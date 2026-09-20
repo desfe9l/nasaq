@@ -1,29 +1,6 @@
-# Dependencies
 node_modules/
-
-# Build output
-.vercel/
 dist/
-.tanstack/
-*.tsbuildinfo
-
-# Local database (PGLite) and logs
-.pglite/
-*.log
-
-# Environment secrets — never commit these
 .env
-.env.*
-!.env.example
-
-# macOS
+.env.local
 .DS_Store
-
-# Editor
-.vscode/
-.idea/
-# Runtime state (preview pid)
-.grok/
-
-# Generated source archive served for download
-public/downloads/*.zip
+.vercel/
