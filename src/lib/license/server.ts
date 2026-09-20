@@ -58,15 +58,16 @@ export async function upsertExternalLicense(params: {
   expiresAt: string | null;
   activationCount: number;
   maxActivations: number | null;
+  status?: LicenseStatus;
   metadata: Record<string, string>;
 }): Promise<License> {
   const sql = await getSql();
   const id = `ls_${params.keyHash.slice(0, 24)}`;
   await sql.query(
     `INSERT INTO licenses (id, key_hash, key_prefix, type, status, user_id, activated_at, expires_at, activation_count, max_activations, metadata)
-     VALUES ($1, $2, $3, $4, 'ACTIVE', $5, now(), $6, $7, $8, $9::jsonb)
+     VALUES ($1, $2, $3, $4, $5, $6, now(), $7, $8, $9, $10::jsonb)
      ON CONFLICT (key_hash) DO UPDATE SET
-       status = 'ACTIVE',
+       status = EXCLUDED.status,
        user_id = COALESCE(EXCLUDED.user_id, licenses.user_id),
        activated_at = COALESCE(licenses.activated_at, EXCLUDED.activated_at),
        expires_at = EXCLUDED.expires_at,
@@ -79,6 +80,7 @@ export async function upsertExternalLicense(params: {
       params.keyHash,
       params.keyPrefix,
       params.type,
+      params.status ?? "ACTIVE",
       params.userId,
       params.expiresAt,
       params.activationCount,

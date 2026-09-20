@@ -13,7 +13,6 @@ import {
   validateLicense as dbValidate,
   createLicense as dbCreate,
   listAllLicenses as dbListAll,
-  findLicenseById,
   revokeLicense as dbRevoke,
   reactivateLicense as dbReactivate,
   updateLicense as dbUpdate,
@@ -25,7 +24,7 @@ import {
 } from "./server";
 import { activateLemonLicense, deactivateLemonLicense, isLemonSqueezyConfigured, validateLemonLicense } from "./lemonsqueezy.server";
 import { checkRateLimit } from "./rate-limit";
-import { LICENSE_ENTITLEMENTS } from "./types";
+import { entitlementsForPlan } from "./types";
 import type {
   License,
   LicenseActivateResult,
@@ -88,22 +87,24 @@ function publicLicense(license: License): LicenseInfo {
     createdAt: license.createdAt,
     source: license.metadata?.source === "lemonsqueezy" ? "lemonsqueezy" : "manual",
     plan: license.metadata?.plan as LicenseInfo["plan"],
+    billing: license.metadata?.billing as LicenseInfo["billing"],
     variantId: license.metadata?.variantId,
+    customerEmail: license.metadata?.customerEmail || undefined,
   };
 }
 
+function externalStatus(status: string): License["status"] {
+  return status === "active" ? "ACTIVE" : status === "disabled" ? "REVOKED" : "EXPIRED";
+}
+
 function entitlementsFor(license: License): Record<import("./types").FeatureId, boolean> {
-  const plan = license.metadata?.plan;
-  if (plan?.startsWith("individual-")) {
-    return { ...LICENSE_ENTITLEMENTS.PRO, collaboration: false, team_features: false, multi_user_activation: false };
-  }
-  return LICENSE_ENTITLEMENTS[license.type];
+  return entitlementsForPlan(license.metadata?.plan as import("./types").LicensePlan | undefined, license.type);
 }
 
 // ── Public: Activate License ───────────────────────────────────────────────
 
 export const activateLicenseFn = createServerFn({ method: "POST" })
-  .validator((data: { key: string; userId?: string }) => data)
+  .validator((data: { key: string; userId?: string; email?: string }) => data)
   .handler(async ({ data }): Promise<LicenseActivateResult> => {
     const ip = await getClientIp();
 
@@ -130,6 +131,7 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
     if (local?.metadata?.source === "lemonsqueezy") {
       try {
         const verified = await validateLemonLicense(key, local.metadata.instanceId);
+        if (verified.status !== "active") return { success: false, message: "الترخيص غير نشط أو منتهٍ." };
         const license = await upsertExternalLicense({
           keyHash,
           keyPrefix: keyPrefix(key),
@@ -138,6 +140,7 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
           expiresAt: verified.expiresAt,
           activationCount: verified.activationCount,
           maxActivations: verified.maxActivations,
+          status: externalStatus(verified.status),
           metadata: verified.metadata,
         });
         return { success: true, message: "تم تفعيل الترخيص بنجاح.", license: publicLicense(license) };
@@ -153,6 +156,10 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
       }
       try {
         const verified = await activateLemonLicense(key);
+        if (data.email && verified.metadata.customerEmail && data.email.trim().toLowerCase() !== verified.metadata.customerEmail.toLowerCase()) {
+          return { success: false, message: "البريد الإلكتروني لا يطابق بيانات الترخيص." };
+        }
+        if (verified.status !== "active") return { success: false, message: "الترخيص غير نشط أو منتهٍ." };
         const license = await upsertExternalLicense({
           keyHash,
           keyPrefix: keyPrefix(key),
@@ -161,6 +168,7 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
           expiresAt: verified.expiresAt,
           activationCount: verified.activationCount,
           maxActivations: verified.maxActivations,
+          status: externalStatus(verified.status),
           metadata: verified.metadata,
         });
         return { success: true, message: "تم تفعيل الترخيص بنجاح.", license: publicLicense(license) };
@@ -212,7 +220,7 @@ export const validateLicenseFn = createServerFn({ method: "POST" })
       if (!isLemonSqueezyConfigured()) return { valid: false };
       try {
         const verified = await validateLemonLicense(key);
-        await upsertExternalLicense({
+          await upsertExternalLicense({
           keyHash,
           keyPrefix: keyPrefix(key),
           type: "PRO",
@@ -220,6 +228,7 @@ export const validateLicenseFn = createServerFn({ method: "POST" })
           expiresAt: verified.expiresAt,
           activationCount: verified.activationCount,
           maxActivations: verified.maxActivations,
+            status: externalStatus(verified.status),
           metadata: verified.metadata,
         });
       } catch {
@@ -238,6 +247,7 @@ export const validateLicenseFn = createServerFn({ method: "POST" })
           expiresAt: verified.expiresAt,
           activationCount: verified.activationCount,
           maxActivations: verified.maxActivations,
+          status: externalStatus(verified.status),
           metadata: verified.metadata,
         });
       } catch {
@@ -262,6 +272,8 @@ export const validateLicenseFn = createServerFn({ method: "POST" })
 export const deactivateLicenseFn = createServerFn({ method: "POST" })
   .validator((data: { key: string }) => data)
   .handler(async ({ data }) => {
+    const ip = await getClientIp();
+    if (!checkRateLimit("license:deactivate", ip, 5, 60_000)) return { success: false };
     const key = data.key.trim();
     if (!isLemonSqueezyKeyFormat(key) || !isLemonSqueezyConfigured()) return { success: false };
     const local = await findLicenseByKeyHash(hashLicenseKey(key));

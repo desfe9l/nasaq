@@ -6,14 +6,12 @@
  */
 
 import { useState } from "react";
-import { useLicense, getCachedLicenseKey } from "@/lib/license/client";
+import { useLicense } from "@/lib/license/client";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { BRAND } from "@/lib/brand";
 import {
   Shield,
   CheckCircle2,
-  XCircle,
-  Clock,
   Key,
   ArrowLeft,
   Crown,
@@ -22,7 +20,7 @@ import {
   Unlock,
 } from "lucide-react";
 import type { LicenseType, FeatureId } from "@/lib/license/types";
-import { LICENSE_ENTITLEMENTS, FEATURE_LABELS } from "@/lib/license/types";
+import { FEATURE_LABELS } from "@/lib/license/types";
 
 // ── Plan Display Config ────────────────────────────────────────────────────
 
@@ -37,7 +35,7 @@ const PLAN_CONFIG: Record<LicenseType, { name: string; icon: typeof Shield; colo
 
 export default function LicensePage() {
   const user = useCurrentUser();
-  const { hasLicense, license, entitlements, activate, deactivate, isLoading, error } = useLicense(user?.id);
+  const { hasLicense, license, entitlements, activate, deactivate, revalidate, isLoading, error } = useLicense(user?.id, user?.primaryEmail);
   const [showActivate, setShowActivate] = useState(false);
   const [activateKey, setActivateKey] = useState("");
   const [activating, setActivating] = useState(false);
@@ -131,6 +129,12 @@ export default function LicensePage() {
                 <p className="font-bold">{new Date(license.expiresAt).toLocaleDateString("ar")}</p>
               </div>
             )}
+            {license.plan && (
+              <div>
+                <p className="text-muted">الخطة والفوترة</p>
+                <p className="font-bold">{license.plan.startsWith("team-") ? "فريق" : "فردي"} · {license.billing === "quarterly" ? "كل 3 أشهر" : "شهري"}</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -147,13 +151,10 @@ export default function LicensePage() {
             </button>
           )}
           {hasLicense && (
-            <button
-              type="button"
-              onClick={deactivate}
-              className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10"
-            >
-              إلغاء التفعيل المحلي
-            </button>
+            <>
+              <button type="button" onClick={() => void revalidate()} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10">تحقق الآن</button>
+              <button type="button" onClick={deactivate} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10">إلغاء التفعيل</button>
+            </>
           )}
         </div>
       </div>

@@ -74,7 +74,7 @@ const INITIAL_STATE: LicenseState = {
  *   const { hasLicense, license, entitlements, activate, isLoading } = useLicense();
  *   if (entitlements.advanced_export) { ... }
  */
-export function useLicense(userId?: string) {
+export function useLicense(userId?: string, userEmail?: string | null) {
   const [state, setState] = useState<LicenseState>(INITIAL_STATE);
 
   // Validate on mount and periodically
@@ -145,7 +145,7 @@ export function useLicense(userId?: string) {
     async (key: string): Promise<{ success: boolean; message: string }> => {
       setState((s) => ({ ...s, error: null }));
       try {
-        const result = await activateLicenseFn({ data: { key, userId } });
+        const result = await activateLicenseFn({ data: { key, userId, email: userEmail || undefined } });
         if (result.success && result.license) {
           setCachedLicenseKey(key);
           // Re-validate to get full entitlements
@@ -167,7 +167,7 @@ export function useLicense(userId?: string) {
         return { success: false, message: msg };
       }
     },
-    [userId],
+    [userEmail, userId],
   );
 
   /** Deactivate (clear local license). */

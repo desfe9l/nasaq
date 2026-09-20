@@ -1,16 +1,28 @@
 import type { LicensePlan } from "./types";
 import { keyPrefix } from "./key";
+import { billingForPlan, planForVariantId, type VariantPlanMap } from "./variant";
 
 export interface LemonLicenseVerification {
   key: string;
   plan: LicensePlan;
   variantId: string;
-  status: "active";
+  status: "active" | "inactive" | "expired" | "disabled";
   expiresAt: string | null;
   activationCount: number;
   maxActivations: number | null;
   instanceId?: string;
   metadata: Record<string, string>;
+}
+
+export interface LemonLicenseMeta {
+  store_id?: number | string;
+  product_id?: number | string;
+  variant_id?: number | string;
+  order_id?: number | string;
+  order_item_id?: number | string;
+  customer_id?: number | string;
+  customer_name?: string;
+  customer_email?: string;
 }
 
 type LemonResponse = {
@@ -58,6 +70,10 @@ function configuredVariants(): Array<{ plan: LicensePlan; id: string }> {
   });
 }
 
+function configuredVariantMap(): VariantPlanMap {
+  return Object.fromEntries(configuredVariants().map(({ plan, id }) => [plan, id])) as VariantPlanMap;
+}
+
 function readResponse(response: LemonResponse): { license: NonNullable<LemonResponse["license_key"]>; meta: NonNullable<LemonResponse["meta"]>; instance?: LemonResponse["instance"] } | null {
   const license = response.license_key || response.data?.attributes;
   const meta = response.meta || response.data?.meta;
@@ -65,11 +81,11 @@ function readResponse(response: LemonResponse): { license: NonNullable<LemonResp
   return { license, meta, instance: response.instance };
 }
 
-function planForVariant(variantId: string): { plan: LicensePlan; id: string } | null {
-  return configuredVariants().find((variant) => variant.id === variantId) || null;
+export function planForVariant(variantId: string): { plan: LicensePlan; id: string } | null {
+  return planForVariantId(variantId, configuredVariantMap());
 }
 
-function verifyMeta(meta: NonNullable<LemonResponse["meta"]>): { plan: LicensePlan; variantId: string } | null {
+export function verifyLemonMetadata(meta: LemonLicenseMeta): { plan: LicensePlan; variantId: string } | null {
   const storeId = env("LEMONSQUEEZY_STORE_ID");
   const productId = env("LEMONSQUEEZY_PRODUCT_ID");
   const variantId = String(meta.variant_id || "");
@@ -80,8 +96,6 @@ function verifyMeta(meta: NonNullable<LemonResponse["meta"]>): { plan: LicensePl
 }
 
 async function requestLicense(action: "activate" | "validate", key: string, instanceId?: string): Promise<LemonLicenseVerification> {
-  const apiKey = env("LEMONSQUEEZY_API_KEY");
-  if (!apiKey) throw new Error("Lemon Squeezy API is not configured");
   const form = new URLSearchParams({ license_key: key.trim() });
   if (action === "activate") form.set("instance_name", `NASAQ-${keyPrefix(key)}`);
   if (action === "validate" && instanceId) form.set("instance_id", instanceId);
@@ -90,7 +104,6 @@ async function requestLicense(action: "activate" | "validate", key: string, inst
     headers: {
       Accept: "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Bearer ${apiKey}`,
     },
     body: form,
   });
@@ -101,8 +114,8 @@ async function requestLicense(action: "activate" | "validate", key: string, inst
   }
 
   const parsed = readResponse(payload);
-  if (!parsed || parsed.license.status !== "active") throw new Error("Lemon Squeezy license is not active");
-  const verified = verifyMeta(parsed.meta);
+  if (!parsed) throw new Error("Lemon Squeezy license response was incomplete");
+  const verified = verifyLemonMetadata(parsed.meta);
   if (!verified) throw new Error("Lemon Squeezy license metadata did not match NASAQ configuration");
 
   return {
@@ -116,19 +129,22 @@ async function requestLicense(action: "activate" | "validate", key: string, inst
     metadata: {
       source: "lemonsqueezy",
       plan: verified.plan,
+      billing: billingForPlan(verified.plan),
       variantId: verified.variantId,
       storeId: String(parsed.meta.store_id),
       productId: String(parsed.meta.product_id),
       orderId: String(parsed.meta.order_id || ""),
       orderItemId: String(parsed.meta.order_item_id || ""),
       customerId: String(parsed.meta.customer_id || ""),
+      customerEmail: String(parsed.meta.customer_email || ""),
+      customerName: String(parsed.meta.customer_name || ""),
       instanceId: parsed.instance?.id || "",
     },
   };
 }
 
 export function isLemonSqueezyConfigured(): boolean {
-  return Boolean(env("LEMONSQUEEZY_API_KEY") && env("LEMONSQUEEZY_STORE_ID") && env("LEMONSQUEEZY_PRODUCT_ID") && configuredVariants().length);
+  return Boolean(env("LEMONSQUEEZY_STORE_ID") && env("LEMONSQUEEZY_PRODUCT_ID") && configuredVariants().length);
 }
 
 export function activateLemonLicense(key: string): Promise<LemonLicenseVerification> {
@@ -140,16 +156,14 @@ export function validateLemonLicense(key: string, instanceId?: string): Promise<
 }
 
 export async function deactivateLemonLicense(key: string, instanceId: string): Promise<void> {
-  const apiKey = env("LEMONSQUEEZY_API_KEY");
-  if (!apiKey) throw new Error("Lemon Squeezy API is not configured");
   const response = await fetch("https://api.lemonsqueezy.com/v1/licenses/deactivate", {
     method: "POST",
     headers: {
       Accept: "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Bearer ${apiKey}`,
     },
     body: new URLSearchParams({ license_key: key.trim(), instance_id: instanceId }),
   });
-  if (!response.ok) throw new Error("Lemon Squeezy license deactivation failed");
+  const payload = (await response.json().catch(() => null)) as { deactivated?: boolean; error?: string } | null;
+  if (!response.ok || payload?.deactivated !== true) throw new Error("Lemon Squeezy license deactivation failed");
 }

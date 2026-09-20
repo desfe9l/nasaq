@@ -10,6 +10,7 @@
 export type LicenseType = "FREE" | "TRIAL" | "PRO" | "LIFETIME";
 export type LicenseSource = "manual" | "lemonsqueezy";
 export type LicensePlan = "individual-monthly" | "individual-quarterly" | "team-monthly" | "team-quarterly";
+export type BillingPeriod = "monthly" | "quarterly";
 export type LicenseStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
 
 /** Full license record as stored in the database. */
@@ -41,7 +42,9 @@ export interface LicenseInfo {
   createdAt: string;
   source?: LicenseSource;
   plan?: LicensePlan;
+  billing?: BillingPeriod;
   variantId?: string;
+  customerEmail?: string;
 }
 
 // ── Feature Entitlements ───────────────────────────────────────────────────
@@ -114,6 +117,13 @@ export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean
     multi_user_activation: true,
   },
 };
+
+export function entitlementsForPlan(plan: LicensePlan | undefined, type: LicenseType): Record<FeatureId, boolean> {
+  if (plan?.startsWith("individual-")) {
+    return { ...LICENSE_ENTITLEMENTS.PRO, collaboration: false, team_features: false, multi_user_activation: false };
+  }
+  return LICENSE_ENTITLEMENTS[type];
+}
 
 /** User-facing feature display names (Arabic). */
 export const FEATURE_LABELS: Record<FeatureId, { name: string; description: string }> = {

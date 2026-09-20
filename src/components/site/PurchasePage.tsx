@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CheckCircle2,
   ClipboardCheck,
@@ -9,13 +9,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { BRAND, whatsappHref } from "@/lib/brand";
-import {
-  checkoutFor,
-  isCheckoutConfigured,
-  LEMON_SQUEEZY_WHATSAPP_URL,
-  type BillingPeriod,
-  type PaidPlan,
-} from "@/lib/product/licensing";
+import { LEMON_SQUEEZY_WHATSAPP_URL, type BillingPeriod, type PaidPlan } from "@/lib/product/licensing";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 
 const PLAN_CONTENT = {
@@ -41,11 +35,26 @@ const PRICES: Record<PaidPlan, Record<BillingPeriod, string>> = {
   team: { monthly: "199", quarterly: "499" },
 };
 
+type CheckoutMatrix = Record<PaidPlan, Record<BillingPeriod, { variantId: string | null; checkoutUrl: string | null }>>;
+
 export function PurchasePage() {
   const [periods, setPeriods] = useState<Record<PaidPlan, BillingPeriod>>({
     individual: "monthly",
     team: "monthly",
   });
+  const [checkouts, setCheckouts] = useState<CheckoutMatrix | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/checkout/config")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((value: CheckoutMatrix | null) => {
+        if (!cancelled && value) setCheckouts(value);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const whatsapp =
     LEMON_SQUEEZY_WHATSAPP_URL ||
     whatsappHref(`السلام عليكم، أرغب بالاستفسار عن الترخيص المؤسسي لمنصة ${BRAND.platform}.`);
@@ -66,7 +75,7 @@ export function PurchasePage() {
         <div className="mt-9 grid gap-4 lg:grid-cols-3">
           {(["individual", "team"] as PaidPlan[]).map((id) => {
             const period = periods[id];
-            const config = checkoutFor(id, period);
+            const config = checkouts?.[id][period];
             const item = PLAN_CONTENT[id];
 
             return (
@@ -112,7 +121,7 @@ export function PurchasePage() {
                     </li>
                   ))}
                 </ul>
-                {isCheckoutConfigured(id, period) ? (
+                {config?.checkoutUrl ? (
                   <a
                     href={config.checkoutUrl}
                     target="_blank"
@@ -121,15 +130,7 @@ export function PurchasePage() {
                   >
                     اشترك {period === "monthly" ? "شهريًا" : "كل 3 أشهر"}
                   </a>
-                ) : (
-                  <button
-                    type="button"
-                    disabled
-                    className="mt-6 h-11 w-full rounded-[8px] bg-navy/40 px-5 text-[13px] font-extrabold text-white"
-                  >
-                    رابط الاشتراك غير مهيأ
-                  </button>
-                )}
+                ) : null}
               </section>
             );
           })}

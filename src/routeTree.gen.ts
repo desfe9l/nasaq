@@ -20,6 +20,7 @@ import { Route as LicenseRouteImport } from './routes/license'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PurchaseRouteImport } from './routes/purchase'
 import { Route as TemplatesRouteImport } from './routes/templates'
+import { Route as ApiCheckoutConfigRouteImport } from './routes/api/checkout/config'
 import { Route as ApiLicenseActivateRouteImport } from './routes/api/license/activate'
 import { Route as ApiLicenseDeactivateRouteImport } from './routes/api/license/deactivate'
 import { Route as ApiLicenseValidateRouteImport } from './routes/api/license/validate'
@@ -80,6 +81,11 @@ const TemplatesRoute = TemplatesRouteImport.update({
   path: '/templates',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiCheckoutConfigRoute = ApiCheckoutConfigRouteImport.update({
+  id: '/api/checkout/config',
+  path: '/api/checkout/config',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiLicenseActivateRoute = ApiLicenseActivateRouteImport.update({
   id: '/api/license/activate',
   path: '/api/license/activate',
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
+  '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
@@ -130,6 +137,7 @@ export interface FileRoutesByTo {
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
+  '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
@@ -148,6 +156,7 @@ export interface FileRoutesById {
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
+  '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
@@ -167,6 +176,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/purchase'
     | '/templates'
+    | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
@@ -184,6 +194,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/purchase'
     | '/templates'
+    | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
@@ -201,6 +212,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/purchase'
     | '/templates'
+    | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
@@ -219,6 +231,7 @@ export interface RootRouteChildren {
   ProjectsRoute: typeof ProjectsRoute
   PurchaseRoute: typeof PurchaseRoute
   TemplatesRoute: typeof TemplatesRoute
+  ApiCheckoutConfigRoute: typeof ApiCheckoutConfigRoute
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
   ApiLicenseValidateRoute: typeof ApiLicenseValidateRoute
@@ -304,6 +317,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TemplatesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/checkout/config': {
+      id: '/api/checkout/config'
+      path: '/api/checkout/config'
+      fullPath: '/api/checkout/config'
+      preLoaderRoute: typeof ApiCheckoutConfigRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/license/activate': {
       id: '/api/license/activate'
       path: '/api/license/activate'
@@ -347,6 +367,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProjectsRoute: ProjectsRoute,
   PurchaseRoute: PurchaseRoute,
   TemplatesRoute: TemplatesRoute,
+  ApiCheckoutConfigRoute: ApiCheckoutConfigRoute,
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,
   ApiLicenseDeactivateRoute: ApiLicenseDeactivateRoute,
   ApiLicenseValidateRoute: ApiLicenseValidateRoute,

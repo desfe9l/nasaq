@@ -7,7 +7,7 @@ import {
   isLemonSqueezyKeyFormat,
   isValidKeyFormat,
 } from "./key.ts";
-import { LICENSE_ENTITLEMENTS } from "./types.ts";
+import { entitlementsForPlan, LICENSE_ENTITLEMENTS } from "./types.ts";
 
 describe("License Key Generation", () => {
   it("generates keys matching the expected format", () => {
@@ -110,6 +110,16 @@ describe("Lemon Squeezy Key Format Validation", () => {
 });
 
 describe("License Entitlements", () => {
+  it("keeps team features out of individual plans", () => {
+    const individual = entitlementsForPlan("individual-monthly", "PRO");
+    const team = entitlementsForPlan("team-monthly", "PRO");
+    assert.ok(individual.premium_templates);
+    assert.ok(individual.advanced_export);
+    assert.ok(!individual.team_features);
+    assert.ok(!individual.multi_user_activation);
+    assert.ok(team.team_features);
+    assert.ok(team.multi_user_activation);
+  });
   it("FREE tier has only core features", () => {
     const free = LICENSE_ENTITLEMENTS.FREE;
     assert.ok(free.core_editor);
