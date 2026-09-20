@@ -8,6 +8,8 @@
 // ── License Types ──────────────────────────────────────────────────────────
 
 export type LicenseType = "FREE" | "TRIAL" | "PRO" | "LIFETIME";
+export type LicenseSource = "manual" | "lemonsqueezy";
+export type LicensePlan = "individual-monthly" | "individual-quarterly" | "team-monthly" | "team-quarterly";
 export type LicenseStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
 
 /** Full license record as stored in the database. */
@@ -37,6 +39,9 @@ export interface LicenseInfo {
   activatedAt: string | null;
   expiresAt: string | null;
   createdAt: string;
+  source?: LicenseSource;
+  plan?: LicensePlan;
+  variantId?: string;
 }
 
 // ── Feature Entitlements ───────────────────────────────────────────────────

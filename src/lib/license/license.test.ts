@@ -4,6 +4,7 @@ import {
   generateLicenseKey,
   hashLicenseKey,
   keyPrefix,
+  isLemonSqueezyKeyFormat,
   isValidKeyFormat,
 } from "./key.ts";
 import { LICENSE_ENTITLEMENTS } from "./types.ts";
@@ -95,6 +96,16 @@ describe("License Key Format Validation", () => {
 
   it("rejects empty strings", () => {
     assert.ok(!isValidKeyFormat(""));
+  });
+});
+
+describe("Lemon Squeezy Key Format Validation", () => {
+  it("accepts a Lemon Squeezy UUID license key", () => {
+    assert.ok(isLemonSqueezyKeyFormat("38b1460a-5104-4067-a91d-77b872934d51"));
+  });
+
+  it("rejects malformed external license keys", () => {
+    assert.ok(!isLemonSqueezyKeyFormat("not-a-license-key"));
   });
 });
 

@@ -50,6 +50,47 @@ export async function findLicenseByKeyHash(keyHash: string): Promise<License | n
   return rows.length > 0 ? rowToLicense(rows[0]) : null;
 }
 
+export async function upsertExternalLicense(params: {
+  keyHash: string;
+  keyPrefix: string;
+  type: LicenseType;
+  userId: string | null;
+  expiresAt: string | null;
+  activationCount: number;
+  maxActivations: number | null;
+  metadata: Record<string, string>;
+}): Promise<License> {
+  const sql = await getSql();
+  const id = `ls_${params.keyHash.slice(0, 24)}`;
+  await sql.query(
+    `INSERT INTO licenses (id, key_hash, key_prefix, type, status, user_id, activated_at, expires_at, activation_count, max_activations, metadata)
+     VALUES ($1, $2, $3, $4, 'ACTIVE', $5, now(), $6, $7, $8, $9::jsonb)
+     ON CONFLICT (key_hash) DO UPDATE SET
+       status = 'ACTIVE',
+       user_id = COALESCE(EXCLUDED.user_id, licenses.user_id),
+       activated_at = COALESCE(licenses.activated_at, EXCLUDED.activated_at),
+       expires_at = EXCLUDED.expires_at,
+       activation_count = EXCLUDED.activation_count,
+       max_activations = EXCLUDED.max_activations,
+       metadata = EXCLUDED.metadata,
+       updated_at = now()`,
+    [
+      id,
+      params.keyHash,
+      params.keyPrefix,
+      params.type,
+      params.userId,
+      params.expiresAt,
+      params.activationCount,
+      params.maxActivations,
+      JSON.stringify(params.metadata),
+    ],
+  );
+  const license = await findLicenseByKeyHash(params.keyHash);
+  if (!license) throw new Error("Failed to persist external license");
+  return license;
+}
+
 /** Find a license by ID. */
 export async function findLicenseById(id: string): Promise<License | null> {
   const sql = await getSql();
