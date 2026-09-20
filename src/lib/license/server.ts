@@ -91,6 +91,34 @@ export async function upsertExternalLicense(params: {
   return license;
 }
 
+export async function applyLemonWebhook(params: {
+  eventId: string;
+  orderId?: string;
+  status: "ACTIVE" | "EXPIRED" | "REVOKED";
+  expiresAt?: string | null;
+}): Promise<boolean> {
+  if (!params.eventId || !params.orderId) return false;
+  const sql = await getSql();
+  const rows = await sql.query(
+    `SELECT id FROM licenses WHERE metadata->>'source' = 'lemonsqueezy' AND metadata->>'orderId' = $1 LIMIT 1`,
+    [params.orderId],
+  );
+  const id = rows[0]?.id;
+  if (!id) return false;
+  const values: unknown[] = [id, params.eventId, params.status];
+  const expiry = params.expiresAt ?? null;
+  await sql.query(
+    `UPDATE licenses
+     SET status = $3,
+         expires_at = COALESCE($4, expires_at),
+         metadata = metadata || jsonb_build_object('lastWebhookId', $2),
+         updated_at = now()
+     WHERE id = $1 AND COALESCE(metadata->>'lastWebhookId', '') <> $2`,
+    [...values, expiry],
+  );
+  return true;
+}
+
 /** Find a license by ID. */
 export async function findLicenseById(id: string): Promise<License | null> {
   const sql = await getSql();

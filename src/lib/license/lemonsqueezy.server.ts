@@ -29,6 +29,9 @@ type LemonResponse = {
     variant_id?: number | string;
     order_id?: number | string;
     order_item_id?: number | string;
+    customer_id?: number | string;
+    customer_name?: string;
+    customer_email?: string;
   };
   instance?: { id?: string } | null;
   data?: {
@@ -77,6 +80,8 @@ function verifyMeta(meta: NonNullable<LemonResponse["meta"]>): { plan: LicensePl
 }
 
 async function requestLicense(action: "activate" | "validate", key: string, instanceId?: string): Promise<LemonLicenseVerification> {
+  const apiKey = env("LEMONSQUEEZY_API_KEY");
+  if (!apiKey) throw new Error("Lemon Squeezy API is not configured");
   const form = new URLSearchParams({ license_key: key.trim() });
   if (action === "activate") form.set("instance_name", `NASAQ-${keyPrefix(key)}`);
   if (action === "validate" && instanceId) form.set("instance_id", instanceId);
@@ -85,6 +90,7 @@ async function requestLicense(action: "activate" | "validate", key: string, inst
     headers: {
       Accept: "application/json",
       "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Bearer ${apiKey}`,
     },
     body: form,
   });
@@ -115,13 +121,14 @@ async function requestLicense(action: "activate" | "validate", key: string, inst
       productId: String(parsed.meta.product_id),
       orderId: String(parsed.meta.order_id || ""),
       orderItemId: String(parsed.meta.order_item_id || ""),
+      customerId: String(parsed.meta.customer_id || ""),
       instanceId: parsed.instance?.id || "",
     },
   };
 }
 
 export function isLemonSqueezyConfigured(): boolean {
-  return Boolean(env("LEMONSQUEEZY_STORE_ID") && env("LEMONSQUEEZY_PRODUCT_ID") && configuredVariants().length);
+  return Boolean(env("LEMONSQUEEZY_API_KEY") && env("LEMONSQUEEZY_STORE_ID") && env("LEMONSQUEEZY_PRODUCT_ID") && configuredVariants().length);
 }
 
 export function activateLemonLicense(key: string): Promise<LemonLicenseVerification> {
@@ -130,4 +137,19 @@ export function activateLemonLicense(key: string): Promise<LemonLicenseVerificat
 
 export function validateLemonLicense(key: string, instanceId?: string): Promise<LemonLicenseVerification> {
   return requestLicense("validate", key, instanceId);
+}
+
+export async function deactivateLemonLicense(key: string, instanceId: string): Promise<void> {
+  const apiKey = env("LEMONSQUEEZY_API_KEY");
+  if (!apiKey) throw new Error("Lemon Squeezy API is not configured");
+  const response = await fetch("https://api.lemonsqueezy.com/v1/licenses/deactivate", {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: new URLSearchParams({ license_key: key.trim(), instance_id: instanceId }),
+  });
+  if (!response.ok) throw new Error("Lemon Squeezy license deactivation failed");
 }

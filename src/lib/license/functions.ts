@@ -23,7 +23,7 @@ import {
   findLicenseByKeyHash,
   upsertExternalLicense,
 } from "./server";
-import { activateLemonLicense, isLemonSqueezyConfigured, validateLemonLicense } from "./lemonsqueezy.server";
+import { activateLemonLicense, deactivateLemonLicense, isLemonSqueezyConfigured, validateLemonLicense } from "./lemonsqueezy.server";
 import { checkRateLimit } from "./rate-limit";
 import { LICENSE_ENTITLEMENTS } from "./types";
 import type {
@@ -95,7 +95,7 @@ function publicLicense(license: License): LicenseInfo {
 function entitlementsFor(license: License): Record<import("./types").FeatureId, boolean> {
   const plan = license.metadata?.plan;
   if (plan?.startsWith("individual-")) {
-    return { ...LICENSE_ENTITLEMENTS.PRO, collaboration: false };
+    return { ...LICENSE_ENTITLEMENTS.PRO, collaboration: false, team_features: false, multi_user_activation: false };
   }
   return LICENSE_ENTITLEMENTS[license.type];
 }
@@ -257,6 +257,23 @@ export const validateLicenseFn = createServerFn({ method: "POST" })
       license: publicLicense(result.license),
       entitlements,
     };
+  });
+
+export const deactivateLicenseFn = createServerFn({ method: "POST" })
+  .validator((data: { key: string }) => data)
+  .handler(async ({ data }) => {
+    const key = data.key.trim();
+    if (!isLemonSqueezyKeyFormat(key) || !isLemonSqueezyConfigured()) return { success: false };
+    const local = await findLicenseByKeyHash(hashLicenseKey(key));
+    const instanceId = local?.metadata?.instanceId;
+    if (!local || !instanceId) return { success: false };
+    try {
+      await deactivateLemonLicense(key, instanceId);
+      await dbRevoke(local.id);
+      return { success: true };
+    } catch {
+      return { success: false };
+    }
   });
 
 // ── Auth: Get My License Status ────────────────────────────────────────────

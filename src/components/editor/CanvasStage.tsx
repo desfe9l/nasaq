@@ -395,12 +395,13 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
             <div
               key={page.id}
               className="page-frame shrink-0"
+              dir="ltr"
               style={{
                 width: `${size.w * zoom}mm`,
                 height: `${(size.h + 12) * zoom}mm`,
               }}
             >
-              <div className="page-frame-content" style={{ width: `${size.w}mm`, transform: `scale(${zoom})` }}>
+              <div className="page-frame-content" dir="ltr" style={{ width: `${size.w}mm`, transform: `scale(${zoom})`, transformOrigin: "top left" }}>
               <div className="mb-2 flex items-center justify-between gap-4 text-[12px] text-muted" dir="rtl">
                 <strong className="text-ink dark:text-white">
                   {page.name}
@@ -411,7 +412,6 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
                     ? `صفحة ${pages.findIndex((p) => p.id === page.id) + 1} من ${pages.length}`
                     : `${round(size.w)} × ${round(size.h)} مم`}
                 </span>
-              </div>
               </div>
               <div
                 ref={(n) => {
@@ -502,6 +502,7 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
                 {isActive &&
                   guides.h.map((y) => <div key={`h${y}`} className="guide-h" style={{ top: `${y}mm` }} />)}
               </div>
+              </div>
             </div>
           );
         })}
@@ -574,6 +575,41 @@ function ExportCapture({ pages }: { pages: Page[] }) {
 
 function resizeByHandle(next: CanvasEl, orig: CanvasEl, handle: string, dx: number, dy: number, lock: boolean) {
   let { x, y, w, h } = orig;
+  const shapeId = orig.style?.shapeId || orig.style?.shape || "rect";
+  const intrinsicLock = orig.type === "shape"
+    ? shapeId !== "ellipse" && orig.style?.aspectLock !== false
+    : ["image", "logo", "icon", "qr"].includes(orig.type) && orig.style?.aspectLock !== false;
+  const preserve = lock || intrinsicLock;
+  const ratio = orig.w / Math.max(orig.h, MIN_SIZE);
+
+  if (preserve) {
+    const horizontal = handle.includes("e") || handle.includes("w");
+    const vertical = handle.includes("n") || handle.includes("s");
+    let scale = 1;
+    if (horizontal && vertical) {
+      const widthScale = (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
+      const heightScale = (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
+      scale = Math.abs(widthScale - 1) >= Math.abs(heightScale - 1) ? widthScale : heightScale;
+    } else if (horizontal) {
+      scale = (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
+    } else if (vertical) {
+      scale = (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
+    }
+    const nextW = Math.max(MIN_SIZE, orig.w * scale);
+    const nextH = Math.max(MIN_SIZE, nextW / ratio);
+    if (handle.includes("w")) x = orig.x + orig.w - nextW;
+    if (handle.includes("e")) x = orig.x;
+    if (!horizontal) x = orig.x + (orig.w - nextW) / 2;
+    if (handle.includes("n")) y = orig.y + orig.h - nextH;
+    if (handle.includes("s")) y = orig.y;
+    if (!vertical) y = orig.y + (orig.h - nextH) / 2;
+    next.x = x;
+    next.y = y;
+    next.w = nextW;
+    next.h = nextH;
+    return;
+  }
+
   if (handle.includes("e")) w = orig.w + dx;
   if (handle.includes("s")) h = orig.h + dy;
   if (handle.includes("w")) {
@@ -583,12 +619,6 @@ function resizeByHandle(next: CanvasEl, orig: CanvasEl, handle: string, dx: numb
   if (handle.includes("n")) {
     y = orig.y + dy;
     h = orig.h - dy;
-  }
-  if (lock) {
-    const ratio = orig.w / orig.h || 1;
-    if (handle === "e" || handle === "w") h = w / ratio;
-    else if (handle === "n" || handle === "s") w = h * ratio;
-    else h = w / ratio;
   }
   if (w < MIN_SIZE) {
     if (handle.includes("w")) x = orig.x + orig.w - MIN_SIZE;

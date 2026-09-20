@@ -67,6 +67,7 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
   const theme = THEMES[useEditor((s) => s.theme)];
   const [cellEditor, setCellEditor] = useState(false);
   const [savingAsset, setSavingAsset] = useState(false);
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ typography: false, arabic: false, appearance: false, transform: true });
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
   const [dropLayerId, setDropLayerId] = useState<string | null>(null);
   const reorderLayers = useEditor((s) => s.reorderLayers);
@@ -290,7 +291,7 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
             </div>
 
             {TEXT_TYPES.includes(el.type) && (
-              <>
+              <InspectorSection title="الخط والطباعة" id="typography" open={openSections.typography} onToggle={() => setOpenSections((s) => ({ ...s, typography: !s.typography }))}>
                 <Field label="الخط">
                   <select
                     value={el.style.fontFamily || "Tajawal"}
@@ -382,7 +383,7 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                     />
                   </Field>
                 </div>
-              </>
+              </InspectorSection>
             )}
 
             {(el.type === "text" || el.type === "box" || el.type === "stat") && (
@@ -441,8 +442,7 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
             )}
 
             {TEXT_MARKUP_TYPES.has(el.type) && (
-              <section className="grid gap-2.5 rounded-[10px] border border-line p-2.5 dark:border-white/10">
-                <h3 className="text-[11px] font-extrabold tracking-wide text-muted">معالجة النص العربي</h3>
+              <InspectorSection title="معالجة النص العربي والمساحة" id="arabic" open={openSections.arabic} onToggle={() => setOpenSections((s) => ({ ...s, arabic: !s.arabic }))}>
 
                 <Field label="شكل الأرقام">
                   <div className="grid grid-cols-2 gap-1.5">
@@ -597,10 +597,11 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                     الاتجاه العمودي مناسب لعناوين الكعب والغلاف الجانبي. تأكد من كفاية ارتفاع العنصر.
                   </p>
                 )}
-              </section>
+              </InspectorSection>
             )}
 
             {["box", "stat", "progress"].includes(el.type) && (
+              <InspectorSection title="المظهر والتعبئة" id="appearance" open={openSections.appearance} onToggle={() => setOpenSections((s) => ({ ...s, appearance: !s.appearance }))}>
               <div className="grid grid-cols-2 gap-2">
                 <Field label="التعبئة">
                   <input
@@ -656,6 +657,7 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                   />
                 </Field>
               </div>
+              </InspectorSection>
             )}
 
             {el.type === "progress" && (
@@ -822,6 +824,16 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                     className="w-full accent-navy"
                   />
                 </Field>
+
+                <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                  قفل النسبة أثناء التحجيم
+                  <input
+                    type="checkbox"
+                    checked={el.style.aspectLock !== false}
+                    onChange={(e) => updateStyle(el.id, { aspectLock: e.target.checked })}
+                    className="accent-navy"
+                  />
+                </label>
               </>
             )}
 
@@ -1075,6 +1087,15 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
 
             {["image", "logo"].includes(el.type) && (
               <>
+                <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                  قفل النسبة أثناء التحجيم
+                  <input
+                    type="checkbox"
+                    checked={el.style.aspectLock !== false}
+                    onChange={(e) => updateStyle(el.id, { aspectLock: e.target.checked })}
+                    className="accent-navy"
+                  />
+                </label>
                 <Field label="الملاءمة">
                   <select
                     value={el.style.objectFit || "cover"}
@@ -1440,6 +1461,30 @@ function EmptyNote({ children }: { children: React.ReactNode }) {
     <p className="rounded-[8px] border border-dashed border-line p-4 text-[12px] leading-6 text-muted dark:border-white/15">
       {children}
     </p>
+  );
+}
+
+function InspectorSection({
+  title,
+  id,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  id: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="grid gap-2 rounded-[9px] border border-line dark:border-white/10" data-inspector-section={id}>
+      <button type="button" aria-expanded={open} onClick={onToggle} className="flex h-9 items-center justify-between px-2.5 text-[11px] font-extrabold text-muted hover:bg-line-2 dark:hover:bg-white/5">
+        <span>{title}</span>
+        <span aria-hidden>{open ? "−" : "+"}</span>
+      </button>
+      {open && <div className="grid gap-2.5 px-2.5 pb-2.5">{children}</div>}
+    </section>
   );
 }
 

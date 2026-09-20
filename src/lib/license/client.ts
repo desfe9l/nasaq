@@ -14,6 +14,7 @@ import {
   activateLicenseFn,
   validateLicenseFn,
   getLicenseStatusFn,
+  deactivateLicenseFn,
 } from "./functions";
 
 // ── Local Storage Cache (UX only, not source of truth) ─────────────────────
@@ -170,7 +171,15 @@ export function useLicense(userId?: string) {
   );
 
   /** Deactivate (clear local license). */
-  const deactivate = useCallback(() => {
+  const deactivate = useCallback(async () => {
+    const cachedKey = getCachedLicenseKey();
+    if (cachedKey) {
+      try {
+        await deactivateLicenseFn({ data: { key: cachedKey } });
+      } catch {
+        /* Local clearing still lets the user remove this browser's cached key. */
+      }
+    }
     setCachedLicenseKey("");
     setState({
       isLoading: false,

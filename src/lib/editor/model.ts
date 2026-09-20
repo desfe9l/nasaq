@@ -105,6 +105,8 @@ export interface ElStyle {
   shape?: "rect" | "circle" | "rounded";
   /** `shape` elements: id from `shapes.ts`. Absent means a plain rectangle. */
   shapeId?: string;
+  /** Preserve the element's intrinsic proportions while resizing. */
+  aspectLock?: boolean;
   cols?: number;
   rows?: number;
   headerBg?: string;

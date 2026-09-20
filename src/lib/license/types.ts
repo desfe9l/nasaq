@@ -55,7 +55,9 @@ export type FeatureId =
   | "unlimited_projects"
   | "unlimited_pages"
   | "data_import"
-  | "collaboration";
+  | "collaboration"
+  | "team_features"
+  | "multi_user_activation";
 
 /** Feature entitlements per license type. */
 export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean>> = {
@@ -69,6 +71,8 @@ export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean
     unlimited_pages: false,
     data_import: false,
     collaboration: false,
+    team_features: false,
+    multi_user_activation: false,
   },
   TRIAL: {
     core_editor: true,
@@ -80,6 +84,8 @@ export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean
     unlimited_pages: true,
     data_import: true,
     collaboration: false,
+    team_features: false,
+    multi_user_activation: false,
   },
   PRO: {
     core_editor: true,
@@ -91,6 +97,8 @@ export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean
     unlimited_pages: true,
     data_import: true,
     collaboration: true,
+    team_features: true,
+    multi_user_activation: true,
   },
   LIFETIME: {
     core_editor: true,
@@ -102,6 +110,8 @@ export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean
     unlimited_pages: true,
     data_import: true,
     collaboration: true,
+    team_features: true,
+    multi_user_activation: true,
   },
 };
 
@@ -116,6 +126,8 @@ export const FEATURE_LABELS: Record<FeatureId, { name: string; description: stri
   unlimited_pages: { name: "صفحات غير محدودة", description: "إضافة عدد غير محدود من الصفحات" },
   data_import: { name: "استيراد البيانات", description: "استيراد البيانات والقوالب من ملفات" },
   collaboration: { name: "التعاون", description: "مشاركة المشاريع والعمل الجماعي" },
+  team_features: { name: "ميزات الفريق", description: "إدارة ميزات ومساحة عمل الفريق" },
+  multi_user_activation: { name: "تفعيل متعدد المستخدمين", description: "تفعيل الترخيص لأكثر من مستخدم" },
 };
 
 // ── API Response Types ─────────────────────────────────────────────────────
