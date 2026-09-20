@@ -10,6 +10,7 @@ import {
   FolderOpen,
   Grid3x3,
   Home,
+  Library,
   Moon,
   PanelLeft,
   PanelRight,
@@ -288,9 +289,10 @@ function Studio({
     const el = document.querySelector(".editor-canvas-stage");
     if (!el) return setZoom(0.82);
     const rect = el.getBoundingClientRect();
-    const pagePxW = activeSize.w * 3.7795;
-    const pagePxH = activeSize.h * 3.7795;
-    // Add some padding around the page for better visibility
+    const pageContent = document.querySelector<HTMLElement>(".editor-canvas-stage .page-frame-content");
+    const pxPerMm = pageContent && activeSize.w > 0 ? pageContent.clientWidth / activeSize.w : 96 / 25.4;
+    const pagePxW = activeSize.w * pxPerMm;
+    const pagePxH = (activeSize.h + 12) * pxPerMm;
     const padding = 20; // pixels
     const next = Math.min((Math.max(0, rect.width - padding * 2)) / pagePxW, (Math.max(0, rect.height - padding * 2)) / pagePxH);
     setZoom(Math.max(0.2, Math.min(2, next)));
@@ -513,9 +515,10 @@ function Studio({
     const el = document.querySelector(".editor-canvas-stage");
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    // Add some padding around the selection for better visibility
+    const pageContent = document.querySelector<HTMLElement>(".editor-canvas-stage .page-frame-content");
+    const activePageScale = pageContent && activeSize.w > 0 ? pageContent.clientWidth / activeSize.w : 96 / 25.4;
     const padding = 20; // pixels
-    const next = Math.min((rect.width - padding * 2) / (bounds.w * 3.7795), (rect.height - padding * 2) / (bounds.h * 3.7795));
+    const next = Math.min((rect.width - padding * 2) / (bounds.w * activePageScale), (rect.height - padding * 2) / (bounds.h * activePageScale));
     setZoom(Math.max(0.2, Math.min(2, next)));
     requestAnimationFrame(() => {
       const target = document.querySelector(`[data-el-id="${CSS.escape(selectedElements()[0]?.id || "")}"]`);
@@ -542,6 +545,15 @@ function Studio({
             <span className="hidden sm:inline">الرئيسية</span>
           </a>
           <div className="hidden md:block"><BrandLogo compact /></div>
+          <button
+            type="button"
+            onClick={() => useEditor.setState({ leftTab: "elements", leftOpen: true, leftCollapsed: false })}
+            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-extrabold dark:border-white/10"
+            title="فتح مكتبة العناصر"
+          >
+            <Library className="size-4" />
+            <span className="hidden lg:inline">المكتبة</span>
+          </button>
         </div>
 
         {/* Scrolls rather than clipping when the viewport cannot hold every control. */}

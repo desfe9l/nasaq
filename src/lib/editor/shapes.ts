@@ -22,6 +22,7 @@ export interface ShapeDef {
   label: string;
   group: string;
   parts: ShapePart[];
+  aspectRatio?: number;
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -72,8 +73,8 @@ export const SHAPES: ShapeDef[] = [
     group: "أساسية",
     parts: [{ k: "rect", x: 0, y: 0, w: 100, h: 100, rx: 14 }],
   },
-  { id: "circle", label: "دائرة", group: "أساسية", parts: [{ k: "circle", cx: 50, cy: 50, r: 50 }] },
-  { id: "ellipse", label: "بيضاوي", group: "أساسية", parts: [{ k: "ellipse", cx: 50, cy: 50, rx: 50, ry: 32 }] },
+  { id: "circle", label: "دائرة", group: "أساسية", aspectRatio: 1, parts: [{ k: "circle", cx: 50, cy: 50, r: 50 }] },
+  { id: "ellipse", label: "بيضاوي", group: "أساسية", aspectRatio: 50 / 32, parts: [{ k: "ellipse", cx: 50, cy: 50, rx: 50, ry: 32 }] },
   { id: "triangle", label: "مثلث", group: "أساسية", parts: [poly("50,2 98,98 2,98")] },
   { id: "triangle-down", label: "مثلث مقلوب", group: "أساسية", parts: [poly("2,2 98,2 50,98")] },
   { id: "diamond", label: "معيّن", group: "أساسية", parts: [poly("50,2 98,50 50,98 2,50")] },
@@ -193,7 +194,7 @@ export const SHAPES: ShapeDef[] = [
     group: "شارات وفقاعات",
     parts: [{ k: "path", d: "M50 0L64 20H88L80 42L100 56L80 70L88 92H64L50 100L36 92H12L20 70L0 56L20 42L12 20H36Z" }],
   },
-  { id: "heart", label: "قلب", group: "شارات وفقاعات", parts: [{ k: "path", d: "M50 98C18 76 0 58 0 36C0 18 12 6 28 6C38 6 46 12 50 22C54 12 62 6 72 6C88 6 100 18 100 36C100 58 82 76 50 98Z" }] },
+  { id: "heart", label: "قلب", group: "شارات وفقاعات", aspectRatio: 100 / 92, parts: [{ k: "path", d: "M50 98C18 76 0 58 0 36C0 18 12 6 28 6C38 6 46 12 50 22C54 12 62 6 72 6C88 6 100 18 100 36C100 58 82 76 50 98Z" }] },
   {
     id: "cloud",
     label: "سحابة",

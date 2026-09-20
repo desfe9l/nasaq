@@ -184,6 +184,8 @@
 
 .editor-ui .editor-canvas-stage {
   background-image: none;
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
 }
 
 /* Control surfaces inside chrome only; the report page is not under these selectors. */
@@ -433,19 +435,28 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 
 .page-frame {
   transform-origin: top center;
+  overflow: visible;
 }
 
 .report-page {
   position: relative;
   width: 210mm;
   height: 297mm;
-  overflow: hidden;
+  overflow: visible;
   direction: rtl;
   background: #fff;
   color: #172033;
   box-shadow: var(--shadow-page);
   isolation: isolate;
   user-select: none;
+}
+
+.page-frame-content {
+  overflow: visible;
+}
+
+#export-root .report-page {
+  overflow: hidden;
 }
 
 .report-page.show-grid::before {

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { findElement, MIN_SIZE, pageSize, type Box, type CanvasEl, type Page } from "@/lib/editor/model";
+import { shapeDef } from "@/lib/editor/shapes";
 import { useEditor } from "@/lib/editor/store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
@@ -22,6 +23,16 @@ type Op =
   | null;
 
 type Marquee = { x0: number; y0: number; x1: number; y1: number } | null;
+
+const ARTBOARD_GAP_MM = 18;
+const SNAP_THRESHOLD_MM = 1.4;
+
+function pagePoint(rect: DOMRect, size: { w: number; h: number }, clientX: number, clientY: number) {
+  return {
+    x: ((clientX - rect.left) / rect.width) * size.w,
+    y: ((clientY - rect.top) / rect.height) * size.h,
+  };
+}
 
 export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: { x: number; y: number }) => void }) {
   const pages = useEditor((s) => s.pages);
@@ -87,11 +98,8 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     if (!page) return null;
     const size = pageSize(page);
     const rect = target.getBoundingClientRect();
-    return {
-      pageId: page.id,
-      x: ((e.clientX - rect.left) / rect.width) * size.w,
-      y: ((e.clientY - rect.top) / rect.height) * size.h,
-    };
+    const point = pagePoint(rect, size, e.clientX, e.clientY);
+    return { pageId: page.id, ...point };
   };
 
   const visible = useMemo(
@@ -132,12 +140,7 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     // Snapshot the live page geometry once: reading it per pointermove would
     // force a layout on every frame of a drag.
     const rect = pageEl.getBoundingClientRect();
-    const scaleX = size.w / rect.width;
-    const scaleY = size.h / rect.height;
-    const toMm = (ev: { clientX: number; clientY: number }) => ({
-      x: (ev.clientX - rect.left) * scaleX,
-      y: (ev.clientY - rect.top) * scaleY,
-    });
+    const toMm = (ev: { clientX: number; clientY: number }) => pagePoint(rect, size, ev.clientX, ev.clientY);
 
     const start = toMm(e);
 
@@ -278,10 +281,7 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     if (!pageEl) return;
     const size = pageSize(page);
     const rect = pageEl.getBoundingClientRect();
-    const toMm = (ev: { clientX: number; clientY: number }) => ({
-      x: ((ev.clientX - rect.left) / rect.width) * size.w,
-      y: ((ev.clientY - rect.top) / rect.height) * size.h,
-    });
+    const toMm = (ev: { clientX: number; clientY: number }) => pagePoint(rect, size, ev.clientX, ev.clientY);
     const start = toMm(e);
     const additive = e.shiftKey;
     const before = additive ? [...selectedIds] : [];
@@ -398,10 +398,10 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
               dir="ltr"
               style={{
                 width: `${size.w * zoom}mm`,
-                height: `${(size.h + 12) * zoom}mm`,
+                height: `${(size.h + 12 + ARTBOARD_GAP_MM) * zoom}mm`,
               }}
             >
-              <div className="page-frame-content" dir="ltr" style={{ width: `${size.w}mm`, transform: `scale(${zoom})`, transformOrigin: "top left" }}>
+              <div className="page-frame-content" dir="ltr" style={{ width: `${size.w}mm`, height: `${size.h + 12}mm`, transform: `scale(${zoom})`, transformOrigin: "top left" }}>
               <div className="mb-2 flex items-center justify-between gap-4 text-[12px] text-muted" dir="rtl">
                 <strong className="text-ink dark:text-white">
                   {page.name}
@@ -580,7 +580,9 @@ function resizeByHandle(next: CanvasEl, orig: CanvasEl, handle: string, dx: numb
     ? shapeId !== "ellipse" && orig.style?.aspectLock !== false
     : ["image", "logo", "icon", "qr"].includes(orig.type) && orig.style?.aspectLock !== false;
   const preserve = lock || intrinsicLock;
-  const ratio = orig.w / Math.max(orig.h, MIN_SIZE);
+  const ratio = orig.type === "shape"
+    ? shapeDef(shapeId).aspectRatio || orig.w / Math.max(orig.h, MIN_SIZE)
+    : orig.w / Math.max(orig.h, MIN_SIZE);
 
   if (preserve) {
     const horizontal = handle.includes("e") || handle.includes("w");
@@ -665,24 +667,27 @@ function applySnap(
     const hedges = [0, size.h / 2, size.h, ...stable.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h])];
     const mineV = [el.x, el.x + el.w / 2, el.x + el.w];
     const mineH = [el.y, el.y + el.h / 2, el.y + el.h];
-    const thr = 1.4;
-    for (const m of mineV) {
-      for (const t of edges) {
-        if (Math.abs(m - t) < thr) {
-          el.x += t - m;
-          v.push(t);
-          break;
+    const nearest = (mine: number[], targets: number[]) => {
+      let best: { delta: number; target: number } | null = null;
+      for (const m of mine) {
+        for (const t of targets) {
+          const delta = t - m;
+          if (Math.abs(delta) <= SNAP_THRESHOLD_MM && (!best || Math.abs(delta) < Math.abs(best.delta))) {
+            best = { delta, target: t };
+          }
         }
       }
+      return best;
+    };
+    const bestV = nearest(mineV, edges);
+    const bestH = nearest(mineH, hedges);
+    if (bestV) {
+      el.x += bestV.delta;
+      v.push(bestV.target);
     }
-    for (const m of mineH) {
-      for (const t of hedges) {
-        if (Math.abs(m - t) < thr) {
-          el.y += t - m;
-          h.push(t);
-          break;
-        }
-      }
+    if (bestH) {
+      el.y += bestH.delta;
+      h.push(bestH.target);
     }
   }
   setGuides({ v: [...new Set(v)], h: [...new Set(h)] });

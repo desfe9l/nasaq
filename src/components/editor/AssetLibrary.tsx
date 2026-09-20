@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Check, Eye, Folder, FolderPlus, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Eye, Folder, FolderPlus, Grid2X2, ImagePlus, List, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
 import type { Asset } from "@/lib/editor/storage";
 import { cn } from "@/lib/utils";
@@ -32,6 +32,7 @@ export function AssetLibrary() {
   const [savingPending, setSavingPending] = useState(false);
   const [folderDialog, setFolderDialog] = useState<"create" | "rename" | null>(null);
   const [folderDraft, setFolderDraft] = useState("");
+  const [viewMode, setViewMode] = useState<"grid" | "compact">("grid");
   const visibleAssets = assets.filter((asset) => (asset.folderId || null) === folderId);
   const currentFolder = folders.find((folder) => folder.id === folderId);
 
@@ -98,9 +99,11 @@ export function AssetLibrary() {
           <h3 className="text-[12px] font-extrabold tracking-wide">مكتبة العناصر</h3>
           <p className="mt-0.5 text-[10px] text-muted">معاينة قبل الحفظ، ثم إدراج وتعديل مباشر</p>
         </div>
-        <span className="rounded-full bg-line-2 px-2 py-1 text-[10px] font-bold tabular-nums text-muted dark:bg-white/10">
-          {visibleAssets.length}
-        </span>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => setViewMode("grid")} aria-label="عرض شبكي" aria-pressed={viewMode === "grid"} className={cn("grid size-7 place-items-center rounded-[6px] border", viewMode === "grid" ? "border-navy bg-navy/10" : "border-line dark:border-white/10")}><Grid2X2 className="size-3.5" /></button>
+          <button type="button" onClick={() => setViewMode("compact")} aria-label="عرض مضغوط" aria-pressed={viewMode === "compact"} className={cn("grid size-7 place-items-center rounded-[6px] border", viewMode === "compact" ? "border-navy bg-navy/10" : "border-line dark:border-white/10")}><List className="size-3.5" /></button>
+          <span className="rounded-full bg-line-2 px-2 py-1 text-[10px] font-bold tabular-nums text-muted dark:bg-white/10">{visibleAssets.length}</span>
+        </div>
       </header>
 
       <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
@@ -161,9 +164,9 @@ export function AssetLibrary() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-2">
+        <div className={cn("grid gap-2", viewMode === "grid" ? "grid-cols-[repeat(auto-fill,minmax(118px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(92px,1fr))]")}>
           {visibleAssets.map((asset) => (
-            <div key={asset.id} className={cn("group relative rounded-[8px] border bg-white/60 p-1.5 dark:bg-white/5", selectedAssetIds.includes(asset.id) ? "border-navy ring-1 ring-navy/30" : "border-line dark:border-white/10")}>
+            <div key={asset.id} className={cn("group relative rounded-[8px] border bg-white/60 p-1.5 dark:bg-white/5", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy/5 ring-1 ring-navy/30" : "border-line dark:border-white/10")}>
               <button type="button" onClick={() => toggleAssetSelect(asset.id)} aria-label={`تحديد ${asset.name}`} className={cn("absolute right-2 top-2 z-10 grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy text-white" : "border-line dark:border-white/20")}>
                 {selectedAssetIds.includes(asset.id) && <Check className="size-3" />}
               </button>
@@ -205,14 +208,15 @@ export function AssetLibrary() {
                     onClick={() => place(asset)}
                     title={`إضافة "${asset.name}" إلى الصفحة`}
                     className={cn(
-                      "grid h-20 w-full place-items-center overflow-hidden rounded-[6px]",
+                      "grid w-full place-items-center overflow-hidden rounded-[6px]",
+                      viewMode === "grid" ? "h-20" : "h-14",
                       "border border-line bg-white transition hover:border-navy-2 dark:border-white/10 dark:bg-white/5",
                     )}
                   >
                     <img
                       src={asset.src}
                       alt={asset.name}
-                      className="max-h-[4.5rem] max-w-full object-contain"
+                      className={cn("max-w-full object-contain", viewMode === "grid" ? "max-h-[4.5rem]" : "max-h-[3.25rem]")}
                     />
                   </button>
                   <span className="mt-1 block truncate text-center text-[9px] text-muted">
