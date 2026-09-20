@@ -30,7 +30,7 @@ export function AssetLibrary() {
   const [pending, setPending] = useState<PendingAsset[]>([]);
   const [preview, setPreview] = useState<Asset | PendingAsset | null>(null);
   const [savingPending, setSavingPending] = useState(false);
-  const [folderDialog, setFolderDialog] = useState<"create" | "rename" | null>(null);
+  const [folderDialog, setFolderDialog] = useState<"create" | "rename" | "delete" | null>(null);
   const [folderDraft, setFolderDraft] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "compact">("grid");
   const visibleAssets = assets.filter((asset) => (asset.folderId || null) === folderId);
@@ -118,7 +118,7 @@ export function AssetLibrary() {
         <button type="button" onClick={() => { setFolderDraft(""); setFolderDialog("create"); }} className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10" title="مجلد جديد" aria-label="مجلد جديد"><FolderPlus className="size-3.5" /></button>
         {currentFolder && <>
           <button type="button" onClick={() => { setFolderDraft(currentFolder.name); setFolderDialog("rename"); }} className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10" title="إعادة تسمية المجلد" aria-label="إعادة تسمية المجلد"><Pencil className="size-3" /></button>
-          <button type="button" onClick={() => void deleteAssetFolder(currentFolder.id)} className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-red-600 dark:border-white/10" title="حذف المجلد" aria-label="حذف المجلد"><Trash2 className="size-3" /></button>
+          <button type="button" onClick={() => setFolderDialog("delete")} className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-red-600 dark:border-white/10" title="حذف المجلد" aria-label="حذف المجلد"><Trash2 className="size-3" /></button>
         </>}
       </div>
 
@@ -280,12 +280,20 @@ export function AssetLibrary() {
       )}
 
       {folderDialog && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4" role="dialog" aria-modal="true" aria-label={folderDialog === "create" ? "إنشاء مجلد" : "إعادة تسمية مجلد"}>
+        <div className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4" role="dialog" aria-modal="true" aria-label={folderDialog === "create" ? "إنشاء مجلد" : folderDialog === "rename" ? "إعادة تسمية مجلد" : "حذف المجلد نهائيًا"}>
+          {folderDialog === "delete" ? (
+            <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]" onKeyDown={(event) => { if (event.key === "Escape") setFolderDialog(null); }}>
+              <strong className="text-[13px]">حذف المجلد نهائيًا؟</strong>
+              <p className="text-[11px] leading-6 text-muted">سيتم حذف هذا المجلد ومحتوياته نهائيًا، ولا يمكن التراجع عن هذا الإجراء.</p>
+              <div className="flex justify-end gap-2"><button type="button" autoFocus onClick={() => setFolderDialog(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">إلغاء</button><button type="button" onClick={() => { if (currentFolder) void deleteAssetFolder(currentFolder.id); setFolderDialog(null); }} className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white">حذف نهائيًا</button></div>
+            </div>
+          ) : (
           <form className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]" onSubmit={(event) => { event.preventDefault(); if (folderDialog === "create") void createAssetFolder(folderDraft); else if (currentFolder) void renameAssetFolder(currentFolder.id, folderDraft); setFolderDialog(null); }}>
             <strong className="text-[12px]">{folderDialog === "create" ? "مجلد جديد" : "إعادة تسمية المجلد"}</strong>
             <input autoFocus value={folderDraft} onChange={(event) => setFolderDraft(event.target.value)} aria-label="اسم المجلد" className="h-9 rounded-[7px] border border-line px-2 text-[12px] dark:border-white/10 dark:bg-white/5" />
             <div className="flex justify-end gap-2"><button type="button" onClick={() => setFolderDialog(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">إلغاء</button><button type="submit" className="h-8 rounded-[6px] bg-navy px-3 text-[11px] font-bold text-white">حفظ</button></div>
           </form>
+          )}
         </div>
       )}
     </section>

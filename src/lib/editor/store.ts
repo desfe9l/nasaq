@@ -932,8 +932,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       const picked = s.selectedIds
         .map((id) => locate(page, id)?.el)
         .filter((el): el is CanvasEl => Boolean(el));
-      if (picked.length < 2) {
-        toast.error("حدّد عنصرين أو أكثر للمحاذاة");
+      if (!picked.length) {
+        toast.error("حدّد عنصرًا للمحاذاة");
         return;
       }
       const size = pageSize(page);

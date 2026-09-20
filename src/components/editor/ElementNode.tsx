@@ -13,6 +13,7 @@ interface Props {
   el: CanvasEl;
   selected: boolean;
   interactive: boolean;
+  showControls?: boolean;
   onPointerDown: (e: React.PointerEvent, kind: "move" | "resize" | "rotate", handle?: string) => void;
 }
 
@@ -23,6 +24,7 @@ export function ElementNode({
   el,
   selected,
   interactive,
+  showControls = true,
   onPointerDown,
   multi,
   onEnterGroup,
@@ -122,7 +124,7 @@ export function ElementNode({
       onDoubleClick={startEdit}
     >
       <ElementContent el={el} textRef={textRef} onBlur={finishEdit} onKeyDown={handleEditKey} />
-      {selected && interactive && !el.locked && !multi && (
+      {showControls && selected && interactive && !el.locked && !multi && (
         <>
           {HANDLES.map((h) => (
             <div

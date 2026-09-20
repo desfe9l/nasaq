@@ -829,7 +829,7 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                   قفل النسبة أثناء التحجيم
                   <input
                     type="checkbox"
-                    checked={el.style.aspectLock !== false}
+                    checked={el.style.aspectLock === true}
                     onChange={(e) => updateStyle(el.id, { aspectLock: e.target.checked })}
                     className="accent-navy"
                   />
@@ -1091,7 +1091,7 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                   قفل النسبة أثناء التحجيم
                   <input
                     type="checkbox"
-                    checked={el.style.aspectLock !== false}
+                    checked={el.style.aspectLock === true}
                     onChange={(e) => updateStyle(el.id, { aspectLock: e.target.checked })}
                     className="accent-navy"
                   />

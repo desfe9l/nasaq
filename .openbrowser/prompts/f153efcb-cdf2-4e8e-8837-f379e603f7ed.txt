@@ -1,0 +1,84 @@
+--- OpenBrowser System Instructions ---
+You are connected to OpenBrowser audit mode.
+
+This is a READ-ONLY project audit.
+The project context supplied below is the source of truth.
+
+STRICT RULES:
+- Do NOT modify any file.
+- Do NOT create, delete, rename, or rewrite anything.
+- Do NOT run commands.
+- Do NOT return JSON operations.
+- Do NOT provide a new prompt for another AI.
+- Do NOT tell the user to perform the audit themselves.
+- Analyze the supplied project context directly.
+- Report only findings supported by the available project context.
+- Clearly distinguish confirmed findings from things that cannot be verified from the supplied context.
+
+AUDIT:
+Analyze the existing project as it currently is.
+Cover, when applicable:
+- Framework and architecture
+- Pages and routes
+- Components and reusable UI
+- Editor / Document / Page / Elements
+- Canvas / Workspace
+- Selection
+- Layers / Groups
+- Zoom / Pan
+- Text and RTL support
+- History / Undo / Redo
+- Templates
+- Projects
+- Assets
+- Export
+- Authentication
+- Storage and persistence
+- API and data flow
+- Responsive behavior
+- Touch / mobile behavior
+- Security
+- Performance
+- Broken, incomplete, duplicated, or suspicious implementation
+- Dead code or apparently unused functionality
+
+OUTPUT:
+- Start immediately with the actual audit report.
+- Use clear Markdown headings and concise bullet points.
+- Reference actual files and paths whenever they are visible in the context.
+- Do not invent files, routes, features, or bugs.
+- End with a short section called "Priority findings" containing only factual findings that are supported by the context.
+--- End System Instructions ---
+
+--- Project Context (JSON) ---
+{
+  "projectSummary": "Project root: /Users/faisalalenazi/Downloads/nasaq-new\nPackage: app-builder-workspace\nScripts: dev, build, db:migrate, build:dev, preview, preview:restart, preview:stop, typecheck, check:auth, test, lint, format\nDependencies: @electric-sql/pglite, @hookform/resolvers, @radix-ui/react-accordion, @radix-ui/react-alert-dialog, @radix-ui/react-avatar, @radix-ui/react-checkbox, @radix-ui/react-collapsible, @radix-ui/react-dialog, @radix-ui/react-dropdown-menu, @radix-ui/react-label, @radix-ui/react-popover, @radix-ui/react-progress, @radix-ui/react-radio-group, @radix-ui/react-scroll-area, @radix-ui/react-select, @radix-ui/react-separator, @radix-ui/react-slider, @radix-ui/react-slot, @radix-ui/react-switch, @radix-ui/react-tabs, @radix-ui/react-toggle, @radix-ui/react-toggle-group, @radix-ui/react-tooltip, @tailwindcss/vite, @tanstack/react-query, @tanstack/react-router, @tanstack/react-start, @tanstack/react-table, @tanstack/router-plugin, better-auth, class-variance-authority, clsx, cmdk, date-fns, docx, html2canvas, jose, jspdf, jszip, kysely, lucide-react, pg, pptxgenjs, qrcode, react, react-day-picker, react-dom, react-hook-form, react-resizable-panels, recharts, sonner, tailwind-merge, tailwindcss, tw-animate-css, vaul, zod, zustand\nDev dependencies: @eslint/js, @types/html2canvas, @types/node, @types/pg, @types/qrcode, @types/react, @types/react-dom, @vitejs/plugin-react, eslint, eslint-config-prettier, eslint-plugin-prettier, eslint-plugin-react-hooks, eslint-plugin-react-refresh, globals, lightningcss, nitro, playwright, prettier, typescript, typescript-eslint, vite\nTypeScript config: present\n\nFiles (259, first 250 shown):\n- .brand-assets.mjs\n- .env.example\n- .gitignore\n- .qa-functional.mjs\n- AGENTS.md\n- AUDIT_REPORT.md\n- README.md\n- eslint.config.mjs\n- package-lock.json\n- package.json\n- pnpm-lock.yaml\n- pnpm-workspace.yaml\n- startup.sh\n- tsconfig.json\n- vite.config.ts\n- docs/productization-report.md\n- attachments/a4-report-editor.html\n- attachments/eid-report-improved(1).html\n- attachments/eid_a4_export_fixed_v3.html\n- attachments/gemini-code-1780450818214.html\n- attachments/gemini-code-1780535292970.html\n- screenshots/.gitkeep\n- screenshots/app-builder-preview-mobile.png\n- screenshots/app-builder-preview.json\n- screenshots/app-builder-preview.png\n- public/favicon.svg\n- public/og.jpg\n- scripts/app-env-plugin.mjs\n- scripts/brand-check.mjs\n- scripts/brand-check.test.mjs\n- scripts/browser-guard.mjs\n- scripts/browser-smoke-verdict.mjs\n- scripts/browser-smoke-verdict.test.mjs\n- scripts/browser-smoke.mjs\n- scripts/check-auth-invariant.mjs\n- scripts/check-auth-invariant.test.mjs\n- scripts/grok-pwa-plugin.mjs\n- scripts/grok-pwa-plugin.test.mjs\n- scripts/grok-pwa-shared.d.mts\n- scripts/grok-pwa-shared.mjs\n- scripts/install-page.html\n- scripts/migrate.mjs\n- scripts/migration-plan.mjs\n- scripts/migration-plan.test.mjs\n- scripts/package-source.py\n- scripts/preview-bridge.mjs\n- scripts/preview-thumbnail.mjs\n- scripts/preview.mjs\n- scripts/preview.test.mjs\n- scripts/sign-out-plan.mjs\n- scripts/sign-out-plan.test.mjs\n- scripts/with-app-env.mjs\n- scripts/with-app-env.test.mjs\n- scripts/write-atomic.mjs\n- scripts/write-atomic.test.mjs\n- artifacts/imagine_images/7576d775-a584-4dda-9ee8-6ed2509b95b3.jpg\n- server/virtual-grok-og-identity.d.ts\n- migrations/auth/0001_auth.sql\n- src/routeTree.gen.ts\n- src/router.tsx\n- src/styles.css\n- public/__grok/icon-180.png\n- server/middleware/grok-pwa.ts\n- .vercel/output/config.json\n- .vercel/output/nitro.json\n- public/__grok/install/styles.css\n- src/components/preview-host-bridge.tsx\n- src/routes/__root.tsx\n- src/routes/about.tsx\n- src/routes/contact.tsx\n- src/routes/editor.tsx\n- src/routes/index.tsx\n- src/routes/projects.tsx\n- src/routes/templates.tsx\n- src/lib/brand.ts\n- src/lib/db.ts\n- src/lib/env.server.ts\n- src/lib/error-component.tsx\n- src/lib/preview-embedder-origin.ts\n- src/lib/preview-host-bridge.ts\n- src/lib/utils.ts\n- .vercel/output/static/favicon.svg\n- .vercel/output/static/og.jpg\n- src/components/editor/ArrangeBar.tsx\n- src/components/editor/AssetLibrary.tsx\n- src/components/editor/CanvasStage.tsx\n- src/components/editor/EditorApp.tsx\n- src/components/editor/ElementNode.tsx\n- src/components/editor/ExportDialog.tsx\n- src/components/editor/LeftPanel.tsx\n- src/components/editor/PageRail.tsx\n- src/components/editor/RightPanel.tsx\n- src/components/editor/ShapeGlyph.tsx\n- src/components/editor/ShapePreview.tsx\n- src/components/editor/TablePicker.tsx\n- src/components/editor/WorkspaceOverlays.tsx\n- src/components/site/AboutPage.tsx\n- src/components/site/BrandKitPage.tsx\n- src/components/site/ContactPage.tsx\n- src/components/site/HomePage.tsx\n- src/components/site/ProjectCard.tsx\n- src/components/site/ProjectsPage.tsx\n- src/components/site/SiteChrome.tsx\n- src/components/site/TemplatesPage.tsx\n- src/lib/auth/client.ts\n- src/lib/auth/email-password.ts\n- src/lib/auth/gate-identity.server.ts\n- src/lib/auth/gate-identity.test.ts\n- src/lib/auth/gate-session-marker.ts\n- src/lib/auth/gate-session.server.ts\n- src/lib/auth/gates.tsx\n- src/lib/auth/isolation.server.ts\n- src/lib/auth/middleware.ts\n- src/lib/auth/pglite-dialect.ts\n- src/lib/auth/popup.server.ts\n- src/lib/auth/preview.ts\n- src/lib/auth/provider.tsx\n- src/lib/auth/providers.ts\n- src/lib/auth/server.ts\n- src/lib/auth/sign-in-gate.test.ts\n- src/lib/auth/sign-in-gate.ts\n- src/lib/auth/use-current-user.ts\n- src/lib/auth/verify.server.ts\n- src/lib/og/site.json\n- src/lib/app-data/app-data.test.ts\n- src/lib/app-data/client.server.ts\n- src/lib/app-data/errors.ts\n- src/lib/app-data/index.ts\n- src/lib/app-data/login.ts\n- src/lib/app-data/readiness-schedule.test.ts\n- src/lib/app-data/readiness-schedule.ts\n- src/lib/app-data/readiness.ts\n- src/lib/app-data/server-only.ts\n- src/lib/app-data/types.ts\n- src/lib/app-data/use-connector-readiness.ts\n- src/lib/multiplayer/index.ts\n- src/lib/multiplayer/p2p.ts\n- src/lib/editor/arabic.test.ts\n- src/lib/editor/arabic.ts\n- src/lib/editor/docx-writer.ts\n- src/lib/editor/export.ts\n- src/lib/editor/fonts.ts\n- src/lib/editor/images.test.ts\n- src/lib/editor/images.ts\n- src/lib/editor/model.ts\n- src/lib/editor/office-export.test.ts\n- src/lib/editor/pptx-writer.ts\n- src/lib/editor/scene.ts\n- src/lib/editor/shape-render.ts\n- src/lib/editor/shapes.ts\n- src/lib/editor/storage.ts\n- src/lib/editor/store.ts\n- src/lib/editor/tables.test.ts\n- src/lib/editor/tables.ts\n- src/lib/editor/templates.ts\n- src/lib/editor/text-render.ts\n- src/lib/editor/vector-path.ts\n- src/lib/product/brand-kit.ts\n- src/lib/product/copy.ts\n- src/lib/product/product.ts\n- public/__grok/install/assets/homescreen/glass-puzzle.svg\n- public/__grok/install/assets/homescreen/glass-share.svg\n- public/__grok/install/assets/homescreen/logo-grok.svg\n- public/__grok/install/assets/homescreen/ob-ipad.png\n- public/__grok/install/assets/homescreen/ob-phone.png\n- public/__grok/install/assets/homescreen/plus.svg\n- .vercel/output/static/__grok/icon-180.png\n- .vercel/output/functions/__server.func/.vc-config.json\n- .vercel/output/functions/__server.func/_runtime.mjs\n- .vercel/output/functions/__server.func/_tanstack-start-manifest_v-DBpQmysX.mjs\n- .vercel/output/functions/__server.func/index.mjs\n- .vercel/output/static/__grok/install/styles.css\n- .vercel/output/static/assets/ProjectCard-9mtpvmVE.js\n- .vercel/output/static/assets/SiteChrome-Htfn30nD.js\n- .vercel/output/static/assets/__vite-browser-external-CKnVkMRn.js\n- .vercel/output/static/assets/about-Cc3icTbt.js\n- .vercel/output/static/assets/arrow-left-D_IUGr5C.js\n- .vercel/output/static/assets/browser-DBRq5Js3.js\n- .vercel/output/static/assets/check-WtkSW2bQ.js\n- .vercel/output/static/assets/contact-CgxBgavD.js\n- .vercel/output/static/assets/copy-DClrrX-w.js\n- .vercel/output/static/assets/dist-6RcYMNCa.js\n- .vercel/output/static/assets/docx-writer-BPUn4ex_.js\n- .vercel/output/static/assets/editor-CH8eFmsg.js\n- .vercel/output/static/assets/export-zPDkJB3e.js\n- .vercel/output/static/assets/html2canvas-CJ4rRp4d.js\n- .vercel/output/static/assets/index-BgQ7jr2d.js\n- .vercel/output/static/assets/index.es-UAezOUOo.js\n- .vercel/output/static/assets/jspdf.es.min-CDSKNppp.js\n- .vercel/output/static/assets/jszip.min-CMUAYIqb.js\n- .vercel/output/static/assets/model-9pgeSoEN.js\n- .vercel/output/static/assets/plus-DqIU1pBo.js\n- .vercel/output/static/assets/pptx-writer-C04q7hIZ.js\n- .vercel/output/static/assets/pptxgen.es-CG00j_NU.js\n- .vercel/output/static/assets/projects-D6XBn2FC.js\n- .vercel/output/static/assets/purify.es-7fJ1DZ6H.js\n- .vercel/output/static/assets/react-dom-D3PiWQFM.js\n- .vercel/output/static/assets/rolldown-runtime-Dd_uD5pT.js\n- .vercel/output/static/assets/routes-CEpwrNAz.js\n- .vercel/output/static/assets/scene-CmS7quOH.js\n- .vercel/output/static/assets/search-B8qYpkpS.js\n- .vercel/output/static/assets/store-DzzE2kaC.js\n- .vercel/output/static/assets/styles-0CsdnweX.css\n- .vercel/output/static/assets/table-2-DZ3fOML2.js\n- .vercel/output/static/assets/templates-CgwQVs1R.js\n- .vercel/output/static/assets/trash-2-DXfqnnGW.js\n- .vercel/output/static/assets/vector-path-C_zUQmdC.js\n- .vercel/output/functions/__server.func/_chunks/ssr-renderer.mjs\n- .vercel/output/functions/__server.func/_ssr/ProjectCard-CuzVuyrH.mjs\n- .vercel/output/functions/__server.func/_ssr/SiteChrome-XD5jBzhC.mjs\n- .vercel/output/functions/__server.func/_ssr/about-CBr3jH8H.mjs\n- .vercel/output/functions/__server.func/_ssr/contact-DBY0sphC.mjs\n- .vercel/output/functions/__server.func/_ssr/docx-writer-BQYnAs_5.mjs\n- .vercel/output/functions/__server.func/_ssr/editor-CVNOMU_9.mjs\n- .vercel/output/functions/__server.func/_ssr/empty-plugin-adapters-BOebg6Xj.mjs\n- .vercel/output/functions/__server.func/_ssr/export-DZRX4NDl.mjs\n- .vercel/output/functions/__server.func/_ssr/pptx-writer-Dv5BdmXa.mjs\n- .vercel/output/functions/__server.func/_ssr/projects-ChRUnk-A.mjs\n- .vercel/output/functions/__server.func/_ssr/rolldown-runtime-D7D4PA-g.mjs\n- .vercel/output/functions/__server.func/_ssr/router-BnMhejiq.mjs\n- .vercel/output/functions/__server.func/_ssr/routes-JmwghMuj.mjs\n- .vercel/output/functions/__server.func/_ssr/scene-s5l7F8MV.mjs\n- .vercel/output/functions/__server.func/_ssr/ssr.mjs\n- .vercel/output/functions/__server.func/_ssr/start-BVnw1Eyd.mjs\n- .vercel/output/functions/__server.func/_ssr/store-Bds5ZYSZ.mjs\n- .vercel/output/functions/__server.func/_ssr/templates-BzqxcKGa.mjs\n- .vercel/output/functions/__server.func/_ssr/vector-path-DqeZ85uX.mjs\n- .vercel/output/functions/__server.func/_libs/babel__runtime.mjs\n- .vercel/output/functions/__server.func/_libs/canvg+[...].mjs\n- .vercel/output/functions/__server.func/_libs/clsx.mjs\n- .vercel/output/functions/__server.func/_libs/core-util-is.mjs\n- .vercel/output/functions/__server.func/_libs/dijkstrajs.mjs\n- .vercel/output/functions/__server.func/_libs/docx.mjs\n- .vercel/output/functions/__server.func/_libs/dompurify.mjs\n- .vercel/output/functions/__server.func/_libs/fast-png+iobuffer+pako.mjs\n- .vercel/output/functions/__server.func/_libs/fflate.mjs\n- .vercel/output/functions/__server.func/_libs/h3+rou3+srvx.mjs\n- .vercel/output/functions/__server.func/_libs/html2canvas.mjs\n- .vercel/output/functions/__server.func/_libs/immediate.mjs\n- .vercel/output/functions/__server.func/_libs/inherits.mjs\n- .vercel/output/functions/__server.func/_libs/isarray.mjs\n- .vercel/output/functions/__server.func/_libs/jspdf.mjs\n- .vercel/output/functions/__server.func/_libs/jszip+[...].mjs\n- .vercel/output/functions/__server.func/_libs/lucide-react.mjs\n- .vercel/output/functions/__server.func/_libs/pngjs.mjs\n- .vercel/output/functions/__server.func/_libs/pptxgenjs.mjs\n- .vercel/output/functions/__server.func/_libs/qrcode.mjs\n- .vercel/output/functions/__server.func/_libs/sonner.mjs\n- .vercel/output/functions/__server.func/_libs/tailwind-merge.mjs\n- .vercel/output/functions/__server.func/_libs/tanstack__history.mjs",
+  "runtime": {
+    "platform": "darwin",
+    "shell": "/bin/sh"
+  },
+  "editingRules": [
+    "Context files below include line numbers (format: \"   1| code\").",
+    "contextDirectories lists attached folder trees, including empty folders with no files.",
+    "Binary image/media files (png, jpg, gif, webp, etc.) may appear in folder trees but are not embedded in context.",
+    "If contextDirectories.empty is true, the folder exists but has no files — use CREATE_FILE, not EDIT_FILE.",
+    "For EDIT_FILE on an existing file: prefer startLine, endLine, and replace for partial edits.",
+    "For code files (.js, .json, .yml, etc.): use ---OB_FILE_BEGIN: path--- ... ---OB_FILE_END--- blocks.",
+    "For README.md and .md files: use ONE ```markdown ... ``` fenced block (ask mode = draft only, agent mode = create file).",
+    "Do NOT create README.md or other .md files unless the user explicitly asks for them.",
+    "For YAML (.yml/.yaml): use OB_FILE blocks with real line breaks — not ```yaml fences.",
+    "For directories: use CREATE_FOLDER — NOT RUN_COMMAND mkdir/md/New-Item.",
+    "Operation order: CREATE_FOLDER first, then CREATE_FILE/EDIT_FILE, then RUN_COMMAND last.",
+    "pnpm-workspace.yaml must use list dashes: packages: then \"  - \\\"apps/*\\\"\" on each line.",
+    "Create package.json files via CREATE_FILE before pnpm install — not pnpm init in shell.",
+    "For RUN_COMMAND: put commands only in JSON { \"action\": \"RUN_COMMAND\", \"command\": \"...\" } — never only in ```bash blocks.",
+    "On Windows (runtime.platform win32): use forward slashes in command paths; avoid bash-only mkdir syntax.",
+    "Do not use EDIT_FILE on package.json after npm init — use CREATE_FILE with full package.json content instead."
+  ],
+  "contextDirectories": [],
+  "contextFiles": []
+}
+--- End Project Context ---
+
+--- User Request ---
+حلل المشروع الحالي فعليًا فقط. لا تعدل ولا تحذف ولا تنشئ أي ملف ولا تشغل أي أمر. أريد تقرير Audit دقيق عن البنية الحالية والصفحات والمكونات والوظائف والمشاكل والنواقص والتكرار، مع ذكر مسارات الملفات ذات الصلة. لا تكتب Prompt ولا تقترح أمرًا جديدًا؛ أعطني نتائج التحليل الفعلية فقط.
