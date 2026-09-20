@@ -9,6 +9,7 @@
 export const BRAND = {
   owner: "فيصل المضياني",
   developer: "فيصل المضياني",
+  developerEn: "Faisal Almodhiani",
   platform: "نَسَق",
   platformEn: "NASAQ",
   name: "نَسَق",

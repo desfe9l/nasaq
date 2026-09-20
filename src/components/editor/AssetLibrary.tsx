@@ -1,5 +1,5 @@
 import { useState, useRef } from "react";
-import { Check, Eye, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Eye, Folder, FolderPlus, ImagePlus, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
 import type { Asset } from "@/lib/editor/storage";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,16 @@ export function AssetLibrary() {
   const removeAsset = useEditor((s) => s.removeAsset);
   const renameAsset = useEditor((s) => s.renameAsset);
   const addAsset = useEditor((s) => s.addAsset); // تأكد أن هذه الدالة موجودة في الـ store لحفظ الصور، أو يتم تمريرها عبر الـ props
+  const folders = useEditor((s) => s.assetFolders);
+  const folderId = useEditor((s) => s.assetFolderId);
+  const selectedAssetIds = useEditor((s) => s.selectedAssetIds);
+  const setAssetFolder = useEditor((s) => s.setAssetFolder);
+  const toggleAssetSelect = useEditor((s) => s.toggleAssetSelect);
+  const clearAssetSelection = useEditor((s) => s.clearAssetSelection);
+  const createAssetFolder = useEditor((s) => s.createAssetFolder);
+  const renameAssetFolder = useEditor((s) => s.renameAssetFolder);
+  const deleteAssetFolder = useEditor((s) => s.deleteAssetFolder);
+  const moveAssetsToFolder = useEditor((s) => s.moveAssetsToFolder);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -20,6 +30,10 @@ export function AssetLibrary() {
   const [pending, setPending] = useState<PendingAsset[]>([]);
   const [preview, setPreview] = useState<Asset | PendingAsset | null>(null);
   const [savingPending, setSavingPending] = useState(false);
+  const [folderDialog, setFolderDialog] = useState<"create" | "rename" | null>(null);
+  const [folderDraft, setFolderDraft] = useState("");
+  const visibleAssets = assets.filter((asset) => (asset.folderId || null) === folderId);
+  const currentFolder = folders.find((folder) => folder.id === folderId);
 
   const place = (asset: Asset) => {
     const max = { w: 90, h: 90 };
@@ -85,9 +99,33 @@ export function AssetLibrary() {
           <p className="mt-0.5 text-[10px] text-muted">معاينة قبل الحفظ، ثم إدراج وتعديل مباشر</p>
         </div>
         <span className="rounded-full bg-line-2 px-2 py-1 text-[10px] font-bold tabular-nums text-muted dark:bg-white/10">
-          {assets.length}
+          {visibleAssets.length}
         </span>
       </header>
+
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+        <button type="button" onClick={() => setAssetFolder(null)} className={cn("inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold", !folderId ? "border-navy bg-navy/10" : "border-line dark:border-white/10")}>
+          <Folder className="size-3" /> الكل
+        </button>
+        {folders.map((folder) => (
+          <button key={folder.id} type="button" onClick={() => setAssetFolder(folder.id)} className={cn("inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold", folderId === folder.id ? "border-navy bg-navy/10" : "border-line dark:border-white/10")}>
+            <Folder className="size-3" /> {folder.name}
+          </button>
+        ))}
+        <button type="button" onClick={() => { setFolderDraft(""); setFolderDialog("create"); }} className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10" title="مجلد جديد" aria-label="مجلد جديد"><FolderPlus className="size-3.5" /></button>
+        {currentFolder && <>
+          <button type="button" onClick={() => { setFolderDraft(currentFolder.name); setFolderDialog("rename"); }} className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10" title="إعادة تسمية المجلد" aria-label="إعادة تسمية المجلد"><Pencil className="size-3" /></button>
+          <button type="button" onClick={() => void deleteAssetFolder(currentFolder.id)} className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-red-600 dark:border-white/10" title="حذف المجلد" aria-label="حذف المجلد"><Trash2 className="size-3" /></button>
+        </>}
+      </div>
+
+      {selectedAssetIds.length > 0 && <div className="flex items-center gap-2 rounded-[7px] border border-gold/50 bg-gold/5 p-1.5 text-[10px]">
+        <span className="font-bold">{selectedAssetIds.length} محدد</span>
+        <select aria-label="نقل العناصر إلى مجلد" defaultValue="" onChange={(e) => { if (e.target.value !== "") void moveAssetsToFolder(selectedAssetIds, e.target.value === "root" ? null : e.target.value); }} className="h-7 min-w-0 flex-1 rounded border border-line bg-transparent px-1 text-[10px] dark:border-white/10">
+          <option value="">نقل إلى…</option><option value="root">المكتبة الرئيسية</option>{folders.map((folder) => <option key={folder.id} value={folder.id}>{folder.name}</option>)}
+        </select>
+        <button type="button" onClick={clearAssetSelection} className="text-muted">إلغاء</button>
+      </div>}
 
       {pending.length > 0 && (
         <div className="rounded-[8px] border border-gold/60 bg-gold/2 p-2 dark:bg-gold/10">
@@ -116,16 +154,19 @@ export function AssetLibrary() {
 
       {assetsLoading ? (
         <p className="text-[10px] text-muted">جارٍ تحميل المكتبة…</p>
-      ) : assets.length === 0 ? (
+      ) : visibleAssets.length === 0 ? (
         <div className="rounded-[8px] border border-dashed border-line p-3 text-center dark:border-white/10">
           <p className="text-[10px] leading-5 text-muted">
             احفظ أي صورة أو شعار أو شكل ترفعه ليظهر هنا وتستخدمه في أي مشروع لاحقاً.
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2">
-          {assets.map((asset) => (
-            <div key={asset.id} className="group relative rounded-[8px] border border-line bg-white/60 p-1.5 dark:border-white/10 dark:bg-white/5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(118px,1fr))] gap-2">
+          {visibleAssets.map((asset) => (
+            <div key={asset.id} className={cn("group relative rounded-[8px] border bg-white/60 p-1.5 dark:bg-white/5", selectedAssetIds.includes(asset.id) ? "border-navy ring-1 ring-navy/30" : "border-line dark:border-white/10")}>
+              <button type="button" onClick={() => toggleAssetSelect(asset.id)} aria-label={`تحديد ${asset.name}`} className={cn("absolute right-2 top-2 z-10 grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy text-white" : "border-line dark:border-white/20")}>
+                {selectedAssetIds.includes(asset.id) && <Check className="size-3" />}
+              </button>
               {editingId === asset.id ? (
                 <div className="flex h-20 flex-col gap-1 rounded-[6px] border border-navy-2 p-1 dark:border-gold/60">
                   <input
@@ -231,6 +272,16 @@ export function AssetLibrary() {
             <div className="grid min-h-48 place-items-center rounded-[8px] border border-line bg-line-2/50 p-4 dark:border-white/10 dark:bg-white/5"><img src={preview.src} alt={preview.name} className="max-h-64 max-w-full object-contain" /></div>
             <div className="mt-3 flex items-center justify-between gap-2 text-[10px] text-muted"><span>{preview.w} × {preview.h} px</span><button type="button" onClick={() => { place(preview); setPreview(null); }} className="inline-flex h-8 items-center gap-1.5 rounded-[6px] bg-navy px-3 font-extrabold text-white"><Plus className="size-3.5" /> إدراج وتحديد</button></div>
           </div>
+        </div>
+      )}
+
+      {folderDialog && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4" role="dialog" aria-modal="true" aria-label={folderDialog === "create" ? "إنشاء مجلد" : "إعادة تسمية مجلد"}>
+          <form className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]" onSubmit={(event) => { event.preventDefault(); if (folderDialog === "create") void createAssetFolder(folderDraft); else if (currentFolder) void renameAssetFolder(currentFolder.id, folderDraft); setFolderDialog(null); }}>
+            <strong className="text-[12px]">{folderDialog === "create" ? "مجلد جديد" : "إعادة تسمية المجلد"}</strong>
+            <input autoFocus value={folderDraft} onChange={(event) => setFolderDraft(event.target.value)} aria-label="اسم المجلد" className="h-9 rounded-[7px] border border-line px-2 text-[12px] dark:border-white/10 dark:bg-white/5" />
+            <div className="flex justify-end gap-2"><button type="button" onClick={() => setFolderDialog(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">إلغاء</button><button type="submit" className="h-8 rounded-[6px] bg-navy px-3 text-[11px] font-bold text-white">حفظ</button></div>
+          </form>
         </div>
       )}
     </section>

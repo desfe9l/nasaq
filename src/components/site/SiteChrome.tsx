@@ -133,7 +133,7 @@ export function SiteFooter() {
               never competing with the platform name. */}
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden className="h-3 w-px bg-line dark:bg-white/15" />
-            المصمم والمطور <strong className="font-extrabold text-ink dark:text-white">فيصل المضياني</strong>
+            المصمم والمطور <strong className="font-extrabold text-ink dark:text-white">{BRAND.developer}</strong>
           </span>
         </div>
       </div>

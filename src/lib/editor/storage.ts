@@ -52,9 +52,16 @@ export interface Asset {
   w: number;
   h: number;
   addedAt: number;
+  folderId?: string | null;
 }
 
-export type SettingsKey = "activeProjectId" | "dark" | "zoom" | "focusMode" | "leftOpen" | "rightOpen" | "leftCollapsed" | "rightCollapsed";
+export interface AssetFolder {
+  id: string;
+  name: string;
+  createdAt: number;
+}
+
+export type SettingsKey = "activeProjectId" | "dark" | "zoom" | "focusMode" | "leftOpen" | "rightOpen" | "leftCollapsed" | "rightCollapsed" | "assetFolders";
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 

@@ -44,6 +44,7 @@ import {
   setSetting,
   storageMode,
   type Asset,
+  type AssetFolder,
 } from "./storage";
 import { createProject, createTemplatePage } from "./templates";
 import { FONTS, LEGACY_STORE_KEY, LEGACY_UI_KEY, TYPE_NAME, UI_KEY } from "./model";
@@ -145,10 +146,20 @@ interface EditorStore extends Project, Ui, History {
   /** Reusable uploaded images, newest first. */
   assets: Asset[];
   assetsLoading: boolean;
+  assetFolders: AssetFolder[];
+  assetFolderId: string | null;
+  selectedAssetIds: string[];
   refreshAssets: () => Promise<void>;
-  addAsset: (asset: { name: string; src: string; w: number; h: number }) => Promise<Asset | null>;
+  addAsset: (asset: { name: string; src: string; w: number; h: number; folderId?: string | null }) => Promise<Asset | null>;
   removeAsset: (id: string) => Promise<void>;
   renameAsset: (id: string, name: string) => Promise<void>;
+  setAssetFolder: (id: string | null) => void;
+  toggleAssetSelect: (id: string) => void;
+  clearAssetSelection: () => void;
+  createAssetFolder: (name: string) => Promise<void>;
+  renameAssetFolder: (id: string, name: string) => Promise<void>;
+  deleteAssetFolder: (id: string) => Promise<void>;
+  moveAssetsToFolder: (ids: string[], folderId: string | null) => Promise<void>;
   /** Bundled + detected + uploaded families, in display order. */
   fontChoices: FontChoice[];
   /** True once the one-off device probe has run. */
@@ -457,6 +468,9 @@ export const useEditor = create<EditorStore>((set, get) => {
     projectsLoading: true,
     storage: { mode: "indexeddb", persistent: true },
     assets: [],
+    assetFolders: [],
+    assetFolderId: null,
+    selectedAssetIds: [],
     assetsLoading: true,
     fontChoices: bundledFontChoices(),
     fontsProbed: false,
@@ -538,6 +552,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         set({ assetsLoading: false });
       }
 
+      const folders = await getSetting<AssetFolder[]>("assetFolders");
+      set({ assetFolders: Array.isArray(folders) ? folders : [] });
+
       document.documentElement.lang = "ar";
       document.documentElement.dir = "rtl";
       set({ hydrated: true, past: [JSON.stringify(projectSlice(get()))], future: [], saveState: "saved", savedAt: Date.now() });
@@ -579,6 +596,42 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!trimmed) return;
       await renameAssetRow(id, trimmed);
       set({ assets: get().assets.map((a) => (a.id === id ? { ...a, name: trimmed } : a)) });
+    },
+
+    setAssetFolder: (id) => set({ assetFolderId: id, selectedAssetIds: [] }),
+    toggleAssetSelect: (id) => set((state) => ({
+      selectedAssetIds: state.selectedAssetIds.includes(id)
+        ? state.selectedAssetIds.filter((item) => item !== id)
+        : [...state.selectedAssetIds, id],
+    })),
+    clearAssetSelection: () => set({ selectedAssetIds: [] }),
+    createAssetFolder: async (name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const folder = { id: uid("folder"), name: trimmed, createdAt: Date.now() };
+      const folders = [...get().assetFolders, folder];
+      set({ assetFolders: folders });
+      await setSetting("assetFolders", folders);
+    },
+    renameAssetFolder: async (id, name) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      const folders = get().assetFolders.map((folder) => folder.id === id ? { ...folder, name: trimmed } : folder);
+      set({ assetFolders: folders });
+      await setSetting("assetFolders", folders);
+    },
+    deleteAssetFolder: async (id) => {
+      const folders = get().assetFolders.filter((folder) => folder.id !== id);
+      const assets = get().assets.map((asset) => asset.folderId === id ? { ...asset, folderId: null } : asset);
+      await Promise.all(assets.filter((asset) => asset.folderId === null).map((asset) => saveAsset(asset)));
+      set({ assetFolders: folders, assets, assetFolderId: get().assetFolderId === id ? null : get().assetFolderId, selectedAssetIds: [] });
+      await setSetting("assetFolders", folders);
+    },
+    moveAssetsToFolder: async (ids, folderId) => {
+      const selected = new Set(ids);
+      const assets = get().assets.map((asset) => selected.has(asset.id) ? { ...asset, folderId } : asset);
+      await Promise.all(assets.filter((asset) => selected.has(asset.id)).map((asset) => saveAsset(asset)));
+      set({ assets, selectedAssetIds: [] });
     },
 
     createProject: async (pack, theme) => {

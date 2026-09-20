@@ -394,12 +394,13 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
           return (
             <div
               key={page.id}
-              className="page-frame"
+              className="page-frame shrink-0"
               style={{
-                transform: `scale(${zoom})`,
-                marginBottom: `${size.h * (zoom - 1)}mm`,
+                width: `${size.w * zoom}mm`,
+                height: `${(size.h + 12) * zoom}mm`,
               }}
             >
+              <div className="page-frame-content" style={{ width: `${size.w}mm`, transform: `scale(${zoom})` }}>
               <div className="mb-2 flex items-center justify-between gap-4 text-[12px] text-muted" dir="rtl">
                 <strong className="text-ink dark:text-white">
                   {page.name}
@@ -410,6 +411,7 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
                     ? `صفحة ${pages.findIndex((p) => p.id === page.id) + 1} من ${pages.length}`
                     : `${round(size.w)} × ${round(size.h)} مم`}
                 </span>
+              </div>
               </div>
               <div
                 ref={(n) => {

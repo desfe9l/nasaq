@@ -45,7 +45,7 @@ export function AboutPage() {
             <div className="flex items-center justify-between gap-4">
               <dt className="text-muted">English</dt>
               <dd className="font-bold" dir="ltr">
-                Developed by {BRAND.developer}
+                Developed by {BRAND.developerEn}
               </dd>
             </div>
           </dl>

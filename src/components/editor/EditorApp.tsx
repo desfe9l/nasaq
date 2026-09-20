@@ -285,14 +285,14 @@ function Studio({
   const activeSize = pageSize(activePage);
 
   const fitToScreen = useCallback(() => {
-    const el = document.querySelector(".studio-grid");
+    const el = document.querySelector(".editor-canvas-stage");
     if (!el) return setZoom(0.82);
     const rect = el.getBoundingClientRect();
     const pagePxW = activeSize.w * 3.7795;
     const pagePxH = activeSize.h * 3.7795;
     // Add some padding around the page for better visibility
     const padding = 20; // pixels
-    const next = Math.min((rect.width - padding * 2) / pagePxW, (rect.height - padding * 2) / pagePxH);
+    const next = Math.min((Math.max(0, rect.width - padding * 2)) / pagePxW, (Math.max(0, rect.height - padding * 2)) / pagePxH);
     setZoom(Math.max(0.2, Math.min(2, next)));
   }, [activeSize.h, activeSize.w, setZoom]);
 
@@ -510,7 +510,7 @@ function Studio({
   const fitToSelection = () => {
     const bounds = elementsBounds(selectedElements());
     if (!bounds) return fitToScreen();
-    const el = document.querySelector(".studio-grid");
+    const el = document.querySelector(".editor-canvas-stage");
     if (!el) return;
     const rect = el.getBoundingClientRect();
     // Add some padding around the selection for better visibility
@@ -685,7 +685,7 @@ function Studio({
         }}
         className={cn(
         "editor-focus-workspace relative grid min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden",
-        focusMode || (leftCollapsed && rightCollapsed) ? "lg:grid-cols-[minmax(0,1fr)]" : leftCollapsed ? "lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_336px]" : rightCollapsed ? "lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[292px_minmax(0,1fr)]" : "lg:grid-cols-[280px_minmax(0,1fr)_320px] xl:grid-cols-[292px_minmax(0,1fr)_336px]",
+        focusMode || (leftCollapsed && rightCollapsed) ? "lg:grid-cols-[minmax(0,1fr)]" : leftCollapsed ? "lg:grid-cols-[minmax(360px,1fr)_320px] xl:grid-cols-[minmax(420px,1fr)_336px]" : rightCollapsed ? "lg:grid-cols-[280px_minmax(360px,1fr)] xl:grid-cols-[292px_minmax(420px,1fr)]" : "lg:grid-cols-[280px_minmax(360px,1fr)_320px] xl:grid-cols-[292px_minmax(420px,1fr)_336px]",
         )}
         style={{
           gridTemplateColumns: focusMode || (leftCollapsed && rightCollapsed)
@@ -693,15 +693,15 @@ function Studio({
             : !isDesktop
               ? undefined
               : leftCollapsed
-                ? `minmax(0, 1fr) ${panelWidths.right}px`
+                ? `minmax(360px, 1fr) ${panelWidths.right}px`
                 : rightCollapsed
-                  ? `${panelWidths.left}px minmax(0, 1fr)`
-                  : `${panelWidths.left}px minmax(0, 1fr) ${panelWidths.right}px`,
+                  ? `${panelWidths.left}px minmax(360px, 1fr)`
+                  : `${panelWidths.left}px minmax(360px, 1fr) ${panelWidths.right}px`,
         }}
       >
         <div
           className={cn(
-            "editor-sidebar h-full min-h-0 overflow-hidden",
+            "editor-sidebar relative z-10 h-full min-h-0 overflow-hidden",
             "max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[292px] max-lg:shadow-2xl",
             !leftOpen && "max-lg:hidden",
             leftCollapsed && "hidden",
@@ -720,7 +720,7 @@ function Studio({
 
         <div
           className={cn(
-            "editor-sidebar editor-properties h-full min-h-0 overflow-hidden",
+            "editor-sidebar editor-properties relative z-10 h-full min-h-0 overflow-hidden",
             "max-lg:absolute max-lg:z-30 max-lg:shadow-2xl",
             // Landscape tablets keep the panel beside the canvas.
             "max-lg:landscape:inset-y-0 max-lg:landscape:left-0 max-lg:landscape:w-[320px]",
@@ -852,7 +852,12 @@ function PanelResizeHandle({ side, onStart }: { side: "left" | "right"; onStart:
   return (
     <div
       className={cn("editor-panel-resize-handle", `editor-panel-resize-${side}`)}
-      onPointerDown={onStart}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        onStart(event);
+      }}
       role="separator"
       aria-orientation="vertical"
       aria-label={`تغيير عرض اللوحة ${side === "left" ? "اليسرى" : "اليمنى"} — اسحب المقبض`}
