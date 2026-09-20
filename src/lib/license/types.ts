@@ -13,6 +13,18 @@ export type LicensePlan = "individual-monthly" | "individual-quarterly" | "team-
 export type BillingPeriod = "monthly" | "quarterly";
 export type LicenseStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
 
+/**
+ * User-facing license type labels — the single source the website and the
+ * License Control Panel both render, so a type never appears under two names.
+ * The raw type id stays visible in parentheses for support/debugging.
+ */
+export const LICENSE_TYPE_LABELS: Record<LicenseType, string> = {
+  FREE: "مجاني (FREE)",
+  TRIAL: "تجريبي (TRIAL)",
+  PRO: "احترافي (PRO)",
+  LIFETIME: "مدى الحياة (LIFETIME)",
+};
+
 /** Full license record as stored in the database. */
 export interface License {
   id: string;

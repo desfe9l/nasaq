@@ -1,4 +1,4 @@
-import { clamp, uid } from "@/lib/utils";
+import { clamp, uid } from "../utils.ts";
 import type { Numerals, TextFit } from "./arabic";
 
 /** A4 portrait, in millimetres — the historical default and page-size fallback. */
@@ -956,6 +956,36 @@ export function alignPositions(
     }
     return { id: el.id, x, y };
   });
+}
+
+/**
+ * Alignment moves for a selection, resolved in absolute page space.
+ *
+ * Group members store group-relative coordinates, so each pick is lifted into
+ * page space, aligned against `frame` (the page or the selection bounds), and
+ * mapped back into the space it actually lives in. Doing the math in mixed
+ * coordinate spaces would fling a group member to the page corner while the
+ * frame said otherwise. With one id this aligns that single element against
+ * the frame — the artboard when the frame is the page box.
+ */
+export function alignmentMoves(
+  pageEls: CanvasEl[],
+  ids: string[],
+  edge: AlignEdge,
+  frame: Box,
+): { id: string; x: number; y: number }[] {
+  const picked = ids.flatMap((id) => {
+    const found = findElement(pageEls, id)?.el;
+    if (!found) return [];
+    const abs = absolutePosition(pageEls, id);
+    return [{ el: found, dx: abs ? abs.x - found.x : 0, dy: abs ? abs.y - found.y : 0 }];
+  });
+  const absPicked = picked.map((p) => ({ ...p.el, x: p.el.x + p.dx, y: p.el.y + p.dy }));
+  return alignPositions(absPicked, edge, frame).map((m, i) => ({
+    id: m.id,
+    x: m.x - picked[i].dx,
+    y: m.y - picked[i].dy,
+  }));
 }
 
 /**

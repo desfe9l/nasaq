@@ -95,8 +95,9 @@ async function ensureFonts(root: HTMLElement) {
 /** Editor chrome that must never appear in an export. */
 function stripAuthoringChrome(doc: Document) {
   // Selection handles are UI, not artwork — and CSS pseudo-elements are never
-  // captured, so only the real handle nodes need removing.
-  doc.querySelectorAll(".handle, .rotate-handle, .overflow-badge, .guide-v, .guide-h, .marquee").forEach((h) => h.remove());
+  // captured, so only the real handle nodes need removing. The whole selection
+  // layer goes with them: it is overlay chrome above the artwork, not content.
+  doc.querySelectorAll(".handle, .rotate-handle, .selection-layer, .overflow-badge, .guide-v, .guide-h, .marquee").forEach((h) => h.remove());
   // The selection ring is authoring chrome; it must not bake into the asset.
   doc.querySelectorAll(".selected, .is-secondary, .locked").forEach((n) => {
     n.classList.remove("selected", "is-secondary", "locked");

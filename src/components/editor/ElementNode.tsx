@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { ICONS, cssFont, parseTable, type CanvasEl } from "@/lib/editor/model";
 import { prepareText, textPadding } from "@/lib/editor/text-render";
 import { useEditor } from "@/lib/editor/store";
@@ -7,33 +7,40 @@ import { applyNumerals } from "@/lib/editor/arabic";
 import { safeImageSrc } from "@/lib/editor/images";
 import { ShapeGlyph } from "./ShapeGlyph";
 
-const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
-
 interface Props {
   el: CanvasEl;
-  selected: boolean;
   interactive: boolean;
-  showControls?: boolean;
   onPointerDown: (e: React.PointerEvent, kind: "move" | "resize" | "rotate", handle?: string) => void;
 }
 
 /** Types whose text can be edited in place with a double click. */
 const EDITABLE = new Set(["text", "box", "stat", "stamp", "progress"]);
 
+/**
+ * A document-layer node: it paints one element, in z-order, and nothing else.
+ *
+ * Selection chrome (outline, resize/rotate handles, the drag-capture frame)
+ * lives in CanvasStage's selection overlay layer, so overlapping elements can
+ * never cover the controls of a selected element beneath them.
+ */
 export function ElementNode({
   el,
-  selected,
   interactive,
-  showControls = true,
   onPointerDown,
-  multi,
   onEnterGroup,
-}: Props & { multi?: boolean; onEnterGroup?: () => void }) {
+}: Props & { onEnterGroup?: () => void }) {
   const updateElement = useEditor((s) => s.updateElement);
   const fitTextBox = useEditor((s) => s.fitTextBox);
+  const setEditing = useEditor((s) => s.setEditing);
   const commit = useEditor((s) => s.commit);
   const textRef = useRef<HTMLDivElement>(null);
   const editing = useRef(false);
+
+  // Only this node may end its own editing session: a blur that arrives after
+  // the author already started editing a different element must not close it.
+  const endEditingState = useCallback(() => {
+    if (useEditor.getState().editingId === el.id) setEditing(null);
+  }, [el.id, setEditing]);
 
   // A remount (undo, page switch) must never leave a stale contentEditable DOM
   // node behind: the rendered `{el.content}` would be out of sync with it.
@@ -42,8 +49,9 @@ export function ElementNode({
       editing.current = false;
       textRef.current.contentEditable = "false";
       textRef.current.classList.remove("editing");
+      endEditingState();
     }
-  }, [el.id]);
+  }, [el.id, endEditingState]);
 
   const startEdit = (e: React.MouseEvent) => {
     if (!interactive || el.locked) return;
@@ -61,6 +69,7 @@ export function ElementNode({
     const node = textRef.current;
     if (!node) return;
     editing.current = true;
+    setEditing(el.id);
     node.contentEditable = "true";
     node.classList.add("editing");
     node.focus();
@@ -76,6 +85,7 @@ export function ElementNode({
     const node = textRef.current;
     if (!node || !editing.current) return;
     editing.current = false;
+    endEditingState();
     node.contentEditable = "false";
     node.classList.remove("editing");
     const next = node.innerText;
@@ -99,12 +109,7 @@ export function ElementNode({
   return (
     <div
       data-el-id={el.id}
-      className={cn(
-        "canvas-el",
-        selected && interactive && "selected",
-        selected && multi && "is-secondary",
-        el.locked && "locked",
-      )}
+      className={cn("canvas-el", el.locked && "locked")}
       style={{
         left: `${el.x}mm`,
         top: `${el.y}mm`,
@@ -118,33 +123,11 @@ export function ElementNode({
       }}
       onPointerDown={(e) => {
         if (!interactive) return;
-        if ((e.target as HTMLElement).closest(".handle, .rotate-handle")) return;
         onPointerDown(e, "move");
       }}
       onDoubleClick={startEdit}
     >
       <ElementContent el={el} textRef={textRef} onBlur={finishEdit} onKeyDown={handleEditKey} />
-      {showControls && selected && interactive && !el.locked && !multi && (
-        <>
-          {HANDLES.map((h) => (
-            <div
-              key={h}
-              className={cn("handle", h)}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                onPointerDown(e, "resize", h);
-              }}
-            />
-          ))}
-          <div
-            className="rotate-handle"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onPointerDown(e, "rotate");
-            }}
-          />
-        </>
-      )}
     </div>
   );
 }
@@ -374,7 +357,6 @@ function ElementContent({
             <ElementNode
               key={child.id}
               el={{ ...child, hidden: child.hidden }}
-              selected={false}
               interactive={false}
               onPointerDown={() => {}}
             />

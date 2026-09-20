@@ -280,9 +280,22 @@ export function AssetLibrary() {
       )}
 
       {folderDialog && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4" role="dialog" aria-modal="true" aria-label={folderDialog === "create" ? "إنشاء مجلد" : folderDialog === "rename" ? "إعادة تسمية مجلد" : "حذف المجلد نهائيًا"}>
+        /*
+         * Destructive-action confirmation. The backdrop has no click handler —
+         * a stray click outside the card can never confirm anything — and
+         * Escape closes from anywhere inside the dialog, whatever holds focus.
+         * The initial focus sits on "إلغاء", so a hasty Enter cancels instead
+         * of confirming the delete.
+         */
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={folderDialog === "create" ? "إنشاء مجلد" : folderDialog === "rename" ? "إعادة تسمية مجلد" : "حذف المجلد نهائيًا"}
+          onKeyDown={(event) => { if (event.key === "Escape") setFolderDialog(null); }}
+        >
           {folderDialog === "delete" ? (
-            <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]" onKeyDown={(event) => { if (event.key === "Escape") setFolderDialog(null); }}>
+            <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]">
               <strong className="text-[13px]">حذف المجلد نهائيًا؟</strong>
               <p className="text-[11px] leading-6 text-muted">سيتم حذف هذا المجلد ومحتوياته نهائيًا، ولا يمكن التراجع عن هذا الإجراء.</p>
               <div className="flex justify-end gap-2"><button type="button" autoFocus onClick={() => setFolderDialog(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">إلغاء</button><button type="button" onClick={() => { if (currentFolder) void deleteAssetFolder(currentFolder.id); setFolderDialog(null); }} className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white">حذف نهائيًا</button></div>

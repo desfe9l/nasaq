@@ -490,20 +490,59 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   object-fit: contain;
 }
 
-.canvas-el.selected {
-  outline: 1.5px solid #2563eb !important;
-  outline-offset: 4px;
-  box-shadow: 0 0 0 1.5mm rgba(37, 99, 235, 0.18), var(--selection-shadow, none);
+/*
+ * Selection & manipulation overlay.
+ *
+ * This layer is a sibling of the document elements and sits above all of them
+ * (SELECTION_LAYER_Z; document z stays at 1..n). It owns the selection outline,
+ * the resize/rotate handles and the drag-capture frame, so artwork that
+ * overlaps a selected element can never cover or steal its controls. The
+ * frame mirrors the element's box and rotation; sizes divide by the
+ * --editor-zoom custom property (set on the canvas stage) because mm scale
+ * with the zoomed page — dividing keeps the chrome a constant on-screen size.
+ */
+/* z-index comes from SELECTION_LAYER_Z in CanvasStage — the one source. */
+.selection-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.selection-frame {
+  --handle-size: calc(2.6mm / var(--editor-zoom, 1));
+  --rotate-gap: calc(10mm / var(--editor-zoom, 1));
+  position: absolute;
+  z-index: 2;
+  border: calc(0.45mm / var(--editor-zoom, 1)) solid #2563eb;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: move;
 }
 
 /*
- * Secondary members of a multi-selection get a thinner, dashed ring so the
- * handle-bearing primary element stays visually dominant.
+ * Secondary members of a multi-selection get a dashed boundary, no handles,
+ * and sit below the primary frame, so the handle-bearing element stays
+ * visually dominant even when the two boxes overlap.
  */
-.canvas-el.selected.is-secondary {
-  outline: 1px dashed rgba(37, 99, 235, 0.95);
-  outline-offset: 3px;
-  box-shadow: none;
+.selection-frame.is-secondary {
+  z-index: 1;
+  border-style: dashed;
+  border-color: rgba(37, 99, 235, 0.9);
+}
+
+.selection-frame.is-locked {
+  border-style: dashed;
+  border-color: rgba(148, 163, 184, 0.95);
+  cursor: not-allowed;
+}
+
+/*
+ * While the caret is inside the element's in-place text editor the frame must
+ * not intercept clicks, double-clicks or drag-selections meant for the
+ * contentEditable node beneath it.
+ */
+.selection-frame.is-editing {
+  pointer-events: none;
 }
 
 .canvas-el.locked {
@@ -659,35 +698,40 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   font-weight: 800;
 }
 
+/*
+ * Handles are anchored to the corners/edges of `.selection-frame`, centred on
+ * the point they control — every position is half a handle off the edge, so
+ * they are exactly usable near artboard edges and never offset arbitrarily.
+ */
 .handle,
 .rotate-handle {
   position: absolute;
-  z-index: 50;
+  z-index: 1;
   background: #ffffff;
-  border: 0.5mm solid #2563eb;
+  border: calc(0.5mm / var(--editor-zoom, 1)) solid #2563eb;
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
 }
 
 .handle {
-  width: 3.2mm;
-  height: 3.2mm;
+  width: var(--handle-size);
+  height: var(--handle-size);
   border-radius: 50%;
 }
 
-.handle.nw { top: -7.2mm; left: -7.2mm; cursor: nwse-resize; }
-.handle.n  { top: -7.2mm; left: calc(50% - 1.6mm); cursor: ns-resize; }
-.handle.ne { top: -7.2mm; right: -7.2mm; cursor: nesw-resize; }
-.handle.e  { top: calc(50% - 1.6mm); right: -7.2mm; cursor: ew-resize; }
-.handle.se { bottom: -7.2mm; right: -7.2mm; cursor: nwse-resize; }
-.handle.s  { bottom: -7.2mm; left: calc(50% - 1.6mm); cursor: ns-resize; }
-.handle.sw { bottom: -7.2mm; left: -7.2mm; cursor: nesw-resize; }
-.handle.w  { top: calc(50% - 1.6mm); left: -7.2mm; cursor: ew-resize; }
+.handle.nw { top: calc(var(--handle-size) / -2); left: calc(var(--handle-size) / -2); cursor: nwse-resize; }
+.handle.n  { top: calc(var(--handle-size) / -2); left: calc(50% - var(--handle-size) / 2); cursor: ns-resize; }
+.handle.ne { top: calc(var(--handle-size) / -2); right: calc(var(--handle-size) / -2); cursor: nesw-resize; }
+.handle.e  { top: calc(50% - var(--handle-size) / 2); right: calc(var(--handle-size) / -2); cursor: ew-resize; }
+.handle.se { bottom: calc(var(--handle-size) / -2); right: calc(var(--handle-size) / -2); cursor: nwse-resize; }
+.handle.s  { bottom: calc(var(--handle-size) / -2); left: calc(50% - var(--handle-size) / 2); cursor: ns-resize; }
+.handle.sw { bottom: calc(var(--handle-size) / -2); left: calc(var(--handle-size) / -2); cursor: nesw-resize; }
+.handle.w  { top: calc(50% - var(--handle-size) / 2); left: calc(var(--handle-size) / -2); cursor: ew-resize; }
 
 .rotate-handle {
-  width: 4.2mm;
-  height: 4.2mm;
-  top: -15mm;
-  left: calc(50% - 2.1mm);
+  width: var(--handle-size);
+  height: var(--handle-size);
+  top: calc(var(--rotate-gap) * -1);
+  left: calc(50% - var(--handle-size) / 2);
   border-radius: 50%;
   cursor: grab;
 }
@@ -697,25 +741,10 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 @media (pointer: coarse) {
-  .handle {
-    width: 5mm;
-    height: 5mm;
-  }
-
-  .handle.nw { top: -8.5mm; left: -8.5mm; }
-  .handle.n  { top: -8.5mm; left: calc(50% - 2.5mm); }
-  .handle.ne { top: -8.5mm; right: -8.5mm; }
-  .handle.e  { top: calc(50% - 2.5mm); right: -8.5mm; }
-  .handle.se { bottom: -8.5mm; right: -8.5mm; }
-  .handle.s  { bottom: -8.5mm; left: calc(50% - 2.5mm); }
-  .handle.sw { bottom: -8.5mm; left: -8.5mm; }
-  .handle.w  { top: calc(50% - 2.5mm); left: -8.5mm; }
-
-  .rotate-handle {
-    width: 6mm;
-    height: 6mm;
-    top: -18mm;
-    left: calc(50% - 3mm);
+  /* Touch targets grow on tablets; same anchors, larger hit circles. */
+  .selection-frame {
+    --handle-size: calc(3.4mm / var(--editor-zoom, 1));
+    --rotate-gap: calc(13mm / var(--editor-zoom, 1));
   }
 }
 
