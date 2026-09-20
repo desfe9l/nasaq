@@ -4,13 +4,13 @@ import {
   A4,
   GRID,
   THEMES,
-  alignPositions,
+  absoluteBounds,
+  alignmentMoves,
   clone,
   constrainElement,
   createElement,
   createGroupFrom,
   distributePositions,
-  elementsBounds,
   explodeGroup,
   findElement,
   nextZ,
@@ -99,6 +99,15 @@ interface Ui {
   selectedIds: string[];
   /** Group whose children are directly selectable, set by entering a group. */
   enteredGroupId: string | null;
+  /**
+   * Element with an active in-place text editor, if any.
+   *
+   * The selection overlay reads this to step aside (no pointer capture, no
+   * handles) while the caret is inside a text node.
+   */
+  editingId: string | null;
+  /** Begin/end in-place text editing for an element. */
+  setEditing: (id: string | null) => void;
   zoom: number;
   showGrid: boolean;
   snapGrid: boolean;
@@ -409,6 +418,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       selectedId: null,
       selectedIds: [],
       enteredGroupId: null,
+      editingId: null,
       ...extra,
     });
   };
@@ -442,6 +452,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     selectedId: null,
     selectedIds: [],
     enteredGroupId: null,
+    editingId: null,
     zoom: 0.82,
     showGrid: false,
     snapGrid: true,
@@ -791,6 +802,8 @@ export const useEditor = create<EditorStore>((set, get) => {
         rightOpen: id ? true : s.rightOpen,
       })),
 
+    setEditing: (id) => set({ editingId: id }),
+
     toggleSelect: (id) => {
       const s = get();
       const page = activePageOf(s);
@@ -929,10 +942,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       const s = get();
       const page = activePageOf(s);
       if (!page) return;
-      const picked = s.selectedIds
-        .map((id) => locate(page, id)?.el)
-        .filter((el): el is CanvasEl => Boolean(el));
-      if (!picked.length) {
+      if (!s.selectedIds.length) {
         toast.error("حدّد عنصرًا للمحاذاة");
         return;
       }
@@ -940,8 +950,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       const target =
         frame === "page"
           ? { x: 0, y: 0, w: size.w, h: size.h }
-          : elementsBounds(picked) || { x: 0, y: 0, w: size.w, h: size.h };
-      applyPositions(alignPositions(picked, edge, target));
+          : absoluteBounds(page.elements, s.selectedIds) || { x: 0, y: 0, w: size.w, h: size.h };
+      // One element aligns against the frame itself (the artboard for "page");
+      // several elements align onto their shared box. Group members are
+      // resolved through absolute page space inside `alignmentMoves`.
+      applyPositions(alignmentMoves(page.elements, s.selectedIds, edge, target));
     },
 
     distribute: (axis) => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { findElement, MIN_SIZE, pageSize, type Box, type CanvasEl, type Page } from "@/lib/editor/model";
-import { shapeDef } from "@/lib/editor/shapes";
+import { applySnap, resizeByHandle } from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
@@ -25,7 +25,18 @@ type Op =
 type Marquee = { x0: number; y0: number; x1: number; y1: number } | null;
 
 const ARTBOARD_GAP_MM = 18;
-const SNAP_THRESHOLD_MM = 1.4;
+/**
+ * z-index of the selection/manipulation layer inside a page.
+ *
+ * `normalizeZ` keeps document elements at 1..n, and the marquee/guides live
+ * below 100, so a large constant guarantees the overlay is painted above every
+ * document element no matter how they stack — the overlay is chrome, never
+ * content, and must never lose a hit-test to artwork that happens to overlap
+ * the selected element.
+ */
+const SELECTION_LAYER_Z = 5000;
+/** The eight resize handles, named by the corner/edge they sit on. */
+const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
 
 function pagePoint(rect: DOMRect, size: { w: number; h: number }, clientX: number, clientY: number) {
   return {
@@ -53,6 +64,7 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
   const commit = useEditor((s) => s.commit);
   const setActivePage = useEditor((s) => s.setActivePage);
   const setZoom = useEditor((s) => s.setZoom);
+  const editingId = useEditor((s) => s.editingId);
 
   const opRef = useRef<Op>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -116,6 +128,9 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     parent?: { x: number; y: number },
   ) => {
     if (el.locked) {
+      // Locked elements can be selected but not gestured; stopping the press
+      // here keeps the stage's click-to-deselect from immediately undoing it.
+      e.stopPropagation();
       select(el.id);
       return;
     }
@@ -202,7 +217,27 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
       if (op.kind === "move") {
         next.x = op.orig.x + dx;
         next.y = op.orig.y + dy;
-        applySnap(next, others, size, snapGrid, snapElements, setGuides, op.origins);
+        /*
+         * Snap policy for moves:
+         *  · Alt escapes all snapping mid-gesture, so a stuck alignment never
+         *    traps the element;
+         *  · Shift is the alignment mode — smart guides stay available for the
+         *    gesture even when the element-snap preference is off;
+         *  · otherwise the author's grid/element snap preferences apply.
+         * The threshold itself is screen-space (see transform.ts), so zoom has
+         * no effect on how eagerly an element locks on.
+         */
+        const zoomNow = useEditor.getState().zoom;
+        const snapped = applySnap(
+          next,
+          others,
+          size,
+          snapGrid && !ev.altKey,
+          !ev.altKey && (snapElements || ev.shiftKey),
+          zoomNow,
+          op.origins,
+        );
+        setGuides(snapped);
         // Everything else in the selection follows the pressed element's final,
         // snapped offset, so their spacing relative to each other is preserved.
         const appliedDx = next.x - op.orig.x;
@@ -221,7 +256,9 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
           );
         }
       } else if (op.kind === "resize") {
-        resizeByHandle(next, op.orig, op.handle || "se", dx, dy, ev.shiftKey);
+        // Shift (or the element's own aspect lock) preserves the element's
+        // current aspect ratio; a plain drag resizes freely.
+        resizeByHandle(next, op.orig, op.handle || "se", dx, dy, ev.shiftKey || op.orig.style?.aspectLock === true);
       } else if (op.kind === "rotate") {
         const cx = op.orig.x + op.orig.w / 2;
         const cy = op.orig.y + op.orig.h / 2;
@@ -328,6 +365,7 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     <div
       ref={stageRef}
       className={cn("editor-canvas-stage studio-grid relative min-h-0 min-w-0 overflow-auto px-6 py-8", dropping && "is-dropping")}
+      style={{ "--editor-zoom": zoom } as React.CSSProperties}
       dir="ltr"
       onPointerDownCapture={(e) => {
         if (!spaceDown.current || !stageRef.current) return;
@@ -391,6 +429,32 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
           const isActive = page.id === activePageId;
           const entered = enteredGroupId ? findElement(page.elements, enteredGroupId)?.el || null : null;
           const enteredKids = entered?.children ?? [];
+          /*
+           * Selection/manipulation frames for this page, in the grouping
+           * context the author is in (group members at their absolute page
+           * positions). They render in a dedicated overlay layer above every
+           * document element so overlapping artwork can never block the
+           * selection outline, the handles or a drag on the selected element.
+           */
+          const selectionFrames: SelectionBox[] = [];
+          if (isActive) {
+            if (entered && enteredKids.length) {
+              for (const child of enteredKids) {
+                if (selectedSet.has(child.id) && !child.hidden) {
+                  selectionFrames.push({
+                    el: { ...child, x: entered.x + child.x, y: entered.y + child.y },
+                    parent: { x: entered.x, y: entered.y },
+                  });
+                }
+              }
+            } else {
+              for (const el of page.elements) {
+                if (selectedSet.has(el.id) && !el.hidden && el.id !== entered?.id) {
+                  selectionFrames.push({ el, parent: undefined });
+                }
+              }
+            }
+          }
           return (
             <div
               key={page.id}
@@ -459,8 +523,6 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
                                 <ElementNode
                                   key={child.id}
                                   el={abs}
-                                  selected={selectedSet.has(child.id)}
-                                  multi={selectedSet.size > 1}
                                   interactive
                                   onPointerDown={(ev, kind, handle) => startOp(ev, page, abs, kind, handle, { x: entered.x, y: entered.y })}
                                 />
@@ -474,8 +536,6 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
                       <ElementNode
                         key={el.id}
                         el={el}
-                        selected={selectedSet.has(el.id)}
-                        multi={selectedSet.size > 1}
                         interactive
                         onEnterGroup={el.type === "group" ? () => enterGroup(el.id) : undefined}
                         onPointerDown={(ev, kind, handle) => startOp(ev, page, el, kind, handle)}
@@ -501,6 +561,23 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
                   guides.v.map((x) => <div key={`v${x}`} className="guide-v" style={{ left: `${x}mm` }} />)}
                 {isActive &&
                   guides.h.map((y) => <div key={`h${y}`} className="guide-h" style={{ top: `${y}mm` }} />)}
+                {isActive &&
+                  selectionFrames.length > 0 && (
+                    <div className="selection-layer" style={{ zIndex: SELECTION_LAYER_Z }}>
+                      {selectionFrames.map((frame) => (
+                        <SelectionFrame
+                          key={frame.el.id}
+                          frame={frame}
+                          primary={selectedIds.length === 1}
+                          editing={editingId === frame.el.id}
+                          onGesture={(ev, kind, handle) =>
+                            startOp(ev, page, frame.el, kind, handle, frame.parent)
+                          }
+                          onEditRequest={() => requestEdit(page.id, frame.el.id)}
+                        />
+                      ))}
+                    </div>
+                  )}
               </div>
               </div>
             </div>
@@ -540,6 +617,109 @@ function OverflowFlag({ el, onFit }: { el: CanvasEl; onFit: () => void }) {
   );
 }
 
+/** A selected element to draw a manipulation frame for, plus its group offset. */
+interface SelectionBox {
+  /** Absolute page-space geometry (group members already offset). */
+  el: CanvasEl;
+  /** Group-relative coordinate offset, when stepping inside a group. */
+  parent?: { x: number; y: number };
+}
+
+/**
+ * Manipulation frame for one selected element, rendered in the selection layer.
+ *
+ * This is the editor's separation of concerns in practice: the document layer
+ * (ElementNode) paints content in z-order, while this frame — always above all
+ * artwork — owns selection chrome and pointer interaction for the selection.
+ * Overlapping elements can never steal its handles, its drag, or its outline.
+ *
+ * The frame mirrors the element's box and rotation exactly, so the handles sit
+ * on the true rotated corners; `--editor-zoom` keeps their screen size stable
+ * at every zoom level.
+ */
+function SelectionFrame({
+  frame,
+  primary,
+  editing,
+  onGesture,
+  onEditRequest,
+}: {
+  frame: SelectionBox;
+  primary: boolean;
+  editing: boolean;
+  onGesture: (e: React.PointerEvent, kind: "move" | "resize" | "rotate", handle?: string) => void;
+  onEditRequest: () => void;
+}) {
+  const select = useEditor((s) => s.select);
+  const el = frame.el;
+  return (
+    <div
+      className={cn(
+        "selection-frame",
+        !primary && "is-secondary",
+        el.locked && "is-locked",
+        editing && "is-editing",
+      )}
+      style={{
+        left: `${el.x}mm`,
+        top: `${el.y}mm`,
+        width: `${el.w}mm`,
+        height: `${el.h}mm`,
+        transform: `rotate(${el.rotation || 0}deg)`,
+      }}
+      onPointerDown={(e) => {
+        if ((e.target as HTMLElement).closest(".handle, .rotate-handle")) return;
+        e.stopPropagation();
+        if (el.locked) {
+          select(el.id);
+          return;
+        }
+        onGesture(e, "move");
+      }}
+      onDoubleClick={(e) => {
+        // Text editing, group stepping: delegate to the element node itself so
+        // there is exactly one edit pathway, never a duplicate.
+        e.stopPropagation();
+        onEditRequest();
+      }}
+    >
+      {primary && !el.locked && !editing && (
+        <>
+          {HANDLES.map((h) => (
+            <div
+              key={h}
+              className={cn("handle", h)}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onGesture(e, "resize", h);
+              }}
+            />
+          ))}
+          <div
+            className="rotate-handle"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              onGesture(e, "rotate");
+            }}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Forward a double-click on the manipulation frame to the element node beneath
+ * it, which owns in-place text editing and group stepping. Dispatching a real
+ * `dblclick` keeps one editing implementation instead of duplicating it in the
+ * overlay.
+ */
+function requestEdit(pageId: string, elId: string) {
+  const host = document.querySelector<HTMLElement>(`[data-page-id="${pageId}"]`);
+  const node = host?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(elId)}"]`);
+  node?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+}
+
 /**
  * Hidden 1:1 pages used by export capture. Rendered off-screen (not
  * `display:none`) so html2canvas still measures real boxes and loads images.
@@ -564,131 +744,11 @@ function ExportCapture({ pages }: { pages: Page[] }) {
               .slice()
               .sort((a, b) => a.z - b.z)
               .map((el) => (
-                <ElementNode key={el.id} el={el} selected={false} interactive={false} onPointerDown={() => {}} />
+                <ElementNode key={el.id} el={el} interactive={false} onPointerDown={() => {}} />
               ))}
           </div>
         );
       })}
     </div>
   );
-}
-
-function resizeByHandle(next: CanvasEl, orig: CanvasEl, handle: string, dx: number, dy: number, lock: boolean) {
-  let { x, y, w, h } = orig;
-  const shapeId = orig.style?.shapeId || orig.style?.shape || "rect";
-  const intrinsicLock = orig.type === "shape"
-    ? shapeId !== "ellipse" && orig.style?.aspectLock !== false
-    : ["image", "logo", "icon", "qr"].includes(orig.type) && orig.style?.aspectLock !== false;
-  const preserve = lock || intrinsicLock;
-  const ratio = orig.type === "shape"
-    ? shapeDef(shapeId).aspectRatio || orig.w / Math.max(orig.h, MIN_SIZE)
-    : orig.w / Math.max(orig.h, MIN_SIZE);
-
-  if (preserve) {
-    const horizontal = handle.includes("e") || handle.includes("w");
-    const vertical = handle.includes("n") || handle.includes("s");
-    let scale = 1;
-    if (horizontal && vertical) {
-      const widthScale = (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
-      const heightScale = (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
-      scale = Math.abs(widthScale - 1) >= Math.abs(heightScale - 1) ? widthScale : heightScale;
-    } else if (horizontal) {
-      scale = (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
-    } else if (vertical) {
-      scale = (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
-    }
-    const nextW = Math.max(MIN_SIZE, orig.w * scale);
-    const nextH = Math.max(MIN_SIZE, nextW / ratio);
-    if (handle.includes("w")) x = orig.x + orig.w - nextW;
-    if (handle.includes("e")) x = orig.x;
-    if (!horizontal) x = orig.x + (orig.w - nextW) / 2;
-    if (handle.includes("n")) y = orig.y + orig.h - nextH;
-    if (handle.includes("s")) y = orig.y;
-    if (!vertical) y = orig.y + (orig.h - nextH) / 2;
-    next.x = x;
-    next.y = y;
-    next.w = nextW;
-    next.h = nextH;
-    return;
-  }
-
-  if (handle.includes("e")) w = orig.w + dx;
-  if (handle.includes("s")) h = orig.h + dy;
-  if (handle.includes("w")) {
-    x = orig.x + dx;
-    w = orig.w - dx;
-  }
-  if (handle.includes("n")) {
-    y = orig.y + dy;
-    h = orig.h - dy;
-  }
-  if (w < MIN_SIZE) {
-    if (handle.includes("w")) x = orig.x + orig.w - MIN_SIZE;
-    w = MIN_SIZE;
-  }
-  if (h < MIN_SIZE) {
-    if (handle.includes("n")) y = orig.y + orig.h - MIN_SIZE;
-    h = MIN_SIZE;
-  }
-  next.x = x;
-  next.y = y;
-  next.w = w;
-  next.h = h;
-}
-
-/**
- * Grid snap plus smart guides, returning the guide lines to draw.
- *
- * Candidate edges include the page edges/centres and every other element's
- * edges and centres, so a dragged element can lock onto a neighbour's baseline
- * as readily as onto the page axis.
- */
-function applySnap(
-  el: CanvasEl,
-  others: CanvasEl[],
-  size: { w: number; h: number },
-  snapGrid: boolean,
-  snapEl: boolean,
-  setGuides: (g: { v: number[]; h: number[] }) => void,
-  moving: Record<string, unknown> = {},
-) {
-  const g = 5;
-  const v: number[] = [];
-  const h: number[] = [];
-  if (snapGrid) {
-    el.x = Math.round(el.x / g) * g;
-    el.y = Math.round(el.y / g) * g;
-  }
-  if (snapEl) {
-    // Elements that are moving with this gesture are not candidates: snapping a
-    // dragged element to a sibling travelling beside it would fight the drag.
-    const stable = others.filter((o) => !moving[o.id]);
-    const edges = [0, size.w / 2, size.w, ...stable.flatMap((o) => [o.x, o.x + o.w / 2, o.x + o.w])];
-    const hedges = [0, size.h / 2, size.h, ...stable.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h])];
-    const mineV = [el.x, el.x + el.w / 2, el.x + el.w];
-    const mineH = [el.y, el.y + el.h / 2, el.y + el.h];
-    const nearest = (mine: number[], targets: number[]) => {
-      let best: { delta: number; target: number } | null = null;
-      for (const m of mine) {
-        for (const t of targets) {
-          const delta = t - m;
-          if (Math.abs(delta) <= SNAP_THRESHOLD_MM && (!best || Math.abs(delta) < Math.abs(best.delta))) {
-            best = { delta, target: t };
-          }
-        }
-      }
-      return best;
-    };
-    const bestV = nearest(mineV, edges);
-    const bestH = nearest(mineH, hedges);
-    if (bestV) {
-      el.x += bestV.delta;
-      v.push(bestV.target);
-    }
-    if (bestH) {
-      el.y += bestH.delta;
-      h.push(bestH.target);
-    }
-  }
-  setGuides({ v: [...new Set(v)], h: [...new Set(h)] });
 }

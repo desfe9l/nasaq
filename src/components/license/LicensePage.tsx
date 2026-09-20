@@ -20,15 +20,15 @@ import {
   Unlock,
 } from "lucide-react";
 import type { LicenseType, FeatureId } from "@/lib/license/types";
-import { FEATURE_LABELS } from "@/lib/license/types";
+import { FEATURE_LABELS, LICENSE_TYPE_LABELS } from "@/lib/license/types";
 
 // ── Plan Display Config ────────────────────────────────────────────────────
 
-const PLAN_CONFIG: Record<LicenseType, { name: string; icon: typeof Shield; color: string; bg: string }> = {
-  FREE: { name: "مجاني", icon: Lock, color: "text-gray-600", bg: "bg-gray-100 dark:bg-gray-800" },
-  TRIAL: { name: "تجريبي", icon: Zap, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/30" },
-  PRO: { name: "PRO", icon: Crown, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-900/30" },
-  LIFETIME: { name: "مدى الحياة", icon: Crown, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-900/30" },
+const PLAN_CONFIG: Record<LicenseType, { icon: typeof Shield; color: string; bg: string }> = {
+  FREE: { icon: Lock, color: "text-gray-600", bg: "bg-gray-100 dark:bg-gray-800" },
+  TRIAL: { icon: Zap, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/30" },
+  PRO: { icon: Crown, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-900/30" },
+  LIFETIME: { icon: Crown, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-900/30" },
 };
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -44,6 +44,7 @@ export default function LicensePage() {
   const currentType: LicenseType = license?.type ?? "FREE";
   const config = PLAN_CONFIG[currentType];
   const PlanIcon = config.icon;
+  const planName = LICENSE_TYPE_LABELS[currentType];
 
   const handleActivate = async () => {
     if (!activateKey.trim()) return;
@@ -91,7 +92,7 @@ export default function LicensePage() {
             </div>
             <div>
               <p className="text-sm text-muted">الخطة الحالية</p>
-              <p className="text-lg font-bold">{config.name}</p>
+              <p className="text-lg font-bold">{planName}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">

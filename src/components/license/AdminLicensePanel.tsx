@@ -14,7 +14,7 @@ import {
   extendLicenseFn,
   assignLicenseFn,
 } from "@/lib/license/functions";
-import type { License, LicenseType } from "@/lib/license/types";
+import { LICENSE_TYPE_LABELS, type License, type LicenseType } from "@/lib/license/types";
 import {
   Shield,
   Plus,
@@ -270,10 +270,11 @@ export default function AdminLicensePanel() {
               onChange={(e) => setCreateType(e.target.value as LicenseType)}
               className="mb-4 min-w-0 rounded-lg border border-line bg-transparent px-4 py-2.5 text-sm outline-none dark:border-white/10"
             >
-              <option value="FREE">مجاني (FREE)</option>
-              <option value="TRIAL">تجريبي (TRIAL)</option>
-              <option value="PRO">احترافي (PRO)</option>
-              <option value="LIFETIME">مدى الحياة (LIFETIME)</option>
+              {(Object.keys(LICENSE_TYPE_LABELS) as LicenseType[]).map((t) => (
+                <option key={t} value={t}>
+                  {LICENSE_TYPE_LABELS[t]}
+                </option>
+              ))}
             </select>
 
             {createType === "TRIAL" && (
@@ -351,7 +352,7 @@ export default function AdminLicensePanel() {
                   <td className="px-4 py-3 font-mono text-xs font-bold" dir="ltr">
                     {lic.keyPrefix}-****
                   </td>
-                  <td className="px-4 py-3 font-bold">{lic.type}</td>
+                  <td className="px-4 py-3 font-bold">{LICENSE_TYPE_LABELS[lic.type] ?? lic.type}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${statusBadgeClass(lic.status)}`}>
                       {lic.status}
