@@ -357,6 +357,13 @@ function Studio({
         copySelected();
         return;
       }
+      if (meta && key === "x") {
+        if (typing) return;
+        e.preventDefault();
+        copySelected();
+        deleteSelected();
+        return;
+      }
       if (meta && key === "v") {
         if (typing) return;
         e.preventDefault();
@@ -397,6 +404,11 @@ function Studio({
         setZoom(useEditor.getState().zoom - 0.08);
         return;
       }
+      if (meta && key === "0") {
+        e.preventDefault();
+        fitToScreen();
+        return;
+      }
       if (typing) return;
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
@@ -415,7 +427,7 @@ function Studio({
         e.preventDefault();
         const state = useEditor.getState();
         const selected = state.selectedElements();
-        const step = e.shiftKey ? 5 : 1;
+        const step = e.shiftKey ? 5 : e.altKey ? 0.5 : 1;
         const dx = e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0;
         const dy = e.key === "ArrowDown" ? step : e.key === "ArrowUp" ? -step : 0;
         // Move the whole selection, not just the primary element, so a nudge

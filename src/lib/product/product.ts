@@ -2,6 +2,8 @@ export type ProductEdition = "demo" | "commercial" | "enterprise";
 export type LicenseStatus = "DEMO" | "TRIAL" | "ACTIVE" | "EXPIRED" | "SUSPENDED";
 export type LicenseScope = "individual" | "team" | "organization" | "enterprise";
 export type MemberRole = "owner" | "administrator" | "designer" | "editor" | "reviewer" | "viewer";
+export type LicenseSource = "manual" | "lemonsqueezy" | "demo-local" | "server";
+export type CommercialPlan = "individual-monthly" | "individual-quarterly" | "team-monthly" | "team-quarterly";
 
 export interface FeatureEntitlements {
   maxProjects: number | null;
@@ -24,8 +26,9 @@ export interface LicenseRecord {
   expiresAt?: string;
   maxUsers?: number;
   entitlements: FeatureEntitlements;
-  /** Server-issued records should replace this local demo record in production. */
-  source: "demo-local" | "server";
+  source: LicenseSource;
+  plan?: CommercialPlan;
+  variantId?: string;
 }
 
 export interface OrganizationProfile {

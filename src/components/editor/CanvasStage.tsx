@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { findElement, MIN_SIZE, pageSize, type Box, type CanvasEl, type Page } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
+import { toast } from "sonner";
 
 type Op =
   | {
@@ -40,13 +41,36 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
   const fitTextBox = useEditor((s) => s.fitTextBox);
   const commit = useEditor((s) => s.commit);
   const setActivePage = useEditor((s) => s.setActivePage);
+  const setZoom = useEditor((s) => s.setZoom);
 
   const opRef = useRef<Op>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const spaceDown = useRef(false);
   const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
   const [marquee, setMarquee] = useState<Marquee>(null);
   const [dropping, setDropping] = useState(false);
   const pageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  useEffect(() => {
+    const down = (event: KeyboardEvent) => {
+      if (event.code === "Space" && !(event.target as HTMLElement | null)?.isContentEditable) spaceDown.current = true;
+    };
+    const up = (event: KeyboardEvent) => {
+      if (event.code === "Space") spaceDown.current = false;
+    };
+    const blur = () => {
+      spaceDown.current = false;
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
 
   /**
    * Translate a drop point into page millimetres.
@@ -302,9 +326,35 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
 
   return (
     <div
+      ref={stageRef}
       className={cn("editor-canvas-stage studio-grid relative min-h-0 min-w-0 overflow-auto px-6 py-8", dropping && "is-dropping")}
       dir="ltr"
+      onPointerDownCapture={(e) => {
+        if (!spaceDown.current || !stageRef.current) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const stage = stageRef.current;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const scrollLeft = stage.scrollLeft;
+        const scrollTop = stage.scrollTop;
+        const move = (event: PointerEvent) => {
+          stage.scrollLeft = scrollLeft - (event.clientX - startX);
+          stage.scrollTop = scrollTop - (event.clientY - startY);
+        };
+        const up = () => {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+      }}
       onPointerDown={() => select(null)}
+      onWheel={(e) => {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault();
+        setZoom(useEditor.getState().zoom + (e.deltaY < 0 ? 0.06 : -0.06));
+      }}
       onDragOver={(e) => {
         if (!onDropImage || !e.dataTransfer.types.includes("Files")) return;
         // Claiming the drop is what suppresses the browser's "open the file" handoff.
@@ -319,9 +369,12 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
       onDrop={(e) => {
         setDropping(false);
         if (!onDropImage) return;
-        const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
-        if (!file) return;
         e.preventDefault();
+        const file = Array.from(e.dataTransfer.files)[0];
+        if (!file || !file.type.startsWith("image/")) {
+          toast.error("نوع الملف غير مدعوم.");
+          return;
+        }
         const at = dropPoint(e);
         if (at) setActivePage(at.pageId);
         onDropImage(file, at ? { x: at.x, y: at.y } : undefined);
