@@ -7,6 +7,7 @@ import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { cn } from "@/lib/utils";
 import { canUseDemoPack } from "@/lib/product/product";
+import { useLicense } from "@/lib/license/client";
 import { useMemo } from "react";
 
 const SIZE_OPTIONS = SIZE_PRESETS.filter((s) => s.id !== "custom");
@@ -26,9 +27,11 @@ export function TemplatesPage() {
     [category],
   );
 
+  const { entitlements } = useLicense();
+
   const startFrom = async (packId: string) => {
-    if (!canUseDemoPack(packId)) {
-      window.location.assign("/purchase");
+    if (!canUseDemoPack(packId) && !entitlements.premium_templates) {
+      window.location.assign("/license");
       return;
     }
     const pack = PACKS.find((p) => p.id === packId);
@@ -77,7 +80,7 @@ export function TemplatesPage() {
                   className="mt-4 inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[12px] font-extrabold text-white"
                 >
                   <Plus className="size-3.5" />
-                  {canUseDemoPack(pack.id) ? "بدء العرض من هذا القالب" : "متاح في النسخة الكاملة"}
+                  {canUseDemoPack(pack.id) || entitlements.premium_templates ? "بدء العرض من هذا القالب" : "متاح في النسخة الكاملة"}
                 </button>
               </div>
             ))}

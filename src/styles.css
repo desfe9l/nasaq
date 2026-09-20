@@ -325,32 +325,59 @@
   top: 0;
   bottom: 0;
   z-index: 45;
-  width: 7px;
+  width: 16px;
   cursor: col-resize;
   touch-action: none;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
 }
 
-.editor-panel-resize-handle::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 3px;
-  width: 1px;
-  background: transparent;
-  transition: background-color 120ms ease;
+/* The visible part: a slim grip pill hugging the canvas-facing edge. */
+.editor-panel-resize-grip {
+  width: 4px;
+  border-radius: 999px;
+  background: var(--editor-border);
+  transition: background-color 120ms ease, width 120ms ease;
 }
 
-.editor-panel-resize-handle:hover::after,
-.editor-panel-resize-handle:focus-visible::after {
+.editor-panel-resize-handle:hover .editor-panel-resize-grip,
+.editor-panel-resize-handle:focus-visible .editor-panel-resize-grip {
+  width: 6px;
   background: var(--editor-active);
 }
 
-.editor-panel-resize-left { inset-inline-start: -3px; }
-.editor-panel-resize-right { inset-inline-end: -3px; }
+/* While a drag is live, the whole app shows a resize cursor and text/element
+   selection is suppressed so the gesture never rubber-bands the canvas. */
+body.is-resizing-panel {
+  cursor: col-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
+  width: 6px;
+  background: var(--editor-active);
+}
+
+/* Left panel: inner (canvas-facing) edge is on the DOM-LTR right… which in this
+   RTL app is the LEFT side of the viewport. The handle must sit on the edge
+   that faces the canvas, i.e. the DOM start side of the panel.
+   Left panel  → handle on its canvas side = `left: -8px` in DOM terms.
+   Right panel → handle on its canvas side = `right: -8px`. */
+.editor-panel-resize-left { left: -8px; }
+.editor-panel-resize-right { right: -8px; }
 
 @media (max-width: 1023px) {
-  .editor-panel-resize-handle { display: none; }
+  /* Handles stay useful on tablets: in landscape the panels sit beside the
+     canvas exactly like desktop, so their edge must stay draggable there.
+     Only portrait hides them — the portrait layout is a bottom sheet with no
+     side edge to drag. */
+  .editor-panel-resize-right { display: none; }
+}
+
+@media (max-width: 1023px) and (orientation: portrait) {
+  .editor-panel-resize-left { display: none; }
 }
 
 /*
@@ -514,20 +541,46 @@
 /*
  * Arrangement bar.
  */
+/*
+ * Arrangement bar sits in the workspace row BELOW the canvas (between canvas
+ * and page rail), never floating over it — a top-centred overlay covered
+ * element labels and titles. `position: static` + centring here keeps it in
+ * normal flow so it can never overlap artwork, and it scrolls horizontally on
+ * narrow screens instead of clipping.
+ */
 .arrange-bar {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
+  position: static;
+  z-index: 20;
   display: flex;
   align-items: center;
   gap: 2px;
   padding: 4px 6px;
+  margin-inline: auto;
   border-radius: 10px;
   border: 1px solid #d8dee9;
   background: rgba(255, 255, 255, 0.97);
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.14);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.arrange-bar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  /* Touch targets grow on tablets; the row wraps rather than overflowing. */
+  .arrange-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 4px;
+  }
+
+  .arrange-btn {
+    width: 34px;
+    height: 34px;
+  }
 }
 
 .editor-ui.editor-dark .arrange-bar {
@@ -560,9 +613,10 @@
 
 .arrange-btn {
   display: grid;
+  flex-shrink: 0;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 7px;
   border: 0;
   background: transparent;

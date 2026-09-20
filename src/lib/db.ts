@@ -19,6 +19,19 @@ const databaseUrl =
 export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
 
 /**
+ * Production guard. Vercel serverless functions have NO writable filesystem
+ * and Nitro's bundle does not emit PGLite's WASM data file — attempting the
+ * fallback there dies with a cryptic `ENOENT ... /var/task/_libs/pglite.data`.
+ * Even if the file shipped, PGLite is in-memory per process, so licenses
+ * written in one invocation would vanish in the next. Deployed apps MUST use
+ * a managed Postgres via DATABASE_URL (free Neon works — `pg` is already a
+ * dependency and `scripts/migrate.mjs` applies migrations on every build).
+ * `VERCEL=1` is injected by Vercel in all its build/function runtimes.
+ */
+const deployedWithoutDatabaseUrl =
+  !databaseUrl && typeof process !== "undefined" && process.env.VERCEL === "1";
+
+/**
  * Minimal shared SQL surface, satisfied by both Neon and PGLite. Both the
  * tagged-template and `.query()` forms resolve to an array of row objects:
  *
@@ -176,6 +189,16 @@ async function createSql(): Promise<Sql> {
         "or a server route loader, never from client code.",
     );
   }
+  if (deployedWithoutDatabaseUrl) {
+    throw new Error(
+      "[db] DATABASE_URL is not set on this deployment. Vercel serverless " +
+        "cannot use the embedded PGLite fallback (no writable filesystem — it " +
+        "fails with ENOENT _libs/pglite.data, and its data would not persist " +
+        "across invocations). Set DATABASE_URL to a managed Postgres (free " +
+        "Neon works) in Vercel → Settings → Environment Variables and redeploy. " +
+        "Migrations apply automatically during the build (npm run db:migrate).",
+    );
+  }
   return dbSource === "neon" ? createNeonSql() : createPgliteSql();
 }
 
@@ -229,10 +252,20 @@ export function ensureDbReady(): Promise<void> {
 const globalBoot = globalThis as typeof globalThis & {
   __pgBootstrapPromise__?: Promise<void>;
 };
-if (typeof window === "undefined" && dbSource === "pglite") {
-  globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
-    globalBoot.__pgBootstrapPromise__ = undefined;
-    console.error("[db] PGLite bootstrap failed:", err);
-    throw err;
-  });
+if (typeof window === "undefined") {
+  if (deployedWithoutDatabaseUrl) {
+    // Surface the actionable error in the function logs at cold start instead
+    // of a confusing PGLite stack trace on the first query.
+    console.error(
+      "[db] Deployed without DATABASE_URL — the license/database-backed " +
+        "features are unavailable. Set DATABASE_URL (free Neon Postgres) in " +
+        "Vercel → Settings → Environment Variables, then redeploy.",
+    );
+  } else if (dbSource === "pglite") {
+    globalBoot.__pgBootstrapPromise__ ??= ensureDbReady().catch((err) => {
+      globalBoot.__pgBootstrapPromise__ = undefined;
+      console.error("[db] PGLite bootstrap failed:", err);
+      throw err;
+    });
+  }
 }

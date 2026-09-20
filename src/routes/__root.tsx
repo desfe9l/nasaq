@@ -5,7 +5,7 @@ import { BRAND } from "@/lib/brand";
 import appCss from "../styles.css?url";
 
 const APP_NAME = BRAND.name;
-const DESCRIPTION = "نسق منصة عربية لتصميم وتحرير التقارير والمستندات والعروض، مع القوالب وإدارة الصفحات والتصدير.";
+const DESCRIPTION = "نَسَق | NASAQ — منصة عربية لتصميم وتحرير التقارير والمستندات والعروض، مع القوالب وإدارة الصفحات والتصدير.";
 
 export const Route = createRootRoute({
   head: () => ({

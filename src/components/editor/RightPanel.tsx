@@ -129,16 +129,20 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
     const layerAtPointer = (pointer: PointerEvent) =>
       document.elementFromPoint(pointer.clientX, pointer.clientY)?.closest<HTMLElement>("[data-layer-id]")?.dataset.layerId || null;
     const move = (pointer: PointerEvent) => setDropLayerId(layerAtPointer(pointer));
-    const up = (pointer: PointerEvent) => {
+    const finish = (pointer: PointerEvent) => {
       const target = layerAtPointer(pointer);
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
       setDraggedLayerId(null);
       setDropLayerId(null);
       if (target && target !== id) reorderLayers(id, target);
     };
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointerup", finish);
+    // A cancelled touch (notification, edge-swipe) must not leave the list
+    // stuck in a half-dragged state.
+    window.addEventListener("pointercancel", finish);
   };
 
   return (
@@ -1381,35 +1385,42 @@ function LayerRow({
           </button>
           </>
         )}
+        {/* Move up/down: wired to `moveLayer`, which swaps real array order and
+            renumbers z — the layers list, canvas stacking and export order all
+            follow the same z rule, so one press moves the layer everywhere. */}
         <button
           type="button"
           title="تقديم طبقة"
+          aria-label={`تقديم ${layer.name || TYPE_NAME[layer.type]}`}
           onClick={() => moveLayer(layer.id, 1)}
-          className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
         >
           <ArrowUp className="size-3.5" />
         </button>
         <button
           type="button"
           title="تأخير طبقة"
+          aria-label={`تأخير ${layer.name || TYPE_NAME[layer.type]}`}
           onClick={() => moveLayer(layer.id, -1)}
-          className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
         >
           <ArrowDown className="size-3.5" />
         </button>
         <button
           type="button"
           title={layer.hidden ? "إظهار" : "إخفاء"}
+          aria-label={layer.hidden ? `إظهار ${layer.name || TYPE_NAME[layer.type]}` : `إخفاء ${layer.name || TYPE_NAME[layer.type]}`}
           onClick={() => setElementFlag(layer.id, "hidden")}
-          className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
         >
           {layer.hidden ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
         </button>
         <button
           type="button"
           title={layer.locked ? "فتح القفل" : "قفل"}
+          aria-label={layer.locked ? `فتح قفل ${layer.name || TYPE_NAME[layer.type]}` : `قفل ${layer.name || TYPE_NAME[layer.type]}`}
           onClick={() => setElementFlag(layer.id, "locked")}
-          className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
         >
           {layer.locked ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />}
         </button>

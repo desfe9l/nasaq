@@ -16,6 +16,42 @@ function waitFrame() {
   return new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
 }
 
+/**
+ * Copy every registered web font into `doc`.
+ *
+ * html2canvas rasterises from a CLONED document inside an iframe, and that clone
+ * re-parses stylesheets from scratch. `@font-face` rules registered at runtime
+ * through `document.fonts.add(...)` (user-uploaded TTF/OTF via the font picker)
+ * exist only in the live document — so in the clone every custom family falls
+ * back, and the exported page ships with a different font and different text
+ * metrics than the canvas the author was looking at. Cloning the FontFace
+ * objects across is what makes the rasteriser see exactly the faces the editor
+ * renders with.
+ */
+function cloneFontsInto(doc: Document) {
+  if (!document.fonts) return;
+  const target = (doc as Document & { fonts?: FontFaceSet }).fonts;
+  if (!target) return;
+  document.fonts.forEach((face) => {
+    try {
+      // A data-URL source is self-contained, so the clone can re-load it with no
+      // network and no CORS involvement. `source` is newer than this project's
+      // DOM typings, hence the guarded read.
+      const src = (face as unknown as { source?: string }).source;
+      const twin = new FontFace(face.family, typeof src === "string" && src ? src : `url()` as unknown as BufferSource, {
+        weight: face.weight,
+        style: face.style,
+        display: face.display,
+      });
+      target.add(twin);
+      void twin.load().catch(() => undefined);
+    } catch {
+      // A face that cannot be cloned (blob revoked, etc.) must not abort export;
+      // the family simply falls back as before.
+    }
+  });
+}
+
 async function waitImages(root: HTMLElement) {
   const imgs = Array.from(root.querySelectorAll("img"));
   await Promise.all(
@@ -26,7 +62,10 @@ async function waitImages(root: HTMLElement) {
           const done = () => res();
           img.onload = done;
           img.onerror = done;
-          setTimeout(done, 2500);
+          // Large photos at export scale can take longer than a blink to decode;
+          // a too-short timeout here is how pictures silently vanish from the
+          // exported file while being perfectly visible on the canvas.
+          setTimeout(done, 8000);
         }),
     ),
   );
@@ -51,6 +90,17 @@ async function ensureFonts(root: HTMLElement) {
     [...specs].map((spec) => document.fonts.load(spec).catch(() => undefined)),
   );
   await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 3000))]);
+}
+
+/** Editor chrome that must never appear in an export. */
+function stripAuthoringChrome(doc: Document) {
+  // Selection handles are UI, not artwork — and CSS pseudo-elements are never
+  // captured, so only the real handle nodes need removing.
+  doc.querySelectorAll(".handle, .rotate-handle, .overflow-badge, .guide-v, .guide-h, .marquee").forEach((h) => h.remove());
+  // The selection ring is authoring chrome; it must not bake into the asset.
+  doc.querySelectorAll(".selected, .is-secondary, .locked").forEach((n) => {
+    n.classList.remove("selected", "is-secondary", "locked");
+  });
 }
 
 export interface CapturedPage {
@@ -88,11 +138,8 @@ export async function captureElement(elId: string, exportScale: number): Promise
     windowWidth: node.offsetWidth,
     windowHeight: node.offsetHeight,
     onclone: (doc) => {
-      doc.querySelectorAll(".handle, .rotate-handle").forEach((h) => h.remove());
-      // The selection ring is authoring chrome; it must not bake into the asset.
-      doc.querySelectorAll(".selected, .is-secondary, .locked").forEach((n) => {
-        n.classList.remove("selected", "is-secondary", "locked");
-      });
+      cloneFontsInto(doc);
+      stripAuthoringChrome(doc);
     },
   });
   return canvas.toDataURL("image/png");
@@ -137,10 +184,15 @@ export async function capturePages(
       windowWidth: node.offsetWidth,
       windowHeight: node.offsetHeight,
       onclone: (clonedDoc) => {
+        cloneFontsInto(clonedDoc);
         const target = pageId
           ? (clonedDoc.querySelector(`[data-export-page="${CSS.escape(pageId)}"]`) as HTMLElement | null)
           : null;
         if (target) target.style.overflow = "hidden";
+        // The hidden capture pages are rendered with `interactive={false}`, so
+        // handles and badges never appear — but the shared helper keeps the
+        // guarantee in one place in case an authoring class ever lands here.
+        stripAuthoringChrome(clonedDoc);
       },
     });
     out.push({ canvas, w, h });

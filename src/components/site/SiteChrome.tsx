@@ -84,7 +84,7 @@ export function SiteHeader({ current }: { current: string }) {
 export function SiteFooter() {
   return (
     <footer className="border-t border-line bg-white dark:border-white/10 dark:bg-[#111722]">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-8 sm:px-6 md:grid-cols-3">
+      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-8 sm:px-6 sm:grid-cols-2 md:grid-cols-3">
         <div>
           <div className="flex items-center gap-2.5">
             <BrandLogo compact />
@@ -120,8 +120,22 @@ export function SiteFooter() {
           </p>
         </div>
       </div>
-      <div className="border-t border-line py-4 text-center text-[11px] text-muted dark:border-white/10">
-        © {new Date().getFullYear()} {BRAND.lockup} — {BRAND.platform}
+      {/*
+       * Legal line. The lockup prints once — `نَسَق` carries `NASAQ` inside
+       * `BrandLockup`, so printing `BRAND.platform` again would duplicate it.
+       */}
+      <div className="border-t border-line px-4 py-4 dark:border-white/10">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-[11px] text-muted sm:justify-between">
+          <span>
+            © {new Date().getFullYear()} <BrandLockup />
+          </span>
+          {/* Designer signature: small, elegant, part of the footer identity —
+              never competing with the platform name. */}
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="h-3 w-px bg-line dark:bg-white/15" />
+            المصمم والمطور <strong className="font-extrabold text-ink dark:text-white">فيصل المضياني</strong>
+          </span>
+        </div>
       </div>
     </footer>
   );
@@ -135,6 +149,20 @@ export function BrandLogo({ compact = false }: { compact?: boolean }) {
         <strong className={compact ? "text-[14px] font-extrabold" : "text-[15px] font-extrabold"}>نَسَق</strong>
         <span className="mt-1 text-[8px] font-bold tracking-[0.16em] text-muted" dir="ltr">NASAQ</span>
       </span>
+    </span>
+  );
+}
+
+/**
+ * Text-only bilingual lockup for tight rows (legal lines, signatures).
+ * Renders `نَسَق | NASAQ` once — never repeated with a second copy of the name.
+ */
+export function BrandLockup() {
+  return (
+    <span className="inline-flex items-baseline gap-1.5 font-extrabold text-ink dark:text-white">
+      <span>نَسَق</span>
+      <span aria-hidden className="text-muted">|</span>
+      <span className="text-[10px] tracking-[0.16em] text-muted" dir="ltr">NASAQ</span>
     </span>
   );
 }

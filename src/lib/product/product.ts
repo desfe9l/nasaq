@@ -2,8 +2,6 @@ export type ProductEdition = "demo" | "commercial" | "enterprise";
 export type LicenseStatus = "DEMO" | "TRIAL" | "ACTIVE" | "EXPIRED" | "SUSPENDED";
 export type LicenseScope = "individual" | "team" | "organization" | "enterprise";
 export type MemberRole = "owner" | "administrator" | "designer" | "editor" | "reviewer" | "viewer";
-export type LicenseSource = "manual" | "lemonsqueezy" | "demo-local" | "server";
-export type CommercialPlan = "individual-monthly" | "individual-quarterly" | "team-monthly" | "team-quarterly";
 
 export interface FeatureEntitlements {
   maxProjects: number | null;
@@ -26,9 +24,8 @@ export interface LicenseRecord {
   expiresAt?: string;
   maxUsers?: number;
   entitlements: FeatureEntitlements;
-  source: LicenseSource;
-  plan?: CommercialPlan;
-  variantId?: string;
+  /** Server-issued records should replace this local demo record in production. */
+  source: "demo-local" | "server";
 }
 
 export interface OrganizationProfile {
@@ -88,7 +85,8 @@ export function canCreateDemoProject(projectCount: number): boolean {
   return projectCount < (DEMO_LICENSE.entitlements.maxProjects ?? Infinity);
 }
 
-export function canUseDemoExport(format: string): boolean {
+export function canUseDemoExport(format: string, hasAdvancedExport = false): boolean {
+  if (hasAdvancedExport) return true;
   return (DEMO_ALLOWED_EXPORTS as readonly string[]).includes(format);
 }
 
@@ -114,4 +112,46 @@ export function hasFeature(license: LicenseRecord, feature: keyof FeatureEntitle
 export function demoModeFromLocation(): boolean {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("demo") === "1";
+}
+
+// ── License System Bridge ──────────────────────────────────────────────────
+// Bridges the existing demo license model with the new server-validated
+// license system. The new system is the source of truth; the old model
+// is kept for backward compatibility.
+
+import type { FeatureId } from "@/lib/license/types";
+import { LICENSE_ENTITLEMENTS } from "@/lib/license/types";
+
+/** Map old FeatureEntitlements keys to new FeatureId keys. */
+const FEATURE_MAP: Record<string, FeatureId> = {
+  premiumTemplates: "premium_templates",
+  advancedExports: "advanced_export",
+  brandKit: "brand_kit",
+  dataImport: "data_import",
+  collaboration: "collaboration",
+};
+
+/** Convert a LicenseType from the new system to the old LicenseRecord shape. */
+export function licenseRecordFromEntitlements(
+  type: import("@/lib/license/types").LicenseType,
+  id?: string,
+): LicenseRecord {
+  const e = LICENSE_ENTITLEMENTS[type];
+  return {
+    id: id ?? `server-${type}`,
+    edition: type === "FREE" ? "demo" : type === "TRIAL" ? "demo" : "commercial",
+    scope: "individual",
+    status: type === "FREE" ? "DEMO" : type === "TRIAL" ? "TRIAL" : "ACTIVE",
+    entitlements: {
+      maxProjects: e.unlimited_projects ? null : 1,
+      maxPagesPerProject: e.unlimited_pages ? null : 3,
+      premiumTemplates: e.premium_templates,
+      advancedExports: e.advanced_export,
+      brandKit: e.brand_kit,
+      organizationWorkspace: e.collaboration,
+      collaboration: e.collaboration,
+      dataImport: e.data_import,
+    },
+    source: "server",
+  };
 }

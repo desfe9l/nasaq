@@ -1,4 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+
+/** Sidebar resize bounds (px) — shared by the drag handler and the persisted default. */
+const PANEL_MIN = { left: 232, right: 264 } as const;
+const PANEL_MAX = { left: 460, right: 520 } as const;
 import {
   Check,
   Download,
@@ -255,7 +259,10 @@ function Studio({
   const [panelWidths, setPanelWidths] = useState(() => {
     try {
       const raw = JSON.parse(localStorage.getItem("diwan-editor-panel-widths") || "{}");
-      return { left: Math.min(420, Math.max(240, Number(raw.left) || 280)), right: Math.min(460, Math.max(280, Number(raw.right) || 320)) };
+      return {
+        left: Math.min(PANEL_MAX.left, Math.max(PANEL_MIN.left, Number(raw.left) || 280)),
+        right: Math.min(PANEL_MAX.right, Math.max(PANEL_MIN.right, Number(raw.right) || 320)),
+      };
     } catch {
       return { left: 280, right: 320 };
     }
@@ -468,18 +475,36 @@ function Studio({
 
   const label = saveLabel(saveState, savedAt, Date.now());
 
-  const resizePanel = (side: "left" | "right", startX: number, startWidth: number) => {
+  /*
+   * Live sidebar resizing.
+   *
+   * Pointer-events based, so mouse and touch share one code path (`touch-action:
+   * none` on the handle keeps iOS Safari from turning the drag into a scroll).
+   * The left panel sits on the viewport's right edge in this RTL app and its
+   * inner edge faces the canvas: dragging that inner edge must GROW the panel.
+   * The old sign convention had that inverted, which is why the handles only
+   * ever seemed decorative.
+   */
+  const resizePanel = (side: "left" | "right", startClientX: number, startWidth: number) => {
+    document.body.classList.add("is-resizing-panel");
     const move = (event: PointerEvent) => {
-      const delta = side === "left" ? event.clientX - startX : startX - event.clientX;
-      const width = Math.min(side === "left" ? 420 : 460, Math.max(side === "left" ? 240 : 280, startWidth + delta));
-      setPanelWidths((current) => ({ ...current, [side]: width }));
+      // Left panel: inner edge is on its LEFT side of the grid (DOM-LTR), so
+      // width grows as the pointer moves left in screen space. Right panel:
+      // inner edge faces the other way, so width grows as the pointer moves
+      // right. Both follow the dragged edge.
+      const delta = side === "left" ? startClientX - event.clientX : event.clientX - startClientX;
+      const width = Math.min(PANEL_MAX[side], Math.max(PANEL_MIN[side], startWidth + delta));
+      setPanelWidths((current) => (current[side] === width ? current : { ...current, [side]: width }));
     };
-    const up = () => {
+    const finish = () => {
+      document.body.classList.remove("is-resizing-panel");
       window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
     };
     window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
   };
 
   const fitToSelection = () => {
@@ -594,10 +619,33 @@ function Studio({
           <IconButton onClick={() => toggle("dark")} title={dark ? "الوضع النهاري" : "الوضع الليلي"}>
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </IconButton>
-          <IconButton onClick={() => toggle("leftCollapsed")} title={leftCollapsed ? "إظهار أدوات العناصر" : "طي أدوات العناصر"}>
+          {/* Panel toggles stay live even in focus mode: full screen must never
+              mean losing the tools — one tap exits focus and brings the panel
+              back (collapsed→open), so the exit is always one press away. */}
+          <IconButton
+            onClick={() => {
+              if (focusMode) {
+                useEditor.setState({ focusMode: false, leftCollapsed: false });
+                return;
+              }
+              toggle("leftCollapsed");
+            }}
+            active={!leftCollapsed && !focusMode}
+            title={leftCollapsed && !focusMode ? "إظهار أدوات العناصر" : "طي أدوات العناصر"}
+          >
             <PanelLeft className="size-4" />
           </IconButton>
-          <IconButton onClick={() => toggle("rightCollapsed")} title={rightCollapsed ? "إظهار الخصائص والطبقات" : "طي الخصائص والطبقات"}>
+          <IconButton
+            onClick={() => {
+              if (focusMode) {
+                useEditor.setState({ focusMode: false, rightCollapsed: false });
+                return;
+              }
+              toggle("rightCollapsed");
+            }}
+            active={!rightCollapsed && !focusMode}
+            title={rightCollapsed && !focusMode ? "إظهار الخصائص والطبقات" : "طي الخصائص والطبقات"}
+          >
             <PanelRight className="size-4" />
           </IconButton>
           <IconButton onClick={() => toggle("focusMode")} active={focusMode} title={focusMode ? "الخروج من وضع التركيز" : "وضع التركيز"}>
@@ -663,7 +711,7 @@ function Studio({
           {!leftCollapsed && !focusMode && <PanelResizeHandle side="left" onStart={(event) => resizePanel("left", event.clientX, panelWidths.left)} />}
         </div>
 
-        <div className="editor-canvas-workspace relative grid min-h-0 grid-rows-[minmax(0,1fr)_auto_auto] overflow-hidden">
+        <div className="editor-canvas-workspace relative grid min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden">
           <CanvasStage onDropImage={onDropImage} />
           <ArrangeBar />
           <PageRail />
@@ -685,9 +733,10 @@ function Studio({
           <RightPanel onReplaceImage={onReplaceImage} />
           {!rightCollapsed && !focusMode && <PanelResizeHandle side="right" onStart={(event) => resizePanel("right", event.clientX, panelWidths.right)} />}
         </div>
+      </div>
 
-        {/*
-         * Small-screen chrome.
+      {/*
+       * Small-screen chrome.
          *
          * One control at a time: the launcher only shows while both drawers are
          * shut, and a single close chip takes over once one is open. Keeping the
@@ -734,12 +783,6 @@ function Studio({
           </button>
         )}
 
-        {/* Pinned to the canvas pane, not the viewport, so it sits over the sheet area only. */}
-        <p className="pointer-events-none absolute right-3 top-2 z-10 hidden max-w-[calc(100%-1.5rem)] truncate rounded-full bg-white/85 px-2.5 py-1 text-[11px] text-muted backdrop-blur-sm lg:block dark:bg-[#161c26]/85">
-          {activePage?.name} · {Math.round(activeSize.w)} × {Math.round(activeSize.h)} مم ·{" "}
-          {activePage?.elements.length || 0} عنصر
-        </p>
-      </div>
       <WorkspaceOverlays menu={contextMenu} onCloseMenu={() => setContextMenu(null)} fitToScreen={fitToScreen} />
       <ExportDialog />
     </div>
@@ -801,5 +844,21 @@ function SaveBadge({ state, label, onClick }: { state: SaveState; label: string;
 }
 
 function PanelResizeHandle({ side, onStart }: { side: "left" | "right"; onStart: (event: React.PointerEvent<HTMLDivElement>) => void }) {
-  return <div className={cn("editor-panel-resize-handle", `editor-panel-resize-${side}`)} onPointerDown={onStart} role="separator" aria-label={`تغيير عرض اللوحة ${side === "left" ? "اليسرى" : "اليمنى"}`} />;
+  /*
+   * A 16px-wide hit strip with a visible 4px grip pill at the canvas edge.
+   * `touch-action: none` is what makes the drag work on an iPad; without it
+   * Safari turns the gesture into a panel scroll and the handle feels dead.
+   */
+  return (
+    <div
+      className={cn("editor-panel-resize-handle", `editor-panel-resize-${side}`)}
+      onPointerDown={onStart}
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={`تغيير عرض اللوحة ${side === "left" ? "اليسرى" : "اليمنى"} — اسحب المقبض`}
+      title="اسحب لتغيير عرض اللوحة"
+    >
+      <span className="editor-panel-resize-grip" aria-hidden />
+    </div>
+  );
 }

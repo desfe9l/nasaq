@@ -11,10 +11,12 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
+import { Route as AdminLicensesRouteImport } from './routes/admin-licenses'
 import { Route as BrandKitRouteImport } from './routes/brand-kit'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as EditorRouteImport } from './routes/editor'
+import { Route as LicenseRouteImport } from './routes/license'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PurchaseRouteImport } from './routes/purchase'
 import { Route as TemplatesRouteImport } from './routes/templates'
@@ -27,6 +29,11 @@ const IndexRoute = IndexRouteImport.update({
 const AboutRoute = AboutRouteImport.update({
   id: '/about',
   path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLicensesRoute = AdminLicensesRouteImport.update({
+  id: '/admin-licenses',
+  path: '/admin-licenses',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BrandKitRoute = BrandKitRouteImport.update({
@@ -49,6 +56,11 @@ const EditorRoute = EditorRouteImport.update({
   path: '/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LicenseRoute = LicenseRouteImport.update({
+  id: '/license',
+  path: '/license',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
@@ -68,10 +80,12 @@ const TemplatesRoute = TemplatesRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/admin-licenses': typeof AdminLicensesRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
+  '/license': typeof LicenseRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
@@ -79,10 +93,12 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/admin-licenses': typeof AdminLicensesRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
+  '/license': typeof LicenseRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
@@ -91,10 +107,12 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/admin-licenses': typeof AdminLicensesRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
+  '/license': typeof LicenseRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
@@ -104,10 +122,12 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/about'
+    | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
     | '/demo'
     | '/editor'
+    | '/license'
     | '/projects'
     | '/purchase'
     | '/templates'
@@ -115,10 +135,12 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
+    | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
     | '/demo'
     | '/editor'
+    | '/license'
     | '/projects'
     | '/purchase'
     | '/templates'
@@ -126,10 +148,12 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/about'
+    | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
     | '/demo'
     | '/editor'
+    | '/license'
     | '/projects'
     | '/purchase'
     | '/templates'
@@ -138,10 +162,12 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
+  AdminLicensesRoute: typeof AdminLicensesRoute
   BrandKitRoute: typeof BrandKitRoute
   ContactRoute: typeof ContactRoute
   DemoRoute: typeof DemoRoute
   EditorRoute: typeof EditorRoute
+  LicenseRoute: typeof LicenseRoute
   ProjectsRoute: typeof ProjectsRoute
   PurchaseRoute: typeof PurchaseRoute
   TemplatesRoute: typeof TemplatesRoute
@@ -161,6 +187,13 @@ declare module '@tanstack/react-router' {
       path: '/about'
       fullPath: '/about'
       preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-licenses': {
+      id: '/admin-licenses'
+      path: '/admin-licenses'
+      fullPath: '/admin-licenses'
+      preLoaderRoute: typeof AdminLicensesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/brand-kit': {
@@ -191,6 +224,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/license': {
+      id: '/license'
+      path: '/license'
+      fullPath: '/license'
+      preLoaderRoute: typeof LicenseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects': {
       id: '/projects'
       path: '/projects'
@@ -218,10 +258,12 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
+  AdminLicensesRoute: AdminLicensesRoute,
   BrandKitRoute: BrandKitRoute,
   ContactRoute: ContactRoute,
   DemoRoute: DemoRoute,
   EditorRoute: EditorRoute,
+  LicenseRoute: LicenseRoute,
   ProjectsRoute: ProjectsRoute,
   PurchaseRoute: PurchaseRoute,
   TemplatesRoute: TemplatesRoute,

@@ -178,5 +178,21 @@ export function WorkspaceStatusBar() {
   const activePageId = useEditor((s) => s.activePageId);
   const selectedIds = useEditor((s) => s.selectedIds);
   const page = pages.find((item) => item.id === activePageId);
-  return <div className="editor-status-bar flex h-7 items-center justify-between gap-3 border-t px-3 text-[10px] tabular-nums"><span>{page?.name || "صفحة"} · {page ? `${Math.round(page.w || 210)} × ${Math.round(page.h || 297)} مم` : ""}</span><span>{selectedIds.length ? `${selectedIds.length} محدد` : "لا يوجد تحديد"}</span><span>{Math.round(zoom * 100)}%</span></div>;
+  /*
+   * The page summary lives here instead of a floating pill over the canvas:
+   * a badge pinned inside the canvas area covered element labels and had to be
+   * dodged by the arrange bar. The status bar is part of the workspace chrome,
+   * so it can never overlap artwork.
+   */
+  return (
+    <div className="editor-status-bar flex h-7 shrink-0 items-center justify-between gap-3 border-t px-3 text-[10px] tabular-nums">
+      <span className="min-w-0 truncate">
+        {page?.name || "صفحة"}
+        {page ? ` · ${Math.round(page.w || 210)} × ${Math.round(page.h || 297)} مم` : ""}
+        {page ? ` · ${page.elements.length} عنصر` : ""}
+      </span>
+      <span>{selectedIds.length ? `${selectedIds.length} محدد` : "لا يوجد تحديد"}</span>
+      <span>{Math.round(zoom * 100)}%</span>
+    </div>
+  );
 }

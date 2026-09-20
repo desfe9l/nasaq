@@ -930,28 +930,33 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return;
       const found = locate(page, id);
       if (!found) return;
-      const index = found.list.findIndex((e) => e.id === id);
+      const index = found.index;
       const target = index + dir;
       if (target < 0 || target >= found.list.length) return;
-      const next = { ...page, elements: [...page.elements] };
-      // Reorder within the flat page list; group members reorder inside their
-      // own `children` array so the tree shape is preserved.
-      if (found.list === page.elements) {
-        const arr = [...page.elements];
+      // Swap positions in the array the element actually lives in; group members
+      // reorder inside their own `children` array so the tree shape is preserved.
+      const swapIn = (list: CanvasEl[]): CanvasEl[] => {
+        const arr = [...list];
         [arr[index], arr[target]] = [arr[target], arr[index]];
-        next.elements = arr;
+        return arr;
+      };
+      let next: Page;
+      if (found.list === page.elements) {
+        next = { ...page, elements: swapIn(page.elements) };
       } else {
-        const applyIn = (list: CanvasEl[]): CanvasEl[] => {
-          if (list === found.list) {
-            const arr = [...list];
-            [arr[index], arr[target]] = [arr[target], arr[index]];
-            return arr;
-          }
-          return list.map((el) => (el.children?.length ? { ...el, children: applyIn(el.children) } : el));
-        };
-        next.elements = applyIn(page.elements);
+        const applyIn = (list: CanvasEl[]): CanvasEl[] =>
+          list === found.list
+            ? swapIn(list)
+            : list.map((el) => (el.children?.length ? { ...el, children: applyIn(el.children) } : el));
+        next = { ...page, elements: applyIn(page.elements) };
       }
-      normalizeZ(next);
+      // NOT `normalizeZ` here: it re-sorts by the old z values and would undo the
+      // swap. Instead rewrite z from the new array order, which is the same rule
+      // the canvas painter and every exporter follow, so the list, the canvas and
+      // the exported file stay in one order.
+      const renumber = (list: CanvasEl[]): CanvasEl[] =>
+        list.map((el, i) => ({ ...el, z: i + 1, children: el.children?.length ? renumber(el.children) : el.children }));
+      next.elements = renumber(next.elements);
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
     },

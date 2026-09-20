@@ -16,6 +16,7 @@ import { pageSize } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { canUseDemoExport } from "@/lib/product/product";
+import { useLicense } from "@/lib/license/client";
 
 const FORMATS: { id: ExportFormat; title: string; desc: string; icon: typeof FileDown }[] = [
   { id: "pdf", title: "PDF", desc: "طباعة وأرشفة رسمية", icon: FileDown },
@@ -50,12 +51,13 @@ export function ExportDialog() {
   const [error, setError] = useState<string | null>(null);
   const [previewPages, setPreviewPages] = useState<CapturedPage[]>([]);
   const [previewBusy, setPreviewBusy] = useState(false);
+  const { entitlements } = useLicense();
 
   if (!open) return null;
 
   const selected = scope === "all" ? pages : pages.filter((p) => p.id === activePageId);
   const needsRaster = RASTER_FORMATS.has(format) || (OFFICE_FORMATS.has(format) && !editableOffice);
-  const formatAllowed = canUseDemoExport(format);
+  const formatAllowed = canUseDemoExport(format, entitlements.advanced_export);
 
   const run = async () => {
     if (!formatAllowed) {
@@ -173,7 +175,7 @@ export function ExportDialog() {
                 <span className={cn("text-[11px] leading-4", format === f.id ? "text-white/70" : "text-muted")}>
                   {f.desc}
                 </span>
-                {!canUseDemoExport(f.id) && <span className="mt-1 block text-[10px] font-bold text-gold-2">النسخة الكاملة</span>}
+                {!canUseDemoExport(f.id, entitlements.advanced_export) && <span className="mt-1 block text-[10px] font-bold text-gold-2">النسخة الكاملة</span>}
               </button>
             );
           })}
