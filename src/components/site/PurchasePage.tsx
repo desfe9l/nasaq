@@ -158,7 +158,8 @@ export function PurchasePage() {
             <div className="flex-1">
               <h2 className="text-[15px] font-extrabold">لديك مفتاح ترخيص بالفعل؟</h2>
               <p className="mt-1 text-[12px] leading-6 text-muted">
-                إذا أرسل لك المنصّب مفتاح ترخيص، فأدخله في صفحة التراخيص لفتح الميزات فورًا.
+                إذا أرسل لك المنصّب مفتاح ترخيص (NASAQ-…)، فأدخله في صفحة التراخيص لفتح
+                الميزات فورًا.
               </p>
               <a
                 href="/license"
