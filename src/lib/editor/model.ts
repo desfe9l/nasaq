@@ -1048,3 +1048,101 @@ export const SHADOWS: { id: string; label: string; value: string }[] = [
   { id: "medium", label: "متوسط", value: "0 2mm 5mm rgba(15,23,42,.16)" },
   { id: "strong", label: "قوي", value: "0 3mm 8mm rgba(15,23,42,.24)" },
 ];
+
+// ── Viewer geometry: millimetres ⇄ screen pixels ───────────────────────────
+
+/** Millimetres per CSS pixel at 100% zoom (1px = 25.4/96 mm). */
+export const MM_PER_PX = 25.4 / 96;
+
+/**
+ * Convert a screen-space length to document millimetres at a given zoom.
+ *
+ * All thresholds the editor feels (snap stickiness, auto-pan margins, cursor
+ * hit radii) are specified in *screen* pixels — what the user actually sees —
+ * then converted here so the math stays in document space at every zoom.
+ */
+export function pxToMm(px: number, zoom: number): number {
+  const z = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return px * MM_PER_PX / z;
+}
+
+/**
+ * Convert a document-space length to screen pixels at a given zoom.
+ * Inverse of `pxToMm` — used to keep on-screen chrome a constant size.
+ */
+export function mmToPx(mm: number, zoom: number): number {
+  const z = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return mm * z / MM_PER_PX;
+}
+
+// ── Element defaults: one source for palette inserts and drawn elements ────
+
+/**
+ * Default geometry and style for a new element of `type`.
+ *
+ * Palette inserts, text drawn on the canvas and pasted fallbacks all start
+ * from this single source, so an element behaves the same however it was
+ * created. Values are document millimetres (and pt for fonts) exactly as the
+ * properties panel expects them.
+ */
+export function createElementDefaults(type: ElType): Partial<CanvasEl> & { style: Partial<ElStyle> } {
+  const base: Partial<CanvasEl> & { style: Partial<ElStyle> } = {
+    style: {
+      fontFamily: "Tajawal",
+      fontSize: 14,
+      color: "#172033",
+      textAlign: "right",
+    },
+  };
+  switch (type) {
+    case "text":
+      return { ...base, w: 80, h: 14 };
+    case "box":
+      return { ...base, w: 60, h: 30, style: { ...base.style, fill: "#f7f8fb", radius: 4 } };
+    case "stat":
+      return { ...base, w: 55, h: 32, style: { ...base.style, fill: "#f2f7f3", radius: 6 } };
+    case "shape":
+      return { ...base, w: 40, h: 40, style: { ...base.style, fill: "#006c35" } };
+    case "line":
+      return { ...base, w: 60, h: 4, style: { ...base.style, color: "#c9a86a", stroke: 0.8 } };
+    case "divider":
+      return { ...base, w: 80, h: 6, style: { ...base.style, color: "#c9a86a", stroke: 0.5 } };
+    case "table":
+      return { ...base, w: 150, h: 60, style: { ...base.style, cols: 3, rows: 4 } };
+    case "image":
+      return { ...base, w: 60, h: 45, style: { ...base.style, objectFit: "cover" } };
+    case "logo":
+      return { ...base, w: 24, h: 24, style: { ...base.style, objectFit: "contain" } };
+    case "qr":
+      return { ...base, w: 26, h: 26 };
+    case "icon":
+      return { ...base, w: 10, h: 10, style: { ...base.style, color: "#c9a86a" } };
+    case "progress":
+      return { ...base, w: 70, h: 16, style: { ...base.style, fill: "#006c35", value: 70 } };
+    case "stamp":
+      return { ...base, w: 34, h: 34, style: { ...base.style, color: "#c9a86a" } };
+    default:
+      return { ...base, w: 40, h: 30 };
+  }
+}
+
+/**
+ * Top-left position that centres a `w × h` element inside the visible area of
+ * the workspace (in document millimetres), clamped so the element stays fully
+ * on the page. Palette inserts and drawn text both land here, so what you add
+ * always appears where you are looking — never in a fixed corner.
+ */
+export function centerFor(
+  visible: { x: number; y: number; w: number; h: number },
+  size: { w: number; h: number; elW: number; elH: number },
+): { x: number; y: number } {
+  const cx = visible.x + visible.w / 2;
+  const cy = visible.y + visible.h / 2;
+  const x = clamp(cx - size.elW / 2, 0, Math.max(0, size.w - size.elW));
+  const y = clamp(cy - size.elH / 2, 0, Math.max(0, size.h - size.elH));
+  return { x: round2(x), y: round2(y) };
+}
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
+}

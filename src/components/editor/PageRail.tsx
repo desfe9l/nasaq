@@ -104,7 +104,12 @@ export function PageRail() {
               }}
               className={cn(
                 "group relative shrink-0 rounded-[8px] border p-1.5",
-                p.id === activePageId ? "border-navy bg-navy/5" : "border-line dark:border-white/10",
+                // Active page: a clear gold ring around the thumbnail — the
+                // same accent the canvas ring uses, so "you are here" reads
+                // identically in both places.
+                p.id === activePageId
+                  ? "border-transparent ring-2 ring-gold ring-offset-2 ring-offset-white dark:ring-offset-[#111722]"
+                  : "border-line dark:border-white/10",
                 dragIndex === i && "opacity-50",
                 overIndex === i && dragIndex !== null && dragIndex !== i && "drop-target",
               )}

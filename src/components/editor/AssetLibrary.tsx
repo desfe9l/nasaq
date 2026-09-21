@@ -1,7 +1,9 @@
 import { useState, useRef } from "react";
-import { Check, Eye, Folder, FolderPlus, Grid2X2, ImagePlus, List, Pencil, Plus, Trash2, X } from "lucide-react";
+import { toast } from "sonner";
+import { Check, Download, Eye, Folder, FolderPlus, Grid2X2, ImagePlus, List, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
 import type { Asset } from "@/lib/editor/storage";
+import { downloadLibraryFile, planLibraryImport } from "@/lib/editor/library-export";
 import { cn } from "@/lib/utils";
 
 type PendingAsset = Asset & { fileName: string };
@@ -25,6 +27,7 @@ export function AssetLibrary() {
   const moveAssetsToFolder = useEditor((s) => s.moveAssetsToFolder);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const libraryImportRef = useRef<HTMLInputElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [pending, setPending] = useState<PendingAsset[]>([]);
@@ -92,6 +95,38 @@ export function AssetLibrary() {
     }
   };
 
+  /*
+   * Library export / import: one JSON file carries the whole shelf between
+   * devices. Import merges (fresh ids, exact duplicates skipped) so nothing
+   * already saved is lost or rewritten.
+   */
+  const exportLibrary = () => {
+    const name = downloadLibraryFile({ folders, assets });
+    toast.success(`تم تنزيل المكتبة — ${name}`);
+  };
+
+  const importLibrary = async (file: File) => {
+    try {
+      const raw = JSON.parse(await file.text());
+      const plan = planLibraryImport(raw, { folders, assets });
+      for (const folder of plan.folders) {
+        await createAssetFolder(folder.name);
+      }
+      for (const asset of plan.assets) {
+        await addAsset({ name: asset.name, src: asset.src, w: asset.w, h: asset.h, folderId: asset.folderId });
+      }
+      toast.success(
+        plan.assets.length
+          ? `أُضيف ${plan.assets.length} عنصر${plan.skipped ? ` — تخطّي ${plan.skipped} مكرر` : ""}`
+          : plan.skipped
+            ? "كل العناصر موجودة مسبقًا — لا شيء جديد"
+            : "الملف فارغ — لا عناصر لاستيرادها",
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "تعذر قراءة ملف المكتبة.");
+    }
+  };
+
   return (
     <section className="grid gap-2">
       <header className="flex items-center justify-between gap-2">
@@ -100,6 +135,19 @@ export function AssetLibrary() {
           <p className="mt-0.5 text-[10px] text-muted">معاينة قبل الحفظ، ثم إدراج وتعديل مباشر</p>
         </div>
         <div className="flex items-center gap-1">
+          <button type="button" onClick={exportLibrary} aria-label="تصدير المكتبة" title="تصدير المكتبة (ملف واحد بكل المجلدات والعناصر)" className="grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"><Download className="size-3.5" /></button>
+          <button type="button" onClick={() => libraryImportRef.current?.click()} aria-label="استيراد مكتبة" title="استيراد مكتبة من ملف (يُدمج مع الحالي)" className="grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"><Upload className="size-3.5" /></button>
+          <input
+            ref={libraryImportRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void importLibrary(file);
+            }}
+          />
           <button type="button" onClick={() => setViewMode("grid")} aria-label="عرض شبكي" aria-pressed={viewMode === "grid"} className={cn("grid size-7 place-items-center rounded-[6px] border", viewMode === "grid" ? "border-navy bg-navy/10" : "border-line dark:border-white/10")}><Grid2X2 className="size-3.5" /></button>
           <button type="button" onClick={() => setViewMode("compact")} aria-label="عرض مضغوط" aria-pressed={viewMode === "compact"} className={cn("grid size-7 place-items-center rounded-[6px] border", viewMode === "compact" ? "border-navy bg-navy/10" : "border-line dark:border-white/10")}><List className="size-3.5" /></button>
           <span className="rounded-full bg-line-2 px-2 py-1 text-[10px] font-bold tabular-nums text-muted dark:bg-white/10">{visibleAssets.length}</span>

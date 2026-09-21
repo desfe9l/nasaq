@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 const PANEL_MIN = { left: 232, right: 264 } as const;
 const PANEL_MAX = { left: 460, right: 520 } as const;
 import {
+  BookOpen,
   Check,
   Download,
   Focus,
@@ -14,10 +15,12 @@ import {
   Moon,
   PanelLeft,
   PanelRight,
+  PenLine,
   Redo2,
   Save,
   Sun,
   Undo2,
+  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -547,6 +550,27 @@ function Studio({
           <div className="hidden md:block"><BrandLogo compact /></div>
           <button
             type="button"
+            onClick={() => {
+              useEditor.setState({ leftTab: "elements", leftOpen: true, leftCollapsed: false });
+              window.dispatchEvent(new CustomEvent("nasaq:draw-text"));
+            }}
+            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-extrabold dark:border-white/10"
+            title="اكتب نصك: اسحب على الصفحة لرسم مربع النص"
+          >
+            <PenLine className="size-4" />
+            <span className="hidden lg:inline">نص بالرسم</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => window.open("/projects", "_blank")}
+            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-extrabold dark:border-white/10"
+            title="انتقل إلى صفحة نصوصك (المكتبة)"
+          >
+            <BookOpen className="size-4" />
+            <span className="hidden lg:inline">نصوصك</span>
+          </button>
+          <button
+            type="button"
             onClick={() => useEditor.setState({ leftTab: "elements", leftOpen: true, leftCollapsed: false })}
             className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-extrabold dark:border-white/10"
             title="فتح مكتبة العناصر"
@@ -719,6 +743,17 @@ function Studio({
             leftCollapsed && "hidden",
           )}
         >
+          {/* Explicit close button: the user always closes the panel by a
+              visible element, not only by tapping outside it. */}
+          <button
+            type="button"
+            onClick={() => toggle("leftCollapsed")}
+            aria-label="إغلاق لوحة العناصر"
+            title="إغلاق لوحة العناصر"
+            className="absolute left-1.5 top-1.5 z-20 grid size-7 place-items-center rounded-[6px] border border-line bg-white/90 text-muted hover:text-ink dark:border-white/10 dark:bg-[#161c26]/90"
+          >
+            <X className="size-3.5" />
+          </button>
           <LeftPanel onUpload={onUpload} />
           {!leftCollapsed && !focusMode && <PanelResizeHandle side="left" onStart={(event) => resizePanel("left", event.clientX, panelWidths.left)} />}
         </div>
@@ -742,6 +777,16 @@ function Studio({
             rightCollapsed && "hidden",
           )}
         >
+          {/* Explicit close button for the properties panel too. */}
+          <button
+            type="button"
+            onClick={() => toggle("rightCollapsed")}
+            aria-label="إغلاق لوحة الخصائص"
+            title="إغلاق لوحة الخصائص"
+            className="absolute right-1.5 top-1.5 z-20 grid size-7 place-items-center rounded-[6px] border border-line bg-white/90 text-muted hover:text-ink dark:border-white/10 dark:bg-[#161c26]/90"
+          >
+            <X className="size-3.5" />
+          </button>
           <RightPanel onReplaceImage={onReplaceImage} />
           {!rightCollapsed && !focusMode && <PanelResizeHandle side="right" onStart={(event) => resizePanel("right", event.clientX, panelWidths.right)} />}
         </div>

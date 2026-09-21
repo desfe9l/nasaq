@@ -15,7 +15,7 @@ export function BrandKitPage() {
 
   return (
     <div className="min-h-full bg-paper dark:bg-[#111722]">
-      <SiteHeader current="/brand-kit" />
+      <SiteHeader current="/الهوية" />
       <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
         <section className="border-b border-line pb-10 dark:border-white/10"><div className="flex items-center gap-4"><span className="scale-125 origin-right"><BrandLogo /></span><div><p className="text-[11px] font-bold tracking-[0.18em] text-green">هوية المنتج</p><p className="mt-3 max-w-2xl text-[14px] leading-7 text-muted">منصة عربية تساعدك على إنشاء التقارير والمستندات والعروض وتنظيمها في مساحة عمل واحدة.</p></div></div></section>
 

@@ -46,7 +46,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/projects", label: "المشاريع" },
   { to: "/templates", label: "القوالب" },
   { to: "/purchase", label: "النسخ والتراخيص" },
-  { to: "/brand-kit", label: "الهوية" },
+  { to: "/الهوية", label: "الهوية" },
   { to: "/about", label: "عن المنصة" },
   { to: "/contact", label: "التواصل" },
 ];

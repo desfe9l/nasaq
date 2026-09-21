@@ -39,6 +39,9 @@ import {
   type ThemeId,
 } from "@/lib/editor/model";
 import { SHAPES, shapesByGroup } from "@/lib/editor/shapes";
+
+/** localStorage slot for the author's starred fonts. */
+const FAVORITE_FONTS_KEY = "nasaq.font-favorites";
 import { detectPlatform } from "@/lib/editor/fonts";
 import { PAGE_TEMPLATES, TEMPLATE_CATEGORIES, type TemplateCategoryId } from "@/lib/editor/templates";
 import { useEditor, type LeftTab } from "@/lib/editor/store";
@@ -57,7 +60,6 @@ const TABS: { id: LeftTab; label: string; icon: typeof Type }[] = [
   { id: "settings", label: "إعدادات", icon: Settings2 },
 ];
 
-/** Element palette, grouped by intent so the list stays scannable. */
 const TOOL_GROUPS: { title: string; items: { type: ElType; label: string; icon: typeof Type }[] }[] = [
   {
     title: "نص",
@@ -795,14 +797,43 @@ function FontsTab() {
   const activePageId = useEditor((s) => s.activePageId);
   const updateStyle = useEditor((s) => s.updateStyle);
   const [query, setQuery] = useState("");
+  /*
+   * Starred fonts. Saved to localStorage so favourites survive a reload —
+   * the same "UX cache" contract as the rest of the editor's UI prefs.
+   */
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(FAVORITE_FONTS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const toggleFavorite = (family: string) => {
+    setFavorites((prev) => {
+      const next = prev.includes(family) ? prev.filter((f) => f !== family) : [...prev, family];
+      try {
+        localStorage.setItem(FAVORITE_FONTS_KEY, JSON.stringify(next));
+      } catch {
+        /* storage unavailable — favourites stay for this session only */
+      }
+      return next;
+    });
+  };
 
   const page = pages.find((p) => p.id === activePageId);
   const selected = page?.elements.find((e) => e.id === selectedId);
   const current = selected?.style.fontFamily;
   const matching = choices.filter((f) => f.family.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-  const bundled = matching.filter((f) => f.source === "bundled");
-  const system = matching.filter((f) => f.source === "system");
-  const uploaded = matching.filter((f) => f.source === "uploaded");
+  // Favourites first (in star order), then everything else by source.
+  const favoriteSet = new Set(favorites);
+  const favs = matching.filter((f) => favoriteSet.has(f.family));
+  const rest = matching.filter((f) => !favoriteSet.has(f.family));
+  const bundled = favs.length || rest.length ? [...favs, ...rest.filter((f) => f.source === "bundled")] : rest.filter((f) => f.source === "bundled");
+  const system = rest.filter((f) => f.source === "system");
+  const uploaded = rest.filter((f) => f.source === "uploaded");
 
   const apply = (family: string) => {
     if (!selected) return;
@@ -815,32 +846,62 @@ function FontsTab() {
         <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">{title}</h3>
         {hint && <p className="mb-1.5 text-[10px] leading-4 text-muted">{hint}</p>}
         <div className="grid gap-1.5">
-          {items.map((f) => (
-            <button
-              key={f.family}
-              type="button"
-              disabled={!selected}
-              onClick={() => apply(f.family)}
-              title={selected ? `تطبيق ${f.family}` : "اختر عنصر نص أولاً"}
-              className={cn(
-                "flex items-center justify-between gap-2 rounded-[8px] border px-2.5 py-2 text-right disabled:opacity-55",
-                current === f.family
-                  ? "border-navy-2 bg-navy-2/5"
-                  : "border-line hover:border-navy-2 dark:border-white/10",
-              )}
-            >
-              <span className="min-w-0">
-                <span
-                  className="block truncate text-[13px]"
-                  style={{ fontFamily: `"${f.family.replace(/"/g, "")}", sans-serif` }}
-                >
-                  {f.family}
+          {items.map((f) => {
+            const fav = favoriteSet.has(f.family);
+            return (
+              <button
+                key={f.family}
+                type="button"
+                disabled={!selected}
+                onClick={() => apply(f.family)}
+                title={selected ? `تطبيق ${f.family}` : "اختر عنصر نص أولاً"}
+                className={cn(
+                  "flex items-center justify-between gap-2 rounded-[8px] border px-2.5 py-2 text-right disabled:opacity-55",
+                  current === f.family
+                    ? "border-navy-2 bg-navy-2/5"
+                    : "border-line hover:border-navy-2 dark:border-white/10",
+                )}
+              >
+                <span className="min-w-0">
+                  <span
+                    className="block truncate text-[13px]"
+                    style={{ fontFamily: `"${f.family.replace(/"/g, "")}", sans-serif` }}
+                  >
+                    {f.family}
+                  </span>
+                  <span className="block truncate text-[10px] text-muted">{f.note}</span>
                 </span>
-                <span className="block truncate text-[10px] text-muted">{f.note}</span>
-              </span>
-              {current === f.family && <span className="shrink-0 text-[10px] font-extrabold text-navy-2">مُطبَّق</span>}
-            </button>
-          ))}
+                <span className="flex shrink-0 items-center gap-1">
+                  {/* Star toggle: works even without a text selection, so the
+                      author can organise the list before picking an element. */}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={fav ? `إزالة ${f.family} من المفضلة` : `إضافة ${f.family} إلى المفضلة`}
+                    aria-pressed={fav}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(f.family);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleFavorite(f.family);
+                      }
+                    }}
+                    className={cn(
+                      "grid size-6 place-items-center rounded-[6px]",
+                      fav ? "text-amber-500" : "text-muted/50 hover:text-amber-500",
+                    )}
+                  >
+                    <Star className={cn("size-3.5", fav && "fill-amber-400")} />
+                  </span>
+                  {current === f.family && <span className="text-[10px] font-extrabold text-navy-2">مُطبَّق</span>}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
     );

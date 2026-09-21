@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 132 40" role="img" aria-label="نَسَق | NASAQ">
+  <!--
+    NASAQ mark — dark-surface variant.
+    Geometry mirrors public/nasaq-mark.svg (the light-background original);
+    strokes switch to the cream/gold palette so the mark stays legible on
+    navy/black backgrounds (headers, dark editor chrome, social cards).
+  -->
+  <g fill="none">
+    <!-- Diamond: the ن dot turned into the platform's keystone mark. -->
+    <rect x="6" y="8" width="24" height="24" rx="3.5" transform="rotate(45 18 20)" fill="none" stroke="#E8DCC3" stroke-width="2.6"/>
+    <rect x="11.2" y="13.2" width="13.6" height="13.6" rx="2" transform="rotate(45 18 20)" fill="#C9A86A"/>
+    <!-- Open glyph: the ن bowl, abstracted. -->
+    <path d="M12.5 26.5c2.2 1.8 4.3 2.6 5.5 2.6s3.3-.8 5.5-2.6" stroke="#F5F1E6" stroke-width="2.2" stroke-linecap="round"/>
+    <circle cx="18" cy="31.6" r="1.7" fill="#F5F1E6"/>
+    <!-- Wordmark: NASAQ, letterspaced to lock up with the diamond. -->
+    <text x="40" y="27" font-family="Cairo, 'IBM Plex Sans Arabic', sans-serif" font-size="15.5" font-weight="800" letter-spacing="4.5" fill="#F5F1E6">NASAQ</text>
+  </g>
+</svg>
