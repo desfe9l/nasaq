@@ -101,10 +101,28 @@ function entitlementsFor(license: License): Record<import("./types").FeatureId, 
   return entitlementsForPlan(license.metadata?.plan as import("./types").LicensePlan | undefined, license.type);
 }
 
+/**
+ * Resolve the caller's *verified* identity (session cookie or preview bearer
+ * token), or `null` for anonymous visitors.
+ *
+ * Identity is NEVER taken from request data: a client-sent `userId` would let
+ * anyone read another user's license status or link a key to someone else's
+ * account. Dynamic import keeps `*.server` code out of the client bundle —
+ * the same pattern `auth/middleware.ts` uses.
+ */
+async function verifiedUserId(): Promise<string | null> {
+  try {
+    const { getSessionUser } = await import("@/lib/auth/verify.server");
+    return (await getSessionUser())?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Public: Activate License ───────────────────────────────────────────────
 
 export const activateLicenseFn = createServerFn({ method: "POST" })
-  .validator((data: { key: string; userId?: string; email?: string }) => data)
+  .validator((data: { key: string; email?: string }) => data)
   .handler(async ({ data }): Promise<LicenseActivateResult> => {
     const ip = await getClientIp();
 
@@ -127,6 +145,11 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
     }
 
     const keyHash = hashLicenseKey(key);
+    // Link the activation to the verified session user when there is one;
+    // anonymous activations store an unowned license. (`data.userId` was
+    // removed: the caller must not be able to choose whose account a key
+    // binds to.)
+    const sessionUserId = await verifiedUserId();
     const local = await findLicenseByKeyHash(keyHash);
     if (local?.metadata?.source === "lemonsqueezy") {
       try {
@@ -136,7 +159,7 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
           keyHash,
           keyPrefix: keyPrefix(key),
           type: "PRO",
-          userId: data.userId ?? null,
+          userId: sessionUserId,
           expiresAt: verified.expiresAt,
           activationCount: verified.activationCount,
           maxActivations: verified.maxActivations,
@@ -148,7 +171,7 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
         return { success: false, message: "تعذر التحقق من حالة ترخيص Lemon Squeezy." };
       }
     }
-    const result = local ? await dbActivate(keyHash, data.userId ?? null) : null;
+    const result = local ? await dbActivate(keyHash, sessionUserId) : null;
 
     if (lemonKey && (!local || local.metadata?.source !== "lemonsqueezy")) {
       if (!isLemonSqueezyConfigured()) {
@@ -164,7 +187,7 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
           keyHash,
           keyPrefix: keyPrefix(key),
           type: "PRO",
-          userId: data.userId ?? null,
+          userId: sessionUserId,
           expiresAt: verified.expiresAt,
           activationCount: verified.activationCount,
           maxActivations: verified.maxActivations,
@@ -291,9 +314,12 @@ export const deactivateLicenseFn = createServerFn({ method: "POST" })
 // ── Auth: Get My License Status ────────────────────────────────────────────
 
 export const getLicenseStatusFn = createServerFn({ method: "POST" })
-  .validator((data: { userId: string }) => data)
-  .handler(async ({ data }): Promise<LicenseStatusResult> => {
-    const licenses = await findLicensesByUserId(data.userId);
+  .handler(async (): Promise<LicenseStatusResult> => {
+    // The queried identity is always the verified session user — a client-supplied
+    // `userId` would leak anyone's license status to anyone (see verifiedUserId).
+    const userId = await verifiedUserId();
+    if (!userId) return { hasLicense: false };
+    const licenses = await findLicensesByUserId(userId);
 
     // Find the most relevant active license
     const active = licenses.find(

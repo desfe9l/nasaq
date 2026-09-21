@@ -112,11 +112,12 @@ export function useLicense(userId?: string, userEmail?: string | null) {
     }
   }, []);
 
-  // Also check server status for user-linked licenses
+  // Also check server status for user-linked licenses. The server resolves
+  // the identity from the verified session — no client id is sent.
   const checkUserLicense = useCallback(async () => {
     if (!userId) return;
     try {
-      const result = await getLicenseStatusFn({ data: { userId } });
+      const result = await getLicenseStatusFn({ data: undefined });
       if (result.hasLicense && result.license && result.entitlements) {
         setState({
           isLoading: false,
@@ -145,7 +146,7 @@ export function useLicense(userId?: string, userEmail?: string | null) {
     async (key: string): Promise<{ success: boolean; message: string }> => {
       setState((s) => ({ ...s, error: null }));
       try {
-        const result = await activateLicenseFn({ data: { key, userId, email: userEmail || undefined } });
+        const result = await activateLicenseFn({ data: { key, email: userEmail || undefined } });
         if (result.success && result.license) {
           setCachedLicenseKey(key);
           // Re-validate to get full entitlements
