@@ -15,8 +15,10 @@ import {
   ImagePlus,
   Link,
   Lock,
+  Scissors,
   Trash2,
   Unlock,
+  X,
 } from "lucide-react";
 import {
   ICONS,
@@ -67,7 +69,10 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
   const theme = THEMES[useEditor((s) => s.theme)];
   const [cellEditor, setCellEditor] = useState(false);
   const [savingAsset, setSavingAsset] = useState(false);
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ typography: false, arabic: false, appearance: false, transform: true });
+  // Typography + Arabic sections start OPEN: they hold the most-used text
+  // controls (alignment, direction) — collapsed-by-default read as "the
+  // alignment feature is missing". Users can still fold them away.
+  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ typography: true, arabic: true, appearance: false, transform: true });
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
   const [dropLayerId, setDropLayerId] = useState<string | null>(null);
   const reorderLayers = useEditor((s) => s.reorderLayers);
@@ -244,7 +249,7 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                   />
                 </Field>
               ))}
-              <Field label="دوران °">
+              <Field label="زاوية الدوران">
                 <input
                   type="number"
                   value={round(el.rotation)}
@@ -252,7 +257,7 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                   onBlur={() => updateElement(el.id, { rotation: el.rotation })}
                 />
               </Field>
-              <Field label="شفافية">
+              <Field label="الشفافية">
                 <input
                   type="number"
                   min={0}
@@ -1103,9 +1108,9 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                       updateStyle(el.id, { objectFit: e.target.value as "cover" | "contain" | "fill" })
                     }
                   >
-                    <option value="cover">Cover — تعبئة مع قص</option>
-                    <option value="contain">Contain — احتواء كامل</option>
-                    <option value="fill">Fill — تمديد</option>
+                    <option value="cover">تعبئة مع قص (Cover)</option>
+                    <option value="contain">احتواء كامل (Contain)</option>
+                    <option value="fill">تمديد (Fill)</option>
                   </select>
                 </Field>
                 <div className="grid grid-cols-2 gap-2">
@@ -1149,6 +1154,61 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                   onBlur={() => updateElement(el.id, { content: el.content })}
                 />
               </Field>
+            )}
+
+            {el.type === "svg" && (
+              <>
+                {/*
+                 * SVG stays vector in the editor. Its markup is chosen from the
+                 * device (Shapes → إضافة SVG من الجهاز) and sanitised on render
+                 * — there is intentionally no code editor here. Fill and stroke
+                 * are INDEPENDENT overrides applied onto the artwork
+                 * (applySvgColors); an unset channel keeps the file's own
+                 * colors, so recoloring the fill never rewrites outlines.
+                 */}
+                <Field label="لون التعبئة (Fill)" full>
+                  <ColorRow
+                    value={el.style.svgFill || ""}
+                    fallback={el.style.color || "#172033"}
+                    onChange={(v) => updateStyle(el.id, { svgFill: v }, true)}
+                    onCommit={() => updateStyle(el.id, { svgFill: el.style.svgFill })}
+                  />
+                </Field>
+                <Field label="لون الإطار (Stroke)" full>
+                  <ColorRow
+                    value={el.style.svgStroke || ""}
+                    fallback="#c9a86a"
+                    onChange={(v) => updateStyle(el.id, { svgStroke: v }, true)}
+                    onCommit={() => updateStyle(el.id, { svgStroke: el.style.svgStroke })}
+                  />
+                </Field>
+                <Field label="سماكة الإطار">
+                  <input
+                    type="number"
+                    step={0.1}
+                    min={0}
+                    value={el.style.svgStrokeWidth ?? ""}
+                    placeholder="كما في الملف"
+                    onChange={(e) => updateStyle(el.id, { svgStrokeWidth: e.target.value === "" ? undefined : Number(e.target.value) }, true)}
+                    onBlur={() => updateStyle(el.id, { svgStrokeWidth: el.style.svgStrokeWidth })}
+                  />
+                </Field>
+                <Field label="الملاءمة">
+                  <select
+                    value={el.style.objectFit || "contain"}
+                    onChange={(e) =>
+                      updateStyle(el.id, { objectFit: e.target.value as "cover" | "contain" | "fill" })
+                    }
+                  >
+                    <option value="contain">احتواء كامل (Contain)</option>
+                    <option value="cover">تعبئة مع قص (Cover)</option>
+                    <option value="fill">تمديد (Fill)</option>
+                  </select>
+                </Field>
+                <p className="text-[10px] leading-4 text-muted">
+                  اترك اللون فارغًا ليبقى لون الملف الأصلي كما هو. التعبئة والإطار مستقلان تمامًا.
+                </p>
+              </>
             )}
 
             <Field label="الظل">
@@ -1196,10 +1256,10 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
 const TEXT_MARKUP_TYPES = new Set(["text", "box", "stat", "stamp", "progress"]);
 
 const LABELS: Record<"x" | "y" | "w" | "h", string> = {
-  x: "X مم",
-  y: "Y مم",
-  w: "العرض مم",
-  h: "الارتفاع مم",
+  x: "الموضع الأفقي (مم)",
+  y: "الموضع الرأسي (مم)",
+  w: "العرض (مم)",
+  h: "الارتفاع (مم)",
 };
 
 function resizeTable(
@@ -1354,7 +1414,11 @@ function LayerRow({
         data-layer-id={depth === 0 ? layer.id : undefined}
         className={cn(
           "flex items-center gap-1.5 rounded-[8px] border px-2 py-1.5",
-          selected ? "border-navy-2 bg-navy-2/5" : "border-line dark:border-white/10",
+          // Selected layer: a firm ring + tinted row, clearly stronger than the
+          // idle border — it must read at a glance against the layers list.
+          selected
+            ? "border-navy-2 bg-navy-2/10 ring-2 ring-navy-2/40 dark:bg-navy-2/15"
+            : "border-line dark:border-white/10",
           dragging && "opacity-50",
           dropTarget && "drop-target",
         )}
@@ -1401,6 +1465,8 @@ function LayerRow({
               {layer.locked && <Lock className="size-3.5" />}
               {layer.hidden && <EyeOff className="size-3.5" />}
               {layer.linkId && <Link className="size-3.5 text-gold-2" />}
+              {/* The mask relationship is visible in the tree, not only on canvas. */}
+              {layer.clippedBy && <Scissors className="size-3.5 text-gold-2" aria-label="مقصوص بقناع" />}
               <span className="text-[10px] tabular-nums">{layer.z}</span>
             </span>
           </button>
@@ -1543,6 +1609,85 @@ function CommitRange({
       }}
       onBlur={flush}
     />
+  );
+}
+
+/**
+ * صف اختيار اللون: منتقي لون + الألوان المحفوظة (من هوية المشروع) + مسح.
+ *
+ * Reused by every color field (نص، تعبئة، إطار، SVG fill/stroke) so "saved
+ * colors" is ONE row component, not a parallel palette system. Empty value =
+ * follow the artwork/theme (القناة بلا تجاوز) — the ✕ clears the override.
+ */
+function ColorRow({
+  value,
+  fallback,
+  onChange,
+  onCommit,
+}: {
+  value: string;
+  fallback: string;
+  onChange: (v: string) => void;
+  onCommit: () => void;
+}) {
+  const themeId = useEditor((s) => s.theme);
+  const theme = THEMES[themeId];
+  const saved = [theme.primary, theme.accent, theme.ink, "#ffffff", "#111722", "#e11d48", "#2563eb"];
+  return (
+    <div className="grid gap-1">
+      <div className="flex items-center gap-1.5">
+        <input
+          type="color"
+          value={toColor(value, fallback)}
+          onChange={(e) => onChange(e.target.value)}
+          onBlur={onCommit}
+          className="h-9 w-12 shrink-0"
+        />
+        <input
+          type="text"
+          dir="ltr"
+          value={value || ""}
+          placeholder="افتراضي"
+          onChange={(e) => {
+            const v = e.target.value.trim();
+            if (/^#[0-9a-fA-F]{0,8}$/.test(v)) onChange(v);
+          }}
+          onBlur={onCommit}
+          className="h-9 min-w-0 flex-1 rounded-[8px] border border-line px-2 text-[12px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+        />
+        <button
+          type="button"
+          title="إرجاع اللون الافتراضي"
+          aria-label="إرجاع اللون الافتراضي"
+          onClick={() => {
+            onChange("");
+            onCommit();
+          }}
+          className="grid size-9 shrink-0 place-items-center rounded-[8px] border border-line text-muted hover:text-ink dark:border-white/10"
+        >
+          <X className="size-3.5" />
+        </button>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {saved.map((c) => (
+          <button
+            key={c}
+            type="button"
+            title={c}
+            aria-label={`اللون المحفوظ ${c}`}
+            onClick={() => {
+              onChange(c);
+              onCommit();
+            }}
+            style={{ background: c }}
+            className={cn(
+              "size-5 rounded-[5px] border",
+              value.toLowerCase() === c.toLowerCase() ? "border-navy ring-2 ring-navy/40" : "border-line dark:border-white/20",
+            )}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 

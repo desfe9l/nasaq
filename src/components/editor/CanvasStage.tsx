@@ -70,6 +70,8 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
   const opRef = useRef<Op>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const spaceDown = useRef(false);
+  /** Active two-finger touch pan: midpoint + scroll origin captured on start. */
+  const touchPan = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
   const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
   const [marquee, setMarquee] = useState<Marquee>(null);
   const [dropping, setDropping] = useState(false);
@@ -154,7 +156,14 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     }
     e.stopPropagation();
     e.preventDefault();
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    // setPointerCapture throws NotFoundError for synthetic/dispatched events
+    // that carry no live pointer — wrap so a programmatic click (tests,
+    // a11y tools) can't crash the interaction handler.
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    } catch {
+      /* no live pointer: capture is a drag-quality optimisation, not required */
+    }
     setActivePage(page.id);
 
     /*
@@ -474,10 +483,64 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
         window.addEventListener("pointerup", up);
       }}
       onPointerDown={() => select(null)}
+      /*
+       * Two-finger pan. A trackpad already pans here through the browser's own
+       * two-finger scroll (and ctrl+wheel is the pinch-zoom channel below), so
+       * this covers the TOUCH case: two fingers move the viewport, never the
+       * artwork. The gesture only starts on the stage background, and it
+       * cancels any rubber-band selection so a pan can never be mistaken for a
+       * marquee or drag an element. One-finger drags keep their normal meaning.
+       */
+      onTouchStart={(e) => {
+        if (e.touches.length !== 2 || !stageRef.current) {
+          touchPan.current = null;
+          return;
+        }
+        setMarquee(null);
+        touchPan.current = {
+          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+          y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+          scrollLeft: stageRef.current.scrollLeft,
+          scrollTop: stageRef.current.scrollTop,
+        };
+      }}
+      onTouchMove={(e) => {
+        const start = touchPan.current;
+        const stage = stageRef.current;
+        if (!start || !stage || e.touches.length !== 2) return;
+        const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        stage.scrollLeft = start.scrollLeft - (x - start.x);
+        stage.scrollTop = start.scrollTop - (y - start.y);
+      }}
+      onTouchEnd={(e) => {
+        if (e.touches.length < 2) touchPan.current = null;
+      }}
+      onTouchCancel={() => {
+        touchPan.current = null;
+      }}
       onWheel={(e) => {
         if (!(e.ctrlKey || e.metaKey)) return;
         e.preventDefault();
-        setZoom(useEditor.getState().zoom + (e.deltaY < 0 ? 0.06 : -0.06));
+        const stage = stageRef.current;
+        const prev = useEditor.getState().zoom;
+        const next = Math.min(2, Math.max(0.2, prev + (e.deltaY < 0 ? 0.06 : -0.06)));
+        if (next === prev) return;
+        // Pointer-anchored zoom: the page point under the cursor stays put, so
+        // zooming in on a detail never throws the author somewhere else.
+        const rect = stage?.getBoundingClientRect();
+        const px = rect ? e.clientX - rect.left : 0;
+        const py = rect ? e.clientY - rect.top : 0;
+        const anchorX = (stage?.scrollLeft ?? 0) + px;
+        const anchorY = (stage?.scrollTop ?? 0) + py;
+        setZoom(next);
+        if (stage) {
+          const ratio = next / prev;
+          requestAnimationFrame(() => {
+            stage.scrollLeft = anchorX * ratio - px;
+            stage.scrollTop = anchorY * ratio - py;
+          });
+        }
       }}
       onDragOver={(e) => {
         if (!onDropImage || !e.dataTransfer.types.includes("Files")) return;

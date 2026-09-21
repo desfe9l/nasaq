@@ -5,7 +5,11 @@ import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { applyNumerals } from "@/lib/editor/arabic";
 import { safeImageSrc } from "@/lib/editor/images";
-import { ShapeGlyph } from "./ShapeGlyph";
+import { applySvgColors, sanitizeSvgContent } from "@/lib/editor/svg";
+import { isCompoundShape, shapeDef } from "@/lib/editor/shapes";
+import { shapeIdOf } from "@/lib/editor/shape-render";
+import { mapShapePart } from "@/lib/editor/shape-affine";
+import { ShapeGlyph, ShapeParts } from "./ShapeGlyph";
 
 interface Props {
   el: CanvasEl;
@@ -33,6 +37,43 @@ export function ElementNode({
   const fitTextBox = useEditor((s) => s.fitTextBox);
   const setEditing = useEditor((s) => s.setEditing);
   const commit = useEditor((s) => s.commit);
+  /**
+   * قناع القص (Clipping Mask): the shape element masking this one, looked up
+   * from the live page. Real clipping = `clip-path` matching the mask's own
+   * geometry, computed in the MASK's box but applied to the masked element in
+   * page space (clip-path supports `clipPathUnits`-style math via calc since
+   * both are mm boxes on the same page). The mask shape itself stays visible.
+   */
+  const pages = useEditor((s) => s.pages);
+  const activePageId = useEditor((s) => s.activePageId);
+  const activeElements = pages.find((p) => p.id === activePageId)?.elements ?? [];
+  const maskShape = el.clippedBy
+    ? activeElements.find((m) => m.id === el.clippedBy && (m.type === "shape" || m.type === "svg"))
+    : null;
+  /*
+   * قناع القص (Clipping Mask) — real clipping of the picture by the mask.
+   *
+   * The cut follows the mask's OWN silhouette, not its bounding box: geometry
+   * from shapes.ts (a 0–100 box) is placed inside the masked element's box and
+   * referenced with `clip-path: url(#…)`. It is expressed in fractional
+   * `objectBoundingBox` units because a `clipPath` referenced from HTML loses its
+   * contents the moment they carry an SVG `transform`; the placement therefore
+   * happens in the coordinates themselves (shape-affine.ts).
+   */
+  const clipId = `nasaq-clip-${el.id}`;
+  const clipPath = maskShape ? `url(#${clipId})` : undefined;
+  const maskDef = maskShape && maskShape.type === "shape" ? shapeDef(shapeIdOf(maskShape.style)) : undefined;
+  /** Fractions of the masked element's own box (objectBoundingBox units). */
+  const clipMap = maskShape
+    ? {
+        sx: Math.max(1, maskShape.w) / Math.max(0.1, el.w) / 100,
+        sy: Math.max(1, maskShape.h) / Math.max(0.1, el.h) / 100,
+        tx: (maskShape.x - el.x) / Math.max(0.1, el.w),
+        ty: (maskShape.y - el.y) / Math.max(0.1, el.h),
+      }
+    : null;
+  const clipParts = maskDef && clipMap ? maskDef.parts.map((part) => mapShapePart(part, clipMap)) : null;
+  const clipBox = clipMap ? { x: clipMap.tx, y: clipMap.ty, w: clipMap.sx * 100, h: clipMap.sy * 100 } : null;
   const textRef = useRef<HTMLDivElement>(null);
   const editing = useRef(false);
 
@@ -120,6 +161,7 @@ export function ElementNode({
         zIndex: el.z,
         boxShadow: el.style?.shadow || undefined,
         cursor: el.locked ? "not-allowed" : interactive ? "move" : "default",
+        clipPath,
       }}
       onPointerDown={(e) => {
         if (!interactive) return;
@@ -127,6 +169,29 @@ export function ElementNode({
       }}
       onDoubleClick={startEdit}
     >
+      {clipBox && (
+        /*
+         * The clip geometry lives inside the masked element so `url(#…)` always
+         * resolves locally, and stays zero-sized so it never affects layout. Its
+         * coordinates are already in the element's fractional box, so the whole
+         * clip is a pure geometry statement — no transform to be lost.
+         *
+         * The shapes sit DIRECTLY inside the clipPath: only shape elements are
+         * permitted children, and a wrapping `<g>` makes Chromium throw the whole
+         * clip away (an empty region), which reads as "the picture vanished".
+         */
+        <svg className="pointer-events-none absolute left-0 top-0 h-0 w-0" aria-hidden focusable={false}>
+          <defs>
+            <clipPath id={clipId} clipPathUnits="objectBoundingBox">
+              {clipParts ? (
+                <ShapeParts parts={clipParts} fillRule={maskDef && isCompoundShape(maskDef.id) ? "evenodd" : undefined} />
+              ) : (
+                <rect x={clipBox.x} y={clipBox.y} width={clipBox.w} height={clipBox.h} />
+              )}
+            </clipPath>
+          </defs>
+        </svg>
+      )}
       <ElementContent el={el} textRef={textRef} onBlur={finishEdit} onKeyDown={handleEditKey} />
     </div>
   );
@@ -144,6 +209,16 @@ function ElementContent({
   onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
 }) {
   const s = el.style || {};
+  /*
+   * A shape that clips another element paints as the clip outline, not as a
+   * filled shape (the same rule every vector editor uses): an opaque fill would
+   * hide the very picture it cuts. The author's own border is kept; when there
+   * is none, a dashed hairline marks the mask so it stays findable on canvas.
+   */
+  const masking = useEditor((st) =>
+    (st.pages.find((p) => p.id === st.activePageId)?.elements ?? []).some((m) => m.clippedBy === el.id),
+  );
+  const maskOutline = masking && !(Number(s.borderWidth) > 0);
   const prepared = prepareText(el);
   const vertical = s.writingMode === "vertical";
   const pad = textPadding(el);
@@ -369,9 +444,10 @@ function ElementContent({
     return (
       <ShapeGlyph
         style={s}
-        fill={s.fill || "#006c35"}
-        stroke={s.borderColor || "transparent"}
-        borderWidthMm={Number(s.borderWidth) || 0}
+        fill={masking ? "none" : s.fill || "#006c35"}
+        stroke={maskOutline ? "var(--color-gold)" : s.borderColor || "transparent"}
+        borderWidthMm={maskOutline ? 0.25 : Number(s.borderWidth) || 0}
+        strokeDasharray={maskOutline ? "2 2" : undefined}
         box={{ w: el.w, h: el.h }}
       />
     );
@@ -433,6 +509,39 @@ function ElementContent({
           borderRadius: `${s.radius || 0}mm`,
           pointerEvents: "none",
         }}
+      />
+    );
+  }
+
+  if (el.type === "svg") {
+    // Vector path: sanitised markup renders inline, so it stays crisp at any
+    // zoom. Panel fill/stroke overrides are applied onto the markup itself
+    // (independent channels — see applySvgColors); `currentColor` in the
+    // markup keeps following the panel's color property.
+    const clean = applySvgColors(sanitizeSvgContent(el.content), {
+      fill: s.svgFill,
+      stroke: s.svgStroke,
+      strokeWidth: s.svgStrokeWidth,
+    });
+    if (!clean) {
+      return (
+        <div className="grid h-full w-full place-items-center bg-[#f4f6fa] text-[9pt] font-bold text-muted">
+          ألصق كود SVG من الخصائص
+        </div>
+      );
+    }
+    return (
+      <div
+        className="grid h-full w-full place-items-center"
+        style={{
+          color: s.color || "#172033",
+          opacity: el.opacity ?? 1,
+          overflow: s.overflowVisible ? "visible" : "hidden",
+          pointerEvents: "none",
+        }}
+        // Sanitised above (allow-list walk) — no script/handler/external ref
+        // survives, so this is safe to inline.
+        dangerouslySetInnerHTML={{ __html: clean }}
       />
     );
   }

@@ -1,6 +1,7 @@
 import { ICONS, cssFont, pageSize, parseTable, type CanvasEl, type Page } from "./model";
 import { applyNumerals } from "./arabic";
 import { safeImageSrc } from "./images";
+import { safeSvgSrc } from "./svg";
 import { shapeDef, type ShapePart } from "./shapes";
 import { shapeIdOf } from "./shape-render";
 import { prepareText, textPadding } from "./text-render";
@@ -406,14 +407,18 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
 
     case "image":
     case "logo":
-    case "qr": {
-      const src = safeImageSrc(el.src);
+    case "qr":
+    case "svg": {
+      // SVG converts to a PNG at the export boundary only — the editor itself
+      // keeps it vector. Rasterising happens in export.ts (async) and lands in
+      // el.src temporarily; here we consume whichever source is usable.
+      const src = safeImageSrc(el.src) || safeSvgSrc(el.src);
       if (!src) return null;
       return {
         kind: "image",
         ...base,
         src,
-        fit: s.objectFit || (el.type === "logo" || el.type === "qr" ? "contain" : "cover"),
+        fit: s.objectFit || (el.type === "logo" || el.type === "qr" || el.type === "svg" ? "contain" : "cover"),
         posX: Number.isFinite(s.objectX) ? Number(s.objectX) : 50,
         posY: Number.isFinite(s.objectY) ? Number(s.objectY) : 50,
         radius: Number(s.radius) || 0,

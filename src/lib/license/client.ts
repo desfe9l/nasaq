@@ -168,7 +168,9 @@ export function useLicense(userId?: string, userEmail?: string | null) {
         return { success: false, message: msg };
       }
     },
-    [userEmail, userId],
+    // `activate` no longer sends a client-side identity (server resolves the
+    // session); only userEmail is read.
+    [userEmail],
   );
 
   /** Deactivate (clear local license). */

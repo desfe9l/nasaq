@@ -75,6 +75,7 @@ export type ElType =
   | "qr"
   | "stat"
   | "progress"
+  | "svg"
   | "group";
 
 export type ThemeId = "official" | "eid" | "ministry" | "slate" | "sand";
@@ -103,6 +104,15 @@ export interface ElStyle {
   objectY?: number;
   stroke?: number;
   shape?: "rect" | "circle" | "rounded";
+  /**
+   * `svg` elements: independent fill/stroke overrides applied on top of the
+   * author's markup (see svg.ts `applySvgColors`). Unset means the artwork's
+   * own colors stand — overriding is opt-in per channel.
+   */
+  svgFill?: string;
+  svgStroke?: string;
+  /** `svg` elements: stroke width override in mm; unset keeps the markup's. */
+  svgStrokeWidth?: number;
   /** `shape` elements: id from `shapes.ts`. Absent means a plain rectangle. */
   shapeId?: string;
   /** Preserve the element's intrinsic proportions while resizing. */
@@ -202,6 +212,12 @@ export interface CanvasEl {
    * ungrouping.
    */
   children?: CanvasEl[];
+  /**
+   * قناع القص (Clipping Mask): the id of the shape element on the same page
+   * whose geometry clips this element's paint. One shape may clip several
+   * elements; removing the mask clears the ids that point at it.
+   */
+  clippedBy?: string;
 }
 
 export interface Page {
@@ -388,6 +404,7 @@ export const TYPE_NAME: Record<ElType, string> = {
   qr: "رمز QR",
   stat: "مؤشر",
   progress: "شريط تقدم",
+  svg: "رسم SVG",
   group: "مجموعة",
 };
 
@@ -679,6 +696,17 @@ export function createElement(type: ElType, over: Partial<CanvasEl> = {}, theme?
       h: 28,
       content: "https://",
       style: { fill: "#ffffff", color: t.primary },
+    },
+    svg: {
+      w: 60,
+      h: 60,
+      // A tiny sample glyph (stroke-only rounded square + diagonal) so the
+      // element is never empty; the author pastes their own markup in the
+      // properties panel. Content is sanitised before it ever renders —
+      // see sanitizeSvgContent in svg.ts.
+      content:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/><path d="M7 14l3-3 3 3 4-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      style: { color: t.primary, overflowVisible: true },
     },
     stat: {
       w: 72,

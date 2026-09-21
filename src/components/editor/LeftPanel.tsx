@@ -17,6 +17,7 @@ import {
   Layers,
   Ruler,
   Gauge,
+  FileCode2,
   FileText,
   Baseline,
   Eye,
@@ -73,6 +74,7 @@ const TOOL_GROUPS: { title: string; items: { type: ElType; label: string; icon: 
     items: [
       { type: "image", label: "صورة", icon: ImageIcon },
       { type: "logo", label: "شعار", icon: BadgePercent },
+      { type: "svg", label: "إضافة SVG من الجهاز", icon: FileCode2 },
       { type: "qr", label: "رمز QR", icon: QrCode },
     ],
   },
@@ -95,7 +97,7 @@ const TOOL_GROUPS: { title: string; items: { type: ElType; label: string; icon: 
   },
 ];
 
-export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "font" | "library") => void }) {
+export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" | "logo" | "font" | "library") => void; onUploadSvg: () => void }) {
   const tab = useEditor((s) => s.leftTab);
   const setLeftTab = useEditor((s) => s.setLeftTab);
   const addElement = useEditor((s) => s.addElement);
@@ -135,6 +137,12 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
   const add = async (type: ElType) => {
     if (type === "image" || type === "logo") {
       onUpload(type);
+      return;
+    }
+    // رسم SVG من الجهاز: opens the file picker (LeftPanel needs no input of
+    // its own — the studio owns the <input> and the toast flow).
+    if (type === "svg") {
+      onUploadSvg();
       return;
     }
     if (type === "table") {

@@ -77,8 +77,6 @@ export interface LibraryImportPlan {
   skipped: number;
 }
 
-const sameBytes = (a: string, b: string) => a.length === b.length && a === b;
-
 /**
  * Validate + plan an import against the existing library.
  *

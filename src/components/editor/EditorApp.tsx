@@ -53,6 +53,7 @@ export function EditorApp() {
   const projectInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
   const fontInput = useRef<HTMLInputElement>(null);
+  const svgInput = useRef<HTMLInputElement>(null);
   const imageIntent = useRef<{ type: "image" | "logo" | "replace" | "library"; targetId?: string }>({ type: "image" });
 
   useEffect(() => {
@@ -138,6 +139,15 @@ export function EditorApp() {
     imageInput.current?.click();
   };
 
+  /**
+   * إضافة SVG من الجهاز: read the chosen .svg file as text, sanity-check it
+   * holds an actual <svg>, and place it as a real vector element. The markup
+   * is stored raw here — the canvas sanitises on render and export (svg.ts).
+   */
+  const uploadSvg = () => {
+    svgInput.current?.click();
+  };
+
   return (
     <div className="h-full min-h-0">
       <Toaster position="top-center" richColors dir="rtl" />
@@ -176,6 +186,33 @@ export function EditorApp() {
         }}
       />
 
+      {/* إضافة SVG من الجهاز — file lives on the page as real vector markup. */}
+      <input
+        ref={svgInput}
+        type="file"
+        accept=".svg,image/svg+xml"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const markup = String(reader.result || "");
+            if (!markup.includes("<svg")) {
+              toast.error("الملف ليس رسم SVG صالحًا");
+              return;
+            }
+            useEditor.getState().addElement("svg", {
+              content: markup,
+              name: file.name.replace(/\.svg$/i, "").slice(0, 30) || "رسم SVG",
+            });
+            toast.success("أُضيف الرسم إلى الصفحة");
+          };
+          reader.readAsText(file);
+        }}
+      />
+
       <input
         ref={fontInput}
         type="file"
@@ -205,9 +242,26 @@ export function EditorApp() {
         }}
       />
 
-      <Studio onOpenFile={openFile} onUpload={upload} onReplaceImage={replaceImage} onDropImage={ingestImage} />
+      <Studio onOpenFile={openFile} onUpload={upload} onReplaceImage={replaceImage} onDropImage={ingestImage} onUploadSvg={uploadSvg} />
     </div>
   );
+}
+
+/**
+ * Whole-interface zoom bounds.
+ *
+ * Bounded on purpose: below ~80% the tool labels stop being readable and above
+ * ~135% the docked panels would crowd the canvas out on a laptop screen. The
+ * canvas keeps its own wider zoom range for artboard-level work.
+ */
+const UI_SCALE_KEY = "diwan-editor-ui-scale";
+const UI_SCALE_MIN = 0.8;
+const UI_SCALE_MAX = 1.35;
+const UI_SCALE_STEP = 0.05;
+
+function stepUiScale(current: number, dir: 1 | -1): number {
+  const next = Math.round((current + dir * UI_SCALE_STEP) * 100) / 100;
+  return Math.min(UI_SCALE_MAX, Math.max(UI_SCALE_MIN, next));
 }
 
 function Studio({
@@ -215,11 +269,13 @@ function Studio({
   onUpload,
   onReplaceImage,
   onDropImage,
+  onUploadSvg,
 }: {
   onOpenFile: () => void;
   onUpload: (kind: "image" | "logo" | "font" | "library") => void;
   onReplaceImage: (id: string) => void;
   onDropImage: (file: File, at?: { x: number; y: number }) => Promise<void>;
+  onUploadSvg: () => void;
 }) {
   const name = useEditor((s) => s.name);
   const setName = useEditor((s) => s.setName);
@@ -273,9 +329,21 @@ function Studio({
   });
   const [isDesktop, setIsDesktop] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches);
 
+  // Whole-interface zoom (keyboard ⌘±). Persisted with the panel widths so the
+  // workspace comes back exactly as the author left it.
+  const [uiScale, setUiScale] = useState(() => {
+    if (typeof window === "undefined") return 1;
+    const raw = Number(localStorage.getItem(UI_SCALE_KEY));
+    return Number.isFinite(raw) && raw >= UI_SCALE_MIN && raw <= UI_SCALE_MAX ? raw : 1;
+  });
+
   useEffect(() => {
     localStorage.setItem("diwan-editor-panel-widths", JSON.stringify(panelWidths));
   }, [panelWidths]);
+
+  useEffect(() => {
+    localStorage.setItem(UI_SCALE_KEY, String(uiScale));
+  }, [uiScale]);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
@@ -288,17 +356,31 @@ function Studio({
   const activePage = pages.find((p) => p.id === activePageId) || pages[0];
   const activeSize = pageSize(activePage);
 
+  /**
+   * ملاءمة الصفحة / عرض الصفحة بالكامل: pick a zoom that fits the WHOLE
+   * artboard (all four edges inside the viewport) and then centre it, so Fit
+   * never lands on a smaller view of wherever the author had scrolled to.
+   */
   const fitToScreen = useCallback(() => {
-    const el = document.querySelector(".editor-canvas-stage");
+    const el = document.querySelector<HTMLElement>(".editor-canvas-stage");
     if (!el) return setZoom(0.82);
     const rect = el.getBoundingClientRect();
     const pageContent = document.querySelector<HTMLElement>(".editor-canvas-stage .page-frame-content");
     const pxPerMm = pageContent && activeSize.w > 0 ? pageContent.clientWidth / activeSize.w : 96 / 25.4;
     const pagePxW = activeSize.w * pxPerMm;
     const pagePxH = (activeSize.h + 12) * pxPerMm;
-    const padding = 20; // pixels
+    const padding = 28; // pixels of breathing room on every edge
     const next = Math.min((Math.max(0, rect.width - padding * 2)) / pagePxW, (Math.max(0, rect.height - padding * 2)) / pagePxH);
     setZoom(Math.max(0.2, Math.min(2, next)));
+    requestAnimationFrame(() => {
+      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+      const pageEl = stage?.querySelector<HTMLElement>(".page-frame");
+      if (!stage || !pageEl) return;
+      const sr = stage.getBoundingClientRect();
+      const pr = pageEl.getBoundingClientRect();
+      stage.scrollLeft += pr.left + pr.width / 2 - (sr.left + sr.width / 2);
+      stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
+    });
   }, [activeSize.h, activeSize.w, setZoom]);
 
   // A 20 s heartbeat keeps "آخر حفظ منذ …" honest without a per-second store write.
@@ -406,19 +488,26 @@ function Studio({
         fitToScreen();
         return;
       }
+      /*
+       * Keyboard zoom scales the WHOLE editor interface (toolbar + panels +
+       * canvas) as one unit, the way ⌘± behaves in a browser — but bounded, so
+       * buttons and labels never become unusable and no panel can leave the
+       * screen. The canvas' own zoom (toolbar ±, ctrl/trackpad-pinch) stays for
+       * artboard-level precision. Browser zoom is never touched.
+       */
       if (meta && (key === "+" || key === "=")) {
         e.preventDefault();
-        setZoom(useEditor.getState().zoom + 0.08);
+        setUiScale((v) => stepUiScale(v, 1));
         return;
       }
       if (meta && key === "-") {
         e.preventDefault();
-        setZoom(useEditor.getState().zoom - 0.08);
+        setUiScale((v) => stepUiScale(v, -1));
         return;
       }
       if (meta && key === "0") {
         e.preventDefault();
-        fitToScreen();
+        setUiScale(1);
         return;
       }
       if (typing) return;
@@ -536,7 +625,12 @@ function Studio({
      * Rows are `auto` (header) + `minmax(0,1fr)` (workspace), so the header may
      * wrap on a narrow tablet without stealing height from the canvas.
      */
-    <div className={cn("editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]", dark ? "editor-dark" : "editor-light", focusMode && "editor-focus")}>
+    <div
+      className={cn("editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]", dark ? "editor-dark" : "editor-light", focusMode && "editor-focus")}
+      /* CSS `zoom` keeps the whole shell in layout (unlike transform), so the
+         panels stay docked and reachable at every scale. Bounded by stepUiScale. */
+      style={uiScale === 1 ? undefined : { zoom: uiScale }}
+    >
       <header className="editor-toolbar z-20 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pt-[max(0.375rem,var(--safe-top))] pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))]">
         <div className="flex shrink-0 items-center gap-2">
           <a
@@ -560,20 +654,36 @@ function Studio({
             <PenLine className="size-4" />
             <span className="hidden lg:inline">نص بالرسم</span>
           </button>
-          <button
-            type="button"
-            onClick={() => window.open("/projects", "_blank")}
+          {/**
+           * «مشاريعي» → صفحة المشاريع. A real same-tab navigation (anchor) so it
+           * works from any editor state — project, page, panel, focus mode —
+           * with no dependency on editor state at all.
+           */}
+          <a
+            href="/projects"
             className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-extrabold dark:border-white/10"
-            title="انتقل إلى صفحة نصوصك (المكتبة)"
+            title="الانتقال إلى مشاريعي"
           >
             <BookOpen className="size-4" />
-            <span className="hidden lg:inline">نصوصك</span>
-          </button>
+            <span className="hidden lg:inline">مشاريعي</span>
+          </a>
+          {/**
+           * «المكتبة» → the assets shelf inside the elements panel. Opening the
+           * panel and selecting its «عناصر» tab IS how the library is reached
+           * from anywhere in the editor; the button holds no other state.
+           */}
           <button
             type="button"
-            onClick={() => useEditor.setState({ leftTab: "elements", leftOpen: true, leftCollapsed: false })}
+            onClick={() => {
+              useEditor.setState({ leftTab: "elements", leftOpen: true, leftCollapsed: false, focusMode: false });
+              // Bring the shelf itself into view: the elements tab scrolls the
+              // library section into sight, so the click always lands visibly.
+              requestAnimationFrame(() => {
+                document.querySelector(".asset-library")?.scrollIntoView({ block: "start", behavior: "smooth" });
+              });
+            }}
             className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-extrabold dark:border-white/10"
-            title="فتح مكتبة العناصر"
+            title="فتح مكتبة الصور والعناصر"
           >
             <Library className="size-4" />
             <span className="hidden lg:inline">المكتبة</span>
@@ -743,18 +853,25 @@ function Studio({
             leftCollapsed && "hidden",
           )}
         >
-          {/* Explicit close button: the user always closes the panel by a
-              visible element, not only by tapping outside it. */}
-          <button
-            type="button"
-            onClick={() => toggle("leftCollapsed")}
-            aria-label="إغلاق لوحة العناصر"
-            title="إغلاق لوحة العناصر"
-            className="absolute left-1.5 top-1.5 z-20 grid size-7 place-items-center rounded-[6px] border border-line bg-white/90 text-muted hover:text-ink dark:border-white/10 dark:bg-[#161c26]/90"
-          >
-            <X className="size-3.5" />
-          </button>
-          <LeftPanel onUpload={onUpload} />
+          {/*
+           * Panel close button — inside the tab-strip row's own flow, not
+           * floating: an absolutely-positioned X previously sat ON TOP of the
+           * first tabs (and any content near the panel's top corner), covering
+           * them. Keeping it in-flow removes the overlap at every size, zoom
+           * and theme without hiding the affordance.
+           */}
+          <div className="flex items-center justify-start border-b border-line px-1.5 py-1 dark:border-white/10">
+            <button
+              type="button"
+              onClick={() => toggle("leftCollapsed")}
+              aria-label="إغلاق لوحة العناصر"
+              title="إغلاق لوحة العناصر"
+              className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-line px-2 text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
+            >
+              <X className="size-3.5" /> إغلاق
+            </button>
+          </div>
+          <LeftPanel onUpload={onUpload} onUploadSvg={onUploadSvg} />
           {!leftCollapsed && !focusMode && <PanelResizeHandle side="left" onStart={(event) => resizePanel("left", event.clientX, panelWidths.left)} />}
         </div>
 
@@ -777,16 +894,18 @@ function Studio({
             rightCollapsed && "hidden",
           )}
         >
-          {/* Explicit close button for the properties panel too. */}
-          <button
-            type="button"
-            onClick={() => toggle("rightCollapsed")}
-            aria-label="إغلاق لوحة الخصائص"
-            title="إغلاق لوحة الخصائص"
-            className="absolute right-1.5 top-1.5 z-20 grid size-7 place-items-center rounded-[6px] border border-line bg-white/90 text-muted hover:text-ink dark:border-white/10 dark:bg-[#161c26]/90"
-          >
-            <X className="size-3.5" />
-          </button>
+          {/* Same in-flow close row for the properties panel. */}
+          <div className="flex items-center justify-end border-b border-line px-1.5 py-1 dark:border-white/10">
+            <button
+              type="button"
+              onClick={() => toggle("rightCollapsed")}
+              aria-label="إغلاق لوحة الخصائص"
+              title="إغلاق لوحة الخصائص"
+              className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-line px-2 text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
+            >
+              <X className="size-3.5" /> إغلاق
+            </button>
+          </div>
           <RightPanel onReplaceImage={onReplaceImage} />
           {!rightCollapsed && !focusMode && <PanelResizeHandle side="right" onStart={(event) => resizePanel("right", event.clientX, panelWidths.right)} />}
         </div>
@@ -912,7 +1031,13 @@ function PanelResizeHandle({ side, onStart }: { side: "left" | "right"; onStart:
       onPointerDown={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        event.currentTarget.setPointerCapture(event.pointerId);
+        // Same guard as CanvasStage: synthetic events (no live pointer) make
+        // setPointerCapture throw NotFoundError.
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          /* drag still works through window-level pointermove listeners */
+        }
         onStart(event);
       }}
       role="separator"

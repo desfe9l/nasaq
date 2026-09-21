@@ -144,7 +144,25 @@ export function SiteFooter() {
 export function BrandLogo({ compact = false }: { compact?: boolean }) {
   return (
     <span className="inline-flex items-center gap-2.5" aria-label="نَسَق | NASAQ">
-      <img src="/nasaq-mark.svg" alt="" aria-hidden className={compact ? "size-8 shrink-0" : "size-9 shrink-0"} />
+      {/*
+       * Dark-mode swap: the mark's dark fills (#063b35/#1a1a1a) vanish on the
+       * dark chrome, so the dark theme loads the light-fill variant of the
+       * SAME artwork (only the <style> fills differ — geometry is untouched).
+       * Both files are always fetched from the same origin; the swap is pure
+       * CSS, no JS, and the light variant keeps its original colors.
+       */}
+      <img
+        src="/nasaq-mark.svg"
+        alt=""
+        aria-hidden
+        className={cn(compact ? "size-8 shrink-0" : "size-9 shrink-0", "dark:hidden")}
+      />
+      <img
+        src="/nasaq-mark-inv.svg"
+        alt=""
+        aria-hidden
+        className={cn(compact ? "size-8 shrink-0" : "size-9 shrink-0", "hidden dark:block")}
+      />
       <span className="grid leading-none">
         <strong className={compact ? "text-[14px] font-extrabold" : "text-[15px] font-extrabold"}>نَسَق</strong>
         <span className="mt-1 text-[8px] font-bold tracking-[0.16em] text-muted" dir="ltr">NASAQ</span>

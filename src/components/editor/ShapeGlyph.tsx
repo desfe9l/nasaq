@@ -1,4 +1,4 @@
-import { isCompoundShape, shapeDef } from "@/lib/editor/shapes";
+import { isCompoundShape, shapeDef, type ShapePart } from "@/lib/editor/shapes";
 import { shapeIdOf, strokeToUnits } from "@/lib/editor/shape-render";
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
   borderWidthMm: number;
   /** Element box in mm — needed to convert the outline to viewBox units. */
   box: { w: number; h: number };
+  /** Dash pattern in viewBox units — the clipping-mask outline marker. */
+  strokeDasharray?: string;
 }
 
 /**
@@ -19,7 +21,37 @@ interface Props {
  * Children are built as elements rather than injected markup — shape ids arrive
  * from imported project files and must never reach the DOM as raw SVG source.
  */
-export function ShapeGlyph({ style, fill, stroke, borderWidthMm, box }: Props) {
+/**
+ * Raw geometry of a shape as SVG children, in whatever box the caller passes.
+ *
+ * The clip-path of a clipping mask needs the exact same primitives the glyph
+ * paints, otherwise the cut would follow a different silhouette than the shape
+ * the author sees. Keeping one builder guarantees they can never drift.
+ */
+export function ShapeParts({ parts, fillRule }: { parts: ShapePart[]; fillRule?: "evenodd" }) {
+  return (
+    <>
+      {parts.map((part, i) => {
+        const shared = { strokeLinejoin: "round" as const, fillRule };
+        if (part.k === "rect") {
+          return <rect key={i} {...shared} x={part.x} y={part.y} width={part.w} height={part.h} rx={part.rx} />;
+        }
+        if (part.k === "circle") {
+          return <circle key={i} {...shared} cx={part.cx} cy={part.cy} r={part.r} />;
+        }
+        if (part.k === "ellipse") {
+          return <ellipse key={i} {...shared} cx={part.cx} cy={part.cy} rx={part.rx} ry={part.ry} />;
+        }
+        if (part.k === "poly") {
+          return <polygon key={i} {...shared} points={part.points} />;
+        }
+        return <path key={i} {...shared} d={part.d} />;
+      })}
+    </>
+  );
+}
+
+export function ShapeGlyph({ style, fill, stroke, borderWidthMm, box, strokeDasharray }: Props) {
   const def = shapeDef(shapeIdOf(style));
   const strokeUnits = strokeToUnits(borderWidthMm, box);
   const inner = Math.max(1, 100 - strokeUnits);
@@ -40,26 +72,10 @@ export function ShapeGlyph({ style, fill, stroke, borderWidthMm, box }: Props) {
         fillRule={isCompoundShape(def.id) ? "evenodd" : undefined}
         stroke={strokeUnits > 0 ? stroke : undefined}
         strokeWidth={strokeUnits > 0 ? strokeUnits : undefined}
+        strokeDasharray={strokeDasharray}
         strokeLinejoin="round"
       >
-        {def.parts.map((part, i) => {
-          // `key` goes on the element itself: React reads it before spreading,
-          // so a keyed object spread here would warn and drop the key.
-          const shared = { strokeLinejoin: "round" as const };
-          if (part.k === "rect") {
-            return <rect key={i} {...shared} x={part.x} y={part.y} width={part.w} height={part.h} rx={part.rx} />;
-          }
-          if (part.k === "circle") {
-            return <circle key={i} {...shared} cx={part.cx} cy={part.cy} r={part.r} />;
-          }
-          if (part.k === "ellipse") {
-            return <ellipse key={i} {...shared} cx={part.cx} cy={part.cy} rx={part.rx} ry={part.ry} />;
-          }
-          if (part.k === "poly") {
-            return <polygon key={i} {...shared} points={part.points} />;
-          }
-          return <path key={i} {...shared} d={part.d} />;
-        })}
+        <ShapeParts parts={def.parts} fillRule={isCompoundShape(def.id) ? "evenodd" : undefined} />
       </g>
     </svg>
   );

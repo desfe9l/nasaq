@@ -113,24 +113,36 @@ export function WorkspaceOverlays({
   };
 
   const selectedTypes = selectedElements().map((item) => item.type);
+  /*
+   * قناع القص (Clipping Mask): applies only when the selection is exactly an
+   * image-family element (image/logo/svg/qr) + a shape — the only pair the
+   * mask has meaning for. Any other selection hides the entries entirely.
+   */
+  const applyMask = useEditor((s) => s.applyClipMask);
+  const removeMask = useEditor((s) => s.removeClipMask);
+  const selectedEls = selectedElements();
+  const maskSource = selectedEls.find((el) => el.type === "image" || el.type === "logo" || el.type === "qr");
+  const maskShape = selectedEls.find((el) => el.type === "shape" || el.type === "svg");
+  const maskApplicable = !!maskSource && !!maskShape && selectedEls.length === 2;
+  const maskRemovable = selectedEls.length === 1 && !!selectedEls[0].clippedBy;
   const contextActions: ContextAction[] = menu?.targetId
     ? [
         { label: "نسخ", icon: Copy, run: copy },
-        { label: "تكرار", icon: Copy, run: duplicate },
-        { label: "تقديم", icon: Layers, run: () => bring("forward") },
-        { label: "إرسال للخلف", icon: Layers, run: () => bring("back") },
-        ...(selectedCount >= 2 ? [{ label: "تجميع", icon: Group, run: group }] : []),
-        ...(selectedTypes.includes("group") ? [{ label: "فك التجميع", icon: Ungroup, run: ungroup }] : []),
-        { label: "قفل / فتح القفل", icon: Lock, run: toggleLock },
+        { label: "تكرار العنصر", icon: Copy, run: duplicate },
+        { label: "نقل إلى الأمام", icon: Layers, run: () => bring("forward") },
+        { label: "نقل إلى الخلف", icon: Layers, run: () => bring("back") },
+        ...(selectedCount >= 2 ? [{ label: "تجميع العناصر", icon: Group, run: group }] : []),
+        ...(selectedTypes.includes("group") ? [{ label: "فك تجميع العناصر", icon: Ungroup, run: ungroup }] : []),
+        ...(maskApplicable ? [{ label: "تطبيق قناع القص (Clipping Mask)", icon: Group, run: () => applyMask(maskSource!.id, maskShape!.id) }] : []),
+        ...(maskRemovable ? [{ label: "إزالة قناع القص", icon: Ungroup, run: () => removeMask(selectedEls[0].clippedBy!) }] : []),
+        { label: "قفل العنصر / فتح قفل العنصر", icon: Lock, run: toggleLock },
         { label: "إخفاء / إظهار", icon: Eye, run: toggleHidden },
         { label: "حذف", icon: Trash2, run: deleteSelected, danger: true },
       ]
     : [
         { label: "لصق", icon: Copy, run: paste, disabled: !clipboard },
         { label: "تحديد الكل", icon: AlignCenter, run: selectAll },
-        { label: "تكبير", icon: ZoomIn, run: () => setZoom(zoom + 0.08) },
-        { label: "تصغير", icon: ZoomOut, run: () => setZoom(zoom - 0.08) },
-        { label: "ملاءمة مساحة العمل", icon: Maximize2, run: fitToScreen },
+        { label: "عرض الصفحة بالكامل", icon: Maximize2, run: fitToScreen },
         { label: "وضع التركيز", icon: Focus, run: () => toggle("focusMode") },
         { label: "إظهار / إخفاء الشبكة", icon: Eye, run: () => toggle("showGrid") },
       ];
