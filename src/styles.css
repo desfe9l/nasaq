@@ -502,10 +502,23 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * with the zoomed page — dividing keeps the chrome a constant on-screen size.
  */
 /*
- * Hairline selection: the outline is a true 1px screen-space line. It is set
- * in px on the rotated frame (mm borders blur and thicken when zoomed), so the
- * selected element reads with a crisp edge at every zoom level.
+ * Hairline selection with theme-aware colors:
+ *  — Light mode: deep navy on white paper, with a white halo so it never
+ *    disappears against dark artwork.
+ *  — Dark mode: gold — NASAQ's accent — which reads clearly on both the dark
+ *    chrome and the still-white page. The halo flips to dark.
+ * Both are double-ring (contrast ring + color ring) so the selection is
+ * unmistakable over ANY artwork in EITHER theme without covering the element
+ * (borders only, zero fill).
  */
+.editor-ui.editor-light {
+  --sel-color: #1d4ed8;
+  --sel-halo: rgba(255, 255, 255, 0.9);
+}
+.editor-ui.editor-dark {
+  --sel-color: #d9b45b;
+  --sel-halo: rgba(17, 23, 34, 0.9);
+}
 /* z-index comes from SELECTION_LAYER_Z in CanvasStage — the one source. */
 .selection-layer {
   position: absolute;
@@ -516,11 +529,19 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .selection-frame {
   --handle-size: calc(2.6mm / var(--editor-zoom, 1));
   --rotate-gap: calc(10mm / var(--editor-zoom, 1));
+  /*
+   * The page lives in a scaled space, so a plain 1px border renders sub-pixel
+   * (≈0.55px at 82%) and the selection looks faint or invisible — the exact
+   * "no clear highlight" regression. Counter-scaling by --editor-zoom keeps
+   * the rings a constant ≈1.5–2px ON SCREEN at every zoom, hairline yet
+   * unmistakable, same trick the handles above already use.
+   */
   position: absolute;
   z-index: 2;
-  border: 1px solid #2563eb;
-  outline: 1px solid rgba(37, 99, 235, 0.35);
-  outline-offset: 1px;
+  border: calc(2.6px / var(--editor-zoom, 1)) solid var(--sel-color, #1d4ed8);
+  outline: calc(1.8px / var(--editor-zoom, 1)) solid var(--sel-halo, rgba(255, 255, 255, 0.9));
+  outline-offset: 0;
+  box-shadow: 0 0 0 calc(1.8px / var(--editor-zoom, 1)) var(--sel-halo, rgba(255, 255, 255, 0.9)) inset;
   pointer-events: auto;
   touch-action: none;
   cursor: move;
@@ -534,7 +555,8 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .selection-frame.is-secondary {
   z-index: 1;
   border-style: dashed;
-  border-color: rgba(37, 99, 235, 0.9);
+  border-color: color-mix(in srgb, var(--sel-color, #1d4ed8) 85%, transparent);
+  outline-style: dashed;
 }
 
 /*
@@ -752,7 +774,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   position: absolute;
   z-index: 1;
   background: #ffffff;
-  border: calc(0.5mm / var(--editor-zoom, 1)) solid #2563eb;
+  border: calc(0.5mm / var(--editor-zoom, 1)) solid var(--sel-color, #1d4ed8);
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
 }
 

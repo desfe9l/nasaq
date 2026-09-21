@@ -240,6 +240,13 @@ interface EditorStore extends Project, Ui, History {
   pasteClipboard: () => void;
   deleteSelected: () => void;
   bring: (dir: "forward" | "back" | "front" | "bottom") => void;
+  /**
+   * قناع القص (Clipping Mask): mask `sourceId` (image-family) by `shapeId`.
+   * The relationship is one `clippedBy` pointer — it follows undo/redo for
+   * free and removes cleanly.
+   */
+  applyClipMask: (sourceId: string, shapeId: string) => void;
+  removeClipMask: (shapeId: string) => void;
   toggleLock: () => void;
   toggleHidden: () => void;
   /**
@@ -573,10 +580,14 @@ export const useEditor = create<EditorStore>((set, get) => {
         }
         const activeId = (await getSetting<string>("activeProjectId")) || ui.activeProjectId;
         const active = activeId ? await getProject(activeId) : null;
+        const dark = ui.dark == null ? true : Boolean(ui.dark);
+        // Re-apply the persisted theme to <html> on boot (same contract as
+        // toggle("dark") — without it a reload loses the dark utilities).
+        document.documentElement.classList.toggle("dark", dark);
         set({
           projects: list,
           projectsLoading: false,
-          dark: ui.dark == null ? true : Boolean(ui.dark),
+          dark,
           focusMode: Boolean(ui.focusMode),
           leftOpen: Boolean(ui.leftOpen),
           rightOpen: Boolean(ui.rightOpen),
@@ -803,6 +814,12 @@ export const useEditor = create<EditorStore>((set, get) => {
     toggle: (key) => {
       const next = !get()[key];
       set({ [key]: next } as Partial<EditorStore>);
+      // The `dark:` Tailwind variant keys off `html.dark` — without this sync
+      // every dark: utility in the app is dead (restored: the line existed in
+      // cf8c7e5's store and was dropped in a later refactor).
+      if (key === "dark") {
+        document.documentElement.classList.toggle("dark", next);
+      }
       if (key === "dark" || key === "focusMode" || key === "leftOpen" || key === "rightOpen" || key === "leftCollapsed" || key === "rightCollapsed") {
         void setSetting(key, next);
       }
@@ -1329,6 +1346,63 @@ export const useEditor = create<EditorStore>((set, get) => {
       normalizeZ(next);
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
+    },
+
+    /**
+     * قناع القص (Clipping Mask).
+     *
+     * One `clippedBy` pointer on the masked element is the whole relationship:
+     * the canvas clips its paint to the shape's silhouette, undo/redo restores
+     * it like any other field, and removal clears the pointer. No parallel mask
+     * tree to keep in sync with the page.
+     */
+    applyClipMask: (sourceId, shapeId) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const source = locate(page, sourceId)?.el;
+      const shape = locate(page, shapeId)?.el;
+      if (!source || !shape) return;
+      const isShape = shape.type === "shape" || shape.type === "svg";
+      const isImageFamily = source.type === "image" || source.type === "logo" || source.type === "qr" || source.type === "svg";
+      if (!isShape || !isImageFamily || sourceId === shapeId) return;
+      /*
+       * Frame the picture in the mask. Without this, a mask applied to two
+       * elements that do not overlap produces an apparently empty shape — the
+       * picture would sit entirely outside its own cut. When they already
+       * overlap the author has placed it deliberately, so nothing is moved.
+       */
+      const ix = Math.max(0, Math.min(source.x + source.w, shape.x + shape.w) - Math.max(source.x, shape.x));
+      const iy = Math.max(0, Math.min(source.y + source.h, shape.y + shape.h) - Math.max(source.y, shape.y));
+      const covered = (ix * iy) / Math.max(1, shape.w * shape.h) > 0.6;
+      let framed: Partial<{ x: number; y: number; w: number; h: number }> = {};
+      if (!covered) {
+        const scale = Math.max(shape.w / Math.max(1, source.w), shape.h / Math.max(1, source.h));
+        const w = source.w * scale;
+        const h = source.h * scale;
+        framed = { x: shape.x + (shape.w - w) / 2, y: shape.y + (shape.h - h) / 2, w, h };
+      }
+      const next = mapElement(page, sourceId, (el) => ({ ...el, ...framed, clippedBy: shapeId }));
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        selectedId: sourceId,
+        selectedIds: [sourceId],
+      });
+      pushHistory();
+      toast.success("تم تطبيق قناع القص (Clipping Mask)");
+    },
+
+    removeClipMask: (shapeId) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const masked = page.elements.filter((el) => el.clippedBy === shapeId);
+      if (!masked.length) return;
+      const ids = new Set(masked.map((el) => el.id));
+      const next = mapElements(page, ids, (el) => ({ ...el, clippedBy: undefined }));
+      set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
+      pushHistory();
+      toast.success("تمت إزالة قناع القص");
     },
 
     reorderLayers: (fromId, toId) => {

@@ -90,7 +90,12 @@ export function PageRail() {
         </button>
       </div>
 
-      <ul className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1" dir="rtl">
+      {/*
+       * `px-1 py-1` is ring room, not decoration: the active page is marked by a
+       * 2px ring with a 2px offset, and without padding those 4px were clipped
+       * by this scroll container — the first/last thumbnail showed a cut ring.
+       */}
+      <ul className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto px-1 py-1" dir="rtl">
         {pages.map((p, i) => {
           const size = pageSize(p);
           const ratio = size.w / size.h;

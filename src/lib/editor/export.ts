@@ -6,6 +6,7 @@ import { prepareText } from "./text-render";
 import { shapeSvgMarkup, strokeToUnits } from "./shape-render";
 import { applyNumerals } from "./arabic";
 import { safeImageSrc } from "./images";
+import { applySvgColors, safeSvgSrc, sanitizeSvgContent } from "./svg";
 
 export type ExportFormat = "pdf" | "pptx" | "docx" | "png" | "jpg" | "html" | "json";
 
@@ -234,7 +235,7 @@ export async function exportPdf(pages: CapturedPage[], name: string) {
 export async function exportPptxEditable(pages: Page[], name: string) {
   const { buildScene } = await import("./scene");
   const { writePptx } = await import("./pptx-writer");
-  const blob = await writePptx(buildScene(pages), name);
+  const blob = await writePptx(buildScene(await materializeSvgSources(pages)), name);
   downloadBlob(blob, `${name}.pptx`);
 }
 
@@ -248,8 +249,42 @@ export async function exportPptxEditable(pages: Page[], name: string) {
 export async function exportDocxEditable(pages: Page[], name: string) {
   const { buildScene } = await import("./scene");
   const { writeDocx } = await import("./docx-writer");
-  const blob = await writeDocx({ scenes: buildScene(pages), title: name });
+  const blob = await writeDocx({ scenes: buildScene(await materializeSvgSources(pages)), title: name });
   downloadBlob(blob, `${name}.docx`);
+}
+
+/**
+ * Materialise every svg element's raster source before scene building.
+ *
+ * SVG elements carry their vector markup in `content`; the Office scene needs
+ * image bytes in `src`. Each svg's PNG is written into a CLONE of the page
+ * list (originals untouched — the editor keeps its vector), then the scene is
+ * built from the clones. Failures leave `src` empty and the element is simply
+ * skipped by the scene mapper, exactly like a broken image.
+ */
+async function materializeSvgSources(pages: Page[]): Promise<Page[]> {
+  const needs = pages.some((p) => p.elements.some((el) => el.type === "svg" && !safeSvgSrc(el.src)));
+  if (!needs) return pages;
+  const { svgToPngDataUrl } = await import("./svg");
+  return Promise.all(
+    pages.map(async (page) => ({
+      ...page,
+      elements: await Promise.all(
+        page.elements.map(async (el) => {
+          if (el.type !== "svg" || safeSvgSrc(el.src)) return el;
+          // Rasterise with the same panel overrides the canvas showed, so the
+          // exported file matches what the author sees.
+          const painted = applySvgColors(sanitizeSvgContent(el.content || ""), {
+            fill: el.style.svgFill,
+            stroke: el.style.svgStroke,
+            strokeWidth: el.style.svgStrokeWidth,
+          });
+          const png = await svgToPngDataUrl(painted, el.w, el.h, 2);
+          return png ? { ...el, src: png } : el;
+        }),
+      ),
+    })),
+  );
 }
 
 /**

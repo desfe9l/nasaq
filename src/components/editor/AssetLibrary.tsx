@@ -34,6 +34,12 @@ export function AssetLibrary() {
   const [preview, setPreview] = useState<Asset | PendingAsset | null>(null);
   const [savingPending, setSavingPending] = useState(false);
   const [folderDialog, setFolderDialog] = useState<"create" | "rename" | "delete" | null>(null);
+  /**
+   * Element pending deletion. Deleting an asset is destructive and one click
+   * away in a dense toolbar, so it goes through the same confirmation pattern
+   * as folders instead of firing straight from the button.
+   */
+  const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
   const [folderDraft, setFolderDraft] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "compact">("grid");
   const visibleAssets = assets.filter((asset) => (asset.folderId || null) === folderId);
@@ -128,7 +134,7 @@ export function AssetLibrary() {
   };
 
   return (
-    <section className="grid gap-2">
+    <section className="asset-library grid gap-2">
       <header className="flex items-center justify-between gap-2">
         <div>
           <h3 className="text-[12px] font-extrabold tracking-wide">مكتبة العناصر</h3>
@@ -283,8 +289,9 @@ export function AssetLibrary() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => void removeAsset(asset.id)}
+                      onClick={() => setAssetToDelete(asset)}
                       title="حذف من المكتبة"
+                      aria-label={`حذف ${asset.name} من المكتبة`}
                       className="grid size-6 place-items-center rounded-[5px] border border-line text-red-600 dark:border-white/10 dark:text-red-400"
                     >
                       <Trash2 className="size-2.5" />
@@ -355,6 +362,46 @@ export function AssetLibrary() {
             <div className="flex justify-end gap-2"><button type="button" onClick={() => setFolderDialog(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">إلغاء</button><button type="submit" className="h-8 rounded-[6px] bg-navy px-3 text-[11px] font-bold text-white">حفظ</button></div>
           </form>
           )}
+        </div>
+      )}
+
+      {assetToDelete && (
+        /* Same destructive-action contract as the folder dialog: no confirm on
+           backdrop click, Escape cancels, and focus starts on «إلغاء». */
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="تأكيد حذف العنصر"
+          onKeyDown={(event) => { if (event.key === "Escape") setAssetToDelete(null); }}
+        >
+          <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]">
+            <strong className="text-[13px]">هل أنت متأكد من الحذف؟</strong>
+            <p className="text-[11px] leading-6 text-muted">
+              سيتم حذف «{assetToDelete.name}» من المكتبة نهائيًا. العناصر التي أُدرجت في الصفحات لا تتأثر.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setAssetToDelete(null)}
+                className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10"
+              >
+                إلغاء
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const target = assetToDelete;
+                  setAssetToDelete(null);
+                  void removeAsset(target.id);
+                }}
+                className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white"
+              >
+                حذف
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </section>
