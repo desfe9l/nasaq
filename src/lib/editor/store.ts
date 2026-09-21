@@ -6,9 +6,11 @@ import {
   THEMES,
   absoluteBounds,
   alignmentMoves,
+  centerFor,
   clone,
   constrainElement,
   createElement,
+  createElementDefaults,
   createGroupFrom,
   distributePositions,
   explodeGroup,
@@ -227,6 +229,8 @@ interface EditorStore extends Project, Ui, History {
   /** Reorder top-level layers using their visible (front-to-back) list order. */
   reorderLayers: (fromId: string, toId: string) => void;
   addElement: (type: ElType, over?: Partial<CanvasEl>) => string | undefined;
+  /** Create a text element at an exact drawn box (the «نص بالرسم» tool). */
+  addTextAt: (box: { x: number; y: number; w: number; h: number }, pageId?: string) => string | undefined;
   updateElement: (id: string, patch: Partial<CanvasEl>, live?: boolean) => void;
   updateStyle: (id: string, patch: CanvasEl["style"], live?: boolean) => void;
   replaceElement: (el: CanvasEl, live?: boolean) => void;
@@ -282,6 +286,37 @@ function snap(v: number, enabled: boolean) {
 }
 
 const blank = createProject("official");
+
+/**
+ * The part of `page` (in document mm, page-relative) currently visible in the
+ * canvas viewport. Used by centered inserts so new elements appear where the
+ * author is looking. When the viewport is unknown (SSR, tests) or the page is
+ * entirely off-screen, falls back to the whole page so insertion stays visible.
+ */
+function visiblePageRect(
+  stage: HTMLElement | null,
+  page: Page,
+  zoom: number,
+  previewAll: boolean,
+): { x: number; y: number; w: number; h: number } {
+  const size = pageSize(page);
+  try {
+    const host = stage?.querySelector<HTMLElement>(`[data-page-id="${page.id}"]`) ?? null;
+    if (stage && host) {
+      const vr = stage.getBoundingClientRect();
+      const pr = host.getBoundingClientRect();
+      const x0 = Math.max(0, (vr.left - pr.left) / zoom);
+      const y0 = Math.max(0, (vr.top - pr.top) / zoom);
+      const x1 = Math.min(size.w, (vr.right - pr.left) / zoom);
+      const y1 = Math.min(size.h, (vr.bottom - pr.top) / zoom);
+      if (x1 > x0 && y1 > y0) return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    }
+  } catch {
+    /* no viewport (SSR/tests) — fall through */
+  }
+  void previewAll;
+  return { x: 0, y: 0, w: size.w, h: size.h };
+}
 
 const activePageOf = (s: { pages: Page[]; activePageId: string }) =>
   s.pages.find((p) => p.id === s.activePageId) || s.pages[0];
@@ -1033,11 +1068,28 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return undefined;
       const theme = THEMES[s.theme];
       const size = pageSize(page);
+      /*
+       * Centered insert: the element lands in the middle of what the author is
+       * looking at (the union of every visible artboard), not a fixed corner.
+       * Defaults come from createElementDefaults; anything the caller passes in
+       * `over` (e.g. a palette preset or a drawn size) wins over them, and the
+       * theme layer is applied last exactly as before — layering keeps one
+       * source of defaults without changing createElement's theming contract.
+       */
+      const defaults = createElementDefaults(type);
+      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+      const defaultSize = { w: defaults.w ?? 40, h: defaults.h ?? 30 };
+      const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+      const pos = centerFor(
+        visible,
+        { w: size.w, h: size.h, elW: defaultSize.w, elH: defaultSize.h },
+      );
       const el = createElement(
         type,
         {
-          x: Math.min(28, size.w - 40),
-          y: Math.min(36 + (page.elements.length % 8) * 6, size.h - 20),
+          ...defaults,
+          x: pos.x,
+          y: pos.y,
           z: nextZ(page),
           ...over,
         },
@@ -1047,6 +1099,39 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({
         pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: [...p.elements, el] } : p)),
         selectedId: el.id,
+        rightTab: "properties",
+      });
+      pushHistory();
+      return el.id;
+    },
+
+    addTextAt: (box, pageId) => {
+      const s = get();
+      const page = pageId ? s.pages.find((p) => p.id === pageId) : activePageOf(s);
+      if (!page) return undefined;
+      const theme = THEMES[s.theme];
+      const size = pageSize(page);
+      const defaults = createElementDefaults("text");
+      const el = createElement(
+        "text",
+        {
+          ...defaults,
+          x: box.x,
+          y: box.y,
+          w: box.w,
+          h: box.h,
+          // Drawn text always lands on top of everything visible: this is a
+          // new layer the author just drew, never a reshuffle of existing ones.
+          z: nextZ(page),
+        },
+        theme,
+      );
+      constrainElement(el, size);
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: [...p.elements, el] } : p)),
+        selectedId: el.id,
+        selectedIds: [el.id],
+        activePageId: page.id,
         rightTab: "properties",
       });
       pushHistory();

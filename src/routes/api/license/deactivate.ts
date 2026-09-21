@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { deactivateLicenseFn } from "@/lib/license/functions";
+import { respondLicense } from "@/lib/license/api.server";
 
 export const Route = createFileRoute("/api/license/deactivate")({
   server: {
@@ -7,8 +8,7 @@ export const Route = createFileRoute("/api/license/deactivate")({
       POST: async ({ request }) => {
         const body = await request.json().catch(() => ({}));
         const key = typeof body?.key === "string" ? body.key : "";
-        const result = await deactivateLicenseFn({ data: { key } });
-        return Response.json(result, { status: result.success ? 200 : 400 });
+        return respondLicense(deactivateLicenseFn({ data: { key } }), (r) => (r.success ? 200 : 400));
       },
     },
   },

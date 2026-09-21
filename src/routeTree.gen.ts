@@ -20,6 +20,7 @@ import { Route as LicenseRouteImport } from './routes/license'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PurchaseRouteImport } from './routes/purchase'
 import { Route as TemplatesRouteImport } from './routes/templates'
+import { Route as Char1575Char1604Char1607Char1608Char1610Char1577RouteImport } from './routes/الهوية'
 import { Route as ApiCheckoutConfigRouteImport } from './routes/api/checkout/config'
 import { Route as ApiLicenseActivateRouteImport } from './routes/api/license/activate'
 import { Route as ApiLicenseDeactivateRouteImport } from './routes/api/license/deactivate'
@@ -81,6 +82,12 @@ const TemplatesRoute = TemplatesRouteImport.update({
   path: '/templates',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Char1575Char1604Char1607Char1608Char1610Char1577Route =
+  Char1575Char1604Char1607Char1608Char1610Char1577RouteImport.update({
+    id: '/الهوية',
+    path: '/الهوية',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiCheckoutConfigRoute = ApiCheckoutConfigRouteImport.update({
   id: '/api/checkout/config',
   path: '/api/checkout/config',
@@ -119,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
+  '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
@@ -137,6 +145,7 @@ export interface FileRoutesByTo {
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
+  '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
@@ -156,6 +165,7 @@ export interface FileRoutesById {
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
+  '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
@@ -176,6 +186,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/purchase'
     | '/templates'
+    | '/الهوية'
     | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/purchase'
     | '/templates'
+    | '/الهوية'
     | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
@@ -212,6 +224,7 @@ export interface FileRouteTypes {
     | '/projects'
     | '/purchase'
     | '/templates'
+    | '/الهوية'
     | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
@@ -231,6 +244,7 @@ export interface RootRouteChildren {
   ProjectsRoute: typeof ProjectsRoute
   PurchaseRoute: typeof PurchaseRoute
   TemplatesRoute: typeof TemplatesRoute
+  Char1575Char1604Char1607Char1608Char1610Char1577Route: typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   ApiCheckoutConfigRoute: typeof ApiCheckoutConfigRoute
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
@@ -317,6 +331,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TemplatesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/الهوية': {
+      id: '/الهوية'
+      path: '/الهوية'
+      fullPath: '/الهوية'
+      preLoaderRoute: typeof Char1575Char1604Char1607Char1608Char1610Char1577RouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/checkout/config': {
       id: '/api/checkout/config'
       path: '/api/checkout/config'
@@ -367,6 +388,8 @@ const rootRouteChildren: RootRouteChildren = {
   ProjectsRoute: ProjectsRoute,
   PurchaseRoute: PurchaseRoute,
   TemplatesRoute: TemplatesRoute,
+  Char1575Char1604Char1607Char1608Char1610Char1577Route:
+    Char1575Char1604Char1607Char1608Char1610Char1577Route,
   ApiCheckoutConfigRoute: ApiCheckoutConfigRoute,
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,
   ApiLicenseDeactivateRoute: ApiLicenseDeactivateRoute,

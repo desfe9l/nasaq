@@ -58,6 +58,7 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
   const select = useEditor((s) => s.select);
   const toggleSelect = useEditor((s) => s.toggleSelect);
   const selectMany = useEditor((s) => s.selectMany);
+  const addTextAt = useEditor((s) => s.addTextAt);
   const enterGroup = useEditor((s) => s.enterGroup);
   const replaceElement = useEditor((s) => s.replaceElement);
   const fitTextBox = useEditor((s) => s.fitTextBox);
@@ -72,8 +73,25 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
   const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
   const [marquee, setMarquee] = useState<Marquee>(null);
   const [dropping, setDropping] = useState(false);
+  /** Armed when the author picks «نص بالرسم»: next page drag draws a text box. */
+  const [drawArmed, setDrawArmed] = useState(false);
   const pageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  // «نص بالرسم»: any surface can arm the tool (the toolbar button broadcasts);
+  // Escape is the way out without drawing anything.
+  useEffect(() => {
+    const arm = () => setDrawArmed(true);
+    const disarm = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawArmed(false);
+    };
+    window.addEventListener("nasaq:draw-text", arm);
+    window.addEventListener("keydown", disarm);
+    return () => {
+      window.removeEventListener("nasaq:draw-text", arm);
+      window.removeEventListener("keydown", disarm);
+    };
+  }, []);
 
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
@@ -210,9 +228,43 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
       const op = opRef.current;
       if (!op) return;
       const cur = toMm(ev);
-      const dx = cur.x - op.startX;
-      const dy = cur.y - op.startY;
+      let dx = cur.x - op.startX;
+      let dy = cur.y - op.startY;
       const next: CanvasEl = { ...op.orig, style: { ...op.orig.style } };
+
+      /*
+       * Drag auto-pan: near the viewport edge the stage scrolls itself, so a
+       * drag can continue past what is on screen. Edge zones are screen pixels
+       * (80px engage, speed eases to 0 at the very edge) — zoom-independent by
+       * definition because they are measured on the visible viewport itself.
+       */
+      const stageEl = stageRef.current;
+      if (stageEl) {
+        const vr = stageEl.getBoundingClientRect();
+        const margin = 80;
+        const ease = (dist: number) => (margin - Math.max(dist, 0)) * 0.12;
+        const fromLeft = ev.clientX - vr.left;
+        const fromRight = vr.right - ev.clientX;
+        const fromTop = ev.clientY - vr.top;
+        const fromBottom = vr.bottom - ev.clientY;
+        const ax = fromLeft < margin ? -ease(fromLeft) : fromRight < margin ? ease(fromRight) : 0;
+        const ay = fromTop < margin ? -ease(fromTop) : fromBottom < margin ? ease(fromBottom) : 0;
+        if (ax || ay) {
+          stageEl.scrollLeft += ax;
+          stageEl.scrollTop += ay;
+          // Scroll changes what the pointer means in document space; re-read it
+          // so the element keeps tracking the cursor instead of lagging.
+          const pageElNow = pageRefs.current[op.pageId];
+          if (pageElNow) {
+            const rectNow = pageElNow.getBoundingClientRect();
+            const curNow = pagePoint(rectNow, size, ev.clientX, ev.clientY);
+            cur.x = curNow.x;
+            cur.y = curNow.y;
+            dx = curNow.x - op.startX;
+            dy = curNow.y - op.startY;
+          }
+        }
+      }
 
       if (op.kind === "move") {
         next.x = op.orig.x + dx;
@@ -312,7 +364,7 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     return page.elements.map((el) => ({ id: el.id, box: { x: el.x, y: el.y, w: el.w, h: el.h } }));
   };
 
-  /** Rubber-band selection on empty page space. */
+  /** Rubber-band selection on empty page space, or a drawn text box when armed. */
   const startMarquee = (e: React.PointerEvent, page: Page) => {
     const pageEl = pageRefs.current[page.id];
     if (!pageEl) return;
@@ -320,6 +372,36 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     const rect = pageEl.getBoundingClientRect();
     const toMm = (ev: { clientX: number; clientY: number }) => pagePoint(rect, size, ev.clientX, ev.clientY);
     const start = toMm(e);
+    if (drawArmed) {
+      let done = false;
+      const move = (ev: PointerEvent) => {
+        const cur = toMm(ev);
+        setMarquee({ x0: start.x, y0: start.y, x1: cur.x, y1: cur.y });
+      };
+      const up = (ev: PointerEvent) => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        if (done) return;
+        done = true;
+        const end = toMm(ev);
+        setMarquee(null);
+        setDrawArmed(false);
+        const w = Math.max(MIN_SIZE, Math.abs(end.x - start.x));
+        const h = Math.max(MIN_SIZE, Math.abs(end.y - start.y));
+        const id = addTextAt(
+          { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), w, h },
+          page.id,
+        );
+        if (id) {
+          // The box opens for typing immediately — the drawn rectangle IS the
+          // text element, so editing starts as soon as the pointer is up.
+          requestAnimationFrame(() => requestEdit(page.id, id));
+        }
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+      return;
+    }
     const additive = e.shiftKey;
     const before = additive ? [...selectedIds] : [];
     const candidates = pickables(page);
@@ -364,7 +446,11 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
   return (
     <div
       ref={stageRef}
-      className={cn("editor-canvas-stage studio-grid relative min-h-0 min-w-0 overflow-auto px-6 py-8", dropping && "is-dropping")}
+      className={cn(
+        "editor-canvas-stage studio-grid relative min-h-0 min-w-0 overflow-auto px-6 py-8",
+        dropping && "is-dropping",
+        drawArmed && "draw-armed",
+      )}
       style={{ "--editor-zoom": zoom } as React.CSSProperties}
       dir="ltr"
       onPointerDownCapture={(e) => {
