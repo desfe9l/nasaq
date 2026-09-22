@@ -172,3 +172,22 @@ as real vector elements; tables/charts render legibly in both themes.
 - [ ] RTL: drag deltas, drop targets and floating anchors all verified in `dir="rtl"`.
 - [x] `npm run typecheck`, `npm run lint`, `npm test`, `npm run build` all green (see Verification).
 - [ ] Save/load/export (PDF/PNG/DOCX/PPTX) produce identical output to the pre-overhaul baseline.
+
+## Visual polish pass (third work order)
+
+Pure styling/layout pass — no functional logic, state or event handler was touched; every component keeps its behaviour and its accessible name/tooltip.
+
+| # | Brief item | State | Where |
+| --- | --- | --- | --- |
+| 1 | One 16/24px spacing rhythm | done | Section padding `py-12 md:py-16`, card padding `p-4`/`p-5`/`p-6`, grid gaps `gap-4 md:gap-6`, page rail `gap-4 px-4`, canvas pages `gap-6` |
+| 2 | Elevated cards: `rounded-xl`/`2xl`, soft shadow, 1px border | done | `--shadow-card` / `--shadow-card-hover` in `@theme` (dark variants add a translucent glow ring); `src/components/site/cards.ts` (`SITE_CARD`, `cardClass`) applied to the template, feature, project, plan, about and brand-kit cards |
+| 3 | Contrast harmony in both themes | done | `--color-muted` → `#5d6575` (≈5.8:1 on white) with `html.dark` re-pointing it to `#9aa5b4` (≈7:1); card titles `text-ink`/`dark:text-white`; light editor dividers one shade darker (`--editor-border: #b6b8bb`) |
+| 4 | Glassmorphic sticky nav | done | `SiteHeader`: `bg-white/80` (dark `#111722/80`) + `backdrop-blur-[12px]` + `border-line/60` + `shadow-sm` |
+| 5 | Template grid, leftover last row auto-centered | done | `CARD_WRAP` (flex-wrap + `justify-center`) + `CARD_W` (`(100% − gap) / columns` per breakpoint) on the homepage packs grid and both TemplatesPage grids |
+| 6 | Features section: distinct icon tiles, hover lift, emphasized selling points | done | `ICON_TINTS` / `iconTint()` in `cards.ts`; feature cards `rounded-2xl` + `hover:-translate-y-1` + `transition-all`; the flagship pillar keeps the solid brand tile |
+| 7 | Tablet toolbar 768–1024px: no multi-row wrapping | done | Toolbar `md:flex-nowrap md:overflow-x-auto md:whitespace-nowrap`; tool tray `md:min-w-0` (still `min-w-fit` + `order-last` on phones, where wrapping is wanted), draw-text label collapses to its icon below `lg` |
+| 8 | Compact tablet side panels | done | Properties/Layers drawer `md:max-lg:w-72` (288px); phones keep `min(340px,90vw)` |
+| 9 | A4 artboard floats | done | `.report-page` shadow stack at `shadow-2xl` scale (plus the 1px edge hairline); pages stay auto-centered (`mx-auto … min-w-full`) |
+| 10 | Bottom page strip + crisp borders | done | Active page `ring-2 ring-[var(--primary-accent)]` (the editor's own primary, light/dark aware), rounded thumbnails with a crisp border + small shadow, rail actions also revealed on `focus-within` |
+
+Verification for this pass: `npm run typecheck` clean · `npm run lint` 0 errors / 3 pre-existing warnings · `npm run build` green · `npm test` and the TS suite unchanged from the pre-pass baseline (17 / 10 pre-existing failures, same IDs). Generated CSS was inspected to confirm `shadow-card*`, `backdrop-blur-[12px]`, `ring-[var(--primary-accent)]`, `md:max-lg:w-72` and the breakpoint bases all compile, and that the tablet width and each `basis-*` override win in cascade order.
