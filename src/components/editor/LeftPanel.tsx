@@ -53,7 +53,6 @@ import { TablePicker } from "./TablePicker";
 
 const TABS: { id: LeftTab; label: string; icon: typeof Type }[] = [
   { id: "elements", label: "عناصر", icon: LayoutTemplate },
-  { id: "library", label: "المكتبة", icon: ImageIcon },
   { id: "shapes", label: "أشكال", icon: Shapes },
   { id: "templates", label: "قوالب", icon: FileText },
   { id: "pages", label: "صفحات", icon: Layers },
@@ -131,7 +130,6 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
   const [qrBusy, setQrBusy] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [previewTemplate, setPreviewTemplate] = useState<(typeof PAGE_TEMPLATES)[number] | null>(null);
-  const [confirmPageDelete, setConfirmPageDelete] = useState<string | null>(null);
 
   const page = pages.find((p) => p.id === activePageId);
   const activeSizeId = sizeIdOf(page);
@@ -187,7 +185,7 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
 
   return (
     <aside className="flex h-full min-h-0 flex-col border-l border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
-      <div className="grid shrink-0 grid-cols-8 gap-0.5 border-b border-line p-1.5 dark:border-white/10">
+      <div className="grid shrink-0 grid-cols-7 gap-0.5 border-b border-line p-1.5 dark:border-white/10">
         {TABS.map((t) => {
           const Icon = t.icon;
           return (
@@ -365,24 +363,6 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
               </p>
             </section>
 
-            <AssetLibrary compact />
-          </div>
-        )}
-
-        {tab === "library" && (
-          <div className="grid gap-3">
-            <header className="flex items-center justify-between">
-              <h2 className="text-[13px] font-extrabold">المكتبة</h2>
-              <span className="text-[10px] text-muted">اسحب العنصر إلى الصفحة أو انقر لإضافته</span>
-            </header>
-            <div className="flex gap-1.5">
-              <button type="button" onClick={() => onUpload("library")} className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[11px] font-extrabold text-white">
-                <ImageIcon className="size-3.5" /> رفع إلى المكتبة
-              </button>
-              <button type="button" onClick={onUploadSvg} className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10">
-                <FileCode2 className="size-3.5" /> رفع SVG
-              </button>
-            </div>
             <AssetLibrary />
           </div>
         )}
@@ -552,7 +532,7 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
                     >
                       ↓
                     </MiniButton>
-                    <MiniButton onClick={() => setConfirmPageDelete(p.id)} label="حذف الصفحة" danger>
+                    <MiniButton onClick={() => deletePage(p.id)} label="حذف الصفحة" danger>
                       حذف
                     </MiniButton>
                   </div>
@@ -569,18 +549,6 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
             <p className="text-[11px] leading-5 text-muted">
               لإعادة الترتيب بالسحب والإفلات، استخدم شريط الصفحات أسفل منطقة التصميم.
             </p>
-            {confirmPageDelete && (
-              <div className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4" role="dialog" aria-modal="true" aria-label="تأكيد حذف الصفحة">
-                <div className="w-full max-w-xs rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]">
-                  <strong className="text-[13px]">حذف الصفحة؟</strong>
-                  <p className="mt-1 text-[11px] leading-6 text-muted">سيتم حذف الصفحة وكل عناصرها نهائيًا.</p>
-                  <div className="mt-3 flex justify-end gap-2">
-                    <button type="button" autoFocus onClick={() => setConfirmPageDelete(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">إلغاء</button>
-                    <button type="button" onClick={() => { if (confirmPageDelete) deletePage(confirmPageDelete); setConfirmPageDelete(null); }} className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white">حذف</button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
