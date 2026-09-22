@@ -320,7 +320,7 @@ export function TablePicker({ theme, onAdd }: Props) {
               key={s.id}
               type="button"
               onClick={() => addGrid(s.cols, s.rows, s.header)}
-              className="rounded-[8px] border border-line px-2 py-2 text-right hover:border-navy-2 dark:border-white/10"
+              className="library-hit rounded-[8px] border border-line px-2 py-2 text-right dark:border-white/10"
               title={s.hint}
             >
               <strong className="block text-[11px]">{s.label}</strong>

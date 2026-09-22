@@ -318,7 +318,7 @@ export function LeftPanel({
                              * SVG upload one does), so extra services can be added
                              * to TOOL_GROUPS later without a new layout.
                              */
-                            className="flex min-h-[38px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold leading-snug transition hover:border-navy-2 hover:bg-navy-2/5 disabled:opacity-50 dark:border-white/10 dark:hover:border-gold/60"
+                            className="library-hit flex min-h-[38px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold leading-snug transition disabled:opacity-50 dark:border-white/10"
                             title={TYPE_NAME[t.type]}
                           >
                             <span className="min-w-0">{t.label}</span>
@@ -448,7 +448,7 @@ export function LeftPanel({
                         })
                       }
                       title={s.label}
-                      className="grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-navy-2 transition hover:border-navy-2 hover:bg-navy-2/5 dark:border-white/10 dark:text-gold-2"
+                      className="library-hit grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-navy-2 transition dark:border-white/10 dark:text-gold-2"
                     >
                       <ShapePreview
                         shapeId={s.id}
@@ -515,7 +515,7 @@ export function LeftPanel({
                   key={t.id}
                   type="button"
                   onClick={() => setPreviewTemplate(t)}
-                  className="grid grid-cols-[72px_1fr_auto] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition hover:border-navy-2 hover:bg-navy-2/5 dark:border-white/10"
+                  className="library-hit grid grid-cols-[72px_1fr_auto] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition dark:border-white/10"
                 >
                   <TemplatePreview variant={t.preview} />
                   <span className="min-w-0">
@@ -933,11 +933,12 @@ function FontsTab() {
                 onClick={() => apply(f.family)}
                 title={selected ? `تطبيق ${f.family}` : "اختر عنصر نص أولاً"}
                 className={cn(
-                  "flex items-center justify-between gap-2 rounded-[8px] border px-2.5 py-2 text-right disabled:opacity-55",
+                  "library-hit flex items-center justify-between gap-2 rounded-[8px] border px-2.5 py-2 text-right disabled:opacity-55",
                   current === f.family
                     ? "border-navy-2 bg-navy-2/5"
-                    : "border-line hover:border-navy-2 dark:border-white/10",
+                    : "border-line dark:border-white/10",
                 )}
+                aria-pressed={current === f.family}
               >
                 <span className="min-w-0">
                   <span

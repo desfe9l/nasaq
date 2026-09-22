@@ -584,9 +584,9 @@ export function AssetLibrary() {
                     onClick={() => place(asset)}
                     title={`إدراج "${asset.name}" في مساحة العمل — اسحبه على اللوحة لوضع مخصص`}
                     className={cn(
-                      "grid w-full place-items-center overflow-hidden rounded-[6px]",
+                      "library-hit grid w-full place-items-center overflow-hidden rounded-[6px]",
                       viewMode === "grid" ? "h-20" : "h-14",
-                      "border border-line bg-white transition hover:border-navy-2 dark:border-white/10 dark:bg-white/5",
+                      "border border-line bg-white transition dark:border-white/10 dark:bg-white/5",
                     )}
                   >
                     <img

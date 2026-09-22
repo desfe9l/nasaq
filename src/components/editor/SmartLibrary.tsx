@@ -873,7 +873,7 @@ export function SmartLibraryPanel({
                 })
               }
               title={s.label}
-              className="grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-navy-2 transition hover:border-navy-2 hover:bg-navy-2/5 dark:border-white/10 dark:text-gold-2"
+              className="library-hit grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-navy-2 transition dark:border-white/10 dark:text-gold-2"
             >
               <ShapePreview shapeId={s.shapeId} className="size-full max-h-7" />
             </button>
@@ -1240,7 +1240,7 @@ export function SmartLibraryPanel({
               key={t.id}
               type="button"
               onClick={() => onPreviewTemplate(t)}
-              className="grid min-h-[52px] grid-cols-[64px_1fr] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition hover:border-navy-2 hover:bg-navy-2/5 dark:border-white/10"
+              className="library-hit grid min-h-[52px] grid-cols-[64px_1fr] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition dark:border-white/10"
             >
               <TemplatePreview variant={t.preview} />
               <span className="min-w-0">

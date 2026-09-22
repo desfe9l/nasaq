@@ -36,7 +36,9 @@
  * thin accent. No gradient-led surfaces, no decorative elements without a function.
  */
 @theme {
-  --font-sans: "Tajawal", "Cairo", "IBM Plex Sans Arabic", "Noto Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    "Tajawal", "Cairo", "IBM Plex Sans Arabic", "Noto Sans Arabic",
+    ui-sans-serif, system-ui, sans-serif;
   --font-display: "Cairo", "Tajawal", sans-serif;
   --font-serif-ar: "Amiri", "Noto Naskh Arabic", serif;
 
@@ -65,7 +67,8 @@
   --radius-md: 10px;
   --radius-lg: 14px;
 
-  --shadow-panel: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --shadow-panel:
+    0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
   --shadow-page: 0 24px 64px rgba(15, 23, 42, 0.18);
 }
 
@@ -271,7 +274,10 @@
   color: var(--editor-text-secondary);
 }
 
-.editor-ui .editor-properties .field-control > input:not([type="range"]):not([type="color"]),
+.editor-ui
+  .editor-properties
+  .field-control
+  > input:not([type="range"]):not([type="color"]),
 .editor-ui .editor-properties .field-control > select,
 .editor-ui .editor-properties .field-control > textarea {
   background-color: var(--editor-surface) !important;
@@ -385,7 +391,9 @@
   width: 4px;
   border-radius: 999px;
   background: var(--editor-border);
-  transition: background-color 120ms ease, width 120ms ease;
+  transition:
+    background-color 120ms ease,
+    width 120ms ease;
 }
 
 .editor-panel-resize-handle:hover .editor-panel-resize-grip,
@@ -412,19 +420,27 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
    that faces the canvas, i.e. the DOM start side of the panel.
    Left panel  → handle on its canvas side = `left: -8px` in DOM terms.
    Right panel → handle on its canvas side = `right: -8px`. */
-.editor-panel-resize-left { left: -8px; }
-.editor-panel-resize-right { right: -8px; }
+.editor-panel-resize-left {
+  left: -8px;
+}
+.editor-panel-resize-right {
+  right: -8px;
+}
 
 @media (max-width: 1023px) {
   /* Handles stay useful on tablets: in landscape the panels sit beside the
      canvas exactly like desktop, so their edge must stay draggable there.
      Only portrait hides them — the portrait layout is a bottom sheet with no
      side edge to drag. */
-  .editor-panel-resize-right { display: none; }
+  .editor-panel-resize-right {
+    display: none;
+  }
 }
 
 @media (max-width: 1023px) and (orientation: portrait) {
-  .editor-panel-resize-left { display: none; }
+  .editor-panel-resize-left {
+    display: none;
+  }
 }
 
 /*
@@ -634,9 +650,11 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   position: absolute;
   z-index: 2;
   border: calc(2.6px / var(--editor-zoom, 1)) solid var(--sel-color, #1d4ed8);
-  outline: calc(1.8px / var(--editor-zoom, 1)) solid var(--sel-halo, rgba(255, 255, 255, 0.9));
+  outline: calc(1.8px / var(--editor-zoom, 1)) solid
+    var(--sel-halo, rgba(255, 255, 255, 0.9));
   outline-offset: 0;
-  box-shadow: 0 0 0 calc(1.8px / var(--editor-zoom, 1)) var(--sel-halo, rgba(255, 255, 255, 0.9)) inset;
+  box-shadow: 0 0 0 calc(1.8px / var(--editor-zoom, 1))
+    var(--sel-halo, rgba(255, 255, 255, 0.9)) inset;
   pointer-events: auto;
   touch-action: none;
   cursor: move;
@@ -914,14 +932,46 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   }
 }
 
-.handle.nw { top: calc(var(--handle-size) / -2); left: calc(var(--handle-size) / -2); cursor: nwse-resize; }
-.handle.n  { top: calc(var(--handle-size) / -2); left: calc(50% - var(--handle-size) / 2); cursor: ns-resize; }
-.handle.ne { top: calc(var(--handle-size) / -2); right: calc(var(--handle-size) / -2); cursor: nesw-resize; }
-.handle.e  { top: calc(50% - var(--handle-size) / 2); right: calc(var(--handle-size) / -2); cursor: ew-resize; }
-.handle.se { bottom: calc(var(--handle-size) / -2); right: calc(var(--handle-size) / -2); cursor: nwse-resize; }
-.handle.s  { bottom: calc(var(--handle-size) / -2); left: calc(50% - var(--handle-size) / 2); cursor: ns-resize; }
-.handle.sw { bottom: calc(var(--handle-size) / -2); left: calc(var(--handle-size) / -2); cursor: nesw-resize; }
-.handle.w  { top: calc(50% - var(--handle-size) / 2); left: calc(var(--handle-size) / -2); cursor: ew-resize; }
+.handle.nw {
+  top: calc(var(--handle-size) / -2);
+  left: calc(var(--handle-size) / -2);
+  cursor: nwse-resize;
+}
+.handle.n {
+  top: calc(var(--handle-size) / -2);
+  left: calc(50% - var(--handle-size) / 2);
+  cursor: ns-resize;
+}
+.handle.ne {
+  top: calc(var(--handle-size) / -2);
+  right: calc(var(--handle-size) / -2);
+  cursor: nesw-resize;
+}
+.handle.e {
+  top: calc(50% - var(--handle-size) / 2);
+  right: calc(var(--handle-size) / -2);
+  cursor: ew-resize;
+}
+.handle.se {
+  bottom: calc(var(--handle-size) / -2);
+  right: calc(var(--handle-size) / -2);
+  cursor: nwse-resize;
+}
+.handle.s {
+  bottom: calc(var(--handle-size) / -2);
+  left: calc(50% - var(--handle-size) / 2);
+  cursor: ns-resize;
+}
+.handle.sw {
+  bottom: calc(var(--handle-size) / -2);
+  left: calc(var(--handle-size) / -2);
+  cursor: nesw-resize;
+}
+.handle.w {
+  top: calc(50% - var(--handle-size) / 2);
+  left: calc(var(--handle-size) / -2);
+  cursor: ew-resize;
+}
 
 .rotate-handle {
   width: var(--handle-size);
@@ -935,10 +985,22 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * it controls, so it is reachable no matter how small the element is and it
  * never covers the resize dots.
  */
-.rotate-handle.nw { top: calc(var(--rotate-gap) * -1); left: calc(var(--rotate-gap) * -1); }
-.rotate-handle.ne { top: calc(var(--rotate-gap) * -1); right: calc(var(--rotate-gap) * -1); }
-.rotate-handle.se { bottom: calc(var(--rotate-gap) * -1); right: calc(var(--rotate-gap) * -1); }
-.rotate-handle.sw { bottom: calc(var(--rotate-gap) * -1); left: calc(var(--rotate-gap) * -1); }
+.rotate-handle.nw {
+  top: calc(var(--rotate-gap) * -1);
+  left: calc(var(--rotate-gap) * -1);
+}
+.rotate-handle.ne {
+  top: calc(var(--rotate-gap) * -1);
+  right: calc(var(--rotate-gap) * -1);
+}
+.rotate-handle.se {
+  bottom: calc(var(--rotate-gap) * -1);
+  right: calc(var(--rotate-gap) * -1);
+}
+.rotate-handle.sw {
+  bottom: calc(var(--rotate-gap) * -1);
+  left: calc(var(--rotate-gap) * -1);
+}
 
 .rotate-handle::after {
   content: "";
@@ -1037,8 +1099,12 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 @media print {
-  body { background: #fff !important; }
-  .no-print { display: none !important; }
+  body {
+    background: #fff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
 }
 
 /* =====================================================================
@@ -1194,19 +1260,30 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 @keyframes accordion-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .editor-accordion-body { animation: none; }
-  .editor-accordion-chevron { transition: none; }
+  .editor-accordion-body {
+    animation: none;
+  }
+  .editor-accordion-chevron {
+    transition: none;
+  }
 }
 
 .editor-subgroup {
   display: grid;
   gap: 0.5rem;
-  border-inline-start: 2px solid color-mix(in srgb, var(--editor-border, #dde2ea) 80%, transparent);
+  border-inline-start: 2px solid
+    color-mix(in srgb, var(--editor-border, #dde2ea) 80%, transparent);
   padding-inline-start: 0.625rem;
 }
 
@@ -1288,7 +1365,10 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   color: var(--editor-text-secondary, #6b7383);
   cursor: pointer;
   touch-action: manipulation;
-  transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
   opacity: 0;
 }
 
@@ -1305,7 +1385,11 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 
 .scrub-stepper:disabled {
   cursor: not-allowed;
-  color: color-mix(in srgb, var(--editor-text-secondary, #6b7383) 50%, transparent);
+  color: color-mix(
+    in srgb,
+    var(--editor-text-secondary, #6b7383) 50%,
+    transparent
+  );
 }
 
 .scrub-input.is-disabled .scrub-track {
@@ -1361,8 +1445,12 @@ body.is-scrubbing-value {
 }
 
 @keyframes drawer-backdrop-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @media (min-width: 1024px) {
@@ -1391,7 +1479,9 @@ body.is-scrubbing-value {
   height: 4px;
   border-radius: 999px;
   background: var(--editor-border, #c9cacc);
-  transition: background-color 140ms ease, width 140ms ease;
+  transition:
+    background-color 140ms ease,
+    width 140ms ease;
 }
 
 .editor-page-rail-resizer:hover::before,
@@ -1450,8 +1540,14 @@ body.is-resizing-rail {
  * to slide *away* from the element it belongs to, never across it.
  */
 @keyframes floating-toolbar-in {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .floating-toolbar[data-placement="below"] {
@@ -1464,13 +1560,25 @@ body.is-resizing-rail {
 }
 
 @keyframes floating-toolbar-in-down {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 @keyframes floating-toolbar-in-side {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: none; }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .floating-toolbar-section {
@@ -1501,7 +1609,9 @@ body.is-resizing-rail {
   cursor: pointer;
   font-size: 11px;
   font-weight: 800;
-  transition: background-color 120ms ease, color 120ms ease;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
 }
 
 .floating-toolbar-btn:hover:not(:disabled) {
@@ -1612,7 +1722,10 @@ body.is-resizing-rail {
  * PHASE 5 — Layer tree.
  */
 .layer-row {
-  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease, background-color 140ms ease;
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease,
+    background-color 140ms ease;
 }
 
 .layer-row.is-dragging {
@@ -1632,8 +1745,12 @@ body.is-resizing-rail {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
 }
 
-.layer-row.is-drop-before::before { top: -1px; }
-.layer-row.is-drop-after::after { bottom: -1px; }
+.layer-row.is-drop-before::before {
+  top: -1px;
+}
+.layer-row.is-drop-after::after {
+  bottom: -1px;
+}
 
 .layer-children {
   display: grid;
@@ -1754,7 +1871,8 @@ body.is-resizing-rail {
 .library-item:focus-visible {
   border: 2px solid var(--primary-accent, #1d4ed8);
   background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-accent, #1d4ed8) 25%, transparent);
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--primary-accent, #1d4ed8) 25%, transparent);
   outline: none;
 }
 
@@ -1768,6 +1886,49 @@ body.is-resizing-rail {
 .library-item[aria-pressed="true"],
 .library-item[data-active="true"] {
   border: 2px solid var(--primary-accent, #1d4ed8);
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+}
+
+/*
+ * `library-hit` is the INTERACTION half of the same affordance, with no layout
+ * properties at all: cards that already own their own display/grid rules (the
+ * shape grid, font rows, template cards, saved assets) opt in without any risk
+ * of the shared box model overriding their layout.
+ *
+ * Every selector is scoped to `.editor-sidebar` so it outranks the per-card
+ * Tailwind `hover:` utilities that sit earlier in the bundle — one behaviour,
+ * whichever markup a card was written with.
+ */
+.library-hit,
+.editor-sidebar .library-asset-card,
+.editor-sidebar .library-drag-card,
+.editor-sidebar .library-item {
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+
+.library-hit:hover,
+.library-hit:focus-visible,
+.editor-sidebar .library-asset-card:hover,
+.editor-sidebar .library-asset-card:focus-visible,
+.editor-sidebar .library-drag-card:hover,
+.editor-sidebar .library-drag-card:focus-visible,
+.editor-sidebar .library-item:hover,
+.editor-sidebar .library-item:focus-visible {
+  border: 2px solid var(--primary-accent, #1d4ed8) !important;
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--primary-accent, #1d4ed8) 25%, transparent);
+  outline: none;
+}
+
+.library-hit[aria-pressed="true"],
+.library-hit[data-active="true"],
+.editor-sidebar .library-item[aria-pressed="true"],
+.editor-sidebar .library-item[data-active="true"] {
+  border: 2px solid var(--primary-accent, #1d4ed8) !important;
   background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
 }
 

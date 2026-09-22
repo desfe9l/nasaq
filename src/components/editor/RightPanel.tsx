@@ -1183,11 +1183,12 @@ export function RightPanel({
                             }
                             title={s.label}
                             className={cn(
-                              "grid aspect-square place-items-center rounded-[6px] border p-1",
+                              "library-hit grid aspect-square place-items-center rounded-[6px] border p-1",
                               active
                                 ? "border-navy-2 bg-navy-2/10 text-navy-2 dark:text-gold-2"
-                                : "border-line text-muted hover:border-navy-2 dark:border-white/10",
+                                : "border-line text-muted dark:border-white/10",
                             )}
+                            aria-pressed={active}
                           >
                             <ShapePreview
                               shapeId={s.id}
