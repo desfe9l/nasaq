@@ -147,22 +147,38 @@ export function CanvasStage({
   const [marquee, setMarquee] = useState<Marquee>(null);
   /** Which drop gesture is hovering: an image file, a library card, or none. */
   const [dropping, setDropping] = useState<"file" | "library" | null>(null);
-  /** Armed when the author picks «نص بالرسم»: next page drag draws a text box. */
-  const [drawArmed, setDrawArmed] = useState(false);
+  /**
+   * The active drawing tool. `null` is the select/move tool (V).
+   *
+   * Kept in the canvas because only the canvas knows page geometry (zoom + the
+   * active artboard rect). Everything else broadcasts through the
+   * `nasaq:tool` / `nasaq:draw-text` window events, so there is exactly one
+   * owner of "which tool is armed" and no second source of truth to sync.
+   */
+  const [drawTool, setDrawTool] = useState<"text" | "rect" | null>(null);
+  const drawArmed = drawTool !== null;
   const pageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
-  // «نص بالرسم»: any surface can arm the tool (the toolbar button broadcasts);
-  // Escape is the way out without drawing anything.
+  /*
+   * Tool arming. «نص بالرسم» from the toolbar and `T` / `R` / `V` from the
+   * keyboard all land here; Escape is the way out without drawing anything.
+   */
   useEffect(() => {
-    const arm = () => setDrawArmed(true);
-    const disarm = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDrawArmed(false);
+    const armText = () => setDrawTool("text");
+    const onTool = (event: Event) => {
+      const detail = (event as CustomEvent<"text" | "rect" | null>).detail;
+      setDrawTool(detail ?? null);
     };
-    window.addEventListener("nasaq:draw-text", arm);
+    const disarm = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawTool(null);
+    };
+    window.addEventListener("nasaq:draw-text", armText);
+    window.addEventListener("nasaq:tool", onTool);
     window.addEventListener("keydown", disarm);
     return () => {
-      window.removeEventListener("nasaq:draw-text", arm);
+      window.removeEventListener("nasaq:draw-text", armText);
+      window.removeEventListener("nasaq:tool", onTool);
       window.removeEventListener("keydown", disarm);
     };
   }, []);
@@ -648,7 +664,7 @@ export function CanvasStage({
     const toMm = (ev: { clientX: number; clientY: number }) =>
       pagePoint(rect, size, ev.clientX, ev.clientY);
     const start = toMm(e);
-    if (drawArmed) {
+    if (drawTool) {
       let done = false;
       const move = (ev: PointerEvent) => {
         const cur = toMm(ev);
@@ -661,13 +677,22 @@ export function CanvasStage({
         done = true;
         const end = toMm(ev);
         setMarquee(null);
-        setDrawArmed(false);
+        setDrawTool(null);
         const w = Math.max(MIN_SIZE, Math.abs(end.x - start.x));
         const h = Math.max(MIN_SIZE, Math.abs(end.y - start.y));
-        const id = addTextAt(
-          { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), w, h },
-          page.id,
-        );
+        const box = {
+          x: Math.min(start.x, end.x),
+          y: Math.min(start.y, end.y),
+          w,
+          h,
+        };
+        if (drawTool === "rect") {
+          // `over` wins over the computed position inside `addElementAt`, so the
+          // rectangle lands exactly where it was drawn — not centred.
+          addElementAt("box", box);
+          return;
+        }
+        const id = addTextAt(box, page.id);
         if (id) {
           // The box opens for typing immediately — the drawn rectangle IS the
           // text element, so editing starts as soon as the pointer is up.
@@ -732,6 +757,7 @@ export function CanvasStage({
         "editor-canvas-stage studio-grid relative min-h-0 min-w-0 overflow-auto px-6 py-8",
         dropping && "is-dropping",
         drawArmed && "draw-armed",
+        drawTool === "rect" && "draw-rect",
       )}
       style={{ "--editor-zoom": zoom } as React.CSSProperties}
       dir="ltr"

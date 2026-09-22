@@ -367,6 +367,7 @@ function Studio({
   const openLibrary = useEditor((s) => s.openLibrary);
   const openContextMenu = useEditor((s) => s.openContextMenu);
   const closeContextMenu = useEditor((s) => s.closeContextMenu);
+  const bring = useEditor((s) => s.bring);
   const duplicateSelected = useEditor((s) => s.duplicateSelected);
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const copySelected = useEditor((s) => s.copySelected);
@@ -657,10 +658,60 @@ function Studio({
         else group();
         return;
       }
-      if (!meta && key === "v") return;
-      if (!meta && key === "t") {
+      /*
+       * Photoshop muscle memory (step 9).
+       *
+       *   V           أداة التحديد/التحريك — the tool every other one returns to
+       *   T           أداة النص — drag a box, type straight away
+       *   R           أداة الأشكال — drag a box, get a rectangle
+       *   Space+drag  pan (owned by the canvas)
+       *
+       * The tool itself lives in the canvas (it owns the page geometry); the
+       * shortcut only broadcasts, exactly like the «نص بالرسم» toolbar button,
+       * so there is one implementation of "arm the tool" and it is never
+       * duplicated in the shell.
+       */
+      if (!meta && !e.altKey && key === "v") {
         e.preventDefault();
+        armTool(null);
+        return;
+      }
+      if (!meta && !e.altKey && key === "t") {
+        e.preventDefault();
+        // Both halves of "text tool": show the text tab and arm the drag-to-draw
+        // gesture, so a press on the artboard starts typing.
         useEditor.getState().setLeftTab("elements");
+        armTool("text");
+        return;
+      }
+      if (!meta && !e.altKey && key === "r") {
+        e.preventDefault();
+        useEditor.getState().setLeftTab("shapes");
+        armTool("rect");
+        return;
+      }
+      if (meta && key === "j") {
+        if (typing) return;
+        e.preventDefault();
+        duplicateSelected();
+        return;
+      }
+      /*
+       * Layer order on the bracket keys, the Photoshop arrangement:
+       *   ⌘] forward   ⌘[ back   ⌘⇧] to front   ⌘⇧[ to back
+       * `e.code` covers layouts where the bracket sits behind another glyph
+       * (including the Arabic keymap), so the shortcut is not layout-dependent.
+       */
+      if (meta && (key === "[" || e.code === "BracketLeft")) {
+        if (typing) return;
+        e.preventDefault();
+        bring(e.shiftKey ? "bottom" : "back");
+        return;
+      }
+      if (meta && (key === "]" || e.code === "BracketRight")) {
+        if (typing) return;
+        e.preventDefault();
+        bring(e.shiftKey ? "front" : "forward");
         return;
       }
       if (!meta && e.shiftKey && (key === "1" || e.code === "Digit1")) {
@@ -761,6 +812,7 @@ function Studio({
     setZoom,
     group,
     ungroup,
+    bring,
     selectAll,
     enterGroup,
     enteredGroupId,
@@ -780,6 +832,17 @@ function Studio({
    * The old sign convention had that inverted, which is why the handles only
    * ever seemed decorative.
    */
+  /**
+   * Ask the canvas to switch tool. `null` is the select/move tool.
+   *
+   * A window event keeps the tool state in the one component that needs it
+   * (the canvas measures page coordinates), so this is a broadcast, not a
+   * second source of truth.
+   */
+  const armTool = (tool: "text" | "rect" | null) => {
+    window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: tool }));
+  };
+
   const resizePanel = (
     side: "left" | "right",
     startClientX: number,
@@ -1197,7 +1260,8 @@ function Studio({
            * switches the transition off, so manual resizing stays 1:1 with the
            * pointer and never feels laggy.
            */
-          transition: "grid-template-columns 180ms cubic-bezier(0.22, 1, 0.36, 1)",
+          transition:
+            "grid-template-columns 180ms cubic-bezier(0.22, 1, 0.36, 1)",
           gridTemplateColumns:
             focusMode || (leftCollapsed && rightCollapsed)
               ? isDesktop

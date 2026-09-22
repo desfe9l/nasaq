@@ -15,12 +15,15 @@ import {
   Layers,
   Lock,
   Maximize2,
+  Move,
   PenLine,
   Redo2,
   Scissors,
   Search,
   Settings2,
+  Square,
   Trash2,
+  Type,
   Ungroup,
   Undo2,
   ZoomIn,
@@ -49,14 +52,26 @@ type ContextAction = {
 const ACTIONS = [
   { id: "undo", label: "تراجع", hint: "⌘ Z", icon: Undo2 },
   { id: "redo", label: "إعادة", hint: "⌘ ⇧ Z", icon: Redo2 },
-  { id: "duplicate", label: "تكرار العنصر", hint: "⌘ D", icon: Copy },
+  { id: "duplicate", label: "تكرار العنصر", hint: "⌘ D / ⌘ J", icon: Copy },
   { id: "group", label: "تجميع المحدد", hint: "⌘ G", icon: Group },
   { id: "ungroup", label: "فك التجميع", hint: "⌘ ⇧ G", icon: Ungroup },
-  { id: "zoom-fit", label: "ملاءمة مساحة العمل", hint: "⇧ 1", icon: Maximize2 },
+  { id: "zoom-fit", label: "ملاءمة مساحة العمل", hint: "⌘ 0", icon: Maximize2 },
   { id: "zoom-in", label: "تكبير", hint: "⌘ +", icon: ZoomIn },
   { id: "zoom-out", label: "تصغير", hint: "⌘ -", icon: ZoomOut },
   { id: "focus", label: "وضع التركيز", hint: "", icon: Focus },
   { id: "export", label: "تصدير", hint: "⌘ E", icon: Download },
+  /*
+   * Tools (step 9) — listed so the V/T/R muscle memory is discoverable from the
+   * palette, not only from the keyboard.
+   */
+  { id: "tool-move", label: "أداة التحديد والتحريك", hint: "V", icon: Move },
+  { id: "tool-text", label: "أداة النص (ارسم صندوقًا)", hint: "T", icon: Type },
+  {
+    id: "tool-shape",
+    label: "أداة الأشكال (ارسم مستطيلًا)",
+    hint: "R",
+    icon: Square,
+  },
 ];
 
 export function WorkspaceOverlays({
@@ -83,6 +98,7 @@ export function WorkspaceOverlays({
   const bring = useEditor((s) => s.bring);
   const toggleLock = useEditor((s) => s.toggleLock);
   const flipSelected = useEditor((s) => s.flipSelected);
+  const setLeftTab = useEditor((s) => s.setLeftTab);
   const toggleHidden = useEditor((s) => s.toggleHidden);
   const toggle = useEditor((s) => s.toggle);
   const setZoom = useEditor((s) => s.setZoom);
@@ -146,6 +162,17 @@ export function WorkspaceOverlays({
         break;
       case "zoom-fit":
         fitToScreen();
+        break;
+      case "tool-move":
+        window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: null }));
+        break;
+      case "tool-text":
+        setLeftTab("elements");
+        window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: "text" }));
+        break;
+      case "tool-shape":
+        setLeftTab("shapes");
+        window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: "rect" }));
         break;
       case "zoom-in":
         setZoom(zoom + 0.08);

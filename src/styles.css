@@ -707,6 +707,11 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .editor-canvas-stage.draw-armed .report-page {
   cursor: crosshair;
 }
+/* The shape tool shares the crosshair; only the draw gesture differs. */
+.editor-canvas-stage.draw-rect .report-page {
+  cursor: crosshair;
+}
+
 .editor-canvas-stage.draw-armed .marquee {
   border-style: dashed;
   border-color: rgba(0, 108, 53, 0.9);
