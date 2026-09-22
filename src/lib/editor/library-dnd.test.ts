@@ -23,6 +23,18 @@ describe("normalizeLibraryDrop", () => {
     assert.deepEqual(out!.items[0].over, { name: "عمود" });
   });
 
+  it("accepts the image family so saved assets can be dropped on the artboard", () => {
+    const out = normalizeLibraryDrop({
+      items: [
+        { type: "image", over: { src: "data:image/png;base64,AA" } },
+        { type: "logo", over: { name: "شعار" } },
+      ],
+    });
+    assert.ok(out);
+    assert.equal(out!.items.length, 2);
+    assert.equal(out!.items[0].type, "image");
+  });
+
   it("drops unknown element types instead of inserting junk", () => {
     const out = normalizeLibraryDrop({
       items: [{ type: "iframe" }, { type: "table" }],

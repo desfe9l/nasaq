@@ -23,9 +23,8 @@ import { SHAPES } from "@/lib/editor/shapes";
 import { PAGE_TEMPLATES, type PageTemplateDef } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import {
-  LIBRARY_DND_MIME,
   insertLibraryDrop,
-  serializeLibraryDrop,
+  writeLibraryDrag,
   type LibraryDropItem,
   type LibraryDropPayload,
 } from "@/lib/editor/library-dnd";
@@ -822,8 +821,7 @@ export function SmartLibraryPanel({
     event: React.DragEvent,
     payload: LibraryDropPayload,
   ) => {
-    event.dataTransfer.setData(LIBRARY_DND_MIME, serializeLibraryDrop(payload));
-    event.dataTransfer.effectAllowed = "copy";
+    writeLibraryDrag(event.dataTransfer, payload);
   };
 
   return (

@@ -1690,6 +1690,15 @@ export const useEditor = create<EditorStore>((set, get) => {
         rightTab: "properties",
       });
       pushHistory();
+      /*
+       * Step 10 — one confirmation for EVERY insertion funnel.
+       *
+       * `addElementAt` is what the library cards, the element palette, the table
+       * builder and the canvas drop all call, so a single toast here covers
+       * "click or drag a library item" exactly, with no chance of a path being
+       * forgotten. Short duration keeps it subtle: a receipt, not an alert.
+       */
+      toast.success("تمت إضافة العنصر إلى مساحة العمل", { duration: 1600 });
       return el;
     },
 
@@ -1729,6 +1738,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         rightTab: "properties",
       });
       pushHistory();
+      toast.success("تمت إضافة صندوق نص إلى مساحة العمل", { duration: 1600 });
       return el.id;
     },
 

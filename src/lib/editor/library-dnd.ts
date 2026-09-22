@@ -21,6 +21,13 @@ export const LIBRARY_DND_MIME = "application/x-nasaq-library";
 /** Element types a library card is allowed to create. */
 export const LIBRARY_DROP_TYPES = [
   "table",
+  /*
+   * The image family joins the list for the asset library (step 10): a saved
+   * asset must be draggable onto the artboard at the drop point, exactly like a
+   * template card, instead of only being insertable from its Plus button.
+   */
+  "image",
+  "logo",
   "progress",
   "stat",
   "stamp",
@@ -92,6 +99,21 @@ export function serializeLibraryDrop(payload: LibraryDropPayload): string {
 }
 
 /** Parse a `dataTransfer` string, returning null for anything unusable. */
+/**
+ * Attach a payload to an HTML5 drag.
+ *
+ * Shared by every draggable card in the library so the transport (MIME type,
+ * effect, serialisation) has exactly one definition; the canvas validates the
+ * same string on arrival.
+ */
+export function writeLibraryDrag(
+  dataTransfer: DataTransfer,
+  payload: LibraryDropPayload,
+): void {
+  dataTransfer.setData(LIBRARY_DND_MIME, serializeLibraryDrop(payload));
+  dataTransfer.effectAllowed = "copy";
+}
+
 export function parseLibraryDrop(
   raw: string | null | undefined,
 ): LibraryDropPayload | null {
