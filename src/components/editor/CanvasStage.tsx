@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { findElement, MIN_SIZE, pageSize, type Box, type CanvasEl, type ElType, type Page } from "@/lib/editor/model";
+import {
+  findElement,
+  MIN_SIZE,
+  pageSize,
+  type Box,
+  type CanvasEl,
+  type ElType,
+  type Page,
+} from "@/lib/editor/model";
 import { applySnap, resizeByHandle } from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
 import { prepareText } from "@/lib/editor/text-render";
@@ -8,22 +16,24 @@ import { ElementNode } from "./ElementNode";
 import { FloatingToolbar } from "./FloatingToolbar";
 import { toast } from "sonner";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
-import { LIBRARY_DND_MIME, insertLibraryDrop, parseLibraryDrop } from "@/lib/editor/library-dnd";
+import {
+  LIBRARY_DND_MIME,
+  insertLibraryDrop,
+  parseLibraryDrop,
+} from "@/lib/editor/library-dnd";
 
-type Op =
-  | {
-      kind: "move" | "resize" | "rotate";
-      id: string;
-      handle?: string;
-      startX: number;
-      startY: number;
-      /** Positions of every element the gesture moves, keyed by id. */
-      origins: Record<string, { x: number; y: number }>;
-      orig: CanvasEl;
-      pageId: string;
-      parent?: { x: number; y: number };
-    }
-  | null;
+type Op = {
+  kind: "move" | "resize" | "rotate";
+  id: string;
+  handle?: string;
+  startX: number;
+  startY: number;
+  /** Positions of every element the gesture moves, keyed by id. */
+  origins: Record<string, { x: number; y: number }>;
+  orig: CanvasEl;
+  pageId: string;
+  parent?: { x: number; y: number };
+} | null;
 
 type Marquee = { x0: number; y0: number; x1: number; y1: number } | null;
 
@@ -40,8 +50,32 @@ const ARTBOARD_GAP_MM = 18;
 const SELECTION_LAYER_Z = 5000;
 /** The eight resize handles, named by the corner/edge they sit on. */
 const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
+/** Corner rotation grips (step 7). */
+const ROTATE_HANDLES = ["nw", "ne", "se", "sw"] as const;
 
-function pagePoint(rect: DOMRect, size: { w: number; h: number }, clientX: number, clientY: number) {
+/**
+ * Snap a raw drag angle.
+ *
+ * `Shift` engages the ladder: 15° steps with a strong pull onto the cardinal
+ * lines (0/45/90/…) — the multiples an author actually wants — while a plain
+ * drag stays continuous at 1° for fine alignment. Both branches normalise into
+ * (−180, 180] so the readout never shows 359° where −1° is meant.
+ */
+function snapRotation(raw: number, shift: boolean): number {
+  if (!shift) {
+    const free = (((raw % 360) + 540) % 360) - 180;
+    return round(free);
+  }
+  const fifteen = Math.round(raw / 15) * 15;
+  return (((fifteen % 360) + 540) % 360) - 180;
+}
+
+function pagePoint(
+  rect: DOMRect,
+  size: { w: number; h: number },
+  clientX: number,
+  clientY: number,
+) {
   return {
     x: ((clientX - rect.left) / rect.width) * size.w,
     y: ((clientY - rect.top) / rect.height) * size.h,
@@ -99,7 +133,17 @@ export function CanvasStage({
     distance: number;
     mode: "pan" | "pinch" | null;
   } | null>(null);
-  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
+  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({
+    v: [],
+    h: [],
+  });
+  /** Live angle readout shown next to the pointer while rotating (step 7). */
+  const [rotationHint, setRotationHint] = useState<{
+    angle: number;
+    shift: boolean;
+    x: number;
+    y: number;
+  } | null>(null);
   const [marquee, setMarquee] = useState<Marquee>(null);
   /** Which drop gesture is hovering: an image file, a library card, or none. */
   const [dropping, setDropping] = useState<"file" | "library" | null>(null);
@@ -139,7 +183,10 @@ export function CanvasStage({
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
       const prev = useEditor.getState().zoom;
-      const next = Math.min(2, Math.max(0.2, prev + (e.deltaY < 0 ? 0.06 : -0.06)));
+      const next = Math.min(
+        2,
+        Math.max(0.2, prev + (e.deltaY < 0 ? 0.06 : -0.06)),
+      );
       // Pointer-anchored zoom: the page point under the cursor stays put, so
       // zooming in on a detail never throws the author somewhere else.
       zoomAnchoredAt(stage, prev, next, e.clientX, e.clientY);
@@ -165,7 +212,10 @@ export function CanvasStage({
     const midpoint = (touches: TouchList) => ({
       x: (touches[0].clientX + touches[1].clientX) / 2,
       y: (touches[0].clientY + touches[1].clientY) / 2,
-      distance: Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY),
+      distance: Math.hypot(
+        touches[0].clientX - touches[1].clientX,
+        touches[0].clientY - touches[1].clientY,
+      ),
     });
 
     const onStart = (event: TouchEvent) => {
@@ -234,7 +284,11 @@ export function CanvasStage({
 
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
-      if (event.code === "Space" && !(event.target as HTMLElement | null)?.isContentEditable) spaceDown.current = true;
+      if (
+        event.code === "Space" &&
+        !(event.target as HTMLElement | null)?.isContentEditable
+      )
+        spaceDown.current = true;
     };
     const up = (event: KeyboardEvent) => {
       if (event.code === "Space") spaceDown.current = false;
@@ -259,8 +313,12 @@ export function CanvasStage({
    * a ref, because the author may drop onto any page — including one that is not
    * the active page in the all-pages preview.
    */
-  const dropPoint = (e: React.DragEvent): { x: number; y: number; pageId: string } | null => {
-    const target = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-page-id]");
+  const dropPoint = (
+    e: React.DragEvent,
+  ): { x: number; y: number; pageId: string } | null => {
+    const target = (e.target as HTMLElement | null)?.closest<HTMLElement>(
+      "[data-page-id]",
+    );
     if (!target) return null;
     const pageId = target.dataset.pageId;
     const page = pages.find((p) => p.id === pageId);
@@ -322,7 +380,8 @@ export function CanvasStage({
     // Snapshot the live page geometry once: reading it per pointermove would
     // force a layout on every frame of a drag.
     const rect = pageEl.getBoundingClientRect();
-    const toMm = (ev: { clientX: number; clientY: number }) => pagePoint(rect, size, ev.clientX, ev.clientY);
+    const toMm = (ev: { clientX: number; clientY: number }) =>
+      pagePoint(rect, size, ev.clientX, ev.clientY);
 
     const start = toMm(e);
 
@@ -330,11 +389,23 @@ export function CanvasStage({
     // on the pressed element; a plain drag carries the whole selection unless
     // the press was a shift-toggle, which is a selection change and not a drag.
     const draggingIds =
-      kind !== "move" || e.shiftKey ? [el.id] : selectedSet.has(el.id) ? selectedIds : [el.id];
+      kind !== "move" || e.shiftKey
+        ? [el.id]
+        : selectedSet.has(el.id)
+          ? selectedIds
+          : [el.id];
     const linkedIds =
       kind === "move" && !e.shiftKey
         ? page.elements
-            .filter((candidate) => candidate.linkId && draggingIds.some((id) => page.elements.find((item) => item.id === id)?.linkId === candidate.linkId))
+            .filter(
+              (candidate) =>
+                candidate.linkId &&
+                draggingIds.some(
+                  (id) =>
+                    page.elements.find((item) => item.id === id)?.linkId ===
+                    candidate.linkId,
+                ),
+            )
             .map((candidate) => candidate.id)
         : [];
     const gestureIds = [...new Set([...draggingIds, ...linkedIds])];
@@ -396,8 +467,18 @@ export function CanvasStage({
         const fromRight = vr.right - ev.clientX;
         const fromTop = ev.clientY - vr.top;
         const fromBottom = vr.bottom - ev.clientY;
-        const ax = fromLeft < margin ? -ease(fromLeft) : fromRight < margin ? ease(fromRight) : 0;
-        const ay = fromTop < margin ? -ease(fromTop) : fromBottom < margin ? ease(fromBottom) : 0;
+        const ax =
+          fromLeft < margin
+            ? -ease(fromLeft)
+            : fromRight < margin
+              ? ease(fromRight)
+              : 0;
+        const ay =
+          fromTop < margin
+            ? -ease(fromTop)
+            : fromBottom < margin
+              ? ease(fromBottom)
+              : 0;
         if (ax || ay) {
           stageEl.scrollLeft += ax;
           stageEl.scrollTop += ay;
@@ -444,9 +525,8 @@ export function CanvasStage({
         const appliedDx = next.x - op.orig.x;
         const appliedDy = next.y - op.orig.y;
         // When inside a group, siblings live in entered.children; otherwise in page.elements.
-        const siblingList = op.parent && enteredGroup
-          ? enteredChildren
-          : page.elements;
+        const siblingList =
+          op.parent && enteredGroup ? enteredChildren : page.elements;
         for (const [id, origin] of Object.entries(op.origins)) {
           if (id === op.id) continue;
           const sibling = siblingList.find((x) => x.id === id);
@@ -459,14 +539,27 @@ export function CanvasStage({
       } else if (op.kind === "resize") {
         // Shift (or the element's own aspect lock) preserves the element's
         // current aspect ratio; a plain drag resizes freely.
-        resizeByHandle(next, op.orig, op.handle || "se", dx, dy, ev.shiftKey || op.orig.style?.aspectLock === true);
+        resizeByHandle(
+          next,
+          op.orig,
+          op.handle || "se",
+          dx,
+          dy,
+          ev.shiftKey || op.orig.style?.aspectLock === true,
+        );
       } else if (op.kind === "rotate") {
         const cx = op.orig.x + op.orig.w / 2;
         const cy = op.orig.y + op.orig.h / 2;
         const a0 = Math.atan2(op.startY - cy, op.startX - cx);
         const a1 = Math.atan2(cur.y - cy, cur.x - cx);
         const raw = (op.orig.rotation || 0) + ((a1 - a0) * 180) / Math.PI;
-        next.rotation = ev.shiftKey ? Math.round(raw / 15) * 15 : round(raw % 360);
+        next.rotation = snapRotation(raw, ev.shiftKey);
+        setRotationHint({
+          angle: next.rotation,
+          shift: ev.shiftKey,
+          x: ev.clientX,
+          y: ev.clientY,
+        });
       }
       // Editing is free: an element may sit fully inside the page, straddle its
       // edge, or move entirely outside it. Only export clips content to the
@@ -479,13 +572,25 @@ export function CanvasStage({
       next.h = Math.max(clamp(next.h, MIN_SIZE, workspaceH), MIN_SIZE);
       // Soft boundary: allow elements to extend beyond page but keep them
       // within a generous workspace area so nothing disappears unexpectedly.
-      next.x = Math.max(-workspaceMargin, Math.min(next.x, size.w + workspaceMargin - next.w));
-      next.y = Math.max(-workspaceMargin, Math.min(next.y, size.h + workspaceMargin - next.h));
-      replaceElement(op.parent ? { ...next, x: next.x - op.parent.x, y: next.y - op.parent.y } : next, true);
+      next.x = Math.max(
+        -workspaceMargin,
+        Math.min(next.x, size.w + workspaceMargin - next.w),
+      );
+      next.y = Math.max(
+        -workspaceMargin,
+        Math.min(next.y, size.h + workspaceMargin - next.h),
+      );
+      replaceElement(
+        op.parent
+          ? { ...next, x: next.x - op.parent.x, y: next.y - op.parent.y }
+          : next,
+        true,
+      );
     };
 
     const up = () => {
       opRef.current = null;
+      setRotationHint(null);
       setGuides({ v: [], h: [] });
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
@@ -503,14 +608,24 @@ export function CanvasStage({
    * their absolute page positions.
    */
   const pickables = (page: Page): { id: string; box: Box }[] => {
-    const entered = enteredGroupId ? findElement(page.elements, enteredGroupId)?.el || null : null;
+    const entered = enteredGroupId
+      ? findElement(page.elements, enteredGroupId)?.el || null
+      : null;
     if (entered?.children?.length) {
       return entered.children.map((child) => ({
         id: child.id,
-        box: { x: entered.x + child.x, y: entered.y + child.y, w: child.w, h: child.h },
+        box: {
+          x: entered.x + child.x,
+          y: entered.y + child.y,
+          w: child.w,
+          h: child.h,
+        },
       }));
     }
-    return page.elements.map((el) => ({ id: el.id, box: { x: el.x, y: el.y, w: el.w, h: el.h } }));
+    return page.elements.map((el) => ({
+      id: el.id,
+      box: { x: el.x, y: el.y, w: el.w, h: el.h },
+    }));
   };
 
   /**
@@ -530,7 +645,8 @@ export function CanvasStage({
     if (!pageEl) return;
     const size = pageSize(page);
     const rect = pageEl.getBoundingClientRect();
-    const toMm = (ev: { clientX: number; clientY: number }) => pagePoint(rect, size, ev.clientX, ev.clientY);
+    const toMm = (ev: { clientX: number; clientY: number }) =>
+      pagePoint(rect, size, ev.clientX, ev.clientY);
     const start = toMm(e);
     if (drawArmed) {
       let done = false;
@@ -576,7 +692,12 @@ export function CanvasStage({
         w: Math.abs(cur.x - start.x),
         h: Math.abs(cur.y - start.y),
       };
-      setMarquee({ x0: box.x, y0: box.y, x1: box.x + box.w, y1: box.y + box.h });
+      setMarquee({
+        x0: box.x,
+        y0: box.y,
+        x1: box.x + box.w,
+        y1: box.y + box.h,
+      });
       // Intersection, not full containment: brushing across a row of elements is
       // the gesture people actually use to grab them all.
       const hits = candidates
@@ -672,15 +793,25 @@ export function CanvasStage({
         setDropping(null);
         // Library card: place it exactly where it was dropped, on whichever
         // page received it.
-        const payload = parseLibraryDrop(e.dataTransfer.getData(LIBRARY_DND_MIME));
+        const payload = parseLibraryDrop(
+          e.dataTransfer.getData(LIBRARY_DND_MIME),
+        );
         if (payload) {
           e.preventDefault();
           const at = dropPoint(e);
           if (at) setActivePage(at.pageId);
-          insertLibraryDrop(payload, at ? { x: at.x, y: at.y } : null, (type, over, center) => {
-            const el = addElementAt(type as ElType, over as Partial<CanvasEl>, center);
-            return el ? { x: el.x, y: el.y, w: el.w, h: el.h } : undefined;
-          });
+          insertLibraryDrop(
+            payload,
+            at ? { x: at.x, y: at.y } : null,
+            (type, over, center) => {
+              const el = addElementAt(
+                type as ElType,
+                over as Partial<CanvasEl>,
+                center,
+              );
+              return el ? { x: el.x, y: el.y, w: el.w, h: el.h } : undefined;
+            },
+          );
           return;
         }
         if (!onDropImage) return;
@@ -697,14 +828,21 @@ export function CanvasStage({
     >
       {dropping && (
         <div className="pointer-events-none sticky top-0 z-[var(--z-canvas-overlay)] mx-auto w-max rounded-full border border-gold/40 bg-white/95 px-4 py-1.5 text-[11px] font-extrabold text-navy shadow-sm dark:bg-[#161c26] dark:text-gold-2">
-          {dropping === "library" ? "أفلت العنصر ليُضاف في هذا الموضع" : "أفلت الصورة لإضافتها إلى الصفحة"}
+          {dropping === "library"
+            ? "أفلت العنصر ليُضاف في هذا الموضع"
+            : "أفلت الصورة لإضافتها إلى الصفحة"}
         </div>
       )}
-      <div className="mx-auto flex w-max min-w-full flex-col items-center gap-3" dir="rtl">
+      <div
+        className="mx-auto flex w-max min-w-full flex-col items-center gap-3"
+        dir="rtl"
+      >
         {visible.map((page) => {
           const size = pageSize(page);
           const isActive = page.id === activePageId;
-          const entered = enteredGroupId ? findElement(page.elements, enteredGroupId)?.el || null : null;
+          const entered = enteredGroupId
+            ? findElement(page.elements, enteredGroupId)?.el || null
+            : null;
           const enteredKids = entered?.children ?? [];
           /*
            * Selection/manipulation frames for this page, in the grouping
@@ -719,14 +857,22 @@ export function CanvasStage({
               for (const child of enteredKids) {
                 if (selectedSet.has(child.id) && !child.hidden) {
                   selectionFrames.push({
-                    el: { ...child, x: entered.x + child.x, y: entered.y + child.y },
+                    el: {
+                      ...child,
+                      x: entered.x + child.x,
+                      y: entered.y + child.y,
+                    },
                     parent: { x: entered.x, y: entered.y },
                   });
                 }
               }
             } else {
               for (const el of page.elements) {
-                if (selectedSet.has(el.id) && !el.hidden && el.id !== entered?.id) {
+                if (
+                  selectedSet.has(el.id) &&
+                  !el.hidden &&
+                  el.id !== entered?.id
+                ) {
                   selectionFrames.push({ el, parent: undefined });
                 }
               }
@@ -742,109 +888,187 @@ export function CanvasStage({
                 height: `${(size.h + 12 + ARTBOARD_GAP_MM) * zoom}mm`,
               }}
             >
-              <div className="page-frame-content" dir="ltr" style={{ width: `${size.w}mm`, height: `${size.h + 12}mm`, transform: `scale(${zoom})`, transformOrigin: "top left" }}>
-              <div className="mb-2 flex items-center justify-between gap-4 text-[12px] text-muted" dir="rtl">
-                <strong className="text-ink dark:text-white">
-                  {page.name}
-                  {entered && <span className="ms-2 font-semibold text-gold-2">· داخل «{entered.name}»</span>}
-                </strong>
-                <span className="tabular-nums">
-                  {previewAll
-                    ? `صفحة ${pages.findIndex((p) => p.id === page.id) + 1} من ${pages.length}`
-                    : `${round(size.w)} × ${round(size.h)} مم`}
-                </span>
-              </div>
               <div
-                ref={(n) => {
-                  pageRefs.current[page.id] = n;
-                }}
-                data-page-id={page.id}
-                className={`report-page ${showGrid ? "show-grid" : ""} ${isActive ? "ring-2 ring-gold ring-offset-8" : ""}`}
-                style={{ width: `${size.w}mm`, height: `${size.h}mm`, background: page.bg || "#fff" }}
-                onPointerDown={(e) => {
-                  // Only a press on the page itself starts a marquee; presses on
-                  // elements are handled by the element and stop propagation.
-                  if (e.target !== e.currentTarget) return;
-                  e.stopPropagation();
-                  setActivePage(page.id);
-                  // A right press only opens the context menu — it must not
-                  // start a marquee (whose plain-click branch would clear the
-                  // selection from under the menu about to open).
-                  if (e.button !== 0) return;
-                  startMarquee(e, page);
+                className="page-frame-content"
+                dir="ltr"
+                style={{
+                  width: `${size.w}mm`,
+                  height: `${size.h + 12}mm`,
+                  transform: `scale(${zoom})`,
+                  transformOrigin: "top left",
                 }}
               >
-                {page.elements
-                  .slice()
-                  .sort((a, b) => a.z - b.z)
-                  .map((el) => {
-                    // Stepped into this group: its frame is drawn for context and
-                    // its members become individually selectable nodes, instead of
-                    // the group behaving as one opaque element.
-                    if (entered && el.id === entered.id && enteredKids.length) {
+                <div
+                  className="mb-2 flex items-center justify-between gap-4 text-[12px] text-muted"
+                  dir="rtl"
+                >
+                  <strong className="text-ink dark:text-white">
+                    {page.name}
+                    {entered && (
+                      <span className="ms-2 font-semibold text-gold-2">
+                        · داخل «{entered.name}»
+                      </span>
+                    )}
+                  </strong>
+                  <span className="tabular-nums">
+                    {previewAll
+                      ? `صفحة ${pages.findIndex((p) => p.id === page.id) + 1} من ${pages.length}`
+                      : `${round(size.w)} × ${round(size.h)} مم`}
+                  </span>
+                </div>
+                <div
+                  ref={(n) => {
+                    pageRefs.current[page.id] = n;
+                  }}
+                  data-page-id={page.id}
+                  className={`report-page ${showGrid ? "show-grid" : ""} ${isActive ? "ring-2 ring-gold ring-offset-8" : ""}`}
+                  style={{
+                    width: `${size.w}mm`,
+                    height: `${size.h}mm`,
+                    background: page.bg || "#fff",
+                  }}
+                  onPointerDown={(e) => {
+                    // Only a press on the page itself starts a marquee; presses on
+                    // elements are handled by the element and stop propagation.
+                    if (e.target !== e.currentTarget) return;
+                    e.stopPropagation();
+                    setActivePage(page.id);
+                    // A right press only opens the context menu — it must not
+                    // start a marquee (whose plain-click branch would clear the
+                    // selection from under the menu about to open).
+                    if (e.button !== 0) return;
+                    startMarquee(e, page);
+                  }}
+                >
+                  {page.elements
+                    .slice()
+                    .sort((a, b) => a.z - b.z)
+                    .map((el) => {
+                      // Stepped into this group: its frame is drawn for context and
+                      // its members become individually selectable nodes, instead of
+                      // the group behaving as one opaque element.
+                      if (
+                        entered &&
+                        el.id === entered.id &&
+                        enteredKids.length
+                      ) {
+                        return (
+                          <div key={el.id}>
+                            <div
+                              className="canvas-el group-frame"
+                              style={{
+                                left: `${el.x}mm`,
+                                top: `${el.y}mm`,
+                                width: `${el.w}mm`,
+                                height: `${el.h}mm`,
+                                transform: `rotate(${el.rotation || 0}deg)`,
+                                zIndex: el.z,
+                              }}
+                            />
+                            {enteredKids
+                              .slice()
+                              .sort((a, b) => a.z - b.z)
+                              .map((child) => {
+                                const abs = {
+                                  ...child,
+                                  x: entered.x + child.x,
+                                  y: entered.y + child.y,
+                                };
+                                return (
+                                  <ElementNode
+                                    key={child.id}
+                                    el={abs}
+                                    interactive
+                                    onPointerDown={(ev, kind, handle) =>
+                                      startOp(ev, page, abs, kind, handle, {
+                                        x: entered.x,
+                                        y: entered.y,
+                                      })
+                                    }
+                                  />
+                                );
+                              })}
+                          </div>
+                        );
+                      }
+                      if (entered && el.id === entered.id) return null;
                       return (
-                        <div key={el.id}>
-                          <div
-                            className="canvas-el group-frame"
-                            style={{
-                              left: `${el.x}mm`,
-                              top: `${el.y}mm`,
-                              width: `${el.w}mm`,
-                              height: `${el.h}mm`,
-                              transform: `rotate(${el.rotation || 0}deg)`,
-                              zIndex: el.z,
-                            }}
-                          />
-                          {enteredKids
-                            .slice()
-                            .sort((a, b) => a.z - b.z)
-                            .map((child) => {
-                              const abs = { ...child, x: entered.x + child.x, y: entered.y + child.y };
-                              return (
-                                <ElementNode
-                                  key={child.id}
-                                  el={abs}
-                                  interactive
-                                  onPointerDown={(ev, kind, handle) => startOp(ev, page, abs, kind, handle, { x: entered.x, y: entered.y })}
-                                />
-                              );
-                            })}
-                        </div>
+                        <ElementNode
+                          key={el.id}
+                          el={el}
+                          interactive
+                          onEnterGroup={
+                            el.type === "group"
+                              ? () => enterGroup(el.id)
+                              : undefined
+                          }
+                          onPointerDown={(ev, kind, handle) =>
+                            startOp(ev, page, el, kind, handle)
+                          }
+                        />
                       );
-                    }
-                    if (entered && el.id === entered.id) return null;
-                    return (
-                      <ElementNode
+                    })}
+                  {marquee && (
+                    <div
+                      className="marquee"
+                      style={{
+                        left: `${marquee.x0}mm`,
+                        top: `${marquee.y0}mm`,
+                        width: `${Math.abs(marquee.x1 - marquee.x0)}mm`,
+                        height: `${Math.abs(marquee.y1 - marquee.y0)}mm`,
+                      }}
+                    />
+                  )}
+                  {isActive &&
+                    page.elements.map((el) => (
+                      <OverflowFlag
                         key={el.id}
                         el={el}
-                        interactive
-                        onEnterGroup={el.type === "group" ? () => enterGroup(el.id) : undefined}
-                        onPointerDown={(ev, kind, handle) => startOp(ev, page, el, kind, handle)}
+                        onFit={() => fitTextBox(el.id)}
                       />
-                    );
-                  })}
-                {marquee && (
-                  <div
-                    className="marquee"
-                    style={{
-                      left: `${marquee.x0}mm`,
-                      top: `${marquee.y0}mm`,
-                      width: `${Math.abs(marquee.x1 - marquee.x0)}mm`,
-                      height: `${Math.abs(marquee.y1 - marquee.y0)}mm`,
-                    }}
-                  />
-                )}
-                {isActive &&
-                  page.elements.map((el) => (
-                    <OverflowFlag key={el.id} el={el} onFit={() => fitTextBox(el.id)} />
-                  ))}
-                {isActive &&
-                  guides.v.map((x) => <div key={`v${x}`} className="guide-v" style={{ left: `${x}mm` }} />)}
-                {isActive &&
-                  guides.h.map((y) => <div key={`h${y}`} className="guide-h" style={{ top: `${y}mm` }} />)}
-                {isActive &&
-                  selectionFrames.length > 0 && (
-                    <div className="selection-layer" style={{ zIndex: SELECTION_LAYER_Z }}>
+                    ))}
+                  {/*
+                   * Live rotation readout. Rendered inside the (clipped) page for
+                   * simplicity but positioned from client coordinates, so it never
+                   * adds a layout box to the artboard.
+                   */}
+                  {rotationHint && isActive && (
+                    <div
+                      className="rotation-hint"
+                      dir="ltr"
+                      style={{ left: rotationHint.x, top: rotationHint.y }}
+                    >
+                      <strong className="tabular-nums">
+                        {Math.round(rotationHint.angle)}°
+                      </strong>
+                      <span>
+                        {rotationHint.shift
+                          ? "التقاط 15°/45°/90°"
+                          : "Shift للالتقاط"}
+                      </span>
+                    </div>
+                  )}
+                  {isActive &&
+                    guides.v.map((x) => (
+                      <div
+                        key={`v${x}`}
+                        className="guide-v"
+                        style={{ left: `${x}mm` }}
+                      />
+                    ))}
+                  {isActive &&
+                    guides.h.map((y) => (
+                      <div
+                        key={`h${y}`}
+                        className="guide-h"
+                        style={{ top: `${y}mm` }}
+                      />
+                    ))}
+                  {isActive && selectionFrames.length > 0 && (
+                    <div
+                      className="selection-layer"
+                      style={{ zIndex: SELECTION_LAYER_Z }}
+                    >
                       {selectionFrames.map((frame) => (
                         <SelectionFrame
                           key={frame.el.id}
@@ -852,27 +1076,36 @@ export function CanvasStage({
                           primary={selectedIds.length === 1}
                           editing={editingId === frame.el.id}
                           onGesture={(ev, kind, handle) =>
-                            startOp(ev, page, frame.el, kind, handle, frame.parent)
+                            startOp(
+                              ev,
+                              page,
+                              frame.el,
+                              kind,
+                              handle,
+                              frame.parent,
+                            )
                           }
-                          onEditRequest={() => requestEdit(page.id, frame.el.id)}
+                          onEditRequest={() =>
+                            requestEdit(page.id, frame.el.id)
+                          }
                         />
                       ))}
                     </div>
                   )}
-              </div>
+                </div>
               </div>
             </div>
           );
         })}
       </div>
       {/*
-        * Phase 4 — floating contextual toolbar.
-        *
-        * Rendered for a single selected element (the primary selection), and
-        * hidden while the caret is inside a text node so it never competes with
-        * in-place editing. It lives in a FIXED overlay — outside the scaled page
-        * — so its buttons keep a constant screen size and its 16px gap is real.
-        */}
+       * Phase 4 — floating contextual toolbar.
+       *
+       * Rendered for a single selected element (the primary selection), and
+       * hidden while the caret is inside a text node so it never competes with
+       * in-place editing. It lives in a FIXED overlay — outside the scaled page
+       * — so its buttons keep a constant screen size and its 16px gap is real.
+       */}
       {primarySelection &&
         editingId !== primarySelection.id &&
         bubbleEnabled &&
@@ -949,7 +1182,11 @@ function SelectionFrame({
   frame: SelectionBox;
   primary: boolean;
   editing: boolean;
-  onGesture: (e: React.PointerEvent, kind: "move" | "resize" | "rotate", handle?: string) => void;
+  onGesture: (
+    e: React.PointerEvent,
+    kind: "move" | "resize" | "rotate",
+    handle?: string,
+  ) => void;
   onEditRequest: () => void;
 }) {
   const select = useEditor((s) => s.select);
@@ -975,10 +1212,11 @@ function SelectionFrame({
         top: `${el.y}mm`,
         width: `${el.w}mm`,
         height: `${el.h}mm`,
-        transform: `rotate(${el.rotation || 0}deg)`,
+        transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
       }}
       onPointerDown={(e) => {
-        if ((e.target as HTMLElement).closest(".handle, .rotate-handle")) return;
+        if ((e.target as HTMLElement).closest(".handle, .rotate-handle"))
+          return;
         e.stopPropagation();
         if (el.locked) {
           select(el.id);
@@ -1005,13 +1243,23 @@ function SelectionFrame({
               }}
             />
           ))}
-          <div
-            className="rotate-handle"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onGesture(e, "rotate");
-            }}
-          />
+          {/*
+           * Step 7 — a rotation grip on EVERY corner, not just the top edge,
+           * so the element can be spun with whichever hand is already there.
+           * Mirroring the frame (flipX/flipY) is handled by CSS, so the grips
+           * always sit on the corners the author can see.
+           */}
+          {ROTATE_HANDLES.map((corner) => (
+            <div
+              key={`rot-${corner}`}
+              className={cn("rotate-handle", corner)}
+              title="اسحب للتدوير — Shift للالتقاط بزوايا 15° / 45° / 90°"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onGesture(e, "rotate");
+              }}
+            />
+          ))}
         </>
       )}
     </div>
@@ -1025,9 +1273,15 @@ function SelectionFrame({
  * overlay.
  */
 function requestEdit(pageId: string, elId: string) {
-  const host = document.querySelector<HTMLElement>(`[data-page-id="${pageId}"]`);
-  const node = host?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(elId)}"]`);
-  node?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  const host = document.querySelector<HTMLElement>(
+    `[data-page-id="${pageId}"]`,
+  );
+  const node = host?.querySelector<HTMLElement>(
+    `[data-el-id="${CSS.escape(elId)}"]`,
+  );
+  node?.dispatchEvent(
+    new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
+  );
 }
 
 /**
@@ -1048,13 +1302,22 @@ function ExportCapture({ pages }: { pages: Page[] }) {
             key={page.id}
             data-export-page={page.id}
             className="report-page"
-            style={{ width: `${size.w}mm`, height: `${size.h}mm`, background: page.bg || "#fff" }}
+            style={{
+              width: `${size.w}mm`,
+              height: `${size.h}mm`,
+              background: page.bg || "#fff",
+            }}
           >
             {page.elements
               .slice()
               .sort((a, b) => a.z - b.z)
               .map((el) => (
-                <ElementNode key={el.id} el={el} interactive={false} onPointerDown={() => {}} />
+                <ElementNode
+                  key={el.id}
+                  el={el}
+                  interactive={false}
+                  onPointerDown={() => {}}
+                />
               ))}
           </div>
         );

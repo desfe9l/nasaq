@@ -119,6 +119,13 @@ export interface ElStyle {
   shapeId?: string;
   /** Preserve the element's intrinsic proportions while resizing. */
   aspectLock?: boolean;
+  /**
+   * Mirror the element's artwork on that axis (step 7). Purely a render/transform
+   * flag: geometry, position and the layer order are untouched, so flipping is
+   * lossless and reversible — flip twice and the element is byte-identical again.
+   */
+  flipX?: boolean;
+  flipY?: boolean;
   cols?: number;
   rows?: number;
   headerBg?: string;

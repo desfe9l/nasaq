@@ -156,7 +156,13 @@ export function ElementNode({
         top: `${el.y}mm`,
         width: `${el.w}mm`,
         height: `${el.h}mm`,
-        transform: `rotate(${el.rotation || 0}deg)`,
+        /*
+         * One transform string carries the whole orientation: rotation first,
+         * then the mirrors (step 7). Order matters — mirroring after rotating
+         * flips the artwork around its own centre, which is what "قلب أفقي"
+         * means to an author looking at a rotated element.
+         */
+        transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
         opacity: el.opacity ?? 1,
         zIndex: el.z,
         boxShadow: el.style?.shadow || undefined,

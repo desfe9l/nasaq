@@ -241,6 +241,10 @@ function addShapeItem(slide: PptxGenJS.Slide, item: SceneShape, name: string) {
       w: mm2in(item.w),
       h: mm2in(item.h),
       rotate: item.rotation || undefined,
+    // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+    // editable artwork rather than a baked bitmap.
+    flipH: item.flipX || undefined,
+    flipV: item.flipY || undefined,
       objectName: name,
       fill,
       line: line ? { color: line.color, width: line.width } : { color: "FFFFFF", width: 0 },
@@ -255,6 +259,10 @@ function addShapeItem(slide: PptxGenJS.Slide, item: SceneShape, name: string) {
       w: mm2in(item.w),
       h: mm2in(item.h),
       rotate: item.rotation || undefined,
+    // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+    // editable artwork rather than a baked bitmap.
+    flipH: item.flipX || undefined,
+    flipV: item.flipY || undefined,
       fill,
       line: line ? { color: line.color, width: line.width } : { color: "FFFFFF", width: 0 },
       rectRadius: rectRadius(4, item.w, item.h),
@@ -284,6 +292,10 @@ function addShapeItem(slide: PptxGenJS.Slide, item: SceneShape, name: string) {
     w: mm2in(item.w),
     h: mm2in(item.h),
     rotate: item.rotation || undefined,
+    // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+    // editable artwork rather than a baked bitmap.
+    flipH: item.flipX || undefined,
+    flipV: item.flipY || undefined,
     fill,
     line: line ? { color: line.color, width: line.width } : { color: "FFFFFF", width: 0 },
     points: points as PptxGenJS.ShapeProps["points"],
@@ -348,6 +360,10 @@ function addTextItem(
     w: mm2in(item.w),
     h: mm2in(item.h),
     rotate: item.rotation || undefined,
+    // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+    // editable artwork rather than a baked bitmap.
+    flipH: item.flipX || undefined,
+    flipV: item.flipY || undefined,
     isTextBox: true,
     inset: mm2in(item.padding || 0),
     valign: "middle",
@@ -542,6 +558,10 @@ function addIconItem(
     w: mm2in(item.w),
     h: mm2in(item.h),
     rotate: item.rotation || undefined,
+    // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+    // editable artwork rather than a baked bitmap.
+    flipH: item.flipX || undefined,
+    flipV: item.flipY || undefined,
     altText: "أيقونة",
     objectName: name,
   });
@@ -561,6 +581,10 @@ function addLineItem(slide: PptxGenJS.Slide, item: Extract<SceneItem, { kind: "l
     h: mm2in(horizontal ? 0 : item.h),
     line: { color: hex(item.color), width: Math.max(0.25, Number(mm2pt(item.width).toFixed(2))) },
     rotate: item.rotation || undefined,
+    // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+    // editable artwork rather than a baked bitmap.
+    flipH: item.flipX || undefined,
+    flipV: item.flipY || undefined,
     objectName: name,
   } as PptxGenJS.ShapeProps);
 }
@@ -577,6 +601,10 @@ function addImageItem(
     w: mm2in(item.w),
     h: mm2in(item.h),
     rotate: item.rotation || undefined,
+    // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+    // editable artwork rather than a baked bitmap.
+    flipH: item.flipX || undefined,
+    flipV: item.flipY || undefined,
     sizing:
       item.fit === "contain"
         ? { type: "contain", w: mm2in(item.w), h: mm2in(item.h) }

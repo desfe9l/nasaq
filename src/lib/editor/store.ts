@@ -358,6 +358,12 @@ interface EditorStore extends Project, Ui, History {
   toggleLock: () => void;
   toggleHidden: () => void;
   /**
+   * قلب أفقي / قلب رأسي — mirror the selection on an axis (step 7).
+   * The flag lives in the element style, so it travels with copy/paste, undo,
+   * the layer tree and every save.
+   */
+  flipSelected: (axis: "x" | "y") => void;
+  /**
    * Copy an element straight into another page. The clipboard alone can do this
    * (copy → switch page → paste), but that loses the current selection and the
    * source page context, so the layers panel offers a direct action.
@@ -485,6 +491,19 @@ function isDescendant(page: Page, ancestorId: string, id: string): boolean {
  * would keep painting locked artwork on the canvas. The tree view indents to
  * any depth, so the cascade has to match that depth.
  */
+/**
+ * Toggle a mirror flag on an element *and its whole subtree*.
+ *
+ * Groups have no artwork of their own, but flipping the folder still has to
+ * reach the children — otherwise flipping a group would look like it did
+ * nothing at all.
+ */
+function flipTree(el: CanvasEl, key: "flipX" | "flipY"): CanvasEl {
+  const flipped: CanvasEl = { ...el, style: { ...el.style, [key]: !el.style?.[key] } };
+  if (el.children?.length) flipped.children = el.children.map((c) => flipTree(c, key));
+  return flipped;
+}
+
 function cascadeFlag(el: CanvasEl, flag: "hidden" | "locked", value: boolean): CanvasEl {
   return {
     ...el,
@@ -1711,6 +1730,19 @@ export const useEditor = create<EditorStore>((set, get) => {
       const next = mapElements(page, ids, (el) => cascadeFlag(el, "hidden", !el.hidden));
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
+    },
+
+    flipSelected: (axis) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const ids = new Set(s.selectedIds);
+      if (!ids.size) return;
+      const key = axis === "x" ? "flipX" : "flipY";
+      const next = mapElements(page, ids, (el) => flipTree(el, key));
+      set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
+      pushHistory();
+      toast.success(axis === "x" ? "تم القلب أفقيًا" : "تم القلب رأسيًا");
     },
 
     copyElementToPage: (elId, pageId) => {

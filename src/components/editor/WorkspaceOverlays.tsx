@@ -6,6 +6,8 @@ import {
   CopyPlus,
   Download,
   Eye,
+  FlipHorizontal2,
+  FlipVertical2,
   Focus,
   Group,
   Keyboard,
@@ -33,7 +35,14 @@ import { cn } from "@/lib/utils";
  * re-exports it for the shell.
  */
 type MenuPoint = ContextMenuPoint;
-type ContextAction = { label: string; icon: typeof Copy; run: () => void; disabled?: boolean; danger?: boolean; sepBefore?: boolean };
+type ContextAction = {
+  label: string;
+  icon: typeof Copy;
+  run: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+  sepBefore?: boolean;
+};
 
 const ACTIONS = [
   { id: "undo", label: "تراجع", hint: "⌘ Z", icon: Undo2 },
@@ -71,6 +80,7 @@ export function WorkspaceOverlays({
   const paste = useEditor((s) => s.pasteClipboard);
   const bring = useEditor((s) => s.bring);
   const toggleLock = useEditor((s) => s.toggleLock);
+  const flipSelected = useEditor((s) => s.flipSelected);
   const toggleHidden = useEditor((s) => s.toggleHidden);
   const toggle = useEditor((s) => s.toggle);
   const setZoom = useEditor((s) => s.setZoom);
@@ -82,14 +92,22 @@ export function WorkspaceOverlays({
   const clipboard = useEditor((s) => s.clipboard);
 
   const filtered = useMemo(
-    () => ACTIONS.filter((action) => action.label.includes(query.trim()) || action.id.includes(query.trim().toLowerCase())),
+    () =>
+      ACTIONS.filter(
+        (action) =>
+          action.label.includes(query.trim()) ||
+          action.id.includes(query.trim().toLowerCase()),
+      ),
     [query],
   );
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
-      const typing = !!target && (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
+      const typing =
+        !!target &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
       if (typing) return;
       const meta = event.metaKey || event.ctrlKey;
       if (meta && event.key.toLowerCase() === "k") {
@@ -109,16 +127,36 @@ export function WorkspaceOverlays({
 
   const run = (id: string) => {
     switch (id) {
-      case "undo": undo(); break;
-      case "redo": redo(); break;
-      case "duplicate": duplicate(); break;
-      case "group": group(); break;
-      case "ungroup": ungroup(); break;
-      case "zoom-fit": fitToScreen(); break;
-      case "zoom-in": setZoom(zoom + 0.08); break;
-      case "zoom-out": setZoom(zoom - 0.08); break;
-      case "focus": toggle("focusMode"); break;
-      case "export": toggle("exportOpen"); break;
+      case "undo":
+        undo();
+        break;
+      case "redo":
+        redo();
+        break;
+      case "duplicate":
+        duplicate();
+        break;
+      case "group":
+        group();
+        break;
+      case "ungroup":
+        ungroup();
+        break;
+      case "zoom-fit":
+        fitToScreen();
+        break;
+      case "zoom-in":
+        setZoom(zoom + 0.08);
+        break;
+      case "zoom-out":
+        setZoom(zoom - 0.08);
+        break;
+      case "focus":
+        toggle("focusMode");
+        break;
+      case "export":
+        toggle("exportOpen");
+        break;
     }
     setCommandOpen(false);
     onCloseMenu();
@@ -133,15 +171,26 @@ export function WorkspaceOverlays({
   const applyMask = useEditor((s) => s.applyClipMask);
   const removeMask = useEditor((s) => s.removeClipMask);
   const selectedEls = selectedElements();
-  const maskSource = selectedEls.find((el) => el.type === "image" || el.type === "logo" || el.type === "qr");
-  const maskShape = selectedEls.find((el) => el.type === "shape" || el.type === "svg");
-  const maskApplicable = !!maskSource && !!maskShape && selectedEls.length === 2;
+  const maskSource = selectedEls.find(
+    (el) => el.type === "image" || el.type === "logo" || el.type === "qr",
+  );
+  const maskShape = selectedEls.find(
+    (el) => el.type === "shape" || el.type === "svg",
+  );
+  const maskApplicable =
+    !!maskSource && !!maskShape && selectedEls.length === 2;
   const maskRemovable = selectedEls.length === 1 && !!selectedEls[0].clippedBy;
   const renameElement = useEditor((s) => s.renameElement);
   // selectedElements() preserves selection order with the primary LAST.
-  const primaryName = selectedEls.length ? selectedEls[selectedEls.length - 1].name : undefined;
-  const primaryIsGroup = selectedEls.length === 1 && selectedEls[selectedEls.length - 1].type === "group";
-  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  const primaryName = selectedEls.length
+    ? selectedEls[selectedEls.length - 1].name
+    : undefined;
+  const primaryIsGroup =
+    selectedEls.length === 1 &&
+    selectedEls[selectedEls.length - 1].type === "group";
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(
+    null,
+  );
   /** Group, then open the naming dialog for the fresh group right away — grouping
    *  without naming leaves «مجموعة 1» rows that nobody can tell apart. */
   const groupAndName = () => {
@@ -162,31 +211,128 @@ export function WorkspaceOverlays({
   const contextActions: ContextAction[] = menu?.targetId
     ? [
         { label: "نسخ", icon: Copy, run: copy },
-        { label: "قص", icon: Scissors, run: () => { copy(); deleteSelected(); } },
-        { label: "لصق", icon: ClipboardPaste, run: paste, disabled: !clipboard, sepBefore: true },
+        {
+          label: "قص",
+          icon: Scissors,
+          run: () => {
+            copy();
+            deleteSelected();
+          },
+        },
+        {
+          label: "لصق",
+          icon: ClipboardPaste,
+          run: paste,
+          disabled: !clipboard,
+          sepBefore: true,
+        },
         { label: "تكرار العنصر", icon: CopyPlus, run: duplicate },
-        { label: "إحضار للأمام", icon: Layers, run: () => bring("forward"), sepBefore: true },
+        {
+          label: "إحضار للأمام",
+          icon: Layers,
+          run: () => bring("forward"),
+          sepBefore: true,
+        },
         { label: "إرسال للخلف", icon: Layers, run: () => bring("back") },
-        { label: "إلى المقدمة تمامًا", icon: Layers, run: () => bring("front") },
+        {
+          label: "إلى المقدمة تمامًا",
+          icon: Layers,
+          run: () => bring("front"),
+        },
         { label: "إلى الخلف تمامًا", icon: Layers, run: () => bring("bottom") },
-        ...(selectedCount >= 2 ? [{ label: "تجميع العناصر", icon: Group, run: groupAndName, sepBefore: true } as ContextAction] : []),
-        ...(primaryIsGroup ? [{ label: "الدخول إلى المجموعة", icon: Group, run: () => enterGroup(selectedEls[selectedEls.length - 1].id) } as ContextAction] : []),
-        ...(selectedTypes.includes("group") ? [{ label: "فك تجميع العناصر", icon: Ungroup, run: ungroup } as ContextAction] : []),
-        ...(maskApplicable ? [{ label: "تطبيق قناع القص (Clipping Mask)", icon: Group, run: () => applyMask(maskSource!.id, maskShape!.id), sepBefore: true } as ContextAction] : []),
-        ...(maskRemovable ? [{ label: "إزالة قناع القص", icon: Ungroup, run: () => removeMask(selectedEls[0].clippedBy!) } as ContextAction] : []),
-        { label: "قفل العنصر / فتح قفل العنصر", icon: Lock, run: toggleLock, sepBefore: true },
+        /*
+         * Step 7 — mirrors sit right under the stacking actions, the same slot
+         * Photoshop uses for Transform commands, so the eye finds them where it
+         * already looks for a change of orientation.
+         */
+        {
+          label: "قلب أفقي",
+          icon: FlipHorizontal2,
+          run: () => flipSelected("x"),
+          sepBefore: true,
+        },
+        {
+          label: "قلب رأسي",
+          icon: FlipVertical2,
+          run: () => flipSelected("y"),
+        },
+        ...(selectedCount >= 2
+          ? [
+              {
+                label: "تجميع العناصر",
+                icon: Group,
+                run: groupAndName,
+                sepBefore: true,
+              } as ContextAction,
+            ]
+          : []),
+        ...(primaryIsGroup
+          ? [
+              {
+                label: "الدخول إلى المجموعة",
+                icon: Group,
+                run: () => enterGroup(selectedEls[selectedEls.length - 1].id),
+              } as ContextAction,
+            ]
+          : []),
+        ...(selectedTypes.includes("group")
+          ? [
+              {
+                label: "فك تجميع العناصر",
+                icon: Ungroup,
+                run: ungroup,
+              } as ContextAction,
+            ]
+          : []),
+        ...(maskApplicable
+          ? [
+              {
+                label: "تطبيق قناع القص (Clipping Mask)",
+                icon: Group,
+                run: () => applyMask(maskSource!.id, maskShape!.id),
+                sepBefore: true,
+              } as ContextAction,
+            ]
+          : []),
+        ...(maskRemovable
+          ? [
+              {
+                label: "إزالة قناع القص",
+                icon: Ungroup,
+                run: () => removeMask(selectedEls[0].clippedBy!),
+              } as ContextAction,
+            ]
+          : []),
+        {
+          label: "قفل العنصر / فتح قفل العنصر",
+          icon: Lock,
+          run: toggleLock,
+          sepBefore: true,
+        },
         { label: "إخفاء / إظهار", icon: Eye, run: toggleHidden },
         {
           label: primaryIsGroup ? "تسمية المجموعة…" : "إعادة تسمية…",
           icon: PenLine,
-          run: () => setRenaming({ id: menu.targetId!, name: primaryName || "" }),
+          run: () =>
+            setRenaming({ id: menu.targetId!, name: primaryName || "" }),
           disabled: selectedCount > 1,
         },
         { label: "الخصائص", icon: Settings2, run: openProperties },
-        { label: "حذف", icon: Trash2, run: deleteSelected, danger: true, sepBefore: true },
+        {
+          label: "حذف",
+          icon: Trash2,
+          run: deleteSelected,
+          danger: true,
+          sepBefore: true,
+        },
       ]
     : [
-        { label: "لصق", icon: ClipboardPaste, run: paste, disabled: !clipboard },
+        {
+          label: "لصق",
+          icon: ClipboardPaste,
+          run: paste,
+          disabled: !clipboard,
+        },
         /*
          * The selection — not the point — decides grouping here: a right-click
          * that missed the artwork still has the selected elements in the store,
@@ -194,21 +340,56 @@ export function WorkspaceOverlays({
          * Their absence here is what hid grouping from the empty-space menu
          * even with several elements selected.
          */
-        ...(selectedCount >= 2 ? [{ label: "تجميع العناصر", icon: Group, run: groupAndName, sepBefore: true } as ContextAction] : []),
-        ...(selectedTypes.includes("group") ? [{ label: "فك تجميع العناصر", icon: Ungroup, run: ungroup } as ContextAction] : []),
+        ...(selectedCount >= 2
+          ? [
+              {
+                label: "تجميع العناصر",
+                icon: Group,
+                run: groupAndName,
+                sepBefore: true,
+              } as ContextAction,
+            ]
+          : []),
+        ...(selectedTypes.includes("group")
+          ? [
+              {
+                label: "فك تجميع العناصر",
+                icon: Ungroup,
+                run: ungroup,
+              } as ContextAction,
+            ]
+          : []),
         { label: "تحديد الكل", icon: AlignCenter, run: selectAll },
         { label: "عرض الصفحة بالكامل", icon: Maximize2, run: fitToScreen },
         { label: "وضع التركيز", icon: Focus, run: () => toggle("focusMode") },
-        { label: "إظهار / إخفاء الشبكة", icon: Eye, run: () => toggle("showGrid") },
+        {
+          label: "إظهار / إخفاء الشبكة",
+          icon: Eye,
+          run: () => toggle("showGrid"),
+        },
       ];
 
   return (
     <>
       {menu && (
-        <div className="editor-context-backdrop fixed inset-0 z-[var(--z-context)]" onPointerDown={onCloseMenu} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); onCloseMenu(); } }} tabIndex={-1} autoFocus>
+        <div
+          className="editor-context-backdrop fixed inset-0 z-[var(--z-context)]"
+          onPointerDown={onCloseMenu}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              onCloseMenu();
+            }
+          }}
+          tabIndex={-1}
+          autoFocus
+        >
           <div
             className="editor-context-menu fixed min-w-[210px] rounded-[8px] border p-1.5 shadow-2xl"
-            style={{ left: Math.min(menu.x, window.innerWidth - 230), top: Math.min(menu.y, window.innerHeight - 480) }}
+            style={{
+              left: Math.min(menu.x, window.innerWidth - 230),
+              top: Math.min(menu.y, window.innerHeight - 480),
+            }}
             onPointerDown={(event) => event.stopPropagation()}
             role="menu"
           >
@@ -216,13 +397,34 @@ export function WorkspaceOverlays({
               const Icon = action.icon;
               return (
                 <div key={action.label}>
-                  {action.sepBefore && <div className="my-1 border-t border-[var(--editor-border)]" />}
-                  <button type="button" role="menuitem" disabled={action.disabled} onClick={() => { if (menu.targetId && selectedCount === 0) select(menu.targetId); action.run(); onCloseMenu(); }} className={cn("editor-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold disabled:opacity-35", action.danger && "editor-menu-danger")}><Icon className="size-3.5 shrink-0" /><span>{action.label}</span></button>
+                  {action.sepBefore && (
+                    <div className="my-1 border-t border-[var(--editor-border)]" />
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={action.disabled}
+                    onClick={() => {
+                      if (menu.targetId && selectedCount === 0)
+                        select(menu.targetId);
+                      action.run();
+                      onCloseMenu();
+                    }}
+                    className={cn(
+                      "editor-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold disabled:opacity-35",
+                      action.danger && "editor-menu-danger",
+                    )}
+                  >
+                    <Icon className="size-3.5 shrink-0" />
+                    <span>{action.label}</span>
+                  </button>
                 </div>
               );
             })}
             <div className="my-1 border-t border-[var(--editor-border)]" />
-            <span className="flex items-center gap-2 px-2.5 py-1.5 text-[9px] text-[var(--editor-text-secondary)]"><Keyboard className="size-3" /> اضغط Escape للإغلاق</span>
+            <span className="flex items-center gap-2 px-2.5 py-1.5 text-[9px] text-[var(--editor-text-secondary)]">
+              <Keyboard className="size-3" /> اضغط Escape للإغلاق
+            </span>
           </div>
         </div>
       )}
@@ -236,7 +438,9 @@ export function WorkspaceOverlays({
           role="dialog"
           aria-modal="true"
           aria-label={primaryIsGroup ? "تسمية المجموعة" : "إعادة تسمية العنصر"}
-          onKeyDown={(event) => { if (event.key === "Escape") setRenaming(null); }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setRenaming(null);
+          }}
           onPointerDown={onCloseMenu}
         >
           <form
@@ -250,29 +454,102 @@ export function WorkspaceOverlays({
               onCloseMenu();
             }}
           >
-            <strong className="text-[13px]">{primaryIsGroup ? "تسمية المجموعة" : "إعادة تسمية العنصر"}</strong>
+            <strong className="text-[13px]">
+              {primaryIsGroup ? "تسمية المجموعة" : "إعادة تسمية العنصر"}
+            </strong>
             <input
               autoFocus
               value={renaming.name}
-              onChange={(event) => setRenaming((r) => (r ? { ...r, name: event.target.value } : r))}
+              onChange={(event) =>
+                setRenaming((r) => (r ? { ...r, name: event.target.value } : r))
+              }
               aria-label="اسم العنصر"
               className="h-9 rounded-[7px] border border-line px-2 text-[12px] font-bold dark:border-white/15 dark:bg-white/5"
             />
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => { setRenaming(null); onCloseMenu(); }} className="h-8 rounded-[6px] border border-line px-3 text-[11px] font-bold dark:border-white/10">إلغاء</button>
-              <button type="submit" className="h-8 rounded-[6px] bg-navy px-3 text-[11px] font-bold text-white">حفظ</button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRenaming(null);
+                  onCloseMenu();
+                }}
+                className="h-8 rounded-[6px] border border-line px-3 text-[11px] font-bold dark:border-white/10"
+              >
+                إلغاء
+              </button>
+              <button
+                type="submit"
+                className="h-8 rounded-[6px] bg-navy px-3 text-[11px] font-bold text-white"
+              >
+                حفظ
+              </button>
             </div>
           </form>
         </div>
       )}
 
       {commandOpen && (
-        <div className="editor-command-backdrop fixed inset-0 z-[var(--z-command)] grid place-items-start justify-center pt-[15vh]" onPointerDown={() => setCommandOpen(false)}>
-          <div className="editor-command-menu w-[min(520px,calc(100vw-32px))] overflow-hidden rounded-[10px] border shadow-2xl" onPointerDown={(event) => event.stopPropagation()} role="dialog" aria-label="قائمة الأوامر">
-            <div className="flex items-center gap-2 border-b px-3"><Search className="size-4 text-[var(--editor-text-secondary)]" /><input autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} onKeyDown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((index) => Math.min(index + 1, filtered.length - 1)); } if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => Math.max(index - 1, 0)); } if (event.key === "Enter" && filtered[activeIndex]) run(filtered[activeIndex].id); }} placeholder="ابحث عن أمر…" className="h-12 min-w-0 flex-1 bg-transparent text-[13px] outline-none" /></div>
+        <div
+          className="editor-command-backdrop fixed inset-0 z-[var(--z-command)] grid place-items-start justify-center pt-[15vh]"
+          onPointerDown={() => setCommandOpen(false)}
+        >
+          <div
+            className="editor-command-menu w-[min(520px,calc(100vw-32px))] overflow-hidden rounded-[10px] border shadow-2xl"
+            onPointerDown={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-label="قائمة الأوامر"
+          >
+            <div className="flex items-center gap-2 border-b px-3">
+              <Search className="size-4 text-[var(--editor-text-secondary)]" />
+              <input
+                autoFocus
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setActiveIndex(0);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setActiveIndex((index) =>
+                      Math.min(index + 1, filtered.length - 1),
+                    );
+                  }
+                  if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setActiveIndex((index) => Math.max(index - 1, 0));
+                  }
+                  if (event.key === "Enter" && filtered[activeIndex])
+                    run(filtered[activeIndex].id);
+                }}
+                placeholder="ابحث عن أمر…"
+                className="h-12 min-w-0 flex-1 bg-transparent text-[13px] outline-none"
+              />
+            </div>
             <div className="max-h-[330px] overflow-auto p-1.5">
-              {filtered.map((action, index) => { const Icon = action.icon; return <button key={action.id} type="button" onClick={() => run(action.id)} className={cn("flex w-full items-center gap-2 rounded-[7px] px-2.5 py-2.5 text-right text-[12px] font-bold", index === activeIndex && "editor-command-active")}><Icon className="size-4" /><span className="flex-1">{action.label}</span><kbd>{action.hint || ""}</kbd></button>; })}
-              {!filtered.length && <p className="p-5 text-center text-[11px] text-[var(--editor-text-secondary)]">لا توجد أوامر مطابقة</p>}
+              {filtered.map((action, index) => {
+                const Icon = action.icon;
+                return (
+                  <button
+                    key={action.id}
+                    type="button"
+                    onClick={() => run(action.id)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-[7px] px-2.5 py-2.5 text-right text-[12px] font-bold",
+                      index === activeIndex && "editor-command-active",
+                    )}
+                  >
+                    <Icon className="size-4" />
+                    <span className="flex-1">{action.label}</span>
+                    <kbd>{action.hint || ""}</kbd>
+                  </button>
+                );
+              })}
+              {!filtered.length && (
+                <p className="p-5 text-center text-[11px] text-[var(--editor-text-secondary)]">
+                  لا توجد أوامر مطابقة
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -301,16 +578,20 @@ export function WorkspaceStatusBar() {
       className="editor-status-bar flex h-7 shrink-0 items-center justify-between gap-3 border-t px-3 text-[10px] tabular-nums"
     >
       {/*
-        * `selectable-value`: page size / element count / zoom are numbers an
-        * author copies into a brief, so they opt back into text selection while
-        * the rest of the chrome stays unselectable.
-        */}
+       * `selectable-value`: page size / element count / zoom are numbers an
+       * author copies into a brief, so they opt back into text selection while
+       * the rest of the chrome stays unselectable.
+       */}
       <span className="selectable-value min-w-0 truncate">
         {page?.name || "صفحة"}
-        {page ? ` · ${Math.round(page.w || 210)} × ${Math.round(page.h || 297)} مم` : ""}
+        {page
+          ? ` · ${Math.round(page.w || 210)} × ${Math.round(page.h || 297)} مم`
+          : ""}
         {page ? ` · ${page.elements.length} عنصر` : ""}
       </span>
-      <span className="selectable-value">{selectedIds.length ? `${selectedIds.length} محدد` : "لا يوجد تحديد"}</span>
+      <span className="selectable-value">
+        {selectedIds.length ? `${selectedIds.length} محدد` : "لا يوجد تحديد"}
+      </span>
       <span className="selectable-value">{Math.round(zoom * 100)}%</span>
     </div>
   );

@@ -11,12 +11,16 @@ import {
   Copy,
   Download,
   Eye,
+  FlipHorizontal2,
+  FlipVertical2,
   EyeOff,
   Grid2x2,
   GripVertical,
   ImagePlus,
   Link,
   Lock,
+  RotateCcw,
+  RotateCw,
   Scissors,
   Trash2,
   Unlock,
@@ -39,6 +43,14 @@ import {
   TEXT_FIT_OPTIONS,
 } from "@/lib/editor/arabic";
 import { SHAPES } from "@/lib/editor/shapes";
+
+/**
+ * Fold any angle into (−180, 180] so a quarter-turn from 170° reads −100°,
+ * not 260° — export then renders the element exactly as the canvas shows it.
+ */
+function normalizeDeg(deg: number): number {
+  return (((deg % 360) + 540) % 360) - 180;
+}
 import { columnTotals, resizeMatrix, toCsv } from "@/lib/editor/tables";
 import { prepareText } from "@/lib/editor/text-render";
 import { useEditor, type RightTab } from "@/lib/editor/store";
@@ -50,13 +62,18 @@ import { ScrubField, ScrubInput } from "./ui/ScrubInput";
 
 const TEXT_TYPES = ["text", "box", "stat", "stamp", "table", "progress"];
 
-export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) => void }) {
+export function RightPanel({
+  onReplaceImage,
+}: {
+  onReplaceImage: (id: string) => void;
+}) {
   const tab = useEditor((s) => s.rightTab);
   const setRightTab = useEditor((s) => s.setRightTab);
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
   const selectedId = useEditor((s) => s.selectedId);
   const updateElement = useEditor((s) => s.updateElement);
+  const flipSelected = useEditor((s) => s.flipSelected);
   const updateStyle = useEditor((s) => s.updateStyle);
   const duplicateSelected = useEditor((s) => s.duplicateSelected);
   const copySelected = useEditor((s) => s.copySelected);
@@ -84,14 +101,19 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
    * every few seconds; collapsed-by-default reads as "the feature is missing"),
    * background/export start closed. The choice persists per device.
    */
-  const accordions = useAccordionState<"dimensions" | "text" | "background" | "export">("properties", {
+  const accordions = useAccordionState<
+    "dimensions" | "text" | "background" | "export"
+  >("properties", {
     dimensions: true,
     text: true,
     background: false,
     export: false,
   });
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
-  const [drop, setDrop] = useState<{ id: string; side: "before" | "after" } | null>(null);
+  const [drop, setDrop] = useState<{
+    id: string;
+    side: "before" | "after";
+  } | null>(null);
   const reorderLayers = useEditor((s) => s.reorderLayers);
 
   /**
@@ -119,9 +141,10 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
         w: el.w,
         h: el.h,
       });
-      if (saved) toast.success(`تم حفظ "${saved.name}" في المكتبة`, {
-        description: "تجده في تبويب «عناصر» ← مكتبة العناصر.",
-      });
+      if (saved)
+        toast.success(`تم حفظ "${saved.name}" في المكتبة`, {
+          description: "تجده في تبويب «عناصر» ← مكتبة العناصر.",
+        });
     } catch (err) {
       toast.error("تعذر حفظ العنصر في المكتبة", {
         description: err instanceof Error ? err.message : undefined,
@@ -140,7 +163,8 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
   const page = pages.find((p) => p.id === activePageId);
   // Resolves through groups, so a member picked inside a group shows its own
   // properties rather than nothing.
-  const el = page && selectedId ? findElement(page.elements, selectedId)?.el : undefined;
+  const el =
+    page && selectedId ? findElement(page.elements, selectedId)?.el : undefined;
   const layers = [...(page?.elements || [])].sort((a, b) => b.z - a.z);
   const selectedCount = useEditor((s) => s.selectedIds.length);
   const selectMany = useEditor((s) => s.selectMany);
@@ -181,14 +205,19 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
     event.stopPropagation();
     setDraggedLayerId(id);
     setDrop({ id, side: "after" });
-    const resolve = (pointer: PointerEvent): { id: string; side: "before" | "after" } | null => {
+    const resolve = (
+      pointer: PointerEvent,
+    ): { id: string; side: "before" | "after" } | null => {
       const node = document
         .elementFromPoint(pointer.clientX, pointer.clientY)
         ?.closest<HTMLElement>("[data-layer-id]");
       const target = node?.dataset.layerId;
       if (!node || !target) return null;
       const rect = node.getBoundingClientRect();
-      return { id: target, side: pointer.clientY < rect.top + rect.height / 2 ? "before" : "after" };
+      return {
+        id: target,
+        side: pointer.clientY < rect.top + rect.height / 2 ? "before" : "after",
+      };
     };
     const move = (pointer: PointerEvent) => {
       const next = resolve(pointer);
@@ -225,7 +254,9 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
             onClick={() => setRightTab(id)}
             className={cn(
               "h-9 rounded-[8px] text-[12px] font-extrabold",
-              tab === id ? "bg-navy text-white" : "text-muted hover:bg-line-2 dark:text-white/70 dark:hover:bg-white/5",
+              tab === id
+                ? "bg-navy text-white"
+                : "text-muted hover:bg-line-2 dark:text-white/70 dark:hover:bg-white/5",
             )}
           >
             {label}
@@ -234,10 +265,10 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
       </div>
 
       {/*
-        * Phase 1 — the panel body is the ONLY scrolling region and is capped by
-        * the real header height (`editor-panel-body`), so a short window scrolls
-        * inside the panel instead of clipping the last controls.
-        */}
+       * Phase 1 — the panel body is the ONLY scrolling region and is capped by
+       * the real header height (`editor-panel-body`), so a short window scrolls
+       * inside the panel instead of clipping the last controls.
+       */}
       <div className="editor-pane-scroll editor-panel-body p-3">
         {tab === "layers" && (
           <div className="grid gap-1.5">
@@ -249,10 +280,24 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                 key={layer.id}
                 layer={layer}
                 dragging={draggedLayerId === layer.id}
-                dropBefore={drop?.id === layer.id && drop.side === "before" && draggedLayerId !== layer.id}
-                dropAfter={drop?.id === layer.id && drop.side === "after" && draggedLayerId !== layer.id}
+                dropBefore={
+                  drop?.id === layer.id &&
+                  drop.side === "before" &&
+                  draggedLayerId !== layer.id
+                }
+                dropAfter={
+                  drop?.id === layer.id &&
+                  drop.side === "after" &&
+                  draggedLayerId !== layer.id
+                }
                 onDragStart={startLayerDrag(layer.id)}
-                onRowClick={(event) => clickLayerRow(layer.id, event.shiftKey, event.ctrlKey || event.metaKey)}
+                onRowClick={(event) =>
+                  clickLayerRow(
+                    layer.id,
+                    event.shiftKey,
+                    event.ctrlKey || event.metaKey,
+                  )
+                }
               />
             ))}
           </div>
@@ -261,8 +306,9 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
         {tab === "properties" && !el && (
           <div className="grid gap-2">
             <EmptyNote>
-              اختر عنصراً على الصفحة لعرض خصائصه: الموضع، المقاس، الدوران، الشفافية، الخط، الألوان، الإطار والظل.
-              النقر المزدوج على النص يفعّل التعديل المباشر.
+              اختر عنصراً على الصفحة لعرض خصائصه: الموضع، المقاس، الدوران،
+              الشفافية، الخط، الألوان، الإطار والظل. النقر المزدوج على النص
+              يفعّل التعديل المباشر.
             </EmptyNote>
             <button
               type="button"
@@ -279,13 +325,18 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
           <div className="grid gap-3">
             {selectedCount > 1 && (
               <div className="rounded-[8px] border border-blue-300 bg-blue-50 px-2.5 py-2 text-[11px] font-bold text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
-                {selectedCount} عناصر محددة — تُطبَّق التعديلات على العنصر الأساسي «{el.name || TYPE_NAME[el.type]}» فقط.
-                استخدم شريط الترتيب للمحاذاة والتجميع.
+                {selectedCount} عناصر محددة — تُطبَّق التعديلات على العنصر
+                الأساسي «{el.name || TYPE_NAME[el.type]}» فقط. استخدم شريط
+                الترتيب للمحاذاة والتجميع.
               </div>
             )}
             <div className="flex items-center justify-between">
-              <h3 className="text-[13px] font-extrabold">{el.name || TYPE_NAME[el.type]}</h3>
-              <span className="text-[11px] text-muted">{TYPE_NAME[el.type]}</span>
+              <h3 className="text-[13px] font-extrabold">
+                {el.name || TYPE_NAME[el.type]}
+              </h3>
+              <span className="text-[11px] text-muted">
+                {TYPE_NAME[el.type]}
+              </span>
             </div>
 
             {/* Phase 2 — «الأبعاد والتحاذي» (open by default). */}
@@ -295,77 +346,148 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
               open={accordions.isOpen("dimensions", true)}
               onToggle={() => accordions.toggle("dimensions")}
             >
-            <Field label="الاسم">
-              <input value={el.name} onChange={(e) => updateElement(el.id, { name: e.target.value })} />
-            </Field>
-
-            {/*
-              * Scrubbable geometry (Phase 2.3): drag the label or the value to
-              * change it, Shift for ×10, Alt for ×0.1; the − / + steppers cover
-              * touch. `auto-fit` is what lets the four fields reflow to two or
-              * one column as the panel narrows instead of overlapping.
-              */}
-            <div className="property-grid">
-              {(["x", "y", "w", "h"] as const).map((k) => (
-                <ScrubField
-                  key={k}
-                  label={LABELS[k]}
-                  value={round(el[k])}
-                  min={k === "w" || k === "h" ? 1 : -500}
-                  step={0.5}
-                  suffix="مم"
-                  onChange={(v) => updateElement(el.id, { [k]: v }, true)}
-                  onCommit={(v) => updateElement(el.id, { [k]: v })}
+              <Field label="الاسم">
+                <input
+                  value={el.name}
+                  onChange={(e) =>
+                    updateElement(el.id, { name: e.target.value })
+                  }
                 />
-              ))}
-              <ScrubField
-                label="زاوية الدوران"
-                value={round(el.rotation)}
-                min={-360}
-                max={360}
-                step={1}
-                precision={1}
-                suffix="°"
-                onChange={(v) => updateElement(el.id, { rotation: v }, true)}
-                onCommit={(v) => updateElement(el.id, { rotation: v })}
-              />
-              <ScrubField
-                label="الشفافية"
-                value={round((el.opacity ?? 1) * 100)}
-                min={0}
-                max={100}
-                step={1}
-                precision={0}
-                suffix="%"
-                onChange={(v) => updateElement(el.id, { opacity: v / 100 }, true)}
-                onCommit={(v) => updateElement(el.id, { opacity: v / 100 })}
-              />
-            </div>
+              </Field>
 
-            <div>
-              <p className="mb-1.5 text-[11px] font-extrabold text-muted">محاذاة داخل الصفحة</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {(
-                  [
-                    ["right", "يمين"],
-                    ["center", "وسط"],
-                    ["left", "يسار"],
-                    ["top", "أعلى"],
-                    ["middle", "منتصف"],
-                    ["bottom", "أسفل"],
-                  ] as const
-                ).map(([k, l]) => (
-                  <button
+              {/*
+               * Scrubbable geometry (Phase 2.3): drag the label or the value to
+               * change it, Shift for ×10, Alt for ×0.1; the − / + steppers cover
+               * touch. `auto-fit` is what lets the four fields reflow to two or
+               * one column as the panel narrows instead of overlapping.
+               */}
+              <div className="property-grid">
+                {(["x", "y", "w", "h"] as const).map((k) => (
+                  <ScrubField
                     key={k}
-                    type="button"
-                    onClick={() => alignPage(k)}
-                    className="h-8 rounded-[8px] border border-line text-[11px] font-bold dark:border-white/10"
-                  >
-                    {l}
-                  </button>
+                    label={LABELS[k]}
+                    value={round(el[k])}
+                    min={k === "w" || k === "h" ? 1 : -500}
+                    step={0.5}
+                    suffix="مم"
+                    onChange={(v) => updateElement(el.id, { [k]: v }, true)}
+                    onCommit={(v) => updateElement(el.id, { [k]: v })}
+                  />
                 ))}
+                {/*
+                 * Step 7 — quarter-turn helpers next to the free-form angle: the
+                 * scrubbable field is right for exactness, these two are right
+                 * for the 90% case (straighten, then mirror).
+                 */}
+                <div className="property-grid-span flex flex-wrap items-center gap-1.5">
+                  <span className="text-[10px] font-bold text-muted">
+                    الاتجاه
+                  </span>
+                  <button
+                    type="button"
+                    className="editor-mini-btn"
+                    title="تدوير 90° بعكس عقارب الساعة"
+                    onClick={() =>
+                      updateElement(el.id, {
+                        rotation: normalizeDeg((el.rotation || 0) + 90),
+                      })
+                    }
+                  >
+                    <RotateCcw className="size-3.5" />
+                    90°
+                  </button>
+                  <button
+                    type="button"
+                    className="editor-mini-btn"
+                    title="تدوير 90° مع عقارب الساعة"
+                    onClick={() =>
+                      updateElement(el.id, {
+                        rotation: normalizeDeg((el.rotation || 0) - 90),
+                      })
+                    }
+                  >
+                    <RotateCw className="size-3.5" />
+                    90°
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "editor-mini-btn",
+                      el.style?.flipX && "is-active",
+                    )}
+                    aria-pressed={el.style?.flipX === true}
+                    title="قلب أفقي"
+                    onClick={() => flipSelected("x")}
+                  >
+                    <FlipHorizontal2 className="size-3.5" />
+                    قلب أفقي
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      "editor-mini-btn",
+                      el.style?.flipY && "is-active",
+                    )}
+                    aria-pressed={el.style?.flipY === true}
+                    title="قلب رأسي"
+                    onClick={() => flipSelected("y")}
+                  >
+                    <FlipVertical2 className="size-3.5" />
+                    قلب رأسي
+                  </button>
+                </div>
+                <ScrubField
+                  label="زاوية الدوران"
+                  value={round(el.rotation)}
+                  min={-360}
+                  max={360}
+                  step={1}
+                  precision={1}
+                  suffix="°"
+                  onChange={(v) => updateElement(el.id, { rotation: v }, true)}
+                  onCommit={(v) => updateElement(el.id, { rotation: v })}
+                />
+                <ScrubField
+                  label="الشفافية"
+                  value={round((el.opacity ?? 1) * 100)}
+                  min={0}
+                  max={100}
+                  step={1}
+                  precision={0}
+                  suffix="%"
+                  onChange={(v) =>
+                    updateElement(el.id, { opacity: v / 100 }, true)
+                  }
+                  onCommit={(v) => updateElement(el.id, { opacity: v / 100 })}
+                />
               </div>
-            </div>
+
+              <div>
+                <p className="mb-1.5 text-[11px] font-extrabold text-muted">
+                  محاذاة داخل الصفحة
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {(
+                    [
+                      ["right", "يمين"],
+                      ["center", "وسط"],
+                      ["left", "يسار"],
+                      ["top", "أعلى"],
+                      ["middle", "منتصف"],
+                      ["bottom", "أسفل"],
+                    ] as const
+                  ).map(([k, l]) => (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => alignPage(k)}
+                      className="h-8 rounded-[8px] border border-line text-[11px] font-bold dark:border-white/10"
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </AccordionSection>
 
             {/* Phase 2 — «النص»: content, typography and Arabic handling. */}
@@ -376,1013 +498,1324 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                 open={accordions.isOpen("text", true)}
                 onToggle={() => accordions.toggle("text")}
               >
-              {TEXT_MARKUP_TYPES.has(el.type) && (
-                <Field label="النص (Enter لسطر جديد)" full>
-                  <textarea
-                    rows={4}
-                    value={el.content || ""}
-                    onChange={(e) => updateElement(el.id, { content: e.target.value }, true)}
-                    onBlur={() => updateElement(el.id, { content: el.content })}
-                  />
-                </Field>
-              )}
-              <SubGroup title="الخط والطباعة">
-                <Field label="الخط">
-                  <select
-                    value={el.style.fontFamily || "Tajawal"}
-                    onChange={(e) => updateStyle(el.id, { fontFamily: e.target.value })}
-                  >
-                    {fontChoices.map((f) => (
-                      <option key={f.family} value={f.family}>
-                        {f.family} — {f.note}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <button
-                  type="button"
-                  onClick={() => setLeftTab("fonts")}
-                  className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[10px] font-extrabold dark:border-white/10"
-                >
-                  <Baseline className="size-3.5" /> مكتبة الخطوط ({fontChoices.length})
-                </button>
-                <div className="grid grid-cols-2 gap-2">
-                                  <ScrubField
-                  label="الحجم pt"
-                  value={round(Number(el.style.fontSize || 14) || 0)}
-                  min={4}
-                  max={200}
-                  step={0.5}
-                  onChange={(v) => updateStyle(el.id, { fontSize: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { fontSize: v })}
-                />
-                  <Field label="الوزن">
+                {TEXT_MARKUP_TYPES.has(el.type) && (
+                  <Field label="النص (Enter لسطر جديد)" full>
+                    <textarea
+                      rows={4}
+                      value={el.content || ""}
+                      onChange={(e) =>
+                        updateElement(el.id, { content: e.target.value }, true)
+                      }
+                      onBlur={() =>
+                        updateElement(el.id, { content: el.content })
+                      }
+                    />
+                  </Field>
+                )}
+                <SubGroup title="الخط والطباعة">
+                  <Field label="الخط">
                     <select
-                      value={String(el.style.fontWeight || 600)}
-                      onChange={(e) => updateStyle(el.id, { fontWeight: Number(e.target.value) })}
+                      value={el.style.fontFamily || "Tajawal"}
+                      onChange={(e) =>
+                        updateStyle(el.id, { fontFamily: e.target.value })
+                      }
                     >
-                      {[300, 400, 500, 600, 700, 800, 900].map((w) => (
-                        <option key={w} value={w}>
-                          {w}
+                      {fontChoices.map((f) => (
+                        <option key={f.family} value={f.family}>
+                          {f.family} — {f.note}
                         </option>
                       ))}
                     </select>
                   </Field>
-                </div>
-                <Field label="المحاذاة">
-                  <div className="flex gap-1">
-                    {(
-                      [
-                        ["right", AlignRight, "يمين"],
-                        ["center", AlignCenter, "وسط"],
-                        ["left", AlignLeft, "يسار"],
-                        ["justify", AlignJustify, "ضبط"],
-                      ] as const
-                    ).map(([v, Icon, hint]) => (
-                      <button
-                        key={v}
-                        type="button"
-                        title={hint}
-                        aria-label={hint}
-                        onClick={() => updateStyle(el.id, { textAlign: v })}
-                        aria-pressed={el.style.textAlign === v}
-                        className={cn(
-                          "grid h-9 flex-1 place-items-center rounded-[8px] border",
-                          el.style.textAlign === v ? "border-navy bg-navy text-white" : "border-line dark:border-white/10",
-                        )}
-                      >
-                        <Icon className="size-4" />
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="لون النص">
-                    <input
-                      type="color"
-                      value={toColor(el.style.color, theme.ink)}
-                      onChange={(e) => updateStyle(el.id, { color: e.target.value }, true)}
-                      onBlur={() => updateStyle(el.id, { color: el.style.color })}
-                    />
-                  </Field>
-                                  <ScrubField
-                  label="تباعد الحروف مم"
-                  value={round(Number(el.style.letterSpacing ?? 0) || 0)}
-                  min={-1}
-                  max={3}
-                  step={0.05}
-                  onChange={(v) => updateStyle(el.id, { letterSpacing: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { letterSpacing: v })}
-                />
-                </div>
-              </SubGroup>
-
-            {(el.type === "text" || el.type === "box" || el.type === "stat") && (
-              <>
-                <Field label={`تباعد الأسطر — ${(el.style.lineHeight || 1.45).toFixed(2)}`}>
-                  <CommitRange
-                    min={0.9}
-                    max={2.6}
-                    step={0.05}
-                    value={el.style.lineHeight || 1.45}
-                    ariaLabel="تباعد الأسطر"
-                    onLive={(v) => updateStyle(el.id, { lineHeight: v }, true)}
-                    onCommit={(v) => updateStyle(el.id, { lineHeight: v })}
-                  />
-                  <div className="mt-1 flex gap-1">
-                    {LINE_HEIGHTS.map((l) => (
-                      <button
-                        key={l.id}
-                        type="button"
-                        title={`${l.label} (${l.value})`}
-                        onClick={() => updateStyle(el.id, { lineHeight: l.value })}
-                        className={cn(
-                          "h-7 flex-1 rounded-[6px] border text-[10px] font-extrabold",
-                          Math.abs((el.style.lineHeight || 1.45) - l.value) < 0.01
-                            ? "border-navy-2 bg-navy-2/5"
-                            : "border-line dark:border-white/10",
-                        )}
-                      >
-                        {l.label}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-
-                <Field label="تباعد الحروف">
-                  <div className="flex gap-1">
-                    {LETTER_SPACINGS.map((l) => (
-                      <button
-                        key={l.id}
-                        type="button"
-                        title={l.label}
-                        onClick={() => updateStyle(el.id, { letterSpacing: l.value })}
-                        className={cn(
-                          "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
-                          Math.abs((el.style.letterSpacing || 0) - l.value) < 0.01
-                            ? "border-navy-2 bg-navy-2/5"
-                            : "border-line dark:border-white/10",
-                        )}
-                      >
-                        {l.label}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-              </>
-            )}
-
-            {TEXT_MARKUP_TYPES.has(el.type) && (
-              <SubGroup title="معالجة النص العربي والمساحة">
-
-                <Field label="شكل الأرقام">
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {NUMERAL_OPTIONS.map((n) => (
-                      <button
-                        key={n.id}
-                        type="button"
-                        onClick={() => updateStyle(el.id, { numerals: n.id })}
-                        className={cn(
-                          "h-9 rounded-[8px] border text-[11px] font-extrabold",
-                          (el.style.numerals || "western") === n.id
-                            ? "border-navy-2 bg-navy-2/5"
-                            : "border-line dark:border-white/10",
-                        )}
-                      >
-                        {n.label} <span className="text-muted">{n.sample}</span>
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-
-                <Field label="الفراغ بين الفقرات">
-                  <div className="flex gap-1">
-                    {PARAGRAPH_SPACINGS.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => updateStyle(el.id, { paragraphSpacing: p.value })}
-                        aria-pressed={(el.style.paragraphSpacing || 0) === p.value}
-                        className={cn(
-                          "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
-                          (el.style.paragraphSpacing || 0) === p.value
-                            ? "border-navy-2 bg-navy-2/5"
-                            : "border-line dark:border-white/10",
-                        )}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </Field>
-
-                <Field label="النص الطويل">
-                  <select
-                    value={el.style.textFit || "clip"}
-                    onChange={(e) => updateStyle(el.id, { textFit: e.target.value as "clip" | "shrink" | "grow" })}
+                  <button
+                    type="button"
+                    onClick={() => setLeftTab("fonts")}
+                    className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[10px] font-extrabold dark:border-white/10"
                   >
-                    {TEXT_FIT_OPTIONS.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.label} — {t.hint}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <TextFitStatus el={el} />
-
-                {el.style.textFit === "shrink" && (
-                  <p className="text-[10px] leading-4 text-muted">
-                    يُصغَّر الخط تلقائياً ليتسع النص داخل الإطار — يتوقف عند أدنى حجم مقروء.
-                  </p>
-                )}
-
-                {el.style.textAlign === "justify" && (
-                  <Field label="السطر الأخير">
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <Baseline className="size-3.5" /> مكتبة الخطوط (
+                    {fontChoices.length})
+                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <ScrubField
+                      label="الحجم pt"
+                      value={round(Number(el.style.fontSize || 14) || 0)}
+                      min={4}
+                      max={200}
+                      step={0.5}
+                      onChange={(v) =>
+                        updateStyle(el.id, { fontSize: v }, true)
+                      }
+                      onCommit={(v) => updateStyle(el.id, { fontSize: v })}
+                    />
+                    <Field label="الوزن">
+                      <select
+                        value={String(el.style.fontWeight || 600)}
+                        onChange={(e) =>
+                          updateStyle(el.id, {
+                            fontWeight: Number(e.target.value),
+                          })
+                        }
+                      >
+                        {[300, 400, 500, 600, 700, 800, 900].map((w) => (
+                          <option key={w} value={w}>
+                            {w}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="المحاذاة">
+                    <div className="flex gap-1">
                       {(
                         [
-                          ["start", "إلى اليمين"],
-                          ["stretch", "ممتد"],
+                          ["right", AlignRight, "يمين"],
+                          ["center", AlignCenter, "وسط"],
+                          ["left", AlignLeft, "يسار"],
+                          ["justify", AlignJustify, "ضبط"],
                         ] as const
-                      ).map(([v, l]) => (
+                      ).map(([v, Icon, hint]) => (
                         <button
                           key={v}
                           type="button"
-                          onClick={() => updateStyle(el.id, { justifyLastLine: v })}
-                          aria-pressed={(el.style.justifyLastLine || "start") === v}
+                          title={hint}
+                          aria-label={hint}
+                          onClick={() => updateStyle(el.id, { textAlign: v })}
+                          aria-pressed={el.style.textAlign === v}
                           className={cn(
-                            "h-8 rounded-[6px] border text-[10px] font-extrabold",
-                            (el.style.justifyLastLine || "start") === v
-                              ? "border-navy-2 bg-navy-2/5"
+                            "grid h-9 flex-1 place-items-center rounded-[8px] border",
+                            el.style.textAlign === v
+                              ? "border-navy bg-navy text-white"
                               : "border-line dark:border-white/10",
                           )}
                         >
-                          {l}
+                          <Icon className="size-4" />
                         </button>
                       ))}
                     </div>
                   </Field>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="لون النص">
+                      <input
+                        type="color"
+                        value={toColor(el.style.color, theme.ink)}
+                        onChange={(e) =>
+                          updateStyle(el.id, { color: e.target.value }, true)
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, { color: el.style.color })
+                        }
+                      />
+                    </Field>
+                    <ScrubField
+                      label="تباعد الحروف مم"
+                      value={round(Number(el.style.letterSpacing ?? 0) || 0)}
+                      min={-1}
+                      max={3}
+                      step={0.05}
+                      onChange={(v) =>
+                        updateStyle(el.id, { letterSpacing: v }, true)
+                      }
+                      onCommit={(v) => updateStyle(el.id, { letterSpacing: v })}
+                    />
+                  </div>
+                </SubGroup>
+
+                {(el.type === "text" ||
+                  el.type === "box" ||
+                  el.type === "stat") && (
+                  <>
+                    <Field
+                      label={`تباعد الأسطر — ${(el.style.lineHeight || 1.45).toFixed(2)}`}
+                    >
+                      <CommitRange
+                        min={0.9}
+                        max={2.6}
+                        step={0.05}
+                        value={el.style.lineHeight || 1.45}
+                        ariaLabel="تباعد الأسطر"
+                        onLive={(v) =>
+                          updateStyle(el.id, { lineHeight: v }, true)
+                        }
+                        onCommit={(v) => updateStyle(el.id, { lineHeight: v })}
+                      />
+                      <div className="mt-1 flex gap-1">
+                        {LINE_HEIGHTS.map((l) => (
+                          <button
+                            key={l.id}
+                            type="button"
+                            title={`${l.label} (${l.value})`}
+                            onClick={() =>
+                              updateStyle(el.id, { lineHeight: l.value })
+                            }
+                            className={cn(
+                              "h-7 flex-1 rounded-[6px] border text-[10px] font-extrabold",
+                              Math.abs(
+                                (el.style.lineHeight || 1.45) - l.value,
+                              ) < 0.01
+                                ? "border-navy-2 bg-navy-2/5"
+                                : "border-line dark:border-white/10",
+                            )}
+                          >
+                            {l.label}
+                          </button>
+                        ))}
+                      </div>
+                    </Field>
+
+                    <Field label="تباعد الحروف">
+                      <div className="flex gap-1">
+                        {LETTER_SPACINGS.map((l) => (
+                          <button
+                            key={l.id}
+                            type="button"
+                            title={l.label}
+                            onClick={() =>
+                              updateStyle(el.id, { letterSpacing: l.value })
+                            }
+                            className={cn(
+                              "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
+                              Math.abs(
+                                (el.style.letterSpacing || 0) - l.value,
+                              ) < 0.01
+                                ? "border-navy-2 bg-navy-2/5"
+                                : "border-line dark:border-white/10",
+                            )}
+                          >
+                            {l.label}
+                          </button>
+                        ))}
+                      </div>
+                    </Field>
+                  </>
                 )}
 
-                <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
-                  إظهار النص الزائد
-                  <input
-                    type="checkbox"
-                    checked={Boolean(el.style.overflowVisible)}
-                    onChange={(e) => updateStyle(el.id, { overflowVisible: e.target.checked })}
-                    className="accent-navy"
-                  />
-                </label>
+                {TEXT_MARKUP_TYPES.has(el.type) && (
+                  <SubGroup title="معالجة النص العربي والمساحة">
+                    <Field label="شكل الأرقام">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {NUMERAL_OPTIONS.map((n) => (
+                          <button
+                            key={n.id}
+                            type="button"
+                            onClick={() =>
+                              updateStyle(el.id, { numerals: n.id })
+                            }
+                            className={cn(
+                              "h-9 rounded-[8px] border text-[11px] font-extrabold",
+                              (el.style.numerals || "western") === n.id
+                                ? "border-navy-2 bg-navy-2/5"
+                                : "border-line dark:border-white/10",
+                            )}
+                          >
+                            {n.label}{" "}
+                            <span className="text-muted">{n.sample}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </Field>
 
-                <div className="grid grid-cols-2 gap-1.5">
-                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
-                    الاتجاه عمودي
-                    <input
-                      type="checkbox"
-                      checked={el.style.writingMode === "vertical"}
-                      onChange={(e) => updateStyle(el.id, { writingMode: e.target.checked ? "vertical" : "horizontal" })}
-                      className="accent-navy"
-                    />
-                  </label>
-                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
-                    إزالة التشكيل
-                    <input
-                      type="checkbox"
-                      checked={Boolean(el.style.stripTashkeel)}
-                      onChange={(e) => updateStyle(el.id, { stripTashkeel: e.target.checked })}
-                      className="accent-navy"
-                    />
-                  </label>
-                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
-                    احترام أسطر النص
-                    <input
-                      type="checkbox"
-                      checked={Boolean(el.style.preserveBreaks)}
-                      onChange={(e) => updateStyle(el.id, { preserveBreaks: e.target.checked })}
-                      className="accent-navy"
-                    />
-                  </label>
-                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
-                    ربط الوحدات
-                    <input
-                      type="checkbox"
-                      checked={Boolean(el.style.bindUnits)}
-                      onChange={(e) => updateStyle(el.id, { bindUnits: e.target.checked })}
-                      className="accent-navy"
-                    />
-                  </label>
-                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
-                    ترقيم عربي
-                    <input
-                      type="checkbox"
-                      checked={Boolean(el.style.arabicPunctuation)}
-                      onChange={(e) => updateStyle(el.id, { arabicPunctuation: e.target.checked })}
-                      className="accent-navy"
-                    />
-                  </label>
-                </div>
+                    <Field label="الفراغ بين الفقرات">
+                      <div className="flex gap-1">
+                        {PARAGRAPH_SPACINGS.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() =>
+                              updateStyle(el.id, { paragraphSpacing: p.value })
+                            }
+                            aria-pressed={
+                              (el.style.paragraphSpacing || 0) === p.value
+                            }
+                            className={cn(
+                              "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
+                              (el.style.paragraphSpacing || 0) === p.value
+                                ? "border-navy-2 bg-navy-2/5"
+                                : "border-line dark:border-white/10",
+                            )}
+                          >
+                            {p.label}
+                          </button>
+                        ))}
+                      </div>
+                    </Field>
 
-                {el.style.writingMode === "vertical" && (
-                  <p className="text-[10px] leading-4 text-muted">
-                    الاتجاه العمودي مناسب لعناوين الكعب والغلاف الجانبي. تأكد من كفاية ارتفاع العنصر.
-                  </p>
+                    <Field label="النص الطويل">
+                      <select
+                        value={el.style.textFit || "clip"}
+                        onChange={(e) =>
+                          updateStyle(el.id, {
+                            textFit: e.target.value as
+                              "clip" | "shrink" | "grow",
+                          })
+                        }
+                      >
+                        {TEXT_FIT_OPTIONS.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label} — {t.hint}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                    <TextFitStatus el={el} />
+
+                    {el.style.textFit === "shrink" && (
+                      <p className="text-[10px] leading-4 text-muted">
+                        يُصغَّر الخط تلقائياً ليتسع النص داخل الإطار — يتوقف عند
+                        أدنى حجم مقروء.
+                      </p>
+                    )}
+
+                    {el.style.textAlign === "justify" && (
+                      <Field label="السطر الأخير">
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {(
+                            [
+                              ["start", "إلى اليمين"],
+                              ["stretch", "ممتد"],
+                            ] as const
+                          ).map(([v, l]) => (
+                            <button
+                              key={v}
+                              type="button"
+                              onClick={() =>
+                                updateStyle(el.id, { justifyLastLine: v })
+                              }
+                              aria-pressed={
+                                (el.style.justifyLastLine || "start") === v
+                              }
+                              className={cn(
+                                "h-8 rounded-[6px] border text-[10px] font-extrabold",
+                                (el.style.justifyLastLine || "start") === v
+                                  ? "border-navy-2 bg-navy-2/5"
+                                  : "border-line dark:border-white/10",
+                              )}
+                            >
+                              {l}
+                            </button>
+                          ))}
+                        </div>
+                      </Field>
+                    )}
+
+                    <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                      إظهار النص الزائد
+                      <input
+                        type="checkbox"
+                        checked={Boolean(el.style.overflowVisible)}
+                        onChange={(e) =>
+                          updateStyle(el.id, {
+                            overflowVisible: e.target.checked,
+                          })
+                        }
+                        className="accent-navy"
+                      />
+                    </label>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                        الاتجاه عمودي
+                        <input
+                          type="checkbox"
+                          checked={el.style.writingMode === "vertical"}
+                          onChange={(e) =>
+                            updateStyle(el.id, {
+                              writingMode: e.target.checked
+                                ? "vertical"
+                                : "horizontal",
+                            })
+                          }
+                          className="accent-navy"
+                        />
+                      </label>
+                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                        إزالة التشكيل
+                        <input
+                          type="checkbox"
+                          checked={Boolean(el.style.stripTashkeel)}
+                          onChange={(e) =>
+                            updateStyle(el.id, {
+                              stripTashkeel: e.target.checked,
+                            })
+                          }
+                          className="accent-navy"
+                        />
+                      </label>
+                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                        احترام أسطر النص
+                        <input
+                          type="checkbox"
+                          checked={Boolean(el.style.preserveBreaks)}
+                          onChange={(e) =>
+                            updateStyle(el.id, {
+                              preserveBreaks: e.target.checked,
+                            })
+                          }
+                          className="accent-navy"
+                        />
+                      </label>
+                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                        ربط الوحدات
+                        <input
+                          type="checkbox"
+                          checked={Boolean(el.style.bindUnits)}
+                          onChange={(e) =>
+                            updateStyle(el.id, { bindUnits: e.target.checked })
+                          }
+                          className="accent-navy"
+                        />
+                      </label>
+                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                        ترقيم عربي
+                        <input
+                          type="checkbox"
+                          checked={Boolean(el.style.arabicPunctuation)}
+                          onChange={(e) =>
+                            updateStyle(el.id, {
+                              arabicPunctuation: e.target.checked,
+                            })
+                          }
+                          className="accent-navy"
+                        />
+                      </label>
+                    </div>
+
+                    {el.style.writingMode === "vertical" && (
+                      <p className="text-[10px] leading-4 text-muted">
+                        الاتجاه العمودي مناسب لعناوين الكعب والغلاف الجانبي.
+                        تأكد من كفاية ارتفاع العنصر.
+                      </p>
+                    )}
+                  </SubGroup>
                 )}
-              </SubGroup>
-              )}
               </AccordionSection>
             )}
 
             {/*
-              * Phase 2 — «الخلفية والحدود»: every fill / border / shadow control,
-              * including the per-element-type blocks, behind one collapsible
-              * group so the inspector stays scannable.
-              */}
+             * Phase 2 — «الخلفية والحدود»: every fill / border / shadow control,
+             * including the per-element-type blocks, behind one collapsible
+             * group so the inspector stays scannable.
+             */}
             <AccordionSection
               title="الخلفية والحدود"
               id="background"
               open={accordions.isOpen("background", false)}
               onToggle={() => accordions.toggle("background")}
             >
-            {["box", "stat", "progress"].includes(el.type) && (
-              <SubGroup title="المظهر والتعبئة">
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="التعبئة">
-                  <input
-                    type="color"
-                    value={toColor(el.style.fill, theme.surface)}
-                    onChange={(e) => updateStyle(el.id, { fill: e.target.value }, true)}
-                    onBlur={() => updateStyle(el.id, { fill: el.style.fill })}
-                  />
-                </Field>
-                <Field label="لون الخلفية">
-                  <input
-                    type="color"
-                    value={toColor(el.style.background || el.style.fill, theme.surface)}
-                    onChange={(e) => updateStyle(el.id, { background: e.target.value }, true)}
-                    onBlur={() => updateStyle(el.id, { background: el.style.background })}
-                  />
-                </Field>
-                <Field label="الإطار">
-                  <input
-                    type="color"
-                    value={toColor(el.style.borderColor, theme.line)}
-                    onChange={(e) => updateStyle(el.id, { borderColor: e.target.value }, true)}
-                    onBlur={() => updateStyle(el.id, { borderColor: el.style.borderColor })}
-                  />
-                </Field>
-                                <ScrubField
-                  label="سماكة الإطار مم"
-                  value={round(Number(el.style.borderWidth ?? 0.35) || 0)}
-                  min={0}
-                  step={0.05}
-                  onChange={(v) => updateStyle(el.id, { borderWidth: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { borderWidth: v })}
-                />
-                                <ScrubField
-                  label="الزوايا مم"
-                  value={round(Number(el.style.radius || 0) || 0)}
-                  min={0}
-                  step={0.5}
-                  onChange={(v) => updateStyle(el.id, { radius: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { radius: v })}
-                />
-                                <ScrubField
-                  label="الحاشية مم"
-                  value={round(Number(el.style.padding ?? 4) || 0)}
-                  min={0}
-                  step={0.5}
-                  onChange={(v) => updateStyle(el.id, { padding: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { padding: v })}
-                />
-              </div>
-              </SubGroup>
-            )}
-
-            {el.type === "progress" && (
-              <>
-                <Field label="النوع" full>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {(["bar", "ring", "steps"] as const).map((v) => (
-                      <button
-                        key={v}
-                        type="button"
-                        onClick={() => updateStyle(el.id, { variant: v })}
-                        className={cn(
-                          "h-9 rounded-[8px] border text-[11px] font-extrabold",
-                          (el.style.variant || "bar") === v
-                            ? "border-navy-2 bg-navy-2/5"
-                            : "border-line dark:border-white/10",
+              {["box", "stat", "progress"].includes(el.type) && (
+                <SubGroup title="المظهر والتعبئة">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="التعبئة">
+                      <input
+                        type="color"
+                        value={toColor(el.style.fill, theme.surface)}
+                        onChange={(e) =>
+                          updateStyle(el.id, { fill: e.target.value }, true)
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, { fill: el.style.fill })
+                        }
+                      />
+                    </Field>
+                    <Field label="لون الخلفية">
+                      <input
+                        type="color"
+                        value={toColor(
+                          el.style.background || el.style.fill,
+                          theme.surface,
                         )}
-                      >
-                        {v === "bar" ? "شريط أفقي" : v === "ring" ? "حلقة دائرية" : "نقاط مراحل"}
-                      </button>
-                    ))}
+                        onChange={(e) =>
+                          updateStyle(
+                            el.id,
+                            { background: e.target.value },
+                            true,
+                          )
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, {
+                            background: el.style.background,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="الإطار">
+                      <input
+                        type="color"
+                        value={toColor(el.style.borderColor, theme.line)}
+                        onChange={(e) =>
+                          updateStyle(
+                            el.id,
+                            { borderColor: e.target.value },
+                            true,
+                          )
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, {
+                            borderColor: el.style.borderColor,
+                          })
+                        }
+                      />
+                    </Field>
+                    <ScrubField
+                      label="سماكة الإطار مم"
+                      value={round(Number(el.style.borderWidth ?? 0.35) || 0)}
+                      min={0}
+                      step={0.05}
+                      onChange={(v) =>
+                        updateStyle(el.id, { borderWidth: v }, true)
+                      }
+                      onCommit={(v) => updateStyle(el.id, { borderWidth: v })}
+                    />
+                    <ScrubField
+                      label="الزوايا مم"
+                      value={round(Number(el.style.radius || 0) || 0)}
+                      min={0}
+                      step={0.5}
+                      onChange={(v) => updateStyle(el.id, { radius: v }, true)}
+                      onCommit={(v) => updateStyle(el.id, { radius: v })}
+                    />
+                    <ScrubField
+                      label="الحاشية مم"
+                      value={round(Number(el.style.padding ?? 4) || 0)}
+                      min={0}
+                      step={0.5}
+                      onChange={(v) => updateStyle(el.id, { padding: v }, true)}
+                      onCommit={(v) => updateStyle(el.id, { padding: v })}
+                    />
                   </div>
-                </Field>
+                </SubGroup>
+              )}
 
-                {(el.style.variant || "bar") === "steps" && (
-                  <ScrubField
-                    label="عدد المراحل"
-                    value={Number(el.style.steps) || 5}
-                    min={2}
-                    max={12}
-                    step={1}
-                    precision={0}
-                    full
-                    onChange={(v) => updateStyle(el.id, { steps: v }, true)}
-                    onCommit={(v) => updateStyle(el.id, { steps: v })}
-                  />
-                )}
-
-                <Field label={`نسبة الإنجاز: ${Math.round(Number(el.style.value) || 0)}%`} full>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={Number(el.style.value) || 0}
-                    onChange={(e) => updateStyle(el.id, { value: Number(e.target.value) }, true)}
-                    onBlur={() => updateStyle(el.id, { value: el.style.value })}
-                    className="w-full accent-navy"
-                  />
-                </Field>
-
-                <div className="grid grid-cols-2 gap-2">
-                                  <ScrubField
-                  label="رقم النسبة"
-                  value={round(Number(Math.round(Number(el.style.value) || 0)) || 0)}
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  onChange={(v) => updateStyle(el.id, { value: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { value: v })}
-                />
-                  <Field label="عرض الرقم">
-                    <select
-                      value={el.style.showValue === false ? "no" : "yes"}
-                      onChange={(e) => updateStyle(el.id, { showValue: e.target.value === "yes" })}
-                    >
-                      <option value="yes">ظاهر</option>
-                      <option value="no">مخفي</option>
-                    </select>
-                  </Field>
-                  <Field label="لون الشريط">
-                    <input
-                      type="color"
-                      value={toColor(el.style.fill, theme.primary)}
-                      onChange={(e) => updateStyle(el.id, { fill: e.target.value }, true)}
-                      onBlur={() => updateStyle(el.id, { fill: el.style.fill })}
-                    />
-                  </Field>
-                  <Field label="لون المسار">
-                    <input
-                      type="color"
-                      value={toColor(el.style.background, "#e8ecf3")}
-                      onChange={(e) => updateStyle(el.id, { background: e.target.value }, true)}
-                      onBlur={() => updateStyle(el.id, { background: el.style.background })}
-                    />
-                  </Field>
-                </div>
-
-                <div className="grid grid-cols-3 gap-1.5">
-                  {[25, 50, 75, 90, 100].map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => updateStyle(el.id, { value: v })}
-                      className="h-8 rounded-[8px] border border-line text-[11px] font-extrabold tabular-nums dark:border-white/10"
-                    >
-                      {v}%
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {el.type === "shape" && (
-              <>
-                <Field label="الشكل" full>
-                  <div className="grid grid-cols-5 gap-1.5">
-                    {SHAPES.map((s) => {
-                      const active = (el.style.shapeId || el.style.shape || "rect") === s.id;
-                      return (
+              {el.type === "progress" && (
+                <>
+                  <Field label="النوع" full>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(["bar", "ring", "steps"] as const).map((v) => (
                         <button
-                          key={s.id}
+                          key={v}
                           type="button"
-                          onClick={() => updateStyle(el.id, { shapeId: s.id })}
-                          title={s.label}
+                          onClick={() => updateStyle(el.id, { variant: v })}
                           className={cn(
-                            "grid aspect-square place-items-center rounded-[6px] border p-1",
-                            active
-                              ? "border-navy-2 bg-navy-2/10 text-navy-2 dark:text-gold-2"
-                              : "border-line text-muted hover:border-navy-2 dark:border-white/10",
+                            "h-9 rounded-[8px] border text-[11px] font-extrabold",
+                            (el.style.variant || "bar") === v
+                              ? "border-navy-2 bg-navy-2/5"
+                              : "border-line dark:border-white/10",
                           )}
                         >
-                          <ShapePreview shapeId={s.id} className="size-full max-h-7" />
+                          {v === "bar"
+                            ? "شريط أفقي"
+                            : v === "ring"
+                              ? "حلقة دائرية"
+                              : "نقاط مراحل"}
                         </button>
-                      );
-                    })}
-                  </div>
-                </Field>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="التعبئة">
-                    <input
-                      type="color"
-                      value={toColor(el.style.fill, theme.primary)}
-                      onChange={(e) => updateStyle(el.id, { fill: e.target.value }, true)}
-                      onBlur={() => updateStyle(el.id, { fill: el.style.fill })}
-                    />
-                  </Field>
-                  <Field label="لون الإطار">
-                    <input
-                      type="color"
-                      value={toColor(el.style.borderColor, "#c9a86a")}
-                      onChange={(e) => updateStyle(el.id, { borderColor: e.target.value }, true)}
-                      onBlur={() => updateStyle(el.id, { borderColor: el.style.borderColor })}
-                    />
-                  </Field>
-                                  <ScrubField
-                  label="سماكة الإطار"
-                  value={round(Number(el.style.borderWidth ?? 0) || 0)}
-                  min={0}
-                  step={0.1}
-                  onChange={(v) => updateStyle(el.id, { borderWidth: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { borderWidth: v })}
-                />
-                  <Field label="بلا إطار">
-                    <button
-                      type="button"
-                      onClick={() => updateStyle(el.id, { borderWidth: 0 })}
-                      className="h-9 w-full rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
-                    >
-                      إزالة
-                    </button>
-                  </Field>
-                </div>
-
-                <Field label="الشفافية" full>
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    step={1}
-                    value={Math.round((el.opacity ?? 1) * 100)}
-                    onChange={(e) => updateElement(el.id, { opacity: Number(e.target.value) / 100 }, true)}
-                    onBlur={() => updateElement(el.id, { opacity: el.opacity })}
-                    className="w-full accent-navy"
-                  />
-                </Field>
-
-                <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
-                  قفل النسبة أثناء التحجيم
-                  <input
-                    type="checkbox"
-                    checked={el.style.aspectLock === true}
-                    onChange={(e) => updateStyle(el.id, { aspectLock: e.target.checked })}
-                    className="accent-navy"
-                  />
-                </label>
-              </>
-            )}
-
-            {el.type === "icon" && (
-              <>
-                <Field label="الأيقونة">
-                  <select value={el.icon || "star"} onChange={(e) => updateElement(el.id, { icon: e.target.value })}>
-                    {Object.keys(ICONS).map((k) => (
-                      <option key={k} value={k}>
-                        {k}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                {/*
-                  * The author's own vectors are reachable from the properties
-                  * panel too (Phase 7.3). They insert as `svg` elements, which
-                  * keeps them vector — an `icon` element renders the built-in
-                  * path set only.
-                  */}
-                {customIcons.length > 0 && (
-                  <Field label="رموز مخصصة (إدراج على الصفحة)" full>
-                    <div className="library-grid-icons">
-                      {customIcons.map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          title={item.name}
-                          aria-label={`إدراج ${item.name}`}
-                          onClick={() =>
-                            addElement("svg", {
-                              name: item.name,
-                              content: item.svg,
-                              w: item.kind === "divider" ? 150 : 24,
-                              h: item.kind === "divider" ? 10 : 24,
-                            })
-                          }
-                          className="library-asset-card p-1"
-                          dangerouslySetInnerHTML={{ __html: item.svg }}
-                        />
                       ))}
                     </div>
                   </Field>
-                )}
+
+                  {(el.style.variant || "bar") === "steps" && (
+                    <ScrubField
+                      label="عدد المراحل"
+                      value={Number(el.style.steps) || 5}
+                      min={2}
+                      max={12}
+                      step={1}
+                      precision={0}
+                      full
+                      onChange={(v) => updateStyle(el.id, { steps: v }, true)}
+                      onCommit={(v) => updateStyle(el.id, { steps: v })}
+                    />
+                  )}
+
+                  <Field
+                    label={`نسبة الإنجاز: ${Math.round(Number(el.style.value) || 0)}%`}
+                    full
+                  >
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={Number(el.style.value) || 0}
+                      onChange={(e) =>
+                        updateStyle(
+                          el.id,
+                          { value: Number(e.target.value) },
+                          true,
+                        )
+                      }
+                      onBlur={() =>
+                        updateStyle(el.id, { value: el.style.value })
+                      }
+                      className="w-full accent-navy"
+                    />
+                  </Field>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <ScrubField
+                      label="رقم النسبة"
+                      value={round(
+                        Number(Math.round(Number(el.style.value) || 0)) || 0,
+                      )}
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      onChange={(v) => updateStyle(el.id, { value: v }, true)}
+                      onCommit={(v) => updateStyle(el.id, { value: v })}
+                    />
+                    <Field label="عرض الرقم">
+                      <select
+                        value={el.style.showValue === false ? "no" : "yes"}
+                        onChange={(e) =>
+                          updateStyle(el.id, {
+                            showValue: e.target.value === "yes",
+                          })
+                        }
+                      >
+                        <option value="yes">ظاهر</option>
+                        <option value="no">مخفي</option>
+                      </select>
+                    </Field>
+                    <Field label="لون الشريط">
+                      <input
+                        type="color"
+                        value={toColor(el.style.fill, theme.primary)}
+                        onChange={(e) =>
+                          updateStyle(el.id, { fill: e.target.value }, true)
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, { fill: el.style.fill })
+                        }
+                      />
+                    </Field>
+                    <Field label="لون المسار">
+                      <input
+                        type="color"
+                        value={toColor(el.style.background, "#e8ecf3")}
+                        onChange={(e) =>
+                          updateStyle(
+                            el.id,
+                            { background: e.target.value },
+                            true,
+                          )
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, {
+                            background: el.style.background,
+                          })
+                        }
+                      />
+                    </Field>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[25, 50, 75, 90, 100].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => updateStyle(el.id, { value: v })}
+                        className="h-8 rounded-[8px] border border-line text-[11px] font-extrabold tabular-nums dark:border-white/10"
+                      >
+                        {v}%
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {el.type === "shape" && (
+                <>
+                  <Field label="الشكل" full>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {SHAPES.map((s) => {
+                        const active =
+                          (el.style.shapeId || el.style.shape || "rect") ===
+                          s.id;
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() =>
+                              updateStyle(el.id, { shapeId: s.id })
+                            }
+                            title={s.label}
+                            className={cn(
+                              "grid aspect-square place-items-center rounded-[6px] border p-1",
+                              active
+                                ? "border-navy-2 bg-navy-2/10 text-navy-2 dark:text-gold-2"
+                                : "border-line text-muted hover:border-navy-2 dark:border-white/10",
+                            )}
+                          >
+                            <ShapePreview
+                              shapeId={s.id}
+                              className="size-full max-h-7"
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Field>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="التعبئة">
+                      <input
+                        type="color"
+                        value={toColor(el.style.fill, theme.primary)}
+                        onChange={(e) =>
+                          updateStyle(el.id, { fill: e.target.value }, true)
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, { fill: el.style.fill })
+                        }
+                      />
+                    </Field>
+                    <Field label="لون الإطار">
+                      <input
+                        type="color"
+                        value={toColor(el.style.borderColor, "#c9a86a")}
+                        onChange={(e) =>
+                          updateStyle(
+                            el.id,
+                            { borderColor: e.target.value },
+                            true,
+                          )
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, {
+                            borderColor: el.style.borderColor,
+                          })
+                        }
+                      />
+                    </Field>
+                    <ScrubField
+                      label="سماكة الإطار"
+                      value={round(Number(el.style.borderWidth ?? 0) || 0)}
+                      min={0}
+                      step={0.1}
+                      onChange={(v) =>
+                        updateStyle(el.id, { borderWidth: v }, true)
+                      }
+                      onCommit={(v) => updateStyle(el.id, { borderWidth: v })}
+                    />
+                    <Field label="بلا إطار">
+                      <button
+                        type="button"
+                        onClick={() => updateStyle(el.id, { borderWidth: 0 })}
+                        className="h-9 w-full rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+                      >
+                        إزالة
+                      </button>
+                    </Field>
+                  </div>
+
+                  <Field label="الشفافية" full>
+                    <input
+                      type="range"
+                      min={0}
+                      max={100}
+                      step={1}
+                      value={Math.round((el.opacity ?? 1) * 100)}
+                      onChange={(e) =>
+                        updateElement(
+                          el.id,
+                          { opacity: Number(e.target.value) / 100 },
+                          true,
+                        )
+                      }
+                      onBlur={() =>
+                        updateElement(el.id, { opacity: el.opacity })
+                      }
+                      className="w-full accent-navy"
+                    />
+                  </Field>
+
+                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                    قفل النسبة أثناء التحجيم
+                    <input
+                      type="checkbox"
+                      checked={el.style.aspectLock === true}
+                      onChange={(e) =>
+                        updateStyle(el.id, { aspectLock: e.target.checked })
+                      }
+                      className="accent-navy"
+                    />
+                  </label>
+                </>
+              )}
+
+              {el.type === "icon" && (
+                <>
+                  <Field label="الأيقونة">
+                    <select
+                      value={el.icon || "star"}
+                      onChange={(e) =>
+                        updateElement(el.id, { icon: e.target.value })
+                      }
+                    >
+                      {Object.keys(ICONS).map((k) => (
+                        <option key={k} value={k}>
+                          {k}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  {/*
+                   * The author's own vectors are reachable from the properties
+                   * panel too (Phase 7.3). They insert as `svg` elements, which
+                   * keeps them vector — an `icon` element renders the built-in
+                   * path set only.
+                   */}
+                  {customIcons.length > 0 && (
+                    <Field label="رموز مخصصة (إدراج على الصفحة)" full>
+                      <div className="library-grid-icons">
+                        {customIcons.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            title={item.name}
+                            aria-label={`إدراج ${item.name}`}
+                            onClick={() =>
+                              addElement("svg", {
+                                name: item.name,
+                                content: item.svg,
+                                w: item.kind === "divider" ? 150 : 24,
+                                h: item.kind === "divider" ? 10 : 24,
+                              })
+                            }
+                            className="library-asset-card p-1"
+                            dangerouslySetInnerHTML={{ __html: item.svg }}
+                          />
+                        ))}
+                      </div>
+                    </Field>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="اللون">
+                      <input
+                        type="color"
+                        value={toColor(el.style.color, theme.accent)}
+                        onChange={(e) =>
+                          updateStyle(el.id, { color: e.target.value }, true)
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, { color: el.style.color })
+                        }
+                      />
+                    </Field>
+                    <ScrubField
+                      label="سماكة الخط"
+                      value={round(Number(el.style.stroke || 1.8) || 0)}
+                      min={0.5}
+                      step={0.1}
+                      onChange={(v) => updateStyle(el.id, { stroke: v }, true)}
+                      onCommit={(v) => updateStyle(el.id, { stroke: v })}
+                    />
+                  </div>
+                </>
+              )}
+
+              {(el.type === "line" || el.type === "divider") && (
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="اللون">
                     <input
                       type="color"
                       value={toColor(el.style.color, theme.accent)}
-                      onChange={(e) => updateStyle(el.id, { color: e.target.value }, true)}
-                      onBlur={() => updateStyle(el.id, { color: el.style.color })}
+                      onChange={(e) =>
+                        updateStyle(el.id, { color: e.target.value }, true)
+                      }
+                      onBlur={() =>
+                        updateStyle(el.id, { color: el.style.color })
+                      }
                     />
                   </Field>
-                                  <ScrubField
-                  label="سماكة الخط"
-                  value={round(Number(el.style.stroke || 1.8) || 0)}
-                  min={0.5}
-                  step={0.1}
-                  onChange={(v) => updateStyle(el.id, { stroke: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { stroke: v })}
-                />
-                </div>
-              </>
-            )}
-
-            {(el.type === "line" || el.type === "divider") && (
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="اللون">
-                  <input
-                    type="color"
-                    value={toColor(el.style.color, theme.accent)}
-                    onChange={(e) => updateStyle(el.id, { color: e.target.value }, true)}
-                    onBlur={() => updateStyle(el.id, { color: el.style.color })}
+                  <ScrubField
+                    label="السماكة مم"
+                    value={round(Number(el.style.stroke || 0.8) || 0)}
+                    min={0.1}
+                    step={0.1}
+                    onChange={(v) => updateStyle(el.id, { stroke: v }, true)}
+                    onCommit={(v) => updateStyle(el.id, { stroke: v })}
                   />
-                </Field>
-                                <ScrubField
-                  label="السماكة مم"
-                  value={round(Number(el.style.stroke || 0.8) || 0)}
-                  min={0.1}
-                  step={0.1}
-                  onChange={(v) => updateStyle(el.id, { stroke: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { stroke: v })}
-                />
-              </div>
-            )}
-
-            {el.type === "table" && (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                                  <ScrubField
-                  label="أعمدة"
-                  value={round(Number(el.style.cols || 3) || 0)}
-                  min={1}
-                  max={12}
-                  step={0.5}
-                  onChange={(v) => resizeTable(el, v, el.style.rows || 4, updateElement)}
-                  onCommit={(v) => resizeTable(el, v, el.style.rows || 4, updateElement)}
-                />
-                                  <ScrubField
-                  label="صفوف"
-                  value={round(Number(el.style.rows || 4) || 0)}
-                  min={1}
-                  max={30}
-                  step={0.5}
-                  onChange={(v) => resizeTable(el, el.style.cols || 3, v, updateElement)}
-                  onCommit={(v) => resizeTable(el, el.style.cols || 3, v, updateElement)}
-                />
                 </div>
+              )}
 
-                <Field label="إضافة / حذف سريع" full>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <button
-                      type="button"
-                      disabled={(el.style.rows || 4) >= 30}
-                      onClick={() => setTableSize(el, { rows: (el.style.rows || 4) + 1 }, updateElement)}
-                      className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
-                    >
-                      + صف
-                    </button>
-                    <button
-                      type="button"
-                      disabled={(el.style.rows || 4) <= 1}
-                      onClick={() => setTableSize(el, { rows: (el.style.rows || 4) - 1 }, updateElement)}
-                      className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
-                    >
-                      − صف
-                    </button>
-                    <button
-                      type="button"
-                      disabled={(el.style.cols || 3) >= 12}
-                      onClick={() => setTableSize(el, { cols: (el.style.cols || 3) + 1 }, updateElement)}
-                      className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
-                    >
-                      + عمود
-                    </button>
-                    <button
-                      type="button"
-                      disabled={(el.style.cols || 3) <= 1}
-                      onClick={() => setTableSize(el, { cols: (el.style.cols || 3) - 1 }, updateElement)}
-                      className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
-                    >
-                      − عمود
-                    </button>
+              {el.type === "table" && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <ScrubField
+                      label="أعمدة"
+                      value={round(Number(el.style.cols || 3) || 0)}
+                      min={1}
+                      max={12}
+                      step={0.5}
+                      onChange={(v) =>
+                        resizeTable(el, v, el.style.rows || 4, updateElement)
+                      }
+                      onCommit={(v) =>
+                        resizeTable(el, v, el.style.rows || 4, updateElement)
+                      }
+                    />
+                    <ScrubField
+                      label="صفوف"
+                      value={round(Number(el.style.rows || 4) || 0)}
+                      min={1}
+                      max={30}
+                      step={0.5}
+                      onChange={(v) =>
+                        resizeTable(el, el.style.cols || 3, v, updateElement)
+                      }
+                      onCommit={(v) =>
+                        resizeTable(el, el.style.cols || 3, v, updateElement)
+                      }
+                    />
                   </div>
-                </Field>
 
-                <Field label="محاذاة الخلايا">
-                  <select
-                    value={el.style.cellAlign || "right"}
-                    onChange={(e) =>
-                      updateStyle(el.id, { cellAlign: e.target.value as "right" | "center" | "left" })
-                    }
-                  >
-                    <option value="right">يمين</option>
-                    <option value="center">وسط</option>
-                    <option value="left">يسار</option>
-                  </select>
-                </Field>
-                <div className="grid grid-cols-2 gap-2">
-                  <Field label="خلفية الرأس">
-                    <input
-                      type="color"
-                      value={toColor(el.style.headerBg, theme.primary)}
-                      onChange={(e) => updateStyle(el.id, { headerBg: e.target.value }, true)}
-                      onBlur={() => updateStyle(el.id, { headerBg: el.style.headerBg })}
-                    />
+                  <Field label="إضافة / حذف سريع" full>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        disabled={(el.style.rows || 4) >= 30}
+                        onClick={() =>
+                          setTableSize(
+                            el,
+                            { rows: (el.style.rows || 4) + 1 },
+                            updateElement,
+                          )
+                        }
+                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
+                      >
+                        + صف
+                      </button>
+                      <button
+                        type="button"
+                        disabled={(el.style.rows || 4) <= 1}
+                        onClick={() =>
+                          setTableSize(
+                            el,
+                            { rows: (el.style.rows || 4) - 1 },
+                            updateElement,
+                          )
+                        }
+                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
+                      >
+                        − صف
+                      </button>
+                      <button
+                        type="button"
+                        disabled={(el.style.cols || 3) >= 12}
+                        onClick={() =>
+                          setTableSize(
+                            el,
+                            { cols: (el.style.cols || 3) + 1 },
+                            updateElement,
+                          )
+                        }
+                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
+                      >
+                        + عمود
+                      </button>
+                      <button
+                        type="button"
+                        disabled={(el.style.cols || 3) <= 1}
+                        onClick={() =>
+                          setTableSize(
+                            el,
+                            { cols: (el.style.cols || 3) - 1 },
+                            updateElement,
+                          )
+                        }
+                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
+                      >
+                        − عمود
+                      </button>
+                    </div>
                   </Field>
-                  <Field label="لون الرأس">
-                    <input
-                      type="color"
-                      value={toColor(el.style.headerColor, "#ffffff")}
-                      onChange={(e) => updateStyle(el.id, { headerColor: e.target.value }, true)}
-                      onBlur={() => updateStyle(el.id, { headerColor: el.style.headerColor })}
-                    />
-                  </Field>
-                  <Field label="خلفية الخلايا">
-                    <input
-                      type="color"
-                      value={toColor(el.style.tableBg, "#ffffff")}
-                      onChange={(e) => updateStyle(el.id, { tableBg: e.target.value }, true)}
-                      onBlur={() => updateStyle(el.id, { tableBg: el.style.tableBg })}
-                    />
-                  </Field>
-                  <Field label="لون الحدود">
-                    <input
-                      type="color"
-                      value={toColor(el.style.borderColor, "#bfc7d6")}
-                      onChange={(e) => updateStyle(el.id, { borderColor: e.target.value }, true)}
-                      onBlur={() => updateStyle(el.id, { borderColor: el.style.borderColor })}
-                    />
-                  </Field>
-                  <Field label="تخطيط الصفوف">
+
+                  <Field label="محاذاة الخلايا">
                     <select
-                      value={el.style.stripeBg ? "stripe" : "plain"}
-                      onChange={(e) => updateStyle(el.id, { stripeBg: e.target.value === "stripe" ? "#f4f6fa" : "" })}
+                      value={el.style.cellAlign || "right"}
+                      onChange={(e) =>
+                        updateStyle(el.id, {
+                          cellAlign: e.target.value as
+                            "right" | "center" | "left",
+                        })
+                      }
                     >
-                      <option value="plain">بلون واحد</option>
-                      <option value="stripe">صفوف متبادلة</option>
+                      <option value="right">يمين</option>
+                      <option value="center">وسط</option>
+                      <option value="left">يسار</option>
                     </select>
                   </Field>
-                                  <ScrubField
-                  label="حجم الخط pt"
-                  value={round(Number(el.style.fontSize || 11) || 0)}
-                  min={5}
-                  max={40}
-                  step={0.5}
-                  onChange={(v) => updateStyle(el.id, { fontSize: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { fontSize: v })}
-                />
-                </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="خلفية الرأس">
+                      <input
+                        type="color"
+                        value={toColor(el.style.headerBg, theme.primary)}
+                        onChange={(e) =>
+                          updateStyle(el.id, { headerBg: e.target.value }, true)
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, { headerBg: el.style.headerBg })
+                        }
+                      />
+                    </Field>
+                    <Field label="لون الرأس">
+                      <input
+                        type="color"
+                        value={toColor(el.style.headerColor, "#ffffff")}
+                        onChange={(e) =>
+                          updateStyle(
+                            el.id,
+                            { headerColor: e.target.value },
+                            true,
+                          )
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, {
+                            headerColor: el.style.headerColor,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="خلفية الخلايا">
+                      <input
+                        type="color"
+                        value={toColor(el.style.tableBg, "#ffffff")}
+                        onChange={(e) =>
+                          updateStyle(el.id, { tableBg: e.target.value }, true)
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, { tableBg: el.style.tableBg })
+                        }
+                      />
+                    </Field>
+                    <Field label="لون الحدود">
+                      <input
+                        type="color"
+                        value={toColor(el.style.borderColor, "#bfc7d6")}
+                        onChange={(e) =>
+                          updateStyle(
+                            el.id,
+                            { borderColor: e.target.value },
+                            true,
+                          )
+                        }
+                        onBlur={() =>
+                          updateStyle(el.id, {
+                            borderColor: el.style.borderColor,
+                          })
+                        }
+                      />
+                    </Field>
+                    <Field label="تخطيط الصفوف">
+                      <select
+                        value={el.style.stripeBg ? "stripe" : "plain"}
+                        onChange={(e) =>
+                          updateStyle(el.id, {
+                            stripeBg:
+                              e.target.value === "stripe" ? "#f4f6fa" : "",
+                          })
+                        }
+                      >
+                        <option value="plain">بلون واحد</option>
+                        <option value="stripe">صفوف متبادلة</option>
+                      </select>
+                    </Field>
+                    <ScrubField
+                      label="حجم الخط pt"
+                      value={round(Number(el.style.fontSize || 11) || 0)}
+                      min={5}
+                      max={40}
+                      step={0.5}
+                      onChange={(v) =>
+                        updateStyle(el.id, { fontSize: v }, true)
+                      }
+                      onCommit={(v) => updateStyle(el.id, { fontSize: v })}
+                    />
+                  </div>
 
-                <TableTotals el={el} />
+                  <TableTotals el={el} />
 
-                <div>
+                  <div>
+                    <button
+                      type="button"
+                      onClick={() => setCellEditor((v) => !v)}
+                      aria-expanded={cellEditor}
+                      className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-line text-[12px] font-extrabold dark:border-white/10"
+                    >
+                      <Grid2x2 className="size-3.5" />
+                      {cellEditor
+                        ? "إغلاق محرر الخلايا"
+                        : "تحرير الخلايا كشبكة"}
+                    </button>
+                    {cellEditor && (
+                      <div className="mt-2 overflow-auto rounded-[8px] border border-line p-1 dark:border-white/10">
+                        <table className="border-collapse">
+                          <tbody>
+                            {parseTable(
+                              el.content,
+                              el.style.cols,
+                              el.style.rows,
+                            ).map((row, ri) => (
+                              <tr key={ri}>
+                                {row.map((cell, ci) => (
+                                  <td key={ci} className="p-0.5">
+                                    <input
+                                      value={cell}
+                                      aria-label={`صف ${ri + 1} عمود ${ci + 1}`}
+                                      onChange={(e) =>
+                                        setTableCell(
+                                          el,
+                                          ri,
+                                          ci,
+                                          e.target.value,
+                                          updateElement,
+                                        )
+                                      }
+                                      className="h-7 w-[74px] rounded-[4px] border border-line px-1 text-[11px] dark:border-white/10 dark:bg-white/5"
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  <Field label="بيانات الجدول (سطر لكل صف، | بين الخلايا)" full>
+                    <textarea
+                      rows={5}
+                      value={parseTable(
+                        el.content,
+                        el.style.cols,
+                        el.style.rows,
+                      )
+                        .map((r) => r.join(" | "))
+                        .join("\n")}
+                      onChange={(e) => {
+                        const data = e.target.value
+                          .split("\n")
+                          .map((line) => line.split("|").map((c) => c.trim()));
+                        updateElement(
+                          el.id,
+                          { content: JSON.stringify(data) },
+                          true,
+                        );
+                      }}
+                      onBlur={() =>
+                        updateElement(el.id, { content: el.content })
+                      }
+                    />
+                  </Field>
+
                   <button
                     type="button"
-                    onClick={() => setCellEditor((v) => !v)}
-                    aria-expanded={cellEditor}
-                    className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-line text-[12px] font-extrabold dark:border-white/10"
-                  >
-                    <Grid2x2 className="size-3.5" />
-                    {cellEditor ? "إغلاق محرر الخلايا" : "تحرير الخلايا كشبكة"}
-                  </button>
-                  {cellEditor && (
-                    <div className="mt-2 overflow-auto rounded-[8px] border border-line p-1 dark:border-white/10">
-                      <table className="border-collapse">
-                        <tbody>
-                          {parseTable(el.content, el.style.cols, el.style.rows).map((row, ri) => (
-                            <tr key={ri}>
-                              {row.map((cell, ci) => (
-                                <td key={ci} className="p-0.5">
-                                  <input
-                                    value={cell}
-                                    aria-label={`صف ${ri + 1} عمود ${ci + 1}`}
-                                    onChange={(e) => setTableCell(el, ri, ci, e.target.value, updateElement)}
-                                    className="h-7 w-[74px] rounded-[4px] border border-line px-1 text-[11px] dark:border-white/10 dark:bg-white/5"
-                                  />
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-
-                <Field label="بيانات الجدول (سطر لكل صف، | بين الخلايا)" full>
-                  <textarea
-                    rows={5}
-                    value={parseTable(el.content, el.style.cols, el.style.rows)
-                      .map((r) => r.join(" | "))
-                      .join("\n")}
-                    onChange={(e) => {
-                      const data = e.target.value
-                        .split("\n")
-                        .map((line) => line.split("|").map((c) => c.trim()));
-                      updateElement(el.id, { content: JSON.stringify(data) }, true);
+                    onClick={() => {
+                      const data = parseTable(
+                        el.content,
+                        el.style.cols,
+                        el.style.rows,
+                      );
+                      void copyTableCsv(data);
                     }}
+                    className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+                  >
+                    <Copy className="size-3.5" /> نسخ الجدول كـ CSV
+                  </button>
+                </>
+              )}
+
+              {["image", "logo"].includes(el.type) && (
+                <>
+                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                    قفل النسبة أثناء التحجيم
+                    <input
+                      type="checkbox"
+                      checked={el.style.aspectLock === true}
+                      onChange={(e) =>
+                        updateStyle(el.id, { aspectLock: e.target.checked })
+                      }
+                      className="accent-navy"
+                    />
+                  </label>
+                  <Field label="الملاءمة">
+                    <select
+                      value={el.style.objectFit || "cover"}
+                      onChange={(e) =>
+                        updateStyle(el.id, {
+                          objectFit: e.target.value as
+                            "cover" | "contain" | "fill",
+                        })
+                      }
+                    >
+                      <option value="cover">تعبئة مع قص (Cover)</option>
+                      <option value="contain">احتواء كامل (Contain)</option>
+                      <option value="fill">تمديد (Fill)</option>
+                    </select>
+                  </Field>
+                  <div className="grid grid-cols-2 gap-2">
+                    <ScrubField
+                      label="موضع أفقي %"
+                      value={round(Number(el.style.objectX ?? 50) || 0)}
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      onChange={(v) => updateStyle(el.id, { objectX: v }, true)}
+                      onCommit={(v) => updateStyle(el.id, { objectX: v })}
+                    />
+                    <ScrubField
+                      label="موضع رأسي %"
+                      value={round(Number(el.style.objectY ?? 50) || 0)}
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      onChange={(v) => updateStyle(el.id, { objectY: v }, true)}
+                      onCommit={(v) => updateStyle(el.id, { objectY: v })}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onReplaceImage(el.id)}
+                    className="h-9 rounded-[8px] bg-navy text-[12px] font-extrabold text-white"
+                  >
+                    استبدال الصورة
+                  </button>
+                </>
+              )}
+
+              {el.type === "qr" && (
+                <Field label="نص الرمز" full>
+                  <textarea
+                    rows={3}
+                    value={el.content || ""}
+                    onChange={(e) =>
+                      updateElement(el.id, { content: e.target.value }, true)
+                    }
                     onBlur={() => updateElement(el.id, { content: el.content })}
                   />
                 </Field>
+              )}
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const data = parseTable(el.content, el.style.cols, el.style.rows);
-                    void copyTableCsv(data);
-                  }}
-                  className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
-                >
-                  <Copy className="size-3.5" /> نسخ الجدول كـ CSV
-                </button>
-              </>
-            )}
-
-            {["image", "logo"].includes(el.type) && (
-              <>
-                <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
-                  قفل النسبة أثناء التحجيم
-                  <input
-                    type="checkbox"
-                    checked={el.style.aspectLock === true}
-                    onChange={(e) => updateStyle(el.id, { aspectLock: e.target.checked })}
-                    className="accent-navy"
-                  />
-                </label>
-                <Field label="الملاءمة">
-                  <select
-                    value={el.style.objectFit || "cover"}
-                    onChange={(e) =>
-                      updateStyle(el.id, { objectFit: e.target.value as "cover" | "contain" | "fill" })
-                    }
-                  >
-                    <option value="cover">تعبئة مع قص (Cover)</option>
-                    <option value="contain">احتواء كامل (Contain)</option>
-                    <option value="fill">تمديد (Fill)</option>
-                  </select>
-                </Field>
-                <div className="grid grid-cols-2 gap-2">
-                                  <ScrubField
-                  label="موضع أفقي %"
-                  value={round(Number(el.style.objectX ?? 50) || 0)}
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  onChange={(v) => updateStyle(el.id, { objectX: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { objectX: v })}
-                />
-                                  <ScrubField
-                  label="موضع رأسي %"
-                  value={round(Number(el.style.objectY ?? 50) || 0)}
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  onChange={(v) => updateStyle(el.id, { objectY: v }, true)}
-                  onCommit={(v) => updateStyle(el.id, { objectY: v })}
-                />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onReplaceImage(el.id)}
-                  className="h-9 rounded-[8px] bg-navy text-[12px] font-extrabold text-white"
-                >
-                  استبدال الصورة
-                </button>
-              </>
-            )}
-
-            {el.type === "qr" && (
-              <Field label="نص الرمز" full>
-                <textarea
-                  rows={3}
-                  value={el.content || ""}
-                  onChange={(e) => updateElement(el.id, { content: e.target.value }, true)}
-                  onBlur={() => updateElement(el.id, { content: el.content })}
-                />
-              </Field>
-            )}
-
-            {el.type === "svg" && (
-              <>
-                {/*
-                 * SVG stays vector in the editor. Its markup is chosen from the
-                 * device (Shapes → إضافة SVG من الجهاز) and sanitised on render
-                 * — there is intentionally no code editor here. Fill and stroke
-                 * are INDEPENDENT overrides applied onto the artwork
-                 * (applySvgColors); an unset channel keeps the file's own
-                 * colors, so recoloring the fill never rewrites outlines.
-                 */}
-                <Field label="لون التعبئة (Fill)" full>
-                  <ColorRow
-                    value={el.style.svgFill || ""}
-                    fallback={el.style.color || "#172033"}
-                    onChange={(v) => updateStyle(el.id, { svgFill: v }, true)}
-                    onCommit={() => updateStyle(el.id, { svgFill: el.style.svgFill })}
-                  />
-                </Field>
-                <Field label="لون الإطار (Stroke)" full>
-                  <ColorRow
-                    value={el.style.svgStroke || ""}
-                    fallback="#c9a86a"
-                    onChange={(v) => updateStyle(el.id, { svgStroke: v }, true)}
-                    onCommit={() => updateStyle(el.id, { svgStroke: el.style.svgStroke })}
-                  />
-                </Field>
-                {/*
-                  * An override field: empty means «كما في الملف» (keep the SVG's
-                  * own stroke width), which is why it uses the scrubber's
-                  * `allowUnset` mode instead of a bare number input.
-                  */}
-                <Field label="سماكة الإطار">
-                  <div className="grid gap-1">
-                    <ScrubInput
-                      label="سماكة إطار الرسم — فارغ يعني كما في الملف"
-                      value={el.style.svgStrokeWidth}
-                      allowUnset
-                      min={0}
-                      max={24}
-                      step={0.1}
-                      precision={2}
-                      suffix="مم"
-                      placeholder="كما في الملف"
-                      onChange={(v) => updateStyle(el.id, { svgStrokeWidth: v }, true)}
-                      onCommit={() => updateStyle(el.id, { svgStrokeWidth: el.style.svgStrokeWidth })}
-                      onClear={() => updateStyle(el.id, { svgStrokeWidth: undefined })}
+              {el.type === "svg" && (
+                <>
+                  {/*
+                   * SVG stays vector in the editor. Its markup is chosen from the
+                   * device (Shapes → إضافة SVG من الجهاز) and sanitised on render
+                   * — there is intentionally no code editor here. Fill and stroke
+                   * are INDEPENDENT overrides applied onto the artwork
+                   * (applySvgColors); an unset channel keeps the file's own
+                   * colors, so recoloring the fill never rewrites outlines.
+                   */}
+                  <Field label="لون التعبئة (Fill)" full>
+                    <ColorRow
+                      value={el.style.svgFill || ""}
+                      fallback={el.style.color || "#172033"}
+                      onChange={(v) => updateStyle(el.id, { svgFill: v }, true)}
+                      onCommit={() =>
+                        updateStyle(el.id, { svgFill: el.style.svgFill })
+                      }
                     />
-                    {el.style.svgStrokeWidth !== undefined && (
-                      <button
-                        type="button"
-                        onClick={() => updateStyle(el.id, { svgStrokeWidth: undefined })}
-                        className="h-7 rounded-[6px] border border-line text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
-                      >
-                        كما في الملف (بدون تثبيت)
-                      </button>
-                    )}
-                  </div>
-                </Field>
-                <Field label="الملاءمة">
-                  <select
-                    value={el.style.objectFit || "contain"}
-                    onChange={(e) =>
-                      updateStyle(el.id, { objectFit: e.target.value as "cover" | "contain" | "fill" })
-                    }
-                  >
-                    <option value="contain">احتواء كامل (Contain)</option>
-                    <option value="cover">تعبئة مع قص (Cover)</option>
-                    <option value="fill">تمديد (Fill)</option>
-                  </select>
-                </Field>
-                <p className="text-[10px] leading-4 text-muted">
-                  اترك اللون فارغًا ليبقى لون الملف الأصلي كما هو. التعبئة والإطار مستقلان تمامًا.
-                </p>
-              </>
-            )}
+                  </Field>
+                  <Field label="لون الإطار (Stroke)" full>
+                    <ColorRow
+                      value={el.style.svgStroke || ""}
+                      fallback="#c9a86a"
+                      onChange={(v) =>
+                        updateStyle(el.id, { svgStroke: v }, true)
+                      }
+                      onCommit={() =>
+                        updateStyle(el.id, { svgStroke: el.style.svgStroke })
+                      }
+                    />
+                  </Field>
+                  {/*
+                   * An override field: empty means «كما في الملف» (keep the SVG's
+                   * own stroke width), which is why it uses the scrubber's
+                   * `allowUnset` mode instead of a bare number input.
+                   */}
+                  <Field label="سماكة الإطار">
+                    <div className="grid gap-1">
+                      <ScrubInput
+                        label="سماكة إطار الرسم — فارغ يعني كما في الملف"
+                        value={el.style.svgStrokeWidth}
+                        allowUnset
+                        min={0}
+                        max={24}
+                        step={0.1}
+                        precision={2}
+                        suffix="مم"
+                        placeholder="كما في الملف"
+                        onChange={(v) =>
+                          updateStyle(el.id, { svgStrokeWidth: v }, true)
+                        }
+                        onCommit={() =>
+                          updateStyle(el.id, {
+                            svgStrokeWidth: el.style.svgStrokeWidth,
+                          })
+                        }
+                        onClear={() =>
+                          updateStyle(el.id, { svgStrokeWidth: undefined })
+                        }
+                      />
+                      {el.style.svgStrokeWidth !== undefined && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateStyle(el.id, { svgStrokeWidth: undefined })
+                          }
+                          className="h-7 rounded-[6px] border border-line text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
+                        >
+                          كما في الملف (بدون تثبيت)
+                        </button>
+                      )}
+                    </div>
+                  </Field>
+                  <Field label="الملاءمة">
+                    <select
+                      value={el.style.objectFit || "contain"}
+                      onChange={(e) =>
+                        updateStyle(el.id, {
+                          objectFit: e.target.value as
+                            "cover" | "contain" | "fill",
+                        })
+                      }
+                    >
+                      <option value="contain">احتواء كامل (Contain)</option>
+                      <option value="cover">تعبئة مع قص (Cover)</option>
+                      <option value="fill">تمديد (Fill)</option>
+                    </select>
+                  </Field>
+                  <p className="text-[10px] leading-4 text-muted">
+                    اترك اللون فارغًا ليبقى لون الملف الأصلي كما هو. التعبئة
+                    والإطار مستقلان تمامًا.
+                  </p>
+                </>
+              )}
 
-            <Field label="الظل">
-              <select
-                value={shadowId(el.style.shadow)}
-                onChange={(e) => {
-                  const found = SHADOWS.find((s) => s.id === e.target.value);
-                  updateStyle(el.id, { shadow: found?.value || "" });
-                }}
-              >
-                {SHADOWS.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
+              <Field label="الظل">
+                <select
+                  value={shadowId(el.style.shadow)}
+                  onChange={(e) => {
+                    const found = SHADOWS.find((s) => s.id === e.target.value);
+                    updateStyle(el.id, { shadow: found?.value || "" });
+                  }}
+                >
+                  {SHADOWS.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </AccordionSection>
 
             {/*
-              * Phase 2 — «تصدير»: the export actions that belong to the element
-              * being edited, one press each. Every button opens the SAME export
-              * dialog the toolbar uses (no second export path), just with the
-              * format already chosen.
-              */}
+             * Phase 2 — «تصدير»: the export actions that belong to the element
+             * being edited, one press each. Every button opens the SAME export
+             * dialog the toolbar uses (no second export path), just with the
+             * format already chosen.
+             */}
             <AccordionSection
               title="تصدير"
               id="export"
@@ -1390,23 +1823,60 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
               onToggle={() => accordions.toggle("export")}
             >
               <div className="grid grid-cols-2 gap-1.5">
-                <Action onClick={() => openExport("pdf")} icon={Download} label="PDF" />
-                <Action onClick={() => openExport("png")} icon={Download} label="صورة PNG" />
-                <Action onClick={() => openExport("docx")} icon={Download} label="Word" />
-                <Action onClick={() => openExport("pptx")} icon={Download} label="PowerPoint" />
+                <Action
+                  onClick={() => openExport("pdf")}
+                  icon={Download}
+                  label="PDF"
+                />
+                <Action
+                  onClick={() => openExport("png")}
+                  icon={Download}
+                  label="صورة PNG"
+                />
+                <Action
+                  onClick={() => openExport("docx")}
+                  icon={Download}
+                  label="Word"
+                />
+                <Action
+                  onClick={() => openExport("pptx")}
+                  icon={Download}
+                  label="PowerPoint"
+                />
               </div>
-              <Action onClick={() => void saveToLibrary(el)} icon={ImagePlus} label="حفظ العنصر في المكتبة" />
+              <Action
+                onClick={() => void saveToLibrary(el)}
+                icon={ImagePlus}
+                label="حفظ العنصر في المكتبة"
+              />
               <p className="text-[10px] leading-5 text-muted">
-                يُصدَّر المشروع كاملاً بالصيغة المختارة؛ الصفحة الحالية متاحة داخل نافذة التصدير عبر خيار «الصفحة الحالية».
+                يُصدَّر المشروع كاملاً بالصيغة المختارة؛ الصفحة الحالية متاحة
+                داخل نافذة التصدير عبر خيار «الصفحة الحالية».
               </p>
             </AccordionSection>
 
             <div className="grid grid-cols-2 gap-1.5">
-              <Action onClick={() => bring("forward")} icon={ArrowUp} label="تقديم" />
-              <Action onClick={() => bring("back")} icon={ArrowDown} label="تأخير" />
-              <Action onClick={duplicateSelected} icon={Copy} label="نسخ (⌘D)" />
+              <Action
+                onClick={() => bring("forward")}
+                icon={ArrowUp}
+                label="تقديم"
+              />
+              <Action
+                onClick={() => bring("back")}
+                icon={ArrowDown}
+                label="تأخير"
+              />
+              <Action
+                onClick={duplicateSelected}
+                icon={Copy}
+                label="نسخ (⌘D)"
+              />
               <Action onClick={copySelected} icon={Copy} label="قص للحافظة" />
-              <Action onClick={toggleLock} icon={el.locked ? Unlock : Lock} label={el.locked ? "فتح القفل" : "قفل"} />
+              <Action
+                onClick={toggleLock}
+                icon={el.locked ? Unlock : Lock}
+                label={el.locked ? "فتح القفل" : "قفل"}
+              />
               <Action
                 onClick={toggleHidden}
                 icon={el.hidden ? Eye : EyeOff}
@@ -1418,7 +1888,12 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
               icon={ImagePlus}
               label="حفظ في المكتبة للرجوع إليه"
             />
-            <Action onClick={deleteSelected} icon={Trash2} label="حذف العنصر" danger />
+            <Action
+              onClick={deleteSelected}
+              icon={Trash2}
+              label="حذف العنصر"
+              danger
+            />
           </div>
         )}
       </div>
@@ -1457,7 +1932,12 @@ function setTableSize(
   next: { cols?: number; rows?: number },
   updateElement: (id: string, patch: Partial<CanvasEl>, live?: boolean) => void,
 ) {
-  resizeTable(el, next.cols ?? el.style.cols ?? 3, next.rows ?? el.style.rows ?? 4, updateElement);
+  resizeTable(
+    el,
+    next.cols ?? el.style.cols ?? 3,
+    next.rows ?? el.style.rows ?? 4,
+    updateElement,
+  );
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -1475,7 +1955,8 @@ function TextFitStatus({ el }: { el: CanvasEl }) {
   if (prepared.overflow) {
     return (
       <p className="rounded-[6px] border border-gold/50 bg-gold/10 px-2 py-1.5 text-[10px] leading-4 font-bold text-navy dark:text-gold-2">
-        تم تصغير الخط تلقائياً من {round2(base)}pt إلى {round2(prepared.fontSize)}pt ليتّسع النص.
+        تم تصغير الخط تلقائياً من {round2(base)}pt إلى{" "}
+        {round2(prepared.fontSize)}pt ليتّسع النص.
       </p>
     );
   }
@@ -1499,28 +1980,41 @@ async function copyTableCsv(data: string[][]) {
     // Clipboard permission can be denied; fall back to a download so the data
     // is still retrievable rather than silently lost. `toCsv` already includes
     // the UTF-8 BOM that makes Excel read Arabic correctly.
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const url = URL.createObjectURL(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+    );
     const a = document.createElement("a");
     a.href = url;
     a.download = "table.csv";
     a.click();
     URL.revokeObjectURL(url);
-    toast.message("تم تنزيل الجدول بصيغة CSV", { description: "تعذّر الوصول إلى الحافظة." });
+    toast.message("تم تنزيل الجدول بصيغة CSV", {
+      description: "تعذّر الوصول إلى الحافظة.",
+    });
   }
 }
 
 /** Read-only column sums, so the author can verify figures before typing them. */
 function TableTotals({ el }: { el: CanvasEl }) {
-  const totals = columnTotals(parseTable(el.content, el.style.cols, el.style.rows)).filter((t) => t.numeric);
+  const totals = columnTotals(
+    parseTable(el.content, el.style.cols, el.style.rows),
+  ).filter((t) => t.numeric);
   if (!totals.length) return null;
   return (
     <div className="rounded-[8px] border border-line p-2 dark:border-white/10">
-      <h4 className="mb-1.5 text-[10px] font-extrabold text-muted">مجموع الأعمدة الرقمية</h4>
+      <h4 className="mb-1.5 text-[10px] font-extrabold text-muted">
+        مجموع الأعمدة الرقمية
+      </h4>
       <ul className="grid gap-1">
         {totals.map((t) => (
-          <li key={t.col} className="flex items-center justify-between text-[11px]">
+          <li
+            key={t.col}
+            className="flex items-center justify-between text-[11px]"
+          >
             <span className="text-muted">العمود {t.col + 1}</span>
-            <span className="font-extrabold tabular-nums">{round2(t.total)}</span>
+            <span className="font-extrabold tabular-nums">
+              {round2(t.total)}
+            </span>
           </li>
         ))}
       </ul>
@@ -1609,7 +2103,12 @@ function LayerRow({
           event.preventDefault();
           event.stopPropagation();
           if (!selected) select(layer.id);
-          openContextMenu({ x: event.clientX, y: event.clientY, targetId: layer.id, source: "layers" });
+          openContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            targetId: layer.id,
+            source: "layers",
+          });
         }}
         className={cn(
           "layer-row relative flex items-center gap-1.5 rounded-[8px] border px-2 py-1.5",
@@ -1642,50 +2141,78 @@ function LayerRow({
           />
         ) : (
           <>
-          {/* Folder chevron: the tree view's one expand/collapse control. */}
-          {isFolder ? (
+            {/* Folder chevron: the tree view's one expand/collapse control. */}
+            {isFolder ? (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                aria-expanded={expanded}
+                aria-label={
+                  expanded
+                    ? `طي ${layer.name || TYPE_NAME[layer.type]}`
+                    : `توسيع ${layer.name || TYPE_NAME[layer.type]}`
+                }
+                title={expanded ? "طي المجموعة" : "توسيع المجموعة"}
+                className="grid size-7 shrink-0 place-items-center rounded-[6px] text-muted transition hover:bg-line-2 dark:hover:bg-white/5"
+              >
+                <ChevronDown
+                  className={cn(
+                    "size-3.5 transition-transform",
+                    !expanded && "-rotate-90",
+                  )}
+                />
+              </button>
+            ) : (
+              <span className="size-7 shrink-0" aria-hidden />
+            )}
+            {depth === 0 && onDragStart && (
+              <button
+                type="button"
+                onPointerDown={onDragStart}
+                title="اسحب لإعادة ترتيب الطبقة"
+                aria-label={`إعادة ترتيب ${layer.name || TYPE_NAME[layer.type]}`}
+                className="drag-handle grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-muted dark:border-white/10"
+              >
+                <GripVertical className="size-4" />
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setExpanded((v) => !v)}
-              aria-expanded={expanded}
-              aria-label={expanded ? `طي ${layer.name || TYPE_NAME[layer.type]}` : `توسيع ${layer.name || TYPE_NAME[layer.type]}`}
-              title={expanded ? "طي المجموعة" : "توسيع المجموعة"}
-              className="grid size-7 shrink-0 place-items-center rounded-[6px] text-muted transition hover:bg-line-2 dark:hover:bg-white/5"
+              onClick={(e) =>
+                onRowClick
+                  ? onRowClick(e)
+                  : e.shiftKey
+                    ? toggleSelect(layer.id)
+                    : select(layer.id)
+              }
+              onDoubleClick={() => {
+                // Double-clicking a group row steps into it, mirroring the canvas.
+                if (layer.type === "group") enterGroup(layer.id);
+                else setRenaming(true);
+              }}
+              className="flex min-w-0 flex-1 items-center justify-between text-right text-[12px]"
+              title="نقرة لتحديد · Shift+نقرة لتحديد كل ما بين صفّين · ⌘/Ctrl+نقرة للإضافة · نقرة مزدوجة لإعادة التسمية · نقرة يمنى للقائمة السياقية"
             >
-              <ChevronDown className={cn("size-3.5 transition-transform", !expanded && "-rotate-90")} />
+              <span className="truncate font-bold">
+                {layer.type === "group" && (
+                  <span className="me-1 text-gold-2">▸</span>
+                )}
+                {layer.name || TYPE_NAME[layer.type]}
+              </span>
+              <span className="flex items-center gap-1 pr-1 text-muted">
+                {layer.locked && <Lock className="size-3.5" />}
+                {layer.hidden && <EyeOff className="size-3.5" />}
+                {layer.linkId && <Link className="size-3.5 text-gold-2" />}
+                {/* The mask relationship is visible in the tree, not only on canvas. */}
+                {layer.clippedBy && (
+                  <Scissors
+                    className="size-3.5 text-gold-2"
+                    aria-label="مقصوص بقناع"
+                  />
+                )}
+                <span className="text-[10px] tabular-nums">{layer.z}</span>
+              </span>
             </button>
-          ) : (
-            <span className="size-7 shrink-0" aria-hidden />
-          )}
-          {depth === 0 && onDragStart && (
-            <button type="button" onPointerDown={onDragStart} title="اسحب لإعادة ترتيب الطبقة" aria-label={`إعادة ترتيب ${layer.name || TYPE_NAME[layer.type]}`} className="drag-handle grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-muted dark:border-white/10">
-              <GripVertical className="size-4" />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={(e) => (onRowClick ? onRowClick(e) : e.shiftKey ? toggleSelect(layer.id) : select(layer.id))}
-            onDoubleClick={() => {
-              // Double-clicking a group row steps into it, mirroring the canvas.
-              if (layer.type === "group") enterGroup(layer.id);
-              else setRenaming(true);
-            }}
-            className="flex min-w-0 flex-1 items-center justify-between text-right text-[12px]"
-            title="نقرة لتحديد · Shift+نقرة لتحديد كل ما بين صفّين · ⌘/Ctrl+نقرة للإضافة · نقرة مزدوجة لإعادة التسمية · نقرة يمنى للقائمة السياقية"
-          >
-            <span className="truncate font-bold">
-              {layer.type === "group" && <span className="me-1 text-gold-2">▸</span>}
-              {layer.name || TYPE_NAME[layer.type]}
-            </span>
-            <span className="flex items-center gap-1 pr-1 text-muted">
-              {layer.locked && <Lock className="size-3.5" />}
-              {layer.hidden && <EyeOff className="size-3.5" />}
-              {layer.linkId && <Link className="size-3.5 text-gold-2" />}
-              {/* The mask relationship is visible in the tree, not only on canvas. */}
-              {layer.clippedBy && <Scissors className="size-3.5 text-gold-2" aria-label="مقصوص بقناع" />}
-              <span className="text-[10px] tabular-nums">{layer.z}</span>
-            </span>
-          </button>
           </>
         )}
         {/* Move up/down: wired to `moveLayer`, which swaps real array order and
@@ -1710,27 +2237,43 @@ function LayerRow({
           <ArrowDown className="size-3.5" />
         </button>
         {/*
-          * The eye is the FOLDER switch: hiding a group also hides every nested
-          * child (the store cascades the flag), which is what makes "hide this
-          * folder" mean what the author expects.
-          */}
+         * The eye is the FOLDER switch: hiding a group also hides every nested
+         * child (the store cascades the flag), which is what makes "hide this
+         * folder" mean what the author expects.
+         */}
         <button
           type="button"
           title={layer.hidden ? "إظهار" : "إخفاء"}
-          aria-label={layer.hidden ? `إظهار ${layer.name || TYPE_NAME[layer.type]}` : `إخفاء ${layer.name || TYPE_NAME[layer.type]}`}
+          aria-label={
+            layer.hidden
+              ? `إظهار ${layer.name || TYPE_NAME[layer.type]}`
+              : `إخفاء ${layer.name || TYPE_NAME[layer.type]}`
+          }
           onClick={() => setElementFlag(layer.id, "hidden")}
           className="layer-eye-toggle shrink-0 touch-manipulation border border-line dark:border-white/10"
         >
-          {layer.hidden || hiddenByAncestor ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+          {layer.hidden || hiddenByAncestor ? (
+            <Eye className="size-3.5" />
+          ) : (
+            <EyeOff className="size-3.5" />
+          )}
         </button>
         <button
           type="button"
           title={layer.locked ? "فتح القفل" : "قفل"}
-          aria-label={layer.locked ? `فتح قفل ${layer.name || TYPE_NAME[layer.type]}` : `قفل ${layer.name || TYPE_NAME[layer.type]}`}
+          aria-label={
+            layer.locked
+              ? `فتح قفل ${layer.name || TYPE_NAME[layer.type]}`
+              : `قفل ${layer.name || TYPE_NAME[layer.type]}`
+          }
           onClick={() => setElementFlag(layer.id, "locked")}
           className="grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
         >
-          {layer.locked ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />}
+          {layer.locked ? (
+            <Unlock className="size-3.5" />
+          ) : (
+            <Lock className="size-3.5" />
+          )}
         </button>
       </div>
       {isFolder && expanded && children.length > 0 && (
@@ -1835,7 +2378,15 @@ function ColorRow({
 }) {
   const themeId = useEditor((s) => s.theme);
   const theme = THEMES[themeId];
-  const saved = [theme.primary, theme.accent, theme.ink, "#ffffff", "#111722", "#e11d48", "#2563eb"];
+  const saved = [
+    theme.primary,
+    theme.accent,
+    theme.ink,
+    "#ffffff",
+    "#111722",
+    "#e11d48",
+    "#2563eb",
+  ];
   return (
     <div className="grid gap-1">
       <div className="flex items-center gap-1.5">
@@ -1885,7 +2436,9 @@ function ColorRow({
             style={{ background: c }}
             className={cn(
               "size-5 rounded-[5px] border",
-              value.toLowerCase() === c.toLowerCase() ? "border-navy ring-2 ring-navy/40" : "border-line dark:border-white/20",
+              value.toLowerCase() === c.toLowerCase()
+                ? "border-navy ring-2 ring-navy/40"
+                : "border-line dark:border-white/20",
             )}
           />
         ))}
@@ -1894,9 +2447,22 @@ function ColorRow({
   );
 }
 
-function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
+function Field({
+  label,
+  children,
+  full,
+}: {
+  label: string;
+  children: React.ReactNode;
+  full?: boolean;
+}) {
   return (
-    <label className={cn("editor-property-field grid gap-1 text-[11px] font-extrabold text-muted", full && "col-span-2")}>
+    <label
+      className={cn(
+        "editor-property-field grid gap-1 text-[11px] font-extrabold text-muted",
+        full && "col-span-2",
+      )}
+    >
       {label}
       <div className="field-control [&_input]:h-9 [&_input]:w-full [&_input]:rounded-[8px] [&_input]:border [&_input]:border-line [&_input]:bg-white [&_input]:px-2.5 [&_input]:text-[13px] [&_input]:font-semibold [&_input]:text-ink dark:[&_input]:border-white/10 dark:[&_input]:bg-white/5 dark:[&_input]:text-white [&_input[type=color]]:p-1 [&_input[type=range]]:h-9 [&_select]:h-9 [&_select]:w-full [&_select]:rounded-[8px] [&_select]:border [&_select]:border-line [&_select]:bg-white [&_select]:px-2.5 [&_select]:text-[13px] dark:[&_select]:border-white/10 dark:[&_select]:bg-white/5 dark:[&_select]:text-white [&_textarea]:min-h-[80px] [&_textarea]:w-full [&_textarea]:rounded-[8px] [&_textarea]:border [&_textarea]:border-line [&_textarea]:bg-white [&_textarea]:p-2.5 [&_textarea]:text-[13px] [&_textarea]:leading-6 dark:[&_textarea]:border-white/10 dark:[&_textarea]:bg-white/5 dark:[&_textarea]:text-white">
         {children}
@@ -1934,7 +2500,8 @@ function Action({
 }
 
 function toColor(v: string | undefined, fallback: string) {
-  if (!v || v === "transparent" || v.startsWith("rgba") || v.startsWith("hsl")) return fallback;
+  if (!v || v === "transparent" || v.startsWith("rgba") || v.startsWith("hsl"))
+    return fallback;
   return v;
 }
 

@@ -919,14 +919,49 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .rotate-handle {
   width: var(--handle-size);
   height: var(--handle-size);
-  top: calc(var(--rotate-gap) * -1);
-  left: calc(50% - var(--handle-size) / 2);
   border-radius: 50%;
   cursor: grab;
 }
 
+/*
+ * Step 7 — a grip on every corner. Each sits on the diagonal OUTSIDE the corner
+ * it controls, so it is reachable no matter how small the element is and it
+ * never covers the resize dots.
+ */
+.rotate-handle.nw { top: calc(var(--rotate-gap) * -1); left: calc(var(--rotate-gap) * -1); }
+.rotate-handle.ne { top: calc(var(--rotate-gap) * -1); right: calc(var(--rotate-gap) * -1); }
+.rotate-handle.se { bottom: calc(var(--rotate-gap) * -1); right: calc(var(--rotate-gap) * -1); }
+.rotate-handle.sw { bottom: calc(var(--rotate-gap) * -1); left: calc(var(--rotate-gap) * -1); }
+
+.rotate-handle::after {
+  content: "";
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  background: var(--sel-color, #1d4ed8);
+}
+
 .rotate-handle:active {
   cursor: grabbing;
+}
+
+/* Live angle readout while dragging a rotation grip. */
+.rotation-hint {
+  position: fixed;
+  z-index: var(--z-bubble);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--editor-border, #c9cacc);
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #172033);
+  font-size: 10px;
+  font-weight: 800;
+  box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.45);
+  pointer-events: none;
+  translate: 14px 14px;
 }
 
 @media (pointer: coarse) {
@@ -1839,4 +1874,53 @@ summary,
 .editor-ui .no-select {
   -webkit-user-select: none;
   user-select: none;
+}
+
+/*
+ * STEP 7 — orientation controls (rotation helpers + mirrors).
+ *
+ * Small, dense, wrap-friendly buttons: the properties panel is often narrow, so
+ * these must reflow onto a second line rather than overflow. Every one is at
+ * least 32px tall for touch and the active mirror is unmistakable in both
+ * themes (`aria-pressed` drives the fill, not a hover-only style).
+ */
+.property-grid-span {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.editor-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--editor-border, #c9cacc);
+  border-radius: 8px;
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #172033);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.editor-mini-btn:hover:not(:disabled) {
+  border-color: var(--primary-accent);
+  color: var(--primary-accent);
+}
+
+.editor-mini-btn.is-active,
+.editor-mini-btn[aria-pressed="true"] {
+  border-color: var(--primary-accent);
+  background: var(--library-active-bg);
+  color: var(--primary-accent);
+}
+
+.editor-mini-btn:focus-visible {
+  outline: 2px solid var(--primary-accent);
+  outline-offset: 2px;
 }

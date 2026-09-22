@@ -7,6 +7,8 @@ import {
   AlignRight,
   Bold,
   Copy,
+  FlipHorizontal2,
+  FlipVertical2,
   Italic,
   Layers,
   MoveDown,
@@ -60,6 +62,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const bring = useEditor((s) => s.bring);
   const toggleBubble = useEditor((s) => s.toggleBubble);
+  const flipSelected = useEditor((s) => s.flipSelected);
 
   /**
    * Place the toolbar 16px above the element, flipping below when there is no
@@ -392,6 +395,26 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
           onClick={duplicateSelected}
         >
           <Copy className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          className={cn("floating-toolbar-btn", el.style?.flipX && "is-active")}
+          aria-pressed={el.style?.flipX === true}
+          title="قلب أفقي"
+          aria-label="قلب أفقي"
+          onClick={() => flipSelected("x")}
+        >
+          <FlipHorizontal2 className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          className={cn("floating-toolbar-btn", el.style?.flipY && "is-active")}
+          aria-pressed={el.style?.flipY === true}
+          title="قلب رأسي"
+          aria-label="قلب رأسي"
+          onClick={() => flipSelected("y")}
+        >
+          <FlipVertical2 className="size-3.5" />
         </button>
         <button
           type="button"
