@@ -2024,6 +2024,23 @@ body.is-resizing-rail {
   background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
 }
 
+/*
+ * Saved-asset card in multi-select (batch move). `.is-selected` sits on the
+ * AssetLibrary card itself, so it is scoped `.asset-library` to outrank the
+ * per-card Tailwind ring/bg utilities (both compile to single-class
+ * selectors) with the same navy family the folder chips use. `pointer-events`
+ * stays explicitly live: selection must never make the card inert to
+ * click-to-insert or drag.
+ */
+.asset-library .is-selected {
+  border-color: var(--color-navy, #006c35);
+  background: color-mix(in srgb, var(--color-navy-2, #00874a) 8%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-navy, #006c35) 45%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--color-navy-2, #00874a) 16%, transparent);
+  pointer-events: auto;
+}
+
 /* Inline SVG icons inside a card follow the accent so they stay legible. */
 .editor-ui.editor-dark .library-asset-card svg,
 .editor-ui.editor-dark .library-item svg {

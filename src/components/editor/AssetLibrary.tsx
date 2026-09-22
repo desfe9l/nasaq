@@ -47,6 +47,7 @@ export function AssetLibrary() {
   const renameAssetFolder = useEditor((s) => s.renameAssetFolder);
   const deleteAssetFolder = useEditor((s) => s.deleteAssetFolder);
   const moveAssetsToFolder = useEditor((s) => s.moveAssetsToFolder);
+  const importLibraryPlan = useEditor((s) => s.importLibraryPlan);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const libraryImportRef = useRef<HTMLInputElement>(null);
@@ -113,9 +114,14 @@ export function AssetLibrary() {
     a.click();
     a.remove();
   };
-  const visibleAssets = assets.filter(
-    (asset) => (asset.folderId || null) === folderId,
-  );
+  // «الكل» shows the whole shelf (root + every folder); a folder chip narrows
+  // to that folder's id only. The old filter demanded `folderId === null`
+  // under «الكل», so anything classified — i.e. every normal import — vanished
+  // from the default view.
+  const visibleAssets =
+    folderId === null
+      ? assets
+      : assets.filter((asset) => (asset.folderId ?? null) === folderId);
   const currentFolder = folders.find((folder) => folder.id === folderId);
 
   /** Fit a saved asset into a sane box on the page (never upscale past 1:1). */
@@ -215,25 +221,21 @@ export function AssetLibrary() {
     try {
       const raw = JSON.parse(await file.text());
       const plan = planLibraryImport(raw, { folders, assets });
-      for (const folder of plan.folders) {
-        await createAssetFolder(folder.name);
+      // One atomic store update: the plan's folders land under the exact ids
+      // its assets reference, and folders + assets re-render together — the
+      // shelf shows the whole import in a single commit.
+      const { added, failed } = await importLibraryPlan(plan);
+      if (failed && !added) {
+        toast.error("تعذّر حفظ العناصر — قد تكون مساحة التخزين ممتلئة.");
+      } else {
+        toast.success(
+          added
+            ? `أُضيف ${added} عنصر${plan.skipped ? ` — تخطّي ${plan.skipped} مكرر` : ""}${failed ? ` — تعذّر ${failed}` : ""}`
+            : plan.skipped
+              ? "كل العناصر موجودة مسبقًا — لا شيء جديد"
+              : "الملف فارغ — لا عناصر لاستيرادها",
+        );
       }
-      for (const asset of plan.assets) {
-        await addAsset({
-          name: asset.name,
-          src: asset.src,
-          w: asset.w,
-          h: asset.h,
-          folderId: asset.folderId,
-        });
-      }
-      toast.success(
-        plan.assets.length
-          ? `أُضيف ${plan.assets.length} عنصر${plan.skipped ? ` — تخطّي ${plan.skipped} مكرر` : ""}`
-          : plan.skipped
-            ? "كل العناصر موجودة مسبقًا — لا شيء جديد"
-            : "الملف فارغ — لا عناصر لاستيرادها",
-      );
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "تعذر قراءة ملف المكتبة.",
@@ -504,10 +506,18 @@ export function AssetLibrary() {
                 event.preventDefault();
                 openMenu(event, asset);
               }}
+              onClick={() => {
+                // Whole card = insert (same addToCanvas path every other
+                // library card uses). Control buttons stop their own
+                // propagation; the rename editor is guarded by editingId.
+                if (editingId === asset.id) return;
+                place(asset);
+              }}
               className={cn(
                 "group relative rounded-[8px] border bg-white/60 p-1.5 dark:bg-white/5",
+                editingId !== asset.id && "cursor-pointer",
                 selectedAssetIds.includes(asset.id)
-                  ? "border-navy bg-navy/5 ring-1 ring-navy/30"
+                  ? "is-selected border-navy bg-navy/5 ring-1 ring-navy/30"
                   : "border-line dark:border-white/10",
               )}
             >
@@ -518,6 +528,7 @@ export function AssetLibrary() {
                   toggleAssetSelect(asset.id);
                 }}
                 aria-label={`تحديد ${asset.name}`}
+                aria-pressed={selectedAssetIds.includes(asset.id)}
                 className={cn(
                   "absolute right-2 top-2 z-[2] grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90",
                   selectedAssetIds.includes(asset.id)
@@ -576,12 +587,10 @@ export function AssetLibrary() {
                   <button
                     type="button"
                     /*
-                     * Plain click inserts into the active artboard — the gesture
-                     * every other library card uses. The full command list (folder,
-                     * preview, rename, delete) stays on the ⋯ button above and on
-                     * right-click, so nothing became unreachable.
+                     * No own onClick: the click (pointer *and* keyboard Enter
+                     * on this focused button) bubbles to the card-level
+                     * handler above — one insert path, no double insert.
                      */
-                    onClick={() => place(asset)}
                     title={`إدراج "${asset.name}" في مساحة العمل — اسحبه على اللوحة لوضع مخصص`}
                     className={cn(
                       "library-hit grid w-full place-items-center overflow-hidden rounded-[6px]",

@@ -16,8 +16,9 @@
  * that could execute script (see images.ts) is dropped, not sanitised.
  */
 
-import { safeImageSrc } from "./images";
+import { safeImageSrc } from "./images.ts";
 import type { Asset, AssetFolder } from "./storage";
+import { DEFAULT_FOLDER_ID, normalizeNasaqLibrary } from "./library-manager.ts";
 
 export const LIBRARY_KIND = "nasaq-library";
 export const LIBRARY_VERSION = 1;
@@ -88,7 +89,11 @@ export function downloadLibraryFile(input: LibraryExportInput): string {
 
 export interface LibraryImportPlan {
   folders: Array<Pick<AssetFolder, "id" | "name" | "createdAt">>;
-  /** Entries to create; ids are fresh, folderIds point into `folders` above. */
+  /**
+   * Entries to create; ids are fresh. Every `folderId` resolves to a folder
+   * the store will hold after the plan applies — an id from `folders` above
+   * or an id of a folder that already exists (matched by name). Never null.
+   */
   assets: Array<Omit<Asset, "id" | "addedAt"> & { addedAt?: number }>;
   /** Entries skipped because an identical one already exists. */
   skipped: number;
@@ -98,8 +103,10 @@ export interface LibraryImportPlan {
  * Validate + plan an import against the existing library.
  *
  * Throws with an Arabic message when the file is not a nasaq-library document;
- * returns the merge plan otherwise. Existing folders are matched by name (no
- * duplicate folders); existing assets are matched by name + bytes.
+ * returns the merge plan otherwise. The raw document is first repaired through
+ * `normalizeNasaqLibrary` (default «غير مصنّف» folder, complete asset fields,
+ * folderId always present), then: existing folders are matched by name (no
+ * duplicate folders), existing assets are matched by name + bytes.
  */
 export function planLibraryImport(
   raw: unknown,
@@ -115,30 +122,45 @@ export function planLibraryImport(
     throw new Error("هذا الملف أحدث من نسختك — حدّث المنصة ثم أعد المحاولة.");
   }
 
+  // Repair BEFORE planning: every asset leaving this function carries a
+  // folderId that resolves — the old `?? null` fallback was what made
+  // imported items match neither a folder chip nor the «الكل» view.
+  const doc = normalizeNasaqLibrary(file);
+
   const plan: LibraryImportPlan = { folders: [], assets: [], skipped: 0 };
   const folderIdMap = new Map<string, string>();
   const existingFolderByName = new Map(
     existing.folders.map((f) => [f.name, f.id]),
   );
+  const usedFolderIds = new Set(existing.folders.map((f) => f.id));
 
-  for (const folder of Array.isArray(file.folders) ? file.folders : []) {
-    if (!folder || typeof folder.name !== "string" || !folder.name.trim())
-      continue;
+  for (const folder of doc.folders) {
     const name = folder.name.trim().slice(0, 80);
+    if (!name) continue;
     const known = existingFolderByName.get(name);
     if (known) {
       folderIdMap.set(folder.id, known);
       continue;
     }
-    const freshId = `folder_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-    folderIdMap.set(folder.id, freshId);
-    existingFolderByName.set(name, freshId);
+    // Prefer the file's own id when it is free, so «folder-uncategorized»
+    // keeps its stable identity in the store instead of becoming a random id.
+    const targetId =
+      folder.id && !usedFolderIds.has(folder.id)
+        ? folder.id
+        : `folder_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
+    usedFolderIds.add(targetId);
+    folderIdMap.set(folder.id, targetId);
+    existingFolderByName.set(name, targetId);
     plan.folders.push({
-      id: freshId,
+      id: targetId,
       name,
-      createdAt: Number(folder.createdAt) || Date.now(),
+      createdAt: folder.createdAt || Date.now(),
     });
   }
+
+  // The normalizer always ships the default folder, so this is belt-and-braces
+  // against a hand-built plan: assets must still land somewhere real.
+  const fallbackFolderId = folderIdMap.get(DEFAULT_FOLDER_ID) ?? null;
 
   const existingAssetKeys = new Set(
     existing.assets.map(
@@ -147,22 +169,9 @@ export function planLibraryImport(
   );
   const usedNames = new Set(existing.assets.map((a) => a.name));
 
-  for (const asset of Array.isArray(file.assets) ? file.assets : []) {
-    if (
-      !asset ||
-      typeof asset.name !== "string" ||
-      typeof asset.src !== "string"
-    )
-      continue;
+  for (const asset of doc.assets) {
     // Safe sources only — the same guard the canvas itself applies.
     if (!safeImageSrc(asset.src)) continue;
-    if (
-      typeof asset.w !== "number" ||
-      typeof asset.h !== "number" ||
-      !Number.isFinite(asset.w) ||
-      !Number.isFinite(asset.h)
-    )
-      continue;
 
     const key = `${asset.name}\u0000${asset.src.length}\u0000${asset.src.slice(-64)}`;
     if (existingAssetKeys.has(key)) {
@@ -176,16 +185,13 @@ export function planLibraryImport(
     while (usedNames.has(name)) name = `${name} (نسخة)`;
     usedNames.add(name);
 
-    const folderId = asset.folderId
-      ? (folderIdMap.get(asset.folderId) ?? null)
-      : null;
     plan.assets.push({
       name,
       src: asset.src,
       w: asset.w,
       h: asset.h,
-      folderId,
-      addedAt: Number(asset.addedAt) || Date.now(),
+      folderId: folderIdMap.get(asset.folderId) ?? fallbackFolderId,
+      addedAt: asset.addedAt || Date.now(),
     });
   }
 
