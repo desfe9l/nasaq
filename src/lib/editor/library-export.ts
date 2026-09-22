@@ -27,7 +27,7 @@ export const LIBRARY_VERSION = 1;
 export interface LibraryFile {
   kind: typeof LIBRARY_KIND;
   version: number;
-  folders: Array<{ id: string; name: string; createdAt: number }>;
+  folders: Array<{ id: string; name: string; createdAt: number; parentId?: string | null }>;
   assets: Array<{
     id: string;
     name: string;
@@ -56,6 +56,7 @@ export function buildLibraryFile({
       id: f.id,
       name: f.name,
       createdAt: f.createdAt,
+      parentId: f.parentId ?? null,
     })),
     assets: assets.map((a) => ({
       id: a.id,
@@ -88,13 +89,21 @@ export function downloadLibraryFile(input: LibraryExportInput): string {
 }
 
 export interface LibraryImportPlan {
-  folders: Array<Pick<AssetFolder, "id" | "name" | "createdAt">>;
+  folders: Array<
+    Pick<AssetFolder, "id" | "name" | "createdAt"> & {
+      parentId?: string | null;
+    }
+  >;
   /**
-   * Entries to create; ids are fresh. Every `folderId` resolves to a folder
-   * the store will hold after the plan applies — an id from `folders` above
-   * or an id of a folder that already exists (matched by name). Never null.
+   * Entries to create. `id` (when present) is the file's own id, kept when it
+   * is still free so a round-trip restores the original identities; otherwise
+   * the store mints a fresh one. Every `folderId` resolves to a folder the
+   * store will hold after the plan applies — an id from `folders` above or an
+   * id of a folder that already exists (matched by name). Never null.
    */
-  assets: Array<Omit<Asset, "id" | "addedAt"> & { addedAt?: number }>;
+  assets: Array<
+    Omit<Asset, "id" | "addedAt"> & { addedAt?: number; id?: string }
+  >;
   /** Entries skipped because an identical one already exists. */
   skipped: number;
 }
@@ -129,6 +138,7 @@ export function planLibraryImport(
 
   const plan: LibraryImportPlan = { folders: [], assets: [], skipped: 0 };
   const folderIdMap = new Map<string, string>();
+  const folderParentMap = new Map<string, string | null>();
   const existingFolderByName = new Map(
     existing.folders.map((f) => [f.name, f.id]),
   );
@@ -140,6 +150,7 @@ export function planLibraryImport(
     const known = existingFolderByName.get(name);
     if (known) {
       folderIdMap.set(folder.id, known);
+      folderParentMap.set(folder.id, folder.parentId ?? null);
       continue;
     }
     // Prefer the file's own id when it is free, so «folder-uncategorized»
@@ -150,12 +161,26 @@ export function planLibraryImport(
         : `folder_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
     usedFolderIds.add(targetId);
     folderIdMap.set(folder.id, targetId);
+    folderParentMap.set(folder.id, folder.parentId ?? null);
     existingFolderByName.set(name, targetId);
     plan.folders.push({
       id: targetId,
       name,
       createdAt: folder.createdAt || Date.now(),
+      parentId: folder.parentId ?? null,
     });
+  }
+
+  // Second pass: parents may appear after children in the file, so wire the
+  // hierarchy once every file id has a target id. A parent that vanished
+  // (skipped name / unknown id) degrades to root — never a dangling loop.
+  const plannedIds = new Set(plan.folders.map((f) => f.id));
+  for (const folder of plan.folders) {
+    const fileParent = folderParentMap.get(folder.id) ?? null;
+    const mapped =
+      fileParent != null ? folderIdMap.get(fileParent) ?? null : null;
+    folder.parentId =
+      mapped && mapped !== folder.id && plannedIds.has(mapped) ? mapped : null;
   }
 
   // The normalizer always ships the default folder, so this is belt-and-braces
@@ -168,6 +193,7 @@ export function planLibraryImport(
     ),
   );
   const usedNames = new Set(existing.assets.map((a) => a.name));
+  const usedAssetIds = new Set(existing.assets.map((a) => a.id));
 
   for (const asset of doc.assets) {
     // Safe sources only — the same guard the canvas itself applies.
@@ -185,7 +211,21 @@ export function planLibraryImport(
     while (usedNames.has(name)) name = `${name} (نسخة)`;
     usedNames.add(name);
 
+    // Prefer the file's own id when it is free — neither taken by a row
+    // already in the store nor claimed earlier in this same plan — so an
+    // export → import round-trip restores the exact identities. When it is
+    // taken, omit the id and let the store mint a fresh one (never clobber
+    // the existing row).
+    const claimedInPlan = new Set(
+      plan.assets.map((planned) => planned.id).filter(Boolean),
+    );
+    const targetId =
+      asset.id && !usedAssetIds.has(asset.id) && !claimedInPlan.has(asset.id)
+        ? asset.id
+        : undefined;
+
     plan.assets.push({
+      ...(targetId ? { id: targetId } : {}),
       name,
       src: asset.src,
       w: asset.w,
@@ -194,6 +234,5 @@ export function planLibraryImport(
       addedAt: asset.addedAt || Date.now(),
     });
   }
-
   return plan;
 }

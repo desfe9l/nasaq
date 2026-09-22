@@ -59,6 +59,8 @@ export interface AssetFolder {
   id: string;
   name: string;
   createdAt: number;
+  /** Parent folder for nested shelves; `null` = root. */
+  parentId?: string | null;
 }
 
 export type SettingsKey =

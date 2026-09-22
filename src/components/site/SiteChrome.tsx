@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Menu, Moon, Sun, X } from "lucide-react";
+import { Toaster } from "sonner";
 import { BRAND, CONTACT_PHONE_DISPLAY, NAV_ITEMS, telHref } from "@/lib/brand";
 import { readStoredTheme, writeStoredTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -23,13 +24,21 @@ export function SiteHeader({ current }: { current: string }) {
 
   return (
     /*
+     * Site-wide toast host. The editor mounts its own inside EditorApp, so
+     * putting one here (every marketing/site page renders SiteHeader) gives
+     * those pages live feedback — imports, saves, clipboard — without ever
+     * doubling up on /editor.
+     */
+    <>
+    <Toaster position="top-center" richColors dir="rtl" />
+    {/*
      * Glassmorphic sticky nav.
      *
      * `backdrop-filter: blur(12px)` over a translucent surface keeps the page
      * visible through the bar as it scrolls, while the hairline bottom border +
      * `shadow-sm` keep a crisp edge against the content underneath (without them
      * a blurred bar smears into the page it is floating over).
-     */
+     */}
     <header className="sticky top-0 z-40 border-b border-line/60 bg-white/80 shadow-sm backdrop-blur-[12px] dark:border-white/10 dark:bg-[#111722]/80">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <a href="/" className="flex items-center gap-2.5">
@@ -119,6 +128,7 @@ export function SiteHeader({ current }: { current: string }) {
         </nav>
       )}
     </header>
+    </>
   );
 }
 

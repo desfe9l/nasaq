@@ -70,6 +70,8 @@ const finiteOr = (value: unknown, fallback: number): number =>
  *  3. `id`, `name`, `src`, `w`, `h`, `addedAt` are always usable, so
  *     `planLibraryImport` can no longer skip dimension-less rows and lose
  *     the asset entirely.
+ *  4. Folder `parentId` (nested shelves) is preserved across the round-trip
+ *     and re-validated against real ids — missing parents fall back to root.
  *
  * Unknown extra fields on folders/assets are intentionally dropped: the
  * canonical file format is `{kind, version, folders, assets}` only.
@@ -89,6 +91,13 @@ export function normalizeNasaqLibrary(
         : `folder-${Math.random().toString(36).slice(2, 11)}`,
     name: typeof folder.name === "string" ? folder.name : "",
     createdAt: finiteOr(folder.createdAt, Date.now()),
+    // Nested shelves survive export → import: the raw parentId is carried
+    // through here and only re-validated (parent exists, not itself) below,
+    // after every folder id is known.
+    parentId:
+      typeof folder.parentId === "string" && folder.parentId
+        ? folder.parentId
+        : null,
   }));
 
   // Spec: ensure the default Uncategorized folder exists (unshift if absent).
@@ -107,6 +116,45 @@ export function normalizeNasaqLibrary(
   }
 
   const knownFolderIds = new Set(folders.map((folder) => folder.id));
+
+  // Re-wire hierarchy now that every id is known: a parent that vanished
+  // from the file (or points at the folder itself) degrades to root, never
+  // a dangling reference or a cycle. Duplicate ids collapse to the first
+  // occurrence, so a child always resolves against a real folder.
+  {
+    const seenIds = new Set<string>();
+    for (const folder of folders) {
+      if (seenIds.has(folder.id)) {
+        folder.id = `folder-${Math.random().toString(36).slice(2, 11)}`;
+        folder.parentId = null;
+      }
+      seenIds.add(folder.id);
+    }
+    for (const folder of folders) {
+      if (
+        folder.parentId &&
+        (!knownFolderIds.has(folder.parentId) ||
+          folder.parentId === folder.id)
+      ) {
+        folder.parentId = null;
+      }
+    }
+    // Cycle guard (a↔b hand-edits): walk up; any loop lands at root.
+    for (const folder of folders) {
+      const seen = new Set<string>([folder.id]);
+      let cursor = folder.parentId;
+      while (cursor) {
+        if (seen.has(cursor)) {
+          folder.parentId = null;
+          break;
+        }
+        seen.add(cursor);
+        cursor =
+          folders.find((candidate) => candidate.id === cursor)?.parentId ??
+          null;
+      }
+    }
+  }
 
   const rawAssets = Array.isArray(data.assets) ? data.assets : [];
   const assets: NasaqLibraryAsset[] = rawAssets

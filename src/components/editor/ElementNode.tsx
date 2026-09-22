@@ -14,7 +14,25 @@ import { applySvgColors, sanitizeSvgContent } from "@/lib/editor/svg";
 import { isCompoundShape, shapeDef } from "@/lib/editor/shapes";
 import { shapeIdOf } from "@/lib/editor/shape-render";
 import { mapShapePart } from "@/lib/editor/shape-affine";
+import { isPalmTouch } from "@/lib/editor/pen-input";
 import { ShapeGlyph, ShapeParts } from "./ShapeGlyph";
+
+/**
+ * Pointerdown shared by every in-place text body.
+ *
+ * While the caret is live, presses must not bubble into the element's own
+ * move-gesture (that is what would drag the box out from under the caret) —
+ * and a palm landing next to the writing hand must not teleport the caret at
+ * all, so it is swallowed whole instead.
+ */
+const textPointerDown = (e: React.PointerEvent<HTMLElement>) => {
+  if (isPalmTouch(e)) {
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+  if (e.currentTarget.isContentEditable) e.stopPropagation();
+};
 
 interface Props {
   el: CanvasEl;
@@ -292,7 +310,7 @@ function ElementContent({
         ref={textRef}
         className="el-text"
         style={textStyle}
-        onPointerDown={(e) => e.currentTarget.isContentEditable && e.stopPropagation()}
+        onPointerDown={textPointerDown}
         onBlur={onBlur}
         onKeyDown={onKeyDown}
       >
@@ -317,7 +335,7 @@ function ElementContent({
           justifyContent:
             s.textAlign === "center" ? "center" : s.textAlign === "left" ? "flex-end" : "flex-start",
         }}
-        onPointerDown={(e) => e.currentTarget.isContentEditable && e.stopPropagation()}
+        onPointerDown={textPointerDown}
         onBlur={onBlur}
         onKeyDown={onKeyDown}
       >
@@ -344,7 +362,7 @@ function ElementContent({
           whiteSpace: "nowrap",
           outline: "none",
         }}
-        onPointerDown={(e) => e.currentTarget.isContentEditable && e.stopPropagation()}
+        onPointerDown={textPointerDown}
         onBlur={onBlur}
         onKeyDown={onKeyDown}
       >
@@ -678,7 +696,7 @@ function ElementContent({
           whiteSpace: "pre-wrap",
           overflow: "hidden",
         }}
-        onPointerDown={(e) => e.currentTarget.isContentEditable && e.stopPropagation()}
+        onPointerDown={textPointerDown}
         onBlur={onBlur}
         onKeyDown={onKeyDown}
       >

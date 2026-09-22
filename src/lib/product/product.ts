@@ -38,10 +38,17 @@ export interface OrganizationProfile {
 export interface BrandKit {
   organizationName: string;
   logoSrc?: string;
+  /** Secondary logo for dark / transparent surfaces. */
   secondaryLogoSrc?: string;
+  /** Stamp or signature image used on letters and certificates. */
+  stampSrc?: string;
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
+  /** Page paper tint (A4 background). */
+  paperColor?: string;
+  /** Body text colour on documents. */
+  textColor?: string;
   arabicFont: string;
   englishFont: string;
   headerStyle: "minimal" | "official" | "band";
@@ -49,6 +56,10 @@ export interface BrandKit {
   tableStyle: "clean" | "striped" | "formal";
   chartStyle: "flat" | "accent" | "formal";
   pageSize: "a4-portrait" | "a4-landscape" | "custom";
+  /** Optional official metadata for document headers/previews. */
+  subDepartment?: string;
+  contactLine?: string;
+  dateFormat?: "hijri" | "gregorian";
 }
 
 export const DEMO_LICENSE: LicenseRecord = {
@@ -95,6 +106,8 @@ export const DEFAULT_BRAND_KIT: BrandKit = {
   primaryColor: "#0c3d2c",
   secondaryColor: "#145c42",
   accentColor: "#c6a05a",
+  paperColor: "#fbfaf6",
+  textColor: "#1f2937",
   arabicFont: "Tajawal",
   englishFont: "IBM Plex Sans",
   headerStyle: "official",
@@ -102,6 +115,7 @@ export const DEFAULT_BRAND_KIT: BrandKit = {
   tableStyle: "formal",
   chartStyle: "formal",
   pageSize: "a4-portrait",
+  dateFormat: "hijri",
 };
 
 export function hasFeature(license: LicenseRecord, feature: keyof FeatureEntitlements): boolean {

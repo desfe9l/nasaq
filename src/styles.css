@@ -584,6 +584,20 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   background: #fff;
   color: #172033;
   /*
+   * The artboard is a direct-manipulation surface: every touch and every
+   * Pencil stroke on it belongs to the editor (marquee, drag, draw tools) —
+   * never to the browser's pan / double-tap-zoom. `touch-action: none` on the
+   * page is also what stops Safari from firing pointercancel mid-drag the
+   * moment it mistakes a finger drag for a scroll; the surrounding workspace
+   * keeps `pan-x pan-y` (set on .editor-canvas-stage) so one-finger
+   * navigation outside the sheet still works natively.
+   */
+  touch-action: none;
+  /* iOS long-press callout (copy/share popover on images) hijacks canvas
+     presses — the editor owns selection instead. */
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  /*
    * Physical page metaphor: a floating A4 sheet.
    *
    * Three stacked shadows give the scale of real paper on a desk — a wide soft
@@ -664,6 +678,22 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   touch-action: none;
   min-width: 3mm;
   min-height: 3mm;
+}
+
+/*
+ * Pencil hover affordance (iPadOS + supported browsers).
+ *
+ * A hovering Apple Pencil fires pointer events with pointerType "pen" but does
+ * NOT flip CSS :hover, so the canvas paints its own hairline on the element
+ * under the tip. Counter-scaled by --editor-zoom so the ring stays a constant
+ * ≈1.5px ON SCREEN at every zoom level — the same trick the selection frame
+ * uses. Applies to the document node and the selection frame alike (the frame
+ * sits above the artwork, so a pen over its handles highlights it instead).
+ */
+.canvas-el.is-pen-hover,
+.selection-frame.is-pen-hover {
+  outline: calc(1.5px / var(--editor-zoom, 1)) solid rgba(217, 119, 6, 0.9);
+  outline-offset: calc(2px / var(--editor-zoom, 1));
 }
 
 /* تعديل لضمان عدم وجود خلفيات صلبة تجبر عناصر الـ PNG على فقدان الشفافية */
