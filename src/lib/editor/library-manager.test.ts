@@ -5,7 +5,7 @@ import {
   DEFAULT_FOLDER_NAME,
   normalizeNasaqLibrary,
 } from "./library-manager.ts";
-import { planLibraryImport } from "./library-export.ts";
+import { buildLibraryFile, planLibraryImport } from "./library-export.ts";
 import type { Asset, AssetFolder } from "./storage";
 
 const PNG_1 = "data:image/png;base64,AAAA";
@@ -234,5 +234,62 @@ describe("planLibraryImport", () => {
     });
     assert.equal(plan.assets.length, 1);
     assert.equal(plan.assets[0].name, "آمن");
+  });
+});
+
+describe("export → import round-trip", () => {
+  it("restores nested folders, parentId links and asset ids byte-for-byte", () => {
+    const source = {
+      folders: [
+        { id: "folder-uncategorized", name: "غير مصنّف", createdAt: 1, parentId: null as string | null },
+        { id: "f-parent", name: "هوية الجهة", createdAt: 2, parentId: null as string | null },
+        { id: "f-child", name: "شعارات فرعية", createdAt: 3, parentId: "f-parent" as string | null },
+      ],
+      assets: [
+        { id: "a-1", name: "الشعار", src: PNG_1, w: 10, h: 20, addedAt: 4, folderId: "f-child" as string | null },
+        { id: "a-2", name: "الختم", src: "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=", w: 30, h: 30, addedAt: 5, folderId: "f-parent" as string | null },
+      ],
+    };
+    // Pure serialise → parse cycle, exactly what a downloaded file endures.
+    const file = JSON.parse(JSON.stringify(buildLibraryFile(source)));
+    const plan = planLibraryImport(file, { folders: [], assets: [] });
+
+    const planById = new Map(plan.folders.map((f) => [f.id, f]));
+    assert.equal(planById.get("f-parent")?.parentId, null);
+    assert.equal(planById.get("f-child")?.parentId, "f-parent");
+
+    const assetsById = new Map(plan.assets.map((a) => [a.id, a]));
+    assert.equal(assetsById.get("a-1")?.folderId, "f-child");
+    assert.equal(assetsById.get("a-2")?.folderId, "f-parent");
+    assert.equal(assetsById.get("a-1")?.w, 10);
+    assert.equal(assetsById.get("a-2")?.h, 30);
+    assert.ok(assetsById.get("a-2")!.src.startsWith("data:image/svg+xml"));
+  });
+
+  it("never imports a file that would delete or orphan the parent folder", () => {
+    const file = {
+      kind: "nasaq-library",
+      version: 1,
+      folders: [
+        { id: "f-parent", name: "أرشيف", createdAt: 1, parentId: null },
+        { id: "f-child", name: "فرعي", createdAt: 2, parentId: "f-parent" },
+        // Hand-edited damage: parent missing / pointing at itself / in a loop.
+        { id: "f-orphan", name: "بائتة", createdAt: 3, parentId: "missing" },
+        { id: "f-self", name: "ذاتية", createdAt: 4, parentId: "f-self" },
+      ],
+      assets: [{ name: "عنصر", src: PNG_1, folderId: "f-child" }],
+    };
+    const plan = planLibraryImport(file, { folders: [], assets: [] });
+    const byId = new Map(plan.folders.map((f) => [f.id, f]));
+    // Both real parents are still in the plan — a child never takes the
+    // parent down with it, and no cascade delete exists anywhere.
+    assert.ok(byId.has("f-parent"));
+    assert.ok(byId.has("f-child"));
+    assert.equal(byId.get("f-child")?.parentId, "f-parent");
+    assert.equal(byId.get("f-orphan")?.parentId, null);
+    assert.equal(byId.get("f-self")?.parentId, null);
+    // Deleting a folder in the store re-parents children (no cascade), and
+    // the asset below still resolves after import.
+    assert.equal(plan.assets[0].folderId, "f-child");
   });
 });

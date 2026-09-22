@@ -35,8 +35,10 @@ export function AssetLibrary() {
   const assetsLoading = useEditor((s) => s.assetsLoading);
   const addElement = useEditor((s) => s.addElement);
   const removeAsset = useEditor((s) => s.removeAsset);
+  const removeAssets = useEditor((s) => s.removeAssets);
   const renameAsset = useEditor((s) => s.renameAsset);
   const addAsset = useEditor((s) => s.addAsset); // تأكد أن هذه الدالة موجودة في الـ store لحفظ الصور، أو يتم تمريرها عبر الـ props
+  const selectAssets = useEditor((s) => s.selectAssets);
   const folders = useEditor((s) => s.assetFolders);
   const folderId = useEditor((s) => s.assetFolderId);
   const selectedAssetIds = useEditor((s) => s.selectedAssetIds);
@@ -65,12 +67,20 @@ export function AssetLibrary() {
    * as folders instead of firing straight from the button.
    */
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
+  /**
+   * Batch delete for the current selection. Destructive, so it only runs
+   * from behind this confirm modal — and it deletes ASSETS only: folders
+   * (including parents) are never part of the batch, so nothing cascades.
+   */
+  const [batchDeleting, setBatchDeleting] = useState(false);
   const [folderDraft, setFolderDraft] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "compact">("grid");
   /**
    * Left-click menu on one asset: the card opens a small command menu instead
    * of burying every action in hover micro-buttons. `pickFolder` flips the
-   * same panel into the folder picker so «إضافة إلى مجلد» stays one click deep.
+   * same panel into the folder picker so «نقل» stays one click deep. The same
+   * panel is what a right-click opens (the custom context menu): تحديد،
+   * تحديد الكل، نقل، حذف، إلغاء التحديد.
    */
   const [menu, setMenu] = useState<{
     asset: Asset;
@@ -78,6 +88,8 @@ export function AssetLibrary() {
     y: number;
   } | null>(null);
   const [pickFolder, setPickFolder] = useState(false);
+  /** Anchor row for Shift+Click range selection in the visible shelf. */
+  const rangeAnchorRef = useRef<string | null>(null);
 
   const openMenu = (e: React.MouseEvent, asset: Asset) => {
     if (editingId === asset.id) return;
@@ -160,6 +172,45 @@ export function AssetLibrary() {
   const startRename = (asset: Asset) => {
     setEditingId(asset.id);
     setDraftName(asset.name);
+  };
+
+  /**
+   * Click contract for a card body:
+   *  · plain click       → insert on the page (the original behaviour),
+   *  · Shift+Click       → range-select from the anchor (last selection start)
+   *                        through this row, in the order they appear now,
+   *  · click on a        → handled by its own control (select / menu buttons).
+   * selection (never inserts while a range is being picked — that would drop
+   * the user onto the canvas mid-gesture).
+   */
+  const onCardActivate = (asset: Asset, event: React.MouseEvent) => {
+    if (editingId === asset.id) return;
+    if (event.shiftKey || event.metaKey || event.ctrlKey) {
+      event.preventDefault();
+      const ids = visibleAssets.map((item) => item.id);
+      const anchorId = rangeAnchorRef.current ?? selectedAssetIds[0] ?? ids[0];
+      const from = ids.indexOf(anchorId);
+      const to = ids.indexOf(asset.id);
+      if (from < 0 || to < 0) {
+        toggleAssetSelect(asset.id);
+        return;
+      }
+      const [start, end] = from <= to ? [from, to] : [to, from];
+      const range = ids.slice(start, end + 1);
+      const merged = event.metaKey || event.ctrlKey
+        ? [...new Set([...selectedAssetIds, ...range])]
+        : range;
+      selectAssets(merged);
+      if (!rangeAnchorRef.current) rangeAnchorRef.current = anchorId;
+      return;
+    }
+    rangeAnchorRef.current = asset.id;
+    place(asset);
+  };
+
+  /** Custom right-click menu rows operate on this asset — or the whole shelf. */
+  const selectAllVisible = () => {
+    selectAssets(visibleAssets.map((item) => item.id));
   };
 
   const commitRename = () => {
@@ -386,8 +437,10 @@ export function AssetLibrary() {
       </div>
 
       {selectedAssetIds.length > 0 && (
-        <div className="flex items-center gap-2 rounded-[7px] border border-gold/50 bg-gold/5 p-1.5 text-[10px]">
-          <span className="font-bold">{selectedAssetIds.length} محدد</span>
+        <div className="flex items-center gap-2 rounded-[7px] border border-emerald-500/50 bg-emerald-500/10 p-1.5 text-[10px]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 font-extrabold text-white tabular-nums">
+            {selectedAssetIds.length} محدد
+          </span>
           <select
             aria-label="نقل العناصر إلى مجلد"
             defaultValue=""
@@ -398,7 +451,7 @@ export function AssetLibrary() {
                   e.target.value === "root" ? null : e.target.value,
                 );
             }}
-            className="h-7 min-w-0 flex-1 rounded border border-line bg-transparent px-1 text-[10px] dark:border-white/10"
+            className="h-7 min-w-0 flex-1 rounded border border-emerald-500/40 bg-transparent px-1 text-[10px] dark:border-white/10"
           >
             <option value="">نقل إلى…</option>
             <option value="root">المكتبة الرئيسية</option>
@@ -410,10 +463,18 @@ export function AssetLibrary() {
           </select>
           <button
             type="button"
-            onClick={clearAssetSelection}
-            className="text-muted"
+            onClick={() => setBatchDeleting(true)}
+            className="inline-flex h-7 items-center gap-1 rounded-[6px] bg-red-600 px-2 font-extrabold text-white"
+            title="حذف العناصر المحددة من المكتبة (لا يحذف أي مجلد)"
           >
-            إلغاء
+            <Trash2 className="size-3" /> حذف الكل ({selectedAssetIds.length})
+          </button>
+          <button
+            type="button"
+            onClick={clearAssetSelection}
+            className="px-1 font-bold text-muted"
+          >
+            إلغاء التحديد
           </button>
         </div>
       )}
@@ -502,29 +563,32 @@ export function AssetLibrary() {
                 writeLibraryDrag(event.dataTransfer, dragPayloadFor(asset));
               }}
               onContextMenu={(event) => {
-                // Right-click still reaches the full options menu.
+                // Right-click = the custom context menu (تحديد / تحديد الكل /
+                // نقل / حذف / إلغاء التحديد) at the pointer.
                 event.preventDefault();
                 openMenu(event, asset);
               }}
-              onClick={() => {
+              onClick={(event) => {
                 // Whole card = insert (same addToCanvas path every other
-                // library card uses). Control buttons stop their own
-                // propagation; the rename editor is guarded by editingId.
+                // library card uses). Shift/Ctrl = range/multi selection.
+                // Control buttons stop their own propagation; the rename
+                // editor is guarded by editingId.
                 if (editingId === asset.id) return;
-                place(asset);
+                onCardActivate(asset, event);
               }}
               className={cn(
-                "group relative rounded-[8px] border bg-white/60 p-1.5 dark:bg-white/5",
+                "group relative rounded-[8px] border bg-white/60 p-1.5 transition dark:bg-white/5",
                 editingId !== asset.id && "cursor-pointer",
                 selectedAssetIds.includes(asset.id)
-                  ? "is-selected border-navy bg-navy/5 ring-1 ring-navy/30"
-                  : "border-line dark:border-white/10",
+                  ? "is-selected border-emerald-500/70 bg-emerald-500/10 ring-2 ring-emerald-500/40"
+                  : "border-line hover:border-emerald-500/40 dark:border-white/10",
               )}
             >
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
+                  rangeAnchorRef.current = asset.id;
                   toggleAssetSelect(asset.id);
                 }}
                 aria-label={`تحديد ${asset.name}`}
@@ -532,7 +596,7 @@ export function AssetLibrary() {
                 className={cn(
                   "absolute right-2 top-2 z-[2] grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90",
                   selectedAssetIds.includes(asset.id)
-                    ? "border-navy bg-navy text-white"
+                    ? "border-emerald-600 bg-emerald-600 text-white"
                     : "border-line dark:border-white/20",
                 )}
               >
@@ -692,11 +756,19 @@ export function AssetLibrary() {
                   <MenuRow
                     icon={FolderOpen}
                     label="المكتبة الرئيسية"
-                    disabled={!menu.asset.folderId}
+                    disabled={
+                      !selectedAssetIds.includes(menu.asset.id) &&
+                      !menu.asset.folderId
+                    }
                     onClick={() => {
-                      void moveAssetsToFolder([menu.asset.id], null);
+                      const targets = selectedAssetIds.includes(menu.asset.id)
+                        ? selectedAssetIds
+                        : [menu.asset.id];
+                      void moveAssetsToFolder(targets, null);
                       toast.success(
-                        `نُقل «${menu.asset.name}» إلى المكتبة الرئيسية`,
+                        targets.length > 1
+                          ? `نُقلت ${targets.length} عنصرًا إلى المكتبة الرئيسية`
+                          : `نُقل «${menu.asset.name}» إلى المكتبة الرئيسية`,
                       );
                       closeMenu();
                     }}
@@ -706,11 +778,21 @@ export function AssetLibrary() {
                       key={folder.id}
                       icon={Folder}
                       label={folder.name}
-                      disabled={menu.asset.folderId === folder.id}
+                      disabled={
+                        !selectedAssetIds.includes(menu.asset.id) &&
+                        menu.asset.folderId === folder.id
+                      }
                       onClick={() => {
-                        void moveAssetsToFolder([menu.asset.id], folder.id);
+                        const targets = selectedAssetIds.includes(
+                          menu.asset.id,
+                        )
+                          ? selectedAssetIds
+                          : [menu.asset.id];
+                        void moveAssetsToFolder(targets, folder.id);
                         toast.success(
-                          `أُضيف «${menu.asset.name}» إلى مجلد «${folder.name}»`,
+                          targets.length > 1
+                            ? `نُقلت ${targets.length} عنصرًا إلى «${folder.name}»`
+                            : `أُضيف «${menu.asset.name}» إلى مجلد «${folder.name}»`,
                         );
                         closeMenu();
                       }}
@@ -734,8 +816,29 @@ export function AssetLibrary() {
                     }}
                   />
                   <MenuRow
+                    icon={Check}
+                    label={
+                      selectedAssetIds.includes(menu.asset.id)
+                        ? "❌ إلغاء التحديد"
+                        : "🎯 تحديد"
+                    }
+                    onClick={() => {
+                      rangeAnchorRef.current = menu.asset.id;
+                      toggleAssetSelect(menu.asset.id);
+                      closeMenu();
+                    }}
+                  />
+                  <MenuRow
+                    icon={Grid2X2}
+                    label="🔳 تحديد الكل"
+                    onClick={() => {
+                      selectAllVisible();
+                      closeMenu();
+                    }}
+                  />
+                  <MenuRow
                     icon={FolderOpen}
-                    label="إضافة إلى مجلد…"
+                    label="📁 نقل إلى مجلد…"
                     onClick={() => setPickFolder(true)}
                   />
                   <MenuRow
@@ -762,22 +865,10 @@ export function AssetLibrary() {
                       closeMenu();
                     }}
                   />
-                  <MenuRow
-                    icon={Check}
-                    label={
-                      selectedAssetIds.includes(menu.asset.id)
-                        ? "إلغاء التحديد"
-                        : "تحديد للنقل"
-                    }
-                    onClick={() => {
-                      toggleAssetSelect(menu.asset.id);
-                      closeMenu();
-                    }}
-                  />
                   <div className="my-1 border-t border-line dark:border-white/10" />
                   <MenuRow
                     icon={Trash2}
-                    label="حذف من المكتبة…"
+                    label="🗑️ حذف…"
                     danger
                     onClick={() => {
                       setAssetToDelete(menu.asset);
@@ -943,6 +1034,60 @@ export function AssetLibrary() {
                 </div>
               </form>
             )}
+          </div>,
+          document.body,
+        )}
+
+      {batchDeleting &&
+        createPortal(
+          /*
+           * Batch confirmation: same destructive contract as the single-asset
+           * dialog (backdrop never confirms, Escape cancels, focus starts on
+           * «إلغاء»). Only the selected ASSET ids are removed — folders,
+           * parents included, are never part of this operation.
+           */
+          <div
+            className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/45 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="تأكيد حذف العناصر المحددة"
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setBatchDeleting(false);
+            }}
+          >
+            <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]">
+              <strong className="text-[13px]">
+                حذف {selectedAssetIds.length} عنصرًا من المكتبة؟
+              </strong>
+              <p className="text-[11px] leading-6 text-muted">
+                ستُحذف العناصر المحددة نهائيًا من المكتبة. المجلدات (بما فيها
+                المجلد الأب) تبقى كما هي، والعناصر المُدرجة في الصفحات لا
+                تتأثر.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  autoFocus
+                  onClick={() => setBatchDeleting(false)}
+                  className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const ids = [...selectedAssetIds];
+                    setBatchDeleting(false);
+                    void removeAssets(ids).then(() => {
+                      toast.success(`تم حذف ${ids.length} عنصرًا من المكتبة`);
+                    });
+                  }}
+                  className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white"
+                >
+                  حذف نهائيًا
+                </button>
+              </div>
+            </div>
           </div>,
           document.body,
         )}

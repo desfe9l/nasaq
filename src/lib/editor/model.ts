@@ -323,6 +323,16 @@ export interface Project {
   createdAt?: number;
   updatedAt?: number;
   defaultSize?: SizeId;
+  /** Which pack this document was created from (category filters on /projects). */
+  pack?: PackId;
+  /** Starred by the owner. Persisted with the row, never part of undo history. */
+  favorite?: boolean;
+  /**
+   * Page-1 JPEG capture for the projects grid. Written on auto-save only —
+   * deliberately excluded from undo history (`projectSlice`) so snapshots
+   * never carry multi-KB data URLs.
+   */
+  thumbnail?: string;
 }
 
 /**
@@ -344,6 +354,9 @@ export interface ProjectMeta {
   pages: number;
   createdAt: number;
   updatedAt: number;
+  pack?: PackId;
+  favorite?: boolean;
+  thumbnail?: string;
 }
 
 export function projectMeta(p: Project): ProjectMeta {
@@ -355,6 +368,9 @@ export function projectMeta(p: Project): ProjectMeta {
     pages: p.pages?.length || 0,
     createdAt: p.createdAt || Date.now(),
     updatedAt: p.updatedAt || Date.now(),
+    pack: p.pack,
+    favorite: p.favorite,
+    thumbnail: p.thumbnail,
   };
 }
 

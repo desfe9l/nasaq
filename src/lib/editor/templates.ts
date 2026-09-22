@@ -2232,10 +2232,11 @@ export function createProject(
         : pack === "briefing"
           ? "عرض قيادي"
           : pack === "slides"
-            ? "عرض تقديمي 16:9"
+            ? "عرض تقديمي"
             : pack === "blank"
               ? "مستند جديد"
               : "تقرير رسمي",
+    pack,
     theme: pack === "eid" ? "eid" : themeId,
     orgName,
     defaultSize: pack === "slides" ? "slide-16-9" : "a4-portrait",

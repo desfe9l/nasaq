@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { ArrowLeft, BriefcaseBusiness, FileText, LayoutTemplate, Table2, FileDown, Palette, ShieldCheck, Workflow } from "lucide-react";
+import { ArrowLeft, BriefcaseBusiness, FileText, LayoutTemplate, Table2, FileDown, Palette, ShieldCheck, Workflow, Files } from "lucide-react";
 import { toast } from "sonner";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
@@ -8,12 +8,22 @@ import { ProjectCard } from "@/components/site/ProjectCard";
 import { PRODUCT_COPY } from "@/lib/product/copy";
 import { CARD_W, CARD_WRAP, SITE_CARD, iconTint } from "@/components/site/cards";
 
+/**
+ * Six capability cards (was four): the two extra entries carry the privacy
+ * and multi-format/pagination story. Icons sit on an emerald backlight tile;
+ * the card itself uses the shared lift + a soft emerald glow on hover.
+ */
 const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
   { icon: LayoutTemplate, title: PRODUCT_COPY.capabilities[0][0], desc: PRODUCT_COPY.capabilities[0][1] },
   { icon: Table2, title: PRODUCT_COPY.capabilities[1][0], desc: PRODUCT_COPY.capabilities[1][1] },
   { icon: Palette, title: PRODUCT_COPY.capabilities[2][0], desc: PRODUCT_COPY.capabilities[2][1] },
   { icon: FileDown, title: PRODUCT_COPY.capabilities[3][0], desc: PRODUCT_COPY.capabilities[3][1] },
+  { icon: ShieldCheck, title: PRODUCT_COPY.capabilities[4][0], desc: PRODUCT_COPY.capabilities[4][1] },
+  { icon: Files, title: PRODUCT_COPY.capabilities[5][0], desc: PRODUCT_COPY.capabilities[5][1] },
 ];
+
+/** Value badges shown under the features CTA. */
+const CTA_BADGES = ["🔒 معالجة محلية 100%", "📐 جاهز للطباعة 300DPI", "🇸🇦 دعم الخطوط العربية الرسمية"];
 
 export function HomePage() {
   const importProject = useEditor((s) => s.importProject);
@@ -79,7 +89,7 @@ export function HomePage() {
                     const parsed = JSON.parse(String(reader.result));
                     void importProject(parsed).then(() => window.location.assign("/editor"));
                   } catch {
-                    toast.error("تعذر قراءة الملف — تأكد أنه ملف مشروع بصJSON");
+                    toast.error("تعذر قراءة الملف — تأكد أنه ملف مشروع بصيغة JSON");
                   }
                 };
                 reader.onerror = () => toast.error("تعذر قراءة الملف");
@@ -156,16 +166,20 @@ export function HomePage() {
         <section className="border-t border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
           <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
             <h2 className="text-[20px] font-extrabold">ماذا تتضمن المنصة</h2>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-4">
-              {HIGHLIGHTS.map((h, i) => {
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
+              {HIGHLIGHTS.map((h) => {
                 const Icon = h.icon;
                 return (
                   <div
                     key={h.title}
-                    className={`flex flex-col rounded-2xl bg-paper/60 p-6 dark:bg-white/5 ${SITE_CARD}`}
+                    className={`group flex flex-col rounded-2xl bg-paper/60 p-6 dark:bg-white/5 ${SITE_CARD} hover:border-emerald-500/50 hover:shadow-[0_14px_34px_-14px_rgba(16,185,129,0.45)] dark:hover:border-emerald-400/40`}
                   >
-                    <span className={`grid size-11 place-items-center rounded-xl ${iconTint(i)}`}>
-                      <Icon className="size-5" />
+                    {/* Emerald backlight behind the icon tile. */}
+                    <span className="relative grid size-11 place-items-center">
+                      <span className="absolute inset-0 rounded-xl bg-emerald-500/10 blur-[6px] transition group-hover:bg-emerald-500/20" aria-hidden />
+                      <span className={`relative grid size-10 place-items-center rounded-xl ${iconTint(3)}`}>
+                        <Icon className="size-5" />
+                      </span>
                     </span>
                     <strong className="mt-4 block text-[15px] font-extrabold text-ink dark:text-white">{h.title}</strong>
                     <p className="mt-2 text-[13px] leading-6 text-muted">{h.desc}</p>
@@ -186,6 +200,16 @@ export function HomePage() {
               >
                 عن المنصة
               </a>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {CTA_BADGES.map((badge) => (
+                <span
+                  key={badge}
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-bold text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-300"
+                >
+                  {badge}
+                </span>
+              ))}
             </div>
           </div>
         </section>

@@ -79,6 +79,7 @@ import {
   type TypographyPresetId,
 } from "./typography";
 import { safeImageSrc } from "./images";
+import { captureThumbnail } from "./thumbnail";
 import type { LibraryImportPlan } from "./library-export";
 import { DEFAULT_FOLDER_ID, DEFAULT_FOLDER_NAME } from "./library-manager";
 import {
@@ -309,11 +310,15 @@ interface EditorStore extends Project, Ui, History {
     folderId?: string | null;
   }) => Promise<Asset | null>;
   removeAsset: (id: string) => Promise<void>;
+  /** Batch delete for the multi-select — assets only, never folders. */
+  removeAssets: (ids: string[]) => Promise<void>;
+  /** Replace the selection wholesale (shift+click range, select-all). */
+  selectAssets: (ids: string[]) => void;
   renameAsset: (id: string, name: string) => Promise<void>;
   setAssetFolder: (id: string | null) => void;
   toggleAssetSelect: (id: string) => void;
   clearAssetSelection: () => void;
-  createAssetFolder: (name: string) => Promise<void>;
+  createAssetFolder: (name: string, parentId?: string | null) => Promise<void>;
   renameAssetFolder: (id: string, name: string) => Promise<void>;
   deleteAssetFolder: (id: string) => Promise<void>;
   moveAssetsToFolder: (ids: string[], folderId: string | null) => Promise<void>;
@@ -340,6 +345,8 @@ interface EditorStore extends Project, Ui, History {
   openProject: (id: string) => Promise<void>;
   saveNow: () => Promise<void>;
   renameProject: (id: string, name: string) => Promise<void>;
+  /** Flip a document's star — persists on the row, independent of auto-save. */
+  toggleProjectFavorite: (id: string) => Promise<void>;
   duplicateProject: (id: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
   importProject: (data: Partial<Project>) => Promise<void>;
@@ -742,6 +749,18 @@ function pickable(
   );
 }
 
+/**
+ * Smart default titles: the first «تقرير رسمي» becomes «تقرير رسمي 1», the
+ * next free slot is picked, and an existing custom title wins the bare name.
+ */
+function nextDefaultName(base: string, existing: string[]): string {
+  const taken = new Set(existing.map((name) => name.trim().toLowerCase()));
+  if (!taken.has(base.trim().toLowerCase())) return `${base} 1`;
+  let n = 1;
+  while (taken.has(`${base} ${n}`.toLowerCase())) n += 1;
+  return `${base} ${n}`;
+}
+
 /** Normalises anything loaded from disk, a file, or an older schema version. */
 function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
   const pages = incoming.pages?.length
@@ -784,6 +803,9 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
     // it, so applyProject still falls back to the first page for those.
     activePageId: incoming.activePageId,
     defaultSize: incoming.defaultSize || "a4-portrait",
+    pack: incoming.pack,
+    favorite: incoming.favorite,
+    thumbnail: incoming.thumbnail,
   };
 }
 
@@ -1069,6 +1091,22 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({ assets: get().assets.filter((a) => a.id !== id) });
     },
 
+    removeAssets: async (ids) => {
+      const doomed = new Set(ids);
+      if (!doomed.size) return;
+      // One operation: every selected row is deleted, folders are never
+      // touched (deleting nested items must not cascade to their folder).
+      await Promise.all([...doomed].map((id) => removeAsset(id)));
+      set((state) => ({
+        assets: state.assets.filter((a) => !doomed.has(a.id)),
+        selectedAssetIds: state.selectedAssetIds.filter(
+          (id) => !doomed.has(id),
+        ),
+      }));
+    },
+
+    selectAssets: (ids) => set({ selectedAssetIds: [...new Set(ids)] }),
+
     renameAsset: async (id, name) => {
       const trimmed = name.trim();
       if (!trimmed) return;
@@ -1088,13 +1126,14 @@ export const useEditor = create<EditorStore>((set, get) => {
           : [...state.selectedAssetIds, id],
       })),
     clearAssetSelection: () => set({ selectedAssetIds: [] }),
-    createAssetFolder: async (name) => {
+    createAssetFolder: async (name, parentId) => {
       const trimmed = name.trim();
       if (!trimmed) return;
       const folder = {
         id: uid("folder"),
         name: trimmed,
         createdAt: Date.now(),
+        parentId: parentId ?? null,
       };
       const folders = [...get().assetFolders, folder];
       set({ assetFolders: folders });
@@ -1110,7 +1149,16 @@ export const useEditor = create<EditorStore>((set, get) => {
       await setSetting("assetFolders", folders);
     },
     deleteAssetFolder: async (id) => {
-      const folders = get().assetFolders.filter((folder) => folder.id !== id);
+      const target = get().assetFolders.find((folder) => folder.id === id);
+      // Re-parent (never cascade-delete) nested folders: removing a folder
+      // lifts its children one level up, so no parent above the target and no
+      // sibling subtree is ever destroyed by accident.
+      const parentId = target?.parentId ?? null;
+      const folders = get()
+        .assetFolders.filter((folder) => folder.id !== id)
+        .map((folder) =>
+          folder.parentId === id ? { ...folder, parentId } : folder,
+        );
       const assets = get().assets.map((asset) =>
         asset.folderId === id ? { ...asset, folderId: null } : asset,
       );
@@ -1205,6 +1253,13 @@ export const useEditor = create<EditorStore>((set, get) => {
         try {
           savedRows.push(
             await saveAsset({
+              // Keep the planned id while it is free: a round-trip of the same
+              // library file restores the exact identities, not fresh ones.
+              ...(asset.id &&
+              !savedRows.some((row) => row.id === asset.id) &&
+              !get().assets.some((row) => row.id === asset.id)
+                ? { id: asset.id }
+                : {}),
               name: asset.name,
               src: asset.src,
               w: asset.w,
@@ -1253,6 +1308,12 @@ export const useEditor = create<EditorStore>((set, get) => {
         theme || (pack === "eid" ? "eid" : "official"),
         s.orgName,
       );
+      // Smart auto-increment: «تقرير رسمي 1», «تقرير رسمي 2», … while a
+      // custom-named document never collides with an existing title.
+      project.name = nextDefaultName(
+        project.name,
+        s.projects.map((p) => p.name),
+      );
       const saved = await saveProject(project);
       applyProject(saved, { zoom: 0.82 });
       set({
@@ -1288,10 +1349,18 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!s.pages?.length) return;
       set({ saveState: "saving" });
       try {
+        // Page-1 thumbnail: throttle-safe (`null` → keep whatever the row has)
+        // and merged from the projects meta so an in-flight favorite flip or a
+        // previous capture is never wiped by a later auto-save.
+        const meta = s.projects.find((p) => p.id === s.id);
+        const captured = await captureThumbnail();
         const saved = await saveProject({
           ...projectSlice(s),
           version: s.version,
           updatedAt: Date.now(),
+          pack: s.pack ?? meta?.pack,
+          favorite: meta?.favorite ?? s.favorite ?? false,
+          thumbnail: captured ?? s.thumbnail ?? meta?.thumbnail,
         });
         set({
           id: saved.id,
@@ -1315,14 +1384,25 @@ export const useEditor = create<EditorStore>((set, get) => {
       await get().refreshProjects();
     },
 
+    toggleProjectFavorite: async (id) => {
+      const project = await getProject(id);
+      if (!project) return;
+      const favorite = !project.favorite;
+      await saveProject({ ...project, favorite, id });
+      if (get().id === id) set({ favorite });
+      await get().refreshProjects();
+    },
+
     duplicateProject: async (id) => {
-      const copy = await copyProject(id);
-      if (!copy) {
-        toast.error("تعذر نسخ المشروع");
+      const project = await copyProject(id);
+      if (!project) {
+        toast.error("تعذر تكرار المستند");
         return;
       }
+      // Fresh identity: a copy never inherits the original's star (and its
+      // thumbnail is re-captured on the next auto-save anyway).
+      await saveProject({ ...project, favorite: false, thumbnail: undefined });
       await get().refreshProjects();
-      toast.success(`تم إنشاء «${copy.name}»`);
     },
 
     deleteProject: async (id) => {
