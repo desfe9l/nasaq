@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
 import { ICONS, cssFont, parseTable, type CanvasEl } from "@/lib/editor/model";
-import { prepareText, textPadding } from "@/lib/editor/text-render";
+import {
+  prepareText,
+  textPadding,
+  type PageContext,
+} from "@/lib/editor/text-render";
 import { useEditor } from "@/lib/editor/store";
 import { cn, round as round2 } from "@/lib/utils";
 import { applyNumerals } from "@/lib/editor/arabic";
@@ -16,6 +20,12 @@ interface Props {
   el: CanvasEl;
   interactive: boolean;
   onPointerDown: (e: React.PointerEvent, kind: "move" | "resize" | "rotate", handle?: string) => void;
+  /**
+   * 1-based page the element sits on, so `{رقم_الصفحة_من_الكل}` resolves per
+   * page. The total comes from the store; omitting it falls back to the ambient
+   * context, which is correct for single-page consumers.
+   */
+  pageNo?: number;
 }
 
 /** Types whose text can be edited in place with a double click. */
@@ -33,6 +43,7 @@ export function ElementNode({
   interactive,
   onPointerDown,
   onEnterGroup,
+  pageNo,
 }: Props & { onEnterGroup?: () => void }) {
   const updateElement = useEditor((s) => s.updateElement);
   const fitTextBox = useEditor((s) => s.fitTextBox);
@@ -199,7 +210,13 @@ export function ElementNode({
           </defs>
         </svg>
       )}
-      <ElementContent el={el} textRef={textRef} onBlur={finishEdit} onKeyDown={handleEditKey} />
+      <ElementContent
+        el={el}
+        textRef={textRef}
+        onBlur={finishEdit}
+        onKeyDown={handleEditKey}
+        pageRef={pageNo ? { number: pageNo, count: pages.length } : undefined}
+      />
     </div>
   );
 }
@@ -209,11 +226,13 @@ function ElementContent({
   textRef,
   onBlur,
   onKeyDown,
+  pageRef,
 }: {
   el: CanvasEl;
   textRef: React.RefObject<HTMLDivElement | null>;
   onBlur: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
+  pageRef?: PageContext;
 }) {
   const s = el.style || {};
   /*
@@ -226,7 +245,7 @@ function ElementContent({
     (st.pages.find((p) => p.id === st.activePageId)?.elements ?? []).some((m) => m.clippedBy === el.id),
   );
   const maskOutline = masking && !(Number(s.borderWidth) > 0);
-  const prepared = prepareText(el);
+  const prepared = prepareText(el, pageRef);
   const vertical = s.writingMode === "vertical";
   const pad = textPadding(el);
   /*
@@ -245,7 +264,9 @@ function ElementContent({
     textDecoration: s.underline ? "underline" : undefined,
     textUnderlineOffset: s.underline ? "0.15em" : undefined,
     textAlign: s.textAlign || "right",
-    lineHeight: s.lineHeight || 1.45,
+    // The resolved leading, not the raw style: `prepareText` raises a too-tight
+    // value on multi-line Arabic so the tops of tall letters are never shaved.
+    lineHeight: prepared.lineHeight,
     letterSpacing: s.letterSpacing ? `${s.letterSpacing}mm` : undefined,
     textShadow: s.textShadow || "none",
     direction: "rtl",

@@ -204,6 +204,19 @@ export interface ElStyle {
    * `.justified-rtl` rule, which pins the last line back to the right edge.
    */
   justifyLastLine?: "start" | "stretch";
+  /**
+   * تطويل تلقائي (Auto-Kashida).
+   *
+   * Justify with Arabic elongation instead of word gaps: `kashida.ts` inserts
+   * tatweel strokes only between dual-joining letters, evenly across the line,
+   * and never on a paragraph's last line. This is the correct way to justify
+   * formal Arabic prose — `text-align: justify` spreads the SPACES, which reads
+   * as broken typesetting in Arabic because the whitespace is meant to stay
+   * constant. Opt-in per element: setting it is an authorial choice, and the
+   * rendered string (with its tatweel characters) is what every export writes,
+   * so a document never changes appearance depending on the reader's engine.
+   */
+  kashida?: boolean;
   /** Draw the text vertically, top-to-bottom (titles on covers). */
   writingMode?: "horizontal" | "vertical";
   /** Apply the author's line breaks only; collapse soft wraps. */
@@ -270,6 +283,16 @@ export interface CanvasEl {
    * elements; removing the mask clears the ids that point at it.
    */
   clippedBy?: string;
+  /**
+   * Page furniture (letterhead / footer strip) that «تثبيت الترويسة والتذييل»
+   * has applied to this element.
+   *
+   * A pure marker: it records that the element belongs to the document's shared
+   * header or footer, which is what makes re-applying idempotent and removing
+   * the furniture exact. Geometry, styling and behaviour are untouched, and an
+   * element without the marker is an ordinary element.
+   */
+  hfRole?: "header" | "footer";
 }
 
 export interface Page {
@@ -287,6 +310,13 @@ export interface Project {
   name: string;
   theme: ThemeId;
   orgName: string;
+  /**
+   * Official transaction / outgoing number printed by the {رقم_المعاملة} macro.
+   *
+   * Optional: documents written before macros existed simply resolve the macro
+   * to a fill-in placeholder, so no migration is needed.
+   */
+  transactionNo?: string;
   pages: Page[];
   /** Library metadata — absent on files exported before the upgrade. */
   id?: string;

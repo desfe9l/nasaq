@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Gauge,
   LayoutTemplate,
@@ -786,7 +785,12 @@ export function SmartLibraryPanel({
   onOpenTemplates: () => void;
   onPreviewTemplate: (template: PageTemplateDef) => void;
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
+  /* Shared intent: the report tools raise the same flag (see store). */
+  const pickerOpen = useEditor((s) => s.tablePickerOpen);
+  const setPickerOpen = (open: boolean) =>
+    open
+      ? useEditor.getState().openTablePicker()
+      : useEditor.getState().closeTablePicker();
   const library = useAccordionState<
     "shapes" | "icons" | "dividers" | "indicators" | "tables" | "templates"
   >("library", { shapes: true, icons: true });

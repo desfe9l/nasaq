@@ -141,3 +141,32 @@ export function fitImageBox(
   }
   return { w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 };
 }
+
+/**
+ * Natural pixel size of an image the document ALREADY painted.
+ *
+ * The pre-flight's DPI check needs pixels per placed millimetre, and the only
+ * honest source is the decoded image itself. Rather than keep a second registry
+ * that can fall behind the model, this reads the size straight off the rendered
+ * `<img>` the editor (or the hidden export page) has already loaded — so the
+ * check costs nothing and cannot disagree with what the author sees.
+ *
+ * Returns null when the source is not on screen, and the caller then SKIPS the
+ * check rather than guessing a resolution.
+ */
+export function domImageSize(
+  src: string,
+  root: ParentNode | null = typeof document === "undefined" ? null : document,
+): { w: number; h: number } | null {
+  if (!root) return null;
+  const target = safeImageSrc(src);
+  if (!target) return null;
+  for (const img of Array.from(root.querySelectorAll("img"))) {
+    const candidate = img.getAttribute("src") || img.src;
+    if (candidate !== target && img.src !== target) continue;
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      return { w: img.naturalWidth, h: img.naturalHeight };
+    }
+  }
+  return null;
+}

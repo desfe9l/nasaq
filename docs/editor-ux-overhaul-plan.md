@@ -191,3 +191,39 @@ Pure styling/layout pass — no functional logic, state or event handler was tou
 | 10 | Bottom page strip + crisp borders | done | Active page `ring-2 ring-[var(--primary-accent)]` (the editor's own primary, light/dark aware), rounded thumbnails with a crisp border + small shadow, rail actions also revealed on `focus-within` |
 
 Verification for this pass: `npm run typecheck` clean · `npm run lint` 0 errors / 3 pre-existing warnings · `npm run build` green · `npm test` and the TS suite unchanged from the pre-pass baseline (17 / 10 pre-existing failures, same IDs). Generated CSS was inspected to confirm `shadow-card*`, `backdrop-blur-[12px]`, `ring-[var(--primary-accent)]`, `md:max-lg:w-72` and the breakpoint bases all compile, and that the tablet width and each `basis-*` override win in cascade order.
+
+## Editor upgrade (sixth work order)
+
+Six sections, all client-side and all additive: no document model was replaced, no data structure changed, and every new object the editor inserts is an ordinary element or group — movable, styleable, exportable and undoable in one step like anything the author drew by hand.
+
+| # | Section | State | Where |
+| --- | --- | --- | --- |
+| 1 — Layout & tablet responsiveness | done | **Tablet mode below 1100px, from one number.** `OVERLAY_BREAKPOINT` in `ui-state.ts` is the single source of truth: the shell derives its `matchMedia` query from it and Tailwind gets a matching `lg2` breakpoint (`--breakpoint-lg2: 1100px` in the `@theme` block of `styles.css`), so every shell class is `lg2:`/`max-lg2:` — panels become floating drawers, the artboard keeps the whole viewport, and the JS layout state can never disagree with the CSS. **Auto-fit on shell change:** crossing the boundary re-fits the A4 page (`fitToScreen`) after the layout settles, so turning a tablet sideways never leaves a horizontal scrollbar; the first load keeps the author's saved zoom when it already fits. **Toolbar is one row with pinned actions:** undo/redo + zoom/fit moved out of the scrollable tray into a `shrink-0` cluster, Save/Export stay in the trailing `shrink-0` group, and only the tool tray (menus, project name, grid) scrolls inside the row |
+| 2 — Arabic typography & RTL | done | **Auto-kashida** opt-in per element (`kashida`, `justifyLastLine`) — legal dual-joining slots only, wrapping first so nothing overshoots. **Dynamic macros** `{التاريخ_الهجري}` `{التاريخ_الميلادي}` `{رقم_الصفحة_من_الكل}` `{اسم_الجهة}` `{رقم_المعاملة}`, resolved at render from the document context (canvas, HTML, Word/PowerPoint all through one `prepareText`), page numbers per page. **Per-family leading floors** (`FONT_LINE_HEIGHT_FLOOR`): Naskh faces (Amiri, Noto Naskh 1.7) get more room than Cairo (1.55) or Tajawal (1.5), applied only to multi-line Arabic so single-line titles keep the author's tight leading. **Five intent presets** [عنوان تقرير · عنوان فرعي · نص رسمي · مرجع الخطاب · هامش توقيع], theme-coloured, style-only |
+| 3 — Print-ready & report tools | done | **Guides**: safe type area (dotted 10 mm), binding margin (15 mm, right edge — RTL), bleed 3 mm + crop marks; `guideGeometry` is the one source the canvas overlay and the pre-flight share. **Header/footer isolation**: «تثبيت على كل الصفحات» mirrors the active page's bands onto every same-size page as locked furniture (`hfRole`), idempotent and removable in one action. **Stamp & signature zone** as one group. **Page numbering** `صفحة n من m` as a live macro, add/remove in one click |
+| 4 — KPI & data cards | done | `report-tools.ts` builds progress / target-vs-actual / stat-badge cards out of ordinary `box` + `progress` + `text`, coloured from the active theme (change the theme and the cards follow). Excel/CSV import reuses the existing `sheet-import.ts` + table builder through one shared store intent (`tablePickerOpen`), reachable from «أدوات التقرير» as well as the library |
+| 5 — Pre-flight export checker | done | `preflight.ts` runs six checks (fixed-box text overflow, content in the binding margin, elements off the sheet, images below 300 dpi with 150 as a hard error, blank pages, braces that never resolved) against the model — the same numbers the exporters write. Shown inside the export modal with one-click fixes (ملاءمة الإطار / إبعادها عن الهامش / حذف الصفحة / حذف العناصر), errors block the first press only, and the same report powers the «أدوات التقرير» summary |
+| 6 — Catalog polish | done | Official categories as pills — تقارير سنوية · خطابات رسمية · محاضر اجتماعات · عروض ختامية · خطط تشغيلية — beside شهادات · إنفوجرافيك · قوالبي الخاصة; routing combines category, keyword and element evidence (`pillsFor`), so every new pill has real entries (minutes 4, presentations 10, plans 10 of 29). Leftover cards on the last row stay centred (`CARD_WRAP`), and pill labels are searchable text |
+
+New modules (all pure, no new dependencies): `kashida.ts`, `macros.ts`, `typography.ts`, `print-guides.ts`, `preflight.ts`, `report-tools.ts`, plus the panels `ArabicTextTools.tsx`, `ReportToolsPanel.tsx`, `PrintGuides.tsx`.
+
+### Verification
+
+| Gate | Result |
+| --- | --- |
+| `npm run typecheck` | clean |
+| `npm run lint` | 0 errors, 3 pre-existing warnings (`Accordion.tsx` react-refresh ×2, `product.ts` `FEATURE_MAP`) |
+| TS suite | **305 tests / 295 pass / 10 fail** — the 10 are the pre-existing `writeDocx` (5) and `writePptx` (5) failures present at `HEAD`. Against the pre-upgrade baseline (166 / 156 / 10) that is **+139 tests, +139 passing, no new failures**; 78 of them are the seven new suites (kashida 14, macros 9, typography 16, print-guides 10, preflight 9, report-tools 14, text-render 6) |
+| `node --test scripts/**` | 195 / 178 / 17 — identical to the pre-upgrade baseline |
+| `npm run build` | green; generated CSS contains `@media (width>=1100px)` and `@media not all and (width>=1100px)` with the `max-lg2:` drawer rules, plus the `.print-guides` block |
+| Dev server | `/`, `/editor`, `/templates`, `/projects` all 200 with a proxied `.e2b.app` Host header; every new module transforms without a resolve error |
+
+> A visual sweep (320→1920 px) still cannot run in this sandbox (the Playwright browser download is blocked), so the layout work is verified structurally — breakpoint maths, unit-tested geometry, and the compiled CSS — and should be eyeballed in the live preview.
+
+### Acceptance criteria
+
+- [x] A4 canvas fully visible without horizontal scrolling at 1024 px: drawer layout below 1100 px + auto-fit on layout change.
+- [x] Top toolbar never wraps above `md`, and the four global actions (Save, Undo/Redo, Zoom, Export) are pinned at the row's edges.
+- [x] Macros evaluate in every generated document (canvas, standalone HTML, DOCX, PPTX) from one resolution path.
+- [x] Arabic text stays aligned with kashida support and zero character clipping (leading floors per family, floor applied only where multi-line Arabic could actually clip).
+- [x] Client-side only: sheet import reads the file in the browser; no document ever leaves the device.

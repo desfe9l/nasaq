@@ -60,7 +60,24 @@ import {
   UI_KEY,
 } from "./model";
 import { detectDeviceFonts, type DetectedFont } from "./fonts";
-import { resolveTextBox } from "./text-render";
+import { resolveTextBox, setTextContext } from "./text-render";
+import { DEFAULT_PRINT_GUIDES, type PrintGuideSettings } from "./print-guides";
+import {
+  applyFurniture,
+  boundsOf,
+  clearFurniture,
+  clearPageNumbers as dropPageNumbers,
+  kpiCard,
+  numberPages,
+  placeElements,
+  signatureZoneForPage,
+  type KpiKind,
+} from "./report-tools";
+import {
+  applyTypographyPreset,
+  typographyPreset,
+  type TypographyPresetId,
+} from "./typography";
 import { safeImageSrc } from "./images";
 import {
   applyStoredTheme,
@@ -231,6 +248,21 @@ interface Ui {
    */
   exportPreset: ExportPreset | null;
   pageManagerOpen: boolean;
+  /**
+   * The table builder / Excel-CSV importer is open.
+   *
+   * An intent in the store rather than local state, because three surfaces ask
+   * for it (the elements palette, the smart library, and «أدوات التقرير» →
+   * «استيراد من Excel/CSV»). They all mean the same thing, so they all raise the
+   * same flag and one overlay answers — no duplicated import UI.
+   */
+  tablePickerOpen: boolean;
+  /**
+   * Print guides painted over the artboard: safe type area, binding margin and
+   * bleed. Persisted, because an author preparing a bound report turns them on
+   * once and expects them to still be there tomorrow.
+   */
+  printGuides: PrintGuideSettings;
   saveState: SaveState;
   savedAt: number | null;
   /** Re-renders the "saved N minutes ago" label without polling the store. */
@@ -355,7 +387,12 @@ interface EditorStore extends Project, Ui, History {
   setTheme: (id: ThemeId) => void;
   setName: (name: string) => void;
   setOrg: (org: string) => void;
+  /** Official transaction / outgoing number, printed by {رقم_المعاملة}. */
+  setTransactionNo: (value: string) => void;
   setActivePage: (id: string) => void;
+  /** Open the table builder (optionally from the report tools' import button). */
+  openTablePicker: () => void;
+  closeTablePicker: () => void;
   select: (id: string | null) => void;
   /** Add or remove one element from the selection (shift-click). */
   toggleSelect: (id: string) => void;
@@ -396,6 +433,30 @@ interface EditorStore extends Project, Ui, History {
   /** Reorder top-level layers using their visible (front-to-back) list order. */
   reorderLayers: (fromId: string, toId: string) => void;
   addElement: (type: ElType, over?: Partial<CanvasEl>) => string | undefined;
+  /** Show or hide one print guide across every artboard. */
+  togglePrintGuide: (kind: keyof PrintGuideSettings) => void;
+  /**
+   * Copy the active page's header and footer onto every other page of the same
+   * size (and mark them as furniture, so the action is idempotent).
+   */
+  applyHeaderFooter: () => void;
+  /** Remove every applied header/footer element from the document. */
+  removeHeaderFooter: () => void;
+  /** Add live «صفحة n من m» numbering to every page that lacks it. */
+  addPageNumbers: () => void;
+  /** Remove that numbering again. */
+  removePageNumbers: () => void;
+  /** Drop a ready-made stamp & signature zone on the active page. */
+  insertSignatureZone: () => void;
+  /** Drop a KPI card (progress / target vs actual / stat badge) on the page. */
+  insertKpiCard: (
+    kind: KpiKind,
+    options: { caption: string; value: number; target?: number },
+  ) => void;
+  /** Apply an Arabic typography preset to the selection (or the next text). */
+  applyPreset: (presetId: TypographyPresetId) => void;
+  /** Insert a macro token into the selected text element. */
+  insertMacro: (token: string) => void;
   /**
    * Same insertion, but returns the created element and accepts an optional
    * centre point — the drop target for a library card dragged onto the canvas.
@@ -450,6 +511,15 @@ interface EditorStore extends Project, Ui, History {
   addTemplatePage: (id: string) => void;
   duplicatePage: (id?: string) => void;
   deletePage: (id?: string) => void;
+  /**
+   * Delete specific elements of the active page by id, as ONE history entry.
+   *
+   * Used by the pre-flight checker's offered fixes: a batch of empty boxes is
+   * one decision by the author, so it should be one undo — and unlike
+   * `deleteSelected` it does not depend on the current selection, which the
+   * dialog must not have to change to clean up after itself.
+   */
+  deleteElementsById: (ids: string[]) => void;
   movePage: (dir: -1 | 1) => void;
   movePageById: (id: string, dir: -1 | 1) => void;
   reorderPages: (from: number, to: number) => void;
@@ -659,6 +729,7 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
   const pages = incoming.pages?.length
     ? incoming.pages
     : createProject("blank").pages;
+  incoming.transactionNo ||= "";
   pages.forEach((p) => {
     p.elements ||= [];
     p.w = pageSize(p).w;
@@ -685,6 +756,7 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
     name: incoming.name || "تقرير",
     theme: incoming.theme || "official",
     orgName: incoming.orgName || "",
+    transactionNo: incoming.transactionNo || "",
     pages,
     id: incoming.id,
     createdAt: incoming.createdAt,
@@ -773,6 +845,7 @@ export const useEditor = create<EditorStore>((set, get) => {
 
   return {
     ...blank,
+    transactionNo: blank.transactionNo ?? "",
     activePageId: blank.pages[0].id,
     selectedId: null,
     selectedIds: [],
@@ -780,6 +853,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     editingId: null,
     zoom: 0.82,
     showGrid: false,
+    printGuides: { ...DEFAULT_PRINT_GUIDES },
     snapGrid: true,
     snapElements: true,
     previewAll: true,
@@ -797,6 +871,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     exportOpen: false,
     exportPreset: null,
     pageManagerOpen: false,
+    tablePickerOpen: false,
     saveState: "idle",
     savedAt: null,
     clockTick: 0,
@@ -896,6 +971,10 @@ export const useEditor = create<EditorStore>((set, get) => {
               : PAGES_PANEL_DEFAULT,
           ),
           bubbleEnabled: ui.bubble !== false,
+          printGuides: {
+            ...DEFAULT_PRINT_GUIDES,
+            ...(ui.printGuides ?? {}),
+          },
         });
         if (active) applyProject(active, { zoom: get().zoom });
       } catch {
@@ -1286,6 +1365,19 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
     setOrg: (orgName) => {
       set({ orgName });
+      scheduleSave(500);
+    },
+
+    /*
+     * Opening the builder also reveals the components panel, because that is
+     * where the overlay lives. On a tablet the panel is a drawer, so the author
+     * sees the picker slide in with it instead of a control appearing offscreen.
+     */
+    openTablePicker: () =>
+      set({ tablePickerOpen: true, leftTab: "elements", leftOpen: true }),
+    closeTablePicker: () => set({ tablePickerOpen: false }),
+    setTransactionNo: (transactionNo) => {
+      set({ transactionNo });
       scheduleSave(500);
     },
     setActivePage: (id) => {
@@ -1704,6 +1796,311 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     addElement: (type, over) => get().addElementAt(type, over)?.id,
 
+    /* ── Print guides ────────────────────────────────────────────────────── */
+
+    togglePrintGuide: (kind) => {
+      const next = {
+        ...get().printGuides,
+        [kind]: !get().printGuides[kind],
+      };
+      set({ printGuides: next });
+      writeUi({ printGuides: next });
+    },
+
+    /* ── Page furniture, numbering, and ready-made report objects ────────── */
+
+    /**
+     * Apply the active page's header and footer document-wide.
+     *
+     * The active page is the source because it is the one the author can see and
+     * style; the action then mirrors it onto every page of the same size. It is
+     * ONE history entry, so a mistaken «تثبيت» is a single undo away.
+     */
+    applyHeaderFooter: () => {
+      const s = get();
+      const source = activePageOf(s);
+      if (!source) return;
+      const { pages, copied, skipped } = applyFurniture(
+        s.pages,
+        source.id,
+        (page) => pageSize(page),
+      );
+      if (!copied && !skipped.length) {
+        toast.error("لا يوجد ترويسة أو تذييل في الصفحة الحالية", {
+          description: "أضف عناصر في أعلى الصفحة أو أسفلها ثم أعد المحاولة.",
+        });
+        return;
+      }
+      set({ pages });
+      pushHistory();
+      const note = skipped.length
+        ? ` · تم تخطّي ${skipped.length} صفحة بمقاس مختلف (${skipped.join("، ")})`
+        : "";
+      toast.success(
+        `تم تثبيت الترويسة والتذييل على ${s.pages.length} صفحة${note}`,
+      );
+    },
+
+    removeHeaderFooter: () => {
+      const s = get();
+      const { pages, removed } = clearFurniture(s.pages);
+      if (!removed) {
+        toast.error("لا توجد ترويسة أو تذييل مثبّت");
+        return;
+      }
+      set({ pages });
+      pushHistory();
+      toast.success(`تمت إزالة الترويسة والتذييل (${removed} عنصر)`);
+    },
+
+    addPageNumbers: () => {
+      const s = get();
+      const { pages, added } = numberPages(s.pages, THEMES[s.theme], (page) =>
+        pageSize(page),
+      );
+      if (!added) {
+        toast.error("كل الصفحات مرقّمة بالفعل");
+        return;
+      }
+      set({ pages });
+      pushHistory();
+      toast.success(`تمت إضافة ترقيم الصفحات (${added} عنصر)`);
+    },
+
+    removePageNumbers: () => {
+      const s = get();
+      const { pages, removed } = dropPageNumbers(s.pages);
+      if (!removed) {
+        toast.error("لا يوجد ترقيم صفحات");
+        return;
+      }
+      set({ pages });
+      pushHistory();
+      toast.success("تمت إزالة ترقيم الصفحات");
+    },
+
+    /**
+     * Stamp & signature zone.
+     *
+     * Landed as ONE group in the bottom corner, away from the gutter margin, and
+     * pushed in as one history entry so it can be dragged or undone as a unit.
+     */
+    insertSignatureZone: () => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const size = pageSize(page);
+      const zone = signatureZoneForPage(THEMES[s.theme], size);
+      const next = placeElements(page, [zone]);
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        selectedId: zone.id,
+        selectedIds: [zone.id],
+        rightTab: "properties",
+      });
+      pushHistory();
+      toast.success("تمت إضافة منطقة الختم والتوقيع", {
+        description:
+          "اسحبها إلى مكانها، وتفكيكها من «فك التجميع» إن أردت تعديل أجزائها.",
+        duration: 2600,
+      });
+    },
+
+    insertKpiCard: (kind, options) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const size = pageSize(page);
+      const def = kpiCard(kind, s.theme, { x: 0, y: 0, ...options });
+      const box = boundsOf(def) ?? { x: 0, y: 0, w: 60, h: 30 };
+      /*
+       * Placement: the visible centre of the page, the same rule the library
+       * uses — the card never lands off-screen or under a panel.
+       */
+      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+      const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+      const target = centerFor(visible, {
+        w: size.w,
+        h: size.h,
+        elW: box.w,
+        elH: box.h,
+      });
+      const parts = kpiCard(kind, s.theme, {
+        ...options,
+        x: target.x,
+        y: target.y,
+      });
+      const next = placeElements(page, parts);
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        selectedId: parts[0]?.id ?? null,
+        selectedIds: parts[0] ? [parts[0].id] : [],
+        rightTab: "properties",
+      });
+      pushHistory();
+      toast.success("تمت إضافة بطاقة المؤشر", { duration: 1800 });
+    },
+
+    /**
+     * Arabic typography presets.
+     *
+     * Applying a preset is a STYLE operation over the current selection — text
+     * "when the element is empty" only, and never geometry unless the element is
+     * new. With nothing selected the author gets a fresh, correctly styled text
+     * box, which is the common case: pick a title, type the title.
+     */
+    applyPreset: (presetId) => {
+      const s = get();
+      const preset = typographyPreset(presetId);
+      if (!preset) return;
+      const page = activePageOf(s);
+      if (!page) return;
+      const targets = s
+        .selectedElements()
+        .filter(
+          (el) => el.type === "text" || el.type === "box" || el.type === "stat",
+        );
+      if (!targets.length) {
+        const stage = document.querySelector<HTMLElement>(
+          ".editor-canvas-stage",
+        );
+        const size = pageSize(page);
+        const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+        const pos = centerFor(visible, {
+          w: size.w,
+          h: size.h,
+          elW: preset.box.w,
+          elH: preset.box.h,
+        });
+        const el = applyTypographyPreset(
+          createElement(
+            "text",
+            {
+              x: pos.x,
+              y: pos.y,
+              w: preset.box.w,
+              h: preset.box.h,
+              z: nextZ(page),
+            },
+            THEMES[s.theme],
+          ),
+          preset,
+          s.theme,
+        );
+        constrainElement(el, size);
+        const merged: Page = { ...page, elements: [...page.elements, el] };
+        normalizeZ(merged);
+        set({
+          pages: s.pages.map((p) => (p.id === page.id ? merged : p)),
+          selectedId: el.id,
+          selectedIds: [el.id],
+          rightTab: "properties",
+        });
+        pushHistory();
+        toast.success(`تم إنشاء عنصر بنمط «${preset.label}»`);
+        return;
+      }
+      const byId = new Map(
+        targets.map((el) => [
+          el.id,
+          applyTypographyPreset(el, preset, s.theme),
+        ]),
+      );
+      const walk = (list: CanvasEl[]): CanvasEl[] =>
+        list.map(
+          (el) =>
+            byId.get(el.id) ??
+            (el.children?.length ? { ...el, children: walk(el.children) } : el),
+        );
+      set({
+        pages: s.pages.map((p) =>
+          p.id === page.id ? { ...p, elements: walk(p.elements) } : p,
+        ),
+      });
+      pushHistory();
+      toast.success(
+        targets.length === 1
+          ? `تم تطبيق نمط «${preset.label}»`
+          : `تم تطبيق نمط «${preset.label}» على ${targets.length} عناصر`,
+      );
+    },
+
+    /**
+     * Insert a macro token.
+     *
+     * The token is appended to the selected text element (or a brand-new one) and
+     * stored as the TOKEN, never as its resolved value — that is what keeps the
+     * date live when the document is reopened next month.
+     */
+    insertMacro: (token) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const target = s
+        .selectedElements()
+        .find(
+          (el) => el.type === "text" || el.type === "box" || el.type === "stat",
+        );
+      if (!target) {
+        const size = pageSize(page);
+        const stage = document.querySelector<HTMLElement>(
+          ".editor-canvas-stage",
+        );
+        const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+        const pos = centerFor(visible, {
+          w: size.w,
+          h: size.h,
+          elW: 110,
+          elH: 14,
+        });
+        const el = createElement(
+          "text",
+          {
+            x: pos.x,
+            y: pos.y,
+            w: 110,
+            h: 14,
+            content: token,
+            z: nextZ(page),
+          },
+          THEMES[s.theme],
+        );
+        constrainElement(el, size);
+        const merged: Page = { ...page, elements: [...page.elements, el] };
+        normalizeZ(merged);
+        set({
+          pages: s.pages.map((p) => (p.id === page.id ? merged : p)),
+          selectedId: el.id,
+          selectedIds: [el.id],
+          rightTab: "properties",
+        });
+        pushHistory();
+        toast.success("تمت إضافة الرمز في صندوق نص جديد");
+        return;
+      }
+      const content = String(target.content ?? "");
+      const spacer = content && !/\s$/.test(content) ? " " : "";
+      set({
+        pages: s.pages.map((p) =>
+          p.id === page.id
+            ? {
+                ...p,
+                elements: p.elements.map((el) =>
+                  el.id === target.id
+                    ? { ...el, content: `${content}${spacer}${token}` }
+                    : el,
+                ),
+              }
+            : p,
+        ),
+        selectedId: target.id,
+        selectedIds: [target.id],
+        rightTab: "properties",
+      });
+      pushHistory();
+      toast.success("تمت إضافة الرمز", { duration: 1500 });
+    },
+
     addTextAt: (box, pageId) => {
       const s = get();
       const page = pageId
@@ -1901,6 +2298,30 @@ export const useEditor = create<EditorStore>((set, get) => {
         ),
         selectedId: el.id,
         selectedIds: [el.id],
+      });
+      pushHistory();
+    },
+
+    deleteElementsById: (ids) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page || !ids.length) return;
+      const wanted = new Set(ids);
+      const strip = (list: CanvasEl[]): CanvasEl[] =>
+        list
+          .filter((el) => !(wanted.has(el.id) && !el.locked))
+          .map((el) =>
+            el.children?.length ? { ...el, children: strip(el.children) } : el,
+          );
+      const elements = strip(page.elements);
+      if (elements.length === page.elements.length) return;
+      const next = { ...page, elements };
+      normalizeZ(next);
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        selectedId:
+          s.selectedId && wanted.has(s.selectedId) ? null : s.selectedId,
+        selectedIds: s.selectedIds.filter((id) => !wanted.has(id)),
       });
       pushHistory();
     },
@@ -2402,6 +2823,8 @@ interface PersistedUi {
   pagesPanelHeight?: number;
   /** Floating bubble visibility (absent = shown). */
   bubble?: boolean;
+  /** Print-guide visibility (absent = all off). */
+  printGuides?: PrintGuideSettings;
 }
 
 /** Merge a patch into the persisted UI slot (zoom, panels, pages height…). */
@@ -2462,6 +2885,43 @@ export function saveLabel(
   const hours = Math.round(minutes / 60);
   return `آخر حفظ منذ ${hours} ساعة`;
 }
+
+/*
+ * ── Macro context ─────────────────────────────────────────────────────────
+ *
+ * `{التاريخ_الهجري}`, `{اسم_الجهة}` and friends resolve inside `prepareText`,
+ * which the canvas, the properties panel and three exporters all call. Rather
+ * than thread the document through each of them, one subscription here keeps the
+ * context in step with the store: any write that changes the entity, the
+ * transaction number, the page count or the active page refreshes it.
+ *
+ * Per-page rendering (the HTML and Office exporters) refines the page number
+ * locally — a whole document is painted in one pass, so page 2 and page 9 cannot
+ * share one ambient number.
+ */
+function syncTextContext(state: EditorStore): void {
+  const index = state.pages.findIndex((p) => p.id === state.activePageId);
+  setTextContext({
+    orgName: state.orgName,
+    transactionNo: state.transactionNo,
+    pageNumber: Math.max(1, index + 1),
+    pageCount: Math.max(1, state.pages.length),
+  });
+}
+
+syncTextContext(useEditor.getState());
+
+useEditor.subscribe((state, prev) => {
+  if (
+    state.orgName === prev.orgName &&
+    state.transactionNo === prev.transactionNo &&
+    state.pages === prev.pages &&
+    state.activePageId === prev.activePageId
+  ) {
+    return;
+  }
+  syncTextContext(state);
+});
 
 export { UI_KEY };
 export const A4_SIZE = A4;

@@ -97,7 +97,13 @@ describe("isOverlayViewport", () => {
   });
 
   it("keeps one breakpoint constant for the shell and the store", () => {
-    assert.equal(OVERLAY_BREAKPOINT, 1024);
+    /*
+     * 1100, not the classic 1024: at 1024–1100 two docked panels plus a usable
+     * A4 artboard no longer fit, so the tablet slide-over layout has to start a
+     * little earlier. The shell derives its `matchMedia` query from this same
+     * constant (`EditorApp`), which is what makes "one breakpoint" true.
+     */
+    assert.equal(OVERLAY_BREAKPOINT, 1100);
   });
 });
 

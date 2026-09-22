@@ -48,6 +48,7 @@ import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
 import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
 import { ToolbarMenus } from "./ToolbarMenus";
+import { OVERLAY_BREAKPOINT, isOverlayViewport } from "@/lib/editor/ui-state";
 
 /**
  * The studio shell.
@@ -402,11 +403,20 @@ function Studio({
       return { left: 280, right: 320 };
     }
   });
+  /*
+   * Docked panels vs. slide-overs. The width comes from `OVERLAY_BREAKPOINT`
+   * (the store's single source of truth) rather than a hardcoded number here:
+   * a second copy of this rule is exactly how the shell and the auto-open logic
+   * drift apart, and 1100 is where two panels plus a usable A4 artboard stop
+   * fitting side by side.
+   */
   const [isDesktop, setIsDesktop] = useState(
-    () =>
-      typeof window === "undefined" ||
-      window.matchMedia("(min-width: 1024px)").matches,
+    () => typeof window === "undefined" || !isOverlayViewport(),
   );
+  /** First load is what arms the auto-fit below. */
+  const hydrated = useEditor((s) => s.hydrated);
+  /** Only the very first fit may be skipped when the saved zoom already fits. */
+  const firstFitRef = useRef(true);
 
   /** True when the library tab is the visible one in the components panel. */
   const libraryVisible = isDesktop
@@ -420,12 +430,57 @@ function Studio({
   }, [panelWidths]);
 
   useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px)");
+    const media = window.matchMedia(`(min-width: ${OVERLAY_BREAKPOINT}px)`);
     const update = () => setIsDesktop(media.matches);
     update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
+
+  /*
+   * Re-fit the artboard whenever the SHELL changes shape.
+   *
+   * Crossing the tablet boundary does not just move the panels — it changes how
+   * much room the canvas has (docked columns disappear, drawers float over the
+   * artwork). Keeping the old zoom would leave the A4 page wider than the stage
+   * and hand the author a horizontal scrollbar the moment they turn their iPad
+   * sideways, which is exactly what the tablet mode is supposed to prevent.
+   *
+   * The fit runs after the layout has settled (a short timeout) because the
+   * stage's measured width is what it is only once the panels have actually
+   * docked or undocked. It deliberately depends on nothing else: the author's
+   * zoom inside a given mode is theirs, and only a mode change or the first load
+   * refits. `fitRef` carries the latest callback, so the effect does not re-run
+   * (and re-fit) just because the active page changed underneath it.
+   */
+  useEffect(() => {
+    if (!hydrated) return;
+    const timer = setTimeout(() => {
+      /*
+       * First load respects a zoom the author saved — unless that zoom does not
+       * fit, which is precisely the case that produces a horizontal scrollbar on
+       * a tablet. Later runs are layout changes, where re-fitting is the point.
+       */
+      if (firstFitRef.current) {
+        firstFitRef.current = false;
+        const stage = document.querySelector<HTMLElement>(
+          ".editor-canvas-stage",
+        );
+        const activeId = useEditor.getState().activePageId;
+        const page = stage?.querySelector<HTMLElement>(
+          `[data-page-id="${CSS.escape(activeId ?? "")}"]`,
+        );
+        const fits =
+          !!stage &&
+          !!page &&
+          page.getBoundingClientRect().width <= stage.clientWidth - 8 &&
+          stage.scrollWidth <= stage.clientWidth + 4;
+        if (fits) return;
+      }
+      fitRef.current();
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [isDesktop, hydrated]);
 
   /*
    * Publish the header's REAL height as `--editor-header-h`.
@@ -498,6 +553,9 @@ function Studio({
   const activePage = pages.find((p) => p.id === activePageId) || pages[0];
   const activeSize = pageSize(activePage);
 
+  /** Latest `fitToScreen`, for the layout effect that must not re-subscribe. */
+  const fitRef = useRef<() => void>(() => {});
+
   /**
    * ملاءمة الصفحة / عرض الصفحة بالكامل: pick a zoom that fits the WHOLE
    * artboard (all four edges inside the viewport) and then centre it, so Fit
@@ -537,6 +595,7 @@ function Studio({
       stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
     });
   }, [activePage?.id, activeSize.h, activeSize.w, setZoom]);
+  fitRef.current = fitToScreen;
 
   /**
    * Toolbar/keyboard zoom keeps the middle of the current view stable. With a
@@ -923,10 +982,16 @@ function Studio({
        *
        * `flex-wrap` stays for phones, where the tool tray genuinely belongs on a
        * second line (`order-last` below `md`). From `md` up the row is
-       * `flex-nowrap`: the brand group and the actions group are `shrink-0`, and
-       * the tool tray is `min-w-0`, so on a 768–1024px tablet the tray narrows
-       * and scrolls horizontally INSIDE the row instead of pushing the toolbar
-       * into a stack of mismatched rows.
+       * `flex-nowrap`: the brand group, the history + zoom cluster and the
+       * actions group are all `shrink-0`, and only the tool tray is `min-w-0`,
+       * so on a 768–1100px tablet the tray narrows and scrolls horizontally
+       * INSIDE the row instead of pushing the toolbar into a stack of
+       * mismatched rows.
+       *
+       * The global actions the author reaches for constantly — Save and Export
+       * (actions group), Undo/Redo and Zoom/Fit (pinned cluster) — sit at the
+       * row's two edges and take no part in that scroll, so they stay one click
+       * away at every width.
        */}
       <header
         ref={headerRef}
@@ -957,7 +1022,7 @@ function Studio({
             <PenLine className="size-4" />
             {/* Label returns from `lg` up; on a tablet the icon + tooltip carry
                 the action, which is what buys the tool tray its room. */}
-            <span className="hidden lg:inline">نص بالرسم</span>
+            <span className="hidden lg2:inline">نص بالرسم</span>
           </button>
           {/**
            * «مشاريعي» → صفحة المشاريع. A real same-tab navigation (anchor) so it
@@ -1013,46 +1078,55 @@ function Studio({
          * horizontally INSIDE the single toolbar row — the tablet behaviour —
          * with `whitespace-nowrap` keeping every action group on one line.
          */}
+        {/*
+         * Pinned cluster — history + zoom.
+         *
+         * These four actions are pressed constantly and in a hurry (undo the
+         * last nudge, zoom out to see the page), so they must never scroll off
+         * the row on a tablet. They therefore sit OUTSIDE the scrollable tray,
+         * `shrink-0`, next to the brand group; the tray keeps the menus, the
+         * project name and the grid toggle, which are the items that can afford
+         * to slide.
+         */}
+        <div className="flex shrink-0 items-center gap-1">
+          <IconButton
+            onClick={undo}
+            disabled={past.length <= 1}
+            title="تراجع (⌘Z)"
+          >
+            <Undo2 className="size-4" />
+          </IconButton>
+          <IconButton
+            onClick={redo}
+            disabled={!future.length}
+            title="إعادة (⌘⇧Z)"
+          >
+            <Redo2 className="size-4" />
+          </IconButton>
+          <span
+            className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10"
+            aria-hidden
+          />
+          <IconButton onClick={() => zoomCentered(zoom - 0.08)} title="تصغير">
+            <ZoomOut className="size-4" />
+          </IconButton>
+          <span className="w-10 shrink-0 text-center text-[12px] font-bold tabular-nums">
+            {Math.round(zoom * 100)}%
+          </span>
+          <IconButton onClick={() => zoomCentered(zoom + 0.08)} title="تكبير">
+            <ZoomIn className="size-4" />
+          </IconButton>
+          {/*
+           * Fit is the companion action of zooming (it used to be buried in the
+           * View menu), so it stays on the strip in one click at every size.
+           */}
+          <IconButton onClick={fitToScreen} title="ملاءمة الصفحة">
+            <Scan className="size-4" />
+          </IconButton>
+        </div>
+
         <div className="editor-pane-scroll order-last flex min-w-fit flex-1 items-center overflow-x-auto whitespace-nowrap md:order-none md:min-w-0">
           <div className="mx-auto flex w-max items-center gap-1">
-            <IconButton
-              onClick={undo}
-              disabled={past.length <= 1}
-              title="تراجع (⌘Z)"
-            >
-              <Undo2 className="size-4" />
-            </IconButton>
-            <IconButton
-              onClick={redo}
-              disabled={!future.length}
-              title="إعادة (⌘⇧Z)"
-            >
-              <Redo2 className="size-4" />
-            </IconButton>
-            {/*
-             * Order matters on a narrow canvas: the zoom cluster and the four
-             * tool menus sit at the container's right (RTL start) so they remain
-             * visible without scrolling; the project name, grid and fit-to
-             * selection yield first when the viewport cannot hold everything.
-             */}
-            <IconButton onClick={() => zoomCentered(zoom - 0.08)} title="تصغير">
-              <ZoomOut className="size-4" />
-            </IconButton>
-            <span className="w-10 shrink-0 text-center text-[12px] font-bold tabular-nums">
-              {Math.round(zoom * 100)}%
-            </span>
-            <IconButton onClick={() => zoomCentered(zoom + 0.08)} title="تكبير">
-              <ZoomIn className="size-4" />
-            </IconButton>
-            {/*
-             * Fit lives pinned beside the zoom cluster: it is the companion
-             * action of zooming (was buried as an item inside the View/eye
-             * menu), and staying on the strip keeps it reachable in one click
-             * at every window size.
-             */}
-            <IconButton onClick={fitToScreen} title="ملاءمة الصفحة">
-              <Scan className="size-4" />
-            </IconButton>
             {/* Secondary tools grouped into four real, keyboard-accessible menus.
               Fit/100% live in the View menu (قائمة «عرض»). */}
             <span
@@ -1237,9 +1311,9 @@ function Studio({
       {/*
        * Workspace.
        *
-       * `lg:grid-rows-[minmax(0,1fr)]` is what keeps the panes on screen: without
+       * `lg2:grid-rows-[minmax(0,1fr)]` is what keeps the panes on screen: without
        * a bounded row the implicit row sizes to the tallest panel's content, and
-       * the overflow is then clipped by `lg:overflow-hidden` — which is exactly
+       * the overflow is then clipped by `lg2:overflow-hidden` — which is exactly
        * how the lower properties controls became unreachable. The wrappers are
        * `h-full min-h-0 overflow-hidden` so each panel's inner `flex-1
        * overflow-auto` region is the thing that scrolls.
@@ -1262,12 +1336,12 @@ function Studio({
         className={cn(
           "editor-focus-workspace editor-workspace-row relative grid min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden",
           focusMode || (leftCollapsed && rightCollapsed)
-            ? "lg:grid-cols-[minmax(0,1fr)]"
+            ? "lg2:grid-cols-[minmax(0,1fr)]"
             : leftCollapsed
-              ? "lg:grid-cols-[minmax(360px,1fr)_320px] xl:grid-cols-[minmax(420px,1fr)_336px]"
+              ? "lg2:grid-cols-[minmax(360px,1fr)_320px] xl:grid-cols-[minmax(420px,1fr)_336px]"
               : rightCollapsed
-                ? "lg:grid-cols-[280px_minmax(360px,1fr)] xl:grid-cols-[292px_minmax(420px,1fr)]"
-                : "lg:grid-cols-[280px_minmax(360px,1fr)_320px] xl:grid-cols-[292px_minmax(420px,1fr)_336px]",
+                ? "lg2:grid-cols-[280px_minmax(360px,1fr)] xl:grid-cols-[292px_minmax(420px,1fr)]"
+                : "lg2:grid-cols-[280px_minmax(360px,1fr)_320px] xl:grid-cols-[292px_minmax(420px,1fr)_336px]",
         )}
         style={{
           /*
@@ -1302,11 +1376,11 @@ function Studio({
              * components panel belongs to the visual right edge, which is the
              * physical `right` side here.
              */
-            "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-[var(--z-drawer)] max-lg:w-[min(320px,86vw)] max-lg:shadow-2xl",
-            "max-lg:transition-transform max-lg:duration-200 max-lg:ease-out",
-            !leftOpen && "max-lg:translate-x-full",
-            !leftOpen && "max-lg:pointer-events-none",
-            leftCollapsed && "lg:hidden",
+            "max-lg2:fixed max-lg2:inset-y-0 max-lg2:right-0 max-lg2:z-[var(--z-drawer)] max-lg2:w-[min(320px,86vw)] max-lg2:shadow-2xl",
+            "max-lg2:transition-transform max-lg2:duration-200 max-lg2:ease-out",
+            !leftOpen && "max-lg2:translate-x-full",
+            !leftOpen && "max-lg2:pointer-events-none",
+            leftCollapsed && "lg2:hidden",
           )}
         >
           {/*
@@ -1405,11 +1479,11 @@ function Studio({
              * `min(340px, 90vw)` slide-over, where the canvas is stacked behind
              * the drawer anyway.
              */
-            "max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-[var(--z-drawer)] max-lg:w-[min(340px,90vw)] max-lg:shadow-2xl md:max-lg:w-72",
-            "max-lg:transition-transform max-lg:duration-200 max-lg:ease-out",
-            !rightOpen && "max-lg:-translate-x-full",
-            !rightOpen && "max-lg:pointer-events-none",
-            rightCollapsed && "lg:hidden",
+            "max-lg2:fixed max-lg2:inset-y-0 max-lg2:left-0 max-lg2:z-[var(--z-drawer)] max-lg2:w-[min(340px,90vw)] max-lg2:shadow-2xl md:max-lg2:w-72",
+            "max-lg2:transition-transform max-lg2:duration-200 max-lg2:ease-out",
+            !rightOpen && "max-lg2:-translate-x-full",
+            !rightOpen && "max-lg2:pointer-events-none",
+            rightCollapsed && "lg2:hidden",
           )}
         >
           {/* Same in-flow close row for the properties panel. */}
@@ -1448,7 +1522,7 @@ function Studio({
        */}
       {!(leftOpen || rightOpen) && (
         <div
-          className="pointer-events-none absolute left-1/2 z-[var(--z-drawer)] flex -translate-x-1/2 gap-2 lg:hidden"
+          className="pointer-events-none absolute left-1/2 z-[var(--z-drawer)] flex -translate-x-1/2 gap-2 lg2:hidden"
           style={{ bottom: `calc(${pagesPanelHeight}px + 12px)` }}
         >
           <button

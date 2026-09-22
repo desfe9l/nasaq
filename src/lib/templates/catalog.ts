@@ -35,10 +35,21 @@ import {
 } from "@/lib/editor/model";
 import { freshPages, type CatalogPillId, type CustomTemplate } from "./custom-templates";
 
+/**
+ * Filter pills, in the order the catalog shows them.
+ *
+ * The first six are the official document families the product is organised
+ * around — annual reports, letters, meeting minutes, closing presentations and
+ * operational plans — followed by the two format-oriented pills (certificates,
+ * infographics) and the author's own templates.
+ */
 export const CATALOG_PILLS: { id: CatalogPillId; label: string }[] = [
   { id: "all", label: "الكل" },
   { id: "annual", label: "تقارير سنوية" },
   { id: "letters", label: "خطابات رسمية" },
+  { id: "minutes", label: "محاضر اجتماعات" },
+  { id: "presentations", label: "عروض ختامية" },
+  { id: "plans", label: "خطط تشغيلية" },
   { id: "certificates", label: "شهادات" },
   { id: "infographic", label: "إنفوجرافيك" },
   { id: "custom", label: "قوالبي الخاصة" },
@@ -78,26 +89,26 @@ const PILL_BY_CATEGORY: Record<TemplateCategoryId, CatalogPillId[]> = {
   covers: ["annual", "letters"],
   reports: ["annual", "letters"],
   inner: ["annual"],
-  stats: ["annual", "infographic"],
-  tables: ["infographic"],
-  kpis: ["infographic"],
+  stats: ["annual", "infographic", "presentations"],
+  tables: ["infographic", "minutes"],
+  kpis: ["infographic", "plans"],
   infographics: ["infographic"],
-  slides: ["annual"],
+  slides: ["annual", "presentations"],
   editorial: ["annual"],
-  institutional: ["annual"],
-  data: ["annual", "infographic"],
-  executive: ["annual"],
-  section: ["annual", "certificates"],
-  timeline: ["infographic"],
+  institutional: ["annual", "plans"],
+  data: ["annual", "infographic", "plans"],
+  executive: ["annual", "minutes", "plans"],
+  section: ["annual", "certificates", "presentations"],
+  timeline: ["infographic", "plans"],
 };
 
 /** Starter packs and the pills they answer to (plus their representative category). */
 const PACK_META: Record<PackId, { category: TemplateCategoryId; pills: CatalogPillId[] }> = {
-  official: { category: "reports", pills: ["annual", "letters"] },
+  official: { category: "reports", pills: ["annual", "letters", "plans"] },
   eid: { category: "covers", pills: ["annual", "certificates"] },
-  briefing: { category: "executive", pills: ["annual"] },
-  slides: { category: "slides", pills: ["annual"] },
-  blank: { category: "editorial", pills: ["letters", "annual"] },
+  briefing: { category: "executive", pills: ["annual", "minutes", "plans"] },
+  slides: { category: "slides", pills: ["annual", "presentations"] },
+  blank: { category: "editorial", pills: ["letters", "annual", "plans"] },
 };
 
 const CATEGORY_LABEL: Record<string, string> = Object.fromEntries(
@@ -114,6 +125,9 @@ const KIND_LABEL: Record<CatalogEntryKind, string> = {
 const PILL_KEYWORDS: { pill: CatalogPillId; words: string[] }[] = [
   { pill: "certificates", words: ["شهادة", "شهادات", "ختم", "توقيع", "اعتماد", "تكريم"] },
   { pill: "letters", words: ["خطاب", "رسالة", "مذكرة", "تعميم", "ترويسة"] },
+  { pill: "minutes", words: ["محضر", "اجتماع", "قرار", "قرارات", "حضور", "توصيات", "جدول أعمال", "مداولات"] },
+  { pill: "presentations", words: ["عرض", "تقديم", "شريحة", "شرائح", "ختامي", "ختامية", "منصة"] },
+  { pill: "plans", words: ["خطة", "خطط", "تشغيلي", "تشغيلية", "مبادرة", "مبادرات", "مستهدف", "أهداف", "مؤشرات أداء"] },
   { pill: "infographic", words: ["إنفوجرافيك", "انفوجرافيك", "مؤشر", "إحصاء", "احصاء", "جدول", "رسم بياني"] },
   { pill: "annual", words: ["تقرير", "سنوي", "أداء", "انجاز", "إنجاز"] },
 ];

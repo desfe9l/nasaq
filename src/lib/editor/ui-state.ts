@@ -11,8 +11,12 @@
  * Screens at or below this width swap the docked sidebars for floating
  * slide-overs. One source of truth, so the store (auto-open rules) and the
  * shell (layout) can never disagree about which mode is active.
+ *
+ * 1100 rather than 1024: at 1024–1100 the two panels plus a usable A4 artboard
+ * do not fit side by side, so the tablet layout has to start a little earlier
+ * than the classic iPad landscape width.
  */
-export const OVERLAY_BREAKPOINT = 1024;
+export const OVERLAY_BREAKPOINT = 1100;
 
 /** True when the viewport is in slide-over mode (tablet/phone widths). */
 export function isOverlayViewport(): boolean {

@@ -102,6 +102,18 @@ export function unwrapParagraphs(text: string): string {
     .join("\n\n");
 }
 
+/**
+ * Does this text contain Arabic script at all?
+ *
+ * Used to scope the Arabic-specific rules (the leading floor, elongation) so a
+ * Latin-only caption keeps the metrics its author chose.
+ */
+export function hasArabic(text: string): boolean {
+  return /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(
+    String(text ?? ""),
+  );
+}
+
 /** A non-breaking space keeps a number's unit and its digits on one line. */
 export function bindUnits(text: string): string {
   return String(text ?? "").replace(
@@ -310,13 +322,21 @@ export function measureTextWidth(
   return Math.min(maxWidthMm, longest * perChar);
 }
 
-/** Line-height presets that suit Arabic ascenders/descenders. */
+/**
+ * Line-height presets that suit Arabic ascenders/descenders.
+ *
+ * Nothing here goes below 1.5: Arabic tall letters (أ إ ل) reach above the Latin
+ * em box and the descenders of ج ح خ ر و ي reach below it, so a tighter leading
+ * makes consecutive lines overlap — the "cut letters" authors report. The floor
+ * is enforced again at render time (`arabicSafeLineHeight`), so a legacy
+ * document carrying 1.2 is still painted correctly.
+ */
 export const LINE_HEIGHTS: { id: string; label: string; value: number }[] = [
-  { id: "tight", label: "متراص", value: 1.2 },
-  { id: "snug", label: "قريب", value: 1.4 },
-  { id: "normal", label: "عادي", value: 1.6 },
-  { id: "airy", label: "واسع", value: 1.85 },
-  { id: "loose", label: "فاصل", value: 2.1 },
+  { id: "tight", label: "متراص", value: 1.5 },
+  { id: "snug", label: "قريب", value: 1.65 },
+  { id: "normal", label: "عادي", value: 1.8 },
+  { id: "airy", label: "واسع", value: 2 },
+  { id: "loose", label: "فاصل", value: 2.2 },
 ];
 
 /** Letter-spacing presets, in mm — Arabic joins letters, so values stay small. */

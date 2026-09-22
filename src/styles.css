@@ -43,6 +43,17 @@
   --font-serif-ar: "Amiri", "Noto Naskh Arabic", serif;
 
   /*
+   * `lg2` — the editor's own docked/overlay boundary, at 1100px.
+   *
+   * Tailwind's stock `lg` (1024px) is one CSS pixel away from a layout the shell
+   * cannot actually fit: two panels plus a usable A4 artboard need 1100. The Java-
+   * Script boundary lives in `ui-state.ts` (`OVERLAY_BREAKPOINT`) and the
+   * layout's classes use `lg2:`/`max-lg2:` — the two must always be the same
+   * number, which is why neither is spelled out in a component.
+   */
+  --breakpoint-lg2: 1100px;
+
+  /*
    * `navy` keeps its name because it is the historical token for the primary
    * surface colour and is referenced across the whole editor; it now carries the
    * institutional emerald that NASAQ brands with.
@@ -606,6 +617,44 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
     linear-gradient(rgba(37, 99, 235, 0.09) 1px, transparent 1px),
     linear-gradient(90deg, rgba(37, 99, 235, 0.09) 1px, transparent 1px);
   background-size: 5mm 5mm;
+}
+
+/*
+ * Print guides (safe area / binding margin / bleed).
+ *
+ * Painted above the artwork and below the selection chrome: a guide is a
+ * measuring aid, never something the author can click or drag. Colours are
+ * deliberately quiet in both themes so the guides read as rulers, not as design.
+ */
+.print-guides {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+  color: rgba(37, 99, 235, 0.75);
+}
+
+.print-guides .pg-safe {
+  color: rgba(37, 99, 235, 0.6);
+}
+
+.print-guides .pg-safe text,
+.print-guides .pg-gutter text {
+  fill: rgba(37, 99, 235, 0.85);
+  font-family: "Tajawal", "Cairo", sans-serif;
+  font-weight: 700;
+  direction: rtl;
+}
+
+.print-guides .pg-gutter rect {
+  fill: rgba(217, 119, 6, 0.09);
+}
+
+.print-guides .pg-gutter {
+  color: rgba(217, 119, 6, 0.9);
+}
+
+.print-guides .pg-bleed {
+  color: rgba(220, 38, 38, 0.85);
 }
 
 .canvas-el {

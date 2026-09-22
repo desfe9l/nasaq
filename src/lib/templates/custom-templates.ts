@@ -32,6 +32,9 @@ export type CatalogPillId =
   | "all"
   | "annual"
   | "letters"
+  | "minutes"
+  | "presentations"
+  | "plans"
   | "certificates"
   | "infographic"
   | "custom";

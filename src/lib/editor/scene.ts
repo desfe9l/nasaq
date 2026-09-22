@@ -11,7 +11,7 @@ import { safeImageSrc } from "./images";
 import { safeSvgSrc } from "./svg";
 import { shapeDef, type ShapePart } from "./shapes";
 import { shapeIdOf } from "./shape-render";
-import { prepareText, textPadding } from "./text-render";
+import { prepareText, textPadding, type PageContext } from "./text-render";
 
 /**
  * A page described in millimetres, independent of how it is drawn.
@@ -258,6 +258,7 @@ function walk(
   oy: number,
   inherited: { rotation: number; opacity: number },
   out: SceneItem[],
+  pageRef?: PageContext,
 ) {
   for (const el of els) {
     if (el.hidden) continue;
@@ -275,11 +276,18 @@ function walk(
         oy + el.y,
         { rotation: inherited.rotation + (el.rotation || 0), opacity },
         out,
+        pageRef,
       );
       continue;
     }
 
-    const item = toItem(el, ox, oy, inherited.rotation + (el.rotation || 0));
+    const item = toItem(
+      el,
+      ox,
+      oy,
+      inherited.rotation + (el.rotation || 0),
+      pageRef,
+    );
     if (Array.isArray(item)) out.push(...item);
     else if (item) out.push(item);
   }
@@ -313,6 +321,7 @@ function toItem(
   ox: number,
   oy: number,
   rotation: number,
+  pageRef?: PageContext,
 ): SceneItem | SceneItem[] | null {
   const s = el.style || {};
   const base = {
@@ -329,7 +338,7 @@ function toItem(
     ...(s.flipY ? { flipY: true } : {}),
   };
 
-  const prepared = prepareText(el);
+  const prepared = prepareText(el, pageRef);
   const font = cssFont(s.fontFamily);
   const padding = textPadding(el);
 
@@ -346,7 +355,7 @@ function toItem(
         underline: s.underline === true,
         color: cleanColor(s.color, DEFAULT_INK),
         align: s.textAlign || "right",
-        lineHeight: s.lineHeight || 1.45,
+        lineHeight: prepared.lineHeight,
         letterSpacing: Number(s.letterSpacing) || 0,
         paragraphSpacing: Number(s.paragraphSpacing) || 0,
         vertical: s.writingMode === "vertical",
@@ -369,7 +378,7 @@ function toItem(
         underline: s.underline === true,
         color: cleanColor(s.color, DEFAULT_INK),
         align: s.textAlign || "right",
-        lineHeight: s.lineHeight || 1.5,
+        lineHeight: prepared.lineHeight,
         letterSpacing: Number(s.letterSpacing) || 0,
         paragraphSpacing: Number(s.paragraphSpacing) || 0,
         vertical: s.writingMode === "vertical",
@@ -391,7 +400,7 @@ function toItem(
         underline: false,
         color: cleanColor(s.color, DEFAULT_ACCENT),
         align: "center",
-        lineHeight: s.lineHeight || 1.2,
+        lineHeight: prepared.lineHeight,
         letterSpacing: 0,
         paragraphSpacing: 0,
         vertical: false,
@@ -540,11 +549,11 @@ function toItem(
 }
 
 /** Resolve one page into a flat scene in millimetres. */
-export function buildScenePage(page: Page): ScenePage {
+export function buildScenePage(page: Page, pageRef?: PageContext): ScenePage {
   const size = pageSize(page);
   const items: SceneItem[] = [];
   const ordered = page.elements.slice().sort((a, b) => (a.z || 0) - (b.z || 0));
-  walk(ordered, 0, 0, { rotation: 0, opacity: 1 }, items);
+  walk(ordered, 0, 0, { rotation: 0, opacity: 1 }, items, pageRef);
   return {
     w: size.w,
     h: size.h,
@@ -554,8 +563,16 @@ export function buildScenePage(page: Page): ScenePage {
   };
 }
 
+/**
+ * Build the writer-neutral scene for a whole document.
+ *
+ * Each page is rendered with its own page number so a Word/PowerPoint export
+ * carries the same «صفحة n من m» the canvas shows.
+ */
 export function buildScene(pages: Page[]): ScenePage[] {
-  return pages.map(buildScenePage);
+  return pages.map((page, index) =>
+    buildScenePage(page, { number: index + 1, count: pages.length }),
+  );
 }
 
 /** Every distinct font family in a scene, so a writer can declare them up front. */

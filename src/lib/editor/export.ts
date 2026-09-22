@@ -9,7 +9,7 @@ import {
   type Page,
   type Project,
 } from "./model";
-import { prepareText } from "./text-render";
+import { prepareText, type PageContext } from "./text-render";
 import { shapeSvgMarkup, strokeToUnits } from "./shape-render";
 import { applyNumerals } from "./arabic";
 import { safeImageSrc } from "./images";
@@ -509,13 +509,21 @@ const TEXT_ALIGN = [
 const OBJECT_FIT = ["cover", "contain", "fill", "none", "scale-down"] as const;
 const FONT_STYLE = ["normal", "italic", "oblique"] as const;
 
-function elHtml(el: CanvasEl): string {
+/**
+ * One element as HTML.
+ *
+ * `pageRef` carries the page the element belongs to so `{رقم_الصفحة_من_الكل}`
+ * resolves per page — the standalone file renders the whole document in one
+ * pass, where a single ambient page number would print the same number on every
+ * sheet.
+ */
+function elHtml(el: CanvasEl, pageRef?: PageContext): string {
   const s = el.style || {};
   const wrap = (inner: string) =>
     `<div class="el" style="left:${num(el.x, 0, -1e4, 1e4)}mm;top:${num(el.y, 0, -1e4, 1e4)}mm;width:${num(el.w, 40, 0, 1e4)}mm;height:${num(el.h, 20, 0, 1e4)}mm;transform:rotate(${num(el.rotation, 0, -3600, 3600)}deg);opacity:${num(el.opacity, 1, 0, 1)};z-index:${num(el.z, 1, -1e4, 1e4)};box-shadow:${esc(s.shadow || "none")}">${inner}</div>`;
 
   /** Mirror of the canvas text options so the exported file matches the screen. */
-  const text = prepareText(el);
+  const text = prepareText(el, pageRef);
   const verticalCss =
     s.writingMode === "vertical"
       ? "writing-mode:vertical-rl;text-orientation:mixed;"
@@ -529,18 +537,18 @@ function elHtml(el: CanvasEl): string {
       (el.children || [])
         .slice()
         .sort((a, b) => num(a.z, 0) - num(b.z, 0))
-        .map(elHtml)
+        .map((child) => elHtml(child, pageRef))
         .join(""),
     );
   }
   if (el.type === "text") {
     return wrap(
-      `<div class="text" style="font-family:${cssFont(s.fontFamily)};font-size:${num(text.fontSize, 14, 4, 400)}pt;color:${cssColor(s.color, "#172033")};font-weight:${num(s.fontWeight, 600, 100, 900)};text-align:${cssKeyword(s.textAlign, TEXT_ALIGN, "right")};line-height:${num(s.lineHeight, 1.45, 0.5, 5)};font-style:${cssKeyword(s.fontStyle, FONT_STYLE, "normal")};letter-spacing:${num(s.letterSpacing, 0, -10, 50)}mm;direction:rtl;${verticalCss}">${body()}</div>`,
+      `<div class="text" style="font-family:${cssFont(s.fontFamily)};font-size:${num(text.fontSize, 14, 4, 400)}pt;color:${cssColor(s.color, "#172033")};font-weight:${num(s.fontWeight, 600, 100, 900)};text-align:${cssKeyword(s.textAlign, TEXT_ALIGN, "right")};line-height:${num(text.lineHeight, 1.45, 0.5, 5)};font-style:${cssKeyword(s.fontStyle, FONT_STYLE, "normal")};letter-spacing:${num(s.letterSpacing, 0, -10, 50)}mm;direction:rtl;${verticalCss}">${body()}</div>`,
     );
   }
   if (el.type === "box" || el.type === "stat") {
     return wrap(
-      `<div class="box" style="background:${cssColor(s.fill || s.background, "#f7f8fb")};border:${num(s.borderWidth, 0.35, 0, 50)}mm solid ${cssColor(s.borderColor, "#d9dee8")};border-radius:${num(s.radius, 4, 0, 500)}mm;padding:${num(s.padding, 4, 0, 200)}mm;font-family:${cssFont(s.fontFamily)};font-size:${num(text.fontSize, 12, 4, 400)}pt;color:${cssColor(s.color, "#172033")};font-weight:${num(s.fontWeight, 600, 100, 900)};text-align:${cssKeyword(s.textAlign, TEXT_ALIGN, "right")};line-height:${num(s.lineHeight, 1.5, 0.5, 5)};direction:rtl;${verticalCss}">${body()}</div>`,
+      `<div class="box" style="background:${cssColor(s.fill || s.background, "#f7f8fb")};border:${num(s.borderWidth, 0.35, 0, 50)}mm solid ${cssColor(s.borderColor, "#d9dee8")};border-radius:${num(s.radius, 4, 0, 500)}mm;padding:${num(s.padding, 4, 0, 200)}mm;font-family:${cssFont(s.fontFamily)};font-size:${num(text.fontSize, 12, 4, 400)}pt;color:${cssColor(s.color, "#172033")};font-weight:${num(s.fontWeight, 600, 100, 900)};text-align:${cssKeyword(s.textAlign, TEXT_ALIGN, "right")};line-height:${num(text.lineHeight, 1.5, 0.5, 5)};direction:rtl;${verticalCss}">${body()}</div>`,
     );
   }
   if (el.type === "progress") {
@@ -671,12 +679,13 @@ function elHtml(el: CanvasEl): string {
 
 export function buildStandaloneHtml(project: Project, pages: Page[]) {
   const body = pages
-    .map((p) => {
+    .map((p, index) => {
       const size = pageSize(p);
+      const pageRef = { number: index + 1, count: pages.length };
       return `<section class="page" style="width:${num(size.w, 210, 10, 1e4)}mm;height:${num(size.h, 297, 10, 1e4)}mm;background:${cssColor(p.bg, "#fff")}">${p.elements
         .slice()
         .sort((a, b) => num(a.z, 0) - num(b.z, 0))
-        .map(elHtml)
+        .map((el) => elHtml(el, pageRef))
         .join("")}</section>`;
     })
     .join("\n");

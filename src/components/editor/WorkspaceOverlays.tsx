@@ -32,6 +32,7 @@ import {
 import { useEditor, type ContextMenuPoint } from "@/lib/editor/store";
 import { normalizeFade } from "@/lib/editor/fade";
 import { findElement } from "@/lib/editor/model";
+import type { PrintGuideSettings } from "@/lib/editor/print-guides";
 import { cn } from "@/lib/utils";
 
 /**
@@ -191,6 +192,7 @@ export function WorkspaceOverlays({
     onCloseMenu();
   };
 
+  /** Print-guide toggles shared by the status bar (see `WorkspaceStatusBar`). */
   const selectedTypes = selectedElements().map((item) => item.type);
   /*
    * قناع القص (Clipping Mask): applies only when the selection is exactly an
@@ -615,6 +617,8 @@ export type { MenuPoint };
 
 export function WorkspaceStatusBar() {
   const zoom = useEditor((s) => s.zoom);
+  const printGuides = useEditor((s) => s.printGuides);
+  const togglePrintGuide = useEditor((s) => s.togglePrintGuide);
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
   const selectedIds = useEditor((s) => s.selectedIds);
@@ -645,7 +649,56 @@ export function WorkspaceStatusBar() {
       <span className="selectable-value">
         {selectedIds.length ? `${selectedIds.length} محدد` : "لا يوجد تحديد"}
       </span>
-      <span className="selectable-value">{Math.round(zoom * 100)}%</span>
+      <span className="flex items-center gap-1">
+        {/*
+         * Print guides, one toggle each, in the workspace chrome.
+         *
+         * They live here rather than in a dialog because they are a viewing aid
+         * the author flicks on and off while arranging a page — and the status
+         * bar is already the home of "what am I looking at" (page, size, zoom).
+         */}
+        {GUIDE_TOGGLES.map((guide) => (
+          <button
+            key={guide.key}
+            type="button"
+            onClick={() => togglePrintGuide(guide.key)}
+            aria-pressed={Boolean(printGuides?.[guide.key])}
+            title={guide.hint}
+            className={cn(
+              "rounded-[5px] border px-1.5 py-0.5 text-[10px] font-extrabold",
+              printGuides?.[guide.key]
+                ? "border-navy-2 bg-navy-2/10 text-navy-2 dark:border-gold/50 dark:text-gold-2"
+                : "border-transparent text-muted",
+            )}
+          >
+            {guide.label}
+          </button>
+        ))}
+        <span className="selectable-value">{Math.round(zoom * 100)}%</span>
+      </span>
     </div>
   );
 }
+
+/** Print-guide toggles, with the wording the status bar shows. */
+const GUIDE_TOGGLES: {
+  key: keyof PrintGuideSettings;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    key: "safe",
+    label: "المنطقة الآمنة",
+    hint: "إظهار المنطقة الآمنة للنص (١٠ مم من حدّ القطع).",
+  },
+  {
+    key: "gutter",
+    label: "هامش التجليد",
+    hint: "إظهار هامش التجليد ١٥ مم عند الحافة اليمنى.",
+  },
+  {
+    key: "bleed",
+    label: "القص الزائد",
+    hint: "إظهار منطقة القص الزائد ٣ مم وعلامات القص.",
+  },
+];

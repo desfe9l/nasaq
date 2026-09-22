@@ -83,6 +83,8 @@ import { cn, round } from "@/lib/utils";
 import { toast } from "sonner";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, SubGroup, useAccordionState } from "./ui/Accordion";
+import { ArabicTextTools } from "./ArabicTextTools";
+import { ReportToolsPanel } from "./ReportToolsPanel";
 import { ScrubField, ScrubInput } from "./ui/ScrubInput";
 
 const TEXT_TYPES = ["text", "box", "stat", "stamp", "table", "progress"];
@@ -128,11 +130,14 @@ export function RightPanel({
    * background/export start closed. The choice persists per device.
    */
   const accordions = useAccordionState<
-    "dimensions" | "text" | "background" | "fade" | "export"
+    "dimensions" | "text" | "background" | "fade" | "report" | "export"
   >("properties", {
     dimensions: true,
     text: true,
     background: false,
+    // «أدوات التقرير» opens on demand: it is a toolbox, not a per-element
+    // property, and folding it away keeps the inspector scannable.
+    report: false,
     // Opens by itself the moment a fade exists, so the layer is never invisible
     // state: the author can always see what is painting over the picture.
     fade: false,
@@ -932,6 +937,14 @@ export function RightPanel({
                     )}
                   </SubGroup>
                 )}
+
+                {/*
+                 * Section 2 + 3 + 5 — Arabic typography presets, opt-in kashida
+                 * justification and the dynamic macro tokens. All three are
+                 * per-element text tools, so they live inside «النص» rather than
+                 * in a section of their own.
+                 */}
+                {TEXT_MARKUP_TYPES.has(el.type) && <ArabicTextTools el={el} />}
               </AccordionSection>
             )}
 
@@ -2053,6 +2066,24 @@ export function RightPanel({
               danger
             />
           </div>
+        )}
+
+        {/*
+         * «أدوات التقرير» — document-level tools (KPI cards, the stamp and
+         * signature zone, page furniture and numbering, print guides, the
+         * pre-flight summary). Rendered outside the element blocks so it stays
+         * reachable whether or not something is selected: inserting a card is
+         * not a property of the current selection.
+         */}
+        {tab === "properties" && (
+          <AccordionSection
+            title="أدوات التقرير"
+            id="report"
+            open={accordions.isOpen("report", false)}
+            onToggle={() => accordions.toggle("report")}
+          >
+            <ReportToolsPanel />
+          </AccordionSection>
         )}
       </div>
     </aside>

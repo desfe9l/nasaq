@@ -227,7 +227,11 @@ test("mirrorHandle flips the axis letters a mirrored element swaps", () => {
   assert.equal(mirrorHandle("nw", true, false), "ne");
   assert.equal(mirrorHandle("ne", true, false), "nw");
   assert.equal(mirrorHandle("se", true, false), "sw");
-  assert.equal(mirrorHandle("n", true, false), "n", "a vertical-only edge is unmoved by a horizontal mirror");
+  assert.equal(
+    mirrorHandle("n", true, false),
+    "n",
+    "a vertical-only edge is unmoved by a horizontal mirror",
+  );
   assert.equal(mirrorHandle("n", false, true), "s");
   assert.equal(mirrorHandle("se", true, true), "nw");
   assert.equal(mirrorHandle("e", true, true), "w");

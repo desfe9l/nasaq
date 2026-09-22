@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   FileDown,
   FileText,
@@ -10,9 +10,18 @@ import {
   X,
   TriangleAlert,
   Loader2,
+  ShieldCheck,
 } from "lucide-react";
 import { capturePages, runExport, safeFileName, type CapturedPage, type ExportFormat } from "@/lib/editor/export";
 import { pageSize } from "@/lib/editor/model";
+import {
+  runPreflight,
+  preflightSummary,
+  SEVERITY_LABEL,
+  type PreflightIssue,
+} from "@/lib/editor/preflight";
+import { GUTTER_MARGIN_MM, type PrintGuideSettings } from "@/lib/editor/print-guides";
+import { domImageSize } from "@/lib/editor/images";
 import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { canUseDemoExport } from "@/lib/product/product";
@@ -28,6 +37,24 @@ const FORMATS: { id: ExportFormat; title: string; desc: string; icon: typeof Fil
   { id: "json", title: "ملف المشروع", desc: "نسخة احتياطية قابلة للاستيراد", icon: FileJson },
 ];
 
+/** Wording for each offered fix, so the button says what it will do. */
+const FIX_LABEL: Record<NonNullable<PreflightIssue["fix"]>, string> = {
+  "fit-text": "ملاءمة الإطار",
+  "move-inward": "إبعادها عن الهامش",
+  "delete-page": "حذف الصفحة",
+  "delete-element": "حذف العناصر",
+};
+
+/** The three guides, as the export dialog spells them. */
+const GUIDE_LABELS: {
+  key: keyof PrintGuideSettings;
+  label: string;
+}[] = [
+  { key: "safe", label: "إظهار المنطقة الآمنة" },
+  { key: "gutter", label: "هامش التجليد" },
+  { key: "bleed", label: "القصّ والقص الزائد" },
+];
+
 /** Formats drawn from the rendered DOM; the rest read the page model. */
 const RASTER_FORMATS = new Set<ExportFormat>(["pdf", "png", "jpg"]);
 const OFFICE_FORMATS = new Set<ExportFormat>(["pptx", "docx"]);
@@ -41,6 +68,12 @@ export function ExportDialog() {
   const orgName = useEditor((s) => s.orgName);
   const theme = useEditor((s) => s.theme);
   const version = useEditor((s) => s.version);
+  const printGuides = useEditor((s) => s.printGuides);
+  const togglePrintGuide = useEditor((s) => s.togglePrintGuide);
+  const fitTextBox = useEditor((s) => s.fitTextBox);
+  const updateElement = useEditor((s) => s.updateElement);
+  const deletePage = useEditor((s) => s.deletePage);
+  const deleteElementsById = useEditor((s) => s.deleteElementsById);
 
   const [format, setFormat] = useState<ExportFormat>("pdf");
   const [quality, setQuality] = useState<2 | 3 | 4>(2);
@@ -53,15 +86,87 @@ export function ExportDialog() {
   const [previewBusy, setPreviewBusy] = useState(false);
   const { entitlements } = useLicense();
 
+  /* Page scope — needed by the pre-flight memo below, so it is computed before
+     the early return to keep the hook order stable across open/closed states. */
+  const selected =
+    scope === "all" ? pages : pages.filter((p) => p.id === activePageId);
+
+  /**
+   * Pre-flight, always computed — not on demand.
+   *
+   * The check is pure model maths (no DOM, no canvas), so running it on every
+   * open costs nothing and means the author sees the problems BEFORE pressing
+   * «تنزيل الملف» rather than in a dialog they have already dismissed. The
+   * image-resolution check reads the pixel size the hidden export page has
+   * already loaded, and skips images it cannot measure.
+   */
+  const report = useMemo(
+    () =>
+      runPreflight(selected, {
+        guides: printGuides,
+        imageSize: (src) => domImageSize(src),
+      }),
+    // `pages` carries the geometry the checks measure; scope narrows it down.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pages, scope, activePageId, printGuides],
+  );
+  /** True once the author has seen the errors and asked to export anyway. */
+  const [riskAccepted, setRiskAccepted] = useState(false);
+
   if (!open) return null;
 
-  const selected = scope === "all" ? pages : pages.filter((p) => p.id === activePageId);
   const needsRaster = RASTER_FORMATS.has(format) || (OFFICE_FORMATS.has(format) && !editableOffice);
   const formatAllowed = canUseDemoExport(format, entitlements.advanced_export);
+
+  /**
+   * Apply one offered fix.
+   *
+   * Each fix is a normal store action, so it is undoable and lands in history
+   * exactly like the same edit made by hand — the checker never mutates the
+   * document itself.
+   */
+  const applyFix = (issue: PreflightIssue) => {
+    if (!issue.fix) return;
+    if (issue.fix === "fit-text") {
+      issue.elementIds.forEach((id) => fitTextBox(id));
+    } else if (issue.fix === "move-inward") {
+      // Push the element clear of the binding band, keeping its distance to the
+      // trim edge honest: the band is on the RIGHT, so the fix moves it left.
+      for (const id of issue.elementIds) {
+        const el = selected
+          .flatMap((p) => p.elements)
+          .find((candidate) => candidate.id === id);
+        if (!el) continue;
+        const page = selected.find((p) => p.elements.some((c) => c.id === id));
+        if (!page) continue;
+        const size = pageSize(page);
+        const wanted = size.w - (GUTTER_MARGIN_MM + 2);
+        updateElement(id, { x: Math.min(el.x, wanted - el.w) });
+      }
+    } else if (issue.fix === "delete-page") {
+      deletePage(issue.pageId);
+    } else if (issue.fix === "delete-element") {
+      deleteElementsById(issue.elementIds);
+    }
+    setRiskAccepted(false);
+  };
 
   const run = async () => {
     if (!formatAllowed) {
       setError("هذا النوع من التصدير متاح في النسخة الكاملة. يمكنك طلب الترخيص المناسب من صفحة النسخ والتراخيص.");
+      return;
+    }
+    /*
+     * Errors block the first press, not the export: the author is told what will
+     * print wrong and gets a second press to proceed. A dialog that simply
+     * refuses to export a document the author wants (a deliberate blank verso,
+     * an A3 fold-out) is worse than one that warns.
+     */
+    if (report.counts.error > 0 && !riskAccepted) {
+      setRiskAccepted(true);
+      setError(
+        `${report.counts.error} خطأ يمنع الطباعة الصحيحة — أصلحه من القائمة أعلاه، أو اضغط «تنزيل الملف» مرة أخرى للتصدير على أي حال.`,
+      );
       return;
     }
     setBusy(true);
@@ -243,6 +348,91 @@ export function ExportDialog() {
             عند اختيار أكثر من صفحة يتم تنزيل ملف ZIP يحتوي صورة مستقلة لكل صفحة.
           </p>
         )}
+
+        {/*
+          * Pre-flight result. Rendered above the buttons because it is the last
+          * thing to read before exporting, and it is the only place the author
+          * can fix what it found without leaving the dialog.
+          */}
+        <div className="mt-4 rounded-[10px] border border-line p-3 dark:border-white/10">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <strong className="inline-flex items-center gap-1.5 text-[12px] text-navy dark:text-white">
+              <ShieldCheck className="size-4 text-navy-2 dark:text-gold-2" />
+              فحص ما قبل التصدير
+            </strong>
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[11px] font-extrabold",
+                report.counts.error
+                  ? "bg-red-100 text-danger dark:bg-red-500/15"
+                  : report.counts.warning
+                    ? "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200"
+                    : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200",
+              )}
+            >
+              {preflightSummary(report)}
+            </span>
+          </div>
+
+          {report.clean ? (
+            <p className="text-[11px] leading-5 text-muted">
+              لا ملاحظات على الصفحات المحددة ({selected.length}) — الترويسة
+              والهوامش ودقة الصور والنصوص كلها داخل الحدود الآمنة.
+            </p>
+          ) : (
+            <ul className="grid max-h-56 gap-1.5 overflow-y-auto pe-1">
+              {report.issues.map((issue, index) => (
+                <li
+                  key={`${issue.kind}-${issue.pageId}-${index}`}
+                  className={cn(
+                    "rounded-[8px] border p-2",
+                    issue.severity === "error"
+                      ? "border-red-200 bg-red-50/70 dark:border-red-500/30 dark:bg-red-500/10"
+                      : issue.severity === "warning"
+                        ? "border-amber-200 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10"
+                        : "border-line dark:border-white/10",
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="text-[11px] font-extrabold leading-5">
+                      {issue.title}
+                      <span className="ms-1 text-[10px] font-semibold text-muted">
+                        · {issue.pageName} · {SEVERITY_LABEL[issue.severity]}
+                      </span>
+                    </span>
+                    {issue.fix && (
+                      <button
+                        type="button"
+                        onClick={() => applyFix(issue)}
+                        className="shrink-0 rounded-[6px] border border-line px-2 py-1 text-[10px] font-extrabold hover:border-navy-2 dark:border-white/10"
+                      >
+                        {FIX_LABEL[issue.fix]}
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[10px] leading-4 text-muted">{issue.detail}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-2 flex flex-wrap gap-3 border-t border-line pt-2 dark:border-white/10">
+            {GUIDE_LABELS.map((guide) => (
+              <label
+                key={guide.key}
+                className="inline-flex cursor-pointer items-center gap-1.5 text-[10px] font-extrabold text-muted"
+              >
+                <input
+                  type="checkbox"
+                  checked={Boolean(printGuides?.[guide.key])}
+                  onChange={() => togglePrintGuide(guide.key)}
+                  className="size-3.5 accent-navy"
+                />
+                {guide.label}
+              </label>
+            ))}
+          </div>
+        </div>
 
         {busy && (
           <p className="mt-3 inline-flex w-full items-center justify-center gap-2 text-center text-[12px] font-bold text-navy-2 dark:text-gold-2">

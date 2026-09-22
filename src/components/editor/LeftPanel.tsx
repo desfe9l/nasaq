@@ -166,7 +166,12 @@ export function LeftPanel({
     setOpenGroups((state) => ({ ...state, [title]: !(state[title] ?? false) }));
   const [customSize, setCustomSize] = useState({ w: 210, h: 297 });
   const [qrBusy, setQrBusy] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
+  /* Shared intent: the report tools raise the same flag (see store). */
+  const pickerOpen = useEditor((s) => s.tablePickerOpen);
+  const setPickerOpen = (open: boolean) =>
+    open
+      ? useEditor.getState().openTablePicker()
+      : useEditor.getState().closeTablePicker();
   const [previewTemplate, setPreviewTemplate] = useState<
     (typeof PAGE_TEMPLATES)[number] | null
   >(null);

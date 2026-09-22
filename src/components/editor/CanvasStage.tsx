@@ -13,6 +13,7 @@ import { useEditor } from "@/lib/editor/store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
+import { PrintGuides } from "./PrintGuides";
 import { FloatingToolbar } from "./FloatingToolbar";
 import { toast } from "sonner";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
@@ -48,6 +49,11 @@ const ARTBOARD_GAP_MM = 18;
  * the selected element.
  */
 const SELECTION_LAYER_Z = 5000;
+/**
+ * Print guides sit just under the selection chrome: above every document
+ * element (1..n), below the outline and handles that must stay grabbable.
+ */
+const GUIDE_LAYER_Z = SELECTION_LAYER_Z - 1;
 /** The eight resize handles, named by the corner/edge they sit on. */
 const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
 /** Corner rotation grips (step 7). */
@@ -103,6 +109,7 @@ export function CanvasStage({
   const zoom = useEditor((s) => s.zoom);
   const previewAll = useEditor((s) => s.previewAll);
   const showGrid = useEditor((s) => s.showGrid);
+  const printGuides = useEditor((s) => s.printGuides);
   const snapGrid = useEditor((s) => s.snapGrid);
   const snapElements = useEditor((s) => s.snapElements);
   const select = useEditor((s) => s.select);
@@ -872,6 +879,8 @@ export function CanvasStage({
         {visible.map((page) => {
           const size = pageSize(page);
           const isActive = page.id === activePageId;
+          /* 1-based document position — `visible` may hold a single page. */
+          const pageNo = pages.findIndex((p) => p.id === page.id) + 1;
           const entered = enteredGroupId
             ? findElement(page.elements, enteredGroupId)?.el || null
             : null;
@@ -1010,6 +1019,7 @@ export function CanvasStage({
                                   <ElementNode
                                     key={child.id}
                                     el={abs}
+                                    pageNo={pageNo}
                                     interactive
                                     onPointerDown={(ev, kind, handle) =>
                                       startOp(ev, page, abs, kind, handle, {
@@ -1028,6 +1038,7 @@ export function CanvasStage({
                         <ElementNode
                           key={el.id}
                           el={el}
+                          pageNo={pageNo}
                           interactive
                           onEnterGroup={
                             el.type === "group"
@@ -1040,6 +1051,11 @@ export function CanvasStage({
                         />
                       );
                     })}
+                  <PrintGuides
+                    page={page}
+                    settings={printGuides}
+                    zIndex={GUIDE_LAYER_Z}
+                  />
                   {marquee && (
                     <div
                       className="marquee"
