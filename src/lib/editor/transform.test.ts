@@ -6,7 +6,12 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { MIN_SIZE, type CanvasEl } from "./model.ts";
-import { applySnap, resizeByHandle, snapThresholdMm } from "./transform.ts";
+import {
+  applySnap,
+  mirrorHandle,
+  resizeByHandle,
+  snapThresholdMm,
+} from "./transform.ts";
 
 function box(x: number, y: number, w: number, h: number): CanvasEl {
   return {
@@ -215,4 +220,25 @@ test("grid snap rounds to the document grid", () => {
   applySnap(el, [], size, true, false, 1, {});
   assert.equal(el.x, 5);
   assert.equal(el.y, 15);
+});
+
+test("mirrorHandle flips the axis letters a mirrored element swaps", () => {
+  assert.equal(mirrorHandle("nw", false, false), "nw");
+  assert.equal(mirrorHandle("nw", true, false), "ne");
+  assert.equal(mirrorHandle("ne", true, false), "nw");
+  assert.equal(mirrorHandle("se", true, false), "sw");
+  assert.equal(mirrorHandle("n", true, false), "n", "a vertical-only edge is unmoved by a horizontal mirror");
+  assert.equal(mirrorHandle("n", false, true), "s");
+  assert.equal(mirrorHandle("se", true, true), "nw");
+  assert.equal(mirrorHandle("e", true, true), "w");
+});
+
+test("a mirrored corner grip drags the edge the author can see", () => {
+  // Element mirrored horizontally: the grip drawn at the visual right edge must
+  // grow the box to the right, exactly like an unmirrored `e` handle.
+  const orig = box(20, 20, 40, 30);
+  const next = box(20, 20, 40, 30);
+  resizeByHandle(next, orig, mirrorHandle("nw", true, false), 10, 0, false);
+  assert.equal(next.w, 50);
+  assert.equal(next.x, 20);
 });

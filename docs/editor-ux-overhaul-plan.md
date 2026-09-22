@@ -137,13 +137,29 @@ as real vector elements; tables/charts render legibly in both themes.
 
 **Extra containment fixes found while verifying:** the left tab strip became a scrollable row (the fixed 8-column grid squeezed labels under icons at the panel's minimum width), and the icon grid/properties panel got fluid card grids that wrap instead of overflowing.
 
+## Follow-up fixes (second work order)
+
+| # | Fix | State | Where |
+| --- | --- | --- | --- |
+| 1 | Global `user-select: none` across the chrome, exempting form fields, `[contenteditable]`, artboard text and explicitly copyable values (`.selectable-value`, e.g. the status bar counters). | done | `styles.css` "TEXT SELECTION POLICY" |
+| 2 | Floating bubble: eye toggle in the header + a dismiss ✕ in the bubble itself (persisted as `ui.bubble`); placement now scores four sides against measured obstacles (`[data-editor-obstacle]`: header, both sidebars, pages rail, status bar) and hides entirely while a dialog/menu owns the screen. | done | `store.ts` (`bubbleEnabled`), `FloatingToolbar.tsx`, `EditorApp.tsx` |
+| 3 | One `--z-*` scale (`canvas 0 → toast 200`) replaces every hardcoded layer, and `.editor-canvas-stage` is `isolation: isolate` so artboard layers can never cover chrome. The bubble is portalled to `body` to stay above the panels. | done | `styles.css`, all editor components |
+| 4 | Library hover/focus: 2px `--primary-accent` outline + tinted fill, `[aria-pressed]`/`[data-active]` states, crisp in both themes. | done | `styles.css` library block |
+| 5 | Permanent المكتبة button in the header, between the properties toggle and the main tools; docks/undocks with a 180ms grid transition that stands down during manual resizing. | done | `EditorApp.tsx`, `store.openLibrary` |
+| 6 | 80px bottom padding + `scroll-margin-bottom` on the panel scroll containers so the last row (and its drop target) is fully reachable. | done | `styles.css` |
+| 7 | Rotation grip on **all four corners**, live angle readout, Shift ladder (15° with a hard pull onto 45/90/135), and قلب أفقي / قلب رأسي in the context menu, properties panel and bubble — stored as lossless `flipX`/`flipY` style flags (mirrored resize handled by `mirrorHandle`, native `flipH`/`flipV` on PowerPoint export). | done | `CanvasStage.tsx`, `transform.ts`, `RightPanel.tsx`, `WorkspaceOverlays.tsx`, `store.flipSelected` |
+| 8 | طبقة التلاشي for the image family: add/remove from the context menu, four gradient directions, from/to colour pickers, opacity and eight blend modes. | done | `fade.ts` (8 tests), `ElementNode.tsx`, `RightPanel.tsx`, `store.toggleFadeOverlay` |
+| 9 | Photoshop shortcuts: `V` select, `T` text, `R` shape (drag to draw), ⌘/Ctrl+J duplicate, ⌘/Ctrl+G / ⇧G group/ungroup, ⌘[ / ⌘] back-forward, ⌘⇧[ / ⌘⇧] to back/front, Space+drag pan, ⌘0 zoom-fit. Tool state has one owner (the canvas) behind a `nasaq:tool` broadcast. | done | `EditorApp.tsx`, `CanvasStage.tsx`, `WorkspaceOverlays.tsx` |
+| 10 | Every library gesture lands on the artboard: clicks centre the item, drags drop it under the pointer (saved assets included — `image`/`logo` joined the drag whitelist), and the store's insertion funnel toasts «تمت إضافة العنصر إلى مساحة العمل». | done | `library-dnd.ts`, `AssetLibrary.tsx`, `store.ts` |
+| 11 | Table builder: manual rows × columns (up to 400×60) beside the hover grid, plus إستيراد من Excel / CSV for `.xlsx`/`.csv` via pick-or-drop → preview → insert. | done | `TablePicker.tsx`, `sheet-import.ts` (20 tests) |
+
 ## Verification
 
 | Gate | Result |
 | --- | --- |
 | `npm run typecheck` | clean |
 | `npm run lint` | 0 errors, 3 pre-existing warnings (`Accordion.tsx` react-refresh ×2, `product.ts` `FEATURE_MAP`) |
-| `npm test` | unchanged vs the pre-overhaul baseline: the same 17 `scripts/**` failures exist at `HEAD` (verified in a clean `git worktree`); **+26 new passing tests** (`ui-state.test.ts` ×16, `library-dnd.test.ts` ×10) with the same 10 pre-existing TS-suite failures |
+| `npm test` | unchanged vs the pre-overhaul baseline: the same 17 `scripts/**` failures exist at `HEAD` (verified in a clean `git worktree`). TS suite: **227 tests / 217 pass / 10 fail** vs the baseline's **166 / 156 / 10** — i.e. **+61 passing tests, zero new failures** (`ui-state` ×20, `library-dnd` ×11, `fade` ×8, `sheet-import` ×20, `transform` ×+2) |
 | `npm run build` | green (nitro/vercel output) |
 | Preview | dev server binds `0.0.0.0:8080`, `allowedHosts: [".e2b.app"]` — verified 200 through a proxied `.e2b.app` Host header |
 

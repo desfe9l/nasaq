@@ -8,7 +8,7 @@ import {
   type ElType,
   type Page,
 } from "@/lib/editor/model";
-import { applySnap, resizeByHandle } from "@/lib/editor/transform";
+import { applySnap, mirrorHandle, resizeByHandle } from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
@@ -558,7 +558,13 @@ export function CanvasStage({
         resizeByHandle(
           next,
           op.orig,
-          op.handle || "se",
+          // A mirrored element is drawn flipped, so the grip the author grabbed
+          // must drive the opposite edge (step 7). `mirrorHandle` maps it.
+          mirrorHandle(
+            op.handle || "se",
+            op.orig.style?.flipX === true,
+            op.orig.style?.flipY === true,
+          ),
           dx,
           dy,
           ev.shiftKey || op.orig.style?.aspectLock === true,

@@ -621,7 +621,9 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 
 .selection-frame {
   --handle-size: calc(2.6mm / var(--editor-zoom, 1));
-  --rotate-gap: calc(10mm / var(--editor-zoom, 1));
+  /* Diagonal reach of the corner rotation grips: close enough to grab without a
+     hunt, far enough to clear the corner resize dot underneath. */
+  --rotate-gap: calc(6mm / var(--editor-zoom, 1));
   /*
    * The page lives in a scaled space, so a plain 1px border renders sub-pixel
    * (≈0.55px at 82%) and the selection looks faint or invisible — the exact

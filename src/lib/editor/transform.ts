@@ -50,6 +50,28 @@ export interface GestureBox {
  * The explicit per-element lock (`style.aspectLock`) behaves the same way and
  * is resolved by the caller.
  */
+/**
+ * Map a handle to the handle it *behaves* as on a mirrored element (step 7).
+ *
+ * `scaleX(-1)` moves the `nw` grip to the visual right edge: the author grabs
+ * what looks like the top-right corner, so the resize must grow from that side.
+ * Swapping the axis letters is exactly equivalent to inverting dx/dy for the
+ * axes the handle actually uses, and leaves the geometry maths untouched.
+ */
+export function mirrorHandle(handle: string, flipX: boolean, flipY: boolean): string {
+  let out = "";
+  for (const ch of handle) {
+    if (ch === "e" && flipX) out += "w";
+    else if (ch === "w" && flipX) out += "e";
+    else if (ch === "n" && flipY) out += "s";
+    else if (ch === "s" && flipY) out += "n";
+    else out += ch;
+  }
+  // Letter order is preserved (and irrelevant to `resizeByHandle`, which uses
+  // `includes`), so "nw" maps to "ne" and stays readable.
+  return out;
+}
+
 export function resizeByHandle(
   next: GestureBox,
   orig: GestureBox,
