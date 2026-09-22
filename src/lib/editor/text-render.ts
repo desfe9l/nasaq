@@ -1,5 +1,11 @@
 import { AUTO_TEXT_TYPES, type CanvasEl, type TextBoxMode } from "./model";
-import { fitFontSize, measureTextHeight, measureTextWidth, normalizeArabic, withParagraphSpacing } from "./arabic";
+import {
+  fitFontSize,
+  measureTextHeight,
+  measureTextWidth,
+  normalizeArabic,
+  withParagraphSpacing,
+} from "./arabic";
 
 /** Types whose font size may be auto-fitted to the element box. */
 const FIT_TYPES = new Set(AUTO_TEXT_TYPES);
@@ -82,10 +88,19 @@ export function prepareText(el: CanvasEl): PreparedText {
   const legacyFit = s.textFit || "clip";
   const fontSize =
     mode === "fit" || legacyFit === "shrink" || legacyFit === "grow"
-      ? fitFontSize(text, { w: innerW, h: innerH }, base, lineHeight, legacyFit, paragraphSpacing)
+      ? fitFontSize(
+          text,
+          { w: innerW, h: innerH },
+          base,
+          lineHeight,
+          legacyFit,
+          paragraphSpacing,
+        )
       : base;
 
-  const neededHeight = measureTextHeight(text, innerW, fontSize, lineHeight, paragraphSpacing) + padding * 2;
+  const neededHeight =
+    measureTextHeight(text, innerW, fontSize, lineHeight, paragraphSpacing) +
+    padding * 2;
   const neededWidth =
     mode === "autoWidth"
       ? measureTextWidth(text, fontSize, el.w) + padding * 2

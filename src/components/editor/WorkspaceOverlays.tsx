@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlignCenter,
   ClipboardPaste,
+  Contrast,
   Copy,
   CopyPlus,
   Download,
@@ -26,6 +27,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { useEditor, type ContextMenuPoint } from "@/lib/editor/store";
+import { normalizeFade } from "@/lib/editor/fade";
 import { findElement } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
 
@@ -180,6 +182,18 @@ export function WorkspaceOverlays({
   const maskApplicable =
     !!maskSource && !!maskShape && selectedEls.length === 2;
   const maskRemovable = selectedEls.length === 1 && !!selectedEls[0].clippedBy;
+  const toggleFadeOverlay = useEditor((s) => s.toggleFadeOverlay);
+  /*
+   * Step 8 — the fade entry is offered for the image family only, and flips its
+   * wording once an overlay exists, so the menu never claims to "add" something
+   * the author can already see.
+   */
+  const fadeApplicable = selectedEls.some(
+    (el) => el.type === "image" || el.type === "logo" || el.type === "qr",
+  );
+  const fadePresent = selectedEls.some((el) =>
+    Boolean(normalizeFade(el.style?.fade)),
+  );
   const renameElement = useEditor((s) => s.renameElement);
   // selectedElements() preserves selection order with the primary LAST.
   const primaryName = selectedEls.length
@@ -281,6 +295,18 @@ export function WorkspaceOverlays({
                 label: "فك تجميع العناصر",
                 icon: Ungroup,
                 run: ungroup,
+              } as ContextAction,
+            ]
+          : []),
+        ...(fadeApplicable
+          ? [
+              {
+                label: fadePresent
+                  ? "إزالة طبقة التلاشي"
+                  : "إضافة طبقة تلاشي (Fade Overlay)",
+                icon: Contrast,
+                run: toggleFadeOverlay,
+                sepBefore: true,
               } as ContextAction,
             ]
           : []),

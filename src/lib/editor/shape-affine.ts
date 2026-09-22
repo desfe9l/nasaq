@@ -29,7 +29,18 @@ export interface Affine {
 const round = (n: number) => Math.round(n * 1000) / 1000;
 
 /** Path commands, with the number of coordinates each one consumes. */
-const ARITY: Record<string, number> = { m: 2, l: 2, h: 1, v: 1, c: 6, s: 4, q: 4, t: 2, a: 7, z: 0 };
+const ARITY: Record<string, number> = {
+  m: 2,
+  l: 2,
+  h: 1,
+  v: 1,
+  c: 6,
+  s: 4,
+  q: 4,
+  t: 2,
+  a: 7,
+  z: 0,
+};
 
 interface Cmd {
   letter: string;
@@ -55,7 +66,8 @@ function parsePath(d: string): Cmd[] {
     }
     for (let i = 0; i + arity <= nums.length; i += arity) {
       // Extra coordinate sets after an `M` are line-tos, per the SVG grammar.
-      const l = i === 0 ? letter : letter === "M" ? "L" : letter === "m" ? "l" : letter;
+      const l =
+        i === 0 ? letter : letter === "M" ? "L" : letter === "m" ? "l" : letter;
       out.push({ letter: l, args: nums.slice(i, i + arity) });
     }
   }
@@ -109,7 +121,12 @@ function arcToCubics(
     return ux * vy - uy * vx < 0 ? -a : a;
   };
   const start = angle(1, 0, (x1p - cxp) / rx, (y1p - cyp) / ry);
-  let delta = angle((x1p - cxp) / rx, (y1p - cyp) / ry, (-x1p - cxp) / rx, (-y1p - cyp) / ry);
+  let delta = angle(
+    (x1p - cxp) / rx,
+    (y1p - cyp) / ry,
+    (-x1p - cxp) / rx,
+    (-y1p - cyp) / ry,
+  );
   if (!sweep && delta > 0) delta -= 2 * Math.PI;
   if (sweep && delta < 0) delta += 2 * Math.PI;
   const segments = Math.ceil(Math.abs(delta) / (Math.PI / 2));
@@ -119,12 +136,18 @@ function arcToCubics(
   const pt = (t: number) => {
     const cosT = Math.cos(t);
     const sinT = Math.sin(t);
-    return [cx + rx * cosT * cos - ry * sinT * sin, cy + rx * cosT * sin + ry * sinT * cos];
+    return [
+      cx + rx * cosT * cos - ry * sinT * sin,
+      cy + rx * cosT * sin + ry * sinT * cos,
+    ];
   };
   const der = (t: number) => {
     const cosT = Math.cos(t);
     const sinT = Math.sin(t);
-    return [-rx * sinT * cos - ry * cosT * sin, -rx * sinT * sin + ry * cosT * cos];
+    return [
+      -rx * sinT * cos - ry * cosT * sin,
+      -rx * sinT * sin + ry * cosT * cos,
+    ];
   };
   for (let i = 0; i < segments; i++) {
     const t1 = start + i * step;
@@ -133,7 +156,14 @@ function arcToCubics(
     const p2 = pt(t2);
     const d1 = der(t1);
     const d2 = der(t2);
-    out.push([p1[0] + k * d1[0], p1[1] + k * d1[1], p2[0] - k * d2[0], p2[1] - k * d2[1], p2[0], p2[1]]);
+    out.push([
+      p1[0] + k * d1[0],
+      p1[1] + k * d1[1],
+      p2[0] - k * d2[0],
+      p2[1] - k * d2[1],
+      p2[0],
+      p2[1],
+    ]);
   }
   return out;
 }
@@ -187,13 +217,17 @@ export function mapPathData(d: string, m: Affine): string {
     }
     if (lower === "h") {
       const nx = rel ? x + a[0] : a[0];
-      out.push(`${rel ? "h" : "H"} ${scaleNum(rel ? a[0] * m.sx : nx * m.sx + m.tx)}`);
+      out.push(
+        `${rel ? "h" : "H"} ${scaleNum(rel ? a[0] * m.sx : nx * m.sx + m.tx)}`,
+      );
       x = nx;
       continue;
     }
     if (lower === "v") {
       const ny = rel ? y + a[0] : a[0];
-      out.push(`${rel ? "v" : "V"} ${scaleNum(rel ? a[0] * m.sy : ny * m.sy + m.ty)}`);
+      out.push(
+        `${rel ? "v" : "V"} ${scaleNum(rel ? a[0] * m.sy : ny * m.sy + m.ty)}`,
+      );
       y = ny;
       continue;
     }
@@ -255,11 +289,18 @@ export function mapShapePart(part: ShapePart, m: Affine): ShapePart {
     case "circle": {
       const rx = part.r * m.sx;
       const ry = part.r * m.sy;
-      if (Math.abs(rx - ry) < 1e-6) return { k: "circle", cx: px(part.cx), cy: py(part.cy), r: rx };
+      if (Math.abs(rx - ry) < 1e-6)
+        return { k: "circle", cx: px(part.cx), cy: py(part.cy), r: rx };
       return { k: "ellipse", cx: px(part.cx), cy: py(part.cy), rx, ry };
     }
     case "ellipse":
-      return { k: "ellipse", cx: px(part.cx), cy: py(part.cy), rx: part.rx * m.sx, ry: part.ry * m.sy };
+      return {
+        k: "ellipse",
+        cx: px(part.cx),
+        cy: py(part.cy),
+        rx: part.rx * m.sx,
+        ry: part.ry * m.sy,
+      };
     case "poly":
       return { k: "poly", points: mapPoints(part.points, m) };
     default:

@@ -1,3 +1,4 @@
+import type { FadeOverlay } from "./fade";
 import { clamp, uid } from "../utils.ts";
 import type { Numerals, TextFit } from "./arabic";
 
@@ -19,7 +20,8 @@ export const LEGACY_STORE_KEY = "diwan-report-project-v2";
 export const UI_KEY = "nasaq-report-ui-v2";
 export const LEGACY_UI_KEY = "diwan-report-ui-v2";
 
-export type SizeId = "a4-portrait" | "a4-landscape" | "slide-16-9" | "a3-portrait" | "custom";
+export type SizeId =
+  "a4-portrait" | "a4-landscape" | "slide-16-9" | "a3-portrait" | "custom";
 
 export interface SizePreset {
   id: SizeId;
@@ -31,11 +33,41 @@ export interface SizePreset {
 
 /** Page presets offered in the editor. `custom` keeps whatever the user types. */
 export const SIZE_PRESETS: SizePreset[] = [
-  { id: "a4-portrait", name: "A4 رأسي", desc: "210 × 297 مم — التقارير الرسمية", w: 210, h: 297 },
-  { id: "a4-landscape", name: "A4 أفقي", desc: "297 × 210 مم — الجداول العريضة", w: 297, h: 210 },
-  { id: "slide-16-9", name: "عرض 16:9", desc: "338.7 × 190.5 مم — العروض التقديمية", w: 338.7, h: 190.5 },
-  { id: "a3-portrait", name: "A3 رأسي", desc: "297 × 420 مم — الملصقات واللوحات", w: 297, h: 420 },
-  { id: "custom", name: "مقاس مخصص", desc: "أدخل العرض والارتفاع بالمليمتر", w: 210, h: 297 },
+  {
+    id: "a4-portrait",
+    name: "A4 رأسي",
+    desc: "210 × 297 مم — التقارير الرسمية",
+    w: 210,
+    h: 297,
+  },
+  {
+    id: "a4-landscape",
+    name: "A4 أفقي",
+    desc: "297 × 210 مم — الجداول العريضة",
+    w: 297,
+    h: 210,
+  },
+  {
+    id: "slide-16-9",
+    name: "عرض 16:9",
+    desc: "338.7 × 190.5 مم — العروض التقديمية",
+    w: 338.7,
+    h: 190.5,
+  },
+  {
+    id: "a3-portrait",
+    name: "A3 رأسي",
+    desc: "297 × 420 مم — الملصقات واللوحات",
+    w: 297,
+    h: 420,
+  },
+  {
+    id: "custom",
+    name: "مقاس مخصص",
+    desc: "أدخل العرض والارتفاع بالمليمتر",
+    w: 210,
+    h: 297,
+  },
 ];
 
 export function sizePreset(id: SizeId | string | undefined): SizePreset {
@@ -43,7 +75,10 @@ export function sizePreset(id: SizeId | string | undefined): SizePreset {
 }
 
 /** Page dimensions in mm; falls back to A4 so pre-upgrade projects keep working. */
-export function pageSize(page?: { w?: number; h?: number } | null): { w: number; h: number } {
+export function pageSize(page?: { w?: number; h?: number } | null): {
+  w: number;
+  h: number;
+} {
   const w = Number(page?.w);
   const h = Number(page?.h);
   return {
@@ -56,7 +91,8 @@ export function pageSize(page?: { w?: number; h?: number } | null): { w: number;
 export function sizeIdOf(page?: { w?: number; h?: number } | null): SizeId {
   const { w, h } = pageSize(page);
   const hit = SIZE_PRESETS.find(
-    (s) => s.id !== "custom" && Math.abs(s.w - w) < 0.5 && Math.abs(s.h - h) < 0.5,
+    (s) =>
+      s.id !== "custom" && Math.abs(s.w - w) < 0.5 && Math.abs(s.h - h) < 0.5,
   );
   return hit?.id || "custom";
 }
@@ -126,6 +162,11 @@ export interface ElStyle {
    */
   flipX?: boolean;
   flipY?: boolean;
+  /**
+   * طبقة التلاشي — a gradient scrim painted above an image (step 8). Percentages
+   * and colours only; `fade.ts` owns the rendering rules.
+   */
+  fade?: FadeOverlay;
   cols?: number;
   rows?: number;
   headerBg?: string;
@@ -564,7 +605,13 @@ export const PROGRESS_PRESETS: ProgressPreset[] = [
     sample: "مراحل المشروع",
     w: 120,
     h: 18,
-    style: { value: 60, showValue: true, fontSize: 10, variant: "steps", steps: 5 },
+    style: {
+      value: 60,
+      showValue: true,
+      fontSize: 10,
+      variant: "steps",
+      steps: 5,
+    },
   },
 ];
 
@@ -592,7 +639,11 @@ export function defaultTable(cols: number, rows: number) {
   return JSON.stringify(data);
 }
 
-export function parseTable(content: string | undefined, cols = 3, rows = 4): string[][] {
+export function parseTable(
+  content: string | undefined,
+  cols = 3,
+  rows = 4,
+): string[][] {
   try {
     const parsed = JSON.parse(content || "[]");
     if (Array.isArray(parsed) && parsed.length) {
@@ -606,7 +657,11 @@ export function parseTable(content: string | undefined, cols = 3, rows = 4): str
   return JSON.parse(defaultTable(cols, rows)) as string[][];
 }
 
-export function createElement(type: ElType, over: Partial<CanvasEl> = {}, theme?: Theme): CanvasEl {
+export function createElement(
+  type: ElType,
+  over: Partial<CanvasEl> = {},
+  theme?: Theme,
+): CanvasEl {
   const t = theme || THEMES.official;
   const defaults: Record<ElType, Partial<CanvasEl>> = {
     text: {
@@ -625,7 +680,8 @@ export function createElement(type: ElType, over: Partial<CanvasEl> = {}, theme?
     box: {
       w: 92,
       h: 36,
-      content: "محتوى المربع — يمكن تعديل النص والمحاذاة والخلفية من لوحة الخصائص.",
+      content:
+        "محتوى المربع — يمكن تعديل النص والمحاذاة والخلفية من لوحة الخصائص.",
       style: {
         fontFamily: "Cairo",
         fontSize: 12,
@@ -788,7 +844,8 @@ export function createElement(type: ElType, over: Partial<CanvasEl> = {}, theme?
     ...over,
   };
   el.style = { ...(d.style || {}), ...(over.style || {}) };
-  if (type === "table" && !el.content) el.content = defaultTable(el.style.cols || 3, el.style.rows || 4);
+  if (type === "table" && !el.content)
+    el.content = defaultTable(el.style.cols || 3, el.style.rows || 4);
   return el;
 }
 
@@ -807,13 +864,20 @@ export function createElement(type: ElType, over: Partial<CanvasEl> = {}, theme?
  * blow up layout/export math. ±1e4mm matches the bound export.ts already
  * applies per-field when serialising, so the two stay consistent.
  */
-export function constrainElement(el: CanvasEl, size: { w: number; h: number } = A4) {
+export function constrainElement(
+  el: CanvasEl,
+  size: { w: number; h: number } = A4,
+) {
   const maxDim = Math.max(size.w, size.h, A4.w, A4.h) * 10;
   el.w = clamp(Number(el.w) || MIN_SIZE, MIN_SIZE, maxDim);
   el.h = clamp(Number(el.h) || MIN_SIZE, MIN_SIZE, maxDim);
   el.x = clamp(Number.isFinite(Number(el.x)) ? Number(el.x) : 0, -1e4, 1e4);
   el.y = clamp(Number.isFinite(Number(el.y)) ? Number(el.y) : 0, -1e4, 1e4);
-  el.opacity = clamp(Number.isFinite(Number(el.opacity)) ? Number(el.opacity) : 1, 0, 1);
+  el.opacity = clamp(
+    Number.isFinite(Number(el.opacity)) ? Number(el.opacity) : 1,
+    0,
+    1,
+  );
   el.rotation = Number(el.rotation) || 0;
 }
 
@@ -898,7 +962,12 @@ export function findElement(
  * Group children store group-relative coordinates, so reaching a nested element
  * means adding every ancestor's origin on the way down.
  */
-export function absolutePosition(els: CanvasEl[], id: string, ox = 0, oy = 0): { x: number; y: number } | null {
+export function absolutePosition(
+  els: CanvasEl[],
+  id: string,
+  ox = 0,
+  oy = 0,
+): { x: number; y: number } | null {
   for (const el of els) {
     const x = ox + el.x;
     const y = oy + el.y;
@@ -930,7 +999,10 @@ export function scaleChildren(group: CanvasEl, prevW: number, prevH: number) {
  * Wrap elements into a single group, converting their page coordinates into
  * group-relative ones.
  */
-export function createGroupFrom(els: CanvasEl[], name?: string): CanvasEl | null {
+export function createGroupFrom(
+  els: CanvasEl[],
+  name?: string,
+): CanvasEl | null {
   const box = elementsBounds(els);
   if (!box || els.length < 2) return null;
   const children = els.map((el) => ({
@@ -964,7 +1036,8 @@ export function explodeGroup(group: CanvasEl): CanvasEl[] {
   }));
 }
 
-export type AlignEdge = "left" | "right" | "center" | "top" | "middle" | "bottom";
+export type AlignEdge =
+  "left" | "right" | "center" | "top" | "middle" | "bottom";
 
 /**
  * New positions that align elements to a shared edge.
@@ -1025,9 +1098,19 @@ export function alignmentMoves(
     const found = findElement(pageEls, id)?.el;
     if (!found) return [];
     const abs = absolutePosition(pageEls, id);
-    return [{ el: found, dx: abs ? abs.x - found.x : 0, dy: abs ? abs.y - found.y : 0 }];
+    return [
+      {
+        el: found,
+        dx: abs ? abs.x - found.x : 0,
+        dy: abs ? abs.y - found.y : 0,
+      },
+    ];
   });
-  const absPicked = picked.map((p) => ({ ...p.el, x: p.el.x + p.dx, y: p.el.y + p.dy }));
+  const absPicked = picked.map((p) => ({
+    ...p.el,
+    x: p.el.x + p.dx,
+    y: p.el.y + p.dy,
+  }));
   return alignPositions(absPicked, edge, frame).map((m, i) => ({
     id: m.id,
     x: m.x - picked[i].dx,
@@ -1061,7 +1144,11 @@ export function distributePositions(
   const out: { id: string; x: number; y: number }[] = [];
   let cursor = posOf(first);
   for (const el of sorted) {
-    out.push(axis === "h" ? { id: el.id, x: cursor, y: el.y } : { id: el.id, x: el.x, y: cursor });
+    out.push(
+      axis === "h"
+        ? { id: el.id, x: cursor, y: el.y }
+        : { id: el.id, x: el.x, y: cursor },
+    );
     cursor += sizeOf(el) + gap;
   }
   return out;
@@ -1110,7 +1197,7 @@ export const MM_PER_PX = 25.4 / 96;
  */
 export function pxToMm(px: number, zoom: number): number {
   const z = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
-  return px * MM_PER_PX / z;
+  return (px * MM_PER_PX) / z;
 }
 
 /**
@@ -1119,7 +1206,7 @@ export function pxToMm(px: number, zoom: number): number {
  */
 export function mmToPx(mm: number, zoom: number): number {
   const z = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
-  return mm * z / MM_PER_PX;
+  return (mm * z) / MM_PER_PX;
 }
 
 // ── Element defaults: one source for palette inserts and drawn elements ────
@@ -1132,7 +1219,9 @@ export function mmToPx(mm: number, zoom: number): number {
  * created. Values are document millimetres (and pt for fonts) exactly as the
  * properties panel expects them.
  */
-export function createElementDefaults(type: ElType): Partial<CanvasEl> & { style: Partial<ElStyle> } {
+export function createElementDefaults(
+  type: ElType,
+): Partial<CanvasEl> & { style: Partial<ElStyle> } {
   const base: Partial<CanvasEl> & { style: Partial<ElStyle> } = {
     style: {
       fontFamily: "Tajawal",
@@ -1145,29 +1234,84 @@ export function createElementDefaults(type: ElType): Partial<CanvasEl> & { style
     case "text":
       return { ...base, w: 80, h: 14 };
     case "box":
-      return { ...base, w: 60, h: 30, style: { ...base.style, fill: "#f7f8fb", radius: 4 } };
+      return {
+        ...base,
+        w: 60,
+        h: 30,
+        style: { ...base.style, fill: "#f7f8fb", radius: 4 },
+      };
     case "stat":
-      return { ...base, w: 55, h: 32, style: { ...base.style, fill: "#f2f7f3", radius: 6 } };
+      return {
+        ...base,
+        w: 55,
+        h: 32,
+        style: { ...base.style, fill: "#f2f7f3", radius: 6 },
+      };
     case "shape":
-      return { ...base, w: 40, h: 40, style: { ...base.style, fill: "#006c35" } };
+      return {
+        ...base,
+        w: 40,
+        h: 40,
+        style: { ...base.style, fill: "#006c35" },
+      };
     case "line":
-      return { ...base, w: 60, h: 4, style: { ...base.style, color: "#c9a86a", stroke: 0.8 } };
+      return {
+        ...base,
+        w: 60,
+        h: 4,
+        style: { ...base.style, color: "#c9a86a", stroke: 0.8 },
+      };
     case "divider":
-      return { ...base, w: 80, h: 6, style: { ...base.style, color: "#c9a86a", stroke: 0.5 } };
+      return {
+        ...base,
+        w: 80,
+        h: 6,
+        style: { ...base.style, color: "#c9a86a", stroke: 0.5 },
+      };
     case "table":
-      return { ...base, w: 150, h: 60, style: { ...base.style, cols: 3, rows: 4 } };
+      return {
+        ...base,
+        w: 150,
+        h: 60,
+        style: { ...base.style, cols: 3, rows: 4 },
+      };
     case "image":
-      return { ...base, w: 60, h: 45, style: { ...base.style, objectFit: "cover" } };
+      return {
+        ...base,
+        w: 60,
+        h: 45,
+        style: { ...base.style, objectFit: "cover" },
+      };
     case "logo":
-      return { ...base, w: 24, h: 24, style: { ...base.style, objectFit: "contain" } };
+      return {
+        ...base,
+        w: 24,
+        h: 24,
+        style: { ...base.style, objectFit: "contain" },
+      };
     case "qr":
       return { ...base, w: 26, h: 26 };
     case "icon":
-      return { ...base, w: 10, h: 10, style: { ...base.style, color: "#c9a86a" } };
+      return {
+        ...base,
+        w: 10,
+        h: 10,
+        style: { ...base.style, color: "#c9a86a" },
+      };
     case "progress":
-      return { ...base, w: 70, h: 16, style: { ...base.style, fill: "#006c35", value: 70 } };
+      return {
+        ...base,
+        w: 70,
+        h: 16,
+        style: { ...base.style, fill: "#006c35", value: 70 },
+      };
     case "stamp":
-      return { ...base, w: 34, h: 34, style: { ...base.style, color: "#c9a86a" } };
+      return {
+        ...base,
+        w: 34,
+        h: 34,
+        style: { ...base.style, color: "#c9a86a" },
+      };
     default:
       return { ...base, w: 40, h: 30 };
   }

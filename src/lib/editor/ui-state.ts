@@ -16,7 +16,8 @@ export const OVERLAY_BREAKPOINT = 1024;
 
 /** True when the viewport is in slide-over mode (tablet/phone widths). */
 export function isOverlayViewport(): boolean {
-  if (typeof window === "undefined" || typeof window.matchMedia !== "function") return false;
+  if (typeof window === "undefined" || typeof window.matchMedia !== "function")
+    return false;
   return !window.matchMedia(`(min-width: ${OVERLAY_BREAKPOINT}px)`).matches;
 }
 
@@ -37,7 +38,10 @@ const PAGES_PANEL_RESERVED = 220;
 /** Clamp a pages-panel height to the current viewport. */
 export function clampPagesHeight(height: number): number {
   const viewport = typeof window === "undefined" ? 900 : window.innerHeight;
-  const max = Math.max(PAGES_PANEL_MIN + 24, Math.min(viewport * 0.6, viewport - PAGES_PANEL_RESERVED));
+  const max = Math.max(
+    PAGES_PANEL_MIN + 24,
+    Math.min(viewport * 0.6, viewport - PAGES_PANEL_RESERVED),
+  );
   const value = Number.isFinite(height) ? height : PAGES_PANEL_DEFAULT;
   return Math.min(max, Math.max(PAGES_PANEL_MIN, Math.round(value)));
 }
@@ -58,8 +62,10 @@ export function extractSvgMarkup(raw: string): string | null {
 
 /** Overlap area between two screen boxes (0 when they only touch). */
 function overlapArea(a: ScreenBox, b: ScreenBox): number {
-  const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
-  const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
+  const w =
+    Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+  const h =
+    Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
   return w > 0 && h > 0 ? w * h : 0;
 }
 
@@ -117,7 +123,10 @@ export function placeFloatingToolbar(
   avoid: readonly ScreenBox[] = [],
 ): ToolbarPlacement {
   const clampTop = (value: number) =>
-    Math.min(Math.max(value, margin), Math.max(margin, viewport.height - size.height - margin));
+    Math.min(
+      Math.max(value, margin),
+      Math.max(margin, viewport.height - size.height - margin),
+    );
   const clampLeft = (value: number) =>
     viewport.width - 2 * margin <= size.width
       ? margin
@@ -133,11 +142,31 @@ export function placeFloatingToolbar(
    * Each candidate is clamped into the viewport first, then scored by how much
    * of it lands on an obstacle.
    */
-  const candidates: Array<{ placement: ToolbarPlacement["placement"]; left: number; top: number }> = [
-    { placement: "above", left: clampLeft(centeredLeft), top: clampTop(anchor.top - gap - size.height) },
-    { placement: "below", left: clampLeft(centeredLeft), top: clampTop(anchor.bottom + gap) },
-    { placement: "left", left: clampLeft(anchor.left - gap - size.width), top: clampTop(centeredTop) },
-    { placement: "right", left: clampLeft(anchor.right + gap), top: clampTop(centeredTop) },
+  const candidates: Array<{
+    placement: ToolbarPlacement["placement"];
+    left: number;
+    top: number;
+  }> = [
+    {
+      placement: "above",
+      left: clampLeft(centeredLeft),
+      top: clampTop(anchor.top - gap - size.height),
+    },
+    {
+      placement: "below",
+      left: clampLeft(centeredLeft),
+      top: clampTop(anchor.bottom + gap),
+    },
+    {
+      placement: "left",
+      left: clampLeft(anchor.left - gap - size.width),
+      top: clampTop(centeredTop),
+    },
+    {
+      placement: "right",
+      left: clampLeft(anchor.right + gap),
+      top: clampTop(centeredTop),
+    },
   ];
 
   let best = candidates[0];

@@ -1924,3 +1924,16 @@ summary,
   outline: 2px solid var(--primary-accent);
   outline-offset: 2px;
 }
+
+/*
+ * STEP 8 — طبقة التلاشي (fade overlay).
+ *
+ * A gradient scrim that sits above an image's frame. Its geometry is the image
+ * frame, so it stays put through resizes, rotation and mirroring; `inset: 0` is
+ * what makes it inherit every one of those transforms for free.
+ */
+.fade-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}

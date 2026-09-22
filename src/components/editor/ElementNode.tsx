@@ -4,6 +4,7 @@ import { prepareText, textPadding } from "@/lib/editor/text-render";
 import { useEditor } from "@/lib/editor/store";
 import { cn, round as round2 } from "@/lib/utils";
 import { applyNumerals } from "@/lib/editor/arabic";
+import { fadeStyle, normalizeFade } from "@/lib/editor/fade";
 import { safeImageSrc } from "@/lib/editor/images";
 import { applySvgColors, sanitizeSvgContent } from "@/lib/editor/svg";
 import { isCompoundShape, shapeDef } from "@/lib/editor/shapes";
@@ -550,20 +551,40 @@ function ElementContent({
         </div>
       );
     }
+    const fade = normalizeFade(s.fade);
     return (
-      <img
-        alt=""
-        src={src}
-        draggable={false}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: s.objectFit || (el.type === "logo" || el.type === "qr" ? "contain" : "cover"),
-          objectPosition: `${s.objectX ?? 50}% ${s.objectY ?? 50}%`,
-          borderRadius: `${s.radius || 0}mm`,
-          pointerEvents: "none",
-        }}
-      />
+      <>
+        <img
+          alt=""
+          src={src}
+          draggable={false}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: s.objectFit || (el.type === "logo" || el.type === "qr" ? "contain" : "cover"),
+            objectPosition: `${s.objectX ?? 50}% ${s.objectY ?? 50}%`,
+            borderRadius: `${s.radius || 0}mm`,
+            pointerEvents: "none",
+          }}
+        />
+        {/*
+          * Step 8 — طبقة التلاشي. Painted after the image so it always sits on
+          * top, sized to the frame (not the photo), and inert: it is decoration,
+          * so a click must reach the image underneath and dragging the element
+          * must keep working.
+          */}
+        {fade && (
+          <div
+            aria-hidden
+            data-fade-overlay={el.id}
+            className="fade-overlay"
+            style={{
+              ...fadeStyle(fade),
+              borderRadius: `${s.radius || 0}mm`,
+            }}
+          />
+        )}
+      </>
     );
   }
 

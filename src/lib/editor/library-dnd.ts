@@ -65,7 +65,9 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
  * Unknown element types are dropped (not fatal): a payload written by an older
  * build of the panel should still insert the parts this build understands.
  */
-export function normalizeLibraryDrop(input: unknown): LibraryDropPayload | null {
+export function normalizeLibraryDrop(
+  input: unknown,
+): LibraryDropPayload | null {
   if (!isPlainObject(input)) return null;
   const rawItems = input.items;
   if (!Array.isArray(rawItems)) return null;
@@ -90,7 +92,9 @@ export function serializeLibraryDrop(payload: LibraryDropPayload): string {
 }
 
 /** Parse a `dataTransfer` string, returning null for anything unusable. */
-export function parseLibraryDrop(raw: string | null | undefined): LibraryDropPayload | null {
+export function parseLibraryDrop(
+  raw: string | null | undefined,
+): LibraryDropPayload | null {
   if (!raw) return null;
   try {
     return normalizeLibraryDrop(JSON.parse(raw));
@@ -121,7 +125,11 @@ export interface InsertedBox {
 export function insertLibraryDrop(
   payload: LibraryDropPayload,
   at: { x: number; y: number } | null,
-  addAt: (type: string, over: Record<string, unknown>, center?: { x: number; y: number }) => InsertedBox | undefined,
+  addAt: (
+    type: string,
+    over: Record<string, unknown>,
+    center?: { x: number; y: number },
+  ) => InsertedBox | undefined,
 ): number {
   let anchor: { x: number; y: number } | null = at;
   let created = 0;

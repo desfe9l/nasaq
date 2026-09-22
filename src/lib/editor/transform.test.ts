@@ -5,10 +5,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import {
-  MIN_SIZE,
-  type CanvasEl,
-} from "./model.ts";
+import { MIN_SIZE, type CanvasEl } from "./model.ts";
 import { applySnap, resizeByHandle, snapThresholdMm } from "./transform.ts";
 
 function box(x: number, y: number, w: number, h: number): CanvasEl {
@@ -27,9 +24,22 @@ function box(x: number, y: number, w: number, h: number): CanvasEl {
   };
 }
 
-function resize(orig: CanvasEl, handle: string, dx: number, dy: number, shift: boolean): CanvasEl {
+function resize(
+  orig: CanvasEl,
+  handle: string,
+  dx: number,
+  dy: number,
+  shift: boolean,
+): CanvasEl {
   const next = { ...orig };
-  resizeByHandle(next, orig, handle, dx, dy, shift || orig.style.aspectLock === true);
+  resizeByHandle(
+    next,
+    orig,
+    handle,
+    dx,
+    dy,
+    shift || orig.style.aspectLock === true,
+  );
   return next;
 }
 
@@ -72,7 +82,11 @@ test("shift + corner preserves the element's own aspect ratio", () => {
   // width follows at the locked 2:1 ratio.
   const wide = resize(box(0, 0, 100, 50), "se", 0, 40, true);
   assert.equal(wide.w, 180);
-  assert.equal(wide.h, 90, "movement on the minor axis still scales from the dominant axis");
+  assert.equal(
+    wide.h,
+    90,
+    "movement on the minor axis still scales from the dominant axis",
+  );
 });
 
 test("shift resize keeps a circle circular and an image proportional", () => {
@@ -95,7 +109,11 @@ test("shift resize does not distort star/polygon shapes with ideal ratios", () =
   const star = box(0, 0, 50, 50);
   star.style.shapeId = "star5";
   const next = resize(star, "se", 25, 25, true);
-  assert.equal(next.w, next.h, "a square star scales uniformly, no golden-ratio constant");
+  assert.equal(
+    next.w,
+    next.h,
+    "a square star scales uniformly, no golden-ratio constant",
+  );
 });
 
 test("shift resize anchors the opposite corner and can centre edges", () => {
@@ -108,14 +126,22 @@ test("shift resize anchors the opposite corner and can centre edges", () => {
 
   const fromEdge = resize(box(10, 10, 40, 20), "n", 0, -10, true);
   assert.equal(fromEdge.w, 60, "1.5x vertical move scales width to match");
-  assert.equal(fromEdge.x, 10 + (40 - 60) / 2, "pure n/s resize stays centred horizontally");
+  assert.equal(
+    fromEdge.x,
+    10 + (40 - 60) / 2,
+    "pure n/s resize stays centred horizontally",
+  );
 });
 
 test("aspectLock preserves the ratio without Shift", () => {
   const locked = box(0, 0, 60, 30);
   locked.style.aspectLock = true;
   const next = resize(locked, "se", 0, 60, false);
-  assert.equal(next.w, 180, "3x vertical move, width follows the locked 2:1 ratio");
+  assert.equal(
+    next.w,
+    180,
+    "3x vertical move, width follows the locked 2:1 ratio",
+  );
   assert.equal(next.h, 90);
 });
 
@@ -158,15 +184,27 @@ test("smart snapping aligns to other elements and the artboard", () => {
   const centre = box(94.2, 0, 20, 20);
   const centreHit = applySnap(centre, [], size, false, true, 1, {});
   assert.deepEqual(centreHit.v, [105]);
-  assert.equal(centre.x + centre.w / 2, 105, "the element's centre lands on the artboard centre");
+  assert.equal(
+    centre.x + centre.w / 2,
+    105,
+    "the element's centre lands on the artboard centre",
+  );
 });
 
 test("snapping ignores elements moving with the gesture", () => {
   const size = { w: 210, h: 297 };
   const el = box(101, 50, 20, 20);
-  const guides = applySnap(el, [{ id: "peer", x: 100, y: 0, w: 30, h: 30 }], size, false, true, 1, {
-    peer: true,
-  });
+  const guides = applySnap(
+    el,
+    [{ id: "peer", x: 100, y: 0, w: 30, h: 30 }],
+    size,
+    false,
+    true,
+    1,
+    {
+      peer: true,
+    },
+  );
   assert.deepEqual(guides, { v: [], h: [] });
   assert.equal(el.x, 101);
 });

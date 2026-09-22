@@ -18,7 +18,9 @@ export function toArabicDigits(text: string): string {
 
 /** Convert Arabic-Indic digits back to Western. */
 export function toWesternDigits(text: string): string {
-  return String(text ?? "").replace(/[٠-٩]/g, (d) => String(AR_DIGITS.indexOf(d)));
+  return String(text ?? "").replace(/[٠-٩]/g, (d) =>
+    String(AR_DIGITS.indexOf(d)),
+  );
 }
 
 /**
@@ -28,7 +30,10 @@ export function toWesternDigits(text: string): string {
  * Arabic-Indic already, so a one-way converter would make the "western" choice
  * silently do nothing for exactly the documents that need it most.
  */
-export function applyNumerals(text: string, numerals: Numerals | undefined): string {
+export function applyNumerals(
+  text: string,
+  numerals: Numerals | undefined,
+): string {
   const src = String(text ?? "");
   if (numerals === "arabic") return toArabicDigits(src);
   if (numerals === "western") return toWesternDigits(src);
@@ -114,7 +119,10 @@ export interface NormalizeOptions {
 }
 
 /** Apply the chosen text clean-up steps in a fixed, predictable order. */
-export function normalizeArabic(text: string, opts: NormalizeOptions = {}): string {
+export function normalizeArabic(
+  text: string,
+  opts: NormalizeOptions = {},
+): string {
   let out = String(text ?? "");
   if (opts.punctuation) out = toArabicPunctuation(out);
   if (opts.unwrap) out = unwrapParagraphs(out);
@@ -130,12 +138,19 @@ export function normalizeArabic(text: string, opts: NormalizeOptions = {}): stri
  * Deliberately layout-free (average glyph advance, no DOM measurement) because
  * it runs on every render and inside the auto-fit search.
  */
-export function estimateLines(text: string, boxWidthMm: number, fontSizePt: number): number {
+export function estimateLines(
+  text: string,
+  boxWidthMm: number,
+  fontSizePt: number,
+): number {
   const content = String(text ?? "");
   if (!content.trim()) return 0;
   // Average Arabic glyph advance is ≈0.5em; 1pt ≈ 0.3528mm.
   const charWidthMm = fontSizePt * 0.3528 * 0.5;
-  const perLine = Math.max(1, Math.floor(boxWidthMm / Math.max(0.1, charWidthMm)));
+  const perLine = Math.max(
+    1,
+    Math.floor(boxWidthMm / Math.max(0.1, charWidthMm)),
+  );
   return content.split("\n").reduce((total, line) => {
     const len = line.trim().length;
     return total + (len === 0 ? 1 : Math.ceil(len / perLine));
@@ -165,7 +180,11 @@ export type TextFit = "clip" | "shrink" | "grow";
  * sees identical to what `fitFontSize` budgets for, instead of the two drifting
  * apart by a fraction of a line.
  */
-export const PARAGRAPH_SPACINGS: { id: string; label: string; value: number }[] = [
+export const PARAGRAPH_SPACINGS: {
+  id: string;
+  label: string;
+  value: number;
+}[] = [
   { id: "none", label: "بلا فراغ", value: 0 },
   { id: "one", label: "فراغ سطر", value: 1 },
   { id: "two", label: "فراغ سطرين", value: 2 },
@@ -222,7 +241,8 @@ export function fitFontSize(
   // contributes n + 1 lines per boundary. Deriving it here rather than counting
   // `\n\n` runs keeps this aligned with `withParagraphSpacing`.
   const fits = (pt: number) =>
-    measureTextHeight(text, box.w, pt, lineHeight, paragraphSpacing) <= box.h + 0.4;
+    measureTextHeight(text, box.w, pt, lineHeight, paragraphSpacing) <=
+    box.h + 0.4;
 
   if (mode === "shrink") {
     if (fits(base)) return base;
@@ -276,7 +296,11 @@ export function measureTextHeight(
  * expand to the page width and every later line would still wrap, so the search
  * targets the width at which the current wrapping is already as good as it gets.
  */
-export function measureTextWidth(text: string, fontSizePt: number, maxWidthMm: number): number {
+export function measureTextWidth(
+  text: string,
+  fontSizePt: number,
+  maxWidthMm: number,
+): number {
   const longest = String(text ?? "")
     .split("\n")
     .reduce((max, line) => Math.max(max, line.trim().length), 0);
@@ -304,14 +328,19 @@ export const LETTER_SPACINGS: { id: string; label: string; value: number }[] = [
 ];
 
 /** Numeral systems offered in the properties panel. */
-export const NUMERAL_OPTIONS: { id: Numerals; label: string; sample: string }[] = [
+export const NUMERAL_OPTIONS: {
+  id: Numerals;
+  label: string;
+  sample: string;
+}[] = [
   { id: "western", label: "أرقام لاتينية", sample: "2026" },
   { id: "arabic", label: "أرقام عربية", sample: "٢٠٢٦" },
 ];
 
 /** Text-overflow strategies. `shrink` is what makes long Arabic strings safe. */
-export const TEXT_FIT_OPTIONS: { id: TextFit; label: string; hint: string }[] = [
-  { id: "clip", label: "قص", hint: "اترك النص يتجاوز دون تصغير" },
-  { id: "shrink", label: "تصغير تلقائي", hint: "صغّر الخط حتى يتسع النص" },
-  { id: "grow", label: "تكبير تلقائي", hint: "كبّر الخط ليملأ المساحة" },
-];
+export const TEXT_FIT_OPTIONS: { id: TextFit; label: string; hint: string }[] =
+  [
+    { id: "clip", label: "قص", hint: "اترك النص يتجاوز دون تصغير" },
+    { id: "shrink", label: "تصغير تلقائي", hint: "صغّر الخط حتى يتسع النص" },
+    { id: "grow", label: "تكبير تلقائي", hint: "كبّر الخط ليملأ المساحة" },
+  ];

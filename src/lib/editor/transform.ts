@@ -92,13 +92,20 @@ export function resizeByHandle(
   const vertical = handle.includes("n") || handle.includes("s");
   let scale = 1;
   if (horizontal && vertical) {
-    const widthScale = (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
-    const heightScale = (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
-    scale = Math.abs(widthScale - 1) >= Math.abs(heightScale - 1) ? widthScale : heightScale;
+    const widthScale =
+      (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
+    const heightScale =
+      (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
+    scale =
+      Math.abs(widthScale - 1) >= Math.abs(heightScale - 1)
+        ? widthScale
+        : heightScale;
   } else if (horizontal) {
-    scale = (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
+    scale =
+      (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
   } else if (vertical) {
-    scale = (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
+    scale =
+      (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
   }
   // Keep the result on the same side of MIN_SIZE as the scale itself: a
   // negative scale means the pointer crossed the far edge, and clamping the
@@ -158,8 +165,18 @@ export function applySnap(
     // Elements that are moving with this gesture are not candidates: snapping
     // a dragged element to a sibling travelling beside it would fight the drag.
     const stable = others.filter((o) => !moving[o.id as string]);
-    const edges = [0, size.w / 2, size.w, ...stable.flatMap((o) => [o.x, o.x + o.w / 2, o.x + o.w])];
-    const hedges = [0, size.h / 2, size.h, ...stable.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h])];
+    const edges = [
+      0,
+      size.w / 2,
+      size.w,
+      ...stable.flatMap((o) => [o.x, o.x + o.w / 2, o.x + o.w]),
+    ];
+    const hedges = [
+      0,
+      size.h / 2,
+      size.h,
+      ...stable.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h]),
+    ];
     const mineV = [el.x, el.x + el.w / 2, el.x + el.w];
     const mineH = [el.y, el.y + el.h / 2, el.y + el.h];
     const nearest = (mine: number[], targets: number[]) => {
@@ -167,7 +184,10 @@ export function applySnap(
       for (const m of mine) {
         for (const t of targets) {
           const delta = t - m;
-          if (Math.abs(delta) <= threshold && (!best || Math.abs(delta) < Math.abs(best.delta))) {
+          if (
+            Math.abs(delta) <= threshold &&
+            (!best || Math.abs(delta) < Math.abs(best.delta))
+          ) {
             best = { delta, target: t };
           }
         }

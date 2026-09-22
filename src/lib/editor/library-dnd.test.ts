@@ -24,7 +24,9 @@ describe("normalizeLibraryDrop", () => {
   });
 
   it("drops unknown element types instead of inserting junk", () => {
-    const out = normalizeLibraryDrop({ items: [{ type: "iframe" }, { type: "table" }] });
+    const out = normalizeLibraryDrop({
+      items: [{ type: "iframe" }, { type: "table" }],
+    });
     assert.ok(out);
     assert.equal(out!.items.length, 1);
     assert.equal(out!.items[0].type, "table");
@@ -45,7 +47,9 @@ describe("normalizeLibraryDrop", () => {
   });
 
   it("ignores non-finite offsets rather than producing NaN geometry", () => {
-    const out = normalizeLibraryDrop({ items: [{ type: "table", dx: Number.NaN, dy: Infinity }] });
+    const out = normalizeLibraryDrop({
+      items: [{ type: "table", dx: Number.NaN, dy: Infinity }],
+    });
     assert.equal(out!.items[0].dx, undefined);
     assert.equal(out!.items[0].dy, undefined);
   });
@@ -53,7 +57,9 @@ describe("normalizeLibraryDrop", () => {
 
 describe("serialize/parse round trip", () => {
   it("survives a dataTransfer round trip", () => {
-    const payload = { items: [{ type: "table", over: { style: { cols: 3, rows: 4 } }, dx: 2 }] };
+    const payload = {
+      items: [{ type: "table", over: { style: { cols: 3, rows: 4 } }, dx: 2 }],
+    };
     const raw = serializeLibraryDrop(payload);
     assert.deepEqual(parseLibraryDrop(raw), normalizeLibraryDrop(payload));
   });
@@ -69,8 +75,16 @@ describe("serialize/parse round trip", () => {
 describe("insertLibraryDrop", () => {
   /** Fake store: records every insert and returns the box it was given. */
   const recorder = () => {
-    const calls: Array<{ type: string; over: Record<string, unknown>; center?: { x: number; y: number } }> = [];
-    const addAt = (type: string, over: Record<string, unknown>, center?: { x: number; y: number }): InsertedBox => {
+    const calls: Array<{
+      type: string;
+      over: Record<string, unknown>;
+      center?: { x: number; y: number };
+    }> = [];
+    const addAt = (
+      type: string,
+      over: Record<string, unknown>,
+      center?: { x: number; y: number },
+    ): InsertedBox => {
       calls.push({ type, over, center });
       // Simulate the store centring the element on the requested point.
       const w = Number(over.w ?? 40);
@@ -103,8 +117,21 @@ describe("insertLibraryDrop", () => {
 
   it("centres the first element itself when the card is clicked, then follows it", () => {
     const { calls, addAt } = recorder();
-    insertLibraryDrop({ items: [{ type: "table", over: { w: 100, h: 40 } }, { type: "progress", dx: 30 }] }, null, addAt);
-    assert.equal(calls[0].center, undefined, "click insert keeps the default centred placement");
+    insertLibraryDrop(
+      {
+        items: [
+          { type: "table", over: { w: 100, h: 40 } },
+          { type: "progress", dx: 30 },
+        ],
+      },
+      null,
+      addAt,
+    );
+    assert.equal(
+      calls[0].center,
+      undefined,
+      "click insert keeps the default centred placement",
+    );
     // The fake store centres the first element at (100, 200); the sibling keeps
     // its +30mm offset from that centre, exactly as it would after a drop.
     assert.deepEqual(calls[1].center, { x: 130, y: 200 });
@@ -112,10 +139,14 @@ describe("insertLibraryDrop", () => {
 
   it("skips items the store refuses and still reports the real count", () => {
     const calls: string[] = [];
-    const created = insertLibraryDrop({ items: [{ type: "table" }, { type: "progress" }] }, { x: 0, y: 0 }, (type) => {
-      calls.push(type);
-      return type === "progress" ? { x: 0, y: 0, w: 10, h: 10 } : undefined;
-    });
+    const created = insertLibraryDrop(
+      { items: [{ type: "table" }, { type: "progress" }] },
+      { x: 0, y: 0 },
+      (type) => {
+        calls.push(type);
+        return type === "progress" ? { x: 0, y: 0, w: 10, h: 10 } : undefined;
+      },
+    );
     assert.equal(created, 1);
     assert.deepEqual(calls, ["table", "progress"]);
   });

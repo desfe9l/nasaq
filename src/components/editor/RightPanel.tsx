@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Copy,
   Download,
+  Contrast,
   Eye,
   FlipHorizontal2,
   FlipVertical2,
@@ -42,7 +43,31 @@ import {
   PARAGRAPH_SPACINGS,
   TEXT_FIT_OPTIONS,
 } from "@/lib/editor/arabic";
+import {
+  DEFAULT_FADE,
+  FADE_BLENDS,
+  FADE_DIRECTIONS,
+  fadeDirectionLabel,
+  normalizeFade,
+  type FadeBlend,
+  type FadeOverlay,
+} from "@/lib/editor/fade";
 import { SHAPES } from "@/lib/editor/shapes";
+
+/** Element types that can carry a fade overlay (the image family, step 8). */
+const FADE_TYPES: ReadonlySet<string> = new Set(["image", "logo", "qr"]);
+
+/** Arabic labels for the blend modes offered on a fade overlay. */
+const BLEND_LABEL: Record<string, string> = {
+  normal: "عادي",
+  multiply: "تراكب ضربي (Multiply)",
+  screen: "إضاءة (Screen)",
+  overlay: "تغطية (Overlay)",
+  "soft-light": "ضوء ناعم (Soft Light)",
+  darken: "تغميق (Darken)",
+  lighten: "تفتيح (Lighten)",
+  luminosity: "إضاءة لونية (Luminosity)",
+};
 
 /**
  * Fold any angle into (−180, 180] so a quarter-turn from 170° reads −100°,
@@ -74,6 +99,7 @@ export function RightPanel({
   const selectedId = useEditor((s) => s.selectedId);
   const updateElement = useEditor((s) => s.updateElement);
   const flipSelected = useEditor((s) => s.flipSelected);
+  const toggleFadeOverlay = useEditor((s) => s.toggleFadeOverlay);
   const updateStyle = useEditor((s) => s.updateStyle);
   const duplicateSelected = useEditor((s) => s.duplicateSelected);
   const copySelected = useEditor((s) => s.copySelected);
@@ -102,11 +128,14 @@ export function RightPanel({
    * background/export start closed. The choice persists per device.
    */
   const accordions = useAccordionState<
-    "dimensions" | "text" | "background" | "export"
+    "dimensions" | "text" | "background" | "fade" | "export"
   >("properties", {
     dimensions: true,
     text: true,
     background: false,
+    // Opens by itself the moment a fade exists, so the layer is never invisible
+    // state: the author can always see what is painting over the picture.
+    fade: false,
     export: false,
   });
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
@@ -165,6 +194,21 @@ export function RightPanel({
   // properties rather than nothing.
   const el =
     page && selectedId ? findElement(page.elements, selectedId)?.el : undefined;
+  /*
+   * Step 8 state: the normalised overlay (so a hand-edited save renders the
+   * same values the panel shows) plus one writer that keeps every edit in the
+   * element's history — the same pathway as any other style change.
+   */
+  const fade = normalizeFade(el?.style?.fade);
+  const updateFade = (patch: Partial<FadeOverlay>, transient = false) => {
+    if (!el) return;
+    updateElement(
+      el.id,
+      { style: { ...el.style, fade: { ...(fade ?? DEFAULT_FADE), ...patch } } },
+      transient,
+    );
+  };
+
   const layers = [...(page?.elements || [])].sort((a, b) => b.z - a.z);
   const selectedCount = useEditor((s) => s.selectedIds.length);
   const selectMany = useEditor((s) => s.selectMany);
@@ -1816,6 +1860,119 @@ export function RightPanel({
              * dialog the toolbar uses (no second export path), just with the
              * format already chosen.
              */}
+            {/*
+             * Step 8 — طبقة التلاشي. Only the image family can carry one, so
+             * the whole section is hidden elsewhere; inside, the four gradient
+             * presets are buttons (not a dropdown) because they are the fast
+             * path, and the colour/opacity/blend controls refine from there.
+             */}
+            {FADE_TYPES.has(el.type) && (
+              <AccordionSection
+                title="طبقة التلاشي (Fade Overlay)"
+                id="fade"
+                open={accordions.isOpen("fade", fade !== null)}
+                onToggle={() => accordions.toggle("fade")}
+              >
+                {fade ? (
+                  <>
+                    <SubGroup title="اتجاه التدرج">
+                      <div className="grid grid-cols-2 gap-2">
+                        {FADE_DIRECTIONS.map((direction) => (
+                          <button
+                            key={direction}
+                            type="button"
+                            aria-pressed={fade.direction === direction}
+                            onClick={() => updateFade({ direction })}
+                            className={cn(
+                              "h-8 rounded-[8px] border border-line text-[10px] font-bold dark:border-white/10",
+                              fade.direction === direction &&
+                                "border-[var(--primary-accent)] bg-[var(--library-active-bg)] text-[var(--primary-accent)]",
+                            )}
+                          >
+                            {fadeDirectionLabel(direction)}
+                          </button>
+                        ))}
+                      </div>
+                    </SubGroup>
+
+                    <SubGroup title="الألوان">
+                      <div className="grid grid-cols-2 gap-2">
+                        <Field label="من">
+                          <input
+                            type="color"
+                            value={toColor(fade.from, "#0f172a")}
+                            onChange={(e) =>
+                              updateFade({ from: e.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field label="إلى">
+                          <input
+                            type="color"
+                            value={toColor(fade.to, "#ffffff")}
+                            onChange={(e) => updateFade({ to: e.target.value })}
+                          />
+                        </Field>
+                      </div>
+                      <button
+                        type="button"
+                        className="editor-mini-btn w-full justify-center"
+                        onClick={() => updateFade({ to: "transparent" })}
+                      >
+                        اجعل النهاية شفافة (تلاشٍ ناعم)
+                      </button>
+                    </SubGroup>
+
+                    <SubGroup title="الدمج">
+                      <ScrubField
+                        label="الشفافية"
+                        value={round(fade.opacity * 100)}
+                        min={0}
+                        max={100}
+                        step={1}
+                        precision={0}
+                        suffix="%"
+                        onChange={(v) => updateFade({ opacity: v / 100 }, true)}
+                        onCommit={(v) => updateFade({ opacity: v / 100 })}
+                      />
+                      <Field label="وضع الدمج">
+                        <select
+                          value={fade.blend}
+                          onChange={(e) =>
+                            updateFade({ blend: e.target.value as FadeBlend })
+                          }
+                        >
+                          {FADE_BLENDS.map((blend) => (
+                            <option key={blend} value={blend}>
+                              {BLEND_LABEL[blend] ?? blend}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    </SubGroup>
+
+                    <button
+                      type="button"
+                      className="editor-mini-btn w-full justify-center text-[#b42318]"
+                      onClick={toggleFadeOverlay}
+                    >
+                      <Trash2 className="size-3.5" />
+                      إزالة طبقة التلاشي
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="editor-mini-btn w-full justify-center"
+                    onClick={toggleFadeOverlay}
+                  >
+                    <Contrast className="size-3.5" />
+                    إضافة طبقة تلاشي (Fade Overlay)
+                  </button>
+                )}
+              </AccordionSection>
+            )}
+
             <AccordionSection
               title="تصدير"
               id="export"

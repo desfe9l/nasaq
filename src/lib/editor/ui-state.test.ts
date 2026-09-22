@@ -17,12 +17,19 @@ function overlap(
   a: { left: number; top: number; width: number; height: number },
   b: { left: number; top: number; width: number; height: number },
 ): number {
-  const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
-  const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
+  const w =
+    Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+  const h =
+    Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
   return w > 0 && h > 0 ? w * h : 0;
 }
 
-const box = (left: number, top: number, width: number, height: number): ScreenBox => ({
+const box = (
+  left: number,
+  top: number,
+  width: number,
+  height: number,
+): ScreenBox => ({
   left,
   top,
   width,
@@ -65,7 +72,10 @@ describe("extractSvgMarkup", () => {
   });
 
   it("returns null when there is no svg root at all", () => {
-    assert.equal(extractSvgMarkup("<html><body>لا يوجد رسم</body></html>"), null);
+    assert.equal(
+      extractSvgMarkup("<html><body>لا يوجد رسم</body></html>"),
+      null,
+    );
     assert.equal(extractSvgMarkup(""), null);
   });
 
@@ -74,7 +84,9 @@ describe("extractSvgMarkup", () => {
   });
 
   it("matches the closing tag case-insensitively and tolerates whitespace", () => {
-    const out = extractSvgMarkup("<SVG xmlns='x'><rect width='4' height='4'/></SVG  >");
+    const out = extractSvgMarkup(
+      "<SVG xmlns='x'><rect width='4' height='4'/></SVG  >",
+    );
     assert.ok(out);
   });
 });
@@ -108,7 +120,11 @@ describe("placeFloatingToolbar", () => {
   });
 
   it("never leaves the viewport horizontally (both edges)", () => {
-    const rightEdge = placeFloatingToolbar(box(1380, 400, 40, 40), size, viewport);
+    const rightEdge = placeFloatingToolbar(
+      box(1380, 400, 40, 40),
+      size,
+      viewport,
+    );
     assert.equal(rightEdge.left, viewport.width - size.width - 8);
     assert.equal(rightEdge.clamped, true);
 
@@ -120,15 +136,26 @@ describe("placeFloatingToolbar", () => {
 
   it("keeps the toolbar visible when the element is taller than the viewport", () => {
     const tiny = { width: 380, height: 300 };
-    const out = placeFloatingToolbar(box(20, 20, 300, 500), { width: 320, height: 44 }, tiny);
+    const out = placeFloatingToolbar(
+      box(20, 20, 300, 500),
+      { width: 320, height: 44 },
+      tiny,
+    );
     assert.ok(out.top >= 8);
-    assert.ok(out.top + 44 <= tiny.height, "toolbar stays inside the vertical bounds");
+    assert.ok(
+      out.top + 44 <= tiny.height,
+      "toolbar stays inside the vertical bounds",
+    );
     assert.ok(out.left >= 8 && out.left + 320 <= tiny.width);
   });
 
   it("pins to the margin when the viewport is narrower than the toolbar", () => {
     const narrow = { width: 300, height: 800 };
-    const out = placeFloatingToolbar(box(20, 400, 200, 80), { width: 320, height: 44 }, narrow);
+    const out = placeFloatingToolbar(
+      box(20, 400, 200, 80),
+      { width: 320, height: 44 },
+      narrow,
+    );
     assert.equal(out.left, 8);
     assert.equal(out.clamped, true);
   });
@@ -144,27 +171,81 @@ describe("placeFloatingToolbar obstacle avoidance", () => {
   const viewport = { width: 1440, height: 900 };
   const size = { width: 420, height: 44 };
   /** The docked properties panel: a 320px column on the left edge. */
-  const propertiesPanel: ScreenBox = { left: 0, top: 52, width: 320, height: 848, right: 320, bottom: 900 };
+  const propertiesPanel: ScreenBox = {
+    left: 0,
+    top: 52,
+    width: 320,
+    height: 848,
+    right: 320,
+    bottom: 900,
+  };
 
   it("steps around the properties panel instead of covering it", () => {
-    const out = placeFloatingToolbar(box(200, 400, 200, 120), size, viewport, 16, 8, [propertiesPanel]);
-    const box$ = { left: out.left, top: out.top, width: size.width, height: size.height };
-    assert.equal(overlap(out, box$, propertiesPanel), 0, "bubble must not overlap the panel");
+    const out = placeFloatingToolbar(
+      box(200, 400, 200, 120),
+      size,
+      viewport,
+      16,
+      8,
+      [propertiesPanel],
+    );
+    const box$ = {
+      left: out.left,
+      top: out.top,
+      width: size.width,
+      height: size.height,
+    };
+    assert.equal(
+      overlap(out, box$, propertiesPanel),
+      0,
+      "bubble must not overlap the panel",
+    );
     // Above/below would have centred it over the panel, so it moved to a side.
-    assert.ok(out.placement === "right" || out.placement === "above" || out.placement === "below");
-    assert.ok(out.left >= propertiesPanel.right, `expected the bubble right of the panel, got ${out.left}`);
+    assert.ok(
+      out.placement === "right" ||
+        out.placement === "above" ||
+        out.placement === "below",
+    );
+    assert.ok(
+      out.left >= propertiesPanel.right,
+      `expected the bubble right of the panel, got ${out.left}`,
+    );
   });
 
   it("keeps the preferred placement when nothing is in the way", () => {
-    const out = placeFloatingToolbar(box(700, 400, 200, 120), size, viewport, 16, 8, [propertiesPanel]);
+    const out = placeFloatingToolbar(
+      box(700, 400, 200, 120),
+      size,
+      viewport,
+      16,
+      8,
+      [propertiesPanel],
+    );
     assert.equal(out.placement, "above");
     assert.equal(out.top, 400 - 16 - 44);
   });
 
   it("avoids the header when the element is scrolled to the top", () => {
-    const header: ScreenBox = { left: 0, top: 0, width: 1440, height: 52, right: 1440, bottom: 52 };
-    const out = placeFloatingToolbar(box(700, 60, 200, 120), size, viewport, 16, 8, [header]);
-    assert.ok(out.top >= header.bottom, `expected the bubble below the header, got ${out.top}`);
+    const header: ScreenBox = {
+      left: 0,
+      top: 0,
+      width: 1440,
+      height: 52,
+      right: 1440,
+      bottom: 52,
+    };
+    const out = placeFloatingToolbar(
+      box(700, 60, 200, 120),
+      size,
+      viewport,
+      16,
+      8,
+      [header],
+    );
+    assert.ok(
+      out.top >= header.bottom,
+      `expected the bubble below the header, got ${out.top}`,
+    );
   });
 
   it("never covers the selected element even when every side is blocked", () => {
@@ -174,7 +255,12 @@ describe("placeFloatingToolbar obstacle avoidance", () => {
     ];
     const anchor = box(600, 420, 240, 100);
     const out = placeFloatingToolbar(anchor, size, viewport, 16, 8, walled);
-    const box$ = { left: out.left, top: out.top, width: size.width, height: size.height };
+    const box$ = {
+      left: out.left,
+      top: out.top,
+      width: size.width,
+      height: size.height,
+    };
     // Sides win: they have no vertical overlap with the walls at all.
     assert.ok(out.placement === "left" || out.placement === "right");
     assert.equal(overlap(out, box$, anchor), 0);

@@ -34,7 +34,12 @@ export function isAcceptedImage(file: File): boolean {
 export function safeImageSrc(src: unknown): string {
   const value = String(src ?? "").trim();
   if (!value) return "";
-  if (/^data:image\/[a-z0-9.+-]+(;[a-z0-9-]+=[a-z0-9-]+)*(;base64)?,[\s\S]*$/i.test(value)) return value;
+  if (
+    /^data:image\/[a-z0-9.+-]+(;[a-z0-9-]+=[a-z0-9-]+)*(;base64)?,[\s\S]*$/i.test(
+      value,
+    )
+  )
+    return value;
   if (/^https?:\/\//i.test(value)) return value;
   if (/^blob:/i.test(value)) return value;
   return "";
@@ -61,13 +66,21 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 /**
  * Turn a picked/dropped file into a data URL sized for a print page.
  */
-export async function prepareImage(file: File, limits: ImageLimits = IMAGE_LIMITS): Promise<PreparedImage> {
+export async function prepareImage(
+  file: File,
+  limits: ImageLimits = IMAGE_LIMITS,
+): Promise<PreparedImage> {
   if (!isAcceptedImage(file)) throw new Error("نوع الملف ليس صورة مدعومة");
 
   const raw = await readAsDataUrl(file);
   if (file.type === "image/svg+xml") {
     const img = await loadImage(raw);
-    return { src: raw, width: img.naturalWidth, height: img.naturalHeight, resized: false };
+    return {
+      src: raw,
+      width: img.naturalWidth,
+      height: img.naturalHeight,
+      resized: false,
+    };
   }
 
   const img = await loadImage(raw);
@@ -86,20 +99,28 @@ export async function prepareImage(file: File, limits: ImageLimits = IMAGE_LIMIT
   if (!ctx) return { src: raw, width: w, height: h, resized: false };
 
   // التحقق مما إذا كانت الصورة شفافة (PNG أو WebP) للحفاظ على الشفافية وعدم ملء الخلفية باللون الأبيض
-  const isTransparent = file.type === "image/png" || file.type === "image/webp" || file.type === "image/gif";
-  
+  const isTransparent =
+    file.type === "image/png" ||
+    file.type === "image/webp" ||
+    file.type === "image/gif";
+
   if (!isTransparent) {
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, tw, th);
   }
 
   ctx.drawImage(img, 0, 0, tw, th);
-  
+
   // الحفاظ على صيغة PNG إذا كانت الصورة الأصلية شفافة لضمان عدم ضياع القنوات الشفافة
   const mimeType = isTransparent ? "image/png" : "image/jpeg";
   const quality = isTransparent ? undefined : 0.92;
 
-  return { src: canvas.toDataURL(mimeType, quality), width: tw, height: th, resized: true };
+  return {
+    src: canvas.toDataURL(mimeType, quality),
+    width: tw,
+    height: th,
+    resized: true,
+  };
 }
 
 /**
@@ -110,7 +131,8 @@ export function fitImageBox(
   image: { width: number; height: number },
   maxMm: { w: number; h: number },
 ): { w: number; h: number } {
-  const ratio = image.width > 0 && image.height > 0 ? image.width / image.height : 1.5;
+  const ratio =
+    image.width > 0 && image.height > 0 ? image.width / image.height : 1.5;
   let w = maxMm.w;
   let h = w / ratio;
   if (h > maxMm.h) {
