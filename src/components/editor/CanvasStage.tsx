@@ -6,6 +6,7 @@ import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
 import { toast } from "sonner";
+import { zoomAnchoredAt } from "@/lib/editor/viewport";
 
 type Op =
   | {
@@ -64,7 +65,6 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
   const fitTextBox = useEditor((s) => s.fitTextBox);
   const commit = useEditor((s) => s.commit);
   const setActivePage = useEditor((s) => s.setActivePage);
-  const setZoom = useEditor((s) => s.setZoom);
   const editingId = useEditor((s) => s.editingId);
 
   const opRef = useRef<Op>(null);
@@ -93,6 +93,31 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
       window.removeEventListener("nasaq:draw-text", arm);
       window.removeEventListener("keydown", disarm);
     };
+  }, []);
+
+  /*
+   * Ctrl/cmd + wheel zooms the canvas, anchored on the pointer.
+   *
+   * This must be a NATIVE, non-passive listener: React registers `wheel` at
+   * its root passively, so `preventDefault()` inside `onWheel` cannot stop the
+   * browser's default — the stage would also natively scroll (or, on real
+   * desktop browsers, the whole page would run its own pinch-zoom) while the
+   * anchored zoom adjusts scroll, and the two fight every step.
+   */
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const prev = useEditor.getState().zoom;
+      const next = Math.min(2, Math.max(0.2, prev + (e.deltaY < 0 ? 0.06 : -0.06)));
+      // Pointer-anchored zoom: the page point under the cursor stays put, so
+      // zooming in on a detail never throws the author somewhere else.
+      zoomAnchoredAt(stage, prev, next, e.clientX, e.clientY);
+    };
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", onWheel);
   }, []);
 
   useEffect(() => {
@@ -440,13 +465,14 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
       selectMany([...before, ...hits.filter((id) => !before.includes(id))]);
     };
 
-    const up = () => {
+    const up = (ev: PointerEvent) => {
       setMarquee(null);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       // A press with no drag is a plain click on empty space, which clears the
-      // selection the way every design tool does.
-      if (!moved && !additive) select(null);
+      // selection the way every design tool does — left button only, so a
+      // right-click never wipes the selection its menu is about to act on.
+      if (!moved && !additive && ev.button === 0) select(null);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -482,7 +508,15 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
         window.addEventListener("pointermove", move);
         window.addEventListener("pointerup", up);
       }}
-      onPointerDown={() => select(null)}
+      /*
+       * Click-to-deselect is a LEFT-button gesture. Clearing on every button
+       * meant the right-click itself wiped the multi-selection a moment before
+       * its context menu opened — so تجميع/فك التجميع vanished from the
+       * empty-space menu even with several elements selected.
+       */
+      onPointerDown={(e) => {
+        if (e.button === 0) select(null);
+      }}
       /*
        * Two-finger pan. A trackpad already pans here through the browser's own
        * two-finger scroll (and ctrl+wheel is the pinch-zoom channel below), so
@@ -518,29 +552,6 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
       }}
       onTouchCancel={() => {
         touchPan.current = null;
-      }}
-      onWheel={(e) => {
-        if (!(e.ctrlKey || e.metaKey)) return;
-        e.preventDefault();
-        const stage = stageRef.current;
-        const prev = useEditor.getState().zoom;
-        const next = Math.min(2, Math.max(0.2, prev + (e.deltaY < 0 ? 0.06 : -0.06)));
-        if (next === prev) return;
-        // Pointer-anchored zoom: the page point under the cursor stays put, so
-        // zooming in on a detail never throws the author somewhere else.
-        const rect = stage?.getBoundingClientRect();
-        const px = rect ? e.clientX - rect.left : 0;
-        const py = rect ? e.clientY - rect.top : 0;
-        const anchorX = (stage?.scrollLeft ?? 0) + px;
-        const anchorY = (stage?.scrollTop ?? 0) + py;
-        setZoom(next);
-        if (stage) {
-          const ratio = next / prev;
-          requestAnimationFrame(() => {
-            stage.scrollLeft = anchorX * ratio - px;
-            stage.scrollTop = anchorY * ratio - py;
-          });
-        }
       }}
       onDragOver={(e) => {
         if (!onDropImage || !e.dataTransfer.types.includes("Files")) return;
@@ -639,6 +650,10 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
                   if (e.target !== e.currentTarget) return;
                   e.stopPropagation();
                   setActivePage(page.id);
+                  // A right press only opens the context menu — it must not
+                  // start a marquee (whose plain-click branch would clear the
+                  // selection from under the menu about to open).
+                  if (e.button !== 0) return;
                   startMarquee(e, page);
                 }}
               >
@@ -809,6 +824,14 @@ function SelectionFrame({
         el.locked && "is-locked",
         editing && "is-editing",
       )}
+      /*
+       * Carry the element id: the workspace context menu resolves its target
+       * with `closest("[data-el-id]")`, and the frame — not the element node —
+       * is what a right-click on SELECTED artwork actually lands on. Without
+       * this the menu opened as the empty-space menu (paste/select-all) even
+       * though the author was pointing at an element.
+       */
+      data-el-id={el.id}
       style={{
         left: `${el.x}mm`,
         top: `${el.y}mm`,

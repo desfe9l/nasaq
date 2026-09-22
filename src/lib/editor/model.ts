@@ -131,7 +131,9 @@ export interface ElStyle {
   /** `progress` elements: show the percentage number next to the caption. */
   showValue?: boolean;
   /** `progress` elements: linear bar or radial ring. */
-  variant?: "bar" | "ring";
+  variant?: "bar" | "ring" | "steps";
+  /** Steps variant: number of dots/stages (2–12). */
+  steps?: number;
   /** Arabic typography: numeral style for digits inside the content. */
   numerals?: Numerals;
   /** How text behaves when it exceeds its box. */
@@ -546,6 +548,14 @@ export const PROGRESS_PRESETS: ProgressPreset[] = [
     w: 44,
     h: 44,
     style: { value: 68, showValue: true, fontSize: 11 },
+  },
+  {
+    id: "steps",
+    label: "نقاط مراحل",
+    sample: "مراحل المشروع",
+    w: 120,
+    h: 18,
+    style: { value: 60, showValue: true, fontSize: 10, variant: "steps", steps: 5 },
   },
 ];
 

@@ -186,6 +186,14 @@
   background-image: none;
   touch-action: pan-x pan-y;
   overscroll-behavior: contain;
+  /*
+   * Chrome's scroll anchoring "helpfully" rescrolls the stage whenever the
+   * re-rendered artboard changes size under it — which is exactly what a zoom
+   * step is. That fights the anchored-zoom correction (viewport-tools.ts
+   * `zoomAnchoredAt`) and leaves the anchor point drifting several millimetres
+   * per wheel step. The canvas manages its own scroll on zoom; anchoring off.
+   */
+  overflow-anchor: none;
 }
 
 /* Control surfaces inside chrome only; the report page is not under these selectors. */
@@ -297,6 +305,18 @@
 
 .editor-context-menu,
 .editor-command-menu {
+  background: var(--editor-panel);
+  border-color: var(--editor-border);
+  color: var(--editor-text);
+}
+
+/*
+ * Toolbar dropdowns (المحاذاة/الترتيب/تحويل/عرض) float over the artwork, so
+ * they must be opaque like the context menu — with no background of their own
+ * the page showed straight through the rows and the menu read as a broken
+ * translucent sheet.
+ */
+.editor-dropdown-panel {
   background: var(--editor-panel);
   border-color: var(--editor-border);
   color: var(--editor-text);

@@ -8,6 +8,7 @@ import {
   Check,
   Download,
   Focus,
+  GalleryHorizontalEnd,
   FolderOpen,
   Grid3x3,
   Home,
@@ -23,11 +24,13 @@ import {
   X,
   ZoomIn,
   ZoomOut,
+  Scan,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import { useEditor, saveLabel, type SaveState } from "@/lib/editor/store";
 import { elementsBounds, pageSize } from "@/lib/editor/model";
 import { fitImageBox, prepareImage } from "@/lib/editor/images";
+import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { LeftPanel } from "./LeftPanel";
 import { RightPanel } from "./RightPanel";
 import { CanvasStage } from "./CanvasStage";
@@ -36,8 +39,8 @@ import { PageRail } from "./PageRail";
 import { ExportDialog } from "./ExportDialog";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
-import { BrandLogo } from "@/components/site/SiteChrome";
 import { WorkspaceOverlays, WorkspaceStatusBar, type MenuPoint } from "./WorkspaceOverlays";
+import { ToolbarMenus } from "./ToolbarMenus";
 
 /**
  * The studio shell.
@@ -247,23 +250,6 @@ export function EditorApp() {
   );
 }
 
-/**
- * Whole-interface zoom bounds.
- *
- * Bounded on purpose: below ~80% the tool labels stop being readable and above
- * ~135% the docked panels would crowd the canvas out on a laptop screen. The
- * canvas keeps its own wider zoom range for artboard-level work.
- */
-const UI_SCALE_KEY = "diwan-editor-ui-scale";
-const UI_SCALE_MIN = 0.8;
-const UI_SCALE_MAX = 1.35;
-const UI_SCALE_STEP = 0.05;
-
-function stepUiScale(current: number, dir: 1 | -1): number {
-  const next = Math.round((current + dir * UI_SCALE_STEP) * 100) / 100;
-  return Math.min(UI_SCALE_MAX, Math.max(UI_SCALE_MIN, next));
-}
-
 function Studio({
   onOpenFile,
   onUpload,
@@ -329,21 +315,9 @@ function Studio({
   });
   const [isDesktop, setIsDesktop] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches);
 
-  // Whole-interface zoom (keyboard ⌘±). Persisted with the panel widths so the
-  // workspace comes back exactly as the author left it.
-  const [uiScale, setUiScale] = useState(() => {
-    if (typeof window === "undefined") return 1;
-    const raw = Number(localStorage.getItem(UI_SCALE_KEY));
-    return Number.isFinite(raw) && raw >= UI_SCALE_MIN && raw <= UI_SCALE_MAX ? raw : 1;
-  });
-
   useEffect(() => {
     localStorage.setItem("diwan-editor-panel-widths", JSON.stringify(panelWidths));
   }, [panelWidths]);
-
-  useEffect(() => {
-    localStorage.setItem(UI_SCALE_KEY, String(uiScale));
-  }, [uiScale]);
 
   useEffect(() => {
     const media = window.matchMedia("(min-width: 1024px)");
@@ -356,32 +330,52 @@ function Studio({
   const activePage = pages.find((p) => p.id === activePageId) || pages[0];
   const activeSize = pageSize(activePage);
 
+/**
+ * ملاءمة الصفحة / عرض الصفحة بالكامل: pick a zoom that fits the WHOLE
+ * artboard (all four edges inside the viewport) and then centre it, so Fit
+ * never lands on a smaller view of wherever the author had scrolled to.
+ */
+const fitToScreen = useCallback(() => {
+  const el = document.querySelector<HTMLElement>(".editor-canvas-stage");
+  if (!el) return setZoom(0.82);
+  const rect = el.getBoundingClientRect();
+  // Measure the ACTIVE artboard, not whichever page happens to be first in
+  // the all-pages preview — the fit must always bring the page being edited
+  // into view, and pages may carry different sizes.
+  const pageEl = document.querySelector<HTMLElement>(
+    `.editor-canvas-stage [data-page-id="${CSS.escape(activePage.id)}"]`,
+  );
+  const pxPerMm = pageEl && activeSize.w > 0 ? pageEl.clientWidth / activeSize.w : 96 / 25.4;
+  const pagePxW = activeSize.w * pxPerMm;
+  const pagePxH = (activeSize.h + 12) * pxPerMm;
+  const padding = 28; // pixels of breathing room on every edge
+  const next = Math.min((Math.max(0, rect.width - padding * 2)) / pagePxW, (Math.max(0, rect.height - padding * 2)) / pagePxH);
+  setZoom(Math.max(0.2, Math.min(2, next)));
+  requestAnimationFrame(() => {
+    const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+    const pageEl2 = stage?.querySelector<HTMLElement>(`[data-page-id="${CSS.escape(activePage.id)}"]`);
+    if (!stage || !pageEl2) return;
+    const sr = stage.getBoundingClientRect();
+    const pr = pageEl2.getBoundingClientRect();
+    stage.scrollLeft += pr.left + pr.width / 2 - (sr.left + sr.width / 2);
+    stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
+  });
+}, [activePage?.id, activeSize.h, activeSize.w, setZoom]);
+
   /**
-   * ملاءمة الصفحة / عرض الصفحة بالكامل: pick a zoom that fits the WHOLE
-   * artboard (all four edges inside the viewport) and then centre it, so Fit
-   * never lands on a smaller view of wherever the author had scrolled to.
+   * Toolbar/keyboard zoom keeps the middle of the current view stable. With a
+   * bare setZoom the artboard rescales around its top edge and whatever the
+   * author was looking at flies off-screen — zoom then stops being a way to
+   * navigate. Anchoring on the viewport centre (same mechanism as ctrl+wheel)
+   * keeps the visible content in place at every step.
    */
-  const fitToScreen = useCallback(() => {
-    const el = document.querySelector<HTMLElement>(".editor-canvas-stage");
-    if (!el) return setZoom(0.82);
-    const rect = el.getBoundingClientRect();
-    const pageContent = document.querySelector<HTMLElement>(".editor-canvas-stage .page-frame-content");
-    const pxPerMm = pageContent && activeSize.w > 0 ? pageContent.clientWidth / activeSize.w : 96 / 25.4;
-    const pagePxW = activeSize.w * pxPerMm;
-    const pagePxH = (activeSize.h + 12) * pxPerMm;
-    const padding = 28; // pixels of breathing room on every edge
-    const next = Math.min((Math.max(0, rect.width - padding * 2)) / pagePxW, (Math.max(0, rect.height - padding * 2)) / pagePxH);
-    setZoom(Math.max(0.2, Math.min(2, next)));
-    requestAnimationFrame(() => {
-      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
-      const pageEl = stage?.querySelector<HTMLElement>(".page-frame");
-      if (!stage || !pageEl) return;
-      const sr = stage.getBoundingClientRect();
-      const pr = pageEl.getBoundingClientRect();
-      stage.scrollLeft += pr.left + pr.width / 2 - (sr.left + sr.width / 2);
-      stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
-    });
-  }, [activeSize.h, activeSize.w, setZoom]);
+  const zoomCentered = useCallback((next: number) => {
+    const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+    if (!stage) return setZoom(Math.max(0.2, Math.min(2, next)));
+    const r = stage.getBoundingClientRect();
+    zoomAnchoredAt(stage, useEditor.getState().zoom, next, r.left + r.width / 2, r.top + r.height / 2);
+  }, [setZoom]);
+
 
   // A 20 s heartbeat keeps "آخر حفظ منذ …" honest without a per-second store write.
   useEffect(() => {
@@ -483,31 +477,30 @@ function Studio({
         useEditor.getState().setLeftTab("elements");
         return;
       }
-      if (!meta && key === "1" && e.shiftKey) {
+      if (!meta && e.shiftKey && (key === "1" || e.code === "Digit1")) {
         e.preventDefault();
         fitToScreen();
         return;
       }
       /*
-       * Keyboard zoom scales the WHOLE editor interface (toolbar + panels +
-       * canvas) as one unit, the way ⌘± behaves in a browser — but bounded, so
-       * buttons and labels never become unusable and no panel can leave the
-       * screen. The canvas' own zoom (toolbar ±, ctrl/trackpad-pinch) stays for
-       * artboard-level precision. Browser zoom is never touched.
+       * Keyboard zoom targets the CANVAS only (artboard + content): the
+       * toolbar, panels and header keep their size at every zoom level, so
+       * buttons stay hittable and no panel can leave the screen. Browser zoom
+       * is never touched.
        */
       if (meta && (key === "+" || key === "=")) {
         e.preventDefault();
-        setUiScale((v) => stepUiScale(v, 1));
+        zoomCentered(useEditor.getState().zoom + 0.08);
         return;
       }
       if (meta && key === "-") {
         e.preventDefault();
-        setUiScale((v) => stepUiScale(v, -1));
+        zoomCentered(useEditor.getState().zoom - 0.08);
         return;
       }
-      if (meta && key === "0") {
+      if (meta && (key === "0" || e.code === "Digit0")) {
         e.preventDefault();
-        setUiScale(1);
+        fitToScreen();
         return;
       }
       if (typing) return;
@@ -559,6 +552,7 @@ function Studio({
     commit,
     activePage,
     fitToScreen,
+    zoomCentered,
     setZoom,
     group,
     ungroup,
@@ -627,32 +621,27 @@ function Studio({
      */
     <div
       className={cn("editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]", dark ? "editor-dark" : "editor-light", focusMode && "editor-focus")}
-      /* CSS `zoom` keeps the whole shell in layout (unlike transform), so the
-         panels stay docked and reachable at every scale. Bounded by stepUiScale. */
-      style={uiScale === 1 ? undefined : { zoom: uiScale }}
     >
       <header className="editor-toolbar z-20 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pt-[max(0.375rem,var(--safe-top))] pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))]">
         <div className="flex shrink-0 items-center gap-2">
           <a
             href="/"
-            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-extrabold dark:border-white/10"
+            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
             title="العودة إلى الصفحة الرئيسية"
           >
             <Home className="size-4" />
-            <span className="hidden sm:inline">الرئيسية</span>
           </a>
-          <div className="hidden md:block"><BrandLogo compact /></div>
           <button
             type="button"
             onClick={() => {
               useEditor.setState({ leftTab: "elements", leftOpen: true, leftCollapsed: false });
               window.dispatchEvent(new CustomEvent("nasaq:draw-text"));
             }}
-            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-extrabold dark:border-white/10"
+            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
             title="اكتب نصك: اسحب على الصفحة لرسم مربع النص"
           >
             <PenLine className="size-4" />
-            <span className="hidden lg:inline">نص بالرسم</span>
+            <span>نص بالرسم</span>
           </button>
           {/**
            * «مشاريعي» → صفحة المشاريع. A real same-tab navigation (anchor) so it
@@ -661,11 +650,10 @@ function Studio({
            */}
           <a
             href="/projects"
-            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-extrabold dark:border-white/10"
+            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
             title="الانتقال إلى مشاريعي"
           >
             <BookOpen className="size-4" />
-            <span className="hidden lg:inline">مشاريعي</span>
           </a>
           {/**
            * «المكتبة» → the assets shelf inside the elements panel. Opening the
@@ -675,93 +663,84 @@ function Studio({
           <button
             type="button"
             onClick={() => {
-              useEditor.setState({ leftTab: "elements", leftOpen: true, leftCollapsed: false, focusMode: false });
-              // Bring the shelf itself into view: the elements tab scrolls the
-              // library section into sight, so the click always lands visibly.
-              requestAnimationFrame(() => {
-                document.querySelector(".asset-library")?.scrollIntoView({ block: "start", behavior: "smooth" });
-              });
+              // The library has its own dedicated tab now — same top strip as
+              // العناصر and الأشكال, so opening it is a tab switch, not a scroll.
+              useEditor.setState({ leftTab: "library", leftOpen: true, leftCollapsed: false, focusMode: false });
             }}
-            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-extrabold dark:border-white/10"
+            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
             title="فتح مكتبة الصور والعناصر"
           >
             <Library className="size-4" />
-            <span className="hidden lg:inline">المكتبة</span>
           </button>
         </div>
 
-        {/* Scrolls rather than clipping when the viewport cannot hold every control. */}
-        <div className="editor-pane-scroll order-last flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto md:order-none md:justify-center">
+        {/*
+         * Scrolls rather than clipping when the viewport cannot hold every
+         * control. The inner `w-max` wrapper is what keeps centering safe:
+         * `justify-center` on a scroll container lets overflowing items spill
+         * over BOTH edges and pile onto the neighbouring groups, while
+         * `mx-auto` centers only when the row fits and scrolls from its start
+         * edge when it does not.
+         */}
+        {/*
+         * `min-w-fit` makes the group claim its full row and WRAP to a second
+         * toolbar row when the viewport is narrower than the tools — controls
+         * stack where they stay visible instead of scrolling out of sight.
+         */}
+        <div className="editor-pane-scroll order-last flex min-w-fit flex-1 items-center overflow-x-auto md:order-none">
+          <div className="mx-auto flex w-max items-center gap-1">
           <IconButton onClick={undo} disabled={past.length <= 1} title="تراجع (⌘Z)">
             <Undo2 className="size-4" />
           </IconButton>
           <IconButton onClick={redo} disabled={!future.length} title="إعادة (⌘⇧Z)">
             <Redo2 className="size-4" />
           </IconButton>
+          {/*
+           * Order matters on a narrow canvas: the zoom cluster and the four
+           * tool menus sit at the container's right (RTL start) so they remain
+           * visible without scrolling; the project name, grid and fit-to
+           * selection yield first when the viewport cannot hold everything.
+           */}
+          <IconButton onClick={() => zoomCentered(zoom - 0.08)} title="تصغير">
+            <ZoomOut className="size-4" />
+          </IconButton>
+          <span className="w-10 shrink-0 text-center text-[12px] font-bold tabular-nums">
+            {Math.round(zoom * 100)}%
+          </span>
+          <IconButton onClick={() => zoomCentered(zoom + 0.08)} title="تكبير">
+            <ZoomIn className="size-4" />
+          </IconButton>
+          {/*
+           * Fit lives pinned beside the zoom cluster: it is the companion
+           * action of zooming (was buried as an item inside the View/eye
+           * menu), and staying on the strip keeps it reachable in one click
+           * at every window size.
+           */}
+          <IconButton onClick={fitToScreen} title="ملاءمة الصفحة">
+            <Scan className="size-4" />
+          </IconButton>
+          {/* Secondary tools grouped into four real, keyboard-accessible menus.
+              Fit/100% live in the View menu (قائمة «عرض»). */}
+          <span className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10" aria-hidden />
+          <ToolbarMenus fitToScreen={fitToScreen} fitToSelection={fitToSelection} />
+          <span className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10" aria-hidden />
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             aria-label="اسم المشروع"
-            className="mx-1 hidden h-9 max-w-[240px] min-w-0 rounded-[8px] border border-line px-3 text-center text-[13px] font-bold outline-none focus:border-navy-2 lg:block dark:border-white/10 dark:bg-white/5 dark:text-white"
+            className="mx-0.5 block h-9 w-24 min-w-0 shrink rounded-[8px] px-2 text-center text-[12px] font-bold outline-none hover:bg-line-2 focus:bg-line-2 dark:bg-white/5 dark:text-white"
           />
           <IconButton onClick={() => toggle("showGrid")} active={showGrid} title="الشبكة">
             <Grid3x3 className="size-4" />
           </IconButton>
-          <IconButton onClick={() => setZoom(zoom - 0.08)} title="تصغير">
-            <ZoomOut className="size-4" />
-          </IconButton>
-          <span className="w-11 shrink-0 text-center text-[12px] font-bold tabular-nums">
-            {Math.round(zoom * 100)}%
-          </span>
-          <IconButton onClick={() => setZoom(zoom + 0.08)} title="تكبير">
-            <ZoomIn className="size-4" />
-          </IconButton>
-          {/*
-           * Fit/100% matter most on tablets, where the canvas is the only thing
-           * on screen and a fixed 82% can leave the page off-centre or oversized.
-           */}
-          <button
-            type="button"
-            onClick={fitToScreen}
-            title="ملاءمة العرض"
-            className="hidden h-9 shrink-0 items-center rounded-[8px] border border-line px-2 text-[11px] font-extrabold md:inline-flex dark:border-white/10"
-          >
-            ملاءمة
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoom(1)}
-            className="hidden h-9 shrink-0 items-center rounded-[8px] border border-line px-2 text-[11px] font-extrabold md:inline-flex dark:border-white/10"
-          >
-            100%
-          </button>
-          <IconButton onClick={fitToSelection} disabled={!selectedElements().length} title="ملاءمة التحديد">
-            <Focus className="size-4" />
-          </IconButton>
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center justify-end gap-1.5">
           <SaveBadge state={saveState} label={label} onClick={() => void saveNow()} />
-          <button
-            type="button"
-            onClick={selectAll}
-            disabled={!activePage?.elements.some((el) => !el.locked && !el.hidden)}
-            title="تحديد كل عناصر الصفحة (⌘A)"
-            className="hidden h-9 rounded-[8px] border border-line px-2.5 text-[12px] font-bold disabled:opacity-40 lg:inline-flex lg:items-center dark:border-white/10"
-          >
-            تحديد الكل
-          </button>
-          <button
-            type="button"
-            onClick={() => toggle("previewAll")}
-            aria-pressed={previewAll}
-            className={cn(
-              "hidden h-9 rounded-[8px] border px-2.5 text-[12px] font-bold xl:inline-flex xl:items-center",
-              previewAll ? "border-navy bg-navy text-white" : "border-line dark:border-white/10",
-            )}
-          >
-            كل الصفحات
-          </button>
+          <IconButton onClick={() => toggle("previewAll")} active={previewAll} title="كل الصفحات">
+            <GalleryHorizontalEnd className="size-4" />
+          </IconButton>
           <IconButton onClick={() => toggle("dark")} title={dark ? "الوضع النهاري" : "الوضع الليلي"}>
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </IconButton>
@@ -803,7 +782,7 @@ function Studio({
           <button
             type="button"
             onClick={() => toggle("exportOpen")}
-            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-white"
+            className="inline-flex h-9 items-center gap-1 rounded-[8px] bg-navy px-2 text-[12px] font-extrabold text-white"
           >
             <Download className="size-4" />
             تصدير
@@ -945,19 +924,13 @@ function Studio({
           </div>
         )}
 
-        {/* Top-centred, so it clears a side drawer on landscape and a bottom sheet on portrait. */}
-        {(leftOpen || rightOpen) && (
-          <button
-            type="button"
-            onClick={() => {
-              if (useEditor.getState().leftOpen) toggle("leftOpen");
-              if (useEditor.getState().rightOpen) toggle("rightOpen");
-            }}
-            className="absolute left-1/2 top-2 z-40 -translate-x-1/2 rounded-full border border-line bg-white/95 px-4 py-1.5 text-[12px] font-extrabold shadow-lg backdrop-blur-sm lg:hidden dark:border-white/15 dark:bg-[#161c26]/95"
-          >
-            إغلاق اللوحة
-          </button>
-        )}
+        {/*
+         * The old floating «إغلاق اللوحة» pill used to sit absolutely at the
+         * top centre of the shell — right on top of the toolbar controls and
+         * the artboard beneath them. Each drawer now carries its own in-flow
+         * «إغلاق» chip in its header (and the launcher chips reappear once
+         * both are shut), so nothing needs to float above the workspace.
+         */}
 
       <WorkspaceOverlays menu={contextMenu} onCloseMenu={() => setContextMenu(null)} fitToScreen={fitToScreen} />
       <ExportDialog />
@@ -987,8 +960,14 @@ function IconButton({
       aria-label={title}
       aria-pressed={active}
       className={cn(
-        "icon-btn grid size-9 shrink-0 place-items-center rounded-[8px] border disabled:opacity-40",
-        active ? "border-navy bg-navy text-white" : "border-line dark:border-white/10",
+        /*
+         * Frame-less, one uniform size: every toolbar control is the same 36px
+         * control with a hover wash instead of a drawn border, so the row reads
+         * as one tool strip at any zoom level. Active keeps the filled navy
+         * state — that is what makes the on/off state readable without a frame.
+         */
+        "grid size-9 shrink-0 place-items-center rounded-[8px] transition hover:bg-line-2 disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-white/10",
+        active && "bg-navy text-white hover:bg-navy dark:bg-navy dark:text-white",
       )}
     >
       {children}
@@ -999,22 +978,23 @@ function IconButton({
 function SaveBadge({ state, label, onClick }: { state: SaveState; label: string; onClick: () => void }) {
   const tone =
     state === "error"
-      ? "border-red-200 bg-red-50 text-danger dark:border-red-500/30 dark:bg-red-500/10"
+      ? "bg-red-500/10 text-danger"
       : state === "dirty" || state === "saving"
-        ? "border-line text-muted dark:border-white/10"
-        : "border-ok/30 bg-ok/5 text-ok";
+        ? "text-muted"
+        : "text-ok";
   return (
     <button
       type="button"
       onClick={onClick}
-      title="حفظ الآن (⌘S)"
+      title={`${label} (⌘S)`}
       className={cn(
-        "hidden h-9 items-center gap-1.5 rounded-[8px] border px-2.5 text-[11px] font-bold xl:inline-flex",
+        // Same 36px control as the rest of the strip; the state lives in the
+        // icon and colour, the full label in the tooltip.
+        "grid size-9 shrink-0 place-items-center rounded-[8px] transition hover:bg-line-2 dark:hover:bg-white/10",
         tone,
       )}
     >
-      {state === "saved" ? <Check className="size-3.5" /> : <Save className="size-3.5" />}
-      {label}
+      {state === "saved" ? <Check className="size-4" /> : <Save className="size-4" />}
     </button>
   );
 }

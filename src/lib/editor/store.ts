@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import {
   A4,
   GRID,
+  MIN_SIZE,
   THEMES,
   absoluteBounds,
   alignmentMoves,
@@ -53,10 +54,11 @@ import { FONTS, LEGACY_STORE_KEY, LEGACY_UI_KEY, TYPE_NAME, UI_KEY } from "./mod
 import { detectDeviceFonts, type DetectedFont } from "./fonts";
 import { resolveTextBox } from "./text-render";
 import { safeImageSrc } from "./images";
+import { applyStoredTheme, readStoredTheme, writeStoredTheme } from "@/lib/theme";
 import { clamp, uid } from "@/lib/utils";
 import { canAddDemoPage, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
 
-export type LeftTab = "elements" | "shapes" | "templates" | "theme" | "pages" | "fonts" | "settings";
+export type LeftTab = "elements" | "shapes" | "library" | "templates" | "theme" | "pages" | "fonts" | "settings";
 export type RightTab = "properties" | "layers";
 export type View = "home" | "editor";
 
@@ -218,10 +220,16 @@ interface EditorStore extends Project, Ui, History {
   enterGroup: (id: string | null) => void;
   /** Selected elements of the active page, primary first. */
   selectedElements: () => CanvasEl[];
-  group: () => void;
+  /** Returns the new group's id (also the live selection), or null when nothing was grouped. */
+  group: () => string | null;
   ungroup: () => void;
   align: (edge: AlignEdge, frame: "selection" | "page") => void;
   distribute: (axis: "h" | "v") => void;
+  /**
+   * Match every selected element's size to the PRIMARY selection's
+   * (Same Width / Same Height / Same Size). Top-level, unlocked elements only.
+   */
+  matchSize: (dim: "width" | "height" | "both") => void;
   /** Rename an element from the layers panel. */
   renameElement: (id: string, name: string) => void;
   setElementFlag: (id: string, flag: "locked" | "hidden", value?: boolean) => void;
@@ -580,10 +588,11 @@ export const useEditor = create<EditorStore>((set, get) => {
         }
         const activeId = (await getSetting<string>("activeProjectId")) || ui.activeProjectId;
         const active = activeId ? await getProject(activeId) : null;
-        const dark = ui.dark == null ? true : Boolean(ui.dark);
-        // Re-apply the persisted theme to <html> on boot (same contract as
-        // toggle("dark") — without it a reload loses the dark utilities).
-        document.documentElement.classList.toggle("dark", dark);
+        // One shared site-wide preference (lib/theme.ts): the editor no longer
+        // invents its own default or storage channel — the visitor's choice
+        // made on any page (or the toolbar here) is what loads everywhere.
+        const dark = readStoredTheme() ?? false;
+        applyStoredTheme();
         set({
           projects: list,
           projectsLoading: false,
@@ -814,13 +823,13 @@ export const useEditor = create<EditorStore>((set, get) => {
     toggle: (key) => {
       const next = !get()[key];
       set({ [key]: next } as Partial<EditorStore>);
-      // The `dark:` Tailwind variant keys off `html.dark` — without this sync
-      // every dark: utility in the app is dead (restored: the line existed in
-      // cf8c7e5's store and was dropped in a later refactor).
+      // The `dark:` Tailwind variant keys off `html.dark` — the shared theme
+      // module both persists the choice and keeps the class in sync, so the
+      // editor toolbar, the site header and every page agree on one mode.
       if (key === "dark") {
-        document.documentElement.classList.toggle("dark", next);
+        writeStoredTheme(next);
       }
-      if (key === "dark" || key === "focusMode" || key === "leftOpen" || key === "rightOpen" || key === "leftCollapsed" || key === "rightCollapsed") {
+      if (key === "focusMode" || key === "leftOpen" || key === "rightOpen" || key === "leftCollapsed" || key === "rightCollapsed") {
         void setSetting(key, next);
       }
     },
@@ -930,23 +939,23 @@ export const useEditor = create<EditorStore>((set, get) => {
     group: () => {
       const s = get();
       const page = activePageOf(s);
-      if (!page) return;
+      if (!page) return null;
       const picked = s.selectedIds
         .map((id) => locate(page, id)?.el)
         .filter((el): el is CanvasEl => Boolean(el) && !el!.locked);
       if (picked.length < 2) {
         toast.error("حدّد عنصرين أو أكثر للتجميع");
-        return;
+        return null;
       }
       // Group only siblings: mixing depths would make the children's relative
       // coordinates ambiguous, so a nested pick is simply left out.
       const topLevel = picked.filter((el) => page.elements.some((e) => e.id === el.id));
       if (topLevel.length < 2) {
         toast.error("لا يمكن تجميع عناصر من مستويات مختلفة");
-        return;
+        return null;
       }
       const group = createGroupFrom(topLevel);
-      if (!group) return;
+      if (!group) return null;
       const ids = new Set(topLevel.map((el) => el.id));
       const elements = [...page.elements.filter((e) => !ids.has(e.id)), group];
       const next = { ...page, elements };
@@ -958,6 +967,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
       pushHistory();
       toast.success(`تم تجميع ${topLevel.length} عناصر`);
+      return group.id;
     },
 
     ungroup: () => {
@@ -1022,6 +1032,33 @@ export const useEditor = create<EditorStore>((set, get) => {
         return;
       }
       applyPositions(out);
+    },
+
+    matchSize: (dim) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const primary = s.selectedId ? locate(page, s.selectedId)?.el : undefined;
+      if (!primary) return;
+      // Only top-level siblings take part: a group member's size is relative
+      // to its parent's box, and resizing it in page units would skew the group.
+      const targets = s.selectedIds
+        .filter((id) => id !== s.selectedId)
+        .map((id) => locate(page, id))
+        .filter(
+          (found): found is NonNullable<ReturnType<typeof locate>> =>
+            Boolean(found) && found!.list === page.elements && !found!.el.locked,
+        );
+      if (!targets.length) return;
+      const w = Math.max(MIN_SIZE, primary.w);
+      const h = Math.max(MIN_SIZE, primary.h);
+      const next = mapElements(page, new Set(targets.map((f) => f.el.id)), (el) => ({
+        ...el,
+        ...(dim !== "height" ? { w } : {}),
+        ...(dim !== "width" ? { h } : {}),
+      }));
+      set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
+      pushHistory();
     },
 
     renameElement: (id, name) => {
@@ -1115,7 +1152,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       constrainElement(el, size);
       set({
         pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: [...p.elements, el] } : p)),
+        // Both selection fields together: selectedId alone leaves selectedIds
+        // empty, so the selection frame, the arrange bar and every
+        // selection-scoped command ignored the element that was just added.
         selectedId: el.id,
+        selectedIds: [el.id],
         rightTab: "properties",
       });
       pushHistory();

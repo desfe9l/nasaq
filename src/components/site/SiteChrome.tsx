@@ -1,14 +1,25 @@
 import { useEffect, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, Moon, Sun, X } from "lucide-react";
 import { BRAND, CONTACT_PHONE_DISPLAY, NAV_ITEMS, telHref } from "@/lib/brand";
+import { readStoredTheme, writeStoredTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 export function SiteHeader({ current }: { current: string }) {
   const [open, setOpen] = useState(false);
+  // Initialised from the shared preference; the root-level theme module has
+  // already applied the class before any route renders, so this never
+  // disagrees with what is on screen.
+  const [dark, setDark] = useState(() => readStoredTheme() ?? false);
 
   useEffect(() => {
     setOpen(false);
   }, [current]);
+
+  const toggleTheme = () => {
+    const next = !dark;
+    setDark(next);
+    writeStoredTheme(next);
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur dark:border-white/10 dark:bg-[#111722]/95">
@@ -35,6 +46,19 @@ export function SiteHeader({ current }: { current: string }) {
         </nav>
 
         <div className="flex items-center gap-2">
+          {/* Light/Dark is the visitor's choice: one toggle, applied site-wide
+              and persisted (lib/theme.ts), so every page loads on the same
+              mode instead of each page forcing its own. */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-pressed={dark}
+            aria-label={dark ? "التبديل إلى الوضع الفاتح" : "التبديل إلى الوضع الداكن"}
+            title={dark ? "الوضع الفاتح" : "الوضع الداكن"}
+            className="grid size-9 place-items-center rounded-[8px] border border-line dark:border-white/10"
+          >
+            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </button>
           <a
             href={telHref()}
             className="hidden h-9 items-center gap-2 rounded-[8px] border border-line px-3 text-[12px] font-bold sm:inline-flex dark:border-white/10"
@@ -75,6 +99,15 @@ export function SiteHeader({ current }: { current: string }) {
               {item.label}
             </a>
           ))}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-pressed={dark}
+            className="mt-1 flex w-full items-center gap-2 rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted"
+          >
+            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            {dark ? "الوضع الفاتح" : "الوضع الداكن"}
+          </button>
         </nav>
       )}
     </header>

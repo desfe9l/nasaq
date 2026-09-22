@@ -93,7 +93,8 @@ export function ArrangeBar() {
   );
 }
 
-function AlignIcon({ kind }: { kind: string }) {
+/** Alignment glyphs shared with the toolbar's Alignment & Distribution menu. */
+export function AlignIcon({ kind }: { kind: string }) {
   const common = {
     width: 14,
     height: 14,

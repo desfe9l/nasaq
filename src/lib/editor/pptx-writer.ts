@@ -408,6 +408,44 @@ function addTableItem(
 }
 
 function addProgressItem(slide: PptxGenJS.Slide, item: Extract<SceneItem, { kind: "progress" }>) {
+  if (item.variant === "steps") {
+    // Stages row: one ellipse per stage, filled up to the value, caption above
+    // — the same composition the canvas draws.
+    const total = item.steps;
+    const filled = Math.round((item.value / 100) * total);
+    const dot = Math.max(2.4, Math.min(item.h * 0.34, 7));
+    const gap = dot * 0.55;
+    const rowW = total * dot + (total - 1) * gap;
+    for (let i = 0; i < total; i++) {
+      // RTL: the first stage sits at the right edge, matching the canvas.
+      const x = item.x + item.w - rowW + i * (dot + gap);
+      slide.addShape("ellipse" as PptxGenJS.SHAPE_NAME, {
+        x: mm2in(x),
+        y: mm2in(item.y + item.h - dot),
+        w: mm2in(dot),
+        h: mm2in(dot),
+        fill: { color: hex(i < filled ? item.fill : item.track) },
+        line: { color: hex(i < filled ? item.fill : item.track), width: 0 },
+      });
+    }
+    slide.addText(`${item.label}${item.showValue ? ` ${item.value}%` : ""}`.trim(), {
+      x: mm2in(item.x),
+      y: mm2in(item.y),
+      w: mm2in(item.w),
+      h: mm2in(Math.max(4, item.h - dot)),
+      fontFace: item.font.split(",")[0].trim().replace(/^["']|["']$/g, ""),
+      fontSize: item.size,
+      bold: item.weight >= 600,
+      color: hex(item.color),
+      align: "right",
+      rtlMode: true,
+      valign: "top",
+      isTextBox: true,
+      margin: 0,
+    });
+    return;
+  }
+
   if (item.variant === "ring") {
     // PowerPoint has a `blockArc` preset but no adjustable donut with a label,
     // so the ring is drawn as a true arc plus the caption beside it.

@@ -468,6 +468,19 @@ function elHtml(el: CanvasEl): string {
     const shown = s.numerals ? `${applyNumerals(String(value), s.numerals)}%` : `${value}%`;
     const valueHtml = s.showValue === false ? "" : `<span style="flex-shrink:0">${shown}</span>`;
 
+    if (s.variant === "steps") {
+      const total = Math.max(2, Math.min(12, Number(s.steps) || 5));
+      const filled = Math.round((value / 100) * total);
+      const dotSize = Math.max(2.4, Math.min(num(el.h, 18, 0, 1e4) * 0.34, 7));
+      const dots = Array.from({ length: total }, (_, i) => `<span style="width:${dotSize}mm;height:${dotSize}mm;border-radius:999px;flex-shrink:0;background:${i < filled ? cssColor(s.fill, "#006c35") : cssColor(s.background, "#e8ecf3")}"></span>`).join("");
+      return wrap(
+        `<div style="width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;gap:1.4mm;direction:rtl;overflow:hidden;font-family:${cssFont(s.fontFamily)}">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:2mm;font-size:${num(text.fontSize, 10, 4, 400)}pt;font-weight:${num(s.fontWeight, 700, 100, 900)};color:${cssColor(s.color, "#172033")}"><span class="progress-caption" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${body()}</span>${valueHtml}</div>
+          <div style="display:flex;align-items:center;gap:${dotSize * 0.55}mm;flex-shrink:0">${dots}</div>
+        </div>`,
+      );
+    }
+
     if (s.variant === "ring") {
       const size = Math.max(8, Math.min(num(el.w, 40, 0, 1e4), num(el.h, 40, 0, 1e4)));
       const thickness = Math.max(1.5, size * 0.11);

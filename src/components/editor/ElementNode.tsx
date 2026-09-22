@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { ICONS, cssFont, parseTable, type CanvasEl } from "@/lib/editor/model";
 import { prepareText, textPadding } from "@/lib/editor/text-render";
 import { useEditor } from "@/lib/editor/store";
-import { cn } from "@/lib/utils";
+import { cn, round as round2 } from "@/lib/utils";
 import { applyNumerals } from "@/lib/editor/arabic";
 import { safeImageSrc } from "@/lib/editor/images";
 import { applySvgColors, sanitizeSvgContent } from "@/lib/editor/svg";
@@ -321,6 +321,52 @@ function ElementContent({
         {renderText("")}
       </span>
     );
+
+    if (s.variant === "steps") {
+      const total = Math.max(2, Math.min(12, Number(s.steps) || 5));
+      // Completed stages light up left-to-right (RTL: right-to-left visually,
+      // matching the reading direction the caption already follows).
+      const filled = Math.round((value / 100) * total);
+      const dot = Math.max(2.4, Math.min(el.h * 0.34, 7));
+      return (
+        <div
+          className="el-box"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            gap: "1.4mm",
+            direction: "rtl",
+            fontFamily: cssFont(s.fontFamily),
+            fontSize: `${prepared.fontSize}pt`,
+            color: s.color || "#172033",
+            fontWeight: s.fontWeight || 700,
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "2mm" }}>
+            {caption}
+            {s.showValue !== false && (
+              <span style={{ color: s.fill || "#006c35", flexShrink: 0 }}>{shown}</span>
+            )}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: `${round2(dot * 0.55)}mm`, flexShrink: 0 }} aria-hidden>
+            {Array.from({ length: total }, (_, i) => (
+              <span
+                key={i}
+                style={{
+                  width: `${round2(dot)}mm`,
+                  height: `${round2(dot)}mm`,
+                  borderRadius: "999px",
+                  flexShrink: 0,
+                  background: i < filled ? s.fill || "#006c35" : s.background || "#e8ecf3",
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    }
 
     if (s.variant === "ring") {
       const size = Math.max(8, Math.min(el.w, el.h));
