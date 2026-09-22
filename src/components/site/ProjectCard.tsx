@@ -153,7 +153,7 @@ export function ProjectCard({
         aria-label={`فتح ${project.name}`}
         className="group/overlay absolute inset-0 grid place-items-center bg-navy/0 backdrop-blur-0 transition-all duration-200 hover:bg-navy/45 hover:backdrop-blur-[2px] focus-visible:bg-navy/45 focus-visible:backdrop-blur-[2px] focus:outline-none"
       >
-        <span className="inline-flex translate-y-1 items-center gap-1.5 rounded-full border border-white/40 bg-white/85 px-3 py-1.5 text-[11px] font-extrabold text-navy opacity-0 shadow-sm transition-all duration-200 group-hover/overlay:translate-y-0 group-hover/overlay:opacity-100 group-focus-visible/overlay:translate-y-0 group-focus-visible/overlay:opacity-100 dark:border-white/20 dark:bg-[#161c26]/90 dark:text-gold-2">
+        <span className="inline-flex translate-y-1 items-center gap-1.5 rounded-full border border-white/40 bg-white/85 px-3 py-1.5 text-[11px] font-extrabold text-navy opacity-0 shadow-sm transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-hover/overlay:translate-y-0 group-hover/overlay:opacity-100 group-focus-visible/overlay:translate-y-0 group-focus-visible/overlay:opacity-100 dark:border-white/20 dark:bg-[#161c26]/90 dark:text-gold-2">
           <FolderOpen className="size-3.5" />
           فتح المستند
         </span>

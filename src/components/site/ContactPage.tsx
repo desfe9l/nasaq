@@ -84,7 +84,7 @@ export function ContactPage() {
               </span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <a href={telHref()} className="block text-[28px] font-extrabold tabular-nums text-ink dark:text-white" dir="ltr">
+              <a href={telHref()} className="block whitespace-nowrap text-[28px] font-extrabold tabular-nums text-ink dark:text-white" dir="ltr">
                 {CONTACT_PHONE_DISPLAY}
               </a>
               <button

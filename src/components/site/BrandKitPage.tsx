@@ -99,18 +99,27 @@ export function BrandKitPage() {
     window.setTimeout(() => setSaved(false), 1800);
   };
 
+  /** Shared image apply: used by the file pickers AND the drag-&-drop zones. */
+  const applyImage = async (
+    key: "logoSrc" | "secondaryLogoSrc" | "stampSrc",
+    file: File | undefined | null,
+  ) => {
+    if (!file) return;
+    const url = await readFileDataUrl(file);
+    if (!url) {
+      toast.error("تعذر قراءة الصورة — اختر ملفًا بصيغة صورة");
+      return;
+    }
+    update(key, url);
+    toast.success("تم رفع الصورة في الهوية");
+  };
+
   const onLogoFile =
     (key: "logoSrc" | "secondaryLogoSrc" | "stampSrc") =>
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
+    (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       e.target.value = "";
-      if (!file) return;
-      const url = await readFileDataUrl(file);
-      if (!url) {
-        toast.error("تعذر قراءة الصورة — اختر ملفًا بصيغة صورة");
-        return;
-      }
-      update(key, url);
+      void applyImage(key, file);
     };
 
   const applyPreset = (preset: (typeof PALETTE_PRESETS)[number]) => {
@@ -261,9 +270,9 @@ export function BrandKitPage() {
               <div>
                 <p className="text-[11px] font-extrabold text-muted">الصور الرسمية</p>
                 <div className="mt-2 grid gap-3 sm:grid-cols-3">
-                  <LogoZone label="الشعار الأساسي" hint="PNG/SVG بخلفية شفافة" src={kit.logoSrc} onPick={() => logoInput.current?.click()} onClear={() => update("logoSrc", undefined)} />
-                  <LogoZone label="شعار للوضع الداكن" hint="للالصاق على خلفيات داكنة" src={kit.secondaryLogoSrc} onPick={() => darkLogoInput.current?.click()} onClear={() => update("secondaryLogoSrc", undefined)} />
-                  <LogoZone label="الختم أو التوقيع" hint="ختم دائري أو توقيع ممسوح" src={kit.stampSrc} onPick={() => stampInput.current?.click()} onClear={() => update("stampSrc", undefined)} />
+                  <LogoZone label="الشعار الأساسي" hint="اسحب وأفلت صورة هنا أو انقر للاختيار" src={kit.logoSrc} onPick={() => logoInput.current?.click()} onClear={() => update("logoSrc", undefined)} onFile={(f) => void applyImage("logoSrc", f)} />
+                  <LogoZone label="شعار للوضع الداكن" hint="اسحب وأفلت صورة بشفافية أو خلفية داكنة" src={kit.secondaryLogoSrc} onPick={() => darkLogoInput.current?.click()} onClear={() => update("secondaryLogoSrc", undefined)} onFile={(f) => void applyImage("secondaryLogoSrc", f)} />
+                  <LogoZone label="الختم أو التوقيع" hint="اسحب وأفلت الختم أو التوقيع الممسوح" src={kit.stampSrc} onPick={() => stampInput.current?.click()} onClear={() => update("stampSrc", undefined)} onFile={(f) => void applyImage("stampSrc", f)} />
                 </div>
                 <input ref={logoInput} type="file" accept="image/*" className="hidden" onChange={(e) => void onLogoFile("logoSrc")(e)} />
                 <input ref={darkLogoInput} type="file" accept="image/*" className="hidden" onChange={(e) => void onLogoFile("secondaryLogoSrc")(e)} />
@@ -463,13 +472,48 @@ export function BrandKitPage() {
   );
 }
 
-function LogoZone({ label, hint, src, onPick, onClear }: { label: string; hint: string; src?: string; onPick: () => void; onClear: () => void }) {
+function LogoZone({
+  label,
+  hint,
+  src,
+  onPick,
+  onClear,
+  onFile,
+}: {
+  label: string;
+  hint: string;
+  src?: string;
+  onPick: () => void;
+  onClear: () => void;
+  onFile: (file: File) => void;
+}) {
+  const [over, setOver] = useState(false);
   return (
-    <div className="relative">
+    <div
+      className="relative"
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          setOver(true);
+        }
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) onFile(file);
+      }}
+    >
       <button
         type="button"
         onClick={onPick}
-        className="grid h-24 w-full place-items-center overflow-hidden rounded-[8px] border-2 border-dashed border-line bg-line-2/40 p-2 transition hover:border-navy-2 dark:border-white/15 dark:bg-white/5"
+        className={cn(
+          "grid h-24 w-full place-items-center overflow-hidden rounded-[8px] border-2 border-dashed p-2 transition",
+          over
+            ? "border-navy-2 bg-navy/10 dark:border-gold-2/70 dark:bg-gold-2/10"
+            : "border-line bg-line-2/40 hover:border-navy-2 dark:border-white/15 dark:bg-white/5",
+        )}
         title={hint}
       >
         {src ? (
@@ -478,6 +522,7 @@ function LogoZone({ label, hint, src, onPick, onClear }: { label: string; hint: 
           <span className="grid place-items-center gap-1 text-center text-[10px] leading-4 text-muted">
             <Plus className="size-4" />
             {label}
+            <span className="text-[8.5px] opacity-75">اسحب وأفلت أو انقر</span>
           </span>
         )}
       </button>
