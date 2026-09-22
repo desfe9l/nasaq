@@ -12,7 +12,12 @@ import {
   normalizeZ,
 } from "./model";
 
-function page(name: string, theme: Theme, build: (add: Add) => void, size?: { w: number; h: number }): Page {
+function page(
+  name: string,
+  theme: Theme,
+  build: (add: Add) => void,
+  size?: { w: number; h: number },
+): Page {
   const p: Page = {
     id: uid("page"),
     name,
@@ -365,7 +370,12 @@ function officialPages(theme: Theme, org: string): Page[] {
         y: 152,
         w: 162,
         h: 88,
-        style: { fill: theme.surface, borderColor: theme.line, borderWidth: 0.35, radius: 4 },
+        style: {
+          fill: theme.surface,
+          borderColor: theme.line,
+          borderWidth: 0.35,
+          radius: 4,
+        },
       });
       [42, 58, 70, 84, 96].forEach((height, i) => {
         add("shape", {
@@ -408,7 +418,13 @@ function officialPages(theme: Theme, org: string): Page[] {
         },
       });
       add("stamp", { x: 140, y: 132, w: 42, h: 42, content: "خُتم" });
-      add("line", { x: 28, y: 168, w: 78, h: 4, style: { color: theme.ink, stroke: 0.4 } });
+      add("line", {
+        x: 28,
+        y: 168,
+        w: 78,
+        h: 4,
+        style: { color: theme.ink, stroke: 0.4 },
+      });
       add("text", {
         name: "توقيع",
         x: 28,
@@ -626,13 +642,20 @@ function eidPages(theme: Theme, org: string): Page[] {
           textAlign: "center",
         },
       });
-      add("divider", { x: 70, y: 132, w: 70, h: 8, style: { color: theme.accent } });
+      add("divider", {
+        x: 70,
+        y: 132,
+        w: 70,
+        h: 8,
+        style: { color: theme.accent },
+      });
       add("text", {
         x: 30,
         y: 148,
         w: 150,
         h: 28,
-        content: "نقدر جهود الفرق الميدانية والإسناد الإعلامي، ونتطلع إلى مواصلة العمل بروح الفريق.",
+        content:
+          "نقدر جهود الفرق الميدانية والإسناد الإعلامي، ونتطلع إلى مواصلة العمل بروح الفريق.",
         style: {
           fontFamily: "Cairo",
           fontSize: 13,
@@ -772,7 +795,12 @@ function statsInfographicPage(theme: Theme, org: string): Page {
         y,
         w: 78,
         h: 38,
-        style: { fill: theme.surface, borderColor: theme.line, borderWidth: 0.35, radius: 4 },
+        style: {
+          fill: theme.surface,
+          borderColor: theme.line,
+          borderWidth: 0.35,
+          radius: 4,
+        },
       });
       add("text", {
         name: `رقم ${i + 1}`,
@@ -901,7 +929,14 @@ function infographicPage(theme: Theme, org: string): Page {
         textAlign: "right",
       },
     });
-    add("line", { name: "خط ذهبي", x: 30, y: 52, w: 60, h: 4, style: { color: theme.accent, stroke: 1 } });
+    add("line", {
+      name: "خط ذهبي",
+      x: 30,
+      y: 52,
+      w: 60,
+      h: 4,
+      style: { color: theme.accent, stroke: 1 },
+    });
     const steps: [string, string][] = [
       ["01", "التخطيط وتحديد النطاق"],
       ["02", "جمع البيانات والتحقق منها"],
@@ -1057,7 +1092,12 @@ function slidesPages(theme: Theme, org: string): Page[] {
             y: 48,
             w: 92,
             h: 62,
-            style: { fill: theme.surface, borderColor: theme.line, borderWidth: 0.35, radius: 5 },
+            style: {
+              fill: theme.surface,
+              borderColor: theme.line,
+              borderWidth: 0.35,
+              radius: 5,
+            },
           });
           add("text", {
             name: `رقم ${i + 1}`,
@@ -1107,7 +1147,14 @@ function slidesPages(theme: Theme, org: string): Page[] {
   ];
 }
 
-type TemplateInk = { primary: string; accent: string; ink: string; muted: string; line: string; surface: string };
+type TemplateInk = {
+  primary: string;
+  accent: string;
+  ink: string;
+  muted: string;
+  line: string;
+  surface: string;
+};
 
 function identity(theme: Theme): TemplateInk {
   return {
@@ -1129,7 +1176,13 @@ function officialMark(add: Add, colors: TemplateInk, title: string, y = 18) {
     w: 132,
     h: 12,
     content: title,
-    style: { fontFamily: "Tajawal", fontSize: 16, color: colors.primary, fontWeight: 800, textAlign: "right" },
+    style: {
+      fontFamily: "Tajawal",
+      fontSize: 16,
+      color: colors.primary,
+      fontWeight: 800,
+      textAlign: "right",
+    },
   });
   add("text", {
     name: "تاريخ التقرير",
@@ -1138,7 +1191,13 @@ function officialMark(add: Add, colors: TemplateInk, title: string, y = 18) {
     w: 160,
     h: 8,
     content: "التاريخ",
-    style: { fontFamily: "Cairo", fontSize: 9, color: colors.muted, fontWeight: 600, textAlign: "right" },
+    style: {
+      fontFamily: "Cairo",
+      fontSize: 9,
+      color: colors.muted,
+      fontWeight: 600,
+      textAlign: "right",
+    },
   });
 }
 
@@ -1146,28 +1205,195 @@ function editorialPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تحريرية", theme, (add) => {
     officialMark(add, c, "عنوان التقرير");
-    add("text", { name: "عنوان رئيسي", x: 24, y: 70, w: 112, h: 42, content: "العنوان الرئيسي\nللتقرير", style: { fontFamily: "Tajawal", fontSize: 27, color: c.primary, fontWeight: 800, textAlign: "right", lineHeight: 1.18 } });
-    add("stat", { name: "الرقم البصري", x: 150, y: 66, w: 36, h: 42, content: "01\nمؤشر", style: { fontFamily: "Tajawal", fontSize: 22, color: c.primary, fontWeight: 800, textAlign: "center" } });
-    add("box", { name: "كتلة النص", x: 24, y: 132, w: 112, h: 58, content: "نص تمهيدي مختصر يشرح موضوع الصفحة ويترك مساحة مريحة للقراءة والتحرير.", style: { fontFamily: "Cairo", fontSize: 12, color: c.ink, fill: "#ffffff", borderColor: c.line, borderWidth: 0.35, radius: 0, padding: 5, lineHeight: 1.8, textAlign: "right" } });
-    add("shape", { name: "كتلة لونية هادئة", x: 151, y: 128, w: 34, h: 70, style: { fill: c.primary, borderWidth: 0, radius: 0 } });
-    add("text", { name: "اسم الجهة", x: 24, y: 240, w: 110, h: 10, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 11, color: c.primary, fontWeight: 700, textAlign: "right" } });
-    add("text", { name: "تذييل الصفحة", x: 24, y: 268, w: 162, h: 8, content: "ملاحظة تحريرية", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
+    add("text", {
+      name: "عنوان رئيسي",
+      x: 24,
+      y: 70,
+      w: 112,
+      h: 42,
+      content: "العنوان الرئيسي\nللتقرير",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 27,
+        color: c.primary,
+        fontWeight: 800,
+        textAlign: "right",
+        lineHeight: 1.18,
+      },
+    });
+    add("stat", {
+      name: "الرقم البصري",
+      x: 150,
+      y: 66,
+      w: 36,
+      h: 42,
+      content: "01\nمؤشر",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 22,
+        color: c.primary,
+        fontWeight: 800,
+        textAlign: "center",
+      },
+    });
+    add("box", {
+      name: "كتلة النص",
+      x: 24,
+      y: 132,
+      w: 112,
+      h: 58,
+      content:
+        "نص تمهيدي مختصر يشرح موضوع الصفحة ويترك مساحة مريحة للقراءة والتحرير.",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 12,
+        color: c.ink,
+        fill: "#ffffff",
+        borderColor: c.line,
+        borderWidth: 0.35,
+        radius: 0,
+        padding: 5,
+        lineHeight: 1.8,
+        textAlign: "right",
+      },
+    });
+    add("shape", {
+      name: "كتلة لونية هادئة",
+      x: 151,
+      y: 128,
+      w: 34,
+      h: 70,
+      style: { fill: c.primary, borderWidth: 0, radius: 0 },
+    });
+    add("text", {
+      name: "اسم الجهة",
+      x: 24,
+      y: 240,
+      w: 110,
+      h: 10,
+      content: org || "اسم الجهة",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 11,
+        color: c.primary,
+        fontWeight: 700,
+        textAlign: "right",
+      },
+    });
+    add("text", {
+      name: "تذييل الصفحة",
+      x: 24,
+      y: 268,
+      w: 162,
+      h: 8,
+      content: "ملاحظة تحريرية",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 8,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "right",
+      },
+    });
   });
 }
 
 function institutionalGridPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("شبكة مؤسسية", theme, (add) => {
-    add("shape", { name: "منطقة الترويسة", x: 0, y: 0, w: 210, h: 52, style: { fill: c.primary, borderWidth: 0, radius: 0 } });
-    add("logo", { name: "مساحة الشعار الرسمي", x: 166, y: 12, w: 22, h: 22 });
-    add("text", { name: "عنوان الشبكة", x: 24, y: 15, w: 130, h: 13, content: "تقرير مؤسسي", style: { fontFamily: "Tajawal", fontSize: 17, color: "#ffffff", fontWeight: 800, textAlign: "right" } });
-    add("text", { name: "التاريخ", x: 24, y: 35, w: 130, h: 7, content: "التاريخ", style: { fontFamily: "Cairo", fontSize: 8, color: "#ffffff", fontWeight: 600, textAlign: "right" } });
-    const cells = [[24, 70, 76, 62], [110, 70, 76, 62], [24, 144, 76, 82], [110, 144, 76, 82]] as const;
-    cells.forEach(([x, y, w, h], i) => {
-      add("shape", { name: `وحدة شبكية ${i + 1}`, x, y, w, h, style: { fill: "#ffffff", borderColor: c.line, borderWidth: 0.35, radius: 0 } });
-      add(i === 0 ? "stat" : "box", { name: `محتوى الوحدة ${i + 1}`, x: x + 6, y: y + 8, w: w - 12, h: h - 16, content: i === 0 ? "01\nمؤشر رئيسي" : "عنوان الوحدة\nنص مختصر قابل للتحرير", style: { fontFamily: i === 0 ? "Tajawal" : "Cairo", fontSize: i === 0 ? 22 : 11, color: i === 0 ? c.primary : c.ink, fontWeight: 700, textAlign: "right", lineHeight: 1.6, padding: 2 } });
+    add("shape", {
+      name: "منطقة الترويسة",
+      x: 0,
+      y: 0,
+      w: 210,
+      h: 52,
+      style: { fill: c.primary, borderWidth: 0, radius: 0 },
     });
-    add("text", { name: "الجهة", x: 24, y: 253, w: 162, h: 9, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 9, color: c.muted, fontWeight: 600, textAlign: "right" } });
+    add("logo", { name: "مساحة الشعار الرسمي", x: 166, y: 12, w: 22, h: 22 });
+    add("text", {
+      name: "عنوان الشبكة",
+      x: 24,
+      y: 15,
+      w: 130,
+      h: 13,
+      content: "تقرير مؤسسي",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 17,
+        color: "#ffffff",
+        fontWeight: 800,
+        textAlign: "right",
+      },
+    });
+    add("text", {
+      name: "التاريخ",
+      x: 24,
+      y: 35,
+      w: 130,
+      h: 7,
+      content: "التاريخ",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 8,
+        color: "#ffffff",
+        fontWeight: 600,
+        textAlign: "right",
+      },
+    });
+    const cells = [
+      [24, 70, 76, 62],
+      [110, 70, 76, 62],
+      [24, 144, 76, 82],
+      [110, 144, 76, 82],
+    ] as const;
+    cells.forEach(([x, y, w, h], i) => {
+      add("shape", {
+        name: `وحدة شبكية ${i + 1}`,
+        x,
+        y,
+        w,
+        h,
+        style: {
+          fill: "#ffffff",
+          borderColor: c.line,
+          borderWidth: 0.35,
+          radius: 0,
+        },
+      });
+      add(i === 0 ? "stat" : "box", {
+        name: `محتوى الوحدة ${i + 1}`,
+        x: x + 6,
+        y: y + 8,
+        w: w - 12,
+        h: h - 16,
+        content:
+          i === 0 ? "01\nمؤشر رئيسي" : "عنوان الوحدة\nنص مختصر قابل للتحرير",
+        style: {
+          fontFamily: i === 0 ? "Tajawal" : "Cairo",
+          fontSize: i === 0 ? 22 : 11,
+          color: i === 0 ? c.primary : c.ink,
+          fontWeight: 700,
+          textAlign: "right",
+          lineHeight: 1.6,
+          padding: 2,
+        },
+      });
+    });
+    add("text", {
+      name: "الجهة",
+      x: 24,
+      y: 253,
+      w: 162,
+      h: 9,
+      content: org || "اسم الجهة",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 9,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "right",
+      },
+    });
   });
 }
 
@@ -1175,13 +1401,121 @@ function dataFocusPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تركيز البيانات", theme, (add) => {
     officialMark(add, c, "البيانات أولًا");
-    add("text", { name: "عنوان صغير", x: 24, y: 68, w: 162, h: 10, content: "ملخص المؤشر", style: { fontFamily: "Cairo", fontSize: 11, color: c.muted, fontWeight: 700, textAlign: "right" } });
-    add("text", { name: "رقم رئيسي", x: 24, y: 82, w: 100, h: 38, content: "000", style: { fontFamily: "Tajawal", fontSize: 48, color: c.primary, fontWeight: 800, textAlign: "right", lineHeight: 1 } });
-    add("text", { name: "وصف الرقم", x: 24, y: 124, w: 100, h: 9, content: "وصف الرقم الرئيسي", style: { fontFamily: "Cairo", fontSize: 10, color: c.muted, fontWeight: 600, textAlign: "right" } });
-    ["مؤشر ثانوي", "مؤشر ثانوي", "مؤشر ثانوي"].forEach((label, i) => add("stat", { name: label, x: 145, y: 78 + i * 30, w: 41, h: 24, content: `0${i + 1}\n${label}`, style: { fontFamily: "Tajawal", fontSize: 13, color: c.ink, fontWeight: 700, textAlign: "center" } }));
-    add("table", { name: "جدول البيانات", x: 24, y: 158, w: 162, h: 74, content: JSON.stringify([["المؤشر", "القيمة", "الحالة"], ["بند قابل للتحرير", "000", "--"], ["بند قابل للتحرير", "000", "--"]]), style: { cols: 3, rows: 3, fontSize: 10, headerBg: c.primary, headerColor: "#ffffff", tableBg: "#ffffff", borderColor: c.line, cellAlign: "center" } });
-    add("text", { name: "مصدر البيانات", x: 24, y: 246, w: 162, h: 8, content: "مصدر البيانات", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
-    add("text", { name: "اسم الجهة", x: 24, y: 266, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.primary, fontWeight: 700, textAlign: "right" } });
+    add("text", {
+      name: "عنوان صغير",
+      x: 24,
+      y: 68,
+      w: 162,
+      h: 10,
+      content: "ملخص المؤشر",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 11,
+        color: c.muted,
+        fontWeight: 700,
+        textAlign: "right",
+      },
+    });
+    add("text", {
+      name: "رقم رئيسي",
+      x: 24,
+      y: 82,
+      w: 100,
+      h: 38,
+      content: "000",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 48,
+        color: c.primary,
+        fontWeight: 800,
+        textAlign: "right",
+        lineHeight: 1,
+      },
+    });
+    add("text", {
+      name: "وصف الرقم",
+      x: 24,
+      y: 124,
+      w: 100,
+      h: 9,
+      content: "وصف الرقم الرئيسي",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 10,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "right",
+      },
+    });
+    ["مؤشر ثانوي", "مؤشر ثانوي", "مؤشر ثانوي"].forEach((label, i) =>
+      add("stat", {
+        name: label,
+        x: 145,
+        y: 78 + i * 30,
+        w: 41,
+        h: 24,
+        content: `0${i + 1}\n${label}`,
+        style: {
+          fontFamily: "Tajawal",
+          fontSize: 13,
+          color: c.ink,
+          fontWeight: 700,
+          textAlign: "center",
+        },
+      }),
+    );
+    add("table", {
+      name: "جدول البيانات",
+      x: 24,
+      y: 158,
+      w: 162,
+      h: 74,
+      content: JSON.stringify([
+        ["المؤشر", "القيمة", "الحالة"],
+        ["بند قابل للتحرير", "000", "--"],
+        ["بند قابل للتحرير", "000", "--"],
+      ]),
+      style: {
+        cols: 3,
+        rows: 3,
+        fontSize: 10,
+        headerBg: c.primary,
+        headerColor: "#ffffff",
+        tableBg: "#ffffff",
+        borderColor: c.line,
+        cellAlign: "center",
+      },
+    });
+    add("text", {
+      name: "مصدر البيانات",
+      x: 24,
+      y: 246,
+      w: 162,
+      h: 8,
+      content: "مصدر البيانات",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 8,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "right",
+      },
+    });
+    add("text", {
+      name: "اسم الجهة",
+      x: 24,
+      y: 266,
+      w: 162,
+      h: 8,
+      content: org || "اسم الجهة",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 8,
+        color: c.primary,
+        fontWeight: 700,
+        textAlign: "right",
+      },
+    });
   });
 }
 
@@ -1189,26 +1523,169 @@ function verticalFlowPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تدفق رأسي", theme, (add) => {
     officialMark(add, c, "تدفق العمل", 14);
-    add("text", { name: "عنوان التدفق", x: 24, y: 58, w: 162, h: 24, content: "من الفكرة إلى الأثر", style: { fontFamily: "Tajawal", fontSize: 24, color: c.primary, fontWeight: 800, textAlign: "right" } });
-    const blocks = [[24, 98, 162, 30], [42, 140, 144, 38], [60, 190, 126, 48], [78, 250, 108, 25]] as const;
-    blocks.forEach(([x, y, w, h], i) => {
-      add("shape", { name: `مرحلة ${i + 1}`, x, y, w, h, style: { fill: i % 2 ? "#ffffff" : c.surface, borderColor: c.line, borderWidth: 0.35, radius: 0 } });
-      add("text", { name: `عنوان مرحلة ${i + 1}`, x: x + 7, y: y + 7, w: w - 14, h: 10, content: `0${i + 1}  ·  عنوان المرحلة`, style: { fontFamily: "Cairo", fontSize: 11, color: c.ink, fontWeight: 700, textAlign: "right" } });
+    add("text", {
+      name: "عنوان التدفق",
+      x: 24,
+      y: 58,
+      w: 162,
+      h: 24,
+      content: "من الفكرة إلى الأثر",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 24,
+        color: c.primary,
+        fontWeight: 800,
+        textAlign: "right",
+      },
     });
-    add("text", { name: "اسم الجهة", x: 24, y: 278, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
+    const blocks = [
+      [24, 98, 162, 30],
+      [42, 140, 144, 38],
+      [60, 190, 126, 48],
+      [78, 250, 108, 25],
+    ] as const;
+    blocks.forEach(([x, y, w, h], i) => {
+      add("shape", {
+        name: `مرحلة ${i + 1}`,
+        x,
+        y,
+        w,
+        h,
+        style: {
+          fill: i % 2 ? "#ffffff" : c.surface,
+          borderColor: c.line,
+          borderWidth: 0.35,
+          radius: 0,
+        },
+      });
+      add("text", {
+        name: `عنوان مرحلة ${i + 1}`,
+        x: x + 7,
+        y: y + 7,
+        w: w - 14,
+        h: 10,
+        content: `0${i + 1}  ·  عنوان المرحلة`,
+        style: {
+          fontFamily: "Cairo",
+          fontSize: 11,
+          color: c.ink,
+          fontWeight: 700,
+          textAlign: "right",
+        },
+      });
+    });
+    add("text", {
+      name: "اسم الجهة",
+      x: 24,
+      y: 278,
+      w: 162,
+      h: 8,
+      content: org || "اسم الجهة",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 8,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "right",
+      },
+    });
   });
 }
 
 function asymmetricPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تحريرية غير متماثلة", theme, (add) => {
-    add("shape", { name: "كتلة جانبية", x: 0, y: 0, w: 72, h: 297, style: { fill: c.primary, borderWidth: 0, radius: 0 } });
+    add("shape", {
+      name: "كتلة جانبية",
+      x: 0,
+      y: 0,
+      w: 72,
+      h: 297,
+      style: { fill: c.primary, borderWidth: 0, radius: 0 },
+    });
     add("logo", { name: "مساحة الشعار الرسمي", x: 24, y: 20, w: 22, h: 22 });
-    add("text", { name: "عنوان جانبي", x: 18, y: 62, w: 38, h: 90, content: "قسم\nالتقرير", style: { fontFamily: "Tajawal", fontSize: 22, color: "#ffffff", fontWeight: 800, textAlign: "center", writingMode: "vertical" } });
-    add("text", { name: "العنوان الرئيسي", x: 92, y: 42, w: 92, h: 38, content: "عنوان غير\nمتماثل", style: { fontFamily: "Tajawal", fontSize: 25, color: c.primary, fontWeight: 800, textAlign: "right", lineHeight: 1.2 } });
-    add("stat", { name: "مرساة بصرية", x: 94, y: 102, w: 48, h: 46, content: "01\nنتيجة", style: { fontFamily: "Tajawal", fontSize: 20, color: c.primary, fontWeight: 800, textAlign: "center" } });
-    add("box", { name: "النص الرئيسي", x: 92, y: 166, w: 94, h: 56, content: "نص موجز يشرح الفكرة الأساسية للصفحة.", style: { fontFamily: "Cairo", fontSize: 12, color: c.ink, fill: "#ffffff", borderColor: c.line, borderWidth: 0.35, radius: 0, padding: 5, lineHeight: 1.8, textAlign: "right" } });
-    add("text", { name: "التاريخ", x: 92, y: 254, w: 94, h: 8, content: "التاريخ  ·  " + (org || "اسم الجهة"), style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
+    add("text", {
+      name: "عنوان جانبي",
+      x: 18,
+      y: 62,
+      w: 38,
+      h: 90,
+      content: "قسم\nالتقرير",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 22,
+        color: "#ffffff",
+        fontWeight: 800,
+        textAlign: "center",
+        writingMode: "vertical",
+      },
+    });
+    add("text", {
+      name: "العنوان الرئيسي",
+      x: 92,
+      y: 42,
+      w: 92,
+      h: 38,
+      content: "عنوان غير\nمتماثل",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 25,
+        color: c.primary,
+        fontWeight: 800,
+        textAlign: "right",
+        lineHeight: 1.2,
+      },
+    });
+    add("stat", {
+      name: "مرساة بصرية",
+      x: 94,
+      y: 102,
+      w: 48,
+      h: 46,
+      content: "01\nنتيجة",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 20,
+        color: c.primary,
+        fontWeight: 800,
+        textAlign: "center",
+      },
+    });
+    add("box", {
+      name: "النص الرئيسي",
+      x: 92,
+      y: 166,
+      w: 94,
+      h: 56,
+      content: "نص موجز يشرح الفكرة الأساسية للصفحة.",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 12,
+        color: c.ink,
+        fill: "#ffffff",
+        borderColor: c.line,
+        borderWidth: 0.35,
+        radius: 0,
+        padding: 5,
+        lineHeight: 1.8,
+        textAlign: "right",
+      },
+    });
+    add("text", {
+      name: "التاريخ",
+      x: 92,
+      y: 254,
+      w: 94,
+      h: 8,
+      content: "التاريخ  ·  " + (org || "اسم الجهة"),
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 8,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "right",
+      },
+    });
   });
 }
 
@@ -1216,12 +1693,72 @@ function modularPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("وحدات معيارية", theme, (add) => {
     officialMark(add, c, "وحدات التقرير", 12);
-    const modules = [[24, 62, 78, 54, "عنوان ونص"], [112, 62, 74, 32, "01  رقم"], [112, 104, 74, 72, "ملاحظة"], [24, 128, 78, 48, "مؤشر"], [24, 188, 162, 42, "جدول أو رسم"]] as const;
+    const modules = [
+      [24, 62, 78, 54, "عنوان ونص"],
+      [112, 62, 74, 32, "01  رقم"],
+      [112, 104, 74, 72, "ملاحظة"],
+      [24, 128, 78, 48, "مؤشر"],
+      [24, 188, 162, 42, "جدول أو رسم"],
+    ] as const;
     modules.forEach(([x, y, w, h, label], i) => {
-      add("shape", { name: `وحدة ${i + 1}`, x, y, w, h, style: { fill: i === 1 ? c.primary : "#ffffff", borderColor: c.line, borderWidth: 0.35, radius: 0 } });
-      add(i === 1 ? "stat" : i === 4 ? "table" : "box", { name: `محتوى الوحدة ${i + 1}`, x: x + 5, y: y + 5, w: w - 10, h: h - 10, content: i === 4 ? JSON.stringify([["البند", "القيمة"], ["بند قابل للتحرير", "000"]]) : label, style: { fontFamily: i === 1 ? "Tajawal" : "Cairo", fontSize: i === 1 ? 20 : 11, color: i === 1 ? "#ffffff" : c.ink, fontWeight: 700, textAlign: "right", cols: i === 4 ? 2 : undefined, rows: i === 4 ? 2 : undefined, headerBg: c.primary, headerColor: "#ffffff", tableBg: "#ffffff", borderColor: c.line, padding: 2, lineHeight: 1.6 } });
+      add("shape", {
+        name: `وحدة ${i + 1}`,
+        x,
+        y,
+        w,
+        h,
+        style: {
+          fill: i === 1 ? c.primary : "#ffffff",
+          borderColor: c.line,
+          borderWidth: 0.35,
+          radius: 0,
+        },
+      });
+      add(i === 1 ? "stat" : i === 4 ? "table" : "box", {
+        name: `محتوى الوحدة ${i + 1}`,
+        x: x + 5,
+        y: y + 5,
+        w: w - 10,
+        h: h - 10,
+        content:
+          i === 4
+            ? JSON.stringify([
+                ["البند", "القيمة"],
+                ["بند قابل للتحرير", "000"],
+              ])
+            : label,
+        style: {
+          fontFamily: i === 1 ? "Tajawal" : "Cairo",
+          fontSize: i === 1 ? 20 : 11,
+          color: i === 1 ? "#ffffff" : c.ink,
+          fontWeight: 700,
+          textAlign: "right",
+          cols: i === 4 ? 2 : undefined,
+          rows: i === 4 ? 2 : undefined,
+          headerBg: c.primary,
+          headerColor: "#ffffff",
+          tableBg: "#ffffff",
+          borderColor: c.line,
+          padding: 2,
+          lineHeight: 1.6,
+        },
+      });
     });
-    add("text", { name: "اسم الجهة", x: 24, y: 260, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
+    add("text", {
+      name: "اسم الجهة",
+      x: 24,
+      y: 260,
+      w: 162,
+      h: 8,
+      content: org || "اسم الجهة",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 8,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "right",
+      },
+    });
   });
 }
 
@@ -1229,12 +1766,92 @@ function executivePage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("ملخص تنفيذي", theme, (add) => {
     add("logo", { name: "مساحة الشعار الرسمي", x: 94, y: 20, w: 22, h: 22 });
-    add("text", { name: "التاريخ", x: 24, y: 24, w: 62, h: 8, content: "التاريخ", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "left" } });
-    add("text", { name: "العنوان التنفيذي", x: 34, y: 72, w: 142, h: 36, content: "ملخص تنفيذي", style: { fontFamily: "Tajawal", fontSize: 31, color: c.primary, fontWeight: 800, textAlign: "center" } });
-    add("line", { name: "خط مرجعي", x: 82, y: 120, w: 46, h: 2, style: { color: c.accent, stroke: 0.8 } });
-    add("box", { name: "الرسالة التنفيذية", x: 46, y: 142, w: 118, h: 48, content: "رسالة واحدة مركزة تلخص القرار أو النتيجة الأهم.", style: { fontFamily: "Cairo", fontSize: 13, color: c.ink, fill: "#ffffff", borderWidth: 0, padding: 4, lineHeight: 1.8, textAlign: "center" } });
-    add("text", { name: "الرقم التنفيذي", x: 72, y: 210, w: 66, h: 32, content: "000", style: { fontFamily: "Tajawal", fontSize: 38, color: c.primary, fontWeight: 800, textAlign: "center" } });
-    add("text", { name: "اسم الجهة", x: 24, y: 266, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "center" } });
+    add("text", {
+      name: "التاريخ",
+      x: 24,
+      y: 24,
+      w: 62,
+      h: 8,
+      content: "التاريخ",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 8,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "left",
+      },
+    });
+    add("text", {
+      name: "العنوان التنفيذي",
+      x: 34,
+      y: 72,
+      w: 142,
+      h: 36,
+      content: "ملخص تنفيذي",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 31,
+        color: c.primary,
+        fontWeight: 800,
+        textAlign: "center",
+      },
+    });
+    add("line", {
+      name: "خط مرجعي",
+      x: 82,
+      y: 120,
+      w: 46,
+      h: 2,
+      style: { color: c.accent, stroke: 0.8 },
+    });
+    add("box", {
+      name: "الرسالة التنفيذية",
+      x: 46,
+      y: 142,
+      w: 118,
+      h: 48,
+      content: "رسالة واحدة مركزة تلخص القرار أو النتيجة الأهم.",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 13,
+        color: c.ink,
+        fill: "#ffffff",
+        borderWidth: 0,
+        padding: 4,
+        lineHeight: 1.8,
+        textAlign: "center",
+      },
+    });
+    add("text", {
+      name: "الرقم التنفيذي",
+      x: 72,
+      y: 210,
+      w: 66,
+      h: 32,
+      content: "000",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 38,
+        color: c.primary,
+        fontWeight: 800,
+        textAlign: "center",
+      },
+    });
+    add("text", {
+      name: "اسم الجهة",
+      x: 24,
+      y: 266,
+      w: 162,
+      h: 8,
+      content: org || "اسم الجهة",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 8,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "center",
+      },
+    });
   });
 }
 
@@ -1242,13 +1859,115 @@ function statisticalPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("إحصائية", theme, (add) => {
     officialMark(add, c, "قراءة إحصائية", 14);
-    add("text", { name: "الرقم الأكبر", x: 24, y: 70, w: 86, h: 46, content: "000", style: { fontFamily: "Tajawal", fontSize: 55, color: c.primary, fontWeight: 800, textAlign: "right" } });
-    add("text", { name: "وصف الإحصائية", x: 24, y: 120, w: 86, h: 9, content: "المؤشر الأساسي", style: { fontFamily: "Cairo", fontSize: 10, color: c.muted, fontWeight: 700, textAlign: "right" } });
-    ["مؤشر 01", "مؤشر 02", "مؤشر 03"].forEach((label, i) => add("stat", { name: label, x: 132, y: 72 + i * 34, w: 54, h: 28, content: `00${i + 1}\n${label}`, style: { fontFamily: "Tajawal", fontSize: 14, color: c.ink, fontWeight: 700, textAlign: "center" } }));
-    add("shape", { name: "مساحة الرسم", x: 24, y: 154, w: 162, h: 66, style: { fill: c.surface, borderColor: c.line, borderWidth: 0.35, radius: 0 } });
-    [24, 44, 68, 52, 82].forEach((h, i) => add("shape", { name: `عمود قابل للتحرير ${i + 1}`, x: 42 + i * 25, y: 210 - h, w: 11, h, style: { fill: i === 4 ? c.accent : c.primary, borderWidth: 0, radius: 0 } }));
-    add("table", { name: "جدول الإحصائية", x: 24, y: 232, w: 162, h: 34, content: JSON.stringify([["البند", "القيمة"], ["بند قابل للتحرير", "000"]]), style: { cols: 2, rows: 2, fontSize: 9, headerBg: c.primary, headerColor: "#ffffff", tableBg: "#ffffff", borderColor: c.line } });
-    add("text", { name: "اسم الجهة", x: 24, y: 278, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
+    add("text", {
+      name: "الرقم الأكبر",
+      x: 24,
+      y: 70,
+      w: 86,
+      h: 46,
+      content: "000",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 55,
+        color: c.primary,
+        fontWeight: 800,
+        textAlign: "right",
+      },
+    });
+    add("text", {
+      name: "وصف الإحصائية",
+      x: 24,
+      y: 120,
+      w: 86,
+      h: 9,
+      content: "المؤشر الأساسي",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 10,
+        color: c.muted,
+        fontWeight: 700,
+        textAlign: "right",
+      },
+    });
+    ["مؤشر 01", "مؤشر 02", "مؤشر 03"].forEach((label, i) =>
+      add("stat", {
+        name: label,
+        x: 132,
+        y: 72 + i * 34,
+        w: 54,
+        h: 28,
+        content: `00${i + 1}\n${label}`,
+        style: {
+          fontFamily: "Tajawal",
+          fontSize: 14,
+          color: c.ink,
+          fontWeight: 700,
+          textAlign: "center",
+        },
+      }),
+    );
+    add("shape", {
+      name: "مساحة الرسم",
+      x: 24,
+      y: 154,
+      w: 162,
+      h: 66,
+      style: {
+        fill: c.surface,
+        borderColor: c.line,
+        borderWidth: 0.35,
+        radius: 0,
+      },
+    });
+    [24, 44, 68, 52, 82].forEach((h, i) =>
+      add("shape", {
+        name: `عمود قابل للتحرير ${i + 1}`,
+        x: 42 + i * 25,
+        y: 210 - h,
+        w: 11,
+        h,
+        style: {
+          fill: i === 4 ? c.accent : c.primary,
+          borderWidth: 0,
+          radius: 0,
+        },
+      }),
+    );
+    add("table", {
+      name: "جدول الإحصائية",
+      x: 24,
+      y: 232,
+      w: 162,
+      h: 34,
+      content: JSON.stringify([
+        ["البند", "القيمة"],
+        ["بند قابل للتحرير", "000"],
+      ]),
+      style: {
+        cols: 2,
+        rows: 2,
+        fontSize: 9,
+        headerBg: c.primary,
+        headerColor: "#ffffff",
+        tableBg: "#ffffff",
+        borderColor: c.line,
+      },
+    });
+    add("text", {
+      name: "اسم الجهة",
+      x: 24,
+      y: 278,
+      w: 162,
+      h: 8,
+      content: org || "اسم الجهة",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 8,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "right",
+      },
+    });
   });
 }
 
@@ -1256,11 +1975,76 @@ function sectionDividerPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("فاصل قسم", theme, (add) => {
     add("logo", { name: "مساحة الشعار الرسمي", x: 24, y: 22, w: 22, h: 22 });
-    add("text", { name: "اسم الجهة", x: 52, y: 28, w: 134, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 9, color: c.muted, fontWeight: 600, textAlign: "right" } });
-    add("text", { name: "رقم القسم", x: 24, y: 90, w: 162, h: 70, content: "01", style: { fontFamily: "Tajawal", fontSize: 88, color: c.primary, fontWeight: 800, textAlign: "right", lineHeight: 0.9 } });
-    add("text", { name: "عنوان القسم", x: 24, y: 174, w: 120, h: 22, content: "عنوان القسم", style: { fontFamily: "Tajawal", fontSize: 25, color: c.ink, fontWeight: 800, textAlign: "right" } });
-    add("text", { name: "وصف القسم", x: 24, y: 208, w: 108, h: 26, content: "وصف مختصر للقسم ومساره.", style: { fontFamily: "Cairo", fontSize: 11, color: c.muted, fontWeight: 600, textAlign: "right", lineHeight: 1.7 } });
-    add("shape", { name: "علامة القسم", x: 158, y: 174, w: 28, h: 28, style: { fill: c.accent, borderWidth: 0, shape: "circle" } });
+    add("text", {
+      name: "اسم الجهة",
+      x: 52,
+      y: 28,
+      w: 134,
+      h: 8,
+      content: org || "اسم الجهة",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 9,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "right",
+      },
+    });
+    add("text", {
+      name: "رقم القسم",
+      x: 24,
+      y: 90,
+      w: 162,
+      h: 70,
+      content: "01",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 88,
+        color: c.primary,
+        fontWeight: 800,
+        textAlign: "right",
+        lineHeight: 0.9,
+      },
+    });
+    add("text", {
+      name: "عنوان القسم",
+      x: 24,
+      y: 174,
+      w: 120,
+      h: 22,
+      content: "عنوان القسم",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 25,
+        color: c.ink,
+        fontWeight: 800,
+        textAlign: "right",
+      },
+    });
+    add("text", {
+      name: "وصف القسم",
+      x: 24,
+      y: 208,
+      w: 108,
+      h: 26,
+      content: "وصف مختصر للقسم ومساره.",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 11,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "right",
+        lineHeight: 1.7,
+      },
+    });
+    add("shape", {
+      name: "علامة القسم",
+      x: 158,
+      y: 174,
+      w: 28,
+      h: 28,
+      style: { fill: c.accent, borderWidth: 0, shape: "circle" },
+    });
   });
 }
 
@@ -1268,30 +2052,162 @@ function processPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("مراحل إجرائية", theme, (add) => {
     officialMark(add, c, "المراحل الإجرائية", 14);
-    add("text", { name: "عنوان المسار", x: 24, y: 62, w: 162, h: 18, content: "منهجية التنفيذ", style: { fontFamily: "Tajawal", fontSize: 22, color: c.primary, fontWeight: 800, textAlign: "right" } });
+    add("text", {
+      name: "عنوان المسار",
+      x: 24,
+      y: 62,
+      w: 162,
+      h: 18,
+      content: "منهجية التنفيذ",
+      style: {
+        fontFamily: "Tajawal",
+        fontSize: 22,
+        color: c.primary,
+        fontWeight: 800,
+        textAlign: "right",
+      },
+    });
     const stages = ["تحديد", "تحليل", "تنفيذ", "قياس"];
     stages.forEach((label, i) => {
       const x = 24 + i * 43;
-      if (i < stages.length - 1) add("line", { name: `صلة المرحلة ${i + 1}`, x: x + 18, y: 128, w: 25, h: 2, style: { color: c.line, stroke: 0.7 } });
-      add("shape", { name: `نقطة المرحلة ${i + 1}`, x, y: 116, w: 24, h: 24, style: { fill: i === 0 ? c.primary : "#ffffff", borderColor: c.primary, borderWidth: 0.7, shape: "circle" } });
-      add("text", { name: `رقم المرحلة ${i + 1}`, x, y: 122, w: 24, h: 8, content: `0${i + 1}`, style: { fontFamily: "Tajawal", fontSize: 10, color: i === 0 ? "#ffffff" : c.primary, fontWeight: 800, textAlign: "center" } });
-      add("text", { name: `اسم المرحلة ${i + 1}`, x: x - 5, y: 150, w: 34, h: 10, content: label, style: { fontFamily: "Cairo", fontSize: 10, color: c.ink, fontWeight: 700, textAlign: "center" } });
+      if (i < stages.length - 1)
+        add("line", {
+          name: `صلة المرحلة ${i + 1}`,
+          x: x + 18,
+          y: 128,
+          w: 25,
+          h: 2,
+          style: { color: c.line, stroke: 0.7 },
+        });
+      add("shape", {
+        name: `نقطة المرحلة ${i + 1}`,
+        x,
+        y: 116,
+        w: 24,
+        h: 24,
+        style: {
+          fill: i === 0 ? c.primary : "#ffffff",
+          borderColor: c.primary,
+          borderWidth: 0.7,
+          shape: "circle",
+        },
+      });
+      add("text", {
+        name: `رقم المرحلة ${i + 1}`,
+        x,
+        y: 122,
+        w: 24,
+        h: 8,
+        content: `0${i + 1}`,
+        style: {
+          fontFamily: "Tajawal",
+          fontSize: 10,
+          color: i === 0 ? "#ffffff" : c.primary,
+          fontWeight: 800,
+          textAlign: "center",
+        },
+      });
+      add("text", {
+        name: `اسم المرحلة ${i + 1}`,
+        x: x - 5,
+        y: 150,
+        w: 34,
+        h: 10,
+        content: label,
+        style: {
+          fontFamily: "Cairo",
+          fontSize: 10,
+          color: c.ink,
+          fontWeight: 700,
+          textAlign: "center",
+        },
+      });
     });
-    add("box", { name: "ملاحظة المسار", x: 24, y: 190, w: 162, h: 42, content: "ملاحظة أو وصف مختصر للعملية.", style: { fontFamily: "Cairo", fontSize: 12, color: c.ink, fill: "#ffffff", borderColor: c.line, borderWidth: 0.35, radius: 0, padding: 4, lineHeight: 1.7, textAlign: "right" } });
-    add("text", { name: "اسم الجهة", x: 24, y: 266, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
+    add("box", {
+      name: "ملاحظة المسار",
+      x: 24,
+      y: 190,
+      w: 162,
+      h: 42,
+      content: "ملاحظة أو وصف مختصر للعملية.",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 12,
+        color: c.ink,
+        fill: "#ffffff",
+        borderColor: c.line,
+        borderWidth: 0.35,
+        radius: 0,
+        padding: 4,
+        lineHeight: 1.7,
+        textAlign: "right",
+      },
+    });
+    add("text", {
+      name: "اسم الجهة",
+      x: 24,
+      y: 266,
+      w: 162,
+      h: 8,
+      content: org || "اسم الجهة",
+      style: {
+        fontFamily: "Cairo",
+        fontSize: 8,
+        color: c.muted,
+        fontWeight: 600,
+        textAlign: "right",
+      },
+    });
   });
 }
 
-export const PACKS: { id: PackId; title: string; desc: string; pages: string }[] = [
-  { id: "official", title: "تقرير رسمي متكامل", desc: "غلاف، محتويات، ملخص، إنجازات، مؤشرات، خاتمة", pages: "6 صفحات" },
-  { id: "eid", title: "تقرير فعالية ومناسبة", desc: "غلاف احتفالي، مؤشرات، معرض صور، ختام", pages: "4 صفحات" },
-  { id: "briefing", title: "عرض قيادي موجز", desc: "غلاف عرض مع مؤشرات وخاتمة", pages: "3 صفحات" },
-  { id: "slides", title: "عرض تقديمي 16:9", desc: "شرائح بنسبة 16:9 للاجتماعات", pages: "2 شريحة" },
-  { id: "blank", title: "مستند فارغ A4", desc: "صفحة بيضاء مع رأس وتذييل خفيف", pages: "1 صفحة" },
+export const PACKS: {
+  id: PackId;
+  title: string;
+  desc: string;
+  pages: string;
+}[] = [
+  {
+    id: "official",
+    title: "تقرير رسمي متكامل",
+    desc: "غلاف، محتويات، ملخص، إنجازات، مؤشرات، خاتمة",
+    pages: "6 صفحات",
+  },
+  {
+    id: "eid",
+    title: "تقرير فعالية ومناسبة",
+    desc: "غلاف احتفالي، مؤشرات، معرض صور، ختام",
+    pages: "4 صفحات",
+  },
+  {
+    id: "briefing",
+    title: "عرض قيادي موجز",
+    desc: "غلاف عرض مع مؤشرات وخاتمة",
+    pages: "3 صفحات",
+  },
+  {
+    id: "slides",
+    title: "عرض تقديمي 16:9",
+    desc: "شرائح بنسبة 16:9 للاجتماعات",
+    pages: "2 شريحة",
+  },
+  {
+    id: "blank",
+    title: "مستند فارغ A4",
+    desc: "صفحة بيضاء مع رأس وتذييل خفيف",
+    pages: "1 صفحة",
+  },
 ];
 
-export function createProject(pack: PackId, themeId: ThemeId = "official", orgName = ""): Project {
-  const theme = THEMES[pack === "eid" ? (themeId === "official" ? "eid" : themeId) : themeId];
+export function createProject(
+  pack: PackId,
+  themeId: ThemeId = "official",
+  orgName = "",
+): Project {
+  const theme =
+    THEMES[
+      pack === "eid" ? (themeId === "official" ? "eid" : themeId) : themeId
+    ];
   const pages =
     pack === "official"
       ? officialPages(theme, orgName)
@@ -1373,37 +2289,211 @@ export interface PageTemplateDef {
   category: TemplateCategoryId;
   size?: { w: number; h: number };
   concept?: string;
-  preview?: "editorial" | "grid" | "data" | "flow" | "asymmetric" | "modular" | "executive" | "statistical" | "section" | "process";
+  preview?:
+    | "editorial"
+    | "grid"
+    | "data"
+    | "flow"
+    | "asymmetric"
+    | "modular"
+    | "executive"
+    | "statistical"
+    | "section"
+    | "process";
 }
 
 const A4_SIZE = { w: 210, h: 297 };
 const SLIDE_SIZE = { w: 338.7, h: 190.5 };
 
 export const PAGE_TEMPLATES: PageTemplateDef[] = [
-  { id: "cover", title: "غلاف رسمي", desc: "شريط كحلي وشعار وعنوان", category: "covers", size: A4_SIZE },
-  { id: "cover-celebration", title: "غلاف مناسبة", desc: "غلاف احتفالي بخلفية داكنة", category: "covers", size: A4_SIZE },
-  { id: "text", title: "صفحة نصية", desc: "عنوان وفقرة وجدول", category: "reports", size: A4_SIZE },
-  { id: "contents", title: "محتويات", desc: "فهرس بنود مرقم", category: "inner", size: A4_SIZE },
-  { id: "achievements", title: "إنجازات", desc: "بطاقات أثر", category: "inner", size: A4_SIZE },
-  { id: "images", title: "معرض صور", desc: "أربع صور مع تعليق", category: "inner", size: A4_SIZE },
-  { id: "thanks", title: "شكر وختام", desc: "صفحة ختامية هادئة", category: "inner", size: A4_SIZE },
-  { id: "closing", title: "توقيع وختم", desc: "خلاصة وتوقيع", category: "inner", size: A4_SIZE },
-  { id: "stats", title: "مؤشرات ميدانية", desc: "أرقام ورسم أعمدة", category: "kpis", size: A4_SIZE },
-  { id: "stats-board", title: "لوحة مؤشرات", desc: "أربع بطاقات أرقام وأشرطة تقدم", category: "stats", size: A4_SIZE },
-  { id: "table-data", title: "جدول تفصيلي", desc: "جدول خمسة أعمدة للمقارنة", category: "tables", size: A4_SIZE },
-  { id: "infographic", title: "مسار من خمس مراحل", desc: "إنفوجرافيك عمودي جاهز", category: "infographics", size: A4_SIZE },
-  { id: "slide-cover", title: "شريحة غلاف", desc: "شريحة عريضة للعرض", category: "slides", size: SLIDE_SIZE },
-  { id: "slide-stats", title: "شريحة مؤشرات", desc: "ثلاث بطاقات ومؤشر تقدم", category: "slides", size: SLIDE_SIZE },
-  { id: "editorial", title: "تحريرية حديثة", desc: "عنوان مسيطر ومساحة بيضاء ورقم بصري", category: "editorial", concept: "Editorial", preview: "editorial", size: A4_SIZE },
-  { id: "institutional-grid", title: "شبكة مؤسسية", desc: "تقسيم شبكي واضح لوحدات المعلومات", category: "institutional", concept: "Institutional Grid", preview: "grid", size: A4_SIZE },
-  { id: "data-focus", title: "تركيز البيانات", desc: "رقم رئيسي وجدول ومؤشرات ثانوية", category: "data", concept: "Data Focus", preview: "data", size: A4_SIZE },
-  { id: "vertical-flow", title: "تدفق رأسي", desc: "كتل متدرجة تقود العين إلى الأسفل", category: "timeline", concept: "Vertical Flow", preview: "flow", size: A4_SIZE },
-  { id: "asymmetric", title: "تحريرية غير متماثلة", desc: "كتلة جانبية ومرساة بصرية خارج المركز", category: "editorial", concept: "Asymmetric Editorial", preview: "asymmetric", size: A4_SIZE },
-  { id: "modular", title: "وحدات معيارية", desc: "موزاييك من وحدات مستقلة بأحجام مختلفة", category: "institutional", concept: "Modular", preview: "modular", size: A4_SIZE },
-  { id: "executive", title: "ملخص تنفيذي", desc: "تكوين هادئ برسالة واحدة ورقم واضح", category: "executive", concept: "Executive Report", preview: "executive", size: A4_SIZE },
-  { id: "statistical", title: "قراءة إحصائية", desc: "رقم كبير وأعمدة ومؤشرات للقراءة السريعة", category: "stats", concept: "Statistical", preview: "statistical", size: A4_SIZE },
-  { id: "section-divider", title: "فاصل قسم", desc: "رقم قسم كبير ومساحة بيضاء واسعة", category: "section", concept: "Section Divider", preview: "section", size: A4_SIZE },
-  { id: "process", title: "مراحل إجرائية", desc: "تسلسل أفقي قابل للتحرير للمراحل", category: "timeline", concept: "Timeline / Process", preview: "process", size: A4_SIZE },
+  {
+    id: "cover",
+    title: "غلاف رسمي",
+    desc: "شريط كحلي وشعار وعنوان",
+    category: "covers",
+    size: A4_SIZE,
+  },
+  {
+    id: "cover-celebration",
+    title: "غلاف مناسبة",
+    desc: "غلاف احتفالي بخلفية داكنة",
+    category: "covers",
+    size: A4_SIZE,
+  },
+  {
+    id: "text",
+    title: "صفحة نصية",
+    desc: "عنوان وفقرة وجدول",
+    category: "reports",
+    size: A4_SIZE,
+  },
+  {
+    id: "contents",
+    title: "محتويات",
+    desc: "فهرس بنود مرقم",
+    category: "inner",
+    size: A4_SIZE,
+  },
+  {
+    id: "achievements",
+    title: "إنجازات",
+    desc: "بطاقات أثر",
+    category: "inner",
+    size: A4_SIZE,
+  },
+  {
+    id: "images",
+    title: "معرض صور",
+    desc: "أربع صور مع تعليق",
+    category: "inner",
+    size: A4_SIZE,
+  },
+  {
+    id: "thanks",
+    title: "شكر وختام",
+    desc: "صفحة ختامية هادئة",
+    category: "inner",
+    size: A4_SIZE,
+  },
+  {
+    id: "closing",
+    title: "توقيع وختم",
+    desc: "خلاصة وتوقيع",
+    category: "inner",
+    size: A4_SIZE,
+  },
+  {
+    id: "stats",
+    title: "مؤشرات ميدانية",
+    desc: "أرقام ورسم أعمدة",
+    category: "kpis",
+    size: A4_SIZE,
+  },
+  {
+    id: "stats-board",
+    title: "لوحة مؤشرات",
+    desc: "أربع بطاقات أرقام وأشرطة تقدم",
+    category: "stats",
+    size: A4_SIZE,
+  },
+  {
+    id: "table-data",
+    title: "جدول تفصيلي",
+    desc: "جدول خمسة أعمدة للمقارنة",
+    category: "tables",
+    size: A4_SIZE,
+  },
+  {
+    id: "infographic",
+    title: "مسار من خمس مراحل",
+    desc: "إنفوجرافيك عمودي جاهز",
+    category: "infographics",
+    size: A4_SIZE,
+  },
+  {
+    id: "slide-cover",
+    title: "شريحة غلاف",
+    desc: "شريحة عريضة للعرض",
+    category: "slides",
+    size: SLIDE_SIZE,
+  },
+  {
+    id: "slide-stats",
+    title: "شريحة مؤشرات",
+    desc: "ثلاث بطاقات ومؤشر تقدم",
+    category: "slides",
+    size: SLIDE_SIZE,
+  },
+  {
+    id: "editorial",
+    title: "تحريرية حديثة",
+    desc: "عنوان مسيطر ومساحة بيضاء ورقم بصري",
+    category: "editorial",
+    concept: "Editorial",
+    preview: "editorial",
+    size: A4_SIZE,
+  },
+  {
+    id: "institutional-grid",
+    title: "شبكة مؤسسية",
+    desc: "تقسيم شبكي واضح لوحدات المعلومات",
+    category: "institutional",
+    concept: "Institutional Grid",
+    preview: "grid",
+    size: A4_SIZE,
+  },
+  {
+    id: "data-focus",
+    title: "تركيز البيانات",
+    desc: "رقم رئيسي وجدول ومؤشرات ثانوية",
+    category: "data",
+    concept: "Data Focus",
+    preview: "data",
+    size: A4_SIZE,
+  },
+  {
+    id: "vertical-flow",
+    title: "تدفق رأسي",
+    desc: "كتل متدرجة تقود العين إلى الأسفل",
+    category: "timeline",
+    concept: "Vertical Flow",
+    preview: "flow",
+    size: A4_SIZE,
+  },
+  {
+    id: "asymmetric",
+    title: "تحريرية غير متماثلة",
+    desc: "كتلة جانبية ومرساة بصرية خارج المركز",
+    category: "editorial",
+    concept: "Asymmetric Editorial",
+    preview: "asymmetric",
+    size: A4_SIZE,
+  },
+  {
+    id: "modular",
+    title: "وحدات معيارية",
+    desc: "موزاييك من وحدات مستقلة بأحجام مختلفة",
+    category: "institutional",
+    concept: "Modular",
+    preview: "modular",
+    size: A4_SIZE,
+  },
+  {
+    id: "executive",
+    title: "ملخص تنفيذي",
+    desc: "تكوين هادئ برسالة واحدة ورقم واضح",
+    category: "executive",
+    concept: "Executive Report",
+    preview: "executive",
+    size: A4_SIZE,
+  },
+  {
+    id: "statistical",
+    title: "قراءة إحصائية",
+    desc: "رقم كبير وأعمدة ومؤشرات للقراءة السريعة",
+    category: "stats",
+    concept: "Statistical",
+    preview: "statistical",
+    size: A4_SIZE,
+  },
+  {
+    id: "section-divider",
+    title: "فاصل قسم",
+    desc: "رقم قسم كبير ومساحة بيضاء واسعة",
+    category: "section",
+    concept: "Section Divider",
+    preview: "section",
+    size: A4_SIZE,
+  },
+  {
+    id: "process",
+    title: "مراحل إجرائية",
+    desc: "تسلسل أفقي قابل للتحرير للمراحل",
+    category: "timeline",
+    concept: "Timeline / Process",
+    preview: "process",
+    size: A4_SIZE,
+  },
 ];
 
 export function templateById(id: string): PageTemplateDef | undefined {
@@ -1414,7 +2504,11 @@ export function templateById(id: string): PageTemplateDef | undefined {
  * Builds a fresh page for a gallery entry. Every call returns new element ids,
  * so inserting a template copies it rather than editing the template source.
  */
-export function createTemplatePage(id: string, theme: Theme, org: string): Page {
+export function createTemplatePage(
+  id: string,
+  theme: Theme,
+  org: string,
+): Page {
   switch (id) {
     case "cover":
       return coverPage(theme, org);

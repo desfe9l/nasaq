@@ -7,7 +7,14 @@ import { test } from "node:test";
 
 import { alignmentMoves, type CanvasEl, type Page } from "./model.ts";
 
-function el(id: string, x: number, y: number, w: number, h: number, extra: Partial<CanvasEl> = {}): CanvasEl {
+function el(
+  id: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  extra: Partial<CanvasEl> = {},
+): CanvasEl {
   return {
     id,
     type: "box",
@@ -54,7 +61,10 @@ test("single element aligns to the artboard on all six edges", () => {
 
 test("group member aligns in absolute page space, not group-relative space", () => {
   const child = el("child", 5, 5, 20, 10); // group-relative
-  const group = el("grp", 100, 200, 30, 20, { type: "group", children: [child] });
+  const group = el("grp", 100, 200, 30, 20, {
+    type: "group",
+    children: [child],
+  });
   const page = pageOf([group]);
 
   // The child's absolute page position is (105, 205). Aligning LEFT must put
@@ -65,7 +75,11 @@ test("group member aligns in absolute page space, not group-relative space", () 
   assert.deepEqual(left, { id: "child", x: -100, y: 5 });
 
   const center = alignmentMoves(page.elements, ["child"], "center", A4)[0];
-  assert.equal(center.x + 100 + 10, 105, "child centre lands on the artboard centre");
+  assert.equal(
+    center.x + 100 + 10,
+    105,
+    "child centre lands on the artboard centre",
+  );
 });
 
 test("multi-element alignment keeps using the shared selection box", () => {

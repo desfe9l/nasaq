@@ -1,27 +1,40 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { findElement, MIN_SIZE, pageSize, type Box, type CanvasEl, type Page } from "@/lib/editor/model";
-import { applySnap, resizeByHandle } from "@/lib/editor/transform";
+import {
+  findElement,
+  MIN_SIZE,
+  pageSize,
+  type Box,
+  type CanvasEl,
+  type ElType,
+  type Page,
+} from "@/lib/editor/model";
+import { applySnap, mirrorHandle, resizeByHandle } from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
+import { PrintGuides } from "./PrintGuides";
+import { FloatingToolbar } from "./FloatingToolbar";
 import { toast } from "sonner";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
+import {
+  LIBRARY_DND_MIME,
+  insertLibraryDrop,
+  parseLibraryDrop,
+} from "@/lib/editor/library-dnd";
 
-type Op =
-  | {
-      kind: "move" | "resize" | "rotate";
-      id: string;
-      handle?: string;
-      startX: number;
-      startY: number;
-      /** Positions of every element the gesture moves, keyed by id. */
-      origins: Record<string, { x: number; y: number }>;
-      orig: CanvasEl;
-      pageId: string;
-      parent?: { x: number; y: number };
-    }
-  | null;
+type Op = {
+  kind: "move" | "resize" | "rotate";
+  id: string;
+  handle?: string;
+  startX: number;
+  startY: number;
+  /** Positions of every element the gesture moves, keyed by id. */
+  origins: Record<string, { x: number; y: number }>;
+  orig: CanvasEl;
+  pageId: string;
+  parent?: { x: number; y: number };
+} | null;
 
 type Marquee = { x0: number; y0: number; x1: number; y1: number } | null;
 
@@ -36,24 +49,67 @@ const ARTBOARD_GAP_MM = 18;
  * the selected element.
  */
 const SELECTION_LAYER_Z = 5000;
+/**
+ * Print guides sit just under the selection chrome: above every document
+ * element (1..n), below the outline and handles that must stay grabbable.
+ */
+const GUIDE_LAYER_Z = SELECTION_LAYER_Z - 1;
 /** The eight resize handles, named by the corner/edge they sit on. */
 const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
+/** Corner rotation grips (step 7). */
+const ROTATE_HANDLES = ["nw", "ne", "se", "sw"] as const;
 
-function pagePoint(rect: DOMRect, size: { w: number; h: number }, clientX: number, clientY: number) {
+/**
+ * Snap a raw drag angle.
+ *
+ * `Shift` engages the ladder: 15° steps with a strong pull onto the cardinal
+ * lines (0/45/90/…) — the multiples an author actually wants — while a plain
+ * drag stays continuous at 1° for fine alignment. Both branches normalise into
+ * (−180, 180] so the readout never shows 359° where −1° is meant.
+ */
+function snapRotation(raw: number, shift: boolean): number {
+  if (!shift) {
+    const free = (((raw % 360) + 540) % 360) - 180;
+    return round(free);
+  }
+  const fifteen = Math.round(raw / 15) * 15;
+  return (((fifteen % 360) + 540) % 360) - 180;
+}
+
+function pagePoint(
+  rect: DOMRect,
+  size: { w: number; h: number },
+  clientX: number,
+  clientY: number,
+) {
   return {
     x: ((clientX - rect.left) / rect.width) * size.w,
     y: ((clientY - rect.top) / rect.height) * size.h,
   };
 }
 
-export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: { x: number; y: number }) => void }) {
+export function CanvasStage({
+  onDropImage,
+  onCanvasTap,
+}: {
+  onDropImage?: (file: File, at?: { x: number; y: number }) => void;
+  /** Fired on a canvas press — used to dismiss the floating drawers. */
+  onCanvasTap?: () => void;
+}) {
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
   const selectedIds = useEditor((s) => s.selectedIds);
+  const selectedId = useEditor((s) => s.selectedId);
+  const addElementAt = useEditor((s) => s.addElementAt);
+  const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
+  const exportOpen = useEditor((s) => s.exportOpen);
+  const pageManagerOpen = useEditor((s) => s.pageManagerOpen);
+  const contextMenu = useEditor((s) => s.contextMenu);
   const enteredGroupId = useEditor((s) => s.enteredGroupId);
   const zoom = useEditor((s) => s.zoom);
   const previewAll = useEditor((s) => s.previewAll);
   const showGrid = useEditor((s) => s.showGrid);
+  const printGuides = useEditor((s) => s.printGuides);
   const snapGrid = useEditor((s) => s.snapGrid);
   const snapElements = useEditor((s) => s.snapElements);
   const select = useEditor((s) => s.select);
@@ -70,27 +126,66 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
   const opRef = useRef<Op>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const spaceDown = useRef(false);
-  /** Active two-finger touch pan: midpoint + scroll origin captured on start. */
-  const touchPan = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
-  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
+  /**
+   * Active two-finger gesture. Captured on start (midpoint, scroll origin,
+   * finger distance) and resolved on the first move into either a PAN (fingers
+   * move together) or a PINCH (the distance changes) — mixing the two makes a
+   * zoom drift sideways, which is the classic broken pinch.
+   */
+  const touchPan = useRef<{
+    x: number;
+    y: number;
+    scrollLeft: number;
+    scrollTop: number;
+    distance: number;
+    mode: "pan" | "pinch" | null;
+  } | null>(null);
+  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({
+    v: [],
+    h: [],
+  });
+  /** Live angle readout shown next to the pointer while rotating (step 7). */
+  const [rotationHint, setRotationHint] = useState<{
+    angle: number;
+    shift: boolean;
+    x: number;
+    y: number;
+  } | null>(null);
   const [marquee, setMarquee] = useState<Marquee>(null);
-  const [dropping, setDropping] = useState(false);
-  /** Armed when the author picks «نص بالرسم»: next page drag draws a text box. */
-  const [drawArmed, setDrawArmed] = useState(false);
+  /** Which drop gesture is hovering: an image file, a library card, or none. */
+  const [dropping, setDropping] = useState<"file" | "library" | null>(null);
+  /**
+   * The active drawing tool. `null` is the select/move tool (V).
+   *
+   * Kept in the canvas because only the canvas knows page geometry (zoom + the
+   * active artboard rect). Everything else broadcasts through the
+   * `nasaq:tool` / `nasaq:draw-text` window events, so there is exactly one
+   * owner of "which tool is armed" and no second source of truth to sync.
+   */
+  const [drawTool, setDrawTool] = useState<"text" | "rect" | null>(null);
+  const drawArmed = drawTool !== null;
   const pageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
-  // «نص بالرسم»: any surface can arm the tool (the toolbar button broadcasts);
-  // Escape is the way out without drawing anything.
+  /*
+   * Tool arming. «نص بالرسم» from the toolbar and `T` / `R` / `V` from the
+   * keyboard all land here; Escape is the way out without drawing anything.
+   */
   useEffect(() => {
-    const arm = () => setDrawArmed(true);
-    const disarm = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDrawArmed(false);
+    const armText = () => setDrawTool("text");
+    const onTool = (event: Event) => {
+      const detail = (event as CustomEvent<"text" | "rect" | null>).detail;
+      setDrawTool(detail ?? null);
     };
-    window.addEventListener("nasaq:draw-text", arm);
+    const disarm = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawTool(null);
+    };
+    window.addEventListener("nasaq:draw-text", armText);
+    window.addEventListener("nasaq:tool", onTool);
     window.addEventListener("keydown", disarm);
     return () => {
-      window.removeEventListener("nasaq:draw-text", arm);
+      window.removeEventListener("nasaq:draw-text", armText);
+      window.removeEventListener("nasaq:tool", onTool);
       window.removeEventListener("keydown", disarm);
     };
   }, []);
@@ -111,7 +206,10 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
       const prev = useEditor.getState().zoom;
-      const next = Math.min(2, Math.max(0.2, prev + (e.deltaY < 0 ? 0.06 : -0.06)));
+      const next = Math.min(
+        2,
+        Math.max(0.2, prev + (e.deltaY < 0 ? 0.06 : -0.06)),
+      );
       // Pointer-anchored zoom: the page point under the cursor stays put, so
       // zooming in on a detail never throws the author somewhere else.
       zoomAnchoredAt(stage, prev, next, e.clientX, e.clientY);
@@ -120,9 +218,100 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     return () => stage.removeEventListener("wheel", onWheel);
   }, []);
 
+  /*
+   * Touch navigation: two fingers pan, and a change in finger distance zooms.
+   *
+   * Bound natively and non-passively on purpose. React registers touch
+   * listeners passively at the root, so `preventDefault()` inside `onTouchMove`
+   * cannot stop the browser's own pinch-zoom — the page would zoom underneath
+   * the artboard while the canvas zoomed with it. One native handler owns the
+   * whole gesture instead, and the midpoint anchoring reuses `zoomAnchoredAt`,
+   * the same path ctrl+wheel takes.
+   */
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const midpoint = (touches: TouchList) => ({
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+      distance: Math.hypot(
+        touches[0].clientX - touches[1].clientX,
+        touches[0].clientY - touches[1].clientY,
+      ),
+    });
+
+    const onStart = (event: TouchEvent) => {
+      if (event.touches.length !== 2) {
+        touchPan.current = null;
+        return;
+      }
+      // A two-finger gesture is navigation, never a rubber-band selection.
+      setMarquee(null);
+      const mid = midpoint(event.touches);
+      touchPan.current = {
+        x: mid.x,
+        y: mid.y,
+        scrollLeft: stage.scrollLeft,
+        scrollTop: stage.scrollTop,
+        distance: Math.max(24, mid.distance),
+        mode: null,
+      };
+    };
+
+    const onMove = (event: TouchEvent) => {
+      const state = touchPan.current;
+      if (!state || event.touches.length !== 2) return;
+      const mid = midpoint(event.touches);
+      // Decide the gesture once, after a deliberate movement: a few px of
+      // finger wobble during a pan must not start zooming.
+      if (!state.mode) {
+        const spread = Math.abs(mid.distance - state.distance);
+        const shift = Math.hypot(mid.x - state.x, mid.y - state.y);
+        if (spread > 10 && spread > shift) state.mode = "pinch";
+        else if (shift > 8) state.mode = "pan";
+        else return;
+      }
+      event.preventDefault();
+      if (state.mode === "pinch") {
+        const ratio = mid.distance / state.distance;
+        const prev = useEditor.getState().zoom;
+        const next = Math.min(2, Math.max(0.2, prev * ratio));
+        if (Math.abs(next - prev) > 0.004) {
+          zoomAnchoredAt(stage, prev, next, mid.x, mid.y);
+          // Incremental: the ratio is applied against the last applied frame,
+          // so a slow pinch does not accumulate rounding drift.
+          state.distance = mid.distance;
+        }
+        return;
+      }
+      stage.scrollLeft = state.scrollLeft - (mid.x - state.x);
+      stage.scrollTop = state.scrollTop - (mid.y - state.y);
+    };
+
+    const onEnd = () => {
+      touchPan.current = null;
+    };
+
+    stage.addEventListener("touchstart", onStart, { passive: false });
+    stage.addEventListener("touchmove", onMove, { passive: false });
+    stage.addEventListener("touchend", onEnd);
+    stage.addEventListener("touchcancel", onEnd);
+    return () => {
+      stage.removeEventListener("touchstart", onStart);
+      stage.removeEventListener("touchmove", onMove);
+      stage.removeEventListener("touchend", onEnd);
+      stage.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
-      if (event.code === "Space" && !(event.target as HTMLElement | null)?.isContentEditable) spaceDown.current = true;
+      if (
+        event.code === "Space" &&
+        !(event.target as HTMLElement | null)?.isContentEditable
+      )
+        spaceDown.current = true;
     };
     const up = (event: KeyboardEvent) => {
       if (event.code === "Space") spaceDown.current = false;
@@ -147,8 +336,12 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
    * a ref, because the author may drop onto any page — including one that is not
    * the active page in the all-pages preview.
    */
-  const dropPoint = (e: React.DragEvent): { x: number; y: number; pageId: string } | null => {
-    const target = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-page-id]");
+  const dropPoint = (
+    e: React.DragEvent,
+  ): { x: number; y: number; pageId: string } | null => {
+    const target = (e.target as HTMLElement | null)?.closest<HTMLElement>(
+      "[data-page-id]",
+    );
     if (!target) return null;
     const pageId = target.dataset.pageId;
     const page = pages.find((p) => p.id === pageId);
@@ -172,6 +365,9 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     handle?: string,
     parent?: { x: number; y: number },
   ) => {
+    // The press lands on an element, so the stage handler never sees it — but
+    // the drawer must still get out of the way.
+    onCanvasTap?.();
     if (el.locked) {
       // Locked elements can be selected but not gestured; stopping the press
       // here keeps the stage's click-to-deselect from immediately undoing it.
@@ -207,7 +403,8 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     // Snapshot the live page geometry once: reading it per pointermove would
     // force a layout on every frame of a drag.
     const rect = pageEl.getBoundingClientRect();
-    const toMm = (ev: { clientX: number; clientY: number }) => pagePoint(rect, size, ev.clientX, ev.clientY);
+    const toMm = (ev: { clientX: number; clientY: number }) =>
+      pagePoint(rect, size, ev.clientX, ev.clientY);
 
     const start = toMm(e);
 
@@ -215,11 +412,23 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     // on the pressed element; a plain drag carries the whole selection unless
     // the press was a shift-toggle, which is a selection change and not a drag.
     const draggingIds =
-      kind !== "move" || e.shiftKey ? [el.id] : selectedSet.has(el.id) ? selectedIds : [el.id];
+      kind !== "move" || e.shiftKey
+        ? [el.id]
+        : selectedSet.has(el.id)
+          ? selectedIds
+          : [el.id];
     const linkedIds =
       kind === "move" && !e.shiftKey
         ? page.elements
-            .filter((candidate) => candidate.linkId && draggingIds.some((id) => page.elements.find((item) => item.id === id)?.linkId === candidate.linkId))
+            .filter(
+              (candidate) =>
+                candidate.linkId &&
+                draggingIds.some(
+                  (id) =>
+                    page.elements.find((item) => item.id === id)?.linkId ===
+                    candidate.linkId,
+                ),
+            )
             .map((candidate) => candidate.id)
         : [];
     const gestureIds = [...new Set([...draggingIds, ...linkedIds])];
@@ -281,8 +490,18 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
         const fromRight = vr.right - ev.clientX;
         const fromTop = ev.clientY - vr.top;
         const fromBottom = vr.bottom - ev.clientY;
-        const ax = fromLeft < margin ? -ease(fromLeft) : fromRight < margin ? ease(fromRight) : 0;
-        const ay = fromTop < margin ? -ease(fromTop) : fromBottom < margin ? ease(fromBottom) : 0;
+        const ax =
+          fromLeft < margin
+            ? -ease(fromLeft)
+            : fromRight < margin
+              ? ease(fromRight)
+              : 0;
+        const ay =
+          fromTop < margin
+            ? -ease(fromTop)
+            : fromBottom < margin
+              ? ease(fromBottom)
+              : 0;
         if (ax || ay) {
           stageEl.scrollLeft += ax;
           stageEl.scrollTop += ay;
@@ -329,9 +548,8 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
         const appliedDx = next.x - op.orig.x;
         const appliedDy = next.y - op.orig.y;
         // When inside a group, siblings live in entered.children; otherwise in page.elements.
-        const siblingList = op.parent && enteredGroup
-          ? enteredChildren
-          : page.elements;
+        const siblingList =
+          op.parent && enteredGroup ? enteredChildren : page.elements;
         for (const [id, origin] of Object.entries(op.origins)) {
           if (id === op.id) continue;
           const sibling = siblingList.find((x) => x.id === id);
@@ -344,14 +562,33 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
       } else if (op.kind === "resize") {
         // Shift (or the element's own aspect lock) preserves the element's
         // current aspect ratio; a plain drag resizes freely.
-        resizeByHandle(next, op.orig, op.handle || "se", dx, dy, ev.shiftKey || op.orig.style?.aspectLock === true);
+        resizeByHandle(
+          next,
+          op.orig,
+          // A mirrored element is drawn flipped, so the grip the author grabbed
+          // must drive the opposite edge (step 7). `mirrorHandle` maps it.
+          mirrorHandle(
+            op.handle || "se",
+            op.orig.style?.flipX === true,
+            op.orig.style?.flipY === true,
+          ),
+          dx,
+          dy,
+          ev.shiftKey || op.orig.style?.aspectLock === true,
+        );
       } else if (op.kind === "rotate") {
         const cx = op.orig.x + op.orig.w / 2;
         const cy = op.orig.y + op.orig.h / 2;
         const a0 = Math.atan2(op.startY - cy, op.startX - cx);
         const a1 = Math.atan2(cur.y - cy, cur.x - cx);
         const raw = (op.orig.rotation || 0) + ((a1 - a0) * 180) / Math.PI;
-        next.rotation = ev.shiftKey ? Math.round(raw / 15) * 15 : round(raw % 360);
+        next.rotation = snapRotation(raw, ev.shiftKey);
+        setRotationHint({
+          angle: next.rotation,
+          shift: ev.shiftKey,
+          x: ev.clientX,
+          y: ev.clientY,
+        });
       }
       // Editing is free: an element may sit fully inside the page, straddle its
       // edge, or move entirely outside it. Only export clips content to the
@@ -364,13 +601,25 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
       next.h = Math.max(clamp(next.h, MIN_SIZE, workspaceH), MIN_SIZE);
       // Soft boundary: allow elements to extend beyond page but keep them
       // within a generous workspace area so nothing disappears unexpectedly.
-      next.x = Math.max(-workspaceMargin, Math.min(next.x, size.w + workspaceMargin - next.w));
-      next.y = Math.max(-workspaceMargin, Math.min(next.y, size.h + workspaceMargin - next.h));
-      replaceElement(op.parent ? { ...next, x: next.x - op.parent.x, y: next.y - op.parent.y } : next, true);
+      next.x = Math.max(
+        -workspaceMargin,
+        Math.min(next.x, size.w + workspaceMargin - next.w),
+      );
+      next.y = Math.max(
+        -workspaceMargin,
+        Math.min(next.y, size.h + workspaceMargin - next.h),
+      );
+      replaceElement(
+        op.parent
+          ? { ...next, x: next.x - op.parent.x, y: next.y - op.parent.y }
+          : next,
+        true,
+      );
     };
 
     const up = () => {
       opRef.current = null;
+      setRotationHint(null);
       setGuides({ v: [], h: [] });
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
@@ -388,15 +637,36 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
    * their absolute page positions.
    */
   const pickables = (page: Page): { id: string; box: Box }[] => {
-    const entered = enteredGroupId ? findElement(page.elements, enteredGroupId)?.el || null : null;
+    const entered = enteredGroupId
+      ? findElement(page.elements, enteredGroupId)?.el || null
+      : null;
     if (entered?.children?.length) {
       return entered.children.map((child) => ({
         id: child.id,
-        box: { x: entered.x + child.x, y: entered.y + child.y, w: child.w, h: child.h },
+        box: {
+          x: entered.x + child.x,
+          y: entered.y + child.y,
+          w: child.w,
+          h: child.h,
+        },
       }));
     }
-    return page.elements.map((el) => ({ id: el.id, box: { x: el.x, y: el.y, w: el.w, h: el.h } }));
+    return page.elements.map((el) => ({
+      id: el.id,
+      box: { x: el.x, y: el.y, w: el.w, h: el.h },
+    }));
   };
+
+  /**
+   * The element the contextual toolbar formats: the primary selection, resolved
+   * through the current grouping context so a group member gets its own tools.
+   */
+  const activePageForSelection = pages.find((p) => p.id === activePageId);
+  const primarySelection = (() => {
+    if (!selectedId || !activePageForSelection) return null;
+    const found = findElement(activePageForSelection.elements, selectedId)?.el;
+    return found && !found.hidden ? found : null;
+  })();
 
   /** Rubber-band selection on empty page space, or a drawn text box when armed. */
   const startMarquee = (e: React.PointerEvent, page: Page) => {
@@ -404,9 +674,10 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     if (!pageEl) return;
     const size = pageSize(page);
     const rect = pageEl.getBoundingClientRect();
-    const toMm = (ev: { clientX: number; clientY: number }) => pagePoint(rect, size, ev.clientX, ev.clientY);
+    const toMm = (ev: { clientX: number; clientY: number }) =>
+      pagePoint(rect, size, ev.clientX, ev.clientY);
     const start = toMm(e);
-    if (drawArmed) {
+    if (drawTool) {
       let done = false;
       const move = (ev: PointerEvent) => {
         const cur = toMm(ev);
@@ -419,13 +690,22 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
         done = true;
         const end = toMm(ev);
         setMarquee(null);
-        setDrawArmed(false);
+        setDrawTool(null);
         const w = Math.max(MIN_SIZE, Math.abs(end.x - start.x));
         const h = Math.max(MIN_SIZE, Math.abs(end.y - start.y));
-        const id = addTextAt(
-          { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y), w, h },
-          page.id,
-        );
+        const box = {
+          x: Math.min(start.x, end.x),
+          y: Math.min(start.y, end.y),
+          w,
+          h,
+        };
+        if (drawTool === "rect") {
+          // `over` wins over the computed position inside `addElementAt`, so the
+          // rectangle lands exactly where it was drawn — not centred.
+          addElementAt("box", box);
+          return;
+        }
+        const id = addTextAt(box, page.id);
         if (id) {
           // The box opens for typing immediately — the drawn rectangle IS the
           // text element, so editing starts as soon as the pointer is up.
@@ -450,7 +730,12 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
         w: Math.abs(cur.x - start.x),
         h: Math.abs(cur.y - start.y),
       };
-      setMarquee({ x0: box.x, y0: box.y, x1: box.x + box.w, y1: box.y + box.h });
+      setMarquee({
+        x0: box.x,
+        y0: box.y,
+        x1: box.x + box.w,
+        y1: box.y + box.h,
+      });
       // Intersection, not full containment: brushing across a row of elements is
       // the gesture people actually use to grab them all.
       const hits = candidates
@@ -485,6 +770,7 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
         "editor-canvas-stage studio-grid relative min-h-0 min-w-0 overflow-auto px-6 py-8",
         dropping && "is-dropping",
         drawArmed && "draw-armed",
+        drawTool === "rect" && "draw-rect",
       )}
       style={{ "--editor-zoom": zoom } as React.CSSProperties}
       dir="ltr"
@@ -515,57 +801,58 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
        * empty-space menu even with several elements selected.
        */
       onPointerDown={(e) => {
+        // Floating drawers close on any canvas press — including a press that
+        // starts a marquee or grabs an element, because on a tablet the tap
+        // means "get the panel out of my way", not "deselect".
+        onCanvasTap?.();
         if (e.button === 0) select(null);
       }}
-      /*
-       * Two-finger pan. A trackpad already pans here through the browser's own
-       * two-finger scroll (and ctrl+wheel is the pinch-zoom channel below), so
-       * this covers the TOUCH case: two fingers move the viewport, never the
-       * artwork. The gesture only starts on the stage background, and it
-       * cancels any rubber-band selection so a pan can never be mistaken for a
-       * marquee or drag an element. One-finger drags keep their normal meaning.
-       */
-      onTouchStart={(e) => {
-        if (e.touches.length !== 2 || !stageRef.current) {
-          touchPan.current = null;
-          return;
-        }
-        setMarquee(null);
-        touchPan.current = {
-          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-          y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
-          scrollLeft: stageRef.current.scrollLeft,
-          scrollTop: stageRef.current.scrollTop,
-        };
-      }}
-      onTouchMove={(e) => {
-        const start = touchPan.current;
-        const stage = stageRef.current;
-        if (!start || !stage || e.touches.length !== 2) return;
-        const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        stage.scrollLeft = start.scrollLeft - (x - start.x);
-        stage.scrollTop = start.scrollTop - (y - start.y);
-      }}
-      onTouchEnd={(e) => {
-        if (e.touches.length < 2) touchPan.current = null;
-      }}
-      onTouchCancel={() => {
-        touchPan.current = null;
-      }}
+      /* Two-finger pan and pinch-to-zoom are owned by the native touch effect
+         above, so a trackpad (browser scroll) and a touchscreen behave the
+         same way without two competing handlers. */
       onDragOver={(e) => {
-        if (!onDropImage || !e.dataTransfer.types.includes("Files")) return;
-        // Claiming the drop is what suppresses the browser's "open the file" handoff.
+        /*
+         * Two kinds of drop land here: an image file from the OS, and a card
+         * dragged out of the smart library. Both must claim the gesture (that
+         * is what stops the browser from navigating to the file), but only the
+         * library payload should insert anything on `drop`.
+         */
+        const isFile = e.dataTransfer.types.includes("Files");
+        const isLibrary = e.dataTransfer.types.includes(LIBRARY_DND_MIME);
+        if ((!onDropImage || !isFile) && !isLibrary) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
-        setDropping(true);
+        setDropping(isLibrary ? "library" : "file");
       }}
       onDragLeave={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-        setDropping(false);
+        setDropping(null);
       }}
       onDrop={(e) => {
-        setDropping(false);
+        setDropping(null);
+        // Library card: place it exactly where it was dropped, on whichever
+        // page received it.
+        const payload = parseLibraryDrop(
+          e.dataTransfer.getData(LIBRARY_DND_MIME),
+        );
+        if (payload) {
+          e.preventDefault();
+          const at = dropPoint(e);
+          if (at) setActivePage(at.pageId);
+          insertLibraryDrop(
+            payload,
+            at ? { x: at.x, y: at.y } : null,
+            (type, over, center) => {
+              const el = addElementAt(
+                type as ElType,
+                over as Partial<CanvasEl>,
+                center,
+              );
+              return el ? { x: el.x, y: el.y, w: el.w, h: el.h } : undefined;
+            },
+          );
+          return;
+        }
         if (!onDropImage) return;
         e.preventDefault();
         const file = Array.from(e.dataTransfer.files)[0];
@@ -579,15 +866,24 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
       }}
     >
       {dropping && (
-        <div className="pointer-events-none sticky top-0 z-50 mx-auto w-max rounded-full border border-gold/40 bg-white/95 px-4 py-1.5 text-[11px] font-extrabold text-navy shadow-sm dark:bg-[#161c26] dark:text-gold-2">
-          أفلت الصورة لإضافتها إلى الصفحة
+        <div className="pointer-events-none sticky top-0 z-[var(--z-canvas-overlay)] mx-auto w-max rounded-full border border-gold/40 bg-white/95 px-4 py-1.5 text-[11px] font-extrabold text-navy shadow-sm dark:bg-[#161c26] dark:text-gold-2">
+          {dropping === "library"
+            ? "أفلت العنصر ليُضاف في هذا الموضع"
+            : "أفلت الصورة لإضافتها إلى الصفحة"}
         </div>
       )}
-      <div className="mx-auto flex w-max min-w-full flex-col items-center gap-3" dir="rtl">
+      <div
+        className="mx-auto flex w-max min-w-full flex-col items-center gap-6"
+        dir="rtl"
+      >
         {visible.map((page) => {
           const size = pageSize(page);
           const isActive = page.id === activePageId;
-          const entered = enteredGroupId ? findElement(page.elements, enteredGroupId)?.el || null : null;
+          /* 1-based document position — `visible` may hold a single page. */
+          const pageNo = pages.findIndex((p) => p.id === page.id) + 1;
+          const entered = enteredGroupId
+            ? findElement(page.elements, enteredGroupId)?.el || null
+            : null;
           const enteredKids = entered?.children ?? [];
           /*
            * Selection/manipulation frames for this page, in the grouping
@@ -602,14 +898,22 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
               for (const child of enteredKids) {
                 if (selectedSet.has(child.id) && !child.hidden) {
                   selectionFrames.push({
-                    el: { ...child, x: entered.x + child.x, y: entered.y + child.y },
+                    el: {
+                      ...child,
+                      x: entered.x + child.x,
+                      y: entered.y + child.y,
+                    },
                     parent: { x: entered.x, y: entered.y },
                   });
                 }
               }
             } else {
               for (const el of page.elements) {
-                if (selectedSet.has(el.id) && !el.hidden && el.id !== entered?.id) {
+                if (
+                  selectedSet.has(el.id) &&
+                  !el.hidden &&
+                  el.id !== entered?.id
+                ) {
                   selectionFrames.push({ el, parent: undefined });
                 }
               }
@@ -625,109 +929,194 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
                 height: `${(size.h + 12 + ARTBOARD_GAP_MM) * zoom}mm`,
               }}
             >
-              <div className="page-frame-content" dir="ltr" style={{ width: `${size.w}mm`, height: `${size.h + 12}mm`, transform: `scale(${zoom})`, transformOrigin: "top left" }}>
-              <div className="mb-2 flex items-center justify-between gap-4 text-[12px] text-muted" dir="rtl">
-                <strong className="text-ink dark:text-white">
-                  {page.name}
-                  {entered && <span className="ms-2 font-semibold text-gold-2">· داخل «{entered.name}»</span>}
-                </strong>
-                <span className="tabular-nums">
-                  {previewAll
-                    ? `صفحة ${pages.findIndex((p) => p.id === page.id) + 1} من ${pages.length}`
-                    : `${round(size.w)} × ${round(size.h)} مم`}
-                </span>
-              </div>
               <div
-                ref={(n) => {
-                  pageRefs.current[page.id] = n;
-                }}
-                data-page-id={page.id}
-                className={`report-page ${showGrid ? "show-grid" : ""} ${isActive ? "ring-2 ring-gold ring-offset-8" : ""}`}
-                style={{ width: `${size.w}mm`, height: `${size.h}mm`, background: page.bg || "#fff" }}
-                onPointerDown={(e) => {
-                  // Only a press on the page itself starts a marquee; presses on
-                  // elements are handled by the element and stop propagation.
-                  if (e.target !== e.currentTarget) return;
-                  e.stopPropagation();
-                  setActivePage(page.id);
-                  // A right press only opens the context menu — it must not
-                  // start a marquee (whose plain-click branch would clear the
-                  // selection from under the menu about to open).
-                  if (e.button !== 0) return;
-                  startMarquee(e, page);
+                className="page-frame-content"
+                dir="ltr"
+                style={{
+                  width: `${size.w}mm`,
+                  height: `${size.h + 12}mm`,
+                  transform: `scale(${zoom})`,
+                  transformOrigin: "top left",
                 }}
               >
-                {page.elements
-                  .slice()
-                  .sort((a, b) => a.z - b.z)
-                  .map((el) => {
-                    // Stepped into this group: its frame is drawn for context and
-                    // its members become individually selectable nodes, instead of
-                    // the group behaving as one opaque element.
-                    if (entered && el.id === entered.id && enteredKids.length) {
+                <div
+                  className="mb-2 flex items-center justify-between gap-4 text-[12px] text-muted"
+                  dir="rtl"
+                >
+                  <strong className="text-ink dark:text-white">
+                    {page.name}
+                    {entered && (
+                      <span className="ms-2 font-semibold text-gold-2">
+                        · داخل «{entered.name}»
+                      </span>
+                    )}
+                  </strong>
+                  <span className="tabular-nums">
+                    {previewAll
+                      ? `صفحة ${pages.findIndex((p) => p.id === page.id) + 1} من ${pages.length}`
+                      : `${round(size.w)} × ${round(size.h)} مم`}
+                  </span>
+                </div>
+                <div
+                  ref={(n) => {
+                    pageRefs.current[page.id] = n;
+                  }}
+                  data-page-id={page.id}
+                  className={`report-page ${showGrid ? "show-grid" : ""} ${isActive ? "ring-2 ring-gold ring-offset-8" : ""}`}
+                  style={{
+                    width: `${size.w}mm`,
+                    height: `${size.h}mm`,
+                    background: page.bg || "#fff",
+                  }}
+                  onPointerDown={(e) => {
+                    // Only a press on the page itself starts a marquee; presses on
+                    // elements are handled by the element and stop propagation.
+                    if (e.target !== e.currentTarget) return;
+                    e.stopPropagation();
+                    setActivePage(page.id);
+                    // A right press only opens the context menu — it must not
+                    // start a marquee (whose plain-click branch would clear the
+                    // selection from under the menu about to open).
+                    if (e.button !== 0) return;
+                    startMarquee(e, page);
+                  }}
+                >
+                  {page.elements
+                    .slice()
+                    .sort((a, b) => a.z - b.z)
+                    .map((el) => {
+                      // Stepped into this group: its frame is drawn for context and
+                      // its members become individually selectable nodes, instead of
+                      // the group behaving as one opaque element.
+                      if (
+                        entered &&
+                        el.id === entered.id &&
+                        enteredKids.length
+                      ) {
+                        return (
+                          <div key={el.id}>
+                            <div
+                              className="canvas-el group-frame"
+                              style={{
+                                left: `${el.x}mm`,
+                                top: `${el.y}mm`,
+                                width: `${el.w}mm`,
+                                height: `${el.h}mm`,
+                                transform: `rotate(${el.rotation || 0}deg)`,
+                                zIndex: el.z,
+                              }}
+                            />
+                            {enteredKids
+                              .slice()
+                              .sort((a, b) => a.z - b.z)
+                              .map((child) => {
+                                const abs = {
+                                  ...child,
+                                  x: entered.x + child.x,
+                                  y: entered.y + child.y,
+                                };
+                                return (
+                                  <ElementNode
+                                    key={child.id}
+                                    el={abs}
+                                    pageNo={pageNo}
+                                    interactive
+                                    onPointerDown={(ev, kind, handle) =>
+                                      startOp(ev, page, abs, kind, handle, {
+                                        x: entered.x,
+                                        y: entered.y,
+                                      })
+                                    }
+                                  />
+                                );
+                              })}
+                          </div>
+                        );
+                      }
+                      if (entered && el.id === entered.id) return null;
                       return (
-                        <div key={el.id}>
-                          <div
-                            className="canvas-el group-frame"
-                            style={{
-                              left: `${el.x}mm`,
-                              top: `${el.y}mm`,
-                              width: `${el.w}mm`,
-                              height: `${el.h}mm`,
-                              transform: `rotate(${el.rotation || 0}deg)`,
-                              zIndex: el.z,
-                            }}
-                          />
-                          {enteredKids
-                            .slice()
-                            .sort((a, b) => a.z - b.z)
-                            .map((child) => {
-                              const abs = { ...child, x: entered.x + child.x, y: entered.y + child.y };
-                              return (
-                                <ElementNode
-                                  key={child.id}
-                                  el={abs}
-                                  interactive
-                                  onPointerDown={(ev, kind, handle) => startOp(ev, page, abs, kind, handle, { x: entered.x, y: entered.y })}
-                                />
-                              );
-                            })}
-                        </div>
+                        <ElementNode
+                          key={el.id}
+                          el={el}
+                          pageNo={pageNo}
+                          interactive
+                          onEnterGroup={
+                            el.type === "group"
+                              ? () => enterGroup(el.id)
+                              : undefined
+                          }
+                          onPointerDown={(ev, kind, handle) =>
+                            startOp(ev, page, el, kind, handle)
+                          }
+                        />
                       );
-                    }
-                    if (entered && el.id === entered.id) return null;
-                    return (
-                      <ElementNode
+                    })}
+                  <PrintGuides
+                    page={page}
+                    settings={printGuides}
+                    zIndex={GUIDE_LAYER_Z}
+                  />
+                  {marquee && (
+                    <div
+                      className="marquee"
+                      style={{
+                        left: `${marquee.x0}mm`,
+                        top: `${marquee.y0}mm`,
+                        width: `${Math.abs(marquee.x1 - marquee.x0)}mm`,
+                        height: `${Math.abs(marquee.y1 - marquee.y0)}mm`,
+                      }}
+                    />
+                  )}
+                  {isActive &&
+                    page.elements.map((el) => (
+                      <OverflowFlag
                         key={el.id}
                         el={el}
-                        interactive
-                        onEnterGroup={el.type === "group" ? () => enterGroup(el.id) : undefined}
-                        onPointerDown={(ev, kind, handle) => startOp(ev, page, el, kind, handle)}
+                        onFit={() => fitTextBox(el.id)}
                       />
-                    );
-                  })}
-                {marquee && (
-                  <div
-                    className="marquee"
-                    style={{
-                      left: `${marquee.x0}mm`,
-                      top: `${marquee.y0}mm`,
-                      width: `${Math.abs(marquee.x1 - marquee.x0)}mm`,
-                      height: `${Math.abs(marquee.y1 - marquee.y0)}mm`,
-                    }}
-                  />
-                )}
-                {isActive &&
-                  page.elements.map((el) => (
-                    <OverflowFlag key={el.id} el={el} onFit={() => fitTextBox(el.id)} />
-                  ))}
-                {isActive &&
-                  guides.v.map((x) => <div key={`v${x}`} className="guide-v" style={{ left: `${x}mm` }} />)}
-                {isActive &&
-                  guides.h.map((y) => <div key={`h${y}`} className="guide-h" style={{ top: `${y}mm` }} />)}
-                {isActive &&
-                  selectionFrames.length > 0 && (
-                    <div className="selection-layer" style={{ zIndex: SELECTION_LAYER_Z }}>
+                    ))}
+                  {/*
+                   * Live rotation readout. Rendered inside the (clipped) page for
+                   * simplicity but positioned from client coordinates, so it never
+                   * adds a layout box to the artboard.
+                   */}
+                  {rotationHint && isActive && (
+                    <div
+                      className="rotation-hint"
+                      dir="ltr"
+                      style={{ left: rotationHint.x, top: rotationHint.y }}
+                    >
+                      <strong className="tabular-nums">
+                        {Math.round(rotationHint.angle)}°
+                      </strong>
+                      <span>
+                        {rotationHint.shift
+                          ? "التقاط 15°/45°/90°"
+                          : "Shift للالتقاط"}
+                      </span>
+                    </div>
+                  )}
+                  {isActive &&
+                    guides.v.map((x) => (
+                      <div
+                        key={`v${x}`}
+                        className="guide-v"
+                        style={{ left: `${x}mm` }}
+                      />
+                    ))}
+                  {isActive &&
+                    guides.h.map((y) => (
+                      <div
+                        key={`h${y}`}
+                        className="guide-h"
+                        style={{ top: `${y}mm` }}
+                      />
+                    ))}
+                  {isActive && selectionFrames.length > 0 && (
+                    <div
+                      className="selection-layer"
+                      style={{ zIndex: SELECTION_LAYER_Z }}
+                    >
                       {selectionFrames.map((frame) => (
                         <SelectionFrame
                           key={frame.el.id}
@@ -735,19 +1124,49 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
                           primary={selectedIds.length === 1}
                           editing={editingId === frame.el.id}
                           onGesture={(ev, kind, handle) =>
-                            startOp(ev, page, frame.el, kind, handle, frame.parent)
+                            startOp(
+                              ev,
+                              page,
+                              frame.el,
+                              kind,
+                              handle,
+                              frame.parent,
+                            )
                           }
-                          onEditRequest={() => requestEdit(page.id, frame.el.id)}
+                          onEditRequest={() =>
+                            requestEdit(page.id, frame.el.id)
+                          }
                         />
                       ))}
                     </div>
                   )}
-              </div>
+                </div>
               </div>
             </div>
           );
         })}
       </div>
+      {/*
+       * Phase 4 — floating contextual toolbar.
+       *
+       * Rendered for a single selected element (the primary selection), and
+       * hidden while the caret is inside a text node so it never competes with
+       * in-place editing. It lives in a FIXED overlay — outside the scaled page
+       * — so its buttons keep a constant screen size and its 16px gap is real.
+       */}
+      {primarySelection &&
+        editingId !== primarySelection.id &&
+        bubbleEnabled &&
+        /*
+         * Never competing with a modal surface: while the export dialog, the
+         * page manager or a context menu is open the bubble is hidden outright,
+         * so it cannot sit on a dialog (which is what "never overlaps active
+         * dialogs" means in practice — the dialog owns the screen then).
+         */
+        !exportOpen &&
+        !pageManagerOpen &&
+        !contextMenu && <FloatingToolbar el={primarySelection} />}
+
       <ExportCapture pages={pages} />
     </div>
   );
@@ -811,7 +1230,11 @@ function SelectionFrame({
   frame: SelectionBox;
   primary: boolean;
   editing: boolean;
-  onGesture: (e: React.PointerEvent, kind: "move" | "resize" | "rotate", handle?: string) => void;
+  onGesture: (
+    e: React.PointerEvent,
+    kind: "move" | "resize" | "rotate",
+    handle?: string,
+  ) => void;
   onEditRequest: () => void;
 }) {
   const select = useEditor((s) => s.select);
@@ -837,10 +1260,11 @@ function SelectionFrame({
         top: `${el.y}mm`,
         width: `${el.w}mm`,
         height: `${el.h}mm`,
-        transform: `rotate(${el.rotation || 0}deg)`,
+        transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
       }}
       onPointerDown={(e) => {
-        if ((e.target as HTMLElement).closest(".handle, .rotate-handle")) return;
+        if ((e.target as HTMLElement).closest(".handle, .rotate-handle"))
+          return;
         e.stopPropagation();
         if (el.locked) {
           select(el.id);
@@ -867,13 +1291,23 @@ function SelectionFrame({
               }}
             />
           ))}
-          <div
-            className="rotate-handle"
-            onPointerDown={(e) => {
-              e.stopPropagation();
-              onGesture(e, "rotate");
-            }}
-          />
+          {/*
+           * Step 7 — a rotation grip on EVERY corner, not just the top edge,
+           * so the element can be spun with whichever hand is already there.
+           * Mirroring the frame (flipX/flipY) is handled by CSS, so the grips
+           * always sit on the corners the author can see.
+           */}
+          {ROTATE_HANDLES.map((corner) => (
+            <div
+              key={`rot-${corner}`}
+              className={cn("rotate-handle", corner)}
+              title="اسحب للتدوير — Shift للالتقاط بزوايا 15° / 45° / 90°"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onGesture(e, "rotate");
+              }}
+            />
+          ))}
         </>
       )}
     </div>
@@ -887,9 +1321,15 @@ function SelectionFrame({
  * overlay.
  */
 function requestEdit(pageId: string, elId: string) {
-  const host = document.querySelector<HTMLElement>(`[data-page-id="${pageId}"]`);
-  const node = host?.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(elId)}"]`);
-  node?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true, cancelable: true }));
+  const host = document.querySelector<HTMLElement>(
+    `[data-page-id="${pageId}"]`,
+  );
+  const node = host?.querySelector<HTMLElement>(
+    `[data-el-id="${CSS.escape(elId)}"]`,
+  );
+  node?.dispatchEvent(
+    new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
+  );
 }
 
 /**
@@ -910,13 +1350,22 @@ function ExportCapture({ pages }: { pages: Page[] }) {
             key={page.id}
             data-export-page={page.id}
             className="report-page"
-            style={{ width: `${size.w}mm`, height: `${size.h}mm`, background: page.bg || "#fff" }}
+            style={{
+              width: `${size.w}mm`,
+              height: `${size.h}mm`,
+              background: page.bg || "#fff",
+            }}
           >
             {page.elements
               .slice()
               .sort((a, b) => a.z - b.z)
               .map((el) => (
-                <ElementNode key={el.id} el={el} interactive={false} onPointerDown={() => {}} />
+                <ElementNode
+                  key={el.id}
+                  el={el}
+                  interactive={false}
+                  onPointerDown={() => {}}
+                />
               ))}
           </div>
         );

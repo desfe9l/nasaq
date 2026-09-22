@@ -90,7 +90,7 @@ export function ProjectCard({
   return (
     <div
       className={cn(
-        "relative rounded-[12px] border border-line bg-white p-4 transition hover:border-navy-2 dark:border-white/10 dark:bg-white/5",
+        "shadow-card dark:shadow-card-dark relative rounded-xl border border-line bg-white p-4 transition-all duration-200 hover:-translate-y-1 hover:border-navy-2 hover:shadow-card-hover dark:border-white/10 dark:bg-white/5 dark:hover:shadow-card-dark-hover",
         busy && "opacity-60",
       )}
     >
@@ -186,7 +186,7 @@ export function ProjectCard({
       )}
 
       {confirming && (
-        <div className="absolute inset-0 z-30 grid place-items-center rounded-[12px] bg-white/95 p-4 text-center dark:bg-[#1b2433]/95">
+        <div className="absolute inset-0 z-30 grid place-items-center rounded-xl bg-white/95 p-4 text-center dark:bg-[#1b2433]/95">
           <div>
             <p className="text-[13px] font-extrabold">حذف «{project.name}»؟</p>
             <p className="mt-1 text-[11px] text-muted">لا يمكن التراجع عن هذه العملية.</p>

@@ -42,7 +42,10 @@ describe("Arabic clean-up", () => {
   });
 
   it("applies steps in a fixed order regardless of input order", () => {
-    const a = normalizeArabic("٩٠٤\nحالات", { numerals: "western", unwrap: true });
+    const a = normalizeArabic("٩٠٤\nحالات", {
+      numerals: "western",
+      unwrap: true,
+    });
     assert.equal(a, "904 حالات");
   });
 });
@@ -57,7 +60,8 @@ describe("estimateLines", () => {
   });
 
   it("grows the line count as the font gets larger", () => {
-    const text = "نص تجريبي طويل يقيس عدد الأسطر المتوقعة داخل الإطار المخصص له".repeat(3);
+    const text =
+      "نص تجريبي طويل يقيس عدد الأسطر المتوقعة داخل الإطار المخصص له".repeat(3);
     const small = estimateLines(text, 80, 8);
     const large = estimateLines(text, 80, 24);
     assert.ok(large > small, `expected ${large} > ${small}`);
@@ -122,7 +126,8 @@ describe("fitFontSize with paragraph spacing", () => {
 });
 
 describe("fitFontSize", () => {
-  const long = "تقرير مفصل عن مؤشرات الأداء الربع سنوي مع شرح لكل مؤشر ونتائجه".repeat(4);
+  const long =
+    "تقرير مفصل عن مؤشرات الأداء الربع سنوي مع شرح لكل مؤشر ونتائجه".repeat(4);
   const box = { w: 60, h: 20 };
 
   it("returns the requested size in clip mode", () => {
@@ -136,7 +141,10 @@ describe("fitFontSize", () => {
   });
 
   it("leaves text that already fits at its requested size", () => {
-    assert.equal(fitFontSize("عنوان", { w: 120, h: 40 }, 18, 1.45, "shrink"), 18);
+    assert.equal(
+      fitFontSize("عنوان", { w: 120, h: 40 }, 18, 1.45, "shrink"),
+      18,
+    );
   });
 
   it("caps growth for short text", () => {

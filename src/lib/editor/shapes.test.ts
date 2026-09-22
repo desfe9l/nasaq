@@ -19,15 +19,28 @@ test("shapes: every shape definition is box-units and has a valid group", () => 
     // (percent-of-box), which is what makes a shape scale to any size.
     for (const part of shape.parts) {
       const coords = ["x", "y", "w", "h", "cx", "cy", "r", "rx", "ry"]
-        .map((k) => (k in part ? (part as unknown as Record<string, number>)[k] : undefined))
+        .map((k) =>
+          k in part
+            ? (part as unknown as Record<string, number>)[k]
+            : undefined,
+        )
         .filter((v): v is number => typeof v === "number");
       for (const v of coords) {
-        assert.ok(Number.isFinite(v), `shape ${shape.id} part coordinate is not finite`);
-        assert.ok(v >= -0.5 && v <= 100.5, `shape ${shape.id} part coordinate ${v} outside 0..100 box-units`);
+        assert.ok(
+          Number.isFinite(v),
+          `shape ${shape.id} part coordinate is not finite`,
+        );
+        assert.ok(
+          v >= -0.5 && v <= 100.5,
+          `shape ${shape.id} part coordinate ${v} outside 0..100 box-units`,
+        );
       }
     }
     assert.ok(shape.parts.length > 0, `shape ${shape.id} has no parts`);
-    assert.ok(groups.has(shape.group), `shape ${shape.id} group ${shape.group} not in groups`);
+    assert.ok(
+      groups.has(shape.group),
+      `shape ${shape.id} group ${shape.group} not in groups`,
+    );
   }
 });
 
@@ -39,14 +52,23 @@ test("shapes: unique ids across the whole library", () => {
 test("shapes: default shape exists and resolves", () => {
   assert.ok(SHAPES.some((s) => s.id === DEFAULT_SHAPE_ID));
   assert.equal(shapeDef(DEFAULT_SHAPE_ID)?.id, DEFAULT_SHAPE_ID);
-  assert.equal(shapeDef("does-not-exist")?.id, DEFAULT_SHAPE_ID, "unknown ids fall back to the default shape");
+  assert.equal(
+    shapeDef("does-not-exist")?.id,
+    DEFAULT_SHAPE_ID,
+    "unknown ids fall back to the default shape",
+  );
 });
 
 test("shapes: rhombus insets scale with the box, not fixed constants", () => {
-  const def = shapeDef("rhombus") ?? shapeDef("diamond") ?? SHAPES.find((s) => /rhomb|diam/i.test(s.id));
+  const def =
+    shapeDef("rhombus") ??
+    shapeDef("diamond") ??
+    SHAPES.find((s) => /rhomb|diam/i.test(s.id));
   if (!def) return; // library without a rhombus — nothing to prove here
   const small = def.parts[0];
-  const scaled = (def as unknown as { scaleParts?: (f: number) => typeof small }).scaleParts?.(2);
+  const scaled = (
+    def as unknown as { scaleParts?: (f: number) => typeof small }
+  ).scaleParts?.(2);
   void small;
   void scaled;
   // The box-units contract is the test: parts are fractions of w/h, proven by
@@ -67,8 +89,14 @@ test("shapes: every part draws a valid SVG path (no NaN in d)", () => {
   for (const shape of SHAPES) {
     for (const part of shape.parts) {
       if ("d" in part && part.d) {
-        assert.ok(!part.d.includes("NaN"), `shape ${shape.id} part has NaN in path data`);
-        assert.ok(/[MmLlCcAaZz]/.test(part.d), `shape ${shape.id} part is not a path`);
+        assert.ok(
+          !part.d.includes("NaN"),
+          `shape ${shape.id} part has NaN in path data`,
+        );
+        assert.ok(
+          /[MmLlCcAaZz]/.test(part.d),
+          `shape ${shape.id} part is not a path`,
+        );
       }
     }
   }
@@ -85,7 +113,10 @@ test("units: pxToMm/mmToPx round-trip and zoom division", () => {
   // Round trip at several zooms.
   for (const z of [0.3, 0.82, 1, 2.5, 4]) {
     const mm = pxToMm(37, z);
-    assert.ok(Math.abs(mmToPx(mm, z) - 37) < 1e-9, `round trip failed at zoom ${z}`);
+    assert.ok(
+      Math.abs(mmToPx(mm, z) - 37) < 1e-9,
+      `round trip failed at zoom ${z}`,
+    );
   }
   // Non-finite / zero zoom is guarded to 1.
   assert.equal(pxToMm(96, 0), 25.4);
@@ -98,8 +129,19 @@ test("units: MM_PER_PX matches the CSS mm definition", () => {
 
 test("defaults: createElementDefaults gives every type a positive box and a style", () => {
   const types = [
-    "text", "box", "stat", "shape", "line", "divider",
-    "table", "image", "logo", "qr", "icon", "progress", "stamp",
+    "text",
+    "box",
+    "stat",
+    "shape",
+    "line",
+    "divider",
+    "table",
+    "image",
+    "logo",
+    "qr",
+    "icon",
+    "progress",
+    "stamp",
   ] as const;
   for (const type of types) {
     const d = createElementDefaults(type);
@@ -123,11 +165,17 @@ test("defaults: centerFor clamps inside the page and centres in the visible rect
   assert.equal(pos.x, 80);
   assert.equal(pos.y, 140);
   // An element larger than the page clamps to the top-left corner, never negative.
-  const huge = centerFor({ x: 0, y: 0, w: 210, h: 297 }, { w: 210, h: 297, elW: 300, elH: 400 });
+  const huge = centerFor(
+    { x: 0, y: 0, w: 210, h: 297 },
+    { w: 210, h: 297, elW: 300, elH: 400 },
+  );
   assert.equal(huge.x, 0);
   assert.equal(huge.y, 0);
   // Off-screen-visible rect still clamps inside the page.
-  const clamped = centerFor({ x: -500, y: -500, w: 100, h: 100 }, { w: 210, h: 297, elW: 20, elH: 20 });
+  const clamped = centerFor(
+    { x: -500, y: -500, w: 100, h: 100 },
+    { w: 210, h: 297, elW: 20, elH: 20 },
+  );
   assert.equal(clamped.x, 0);
   assert.equal(clamped.y, 0);
 });

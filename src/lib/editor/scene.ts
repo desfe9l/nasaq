@@ -1,10 +1,17 @@
-import { ICONS, cssFont, pageSize, parseTable, type CanvasEl, type Page } from "./model";
+import {
+  ICONS,
+  cssFont,
+  pageSize,
+  parseTable,
+  type CanvasEl,
+  type Page,
+} from "./model";
 import { applyNumerals } from "./arabic";
 import { safeImageSrc } from "./images";
 import { safeSvgSrc } from "./svg";
 import { shapeDef, type ShapePart } from "./shapes";
 import { shapeIdOf } from "./shape-render";
-import { prepareText, textPadding } from "./text-render";
+import { prepareText, textPadding, type PageContext } from "./text-render";
 
 /**
  * A page described in millimetres, independent of how it is drawn.
@@ -34,12 +41,21 @@ export interface SceneText {
   w: number;
   h: number;
   rotation: number;
+
+  /** Mirrored artwork (step 7); absent means "not mirrored". */
+  flipX?: boolean;
+  flipY?: boolean;
   text: string;
   font: string;
   /** Point size, after any auto-fit. */
   size: number;
   weight: number;
   italic: boolean;
+  /**
+   * Optional so synthetic scene fixtures (tests, generated tables) stay valid —
+   * absent means "not underlined".
+   */
+  underline?: boolean;
   color: string;
   align: "right" | "center" | "left" | "justify";
   lineHeight: number;
@@ -62,6 +78,10 @@ export interface SceneShape {
   w: number;
   h: number;
   rotation: number;
+
+  /** Mirrored artwork (step 7); absent means "not mirrored". */
+  flipX?: boolean;
+  flipY?: boolean;
   fill: string;
   stroke: SceneStroke | null;
   /** Authored geometry id, for writers that map to a native preset. */
@@ -77,6 +97,10 @@ export interface SceneLine {
   w: number;
   h: number;
   rotation: number;
+
+  /** Mirrored artwork (step 7); absent means "not mirrored". */
+  flipX?: boolean;
+  flipY?: boolean;
   color: string;
   /** Thickness in mm. */
   width: number;
@@ -90,6 +114,10 @@ export interface SceneImage {
   w: number;
   h: number;
   rotation: number;
+
+  /** Mirrored artwork (step 7); absent means "not mirrored". */
+  flipX?: boolean;
+  flipY?: boolean;
   /** Already validated by `safeImageSrc`; empty when the source is unusable. */
   src: string;
   fit: "cover" | "contain" | "fill";
@@ -105,6 +133,10 @@ export interface SceneTable {
   w: number;
   h: number;
   rotation: number;
+
+  /** Mirrored artwork (step 7); absent means "not mirrored". */
+  flipX?: boolean;
+  flipY?: boolean;
   rows: string[][];
   font: string;
   size: number;
@@ -125,6 +157,10 @@ export interface SceneProgress {
   w: number;
   h: number;
   rotation: number;
+
+  /** Mirrored artwork (step 7); absent means "not mirrored". */
+  flipX?: boolean;
+  flipY?: boolean;
   label: string;
   /** 0–100. */
   value: number;
@@ -148,6 +184,10 @@ export interface SceneIcon {
   w: number;
   h: number;
   rotation: number;
+
+  /** Mirrored artwork (step 7); absent means "not mirrored". */
+  flipX?: boolean;
+  flipY?: boolean;
   /** `24×24` SVG path data from `ICONS`. */
   path: string;
   color: string;
@@ -186,7 +226,11 @@ function cleanColor(value: unknown, fallback: string): string {
 }
 
 /** A stroke, or `null` when it is too thin to survive an Office renderer. */
-function strokeOf(color: unknown, widthMm: unknown, fallbackColor: string): SceneStroke | null {
+function strokeOf(
+  color: unknown,
+  widthMm: unknown,
+  fallbackColor: string,
+): SceneStroke | null {
   const width = Number(widthMm);
   if (!Number.isFinite(width) || width <= 0) return null;
   return { color: cleanColor(color, fallbackColor), width };
@@ -194,7 +238,9 @@ function strokeOf(color: unknown, widthMm: unknown, fallbackColor: string): Scen
 
 function weightOf(value: unknown, fallback: number): number {
   const n = Number(value);
-  return Number.isFinite(n) ? Math.min(900, Math.max(100, Math.round(n))) : fallback;
+  return Number.isFinite(n)
+    ? Math.min(900, Math.max(100, Math.round(n)))
+    : fallback;
 }
 
 /**
@@ -212,10 +258,12 @@ function walk(
   oy: number,
   inherited: { rotation: number; opacity: number },
   out: SceneItem[],
+  pageRef?: PageContext,
 ) {
   for (const el of els) {
     if (el.hidden) continue;
-    const opacity = inherited.opacity * (Number.isFinite(el.opacity) ? el.opacity : 1);
+    const opacity =
+      inherited.opacity * (Number.isFinite(el.opacity) ? el.opacity : 1);
     // A fully transparent element is invisible on the canvas too; emitting it
     // would put an unreachable object in the user's PowerPoint.
     if (opacity <= 0.01) continue;
@@ -228,18 +276,32 @@ function walk(
         oy + el.y,
         { rotation: inherited.rotation + (el.rotation || 0), opacity },
         out,
+        pageRef,
       );
       continue;
     }
 
-    const item = toItem(el, ox, oy, inherited.rotation + (el.rotation || 0));
+    const item = toItem(
+      el,
+      ox,
+      oy,
+      inherited.rotation + (el.rotation || 0),
+      pageRef,
+    );
     if (Array.isArray(item)) out.push(...item);
     else if (item) out.push(item);
   }
 }
 
 /** A `rect` primitive at page millimetres — the building block of the divider. */
-function bar(x: number, y: number, w: number, h: number, rotation: number, fill: string): SceneShape {
+function bar(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  rotation: number,
+  fill: string,
+): SceneShape {
   return {
     kind: "shape",
     x,
@@ -254,7 +316,13 @@ function bar(x: number, y: number, w: number, h: number, rotation: number, fill:
   };
 }
 
-function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneItem | SceneItem[] | null {
+function toItem(
+  el: CanvasEl,
+  ox: number,
+  oy: number,
+  rotation: number,
+  pageRef?: PageContext,
+): SceneItem | SceneItem[] | null {
   const s = el.style || {};
   const base = {
     x: ox + el.x,
@@ -262,9 +330,15 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
     w: Math.max(0.5, el.w),
     h: Math.max(0.5, el.h),
     rotation,
+    /*
+     * Mirrors (step 7). Optional on every item so existing fixtures, generated
+     * tables and office writers that ignore them keep working unchanged.
+     */
+    ...(s.flipX ? { flipX: true } : {}),
+    ...(s.flipY ? { flipY: true } : {}),
   };
 
-  const prepared = prepareText(el);
+  const prepared = prepareText(el, pageRef);
   const font = cssFont(s.fontFamily);
   const padding = textPadding(el);
 
@@ -278,9 +352,10 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
         size: prepared.fontSize,
         weight: weightOf(s.fontWeight, 600),
         italic: s.fontStyle === "italic" || s.fontStyle === "oblique",
+        underline: s.underline === true,
         color: cleanColor(s.color, DEFAULT_INK),
         align: s.textAlign || "right",
-        lineHeight: s.lineHeight || 1.45,
+        lineHeight: prepared.lineHeight,
         letterSpacing: Number(s.letterSpacing) || 0,
         paragraphSpacing: Number(s.paragraphSpacing) || 0,
         vertical: s.writingMode === "vertical",
@@ -300,9 +375,10 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
         size: prepared.fontSize,
         weight: weightOf(s.fontWeight, 600),
         italic: s.fontStyle === "italic" || s.fontStyle === "oblique",
+        underline: s.underline === true,
         color: cleanColor(s.color, DEFAULT_INK),
         align: s.textAlign || "right",
-        lineHeight: s.lineHeight || 1.5,
+        lineHeight: prepared.lineHeight,
         letterSpacing: Number(s.letterSpacing) || 0,
         paragraphSpacing: Number(s.paragraphSpacing) || 0,
         vertical: s.writingMode === "vertical",
@@ -321,16 +397,20 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
         size: prepared.fontSize,
         weight: weightOf(s.fontWeight, 700),
         italic: false,
+        underline: false,
         color: cleanColor(s.color, DEFAULT_ACCENT),
         align: "center",
-        lineHeight: s.lineHeight || 1.2,
+        lineHeight: prepared.lineHeight,
         letterSpacing: 0,
         paragraphSpacing: 0,
         vertical: false,
         fill: null,
         // The canvas draws the stamp as a double-ring pill; a writer that cannot
         // express that keeps the outline, which reads the same at page scale.
-        border: { color: cleanColor(s.borderColor || s.color, DEFAULT_ACCENT), width: 0.7 },
+        border: {
+          color: cleanColor(s.borderColor || s.color, DEFAULT_ACCENT),
+          width: 0.7,
+        },
         radius: Math.min(base.w, base.h) / 2,
         padding,
       };
@@ -420,7 +500,11 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
         kind: "image",
         ...base,
         src,
-        fit: s.objectFit || (el.type === "logo" || el.type === "qr" || el.type === "svg" ? "contain" : "cover"),
+        fit:
+          s.objectFit ||
+          (el.type === "logo" || el.type === "qr" || el.type === "svg"
+            ? "contain"
+            : "cover"),
         posX: Number.isFinite(s.objectX) ? Number(s.objectX) : 50,
         posY: Number.isFinite(s.objectY) ? Number(s.objectY) : 50,
         radius: Number(s.radius) || 0,
@@ -442,7 +526,12 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
         ...base,
         label: prepared.text,
         value: Math.min(100, Math.max(0, Number(s.value) || 0)),
-        variant: s.variant === "ring" ? "ring" : s.variant === "steps" ? "steps" : "bar",
+        variant:
+          s.variant === "ring"
+            ? "ring"
+            : s.variant === "steps"
+              ? "steps"
+              : "bar",
         steps: Math.max(2, Math.min(12, Number(s.steps) || 5)),
         showValue: s.showValue !== false,
         fill: cleanColor(s.fill, "#006c35"),
@@ -460,11 +549,11 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
 }
 
 /** Resolve one page into a flat scene in millimetres. */
-export function buildScenePage(page: Page): ScenePage {
+export function buildScenePage(page: Page, pageRef?: PageContext): ScenePage {
   const size = pageSize(page);
   const items: SceneItem[] = [];
   const ordered = page.elements.slice().sort((a, b) => (a.z || 0) - (b.z || 0));
-  walk(ordered, 0, 0, { rotation: 0, opacity: 1 }, items);
+  walk(ordered, 0, 0, { rotation: 0, opacity: 1 }, items, pageRef);
   return {
     w: size.w,
     h: size.h,
@@ -474,8 +563,16 @@ export function buildScenePage(page: Page): ScenePage {
   };
 }
 
+/**
+ * Build the writer-neutral scene for a whole document.
+ *
+ * Each page is rendered with its own page number so a Word/PowerPoint export
+ * carries the same «صفحة n من m» the canvas shows.
+ */
 export function buildScene(pages: Page[]): ScenePage[] {
-  return pages.map(buildScenePage);
+  return pages.map((page, index) =>
+    buildScenePage(page, { number: index + 1, count: pages.length }),
+  );
 }
 
 /** Every distinct font family in a scene, so a writer can declare them up front. */
@@ -483,8 +580,15 @@ export function sceneFonts(scenes: ScenePage[]): string[] {
   const names = new Set<string>();
   for (const scene of scenes) {
     for (const item of scene.items) {
-      if (item.kind === "text" || item.kind === "table" || item.kind === "progress") {
-        const first = item.font.split(",")[0].trim().replace(/^["']|["']$/g, "");
+      if (
+        item.kind === "text" ||
+        item.kind === "table" ||
+        item.kind === "progress"
+      ) {
+        const first = item.font
+          .split(",")[0]
+          .trim()
+          .replace(/^["']|["']$/g, "");
         if (first) names.add(first);
       }
     }

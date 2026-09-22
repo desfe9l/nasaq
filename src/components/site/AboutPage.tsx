@@ -26,7 +26,7 @@ export function AboutPage() {
           مناسبة للتسليم الرسمي.
         </p>
 
-        <section className="mt-8 grid gap-4 rounded-[12px] border border-line bg-white p-6 sm:grid-cols-2 dark:border-white/10 dark:bg-white/5">
+        <section className="shadow-card dark:shadow-card-dark mt-8 grid gap-4 rounded-xl border border-line bg-white p-6 sm:grid-cols-2 dark:border-white/10 dark:bg-white/5">
           <Fact title="الغرض" body={BRAND.tagline} />
           <Fact title="اللغة" body="الواجهة عربية بترتيب RTL كامل — لا ترجمة سطحية." />
           <Fact title="المقاسات" body="A4 رأسي/أفقي، A3، شرائح 16:9، ومقاسات مخصصة بالمليمتر." />
@@ -35,7 +35,7 @@ export function AboutPage() {
           <Fact title="الملاءمة" body="مصمّمة للعمل على الشاشات الكبيرة أولاً، وتعمل على الأجهزة اللوحية." />
         </section>
 
-        <section className="mt-8 rounded-[12px] border border-line bg-white p-6 dark:border-white/10 dark:bg-white/5">
+        <section className="mt-8 shadow-card dark:shadow-card-dark rounded-xl border border-line bg-white p-6 dark:border-white/10 dark:bg-white/5">
           <h2 className="text-[16px] font-extrabold">التطوير</h2>
           <dl className="mt-3 grid gap-2 text-[14px]">
             <div className="flex items-center justify-between gap-4">
@@ -55,7 +55,7 @@ export function AboutPage() {
           </p>
         </section>
 
-        <section className="mt-8 rounded-[12px] border border-line bg-white p-6 dark:border-white/10 dark:bg-white/5">
+        <section className="mt-8 shadow-card dark:shadow-card-dark rounded-xl border border-line bg-white p-6 dark:border-white/10 dark:bg-white/5">
           <h2 className="text-[16px] font-extrabold">بيانات التواصل</h2>
           <dl className="mt-3 grid gap-2 text-[14px]">
             <div className="flex items-center justify-between gap-4">

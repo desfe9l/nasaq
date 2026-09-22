@@ -61,7 +61,18 @@ export interface AssetFolder {
   createdAt: number;
 }
 
-export type SettingsKey = "activeProjectId" | "dark" | "zoom" | "focusMode" | "leftOpen" | "rightOpen" | "leftCollapsed" | "rightCollapsed" | "assetFolders";
+export type SettingsKey =
+  | "activeProjectId"
+  | "dark"
+  | "zoom"
+  | "focusMode"
+  | "leftOpen"
+  | "rightOpen"
+  | "leftCollapsed"
+  | "rightCollapsed"
+  | "assetFolders"
+  /** SVG icons/dividers the author added to the smart library. */
+  | "customLibrary";
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
@@ -130,7 +141,8 @@ async function migrateLegacyDb(db: IDBDatabase): Promise<void> {
           request(t.objectStore(name).getAllKeys()),
         )) as IDBValidKey[];
         const seen = new Set(existing.map((k) => String(k)));
-        const keyPath = MIRRORED_STORES.find((s) => s.name === name)?.keyPath ?? "id";
+        const keyPath =
+          MIRRORED_STORES.find((s) => s.name === name)?.keyPath ?? "id";
         const fresh = rows.filter((row) => !seen.has(String(row[keyPath])));
         if (fresh.length) {
           await tx(db, name, "readwrite", (t) => {
@@ -206,8 +218,10 @@ function tx<T>(
       reject(err);
       return;
     }
-    t.onerror = () => reject(t.error ?? new Error("IndexedDB transaction failed"));
-    t.onabort = () => reject(t.error ?? new Error("IndexedDB transaction aborted"));
+    t.onerror = () =>
+      reject(t.error ?? new Error("IndexedDB transaction failed"));
+    t.onabort = () =>
+      reject(t.error ?? new Error("IndexedDB transaction aborted"));
     t.oncomplete = () => resolve(result as T);
     let result: T;
     Promise.resolve(run(t)).then((value) => {
@@ -219,7 +233,8 @@ function tx<T>(
 function request<T>(req: IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("IndexedDB request failed"));
+    req.onerror = () =>
+      reject(req.error ?? new Error("IndexedDB request failed"));
   });
 }
 
@@ -230,7 +245,8 @@ const fallback = {
       // Read through the pre-rebrand slot until the new one has been written,
       // so a private-window session keeps the projects it saved before.
       const raw =
-        localStorage.getItem(LS_PROJECTS) ?? localStorage.getItem(LEGACY_LS_PROJECTS);
+        localStorage.getItem(LS_PROJECTS) ??
+        localStorage.getItem(LEGACY_LS_PROJECTS);
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? (parsed as Project[]) : [];
     } catch {
@@ -261,7 +277,9 @@ export async function listProjects(): Promise<ProjectMeta[]> {
   const db = await openDb();
   if (!db) return fallback.all().map(projectMeta).sort(byRecency);
   try {
-    const rows = await tx(db, PROJECTS, "readonly", (t) => request(t.objectStore(PROJECTS).getAll()));
+    const rows = await tx(db, PROJECTS, "readonly", (t) =>
+      request(t.objectStore(PROJECTS).getAll()),
+    );
     return (rows as Project[]).map(projectMeta).sort(byRecency);
   } catch {
     return [];
@@ -276,7 +294,9 @@ export async function getProject(id: string): Promise<Project | null> {
   const db = await openDb();
   if (!db) return fallback.get(id);
   try {
-    const row = await tx(db, PROJECTS, "readonly", (t) => request(t.objectStore(PROJECTS).get(id)));
+    const row = await tx(db, PROJECTS, "readonly", (t) =>
+      request(t.objectStore(PROJECTS).get(id)),
+    );
     return (row as Project | undefined) ?? null;
   } catch {
     return null;
@@ -295,7 +315,9 @@ export async function saveProject(project: Project): Promise<Project> {
     fallback.put(stamped);
     return stamped;
   }
-  await tx(db, PROJECTS, "readwrite", (t) => request(t.objectStore(PROJECTS).put(clone(stamped))));
+  await tx(db, PROJECTS, "readwrite", (t) =>
+    request(t.objectStore(PROJECTS).put(clone(stamped))),
+  );
   return stamped;
 }
 
@@ -305,7 +327,9 @@ export async function deleteProject(id: string): Promise<void> {
     fallback.remove(id);
     return;
   }
-  await tx(db, PROJECTS, "readwrite", (t) => request(t.objectStore(PROJECTS).delete(id)));
+  await tx(db, PROJECTS, "readwrite", (t) =>
+    request(t.objectStore(PROJECTS).delete(id)),
+  );
 }
 
 export async function duplicateProject(id: string): Promise<Project | null> {
@@ -317,16 +341,24 @@ export async function duplicateProject(id: string): Promise<Project | null> {
     name: `${source.name} نسخة`,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    pages: source.pages.map((p) => ({ ...clone(p), id: uid("page"), elements: p.elements.map((e) => ({ ...clone(e), id: uid("el") })) })),
+    pages: source.pages.map((p) => ({
+      ...clone(p),
+      id: uid("page"),
+      elements: p.elements.map((e) => ({ ...clone(e), id: uid("el") })),
+    })),
   };
   return saveProject(copy);
 }
 
-export async function getSetting<T = unknown>(key: SettingsKey): Promise<T | null> {
+export async function getSetting<T = unknown>(
+  key: SettingsKey,
+): Promise<T | null> {
   const db = await openDb();
   if (!db) {
     try {
-      const raw = localStorage.getItem(LS_SETTINGS) ?? localStorage.getItem(LEGACY_LS_SETTINGS);
+      const raw =
+        localStorage.getItem(LS_SETTINGS) ??
+        localStorage.getItem(LEGACY_LS_SETTINGS);
       const parsed = raw ? JSON.parse(raw) : {};
       return (parsed?.[key] ?? null) as T | null;
     } catch {
@@ -334,23 +366,30 @@ export async function getSetting<T = unknown>(key: SettingsKey): Promise<T | nul
     }
   }
   try {
-    const row = await tx(db, SETTINGS, "readonly", (t) => request(t.objectStore(SETTINGS).get(key)));
-    return ((row as { key: string; value: unknown } | undefined)?.value ?? null) as T | null;
+    const row = await tx(db, SETTINGS, "readonly", (t) =>
+      request(t.objectStore(SETTINGS).get(key)),
+    );
+    return ((row as { key: string; value: unknown } | undefined)?.value ??
+      null) as T | null;
   } catch {
     return null;
   }
 }
 
-export async function setSetting(key: SettingsKey, value: unknown): Promise<void> {
+export async function setSetting(
+  key: SettingsKey,
+  value: unknown,
+): Promise<void> {
   const db = await openDb();
   if (!db) {
     let parsed: Record<string, unknown> = {};
     try {
-      parsed = JSON.parse(
-        localStorage.getItem(LS_SETTINGS) ??
-          localStorage.getItem(LEGACY_LS_SETTINGS) ??
-          "{}",
-      ) || {};
+      parsed =
+        JSON.parse(
+          localStorage.getItem(LS_SETTINGS) ??
+            localStorage.getItem(LEGACY_LS_SETTINGS) ??
+            "{}",
+        ) || {};
     } catch {
       parsed = {};
     }
@@ -371,7 +410,9 @@ export async function setSetting(key: SettingsKey, value: unknown): Promise<void
  * One-time upgrade of the pre-upgrade single-project autosave slot into the
  * library. Returns the migrated project so the caller can open it directly.
  */
-export async function migrateLegacyProject(raw: unknown): Promise<Project | null> {
+export async function migrateLegacyProject(
+  raw: unknown,
+): Promise<Project | null> {
   if (!raw || typeof raw !== "object") return null;
   const data = raw as Partial<Project> & { activePageId?: string };
   if (!Array.isArray(data.pages) || data.pages.length === 0) return null;
@@ -395,7 +436,9 @@ export async function clearAllProjects(): Promise<void> {
     fallback.write([]);
     return;
   }
-  await tx(db, PROJECTS, "readwrite", (t) => request(t.objectStore(PROJECTS).clear()));
+  await tx(db, PROJECTS, "readwrite", (t) =>
+    request(t.objectStore(PROJECTS).clear()),
+  );
 }
 
 /**
@@ -408,7 +451,9 @@ export async function clearAllProjects(): Promise<void> {
 const assetFallback = {
   all(): Asset[] {
     try {
-      const raw = localStorage.getItem(LS_ASSETS) ?? localStorage.getItem(LEGACY_LS_ASSETS);
+      const raw =
+        localStorage.getItem(LS_ASSETS) ??
+        localStorage.getItem(LEGACY_LS_ASSETS);
       const parsed = raw ? JSON.parse(raw) : [];
       return Array.isArray(parsed) ? (parsed as Asset[]) : [];
     } catch {
@@ -424,14 +469,18 @@ export async function listAssets(): Promise<Asset[]> {
   const db = await openDb();
   if (!db) return assetFallback.all().sort((a, b) => b.addedAt - a.addedAt);
   try {
-    const rows = await tx(db, ASSETS, "readonly", (t) => request(t.objectStore(ASSETS).getAll()));
+    const rows = await tx(db, ASSETS, "readonly", (t) =>
+      request(t.objectStore(ASSETS).getAll()),
+    );
     return (rows as Asset[]).sort((a, b) => b.addedAt - a.addedAt);
   } catch {
     return [];
   }
 }
 
-export async function saveAsset(asset: Omit<Asset, "id" | "addedAt"> & Partial<Asset>): Promise<Asset> {
+export async function saveAsset(
+  asset: Omit<Asset, "id" | "addedAt"> & Partial<Asset>,
+): Promise<Asset> {
   const stamped: Asset = {
     ...asset,
     id: asset.id || uid("asset"),
@@ -439,10 +488,15 @@ export async function saveAsset(asset: Omit<Asset, "id" | "addedAt"> & Partial<A
   };
   const db = await openDb();
   if (!db) {
-    assetFallback.write([stamped, ...assetFallback.all().filter((a) => a.id !== stamped.id)]);
+    assetFallback.write([
+      stamped,
+      ...assetFallback.all().filter((a) => a.id !== stamped.id),
+    ]);
     return stamped;
   }
-  await tx(db, ASSETS, "readwrite", (t) => request(t.objectStore(ASSETS).put(stamped)));
+  await tx(db, ASSETS, "readwrite", (t) =>
+    request(t.objectStore(ASSETS).put(stamped)),
+  );
   return stamped;
 }
 
@@ -452,18 +506,22 @@ export async function deleteAsset(id: string): Promise<void> {
     assetFallback.write(assetFallback.all().filter((a) => a.id !== id));
     return;
   }
-  await tx(db, ASSETS, "readwrite", (t) => request(t.objectStore(ASSETS).delete(id)));
+  await tx(db, ASSETS, "readwrite", (t) =>
+    request(t.objectStore(ASSETS).delete(id)),
+  );
 }
 
 export async function renameAsset(id: string, name: string): Promise<void> {
   const db = await openDb();
   if (!db) {
-    assetFallback.write(assetFallback.all().map((a) => (a.id === id ? { ...a, name } : a)));
+    assetFallback.write(
+      assetFallback.all().map((a) => (a.id === id ? { ...a, name } : a)),
+    );
     return;
   }
-  const row = (await tx(db, ASSETS, "readonly", (t) => request(t.objectStore(ASSETS).get(id)))) as
-    | Asset
-    | undefined;
+  const row = (await tx(db, ASSETS, "readonly", (t) =>
+    request(t.objectStore(ASSETS).get(id)),
+  )) as Asset | undefined;
   if (!row) return;
   await tx(db, ASSETS, "readwrite", (t) =>
     request(t.objectStore(ASSETS).put({ ...row, name })),

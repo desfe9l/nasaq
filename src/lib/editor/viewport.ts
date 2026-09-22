@@ -30,11 +30,18 @@ export function zoomAnchoredAt(
   if (!stage) return;
   const target = Math.min(2, Math.max(0.2, next));
   if (target === prev) return;
-  const pages = Array.from(stage.querySelectorAll<HTMLElement>("[data-page-id]"));
+  const pages = Array.from(
+    stage.querySelectorAll<HTMLElement>("[data-page-id]"),
+  );
   const page =
     pages.find((p) => {
       const r = p.getBoundingClientRect();
-      return clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom;
+      return (
+        clientX >= r.left &&
+        clientX <= r.right &&
+        clientY >= r.top &&
+        clientY <= r.bottom
+      );
     }) || pages[0];
   if (!page || !page.offsetWidth) return;
   const seq = ++zoomSeq;

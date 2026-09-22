@@ -71,7 +71,12 @@ const PAGE = {
       fill: "#0b2545",
       stroke: { color: "#c6a05a", width: 0.6 },
       shapeId: "crescent",
-      parts: [{ k: "path" as const, d: "M50 5 A45 45 0 1 0 50 95 A35 35 0 1 1 50 5 Z" }],
+      parts: [
+        {
+          k: "path" as const,
+          d: "M50 5 A45 45 0 1 0 50 95 A35 35 0 1 1 50 5 Z",
+        },
+      ],
     },
     {
       kind: "shape" as const,
@@ -137,7 +142,15 @@ describe("parseSvgPath", () => {
   it("emits cubics with control points", () => {
     const segs = parseSvgPath("M0 0 C1 1 2 2 3 3");
     assert.equal(segs[1].kind, "cubic");
-    assert.deepEqual(segs[1], { kind: "cubic", x: 3, y: 3, x1: 1, y1: 1, x2: 2, y2: 2 });
+    assert.deepEqual(segs[1], {
+      kind: "cubic",
+      x: 3,
+      y: 3,
+      x1: 1,
+      y1: 1,
+      x2: 2,
+      y2: 2,
+    });
   });
 
   it("approximates arcs as cubics rather than dropping them", () => {
@@ -165,7 +178,15 @@ describe("parseSvgPath", () => {
 describe("scaleSegments", () => {
   it("scales points and control points into the target box", () => {
     const segs = scaleSegments(parseSvgPath("M0 0 C1 1 2 2 3 3"), 10, 20);
-    assert.deepEqual(segs[1], { kind: "cubic", x: 30, y: 60, x1: 10, y1: 20, x2: 20, y2: 40 });
+    assert.deepEqual(segs[1], {
+      kind: "cubic",
+      x: 30,
+      y: 60,
+      x1: 10,
+      y1: 20,
+      x2: 20,
+      y2: 40,
+    });
   });
 });
 
@@ -220,7 +241,11 @@ describe("writeDocx", () => {
     const prefix = doc.slice(0, tblStart);
     const opened = (prefix.match(/<w:p[ >]/g) || []).length;
     const closed = (prefix.match(/<\/w:p>/g) || []).length;
-    assert.equal(opened, closed, "the table must not be nested inside an open <w:p>");
+    assert.equal(
+      opened,
+      closed,
+      "the table must not be nested inside an open <w:p>",
+    );
   });
 
   it("gives every drawing a unique id and page anchoring", async () => {
@@ -280,11 +305,15 @@ describe("writePptx", () => {
     // outside it are clamped by PowerPoint and the shape renders wrong. It also
     // rescales any value under 100 as inches, so a writer emitting millimetres
     // passes this comparison only by accident.
-    const paths = [...slide.matchAll(/<a:path w="(\d+)" h="(\d+)">([^]*?)<\/a:path>/g)];
+    const paths = [
+      ...slide.matchAll(/<a:path w="(\d+)" h="(\d+)">([^]*?)<\/a:path>/g),
+    ];
     assert.ok(paths.length > 0, "expected at least one custom path");
     let ptCount = 0;
     for (const [, pw, ph, body] of paths) {
-      for (const [, px, py] of body.matchAll(/<a:pt x="(-?\d+)" y="(-?\d+)"/g)) {
+      for (const [, px, py] of body.matchAll(
+        /<a:pt x="(-?\d+)" y="(-?\d+)"/g,
+      )) {
         ptCount++;
         const x = Number(px);
         const y = Number(py);
@@ -309,7 +338,9 @@ describe("writePptx", () => {
     const blob = await writePptx([PAGE], "تقرير");
     const zip = await JSZip.loadAsync(await blob.arrayBuffer());
     const slide = await zip.file("ppt/slides/slide1.xml")!.async("string");
-    const names = [...slide.matchAll(/<p:cNvPr id="\d+" name="([^"]+)"/g)].map((m) => m[1]);
+    const names = [...slide.matchAll(/<p:cNvPr id="\d+" name="([^"]+)"/g)].map(
+      (m) => m[1],
+    );
     assert.ok(names.length >= 3, "expected several named objects");
     // pptxgenjs falls back to "Shape 1", which passes a non-empty check while
     // leaving the selection pane useless in a long report.

@@ -27,7 +27,15 @@ export interface LibraryFile {
   kind: typeof LIBRARY_KIND;
   version: number;
   folders: Array<{ id: string; name: string; createdAt: number }>;
-  assets: Array<{ id: string; name: string; src: string; w: number; h: number; addedAt: number; folderId?: string | null }>;
+  assets: Array<{
+    id: string;
+    name: string;
+    src: string;
+    w: number;
+    h: number;
+    addedAt: number;
+    folderId?: string | null;
+  }>;
 }
 
 export interface LibraryExportInput {
@@ -36,11 +44,18 @@ export interface LibraryExportInput {
 }
 
 /** Build the export document from the current library state. */
-export function buildLibraryFile({ folders, assets }: LibraryExportInput): LibraryFile {
+export function buildLibraryFile({
+  folders,
+  assets,
+}: LibraryExportInput): LibraryFile {
   return {
     kind: LIBRARY_KIND,
     version: LIBRARY_VERSION,
-    folders: folders.map((f) => ({ id: f.id, name: f.name, createdAt: f.createdAt })),
+    folders: folders.map((f) => ({
+      id: f.id,
+      name: f.name,
+      createdAt: f.createdAt,
+    })),
     assets: assets.map((a) => ({
       id: a.id,
       name: a.name,
@@ -56,7 +71,9 @@ export function buildLibraryFile({ folders, assets }: LibraryExportInput): Libra
 /** Serialise + download the library as a JSON file. Returns the filename. */
 export function downloadLibraryFile(input: LibraryExportInput): string {
   const file = buildLibraryFile(input);
-  const blob = new Blob([JSON.stringify(file, null, 2)], { type: "application/json" });
+  const blob = new Blob([JSON.stringify(file, null, 2)], {
+    type: "application/json",
+  });
   const url = URL.createObjectURL(blob);
   const name = `nasaq-library-${new Date().toISOString().slice(0, 10)}.json`;
   const a = document.createElement("a");
@@ -90,7 +107,9 @@ export function planLibraryImport(
 ): LibraryImportPlan {
   const file = raw as Partial<LibraryFile> | null;
   if (!file || file.kind !== LIBRARY_KIND || typeof file.version !== "number") {
-    throw new Error("الملف ليس ملف مكتبة صالح — اصدّر المكتبة أولاً من الجهاز الآخر.");
+    throw new Error(
+      "الملف ليس ملف مكتبة صالح — اصدّر المكتبة أولاً من الجهاز الآخر.",
+    );
   }
   if (file.version > LIBRARY_VERSION) {
     throw new Error("هذا الملف أحدث من نسختك — حدّث المنصة ثم أعد المحاولة.");
@@ -98,10 +117,13 @@ export function planLibraryImport(
 
   const plan: LibraryImportPlan = { folders: [], assets: [], skipped: 0 };
   const folderIdMap = new Map<string, string>();
-  const existingFolderByName = new Map(existing.folders.map((f) => [f.name, f.id]));
+  const existingFolderByName = new Map(
+    existing.folders.map((f) => [f.name, f.id]),
+  );
 
   for (const folder of Array.isArray(file.folders) ? file.folders : []) {
-    if (!folder || typeof folder.name !== "string" || !folder.name.trim()) continue;
+    if (!folder || typeof folder.name !== "string" || !folder.name.trim())
+      continue;
     const name = folder.name.trim().slice(0, 80);
     const known = existingFolderByName.get(name);
     if (known) {
@@ -111,17 +133,36 @@ export function planLibraryImport(
     const freshId = `folder_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
     folderIdMap.set(folder.id, freshId);
     existingFolderByName.set(name, freshId);
-    plan.folders.push({ id: freshId, name, createdAt: Number(folder.createdAt) || Date.now() });
+    plan.folders.push({
+      id: freshId,
+      name,
+      createdAt: Number(folder.createdAt) || Date.now(),
+    });
   }
 
-  const existingAssetKeys = new Set(existing.assets.map((a) => `${a.name}\u0000${a.src.length}\u0000${a.src.slice(-64)}`));
+  const existingAssetKeys = new Set(
+    existing.assets.map(
+      (a) => `${a.name}\u0000${a.src.length}\u0000${a.src.slice(-64)}`,
+    ),
+  );
   const usedNames = new Set(existing.assets.map((a) => a.name));
 
   for (const asset of Array.isArray(file.assets) ? file.assets : []) {
-    if (!asset || typeof asset.name !== "string" || typeof asset.src !== "string") continue;
+    if (
+      !asset ||
+      typeof asset.name !== "string" ||
+      typeof asset.src !== "string"
+    )
+      continue;
     // Safe sources only — the same guard the canvas itself applies.
     if (!safeImageSrc(asset.src)) continue;
-    if (typeof asset.w !== "number" || typeof asset.h !== "number" || !Number.isFinite(asset.w) || !Number.isFinite(asset.h)) continue;
+    if (
+      typeof asset.w !== "number" ||
+      typeof asset.h !== "number" ||
+      !Number.isFinite(asset.w) ||
+      !Number.isFinite(asset.h)
+    )
+      continue;
 
     const key = `${asset.name}\u0000${asset.src.length}\u0000${asset.src.slice(-64)}`;
     if (existingAssetKeys.has(key)) {
@@ -135,7 +176,9 @@ export function planLibraryImport(
     while (usedNames.has(name)) name = `${name} (نسخة)`;
     usedNames.add(name);
 
-    const folderId = asset.folderId ? folderIdMap.get(asset.folderId) ?? null : null;
+    const folderId = asset.folderId
+      ? (folderIdMap.get(asset.folderId) ?? null)
+      : null;
     plan.assets.push({
       name,
       src: asset.src,

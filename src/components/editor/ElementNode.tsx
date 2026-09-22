@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef } from "react";
 import { ICONS, cssFont, parseTable, type CanvasEl } from "@/lib/editor/model";
-import { prepareText, textPadding } from "@/lib/editor/text-render";
+import {
+  prepareText,
+  textPadding,
+  type PageContext,
+} from "@/lib/editor/text-render";
 import { useEditor } from "@/lib/editor/store";
 import { cn, round as round2 } from "@/lib/utils";
 import { applyNumerals } from "@/lib/editor/arabic";
+import { fadeStyle, normalizeFade } from "@/lib/editor/fade";
 import { safeImageSrc } from "@/lib/editor/images";
 import { applySvgColors, sanitizeSvgContent } from "@/lib/editor/svg";
 import { isCompoundShape, shapeDef } from "@/lib/editor/shapes";
@@ -15,6 +20,12 @@ interface Props {
   el: CanvasEl;
   interactive: boolean;
   onPointerDown: (e: React.PointerEvent, kind: "move" | "resize" | "rotate", handle?: string) => void;
+  /**
+   * 1-based page the element sits on, so `{رقم_الصفحة_من_الكل}` resolves per
+   * page. The total comes from the store; omitting it falls back to the ambient
+   * context, which is correct for single-page consumers.
+   */
+  pageNo?: number;
 }
 
 /** Types whose text can be edited in place with a double click. */
@@ -32,6 +43,7 @@ export function ElementNode({
   interactive,
   onPointerDown,
   onEnterGroup,
+  pageNo,
 }: Props & { onEnterGroup?: () => void }) {
   const updateElement = useEditor((s) => s.updateElement);
   const fitTextBox = useEditor((s) => s.fitTextBox);
@@ -156,7 +168,13 @@ export function ElementNode({
         top: `${el.y}mm`,
         width: `${el.w}mm`,
         height: `${el.h}mm`,
-        transform: `rotate(${el.rotation || 0}deg)`,
+        /*
+         * One transform string carries the whole orientation: rotation first,
+         * then the mirrors (step 7). Order matters — mirroring after rotating
+         * flips the artwork around its own centre, which is what "قلب أفقي"
+         * means to an author looking at a rotated element.
+         */
+        transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
         opacity: el.opacity ?? 1,
         zIndex: el.z,
         boxShadow: el.style?.shadow || undefined,
@@ -192,7 +210,13 @@ export function ElementNode({
           </defs>
         </svg>
       )}
-      <ElementContent el={el} textRef={textRef} onBlur={finishEdit} onKeyDown={handleEditKey} />
+      <ElementContent
+        el={el}
+        textRef={textRef}
+        onBlur={finishEdit}
+        onKeyDown={handleEditKey}
+        pageRef={pageNo ? { number: pageNo, count: pages.length } : undefined}
+      />
     </div>
   );
 }
@@ -202,11 +226,13 @@ function ElementContent({
   textRef,
   onBlur,
   onKeyDown,
+  pageRef,
 }: {
   el: CanvasEl;
   textRef: React.RefObject<HTMLDivElement | null>;
   onBlur: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
+  pageRef?: PageContext;
 }) {
   const s = el.style || {};
   /*
@@ -219,7 +245,7 @@ function ElementContent({
     (st.pages.find((p) => p.id === st.activePageId)?.elements ?? []).some((m) => m.clippedBy === el.id),
   );
   const maskOutline = masking && !(Number(s.borderWidth) > 0);
-  const prepared = prepareText(el);
+  const prepared = prepareText(el, pageRef);
   const vertical = s.writingMode === "vertical";
   const pad = textPadding(el);
   /*
@@ -235,8 +261,12 @@ function ElementContent({
     color: s.color || "#172033",
     fontWeight: s.fontWeight || 600,
     fontStyle: (s.fontStyle as React.CSSProperties["fontStyle"]) || "normal",
+    textDecoration: s.underline ? "underline" : undefined,
+    textUnderlineOffset: s.underline ? "0.15em" : undefined,
     textAlign: s.textAlign || "right",
-    lineHeight: s.lineHeight || 1.45,
+    // The resolved leading, not the raw style: `prepareText` raises a too-tight
+    // value on multi-line Arabic so the tops of tall letters are never shaved.
+    lineHeight: prepared.lineHeight,
     letterSpacing: s.letterSpacing ? `${s.letterSpacing}mm` : undefined,
     textShadow: s.textShadow || "none",
     direction: "rtl",
@@ -542,20 +572,40 @@ function ElementContent({
         </div>
       );
     }
+    const fade = normalizeFade(s.fade);
     return (
-      <img
-        alt=""
-        src={src}
-        draggable={false}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: s.objectFit || (el.type === "logo" || el.type === "qr" ? "contain" : "cover"),
-          objectPosition: `${s.objectX ?? 50}% ${s.objectY ?? 50}%`,
-          borderRadius: `${s.radius || 0}mm`,
-          pointerEvents: "none",
-        }}
-      />
+      <>
+        <img
+          alt=""
+          src={src}
+          draggable={false}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: s.objectFit || (el.type === "logo" || el.type === "qr" ? "contain" : "cover"),
+            objectPosition: `${s.objectX ?? 50}% ${s.objectY ?? 50}%`,
+            borderRadius: `${s.radius || 0}mm`,
+            pointerEvents: "none",
+          }}
+        />
+        {/*
+          * Step 8 — طبقة التلاشي. Painted after the image so it always sits on
+          * top, sized to the frame (not the photo), and inert: it is decoration,
+          * so a click must reach the image underneath and dragging the element
+          * must keep working.
+          */}
+        {fade && (
+          <div
+            aria-hidden
+            data-fade-overlay={el.id}
+            className="fade-overlay"
+            style={{
+              ...fadeStyle(fade),
+              borderRadius: `${s.radius || 0}mm`,
+            }}
+          />
+        )}
+      </>
     );
   }
 

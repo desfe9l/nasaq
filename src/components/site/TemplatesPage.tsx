@@ -1,61 +1,459 @@
-import { useEffect, useState } from "react";
-import { ArrowLeft, Plus } from "lucide-react";
+/*
+ * Templates catalog.
+ *
+ * One surface for the whole template library: the shipped packs and page
+ * templates together with the templates the author creates, edits, duplicates
+ * or deletes here. Every card paints a REAL page (see TemplatePreview), so what
+ * is on the card is what the editor opens.
+ *
+ * Behaviour contract kept from the previous catalog:
+ *   • starter packs stay license-gated (`canUseDemoPack` / premium entitlement)
+ *     exactly as before — «استخدام القالب» routes to /license when locked;
+ *   • page templates and custom templates respect the demo project/page caps
+ *     (`canCreateDemoProject` plus the same `maxPagesPerProject` the editor
+ *     enforces), so nothing here widens what a demo licence can do;
+ *   • opening a project stays `importProject` + `/editor`.
+ *
+ * Everything the catalog manages lives in one localStorage slot
+ * (`lib/templates/custom-templates.ts`) surfaced through `useSyncExternalStore`:
+ * edits appear immediately, across reloads and other tabs, with no rebuild.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { Database, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
-import { PACKS, PAGE_TEMPLATES, TEMPLATE_CATEGORIES, type TemplateCategoryId } from "@/lib/editor/templates";
-import { SIZE_PRESETS, THEMES, pageSize, type PackId } from "@/lib/editor/model";
+import { SIZE_PRESETS, THEMES, type Page, type ThemeId } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
+import { getProject } from "@/lib/editor/storage";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
+import { CARD_W, CARD_WRAP } from "@/components/site/cards";
 import { cn } from "@/lib/utils";
-import { canUseDemoPack } from "@/lib/product/product";
+import { DEMO_LICENSE, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
 import { useLicense } from "@/lib/license/client";
-import { useMemo } from "react";
+import {
+  CATALOG_PILLS,
+  entryProjectSeed,
+  entryTemplatePages,
+  filterCatalog,
+  matchesQuery,
+  type CatalogEntry,
+} from "@/lib/templates/catalog";
+import {
+  TemplateStorageError,
+  clearDraft,
+  deleteCustomTemplate,
+  duplicateCustomTemplate,
+  saveCustomTemplate,
+  saveDraft,
+  type CatalogPillId,
+} from "@/lib/templates/custom-templates";
+import { TemplateCard } from "@/components/site/TemplateCard";
+import {
+  ConfirmDialog,
+  QuickViewDialog,
+  TemplateFormDialog,
+  type TemplateFormValues,
+} from "@/components/site/TemplateDialogs";
+import { useCatalogEntries, useCustomTemplates, useTemplateDraft } from "@/components/site/useCatalog";
 
 const SIZE_OPTIONS = SIZE_PRESETS.filter((s) => s.id !== "custom");
+const THEME_ORDER: ThemeId[] = ["official", "eid", "ministry", "slate", "sand"];
+
+/** A storage/quota failure carries its own Arabic message; anything else is generic. */
+function reportError(err: unknown, fallback: string) {
+  toast.error(err instanceof TemplateStorageError ? err.message : fallback);
+}
 
 export function TemplatesPage() {
   const hydrate = useEditor((s) => s.hydrate);
-  const createProject = useEditor((s) => s.createProject);
-  const [category, setCategory] = useState<TemplateCategoryId | "all">("all");
-  const [theme, setTheme] = useState<keyof typeof THEMES>("official");
+  const importProject = useEditor((s) => s.importProject);
+  const openProject = useEditor((s) => s.openProject);
+  const projects = useEditor((s) => s.projects);
+  /** The project currently open in the editor — the default source document. */
+  const activeProjectId = useEditor((s) => s.id);
+  const orgName = useEditor((s) => s.orgName);
+  const { entitlements } = useLicense();
+
+  const [theme, setTheme] = useState<ThemeId>("official");
+  const [pill, setPill] = useState<CatalogPillId>("all");
+  const [query, setQuery] = useState("");
+  const [quickViewId, setQuickViewId] = useState<string | null>(null);
+  const [form, setForm] = useState<{ mode: "create" | "edit"; entryId?: string } | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [justSaved, setJustSaved] = useState<string | null>(null);
+
+  const custom = useCustomTemplates();
+  const draft = useTemplateDraft();
+  const entries = useCatalogEntries(theme, orgName);
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
-  const templates = useMemo(
-    () => PAGE_TEMPLATES.filter((t) => category === "all" || t.category === category),
-    [category],
-  );
+  const filtered = useMemo(() => filterCatalog(entries, { pill, query }), [entries, pill, query]);
+  const counts = useMemo(() => {
+    const map = new Map<CatalogPillId, number>();
+    for (const option of CATALOG_PILLS) {
+      map.set(
+        option.id,
+        entries.filter(
+          (entry) =>
+            (option.id === "all" || entry.pills.includes(option.id)) && matchesQuery(entry, query),
+        ).length,
+      );
+    }
+    return map;
+  }, [entries, query]);
 
-  const { entitlements } = useLicense();
+  const quickEntry = quickViewId ? entries.find((e) => e.id === quickViewId) ?? null : null;
+  const confirmEntry = confirmId ? entries.find((e) => e.id === confirmId) ?? null : null;
+  const formEntry = form?.entryId ? entries.find((e) => e.id === form.entryId) ?? null : null;
+  const customCount = custom.length;
 
-  const startFrom = async (packId: string) => {
-    if (!canUseDemoPack(packId) && !entitlements.premium_templates) {
+  /* ── guards ──────────────────────────────────────────────────────────── */
+
+  /**
+   * The store's own limits, said in context before anything is built.
+   *
+   * Projects and pages are counted exactly as `store.ts` counts them — the demo
+   * licence allows one project of up to three pages — and a licence lifts the
+   * limits through the same two entitlements the editor reads. Nothing here can
+   * grant more than the store would.
+   */
+  const demoBlocked = (pageCount: number): boolean => {
+    if (!entitlements.unlimited_projects && !canCreateDemoProject(projects.length)) {
+      toast.error("اكتملت مساحة العرض التجريبي", {
+        description: "يتضمن العرض مشروعًا واحدًا. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
+      });
+      return true;
+    }
+    const maxPages = DEMO_LICENSE.entitlements.maxPagesPerProject ?? Infinity;
+    if (!entitlements.unlimited_pages && pageCount > maxPages) {
+      toast.error("وصلت إلى حد صفحات العرض التجريبي", {
+        description: "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
+      });
+      return true;
+    }
+    return false;
+  };
+
+  /** Starter packs outside the demo allowance open the pricing page, as before. */
+  const packLocked = (entry: CatalogEntry): boolean =>
+    entry.kind === "pack" && !canUseDemoPack(entry.sourceId) && !entitlements.premium_templates;
+
+  /* ── actions ─────────────────────────────────────────────────────────── */
+
+  /** «استخدام القالب» — build a project from the entry and open the editor. */
+  const startFromEntry = async (entry: CatalogEntry) => {
+    if (packLocked(entry)) {
       window.location.assign("/license");
       return;
     }
-    const pack = PACKS.find((p) => p.id === packId);
-    const created = await createProject(packId as PackId, theme);
-    if (created) {
-      toast.success(`تم إنشاء «${pack?.title || packId}»`);
-      window.location.assign("/editor");
+    // The page caps are only as good as the project list they are counted from.
+    await hydrate();
+    const seed = entryProjectSeed(entry, { themeId: theme, orgName });
+    if (demoBlocked(seed.pages.length)) return;
+    setQuickViewId(null);
+    await importProject(seed);
+    window.location.assign("/editor");
+  };
+
+  /**
+   * «تعديل القالب» — open a real working copy in the editor and remember the
+   * link, so an edit made there can be written back over the template (custom)
+   * or published as a new one (shipped templates). See the draft banner below.
+   */
+  const editEntry = async (entry: CatalogEntry) => {
+    if (packLocked(entry)) {
+      window.location.assign("/license");
+      return;
+    }
+    await hydrate();
+    const seed = entryProjectSeed(entry, { themeId: theme, orgName });
+    if (demoBlocked(seed.pages.length)) return;
+    setQuickViewId(null);
+    await importProject({ ...seed, name: `${entry.title} — مسودة` });
+    const projectId = useEditor.getState().id;
+    if (projectId) {
+      try {
+        saveDraft({
+          entryId: entry.id,
+          title: entry.title,
+          projectId,
+          kind: entry.kind === "custom" ? "custom" : "copy",
+          startedAt: Date.now(),
+        });
+      } catch (err) {
+        reportError(err, "تعذّر تذكّر مسودة التعديل");
+      }
+    }
+    window.location.assign("/editor");
+  };
+
+  /** «تكرار» — the copy is always a custom template, whatever the source was. */
+  const duplicateEntry = (entry: CatalogEntry) => {
+    // Copying a pack would otherwise hand out its pages without its licence.
+    if (packLocked(entry)) {
+      window.location.assign("/license");
+      return;
+    }
+    try {
+      if (entry.kind === "custom") {
+        duplicateCustomTemplate(entry.sourceId);
+      } else {
+        saveCustomTemplate({
+          title: `${entry.title} — نسخة`,
+          desc: entry.desc,
+          category: entry.category,
+          pills: entry.pills.filter((p) => p !== "all" && p !== "custom"),
+          tags: entry.tags,
+          derivedFrom: entry.id,
+          pages: entryTemplatePages(entry, { themeId: theme, orgName }),
+        });
+      }
+      toast.success(`تم تكرار «${entry.title}» في قوالبي الخاصة`);
+      setQuickViewId(null);
+      setPill("custom");
+      setQuery("");
+    } catch (err) {
+      reportError(err, "تعذّر تكرار القالب");
     }
   };
+
+  const removeEntry = (entry: CatalogEntry) => {
+    try {
+      deleteCustomTemplate(entry.sourceId);
+      toast.success(`تم حذف «${entry.title}»`);
+      setConfirmId(null);
+      setQuickViewId(null);
+      setJustSaved(null);
+    } catch (err) {
+      reportError(err, "تعذّر حذف القالب");
+    }
+  };
+
+  /** Publish a template from a project / another entry / a blank document. */
+  const createFrom = async (values: TemplateFormValues) => {
+    try {
+      let pages: Page[] | undefined;
+      if (values.source.kind === "project") {
+        const project = await getProject(values.source.projectId);
+        if (!project?.pages?.length) {
+          toast.error("تعذّر قراءة المشروع المحدد");
+          return;
+        }
+        pages = project.pages;
+      } else if (values.source.kind === "entry") {
+        const sourceId = values.source.entryId;
+        const picked = entries.find((e) => e.id === sourceId);
+        if (picked) pages = entryTemplatePages(picked, { themeId: theme, orgName });
+      } else {
+        const blank = entries.find((e) => e.id === "pack:blank");
+        if (blank) pages = entryTemplatePages(blank, { themeId: theme, orgName });
+      }
+      if (!pages?.length) {
+        toast.error("لا توجد صفحات لهذا القالب");
+        return;
+      }
+      const saved = saveCustomTemplate({
+        title: values.title,
+        desc: values.desc,
+        category: values.category,
+        pills: values.pills,
+        tags: values.tags,
+        pages,
+      });
+      toast.success(`تم حفظ «${saved.title}» في قوالبي الخاصة`);
+      setForm(null);
+      setJustSaved(`custom:${saved.id}`);
+      setPill("custom");
+      setQuery("");
+    } catch (err) {
+      reportError(err, "تعذّر حفظ القالب");
+    }
+  };
+
+  /** Metadata-only edit: name, description, category, tags and catalog filters. */
+  const saveMeta = (values: TemplateFormValues) => {
+    if (!formEntry?.custom) return;
+    try {
+      const saved = saveCustomTemplate({
+        id: formEntry.custom.id,
+        title: values.title,
+        desc: values.desc,
+        category: values.category,
+        pills: values.pills,
+        tags: values.tags,
+        pages: formEntry.custom.pages,
+      });
+      toast.success(`تم تحديث بيانات «${saved.title}»`);
+      setForm(null);
+      setJustSaved(`custom:${saved.id}`);
+    } catch (err) {
+      reportError(err, "تعذّر حفظ التعديلات");
+    }
+  };
+
+  /** Write the edited draft project back into the library. */
+  const commitDraft = async () => {
+    if (!draft) return;
+    const project = await getProject(draft.projectId);
+    if (!project?.pages?.length) {
+      clearDraft();
+      toast.error("تعذّر قراءة مسودة القالب — حُذف المشروع أو لم يعد موجودًا");
+      return;
+    }
+    try {
+      const target = entries.find((e) => e.id === draft.entryId);
+      const saved =
+        draft.kind === "custom" && target?.custom
+          ? saveCustomTemplate({
+              id: target.custom.id,
+              title: target.custom.title,
+              desc: target.custom.desc,
+              category: target.custom.category,
+              pills: target.custom.pills,
+              tags: target.custom.tags,
+              pages: project.pages,
+            })
+          : saveCustomTemplate({
+              title: draft.title,
+              desc: `مُشتق من «${draft.title}» بعد التعديل.`,
+              category: target?.category || "editorial",
+              pills: target?.pills.filter((p) => p !== "all" && p !== "custom") ?? [],
+              tags: target?.tags ?? [],
+              derivedFrom: draft.entryId,
+              pages: project.pages,
+            });
+      toast.success(
+        draft.kind === "custom" && target?.custom
+          ? `تم تحديث «${saved.title}» بتعديلاتك`
+          : `تم حفظ «${saved.title}» كقالب جديد`,
+      );
+      setJustSaved(`custom:${saved.id}`);
+      clearDraft();
+      setPill("custom");
+      setQuery("");
+    } catch (err) {
+      reportError(err, "تعذّر حفظ المسودة");
+    }
+  };
+
+  const resumeDraft = async () => {
+    if (!draft) return;
+    await openProject(draft.projectId);
+    window.location.assign("/editor");
+  };
+
+  /* ── render ──────────────────────────────────────────────────────────── */
+
+  const field =
+    "h-11 w-full rounded-xl border border-line bg-paper/60 pr-10 pl-10 text-[13px] font-semibold text-ink outline-none transition focus:border-navy dark:border-white/10 dark:bg-white/5 dark:text-white";
 
   return (
     <div className="min-h-full bg-paper dark:bg-[#111722]">
       <SiteHeader current="/templates" />
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
-        <h1 className="text-[26px] font-extrabold">القوالب</h1>
-        <p className="mt-2 max-w-2xl text-[14px] leading-7 text-muted">
-          اختر قالب بداية لإنشاء مشروع كامل، أو انتقل إلى المحرر وأضف صفحات جاهزة من تصنيفات القوالب.
-          أي قالب تختاره ينشئ نسخة جديدة — القالب الأصلي لا يتغير.
-        </p>
+      <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-[26px] font-extrabold text-ink dark:text-white">القوالب</h1>
+            <p className="mt-2 max-w-2xl text-[14px] leading-7 text-muted">
+              كل قالب هنا معاينة حقيقية لصفحاته: استخدمه لإنشاء مشروع، أو عاينه سريعًا، أو عدّله وكرّره
+              واحفظه في «قوالبي الخاصة» — والتغييرات تظهر في الكتالوج مباشرة.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setForm({ mode: "create" })}
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-navy-2"
+          >
+            <Plus className="size-4" />
+            إضافة قالب جديد
+          </button>
+        </div>
 
-        <section className="mt-8">
-          <h2 className="text-[17px] font-extrabold">مشاريع جاهزة</h2>
-          <div className="mt-2 flex flex-wrap gap-2">
+        {/* Search + filters */}
+        <div className="shadow-card dark:shadow-card-dark mt-6 grid gap-4 rounded-2xl border border-line bg-white p-4 dark:border-white/10 dark:bg-white/5 md:p-5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="ابحث باسم القالب أو الوسم أو نوع الاستخدام…"
+              aria-label="بحث في القوالب"
+              className={field}
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                aria-label="مسح البحث"
+                className="absolute left-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-muted transition hover:bg-line-2 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {CATALOG_PILLS.map((option) => {
+              const active = pill === option.id;
+              const count = counts.get(option.id) ?? 0;
+              return (
+                <button
+                  key={option.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setPill(option.id)}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12px] font-extrabold transition-all duration-200",
+                    active
+                      ? "scale-[1.03] border-navy bg-navy text-white shadow-sm"
+                      : "border-line text-muted hover:-translate-y-0.5 hover:border-navy-2 hover:text-ink dark:border-white/10 dark:hover:text-white",
+                  )}
+                >
+                  {option.label}
+                  <span
+                    className={cn(
+                      "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
+                      active
+                        ? "bg-white/20 text-white"
+                        : "bg-line-2 text-muted dark:bg-white/10 dark:text-white/70",
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 border-t border-line/70 pt-4 dark:border-white/10">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-muted">
+              <SlidersHorizontal className="size-3.5" /> سمة العرض
+            </span>
+            {THEME_ORDER.map((id) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTheme(id)}
+                aria-pressed={theme === id}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold transition",
+                  theme === id
+                    ? "border-navy bg-navy text-white"
+                    : "border-line text-muted hover:border-navy-2 dark:border-white/10",
+                )}
+              >
+                <span className="size-3 rounded-full" style={{ background: THEMES[id].primary }} />
+                {THEMES[id].name}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-extrabold text-muted">المقاسات المتاحة</span>
             {SIZE_OPTIONS.map((s) => (
               <span
                 key={s.id}
@@ -65,141 +463,205 @@ export function TemplatesPage() {
               </span>
             ))}
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {PACKS.map((pack) => (
-              <div
-                key={pack.id}
-                className="flex flex-col rounded-[12px] border border-line bg-white p-5 dark:border-white/10 dark:bg-white/5"
+        </div>
+
+        {/* In-progress edit draft */}
+        {draft && (
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/10 p-4 dark:border-gold/30">
+            <div className="flex items-start gap-3">
+              <Database className="mt-0.5 size-4 shrink-0 text-green dark:text-gold-2" />
+              <div>
+                <p className="text-[13px] font-extrabold text-ink dark:text-white">
+                  قيد التعديل: «{draft.title}»
+                </p>
+                <p className="mt-1 text-[12px] leading-6 text-muted">
+                  {draft.kind === "custom"
+                    ? "احفظ التعديلات لتحديث القالب في الكتالوج، أو تجاهل المسودة."
+                    : "احفظ التعديلات كقالب مخصص جديد داخل «قوالبي الخاصة»."}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void resumeDraft()}
+                className="inline-flex h-9 items-center rounded-xl border border-line bg-white px-3 text-[12px] font-bold text-ink transition hover:bg-line-2 dark:border-white/10 dark:bg-white/5 dark:text-white"
               >
-                <strong className="text-[15px] font-extrabold">{pack.title}</strong>
-                <span className="mt-1 text-[12px] leading-6 text-muted">{pack.desc}</span>
-                <span className="mt-2 text-[11px] font-bold text-muted">{pack.pages}</span>
-                <button
-                  type="button"
-                  onClick={() => void startFrom(pack.id)}
-                  className="mt-4 inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[12px] font-extrabold text-white"
-                >
-                  <Plus className="size-3.5" />
-                  {canUseDemoPack(pack.id) || entitlements.premium_templates ? "بدء العرض من هذا القالب" : "متاح في النسخة الكاملة"}
-                </button>
+                متابعة التعديل
+              </button>
+              <button
+                type="button"
+                onClick={() => void commitDraft()}
+                className="inline-flex h-9 items-center rounded-xl bg-navy px-3 text-[12px] font-extrabold text-white transition hover:bg-navy-2"
+              >
+                {draft.kind === "custom" ? "تحديث القالب" : "حفظ كقالب جديد"}
+              </button>
+              <button
+                type="button"
+                onClick={() => clearDraft()}
+                className="inline-flex h-9 items-center rounded-xl border border-line px-3 text-[12px] font-bold text-muted transition hover:bg-line-2 dark:border-white/10 dark:hover:bg-white/5"
+              >
+                تجاهل
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-8 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="text-[17px] font-extrabold text-ink dark:text-white">
+              {CATALOG_PILLS.find((p) => p.id === pill)?.label}
+            </h2>
+            <p className="mt-1 text-[12px] text-muted">
+              {filtered.length ? `${filtered.length} قالبًا معروضًا` : "لا نتائج مطابقة"}
+              {customCount > 0 && pill !== "custom" ? ` · لديك ${customCount} قالبًا مخصصًا` : ""}
+            </p>
+          </div>
+          {customCount > 0 && pill !== "custom" && (
+            <button
+              type="button"
+              onClick={() => setPill("custom")}
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
+            >
+              <Database className="size-3.5" />
+              قوالبي الخاصة ({customCount})
+            </button>
+          )}
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="mt-6 rounded-2xl border border-dashed border-line p-10 text-center dark:border-white/15">
+            <p className="text-[14px] font-bold text-ink dark:text-white">
+              {pill === "custom" && customCount === 0 ? "لا توجد قوالب مخصصة بعد" : "لا توجد قوالب مطابقة"}
+            </p>
+            <p className="mt-1 text-[13px] text-muted">
+              {pill === "custom" && customCount === 0
+                ? "أنشئ قالبك الأول من مشروع حالي أو من قالب جاهز — يبقى محفوظًا في متصفحك."
+                : "جرّب كلمة بحث أخرى أو أزل الفلاتر — أو أنشئ قالبك الأول من مشروعك الحالي."}
+            </p>
+            <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setPill("all");
+                }}
+                className="inline-flex h-10 items-center rounded-xl border border-line px-4 text-[12px] font-bold text-ink transition hover:bg-line-2 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
+              >
+                إزالة الفلاتر
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm({ mode: "create" })}
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-navy px-4 text-[12px] font-extrabold text-white transition hover:bg-navy-2"
+              >
+                <Plus className="size-4" /> إضافة قالب جديد
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className={cn("mt-6", CARD_WRAP)}>
+            {filtered.map((entry) => (
+              <div key={entry.id} className={cn("flex", CARD_W)}>
+                <TemplateCard
+                  entry={entry}
+                  locked={packLocked(entry)}
+                  highlight={justSaved === entry.id}
+                  actions={{
+                    onUse: () => void startFromEntry(entry),
+                    onQuickView: () => setQuickViewId(entry.id),
+                    onEdit: () => void editEntry(entry),
+                    onDuplicate: () => duplicateEntry(entry),
+                    onEditMeta: () => setForm({ mode: "edit", entryId: entry.id }),
+                    onDelete: () => setConfirmId(entry.id),
+                  }}
+                />
               </div>
             ))}
           </div>
-        </section>
+        )}
 
-        <section className="mt-12">
-          <h2 className="text-[17px] font-extrabold">صفحات داخل التقرير</h2>
-          <p className="mt-1 text-[13px] text-muted">
-            هذه الصفحات تُضاف داخل مشروع مفتوح من تبويب «قوالب» في المحرر.
-          </p>
+        <p className="mt-10 flex items-start gap-2 text-[12px] leading-6 text-muted">
+          <Database className="mt-0.5 size-4 shrink-0 text-ok" />
+          القوالب المخصصة تُحفظ في متصفحك (localStorage) وتظهر مباشرةً في الكتالوج بلا إعادة بناء، ويفتح أي
+          منها في المحرر بزر «استخدام القالب». القوالب الجاهزة تبقى كما هي، وأي تعديل عليها يُحفظ كنسخة خاصة بك.
+        </p>
 
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            <Chip active={category === "all"} onClick={() => setCategory("all")} label="الكل" />
-            {TEMPLATE_CATEGORIES.map((c) => (
-              <Chip
-                key={c.id}
-                active={category === c.id}
-                onClick={() => setCategory(c.id)}
-                label={c.title}
-              />
-            ))}
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {(Object.keys(THEMES) as (keyof typeof THEMES)[]).map((id) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTheme(id)}
-                aria-pressed={theme === id}
-                className={cn(
-                  "flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold",
-                  theme === id ? "border-navy bg-navy text-white" : "border-line text-muted dark:border-white/10",
-                )}
-              >
-                <span className="size-3 rounded-full" style={{ background: THEMES[id].primary }} />
-                {THEMES[id].name}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {templates.map((t) => {
-              const size = pageSize({ w: t.size?.w, h: t.size?.h });
-              const basePalette = THEMES[theme];
-              const palette = theme === "official" && t.preview
-                ? { ...basePalette, primary: "#0c3d2c", primarySoft: "#145c42", accent: "#c6a05a" }
-                : basePalette;
-              return (
-                <div key={t.id} className="rounded-[12px] border border-line bg-white p-4 dark:border-white/10 dark:bg-white/5">
-                  <TemplateCardPreview variant={t.preview} palette={palette} aspectRatio={`${size.w} / ${size.h}`} />
-                  <strong className="block text-[14px] font-extrabold">{t.title}</strong>
-                  {t.concept && <span className="mt-1 block text-[9px] font-bold uppercase tracking-wide text-green">{t.concept}</span>}
-                  <span className="mt-1 block text-[12px] leading-6 text-muted">{t.desc}</span>
-                  <span className="mt-2 block text-[11px] font-bold text-muted tabular-nums">
-                    {Math.round(size.w)} × {Math.round(size.h)} مم
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <a
-            href="/editor"
-            className="mt-8 inline-flex h-11 items-center gap-2 rounded-[10px] bg-navy px-4 text-[13px] font-extrabold text-white"
-          >
-            اذهب إلى المحرر لإدراج القوالب
-            <ArrowLeft className="size-4" />
-          </a>
-        </section>
+        <a
+          href="/editor"
+          className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-navy-2"
+        >
+          اذهب إلى المحرر لإدراج القوالب
+        </a>
       </main>
 
       <SiteFooter />
-    </div>
-  );
-}
 
-function TemplateCardPreview({
-  variant = "grid",
-  palette,
-  aspectRatio,
-}: {
-  variant?: string;
-  palette: (typeof THEMES)[keyof typeof THEMES];
-  aspectRatio: string;
-}) {
-  const green = palette.primary;
-  const gold = palette.accent;
-  const line = palette.line;
-  const common = "absolute block";
-  return (
-    <span className="relative mb-3 block overflow-hidden rounded-[6px] border border-line bg-white" style={{ aspectRatio }}>
-      {variant === "editorial" && <><span className={common} style={{ right: "9%", top: "12%", width: "43%", height: "5%", background: green }} /><span className={common} style={{ right: "9%", top: "23%", width: "64%", height: "16%", background: palette.ink }} /><span className={common} style={{ right: "9%", top: "50%", width: "44%", height: "25%", border: `1px solid ${line}` }} /><span className={common} style={{ left: "12%", top: "45%", width: "15%", height: "18%", background: green }} /></>}
-      {variant === "grid" && <><span className={common} style={{ inset: "0 0 auto", height: "18%", background: green }} /><span className={common} style={{ right: "8%", top: "25%", width: "38%", height: "23%", border: `1px solid ${line}` }} /><span className={common} style={{ left: "8%", top: "25%", width: "38%", height: "23%", border: `1px solid ${line}` }} /><span className={common} style={{ right: "8%", bottom: "12%", width: "38%", height: "22%", background: palette.surface, border: `1px solid ${line}` }} /><span className={common} style={{ left: "8%", bottom: "12%", width: "38%", height: "22%", background: palette.surface, border: `1px solid ${line}` }} /></>}
-      {variant === "data" && <><span className={common} style={{ right: "8%", top: "16%", width: "45%", height: "26%", background: green }} /><span className={common} style={{ left: "8%", top: "15%", width: "25%", height: "22%", background: palette.ink }} /><span className={common} style={{ right: "8%", bottom: "16%", width: "84%", height: "30%", border: `1px solid ${line}` }} /><span className={common} style={{ left: "17%", bottom: "21%", width: "7%", height: "15%", background: gold }} /><span className={common} style={{ left: "29%", bottom: "21%", width: "7%", height: "24%", background: green }} /></>}
-      {variant === "flow" && <><span className={common} style={{ right: "9%", top: "12%", width: "55%", height: "5%", background: green }} /><span className={common} style={{ right: "9%", top: "28%", width: "76%", height: "12%", border: `1px solid ${line}` }} /><span className={common} style={{ right: "18%", top: "46%", width: "67%", height: "14%", background: palette.surface, border: `1px solid ${line}` }} /><span className={common} style={{ right: "27%", top: "66%", width: "58%", height: "16%", border: `1px solid ${line}` }} /></>}
-      {variant === "asymmetric" && <><span className={common} style={{ inset: "0 auto 0 0", width: "30%", background: green }} /><span className={common} style={{ right: "8%", top: "20%", width: "52%", height: "16%", background: palette.ink }} /><span className={common} style={{ right: "12%", top: "47%", width: "27%", height: "18%", background: gold }} /><span className={common} style={{ right: "8%", bottom: "12%", width: "55%", height: "16%", border: `1px solid ${line}` }} /></>}
-      {variant === "modular" && <><span className={common} style={{ right: "8%", top: "15%", width: "48%", height: "27%", border: `1px solid ${line}` }} /><span className={common} style={{ left: "8%", top: "15%", width: "31%", height: "16%", background: green }} /><span className={common} style={{ left: "8%", top: "36%", width: "31%", height: "30%", border: `1px solid ${line}` }} /><span className={common} style={{ right: "8%", bottom: "14%", width: "70%", height: "18%", background: palette.surface }} /></>}
-      {variant === "executive" && <><span className={common} style={{ left: "44%", top: "12%", width: "12%", height: "8%", borderRadius: "50%", background: gold }} /><span className={common} style={{ right: "20%", top: "31%", width: "60%", height: "9%", background: green }} /><span className={common} style={{ right: "28%", top: "48%", width: "44%", height: "14%", border: `1px solid ${line}` }} /><span className={common} style={{ left: "36%", bottom: "13%", width: "28%", height: "13%", background: palette.ink }} /></>}
-      {variant === "statistical" && <><span className={common} style={{ right: "8%", top: "15%", width: "40%", height: "22%", background: green }} /><span className={common} style={{ left: "8%", top: "16%", width: "23%", height: "15%", background: palette.ink }} /><span className={common} style={{ left: "13%", bottom: "17%", width: "74%", height: "28%", borderBottom: `2px solid ${line}` }} /><span className={common} style={{ left: "20%", bottom: "17%", width: "6%", height: "16%", background: green }} /><span className={common} style={{ left: "34%", bottom: "17%", width: "6%", height: "24%", background: gold }} /></>}
-      {variant === "section" && <><span className={common} style={{ right: "8%", top: "17%", width: "76%", height: "26%", background: green }} /><span className={common} style={{ right: "8%", top: "56%", width: "48%", height: "8%", background: palette.ink }} /><span className={common} style={{ right: "8%", top: "71%", width: "33%", height: "5%", background: palette.muted }} /><span className={common} style={{ left: "10%", bottom: "13%", width: "10%", height: "10%", background: gold, borderRadius: "50%" }} /></>}
-      {variant === "process" && <><span className={common} style={{ right: "8%", top: "18%", width: "80%", height: "5%", background: green }} /><span className={common} style={{ right: "74%", top: "13%", width: "12%", height: "12%", borderRadius: "50%", background: green }} /><span className={common} style={{ right: "51%", top: "13%", width: "12%", height: "12%", borderRadius: "50%", border: `1px solid ${green}` }} /><span className={common} style={{ right: "28%", top: "13%", width: "12%", height: "12%", borderRadius: "50%", border: `1px solid ${green}` }} /><span className={common} style={{ right: "8%", top: "13%", width: "12%", height: "12%", borderRadius: "50%", border: `1px solid ${green}` }} /><span className={common} style={{ right: "8%", bottom: "16%", width: "70%", height: "20%", border: `1px solid ${line}` }} /></>}
-    </span>
-  );
-}
+      {/* Floating «إضافة قالب جديد» */}
+      <button
+        type="button"
+        onClick={() => setForm({ mode: "create" })}
+        title="إضافة قالب جديد"
+        aria-label="إضافة قالب جديد"
+        className="fixed bottom-5 left-5 z-[var(--z-bubble)] inline-flex h-12 items-center gap-2 rounded-full bg-navy px-5 text-[13px] font-extrabold text-white shadow-xl shadow-navy/30 transition hover:bg-navy-2"
+      >
+        <Plus className="size-4" />
+        قالب جديد
+      </button>
 
-function Chip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "rounded-full border px-3 py-1.5 text-[12px] font-bold",
-        active ? "border-navy bg-navy text-white" : "border-line text-muted dark:border-white/10",
+      {quickEntry && (
+        <QuickViewDialog
+          entry={quickEntry}
+          themeId={theme}
+          onClose={() => setQuickViewId(null)}
+          onUse={() => void startFromEntry(quickEntry)}
+          onEdit={() => void editEntry(quickEntry)}
+          onDuplicate={() => duplicateEntry(quickEntry)}
+          onEditMeta={() => {
+            setQuickViewId(null);
+            setForm({ mode: "edit", entryId: quickEntry.id });
+          }}
+          onDelete={() => {
+            setQuickViewId(null);
+            setConfirmId(quickEntry.id);
+          }}
+        />
       )}
-    >
-      {label}
-    </button>
+
+      {form && (
+        <TemplateFormDialog
+          mode={form.mode}
+          entries={entries}
+          projects={projects}
+          activeProjectId={activeProjectId}
+          initial={
+            form.mode === "edit" && formEntry?.custom
+              ? {
+                  title: formEntry.custom.title,
+                  desc: formEntry.custom.desc,
+                  category: formEntry.custom.category,
+                  tags: formEntry.custom.tags,
+                  pills: formEntry.custom.pills,
+                }
+              : undefined
+          }
+          onClose={() => setForm(null)}
+          onSubmit={(values) => {
+            if (form.mode === "create") void createFrom(values);
+            else saveMeta(values);
+          }}
+        />
+      )}
+
+      {confirmEntry && (
+        <ConfirmDialog
+          title={`حذف «${confirmEntry.title}»؟`}
+          body="سيُحذف القالب المخصص نهائيًا من الكتالوج. المشاريع التي أنشأتها منه لا تتأثر."
+          confirmLabel="حذف القالب"
+          onConfirm={() => removeEntry(confirmEntry)}
+          onClose={() => setConfirmId(null)}
+        />
+      )}
+    </div>
   );
 }

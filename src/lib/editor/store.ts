@@ -23,6 +23,7 @@ import {
   sizePreset,
   type AlignEdge,
   type CanvasEl,
+  type ElStyle,
   type ElType,
   type Page,
   type PackId,
@@ -32,6 +33,7 @@ import {
   type SizeId,
   type ThemeId,
 } from "./model";
+import { DEFAULT_FADE, normalizeFade } from "./fade";
 import {
   deleteAsset as removeAsset,
   deleteProject as removeProject,
@@ -50,23 +52,117 @@ import {
   type AssetFolder,
 } from "./storage";
 import { createProject, createTemplatePage } from "./templates";
-import { FONTS, LEGACY_STORE_KEY, LEGACY_UI_KEY, TYPE_NAME, UI_KEY } from "./model";
+import {
+  FONTS,
+  LEGACY_STORE_KEY,
+  LEGACY_UI_KEY,
+  TYPE_NAME,
+  UI_KEY,
+} from "./model";
 import { detectDeviceFonts, type DetectedFont } from "./fonts";
-import { resolveTextBox } from "./text-render";
+import { resolveTextBox, setTextContext } from "./text-render";
+import { DEFAULT_PRINT_GUIDES, type PrintGuideSettings } from "./print-guides";
+import {
+  applyFurniture,
+  boundsOf,
+  clearFurniture,
+  clearPageNumbers as dropPageNumbers,
+  kpiCard,
+  numberPages,
+  placeElements,
+  signatureZoneForPage,
+  type KpiKind,
+} from "./report-tools";
+import {
+  applyTypographyPreset,
+  typographyPreset,
+  type TypographyPresetId,
+} from "./typography";
 import { safeImageSrc } from "./images";
-import { applyStoredTheme, readStoredTheme, writeStoredTheme } from "@/lib/theme";
+import {
+  applyStoredTheme,
+  readStoredTheme,
+  writeStoredTheme,
+} from "@/lib/theme";
 import { clamp, uid } from "@/lib/utils";
-import { canAddDemoPage, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
+import {
+  canAddDemoPage,
+  canCreateDemoProject,
+  canUseDemoPack,
+} from "@/lib/product/product";
+import {
+  PAGES_PANEL_DEFAULT,
+  clampPagesHeight,
+  extractSvgMarkup,
+  isOverlayViewport,
+} from "./ui-state";
 
-export type LeftTab = "elements" | "shapes" | "library" | "templates" | "theme" | "pages" | "fonts" | "settings";
+/*
+ * The shell's pure layout/import helpers live in `ui-state.ts` (alias-free and
+ * unit-tested); re-exported here so existing import sites — and the panels that
+ * already pull them from the store — keep working unchanged.
+ */
+export {
+  OVERLAY_BREAKPOINT,
+  PAGES_PANEL_DEFAULT,
+  PAGES_PANEL_MIN,
+  clampPagesHeight,
+  extractSvgMarkup,
+  isOverlayViewport,
+} from "./ui-state";
+
+export type LeftTab =
+  | "elements"
+  | "shapes"
+  | "library"
+  | "templates"
+  | "theme"
+  | "pages"
+  | "fonts"
+  | "settings";
 export type RightTab = "properties" | "layers";
 export type View = "home" | "editor";
 
 export type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 
+/** Export formats the studio can produce (mirrors `export.ts`). */
+export type ExportPreset =
+  "pdf" | "png" | "jpg" | "docx" | "pptx" | "html" | "json";
+
+/**
+ * Where a right-click menu was opened from.
+ *
+ * Canvas and layer-row menus share ONE overlay implementation, but they act on
+ * different things: a canvas menu follows the selection, while a layers menu
+ * must act on the row the author right-clicked (which may not be selected yet).
+ * Carrying the origin lets the menu resolve its target correctly.
+ */
+export type ContextMenuSource = "canvas" | "layers";
+
+export interface ContextMenuPoint {
+  x: number;
+  y: number;
+  targetId: string | null;
+  source: ContextMenuSource;
+}
+
+/** A vector asset the author added from their own device (icon or divider). */
+export interface CustomLibraryItem {
+  id: string;
+  name: string;
+  kind: "icon" | "divider";
+  /** Raw `<svg …>` markup — sanitised on render and export like every SVG. */
+  svg: string;
+  createdAt: number;
+}
+
 /** Bundled families as the initial (pre-probe) font list. */
 function bundledFontChoices(): FontChoice[] {
-  return FONTS.map((family) => ({ family, note: "مضمّن في المنصة", source: "bundled" as const }));
+  return FONTS.map((family) => ({
+    family,
+    note: "مضمّن في المنصة",
+    source: "bundled" as const,
+  }));
 }
 
 /**
@@ -74,7 +170,10 @@ function bundledFontChoices(): FontChoice[] {
  * this device, then anything the author uploaded. De-duplicated by family so a
  * system font that is also bundled does not appear twice.
  */
-function mergeFontChoices(detected: DetectedFont[], uploaded: FontChoice[]): FontChoice[] {
+function mergeFontChoices(
+  detected: DetectedFont[],
+  uploaded: FontChoice[],
+): FontChoice[] {
   const bundled: FontChoice[] = FONTS.map((family) => ({
     family,
     note: "مضمّن في المنصة",
@@ -125,8 +224,45 @@ interface Ui {
   rightOpen: boolean;
   leftCollapsed: boolean;
   rightCollapsed: boolean;
+  /** Height (px) of the bottom pages panel — drag-resizable, persisted. */
+  pagesPanelHeight: number;
+  /** Right-click menu shared by the canvas and the layers panel. */
+  contextMenu: ContextMenuPoint | null;
+  /**
+   * Whether the floating contextual bubble (Phase 4 toolbar) is shown.
+   *
+   * Designers who work with the properties panel open often find the bubble
+   * redundant — it follows the selection and can sit over artwork. The toggle
+   * (header eye, or the bubble's own close button) turns it off globally and
+   * the choice is remembered.
+   */
+  bubbleEnabled: boolean;
   exportOpen: boolean;
+  /**
+   * Format the export dialog should open on.
+   *
+   * The dialog owns its own form state, but several surfaces (properties →
+   * «تصدير», toolbar, command palette) know *what* the author wants to export
+   * before the dialog exists. Carrying the intent as a preset removes the
+   * "press export, then pick the format you already picked" step.
+   */
+  exportPreset: ExportPreset | null;
   pageManagerOpen: boolean;
+  /**
+   * The table builder / Excel-CSV importer is open.
+   *
+   * An intent in the store rather than local state, because three surfaces ask
+   * for it (the elements palette, the smart library, and «أدوات التقرير» →
+   * «استيراد من Excel/CSV»). They all mean the same thing, so they all raise the
+   * same flag and one overlay answers — no duplicated import UI.
+   */
+  tablePickerOpen: boolean;
+  /**
+   * Print guides painted over the artboard: safe type area, binding margin and
+   * bleed. Persisted, because an author preparing a bound report turns them on
+   * once and expects them to still be there tomorrow.
+   */
+  printGuides: PrintGuideSettings;
   saveState: SaveState;
   savedAt: number | null;
   /** Re-renders the "saved N minutes ago" label without polling the store. */
@@ -163,7 +299,13 @@ interface EditorStore extends Project, Ui, History {
   assetFolderId: string | null;
   selectedAssetIds: string[];
   refreshAssets: () => Promise<void>;
-  addAsset: (asset: { name: string; src: string; w: number; h: number; folderId?: string | null }) => Promise<Asset | null>;
+  addAsset: (asset: {
+    name: string;
+    src: string;
+    w: number;
+    h: number;
+    folderId?: string | null;
+  }) => Promise<Asset | null>;
   removeAsset: (id: string) => Promise<void>;
   renameAsset: (id: string, name: string) => Promise<void>;
   setAssetFolder: (id: string | null) => void;
@@ -192,15 +334,65 @@ interface EditorStore extends Project, Ui, History {
   toggle: (
     key: keyof Pick<
       Ui,
-      "showGrid" | "snapGrid" | "snapElements" | "previewAll" | "dark" | "leftOpen" | "rightOpen" | "leftCollapsed" | "rightCollapsed" | "focusMode" | "exportOpen" | "pageManagerOpen"
+      | "showGrid"
+      | "snapGrid"
+      | "snapElements"
+      | "previewAll"
+      | "dark"
+      | "leftOpen"
+      | "rightOpen"
+      | "leftCollapsed"
+      | "rightCollapsed"
+      | "focusMode"
+      | "exportOpen"
+      | "pageManagerOpen"
     >,
   ) => void;
   setLeftTab: (t: LeftTab) => void;
   setRightTab: (t: RightTab) => void;
+  /**
+   * One sidebar switch for every screen size.
+   *
+   * Desktop docks the panels (so the toggle flips `*Collapsed`), while
+   * tablet/phone floats them over the canvas (so it flips `*Open`). The header
+   * button therefore behaves like "show/hide this sidebar" everywhere.
+   */
+  toggleSidebar: (side: "left" | "right") => void;
+  /** Dismiss both floating sidebars (backdrop tap, canvas tap, Escape). */
+  closeFloatingPanels: () => void;
+  /** Open the export dialog, optionally preselecting a format. */
+  openExport: (format?: ExportPreset) => void;
+  openContextMenu: (point: ContextMenuPoint) => void;
+  closeContextMenu: () => void;
+  /** Show/hide the floating contextual bubble (persisted). */
+  toggleBubble: (enabled?: boolean) => void;
+  /**
+   * Bring the smart library up from anywhere (the header button).
+   *
+   * Docked screens un-collapse the components panel and select the tab — the
+   * grid columns are unchanged, so the artboard does not move. Floating screens
+   * open the drawer instead.
+   */
+  openLibrary: () => void;
+  /** Clamp + persist the pages panel height (drag handle on its top border). */
+  setPagesPanelHeight: (height: number) => void;
+  /** Custom SVG icons/dividers the author added to the smart library. */
+  customIcons: CustomLibraryItem[];
+  addCustomIcon: (input: {
+    name: string;
+    svg: string;
+    kind: CustomLibraryItem["kind"];
+  }) => Promise<CustomLibraryItem | null>;
+  removeCustomIcon: (id: string) => Promise<void>;
   setTheme: (id: ThemeId) => void;
   setName: (name: string) => void;
   setOrg: (org: string) => void;
+  /** Official transaction / outgoing number, printed by {رقم_المعاملة}. */
+  setTransactionNo: (value: string) => void;
   setActivePage: (id: string) => void;
+  /** Open the table builder (optionally from the report tools' import button). */
+  openTablePicker: () => void;
+  closeTablePicker: () => void;
   select: (id: string | null) => void;
   /** Add or remove one element from the selection (shift-click). */
   toggleSelect: (id: string) => void;
@@ -232,13 +424,54 @@ interface EditorStore extends Project, Ui, History {
   matchSize: (dim: "width" | "height" | "both") => void;
   /** Rename an element from the layers panel. */
   renameElement: (id: string, name: string) => void;
-  setElementFlag: (id: string, flag: "locked" | "hidden", value?: boolean) => void;
+  setElementFlag: (
+    id: string,
+    flag: "locked" | "hidden",
+    value?: boolean,
+  ) => void;
   moveLayer: (id: string, dir: -1 | 1) => void;
   /** Reorder top-level layers using their visible (front-to-back) list order. */
   reorderLayers: (fromId: string, toId: string) => void;
   addElement: (type: ElType, over?: Partial<CanvasEl>) => string | undefined;
+  /** Show or hide one print guide across every artboard. */
+  togglePrintGuide: (kind: keyof PrintGuideSettings) => void;
+  /**
+   * Copy the active page's header and footer onto every other page of the same
+   * size (and mark them as furniture, so the action is idempotent).
+   */
+  applyHeaderFooter: () => void;
+  /** Remove every applied header/footer element from the document. */
+  removeHeaderFooter: () => void;
+  /** Add live «صفحة n من m» numbering to every page that lacks it. */
+  addPageNumbers: () => void;
+  /** Remove that numbering again. */
+  removePageNumbers: () => void;
+  /** Drop a ready-made stamp & signature zone on the active page. */
+  insertSignatureZone: () => void;
+  /** Drop a KPI card (progress / target vs actual / stat badge) on the page. */
+  insertKpiCard: (
+    kind: KpiKind,
+    options: { caption: string; value: number; target?: number },
+  ) => void;
+  /** Apply an Arabic typography preset to the selection (or the next text). */
+  applyPreset: (presetId: TypographyPresetId) => void;
+  /** Insert a macro token into the selected text element. */
+  insertMacro: (token: string) => void;
+  /**
+   * Same insertion, but returns the created element and accepts an optional
+   * centre point — the drop target for a library card dragged onto the canvas.
+   * `addElement` is a thin wrapper over this, so both share one code path.
+   */
+  addElementAt: (
+    type: ElType,
+    over?: Partial<CanvasEl>,
+    center?: { x: number; y: number },
+  ) => CanvasEl | undefined;
   /** Create a text element at an exact drawn box (the «نص بالرسم» tool). */
-  addTextAt: (box: { x: number; y: number; w: number; h: number }, pageId?: string) => string | undefined;
+  addTextAt: (
+    box: { x: number; y: number; w: number; h: number },
+    pageId?: string,
+  ) => string | undefined;
   updateElement: (id: string, patch: Partial<CanvasEl>, live?: boolean) => void;
   updateStyle: (id: string, patch: CanvasEl["style"], live?: boolean) => void;
   replaceElement: (el: CanvasEl, live?: boolean) => void;
@@ -258,6 +491,17 @@ interface EditorStore extends Project, Ui, History {
   toggleLock: () => void;
   toggleHidden: () => void;
   /**
+   * قلب أفقي / قلب رأسي — mirror the selection on an axis (step 7).
+   * The flag lives in the element style, so it travels with copy/paste, undo,
+   * the layer tree and every save.
+   */
+  flipSelected: (axis: "x" | "y") => void;
+  /**
+   * إضافة / إزالة طبقة التلاشي (step 8). Adding uses the default scrim; the
+   * properties panel then edits direction, colours, opacity and blend in place.
+   */
+  toggleFadeOverlay: () => void;
+  /**
    * Copy an element straight into another page. The clipboard alone can do this
    * (copy → switch page → paste), but that loses the current selection and the
    * source page context, so the layers panel offers a direct action.
@@ -267,13 +511,28 @@ interface EditorStore extends Project, Ui, History {
   addTemplatePage: (id: string) => void;
   duplicatePage: (id?: string) => void;
   deletePage: (id?: string) => void;
+  /**
+   * Delete specific elements of the active page by id, as ONE history entry.
+   *
+   * Used by the pre-flight checker's offered fixes: a batch of empty boxes is
+   * one decision by the author, so it should be one undo — and unlike
+   * `deleteSelected` it does not depend on the current selection, which the
+   * dialog must not have to change to clean up after itself.
+   */
+  deleteElementsById: (ids: string[]) => void;
   movePage: (dir: -1 | 1) => void;
   movePageById: (id: string, dir: -1 | 1) => void;
   reorderPages: (from: number, to: number) => void;
   renamePage: (id: string, name: string) => void;
-  setPageSize: (id: string, sizeId: SizeId, custom?: { w: number; h: number }) => void;
+  setPageSize: (
+    id: string,
+    sizeId: SizeId,
+    custom?: { w: number; h: number },
+  ) => void;
   setAllPageSizes: (sizeId: SizeId, custom?: { w: number; h: number }) => void;
-  alignPage: (edge: "left" | "right" | "center" | "top" | "middle" | "bottom") => void;
+  alignPage: (
+    edge: "left" | "right" | "center" | "top" | "middle" | "bottom",
+  ) => void;
   undo: () => void;
   redo: () => void;
   commit: () => void;
@@ -316,7 +575,8 @@ function visiblePageRect(
 ): { x: number; y: number; w: number; h: number } {
   const size = pageSize(page);
   try {
-    const host = stage?.querySelector<HTMLElement>(`[data-page-id="${page.id}"]`) ?? null;
+    const host =
+      stage?.querySelector<HTMLElement>(`[data-page-id="${page.id}"]`) ?? null;
     if (stage && host) {
       const vr = stage.getBoundingClientRect();
       const pr = host.getBoundingClientRect();
@@ -343,17 +603,33 @@ const activePageOf = (s: { pages: Page[]; activePageId: string }) =>
  * `page.elements` silently misses every element inside a group. Every mutation
  * that targets one element goes through here so grouped content stays editable.
  */
-function mapElement(page: Page, id: string, fn: (el: CanvasEl) => CanvasEl): Page {
+function mapElement(
+  page: Page,
+  id: string,
+  fn: (el: CanvasEl) => CanvasEl,
+): Page {
   const walk = (list: CanvasEl[]): CanvasEl[] =>
-    list.map((el) => (el.id === id ? fn(el) : el.children?.length ? { ...el, children: walk(el.children) } : el));
+    list.map((el) =>
+      el.id === id
+        ? fn(el)
+        : el.children?.length
+          ? { ...el, children: walk(el.children) }
+          : el,
+    );
   return { ...page, elements: walk(page.elements) };
 }
 
-function mapElements(page: Page, ids: Set<string>, fn: (el: CanvasEl) => CanvasEl): Page {
+function mapElements(
+  page: Page,
+  ids: Set<string>,
+  fn: (el: CanvasEl) => CanvasEl,
+): Page {
   const walk = (list: CanvasEl[]): CanvasEl[] =>
     list.map((el) => {
       const next = ids.has(el.id) ? fn(el) : el;
-      return next.children?.length ? { ...next, children: walk(next.children) } : next;
+      return next.children?.length
+        ? { ...next, children: walk(next.children) }
+        : next;
     });
   return { ...page, elements: walk(page.elements) };
 }
@@ -366,8 +642,19 @@ function locate(page: Page, id: string) {
 function cloneWithFreshIds(el: CanvasEl): CanvasEl {
   const copy = clone(el);
   copy.id = uid(copy.type === "group" ? "grp" : "el");
-  if (copy.children?.length) copy.children = copy.children.map(cloneWithFreshIds);
+  if (copy.children?.length)
+    copy.children = copy.children.map(cloneWithFreshIds);
   return copy;
+}
+
+/** Element types a fade overlay applies to (the image family). */
+const FADE_TYPES = new Set<CanvasEl["type"]>(["image", "logo", "qr"]);
+
+/** Drop the fade key without mutating the original style object. */
+function omitFade(style: ElStyle | undefined): ElStyle {
+  const { fade: _fade, ...rest } = style ?? {};
+  void _fade;
+  return rest;
 }
 
 /** True when `ancestorId` contains `id` at any depth. */
@@ -378,22 +665,71 @@ function isDescendant(page: Page, ancestorId: string, id: string): boolean {
 }
 
 /**
+ * Apply a flag to an element *and its whole subtree*.
+ *
+ * Folders (مجموعات) are containers: hiding or locking one must reach every
+ * descendant, not just the direct children, or a folder nested inside a folder
+ * would keep painting locked artwork on the canvas. The tree view indents to
+ * any depth, so the cascade has to match that depth.
+ */
+/**
+ * Toggle a mirror flag on an element *and its whole subtree*.
+ *
+ * Groups have no artwork of their own, but flipping the folder still has to
+ * reach the children — otherwise flipping a group would look like it did
+ * nothing at all.
+ */
+function flipTree(el: CanvasEl, key: "flipX" | "flipY"): CanvasEl {
+  const flipped: CanvasEl = {
+    ...el,
+    style: { ...el.style, [key]: !el.style?.[key] },
+  };
+  if (el.children?.length)
+    flipped.children = el.children.map((c) => flipTree(c, key));
+  return flipped;
+}
+
+function cascadeFlag(
+  el: CanvasEl,
+  flag: "hidden" | "locked",
+  value: boolean,
+): CanvasEl {
+  return {
+    ...el,
+    [flag]: value,
+    ...(el.children?.length
+      ? { children: el.children.map((c) => cascadeFlag(c, flag, value)) }
+      : {}),
+  };
+}
+
+/**
  * Element ids the user can actually click given the current group context.
  *
  * A group behaves as one element from outside, so clicking it selects the whole
  * group; stepping into it (double-click) narrows the picks to its children.
  */
-function pickable(page: Page, enteredGroupId: string | null, id: string): boolean {
+function pickable(
+  page: Page,
+  enteredGroupId: string | null,
+  id: string,
+): boolean {
   if (!enteredGroupId) {
     // Top level only: children of a group are reached by entering it.
     return page.elements.some((e) => e.id === id);
   }
-  return isDescendant(page, enteredGroupId, id) || page.elements.some((e) => e.id === id);
+  return (
+    isDescendant(page, enteredGroupId, id) ||
+    page.elements.some((e) => e.id === id)
+  );
 }
 
 /** Normalises anything loaded from disk, a file, or an older schema version. */
 function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
-  const pages = incoming.pages?.length ? incoming.pages : createProject("blank").pages;
+  const pages = incoming.pages?.length
+    ? incoming.pages
+    : createProject("blank").pages;
+  incoming.transactionNo ||= "";
   pages.forEach((p) => {
     p.elements ||= [];
     p.w = pageSize(p).w;
@@ -420,6 +756,7 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
     name: incoming.name || "تقرير",
     theme: incoming.theme || "official",
     orgName: incoming.orgName || "",
+    transactionNo: incoming.transactionNo || "",
     pages,
     id: incoming.id,
     createdAt: incoming.createdAt,
@@ -452,7 +789,10 @@ export const useEditor = create<EditorStore>((set, get) => {
     scheduleSave();
   };
 
-  const applyProject = (incoming: ProjectSnapshot, extra: Partial<EditorStore> = {}) => {
+  const applyProject = (
+    incoming: ProjectSnapshot,
+    extra: Partial<EditorStore> = {},
+  ) => {
     const project = normalizeProject(incoming);
     // Prefer an explicit caller override, then the page the snapshot itself
     // remembers being on (undo/redo), then fall back to the first page for
@@ -460,8 +800,9 @@ export const useEditor = create<EditorStore>((set, get) => {
     // that no longer exists in this particular snapshot.
     const wanted = extra.activePageId || project.activePageId;
     const activePageId =
-      (wanted && project.pages.some((p) => p.id === wanted) ? wanted : undefined) ||
-      project.pages[0]?.id;
+      (wanted && project.pages.some((p) => p.id === wanted)
+        ? wanted
+        : undefined) || project.pages[0]?.id;
     set({
       ...project,
       activePageId,
@@ -489,15 +830,22 @@ export const useEditor = create<EditorStore>((set, get) => {
       list.map((el) => {
         const move = byId.get(el.id);
         const next = move ? { ...el, x: move.x, y: move.y } : el;
-        const withChildren = next.children?.length ? { ...next, children: walk(next.children) } : next;
+        const withChildren = next.children?.length
+          ? { ...next, children: walk(next.children) }
+          : next;
         return withChildren;
       });
-    set({ pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: walk(p.elements) } : p)) });
+    set({
+      pages: s.pages.map((p) =>
+        p.id === page.id ? { ...p, elements: walk(p.elements) } : p,
+      ),
+    });
     pushHistory();
   };
 
   return {
     ...blank,
+    transactionNo: blank.transactionNo ?? "",
     activePageId: blank.pages[0].id,
     selectedId: null,
     selectedIds: [],
@@ -505,6 +853,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     editingId: null,
     zoom: 0.82,
     showGrid: false,
+    printGuides: { ...DEFAULT_PRINT_GUIDES },
     snapGrid: true,
     snapElements: true,
     previewAll: true,
@@ -516,8 +865,13 @@ export const useEditor = create<EditorStore>((set, get) => {
     rightOpen: false,
     leftCollapsed: false,
     rightCollapsed: false,
+    pagesPanelHeight: PAGES_PANEL_DEFAULT,
+    contextMenu: null,
+    bubbleEnabled: true,
     exportOpen: false,
+    exportPreset: null,
     pageManagerOpen: false,
+    tablePickerOpen: false,
     saveState: "idle",
     savedAt: null,
     clockTick: 0,
@@ -535,6 +889,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     assetsLoading: true,
     fontChoices: bundledFontChoices(),
     fontsProbed: false,
+    customIcons: [],
 
     /**
      * Probe installed fonts on first editor open.
@@ -563,7 +918,12 @@ export const useEditor = create<EditorStore>((set, get) => {
       const trimmed = String(family || "").trim();
       if (!trimmed) return;
       const list = get().fontChoices.filter((f) => f.family !== trimmed);
-      set({ fontChoices: [...list, { family: trimmed, note: note || "خط مرفوع", source: "uploaded" }] });
+      set({
+        fontChoices: [
+          ...list,
+          { family: trimmed, note: note || "خط مرفوع", source: "uploaded" },
+        ],
+      });
     },
 
     hydrate: async () => {
@@ -586,7 +946,8 @@ export const useEditor = create<EditorStore>((set, get) => {
             /* a corrupt legacy blob must not block startup */
           }
         }
-        const activeId = (await getSetting<string>("activeProjectId")) || ui.activeProjectId;
+        const activeId =
+          (await getSetting<string>("activeProjectId")) || ui.activeProjectId;
         const active = activeId ? await getProject(activeId) : null;
         // One shared site-wide preference (lib/theme.ts): the editor no longer
         // invents its own default or storage channel — the visitor's choice
@@ -604,6 +965,16 @@ export const useEditor = create<EditorStore>((set, get) => {
           rightCollapsed: Boolean(ui.rightCollapsed),
           previewAll: true,
           zoom: typeof ui.zoom === "number" ? clamp(ui.zoom, 0.35, 1.6) : 0.82,
+          pagesPanelHeight: clampPagesHeight(
+            typeof ui.pagesPanelHeight === "number"
+              ? ui.pagesPanelHeight
+              : PAGES_PANEL_DEFAULT,
+          ),
+          bubbleEnabled: ui.bubble !== false,
+          printGuides: {
+            ...DEFAULT_PRINT_GUIDES,
+            ...(ui.printGuides ?? {}),
+          },
         });
         if (active) applyProject(active, { zoom: get().zoom });
       } catch {
@@ -621,9 +992,29 @@ export const useEditor = create<EditorStore>((set, get) => {
       const folders = await getSetting<AssetFolder[]>("assetFolders");
       set({ assetFolders: Array.isArray(folders) ? folders : [] });
 
+      // Author-added vector icons/dividers live beside the asset shelf: same
+      // durability, but stored as SVG markup so they stay vector on the page.
+      const custom = await getSetting<CustomLibraryItem[]>("customLibrary");
+      set({
+        customIcons: Array.isArray(custom)
+          ? custom.filter(
+              (item) =>
+                item &&
+                typeof item.svg === "string" &&
+                item.svg.includes("<svg"),
+            )
+          : [],
+      });
+
       document.documentElement.lang = "ar";
       document.documentElement.dir = "rtl";
-      set({ hydrated: true, past: [JSON.stringify(projectSlice(get()))], future: [], saveState: "saved", savedAt: Date.now() });
+      set({
+        hydrated: true,
+        past: [JSON.stringify(projectSlice(get()))],
+        future: [],
+        saveState: "saved",
+        savedAt: Date.now(),
+      });
     },
 
     refreshProjects: async () => {
@@ -640,13 +1031,16 @@ export const useEditor = create<EditorStore>((set, get) => {
     addAsset: async (asset) => {
       try {
         const saved = await saveAsset(asset);
-        set({ assets: [saved, ...get().assets.filter((a) => a.id !== saved.id)] });
+        set({
+          assets: [saved, ...get().assets.filter((a) => a.id !== saved.id)],
+        });
         return saved;
       } catch {
         // A full or unavailable store must not lose the element the author is
         // placing right now — only the "save for later" half fails.
         toast.error("تعذر حفظ العنصر في المكتبة", {
-          description: "قد تكون مساحة التخزين ممتلئة. العنصر أُضيف إلى الصفحة على أي حال.",
+          description:
+            "قد تكون مساحة التخزين ممتلئة. العنصر أُضيف إلى الصفحة على أي حال.",
         });
         return null;
       }
@@ -661,20 +1055,29 @@ export const useEditor = create<EditorStore>((set, get) => {
       const trimmed = name.trim();
       if (!trimmed) return;
       await renameAssetRow(id, trimmed);
-      set({ assets: get().assets.map((a) => (a.id === id ? { ...a, name: trimmed } : a)) });
+      set({
+        assets: get().assets.map((a) =>
+          a.id === id ? { ...a, name: trimmed } : a,
+        ),
+      });
     },
 
     setAssetFolder: (id) => set({ assetFolderId: id, selectedAssetIds: [] }),
-    toggleAssetSelect: (id) => set((state) => ({
-      selectedAssetIds: state.selectedAssetIds.includes(id)
-        ? state.selectedAssetIds.filter((item) => item !== id)
-        : [...state.selectedAssetIds, id],
-    })),
+    toggleAssetSelect: (id) =>
+      set((state) => ({
+        selectedAssetIds: state.selectedAssetIds.includes(id)
+          ? state.selectedAssetIds.filter((item) => item !== id)
+          : [...state.selectedAssetIds, id],
+      })),
     clearAssetSelection: () => set({ selectedAssetIds: [] }),
     createAssetFolder: async (name) => {
       const trimmed = name.trim();
       if (!trimmed) return;
-      const folder = { id: uid("folder"), name: trimmed, createdAt: Date.now() };
+      const folder = {
+        id: uid("folder"),
+        name: trimmed,
+        createdAt: Date.now(),
+      };
       const folders = [...get().assetFolders, folder];
       set({ assetFolders: folders });
       await setSetting("assetFolders", folders);
@@ -682,21 +1085,40 @@ export const useEditor = create<EditorStore>((set, get) => {
     renameAssetFolder: async (id, name) => {
       const trimmed = name.trim();
       if (!trimmed) return;
-      const folders = get().assetFolders.map((folder) => folder.id === id ? { ...folder, name: trimmed } : folder);
+      const folders = get().assetFolders.map((folder) =>
+        folder.id === id ? { ...folder, name: trimmed } : folder,
+      );
       set({ assetFolders: folders });
       await setSetting("assetFolders", folders);
     },
     deleteAssetFolder: async (id) => {
       const folders = get().assetFolders.filter((folder) => folder.id !== id);
-      const assets = get().assets.map((asset) => asset.folderId === id ? { ...asset, folderId: null } : asset);
-      await Promise.all(assets.filter((asset) => asset.folderId === null).map((asset) => saveAsset(asset)));
-      set({ assetFolders: folders, assets, assetFolderId: get().assetFolderId === id ? null : get().assetFolderId, selectedAssetIds: [] });
+      const assets = get().assets.map((asset) =>
+        asset.folderId === id ? { ...asset, folderId: null } : asset,
+      );
+      await Promise.all(
+        assets
+          .filter((asset) => asset.folderId === null)
+          .map((asset) => saveAsset(asset)),
+      );
+      set({
+        assetFolders: folders,
+        assets,
+        assetFolderId: get().assetFolderId === id ? null : get().assetFolderId,
+        selectedAssetIds: [],
+      });
       await setSetting("assetFolders", folders);
     },
     moveAssetsToFolder: async (ids, folderId) => {
       const selected = new Set(ids);
-      const assets = get().assets.map((asset) => selected.has(asset.id) ? { ...asset, folderId } : asset);
-      await Promise.all(assets.filter((asset) => selected.has(asset.id)).map((asset) => saveAsset(asset)));
+      const assets = get().assets.map((asset) =>
+        selected.has(asset.id) ? { ...asset, folderId } : asset,
+      );
+      await Promise.all(
+        assets
+          .filter((asset) => selected.has(asset.id))
+          .map((asset) => saveAsset(asset)),
+      );
       set({ assets, selectedAssetIds: [] });
     },
 
@@ -704,17 +1126,23 @@ export const useEditor = create<EditorStore>((set, get) => {
       const s = get();
       if (!canUseDemoPack(pack)) {
         toast.error("هذا القالب متاح ضمن النسخة الكاملة", {
-          description: "يمكنك استكشافه من صفحة القوالب وطلب النسخة المناسبة لجهتك.",
+          description:
+            "يمكنك استكشافه من صفحة القوالب وطلب النسخة المناسبة لجهتك.",
         });
         return false;
       }
       if (!canCreateDemoProject(s.projects.length)) {
         toast.error("اكتملت مساحة العرض التجريبي", {
-          description: "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
+          description:
+            "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
         });
         return false;
       }
-      const project = createProject(pack, theme || (pack === "eid" ? "eid" : "official"), s.orgName);
+      const project = createProject(
+        pack,
+        theme || (pack === "eid" ? "eid" : "official"),
+        s.orgName,
+      );
       const saved = await saveProject(project);
       applyProject(saved, { zoom: 0.82 });
       set({
@@ -736,7 +1164,12 @@ export const useEditor = create<EditorStore>((set, get) => {
         return;
       }
       applyProject(project, { zoom: get().zoom || 0.82 });
-      set({ past: [JSON.stringify(projectSlice(get()))], future: [], saveState: "saved", savedAt: Date.now() });
+      set({
+        past: [JSON.stringify(projectSlice(get()))],
+        future: [],
+        saveState: "saved",
+        savedAt: Date.now(),
+      });
       await setSetting("activeProjectId", project.id);
     },
 
@@ -809,7 +1242,12 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
       const saved = await saveProject(incoming);
       applyProject(saved);
-      set({ past: [JSON.stringify(projectSlice(get()))], future: [], saveState: "saved", savedAt: Date.now() });
+      set({
+        past: [JSON.stringify(projectSlice(get()))],
+        future: [],
+        saveState: "saved",
+        savedAt: Date.now(),
+      });
       await setSetting("activeProjectId", saved.id);
       await get().refreshProjects();
       toast.success("تم استيراد المشروع");
@@ -829,7 +1267,13 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (key === "dark") {
         writeStoredTheme(next);
       }
-      if (key === "focusMode" || key === "leftOpen" || key === "rightOpen" || key === "leftCollapsed" || key === "rightCollapsed") {
+      if (
+        key === "focusMode" ||
+        key === "leftOpen" ||
+        key === "rightOpen" ||
+        key === "leftCollapsed" ||
+        key === "rightCollapsed"
+      ) {
         void setSetting(key, next);
       }
     },
@@ -839,6 +1283,78 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (leftTab === "fonts") get().probeFonts();
     },
     setRightTab: (rightTab) => set({ rightTab, rightOpen: true }),
+
+    toggleSidebar: (side) => {
+      const overlay = isOverlayViewport();
+      // Docked panels persist as `*Collapsed`; floating ones as `*Open`.
+      const key =
+        side === "left"
+          ? overlay
+            ? "leftOpen"
+            : "leftCollapsed"
+          : overlay
+            ? "rightOpen"
+            : "rightCollapsed";
+      const next = !get()[key];
+      set({ [key]: next } as Partial<EditorStore>);
+      void setSetting(key, next);
+    },
+    closeFloatingPanels: () => {
+      set({ leftOpen: false, rightOpen: false });
+      void setSetting("leftOpen", false);
+      void setSetting("rightOpen", false);
+    },
+    openExport: (format) =>
+      set({ exportOpen: true, exportPreset: format ?? null }),
+    openContextMenu: (contextMenu) => set({ contextMenu }),
+    closeContextMenu: () => set({ contextMenu: null }),
+    openLibrary: () => {
+      const overlay = isOverlayViewport();
+      set({
+        leftTab: "library",
+        leftCollapsed: false,
+        leftOpen: overlay ? true : get().leftOpen,
+      });
+    },
+    toggleBubble: (enabled) => {
+      const bubbleEnabled = enabled ?? !get().bubbleEnabled;
+      set({ bubbleEnabled });
+      writeUi({ bubble: bubbleEnabled });
+    },
+    setPagesPanelHeight: (height) => {
+      const next = clampPagesHeight(height);
+      if (get().pagesPanelHeight === next) return;
+      set({ pagesPanelHeight: next });
+      // Persisted through the UI slot so the panel reopens at the author's size.
+      writeUi({ pagesPanelHeight: next });
+    },
+
+    addCustomIcon: async (input) => {
+      const svg = extractSvgMarkup(input.svg);
+      if (!svg) {
+        toast.error("الملف لا يحتوي على رسم SVG صالح");
+        return null;
+      }
+      const item: CustomLibraryItem = {
+        id: uid(input.kind === "divider" ? "dvd" : "icn"),
+        name:
+          (input.name || "").trim().slice(0, 40) ||
+          (input.kind === "divider" ? "فاصل مخصص" : "رمز مخصص"),
+        kind: input.kind,
+        svg,
+        createdAt: Date.now(),
+      };
+      const customIcons = [item, ...get().customIcons];
+      set({ customIcons });
+      await setSetting("customLibrary", customIcons);
+      return item;
+    },
+
+    removeCustomIcon: async (id) => {
+      const customIcons = get().customIcons.filter((item) => item.id !== id);
+      set({ customIcons });
+      await setSetting("customLibrary", customIcons);
+    },
     setTheme: (theme) => {
       set({ theme });
       pushHistory();
@@ -851,16 +1367,40 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({ orgName });
       scheduleSave(500);
     },
+
+    /*
+     * Opening the builder also reveals the components panel, because that is
+     * where the overlay lives. On a tablet the panel is a drawer, so the author
+     * sees the picker slide in with it instead of a control appearing offscreen.
+     */
+    openTablePicker: () =>
+      set({ tablePickerOpen: true, leftTab: "elements", leftOpen: true }),
+    closeTablePicker: () => set({ tablePickerOpen: false }),
+    setTransactionNo: (transactionNo) => {
+      set({ transactionNo });
+      scheduleSave(500);
+    },
     setActivePage: (id) => {
       if (id === get().activePageId) return;
-      set({ activePageId: id, selectedId: null, selectedIds: [], enteredGroupId: null });
+      set({
+        activePageId: id,
+        selectedId: null,
+        selectedIds: [],
+        enteredGroupId: null,
+      });
     },
     select: (id) =>
       set((s) => ({
         selectedId: id,
         selectedIds: id ? [id] : [],
         enteredGroupId: id ? s.enteredGroupId : null,
-        rightOpen: id ? true : s.rightOpen,
+        /*
+         * Selecting opens the properties panel — but only where the panel is
+         * DOCKED. On tablet/phone the panel is a slide-over, and auto-opening it
+         * on every canvas tap would fight the "tap the canvas to dismiss the
+         * drawer" rule (the tap would close it and instantly reopen it).
+         */
+        rightOpen: id && !isOverlayViewport() ? true : s.rightOpen,
       })),
 
     setEditing: (id) => set({ editingId: id }),
@@ -870,10 +1410,17 @@ export const useEditor = create<EditorStore>((set, get) => {
       const page = activePageOf(s);
       if (!page || !pickable(page, s.enteredGroupId, id)) return;
       const has = s.selectedIds.includes(id);
-      const selectedIds = has ? s.selectedIds.filter((x) => x !== id) : [...s.selectedIds, id];
+      const selectedIds = has
+        ? s.selectedIds.filter((x) => x !== id)
+        : [...s.selectedIds, id];
       // The primary selection is the last one added, which is the element whose
       // properties the panel should be showing.
-      set({ selectedIds, selectedId: selectedIds.length ? selectedIds[selectedIds.length - 1] : null });
+      set({
+        selectedIds,
+        selectedId: selectedIds.length
+          ? selectedIds[selectedIds.length - 1]
+          : null,
+      });
     },
 
     selectMany: (ids) => {
@@ -881,7 +1428,10 @@ export const useEditor = create<EditorStore>((set, get) => {
       const page = activePageOf(s);
       if (!page) return;
       const keep = ids.filter((id) => pickable(page, s.enteredGroupId, id));
-      set({ selectedIds: keep, selectedId: keep.length ? keep[keep.length - 1] : null });
+      set({
+        selectedIds: keep,
+        selectedId: keep.length ? keep[keep.length - 1] : null,
+      });
     },
 
     selectAll: () =>
@@ -904,7 +1454,12 @@ export const useEditor = create<EditorStore>((set, get) => {
       }
       const linkId = uid("link");
       const ids = new Set(picked.map((el) => el.id));
-      const next = { ...page, elements: page.elements.map((el) => (ids.has(el.id) ? { ...el, linkId } : el)) };
+      const next = {
+        ...page,
+        elements: page.elements.map((el) =>
+          ids.has(el.id) ? { ...el, linkId } : el,
+        ),
+      };
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
       toast.success("تم ربط العناصر — بقيت مستقلة ويمكن فك الربط لاحقًا");
@@ -915,7 +1470,12 @@ export const useEditor = create<EditorStore>((set, get) => {
       const page = activePageOf(s);
       const ids = new Set(s.selectedIds);
       if (!s.selectedIds.length) return;
-      const next = { ...page, elements: page.elements.map((el) => (ids.has(el.id) ? { ...el, linkId: undefined } : el)) };
+      const next = {
+        ...page,
+        elements: page.elements.map((el) =>
+          ids.has(el.id) ? { ...el, linkId: undefined } : el,
+        ),
+      };
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
       toast.success("تم فك ربط العناصر");
@@ -949,7 +1509,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       }
       // Group only siblings: mixing depths would make the children's relative
       // coordinates ambiguous, so a nested pick is simply left out.
-      const topLevel = picked.filter((el) => page.elements.some((e) => e.id === el.id));
+      const topLevel = picked.filter((el) =>
+        page.elements.some((e) => e.id === el.id),
+      );
       if (topLevel.length < 2) {
         toast.error("لا يمكن تجميع عناصر من مستويات مختلفة");
         return null;
@@ -976,7 +1538,10 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return;
       const targets = s.selectedIds
         .map((id) => locate(page, id)?.el)
-        .filter((el): el is CanvasEl => Boolean(el) && el!.type === "group" && !el!.locked);
+        .filter(
+          (el): el is CanvasEl =>
+            Boolean(el) && el!.type === "group" && !el!.locked,
+        );
       if (!targets.length) {
         toast.error("لا توجد مجموعة محددة لفك التجميع");
         return;
@@ -997,7 +1562,11 @@ export const useEditor = create<EditorStore>((set, get) => {
         enteredGroupId: null,
       });
       pushHistory();
-      toast.success(freed.length > 1 ? `تم فك تجميع ${freed.length} عناصر` : "تم فك التجميع");
+      toast.success(
+        freed.length > 1
+          ? `تم فك تجميع ${freed.length} عناصر`
+          : "تم فك التجميع",
+      );
     },
 
     align: (edge, frame) => {
@@ -1012,11 +1581,18 @@ export const useEditor = create<EditorStore>((set, get) => {
       const target =
         frame === "page"
           ? { x: 0, y: 0, w: size.w, h: size.h }
-          : absoluteBounds(page.elements, s.selectedIds) || { x: 0, y: 0, w: size.w, h: size.h };
+          : absoluteBounds(page.elements, s.selectedIds) || {
+              x: 0,
+              y: 0,
+              w: size.w,
+              h: size.h,
+            };
       // One element aligns against the frame itself (the artboard for "page");
       // several elements align onto their shared box. Group members are
       // resolved through absolute page space inside `alignmentMoves`.
-      applyPositions(alignmentMoves(page.elements, s.selectedIds, edge, target));
+      applyPositions(
+        alignmentMoves(page.elements, s.selectedIds, edge, target),
+      );
     },
 
     distribute: (axis) => {
@@ -1047,16 +1623,22 @@ export const useEditor = create<EditorStore>((set, get) => {
         .map((id) => locate(page, id))
         .filter(
           (found): found is NonNullable<ReturnType<typeof locate>> =>
-            Boolean(found) && found!.list === page.elements && !found!.el.locked,
+            Boolean(found) &&
+            found!.list === page.elements &&
+            !found!.el.locked,
         );
       if (!targets.length) return;
       const w = Math.max(MIN_SIZE, primary.w);
       const h = Math.max(MIN_SIZE, primary.h);
-      const next = mapElements(page, new Set(targets.map((f) => f.el.id)), (el) => ({
-        ...el,
-        ...(dim !== "height" ? { w } : {}),
-        ...(dim !== "width" ? { h } : {}),
-      }));
+      const next = mapElements(
+        page,
+        new Set(targets.map((f) => f.el.id)),
+        (el) => ({
+          ...el,
+          ...(dim !== "height" ? { w } : {}),
+          ...(dim !== "width" ? { h } : {}),
+        }),
+      );
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
     },
@@ -1065,7 +1647,10 @@ export const useEditor = create<EditorStore>((set, get) => {
       const s = get();
       const page = activePageOf(s);
       if (!page) return;
-      const next = mapElement(page, id, (el) => ({ ...el, name: name.trim() || el.name }));
+      const next = mapElement(page, id, (el) => ({
+        ...el,
+        name: name.trim() || el.name,
+      }));
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
     },
@@ -1074,7 +1659,20 @@ export const useEditor = create<EditorStore>((set, get) => {
       const s = get();
       const page = activePageOf(s);
       if (!page) return;
-      const next = mapElement(page, id, (el) => ({ ...el, [flag]: value ?? !el[flag] }));
+      const current = findElement(page.elements, id)?.el;
+      const nextValue = value ?? !current?.[flag];
+      /*
+       * Folder rule (Phase 5): switching a مجموعة/مجلد off must switch every
+       * nested child off with it — otherwise the canvas keeps painting artwork
+       * from a folder the author just hid, and the tree and canvas disagree.
+       * The same applies to locking (a locked folder is fully locked). Only a
+       * group has children, so a leaf element costs one extra check.
+       */
+      const next = mapElement(page, id, (el) =>
+        flag === "hidden" || flag === "locked"
+          ? cascadeFlag(el, flag, nextValue)
+          : { ...el, [flag]: nextValue },
+      );
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
     },
@@ -1102,7 +1700,11 @@ export const useEditor = create<EditorStore>((set, get) => {
         const applyIn = (list: CanvasEl[]): CanvasEl[] =>
           list === found.list
             ? swapIn(list)
-            : list.map((el) => (el.children?.length ? { ...el, children: applyIn(el.children) } : el));
+            : list.map((el) =>
+                el.children?.length
+                  ? { ...el, children: applyIn(el.children) }
+                  : el,
+              );
         next = { ...page, elements: applyIn(page.elements) };
       }
       // NOT `normalizeZ` here: it re-sorts by the old z values and would undo the
@@ -1110,34 +1712,52 @@ export const useEditor = create<EditorStore>((set, get) => {
       // the canvas painter and every exporter follow, so the list, the canvas and
       // the exported file stay in one order.
       const renumber = (list: CanvasEl[]): CanvasEl[] =>
-        list.map((el, i) => ({ ...el, z: i + 1, children: el.children?.length ? renumber(el.children) : el.children }));
+        list.map((el, i) => ({
+          ...el,
+          z: i + 1,
+          children: el.children?.length ? renumber(el.children) : el.children,
+        }));
       next.elements = renumber(next.elements);
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
     },
 
-    addElement: (type, over) => {
+    addElementAt: (type, over, center) => {
       const s = get();
       const page = activePageOf(s);
       if (!page) return undefined;
       const theme = THEMES[s.theme];
       const size = pageSize(page);
       /*
-       * Centered insert: the element lands in the middle of what the author is
-       * looking at (the union of every visible artboard), not a fixed corner.
+       * Two placements, one insertion:
+       *  · no `center` — the element lands in the middle of what the author is
+       *    looking at (the union of every visible artboard), not a fixed corner;
+       *  · `center` given — the element is centred on that page point, which is
+       *    how a library card dropped on the canvas lands under the cursor.
        * Defaults come from createElementDefaults; anything the caller passes in
        * `over` (e.g. a palette preset or a drawn size) wins over them, and the
        * theme layer is applied last exactly as before — layering keeps one
        * source of defaults without changing createElement's theming contract.
        */
       const defaults = createElementDefaults(type);
-      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
-      const defaultSize = { w: defaults.w ?? 40, h: defaults.h ?? 30 };
-      const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
-      const pos = centerFor(
-        visible,
-        { w: size.w, h: size.h, elW: defaultSize.w, elH: defaultSize.h },
-      );
+      const box = {
+        w: over?.w ?? defaults.w ?? 40,
+        h: over?.h ?? defaults.h ?? 30,
+      };
+      let pos = center;
+      if (pos) pos = { x: pos.x - box.w / 2, y: pos.y - box.h / 2 };
+      else {
+        const stage = document.querySelector<HTMLElement>(
+          ".editor-canvas-stage",
+        );
+        const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+        pos = centerFor(visible, {
+          w: size.w,
+          h: size.h,
+          elW: box.w,
+          elH: box.h,
+        });
+      }
       const el = createElement(
         type,
         {
@@ -1151,7 +1771,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       );
       constrainElement(el, size);
       set({
-        pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: [...p.elements, el] } : p)),
+        pages: s.pages.map((p) =>
+          p.id === page.id ? { ...p, elements: [...p.elements, el] } : p,
+        ),
         // Both selection fields together: selectedId alone leaves selectedIds
         // empty, so the selection frame, the arrange bar and every
         // selection-scoped command ignored the element that was just added.
@@ -1160,12 +1782,330 @@ export const useEditor = create<EditorStore>((set, get) => {
         rightTab: "properties",
       });
       pushHistory();
-      return el.id;
+      /*
+       * Step 10 — one confirmation for EVERY insertion funnel.
+       *
+       * `addElementAt` is what the library cards, the element palette, the table
+       * builder and the canvas drop all call, so a single toast here covers
+       * "click or drag a library item" exactly, with no chance of a path being
+       * forgotten. Short duration keeps it subtle: a receipt, not an alert.
+       */
+      toast.success("تمت إضافة العنصر إلى مساحة العمل", { duration: 1600 });
+      return el;
+    },
+
+    addElement: (type, over) => get().addElementAt(type, over)?.id,
+
+    /* ── Print guides ────────────────────────────────────────────────────── */
+
+    togglePrintGuide: (kind) => {
+      const next = {
+        ...get().printGuides,
+        [kind]: !get().printGuides[kind],
+      };
+      set({ printGuides: next });
+      writeUi({ printGuides: next });
+    },
+
+    /* ── Page furniture, numbering, and ready-made report objects ────────── */
+
+    /**
+     * Apply the active page's header and footer document-wide.
+     *
+     * The active page is the source because it is the one the author can see and
+     * style; the action then mirrors it onto every page of the same size. It is
+     * ONE history entry, so a mistaken «تثبيت» is a single undo away.
+     */
+    applyHeaderFooter: () => {
+      const s = get();
+      const source = activePageOf(s);
+      if (!source) return;
+      const { pages, copied, skipped } = applyFurniture(
+        s.pages,
+        source.id,
+        (page) => pageSize(page),
+      );
+      if (!copied && !skipped.length) {
+        toast.error("لا يوجد ترويسة أو تذييل في الصفحة الحالية", {
+          description: "أضف عناصر في أعلى الصفحة أو أسفلها ثم أعد المحاولة.",
+        });
+        return;
+      }
+      set({ pages });
+      pushHistory();
+      const note = skipped.length
+        ? ` · تم تخطّي ${skipped.length} صفحة بمقاس مختلف (${skipped.join("، ")})`
+        : "";
+      toast.success(
+        `تم تثبيت الترويسة والتذييل على ${s.pages.length} صفحة${note}`,
+      );
+    },
+
+    removeHeaderFooter: () => {
+      const s = get();
+      const { pages, removed } = clearFurniture(s.pages);
+      if (!removed) {
+        toast.error("لا توجد ترويسة أو تذييل مثبّت");
+        return;
+      }
+      set({ pages });
+      pushHistory();
+      toast.success(`تمت إزالة الترويسة والتذييل (${removed} عنصر)`);
+    },
+
+    addPageNumbers: () => {
+      const s = get();
+      const { pages, added } = numberPages(s.pages, THEMES[s.theme], (page) =>
+        pageSize(page),
+      );
+      if (!added) {
+        toast.error("كل الصفحات مرقّمة بالفعل");
+        return;
+      }
+      set({ pages });
+      pushHistory();
+      toast.success(`تمت إضافة ترقيم الصفحات (${added} عنصر)`);
+    },
+
+    removePageNumbers: () => {
+      const s = get();
+      const { pages, removed } = dropPageNumbers(s.pages);
+      if (!removed) {
+        toast.error("لا يوجد ترقيم صفحات");
+        return;
+      }
+      set({ pages });
+      pushHistory();
+      toast.success("تمت إزالة ترقيم الصفحات");
+    },
+
+    /**
+     * Stamp & signature zone.
+     *
+     * Landed as ONE group in the bottom corner, away from the gutter margin, and
+     * pushed in as one history entry so it can be dragged or undone as a unit.
+     */
+    insertSignatureZone: () => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const size = pageSize(page);
+      const zone = signatureZoneForPage(THEMES[s.theme], size);
+      const next = placeElements(page, [zone]);
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        selectedId: zone.id,
+        selectedIds: [zone.id],
+        rightTab: "properties",
+      });
+      pushHistory();
+      toast.success("تمت إضافة منطقة الختم والتوقيع", {
+        description:
+          "اسحبها إلى مكانها، وتفكيكها من «فك التجميع» إن أردت تعديل أجزائها.",
+        duration: 2600,
+      });
+    },
+
+    insertKpiCard: (kind, options) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const size = pageSize(page);
+      const def = kpiCard(kind, s.theme, { x: 0, y: 0, ...options });
+      const box = boundsOf(def) ?? { x: 0, y: 0, w: 60, h: 30 };
+      /*
+       * Placement: the visible centre of the page, the same rule the library
+       * uses — the card never lands off-screen or under a panel.
+       */
+      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+      const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+      const target = centerFor(visible, {
+        w: size.w,
+        h: size.h,
+        elW: box.w,
+        elH: box.h,
+      });
+      const parts = kpiCard(kind, s.theme, {
+        ...options,
+        x: target.x,
+        y: target.y,
+      });
+      const next = placeElements(page, parts);
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        selectedId: parts[0]?.id ?? null,
+        selectedIds: parts[0] ? [parts[0].id] : [],
+        rightTab: "properties",
+      });
+      pushHistory();
+      toast.success("تمت إضافة بطاقة المؤشر", { duration: 1800 });
+    },
+
+    /**
+     * Arabic typography presets.
+     *
+     * Applying a preset is a STYLE operation over the current selection — text
+     * "when the element is empty" only, and never geometry unless the element is
+     * new. With nothing selected the author gets a fresh, correctly styled text
+     * box, which is the common case: pick a title, type the title.
+     */
+    applyPreset: (presetId) => {
+      const s = get();
+      const preset = typographyPreset(presetId);
+      if (!preset) return;
+      const page = activePageOf(s);
+      if (!page) return;
+      const targets = s
+        .selectedElements()
+        .filter(
+          (el) => el.type === "text" || el.type === "box" || el.type === "stat",
+        );
+      if (!targets.length) {
+        const stage = document.querySelector<HTMLElement>(
+          ".editor-canvas-stage",
+        );
+        const size = pageSize(page);
+        const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+        const pos = centerFor(visible, {
+          w: size.w,
+          h: size.h,
+          elW: preset.box.w,
+          elH: preset.box.h,
+        });
+        const el = applyTypographyPreset(
+          createElement(
+            "text",
+            {
+              x: pos.x,
+              y: pos.y,
+              w: preset.box.w,
+              h: preset.box.h,
+              z: nextZ(page),
+            },
+            THEMES[s.theme],
+          ),
+          preset,
+          s.theme,
+        );
+        constrainElement(el, size);
+        const merged: Page = { ...page, elements: [...page.elements, el] };
+        normalizeZ(merged);
+        set({
+          pages: s.pages.map((p) => (p.id === page.id ? merged : p)),
+          selectedId: el.id,
+          selectedIds: [el.id],
+          rightTab: "properties",
+        });
+        pushHistory();
+        toast.success(`تم إنشاء عنصر بنمط «${preset.label}»`);
+        return;
+      }
+      const byId = new Map(
+        targets.map((el) => [
+          el.id,
+          applyTypographyPreset(el, preset, s.theme),
+        ]),
+      );
+      const walk = (list: CanvasEl[]): CanvasEl[] =>
+        list.map(
+          (el) =>
+            byId.get(el.id) ??
+            (el.children?.length ? { ...el, children: walk(el.children) } : el),
+        );
+      set({
+        pages: s.pages.map((p) =>
+          p.id === page.id ? { ...p, elements: walk(p.elements) } : p,
+        ),
+      });
+      pushHistory();
+      toast.success(
+        targets.length === 1
+          ? `تم تطبيق نمط «${preset.label}»`
+          : `تم تطبيق نمط «${preset.label}» على ${targets.length} عناصر`,
+      );
+    },
+
+    /**
+     * Insert a macro token.
+     *
+     * The token is appended to the selected text element (or a brand-new one) and
+     * stored as the TOKEN, never as its resolved value — that is what keeps the
+     * date live when the document is reopened next month.
+     */
+    insertMacro: (token) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const target = s
+        .selectedElements()
+        .find(
+          (el) => el.type === "text" || el.type === "box" || el.type === "stat",
+        );
+      if (!target) {
+        const size = pageSize(page);
+        const stage = document.querySelector<HTMLElement>(
+          ".editor-canvas-stage",
+        );
+        const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+        const pos = centerFor(visible, {
+          w: size.w,
+          h: size.h,
+          elW: 110,
+          elH: 14,
+        });
+        const el = createElement(
+          "text",
+          {
+            x: pos.x,
+            y: pos.y,
+            w: 110,
+            h: 14,
+            content: token,
+            z: nextZ(page),
+          },
+          THEMES[s.theme],
+        );
+        constrainElement(el, size);
+        const merged: Page = { ...page, elements: [...page.elements, el] };
+        normalizeZ(merged);
+        set({
+          pages: s.pages.map((p) => (p.id === page.id ? merged : p)),
+          selectedId: el.id,
+          selectedIds: [el.id],
+          rightTab: "properties",
+        });
+        pushHistory();
+        toast.success("تمت إضافة الرمز في صندوق نص جديد");
+        return;
+      }
+      const content = String(target.content ?? "");
+      const spacer = content && !/\s$/.test(content) ? " " : "";
+      set({
+        pages: s.pages.map((p) =>
+          p.id === page.id
+            ? {
+                ...p,
+                elements: p.elements.map((el) =>
+                  el.id === target.id
+                    ? { ...el, content: `${content}${spacer}${token}` }
+                    : el,
+                ),
+              }
+            : p,
+        ),
+        selectedId: target.id,
+        selectedIds: [target.id],
+        rightTab: "properties",
+      });
+      pushHistory();
+      toast.success("تمت إضافة الرمز", { duration: 1500 });
     },
 
     addTextAt: (box, pageId) => {
       const s = get();
-      const page = pageId ? s.pages.find((p) => p.id === pageId) : activePageOf(s);
+      const page = pageId
+        ? s.pages.find((p) => p.id === pageId)
+        : activePageOf(s);
       if (!page) return undefined;
       const theme = THEMES[s.theme];
       const size = pageSize(page);
@@ -1186,13 +2126,16 @@ export const useEditor = create<EditorStore>((set, get) => {
       );
       constrainElement(el, size);
       set({
-        pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: [...p.elements, el] } : p)),
+        pages: s.pages.map((p) =>
+          p.id === page.id ? { ...p, elements: [...p.elements, el] } : p,
+        ),
         selectedId: el.id,
         selectedIds: [el.id],
         activePageId: page.id,
         rightTab: "properties",
       });
       pushHistory();
+      toast.success("تمت إضافة صندوق نص إلى مساحة العمل", { duration: 1600 });
       return el.id;
     },
 
@@ -1202,9 +2145,15 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return;
       const size = pageSize(page);
       const next = mapElement(page, id, (el) => {
-        const merged = { ...el, ...patch, style: { ...el.style, ...(patch.style || {}) } };
-        if (patch.x != null && !live) merged.x = snap(Number(patch.x), s.snapGrid);
-        if (patch.y != null && !live) merged.y = snap(Number(patch.y), s.snapGrid);
+        const merged = {
+          ...el,
+          ...patch,
+          style: { ...el.style, ...(patch.style || {}) },
+        };
+        if (patch.x != null && !live)
+          merged.x = snap(Number(patch.x), s.snapGrid);
+        if (patch.y != null && !live)
+          merged.y = snap(Number(patch.y), s.snapGrid);
         constrainElement(merged, size);
         return merged;
       });
@@ -1282,7 +2231,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!picked.length) return;
       // Only top-level elements are duplicated onto the page: a group is one
       // element, and copying one of its members would need a new parent.
-      const topLevel = picked.filter((el) => page.elements.some((e) => e.id === el.id));
+      const topLevel = picked.filter((el) =>
+        page.elements.some((e) => e.id === el.id),
+      );
       if (!topLevel.length) return;
       const copies = topLevel.map((el) => {
         const copy = clone(el);
@@ -1294,7 +2245,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         return copy;
       });
       set({
-        pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: [...p.elements, ...copies] } : p)),
+        pages: s.pages.map((p) =>
+          p.id === page.id ? { ...p, elements: [...p.elements, ...copies] } : p,
+        ),
         selectedIds: copies.map((c) => c.id),
         selectedId: copies[copies.length - 1].id,
       });
@@ -1309,7 +2262,13 @@ export const useEditor = create<EditorStore>((set, get) => {
         .map((id) => locate(page, id)?.el)
         .filter((el): el is CanvasEl => Boolean(el));
       if (!picked.length) return;
-      set({ clipboard: clone(picked.length === 1 ? picked[0] : createGroupFrom(picked) || picked[0]) });
+      set({
+        clipboard: clone(
+          picked.length === 1
+            ? picked[0]
+            : createGroupFrom(picked) || picked[0],
+        ),
+      });
     },
 
     pasteClipboard: () => {
@@ -1322,7 +2281,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       // A group's children keep their relative positions, but each needs a fresh
       // id so the copies do not collide with the originals in the tree.
       if (el.children?.length) {
-        const reid = (list: CanvasEl[]) => list.forEach((c) => { c.id = uid("el"); if (c.children?.length) reid(c.children); });
+        const reid = (list: CanvasEl[]) =>
+          list.forEach((c) => {
+            c.id = uid("el");
+            if (c.children?.length) reid(c.children);
+          });
         reid(el.children);
       }
       el.x += 8;
@@ -1330,9 +2293,35 @@ export const useEditor = create<EditorStore>((set, get) => {
       el.z = nextZ(page);
       constrainElement(el, pageSize(page));
       set({
-        pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: [...p.elements, el] } : p)),
+        pages: s.pages.map((p) =>
+          p.id === page.id ? { ...p, elements: [...p.elements, el] } : p,
+        ),
         selectedId: el.id,
         selectedIds: [el.id],
+      });
+      pushHistory();
+    },
+
+    deleteElementsById: (ids) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page || !ids.length) return;
+      const wanted = new Set(ids);
+      const strip = (list: CanvasEl[]): CanvasEl[] =>
+        list
+          .filter((el) => !(wanted.has(el.id) && !el.locked))
+          .map((el) =>
+            el.children?.length ? { ...el, children: strip(el.children) } : el,
+          );
+      const elements = strip(page.elements);
+      if (elements.length === page.elements.length) return;
+      const next = { ...page, elements };
+      normalizeZ(next);
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        selectedId:
+          s.selectedId && wanted.has(s.selectedId) ? null : s.selectedId,
+        selectedIds: s.selectedIds.filter((id) => !wanted.has(id)),
       });
       pushHistory();
     },
@@ -1352,7 +2341,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       const strip = (list: CanvasEl[]): CanvasEl[] =>
         list
           .filter((el) => !ids.has(el.id))
-          .map((el) => (el.children?.length ? { ...el, children: strip(el.children) } : el));
+          .map((el) =>
+            el.children?.length ? { ...el, children: strip(el.children) } : el,
+          );
       const elements = strip(page.elements);
       const next = { ...page, elements };
       normalizeZ(next);
@@ -1405,7 +2396,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       const shape = locate(page, shapeId)?.el;
       if (!source || !shape) return;
       const isShape = shape.type === "shape" || shape.type === "svg";
-      const isImageFamily = source.type === "image" || source.type === "logo" || source.type === "qr" || source.type === "svg";
+      const isImageFamily =
+        source.type === "image" ||
+        source.type === "logo" ||
+        source.type === "qr" ||
+        source.type === "svg";
       if (!isShape || !isImageFamily || sourceId === shapeId) return;
       /*
        * Frame the picture in the mask. Without this, a mask applied to two
@@ -1413,17 +2408,37 @@ export const useEditor = create<EditorStore>((set, get) => {
        * picture would sit entirely outside its own cut. When they already
        * overlap the author has placed it deliberately, so nothing is moved.
        */
-      const ix = Math.max(0, Math.min(source.x + source.w, shape.x + shape.w) - Math.max(source.x, shape.x));
-      const iy = Math.max(0, Math.min(source.y + source.h, shape.y + shape.h) - Math.max(source.y, shape.y));
+      const ix = Math.max(
+        0,
+        Math.min(source.x + source.w, shape.x + shape.w) -
+          Math.max(source.x, shape.x),
+      );
+      const iy = Math.max(
+        0,
+        Math.min(source.y + source.h, shape.y + shape.h) -
+          Math.max(source.y, shape.y),
+      );
       const covered = (ix * iy) / Math.max(1, shape.w * shape.h) > 0.6;
       let framed: Partial<{ x: number; y: number; w: number; h: number }> = {};
       if (!covered) {
-        const scale = Math.max(shape.w / Math.max(1, source.w), shape.h / Math.max(1, source.h));
+        const scale = Math.max(
+          shape.w / Math.max(1, source.w),
+          shape.h / Math.max(1, source.h),
+        );
         const w = source.w * scale;
         const h = source.h * scale;
-        framed = { x: shape.x + (shape.w - w) / 2, y: shape.y + (shape.h - h) / 2, w, h };
+        framed = {
+          x: shape.x + (shape.w - w) / 2,
+          y: shape.y + (shape.h - h) / 2,
+          w,
+          h,
+        };
       }
-      const next = mapElement(page, sourceId, (el) => ({ ...el, ...framed, clippedBy: shapeId }));
+      const next = mapElement(page, sourceId, (el) => ({
+        ...el,
+        ...framed,
+        clippedBy: shapeId,
+      }));
       set({
         pages: s.pages.map((p) => (p.id === page.id ? next : p)),
         selectedId: sourceId,
@@ -1440,7 +2455,10 @@ export const useEditor = create<EditorStore>((set, get) => {
       const masked = page.elements.filter((el) => el.clippedBy === shapeId);
       if (!masked.length) return;
       const ids = new Set(masked.map((el) => el.id));
-      const next = mapElements(page, ids, (el) => ({ ...el, clippedBy: undefined }));
+      const next = mapElements(page, ids, (el) => ({
+        ...el,
+        clippedBy: undefined,
+      }));
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
       toast.success("تمت إزالة قناع القص");
@@ -1456,12 +2474,21 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (from < 0 || to < 0) return;
       const [moved] = ordered.splice(from, 1);
       ordered.splice(to, 0, moved);
-      const zById = new Map(ordered.map((el, index) => [el.id, ordered.length - index]));
+      const zById = new Map(
+        ordered.map((el, index) => [el.id, ordered.length - index]),
+      );
       const next = {
         ...page,
-        elements: page.elements.map((el) => ({ ...el, z: zById.get(el.id) ?? el.z })),
+        elements: page.elements.map((el) => ({
+          ...el,
+          z: zById.get(el.id) ?? el.z,
+        })),
       };
-      set({ pages: s.pages.map((candidate) => (candidate.id === page.id ? next : candidate)) });
+      set({
+        pages: s.pages.map((candidate) =>
+          candidate.id === page.id ? next : candidate,
+        ),
+      });
       pushHistory();
     },
 
@@ -1472,8 +2499,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       const ids = new Set(s.selectedIds);
       if (!ids.size) return;
       // A locked group cannot be toggled: unlocking it would be the only way out
-      // of a state the author just chose.
-      const next = mapElements(page, ids, (el) => ({ ...el, locked: !el.locked }));
+      // of a state the author just chose. Children follow their folder's state
+      // for the same reason a hidden folder hides its contents (Phase 5).
+      const next = mapElements(page, ids, (el) =>
+        cascadeFlag(el, "locked", !el.locked),
+      );
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
     },
@@ -1484,9 +2514,67 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return;
       const ids = new Set(s.selectedIds);
       if (!ids.size) return;
-      const next = mapElements(page, ids, (el) => ({ ...el, hidden: !el.hidden }));
+      // Hiding a folder hides its whole subtree, so the canvas and the layer
+      // tree never disagree about what is on the page.
+      const next = mapElements(page, ids, (el) =>
+        cascadeFlag(el, "hidden", !el.hidden),
+      );
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
+    },
+
+    flipSelected: (axis) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const ids = new Set(s.selectedIds);
+      if (!ids.size) return;
+      const key = axis === "x" ? "flipX" : "flipY";
+      const next = mapElements(page, ids, (el) => flipTree(el, key));
+      set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
+      pushHistory();
+      toast.success(axis === "x" ? "تم القلب أفقيًا" : "تم القلب رأسيًا");
+    },
+
+    toggleFadeOverlay: () => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const ids = new Set(s.selectedIds);
+      if (!ids.size) return;
+      const target =
+        page.elements.find((el) => ids.has(el.id)) ??
+        locate(page, [...ids][0])?.el;
+      if (!target || !FADE_TYPES.has(target.type)) {
+        toast.error("طبقة التلاشي متاحة للصور والشعارات فقط");
+        return;
+      }
+      const has = Boolean(normalizeFade(target.style?.fade));
+      set({
+        pages: s.pages.map((p) =>
+          p.id === page.id
+            ? {
+                ...p,
+                elements: p.elements.map((el) =>
+                  ids.has(el.id) && FADE_TYPES.has(el.type)
+                    ? {
+                        ...el,
+                        style: has
+                          ? omitFade(el.style)
+                          : { ...el.style, fade: { ...DEFAULT_FADE } },
+                      }
+                    : el,
+                ),
+              }
+            : p,
+        ),
+      });
+      pushHistory();
+      toast.success(
+        has
+          ? "تمت إزالة طبقة التلاشي"
+          : "تمت إضافة طبقة التلاشي (Fade Overlay)",
+      );
     },
 
     copyElementToPage: (elId, pageId) => {
@@ -1499,7 +2587,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       copy.z = nextZ(target);
       constrainElement(copy, pageSize(target));
       set({
-        pages: s.pages.map((p) => (p.id === target.id ? { ...p, elements: [...p.elements, copy] } : p)),
+        pages: s.pages.map((p) =>
+          p.id === target.id ? { ...p, elements: [...p.elements, copy] } : p,
+        ),
         activePageId: target.id,
         selectedId: copy.id,
         selectedIds: [copy.id],
@@ -1512,7 +2602,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       const s = get();
       if (!canAddDemoPage(s.pages.length)) {
         toast.error("وصلت إلى حد صفحات العرض التجريبي", {
-          description: "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
+          description:
+            "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
         });
         return;
       }
@@ -1525,7 +2616,12 @@ export const useEditor = create<EditorStore>((set, get) => {
         w: preset.w,
         h: preset.h,
       };
-      set({ pages: [...s.pages, p], activePageId: p.id, selectedId: null, previewAll: true });
+      set({
+        pages: [...s.pages, p],
+        activePageId: p.id,
+        selectedId: null,
+        previewAll: true,
+      });
       pushHistory();
     },
 
@@ -1533,12 +2629,18 @@ export const useEditor = create<EditorStore>((set, get) => {
       const s = get();
       if (!canAddDemoPage(s.pages.length)) {
         toast.error("وصلت إلى حد صفحات العرض التجريبي", {
-          description: "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
+          description:
+            "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
         });
         return;
       }
       const p = createTemplatePage(id, THEMES[s.theme], s.orgName);
-      set({ pages: [...s.pages, p], activePageId: p.id, selectedId: null, previewAll: true });
+      set({
+        pages: [...s.pages, p],
+        activePageId: p.id,
+        selectedId: null,
+        previewAll: true,
+      });
       pushHistory();
     },
 
@@ -1546,7 +2648,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       const s = get();
       if (!canAddDemoPage(s.pages.length)) {
         toast.error("وصلت إلى حد صفحات العرض التجريبي", {
-          description: "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
+          description:
+            "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
         });
         return;
       }
@@ -1577,7 +2680,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (idx < 0) return;
       const pages = s.pages.filter((p) => p.id !== targetId);
       const nextActive =
-        targetId === s.activePageId ? pages[Math.max(0, idx - 1)].id : s.activePageId;
+        targetId === s.activePageId
+          ? pages[Math.max(0, idx - 1)].id
+          : s.activePageId;
       set({ pages, activePageId: nextActive, selectedId: null });
       pushHistory();
     },
@@ -1608,7 +2713,14 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     reorderPages: (from, to) => {
       const s = get();
-      if (from === to || from < 0 || to < 0 || from >= s.pages.length || to >= s.pages.length) return;
+      if (
+        from === to ||
+        from < 0 ||
+        to < 0 ||
+        from >= s.pages.length ||
+        to >= s.pages.length
+      )
+        return;
       const pages = [...s.pages];
       const [item] = pages.splice(from, 1);
       pages.splice(to, 0, item);
@@ -1617,7 +2729,9 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     renamePage: (id, name) => {
-      set({ pages: get().pages.map((p) => (p.id === id ? { ...p, name } : p)) });
+      set({
+        pages: get().pages.map((p) => (p.id === id ? { ...p, name } : p)),
+      });
       scheduleSave(500);
     },
 
@@ -1630,7 +2744,12 @@ export const useEditor = create<EditorStore>((set, get) => {
         defaultSize: sizeId === "custom" ? s.defaultSize : sizeId,
         pages: s.pages.map((p) => {
           if (p.id !== id) return p;
-          const next: Page = { ...p, w, h, elements: p.elements.map((e) => clone(e)) };
+          const next: Page = {
+            ...p,
+            w,
+            h,
+            elements: p.elements.map((e) => clone(e)),
+          };
           next.elements.forEach((e) => constrainElement(e, { w, h }));
           return next;
         }),
@@ -1646,7 +2765,12 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({
         defaultSize: sizeId,
         pages: s.pages.map((p) => {
-          const next: Page = { ...p, w, h, elements: p.elements.map((e) => clone(e)) };
+          const next: Page = {
+            ...p,
+            w,
+            h,
+            elements: p.elements.map((e) => clone(e)),
+          };
           next.elements.forEach((e) => constrainElement(e, { w, h }));
           return next;
         }),
@@ -1696,13 +2820,29 @@ interface PersistedUi {
   rightOpen?: boolean;
   leftCollapsed?: boolean;
   rightCollapsed?: boolean;
+  pagesPanelHeight?: number;
+  /** Floating bubble visibility (absent = shown). */
+  bubble?: boolean;
+  /** Print-guide visibility (absent = all off). */
+  printGuides?: PrintGuideSettings;
+}
+
+/** Merge a patch into the persisted UI slot (zoom, panels, pages height…). */
+function writeUi(patch: PersistedUi): void {
+  try {
+    const current = readUi();
+    localStorage.setItem(UI_KEY, JSON.stringify({ ...current, ...patch }));
+  } catch {
+    /* a full/blocked localStorage must never break an interaction */
+  }
 }
 
 function readUi(): PersistedUi {
   try {
     // Falls back to the pre-rebrand slot so dark mode, zoom and the active
     // project survive the rename instead of resetting to defaults.
-    const raw = localStorage.getItem(UI_KEY) ?? localStorage.getItem(LEGACY_UI_KEY);
+    const raw =
+      localStorage.getItem(UI_KEY) ?? localStorage.getItem(LEGACY_UI_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
     return typeof parsed === "object" && parsed ? (parsed as PersistedUi) : {};
   } catch {
@@ -1728,7 +2868,11 @@ export function getSelectedMany(): CanvasEl[] {
 }
 
 /** Human label for the autosave indicator. */
-export function saveLabel(state: SaveState, savedAt: number | null, now: number): string {
+export function saveLabel(
+  state: SaveState,
+  savedAt: number | null,
+  now: number,
+): string {
   if (state === "saving") return "جارٍ الحفظ…";
   if (state === "error") return "تعذر الحفظ — تحقق من مساحة المتصفح";
   if (state === "dirty") return "تغييرات غير محفوظة…";
@@ -1741,6 +2885,43 @@ export function saveLabel(state: SaveState, savedAt: number | null, now: number)
   const hours = Math.round(minutes / 60);
   return `آخر حفظ منذ ${hours} ساعة`;
 }
+
+/*
+ * ── Macro context ─────────────────────────────────────────────────────────
+ *
+ * `{التاريخ_الهجري}`, `{اسم_الجهة}` and friends resolve inside `prepareText`,
+ * which the canvas, the properties panel and three exporters all call. Rather
+ * than thread the document through each of them, one subscription here keeps the
+ * context in step with the store: any write that changes the entity, the
+ * transaction number, the page count or the active page refreshes it.
+ *
+ * Per-page rendering (the HTML and Office exporters) refines the page number
+ * locally — a whole document is painted in one pass, so page 2 and page 9 cannot
+ * share one ambient number.
+ */
+function syncTextContext(state: EditorStore): void {
+  const index = state.pages.findIndex((p) => p.id === state.activePageId);
+  setTextContext({
+    orgName: state.orgName,
+    transactionNo: state.transactionNo,
+    pageNumber: Math.max(1, index + 1),
+    pageCount: Math.max(1, state.pages.length),
+  });
+}
+
+syncTextContext(useEditor.getState());
+
+useEditor.subscribe((state, prev) => {
+  if (
+    state.orgName === prev.orgName &&
+    state.transactionNo === prev.transactionNo &&
+    state.pages === prev.pages &&
+    state.activePageId === prev.activePageId
+  ) {
+    return;
+  }
+  syncTextContext(state);
+});
 
 export { UI_KEY };
 export const A4_SIZE = A4;

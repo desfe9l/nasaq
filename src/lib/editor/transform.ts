@@ -50,6 +50,28 @@ export interface GestureBox {
  * The explicit per-element lock (`style.aspectLock`) behaves the same way and
  * is resolved by the caller.
  */
+/**
+ * Map a handle to the handle it *behaves* as on a mirrored element (step 7).
+ *
+ * `scaleX(-1)` moves the `nw` grip to the visual right edge: the author grabs
+ * what looks like the top-right corner, so the resize must grow from that side.
+ * Swapping the axis letters is exactly equivalent to inverting dx/dy for the
+ * axes the handle actually uses, and leaves the geometry maths untouched.
+ */
+export function mirrorHandle(handle: string, flipX: boolean, flipY: boolean): string {
+  let out = "";
+  for (const ch of handle) {
+    if (ch === "e" && flipX) out += "w";
+    else if (ch === "w" && flipX) out += "e";
+    else if (ch === "n" && flipY) out += "s";
+    else if (ch === "s" && flipY) out += "n";
+    else out += ch;
+  }
+  // Letter order is preserved (and irrelevant to `resizeByHandle`, which uses
+  // `includes`), so "nw" maps to "ne" and stays readable.
+  return out;
+}
+
 export function resizeByHandle(
   next: GestureBox,
   orig: GestureBox,
@@ -92,13 +114,20 @@ export function resizeByHandle(
   const vertical = handle.includes("n") || handle.includes("s");
   let scale = 1;
   if (horizontal && vertical) {
-    const widthScale = (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
-    const heightScale = (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
-    scale = Math.abs(widthScale - 1) >= Math.abs(heightScale - 1) ? widthScale : heightScale;
+    const widthScale =
+      (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
+    const heightScale =
+      (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
+    scale =
+      Math.abs(widthScale - 1) >= Math.abs(heightScale - 1)
+        ? widthScale
+        : heightScale;
   } else if (horizontal) {
-    scale = (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
+    scale =
+      (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
   } else if (vertical) {
-    scale = (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
+    scale =
+      (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
   }
   // Keep the result on the same side of MIN_SIZE as the scale itself: a
   // negative scale means the pointer crossed the far edge, and clamping the
@@ -158,8 +187,18 @@ export function applySnap(
     // Elements that are moving with this gesture are not candidates: snapping
     // a dragged element to a sibling travelling beside it would fight the drag.
     const stable = others.filter((o) => !moving[o.id as string]);
-    const edges = [0, size.w / 2, size.w, ...stable.flatMap((o) => [o.x, o.x + o.w / 2, o.x + o.w])];
-    const hedges = [0, size.h / 2, size.h, ...stable.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h])];
+    const edges = [
+      0,
+      size.w / 2,
+      size.w,
+      ...stable.flatMap((o) => [o.x, o.x + o.w / 2, o.x + o.w]),
+    ];
+    const hedges = [
+      0,
+      size.h / 2,
+      size.h,
+      ...stable.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h]),
+    ];
     const mineV = [el.x, el.x + el.w / 2, el.x + el.w];
     const mineH = [el.y, el.y + el.h / 2, el.y + el.h];
     const nearest = (mine: number[], targets: number[]) => {
@@ -167,7 +206,10 @@ export function applySnap(
       for (const m of mine) {
         for (const t of targets) {
           const delta = t - m;
-          if (Math.abs(delta) <= threshold && (!best || Math.abs(delta) < Math.abs(best.delta))) {
+          if (
+            Math.abs(delta) <= threshold &&
+            (!best || Math.abs(delta) < Math.abs(best.delta))
+          ) {
             best = { delta, target: t };
           }
         }

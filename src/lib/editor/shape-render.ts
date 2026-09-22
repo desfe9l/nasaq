@@ -10,7 +10,9 @@ import { isCompoundShape, shapeDef, type ShapePart } from "./shapes";
  */
 
 /** `shapeId` when present, else the legacy `shape` enum from pre-upgrade files. */
-export function shapeIdOf(style: { shapeId?: string; shape?: string } | undefined): string {
+export function shapeIdOf(
+  style: { shapeId?: string; shape?: string } | undefined,
+): string {
   if (style?.shapeId) return style.shapeId;
   switch (style?.shape) {
     case "circle":
@@ -81,7 +83,10 @@ export function shapeSvgMarkup(
       ? ` stroke="${opts.stroke}" stroke-width="${strokeUnits}" stroke-linejoin="round"`
       : "";
   const body = def.parts
-    .map((p) => `<${partTag(p)} ${partAttrs(p)}${p.k === "path" ? ' stroke-linejoin="round"' : ""}/>`)
+    .map(
+      (p) =>
+        `<${partTag(p)} ${partAttrs(p)}${p.k === "path" ? ' stroke-linejoin="round"' : ""}/>`,
+    )
     .join("");
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%"><g${transform} fill="${opts.fill}"${evenOdd}${stroke}>${body}</g></svg>`;
 }
@@ -93,11 +98,14 @@ export function shapeSvgMarkup(
  * single scalar cannot match both axes; the geometric mean keeps the outline
  * visually even on the square-ish shapes it is normally used with.
  */
-export function strokeToUnits(borderWidthMm: number, box: { w: number; h: number }): number {
+export function strokeToUnits(
+  borderWidthMm: number,
+  box: { w: number; h: number },
+): number {
   const w = Number(box?.w) || 1;
   const h = Number(box?.h) || 1;
   const scale = Math.sqrt(w * h);
-  return (Number(borderWidthMm) || 0) / Math.max(0.5, scale) * 100;
+  return ((Number(borderWidthMm) || 0) / Math.max(0.5, scale)) * 100;
 }
 
 export type { ShapePart };

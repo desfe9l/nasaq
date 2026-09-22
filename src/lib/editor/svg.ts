@@ -14,24 +14,102 @@
 
 /** Elements that may survive sanitising (drawn + structural only). */
 const ALLOWED_TAGS = new Set([
-  "svg", "g", "defs", "symbol", "use", "title", "desc",
-  "path", "rect", "circle", "ellipse", "line", "polyline", "polygon",
-  "text", "tspan", "marker", "clippath", "mask", "pattern",
-  "lineargradient", "radialgradient", "stop", "filter", "feflood",
-  "feblend", "fecolormatrix", "fecomposite", "fegaussianblur", "feoffset",
+  "svg",
+  "g",
+  "defs",
+  "symbol",
+  "use",
+  "title",
+  "desc",
+  "path",
+  "rect",
+  "circle",
+  "ellipse",
+  "line",
+  "polyline",
+  "polygon",
+  "text",
+  "tspan",
+  "marker",
+  "clippath",
+  "mask",
+  "pattern",
+  "lineargradient",
+  "radialgradient",
+  "stop",
+  "filter",
+  "feflood",
+  "feblend",
+  "fecolormatrix",
+  "fecomposite",
+  "fegaussianblur",
+  "feoffset",
 ]);
 
 /** Attributes that may survive: presentation + geometry + a few linking ids. */
 const ALLOWED_ATTRS = new Set([
-  "id", "class", "d", "x", "y", "x1", "x2", "y1", "y2", "cx", "cy", "r", "rx", "ry",
-  "width", "height", "viewbox", "points", "fill", "fill-opacity", "fill-rule",
-  "stroke", "stroke-opacity", "stroke-width", "stroke-linecap", "stroke-linejoin",
-  "stroke-dasharray", "stroke-dashoffset", "opacity", "transform", "dx", "dy",
-  "offset", "stop-color", "stop-opacity", "gradientunits", "spreadmethod",
-  "text-anchor", "font-family", "font-size", "font-weight", "preserveaspectratio",
-  "clip-path", "clip-rule", "mask", "filter", "in", "in2", "result", "stddeviation",
-  "values", "type", "tablevalues", "slope", "intercept", "amplitude", "exponent",
-  "href", "xmlns", "xmlns:xlink", "role", "aria-hidden",
+  "id",
+  "class",
+  "d",
+  "x",
+  "y",
+  "x1",
+  "x2",
+  "y1",
+  "y2",
+  "cx",
+  "cy",
+  "r",
+  "rx",
+  "ry",
+  "width",
+  "height",
+  "viewbox",
+  "points",
+  "fill",
+  "fill-opacity",
+  "fill-rule",
+  "stroke",
+  "stroke-opacity",
+  "stroke-width",
+  "stroke-linecap",
+  "stroke-linejoin",
+  "stroke-dasharray",
+  "stroke-dashoffset",
+  "opacity",
+  "transform",
+  "dx",
+  "dy",
+  "offset",
+  "stop-color",
+  "stop-opacity",
+  "gradientunits",
+  "spreadmethod",
+  "text-anchor",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "preserveaspectratio",
+  "clip-path",
+  "clip-rule",
+  "mask",
+  "filter",
+  "in",
+  "in2",
+  "result",
+  "stddeviation",
+  "values",
+  "type",
+  "tablevalues",
+  "slope",
+  "intercept",
+  "amplitude",
+  "exponent",
+  "href",
+  "xmlns",
+  "xmlns:xlink",
+  "role",
+  "aria-hidden",
 ]);
 
 /** `href` may only reference an in-document fragment (`#id`) — never a URL. */
@@ -43,7 +121,11 @@ function safeHref(value: string): string {
 /** URI-bearing values (fill/stroke/clip-path/filter/mask) must stay internal. */
 function safeUrlRef(value: string): string {
   const v = value.trim();
-  return v.startsWith("url('#") || v.startsWith('url("#') || /^url\('#[^)]+'\)$/.test(v) || /^url\("#[^)]+"\)$/.test(v) || /^url\(#\S+\)$/.test(v)
+  return v.startsWith("url('#") ||
+    v.startsWith('url("#') ||
+    /^url\('#[^)]+'\)$/.test(v) ||
+    /^url\("#[^)]+"\)$/.test(v) ||
+    /^url\(#\S+\)$/.test(v)
     ? v
     : "";
 }
@@ -58,7 +140,12 @@ export function sanitizeSvgContent(raw: unknown): string {
   try {
     const doc = new DOMParser().parseFromString(value, "image/svg+xml");
     const root = doc.documentElement;
-    if (!root || root.nodeName.toLowerCase() !== "svg" || doc.querySelector("parsererror")) return "";
+    if (
+      !root ||
+      root.nodeName.toLowerCase() !== "svg" ||
+      doc.querySelector("parsererror")
+    )
+      return "";
 
     const walk = (node: Element): void => {
       for (const child of Array.from(node.children)) {
@@ -72,8 +159,10 @@ export function sanitizeSvgContent(raw: unknown): string {
       for (const attr of Array.from(node.attributes)) {
         const name = attr.name.toLowerCase();
         let ok = ALLOWED_ATTRS.has(name);
-        if (ok && (name === "href" || name.endsWith(":href"))) ok = safeHref(attr.value) !== "" || attr.value.trim() === "#";
-        if (ok && /^(fill|stroke|clip-path|filter|mask)$/.test(name)) ok = safeUrlRef(attr.value) !== "" || !attr.value.includes("url(");
+        if (ok && (name === "href" || name.endsWith(":href")))
+          ok = safeHref(attr.value) !== "" || attr.value.trim() === "#";
+        if (ok && /^(fill|stroke|clip-path|filter|mask)$/.test(name))
+          ok = safeUrlRef(attr.value) !== "" || !attr.value.includes("url(");
         if (!ok) node.removeAttribute(attr.name);
       }
     };
@@ -116,14 +205,24 @@ export function applySvgColors(
   if (fill == null && stroke == null && strokeWidth == null) return svgMarkup;
   try {
     const doc = new DOMParser().parseFromString(svgMarkup, "image/svg+xml");
-    if (doc.querySelector("parsererror") || doc.documentElement?.nodeName.toLowerCase() !== "svg") return svgMarkup;
+    if (
+      doc.querySelector("parsererror") ||
+      doc.documentElement?.nodeName.toLowerCase() !== "svg"
+    )
+      return svgMarkup;
     // Paint-order trick: rewrite each drawable's presentation attrs in place.
     // Defaults matter — a rect with no fill attr paints black, so "no fill"
     // must become explicit `fill="none"` before an override can be applied.
-    const drawables = [...doc.querySelectorAll("path, rect, circle, ellipse, line, polyline, polygon, text, tspan")];
+    const drawables = [
+      ...doc.querySelectorAll(
+        "path, rect, circle, ellipse, line, polyline, polygon, text, tspan",
+      ),
+    ];
     for (const node of drawables) {
       const el = node as SVGElement;
-      const owner = el.closest("linearGradient, radialGradient, pattern, marker, clipPath, mask, defs");
+      const owner = el.closest(
+        "linearGradient, radialGradient, pattern, marker, clipPath, mask, defs",
+      );
       if (owner) continue; // never repaint defs/gradient machinery
       // Channels are independent:
       //  · fill override: every drawable gets the fill (a bare shape defaults
@@ -132,10 +231,12 @@ export function applySvgColors(
       //  · stroke override: only shapes that actually stroke today change —
       //    adding outlines to outline-less artwork is not implied.
       const paintsFill = (el.getAttribute("fill") ?? "") !== "none";
-      const paintsStroke = el.hasAttribute("stroke") && el.getAttribute("stroke") !== "none";
+      const paintsStroke =
+        el.hasAttribute("stroke") && el.getAttribute("stroke") !== "none";
       if (fill != null && paintsFill) el.setAttribute("fill", fill);
       if (stroke != null && paintsStroke) el.setAttribute("stroke", stroke);
-      if (strokeWidth != null && paintsStroke) el.setAttribute("stroke-width", String(strokeWidth));
+      if (strokeWidth != null && paintsStroke)
+        el.setAttribute("stroke-width", String(strokeWidth));
     }
     return new XMLSerializer().serializeToString(doc);
   } catch {
