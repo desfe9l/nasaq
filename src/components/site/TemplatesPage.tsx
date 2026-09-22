@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, LayoutTemplate, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PACKS, PAGE_TEMPLATES, TEMPLATE_CATEGORIES, type TemplateCategoryId } from "@/lib/editor/templates";
 import { SIZE_PRESETS, THEMES, pageSize, type PackId } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { cn } from "@/lib/utils";
+import { CARD_W, CARD_WRAP, cardClass, iconTint } from "@/components/site/cards";
 import { canUseDemoPack } from "@/lib/product/product";
 import { useLicense } from "@/lib/license/client";
 import { useMemo } from "react";
@@ -46,16 +47,16 @@ export function TemplatesPage() {
     <div className="min-h-full bg-paper dark:bg-[#111722]">
       <SiteHeader current="/templates" />
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+      <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
         <h1 className="text-[26px] font-extrabold">القوالب</h1>
         <p className="mt-2 max-w-2xl text-[14px] leading-7 text-muted">
           اختر قالب بداية لإنشاء مشروع كامل، أو انتقل إلى المحرر وأضف صفحات جاهزة من تصنيفات القوالب.
           أي قالب تختاره ينشئ نسخة جديدة — القالب الأصلي لا يتغير.
         </p>
 
-        <section className="mt-8">
+        <section className="mt-12">
           <h2 className="text-[17px] font-extrabold">مشاريع جاهزة</h2>
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             {SIZE_OPTIONS.map((s) => (
               <span
                 key={s.id}
@@ -65,19 +66,22 @@ export function TemplatesPage() {
               </span>
             ))}
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {PACKS.map((pack) => (
+          <div className={`mt-6 ${CARD_WRAP}`}>
+            {PACKS.map((pack, i) => (
               <div
                 key={pack.id}
-                className="flex flex-col rounded-[12px] border border-line bg-white p-5 dark:border-white/10 dark:bg-white/5"
+                className={cardClass("flex flex-col p-5 text-right", CARD_W)}
               >
-                <strong className="text-[15px] font-extrabold">{pack.title}</strong>
-                <span className="mt-1 text-[12px] leading-6 text-muted">{pack.desc}</span>
+                <span className={`mb-4 grid size-10 place-items-center rounded-xl ${iconTint(i)}`}>
+                  <LayoutTemplate className="size-5" />
+                </span>
+                <strong className="text-[15px] font-extrabold text-ink dark:text-white">{pack.title}</strong>
+                <span className="mt-2 flex-1 text-[12px] leading-6 text-muted">{pack.desc}</span>
                 <span className="mt-2 text-[11px] font-bold text-muted">{pack.pages}</span>
                 <button
                   type="button"
                   onClick={() => void startFrom(pack.id)}
-                  className="mt-4 inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[12px] font-extrabold text-white"
+                  className="mt-6 inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-navy text-[12px] font-extrabold text-white transition hover:bg-navy-2"
                 >
                   <Plus className="size-3.5" />
                   {canUseDemoPack(pack.id) || entitlements.premium_templates ? "بدء العرض من هذا القالب" : "متاح في النسخة الكاملة"}
@@ -123,7 +127,7 @@ export function TemplatesPage() {
             ))}
           </div>
 
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={`mt-6 ${CARD_WRAP}`}>
             {templates.map((t) => {
               const size = pageSize({ w: t.size?.w, h: t.size?.h });
               const basePalette = THEMES[theme];
@@ -131,10 +135,10 @@ export function TemplatesPage() {
                 ? { ...basePalette, primary: "#0c3d2c", primarySoft: "#145c42", accent: "#c6a05a" }
                 : basePalette;
               return (
-                <div key={t.id} className="rounded-[12px] border border-line bg-white p-4 dark:border-white/10 dark:bg-white/5">
+                <div key={t.id} className={cardClass("p-4 text-right", CARD_W)}>
                   <TemplateCardPreview variant={t.preview} palette={palette} aspectRatio={`${size.w} / ${size.h}`} />
-                  <strong className="block text-[14px] font-extrabold">{t.title}</strong>
-                  {t.concept && <span className="mt-1 block text-[9px] font-bold uppercase tracking-wide text-green">{t.concept}</span>}
+                  <strong className="block text-[14px] font-extrabold text-ink dark:text-white">{t.title}</strong>
+                  {t.concept && <span className="mt-1 block text-[9px] font-bold uppercase tracking-wide text-green dark:text-gold-2">{t.concept}</span>}
                   <span className="mt-1 block text-[12px] leading-6 text-muted">{t.desc}</span>
                   <span className="mt-2 block text-[11px] font-bold text-muted tabular-nums">
                     {Math.round(size.w)} × {Math.round(size.h)} مم
@@ -146,7 +150,7 @@ export function TemplatesPage() {
 
           <a
             href="/editor"
-            className="mt-8 inline-flex h-11 items-center gap-2 rounded-[10px] bg-navy px-4 text-[13px] font-extrabold text-white"
+            className="mt-10 inline-flex h-11 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-navy-2"
           >
             اذهب إلى المحرر لإدراج القوالب
             <ArrowLeft className="size-4" />
@@ -173,7 +177,7 @@ function TemplateCardPreview({
   const line = palette.line;
   const common = "absolute block";
   return (
-    <span className="relative mb-3 block overflow-hidden rounded-[6px] border border-line bg-white" style={{ aspectRatio }}>
+    <span className="relative mb-4 block overflow-hidden rounded-lg border border-line bg-white shadow-sm dark:border-white/15" style={{ aspectRatio }}>
       {variant === "editorial" && <><span className={common} style={{ right: "9%", top: "12%", width: "43%", height: "5%", background: green }} /><span className={common} style={{ right: "9%", top: "23%", width: "64%", height: "16%", background: palette.ink }} /><span className={common} style={{ right: "9%", top: "50%", width: "44%", height: "25%", border: `1px solid ${line}` }} /><span className={common} style={{ left: "12%", top: "45%", width: "15%", height: "18%", background: green }} /></>}
       {variant === "grid" && <><span className={common} style={{ inset: "0 0 auto", height: "18%", background: green }} /><span className={common} style={{ right: "8%", top: "25%", width: "38%", height: "23%", border: `1px solid ${line}` }} /><span className={common} style={{ left: "8%", top: "25%", width: "38%", height: "23%", border: `1px solid ${line}` }} /><span className={common} style={{ right: "8%", bottom: "12%", width: "38%", height: "22%", background: palette.surface, border: `1px solid ${line}` }} /><span className={common} style={{ left: "8%", bottom: "12%", width: "38%", height: "22%", background: palette.surface, border: `1px solid ${line}` }} /></>}
       {variant === "data" && <><span className={common} style={{ right: "8%", top: "16%", width: "45%", height: "26%", background: green }} /><span className={common} style={{ left: "8%", top: "15%", width: "25%", height: "22%", background: palette.ink }} /><span className={common} style={{ right: "8%", bottom: "16%", width: "84%", height: "30%", border: `1px solid ${line}` }} /><span className={common} style={{ left: "17%", bottom: "21%", width: "7%", height: "15%", background: gold }} /><span className={common} style={{ left: "29%", bottom: "21%", width: "7%", height: "24%", background: green }} /></>}

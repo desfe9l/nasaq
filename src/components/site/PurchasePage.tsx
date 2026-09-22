@@ -11,6 +11,7 @@ import {
 import { BRAND, whatsappHref } from "@/lib/brand";
 import { LEMON_SQUEEZY_WHATSAPP_URL, type BillingPeriod, type PaidPlan } from "@/lib/product/licensing";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
+import { cardClass } from "@/components/site/cards";
 
 const PLAN_CONTENT = {
   individual: {
@@ -62,7 +63,7 @@ export function PurchasePage() {
   return (
     <div className="min-h-full bg-paper dark:bg-[#111722]">
       <SiteHeader current="/purchase" />
-      <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
+      <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
         <p className="text-[12px] font-extrabold tracking-[0.16em] text-green dark:text-gold-2">
           نسخ وتراخيص
         </p>
@@ -72,7 +73,7 @@ export function PurchasePage() {
         <p className="mt-3 max-w-2xl text-[15px] leading-8 text-muted">
           اختر نوع الترخيص وفترة الفوترة المناسبة، ثم أكمل الاشتراك عبر رابط Lemon Squeezy المهيأ للمتغير المحدد.
         </p>
-        <div className="mt-9 grid gap-4 lg:grid-cols-3">
+        <div className="mt-8 grid gap-4 md:gap-6 lg:grid-cols-3">
           {(["individual", "team"] as PaidPlan[]).map((id) => {
             const period = periods[id];
             const config = checkouts?.[id][period];
@@ -81,7 +82,7 @@ export function PurchasePage() {
             return (
               <section
                 key={id}
-                className="border border-line bg-white p-5 text-right shadow-sm dark:border-white/10 dark:bg-white/5"
+                className={cardClass("p-5 text-right")}
               >
                 <h2 className="text-[17px] font-extrabold">{item.title}</h2>
                 <p className="mt-2 text-[12px] leading-6 text-muted">{item.body}</p>
@@ -126,7 +127,7 @@ export function PurchasePage() {
                     href={config.checkoutUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-[8px] bg-navy px-5 text-[13px] font-extrabold text-white"
+                    className="mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl bg-navy px-5 text-[13px] font-extrabold text-white transition hover:bg-navy-2"
                   >
                     اشترك {period === "monthly" ? "شهريًا" : "كل 3 أشهر"}
                   </a>
@@ -134,7 +135,7 @@ export function PurchasePage() {
               </section>
             );
           })}
-          <section className="border border-line bg-white p-5 text-right shadow-sm dark:border-white/10 dark:bg-white/5">
+          <section className={cardClass("p-5 text-right")}>
             <h2 className="text-[17px] font-extrabold">ترخيص مؤسسي</h2>
             <p className="mt-2 text-[12px] leading-6 text-muted">
               حل مخصص للجهات التي تحتاج إلى تهيئة وتسليم ودعم وسياسات استخدام خاصة.
@@ -146,7 +147,7 @@ export function PurchasePage() {
               href={whatsapp}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-[8px] bg-navy px-5 text-[13px] font-extrabold text-white"
+              className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-navy px-5 text-[13px] font-extrabold text-white transition hover:bg-navy-2"
             >
               <MessageCircle className="size-4" />
               تواصل معنا
@@ -164,7 +165,7 @@ export function PurchasePage() {
               </p>
               <a
                 href="/license"
-                className="mt-3 inline-flex items-center gap-2 rounded-[8px] border border-line bg-white px-4 py-2 text-[12px] font-bold dark:border-white/10 dark:bg-white/5 hover:bg-accent"
+                className="mt-3 inline-flex items-center gap-2 rounded-xl border border-line bg-white px-4 py-2 text-[12px] font-bold transition hover:bg-accent dark:border-white/10 dark:bg-white/5"
               >
                 <Key className="size-3.5" />
                 تفعيل مفتاح الترخيص

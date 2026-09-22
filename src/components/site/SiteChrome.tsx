@@ -22,7 +22,15 @@ export function SiteHeader({ current }: { current: string }) {
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur dark:border-white/10 dark:bg-[#111722]/95">
+    /*
+     * Glassmorphic sticky nav.
+     *
+     * `backdrop-filter: blur(12px)` over a translucent surface keeps the page
+     * visible through the bar as it scrolls, while the hairline bottom border +
+     * `shadow-sm` keep a crisp edge against the content underneath (without them
+     * a blurred bar smears into the page it is floating over).
+     */
+    <header className="sticky top-0 z-40 border-b border-line/60 bg-white/80 shadow-sm backdrop-blur-[12px] dark:border-white/10 dark:bg-[#111722]/80">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <a href="/" className="flex items-center gap-2.5">
           <BrandLogo />
@@ -116,8 +124,8 @@ export function SiteHeader({ current }: { current: string }) {
 
 export function SiteFooter() {
   return (
-    <footer className="border-t border-line bg-white dark:border-white/10 dark:bg-[#111722]">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-8 sm:px-6 sm:grid-cols-2 md:grid-cols-3">
+    <footer className="border-t border-line/60 bg-white dark:border-white/10 dark:bg-[#111722]">
+      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-12 sm:grid-cols-2 sm:px-6 md:grid-cols-3">
         <div>
           <div className="flex items-center gap-2.5">
             <BrandLogo compact />
@@ -157,7 +165,7 @@ export function SiteFooter() {
        * Legal line. The lockup prints once — `نَسَق` carries `NASAQ` inside
        * `BrandLockup`, so printing `BRAND.platform` again would duplicate it.
        */}
-      <div className="border-t border-line px-4 py-4 dark:border-white/10">
+      <div className="border-t border-line/60 px-4 py-4 dark:border-white/10">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-[11px] text-muted sm:justify-between">
           <span>
             © {new Date().getFullYear()} <BrandLockup />

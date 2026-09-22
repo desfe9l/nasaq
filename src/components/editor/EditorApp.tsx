@@ -918,10 +918,20 @@ function Studio({
         focusMode && "editor-focus",
       )}
     >
+      {/*
+       * Toolbar row (tablet+).
+       *
+       * `flex-wrap` stays for phones, where the tool tray genuinely belongs on a
+       * second line (`order-last` below `md`). From `md` up the row is
+       * `flex-nowrap`: the brand group and the actions group are `shrink-0`, and
+       * the tool tray is `min-w-0`, so on a 768–1024px tablet the tray narrows
+       * and scrolls horizontally INSIDE the row instead of pushing the toolbar
+       * into a stack of mismatched rows.
+       */}
       <header
         ref={headerRef}
         data-editor-obstacle="header"
-        className="editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pt-[max(0.375rem,var(--safe-top))] pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))]"
+        className="editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))] md:flex-nowrap md:overflow-x-auto md:whitespace-nowrap"
       >
         <div className="flex shrink-0 items-center gap-2">
           <a
@@ -945,7 +955,9 @@ function Studio({
             title="اكتب نصك: اسحب على الصفحة لرسم مربع النص"
           >
             <PenLine className="size-4" />
-            <span>نص بالرسم</span>
+            {/* Label returns from `lg` up; on a tablet the icon + tooltip carry
+                the action, which is what buys the tool tray its room. */}
+            <span className="hidden lg:inline">نص بالرسم</span>
           </button>
           {/**
            * «مشاريعي» → صفحة المشاريع. A real same-tab navigation (anchor) so it
@@ -992,11 +1004,16 @@ function Studio({
          * edge when it does not.
          */}
         {/*
-         * `min-w-fit` makes the group claim its full row and WRAP to a second
-         * toolbar row when the viewport is narrower than the tools — controls
-         * stack where they stay visible instead of scrolling out of sight.
+         * Tool tray.
+         *
+         * Below `md` the tray is `min-w-fit` + `order-last`: it claims a full
+         * row and wraps under the brand group, so controls stay visible on a
+         * phone instead of scrolling out of sight. From `md` up `min-w-0` lets
+         * it shrink into whatever space the outer groups leave and scroll
+         * horizontally INSIDE the single toolbar row — the tablet behaviour —
+         * with `whitespace-nowrap` keeping every action group on one line.
          */}
-        <div className="editor-pane-scroll order-last flex min-w-fit flex-1 items-center overflow-x-auto md:order-none">
+        <div className="editor-pane-scroll order-last flex min-w-fit flex-1 items-center overflow-x-auto whitespace-nowrap md:order-none md:min-w-0">
           <div className="mx-auto flex w-max items-center gap-1">
             <IconButton
               onClick={undo}
@@ -1381,7 +1398,14 @@ function Studio({
              * the physical left edge on tablet/phone, identically in landscape
              * and portrait so muscle memory carries across orientations.
              */
-            "max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-[var(--z-drawer)] max-lg:w-[min(340px,90vw)] max-lg:shadow-2xl",
+            /*
+             * Tablet width: the Properties/Layers drawer is compact by default
+             * (288px ≈ `w-72`) between 768 and 1024px, so it covers noticeably
+             * less of the artboard it floats over; phones keep the roomier
+             * `min(340px, 90vw)` slide-over, where the canvas is stacked behind
+             * the drawer anyway.
+             */
+            "max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-[var(--z-drawer)] max-lg:w-[min(340px,90vw)] max-lg:shadow-2xl md:max-lg:w-72",
             "max-lg:transition-transform max-lg:duration-200 max-lg:ease-out",
             !rightOpen && "max-lg:-translate-x-full",
             !rightOpen && "max-lg:pointer-events-none",

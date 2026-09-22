@@ -866,7 +866,7 @@ export function CanvasStage({
         </div>
       )}
       <div
-        className="mx-auto flex w-max min-w-full flex-col items-center gap-3"
+        className="mx-auto flex w-max min-w-full flex-col items-center gap-6"
         dir="rtl"
       >
         {visible.map((page) => {

@@ -6,6 +6,7 @@ import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { ProjectCard } from "@/components/site/ProjectCard";
 import { PRODUCT_COPY } from "@/lib/product/copy";
+import { CARD_W, CARD_WRAP, SITE_CARD, iconTint } from "@/components/site/cards";
 
 const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
   { icon: LayoutTemplate, title: PRODUCT_COPY.capabilities[0][0], desc: PRODUCT_COPY.capabilities[0][1] },
@@ -39,7 +40,7 @@ export function HomePage() {
 
       <main>
         <section className="border-b border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
-          <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-14 sm:px-6 sm:py-20 lg:grid-cols-[1.05fr_.95fr] lg:items-center">
+          <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-12 sm:px-6 md:py-16 lg:grid-cols-[1.05fr_.95fr] lg:items-center">
             <div>
             <p className="mb-3 text-[12px] font-bold tracking-[0.2em] text-green dark:text-gold-2">{PRODUCT_COPY.hero.eyebrow}</p>
             <h1 className="max-w-3xl text-[32px] font-extrabold leading-[1.3] sm:text-[48px]">{PRODUCT_COPY.hero.title}</h1>
@@ -49,15 +50,15 @@ export function HomePage() {
               <button
                 type="button"
                 onClick={() => window.location.assign("/demo")}
-                className="inline-flex h-12 items-center gap-2 rounded-[10px] bg-navy px-5 text-[14px] font-extrabold text-white"
+                className="inline-flex h-12 items-center gap-2 rounded-xl bg-navy px-5 text-[14px] font-extrabold text-white shadow-sm transition hover:bg-navy-2"
               >
                 {PRODUCT_COPY.hero.primary}
                 <ArrowLeft className="size-4" />
               </button>
-              <a href="/purchase" className="inline-flex h-12 items-center gap-2 rounded-[10px] border border-line px-5 text-[14px] font-bold dark:border-white/10">{PRODUCT_COPY.hero.secondary}</a>
+              <a href="/purchase" className="inline-flex h-12 items-center gap-2 rounded-xl border border-line px-5 text-[14px] font-bold transition hover:bg-line-2 dark:border-white/10 dark:hover:bg-white/5">{PRODUCT_COPY.hero.secondary}</a>
               <a
                 href="/projects"
-                className="inline-flex h-12 items-center rounded-[10px] px-3 text-[14px] font-bold text-navy-2 underline decoration-line underline-offset-4 dark:text-gold-2"
+                className="inline-flex h-12 items-center rounded-xl px-3 text-[14px] font-bold text-navy-2 underline decoration-line underline-offset-4 transition hover:decoration-navy-2 dark:text-gold-2"
               >
                 كل مشاريعي
               </a>
@@ -87,7 +88,7 @@ export function HomePage() {
               }}
             />
             </div>
-            <div className="relative min-h-[280px] overflow-hidden rounded-[14px] border border-line bg-[#f4f6f2] p-4 dark:border-white/10 dark:bg-[#252627]">
+            <div className="shadow-card dark:shadow-card-dark relative min-h-[280px] overflow-hidden rounded-2xl border border-line bg-[#f4f6f2] p-4 dark:border-white/10 dark:bg-[#252627]">
               <div className="absolute inset-x-4 top-4 flex items-center justify-between border-b border-[#d7e0d7] pb-3 dark:border-white/10"><span className="text-[10px] font-bold text-green">مساحة العرض التجريبي</span><span className="h-2 w-20 rounded-full bg-[#c6a05a]/60" /></div>
               <div className="absolute right-8 top-20 h-36 w-[48%] bg-white shadow-[0_14px_30px_rgba(15,23,42,.12)] dark:bg-[#f8faf8]"><span className="absolute inset-x-5 top-6 h-3 w-2/3 bg-[#0c3d2c]" /><span className="absolute inset-x-5 top-14 h-14 border border-[#d8e0db]" /><span className="absolute bottom-5 right-5 h-3 w-1/3 bg-[#c6a05a]/70" /></div>
               <div className="absolute bottom-8 left-8 grid gap-2 text-right"><span className="text-[11px] font-extrabold text-[#0c3d2c] dark:text-[#d7d8d9]">محرر التقارير</span><span className="max-w-[180px] text-[12px] leading-6 text-muted">قوالب، طبقات، مؤشرات، وتصدير في مساحة عمل واحدة.</span></div>
@@ -96,75 +97,78 @@ export function HomePage() {
         </section>
 
         <section className="border-b border-line bg-[#f6f8f5] dark:border-white/10 dark:bg-[#1c2021]">
-          <div className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-8 sm:grid-cols-3 sm:px-6">
-            {[[BriefcaseBusiness, "للفرق المؤسسية", "إنتاج منظم للمخرجات المتكررة."], [Workflow, "لسير العمل الحقيقي", "من البيانات والهيكل إلى ملف جاهز للعرض."], [ShieldCheck, "لـDemo آمن", "بيانات محلية تجريبية ومسار واضح للنسخة التجارية."]].map(([Icon, title, desc]) => <div key={String(title)} className="flex gap-3"><Icon className="mt-0.5 size-5 shrink-0 text-green" /><div><strong className="block text-[13px] font-extrabold">{String(title)}</strong><span className="mt-1 block text-[13px] leading-6 text-muted">{String(desc)}</span></div></div>)}
+          <div className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-8 sm:grid-cols-3 sm:px-6 md:py-12">
+            {[[BriefcaseBusiness, "للفرق المؤسسية", "إنتاج منظم للمخرجات المتكررة."], [Workflow, "لسير العمل الحقيقي", "من البيانات والهيكل إلى ملف جاهز للعرض."], [ShieldCheck, "لـDemo آمن", "بيانات محلية تجريبية ومسار واضح للنسخة التجارية."]].map(([Icon, title, desc], i) => <div key={String(title)} className={`flex gap-4 rounded-xl bg-white p-4 dark:bg-white/5 ${SITE_CARD}`}><span className={`grid size-10 shrink-0 place-items-center rounded-xl ${iconTint(i)}`}><Icon className="size-5" /></span><div><strong className="block text-[14px] font-extrabold text-ink dark:text-white">{String(title)}</strong><span className="mt-1 block text-[13px] leading-6 text-muted">{String(desc)}</span></div></div>)}
           </div>
         </section>
 
-        <section className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
+        <section className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
           <h2 className="text-[20px] font-extrabold">أحدث المشاريع</h2>
           <p className="mt-1 text-[13px] text-muted">
             المشاريع محفوظة محلياً في متصفحك — لا تُرسل إلى أي سيرفر.
           </p>
 
           {projectsLoading ? (
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-4 sm:grid-cols-3 md:gap-6">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-[136px] animate-pulse rounded-[12px] border border-line bg-white dark:border-white/10 dark:bg-white/5" />
+                <div key={i} className="shadow-card dark:shadow-card-dark h-[136px] animate-pulse rounded-xl border border-line bg-white dark:border-white/10 dark:bg-white/5" />
               ))}
             </div>
           ) : recent.length ? (
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-4 sm:grid-cols-3 md:gap-6">
               {recent.map((p) => (
                 <ProjectCard key={p.id} project={p} onOpen={openEditor} compact />
               ))}
             </div>
           ) : (
-            <div className="mt-6 rounded-[12px] border border-dashed border-line p-8 text-center dark:border-white/15">
+            <div className="mt-6 rounded-xl border border-dashed border-line p-8 text-center dark:border-white/15">
               <p className="text-[14px] font-bold">لا توجد مشاريع بعد</p>
               <p className="mt-1 text-[13px] text-muted">ابدأ بتقرير رسمي جاهز أو بصفحة فارغة.</p>
             </div>
           )}
         </section>
 
-        <section className="mx-auto w-full max-w-6xl px-4 pb-12 sm:px-6">
+        <section className="mx-auto w-full max-w-6xl px-4 pb-12 sm:px-6 md:pb-16">
           <h2 className="text-[20px] font-extrabold">قوالب البداية</h2>
           <p className="mt-1 text-[13px] text-muted">كل قالب ينشئ نسخة جديدة داخل مشروعك.</p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={`mt-6 ${CARD_WRAP}`}>
             {PACKS.map((pack) => (
               <button
                 key={pack.id}
                 type="button"
                 onClick={() => window.location.assign(pack.id === "blank" ? "/demo" : "/purchase")}
-                className="rounded-[12px] border border-line bg-white p-5 text-right transition hover:border-navy-2 dark:border-white/10 dark:bg-white/5"
+                className={`flex flex-col rounded-xl bg-white p-5 text-right hover:border-navy-2 dark:bg-white/5 ${CARD_W} ${SITE_CARD}`}
               >
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="grid size-10 place-items-center rounded-[9px] bg-navy/5 text-navy-2 dark:bg-white/10 dark:text-gold-2">
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <span className={`grid size-10 place-items-center rounded-xl ${iconTint(0)}`}>
                     {pack.id === "blank" ? <FileText className="size-5" /> : <LayoutTemplate className="size-5" />}
                   </span>
                   <span className="text-[11px] font-bold text-muted">{pack.pages}</span>
                 </div>
-                <strong className="block text-[15px] font-extrabold">{pack.title}</strong>
-                <span className="mt-1 block text-[12px] leading-6 text-muted">{pack.desc}</span>
-                <span className="mt-3 inline-flex text-[11px] font-extrabold text-navy-2 dark:text-gold-2">{pack.id === "blank" ? "فتح العرض" : "متاح في النسخة الكاملة"}</span>
+                <strong className="block text-[15px] font-extrabold text-ink dark:text-white">{pack.title}</strong>
+                <span className="mt-2 block text-[12px] leading-6 text-muted">{pack.desc}</span>
+                <span className="mt-auto inline-flex pt-4 text-[11px] font-extrabold text-navy-2 dark:text-gold-2">{pack.id === "blank" ? "فتح العرض" : "متاح في النسخة الكاملة"}</span>
               </button>
             ))}
           </div>
         </section>
 
         <section className="border-t border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
-          <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
+          <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
             <h2 className="text-[20px] font-extrabold">ماذا تتضمن المنصة</h2>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {HIGHLIGHTS.map((h) => {
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-4">
+              {HIGHLIGHTS.map((h, i) => {
                 const Icon = h.icon;
                 return (
-                  <div key={h.title}>
-                    <span className="grid size-10 place-items-center rounded-[9px] bg-navy/5 text-navy-2 dark:bg-white/10 dark:text-gold-2">
+                  <div
+                    key={h.title}
+                    className={`flex flex-col rounded-2xl bg-paper/60 p-6 dark:bg-white/5 ${SITE_CARD}`}
+                  >
+                    <span className={`grid size-11 place-items-center rounded-xl ${iconTint(i)}`}>
                       <Icon className="size-5" />
                     </span>
-                    <strong className="mt-3 block text-[14px] font-extrabold">{h.title}</strong>
-                    <p className="mt-1 text-[12px] leading-6 text-muted">{h.desc}</p>
+                    <strong className="mt-4 block text-[15px] font-extrabold text-ink dark:text-white">{h.title}</strong>
+                    <p className="mt-2 text-[13px] leading-6 text-muted">{h.desc}</p>
                   </div>
                 );
               })}
@@ -172,13 +176,13 @@ export function HomePage() {
             <div className="mt-8 flex flex-wrap gap-3">
               <a
                 href="/templates"
-                className="inline-flex h-11 items-center rounded-[10px] border border-line px-4 text-[13px] font-bold dark:border-white/10"
+                className="inline-flex h-11 items-center rounded-xl bg-navy px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-navy-2"
               >
                 استعرض القوالب
               </a>
               <a
                 href="/about"
-                className="inline-flex h-11 items-center rounded-[10px] border border-line px-4 text-[13px] font-bold dark:border-white/10"
+                className="inline-flex h-11 items-center rounded-xl border border-line px-4 text-[13px] font-bold transition hover:bg-line-2 dark:border-white/10 dark:hover:bg-white/5"
               >
                 عن المنصة
               </a>

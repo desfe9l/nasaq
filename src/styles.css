@@ -57,7 +57,12 @@
   --color-ink: #172033;
   --color-paper: #f2f4f8;
   --color-surface: #ffffff;
-  --color-muted: #6b7383;
+  /*
+   * Secondary text. Kept just dark enough to clear WCAG AA for the 11–13px
+   * subtext used across the site and the editor (≈5.8:1 on white); the pale
+   * grey it replaced measured ≈4.7:1 and read as washed out on card surfaces.
+   */
+  --color-muted: #5d6575;
   --color-line: #dde2ea;
   --color-line-2: #edf0f5;
   --color-danger: #b42318;
@@ -70,6 +75,23 @@
   --shadow-panel:
     0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
   --shadow-page: 0 24px 64px rgba(15, 23, 42, 0.18);
+
+  /*
+   * Card elevation (site pages + editor cards).
+   *
+   * One soft, low-opacity lift used by every card in the product, so a grid of
+   * cards reads as one surface family instead of a pile of different shadows.
+   * The dark variants add a 1px translucent glow ring on top of the drop
+   * shadow: on a dark page a black shadow alone is nearly invisible, so the
+   * elevation has to come from light as well.
+   * Both are exposed as `shadow-card` / `dark:shadow-card-dark` utilities.
+   */
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  --shadow-card-hover: 0 12px 28px -6px rgba(0, 0, 0, 0.12);
+  --shadow-card-dark:
+    0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-card-dark-hover:
+    0 12px 28px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.09);
 }
 
 @layer base {
@@ -123,6 +145,19 @@
     color: #e9eef5;
   }
 
+  /*
+   * Dark-mode secondary text.
+   *
+   * The light-mode grey is far too dark against a #0f141c page (≈3.7:1, below
+   * AA); the dark theme gets its own, lighter secondary so subtext stays
+   * legible instead of dissolving into the background. Only the muted tone is
+   * re-pointed — every ink/surface token keeps its own light value, and the
+   * editor chrome overrides its tokens separately (.editor-ui … below).
+   */
+  html.dark {
+    --color-muted: #9aa5b4;
+  }
+
   :focus-visible {
     outline: 2px solid var(--color-navy-2);
     outline-offset: 2px;
@@ -173,7 +208,12 @@
   --editor-panel: #f0f0f1;
   --editor-toolbar: #e8e8e9;
   --editor-surface: #fafafa;
-  --editor-border: #c9cacc;
+  /*
+   * Chrome dividers. The previous #c9cacc read as a smudge against the #e8e8e9
+   * toolbar/rail — one shade darker keeps every panel edge, tab divider and
+   * toolbar separator crisp without turning the light chrome grey.
+   */
+  --editor-border: #b6b8bb;
   --editor-text: #28292a;
   --editor-text-secondary: #686a6c;
   --editor-hover: #dedfe0;
@@ -533,14 +573,17 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   background: #fff;
   color: #172033;
   /*
-   * Physical page metaphor: a distinct drop shadow lifts the sheet off the
-   * subdued stage in both themes. A 1px hairline keeps the page edge visible
-   * when the artwork itself is white on a white artboard.
+   * Physical page metaphor: a floating A4 sheet.
+   *
+   * Three stacked shadows give the scale of real paper on a desk — a wide soft
+   * ambient shadow (shadow-2xl scale), a tighter contact shadow, and a 1px
+   * hairline so the page edge stays visible when the artwork itself is white on
+   * a white stage. The sheet therefore reads as "lifted" in both themes.
    */
   box-shadow:
-    0 10px 25px -5px rgba(0, 0, 0, 0.15),
-    0 8px 10px -6px rgba(0, 0, 0, 0.1),
-    0 0 0 1px rgba(15, 23, 42, 0.08);
+    0 25px 50px -12px rgba(15, 23, 42, 0.34),
+    0 10px 22px -12px rgba(15, 23, 42, 0.2),
+    0 0 0 1px rgba(15, 23, 42, 0.07);
   isolation: isolate;
   user-select: none;
 }

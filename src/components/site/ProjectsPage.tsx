@@ -49,7 +49,7 @@ export function ProjectsPage() {
     <div className="min-h-full bg-paper dark:bg-[#111722]">
       <SiteHeader current="/projects" />
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
+      <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-[26px] font-extrabold">مشاريعي</h1>
@@ -126,22 +126,22 @@ export function ProjectsPage() {
         </div>
 
         {projectsLoading ? (
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
-                className="h-[172px] animate-pulse rounded-[12px] border border-line bg-white dark:border-white/10 dark:bg-white/5"
+                className="shadow-card dark:shadow-card-dark h-[172px] animate-pulse rounded-xl border border-line bg-white dark:border-white/10 dark:bg-white/5"
               />
             ))}
           </div>
         ) : filtered.length ? (
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-6 grid gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
             {filtered.map((p) => (
               <ProjectCard key={p.id} project={p} onOpen={open} />
             ))}
           </div>
         ) : (
-          <div className="mt-6 rounded-[12px] border border-dashed border-line p-10 text-center dark:border-white/15">
+          <div className="mt-6 rounded-xl border border-dashed border-line p-10 text-center dark:border-white/15">
             <p className="text-[14px] font-bold">
               {projects.length ? "لا نتائج مطابقة للبحث" : "لا توجد مشاريع بعد"}
             </p>
