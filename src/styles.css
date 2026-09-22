@@ -875,3 +875,96 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   body { background: #fff !important; }
   .no-print { display: none !important; }
 }
+
+
+/* ---------- Targeted Fix: Isolated layers (brand vs view controls vs canvas) ---------- */
+.editor-brand-zone {
+  isolation: isolate;
+  transform: none !important;
+  /* Prevent brand buttons wrapping into view bar */
+  contain: layout style;
+}
+.editor-brand-zone .flex {
+  min-width: 0;
+}
+.editor-view-controls {
+  isolation: isolate;
+  transform: none !important;
+  contain: layout style;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.editor-view-controls::-webkit-scrollbar { display: none; }
+.editor-workspace-scaler {
+  /* uiScale lives ONLY here. Brand + view rows stay at 1x. */
+  min-height: 0;
+  contain: layout;
+}
+/* Canvas zoom isolation — store.zoom affects only .page-frame-content */
+.editor-canvas-stage .page-frame-content {
+  isolation: isolate;
+}
+
+/* ---------- Targeted Fix: bottom clipping — sticky footer for all panels ---------- */
+.editor-sidebar, .editor-properties {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.editor-sidebar .editor-pane-scroll,
+.editor-properties .editor-pane-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.editor-properties-footer {
+  /* already sticky in markup; ensure it never leaves viewport */
+  position: sticky;
+  bottom: 0;
+  backdrop-filter: blur(6px);
+}
+/* Left panel sticky actions (AssetLibrary button) */
+.asset-library {
+  /* internal scroll region handles pending preview without pushing button off screen */
+  min-width: 0;
+}
+
+/* ---------- Targeted Fix: selection color contrast — NASAQ identity ---------- */
+/* Light: #1d4ed8 with white halo already; nudge thickness for visibility at 82% */
+.editor-ui.editor-light .selection-frame {
+  border-width: calc(2.8px / var(--editor-zoom, 1));
+  box-shadow: 0 0 0 calc(1.2px / var(--editor-zoom, 1)) rgba(29, 78, 216, 0.12);
+}
+/* Dark: gold #d9b45b with dark halo; add outer glow so it pops on dark chrome */
+.editor-ui.editor-dark .selection-frame {
+  border-width: calc(2.8px / var(--editor-zoom, 1));
+  box-shadow: 0 0 8px rgba(217, 180, 91, 0.35), 0 0 0 calc(1px / var(--editor-zoom, 1)) rgba(0,0,0,0.5) inset;
+}
+/* Secondary selection dashed remains distinct but still uses NASAQ palette */
+.editor-ui.editor-dark .selection-frame.is-secondary {
+  border-color: color-mix(in srgb, var(--sel-color) 75%, transparent);
+}
+/* Locked: keep selected but visually locked — purple dashed + retain selection halo */
+.selection-frame.is-locked.is-selected,
+.selection-frame.is-locked {
+  border-color: #8b5cf6 !important;
+  box-shadow: 0 0 0 calc(1.5px / var(--editor-zoom, 1)) rgba(139, 92, 246, 0.25);
+}
+/* Layer list — locked yet selected keeps both cues */
+.editor-ui .layer-row.is-locked.is-selected {
+  border-color: #8b5cf6;
+  background: color-mix(in srgb, #8b5cf6 10%, var(--editor-panel));
+}
+
+/* ---------- Targeted Fix: Group visual in canvas ---------- */
+.canvas-el.group-frame {
+  outline-width: calc(1.5px / var(--editor-zoom, 1));
+}
+
+/* ---------- Targeted Fix: Library top visibility helper ---------- */
+.editor-sidebar .asset-library {
+  scroll-margin-top: 12px;
+}
+
