@@ -11,6 +11,17 @@ import {
   type ScreenBox,
 } from "./ui-state.ts";
 
+/** Overlap area of two boxes, used to assert "never covers X". */
+function overlap(
+  _origin: { left: number; top: number },
+  a: { left: number; top: number; width: number; height: number },
+  b: { left: number; top: number; width: number; height: number },
+): number {
+  const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+  const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+
 const box = (left: number, top: number, width: number, height: number): ScreenBox => ({
   left,
   top,
@@ -126,5 +137,46 @@ describe("placeFloatingToolbar", () => {
     const a = placeFloatingToolbar(box(300, 500, 100, 50), size, viewport);
     const b = placeFloatingToolbar(box(700, 500, 100, 50), size, viewport);
     assert.equal(b.left - a.left, 400);
+  });
+});
+
+describe("placeFloatingToolbar obstacle avoidance", () => {
+  const viewport = { width: 1440, height: 900 };
+  const size = { width: 420, height: 44 };
+  /** The docked properties panel: a 320px column on the left edge. */
+  const propertiesPanel: ScreenBox = { left: 0, top: 52, width: 320, height: 848, right: 320, bottom: 900 };
+
+  it("steps around the properties panel instead of covering it", () => {
+    const out = placeFloatingToolbar(box(200, 400, 200, 120), size, viewport, 16, 8, [propertiesPanel]);
+    const box$ = { left: out.left, top: out.top, width: size.width, height: size.height };
+    assert.equal(overlap(out, box$, propertiesPanel), 0, "bubble must not overlap the panel");
+    // Above/below would have centred it over the panel, so it moved to a side.
+    assert.ok(out.placement === "right" || out.placement === "above" || out.placement === "below");
+    assert.ok(out.left >= propertiesPanel.right, `expected the bubble right of the panel, got ${out.left}`);
+  });
+
+  it("keeps the preferred placement when nothing is in the way", () => {
+    const out = placeFloatingToolbar(box(700, 400, 200, 120), size, viewport, 16, 8, [propertiesPanel]);
+    assert.equal(out.placement, "above");
+    assert.equal(out.top, 400 - 16 - 44);
+  });
+
+  it("avoids the header when the element is scrolled to the top", () => {
+    const header: ScreenBox = { left: 0, top: 0, width: 1440, height: 52, right: 1440, bottom: 52 };
+    const out = placeFloatingToolbar(box(700, 60, 200, 120), size, viewport, 16, 8, [header]);
+    assert.ok(out.top >= header.bottom, `expected the bubble below the header, got ${out.top}`);
+  });
+
+  it("never covers the selected element even when every side is blocked", () => {
+    const walled: ScreenBox[] = [
+      { left: 0, top: 0, width: 1440, height: 380, right: 1440, bottom: 380 },
+      { left: 0, top: 560, width: 1440, height: 340, right: 1440, bottom: 900 },
+    ];
+    const anchor = box(600, 420, 240, 100);
+    const out = placeFloatingToolbar(anchor, size, viewport, 16, 8, walled);
+    const box$ = { left: out.left, top: out.top, width: size.width, height: size.height };
+    // Sides win: they have no vertical overlap with the walls at all.
+    assert.ok(out.placement === "left" || out.placement === "right");
+    assert.equal(overlap(out, box$, anchor), 0);
   });
 });

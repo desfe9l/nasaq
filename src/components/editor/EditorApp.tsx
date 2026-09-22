@@ -8,6 +8,8 @@ import {
   Check,
   Download,
   Focus,
+  Eye,
+  EyeOff,
   GalleryHorizontalEnd,
   FolderOpen,
   Grid3x3,
@@ -27,7 +29,12 @@ import {
   Scan,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
-import { useEditor, saveLabel, PAGES_PANEL_MIN, type SaveState } from "@/lib/editor/store";
+import {
+  useEditor,
+  saveLabel,
+  PAGES_PANEL_MIN,
+  type SaveState,
+} from "@/lib/editor/store";
 import { elementsBounds, pageSize } from "@/lib/editor/model";
 import { fitImageBox, prepareImage } from "@/lib/editor/images";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
@@ -57,7 +64,10 @@ export function EditorApp() {
   const imageInput = useRef<HTMLInputElement>(null);
   const fontInput = useRef<HTMLInputElement>(null);
   const svgInput = useRef<HTMLInputElement>(null);
-  const imageIntent = useRef<{ type: "image" | "logo" | "replace" | "library"; targetId?: string }>({ type: "image" });
+  const imageIntent = useRef<{
+    type: "image" | "logo" | "replace" | "library";
+    targetId?: string;
+  }>({ type: "image" });
   /** Which kind of reusable vector the next file pick will register. */
   const customAssetIntent = useRef<"icon" | "divider">("icon");
   const customAssetInput = useRef<HTMLInputElement>(null);
@@ -125,8 +135,12 @@ export function EditorApp() {
     return (
       <div className="grid h-full place-items-center bg-navy text-white">
         <div className="text-center">
-          <p className="text-[15px] font-extrabold text-gold-2">{BRAND.developer}</p>
-          <p className="mt-1 text-[12px] text-white/60">جارٍ تحضير مساحة العمل…</p>
+          <p className="text-[15px] font-extrabold text-gold-2">
+            {BRAND.developer}
+          </p>
+          <p className="mt-1 text-[12px] text-white/60">
+            جارٍ تحضير مساحة العمل…
+          </p>
         </div>
       </div>
     );
@@ -181,7 +195,9 @@ export function EditorApp() {
           const reader = new FileReader();
           reader.onload = () => {
             try {
-              void useEditor.getState().importProject(JSON.parse(String(reader.result)));
+              void useEditor
+                .getState()
+                .importProject(JSON.parse(String(reader.result)));
             } catch {
               toast.error("تعذر قراءة الملف — تأكد أنه ملف مشروع بصيغة JSON");
             }
@@ -270,7 +286,9 @@ export function EditorApp() {
           if (!file) return;
           const reader = new FileReader();
           reader.onload = () => {
-            const fontName = file.name.replace(/\.[^.]+$/, "").replace(/[-_]/g, " ");
+            const fontName = file.name
+              .replace(/\.[^.]+$/, "")
+              .replace(/[-_]/g, " ");
             const face = new FontFace(fontName, `url(${reader.result})`);
             face
               .load()
@@ -343,6 +361,10 @@ function Studio({
   const pagesPanelHeight = useEditor((s) => s.pagesPanelHeight);
   const setPagesPanelHeight = useEditor((s) => s.setPagesPanelHeight);
   const contextMenu = useEditor((s) => s.contextMenu);
+  const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
+  const toggleBubble = useEditor((s) => s.toggleBubble);
+  const leftTab = useEditor((s) => s.leftTab);
+  const openLibrary = useEditor((s) => s.openLibrary);
   const openContextMenu = useEditor((s) => s.openContextMenu);
   const closeContextMenu = useEditor((s) => s.closeContextMenu);
   const duplicateSelected = useEditor((s) => s.duplicateSelected);
@@ -362,19 +384,38 @@ function Studio({
   const enteredGroupId = useEditor((s) => s.enteredGroupId);
   const [panelWidths, setPanelWidths] = useState(() => {
     try {
-      const raw = JSON.parse(localStorage.getItem("diwan-editor-panel-widths") || "{}");
+      const raw = JSON.parse(
+        localStorage.getItem("diwan-editor-panel-widths") || "{}",
+      );
       return {
-        left: Math.min(PANEL_MAX.left, Math.max(PANEL_MIN.left, Number(raw.left) || 280)),
-        right: Math.min(PANEL_MAX.right, Math.max(PANEL_MIN.right, Number(raw.right) || 320)),
+        left: Math.min(
+          PANEL_MAX.left,
+          Math.max(PANEL_MIN.left, Number(raw.left) || 280),
+        ),
+        right: Math.min(
+          PANEL_MAX.right,
+          Math.max(PANEL_MIN.right, Number(raw.right) || 320),
+        ),
       };
     } catch {
       return { left: 280, right: 320 };
     }
   });
-  const [isDesktop, setIsDesktop] = useState(() => typeof window === "undefined" || window.matchMedia("(min-width: 1024px)").matches);
+  const [isDesktop, setIsDesktop] = useState(
+    () =>
+      typeof window === "undefined" ||
+      window.matchMedia("(min-width: 1024px)").matches,
+  );
 
+  /** True when the library tab is the visible one in the components panel. */
+  const libraryVisible = isDesktop
+    ? leftTab === "library" && !leftCollapsed && !focusMode
+    : leftOpen && leftTab === "library";
   useEffect(() => {
-    localStorage.setItem("diwan-editor-panel-widths", JSON.stringify(panelWidths));
+    localStorage.setItem(
+      "diwan-editor-panel-widths",
+      JSON.stringify(panelWidths),
+    );
   }, [panelWidths]);
 
   useEffect(() => {
@@ -399,7 +440,10 @@ function Studio({
     if (!node) return;
     const apply = () => {
       const height = Math.round(node.getBoundingClientRect().height);
-      document.documentElement.style.setProperty("--editor-header-h", `${height}px`);
+      document.documentElement.style.setProperty(
+        "--editor-header-h",
+        `${height}px`,
+      );
     };
     apply();
     const observer = new ResizeObserver(apply);
@@ -433,7 +477,8 @@ function Studio({
     const startY = event.clientY;
     const startHeight = pagesPanelHeight;
     document.body.classList.add("is-resizing-rail");
-    const move = (ev: PointerEvent) => setPagesPanelHeight(startHeight + (startY - ev.clientY));
+    const move = (ev: PointerEvent) =>
+      setPagesPanelHeight(startHeight + (startY - ev.clientY));
     const finish = () => {
       document.body.classList.remove("is-resizing-rail");
       window.removeEventListener("pointermove", move);
@@ -446,42 +491,51 @@ function Studio({
   };
 
   /** Keyboard path for the same control (arrow keys, 16px per press). */
-  const nudgePagesHeight = (delta: number) => setPagesPanelHeight(pagesPanelHeight + delta);
+  const nudgePagesHeight = (delta: number) =>
+    setPagesPanelHeight(pagesPanelHeight + delta);
 
   const activePage = pages.find((p) => p.id === activePageId) || pages[0];
   const activeSize = pageSize(activePage);
 
-/**
- * ملاءمة الصفحة / عرض الصفحة بالكامل: pick a zoom that fits the WHOLE
- * artboard (all four edges inside the viewport) and then centre it, so Fit
- * never lands on a smaller view of wherever the author had scrolled to.
- */
-const fitToScreen = useCallback(() => {
-  const el = document.querySelector<HTMLElement>(".editor-canvas-stage");
-  if (!el) return setZoom(0.82);
-  const rect = el.getBoundingClientRect();
-  // Measure the ACTIVE artboard, not whichever page happens to be first in
-  // the all-pages preview — the fit must always bring the page being edited
-  // into view, and pages may carry different sizes.
-  const pageEl = document.querySelector<HTMLElement>(
-    `.editor-canvas-stage [data-page-id="${CSS.escape(activePage.id)}"]`,
-  );
-  const pxPerMm = pageEl && activeSize.w > 0 ? pageEl.clientWidth / activeSize.w : 96 / 25.4;
-  const pagePxW = activeSize.w * pxPerMm;
-  const pagePxH = (activeSize.h + 12) * pxPerMm;
-  const padding = 28; // pixels of breathing room on every edge
-  const next = Math.min((Math.max(0, rect.width - padding * 2)) / pagePxW, (Math.max(0, rect.height - padding * 2)) / pagePxH);
-  setZoom(Math.max(0.2, Math.min(2, next)));
-  requestAnimationFrame(() => {
-    const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
-    const pageEl2 = stage?.querySelector<HTMLElement>(`[data-page-id="${CSS.escape(activePage.id)}"]`);
-    if (!stage || !pageEl2) return;
-    const sr = stage.getBoundingClientRect();
-    const pr = pageEl2.getBoundingClientRect();
-    stage.scrollLeft += pr.left + pr.width / 2 - (sr.left + sr.width / 2);
-    stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
-  });
-}, [activePage?.id, activeSize.h, activeSize.w, setZoom]);
+  /**
+   * ملاءمة الصفحة / عرض الصفحة بالكامل: pick a zoom that fits the WHOLE
+   * artboard (all four edges inside the viewport) and then centre it, so Fit
+   * never lands on a smaller view of wherever the author had scrolled to.
+   */
+  const fitToScreen = useCallback(() => {
+    const el = document.querySelector<HTMLElement>(".editor-canvas-stage");
+    if (!el) return setZoom(0.82);
+    const rect = el.getBoundingClientRect();
+    // Measure the ACTIVE artboard, not whichever page happens to be first in
+    // the all-pages preview — the fit must always bring the page being edited
+    // into view, and pages may carry different sizes.
+    const pageEl = document.querySelector<HTMLElement>(
+      `.editor-canvas-stage [data-page-id="${CSS.escape(activePage.id)}"]`,
+    );
+    const pxPerMm =
+      pageEl && activeSize.w > 0
+        ? pageEl.clientWidth / activeSize.w
+        : 96 / 25.4;
+    const pagePxW = activeSize.w * pxPerMm;
+    const pagePxH = (activeSize.h + 12) * pxPerMm;
+    const padding = 28; // pixels of breathing room on every edge
+    const next = Math.min(
+      Math.max(0, rect.width - padding * 2) / pagePxW,
+      Math.max(0, rect.height - padding * 2) / pagePxH,
+    );
+    setZoom(Math.max(0.2, Math.min(2, next)));
+    requestAnimationFrame(() => {
+      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+      const pageEl2 = stage?.querySelector<HTMLElement>(
+        `[data-page-id="${CSS.escape(activePage.id)}"]`,
+      );
+      if (!stage || !pageEl2) return;
+      const sr = stage.getBoundingClientRect();
+      const pr = pageEl2.getBoundingClientRect();
+      stage.scrollLeft += pr.left + pr.width / 2 - (sr.left + sr.width / 2);
+      stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
+    });
+  }, [activePage?.id, activeSize.h, activeSize.w, setZoom]);
 
   /**
    * Toolbar/keyboard zoom keeps the middle of the current view stable. With a
@@ -490,13 +544,21 @@ const fitToScreen = useCallback(() => {
    * navigate. Anchoring on the viewport centre (same mechanism as ctrl+wheel)
    * keeps the visible content in place at every step.
    */
-  const zoomCentered = useCallback((next: number) => {
-    const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
-    if (!stage) return setZoom(Math.max(0.2, Math.min(2, next)));
-    const r = stage.getBoundingClientRect();
-    zoomAnchoredAt(stage, useEditor.getState().zoom, next, r.left + r.width / 2, r.top + r.height / 2);
-  }, [setZoom]);
-
+  const zoomCentered = useCallback(
+    (next: number) => {
+      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+      if (!stage) return setZoom(Math.max(0.2, Math.min(2, next)));
+      const r = stage.getBoundingClientRect();
+      zoomAnchoredAt(
+        stage,
+        useEditor.getState().zoom,
+        next,
+        r.left + r.width / 2,
+        r.top + r.height / 2,
+      );
+    },
+    [setZoom],
+  );
 
   // A 20 s heartbeat keeps "آخر حفظ منذ …" honest without a per-second store write.
   useEffect(() => {
@@ -525,7 +587,10 @@ const fitToScreen = useCallback(() => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
-      const typing = !!t && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
+      const typing =
+        !!t &&
+        (t.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
       const meta = e.metaKey || e.ctrlKey;
       const key = e.key.toLowerCase();
 
@@ -629,7 +694,11 @@ const fitToScreen = useCallback(() => {
        * tablet the drawer covers the canvas, so the author's first Escape means
        * "put the artwork back", not "clear what I had selected".
        */
-      if (e.key === "Escape" && !isDesktop && (useEditor.getState().leftOpen || useEditor.getState().rightOpen)) {
+      if (
+        e.key === "Escape" &&
+        !isDesktop &&
+        (useEditor.getState().leftOpen || useEditor.getState().rightOpen)
+      ) {
         e.preventDefault();
         closeFloatingPanels();
         return;
@@ -648,13 +717,18 @@ const fitToScreen = useCallback(() => {
         else select(null);
         return;
       }
-      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) && selectedIds.length) {
+      if (
+        ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) &&
+        selectedIds.length
+      ) {
         e.preventDefault();
         const state = useEditor.getState();
         const selected = state.selectedElements();
         const step = e.shiftKey ? 5 : e.altKey ? 0.5 : 1;
-        const dx = e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0;
-        const dy = e.key === "ArrowDown" ? step : e.key === "ArrowUp" ? -step : 0;
+        const dx =
+          e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0;
+        const dy =
+          e.key === "ArrowDown" ? step : e.key === "ArrowUp" ? -step : 0;
         // Move the whole selection, not just the primary element, so a nudge
         // after a marquee behaves the way the author expects.
         for (const id of selectedIds) {
@@ -706,16 +780,28 @@ const fitToScreen = useCallback(() => {
    * The old sign convention had that inverted, which is why the handles only
    * ever seemed decorative.
    */
-  const resizePanel = (side: "left" | "right", startClientX: number, startWidth: number) => {
+  const resizePanel = (
+    side: "left" | "right",
+    startClientX: number,
+    startWidth: number,
+  ) => {
     document.body.classList.add("is-resizing-panel");
     const move = (event: PointerEvent) => {
       // Left panel: inner edge is on its LEFT side of the grid (DOM-LTR), so
       // width grows as the pointer moves left in screen space. Right panel:
       // inner edge faces the other way, so width grows as the pointer moves
       // right. Both follow the dragged edge.
-      const delta = side === "left" ? startClientX - event.clientX : event.clientX - startClientX;
-      const width = Math.min(PANEL_MAX[side], Math.max(PANEL_MIN[side], startWidth + delta));
-      setPanelWidths((current) => (current[side] === width ? current : { ...current, [side]: width }));
+      const delta =
+        side === "left"
+          ? startClientX - event.clientX
+          : event.clientX - startClientX;
+      const width = Math.min(
+        PANEL_MAX[side],
+        Math.max(PANEL_MIN[side], startWidth + delta),
+      );
+      setPanelWidths((current) =>
+        current[side] === width ? current : { ...current, [side]: width },
+      );
     };
     const finish = () => {
       document.body.classList.remove("is-resizing-panel");
@@ -734,13 +820,23 @@ const fitToScreen = useCallback(() => {
     const el = document.querySelector(".editor-canvas-stage");
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const pageContent = document.querySelector<HTMLElement>(".editor-canvas-stage .page-frame-content");
-    const activePageScale = pageContent && activeSize.w > 0 ? pageContent.clientWidth / activeSize.w : 96 / 25.4;
+    const pageContent = document.querySelector<HTMLElement>(
+      ".editor-canvas-stage .page-frame-content",
+    );
+    const activePageScale =
+      pageContent && activeSize.w > 0
+        ? pageContent.clientWidth / activeSize.w
+        : 96 / 25.4;
     const padding = 20; // pixels
-    const next = Math.min((rect.width - padding * 2) / (bounds.w * activePageScale), (rect.height - padding * 2) / (bounds.h * activePageScale));
+    const next = Math.min(
+      (rect.width - padding * 2) / (bounds.w * activePageScale),
+      (rect.height - padding * 2) / (bounds.h * activePageScale),
+    );
     setZoom(Math.max(0.2, Math.min(2, next)));
     requestAnimationFrame(() => {
-      const target = document.querySelector(`[data-el-id="${CSS.escape(selectedElements()[0]?.id || "")}"]`);
+      const target = document.querySelector(
+        `[data-el-id="${CSS.escape(selectedElements()[0]?.id || "")}"]`,
+      );
       target?.scrollIntoView({ block: "center", inline: "center" });
     });
   };
@@ -753,11 +849,16 @@ const fitToScreen = useCallback(() => {
      * wrap on a narrow tablet without stealing height from the canvas.
      */
     <div
-      className={cn("editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]", dark ? "editor-dark" : "editor-light", focusMode && "editor-focus")}
+      className={cn(
+        "editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]",
+        dark ? "editor-dark" : "editor-light",
+        focusMode && "editor-focus",
+      )}
     >
       <header
         ref={headerRef}
-        className="editor-toolbar z-20 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pt-[max(0.375rem,var(--safe-top))] pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))]"
+        data-editor-obstacle="header"
+        className="editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pt-[max(0.375rem,var(--safe-top))] pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))]"
       >
         <div className="flex shrink-0 items-center gap-2">
           <a
@@ -770,7 +871,11 @@ const fitToScreen = useCallback(() => {
           <button
             type="button"
             onClick={() => {
-              useEditor.setState({ leftTab: "elements", leftOpen: true, leftCollapsed: false });
+              useEditor.setState({
+                leftTab: "elements",
+                leftOpen: true,
+                leftCollapsed: false,
+              });
               window.dispatchEvent(new CustomEvent("nasaq:draw-text"));
             }}
             className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
@@ -801,7 +906,12 @@ const fitToScreen = useCallback(() => {
             onClick={() => {
               // The library has its own dedicated tab now — same top strip as
               // العناصر and الأشكال, so opening it is a tab switch, not a scroll.
-              useEditor.setState({ leftTab: "library", leftOpen: true, leftCollapsed: false, focusMode: false });
+              useEditor.setState({
+                leftTab: "library",
+                leftOpen: true,
+                leftCollapsed: false,
+                focusMode: false,
+              });
             }}
             className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
             title="فتح مكتبة الصور والعناصر"
@@ -825,100 +935,209 @@ const fitToScreen = useCallback(() => {
          */}
         <div className="editor-pane-scroll order-last flex min-w-fit flex-1 items-center overflow-x-auto md:order-none">
           <div className="mx-auto flex w-max items-center gap-1">
-          <IconButton onClick={undo} disabled={past.length <= 1} title="تراجع (⌘Z)">
-            <Undo2 className="size-4" />
-          </IconButton>
-          <IconButton onClick={redo} disabled={!future.length} title="إعادة (⌘⇧Z)">
-            <Redo2 className="size-4" />
-          </IconButton>
-          {/*
-           * Order matters on a narrow canvas: the zoom cluster and the four
-           * tool menus sit at the container's right (RTL start) so they remain
-           * visible without scrolling; the project name, grid and fit-to
-           * selection yield first when the viewport cannot hold everything.
-           */}
-          <IconButton onClick={() => zoomCentered(zoom - 0.08)} title="تصغير">
-            <ZoomOut className="size-4" />
-          </IconButton>
-          <span className="w-10 shrink-0 text-center text-[12px] font-bold tabular-nums">
-            {Math.round(zoom * 100)}%
-          </span>
-          <IconButton onClick={() => zoomCentered(zoom + 0.08)} title="تكبير">
-            <ZoomIn className="size-4" />
-          </IconButton>
-          {/*
-           * Fit lives pinned beside the zoom cluster: it is the companion
-           * action of zooming (was buried as an item inside the View/eye
-           * menu), and staying on the strip keeps it reachable in one click
-           * at every window size.
-           */}
-          <IconButton onClick={fitToScreen} title="ملاءمة الصفحة">
-            <Scan className="size-4" />
-          </IconButton>
-          {/* Secondary tools grouped into four real, keyboard-accessible menus.
+            <IconButton
+              onClick={undo}
+              disabled={past.length <= 1}
+              title="تراجع (⌘Z)"
+            >
+              <Undo2 className="size-4" />
+            </IconButton>
+            <IconButton
+              onClick={redo}
+              disabled={!future.length}
+              title="إعادة (⌘⇧Z)"
+            >
+              <Redo2 className="size-4" />
+            </IconButton>
+            {/*
+             * Order matters on a narrow canvas: the zoom cluster and the four
+             * tool menus sit at the container's right (RTL start) so they remain
+             * visible without scrolling; the project name, grid and fit-to
+             * selection yield first when the viewport cannot hold everything.
+             */}
+            <IconButton onClick={() => zoomCentered(zoom - 0.08)} title="تصغير">
+              <ZoomOut className="size-4" />
+            </IconButton>
+            <span className="w-10 shrink-0 text-center text-[12px] font-bold tabular-nums">
+              {Math.round(zoom * 100)}%
+            </span>
+            <IconButton onClick={() => zoomCentered(zoom + 0.08)} title="تكبير">
+              <ZoomIn className="size-4" />
+            </IconButton>
+            {/*
+             * Fit lives pinned beside the zoom cluster: it is the companion
+             * action of zooming (was buried as an item inside the View/eye
+             * menu), and staying on the strip keeps it reachable in one click
+             * at every window size.
+             */}
+            <IconButton onClick={fitToScreen} title="ملاءمة الصفحة">
+              <Scan className="size-4" />
+            </IconButton>
+            {/* Secondary tools grouped into four real, keyboard-accessible menus.
               Fit/100% live in the View menu (قائمة «عرض»). */}
-          <span className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10" aria-hidden />
-          <ToolbarMenus fitToScreen={fitToScreen} fitToSelection={fitToSelection} />
-          <span className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10" aria-hidden />
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            aria-label="اسم المشروع"
-            className="mx-0.5 block h-9 w-24 min-w-0 shrink rounded-[8px] px-2 text-center text-[12px] font-bold outline-none hover:bg-line-2 focus:bg-line-2 dark:bg-white/5 dark:text-white"
-          />
-          <IconButton onClick={() => toggle("showGrid")} active={showGrid} title="الشبكة">
-            <Grid3x3 className="size-4" />
-          </IconButton>
+            <span
+              className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10"
+              aria-hidden
+            />
+            <ToolbarMenus
+              fitToScreen={fitToScreen}
+              fitToSelection={fitToSelection}
+            />
+            <span
+              className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10"
+              aria-hidden
+            />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              aria-label="اسم المشروع"
+              className="mx-0.5 block h-9 w-24 min-w-0 shrink rounded-[8px] px-2 text-center text-[12px] font-bold outline-none hover:bg-line-2 focus:bg-line-2 dark:bg-white/5 dark:text-white"
+            />
+            <IconButton
+              onClick={() => toggle("showGrid")}
+              active={showGrid}
+              title="الشبكة"
+            >
+              <Grid3x3 className="size-4" />
+            </IconButton>
           </div>
         </div>
 
         <div className="flex shrink-0 items-center justify-end gap-1.5">
-          <SaveBadge state={saveState} label={label} onClick={() => void saveNow()} />
-          <IconButton onClick={() => toggle("previewAll")} active={previewAll} title="كل الصفحات">
+          <SaveBadge
+            state={saveState}
+            label={label}
+            onClick={() => void saveNow()}
+          />
+          <IconButton
+            onClick={() => toggle("previewAll")}
+            active={previewAll}
+            title="كل الصفحات"
+          >
             <GalleryHorizontalEnd className="size-4" />
           </IconButton>
-          <IconButton onClick={() => toggle("dark")} title={dark ? "الوضع النهاري" : "الوضع الليلي"}>
+          <IconButton
+            onClick={() => toggle("dark")}
+            title={dark ? "الوضع النهاري" : "الوضع الليلي"}
+          >
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </IconButton>
           {/* Panel toggles stay live even in focus mode: full screen must never
               mean losing the tools — one tap exits focus and brings the panel
               back (collapsed→open), so the exit is always one press away. */}
           {/*
-            * Sidebar toggles (Phase 1).
-            *
-            * ONE button per sidebar that is correct in every layout: docked
-            * screens flip the collapsed flag, tablet/phone flip the floating
-            * drawer — so the control never looks dead (the old buttons toggled
-            * the desktop-only flag, which did nothing visible at <1024px).
-            * Leaving focus mode restores the docks instead of merely toggling.
-            */}
+           * Sidebar toggles (Phase 1).
+           *
+           * ONE button per sidebar that is correct in every layout: docked
+           * screens flip the collapsed flag, tablet/phone flip the floating
+           * drawer — so the control never looks dead (the old buttons toggled
+           * the desktop-only flag, which did nothing visible at <1024px).
+           * Leaving focus mode restores the docks instead of merely toggling.
+           */}
           <IconButton
             onClick={() => {
               if (focusMode) {
-                useEditor.setState({ focusMode: false, leftCollapsed: false, leftOpen: false });
+                useEditor.setState({
+                  focusMode: false,
+                  leftCollapsed: false,
+                  leftOpen: false,
+                });
                 return;
               }
               toggleSidebar("left");
             }}
             active={isDesktop ? !leftCollapsed && !focusMode : leftOpen}
-            title={isDesktop ? (leftCollapsed ? "إظهار لوحة المكونات" : "طي لوحة المكونات") : leftOpen ? "إغلاق لوحة المكونات" : "فتح لوحة المكونات"}
+            title={
+              isDesktop
+                ? leftCollapsed
+                  ? "إظهار لوحة المكونات"
+                  : "طي لوحة المكونات"
+                : leftOpen
+                  ? "إغلاق لوحة المكونات"
+                  : "فتح لوحة المكونات"
+            }
           >
             <PanelRight className="size-4" />
           </IconButton>
           <IconButton
             onClick={() => {
               if (focusMode) {
-                useEditor.setState({ focusMode: false, rightCollapsed: false, rightOpen: false });
+                useEditor.setState({
+                  focusMode: false,
+                  rightCollapsed: false,
+                  rightOpen: false,
+                });
                 return;
               }
               toggleSidebar("right");
             }}
             active={isDesktop ? !rightCollapsed && !focusMode : rightOpen}
-            title={isDesktop ? (rightCollapsed ? "إظهار لوحة الخصائص" : "طي لوحة الخصائص") : rightOpen ? "إغلاق لوحة الخصائص" : "فتح لوحة الخصائص"}
+            title={
+              isDesktop
+                ? rightCollapsed
+                  ? "إظهار لوحة الخصائص"
+                  : "طي لوحة الخصائص"
+                : rightOpen
+                  ? "إغلاق لوحة الخصائص"
+                  : "فتح لوحة الخصائص"
+            }
           >
             <PanelLeft className="size-4" />
           </IconButton>
-          <IconButton onClick={() => toggle("focusMode")} active={focusMode} title={focusMode ? "الخروج من وضع التركيز" : "وضع التركيز"}>
+          {/*
+           * المكتبة — one permanent button, right after the properties toggle
+           * and before the main tools (spec: "between Properties and main
+           * tools"). It docks the library on desktop and slides it in on
+           * tablet/phone, so the panel is always one click away.
+           */}
+          <IconButton
+            onClick={() => {
+              // One button, two directions: the second press retracts the dock
+              // (or closes the drawer), so the Library is a toggle, not a
+              // one-way door.
+              if (libraryVisible) {
+                if (focusMode)
+                  useEditor.setState({
+                    focusMode: false,
+                    leftCollapsed: false,
+                    leftOpen: false,
+                  });
+                else toggleSidebar("left");
+                return;
+              }
+              openLibrary();
+            }}
+            active={libraryVisible}
+            title={
+              libraryVisible ? "إغلاق المكتبة الذكية" : "فتح المكتبة الذكية"
+            }
+          >
+            <Library className="size-4" />
+          </IconButton>
+          {/*
+           * Floating bubble visibility. Tooltips and the bubble itself explain
+           * the state, so the icon never has to carry the meaning alone.
+           */}
+          <IconButton
+            onClick={() => toggleBubble()}
+            active={bubbleEnabled}
+            title={
+              bubbleEnabled
+                ? "إخفاء الشريط العائم للعنصر المحدد"
+                : "إظهار الشريط العائم للعنصر المحدد"
+            }
+          >
+            {bubbleEnabled ? (
+              <Eye className="size-4" />
+            ) : (
+              <EyeOff className="size-4" />
+            )}
+          </IconButton>
+          <IconButton
+            onClick={() => toggle("focusMode")}
+            active={focusMode}
+            title={focusMode ? "الخروج من وضع التركيز" : "وضع التركيز"}
+          >
             <Focus className="size-4" />
           </IconButton>
           <IconButton onClick={onOpenFile} title="استيراد مشروع من ملف JSON">
@@ -948,37 +1167,61 @@ const fitToScreen = useCallback(() => {
       <div
         onContextMenu={(event) => {
           event.preventDefault();
-          const target = (event.target as HTMLElement).closest<HTMLElement>("[data-el-id]");
+          const target = (event.target as HTMLElement).closest<HTMLElement>(
+            "[data-el-id]",
+          );
           const targetId = target?.dataset.elId || null;
           if (targetId && !selectedIds.includes(targetId)) select(targetId);
-          openContextMenu({ x: event.clientX, y: event.clientY, targetId, source: "canvas" });
+          openContextMenu({
+            x: event.clientX,
+            y: event.clientY,
+            targetId,
+            source: "canvas",
+          });
         }}
         className={cn(
-        "editor-focus-workspace relative grid min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden",
-        focusMode || (leftCollapsed && rightCollapsed) ? "lg:grid-cols-[minmax(0,1fr)]" : leftCollapsed ? "lg:grid-cols-[minmax(360px,1fr)_320px] xl:grid-cols-[minmax(420px,1fr)_336px]" : rightCollapsed ? "lg:grid-cols-[280px_minmax(360px,1fr)] xl:grid-cols-[292px_minmax(420px,1fr)]" : "lg:grid-cols-[280px_minmax(360px,1fr)_320px] xl:grid-cols-[292px_minmax(420px,1fr)_336px]",
+          "editor-focus-workspace editor-workspace-row relative grid min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden",
+          focusMode || (leftCollapsed && rightCollapsed)
+            ? "lg:grid-cols-[minmax(0,1fr)]"
+            : leftCollapsed
+              ? "lg:grid-cols-[minmax(360px,1fr)_320px] xl:grid-cols-[minmax(420px,1fr)_336px]"
+              : rightCollapsed
+                ? "lg:grid-cols-[280px_minmax(360px,1fr)] xl:grid-cols-[292px_minmax(420px,1fr)]"
+                : "lg:grid-cols-[280px_minmax(360px,1fr)_320px] xl:grid-cols-[292px_minmax(420px,1fr)_336px]",
         )}
         style={{
-          gridTemplateColumns: focusMode || (leftCollapsed && rightCollapsed)
-            ? isDesktop ? "minmax(0, 1fr)" : undefined
-            : !isDesktop
-              ? undefined
-              : leftCollapsed
-                ? `minmax(360px, 1fr) ${panelWidths.right}px`
-                : rightCollapsed
-                  ? `${panelWidths.left}px minmax(360px, 1fr)`
-                  : `${panelWidths.left}px minmax(360px, 1fr) ${panelWidths.right}px`,
+          /*
+           * Docking transition (fix #5): the Library button and the sidebar
+           * toggles animate the column change so the dock slides instead of
+           * snapping. `is-resizing-panel` (set while a resizer is dragged)
+           * switches the transition off, so manual resizing stays 1:1 with the
+           * pointer and never feels laggy.
+           */
+          transition: "grid-template-columns 180ms cubic-bezier(0.22, 1, 0.36, 1)",
+          gridTemplateColumns:
+            focusMode || (leftCollapsed && rightCollapsed)
+              ? isDesktop
+                ? "minmax(0, 1fr)"
+                : undefined
+              : !isDesktop
+                ? undefined
+                : leftCollapsed
+                  ? `minmax(360px, 1fr) ${panelWidths.right}px`
+                  : rightCollapsed
+                    ? `${panelWidths.left}px minmax(360px, 1fr)`
+                    : `${panelWidths.left}px minmax(360px, 1fr) ${panelWidths.right}px`,
         }}
       >
         <div
           className={cn(
-            "editor-sidebar relative z-10 h-full min-h-0 overflow-hidden",
+            "editor-sidebar relative z-[var(--z-panel)] h-full min-h-0 overflow-hidden",
             /*
              * Phase 1 — below the breakpoint the panel FLOATS over the canvas
              * (a slide-over), it never squishes the artboard. In RTL the
              * components panel belongs to the visual right edge, which is the
              * physical `right` side here.
              */
-            "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[min(320px,86vw)] max-lg:shadow-2xl",
+            "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-[var(--z-drawer)] max-lg:w-[min(320px,86vw)] max-lg:shadow-2xl",
             "max-lg:transition-transform max-lg:duration-200 max-lg:ease-out",
             !leftOpen && "max-lg:translate-x-full",
             !leftOpen && "max-lg:pointer-events-none",
@@ -995,7 +1238,9 @@ const fitToScreen = useCallback(() => {
           <div className="flex items-center justify-start border-b border-line px-1.5 py-1 dark:border-white/10">
             <button
               type="button"
-              onClick={() => (isDesktop ? toggle("leftCollapsed") : closeFloatingPanels())}
+              onClick={() =>
+                isDesktop ? toggle("leftCollapsed") : closeFloatingPanels()
+              }
               aria-label="إغلاق لوحة العناصر"
               title="إغلاق لوحة العناصر"
               className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-line px-2 text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
@@ -1003,19 +1248,34 @@ const fitToScreen = useCallback(() => {
               <X className="size-3.5" /> إغلاق
             </button>
           </div>
-          <LeftPanel onUpload={onUpload} onUploadSvg={onUploadSvg} onAddCustomAsset={onAddCustomAsset} />
-          {!leftCollapsed && !focusMode && <PanelResizeHandle side="left" onStart={(event) => resizePanel("left", event.clientX, panelWidths.left)} />}
+          <LeftPanel
+            onUpload={onUpload}
+            onUploadSvg={onUploadSvg}
+            onAddCustomAsset={onAddCustomAsset}
+          />
+          {!leftCollapsed && !focusMode && (
+            <PanelResizeHandle
+              side="left"
+              onStart={(event) =>
+                resizePanel("left", event.clientX, panelWidths.left)
+              }
+            />
+          )}
         </div>
 
         <div className="editor-canvas-workspace relative grid min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden">
           {/*
-            * Tapping the canvas dismisses the floating drawers: on a tablet the
-            * artwork is what the author wants to see, and reaching for a close
-            * chip to do it would be a second, avoidable gesture.
-            */}
-          <CanvasStage onDropImage={onDropImage} onCanvasTap={() => (drawerOpen ? closeFloatingPanels() : undefined)} />
+           * Tapping the canvas dismisses the floating drawers: on a tablet the
+           * artwork is what the author wants to see, and reaching for a close
+           * chip to do it would be a second, avoidable gesture.
+           */}
+          <CanvasStage
+            onDropImage={onDropImage}
+            onCanvasTap={() => (drawerOpen ? closeFloatingPanels() : undefined)}
+          />
           <ArrangeBar />
           <div
+            data-editor-obstacle="page-rail-resizer"
             className="editor-page-rail-resizer"
             role="separator"
             aria-orientation="horizontal"
@@ -1035,11 +1295,15 @@ const fitToScreen = useCallback(() => {
             }}
           />
           {/*
-            * Pages panel height is applied to the rail itself (and its thumbs
-            * scale through `--rail-height`), so growing the panel reveals more
-            * page rows instead of distorting the thumbnails' aspect ratio.
-            */}
-          <div className="min-h-0 min-w-0" style={{ height: pagesPanelHeight }}>
+           * Pages panel height is applied to the rail itself (and its thumbs
+           * scale through `--rail-height`), so growing the panel reveals more
+           * page rows instead of distorting the thumbnails' aspect ratio.
+           */}
+          <div
+            data-editor-obstacle="page-rail"
+            className="min-h-0 min-w-0"
+            style={{ height: pagesPanelHeight }}
+          >
             <PageRail height={pagesPanelHeight} minHeight={PAGES_PANEL_MIN} />
           </div>
           <WorkspaceStatusBar />
@@ -1047,13 +1311,13 @@ const fitToScreen = useCallback(() => {
 
         <div
           className={cn(
-            "editor-sidebar editor-properties relative z-10 h-full min-h-0 overflow-hidden",
+            "editor-sidebar editor-properties relative z-[var(--z-panel)] h-full min-h-0 overflow-hidden",
             /*
              * The properties panel is the visual LEFT sidebar; it slides in from
              * the physical left edge on tablet/phone, identically in landscape
              * and portrait so muscle memory carries across orientations.
              */
-            "max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:w-[min(340px,90vw)] max-lg:shadow-2xl",
+            "max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-[var(--z-drawer)] max-lg:w-[min(340px,90vw)] max-lg:shadow-2xl",
             "max-lg:transition-transform max-lg:duration-200 max-lg:ease-out",
             !rightOpen && "max-lg:-translate-x-full",
             !rightOpen && "max-lg:pointer-events-none",
@@ -1064,7 +1328,9 @@ const fitToScreen = useCallback(() => {
           <div className="flex items-center justify-end border-b border-line px-1.5 py-1 dark:border-white/10">
             <button
               type="button"
-              onClick={() => (isDesktop ? toggle("rightCollapsed") : closeFloatingPanels())}
+              onClick={() =>
+                isDesktop ? toggle("rightCollapsed") : closeFloatingPanels()
+              }
               aria-label="إغلاق لوحة الخصائص"
               title="إغلاق لوحة الخصائص"
               className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-line px-2 text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
@@ -1073,59 +1339,66 @@ const fitToScreen = useCallback(() => {
             </button>
           </div>
           <RightPanel onReplaceImage={onReplaceImage} />
-          {!rightCollapsed && !focusMode && <PanelResizeHandle side="right" onStart={(event) => resizePanel("right", event.clientX, panelWidths.right)} />}
+          {!rightCollapsed && !focusMode && (
+            <PanelResizeHandle
+              side="right"
+              onStart={(event) =>
+                resizePanel("right", event.clientX, panelWidths.right)
+              }
+            />
+          )}
         </div>
       </div>
 
       {/*
        * Small-screen chrome.
-         *
-         * One control at a time: the launcher only shows while both drawers are
-         * shut, and a single close chip takes over once one is open. Keeping the
-         * launcher visible over an open drawer would cover the very controls it
-         * was used to reveal.
-         */}
-        {!(leftOpen || rightOpen) && (
-          <div
-            className="pointer-events-none absolute left-1/2 z-40 flex -translate-x-1/2 gap-2 lg:hidden"
-            style={{ bottom: `calc(${pagesPanelHeight}px + 12px)` }}
+       *
+       * One control at a time: the launcher only shows while both drawers are
+       * shut, and a single close chip takes over once one is open. Keeping the
+       * launcher visible over an open drawer would cover the very controls it
+       * was used to reveal.
+       */}
+      {!(leftOpen || rightOpen) && (
+        <div
+          className="pointer-events-none absolute left-1/2 z-[var(--z-drawer)] flex -translate-x-1/2 gap-2 lg:hidden"
+          style={{ bottom: `calc(${pagesPanelHeight}px + 12px)` }}
+        >
+          <button
+            type="button"
+            onClick={() => toggle("leftOpen")}
+            className="pointer-events-auto h-10 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
           >
-            <button
-              type="button"
-              onClick={() => toggle("leftOpen")}
-              className="pointer-events-auto h-10 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
-            >
-              عناصر
-            </button>
-            <button
-              type="button"
-              onClick={() => addPage()}
-              className="pointer-events-auto h-10 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
-            >
-              صفحة
-            </button>
-            <button
-              type="button"
-              onClick={() => toggle("rightOpen")}
-              className="pointer-events-auto h-10 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
-            >
-              خصائص
-            </button>
-          </div>
-        )}
-
-        {/*
-         * The old floating «إغلاق اللوحة» pill used to sit absolutely at the
-         * top centre of the shell — right on top of the toolbar controls and
-         * the artboard beneath them. Each drawer now carries its own in-flow
-         * «إغلاق» chip in its header (and the launcher chips reappear once
-         * both are shut), so nothing needs to float above the workspace.
-         */}
+            عناصر
+          </button>
+          <button
+            type="button"
+            onClick={() => addPage()}
+            className="pointer-events-auto h-10 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
+          >
+            صفحة
+          </button>
+          <button
+            type="button"
+            onClick={() => toggle("rightOpen")}
+            className="pointer-events-auto h-10 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
+          >
+            خصائص
+          </button>
+        </div>
+      )}
 
       {/*
-        * Shared backdrop for the floating drawers. Tapping it (or the canvas)
-        * closes them; it is rendered behind the drawers but above the canvas.
-        */}
+       * The old floating «إغلاق اللوحة» pill used to sit absolutely at the
+       * top centre of the shell — right on top of the toolbar controls and
+       * the artboard beneath them. Each drawer now carries its own in-flow
+       * «إغلاق» chip in its header (and the launcher chips reappear once
+       * both are shut), so nothing needs to float above the workspace.
+       */}
+
+      {/*
+       * Shared backdrop for the floating drawers. Tapping it (or the canvas)
+       * closes them; it is rendered behind the drawers but above the canvas.
+       */}
       {drawerOpen && (
         <div
           className="editor-drawer-backdrop"
@@ -1134,7 +1407,11 @@ const fitToScreen = useCallback(() => {
         />
       )}
 
-      <WorkspaceOverlays menu={contextMenu} onCloseMenu={closeContextMenu} fitToScreen={fitToScreen} />
+      <WorkspaceOverlays
+        menu={contextMenu}
+        onCloseMenu={closeContextMenu}
+        fitToScreen={fitToScreen}
+      />
       <ExportDialog />
     </div>
   );
@@ -1169,7 +1446,8 @@ function IconButton({
          * state — that is what makes the on/off state readable without a frame.
          */
         "grid size-9 shrink-0 place-items-center rounded-[8px] transition hover:bg-line-2 disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-white/10",
-        active && "bg-navy text-white hover:bg-navy dark:bg-navy dark:text-white",
+        active &&
+          "bg-navy text-white hover:bg-navy dark:bg-navy dark:text-white",
       )}
     >
       {children}
@@ -1177,7 +1455,15 @@ function IconButton({
   );
 }
 
-function SaveBadge({ state, label, onClick }: { state: SaveState; label: string; onClick: () => void }) {
+function SaveBadge({
+  state,
+  label,
+  onClick,
+}: {
+  state: SaveState;
+  label: string;
+  onClick: () => void;
+}) {
   const tone =
     state === "error"
       ? "bg-red-500/10 text-danger"
@@ -1196,12 +1482,22 @@ function SaveBadge({ state, label, onClick }: { state: SaveState; label: string;
         tone,
       )}
     >
-      {state === "saved" ? <Check className="size-4" /> : <Save className="size-4" />}
+      {state === "saved" ? (
+        <Check className="size-4" />
+      ) : (
+        <Save className="size-4" />
+      )}
     </button>
   );
 }
 
-function PanelResizeHandle({ side, onStart }: { side: "left" | "right"; onStart: (event: React.PointerEvent<HTMLDivElement>) => void }) {
+function PanelResizeHandle({
+  side,
+  onStart,
+}: {
+  side: "left" | "right";
+  onStart: (event: React.PointerEvent<HTMLDivElement>) => void;
+}) {
   /*
    * A 16px-wide hit strip with a visible 4px grip pill at the canvas edge.
    * `touch-action: none` is what makes the drag work on an iPad; without it
@@ -1209,7 +1505,10 @@ function PanelResizeHandle({ side, onStart }: { side: "left" | "right"; onStart:
    */
   return (
     <div
-      className={cn("editor-panel-resize-handle", `editor-panel-resize-${side}`)}
+      className={cn(
+        "editor-panel-resize-handle",
+        `editor-panel-resize-${side}`,
+      )}
       onPointerDown={(event) => {
         event.preventDefault();
         event.stopPropagation();

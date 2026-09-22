@@ -4,6 +4,31 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
+ * Editor chrome layer scale.
+ *
+ * One ordered set of tokens instead of scattered magic numbers, so a dropdown
+ * can never end up UNDER the panel it was opened from, and a floating bubble
+ * can never cover a dialog. Order (low → high):
+ *   canvas artwork < selection overlay < panels < drawer backdrop < drawer
+ *   < floating bubble < dropdown < dialog < context menu < command menu < toast
+ * The canvas overlay stays inside the page (see SELECTION_LAYER_Z in
+ * CanvasStage) and is unaffected by these values.
+ */
+:root {
+  --z-canvas: 0;
+  --z-canvas-overlay: 20;
+  --z-panel: 30;
+  --z-drawer-backdrop: 35;
+  --z-drawer: 40;
+  --z-bubble: 60;
+  --z-dropdown: 70;
+  --z-dialog: 90;
+  --z-context: 100;
+  --z-command: 110;
+  --z-toast: 200;
+}
+
+/*
  * Design tokens.
  *
  * Palette is deliberately restrained: white paper, neutral greys, and
@@ -346,7 +371,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 45;
+  z-index: calc(var(--z-canvas-overlay) + 1);
   width: 16px;
   cursor: col-resize;
   touch-action: none;
@@ -464,6 +489,20 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   outline-offset: 6px;
 }
 
+/*
+ * Canvas containment (fix #3).
+ *
+ * The stage is its own stacking context, so every layer inside an artboard
+ * (grid, guides, marquee, selection frame, handles) resolves against the
+ * artboard and can never paint over a docked sidebar, the top toolbar or a
+ * floating bubble — however large a z-index an element style happens to carry.
+ * Grep `--z-` for the top-level scale these internal values stay under.
+ */
+.editor-canvas-stage {
+  z-index: var(--z-canvas);
+  isolation: isolate;
+}
+
 .page-frame {
   transform-origin: top center;
   overflow: visible;
@@ -551,6 +590,9 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * (borders only, zero fill).
  */
 .editor-ui.editor-light {
+  /* High-contrast "this is interactive" accent for library/palette items. */
+  --primary-accent: #1d4ed8;
+  --library-active-bg: rgba(29, 78, 216, 0.1);
   --sel-color: #1d4ed8;
   --sel-halo: rgba(255, 255, 255, 0.9);
   --sel-glow: rgba(29, 78, 216, 0.18);
@@ -563,6 +605,8 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * stage, on the still-white page, and on top of any artwork.
  */
 .editor-ui.editor-dark {
+  --primary-accent: #60a5fa;
+  --library-active-bg: rgba(96, 165, 250, 0.18);
   --sel-color: #3b82f6;
   --sel-halo: rgba(15, 23, 42, 0.9);
   --sel-glow: rgba(59, 130, 246, 0.2);
@@ -691,7 +735,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  */
 .overflow-badge {
   position: absolute;
-  z-index: 30;
+  z-index: var(--z-canvas-overlay);
   padding: 0.6mm 1.8mm;
   border-radius: 999px;
   border: 0;
@@ -719,7 +763,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  */
 .arrange-bar {
   position: static;
-  z-index: 20;
+  z-index: var(--z-canvas-overlay);
   display: flex;
   align-items: center;
   gap: 2px;
@@ -988,6 +1032,34 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 /*
+ * Bottom breathing room for every scrolling list.
+ *
+ * The last row of a long palette/layers list used to sit flush against the
+ * panel edge: a drag handle at the very bottom was unreachable, and on touch
+ * the browser's own gesture area swallowed the final tap. 80px of trailing
+ * space (plus matching scroll padding) keeps the bottommost item — and any
+ * drop zone behind it — fully visible and interactive.
+ */
+.editor-panel-body,
+.editor-pane-scroll {
+  padding-bottom: 80px;
+  scroll-padding-bottom: 80px;
+}
+
+/* A row the author is dragging to can always scroll clear of the edge. */
+.layer-row,
+.editor-panel-body > *,
+.editor-pane-scroll > * {
+  scroll-margin-bottom: 80px;
+}
+
+/* …except the media-panel rails, where the padding is only about the last row. */
+.editor-panel-body.no-bottom-pad {
+  padding-bottom: 0;
+  scroll-padding-bottom: 0;
+}
+
+/*
  * Fluid property rows. Grids collapse to a single column below 300px of usable
  * panel width, and inputs shrink (`min-width: 0`) instead of overflowing their
  * cell — the two failure modes that produced overlapping controls before.
@@ -1232,7 +1304,7 @@ body.is-scrubbing-value {
 .editor-drawer-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 25;
+  z-index: var(--z-drawer-backdrop);
   background: rgba(15, 23, 42, 0.42);
   backdrop-filter: blur(1.5px);
   animation: drawer-backdrop-in 160ms ease;
@@ -1285,6 +1357,11 @@ body.is-resizing-rail {
   -webkit-user-select: none;
 }
 
+/* Manual panel resizing must track the pointer exactly — no easing. */
+.is-resizing-panel .editor-workspace-row {
+  transition: none !important;
+}
+
 .editor-page-rail-resizer:focus-visible {
   outline: 2px solid #3b82f6;
   outline-offset: 2px;
@@ -1298,7 +1375,7 @@ body.is-resizing-rail {
  */
 .floating-toolbar {
   position: fixed;
-  z-index: 60;
+  z-index: var(--z-bubble);
   display: flex;
   align-items: center;
   gap: 3px;
@@ -1318,8 +1395,31 @@ body.is-resizing-rail {
   display: none;
 }
 
+/*
+ * The entrance follows the side the placer chose, so the bubble always appears
+ * to slide *away* from the element it belongs to, never across it.
+ */
 @keyframes floating-toolbar-in {
   from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.floating-toolbar[data-placement="below"] {
+  animation-name: floating-toolbar-in-down;
+}
+
+.floating-toolbar[data-placement="left"],
+.floating-toolbar[data-placement="right"] {
+  animation-name: floating-toolbar-in-side;
+}
+
+@keyframes floating-toolbar-in-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes floating-toolbar-in-side {
+  from { opacity: 0; transform: scale(0.96); }
   to { opacity: 1; transform: none; }
 }
 
@@ -1565,25 +1665,66 @@ body.is-resizing-rail {
   gap: 6px;
 }
 
-.library-asset-card {
+/*
+ * Library items — hover / focus contrast (both themes).
+ *
+ * The previous states were a 1px border that changed to a *lighter* blue in
+ * dark mode, i.e. the hovered item looked dimmer than its neighbours. Every
+ * interactive item in the library now gets a real 2px `--primary-accent`
+ * outline plus a tinted fill, with focus-visible matching hover so keyboard
+ * users see exactly the same affordance.
+ */
+.library-asset-card,
+.library-drag-card,
+.library-item {
   position: relative;
   display: grid;
   place-items: center;
-  aspect-ratio: 1;
   border: 1px solid var(--editor-border, #dde2ea);
   border-radius: 8px;
   background: var(--editor-surface, #fff);
+  color: var(--editor-text, #172033);
   cursor: pointer;
-  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease,
+    transform 120ms ease;
 }
 
-.library-asset-card:hover {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+.library-asset-card {
+  aspect-ratio: 1;
 }
 
-.library-asset-card:active {
+.library-asset-card:hover,
+.library-drag-card:hover,
+.library-item:hover,
+.library-asset-card:focus-visible,
+.library-drag-card:focus-visible,
+.library-item:focus-visible {
+  border: 2px solid var(--primary-accent, #1d4ed8);
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-accent, #1d4ed8) 25%, transparent);
+  outline: none;
+}
+
+.library-asset-card:active,
+.library-drag-card:active,
+.library-item:active {
   transform: scale(0.97);
+}
+
+/* Selected/permanent state for a library item (e.g. the active category). */
+.library-item[aria-pressed="true"],
+.library-item[data-active="true"] {
+  border: 2px solid var(--primary-accent, #1d4ed8);
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+}
+
+/* Inline SVG icons inside a card follow the accent so they stay legible. */
+.editor-ui.editor-dark .library-asset-card svg,
+.editor-ui.editor-dark .library-item svg {
+  color: currentColor;
 }
 
 /*
@@ -1598,10 +1739,6 @@ body.is-resizing-rail {
 
 .library-drag-card:active {
   cursor: grabbing;
-}
-
-.library-drag-card:hover {
-  box-shadow: inset 2px 0 0 0 #3b82f6;
 }
 
 .library-drag-card::after {
@@ -1635,4 +1772,71 @@ body.is-resizing-rail {
 .library-asset-card:hover .library-asset-remove,
 .library-asset-card:focus-within .library-asset-remove {
   opacity: 1;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * TEXT SELECTION POLICY
+ * ---------------------------------------------------------------------------
+ * UI chrome is not a document: labels, tab names, menu rows, tooltips and icon
+ * buttons must never paint a text selection, which is what makes an interface
+ * feel like a web page instead of an application (and what produced the
+ * "everything got selected blue while I was dragging" complaint).
+ *
+ * Selection is therefore OFF by default (html/body) and switched back ON only
+ * where the text is the content: form fields, in-place editors on the artboard,
+ * and anything explicitly marked `.selectable-value` (copyable data such as a
+ * share link, a font note, a generated id).
+ */
+html,
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable]:not([contenteditable="false"]),
+.selectable-value,
+.selectable-text,
+code,
+pre,
+kbd,
+samp {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The artboard is a document surface, but only its text content is selectable —
+   the page itself stays a canvas the author can drag on. */
+.report-page {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.report-page [contenteditable="true"],
+.report-page .selectable-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Chrome that looks like a control behaves like one, even outside `.editor-ui`
+   (portalled menus, dialogs and toasts render under <body>). */
+button,
+[role="button"],
+[role="menuitem"],
+[role="menuitemcheckbox"],
+[role="menuitemradio"],
+[role="tab"],
+[role="toolbar"],
+[role="separator"],
+label,
+summary,
+.editor-ui aside,
+.editor-ui header,
+.editor-ui nav,
+.editor-ui .no-select {
+  -webkit-user-select: none;
+  user-select: none;
 }

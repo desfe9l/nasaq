@@ -138,7 +138,7 @@ export function ToolbarMenus({ fitToScreen, fitToSelection }: { fitToScreen: () 
           role="menu"
           aria-label={TITLE[openId]}
           onKeyDown={onPanelKeyDown}
-          className="editor-dropdown-panel fixed z-[90] rounded-[10px] border p-1.5 shadow-2xl"
+          className="editor-dropdown-panel fixed z-[var(--z-dropdown)] rounded-[10px] border p-1.5 shadow-2xl"
           style={{ top: pos.top, right: pos.right, width: MENU_W }}
         >
           {openId === "align" && <AlignMenu />}

@@ -122,7 +122,7 @@ export function ExportDialog() {
 
   return (
     <div
-      className="fixed inset-0 z-[80] grid place-items-center bg-navy/50 p-4"
+      className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/50 p-4"
       onClick={() => !busy && toggle("exportOpen")}
     >
       <div
@@ -287,7 +287,7 @@ export function ExportDialog() {
         </div>
 
         {previewPages.length > 0 && (
-          <div className="fixed inset-0 z-[90] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="معاينة التصدير">
+          <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="معاينة التصدير">
             <div className="flex max-h-[92vh] w-full max-w-4xl flex-col rounded-[12px] border border-line bg-white p-4 dark:border-white/10 dark:bg-[#303132]">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div><h3 className="text-[15px] font-extrabold">معاينة التصدير</h3><p className="text-[11px] text-muted">{previewPages.length} صفحة · مطابقة لمقاس المستند</p></div>

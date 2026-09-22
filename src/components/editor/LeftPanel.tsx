@@ -540,7 +540,7 @@ export function LeftPanel({
             </div>
             {previewTemplate && (
               <div
-                className="fixed inset-0 z-[70] grid place-items-center bg-black/45 p-4"
+                className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-black/45 p-4"
                 role="dialog"
                 aria-modal="true"
                 aria-label={`معاينة ${previewTemplate.title}`}

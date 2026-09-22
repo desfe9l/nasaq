@@ -56,6 +56,20 @@ export function extractSvgMarkup(raw: string): string | null {
   return markup.length > 24 ? markup : null;
 }
 
+/** Overlap area between two screen boxes (0 when they only touch). */
+function overlapArea(a: ScreenBox, b: ScreenBox): number {
+  const w = Math.min(a.left + a.width, b.left + b.width) - Math.max(a.left, b.left);
+  const h = Math.min(a.top + a.height, b.top + b.height) - Math.max(a.top, b.top);
+  return w > 0 && h > 0 ? w * h : 0;
+}
+
+/** Total overlap of a candidate box with every obstacle. */
+function blockedArea(box: ScreenBox, avoid: readonly ScreenBox[]): number {
+  let total = 0;
+  for (const obstacle of avoid) total += overlapArea(box, obstacle);
+  return total;
+}
+
 /** Screen-space box (matches the fields of DOMRect we rely on). */
 export interface ScreenBox {
   left: number;
@@ -70,8 +84,11 @@ export interface ScreenBox {
 export interface ToolbarPlacement {
   left: number;
   top: number;
-  /** `above` is the preferred side; `below` means there was no room above. */
-  placement: "above" | "below";
+  /**
+   * Side the toolbar settled on: `above` is preferred, the others are chosen
+   * when the element is near an edge or an obstacle (panel/dialog) is in the way.
+   */
+  placement: "above" | "below" | "left" | "right";
   /** True when the toolbar had to be pushed sideways to stay on screen. */
   clamped: boolean;
 }
@@ -97,22 +114,53 @@ export function placeFloatingToolbar(
   viewport: { width: number; height: number },
   gap = 16,
   margin = 8,
+  avoid: readonly ScreenBox[] = [],
 ): ToolbarPlacement {
-  const fitsAbove = anchor.top - gap - size.height >= margin;
-  const placement: ToolbarPlacement["placement"] = fitsAbove ? "above" : "below";
+  const clampTop = (value: number) =>
+    Math.min(Math.max(value, margin), Math.max(margin, viewport.height - size.height - margin));
+  const clampLeft = (value: number) =>
+    viewport.width - 2 * margin <= size.width
+      ? margin
+      : Math.min(Math.max(value, margin), viewport.width - size.width - margin);
+
+  const centeredLeft = anchor.left + anchor.width / 2 - size.width / 2;
+  const centeredTop = anchor.top + anchor.height / 2 - size.height / 2;
+
   /*
-   * Below is bounded twice: it must clear the element by `gap`, and it must not
-   * run off the bottom of the viewport. On a very short viewport those two
-   * conflict — the viewport bound wins, because a visible toolbar the author can
-   * use beats a perfectly spaced one that is off-screen.
+   * Candidate placements, in preference order: above the element (the original
+   * behaviour), below it, then to either side — the latter two exist so the
+   * bubble can step around the docked panels instead of landing on top of them.
+   * Each candidate is clamped into the viewport first, then scored by how much
+   * of it lands on an obstacle.
    */
-  const rawTop = fitsAbove ? anchor.top - gap - size.height : Math.max(margin, anchor.bottom + gap);
-  const top = Math.min(Math.max(rawTop, margin), Math.max(margin, viewport.height - size.height - margin));
+  const candidates: Array<{ placement: ToolbarPlacement["placement"]; left: number; top: number }> = [
+    { placement: "above", left: clampLeft(centeredLeft), top: clampTop(anchor.top - gap - size.height) },
+    { placement: "below", left: clampLeft(centeredLeft), top: clampTop(anchor.bottom + gap) },
+    { placement: "left", left: clampLeft(anchor.left - gap - size.width), top: clampTop(centeredTop) },
+    { placement: "right", left: clampLeft(anchor.right + gap), top: clampTop(centeredTop) },
+  ];
 
-  const centered = anchor.left + anchor.width / 2 - size.width / 2;
-  const maxLeft = viewport.width - size.width - margin;
-  const left = viewport.width - 2 * margin <= size.width ? margin : Math.min(Math.max(centered, margin), maxLeft);
-  const clamped = Math.abs(left - centered) > 0.5;
+  let best = candidates[0];
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const candidate of candidates) {
+    // A candidate pushed back onto the element itself is not an option: the
+    // bubble must never cover the artwork it is formatting.
+    const box: ScreenBox = {
+      left: candidate.left,
+      top: candidate.top,
+      width: size.width,
+      height: size.height,
+      right: candidate.left + size.width,
+      bottom: candidate.top + size.height,
+    };
+    const score = blockedArea(box, avoid) + overlapArea(box, anchor) * 2;
+    if (score < bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+    if (score === 0) break;
+  }
 
-  return { left, top, placement, clamped };
+  const clamped = Math.abs(best.left - centeredLeft) > 0.5;
+  return { left: best.left, top: best.top, placement: best.placement, clamped };
 }

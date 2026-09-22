@@ -205,7 +205,7 @@ export function WorkspaceOverlays({
   return (
     <>
       {menu && (
-        <div className="editor-context-backdrop fixed inset-0 z-[100]" onPointerDown={onCloseMenu} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); onCloseMenu(); } }} tabIndex={-1} autoFocus>
+        <div className="editor-context-backdrop fixed inset-0 z-[var(--z-context)]" onPointerDown={onCloseMenu} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); onCloseMenu(); } }} tabIndex={-1} autoFocus>
           <div
             className="editor-context-menu fixed min-w-[210px] rounded-[8px] border p-1.5 shadow-2xl"
             style={{ left: Math.min(menu.x, window.innerWidth - 230), top: Math.min(menu.y, window.innerHeight - 480) }}
@@ -232,7 +232,7 @@ export function WorkspaceOverlays({
            contract as the library dialogs: backdrop does not confirm, focus
            starts on the input, Enter saves, Escape cancels. */
         <div
-          className="fixed inset-0 z-[120] grid place-items-center bg-navy/45 p-4"
+          className="fixed inset-0 z-[calc(var(--z-context)+1)] grid place-items-center bg-navy/45 p-4"
           role="dialog"
           aria-modal="true"
           aria-label={primaryIsGroup ? "تسمية المجموعة" : "إعادة تسمية العنصر"}
@@ -267,7 +267,7 @@ export function WorkspaceOverlays({
       )}
 
       {commandOpen && (
-        <div className="editor-command-backdrop fixed inset-0 z-[110] grid place-items-start justify-center pt-[15vh]" onPointerDown={() => setCommandOpen(false)}>
+        <div className="editor-command-backdrop fixed inset-0 z-[var(--z-command)] grid place-items-start justify-center pt-[15vh]" onPointerDown={() => setCommandOpen(false)}>
           <div className="editor-command-menu w-[min(520px,calc(100vw-32px))] overflow-hidden rounded-[10px] border shadow-2xl" onPointerDown={(event) => event.stopPropagation()} role="dialog" aria-label="قائمة الأوامر">
             <div className="flex items-center gap-2 border-b px-3"><Search className="size-4 text-[var(--editor-text-secondary)]" /><input autoFocus value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} onKeyDown={(event) => { if (event.key === "ArrowDown") { event.preventDefault(); setActiveIndex((index) => Math.min(index + 1, filtered.length - 1)); } if (event.key === "ArrowUp") { event.preventDefault(); setActiveIndex((index) => Math.max(index - 1, 0)); } if (event.key === "Enter" && filtered[activeIndex]) run(filtered[activeIndex].id); }} placeholder="ابحث عن أمر…" className="h-12 min-w-0 flex-1 bg-transparent text-[13px] outline-none" /></div>
             <div className="max-h-[330px] overflow-auto p-1.5">
@@ -296,14 +296,22 @@ export function WorkspaceStatusBar() {
    * so it can never overlap artwork.
    */
   return (
-    <div className="editor-status-bar flex h-7 shrink-0 items-center justify-between gap-3 border-t px-3 text-[10px] tabular-nums">
-      <span className="min-w-0 truncate">
+    <div
+      data-editor-obstacle="status-bar"
+      className="editor-status-bar flex h-7 shrink-0 items-center justify-between gap-3 border-t px-3 text-[10px] tabular-nums"
+    >
+      {/*
+        * `selectable-value`: page size / element count / zoom are numbers an
+        * author copies into a brief, so they opt back into text selection while
+        * the rest of the chrome stays unselectable.
+        */}
+      <span className="selectable-value min-w-0 truncate">
         {page?.name || "صفحة"}
         {page ? ` · ${Math.round(page.w || 210)} × ${Math.round(page.h || 297)} مم` : ""}
         {page ? ` · ${page.elements.length} عنصر` : ""}
       </span>
-      <span>{selectedIds.length ? `${selectedIds.length} محدد` : "لا يوجد تحديد"}</span>
-      <span>{Math.round(zoom * 100)}%</span>
+      <span className="selectable-value">{selectedIds.length ? `${selectedIds.length} محدد` : "لا يوجد تحديد"}</span>
+      <span className="selectable-value">{Math.round(zoom * 100)}%</span>
     </div>
   );
 }

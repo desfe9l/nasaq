@@ -61,6 +61,10 @@ export function CanvasStage({
   const selectedIds = useEditor((s) => s.selectedIds);
   const selectedId = useEditor((s) => s.selectedId);
   const addElementAt = useEditor((s) => s.addElementAt);
+  const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
+  const exportOpen = useEditor((s) => s.exportOpen);
+  const pageManagerOpen = useEditor((s) => s.pageManagerOpen);
+  const contextMenu = useEditor((s) => s.contextMenu);
   const enteredGroupId = useEditor((s) => s.enteredGroupId);
   const zoom = useEditor((s) => s.zoom);
   const previewAll = useEditor((s) => s.previewAll);
@@ -692,7 +696,7 @@ export function CanvasStage({
       }}
     >
       {dropping && (
-        <div className="pointer-events-none sticky top-0 z-50 mx-auto w-max rounded-full border border-gold/40 bg-white/95 px-4 py-1.5 text-[11px] font-extrabold text-navy shadow-sm dark:bg-[#161c26] dark:text-gold-2">
+        <div className="pointer-events-none sticky top-0 z-[var(--z-canvas-overlay)] mx-auto w-max rounded-full border border-gold/40 bg-white/95 px-4 py-1.5 text-[11px] font-extrabold text-navy shadow-sm dark:bg-[#161c26] dark:text-gold-2">
           {dropping === "library" ? "أفلت العنصر ليُضاف في هذا الموضع" : "أفلت الصورة لإضافتها إلى الصفحة"}
         </div>
       )}
@@ -869,7 +873,18 @@ export function CanvasStage({
         * in-place editing. It lives in a FIXED overlay — outside the scaled page
         * — so its buttons keep a constant screen size and its 16px gap is real.
         */}
-      {primarySelection && editingId !== primarySelection.id && <FloatingToolbar el={primarySelection} />}
+      {primarySelection &&
+        editingId !== primarySelection.id &&
+        bubbleEnabled &&
+        /*
+         * Never competing with a modal surface: while the export dialog, the
+         * page manager or a context menu is open the bubble is hidden outright,
+         * so it cannot sit on a dialog (which is what "never overlaps active
+         * dialogs" means in practice — the dialog owns the screen then).
+         */
+        !exportOpen &&
+        !pageManagerOpen &&
+        !contextMenu && <FloatingToolbar el={primarySelection} />}
 
       <ExportCapture pages={pages} />
     </div>

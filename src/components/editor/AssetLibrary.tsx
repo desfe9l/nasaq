@@ -265,11 +265,11 @@ export function AssetLibrary() {
         <div className={cn("grid gap-2", viewMode === "grid" ? "grid-cols-[repeat(auto-fill,minmax(118px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(92px,1fr))]")}>
           {visibleAssets.map((asset) => (
             <div key={asset.id} className={cn("group relative rounded-[8px] border bg-white/60 p-1.5 dark:bg-white/5", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy/5 ring-1 ring-navy/30" : "border-line dark:border-white/10")}>
-              <button type="button" onClick={(e) => { e.stopPropagation(); toggleAssetSelect(asset.id); }} aria-label={`تحديد ${asset.name}`} className={cn("absolute right-2 top-2 z-10 grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy text-white" : "border-line dark:border-white/20")}>
+              <button type="button" onClick={(e) => { e.stopPropagation(); toggleAssetSelect(asset.id); }} aria-label={`تحديد ${asset.name}`} className={cn("absolute right-2 top-2 z-[2] grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy text-white" : "border-line dark:border-white/20")}>
                 {selectedAssetIds.includes(asset.id) && <Check className="size-3" />}
               </button>
               {/* Menu affordance: same command list the card click opens. */}
-              <button type="button" onClick={(e) => openMenu(e, asset)} aria-label={`خيارات ${asset.name}`} aria-haspopup="menu" className="absolute left-2 top-2 z-10 grid size-5 place-items-center rounded-full border border-line bg-white/90 text-muted dark:border-white/20 dark:bg-[#161c26]/90" title="الخيارات">
+              <button type="button" onClick={(e) => openMenu(e, asset)} aria-label={`خيارات ${asset.name}`} aria-haspopup="menu" className="absolute left-2 top-2 z-[2] grid size-5 place-items-center rounded-full border border-line bg-white/90 text-muted dark:border-white/20 dark:bg-[#161c26]/90" title="الخيارات">
                 <MoreHorizontal className="size-3" />
               </button>
               {editingId === asset.id ? (
@@ -363,7 +363,7 @@ export function AssetLibrary() {
            properties panel and outside clicks on that side would never close
            the menu. */
         <div
-          className="fixed inset-0 z-50"
+          className="fixed inset-0 z-[var(--z-dialog)]"
           onPointerDown={closeMenu}
           onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); closeMenu(); } }}
           tabIndex={-1}
@@ -446,7 +446,7 @@ export function AssetLibrary() {
       )}
 
       {preview && createPortal(
-        <div className="fixed inset-0 z-50 grid place-items-center bg-navy/55 p-4" role="dialog" aria-modal="true" aria-label={`معاينة ${preview.name}`} onClick={() => setPreview(null)}>
+        <div className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/55 p-4" role="dialog" aria-modal="true" aria-label={`معاينة ${preview.name}`} onClick={() => setPreview(null)}>
           <div className="w-full max-w-sm rounded-[10px] bg-white p-3 shadow-xl dark:bg-[#161c26]" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between gap-2">
               <div><p className="text-[12px] font-extrabold">معاينة العنصر</p><p className="max-w-[15rem] truncate text-[10px] text-muted">{preview.name}</p></div>
@@ -469,7 +469,7 @@ export function AssetLibrary() {
          * the asset menu above.
          */
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4"
+          className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/45 p-4"
           role="dialog"
           aria-modal="true"
           aria-label={folderDialog === "create" ? "إنشاء مجلد" : folderDialog === "rename" ? "إعادة تسمية مجلد" : "حذف المجلد نهائيًا"}
@@ -496,7 +496,7 @@ export function AssetLibrary() {
         /* Same destructive-action contract as the folder dialog: no confirm on
            backdrop click, Escape cancels, and focus starts on «إلغاء». */
         <div
-          className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4"
+          className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/45 p-4"
           role="dialog"
           aria-modal="true"
           aria-label="تأكيد حذف العنصر"

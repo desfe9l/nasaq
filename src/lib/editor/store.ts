@@ -167,6 +167,15 @@ interface Ui {
   pagesPanelHeight: number;
   /** Right-click menu shared by the canvas and the layers panel. */
   contextMenu: ContextMenuPoint | null;
+  /**
+   * Whether the floating contextual bubble (Phase 4 toolbar) is shown.
+   *
+   * Designers who work with the properties panel open often find the bubble
+   * redundant — it follows the selection and can sit over artwork. The toggle
+   * (header eye, or the bubble's own close button) turns it off globally and
+   * the choice is remembered.
+   */
+  bubbleEnabled: boolean;
   exportOpen: boolean;
   /**
    * Format the export dialog should open on.
@@ -262,6 +271,16 @@ interface EditorStore extends Project, Ui, History {
   openExport: (format?: ExportPreset) => void;
   openContextMenu: (point: ContextMenuPoint) => void;
   closeContextMenu: () => void;
+  /** Show/hide the floating contextual bubble (persisted). */
+  toggleBubble: (enabled?: boolean) => void;
+  /**
+   * Bring the smart library up from anywhere (the header button).
+   *
+   * Docked screens un-collapse the components panel and select the tab — the
+   * grid columns are unchanged, so the artboard does not move. Floating screens
+   * open the drawer instead.
+   */
+  openLibrary: () => void;
   /** Clamp + persist the pages panel height (drag handle on its top border). */
   setPagesPanelHeight: (height: number) => void;
   /** Custom SVG icons/dividers the author added to the smart library. */
@@ -615,6 +634,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     rightCollapsed: false,
     pagesPanelHeight: PAGES_PANEL_DEFAULT,
     contextMenu: null,
+    bubbleEnabled: true,
     exportOpen: false,
     exportPreset: null,
     pageManagerOpen: false,
@@ -708,6 +728,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           pagesPanelHeight: clampPagesHeight(
             typeof ui.pagesPanelHeight === "number" ? ui.pagesPanelHeight : PAGES_PANEL_DEFAULT,
           ),
+          bubbleEnabled: ui.bubble !== false,
         });
         if (active) applyProject(active, { zoom: get().zoom });
       } catch {
@@ -969,6 +990,19 @@ export const useEditor = create<EditorStore>((set, get) => {
     openExport: (format) => set({ exportOpen: true, exportPreset: format ?? null }),
     openContextMenu: (contextMenu) => set({ contextMenu }),
     closeContextMenu: () => set({ contextMenu: null }),
+    openLibrary: () => {
+      const overlay = isOverlayViewport();
+      set({
+        leftTab: "library",
+        leftCollapsed: false,
+        leftOpen: overlay ? true : get().leftOpen,
+      });
+    },
+    toggleBubble: (enabled) => {
+      const bubbleEnabled = enabled ?? !get().bubbleEnabled;
+      set({ bubbleEnabled });
+      writeUi({ bubble: bubbleEnabled });
+    },
     setPagesPanelHeight: (height) => {
       const next = clampPagesHeight(height);
       if (get().pagesPanelHeight === next) return;
@@ -1887,6 +1921,8 @@ interface PersistedUi {
   leftCollapsed?: boolean;
   rightCollapsed?: boolean;
   pagesPanelHeight?: number;
+  /** Floating bubble visibility (absent = shown). */
+  bubble?: boolean;
 }
 
 /** Merge a patch into the persisted UI slot (zoom, panels, pages height…). */
