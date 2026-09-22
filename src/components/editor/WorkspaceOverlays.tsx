@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlignCenter,
+  ClipboardPaste,
   Copy,
+  CopyPlus,
   Download,
   Eye,
   Focus,
@@ -10,8 +12,11 @@ import {
   Layers,
   Lock,
   Maximize2,
+  PenLine,
   Redo2,
+  Scissors,
   Search,
+  Settings2,
   Trash2,
   Ungroup,
   Undo2,
@@ -19,10 +24,11 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
+import { findElement } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
 
 type MenuPoint = { x: number; y: number; targetId: string | null };
-type ContextAction = { label: string; icon: typeof Copy; run: () => void; disabled?: boolean; danger?: boolean };
+type ContextAction = { label: string; icon: typeof Copy; run: () => void; disabled?: boolean; danger?: boolean; sepBefore?: boolean };
 
 const ACTIONS = [
   { id: "undo", label: "تراجع", hint: "⌘ Z", icon: Undo2 },
@@ -54,6 +60,7 @@ export function WorkspaceOverlays({
   const duplicate = useEditor((s) => s.duplicateSelected);
   const group = useEditor((s) => s.group);
   const ungroup = useEditor((s) => s.ungroup);
+  const enterGroup = useEditor((s) => s.enterGroup);
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const copy = useEditor((s) => s.copySelected);
   const paste = useEditor((s) => s.pasteClipboard);
@@ -125,22 +132,65 @@ export function WorkspaceOverlays({
   const maskShape = selectedEls.find((el) => el.type === "shape" || el.type === "svg");
   const maskApplicable = !!maskSource && !!maskShape && selectedEls.length === 2;
   const maskRemovable = selectedEls.length === 1 && !!selectedEls[0].clippedBy;
+  const renameElement = useEditor((s) => s.renameElement);
+  // selectedElements() preserves selection order with the primary LAST.
+  const primaryName = selectedEls.length ? selectedEls[selectedEls.length - 1].name : undefined;
+  const primaryIsGroup = selectedEls.length === 1 && selectedEls[selectedEls.length - 1].type === "group";
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null);
+  /** Group, then open the naming dialog for the fresh group right away — grouping
+   *  without naming leaves «مجموعة 1» rows that nobody can tell apart. */
+  const groupAndName = () => {
+    const id = group();
+    if (!id) return;
+    const state = useEditor.getState();
+    const page = state.pages.find((p) => p.id === state.activePageId);
+    const created = page ? findElement(page.elements, id)?.el : undefined;
+    setRenaming({ id, name: created?.name || "" });
+  };
+  const openProperties = () => {
+    const state = useEditor.getState();
+    state.setRightTab("properties");
+    // The properties tab is useless while the panel is collapsed or focus mode
+    // is hiding it — the action must actually bring the panel up.
+    useEditor.setState({ rightCollapsed: false, focusMode: false });
+  };
   const contextActions: ContextAction[] = menu?.targetId
     ? [
         { label: "نسخ", icon: Copy, run: copy },
-        { label: "تكرار العنصر", icon: Copy, run: duplicate },
-        { label: "نقل إلى الأمام", icon: Layers, run: () => bring("forward") },
+        { label: "قص", icon: Scissors, run: () => { copy(); deleteSelected(); } },
+        { label: "لصق", icon: ClipboardPaste, run: paste, disabled: !clipboard, sepBefore: true },
+        { label: "تكرار العنصر", icon: CopyPlus, run: duplicate },
+        { label: "نقل إلى الأمام", icon: Layers, run: () => bring("forward"), sepBefore: true },
         { label: "نقل إلى الخلف", icon: Layers, run: () => bring("back") },
-        ...(selectedCount >= 2 ? [{ label: "تجميع العناصر", icon: Group, run: group }] : []),
-        ...(selectedTypes.includes("group") ? [{ label: "فك تجميع العناصر", icon: Ungroup, run: ungroup }] : []),
-        ...(maskApplicable ? [{ label: "تطبيق قناع القص (Clipping Mask)", icon: Group, run: () => applyMask(maskSource!.id, maskShape!.id) }] : []),
-        ...(maskRemovable ? [{ label: "إزالة قناع القص", icon: Ungroup, run: () => removeMask(selectedEls[0].clippedBy!) }] : []),
-        { label: "قفل العنصر / فتح قفل العنصر", icon: Lock, run: toggleLock },
+        { label: "إلى المقدمة تمامًا", icon: Layers, run: () => bring("front") },
+        { label: "إلى الخلف تمامًا", icon: Layers, run: () => bring("bottom") },
+        ...(selectedCount >= 2 ? [{ label: "تجميع العناصر", icon: Group, run: groupAndName, sepBefore: true } as ContextAction] : []),
+        ...(primaryIsGroup ? [{ label: "الدخول إلى المجموعة", icon: Group, run: () => enterGroup(selectedEls[selectedEls.length - 1].id) } as ContextAction] : []),
+        ...(selectedTypes.includes("group") ? [{ label: "فك تجميع العناصر", icon: Ungroup, run: ungroup } as ContextAction] : []),
+        ...(maskApplicable ? [{ label: "تطبيق قناع القص (Clipping Mask)", icon: Group, run: () => applyMask(maskSource!.id, maskShape!.id), sepBefore: true } as ContextAction] : []),
+        ...(maskRemovable ? [{ label: "إزالة قناع القص", icon: Ungroup, run: () => removeMask(selectedEls[0].clippedBy!) } as ContextAction] : []),
+        { label: "قفل العنصر / فتح قفل العنصر", icon: Lock, run: toggleLock, sepBefore: true },
         { label: "إخفاء / إظهار", icon: Eye, run: toggleHidden },
-        { label: "حذف", icon: Trash2, run: deleteSelected, danger: true },
+        {
+          label: primaryIsGroup ? "تسمية المجموعة…" : "إعادة تسمية…",
+          icon: PenLine,
+          run: () => setRenaming({ id: menu.targetId!, name: primaryName || "" }),
+          disabled: selectedCount > 1,
+        },
+        { label: "الخصائص", icon: Settings2, run: openProperties },
+        { label: "حذف", icon: Trash2, run: deleteSelected, danger: true, sepBefore: true },
       ]
     : [
-        { label: "لصق", icon: Copy, run: paste, disabled: !clipboard },
+        { label: "لصق", icon: ClipboardPaste, run: paste, disabled: !clipboard },
+        /*
+         * The selection — not the point — decides grouping here: a right-click
+         * that missed the artwork still has the selected elements in the store,
+         * so تجميع/فك التجميع must appear exactly as they do over an element.
+         * Their absence here is what hid grouping from the empty-space menu
+         * even with several elements selected.
+         */
+        ...(selectedCount >= 2 ? [{ label: "تجميع العناصر", icon: Group, run: groupAndName, sepBefore: true } as ContextAction] : []),
+        ...(selectedTypes.includes("group") ? [{ label: "فك تجميع العناصر", icon: Ungroup, run: ungroup } as ContextAction] : []),
         { label: "تحديد الكل", icon: AlignCenter, run: selectAll },
         { label: "عرض الصفحة بالكامل", icon: Maximize2, run: fitToScreen },
         { label: "وضع التركيز", icon: Focus, run: () => toggle("focusMode") },
@@ -153,17 +203,61 @@ export function WorkspaceOverlays({
         <div className="editor-context-backdrop fixed inset-0 z-[100]" onPointerDown={onCloseMenu} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); onCloseMenu(); } }} tabIndex={-1} autoFocus>
           <div
             className="editor-context-menu fixed min-w-[210px] rounded-[8px] border p-1.5 shadow-2xl"
-            style={{ left: Math.min(menu.x, window.innerWidth - 230), top: Math.min(menu.y, window.innerHeight - 360) }}
+            style={{ left: Math.min(menu.x, window.innerWidth - 230), top: Math.min(menu.y, window.innerHeight - 480) }}
             onPointerDown={(event) => event.stopPropagation()}
             role="menu"
           >
             {contextActions.map((action) => {
               const Icon = action.icon;
-              return <button key={action.label} type="button" role="menuitem" disabled={action.disabled} onClick={() => { if (menu.targetId && selectedCount === 0) select(menu.targetId); action.run(); onCloseMenu(); }} className={cn("editor-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold disabled:opacity-35", action.danger && "editor-menu-danger")}><Icon className="size-3.5 shrink-0" /><span>{action.label}</span></button>;
+              return (
+                <div key={action.label}>
+                  {action.sepBefore && <div className="my-1 border-t border-[var(--editor-border)]" />}
+                  <button type="button" role="menuitem" disabled={action.disabled} onClick={() => { if (menu.targetId && selectedCount === 0) select(menu.targetId); action.run(); onCloseMenu(); }} className={cn("editor-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold disabled:opacity-35", action.danger && "editor-menu-danger")}><Icon className="size-3.5 shrink-0" /><span>{action.label}</span></button>
+                </div>
+              );
             })}
             <div className="my-1 border-t border-[var(--editor-border)]" />
             <span className="flex items-center gap-2 px-2.5 py-1.5 text-[9px] text-[var(--editor-text-secondary)]"><Keyboard className="size-3" /> اضغط Escape للإغلاق</span>
           </div>
+        </div>
+      )}
+
+      {renaming && (
+        /* Inline rename for the element the menu was opened on — the same
+           contract as the library dialogs: backdrop does not confirm, focus
+           starts on the input, Enter saves, Escape cancels. */
+        <div
+          className="fixed inset-0 z-[120] grid place-items-center bg-navy/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={primaryIsGroup ? "تسمية المجموعة" : "إعادة تسمية العنصر"}
+          onKeyDown={(event) => { if (event.key === "Escape") setRenaming(null); }}
+          onPointerDown={onCloseMenu}
+        >
+          <form
+            className="grid w-full max-w-xs gap-3 rounded-[10px] border border-line bg-white p-4 shadow-xl dark:border-white/10 dark:bg-[#161c26]"
+            onPointerDown={(event) => event.stopPropagation()}
+            onSubmit={(event) => {
+              event.preventDefault();
+              const next = renaming.name.trim();
+              if (next) renameElement(renaming.id, next);
+              setRenaming(null);
+              onCloseMenu();
+            }}
+          >
+            <strong className="text-[13px]">{primaryIsGroup ? "تسمية المجموعة" : "إعادة تسمية العنصر"}</strong>
+            <input
+              autoFocus
+              value={renaming.name}
+              onChange={(event) => setRenaming((r) => (r ? { ...r, name: event.target.value } : r))}
+              aria-label="اسم العنصر"
+              className="h-9 rounded-[7px] border border-line px-2 text-[12px] font-bold dark:border-white/15 dark:bg-white/5"
+            />
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => { setRenaming(null); onCloseMenu(); }} className="h-8 rounded-[6px] border border-line px-3 text-[11px] font-bold dark:border-white/10">إلغاء</button>
+              <button type="submit" className="h-8 rounded-[6px] bg-navy px-3 text-[11px] font-bold text-white">حفظ</button>
+            </div>
+          </form>
         </div>
       )}
 

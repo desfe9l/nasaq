@@ -586,6 +586,59 @@ function iconParagraph(item: Extract<SceneItem, { kind: "icon" }>): Paragraph {
  * value can be retyped and the bars restyled in Word.
  */
 function progressBlocks(item: Extract<SceneItem, { kind: "progress" }>): Paragraph[] {
+  if (item.variant === "steps") {
+    // Stages row: one dot per stage, filled up to the value — the same picture
+    // the canvas draws, kept as native ellipse shapes so Word stays editable.
+    const total = item.steps;
+    const filled = Math.round((item.value / 100) * total);
+    const dot = Math.max(2.4, Math.min(item.h * 0.34, 7));
+    const gap = dot * 0.55;
+    const rowW = total * dot + (total - 1) * gap;
+    const out: Paragraph[] = [];
+    for (let i = 0; i < total; i++) {
+      // RTL: the first stage sits at the right edge, matching the canvas.
+      const x = item.x + item.w - rowW + i * (dot + gap);
+      out.push(...shapeBlock({
+        kind: "shape",
+        x,
+        y: item.y + item.h - dot,
+        w: dot,
+        h: dot,
+        rotation: 0,
+        fill: i < filled ? item.fill : item.track,
+        stroke: null,
+        shapeId: "circle",
+        parts: [{ k: "rect", x: 0, y: 0, w: 100, h: 100 }],
+      }));
+    }
+    out.push(
+      ...textBlock({
+        kind: "text",
+        x: item.x + 1,
+        y: item.y,
+        w: Math.max(6, item.w - 2),
+        h: Math.max(4, item.h - dot),
+        rotation: 0,
+        text: `${item.label}${item.showValue ? ` — ${item.value}%` : ""}`.trim(),
+        font: item.font,
+        size: item.size,
+        weight: item.weight,
+        italic: false,
+        color: item.color,
+        align: "right",
+        lineHeight: 1.2,
+        letterSpacing: 0,
+        paragraphSpacing: 0,
+        vertical: false,
+        fill: null,
+        border: null,
+        radius: 0,
+        padding: 0,
+      }),
+    );
+    return out;
+  }
+
   const track = Math.max(2, item.h);
   const bar = (w: number, x: number, fill: string): Paragraph[] =>
     shapeBlock({

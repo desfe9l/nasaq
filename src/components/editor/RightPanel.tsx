@@ -126,6 +126,29 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
   const el = page && selectedId ? findElement(page.elements, selectedId)?.el : undefined;
   const layers = [...(page?.elements || [])].sort((a, b) => b.z - a.z);
   const selectedCount = useEditor((s) => s.selectedIds.length);
+  const selectMany = useEditor((s) => s.selectMany);
+  const select = useEditor((s) => s.select);
+  const toggleSelect = useEditor((s) => s.toggleSelect);
+  // Anchor for Shift range selection in the layers list: the row last picked
+  // with a plain click. Shift-clicking another row then selects the whole run
+  // between the two — first and last is all the author needs to grab a band.
+  const layerAnchorRef = useRef<string | null>(null);
+
+  /** Plain click = select (new anchor) · Shift = range from the anchor · Ctrl/⌘ = toggle. */
+  const clickLayerRow = (id: string, shift: boolean, meta: boolean) => {
+    if (shift && layerAnchorRef.current && layerAnchorRef.current !== id) {
+      const from = layers.findIndex((l) => l.id === layerAnchorRef.current);
+      const to = layers.findIndex((l) => l.id === id);
+      if (from !== -1 && to !== -1) {
+        const [a, b] = from < to ? [from, to] : [to, from];
+        selectMany(layers.slice(a, b + 1).map((l) => l.id));
+        return;
+      }
+    }
+    if (meta) toggleSelect(id);
+    else select(id);
+    layerAnchorRef.current = id;
+  };
 
   const startLayerDrag = (id: string) => (event: React.PointerEvent) => {
     event.preventDefault();
@@ -187,6 +210,7 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                 dragging={draggedLayerId === layer.id}
                 dropTarget={dropLayerId === layer.id && draggedLayerId !== layer.id}
                 onDragStart={startLayerDrag(layer.id)}
+                onRowClick={(event) => clickLayerRow(layer.id, event.shiftKey, event.ctrlKey || event.metaKey)}
               />
             ))}
           </div>
@@ -668,8 +692,8 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
             {el.type === "progress" && (
               <>
                 <Field label="النوع" full>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {(["bar", "ring"] as const).map((v) => (
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(["bar", "ring", "steps"] as const).map((v) => (
                       <button
                         key={v}
                         type="button"
@@ -681,11 +705,25 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                             : "border-line dark:border-white/10",
                         )}
                       >
-                        {v === "bar" ? "شريط أفقي" : "حلقة دائرية"}
+                        {v === "bar" ? "شريط أفقي" : v === "ring" ? "حلقة دائرية" : "نقاط مراحل"}
                       </button>
                     ))}
                   </div>
                 </Field>
+
+                {(el.style.variant || "bar") === "steps" && (
+                  <Field label="عدد المراحل" full>
+                    <input
+                      type="number"
+                      min={2}
+                      max={12}
+                      step={1}
+                      value={Number(el.style.steps) || 5}
+                      onChange={(e) => updateStyle(el.id, { steps: Math.max(2, Math.min(12, Number(e.target.value) || 5)) }, true)}
+                      onBlur={() => updateStyle(el.id, { steps: Math.max(2, Math.min(12, Number(el.style.steps) || 5)) })}
+                    />
+                  </Field>
+                )}
 
                 <Field label={`نسبة الإنجاز: ${Math.round(Number(el.style.value) || 0)}%`} full>
                   <input
@@ -1384,12 +1422,15 @@ function LayerRow({
   dragging = false,
   dropTarget = false,
   onDragStart,
+  onRowClick,
 }: {
   layer: CanvasEl;
   depth?: number;
   dragging?: boolean;
   dropTarget?: boolean;
   onDragStart?: (event: React.PointerEvent) => void;
+  /** Top-level rows only: Shift selects the whole range from the anchor row. */
+  onRowClick?: (event: React.MouseEvent) => void;
 }) {
   const selected = useEditor((s) => s.selectedIds.includes(layer.id));
   const select = useEditor((s) => s.select);
@@ -1448,14 +1489,14 @@ function LayerRow({
           )}
           <button
             type="button"
-            onClick={(e) => (e.shiftKey ? toggleSelect(layer.id) : select(layer.id))}
+            onClick={(e) => (onRowClick ? onRowClick(e) : e.shiftKey ? toggleSelect(layer.id) : select(layer.id))}
             onDoubleClick={() => {
               // Double-clicking a group row steps into it, mirroring the canvas.
               if (layer.type === "group") enterGroup(layer.id);
               else setRenaming(true);
             }}
             className="flex min-w-0 flex-1 items-center justify-between text-right text-[12px]"
-            title="نقرة لتحديد، Shift+نقرة لإضافة، نقرة مزدوجة لإعادة التسمية"
+            title="نقرة لتحديد · Shift+نقرة لتحديد كل ما بين صفّين · ⌘/Ctrl+نقرة للإضافة · نقرة مزدوجة لإعادة التسمية"
           >
             <span className="truncate font-bold">
               {layer.type === "group" && <span className="me-1 text-gold-2">▸</span>}

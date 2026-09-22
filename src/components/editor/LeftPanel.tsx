@@ -20,8 +20,10 @@ import {
   FileCode2,
   FileText,
   Baseline,
+  ChevronDown,
   Eye,
   X,
+  FolderOpen,
 } from "lucide-react";
 import {
   PROGRESS_PRESETS,
@@ -54,6 +56,7 @@ import { TablePicker } from "./TablePicker";
 const TABS: { id: LeftTab; label: string; icon: typeof Type }[] = [
   { id: "elements", label: "عناصر", icon: LayoutTemplate },
   { id: "shapes", label: "أشكال", icon: Shapes },
+  { id: "library", label: "المكتبة", icon: FolderOpen },
   { id: "templates", label: "قوالب", icon: FileText },
   { id: "pages", label: "صفحات", icon: Layers },
   { id: "theme", label: "سمة", icon: Palette },
@@ -126,6 +129,14 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
   const storage = useEditor((s) => s.storage);
 
   const [category, setCategory] = useState<TemplateCategoryId | "all">("all");
+  /*
+   * Collapsible tool categories: only the first (نص) starts open, so the
+   * palette reads as a short index instead of one long wall of buttons —
+   * the author opens the group they need rather than scrolling past all of
+   * them. Keys follow TOOL_GROUPS titles.
+   */
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ "نص": true });
+  const toggleGroup = (title: string) => setOpenGroups((state) => ({ ...state, [title]: !(state[title] ?? false) }));
   const [customSize, setCustomSize] = useState({ w: 210, h: 297 });
   const [qrBusy, setQrBusy] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -185,7 +196,7 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
 
   return (
     <aside className="flex h-full min-h-0 flex-col border-l border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
-      <div className="grid shrink-0 grid-cols-7 gap-0.5 border-b border-line p-1.5 dark:border-white/10">
+      <div className="grid shrink-0 grid-cols-8 gap-0.5 border-b border-line p-1.5 dark:border-white/10">
         {TABS.map((t) => {
           const Icon = t.icon;
           return (
@@ -223,7 +234,16 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
             )}
             {TOOL_GROUPS.map((group) => (
               <section key={group.title}>
-                <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">{group.title}</h3>
+                <button
+                  type="button"
+                  onClick={() => toggleGroup(group.title)}
+                  aria-expanded={openGroups[group.title] ?? false}
+                  className="mb-2 flex w-full items-center justify-between text-[11px] font-extrabold tracking-wide text-muted transition hover:text-ink dark:hover:text-white"
+                >
+                  {group.title}
+                  <ChevronDown className={cn("size-3.5 transition-transform", (openGroups[group.title] ?? false) ? "rotate-0" : "-rotate-90")} />
+                </button>
+                {(openGroups[group.title] ?? false) && (
                 <div className="grid grid-cols-2 gap-2">
                   {group.items.map((t) => {
                     const Icon = t.icon;
@@ -233,21 +253,58 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
                         type="button"
                         disabled={qrBusy && t.type === "qr"}
                         onClick={() => void add(t.type)}
-                        className="flex h-[64px] flex-col items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-bold transition hover:border-navy-2 hover:bg-navy-2/5 disabled:opacity-50 dark:border-white/10 dark:hover:border-gold/60"
+                        /*
+                         * Horizontal card: label and icon share one compact row
+                         * instead of the icon towering over the label. The fixed
+                         * 64px-tall vertical cards stacked seven rows tall and
+                         * pushed every section below them out of view; at this
+                         * height the whole palette fits with the quick-title
+                         * section still on screen. Labels wrap when long (the
+                         * SVG upload one does), so extra services can be added
+                         * to TOOL_GROUPS later without a new layout.
+                         */
+                        className="flex min-h-[38px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold leading-snug transition hover:border-navy-2 hover:bg-navy-2/5 disabled:opacity-50 dark:border-white/10 dark:hover:border-gold/60"
                         title={TYPE_NAME[t.type]}
                       >
-                        <Icon className="size-[18px] text-navy-2 dark:text-gold-2" />
-                        <span>{t.label}</span>
+                        <span className="min-w-0">{t.label}</span>
+                        <Icon className="size-4 shrink-0 text-navy-2 dark:text-gold-2" />
                       </button>
                     );
                   })}
                 </div>
+                )}
+                {/* Upload lives inside its own category — the trailing duplicate
+                    section (and the scroll it cost) is gone; the hint stays as a
+                    muted caption under the merged buttons. */}
+                {group.title === "صور وشعارات" && (openGroups[group.title] ?? false) && (
+                  <>
+                    <div className="mt-2 grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => onUpload("image")}
+                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[11px] font-extrabold text-white"
+                      >
+                        <ImageIcon className="size-3.5" /> رفع صورة
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onUpload("logo")}
+                        className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+                      >
+                        <BadgePercent className="size-3.5" /> رفع شعار
+                      </button>
+                    </div>
+                    <p className="mt-1.5 text-[10px] leading-5 text-muted">
+                      أو اسحب الصورة وأفلتها على الصفحة مباشرة — تُضاف في موضع الإفلات.
+                    </p>
+                  </>
+                )}
               </section>
             ))}
 
             <section>
               <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">نص سريع</h3>
-              <div className="grid gap-1.5">
+              <div className="grid gap-2">
                 {TEXT_PRESETS.map((p) => (
                   <button
                     key={p.id}
@@ -266,7 +323,7 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
                         },
                       } as Partial<CanvasEl>)
                     }
-                    className="flex items-center justify-between rounded-[8px] border border-line px-2.5 py-2 text-right hover:border-navy-2 dark:border-white/10"
+                    className="flex items-center justify-between rounded-[8px] px-2.5 py-1.5 text-right transition hover:bg-line-2 dark:hover:bg-white/5"
                   >
                     <span className="text-[12px] font-bold">{p.label}</span>
                     <span className="text-[11px] text-muted">{Math.round(Number(p.style.fontSize) || 12)}pt</span>
@@ -277,7 +334,7 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
 
             <section>
               <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">مؤشرات الإنجاز</h3>
-              <div className="grid gap-1.5">
+              <div className="grid gap-2">
                 {PROGRESS_PRESETS.map((p) => (
                   <button
                     key={p.id}
@@ -293,11 +350,11 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
                           color: THEMES[theme].ink,
                           fill: THEMES[theme].primary,
                           ...p.style,
-                          variant: p.id === "ring" ? "ring" : "bar",
+                          variant: p.style.variant ?? (p.id === "ring" ? "ring" : "bar"),
                         },
                       } as Partial<CanvasEl>)
                     }
-                    className="flex items-center gap-2 rounded-[8px] border border-line px-2.5 py-2 text-right hover:border-navy-2 dark:border-white/10"
+                    className="flex items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-right transition hover:bg-line-2 dark:hover:bg-white/5"
                   >
                     <ProgressPreview preset={p} color={THEMES[theme].primary} />
                     <span className="min-w-0 flex-1">
@@ -340,32 +397,10 @@ export function LeftPanel({ onUpload, onUploadSvg }: { onUpload: (kind: "image" 
               </button>
             </section>
 
-            <section>
-              <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">صور وشعارات</h3>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => onUpload("image")}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[11px] font-extrabold text-white"
-                >
-                  <ImageIcon className="size-3.5" /> رفع صورة
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onUpload("logo")}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
-                >
-                  <BadgePercent className="size-3.5" /> رفع شعار
-                </button>
-              </div>
-              <p className="mt-1.5 text-[10px] leading-5 text-muted">
-                أو اسحب الصورة وأفلتها على الصفحة مباشرة — تُضاف في موضع الإفلات.
-              </p>
-            </section>
-
-            <AssetLibrary />
           </div>
         )}
+
+        {tab === "library" && <AssetLibrary />}
 
         {tab === "shapes" && (
           <div className="grid gap-4">
@@ -752,6 +787,21 @@ function ProgressPreview({ preset, color }: { preset: ProgressPreset; color: str
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </svg>
+    );
+  }
+  if (preset.id === "steps") {
+    const total = Math.max(2, Math.min(12, Number(preset.style.steps) || 5));
+    const filled = Math.round((value / 100) * total);
+    return (
+      <span className="flex size-6 shrink-0 items-center gap-[3px]" aria-hidden>
+        {Array.from({ length: total }, (_, i) => (
+          <span
+            key={i}
+            className="block size-[7px] rounded-full"
+            style={{ background: i < filled ? color : "var(--color-line-2, #e8ecf3)" }}
+          />
+        ))}
+      </span>
     );
   }
   return (

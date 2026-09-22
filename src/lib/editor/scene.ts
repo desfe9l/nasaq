@@ -128,7 +128,9 @@ export interface SceneProgress {
   label: string;
   /** 0–100. */
   value: number;
-  variant: "bar" | "ring";
+  variant: "bar" | "ring" | "steps";
+  /** Steps variant: number of dots/stages. */
+  steps: number;
   showValue: boolean;
   fill: string;
   track: string;
@@ -440,7 +442,8 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
         ...base,
         label: prepared.text,
         value: Math.min(100, Math.max(0, Number(s.value) || 0)),
-        variant: s.variant === "ring" ? "ring" : "bar",
+        variant: s.variant === "ring" ? "ring" : s.variant === "steps" ? "steps" : "bar",
+        steps: Math.max(2, Math.min(12, Number(s.steps) || 5)),
         showValue: s.showValue !== false,
         fill: cleanColor(s.fill, "#006c35"),
         track: cleanColor(s.background, "#e8ecf3"),

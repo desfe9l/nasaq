@@ -1,6 +1,7 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
-import { Check, Download, Eye, Folder, FolderPlus, Grid2X2, ImagePlus, List, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { ArrowRight, Check, Download, Eye, Folder, FolderOpen, FolderPlus, Grid2X2, ImagePlus, List, MoreHorizontal, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
 import type { Asset } from "@/lib/editor/storage";
 import { downloadLibraryFile, planLibraryImport } from "@/lib/editor/library-export";
@@ -42,6 +43,49 @@ export function AssetLibrary() {
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
   const [folderDraft, setFolderDraft] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "compact">("grid");
+  /**
+   * Left-click menu on one asset: the card opens a small command menu instead
+   * of burying every action in hover micro-buttons. `pickFolder` flips the
+   * same panel into the folder picker so «إضافة إلى مجلد» stays one click deep.
+   */
+  const [menu, setMenu] = useState<{ asset: Asset; x: number; y: number } | null>(null);
+  const [pickFolder, setPickFolder] = useState(false);
+
+  const openMenu = (e: React.MouseEvent, asset: Asset) => {
+    if (editingId === asset.id) return;
+    e.stopPropagation();
+    setPickFolder(false);
+    setMenu({ asset, x: e.clientX, y: e.clientY });
+  };
+
+  const closeMenu = () => {
+    setMenu(null);
+    setPickFolder(false);
+  };
+
+  // Escape closes the menu from anywhere — focus may be on the card button or
+  // nowhere in particular, so a window-level listener is the reliable channel.
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeMenu();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menu]);
+
+  /** Single-asset download: same bytes the canvas uses, under its own name. */
+  const downloadAsset = (asset: Asset) => {
+    const a = document.createElement("a");
+    a.href = asset.src;
+    a.download = asset.name || "asset";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
   const visibleAssets = assets.filter((asset) => (asset.folderId || null) === folderId);
   const currentFolder = folders.find((folder) => folder.id === folderId);
 
@@ -221,8 +265,12 @@ export function AssetLibrary() {
         <div className={cn("grid gap-2", viewMode === "grid" ? "grid-cols-[repeat(auto-fill,minmax(118px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(92px,1fr))]")}>
           {visibleAssets.map((asset) => (
             <div key={asset.id} className={cn("group relative rounded-[8px] border bg-white/60 p-1.5 dark:bg-white/5", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy/5 ring-1 ring-navy/30" : "border-line dark:border-white/10")}>
-              <button type="button" onClick={() => toggleAssetSelect(asset.id)} aria-label={`تحديد ${asset.name}`} className={cn("absolute right-2 top-2 z-10 grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy text-white" : "border-line dark:border-white/20")}>
+              <button type="button" onClick={(e) => { e.stopPropagation(); toggleAssetSelect(asset.id); }} aria-label={`تحديد ${asset.name}`} className={cn("absolute right-2 top-2 z-10 grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy text-white" : "border-line dark:border-white/20")}>
                 {selectedAssetIds.includes(asset.id) && <Check className="size-3" />}
+              </button>
+              {/* Menu affordance: same command list the card click opens. */}
+              <button type="button" onClick={(e) => openMenu(e, asset)} aria-label={`خيارات ${asset.name}`} aria-haspopup="menu" className="absolute left-2 top-2 z-10 grid size-5 place-items-center rounded-full border border-line bg-white/90 text-muted dark:border-white/20 dark:bg-[#161c26]/90" title="الخيارات">
+                <MoreHorizontal className="size-3" />
               </button>
               {editingId === asset.id ? (
                 <div className="flex h-20 flex-col gap-1 rounded-[6px] border border-navy-2 p-1 dark:border-gold/60">
@@ -259,8 +307,10 @@ export function AssetLibrary() {
                 <>
                   <button
                     type="button"
-                    onClick={() => place(asset)}
-                    title={`إضافة "${asset.name}" إلى الصفحة`}
+                    onClick={(e) => openMenu(e, asset)}
+                    aria-haspopup="menu"
+                    aria-expanded={menu?.asset.id === asset.id}
+                    title={`خيارات "${asset.name}" — إدراج، مجلد، معاينة، تسمية، حذف`}
                     className={cn(
                       "grid w-full place-items-center overflow-hidden rounded-[6px]",
                       viewMode === "grid" ? "h-20" : "h-14",
@@ -277,25 +327,7 @@ export function AssetLibrary() {
                     {asset.name}
                   </span>
                   <div className="mt-1 flex items-center justify-center gap-1">
-                    <button type="button" onClick={() => setPreview(asset)} title="معاينة" aria-label="معاينة" className="grid size-6 place-items-center rounded-[5px] border border-line text-muted dark:border-white/10"><Eye className="size-3" /></button>
-                    <button type="button" onClick={() => place(asset)} title="إدراج في الصفحة" aria-label="إدراج في الصفحة" className="grid size-6 place-items-center rounded-[5px] bg-navy text-white"><Plus className="size-3" /></button>
-                    <button
-                      type="button"
-                      onClick={() => startRename(asset)}
-                      title="إعادة تسمية"
-                      className="grid size-6 place-items-center rounded-[5px] border border-line text-navy-2 dark:border-white/10 dark:text-white"
-                    >
-                      <Pencil className="size-2.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAssetToDelete(asset)}
-                      title="حذف من المكتبة"
-                      aria-label={`حذف ${asset.name} من المكتبة`}
-                      className="grid size-6 place-items-center rounded-[5px] border border-line text-red-600 dark:border-white/10 dark:text-red-400"
-                    >
-                      <Trash2 className="size-2.5" />
-                    </button>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); place(asset); }} title="إدراج في الصفحة" aria-label="إدراج في الصفحة" className="grid size-6 place-items-center rounded-[5px] bg-navy text-white"><Plus className="size-3" /></button>
                   </div>
                 </>
               )}
@@ -321,7 +353,99 @@ export function AssetLibrary() {
         <ImagePlus className="size-3.5" /> حفظ عنصر جديد في المكتبة
       </button>
 
-      {preview && (
+      {menu && createPortal(
+        /* Left-click command menu for one library asset. The backdrop closes
+           without acting (same contract as the folder dialog), Escape works
+           from anywhere, and «إضافة إلى مجلد…» flips this same panel into the
+           folder picker instead of nesting a second floating window.
+           Rendered through a portal at <body>: from inside the sidebar's
+           stacking context the backdrop would paint under the neighbouring
+           properties panel and outside clicks on that side would never close
+           the menu. */
+        <div
+          className="fixed inset-0 z-50"
+          onPointerDown={closeMenu}
+          onKeyDown={(e) => { if (e.key === "Escape") { e.preventDefault(); closeMenu(); } }}
+          tabIndex={-1}
+        >
+          <div
+            role="menu"
+            aria-label={`خيارات ${menu.asset.name}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="absolute min-w-[200px] rounded-[10px] border border-line bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#161c26]"
+            style={{
+              left: Math.max(8, Math.min(menu.x, window.innerWidth - 216)),
+              top: Math.max(8, Math.min(menu.y, window.innerHeight - 330)),
+            }}
+          >
+            {pickFolder ? (
+              <>
+                <MenuRow icon={ArrowRight} label="رجوع" onClick={() => setPickFolder(false)} />
+                <div className="my-1 border-t border-line dark:border-white/10" />
+                <MenuRow
+                  icon={FolderOpen}
+                  label="المكتبة الرئيسية"
+                  disabled={!menu.asset.folderId}
+                  onClick={() => {
+                    void moveAssetsToFolder([menu.asset.id], null);
+                    toast.success(`نُقل «${menu.asset.name}» إلى المكتبة الرئيسية`);
+                    closeMenu();
+                  }}
+                />
+                {folders.map((folder) => (
+                  <MenuRow
+                    key={folder.id}
+                    icon={Folder}
+                    label={folder.name}
+                    disabled={menu.asset.folderId === folder.id}
+                    onClick={() => {
+                      void moveAssetsToFolder([menu.asset.id], folder.id);
+                      toast.success(`أُضيف «${menu.asset.name}» إلى مجلد «${folder.name}»`);
+                      closeMenu();
+                    }}
+                  />
+                ))}
+                {!folders.length && (
+                  <p className="px-2.5 py-1.5 text-[10px] leading-5 text-muted">
+                    لا توجد مجلدات بعد — أنشئ مجلدًا من شريط المجلدات أعلى المكتبة.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <MenuRow
+                  icon={Plus}
+                  label="إدراج على الصفحة"
+                  onClick={() => { place(menu.asset); closeMenu(); }}
+                />
+                <MenuRow
+                  icon={FolderOpen}
+                  label="إضافة إلى مجلد…"
+                  onClick={() => setPickFolder(true)}
+                />
+                <MenuRow icon={Eye} label="معاينة" onClick={() => { setPreview(menu.asset); closeMenu(); }} />
+                <MenuRow icon={Pencil} label="إعادة تسمية" onClick={() => { startRename(menu.asset); closeMenu(); }} />
+                <MenuRow icon={Download} label="تنزيل الصورة" onClick={() => { downloadAsset(menu.asset); closeMenu(); }} />
+                <MenuRow
+                  icon={Check}
+                  label={selectedAssetIds.includes(menu.asset.id) ? "إلغاء التحديد" : "تحديد للنقل"}
+                  onClick={() => { toggleAssetSelect(menu.asset.id); closeMenu(); }}
+                />
+                <div className="my-1 border-t border-line dark:border-white/10" />
+                <MenuRow
+                  icon={Trash2}
+                  label="حذف من المكتبة…"
+                  danger
+                  onClick={() => { setAssetToDelete(menu.asset); closeMenu(); }}
+                />
+              </>
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
+
+      {preview && createPortal(
         <div className="fixed inset-0 z-50 grid place-items-center bg-navy/55 p-4" role="dialog" aria-modal="true" aria-label={`معاينة ${preview.name}`} onClick={() => setPreview(null)}>
           <div className="w-full max-w-sm rounded-[10px] bg-white p-3 shadow-xl dark:bg-[#161c26]" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between gap-2">
@@ -331,16 +455,18 @@ export function AssetLibrary() {
             <div className="grid min-h-48 place-items-center rounded-[8px] border border-line bg-line-2/50 p-4 dark:border-white/10 dark:bg-white/5"><img src={preview.src} alt={preview.name} className="max-h-64 max-w-full object-contain" /></div>
             <div className="mt-3 flex items-center justify-between gap-2 text-[10px] text-muted"><span>{preview.w} × {preview.h} px</span><button type="button" onClick={() => { place(preview); setPreview(null); }} className="inline-flex h-8 items-center gap-1.5 rounded-[6px] bg-navy px-3 font-extrabold text-white"><Plus className="size-3.5" /> إدراج وتحديد</button></div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {folderDialog && (
+      {folderDialog && createPortal(
         /*
          * Destructive-action confirmation. The backdrop has no click handler —
          * a stray click outside the card can never confirm anything — and
          * Escape closes from anywhere inside the dialog, whatever holds focus.
          * The initial focus sits on "إلغاء", so a hasty Enter cancels instead
-         * of confirming the delete.
+         * of confirming the delete. Portal: same stacking-context reason as
+         * the asset menu above.
          */
         <div
           className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4"
@@ -362,10 +488,11 @@ export function AssetLibrary() {
             <div className="flex justify-end gap-2"><button type="button" onClick={() => setFolderDialog(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">إلغاء</button><button type="submit" className="h-8 rounded-[6px] bg-navy px-3 text-[11px] font-bold text-white">حفظ</button></div>
           </form>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
 
-      {assetToDelete && (
+      {assetToDelete && createPortal(
         /* Same destructive-action contract as the folder dialog: no confirm on
            backdrop click, Escape cancels, and focus starts on «إلغاء». */
         <div
@@ -402,7 +529,8 @@ export function AssetLibrary() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </section>
   );
@@ -424,4 +552,29 @@ function imageDimensions(src: string): Promise<{ w: number; h: number }> {
     image.onerror = () => resolve({ w: 100, h: 100 });
     image.src = src;
   });
+}
+
+/** One command row inside the asset menu — shared styling for both views. */
+function MenuRow({ icon: Icon, label, danger, disabled, onClick }: {
+  icon: typeof Plus;
+  label: string;
+  danger?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold transition hover:bg-line-2 disabled:opacity-35 disabled:hover:bg-transparent dark:hover:bg-white/10",
+        danger && "text-red-600 dark:text-red-400",
+      )}
+    >
+      <Icon className="size-3.5 shrink-0" />
+      <span className="flex-1 truncate">{label}</span>
+    </button>
+  );
 }
