@@ -56,6 +56,7 @@ const ACTIONS = [
   { id: "duplicate", label: "تكرار العنصر", hint: "⌘ D / ⌘ J", icon: Copy },
   { id: "group", label: "تجميع المحدد", hint: "⌘ G", icon: Group },
   { id: "ungroup", label: "فك التجميع", hint: "⌘ ⇧ G", icon: Ungroup },
+  { id: "invert-selection", label: "عكس التحديد", hint: "", icon: FlipHorizontal2 },
   { id: "zoom-fit", label: "ملاءمة مساحة العمل", hint: "⌘ 0", icon: Maximize2 },
   { id: "zoom-in", label: "تكبير", hint: "⌘ +", icon: ZoomIn },
   { id: "zoom-out", label: "تصغير", hint: "⌘ -", icon: ZoomOut },
@@ -105,6 +106,7 @@ export function WorkspaceOverlays({
   const setZoom = useEditor((s) => s.setZoom);
   const zoom = useEditor((s) => s.zoom);
   const selectAll = useEditor((s) => s.selectAll);
+  const invertSelection = useEditor((s) => s.invertSelection);
   const select = useEditor((s) => s.select);
   const selectedCount = useEditor((s) => s.selectedIds.length);
   const selectedElements = useEditor((s) => s.selectedElements);
@@ -160,6 +162,9 @@ export function WorkspaceOverlays({
         break;
       case "ungroup":
         ungroup();
+        break;
+      case "invert-selection":
+        invertSelection();
         break;
       case "zoom-fit":
         fitToScreen();
@@ -415,6 +420,7 @@ export function WorkspaceOverlays({
             ]
           : []),
         { label: "تحديد الكل", icon: AlignCenter, run: selectAll },
+        { label: "عكس التحديد", icon: FlipHorizontal2, run: invertSelection },
         { label: "عرض الصفحة بالكامل", icon: Maximize2, run: fitToScreen },
         { label: "وضع التركيز", icon: Focus, run: () => toggle("focusMode") },
         {

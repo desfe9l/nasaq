@@ -22,6 +22,15 @@ import {
   insertLibraryDrop,
   parseLibraryDrop,
 } from "@/lib/editor/library-dnd";
+import {
+  clearPenHover,
+  fireSyntheticDoubleClick,
+  isPalmTouch,
+  noteElementTap,
+  notePenActivity,
+  resetPenInput,
+  updatePenHover,
+} from "@/lib/editor/pen-input";
 
 type Op = {
   kind: "move" | "resize" | "rotate";
@@ -246,6 +255,15 @@ export function CanvasStage({
         touchPan.current = null;
         return;
       }
+      /*
+       * A live element gesture (drag / resize / rotate / long-press) snapshotted
+       * its page rect at press time — zooming mid-drag would desynchronise the
+       * coordinates and throw the element. Navigation waits until it ends.
+       */
+      if (opRef.current) {
+        touchPan.current = null;
+        return;
+      }
       // A two-finger gesture is navigation, never a rubber-band selection.
       setMarquee(null);
       const mid = midpoint(event.touches);
@@ -262,6 +280,14 @@ export function CanvasStage({
     const onMove = (event: TouchEvent) => {
       const state = touchPan.current;
       if (!state || event.touches.length !== 2) return;
+      /*
+       * Claim EVERY move the moment a second finger exists — before the mode
+       * is decided. That freezes the browser's own one-finger pan and its
+       * pinch-zoom for the whole gesture (touch-action already forbids
+       * pinch-zoom on the stage), so the page never zooms or scrolls
+       * underneath the canvas zoom that is about to run.
+       */
+      event.preventDefault();
       const mid = midpoint(event.touches);
       // Decide the gesture once, after a deliberate movement: a few px of
       // finger wobble during a pan must not start zooming.
@@ -272,7 +298,6 @@ export function CanvasStage({
         else if (shift > 8) state.mode = "pan";
         else return;
       }
-      event.preventDefault();
       if (state.mode === "pinch") {
         const ratio = mid.distance / state.distance;
         const prev = useEditor.getState().zoom;
@@ -302,6 +327,78 @@ export function CanvasStage({
       stage.removeEventListener("touchmove", onMove);
       stage.removeEventListener("touchend", onEnd);
       stage.removeEventListener("touchcancel", onEnd);
+    };
+  }, []);
+
+  /*
+   * Apple Pencil layer: palm-rejection bookkeeping, hover affordance and the
+   * iOS-only gesture events.
+   *
+   *  · Pen activity is tracked at WINDOW level in the capture phase, so a palm
+   *    landing anywhere (over a panel, over the artboard) is evaluated
+   *    against the same pen state every gesture entry point reads.
+   *  · Hover: iPadOS reports a hovering Pencil as pointermove with
+   *    pointerType "pen" but does not flip CSS :hover for it — the canvas
+   *    keeps its own hairline highlight on the element under the tip.
+   *  · `gesturestart/gesturechange` are Safari's proprietary pinch that zooms
+   *    the whole PAGE regardless of Pointer Events — the canvas claims them.
+   */
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const track = (event: Event) =>
+      notePenActivity(event as PointerEvent);
+    const PEN_WINDOW_EVENTS = [
+      "pointerdown",
+      "pointerup",
+      "pointercancel",
+      "pointerover",
+      "pointerout",
+      "pointermove",
+    ] as const;
+    for (const type of PEN_WINDOW_EVENTS) {
+      window.addEventListener(type, track, true);
+    }
+
+    const onPenMove = (event: PointerEvent) => {
+      if (event.pointerType !== "pen") return;
+      updatePenHover(event.clientX, event.clientY);
+    };
+    const onPenLeave = (event: PointerEvent) => {
+      if (event.pointerType === "pen") clearPenHover();
+    };
+    stage.addEventListener("pointermove", onPenMove);
+    stage.addEventListener("pointerleave", onPenLeave);
+
+    // A lost window (app switch) can strand pen-down state and lock touch out.
+    const onBlur = () => {
+      clearPenHover();
+      resetPenInput();
+    };
+    window.addEventListener("blur", onBlur);
+
+    const claim = (event: Event) => event.preventDefault();
+    const GESTURE_EVENTS = [
+      "gesturestart",
+      "gesturechange",
+      "gestureend",
+    ] as const;
+    for (const type of GESTURE_EVENTS) {
+      stage.addEventListener(type, claim, { passive: false });
+    }
+
+    return () => {
+      for (const type of PEN_WINDOW_EVENTS) {
+        window.removeEventListener(type, track, true);
+      }
+      stage.removeEventListener("pointermove", onPenMove);
+      stage.removeEventListener("pointerleave", onPenLeave);
+      window.removeEventListener("blur", onBlur);
+      for (const type of GESTURE_EVENTS) {
+        stage.removeEventListener(type, claim);
+      }
+      clearPenHover();
     };
   }, []);
 
@@ -365,6 +462,16 @@ export function CanvasStage({
     handle?: string,
     parent?: { x: number; y: number },
   ) => {
+    /*
+     * Palm rejection FIRST: a resting palm must not dismiss drawers, clear the
+     * selection or start any gesture — swallow the contact outright (stopping
+     * propagation so the stage's click-to-deselect never sees it either).
+     */
+    if (isPalmTouch(e)) {
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
     // The press lands on an element, so the stage handler never sees it — but
     // the drawer must still get out of the way.
     onCanvasTap?.();
@@ -387,16 +494,6 @@ export function CanvasStage({
     }
     setActivePage(page.id);
 
-    /*
-     * Selection rules, in the order a design tool applies them:
-     *  · shift extends the selection, so several elements can be gathered;
-     *  · pressing an element that is already part of a multi-selection keeps the
-     *    whole selection, so it can be dragged as a unit;
-     *  · anything else replaces the selection with the pressed element.
-     */
-    if (e.shiftKey) toggleSelect(el.id);
-    else if (!selectedSet.has(el.id)) select(el.id);
-
     const pageEl = pageRefs.current[page.id];
     if (!pageEl) return;
     const size = pageSize(page);
@@ -407,70 +504,165 @@ export function CanvasStage({
       pagePoint(rect, size, ev.clientX, ev.clientY);
 
     const start = toMm(e);
-
-    // The elements this gesture moves. A resize or rotate handle only ever acts
-    // on the pressed element; a plain drag carries the whole selection unless
-    // the press was a shift-toggle, which is a selection change and not a drag.
-    const draggingIds =
-      kind !== "move" || e.shiftKey
-        ? [el.id]
-        : selectedSet.has(el.id)
-          ? selectedIds
-          : [el.id];
-    const linkedIds =
-      kind === "move" && !e.shiftKey
-        ? page.elements
-            .filter(
-              (candidate) =>
-                candidate.linkId &&
-                draggingIds.some(
-                  (id) =>
-                    page.elements.find((item) => item.id === id)?.linkId ===
-                    candidate.linkId,
-                ),
-            )
-            .map((candidate) => candidate.id)
-        : [];
-    const gestureIds = [...new Set([...draggingIds, ...linkedIds])];
+    /** Movement before a deferred press commits counts as a drag (~4 CSS px). */
+    const slopMm = Math.max(0.2, (4 * size.w) / Math.max(1, rect.width));
+    /** Largest distance the pointer has travelled from the press point. */
+    let maxDist = 0;
 
     // When inside a group, children live in entered.children with
-    // group-relative coordinates; otherwise they're in page.elements.
+    // group-relative coordinates; otherwise they're in page.elements. Hoisted
+    // out of the gesture itself: both `beginGesture` (origins) and the live
+    // `move` handler (sibling follow-along) read the same context.
     const enteredGroup = enteredGroupId
       ? findElement(page.elements, enteredGroupId)?.el || null
       : null;
     const enteredChildren = enteredGroup?.children || [];
 
-    const origins: Record<string, { x: number; y: number }> = {};
-    if (kind === "move" && !e.shiftKey) {
-      for (const id of gestureIds) {
-        let found: CanvasEl | undefined;
-        if (enteredGroup && enteredChildren.some((c) => c.id === id)) {
-          found = enteredChildren.find((c) => c.id === id);
-        } else {
-          found = page.elements.find((x) => x.id === id);
-        }
-        if (found) origins[id] = { x: found.x, y: found.y };
-      }
-    }
+    /*
+     * Selection timing, per input:
+     *
+     *  · mouse (and Shift, which implies a keyboard): decide IMMEDIATELY, with
+     *    the classic rules — shift extends, a member of a multi-selection
+     *    keeps the group draggable, anything else replaces;
+     *  · touch / Pencil without Shift: DEFER the decision — a plain tap
+     *    applies the same rules on pointerup, crossing the slop starts a drag
+     *    with those rules, and a press-and-hold toggles the element in/out of
+     *    the selection (the keyboard-less twin of Shift+click for adding and
+     *    removing elements).
+     *
+     * Deferring is what makes multi-touch selection honest: the gesture never
+     * steals the selection on touchdown, so a hold can mean "add/remove"
+     * instead of always meaning "replace".
+     */
+    const defer =
+      kind === "move" &&
+      !e.shiftKey &&
+      (e.pointerType === "touch" || e.pointerType === "pen");
+    let decided = !defer;
+    let heldLong = false;
+    let tapTimer: ReturnType<typeof setTimeout> | undefined;
 
-    opRef.current = {
-      kind,
-      id: el.id,
-      handle,
-      startX: start.x,
-      startY: start.y,
-      origins,
-      orig: { ...el, style: { ...el.style } },
-      pageId: page.id,
-      parent,
+    /**
+     * The press-selection rules. Reads the LIVE store so the deferred path
+     * (timer / slop) sees the same state a mouse press would have seen — the
+     * outcome is identical to the old immediate evaluation.
+     */
+    const applyPressSelection = () => {
+      const fresh = useEditor.getState();
+      if (e.shiftKey) toggleSelect(el.id);
+      else if (!fresh.selectedIds.includes(el.id)) select(el.id);
+      // Anything already inside a multi-selection stays selected, so the
+      // press can carry the whole group.
     };
+
+    /**
+     * Decide selection + snapshot every element the gesture moves. Called at
+     * press time for a mouse, at slop time for a touch/pen drag.
+     */
+    const beginGesture = () => {
+      applyPressSelection();
+      const fresh = useEditor.getState();
+      const live = new Set(fresh.selectedIds);
+
+      // The elements this gesture moves. A resize or rotate handle only ever
+      // acts on the pressed element; a plain drag carries the whole selection
+      // unless the press was a shift-toggle, which is a selection change and
+      // not a drag.
+      const draggingIds =
+        kind !== "move" || e.shiftKey
+          ? [el.id]
+          : live.has(el.id)
+            ? fresh.selectedIds
+            : [el.id];
+      const linkedIds =
+        kind === "move" && !e.shiftKey
+          ? page.elements
+              .filter(
+                (candidate) =>
+                  candidate.linkId &&
+                  draggingIds.some(
+                    (id) =>
+                      page.elements.find((item) => item.id === id)?.linkId ===
+                      candidate.linkId,
+                  ),
+              )
+              .map((candidate) => candidate.id)
+          : [];
+      const gestureIds = [...new Set([...draggingIds, ...linkedIds])];
+
+      const origins: Record<string, { x: number; y: number }> = {};
+      if (kind === "move" && !e.shiftKey) {
+        for (const id of gestureIds) {
+          let found: CanvasEl | undefined;
+          if (enteredGroup && enteredChildren.some((c) => c.id === id)) {
+            found = enteredChildren.find((c) => c.id === id);
+          } else {
+            found = page.elements.find((x) => x.id === id);
+          }
+          if (found) origins[id] = { x: found.x, y: found.y };
+        }
+      }
+
+      opRef.current = {
+        kind,
+        id: el.id,
+        handle,
+        startX: start.x,
+        startY: start.y,
+        origins,
+        orig: { ...el, style: { ...el.style } },
+        pageId: page.id,
+        parent,
+      };
+    };
+
+    if (decided) {
+      beginGesture();
+    } else {
+      // Touch/pen: hold to toggle selection membership (add when absent,
+      // remove when part of a multi-selection). Fires only if the pointer has
+      // not already broken the slop into a drag.
+      tapTimer = setTimeout(() => {
+        tapTimer = undefined;
+        if (decided) return;
+        decided = true;
+        heldLong = true;
+        const fresh = useEditor.getState();
+        const had = fresh.selectedIds.includes(el.id);
+        if (!had) {
+          toggleSelect(el.id);
+          toast.info("تمت إضافة العنصر إلى التحديد");
+        } else if (fresh.selectedIds.length > 1) {
+          toggleSelect(el.id);
+          toast.info("تمت إزالة العنصر من التحديد");
+        }
+        // A sole selection stays selected: a hold on it means "still selected".
+      }, 450);
+    }
 
     const others = page.elements.filter((x) => x.id !== el.id && !x.hidden);
 
     const move = (ev: PointerEvent) => {
+      if (!decided) {
+        const cur = toMm(ev);
+        const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
+        // A few px of finger wobble during a press must not become a drag…
+        if (dist < slopMm) return;
+        // …but once it does, the gesture starts with the classic rules.
+        decided = true;
+        if (tapTimer !== undefined) {
+          clearTimeout(tapTimer);
+          tapTimer = undefined;
+        }
+        beginGesture();
+        maxDist = dist;
+      }
+      if (heldLong) return;
       const op = opRef.current;
       if (!op) return;
       const cur = toMm(ev);
+      const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
+      if (dist > maxDist) maxDist = dist;
       let dx = cur.x - op.startX;
       let dy = cur.y - op.startY;
       const next: CanvasEl = { ...op.orig, style: { ...op.orig.style } };
@@ -617,16 +809,64 @@ export function CanvasStage({
       );
     };
 
-    const up = () => {
+    const detach = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      if (tapTimer !== undefined) {
+        clearTimeout(tapTimer);
+        tapTimer = undefined;
+      }
+    };
+
+    const up = (ev: PointerEvent) => {
+      // A gesture existed only if `beginGesture` ran: taps and holds never
+      // touch document content, so they skip `commit()` instead of padding
+      // the undo stack with no-op snapshots (a free cleanup for mouse taps
+      // too — they behave exactly as before otherwise).
+      const hadGesture = opRef.current !== null;
+      if (!decided) {
+        decided = true;
+        // Plain tap on touch/pen: apply the classic selection rules now.
+        applyPressSelection();
+      }
+      detach();
+      const wasTap = !heldLong && maxDist < slopMm;
+      if (
+        wasTap &&
+        (ev.pointerType === "touch" || ev.pointerType === "pen") &&
+        noteElementTap(el.id, ev.pointerType)
+      ) {
+        // Second quick tap: text edit / step into the group — the touch twin
+        // of double-click, dispatched through the same single edit pathway.
+        fireSyntheticDoubleClick(el.id);
+      }
       opRef.current = null;
       setRotationHint(null);
       setGuides({ v: [], h: [] });
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      commit();
+      if (hadGesture) commit();
     };
+
+    /*
+     * Safari cancels pointers it takes over (system gesture, incoming call,
+     * palm/edge rejection) without a pointerup — without this the op would
+     * stay armed, window listeners would leak, and the element would keep
+     * tracking a finger that is no longer there.
+     */
+    const cancel = () => {
+      const hadGesture = opRef.current !== null;
+      detach();
+      opRef.current = null;
+      setRotationHint(null);
+      setGuides({ v: [], h: [] });
+      // A cancelled drag commits the geometry reached so far — it is still on
+      // screen, so it must be undoable like any other drag.
+      if (hadGesture) commit();
+    };
+
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
   };
 
   /**
@@ -670,6 +910,12 @@ export function CanvasStage({
 
   /** Rubber-band selection on empty page space, or a drawn text box when armed. */
   const startMarquee = (e: React.PointerEvent, page: Page) => {
+    // Palm on the artboard: no marquee, no deselect, no drawer dismissal.
+    if (isPalmTouch(e)) {
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
     const pageEl = pageRefs.current[page.id];
     if (!pageEl) return;
     const size = pageSize(page);
@@ -678,16 +924,17 @@ export function CanvasStage({
       pagePoint(rect, size, ev.clientX, ev.clientY);
     const start = toMm(e);
     if (drawTool) {
-      let done = false;
       const move = (ev: PointerEvent) => {
         const cur = toMm(ev);
         setMarquee({ x0: start.x, y0: start.y, x1: cur.x, y1: cur.y });
       };
-      const up = (ev: PointerEvent) => {
+      const finish = () => {
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
-        if (done) return;
-        done = true;
+        window.removeEventListener("pointercancel", cancel);
+      };
+      const up = (ev: PointerEvent) => {
+        finish();
         const end = toMm(ev);
         setMarquee(null);
         setDrawTool(null);
@@ -712,8 +959,15 @@ export function CanvasStage({
           requestAnimationFrame(() => requestEdit(page.id, id));
         }
       };
+      // Interrupted (system gesture / palm): drop the preview, arm nothing.
+      const cancel = () => {
+        finish();
+        setMarquee(null);
+        setDrawTool(null);
+      };
       window.addEventListener("pointermove", move);
       window.addEventListener("pointerup", up);
+      window.addEventListener("pointercancel", cancel);
       return;
     }
     const additive = e.shiftKey;
@@ -750,17 +1004,31 @@ export function CanvasStage({
       selectMany([...before, ...hits.filter((id) => !before.includes(id))]);
     };
 
-    const up = (ev: PointerEvent) => {
+    const finish = () => {
       setMarquee(null);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+    };
+
+    const up = (ev: PointerEvent) => {
+      finish();
       // A press with no drag is a plain click on empty space, which clears the
       // selection the way every design tool does — left button only, so a
       // right-click never wipes the selection its menu is about to act on.
       if (!moved && !additive && ev.button === 0) select(null);
     };
+
+    // A cancelled marquee (Safari took the gesture over) ends silently: the
+    // rubber band disappears, the selection the band had built stays as-is,
+    // and no phantom "click" clears anything.
+    const cancel = () => {
+      finish();
+    };
+
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
   };
 
   return (
@@ -775,6 +1043,11 @@ export function CanvasStage({
       style={{ "--editor-zoom": zoom } as React.CSSProperties}
       dir="ltr"
       onPointerDownCapture={(e) => {
+        if (isPalmTouch(e)) {
+          e.stopPropagation();
+          e.preventDefault();
+          return;
+        }
         if (!spaceDown.current || !stageRef.current) return;
         e.preventDefault();
         e.stopPropagation();
@@ -801,6 +1074,9 @@ export function CanvasStage({
        * empty-space menu even with several elements selected.
        */
       onPointerDown={(e) => {
+        // A palm resting on the bare workspace is not a click: no drawer
+        // dismissal, no deselect.
+        if (isPalmTouch(e)) return;
         // Floating drawers close on any canvas press — including a press that
         // starts a marquee or grabs an element, because on a tablet the tap
         // means "get the panel out of my way", not "deselect".
@@ -972,6 +1248,13 @@ export function CanvasStage({
                     // Only a press on the page itself starts a marquee; presses on
                     // elements are handled by the element and stop propagation.
                     if (e.target !== e.currentTarget) return;
+                    // Palm on the artboard: swallow it — no marquee, and no
+                    // fall-through to the stage's click-to-deselect either.
+                    if (isPalmTouch(e)) {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      return;
+                    }
                     e.stopPropagation();
                     setActivePage(page.id);
                     // A right press only opens the context menu — it must not
@@ -1263,6 +1546,13 @@ function SelectionFrame({
         transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
       }}
       onPointerDown={(e) => {
+        // Palm rejection also covers the manipulation frame: a resting hand
+        // must not drag the selection or steal it from under the pen.
+        if (isPalmTouch(e)) {
+          e.stopPropagation();
+          e.preventDefault();
+          return;
+        }
         if ((e.target as HTMLElement).closest(".handle, .rotate-handle"))
           return;
         e.stopPropagation();

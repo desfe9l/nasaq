@@ -419,6 +419,11 @@ interface EditorStore extends Project, Ui, History {
    * everything would pick up.
    */
   selectAll: () => void;
+  /**
+   * Invert the selection within the same universe `selectAll` draws from:
+   * every unlocked, visible element that is NOT currently selected.
+   */
+  invertSelection: () => void;
   linkSelected: () => void;
   unlinkSelected: () => void;
   /** Step into a group so its children can be picked individually. */
@@ -1545,6 +1550,20 @@ export const useEditor = create<EditorStore>((set, get) => {
           .filter((el) => !el.locked && !el.hidden)
           .map((el) => el.id),
       ),
+
+    invertSelection: () => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const selected = new Set(s.selectedIds);
+      // Same universe as selectAll — the invert of "everything" is well-defined
+      // only against the same set of elements the author can actually pick.
+      get().selectMany(
+        page.elements
+          .filter((el) => !el.locked && !el.hidden && !selected.has(el.id))
+          .map((el) => el.id),
+      );
+    },
 
     linkSelected: () => {
       const s = get();
