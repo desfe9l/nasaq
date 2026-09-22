@@ -485,10 +485,11 @@ function Studio({
   /*
    * Publish the header's REAL height as `--editor-header-h`.
    *
-   * Phase 1 sizes the panel bodies with `calc(100vh - header)`, and the header
-   * legitimately wraps to two rows on a narrow tablet. Measuring it (rather
-   * than hard-coding 52px) is what keeps the last property row reachable when
-   * the toolbar grows — the exact clipping regression this phase fixes.
+   * Phase 1 sizes the panel bodies with `calc(100vh - header)`. The header is
+   * one row at every width now, but it is still measured rather than
+   * hard-coded: on a coarse pointer the icon buttons grow to 44px, and the
+   * safe-area insets add to the padding, so the real height is never 52px on
+   * every device. Measuring it is what keeps the last property row reachable.
    */
   const headerRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -978,25 +979,29 @@ function Studio({
       )}
     >
       {/*
-       * Toolbar row (tablet+).
+       * Toolbar row — ONE line at every width.
        *
-       * `flex-wrap` stays for phones, where the tool tray genuinely belongs on a
-       * second line (`order-last` below `md`). From `md` up the row is
-       * `flex-nowrap`: the brand group, the history + zoom cluster and the
-       * actions group are all `shrink-0`, and only the tool tray is `min-w-0`,
-       * so on a 768–1100px tablet the tray narrows and scrolls horizontally
-       * INSIDE the row instead of pushing the toolbar into a stack of
-       * mismatched rows.
+       * The row is `flex-nowrap` and is itself the horizontal scroller
+       * (`overflow-x-auto` + `whitespace-nowrap`): the brand group, the history
+       * + zoom cluster and the actions group are all `shrink-0`, so nothing is
+       * ever squeezed onto a second line, and nothing is clipped off the edge
+       * either. At `md` and up the tool tray is `min-w-0` and absorbs the
+       * slack — it narrows and scrolls inside its own box (`md:overflow-x-auto`
+       * is the tray's, not the row's) so the row itself rarely needs to scroll.
+       * On a phone the four groups are together wider than the screen, so the
+       * row scrolls: the strip slides under the finger instead of breaking into
+       * a stack of ragged lines, which is what used to push controls past the
+       * right edge.
        *
-       * The global actions the author reaches for constantly — Save and Export
-       * (actions group), Undo/Redo and Zoom/Fit (pinned cluster) — sit at the
-       * row's two edges and take no part in that scroll, so they stay one click
-       * away at every width.
+       * The global actions the author reaches for constantly are the first
+       * controls on that strip — Undo/Redo and Zoom/Fit (pinned cluster) right
+       * after the brand group, then Save and Export — so at most one short
+       * swipe separates the author from any of them at any width.
        */}
       <header
         ref={headerRef}
         data-editor-obstacle="header"
-        className="editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))] md:flex-nowrap md:overflow-x-auto md:whitespace-nowrap"
+        className="editor-toolbar z-[var(--z-panel)] flex flex-nowrap items-center gap-x-2 overflow-x-auto whitespace-nowrap border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]"
       >
         <div className="flex shrink-0 items-center gap-2">
           <a
@@ -1071,12 +1076,16 @@ function Studio({
         {/*
          * Tool tray.
          *
-         * Below `md` the tray is `min-w-fit` + `order-last`: it claims a full
-         * row and wraps under the brand group, so controls stay visible on a
-         * phone instead of scrolling out of sight. From `md` up `min-w-0` lets
-         * it shrink into whatever space the outer groups leave and scroll
-         * horizontally INSIDE the single toolbar row — the tablet behaviour —
-         * with `whitespace-nowrap` keeping every action group on one line.
+         * Below `md` it is `min-w-fit` + `order-last`: `min-w-fit` keeps it at
+         * its natural width so it never scrolls inside its own box — it simply
+         * takes part in the row's scroll — and `order-last` puts it at the END
+         * of that single row (brand ▸ history/zoom ▸ actions ▸ tray), so the
+         * menus, the project name and the grid toggle stay one swipe away
+         * instead of wrapping the toolbar into a second line. From `md` up
+         * `md:order-none` returns it to the middle and `min-w-0` lets it shrink
+         * into whatever space the outer groups leave, and its own
+         * `overflow-x-auto` then does the scrolling (the tablet behaviour)
+         * rather than the row.
          */}
         {/*
          * Pinned cluster — history + zoom.
