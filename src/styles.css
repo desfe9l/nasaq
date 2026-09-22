@@ -1082,16 +1082,24 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * space (plus matching scroll padding) keeps the bottommost item — and any
  * drop zone behind it — fully visible and interactive.
  */
-.editor-panel-body,
-.editor-pane-scroll {
+/*
+ * Scope: the vertical panel bodies only. `.editor-pane-scroll` is also used by
+ * the HORIZONTAL tool strip inside the header — padding there would inflate the
+ * measured header height — so it opts out explicitly.
+ */
+.editor-panel-body {
   padding-bottom: 80px;
   scroll-padding-bottom: 80px;
 }
 
+.editor-toolbar .editor-pane-scroll {
+  padding-bottom: 0;
+  scroll-padding-bottom: 0;
+}
+
 /* A row the author is dragging to can always scroll clear of the edge. */
 .layer-row,
-.editor-panel-body > *,
-.editor-pane-scroll > * {
+.editor-panel-body > * {
   scroll-margin-bottom: 80px;
 }
 
