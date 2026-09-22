@@ -40,6 +40,11 @@ export interface SceneText {
   size: number;
   weight: number;
   italic: boolean;
+  /**
+   * Optional so synthetic scene fixtures (tests, generated tables) stay valid —
+   * absent means "not underlined".
+   */
+  underline?: boolean;
   color: string;
   align: "right" | "center" | "left" | "justify";
   lineHeight: number;
@@ -278,6 +283,7 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
         size: prepared.fontSize,
         weight: weightOf(s.fontWeight, 600),
         italic: s.fontStyle === "italic" || s.fontStyle === "oblique",
+        underline: s.underline === true,
         color: cleanColor(s.color, DEFAULT_INK),
         align: s.textAlign || "right",
         lineHeight: s.lineHeight || 1.45,
@@ -300,6 +306,7 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
         size: prepared.fontSize,
         weight: weightOf(s.fontWeight, 600),
         italic: s.fontStyle === "italic" || s.fontStyle === "oblique",
+        underline: s.underline === true,
         color: cleanColor(s.color, DEFAULT_INK),
         align: s.textAlign || "right",
         lineHeight: s.lineHeight || 1.5,
@@ -321,6 +328,7 @@ function toItem(el: CanvasEl, ox: number, oy: number, rotation: number): SceneIt
         size: prepared.fontSize,
         weight: weightOf(s.fontWeight, 700),
         italic: false,
+        underline: false,
         color: cleanColor(s.color, DEFAULT_ACCENT),
         align: "center",
         lineHeight: s.lineHeight || 1.2,

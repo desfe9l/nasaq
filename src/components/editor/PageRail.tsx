@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Copy, GripVertical, Plus, Trash2 } from "lucide-react";
 import { pageSize, type CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
-import { cn } from "@/lib/utils";
+import { clamp, cn } from "@/lib/utils";
 
 /**
  * Horizontal page rail with drag-and-drop reordering.
@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * Uses the pointer events API rather than HTML5 drag-and-drop: the rail lives
  * inside a scroll container and HTML5 DnD is unreliable in Safari there.
  */
-export function PageRail() {
+export function PageRail({ height = 152, minHeight = 96 }: { height?: number; minHeight?: number }) {
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
   const setActivePage = useEditor((s) => s.setActivePage);
@@ -19,6 +19,25 @@ export function PageRail() {
   const deletePage = useEditor((s) => s.deletePage);
   const reorderPages = useEditor((s) => s.reorderPages);
   const renamePage = useEditor((s) => s.renamePage);
+
+  /*
+   * Fluid thumbnails (Phase 3).
+   *
+   * The panel is drag-resizable, so the thumbnail size is DERIVED from the
+   * available height rather than hard-coded: the box keeps the page's own
+   * aspect ratio (width follows height through `ratio`) and simply scales with
+   * the panel. Nothing is ever squashed or stretched, and the row scrolls
+   * horizontally once the pages no longer fit.
+   */
+  const thumbBox = (ratio: number) => {
+    // Strip the chrome around the thumbnail: labels, padding, drag chips.
+    const chrome = 46;
+    const available = Math.max(48, height - chrome);
+    const floor = Math.max(40, minHeight - chrome);
+    const h = clamp(Math.round(available), floor, 220);
+    const w = clamp(Math.round(h * ratio), 34, 240);
+    return { w, h };
+  };
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
@@ -69,7 +88,7 @@ export function PageRail() {
   };
 
   return (
-    <div className="editor-page-rail flex h-[132px] items-stretch gap-2 border-t px-3 py-2">
+    <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-2 border-t px-3 py-2">
       <div className="flex flex-col justify-center gap-1">
         <button
           type="button"
@@ -99,8 +118,7 @@ export function PageRail() {
         {pages.map((p, i) => {
           const size = pageSize(p);
           const ratio = size.w / size.h;
-          const thumbW = ratio >= 1 ? 92 : 62;
-          const thumbH = ratio >= 1 ? Math.round(92 / ratio) : 88;
+          const { w: thumbW, h: thumbH } = thumbBox(ratio);
           return (
             <li
               key={p.id}
@@ -152,7 +170,7 @@ export function PageRail() {
                       />
                     ))}
                 </span>
-                <span className="flex items-center justify-between gap-1 text-[10px]">
+                <span className="flex items-center justify-between gap-1 text-[10px] leading-tight">
                   {renaming === p.id ? (
                     <input
                       autoFocus
@@ -171,7 +189,8 @@ export function PageRail() {
                     />
                   ) : (
                     <span
-                      className="max-w-[86px] truncate font-bold"
+                      className="truncate font-bold"
+                      style={{ maxWidth: `${Math.max(48, thumbW)}px` }}
                       onDoubleClick={() => setRenaming(p.id)}
                       title="انقر مرتين لإعادة التسمية"
                     >

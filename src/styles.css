@@ -428,19 +428,30 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   }
 }
 
+/*
+ * Infinite viewport.
+ *
+ * The stage is a scrolling surface, not a page: a subdued, low-contrast field
+ * (#F3F4F6 light / #1E293B dark) with a faint grid, so the white artboard reads
+ * as a physical sheet floating above the desk. The background is fixed-attached
+ * relative to the scroll container (`background-attachment: local` keeps the
+ * grid moving with the content while the field stays put), which is what makes
+ * the viewport feel unbounded instead of "a big div".
+ */
 .studio-grid {
-  background-color: var(--color-paper);
+  background-color: #f3f4f6;
   background-image:
-    linear-gradient(rgba(7, 29, 61, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(7, 29, 61, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.045) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
 .editor-ui.editor-dark .studio-grid {
-  background-color: #0f141c;
+  background-color: #1e293b;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 /* Drag-and-drop affordance while an image file hovers the canvas. */
@@ -466,7 +477,15 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   direction: rtl;
   background: #fff;
   color: #172033;
-  box-shadow: var(--shadow-page);
+  /*
+   * Physical page metaphor: a distinct drop shadow lifts the sheet off the
+   * subdued stage in both themes. A 1px hairline keeps the page edge visible
+   * when the artwork itself is white on a white artboard.
+   */
+  box-shadow:
+    0 10px 25px -5px rgba(0, 0, 0, 0.15),
+    0 8px 10px -6px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(15, 23, 42, 0.08);
   isolation: isolate;
   user-select: none;
 }
@@ -534,10 +553,20 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .editor-ui.editor-light {
   --sel-color: #1d4ed8;
   --sel-halo: rgba(255, 255, 255, 0.9);
+  --sel-glow: rgba(29, 78, 216, 0.18);
+  --hover-outline: rgba(29, 78, 216, 0.55);
 }
+/*
+ * Dark mode used a muted gold that read as hairline gray against the navy
+ * chrome — "I cannot see what is selected". Selection is now a vibrant primary
+ * blue with a translucent glow overlay, which is unmistakable on the dark
+ * stage, on the still-white page, and on top of any artwork.
+ */
 .editor-ui.editor-dark {
-  --sel-color: #d9b45b;
-  --sel-halo: rgba(17, 23, 34, 0.9);
+  --sel-color: #3b82f6;
+  --sel-halo: rgba(15, 23, 42, 0.9);
+  --sel-glow: rgba(59, 130, 246, 0.2);
+  --hover-outline: rgba(59, 130, 246, 0.6);
 }
 /* z-index comes from SELECTION_LAYER_Z in CanvasStage — the one source. */
 .selection-layer {
@@ -565,6 +594,10 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   pointer-events: auto;
   touch-action: none;
   cursor: move;
+  /* Subtle overlay + glow: the selection volume is legible even over dense
+     artwork, without a filled box that would hide the content. */
+  background: var(--sel-glow, rgba(59, 130, 246, 0.2));
+  background-clip: padding-box;
 }
 
 /*
@@ -798,10 +831,36 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
 }
 
+/*
+ * The visible dot stays small (a 44px blob would cover the artwork it is
+ * resizing), but the HIT area is a full 44×44px on touch devices — realised
+ * with a transparent box-shadow spread that keeps the handle's layout size and
+ * anchors untouched while extending the pointer target in every direction.
+ */
 .handle {
   width: var(--handle-size);
   height: var(--handle-size);
   border-radius: 50%;
+}
+
+@media (pointer: coarse) {
+  /*
+   * `box-shadow` is never hit-tested, so the enlarged target is a real
+   * pseudo-element box centred on the handle (the parent element receives the
+   * pointer event). Divides by --editor-zoom because the page is scaled, which
+   * keeps the target a true 44×44 SCREEN pixels at every zoom level.
+   */
+  .handle::before,
+  .rotate-handle::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: calc(44px / var(--editor-zoom, 1));
+    height: calc(44px / var(--editor-zoom, 1));
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+  }
 }
 
 .handle.nw { top: calc(var(--handle-size) / -2); left: calc(var(--handle-size) / -2); cursor: nwse-resize; }
@@ -894,4 +953,686 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 @media print {
   body { background: #fff !important; }
   .no-print { display: none !important; }
+}
+
+/* =====================================================================
+ * UX/UI overhaul — Phase 1 → 7
+ *
+ * Appended as one coherent block so the overhaul is reviewable in isolation.
+ * Everything here is additive: no existing selector's meaning is changed
+ * except where a comment says so explicitly.
+ * ===================================================================== */
+
+/*
+ * PHASE 1 — Panel containment.
+ *
+ * The shell publishes the header's real height as `--editor-header-h`, so the
+ * panels can size themselves with `calc(100vh - header)` instead of a magic
+ * number that drifts the moment the toolbar wraps to a second row.
+ */
+.editor-shell {
+  --editor-header-h: 52px;
+}
+
+.editor-panel-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Explicit height ceiling: on tablets the soft keyboard and browser chrome
+     change 100vh unpredictably, and the panel must still scroll rather than
+     push its last rows out of the viewport. */
+  max-height: calc(100vh - var(--editor-header-h));
+}
+
+/*
+ * Fluid property rows. Grids collapse to a single column below 300px of usable
+ * panel width, and inputs shrink (`min-width: 0`) instead of overflowing their
+ * cell — the two failure modes that produced overlapping controls before.
+ */
+.property-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
+.editor-property-field {
+  min-width: 0;
+}
+
+.editor-property-field .field-control {
+  min-width: 0;
+}
+
+.editor-property-field .field-control > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Long select labels shrink rather than widening the panel. */
+.editor-property-field select,
+.editor-property-field input {
+  text-overflow: ellipsis;
+}
+
+/*
+ * PHASE 2 — Accordions.
+ */
+.editor-accordion {
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 9px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--editor-surface, #fff) 60%, transparent);
+}
+
+.editor-accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  /* 44px minimum tap height, per the touch brief. */
+  min-height: 44px;
+  padding: 0 0.625rem;
+  border: 0;
+  background: transparent;
+  color: var(--editor-text, #172033);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.editor-accordion-header:hover {
+  background: var(--editor-hover, rgba(15, 23, 42, 0.05));
+}
+
+.editor-accordion-header:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+}
+
+.editor-accordion-chevron {
+  color: var(--editor-text-secondary, #6b7383);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* RTL: the chevron closes toward its own direction, which reads correctly
+   without mirroring the rotation axis. */
+.editor-accordion-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.editor-accordion-body {
+  display: grid;
+  gap: 0.625rem;
+  padding: 0 0.625rem 0.75rem;
+  animation: accordion-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes accordion-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-accordion-body { animation: none; }
+  .editor-accordion-chevron { transition: none; }
+}
+
+.editor-subgroup {
+  display: grid;
+  gap: 0.5rem;
+  border-inline-start: 2px solid color-mix(in srgb, var(--editor-border, #dde2ea) 80%, transparent);
+  padding-inline-start: 0.625rem;
+}
+
+.editor-subgroup-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--editor-text-secondary, #6b7383);
+}
+
+/*
+ * PHASE 2 — Scrubbable inputs.
+ *
+ * The row is a 3-column track: − | value | +. On a fine pointer the steppers
+ * fade until the row is hovered (they are still focusable, so keyboard users
+ * keep them), while on touch they are permanent and full-size.
+ */
+.scrub-input {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+.scrub-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  background: var(--editor-surface, #fff);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.scrub-track:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.scrub-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 34px;
+  padding: 0 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--editor-text, #172033);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  cursor: text;
+}
+
+.scrub-field:focus {
+  outline: none;
+}
+
+.scrub-suffix {
+  padding-inline-end: 0.5rem;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--editor-text-secondary, #6b7383);
+}
+
+.scrub-stepper {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  min-height: 36px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  background: var(--editor-surface, #fff);
+  color: var(--editor-text-secondary, #6b7383);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background-color 120ms ease, color 120ms ease, opacity 120ms ease;
+  opacity: 0;
+}
+
+.scrub-input:hover .scrub-stepper,
+.scrub-input:focus-within .scrub-stepper,
+.scrub-stepper:focus-visible {
+  opacity: 1;
+}
+
+.scrub-stepper:hover:not(:disabled) {
+  background: var(--editor-hover, rgba(15, 23, 42, 0.06));
+  color: var(--editor-text, #172033);
+}
+
+.scrub-stepper:disabled {
+  cursor: not-allowed;
+  color: color-mix(in srgb, var(--editor-text-secondary, #6b7383) 50%, transparent);
+}
+
+.scrub-input.is-disabled .scrub-track {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Touch: steppers are always visible and never smaller than 40px. */
+@media (pointer: coarse) {
+  .scrub-stepper {
+    opacity: 1;
+    width: 42px;
+    min-height: 42px;
+  }
+
+  .scrub-field {
+    height: 42px;
+  }
+}
+
+.scrub-label.is-scrubbable {
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.scrub-label.is-scrubbable:hover {
+  color: var(--editor-text, #172033);
+}
+
+/* While a scrub gesture is live the page must not select text or scroll. */
+body.is-scrubbing-value {
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/*
+ * PHASE 1 — Slide-over drawers (<1024px).
+ *
+ * The docked panels become floating cards over the canvas, so the artboard
+ * keeps its full width; a shared backdrop dismisses them. `will-change`
+ * promotes the moving layer so the slide stays smooth on a tablet.
+ */
+.editor-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 25;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(1.5px);
+  animation: drawer-backdrop-in 160ms ease;
+}
+
+@keyframes drawer-backdrop-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (min-width: 1024px) {
+  .editor-drawer-backdrop {
+    display: none;
+  }
+}
+
+/*
+ * PHASE 3 — Resizable pages panel.
+ */
+.editor-page-rail-resizer {
+  position: relative;
+  height: 10px;
+  flex: 0 0 auto;
+  cursor: row-resize;
+  touch-action: none;
+  display: grid;
+  place-items: center;
+  background: transparent;
+}
+
+.editor-page-rail-resizer::before {
+  content: "";
+  width: 46px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--editor-border, #c9cacc);
+  transition: background-color 140ms ease, width 140ms ease;
+}
+
+.editor-page-rail-resizer:hover::before,
+.editor-page-rail-resizer:focus-visible::before,
+body.is-resizing-rail .editor-page-rail-resizer::before {
+  width: 72px;
+  background: var(--editor-active, #4b4c4d);
+}
+
+body.is-resizing-rail {
+  cursor: row-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.editor-page-rail-resizer:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/*
+ * PHASE 4 — Floating contextual toolbar.
+ *
+ * Rendered in a fixed overlay layer (never inside the scaled page) so its
+ * buttons keep a constant screen size and its 16px gap is a real 16px.
+ */
+.floating-toolbar {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--editor-border, #c9cacc);
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #172033);
+  box-shadow: 0 10px 30px -8px rgba(15, 23, 42, 0.35);
+  animation: floating-toolbar-in 140ms cubic-bezier(0.22, 1, 0.36, 1);
+  max-width: min(92vw, 640px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.floating-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes floating-toolbar-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.floating-toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-inline: 3px;
+}
+
+.floating-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  margin-inline: 3px;
+  background: var(--editor-border, #dde2ea);
+}
+
+.floating-toolbar-btn {
+  display: grid;
+  place-items: center;
+  gap: 0;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.floating-toolbar-btn:hover:not(:disabled) {
+  background: var(--editor-hover, rgba(15, 23, 42, 0.08));
+}
+
+.floating-toolbar-btn[aria-pressed="true"] {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.floating-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.floating-toolbar-select {
+  height: 32px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 7px;
+  background: var(--editor-surface, #fff);
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/*
+ * Opacity is a 0–100% trim, so it stays a slider (a scrubber would hide the
+ * range at a glance) — but a slider needs a real travel: 58px made every
+ * adjustment a single pixel of movement.
+ */
+.floating-toolbar-range {
+  width: 88px;
+  height: 32px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.floating-toolbar-select {
+  max-width: 132px;
+  padding: 0 4px;
+}
+
+/*
+ * Font size inside the toolbar is the shared scrubber, scaled down to toolbar
+ * proportions on a mouse. Coarse pointers keep the 42px steppers from the base
+ * rule (that media query is width-agnostic), so a thumb still gets a real
+ * target — only the desktop chrome is compact.
+ */
+@media (pointer: fine) {
+  .floating-toolbar .scrub-input {
+    width: 92px;
+    flex: 0 0 auto;
+  }
+
+  .floating-toolbar .scrub-field {
+    height: 32px;
+    font-size: 11px;
+  }
+
+  .floating-toolbar .scrub-stepper {
+    width: 26px;
+    min-height: 32px;
+    border-radius: 7px;
+    opacity: 1;
+  }
+
+  .floating-toolbar .scrub-stepper svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .floating-toolbar .scrub-suffix {
+    padding-inline-end: 4px;
+    font-size: 9px;
+  }
+}
+
+.floating-toolbar-swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Touch: every floating control grows to the 44px guideline. */
+@media (pointer: coarse) {
+  .floating-toolbar-btn {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .floating-toolbar-select,
+  .floating-toolbar-swatch {
+    height: 44px;
+  }
+
+  .floating-toolbar-range {
+    width: 132px;
+    height: 44px;
+  }
+}
+
+/*
+ * PHASE 5 — Layer tree.
+ */
+.layer-row {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 160ms ease, background-color 140ms ease;
+}
+
+.layer-row.is-dragging {
+  opacity: 0.6;
+  transform: scale(0.985);
+}
+
+/* Drop indicator: a primary-coloured line on the side the layer will land. */
+.layer-row.is-drop-before::before,
+.layer-row.is-drop-after::after {
+  content: "";
+  position: absolute;
+  inset-inline: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.layer-row.is-drop-before::before { top: -1px; }
+.layer-row.is-drop-after::after { bottom: -1px; }
+
+.layer-children {
+  display: grid;
+  gap: 2px;
+  margin-inline-start: 10px;
+  padding-inline-start: 6px;
+  border-inline-start: 1px dashed var(--editor-border, #dde2ea);
+  animation: accordion-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.layer-row.is-nested-hidden {
+  opacity: 0.45;
+}
+
+.layer-eye-toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .layer-eye-toggle {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/*
+ * PHASE 6 — Contrast fixes for interactive states in dark mode.
+ */
+.editor-ui.editor-dark input:focus-visible,
+.editor-ui.editor-dark select:focus-visible,
+.editor-ui.editor-dark textarea:focus-visible,
+.editor-ui.editor-dark button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+/* Hover outlines on canvas elements use the same primary blue in dark mode. */
+.editor-ui.editor-dark .canvas-el:hover {
+  outline-color: var(--hover-outline) !important;
+}
+
+/*
+ * Table cell interaction (properties panel grid editor) — the previous
+ * `:focus` styling was a faint gray line that vanished on the dark surface.
+ */
+.editor-properties table td:focus-within,
+.editor-properties table th:focus-within {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.editor-ui.editor-dark .editor-properties table input:focus {
+  background: rgba(59, 130, 246, 0.18);
+  color: #fff;
+}
+
+/* Active tab / toggle indicators keep a primary fill in dark mode. */
+.editor-ui.editor-dark .bg-navy.text-white,
+.editor-ui.editor-dark [data-active="true"] {
+  background: #2563eb !important;
+  color: #fff !important;
+}
+
+/*
+ * PHASE 7 — Library accordions & custom asset cards.
+ */
+.library-grid-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 6px;
+}
+
+.library-asset-card {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  background: var(--editor-surface, #fff);
+  cursor: pointer;
+  transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
+}
+
+.library-asset-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+.library-asset-card:active {
+  transform: scale(0.97);
+}
+
+/*
+ * Draggable library card (tables / chart templates): the grab cursor plus a
+ * dotted leading edge advertise the drag, because a palette that can only be
+ * clicked should not look draggable — and vice versa.
+ */
+.library-drag-card {
+  cursor: grab;
+  touch-action: manipulation;
+}
+
+.library-drag-card:active {
+  cursor: grabbing;
+}
+
+.library-drag-card:hover {
+  box-shadow: inset 2px 0 0 0 #3b82f6;
+}
+
+.library-drag-card::after {
+  content: "";
+  flex: 0 0 auto;
+  align-self: center;
+  width: 10px;
+  height: 14px;
+  border-inline-start: 1px dotted currentColor;
+  border-inline-end: 1px dotted currentColor;
+  opacity: 0.35;
+}
+
+/* Remove chip only appears on hover/focus so the grid stays clean. */
+.library-asset-remove {
+  position: absolute;
+  top: -6px;
+  inset-inline-end: -6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  background: var(--editor-panel, #fff);
+  color: #b42318;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.library-asset-card:hover .library-asset-remove,
+.library-asset-card:focus-within .library-asset-remove {
+  opacity: 1;
 }

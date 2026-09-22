@@ -86,6 +86,8 @@ export interface ElStyle {
   fontSize?: number;
   fontWeight?: number | string;
   fontStyle?: string;
+  /** Underline is a text-decoration, not a font variant — hence its own flag. */
+  underline?: boolean;
   color?: string;
   background?: string;
   fill?: string;

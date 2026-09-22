@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { findElement, MIN_SIZE, pageSize, type Box, type CanvasEl, type Page } from "@/lib/editor/model";
+import { findElement, MIN_SIZE, pageSize, type Box, type CanvasEl, type ElType, type Page } from "@/lib/editor/model";
 import { applySnap, resizeByHandle } from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
+import { FloatingToolbar } from "./FloatingToolbar";
 import { toast } from "sonner";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
+import { LIBRARY_DND_MIME, insertLibraryDrop, parseLibraryDrop } from "@/lib/editor/library-dnd";
 
 type Op =
   | {
@@ -46,10 +48,19 @@ function pagePoint(rect: DOMRect, size: { w: number; h: number }, clientX: numbe
   };
 }
 
-export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: { x: number; y: number }) => void }) {
+export function CanvasStage({
+  onDropImage,
+  onCanvasTap,
+}: {
+  onDropImage?: (file: File, at?: { x: number; y: number }) => void;
+  /** Fired on a canvas press — used to dismiss the floating drawers. */
+  onCanvasTap?: () => void;
+}) {
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
   const selectedIds = useEditor((s) => s.selectedIds);
+  const selectedId = useEditor((s) => s.selectedId);
+  const addElementAt = useEditor((s) => s.addElementAt);
   const enteredGroupId = useEditor((s) => s.enteredGroupId);
   const zoom = useEditor((s) => s.zoom);
   const previewAll = useEditor((s) => s.previewAll);
@@ -70,11 +81,24 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
   const opRef = useRef<Op>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const spaceDown = useRef(false);
-  /** Active two-finger touch pan: midpoint + scroll origin captured on start. */
-  const touchPan = useRef<{ x: number; y: number; scrollLeft: number; scrollTop: number } | null>(null);
+  /**
+   * Active two-finger gesture. Captured on start (midpoint, scroll origin,
+   * finger distance) and resolved on the first move into either a PAN (fingers
+   * move together) or a PINCH (the distance changes) — mixing the two makes a
+   * zoom drift sideways, which is the classic broken pinch.
+   */
+  const touchPan = useRef<{
+    x: number;
+    y: number;
+    scrollLeft: number;
+    scrollTop: number;
+    distance: number;
+    mode: "pan" | "pinch" | null;
+  } | null>(null);
   const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
   const [marquee, setMarquee] = useState<Marquee>(null);
-  const [dropping, setDropping] = useState(false);
+  /** Which drop gesture is hovering: an image file, a library card, or none. */
+  const [dropping, setDropping] = useState<"file" | "library" | null>(null);
   /** Armed when the author picks «نص بالرسم»: next page drag draws a text box. */
   const [drawArmed, setDrawArmed] = useState(false);
   const pageRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -118,6 +142,90 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     };
     stage.addEventListener("wheel", onWheel, { passive: false });
     return () => stage.removeEventListener("wheel", onWheel);
+  }, []);
+
+  /*
+   * Touch navigation: two fingers pan, and a change in finger distance zooms.
+   *
+   * Bound natively and non-passively on purpose. React registers touch
+   * listeners passively at the root, so `preventDefault()` inside `onTouchMove`
+   * cannot stop the browser's own pinch-zoom — the page would zoom underneath
+   * the artboard while the canvas zoomed with it. One native handler owns the
+   * whole gesture instead, and the midpoint anchoring reuses `zoomAnchoredAt`,
+   * the same path ctrl+wheel takes.
+   */
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const midpoint = (touches: TouchList) => ({
+      x: (touches[0].clientX + touches[1].clientX) / 2,
+      y: (touches[0].clientY + touches[1].clientY) / 2,
+      distance: Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY),
+    });
+
+    const onStart = (event: TouchEvent) => {
+      if (event.touches.length !== 2) {
+        touchPan.current = null;
+        return;
+      }
+      // A two-finger gesture is navigation, never a rubber-band selection.
+      setMarquee(null);
+      const mid = midpoint(event.touches);
+      touchPan.current = {
+        x: mid.x,
+        y: mid.y,
+        scrollLeft: stage.scrollLeft,
+        scrollTop: stage.scrollTop,
+        distance: Math.max(24, mid.distance),
+        mode: null,
+      };
+    };
+
+    const onMove = (event: TouchEvent) => {
+      const state = touchPan.current;
+      if (!state || event.touches.length !== 2) return;
+      const mid = midpoint(event.touches);
+      // Decide the gesture once, after a deliberate movement: a few px of
+      // finger wobble during a pan must not start zooming.
+      if (!state.mode) {
+        const spread = Math.abs(mid.distance - state.distance);
+        const shift = Math.hypot(mid.x - state.x, mid.y - state.y);
+        if (spread > 10 && spread > shift) state.mode = "pinch";
+        else if (shift > 8) state.mode = "pan";
+        else return;
+      }
+      event.preventDefault();
+      if (state.mode === "pinch") {
+        const ratio = mid.distance / state.distance;
+        const prev = useEditor.getState().zoom;
+        const next = Math.min(2, Math.max(0.2, prev * ratio));
+        if (Math.abs(next - prev) > 0.004) {
+          zoomAnchoredAt(stage, prev, next, mid.x, mid.y);
+          // Incremental: the ratio is applied against the last applied frame,
+          // so a slow pinch does not accumulate rounding drift.
+          state.distance = mid.distance;
+        }
+        return;
+      }
+      stage.scrollLeft = state.scrollLeft - (mid.x - state.x);
+      stage.scrollTop = state.scrollTop - (mid.y - state.y);
+    };
+
+    const onEnd = () => {
+      touchPan.current = null;
+    };
+
+    stage.addEventListener("touchstart", onStart, { passive: false });
+    stage.addEventListener("touchmove", onMove, { passive: false });
+    stage.addEventListener("touchend", onEnd);
+    stage.addEventListener("touchcancel", onEnd);
+    return () => {
+      stage.removeEventListener("touchstart", onStart);
+      stage.removeEventListener("touchmove", onMove);
+      stage.removeEventListener("touchend", onEnd);
+      stage.removeEventListener("touchcancel", onEnd);
+    };
   }, []);
 
   useEffect(() => {
@@ -172,6 +280,9 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     handle?: string,
     parent?: { x: number; y: number },
   ) => {
+    // The press lands on an element, so the stage handler never sees it — but
+    // the drawer must still get out of the way.
+    onCanvasTap?.();
     if (el.locked) {
       // Locked elements can be selected but not gestured; stopping the press
       // here keeps the stage's click-to-deselect from immediately undoing it.
@@ -398,6 +509,17 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     return page.elements.map((el) => ({ id: el.id, box: { x: el.x, y: el.y, w: el.w, h: el.h } }));
   };
 
+  /**
+   * The element the contextual toolbar formats: the primary selection, resolved
+   * through the current grouping context so a group member gets its own tools.
+   */
+  const activePageForSelection = pages.find((p) => p.id === activePageId);
+  const primarySelection = (() => {
+    if (!selectedId || !activePageForSelection) return null;
+    const found = findElement(activePageForSelection.elements, selectedId)?.el;
+    return found && !found.hidden ? found : null;
+  })();
+
   /** Rubber-band selection on empty page space, or a drawn text box when armed. */
   const startMarquee = (e: React.PointerEvent, page: Page) => {
     const pageEl = pageRefs.current[page.id];
@@ -515,57 +637,48 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
        * empty-space menu even with several elements selected.
        */
       onPointerDown={(e) => {
+        // Floating drawers close on any canvas press — including a press that
+        // starts a marquee or grabs an element, because on a tablet the tap
+        // means "get the panel out of my way", not "deselect".
+        onCanvasTap?.();
         if (e.button === 0) select(null);
       }}
-      /*
-       * Two-finger pan. A trackpad already pans here through the browser's own
-       * two-finger scroll (and ctrl+wheel is the pinch-zoom channel below), so
-       * this covers the TOUCH case: two fingers move the viewport, never the
-       * artwork. The gesture only starts on the stage background, and it
-       * cancels any rubber-band selection so a pan can never be mistaken for a
-       * marquee or drag an element. One-finger drags keep their normal meaning.
-       */
-      onTouchStart={(e) => {
-        if (e.touches.length !== 2 || !stageRef.current) {
-          touchPan.current = null;
-          return;
-        }
-        setMarquee(null);
-        touchPan.current = {
-          x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
-          y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
-          scrollLeft: stageRef.current.scrollLeft,
-          scrollTop: stageRef.current.scrollTop,
-        };
-      }}
-      onTouchMove={(e) => {
-        const start = touchPan.current;
-        const stage = stageRef.current;
-        if (!start || !stage || e.touches.length !== 2) return;
-        const x = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-        const y = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-        stage.scrollLeft = start.scrollLeft - (x - start.x);
-        stage.scrollTop = start.scrollTop - (y - start.y);
-      }}
-      onTouchEnd={(e) => {
-        if (e.touches.length < 2) touchPan.current = null;
-      }}
-      onTouchCancel={() => {
-        touchPan.current = null;
-      }}
+      /* Two-finger pan and pinch-to-zoom are owned by the native touch effect
+         above, so a trackpad (browser scroll) and a touchscreen behave the
+         same way without two competing handlers. */
       onDragOver={(e) => {
-        if (!onDropImage || !e.dataTransfer.types.includes("Files")) return;
-        // Claiming the drop is what suppresses the browser's "open the file" handoff.
+        /*
+         * Two kinds of drop land here: an image file from the OS, and a card
+         * dragged out of the smart library. Both must claim the gesture (that
+         * is what stops the browser from navigating to the file), but only the
+         * library payload should insert anything on `drop`.
+         */
+        const isFile = e.dataTransfer.types.includes("Files");
+        const isLibrary = e.dataTransfer.types.includes(LIBRARY_DND_MIME);
+        if ((!onDropImage || !isFile) && !isLibrary) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
-        setDropping(true);
+        setDropping(isLibrary ? "library" : "file");
       }}
       onDragLeave={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-        setDropping(false);
+        setDropping(null);
       }}
       onDrop={(e) => {
-        setDropping(false);
+        setDropping(null);
+        // Library card: place it exactly where it was dropped, on whichever
+        // page received it.
+        const payload = parseLibraryDrop(e.dataTransfer.getData(LIBRARY_DND_MIME));
+        if (payload) {
+          e.preventDefault();
+          const at = dropPoint(e);
+          if (at) setActivePage(at.pageId);
+          insertLibraryDrop(payload, at ? { x: at.x, y: at.y } : null, (type, over, center) => {
+            const el = addElementAt(type as ElType, over as Partial<CanvasEl>, center);
+            return el ? { x: el.x, y: el.y, w: el.w, h: el.h } : undefined;
+          });
+          return;
+        }
         if (!onDropImage) return;
         e.preventDefault();
         const file = Array.from(e.dataTransfer.files)[0];
@@ -580,7 +693,7 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     >
       {dropping && (
         <div className="pointer-events-none sticky top-0 z-50 mx-auto w-max rounded-full border border-gold/40 bg-white/95 px-4 py-1.5 text-[11px] font-extrabold text-navy shadow-sm dark:bg-[#161c26] dark:text-gold-2">
-          أفلت الصورة لإضافتها إلى الصفحة
+          {dropping === "library" ? "أفلت العنصر ليُضاف في هذا الموضع" : "أفلت الصورة لإضافتها إلى الصفحة"}
         </div>
       )}
       <div className="mx-auto flex w-max min-w-full flex-col items-center gap-3" dir="rtl">
@@ -748,6 +861,16 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
           );
         })}
       </div>
+      {/*
+        * Phase 4 — floating contextual toolbar.
+        *
+        * Rendered for a single selected element (the primary selection), and
+        * hidden while the caret is inside a text node so it never competes with
+        * in-place editing. It lives in a FIXED overlay — outside the scaled page
+        * — so its buttons keep a constant screen size and its 16px gap is real.
+        */}
+      {primarySelection && editingId !== primarySelection.id && <FloatingToolbar el={primarySelection} />}
+
       <ExportCapture pages={pages} />
     </div>
   );

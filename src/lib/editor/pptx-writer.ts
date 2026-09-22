@@ -320,6 +320,8 @@ function addTextItem(
         fontSize: item.size,
         bold: item.weight >= 600,
         italic: item.italic || undefined,
+        // PowerPoint wants the style spelled out; "sng" is a single underline.
+        underline: item.underline ? { style: "sng" } : undefined,
         color: hex(item.color),
         align,
         rtlMode: true,

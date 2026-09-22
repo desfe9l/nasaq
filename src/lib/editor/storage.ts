@@ -61,7 +61,18 @@ export interface AssetFolder {
   createdAt: number;
 }
 
-export type SettingsKey = "activeProjectId" | "dark" | "zoom" | "focusMode" | "leftOpen" | "rightOpen" | "leftCollapsed" | "rightCollapsed" | "assetFolders";
+export type SettingsKey =
+  | "activeProjectId"
+  | "dark"
+  | "zoom"
+  | "focusMode"
+  | "leftOpen"
+  | "rightOpen"
+  | "leftCollapsed"
+  | "rightCollapsed"
+  | "assetFolders"
+  /** SVG icons/dividers the author added to the smart library. */
+  | "customLibrary";
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 

@@ -7,7 +7,9 @@ import {
   ArrowDown,
   ArrowUp,
   Baseline,
+  ChevronDown,
   Copy,
+  Download,
   Eye,
   EyeOff,
   Grid2x2,
@@ -43,6 +45,8 @@ import { useEditor, type RightTab } from "@/lib/editor/store";
 import { cn, round } from "@/lib/utils";
 import { toast } from "sonner";
 import { ShapePreview } from "./ShapePreview";
+import { AccordionSection, SubGroup, useAccordionState } from "./ui/Accordion";
+import { ScrubField, ScrubInput } from "./ui/ScrubInput";
 
 const TEXT_TYPES = ["text", "box", "stat", "stamp", "table", "progress"];
 
@@ -66,15 +70,28 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
   const fontChoices = useEditor((s) => s.fontChoices);
   const probeFonts = useEditor((s) => s.probeFonts);
   const setLeftTab = useEditor((s) => s.setLeftTab);
+  const openExport = useEditor((s) => s.openExport);
+  const customIcons = useEditor((s) => s.customIcons);
+  const addElement = useEditor((s) => s.addElement);
   const theme = THEMES[useEditor((s) => s.theme)];
   const [cellEditor, setCellEditor] = useState(false);
   const [savingAsset, setSavingAsset] = useState(false);
-  // Typography + Arabic sections start OPEN: they hold the most-used text
-  // controls (alignment, direction) — collapsed-by-default read as "the
-  // alignment feature is missing". Users can still fold them away.
-  const [openSections, setOpenSections] = useState<Record<string, boolean>>({ typography: true, arabic: true, appearance: false, transform: true });
+  /*
+   * Phase 2 — the inspector is organised into four collapsible groups:
+   * «الأبعاد والتحاذي» · «النص» · «الخلفية والحدود» · «تصدير».
+   *
+   * Dimensions and text start open (they hold the controls people reach for
+   * every few seconds; collapsed-by-default reads as "the feature is missing"),
+   * background/export start closed. The choice persists per device.
+   */
+  const accordions = useAccordionState<"dimensions" | "text" | "background" | "export">("properties", {
+    dimensions: true,
+    text: true,
+    background: false,
+    export: false,
+  });
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
-  const [dropLayerId, setDropLayerId] = useState<string | null>(null);
+  const [drop, setDrop] = useState<{ id: string; side: "before" | "after" } | null>(null);
   const reorderLayers = useEditor((s) => s.reorderLayers);
 
   /**
@@ -150,22 +167,41 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
     layerAnchorRef.current = id;
   };
 
+  /**
+   * Layer drag-reorder (Phase 5.3).
+   *
+   * The drop target AND the insertion side both come from the pointer's
+   * position over the row's own rectangle: the upper half inserts above, the
+   * lower half below. That reads identically in RTL and LTR because it is a
+   * purely vertical decision — the horizontal mirroring of the app has no say
+   * in which side of a row a layer lands on.
+   */
   const startLayerDrag = (id: string) => (event: React.PointerEvent) => {
     event.preventDefault();
     event.stopPropagation();
     setDraggedLayerId(id);
-    setDropLayerId(id);
-    const layerAtPointer = (pointer: PointerEvent) =>
-      document.elementFromPoint(pointer.clientX, pointer.clientY)?.closest<HTMLElement>("[data-layer-id]")?.dataset.layerId || null;
-    const move = (pointer: PointerEvent) => setDropLayerId(layerAtPointer(pointer));
+    setDrop({ id, side: "after" });
+    const resolve = (pointer: PointerEvent): { id: string; side: "before" | "after" } | null => {
+      const node = document
+        .elementFromPoint(pointer.clientX, pointer.clientY)
+        ?.closest<HTMLElement>("[data-layer-id]");
+      const target = node?.dataset.layerId;
+      if (!node || !target) return null;
+      const rect = node.getBoundingClientRect();
+      return { id: target, side: pointer.clientY < rect.top + rect.height / 2 ? "before" : "after" };
+    };
+    const move = (pointer: PointerEvent) => {
+      const next = resolve(pointer);
+      if (next) setDrop(next);
+    };
     const finish = (pointer: PointerEvent) => {
-      const target = layerAtPointer(pointer);
+      const target = resolve(pointer);
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", finish);
       window.removeEventListener("pointercancel", finish);
       setDraggedLayerId(null);
-      setDropLayerId(null);
-      if (target && target !== id) reorderLayers(id, target);
+      setDrop(null);
+      if (target && target.id !== id) reorderLayers(id, target.id);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", finish);
@@ -197,7 +233,12 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
         ))}
       </div>
 
-      <div className="editor-pane-scroll min-h-0 flex-1 overflow-auto p-3">
+      {/*
+        * Phase 1 — the panel body is the ONLY scrolling region and is capped by
+        * the real header height (`editor-panel-body`), so a short window scrolls
+        * inside the panel instead of clipping the last controls.
+        */}
+      <div className="editor-pane-scroll editor-panel-body p-3">
         {tab === "layers" && (
           <div className="grid gap-1.5">
             {layers.length === 0 && (
@@ -208,7 +249,8 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                 key={layer.id}
                 layer={layer}
                 dragging={draggedLayerId === layer.id}
-                dropTarget={dropLayerId === layer.id && draggedLayerId !== layer.id}
+                dropBefore={drop?.id === layer.id && drop.side === "before" && draggedLayerId !== layer.id}
+                dropAfter={drop?.id === layer.id && drop.side === "after" && draggedLayerId !== layer.id}
                 onDragStart={startLayerDrag(layer.id)}
                 onRowClick={(event) => clickLayerRow(layer.id, event.shiftKey, event.ctrlKey || event.metaKey)}
               />
@@ -246,52 +288,58 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
               <span className="text-[11px] text-muted">{TYPE_NAME[el.type]}</span>
             </div>
 
+            {/* Phase 2 — «الأبعاد والتحاذي» (open by default). */}
+            <AccordionSection
+              title="الأبعاد والتحاذي"
+              id="dimensions"
+              open={accordions.isOpen("dimensions", true)}
+              onToggle={() => accordions.toggle("dimensions")}
+            >
             <Field label="الاسم">
               <input value={el.name} onChange={(e) => updateElement(el.id, { name: e.target.value })} />
             </Field>
 
-            {TEXT_MARKUP_TYPES.has(el.type) && (
-              <Field label="النص (Enter لسطر جديد)" full>
-                <textarea
-                  rows={4}
-                  value={el.content || ""}
-                  onChange={(e) => updateElement(el.id, { content: e.target.value }, true)}
-                  onBlur={() => updateElement(el.id, { content: el.content })}
-                />
-              </Field>
-            )}
-
-            <div className="grid grid-cols-2 gap-2">
+            {/*
+              * Scrubbable geometry (Phase 2.3): drag the label or the value to
+              * change it, Shift for ×10, Alt for ×0.1; the − / + steppers cover
+              * touch. `auto-fit` is what lets the four fields reflow to two or
+              * one column as the panel narrows instead of overlapping.
+              */}
+            <div className="property-grid">
               {(["x", "y", "w", "h"] as const).map((k) => (
-                <Field key={k} label={LABELS[k]}>
-                  <input
-                    type="number"
-                    step={0.5}
-                    value={round(el[k])}
-                    onChange={(e) => updateElement(el.id, { [k]: Number(e.target.value) }, true)}
-                    onBlur={() => updateElement(el.id, { [k]: el[k] })}
-                  />
-                </Field>
+                <ScrubField
+                  key={k}
+                  label={LABELS[k]}
+                  value={round(el[k])}
+                  min={k === "w" || k === "h" ? 1 : -500}
+                  step={0.5}
+                  suffix="مم"
+                  onChange={(v) => updateElement(el.id, { [k]: v }, true)}
+                  onCommit={(v) => updateElement(el.id, { [k]: v })}
+                />
               ))}
-              <Field label="زاوية الدوران">
-                <input
-                  type="number"
-                  value={round(el.rotation)}
-                  onChange={(e) => updateElement(el.id, { rotation: Number(e.target.value) }, true)}
-                  onBlur={() => updateElement(el.id, { rotation: el.rotation })}
-                />
-              </Field>
-              <Field label="الشفافية">
-                <input
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  value={el.opacity}
-                  onChange={(e) => updateElement(el.id, { opacity: Number(e.target.value) }, true)}
-                  onBlur={() => updateElement(el.id, { opacity: el.opacity })}
-                />
-              </Field>
+              <ScrubField
+                label="زاوية الدوران"
+                value={round(el.rotation)}
+                min={-360}
+                max={360}
+                step={1}
+                precision={1}
+                suffix="°"
+                onChange={(v) => updateElement(el.id, { rotation: v }, true)}
+                onCommit={(v) => updateElement(el.id, { rotation: v })}
+              />
+              <ScrubField
+                label="الشفافية"
+                value={round((el.opacity ?? 1) * 100)}
+                min={0}
+                max={100}
+                step={1}
+                precision={0}
+                suffix="%"
+                onChange={(v) => updateElement(el.id, { opacity: v / 100 }, true)}
+                onCommit={(v) => updateElement(el.id, { opacity: v / 100 })}
+              />
             </div>
 
             <div>
@@ -318,9 +366,27 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                 ))}
               </div>
             </div>
+            </AccordionSection>
 
+            {/* Phase 2 — «النص»: content, typography and Arabic handling. */}
             {TEXT_TYPES.includes(el.type) && (
-              <InspectorSection title="الخط والطباعة" id="typography" open={openSections.typography} onToggle={() => setOpenSections((s) => ({ ...s, typography: !s.typography }))}>
+              <AccordionSection
+                title="النص"
+                id="text"
+                open={accordions.isOpen("text", true)}
+                onToggle={() => accordions.toggle("text")}
+              >
+              {TEXT_MARKUP_TYPES.has(el.type) && (
+                <Field label="النص (Enter لسطر جديد)" full>
+                  <textarea
+                    rows={4}
+                    value={el.content || ""}
+                    onChange={(e) => updateElement(el.id, { content: e.target.value }, true)}
+                    onBlur={() => updateElement(el.id, { content: el.content })}
+                  />
+                </Field>
+              )}
+              <SubGroup title="الخط والطباعة">
                 <Field label="الخط">
                   <select
                     value={el.style.fontFamily || "Tajawal"}
@@ -341,16 +407,15 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                   <Baseline className="size-3.5" /> مكتبة الخطوط ({fontChoices.length})
                 </button>
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="الحجم pt">
-                    <input
-                      type="number"
-                      min={4}
-                      max={200}
-                      value={el.style.fontSize || 14}
-                      onChange={(e) => updateStyle(el.id, { fontSize: Number(e.target.value) }, true)}
-                      onBlur={() => updateStyle(el.id, { fontSize: el.style.fontSize })}
-                    />
-                  </Field>
+                                  <ScrubField
+                  label="الحجم pt"
+                  value={round(Number(el.style.fontSize || 14) || 0)}
+                  min={4}
+                  max={200}
+                  step={0.5}
+                  onChange={(v) => updateStyle(el.id, { fontSize: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { fontSize: v })}
+                />
                   <Field label="الوزن">
                     <select
                       value={String(el.style.fontWeight || 600)}
@@ -400,20 +465,17 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                       onBlur={() => updateStyle(el.id, { color: el.style.color })}
                     />
                   </Field>
-                  <Field label="تباعد الحروف مم">
-                    <input
-                      type="number"
-                      step={0.05}
-                      min={-1}
-                      max={3}
-                      value={el.style.letterSpacing ?? 0}
-                      onChange={(e) => updateStyle(el.id, { letterSpacing: Number(e.target.value) }, true)}
-                      onBlur={() => updateStyle(el.id, { letterSpacing: el.style.letterSpacing })}
-                    />
-                  </Field>
+                                  <ScrubField
+                  label="تباعد الحروف مم"
+                  value={round(Number(el.style.letterSpacing ?? 0) || 0)}
+                  min={-1}
+                  max={3}
+                  step={0.05}
+                  onChange={(v) => updateStyle(el.id, { letterSpacing: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { letterSpacing: v })}
+                />
                 </div>
-              </InspectorSection>
-            )}
+              </SubGroup>
 
             {(el.type === "text" || el.type === "box" || el.type === "stat") && (
               <>
@@ -471,7 +533,7 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
             )}
 
             {TEXT_MARKUP_TYPES.has(el.type) && (
-              <InspectorSection title="معالجة النص العربي والمساحة" id="arabic" open={openSections.arabic} onToggle={() => setOpenSections((s) => ({ ...s, arabic: !s.arabic }))}>
+              <SubGroup title="معالجة النص العربي والمساحة">
 
                 <Field label="شكل الأرقام">
                   <div className="grid grid-cols-2 gap-1.5">
@@ -626,11 +688,24 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                     الاتجاه العمودي مناسب لعناوين الكعب والغلاف الجانبي. تأكد من كفاية ارتفاع العنصر.
                   </p>
                 )}
-              </InspectorSection>
+              </SubGroup>
+              )}
+              </AccordionSection>
             )}
 
+            {/*
+              * Phase 2 — «الخلفية والحدود»: every fill / border / shadow control,
+              * including the per-element-type blocks, behind one collapsible
+              * group so the inspector stays scannable.
+              */}
+            <AccordionSection
+              title="الخلفية والحدود"
+              id="background"
+              open={accordions.isOpen("background", false)}
+              onToggle={() => accordions.toggle("background")}
+            >
             {["box", "stat", "progress"].includes(el.type) && (
-              <InspectorSection title="المظهر والتعبئة" id="appearance" open={openSections.appearance} onToggle={() => setOpenSections((s) => ({ ...s, appearance: !s.appearance }))}>
+              <SubGroup title="المظهر والتعبئة">
               <div className="grid grid-cols-2 gap-2">
                 <Field label="التعبئة">
                   <input
@@ -656,37 +731,32 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                     onBlur={() => updateStyle(el.id, { borderColor: el.style.borderColor })}
                   />
                 </Field>
-                <Field label="سماكة الإطار مم">
-                  <input
-                    type="number"
-                    step={0.05}
-                    min={0}
-                    value={el.style.borderWidth ?? 0.35}
-                    onChange={(e) => updateStyle(el.id, { borderWidth: Number(e.target.value) }, true)}
-                    onBlur={() => updateStyle(el.id, { borderWidth: el.style.borderWidth })}
-                  />
-                </Field>
-                <Field label="الزوايا مم">
-                  <input
-                    type="number"
-                    min={0}
-                    value={el.style.radius || 0}
-                    onChange={(e) => updateStyle(el.id, { radius: Number(e.target.value) }, true)}
-                    onBlur={() => updateStyle(el.id, { radius: el.style.radius })}
-                  />
-                </Field>
-                <Field label="الحاشية مم">
-                  <input
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    value={el.style.padding ?? 4}
-                    onChange={(e) => updateStyle(el.id, { padding: Number(e.target.value) }, true)}
-                    onBlur={() => updateStyle(el.id, { padding: el.style.padding })}
-                  />
-                </Field>
+                                <ScrubField
+                  label="سماكة الإطار مم"
+                  value={round(Number(el.style.borderWidth ?? 0.35) || 0)}
+                  min={0}
+                  step={0.05}
+                  onChange={(v) => updateStyle(el.id, { borderWidth: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { borderWidth: v })}
+                />
+                                <ScrubField
+                  label="الزوايا مم"
+                  value={round(Number(el.style.radius || 0) || 0)}
+                  min={0}
+                  step={0.5}
+                  onChange={(v) => updateStyle(el.id, { radius: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { radius: v })}
+                />
+                                <ScrubField
+                  label="الحاشية مم"
+                  value={round(Number(el.style.padding ?? 4) || 0)}
+                  min={0}
+                  step={0.5}
+                  onChange={(v) => updateStyle(el.id, { padding: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { padding: v })}
+                />
               </div>
-              </InspectorSection>
+              </SubGroup>
             )}
 
             {el.type === "progress" && (
@@ -712,17 +782,17 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                 </Field>
 
                 {(el.style.variant || "bar") === "steps" && (
-                  <Field label="عدد المراحل" full>
-                    <input
-                      type="number"
-                      min={2}
-                      max={12}
-                      step={1}
-                      value={Number(el.style.steps) || 5}
-                      onChange={(e) => updateStyle(el.id, { steps: Math.max(2, Math.min(12, Number(e.target.value) || 5)) }, true)}
-                      onBlur={() => updateStyle(el.id, { steps: Math.max(2, Math.min(12, Number(el.style.steps) || 5)) })}
-                    />
-                  </Field>
+                  <ScrubField
+                    label="عدد المراحل"
+                    value={Number(el.style.steps) || 5}
+                    min={2}
+                    max={12}
+                    step={1}
+                    precision={0}
+                    full
+                    onChange={(v) => updateStyle(el.id, { steps: v }, true)}
+                    onCommit={(v) => updateStyle(el.id, { steps: v })}
+                  />
                 )}
 
                 <Field label={`نسبة الإنجاز: ${Math.round(Number(el.style.value) || 0)}%`} full>
@@ -739,16 +809,15 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                 </Field>
 
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="رقم النسبة">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={Math.round(Number(el.style.value) || 0)}
-                      onChange={(e) => updateStyle(el.id, { value: Number(e.target.value) }, true)}
-                      onBlur={() => updateStyle(el.id, { value: el.style.value })}
-                    />
-                  </Field>
+                                  <ScrubField
+                  label="رقم النسبة"
+                  value={round(Number(Math.round(Number(el.style.value) || 0)) || 0)}
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  onChange={(v) => updateStyle(el.id, { value: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { value: v })}
+                />
                   <Field label="عرض الرقم">
                     <select
                       value={el.style.showValue === false ? "no" : "yes"}
@@ -834,16 +903,14 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                       onBlur={() => updateStyle(el.id, { borderColor: el.style.borderColor })}
                     />
                   </Field>
-                  <Field label="سماكة الإطار">
-                    <input
-                      type="number"
-                      step={0.1}
-                      min={0}
-                      value={el.style.borderWidth ?? 0}
-                      onChange={(e) => updateStyle(el.id, { borderWidth: Number(e.target.value) }, true)}
-                      onBlur={() => updateStyle(el.id, { borderWidth: el.style.borderWidth })}
-                    />
-                  </Field>
+                                  <ScrubField
+                  label="سماكة الإطار"
+                  value={round(Number(el.style.borderWidth ?? 0) || 0)}
+                  min={0}
+                  step={0.1}
+                  onChange={(v) => updateStyle(el.id, { borderWidth: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { borderWidth: v })}
+                />
                   <Field label="بلا إطار">
                     <button
                       type="button"
@@ -891,6 +958,36 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                     ))}
                   </select>
                 </Field>
+                {/*
+                  * The author's own vectors are reachable from the properties
+                  * panel too (Phase 7.3). They insert as `svg` elements, which
+                  * keeps them vector — an `icon` element renders the built-in
+                  * path set only.
+                  */}
+                {customIcons.length > 0 && (
+                  <Field label="رموز مخصصة (إدراج على الصفحة)" full>
+                    <div className="library-grid-icons">
+                      {customIcons.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          title={item.name}
+                          aria-label={`إدراج ${item.name}`}
+                          onClick={() =>
+                            addElement("svg", {
+                              name: item.name,
+                              content: item.svg,
+                              w: item.kind === "divider" ? 150 : 24,
+                              h: item.kind === "divider" ? 10 : 24,
+                            })
+                          }
+                          className="library-asset-card p-1"
+                          dangerouslySetInnerHTML={{ __html: item.svg }}
+                        />
+                      ))}
+                    </div>
+                  </Field>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="اللون">
                     <input
@@ -900,16 +997,14 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                       onBlur={() => updateStyle(el.id, { color: el.style.color })}
                     />
                   </Field>
-                  <Field label="سماكة الخط">
-                    <input
-                      type="number"
-                      step={0.1}
-                      min={0.5}
-                      value={el.style.stroke || 1.8}
-                      onChange={(e) => updateStyle(el.id, { stroke: Number(e.target.value) }, true)}
-                      onBlur={() => updateStyle(el.id, { stroke: el.style.stroke })}
-                    />
-                  </Field>
+                                  <ScrubField
+                  label="سماكة الخط"
+                  value={round(Number(el.style.stroke || 1.8) || 0)}
+                  min={0.5}
+                  step={0.1}
+                  onChange={(v) => updateStyle(el.id, { stroke: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { stroke: v })}
+                />
                 </div>
               </>
             )}
@@ -924,40 +1019,38 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                     onBlur={() => updateStyle(el.id, { color: el.style.color })}
                   />
                 </Field>
-                <Field label="السماكة مم">
-                  <input
-                    type="number"
-                    step={0.1}
-                    min={0.1}
-                    value={el.style.stroke || 0.8}
-                    onChange={(e) => updateStyle(el.id, { stroke: Number(e.target.value) }, true)}
-                    onBlur={() => updateStyle(el.id, { stroke: el.style.stroke })}
-                  />
-                </Field>
+                                <ScrubField
+                  label="السماكة مم"
+                  value={round(Number(el.style.stroke || 0.8) || 0)}
+                  min={0.1}
+                  step={0.1}
+                  onChange={(v) => updateStyle(el.id, { stroke: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { stroke: v })}
+                />
               </div>
             )}
 
             {el.type === "table" && (
               <>
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="أعمدة">
-                    <input
-                      type="number"
-                      min={1}
-                      max={12}
-                      value={el.style.cols || 3}
-                      onChange={(e) => resizeTable(el, Number(e.target.value), el.style.rows || 4, updateElement)}
-                    />
-                  </Field>
-                  <Field label="صفوف">
-                    <input
-                      type="number"
-                      min={1}
-                      max={30}
-                      value={el.style.rows || 4}
-                      onChange={(e) => resizeTable(el, el.style.cols || 3, Number(e.target.value), updateElement)}
-                    />
-                  </Field>
+                                  <ScrubField
+                  label="أعمدة"
+                  value={round(Number(el.style.cols || 3) || 0)}
+                  min={1}
+                  max={12}
+                  step={0.5}
+                  onChange={(v) => resizeTable(el, v, el.style.rows || 4, updateElement)}
+                  onCommit={(v) => resizeTable(el, v, el.style.rows || 4, updateElement)}
+                />
+                                  <ScrubField
+                  label="صفوف"
+                  value={round(Number(el.style.rows || 4) || 0)}
+                  min={1}
+                  max={30}
+                  step={0.5}
+                  onChange={(v) => resizeTable(el, el.style.cols || 3, v, updateElement)}
+                  onCommit={(v) => resizeTable(el, el.style.cols || 3, v, updateElement)}
+                />
                 </div>
 
                 <Field label="إضافة / حذف سريع" full>
@@ -1051,16 +1144,15 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                       <option value="stripe">صفوف متبادلة</option>
                     </select>
                   </Field>
-                  <Field label="حجم الخط pt">
-                    <input
-                      type="number"
-                      min={5}
-                      max={40}
-                      value={el.style.fontSize || 11}
-                      onChange={(e) => updateStyle(el.id, { fontSize: Number(e.target.value) }, true)}
-                      onBlur={() => updateStyle(el.id, { fontSize: el.style.fontSize })}
-                    />
-                  </Field>
+                                  <ScrubField
+                  label="حجم الخط pt"
+                  value={round(Number(el.style.fontSize || 11) || 0)}
+                  min={5}
+                  max={40}
+                  step={0.5}
+                  onChange={(v) => updateStyle(el.id, { fontSize: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { fontSize: v })}
+                />
                 </div>
 
                 <TableTotals el={el} />
@@ -1152,26 +1244,24 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                   </select>
                 </Field>
                 <div className="grid grid-cols-2 gap-2">
-                  <Field label="موضع أفقي %">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={el.style.objectX ?? 50}
-                      onChange={(e) => updateStyle(el.id, { objectX: Number(e.target.value) }, true)}
-                      onBlur={() => updateStyle(el.id, { objectX: el.style.objectX })}
-                    />
-                  </Field>
-                  <Field label="موضع رأسي %">
-                    <input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={el.style.objectY ?? 50}
-                      onChange={(e) => updateStyle(el.id, { objectY: Number(e.target.value) }, true)}
-                      onBlur={() => updateStyle(el.id, { objectY: el.style.objectY })}
-                    />
-                  </Field>
+                                  <ScrubField
+                  label="موضع أفقي %"
+                  value={round(Number(el.style.objectX ?? 50) || 0)}
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  onChange={(v) => updateStyle(el.id, { objectX: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { objectX: v })}
+                />
+                                  <ScrubField
+                  label="موضع رأسي %"
+                  value={round(Number(el.style.objectY ?? 50) || 0)}
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  onChange={(v) => updateStyle(el.id, { objectY: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { objectY: v })}
+                />
                 </div>
                 <button
                   type="button"
@@ -1220,16 +1310,37 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                     onCommit={() => updateStyle(el.id, { svgStroke: el.style.svgStroke })}
                   />
                 </Field>
+                {/*
+                  * An override field: empty means «كما في الملف» (keep the SVG's
+                  * own stroke width), which is why it uses the scrubber's
+                  * `allowUnset` mode instead of a bare number input.
+                  */}
                 <Field label="سماكة الإطار">
-                  <input
-                    type="number"
-                    step={0.1}
-                    min={0}
-                    value={el.style.svgStrokeWidth ?? ""}
-                    placeholder="كما في الملف"
-                    onChange={(e) => updateStyle(el.id, { svgStrokeWidth: e.target.value === "" ? undefined : Number(e.target.value) }, true)}
-                    onBlur={() => updateStyle(el.id, { svgStrokeWidth: el.style.svgStrokeWidth })}
-                  />
+                  <div className="grid gap-1">
+                    <ScrubInput
+                      label="سماكة إطار الرسم — فارغ يعني كما في الملف"
+                      value={el.style.svgStrokeWidth}
+                      allowUnset
+                      min={0}
+                      max={24}
+                      step={0.1}
+                      precision={2}
+                      suffix="مم"
+                      placeholder="كما في الملف"
+                      onChange={(v) => updateStyle(el.id, { svgStrokeWidth: v }, true)}
+                      onCommit={() => updateStyle(el.id, { svgStrokeWidth: el.style.svgStrokeWidth })}
+                      onClear={() => updateStyle(el.id, { svgStrokeWidth: undefined })}
+                    />
+                    {el.style.svgStrokeWidth !== undefined && (
+                      <button
+                        type="button"
+                        onClick={() => updateStyle(el.id, { svgStrokeWidth: undefined })}
+                        className="h-7 rounded-[6px] border border-line text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
+                      >
+                        كما في الملف (بدون تثبيت)
+                      </button>
+                    )}
+                  </div>
                 </Field>
                 <Field label="الملاءمة">
                   <select
@@ -1264,6 +1375,31 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                 ))}
               </select>
             </Field>
+            </AccordionSection>
+
+            {/*
+              * Phase 2 — «تصدير»: the export actions that belong to the element
+              * being edited, one press each. Every button opens the SAME export
+              * dialog the toolbar uses (no second export path), just with the
+              * format already chosen.
+              */}
+            <AccordionSection
+              title="تصدير"
+              id="export"
+              open={accordions.isOpen("export", false)}
+              onToggle={() => accordions.toggle("export")}
+            >
+              <div className="grid grid-cols-2 gap-1.5">
+                <Action onClick={() => openExport("pdf")} icon={Download} label="PDF" />
+                <Action onClick={() => openExport("png")} icon={Download} label="صورة PNG" />
+                <Action onClick={() => openExport("docx")} icon={Download} label="Word" />
+                <Action onClick={() => openExport("pptx")} icon={Download} label="PowerPoint" />
+              </div>
+              <Action onClick={() => void saveToLibrary(el)} icon={ImagePlus} label="حفظ العنصر في المكتبة" />
+              <p className="text-[10px] leading-5 text-muted">
+                يُصدَّر المشروع كاملاً بالصيغة المختارة؛ الصفحة الحالية متاحة داخل نافذة التصدير عبر خيار «الصفحة الحالية».
+              </p>
+            </AccordionSection>
 
             <div className="grid grid-cols-2 gap-1.5">
               <Action onClick={() => bring("forward")} icon={ArrowUp} label="تقديم" />
@@ -1420,14 +1556,20 @@ function LayerRow({
   layer,
   depth = 0,
   dragging = false,
-  dropTarget = false,
+  dropBefore = false,
+  dropAfter = false,
+  hiddenByAncestor = false,
   onDragStart,
   onRowClick,
 }: {
   layer: CanvasEl;
   depth?: number;
   dragging?: boolean;
-  dropTarget?: boolean;
+  /** Drop indicator position, resolved from the pointer's half of the row. */
+  dropBefore?: boolean;
+  dropAfter?: boolean;
+  /** True when an ancestor folder is hidden — the child is hidden with it. */
+  hiddenByAncestor?: boolean;
   onDragStart?: (event: React.PointerEvent) => void;
   /** Top-level rows only: Shift selects the whole range from the anchor row. */
   onRowClick?: (event: React.MouseEvent) => void;
@@ -1439,8 +1581,17 @@ function LayerRow({
   const renameElement = useEditor((s) => s.renameElement);
   const enterGroup = useEditor((s) => s.enterGroup);
   const moveLayer = useEditor((s) => s.moveLayer);
+  const openContextMenu = useEditor((s) => s.openContextMenu);
   const [renaming, setRenaming] = useState(false);
+  /*
+   * Folder expansion (Phase 5.2). Folders start open — a collapsed folder hides
+   * work, which is the opposite of what the tree is for — and each row keeps
+   * its own state so opening one folder never rearranges another.
+   */
+  const [expanded, setExpanded] = useState(true);
   const [draft, setDraft] = useState(layer.name || TYPE_NAME[layer.type]);
+  const children = layer.children?.slice().sort((a, b) => b.z - a.z) ?? [];
+  const isFolder = layer.type === "group" || children.length > 0;
 
   const commitName = () => {
     setRenaming(false);
@@ -1452,16 +1603,25 @@ function LayerRow({
   return (
     <div className="grid gap-1">
       <div
-        data-layer-id={depth === 0 ? layer.id : undefined}
+        data-layer-id={layer.id}
+        onContextMenu={(event) => {
+          // Right-click acts on THIS row, which may not be the selection yet.
+          event.preventDefault();
+          event.stopPropagation();
+          if (!selected) select(layer.id);
+          openContextMenu({ x: event.clientX, y: event.clientY, targetId: layer.id, source: "layers" });
+        }}
         className={cn(
-          "flex items-center gap-1.5 rounded-[8px] border px-2 py-1.5",
+          "layer-row relative flex items-center gap-1.5 rounded-[8px] border px-2 py-1.5",
           // Selected layer: a firm ring + tinted row, clearly stronger than the
           // idle border — it must read at a glance against the layers list.
           selected
             ? "border-navy-2 bg-navy-2/10 ring-2 ring-navy-2/40 dark:bg-navy-2/15"
             : "border-line dark:border-white/10",
-          dragging && "opacity-50",
-          dropTarget && "drop-target",
+          dragging && "is-dragging",
+          dropBefore && "is-drop-before",
+          dropAfter && "is-drop-after",
+          hiddenByAncestor && "is-nested-hidden",
         )}
         style={depth ? { marginInlineStart: `${depth * 10}px` } : undefined}
       >
@@ -1482,6 +1642,21 @@ function LayerRow({
           />
         ) : (
           <>
+          {/* Folder chevron: the tree view's one expand/collapse control. */}
+          {isFolder ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              aria-label={expanded ? `طي ${layer.name || TYPE_NAME[layer.type]}` : `توسيع ${layer.name || TYPE_NAME[layer.type]}`}
+              title={expanded ? "طي المجموعة" : "توسيع المجموعة"}
+              className="grid size-7 shrink-0 place-items-center rounded-[6px] text-muted transition hover:bg-line-2 dark:hover:bg-white/5"
+            >
+              <ChevronDown className={cn("size-3.5 transition-transform", !expanded && "-rotate-90")} />
+            </button>
+          ) : (
+            <span className="size-7 shrink-0" aria-hidden />
+          )}
           {depth === 0 && onDragStart && (
             <button type="button" onPointerDown={onDragStart} title="اسحب لإعادة ترتيب الطبقة" aria-label={`إعادة ترتيب ${layer.name || TYPE_NAME[layer.type]}`} className="drag-handle grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-muted dark:border-white/10">
               <GripVertical className="size-4" />
@@ -1496,7 +1671,7 @@ function LayerRow({
               else setRenaming(true);
             }}
             className="flex min-w-0 flex-1 items-center justify-between text-right text-[12px]"
-            title="نقرة لتحديد · Shift+نقرة لتحديد كل ما بين صفّين · ⌘/Ctrl+نقرة للإضافة · نقرة مزدوجة لإعادة التسمية"
+            title="نقرة لتحديد · Shift+نقرة لتحديد كل ما بين صفّين · ⌘/Ctrl+نقرة للإضافة · نقرة مزدوجة لإعادة التسمية · نقرة يمنى للقائمة السياقية"
           >
             <span className="truncate font-bold">
               {layer.type === "group" && <span className="me-1 text-gold-2">▸</span>}
@@ -1534,14 +1709,19 @@ function LayerRow({
         >
           <ArrowDown className="size-3.5" />
         </button>
+        {/*
+          * The eye is the FOLDER switch: hiding a group also hides every nested
+          * child (the store cascades the flag), which is what makes "hide this
+          * folder" mean what the author expects.
+          */}
         <button
           type="button"
           title={layer.hidden ? "إظهار" : "إخفاء"}
           aria-label={layer.hidden ? `إظهار ${layer.name || TYPE_NAME[layer.type]}` : `إخفاء ${layer.name || TYPE_NAME[layer.type]}`}
           onClick={() => setElementFlag(layer.id, "hidden")}
-          className="grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="layer-eye-toggle shrink-0 touch-manipulation border border-line dark:border-white/10"
         >
-          {layer.hidden ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+          {layer.hidden || hiddenByAncestor ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
         </button>
         <button
           type="button"
@@ -1553,12 +1733,18 @@ function LayerRow({
           {layer.locked ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />}
         </button>
       </div>
-      {layer.children
-        ?.slice()
-        .sort((a, b) => b.z - a.z)
-        .map((child) => (
-          <LayerRow key={child.id} layer={child} depth={depth + 1} />
-        ))}
+      {isFolder && expanded && children.length > 0 && (
+        <div className="layer-children">
+          {children.map((child) => (
+            <LayerRow
+              key={child.id}
+              layer={child}
+              depth={depth + 1}
+              hiddenByAncestor={hiddenByAncestor || Boolean(layer.hidden)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1568,30 +1754,6 @@ function EmptyNote({ children }: { children: React.ReactNode }) {
     <p className="rounded-[8px] border border-dashed border-line p-4 text-[12px] leading-6 text-muted dark:border-white/15">
       {children}
     </p>
-  );
-}
-
-function InspectorSection({
-  title,
-  id,
-  open,
-  onToggle,
-  children,
-}: {
-  title: string;
-  id: string;
-  open: boolean;
-  onToggle: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="grid gap-2 rounded-[9px] border border-line dark:border-white/10" data-inspector-section={id}>
-      <button type="button" aria-expanded={open} onClick={onToggle} className="flex h-9 items-center justify-between px-2.5 text-[11px] font-extrabold text-muted hover:bg-line-2 dark:hover:bg-white/5">
-        <span>{title}</span>
-        <span aria-hidden>{open ? "−" : "+"}</span>
-      </button>
-      {open && <div className="grid gap-2.5 px-2.5 pb-2.5">{children}</div>}
-    </section>
   );
 }
 

@@ -235,6 +235,8 @@ function ElementContent({
     color: s.color || "#172033",
     fontWeight: s.fontWeight || 600,
     fontStyle: (s.fontStyle as React.CSSProperties["fontStyle"]) || "normal",
+    textDecoration: s.underline ? "underline" : undefined,
+    textUnderlineOffset: s.underline ? "0.15em" : undefined,
     textAlign: s.textAlign || "right",
     lineHeight: s.lineHeight || 1.45,
     letterSpacing: s.letterSpacing ? `${s.letterSpacing}mm` : undefined,

@@ -57,12 +57,50 @@ import { safeImageSrc } from "./images";
 import { applyStoredTheme, readStoredTheme, writeStoredTheme } from "@/lib/theme";
 import { clamp, uid } from "@/lib/utils";
 import { canAddDemoPage, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
+import { PAGES_PANEL_DEFAULT, clampPagesHeight, extractSvgMarkup, isOverlayViewport } from "./ui-state";
+
+/*
+ * The shell's pure layout/import helpers live in `ui-state.ts` (alias-free and
+ * unit-tested); re-exported here so existing import sites — and the panels that
+ * already pull them from the store — keep working unchanged.
+ */
+export { OVERLAY_BREAKPOINT, PAGES_PANEL_DEFAULT, PAGES_PANEL_MIN, clampPagesHeight, extractSvgMarkup, isOverlayViewport } from "./ui-state";
 
 export type LeftTab = "elements" | "shapes" | "library" | "templates" | "theme" | "pages" | "fonts" | "settings";
 export type RightTab = "properties" | "layers";
 export type View = "home" | "editor";
 
 export type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
+
+/** Export formats the studio can produce (mirrors `export.ts`). */
+export type ExportPreset = "pdf" | "png" | "jpg" | "docx" | "pptx" | "html" | "json";
+
+/**
+ * Where a right-click menu was opened from.
+ *
+ * Canvas and layer-row menus share ONE overlay implementation, but they act on
+ * different things: a canvas menu follows the selection, while a layers menu
+ * must act on the row the author right-clicked (which may not be selected yet).
+ * Carrying the origin lets the menu resolve its target correctly.
+ */
+export type ContextMenuSource = "canvas" | "layers";
+
+export interface ContextMenuPoint {
+  x: number;
+  y: number;
+  targetId: string | null;
+  source: ContextMenuSource;
+}
+
+/** A vector asset the author added from their own device (icon or divider). */
+export interface CustomLibraryItem {
+  id: string;
+  name: string;
+  kind: "icon" | "divider";
+  /** Raw `<svg …>` markup — sanitised on render and export like every SVG. */
+  svg: string;
+  createdAt: number;
+}
 
 /** Bundled families as the initial (pre-probe) font list. */
 function bundledFontChoices(): FontChoice[] {
@@ -125,7 +163,20 @@ interface Ui {
   rightOpen: boolean;
   leftCollapsed: boolean;
   rightCollapsed: boolean;
+  /** Height (px) of the bottom pages panel — drag-resizable, persisted. */
+  pagesPanelHeight: number;
+  /** Right-click menu shared by the canvas and the layers panel. */
+  contextMenu: ContextMenuPoint | null;
   exportOpen: boolean;
+  /**
+   * Format the export dialog should open on.
+   *
+   * The dialog owns its own form state, but several surfaces (properties →
+   * «تصدير», toolbar, command palette) know *what* the author wants to export
+   * before the dialog exists. Carrying the intent as a preset removes the
+   * "press export, then pick the format you already picked" step.
+   */
+  exportPreset: ExportPreset | null;
   pageManagerOpen: boolean;
   saveState: SaveState;
   savedAt: number | null;
@@ -197,6 +248,26 @@ interface EditorStore extends Project, Ui, History {
   ) => void;
   setLeftTab: (t: LeftTab) => void;
   setRightTab: (t: RightTab) => void;
+  /**
+   * One sidebar switch for every screen size.
+   *
+   * Desktop docks the panels (so the toggle flips `*Collapsed`), while
+   * tablet/phone floats them over the canvas (so it flips `*Open`). The header
+   * button therefore behaves like "show/hide this sidebar" everywhere.
+   */
+  toggleSidebar: (side: "left" | "right") => void;
+  /** Dismiss both floating sidebars (backdrop tap, canvas tap, Escape). */
+  closeFloatingPanels: () => void;
+  /** Open the export dialog, optionally preselecting a format. */
+  openExport: (format?: ExportPreset) => void;
+  openContextMenu: (point: ContextMenuPoint) => void;
+  closeContextMenu: () => void;
+  /** Clamp + persist the pages panel height (drag handle on its top border). */
+  setPagesPanelHeight: (height: number) => void;
+  /** Custom SVG icons/dividers the author added to the smart library. */
+  customIcons: CustomLibraryItem[];
+  addCustomIcon: (input: { name: string; svg: string; kind: CustomLibraryItem["kind"] }) => Promise<CustomLibraryItem | null>;
+  removeCustomIcon: (id: string) => Promise<void>;
   setTheme: (id: ThemeId) => void;
   setName: (name: string) => void;
   setOrg: (org: string) => void;
@@ -237,6 +308,16 @@ interface EditorStore extends Project, Ui, History {
   /** Reorder top-level layers using their visible (front-to-back) list order. */
   reorderLayers: (fromId: string, toId: string) => void;
   addElement: (type: ElType, over?: Partial<CanvasEl>) => string | undefined;
+  /**
+   * Same insertion, but returns the created element and accepts an optional
+   * centre point — the drop target for a library card dragged onto the canvas.
+   * `addElement` is a thin wrapper over this, so both share one code path.
+   */
+  addElementAt: (
+    type: ElType,
+    over?: Partial<CanvasEl>,
+    center?: { x: number; y: number },
+  ) => CanvasEl | undefined;
   /** Create a text element at an exact drawn box (the «نص بالرسم» tool). */
   addTextAt: (box: { x: number; y: number; w: number; h: number }, pageId?: string) => string | undefined;
   updateElement: (id: string, patch: Partial<CanvasEl>, live?: boolean) => void;
@@ -378,6 +459,22 @@ function isDescendant(page: Page, ancestorId: string, id: string): boolean {
 }
 
 /**
+ * Apply a flag to an element *and its whole subtree*.
+ *
+ * Folders (مجموعات) are containers: hiding or locking one must reach every
+ * descendant, not just the direct children, or a folder nested inside a folder
+ * would keep painting locked artwork on the canvas. The tree view indents to
+ * any depth, so the cascade has to match that depth.
+ */
+function cascadeFlag(el: CanvasEl, flag: "hidden" | "locked", value: boolean): CanvasEl {
+  return {
+    ...el,
+    [flag]: value,
+    ...(el.children?.length ? { children: el.children.map((c) => cascadeFlag(c, flag, value)) } : {}),
+  };
+}
+
+/**
  * Element ids the user can actually click given the current group context.
  *
  * A group behaves as one element from outside, so clicking it selects the whole
@@ -516,7 +613,10 @@ export const useEditor = create<EditorStore>((set, get) => {
     rightOpen: false,
     leftCollapsed: false,
     rightCollapsed: false,
+    pagesPanelHeight: PAGES_PANEL_DEFAULT,
+    contextMenu: null,
     exportOpen: false,
+    exportPreset: null,
     pageManagerOpen: false,
     saveState: "idle",
     savedAt: null,
@@ -535,6 +635,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     assetsLoading: true,
     fontChoices: bundledFontChoices(),
     fontsProbed: false,
+    customIcons: [],
 
     /**
      * Probe installed fonts on first editor open.
@@ -604,6 +705,9 @@ export const useEditor = create<EditorStore>((set, get) => {
           rightCollapsed: Boolean(ui.rightCollapsed),
           previewAll: true,
           zoom: typeof ui.zoom === "number" ? clamp(ui.zoom, 0.35, 1.6) : 0.82,
+          pagesPanelHeight: clampPagesHeight(
+            typeof ui.pagesPanelHeight === "number" ? ui.pagesPanelHeight : PAGES_PANEL_DEFAULT,
+          ),
         });
         if (active) applyProject(active, { zoom: get().zoom });
       } catch {
@@ -620,6 +724,15 @@ export const useEditor = create<EditorStore>((set, get) => {
 
       const folders = await getSetting<AssetFolder[]>("assetFolders");
       set({ assetFolders: Array.isArray(folders) ? folders : [] });
+
+      // Author-added vector icons/dividers live beside the asset shelf: same
+      // durability, but stored as SVG markup so they stay vector on the page.
+      const custom = await getSetting<CustomLibraryItem[]>("customLibrary");
+      set({
+        customIcons: Array.isArray(custom)
+          ? custom.filter((item) => item && typeof item.svg === "string" && item.svg.includes("<svg"))
+          : [],
+      });
 
       document.documentElement.lang = "ar";
       document.documentElement.dir = "rtl";
@@ -839,6 +952,55 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (leftTab === "fonts") get().probeFonts();
     },
     setRightTab: (rightTab) => set({ rightTab, rightOpen: true }),
+
+    toggleSidebar: (side) => {
+      const overlay = isOverlayViewport();
+      // Docked panels persist as `*Collapsed`; floating ones as `*Open`.
+      const key = side === "left" ? (overlay ? "leftOpen" : "leftCollapsed") : overlay ? "rightOpen" : "rightCollapsed";
+      const next = !get()[key];
+      set({ [key]: next } as Partial<EditorStore>);
+      void setSetting(key, next);
+    },
+    closeFloatingPanels: () => {
+      set({ leftOpen: false, rightOpen: false });
+      void setSetting("leftOpen", false);
+      void setSetting("rightOpen", false);
+    },
+    openExport: (format) => set({ exportOpen: true, exportPreset: format ?? null }),
+    openContextMenu: (contextMenu) => set({ contextMenu }),
+    closeContextMenu: () => set({ contextMenu: null }),
+    setPagesPanelHeight: (height) => {
+      const next = clampPagesHeight(height);
+      if (get().pagesPanelHeight === next) return;
+      set({ pagesPanelHeight: next });
+      // Persisted through the UI slot so the panel reopens at the author's size.
+      writeUi({ pagesPanelHeight: next });
+    },
+
+    addCustomIcon: async (input) => {
+      const svg = extractSvgMarkup(input.svg);
+      if (!svg) {
+        toast.error("الملف لا يحتوي على رسم SVG صالح");
+        return null;
+      }
+      const item: CustomLibraryItem = {
+        id: uid(input.kind === "divider" ? "dvd" : "icn"),
+        name: (input.name || "").trim().slice(0, 40) || (input.kind === "divider" ? "فاصل مخصص" : "رمز مخصص"),
+        kind: input.kind,
+        svg,
+        createdAt: Date.now(),
+      };
+      const customIcons = [item, ...get().customIcons];
+      set({ customIcons });
+      await setSetting("customLibrary", customIcons);
+      return item;
+    },
+
+    removeCustomIcon: async (id) => {
+      const customIcons = get().customIcons.filter((item) => item.id !== id);
+      set({ customIcons });
+      await setSetting("customLibrary", customIcons);
+    },
     setTheme: (theme) => {
       set({ theme });
       pushHistory();
@@ -860,7 +1022,13 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedId: id,
         selectedIds: id ? [id] : [],
         enteredGroupId: id ? s.enteredGroupId : null,
-        rightOpen: id ? true : s.rightOpen,
+        /*
+         * Selecting opens the properties panel — but only where the panel is
+         * DOCKED. On tablet/phone the panel is a slide-over, and auto-opening it
+         * on every canvas tap would fight the "tap the canvas to dismiss the
+         * drawer" rule (the tap would close it and instantly reopen it).
+         */
+        rightOpen: id && !isOverlayViewport() ? true : s.rightOpen,
       })),
 
     setEditing: (id) => set({ editingId: id }),
@@ -1074,7 +1242,20 @@ export const useEditor = create<EditorStore>((set, get) => {
       const s = get();
       const page = activePageOf(s);
       if (!page) return;
-      const next = mapElement(page, id, (el) => ({ ...el, [flag]: value ?? !el[flag] }));
+      const current = findElement(page.elements, id)?.el;
+      const nextValue = value ?? !current?.[flag];
+      /*
+       * Folder rule (Phase 5): switching a مجموعة/مجلد off must switch every
+       * nested child off with it — otherwise the canvas keeps painting artwork
+       * from a folder the author just hid, and the tree and canvas disagree.
+       * The same applies to locking (a locked folder is fully locked). Only a
+       * group has children, so a leaf element costs one extra check.
+       */
+      const next = mapElement(page, id, (el) =>
+        flag === "hidden" || flag === "locked"
+          ? cascadeFlag(el, flag, nextValue)
+          : { ...el, [flag]: nextValue },
+      );
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
     },
@@ -1116,28 +1297,32 @@ export const useEditor = create<EditorStore>((set, get) => {
       pushHistory();
     },
 
-    addElement: (type, over) => {
+    addElementAt: (type, over, center) => {
       const s = get();
       const page = activePageOf(s);
       if (!page) return undefined;
       const theme = THEMES[s.theme];
       const size = pageSize(page);
       /*
-       * Centered insert: the element lands in the middle of what the author is
-       * looking at (the union of every visible artboard), not a fixed corner.
+       * Two placements, one insertion:
+       *  · no `center` — the element lands in the middle of what the author is
+       *    looking at (the union of every visible artboard), not a fixed corner;
+       *  · `center` given — the element is centred on that page point, which is
+       *    how a library card dropped on the canvas lands under the cursor.
        * Defaults come from createElementDefaults; anything the caller passes in
        * `over` (e.g. a palette preset or a drawn size) wins over them, and the
        * theme layer is applied last exactly as before — layering keeps one
        * source of defaults without changing createElement's theming contract.
        */
       const defaults = createElementDefaults(type);
-      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
-      const defaultSize = { w: defaults.w ?? 40, h: defaults.h ?? 30 };
-      const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
-      const pos = centerFor(
-        visible,
-        { w: size.w, h: size.h, elW: defaultSize.w, elH: defaultSize.h },
-      );
+      const box = { w: over?.w ?? defaults.w ?? 40, h: over?.h ?? defaults.h ?? 30 };
+      let pos = center;
+      if (pos) pos = { x: pos.x - box.w / 2, y: pos.y - box.h / 2 };
+      else {
+        const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+        const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+        pos = centerFor(visible, { w: size.w, h: size.h, elW: box.w, elH: box.h });
+      }
       const el = createElement(
         type,
         {
@@ -1160,8 +1345,10 @@ export const useEditor = create<EditorStore>((set, get) => {
         rightTab: "properties",
       });
       pushHistory();
-      return el.id;
+      return el;
     },
+
+    addElement: (type, over) => get().addElementAt(type, over)?.id,
 
     addTextAt: (box, pageId) => {
       const s = get();
@@ -1472,8 +1659,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       const ids = new Set(s.selectedIds);
       if (!ids.size) return;
       // A locked group cannot be toggled: unlocking it would be the only way out
-      // of a state the author just chose.
-      const next = mapElements(page, ids, (el) => ({ ...el, locked: !el.locked }));
+      // of a state the author just chose. Children follow their folder's state
+      // for the same reason a hidden folder hides its contents (Phase 5).
+      const next = mapElements(page, ids, (el) => cascadeFlag(el, "locked", !el.locked));
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
     },
@@ -1484,7 +1672,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return;
       const ids = new Set(s.selectedIds);
       if (!ids.size) return;
-      const next = mapElements(page, ids, (el) => ({ ...el, hidden: !el.hidden }));
+      // Hiding a folder hides its whole subtree, so the canvas and the layer
+      // tree never disagree about what is on the page.
+      const next = mapElements(page, ids, (el) => cascadeFlag(el, "hidden", !el.hidden));
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
     },
@@ -1696,6 +1886,17 @@ interface PersistedUi {
   rightOpen?: boolean;
   leftCollapsed?: boolean;
   rightCollapsed?: boolean;
+  pagesPanelHeight?: number;
+}
+
+/** Merge a patch into the persisted UI slot (zoom, panels, pages height…). */
+function writeUi(patch: PersistedUi): void {
+  try {
+    const current = readUi();
+    localStorage.setItem(UI_KEY, JSON.stringify({ ...current, ...patch }));
+  } catch {
+    /* a full/blocked localStorage must never break an interaction */
+  }
 }
 
 function readUi(): PersistedUi {

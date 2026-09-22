@@ -27,7 +27,7 @@ import {
   Scan,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
-import { useEditor, saveLabel, type SaveState } from "@/lib/editor/store";
+import { useEditor, saveLabel, PAGES_PANEL_MIN, type SaveState } from "@/lib/editor/store";
 import { elementsBounds, pageSize } from "@/lib/editor/model";
 import { fitImageBox, prepareImage } from "@/lib/editor/images";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
@@ -39,7 +39,7 @@ import { PageRail } from "./PageRail";
 import { ExportDialog } from "./ExportDialog";
 import { cn } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
-import { WorkspaceOverlays, WorkspaceStatusBar, type MenuPoint } from "./WorkspaceOverlays";
+import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
 import { ToolbarMenus } from "./ToolbarMenus";
 
 /**
@@ -58,6 +58,9 @@ export function EditorApp() {
   const fontInput = useRef<HTMLInputElement>(null);
   const svgInput = useRef<HTMLInputElement>(null);
   const imageIntent = useRef<{ type: "image" | "logo" | "replace" | "library"; targetId?: string }>({ type: "image" });
+  /** Which kind of reusable vector the next file pick will register. */
+  const customAssetIntent = useRef<"icon" | "divider">("icon");
+  const customAssetInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     void hydrate();
@@ -151,6 +154,18 @@ export function EditorApp() {
     svgInput.current?.click();
   };
 
+  /**
+   * «+ إضافة رمز/فاصل جديد» in the smart library.
+   *
+   * Reads the file as markup and registers it with the store (persisted), so
+   * the vector becomes a reusable library item — distinct from «إضافة SVG من
+   * الجهاز», which places a one-off drawing on the page.
+   */
+  const importCustomAsset = (kind: "icon" | "divider") => {
+    customAssetIntent.current = kind;
+    customAssetInput.current?.click();
+  };
+
   return (
     <div className="h-full min-h-0">
       <Toaster position="top-center" richColors dir="rtl" />
@@ -216,6 +231,34 @@ export function EditorApp() {
         }}
       />
 
+      {/* مكتبة ذكية: SVG icons/dividers the author wants to reuse. */}
+      <input
+        ref={customAssetInput}
+        type="file"
+        accept=".svg,image/svg+xml"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            void useEditor
+              .getState()
+              .addCustomIcon({
+                name: file.name.replace(/\.svg$/i, "").slice(0, 40),
+                svg: String(reader.result || ""),
+                kind: customAssetIntent.current,
+              })
+              .then((item) => {
+                if (item) toast.success(`تمت إضافة «${item.name}» إلى المكتبة`);
+              });
+          };
+          reader.onerror = () => toast.error("تعذر قراءة الملف");
+          reader.readAsText(file);
+        }}
+      />
+
       <input
         ref={fontInput}
         type="file"
@@ -245,7 +288,14 @@ export function EditorApp() {
         }}
       />
 
-      <Studio onOpenFile={openFile} onUpload={upload} onReplaceImage={replaceImage} onDropImage={ingestImage} onUploadSvg={uploadSvg} />
+      <Studio
+        onOpenFile={openFile}
+        onUpload={upload}
+        onReplaceImage={replaceImage}
+        onDropImage={ingestImage}
+        onUploadSvg={uploadSvg}
+        onAddCustomAsset={importCustomAsset}
+      />
     </div>
   );
 }
@@ -256,12 +306,14 @@ function Studio({
   onReplaceImage,
   onDropImage,
   onUploadSvg,
+  onAddCustomAsset,
 }: {
   onOpenFile: () => void;
   onUpload: (kind: "image" | "logo" | "font" | "library") => void;
   onReplaceImage: (id: string) => void;
   onDropImage: (file: File, at?: { x: number; y: number }) => Promise<void>;
   onUploadSvg: () => void;
+  onAddCustomAsset: (kind: "icon" | "divider") => void;
 }) {
   const name = useEditor((s) => s.name);
   const setName = useEditor((s) => s.setName);
@@ -286,6 +338,13 @@ function Studio({
   const rightOpen = useEditor((s) => s.rightOpen);
   const leftCollapsed = useEditor((s) => s.leftCollapsed);
   const rightCollapsed = useEditor((s) => s.rightCollapsed);
+  const toggleSidebar = useEditor((s) => s.toggleSidebar);
+  const closeFloatingPanels = useEditor((s) => s.closeFloatingPanels);
+  const pagesPanelHeight = useEditor((s) => s.pagesPanelHeight);
+  const setPagesPanelHeight = useEditor((s) => s.setPagesPanelHeight);
+  const contextMenu = useEditor((s) => s.contextMenu);
+  const openContextMenu = useEditor((s) => s.openContextMenu);
+  const closeContextMenu = useEditor((s) => s.closeContextMenu);
   const duplicateSelected = useEditor((s) => s.duplicateSelected);
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const copySelected = useEditor((s) => s.copySelected);
@@ -301,7 +360,6 @@ function Studio({
   const selectAll = useEditor((s) => s.selectAll);
   const enterGroup = useEditor((s) => s.enterGroup);
   const enteredGroupId = useEditor((s) => s.enteredGroupId);
-  const [contextMenu, setContextMenu] = useState<MenuPoint | null>(null);
   const [panelWidths, setPanelWidths] = useState(() => {
     try {
       const raw = JSON.parse(localStorage.getItem("diwan-editor-panel-widths") || "{}");
@@ -326,6 +384,69 @@ function Studio({
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
+
+  /*
+   * Publish the header's REAL height as `--editor-header-h`.
+   *
+   * Phase 1 sizes the panel bodies with `calc(100vh - header)`, and the header
+   * legitimately wraps to two rows on a narrow tablet. Measuring it (rather
+   * than hard-coding 52px) is what keeps the last property row reachable when
+   * the toolbar grows — the exact clipping regression this phase fixes.
+   */
+  const headerRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const node = headerRef.current;
+    if (!node) return;
+    const apply = () => {
+      const height = Math.round(node.getBoundingClientRect().height);
+      document.documentElement.style.setProperty("--editor-header-h", `${height}px`);
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(node);
+    window.addEventListener("resize", apply);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", apply);
+    };
+  }, []);
+
+  /** True while a floating drawer is open (tablet/phone only). */
+  const drawerOpen = !isDesktop && (leftOpen || rightOpen);
+
+  /*
+   * Pages panel height — drag handle on its top border.
+   *
+   * Pointer-based so mouse, pen and touch share one path, with `touch-action:
+   * none` on the handle (set in CSS) so Safari does not turn the gesture into a
+   * page scroll. The delta is inverted because the handle sits ABOVE the panel:
+   * dragging up must make the panel taller.
+   */
+  const startPagesResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* synthetic event: window listeners still drive the drag */
+    }
+    const startY = event.clientY;
+    const startHeight = pagesPanelHeight;
+    document.body.classList.add("is-resizing-rail");
+    const move = (ev: PointerEvent) => setPagesPanelHeight(startHeight + (startY - ev.clientY));
+    const finish = () => {
+      document.body.classList.remove("is-resizing-rail");
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+  };
+
+  /** Keyboard path for the same control (arrow keys, 16px per press). */
+  const nudgePagesHeight = (delta: number) => setPagesPanelHeight(pagesPanelHeight + delta);
 
   const activePage = pages.find((p) => p.id === activePageId) || pages[0];
   const activeSize = pageSize(activePage);
@@ -503,6 +624,16 @@ const fitToScreen = useCallback(() => {
         fitToScreen();
         return;
       }
+      /*
+       * Escape closes a floating drawer before it touches the selection: on a
+       * tablet the drawer covers the canvas, so the author's first Escape means
+       * "put the artwork back", not "clear what I had selected".
+       */
+      if (e.key === "Escape" && !isDesktop && (useEditor.getState().leftOpen || useEditor.getState().rightOpen)) {
+        e.preventDefault();
+        closeFloatingPanels();
+        return;
+      }
       if (typing) return;
       if (e.key === "Delete" || e.key === "Backspace") {
         e.preventDefault();
@@ -559,6 +690,8 @@ const fitToScreen = useCallback(() => {
     selectAll,
     enterGroup,
     enteredGroupId,
+    isDesktop,
+    closeFloatingPanels,
   ]);
 
   const label = saveLabel(saveState, savedAt, Date.now());
@@ -622,7 +755,10 @@ const fitToScreen = useCallback(() => {
     <div
       className={cn("editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]", dark ? "editor-dark" : "editor-light", focusMode && "editor-focus")}
     >
-      <header className="editor-toolbar z-20 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pt-[max(0.375rem,var(--safe-top))] pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))]">
+      <header
+        ref={headerRef}
+        className="editor-toolbar z-20 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pt-[max(0.375rem,var(--safe-top))] pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))]"
+      >
         <div className="flex shrink-0 items-center gap-2">
           <a
             href="/"
@@ -747,31 +883,40 @@ const fitToScreen = useCallback(() => {
           {/* Panel toggles stay live even in focus mode: full screen must never
               mean losing the tools — one tap exits focus and brings the panel
               back (collapsed→open), so the exit is always one press away. */}
+          {/*
+            * Sidebar toggles (Phase 1).
+            *
+            * ONE button per sidebar that is correct in every layout: docked
+            * screens flip the collapsed flag, tablet/phone flip the floating
+            * drawer — so the control never looks dead (the old buttons toggled
+            * the desktop-only flag, which did nothing visible at <1024px).
+            * Leaving focus mode restores the docks instead of merely toggling.
+            */}
           <IconButton
             onClick={() => {
               if (focusMode) {
-                useEditor.setState({ focusMode: false, leftCollapsed: false });
+                useEditor.setState({ focusMode: false, leftCollapsed: false, leftOpen: false });
                 return;
               }
-              toggle("leftCollapsed");
+              toggleSidebar("left");
             }}
-            active={!leftCollapsed && !focusMode}
-            title={leftCollapsed && !focusMode ? "إظهار أدوات العناصر" : "طي أدوات العناصر"}
+            active={isDesktop ? !leftCollapsed && !focusMode : leftOpen}
+            title={isDesktop ? (leftCollapsed ? "إظهار لوحة المكونات" : "طي لوحة المكونات") : leftOpen ? "إغلاق لوحة المكونات" : "فتح لوحة المكونات"}
           >
-            <PanelLeft className="size-4" />
+            <PanelRight className="size-4" />
           </IconButton>
           <IconButton
             onClick={() => {
               if (focusMode) {
-                useEditor.setState({ focusMode: false, rightCollapsed: false });
+                useEditor.setState({ focusMode: false, rightCollapsed: false, rightOpen: false });
                 return;
               }
-              toggle("rightCollapsed");
+              toggleSidebar("right");
             }}
-            active={!rightCollapsed && !focusMode}
-            title={rightCollapsed && !focusMode ? "إظهار الخصائص والطبقات" : "طي الخصائص والطبقات"}
+            active={isDesktop ? !rightCollapsed && !focusMode : rightOpen}
+            title={isDesktop ? (rightCollapsed ? "إظهار لوحة الخصائص" : "طي لوحة الخصائص") : rightOpen ? "إغلاق لوحة الخصائص" : "فتح لوحة الخصائص"}
           >
-            <PanelRight className="size-4" />
+            <PanelLeft className="size-4" />
           </IconButton>
           <IconButton onClick={() => toggle("focusMode")} active={focusMode} title={focusMode ? "الخروج من وضع التركيز" : "وضع التركيز"}>
             <Focus className="size-4" />
@@ -806,7 +951,7 @@ const fitToScreen = useCallback(() => {
           const target = (event.target as HTMLElement).closest<HTMLElement>("[data-el-id]");
           const targetId = target?.dataset.elId || null;
           if (targetId && !selectedIds.includes(targetId)) select(targetId);
-          setContextMenu({ x: event.clientX, y: event.clientY, targetId });
+          openContextMenu({ x: event.clientX, y: event.clientY, targetId, source: "canvas" });
         }}
         className={cn(
         "editor-focus-workspace relative grid min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden",
@@ -827,9 +972,17 @@ const fitToScreen = useCallback(() => {
         <div
           className={cn(
             "editor-sidebar relative z-10 h-full min-h-0 overflow-hidden",
-            "max-lg:absolute max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[292px] max-lg:shadow-2xl",
-            !leftOpen && "max-lg:hidden",
-            leftCollapsed && "hidden",
+            /*
+             * Phase 1 — below the breakpoint the panel FLOATS over the canvas
+             * (a slide-over), it never squishes the artboard. In RTL the
+             * components panel belongs to the visual right edge, which is the
+             * physical `right` side here.
+             */
+            "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-30 max-lg:w-[min(320px,86vw)] max-lg:shadow-2xl",
+            "max-lg:transition-transform max-lg:duration-200 max-lg:ease-out",
+            !leftOpen && "max-lg:translate-x-full",
+            !leftOpen && "max-lg:pointer-events-none",
+            leftCollapsed && "lg:hidden",
           )}
         >
           {/*
@@ -842,7 +995,7 @@ const fitToScreen = useCallback(() => {
           <div className="flex items-center justify-start border-b border-line px-1.5 py-1 dark:border-white/10">
             <button
               type="button"
-              onClick={() => toggle("leftCollapsed")}
+              onClick={() => (isDesktop ? toggle("leftCollapsed") : closeFloatingPanels())}
               aria-label="إغلاق لوحة العناصر"
               title="إغلاق لوحة العناصر"
               className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-line px-2 text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
@@ -850,34 +1003,68 @@ const fitToScreen = useCallback(() => {
               <X className="size-3.5" /> إغلاق
             </button>
           </div>
-          <LeftPanel onUpload={onUpload} onUploadSvg={onUploadSvg} />
+          <LeftPanel onUpload={onUpload} onUploadSvg={onUploadSvg} onAddCustomAsset={onAddCustomAsset} />
           {!leftCollapsed && !focusMode && <PanelResizeHandle side="left" onStart={(event) => resizePanel("left", event.clientX, panelWidths.left)} />}
         </div>
 
         <div className="editor-canvas-workspace relative grid min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden">
-          <CanvasStage onDropImage={onDropImage} />
+          {/*
+            * Tapping the canvas dismisses the floating drawers: on a tablet the
+            * artwork is what the author wants to see, and reaching for a close
+            * chip to do it would be a second, avoidable gesture.
+            */}
+          <CanvasStage onDropImage={onDropImage} onCanvasTap={() => (drawerOpen ? closeFloatingPanels() : undefined)} />
           <ArrangeBar />
-          <PageRail />
+          <div
+            className="editor-page-rail-resizer"
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="تغيير ارتفاع لوحة الصفحات — اسحب"
+            title="اسحب لتغيير ارتفاع لوحة الصفحات"
+            tabIndex={0}
+            onPointerDown={startPagesResize}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowUp") {
+                event.preventDefault();
+                nudgePagesHeight(16);
+              }
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                nudgePagesHeight(-16);
+              }
+            }}
+          />
+          {/*
+            * Pages panel height is applied to the rail itself (and its thumbs
+            * scale through `--rail-height`), so growing the panel reveals more
+            * page rows instead of distorting the thumbnails' aspect ratio.
+            */}
+          <div className="min-h-0 min-w-0" style={{ height: pagesPanelHeight }}>
+            <PageRail height={pagesPanelHeight} minHeight={PAGES_PANEL_MIN} />
+          </div>
           <WorkspaceStatusBar />
         </div>
 
         <div
           className={cn(
             "editor-sidebar editor-properties relative z-10 h-full min-h-0 overflow-hidden",
-            "max-lg:absolute max-lg:z-30 max-lg:shadow-2xl",
-            // Landscape tablets keep the panel beside the canvas.
-            "max-lg:landscape:inset-y-0 max-lg:landscape:left-0 max-lg:landscape:w-[320px]",
-            // Portrait tablets get a bottom sheet, so the canvas keeps full width.
-            "max-lg:portrait:inset-x-0 max-lg:portrait:bottom-0 max-lg:portrait:h-[52%] max-lg:portrait:w-full max-lg:portrait:rounded-t-2xl max-lg:portrait:border-t max-lg:portrait:border-line",
-            !rightOpen && "max-lg:hidden",
-            rightCollapsed && "hidden",
+            /*
+             * The properties panel is the visual LEFT sidebar; it slides in from
+             * the physical left edge on tablet/phone, identically in landscape
+             * and portrait so muscle memory carries across orientations.
+             */
+            "max-lg:fixed max-lg:inset-y-0 max-lg:left-0 max-lg:z-30 max-lg:w-[min(340px,90vw)] max-lg:shadow-2xl",
+            "max-lg:transition-transform max-lg:duration-200 max-lg:ease-out",
+            !rightOpen && "max-lg:-translate-x-full",
+            !rightOpen && "max-lg:pointer-events-none",
+            rightCollapsed && "lg:hidden",
           )}
         >
           {/* Same in-flow close row for the properties panel. */}
           <div className="flex items-center justify-end border-b border-line px-1.5 py-1 dark:border-white/10">
             <button
               type="button"
-              onClick={() => toggle("rightCollapsed")}
+              onClick={() => (isDesktop ? toggle("rightCollapsed") : closeFloatingPanels())}
               aria-label="إغلاق لوحة الخصائص"
               title="إغلاق لوحة الخصائص"
               className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-line px-2 text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
@@ -899,7 +1086,10 @@ const fitToScreen = useCallback(() => {
          * was used to reveal.
          */}
         {!(leftOpen || rightOpen) && (
-          <div className="pointer-events-none absolute bottom-[152px] left-1/2 z-40 flex -translate-x-1/2 gap-2 lg:hidden">
+          <div
+            className="pointer-events-none absolute left-1/2 z-40 flex -translate-x-1/2 gap-2 lg:hidden"
+            style={{ bottom: `calc(${pagesPanelHeight}px + 12px)` }}
+          >
             <button
               type="button"
               onClick={() => toggle("leftOpen")}
@@ -932,7 +1122,19 @@ const fitToScreen = useCallback(() => {
          * both are shut), so nothing needs to float above the workspace.
          */}
 
-      <WorkspaceOverlays menu={contextMenu} onCloseMenu={() => setContextMenu(null)} fitToScreen={fitToScreen} />
+      {/*
+        * Shared backdrop for the floating drawers. Tapping it (or the canvas)
+        * closes them; it is rendered behind the drawers but above the canvas.
+        */}
+      {drawerOpen && (
+        <div
+          className="editor-drawer-backdrop"
+          onClick={closeFloatingPanels}
+          aria-hidden
+        />
+      )}
+
+      <WorkspaceOverlays menu={contextMenu} onCloseMenu={closeContextMenu} fitToScreen={fitToScreen} />
       <ExportDialog />
     </div>
   );

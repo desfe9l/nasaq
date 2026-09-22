@@ -23,11 +23,16 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useEditor } from "@/lib/editor/store";
+import { useEditor, type ContextMenuPoint } from "@/lib/editor/store";
 import { findElement } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
 
-type MenuPoint = { x: number; y: number; targetId: string | null };
+/**
+ * The menu is opened by the canvas AND by the layer tree; both write the same
+ * store slot, so the type lives there (`ContextMenuPoint`) and this file only
+ * re-exports it for the shell.
+ */
+type MenuPoint = ContextMenuPoint;
 type ContextAction = { label: string; icon: typeof Copy; run: () => void; disabled?: boolean; danger?: boolean; sepBefore?: boolean };
 
 const ACTIONS = [
@@ -160,8 +165,8 @@ export function WorkspaceOverlays({
         { label: "قص", icon: Scissors, run: () => { copy(); deleteSelected(); } },
         { label: "لصق", icon: ClipboardPaste, run: paste, disabled: !clipboard, sepBefore: true },
         { label: "تكرار العنصر", icon: CopyPlus, run: duplicate },
-        { label: "نقل إلى الأمام", icon: Layers, run: () => bring("forward"), sepBefore: true },
-        { label: "نقل إلى الخلف", icon: Layers, run: () => bring("back") },
+        { label: "إحضار للأمام", icon: Layers, run: () => bring("forward"), sepBefore: true },
+        { label: "إرسال للخلف", icon: Layers, run: () => bring("back") },
         { label: "إلى المقدمة تمامًا", icon: Layers, run: () => bring("front") },
         { label: "إلى الخلف تمامًا", icon: Layers, run: () => bring("bottom") },
         ...(selectedCount >= 2 ? [{ label: "تجميع العناصر", icon: Group, run: groupAndName, sepBefore: true } as ContextAction] : []),
