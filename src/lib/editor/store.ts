@@ -79,6 +79,8 @@ import {
   type TypographyPresetId,
 } from "./typography";
 import { safeImageSrc } from "./images";
+import type { LibraryImportPlan } from "./library-export";
+import { DEFAULT_FOLDER_ID, DEFAULT_FOLDER_NAME } from "./library-manager";
 import {
   applyStoredTheme,
   readStoredTheme,
@@ -315,6 +317,17 @@ interface EditorStore extends Project, Ui, History {
   renameAssetFolder: (id: string, name: string) => Promise<void>;
   deleteAssetFolder: (id: string) => Promise<void>;
   moveAssetsToFolder: (ids: string[], folderId: string | null) => Promise<void>;
+  /**
+   * Apply a planned library import (`planLibraryImport`) in one store update:
+   * the plan's folders keep the exact ids its assets reference, and folders +
+   * assets land in a single `set()` so the shelf re-renders atomically. The
+   * old path re-created folders under fresh ids, orphaning every imported
+   * asset's `folderId` — the items were written to storage but matched no
+   * folder chip and no «الكل» filter, so they never appeared.
+   */
+  importLibraryPlan: (
+    plan: LibraryImportPlan,
+  ) => Promise<{ added: number; failed: number }>;
   /** Bundled + detected + uploaded families, in display order. */
   fontChoices: FontChoice[];
   /** True once the one-off device probe has run. */
@@ -1120,6 +1133,98 @@ export const useEditor = create<EditorStore>((set, get) => {
           .map((asset) => saveAsset(asset)),
       );
       set({ assets, selectedAssetIds: [] });
+    },
+
+    importLibraryPlan: async (plan) => {
+      // Folders first: keep the plan's exact ids — the assets below reference
+      // them, and re-minting ids here is what used to orphan the whole import.
+      const folders = [...get().assetFolders];
+      const knownIds = new Set(folders.map((folder) => folder.id));
+      const knownNames = new Map(
+        folders.map((folder) => [folder.name, folder.id]),
+      );
+      // Plan folder ids folded into an existing same-named folder: assets
+      // referencing the plan's id must follow the fold, not fall through to
+      // the default folder below.
+      const folderAliases = new Map<string, string>();
+      for (const folder of plan.folders) {
+        if (knownIds.has(folder.id)) continue;
+        // Name collision with a folder created outside the plan (same merge
+        // rule `planLibraryImport` applies): reuse it rather than duplicate.
+        const byName = knownNames.get(folder.name);
+        if (byName) {
+          folderAliases.set(folder.id, byName);
+          continue;
+        }
+        folders.push(folder);
+        knownIds.add(folder.id);
+        knownNames.set(folder.name, folder.id);
+      }
+      // Belt-and-braces: a plan built before normalisation existed (or a
+      // hand-rolled one) may reference the default folder without shipping
+      // it. Assets must never land in a folder that doesn't exist.
+      const unresolved = plan.assets.some((asset) => {
+        const wanted =
+          (asset.folderId && folderAliases.get(asset.folderId)) ||
+          asset.folderId;
+        return wanted != null && !knownIds.has(wanted);
+      });
+      if (unresolved && !knownIds.has(DEFAULT_FOLDER_ID)) {
+        folders.push({
+          id: DEFAULT_FOLDER_ID,
+          name: DEFAULT_FOLDER_NAME,
+          createdAt: Date.now(),
+        });
+        knownIds.add(DEFAULT_FOLDER_ID);
+      }
+
+      // Persist rows first; `saveAsset` mints an id per call, so each planned
+      // entry becomes exactly one stored asset (failures are counted, not
+      // fatal — a full shelf must not lose the rest of the import).
+      let added = 0;
+      let failed = 0;
+      const savedRows: Asset[] = [];
+      for (const asset of plan.assets) {
+        const wanted =
+          (asset.folderId && folderAliases.get(asset.folderId)) ||
+          asset.folderId ||
+          null;
+        const folderId =
+          wanted && knownIds.has(wanted)
+            ? wanted
+            : // Unresolvable or absent → default folder when we have one,
+              // otherwise root (still reachable under «الكل»).
+              knownIds.has(DEFAULT_FOLDER_ID)
+              ? DEFAULT_FOLDER_ID
+              : null;
+        try {
+          savedRows.push(
+            await saveAsset({
+              name: asset.name,
+              src: asset.src,
+              w: asset.w,
+              h: asset.h,
+              folderId,
+              addedAt: asset.addedAt || Date.now(),
+            }),
+          );
+          added += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+
+      // One atomic update: folder chips and every imported asset render in
+      // the same commit, and the view jumps to «الكل» so whatever just
+      // arrived is immediately visible.
+      set({
+        assetFolders: folders,
+        assets: [...savedRows, ...get().assets],
+        assetFolderId: null,
+        selectedAssetIds: [],
+      });
+      await setSetting("assetFolders", folders);
+      return { added, failed };
     },
 
     createProject: async (pack, theme) => {
