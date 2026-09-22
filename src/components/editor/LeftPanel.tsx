@@ -149,15 +149,9 @@ export function LeftPanel({
    * icons start open (the two the author reaches for first); the rest open on
    * demand and stay open for the session.
    */
-  const library = useAccordionState<
-    | "basics"
-    | "shapes"
-    | "icons"
-    | "dividers"
-    | "indicators"
-    | "tables"
-    | "templates"
-  >("library", { shapes: true, icons: true });
+  // «عناصر أساسية» lives on the same persisted panel key the smart library uses,
+  // so the palette remembers what the author keeps open across reloads.
+  const library = useAccordionState<"basics">("library", { basics: true });
 
   /*
    * Collapsible tool categories: only the first (نص) starts open, so the
