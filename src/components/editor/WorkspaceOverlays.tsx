@@ -68,6 +68,9 @@ export function WorkspaceOverlays({
   const selectedCount = useEditor((s) => s.selectedIds.length);
   const selectedElements = useEditor((s) => s.selectedElements);
   const clipboard = useEditor((s) => s.clipboard);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const enterGroup = useEditor((s) => s.enterGroup);
+  const copySelected = useEditor((s) => s.copySelected);
 
   const filtered = useMemo(
     () => ACTIONS.filter((action) => action.label.includes(query.trim()) || action.id.includes(query.trim().toLowerCase())),
@@ -113,36 +116,56 @@ export function WorkspaceOverlays({
   };
 
   const selectedTypes = selectedElements().map((item) => item.type);
-  /*
-   * قناع القص (Clipping Mask): applies only when the selection is exactly an
-   * image-family element (image/logo/svg/qr) + a shape — the only pair the
-   * mask has meaning for. Any other selection hides the entries entirely.
-   */
   const applyMask = useEditor((s) => s.applyClipMask);
   const removeMask = useEditor((s) => s.removeClipMask);
   const selectedEls = selectedElements();
+  const targetEl = menu?.targetId ? selectedEls.find((e) => e.id === menu.targetId) || selectedElements().find((e) => e.id === menu.targetId) || null : null;
+  // For single target not in selection, we resolve via pages lookup
+  const activePage = useEditor((s) => s.pages.find((p) => p.id === s.activePageId));
+  const resolvedTarget = targetEl || (menu?.targetId && activePage ? (activePage.elements.find((e) => e.id === menu.targetId) || null) : null);
+  const targetType = resolvedTarget?.type || null;
+  const isGroup = targetType === "group" || selectedTypes.includes("group");
+  const isTextLike = targetType ? ["text","box","stat","stamp","table","progress"].includes(targetType) : false;
+  const isImageLike = targetType ? ["image","logo","qr","svg"].includes(targetType) : false;
+  const isShapeLike = targetType ? ["shape","icon","line","divider"].includes(targetType) : false;
+  // Clipping mask applicability
   const maskSource = selectedEls.find((el) => el.type === "image" || el.type === "logo" || el.type === "qr");
   const maskShape = selectedEls.find((el) => el.type === "shape" || el.type === "svg");
   const maskApplicable = !!maskSource && !!maskShape && selectedEls.length === 2;
   const maskRemovable = selectedEls.length === 1 && !!selectedEls[0].clippedBy;
+  const canGroup = selectedCount >= 2;
+  const canUngroup = isGroup;
+  const canCopy = !!menu?.targetId;
+  const canPaste = !menu?.targetId && !!clipboard;
+  // Smart actions: only supported actions per target kind
   const contextActions: ContextAction[] = menu?.targetId
     ? [
-        { label: "نسخ", icon: Copy, run: copy },
-        { label: "تكرار العنصر", icon: Copy, run: duplicate },
+        { label: "تحديد", icon: AlignCenter, run: () => select(menu.targetId!), disabled: !menu.targetId },
+        ...(selectedCount < 2 ? [] : [{ label: "تحديد الكل", icon: AlignCenter, run: selectAll }]),
+        { label: "نسخ", icon: Copy, run: copy, disabled: !canCopy },
+        { label: "قص", icon: Copy, run: () => { copy(); deleteSelected(); }, disabled: !canCopy },
+        { label: "لصق", icon: Copy, run: paste, disabled: !clipboard },
+        { label: "تكرار", icon: Copy, run: duplicate, disabled: !canCopy },
+        ...(canGroup ? [{ label: "تجميع (Group)", icon: Group, run: group }] : []),
+        ...(canUngroup ? [{ label: "فك التجميع (Ungroup)", icon: Ungroup, run: ungroup }] : []),
         { label: "نقل إلى الأمام", icon: Layers, run: () => bring("forward") },
         { label: "نقل إلى الخلف", icon: Layers, run: () => bring("back") },
-        ...(selectedCount >= 2 ? [{ label: "تجميع العناصر", icon: Group, run: group }] : []),
-        ...(selectedTypes.includes("group") ? [{ label: "فك تجميع العناصر", icon: Ungroup, run: ungroup }] : []),
-        ...(maskApplicable ? [{ label: "تطبيق قناع القص (Clipping Mask)", icon: Group, run: () => applyMask(maskSource!.id, maskShape!.id) }] : []),
+        { label: "إحضار للمقدمة", icon: Layers, run: () => bring("front") },
+        { label: "إرسال للخلفية", icon: Layers, run: () => bring("bottom") },
+        { label: "إعادة تسمية", icon: Layers, run: () => { const id = menu.targetId!; const name = window.prompt("اسم جديد", resolvedTarget?.name || ""); if (name) useEditor.getState().renameElement(id, name); } },
+        ...(maskApplicable ? [{ label: "تطبيق قناع القص", icon: Group, run: () => applyMask(maskSource!.id, maskShape!.id) }] : []),
         ...(maskRemovable ? [{ label: "إزالة قناع القص", icon: Ungroup, run: () => removeMask(selectedEls[0].clippedBy!) }] : []),
-        { label: "قفل العنصر / فتح قفل العنصر", icon: Lock, run: toggleLock },
-        { label: "إخفاء / إظهار", icon: Eye, run: toggleHidden },
-        { label: "حذف", icon: Trash2, run: deleteSelected, danger: true },
+        { label: resolvedTarget?.locked ? "فتح القفل" : "قفل", icon: Lock, run: toggleLock },
+        { label: resolvedTarget?.hidden ? "إظهار" : "إخفاء", icon: Eye, run: toggleHidden },
+        ...(targetType === "group" ? [{ label: "فتح المجموعة", icon: Maximize2, run: () => enterGroup(menu.targetId!) }] : []),
+        ...(isImageLike || isShapeLike || isTextLike || targetType === "group" ? [{ label: "الخصائص", icon: Layers, run: () => { select(menu.targetId!); document.querySelector(".editor-properties")?.scrollIntoView({ block: "start" }); } }] : []),
+        { label: "حذف", icon: Trash2, run: () => setConfirmDelete(true), danger: true },
       ]
     : [
-        { label: "لصق", icon: Copy, run: paste, disabled: !clipboard },
+        { label: "لصق", icon: Copy, run: paste, disabled: !canPaste },
         { label: "تحديد الكل", icon: AlignCenter, run: selectAll },
         { label: "عرض الصفحة بالكامل", icon: Maximize2, run: fitToScreen },
+        { label: "ملاءمة التحديد", icon: Focus, run: fitToScreen, disabled: selectedCount === 0 },
         { label: "وضع التركيز", icon: Focus, run: () => toggle("focusMode") },
         { label: "إظهار / إخفاء الشبكة", icon: Eye, run: () => toggle("showGrid") },
       ];
@@ -153,7 +176,7 @@ export function WorkspaceOverlays({
         <div className="editor-context-backdrop fixed inset-0 z-[100]" onPointerDown={onCloseMenu} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); onCloseMenu(); } }} tabIndex={-1} autoFocus>
           <div
             className="editor-context-menu fixed min-w-[210px] rounded-[8px] border p-1.5 shadow-2xl"
-            style={{ left: Math.min(menu.x, window.innerWidth - 230), top: Math.min(menu.y, window.innerHeight - 360) }}
+            style={{ left: Math.min(Math.max(8, menu.x), window.innerWidth - 230), top: Math.min(Math.max(8, menu.y), window.innerHeight - 360) }}
             onPointerDown={(event) => event.stopPropagation()}
             role="menu"
           >
@@ -163,6 +186,19 @@ export function WorkspaceOverlays({
             })}
             <div className="my-1 border-t border-[var(--editor-border)]" />
             <span className="flex items-center gap-2 px-2.5 py-1.5 text-[9px] text-[var(--editor-text-secondary)]"><Keyboard className="size-3" /> اضغط Escape للإغلاق</span>
+          </div>
+        </div>
+      )}
+
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[120] grid place-items-center bg-navy/45 p-4" role="dialog" aria-modal="true" aria-label="تأكيد حذف العنصر" onKeyDown={(e) => { if (e.key === "Escape") setConfirmDelete(false); }}>
+          <div className="w-full max-w-xs rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]" onPointerDown={(e) => e.stopPropagation()}>
+            <strong className="text-[13px]">هل أنت متأكد من الحذف؟</strong>
+            <p className="mt-1 text-[11px] leading-6 text-muted">سيتم حذف العنصر المحدد من الصفحة. يمكنك التراجع مباشرة بـ ⌘Z.</p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button type="button" autoFocus onClick={() => setConfirmDelete(false)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">إلغاء</button>
+              <button type="button" onClick={() => { setConfirmDelete(false); deleteSelected(); onCloseMenu(); }} className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white">حذف</button>
+            </div>
           </div>
         </div>
       )}

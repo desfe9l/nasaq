@@ -95,6 +95,28 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     };
   }, []);
 
+  // Keep artboard visible after any zoom change — if page drifts outside viewport, recenter gently.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const pageEl = stage.querySelector<HTMLElement>(".page-frame");
+    if (!pageEl) return;
+    const sr = stage.getBoundingClientRect();
+    const pr = pageEl.getBoundingClientRect();
+    const fullyHidden = pr.right < sr.left + 10 || pr.left > sr.right -10 || pr.bottom < sr.top +10 || pr.top > sr.bottom -10;
+    if (fullyHidden) {
+      requestAnimationFrame(() => {
+        const s = stageRef.current;
+        const p = s?.querySelector<HTMLElement>(".page-frame");
+        if (!s || !p) return;
+        const sr2 = s.getBoundingClientRect();
+        const pr2 = p.getBoundingClientRect();
+        s.scrollLeft += pr2.left + pr2.width/2 - (sr2.left + sr2.width/2);
+        s.scrollTop += pr2.top + pr2.height/2 - (sr2.top + sr2.height/2);
+      });
+    }
+  }, [zoom]);
+
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       if (event.code === "Space" && !(event.target as HTMLElement | null)?.isContentEditable) spaceDown.current = true;
@@ -365,12 +387,12 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
   const pickables = (page: Page): { id: string; box: Box }[] => {
     const entered = enteredGroupId ? findElement(page.elements, enteredGroupId)?.el || null : null;
     if (entered?.children?.length) {
-      return entered.children.map((child) => ({
+      return entered.children.filter(c=>!c.hidden).map((child) => ({
         id: child.id,
         box: { x: entered.x + child.x, y: entered.y + child.y, w: child.w, h: child.h },
       }));
     }
-    return page.elements.map((el) => ({ id: el.id, box: { x: el.x, y: el.y, w: el.w, h: el.h } }));
+    return page.elements.filter(el=>!el.hidden).map((el) => ({ id: el.id, box: { x: el.x, y: el.y, w: el.w, h: el.h } }));
   };
 
   /** Rubber-band selection on empty page space, or a drawn text box when armed. */
@@ -558,7 +580,8 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
         if (!onDropImage) return;
         e.preventDefault();
         const file = Array.from(e.dataTransfer.files)[0];
-        if (!file || !file.type.startsWith("image/")) {
+        const isImage = file && (file.type.startsWith("image/") || file.name.toLowerCase().endsWith(".svg"));
+        if (!file || !isImage) {
           toast.error("نوع الملف غير مدعوم.");
           return;
         }

@@ -6,7 +6,10 @@ const PANEL_MAX = { left: 460, right: 520 } as const;
 import {
   BookOpen,
   Check,
+  ChevronDown,
   Download,
+  Eye,
+  EyeOff,
   Focus,
   FolderOpen,
   Grid3x3,
@@ -18,6 +21,7 @@ import {
   PenLine,
   Redo2,
   Save,
+  Settings2,
   Sun,
   Undo2,
   X,
@@ -75,6 +79,38 @@ export function EditorApp() {
   const ingestImage = async (file: File, at?: { x: number; y: number }) => {
     const api = useEditor.getState();
     const intent = imageIntent.current;
+    // SVG via image/logo picker: keep as vector element, not rasterized
+    const isSvg = file.type === "image/svg+xml" || file.name.toLowerCase().endsWith(".svg");
+    if (isSvg) {
+      try {
+        const text = await file.text();
+        if (!text.includes("<svg")) throw new Error("الملف ليس رسم SVG صالحًا");
+        if (intent.type === "library") {
+          // Library assets stay as images; store SVG as data URL for preview
+          const svgSrc = text.startsWith("data:") ? text : `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`;
+          await api.addAsset({
+            name: file.name.replace(/\.[^.]+$/, "").slice(0, 40) || "عنصر SVG",
+            src: svgSrc,
+            w: 120,
+            h: 120,
+          });
+          toast.success("تمت إضافة SVG إلى المكتبة");
+        } else {
+          api.addElement("svg", {
+            content: text,
+            name: file.name.replace(/\.svg$/i, "").slice(0, 30) || "رسم SVG",
+            x: at ? at.x - 50 : undefined,
+            y: at ? at.y - 50 : undefined,
+          });
+          toast.success("أُضيف الرسم SVG إلى الصفحة");
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "تعذر إضافة ملف SVG");
+      } finally {
+        imageIntent.current = { type: "image" };
+      }
+      return;
+    }
     try {
       const img = await prepareImage(file);
       const kind = intent.type === "logo" ? "logo" : "image";
@@ -177,7 +213,7 @@ export function EditorApp() {
       <input
         ref={imageInput}
         type="file"
-        accept="image/*"
+        accept="image/*,.svg,image/svg+xml"
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
@@ -336,6 +372,7 @@ function Studio({
     const raw = Number(localStorage.getItem(UI_SCALE_KEY));
     return Number.isFinite(raw) && raw >= UI_SCALE_MIN && raw <= UI_SCALE_MAX ? raw : 1;
   });
+  const [viewMenuOpen, setViewMenuOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("diwan-editor-panel-widths", JSON.stringify(panelWidths));
@@ -382,6 +419,37 @@ function Studio({
       stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
     });
   }, [activeSize.h, activeSize.w, setZoom]);
+
+  // Page switch: preserve viewing mode, keep page centered, clear stale selection that belongs to previous page
+  const prevPageRef = useRef(activePageId);
+  useEffect(() => {
+    if (prevPageRef.current === activePageId) return;
+    const prev = prevPageRef.current;
+    prevPageRef.current = activePageId;
+    // Clear selection that may reference objects from previous page
+    useEditor.getState().select(null);
+    // If user was in Fit mode (zoom near fit value), refit new page to available canvas.
+    // Otherwise preserve zoom (82%/100%/custom) and ensure new page is visible centered.
+    const wasFit = Math.abs(zoom - 0.82) < 0.07 || document.querySelector(".editor-canvas-stage")?.getAttribute("data-fit-active") === "1";
+    if (wasFit) {
+      requestAnimationFrame(() => fitToScreen());
+    } else {
+      requestAnimationFrame(() => {
+        const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+        const pageEl = document.querySelector<HTMLElement>(`[data-page-id="${CSS.escape(activePageId)}"]`)?.closest<HTMLElement>(".page-frame");
+        if (!stage || !pageEl) return;
+        const sr = stage.getBoundingClientRect();
+        const pr = pageEl.getBoundingClientRect();
+        // Gentle centering without jump: only if page ismostly outside viewport
+        const outX = pr.left < sr.left - 20 || pr.right > sr.right + 20;
+        const outY = pr.top < sr.top - 20 || pr.bottom > sr.bottom + 20;
+        if (outX || outY) {
+          stage.scrollLeft += pr.left + pr.width / 2 - (sr.left + sr.width / 2);
+          stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
+        }
+      });
+    }
+  }, [activePageId, fitToScreen, zoom]);
 
   // A 20 s heartbeat keeps "آخر حفظ منذ …" honest without a per-second store write.
   useEffect(() => {
@@ -488,26 +556,20 @@ function Studio({
         fitToScreen();
         return;
       }
-      /*
-       * Keyboard zoom scales the WHOLE editor interface (toolbar + panels +
-       * canvas) as one unit, the way ⌘± behaves in a browser — but bounded, so
-       * buttons and labels never become unusable and no panel can leave the
-       * screen. The canvas' own zoom (toolbar ±, ctrl/trackpad-pinch) stays for
-       * artboard-level precision. Browser zoom is never touched.
-       */
+      // Canvas zoom via keyboard — Command+ +/- and Command+0 (Fit Artboard) affect ONLY canvas, never UI.
       if (meta && (key === "+" || key === "=")) {
         e.preventDefault();
-        setUiScale((v) => stepUiScale(v, 1));
+        setZoom(Math.min(2, Math.round((zoom + 0.08)*100)/100));
         return;
       }
       if (meta && key === "-") {
         e.preventDefault();
-        setUiScale((v) => stepUiScale(v, -1));
+        setZoom(Math.max(0.2, Math.round((zoom - 0.08)*100)/100));
         return;
       }
       if (meta && key === "0") {
         e.preventDefault();
-        setUiScale(1);
+        fitToScreen();
         return;
       }
       if (typing) return;
@@ -620,18 +682,17 @@ function Studio({
 
   return (
     /*
-     * Editor shell.
-     *
-     * Rows are `auto` (header) + `minmax(0,1fr)` (workspace), so the header may
-     * wrap on a narrow tablet without stealing height from the canvas.
+     * Editor shell — isolated layers:
+     * Row 1: .editor-brand-zone (نَسَق/الرئيسية/نص بالرسم/مشاريعي/المكتبة) — never scaled by canvas zoom.
+     * Row 2: .editor-view-controls (Undo/Redo/Grid/Zoom/Fit/100%/Fullscreen) — independent layout, scrollable.
+     * Row 3: workspace (panels + .editor-canvas-stage). Canvas zoom lives ONLY inside
+     *        .page-frame-content via transform scale(zoom). Whole-UI scale (uiScale)
+     *        is applied to the workspace row only, so the chrome rows stay fixed.
      */
     <div
-      className={cn("editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]", dark ? "editor-dark" : "editor-light", focusMode && "editor-focus")}
-      /* CSS `zoom` keeps the whole shell in layout (unlike transform), so the
-         panels stay docked and reachable at every scale. Bounded by stepUiScale. */
-      style={uiScale === 1 ? undefined : { zoom: uiScale }}
+      className={cn("editor-ui editor-shell grid grid-rows-[auto_auto_minmax(0,1fr)]", dark ? "editor-dark" : "editor-light", focusMode && "editor-focus")}
     >
-      <header className="editor-toolbar z-20 flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pt-[max(0.375rem,var(--safe-top))] pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))]">
+      <header className="editor-toolbar editor-brand-zone z-20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-b bg-white px-3 py-1.5 pt-[max(0.375rem,var(--safe-top))] pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] dark:bg-[#0f1623]" style={{ isolation: "isolate", transform: "none" as const }}>
         <div className="flex shrink-0 items-center gap-2">
           <a
             href="/"
@@ -690,57 +751,7 @@ function Studio({
           </button>
         </div>
 
-        {/* Scrolls rather than clipping when the viewport cannot hold every control. */}
-        <div className="editor-pane-scroll order-last flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto md:order-none md:justify-center">
-          <IconButton onClick={undo} disabled={past.length <= 1} title="تراجع (⌘Z)">
-            <Undo2 className="size-4" />
-          </IconButton>
-          <IconButton onClick={redo} disabled={!future.length} title="إعادة (⌘⇧Z)">
-            <Redo2 className="size-4" />
-          </IconButton>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            aria-label="اسم المشروع"
-            className="mx-1 hidden h-9 max-w-[240px] min-w-0 rounded-[8px] border border-line px-3 text-center text-[13px] font-bold outline-none focus:border-navy-2 lg:block dark:border-white/10 dark:bg-white/5 dark:text-white"
-          />
-          <IconButton onClick={() => toggle("showGrid")} active={showGrid} title="الشبكة">
-            <Grid3x3 className="size-4" />
-          </IconButton>
-          <IconButton onClick={() => setZoom(zoom - 0.08)} title="تصغير">
-            <ZoomOut className="size-4" />
-          </IconButton>
-          <span className="w-11 shrink-0 text-center text-[12px] font-bold tabular-nums">
-            {Math.round(zoom * 100)}%
-          </span>
-          <IconButton onClick={() => setZoom(zoom + 0.08)} title="تكبير">
-            <ZoomIn className="size-4" />
-          </IconButton>
-          {/*
-           * Fit/100% matter most on tablets, where the canvas is the only thing
-           * on screen and a fixed 82% can leave the page off-centre or oversized.
-           */}
-          <button
-            type="button"
-            onClick={fitToScreen}
-            title="ملاءمة العرض"
-            className="hidden h-9 shrink-0 items-center rounded-[8px] border border-line px-2 text-[11px] font-extrabold md:inline-flex dark:border-white/10"
-          >
-            ملاءمة
-          </button>
-          <button
-            type="button"
-            onClick={() => setZoom(1)}
-            className="hidden h-9 shrink-0 items-center rounded-[8px] border border-line px-2 text-[11px] font-extrabold md:inline-flex dark:border-white/10"
-          >
-            100%
-          </button>
-          <IconButton onClick={fitToSelection} disabled={!selectedElements().length} title="ملاءمة التحديد">
-            <Focus className="size-4" />
-          </IconButton>
-        </div>
-
-        <div className="flex shrink-0 items-center justify-end gap-1.5">
+        <div className="flex shrink-0 items-center justify-end gap-1.5 flex-wrap">
           <SaveBadge state={saveState} label={label} onClick={() => void saveNow()} />
           <button
             type="button"
@@ -809,18 +820,77 @@ function Studio({
             تصدير
           </button>
         </div>
+        <div className="hidden lg:flex items-center gap-1 rounded bg-gold px-2 py-1 text-[10px] font-extrabold text-navy">تحديث v2.1 ✓</div>
       </header>
+      {/* View-control bar — independent row, never overlaps brand zone. Horizontally scrollable on narrow widths. */}
+      <div className="editor-view-controls z-10 flex flex-wrap items-center justify-center gap-1.5 overflow-x-auto border-b bg-white px-3 py-1.5 dark:border-white/10 dark:bg-[#111827]" style={{ isolation: "isolate" }}>
+        <IconButton onClick={undo} disabled={past.length <= 1} title="تراجع (⌘Z)">
+          <Undo2 className="size-4" />
+        </IconButton>
+        <IconButton onClick={redo} disabled={!future.length} title="إعادة (⌘⇧Z)">
+          <Redo2 className="size-4" />
+        </IconButton>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          aria-label="اسم المشروع"
+          className="mx-1 hidden h-9 max-w-[240px] min-w-0 rounded-[8px] border border-line px-3 text-center text-[13px] font-bold outline-none focus:border-navy-2 lg:block dark:border-white/10 dark:bg-white/5 dark:text-white"
+        />
+        <IconButton onClick={() => toggle("showGrid")} active={showGrid} title="الشبكة">
+          <Grid3x3 className="size-4" />
+        </IconButton>
+        <IconButton onClick={() => setZoom(zoom - 0.08)} title="تصغير">
+          <ZoomOut className="size-4" />
+        </IconButton>
+        <span className="w-11 shrink-0 text-center text-[12px] font-bold tabular-nums">
+          {Math.round(zoom * 100)}%
+        </span>
+        <IconButton onClick={() => setZoom(zoom + 0.08)} title="تكبير">
+          <ZoomIn className="size-4" />
+        </IconButton>
+        <button
+          type="button"
+          onClick={fitToScreen}
+          title="ملاءمة العرض"
+          className="hidden h-9 shrink-0 items-center rounded-[8px] border border-line px-2 text-[11px] font-extrabold md:inline-flex dark:border-white/10"
+        >
+          ملاءمة
+        </button>
+        <button
+          type="button"
+          onClick={() => setZoom(1)}
+          className="hidden h-9 shrink-0 items-center rounded-[8px] border border-line px-2 text-[11px] font-extrabold md:inline-flex dark:border-white/10"
+        >
+          100%
+        </button>
+        <IconButton onClick={fitToSelection} disabled={!selectedElements().length} title="ملاءمة التحديد">
+          <Focus className="size-4" />
+        </IconButton>
+        <div className="relative">
+          <button type="button" onClick={() => setViewMenuOpen((v) => !v)} className="inline-flex h-9 items-center gap-1 rounded-[8px] border border-line px-2.5 text-[11px] font-extrabold dark:border-white/10" title="عرض — View" aria-expanded={viewMenuOpen}>
+            <Eye className="size-3.5" /> عرض <ChevronDown className="size-3" />
+          </button>
+          {viewMenuOpen && (
+            <div className="absolute top-[calc(100%+8px)] left-1/2 z-30 w-[260px] -translate-x-1/2 rounded-[10px] border bg-white p-2 shadow-xl dark:bg-[#1e2635] dark:border-white/10">
+              <button type="button" onClick={() => { toggle("showGrid"); }} className="flex h-9 w-full items-center gap-2 rounded px-2 text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5"><Grid3x3 className="size-4" /> الشبكة {showGrid ? "✓" : ""}</button>
+              <button type="button" onClick={() => { const s = useEditor.getState(); s.toggle("snapGrid"); }} className="flex h-9 w-full items-center gap-2 rounded px-2 text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5"><Settings2 className="size-4" /> التقاط للشبكة</button>
+              <button type="button" onClick={() => { const s = useEditor.getState(); s.toggle("snapElements"); }} className="flex h-9 w-full items-center gap-2 rounded px-2 text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5"><Settings2 className="size-4" /> محاذاة العناصر</button>
+              <div className="my-1 border-t border-line dark:border-white/10" />
+              <button type="button" onClick={() => { setZoom(zoom - 0.08); setViewMenuOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded px-2 text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5"><ZoomOut className="size-4" /> تصغير</button>
+              <button type="button" onClick={() => { setZoom(zoom + 0.08); setViewMenuOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded px-2 text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5"><ZoomIn className="size-4" /> تكبير</button>
+              <button type="button" onClick={() => { fitToScreen(); setViewMenuOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded px-2 text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5"><Focus className="size-4" /> ملاءمة اللوحة</button>
+              <button type="button" onClick={() => { setZoom(1); setViewMenuOpen(false); }} className="flex h-9 w-full items-center gap-2 rounded px-2 text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5">100%</button>
+              <button type="button" onClick={() => setViewMenuOpen(false)} className="mt-1 h-8 w-full rounded-[6px] border border-line text-[11px] dark:border-white/10">إغلاق</button>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/*
-       * Workspace.
-       *
-       * `lg:grid-rows-[minmax(0,1fr)]` is what keeps the panes on screen: without
-       * a bounded row the implicit row sizes to the tallest panel's content, and
-       * the overflow is then clipped by `lg:overflow-hidden` — which is exactly
-       * how the lower properties controls became unreachable. The wrappers are
-       * `h-full min-h-0 overflow-hidden` so each panel's inner `flex-1
-       * overflow-auto` region is the thing that scrolls.
+       * Workspace — scaled as a unit by uiScale, while brand+view rows stay fixed.
+       * Canvas zoom (store.zoom) stays inside .page-frame-content only.
        */}
+      <div className="editor-workspace-scaler min-h-0 overflow-hidden" style={uiScale === 1 ? undefined : { zoom: uiScale }}>
       <div
         onContextMenu={(event) => {
           event.preventDefault();
@@ -909,6 +979,7 @@ function Studio({
           <RightPanel onReplaceImage={onReplaceImage} />
           {!rightCollapsed && !focusMode && <PanelResizeHandle side="right" onStart={(event) => resizePanel("right", event.clientX, panelWidths.right)} />}
         </div>
+      </div>
       </div>
 
       {/*

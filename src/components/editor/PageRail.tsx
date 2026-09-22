@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Copy, GripVertical, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Copy, GripVertical, Maximize2, Minus, Plus, Trash2 } from "lucide-react";
 import { pageSize, type CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,9 @@ export function PageRail() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [thumbScale, setThumbScale] = useState(1);
   const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
   const startDrag = (index: number) => (e: React.PointerEvent) => {
@@ -68,6 +71,14 @@ export function PageRail() {
     window.addEventListener("pointerup", up);
   };
 
+  if (collapsed) {
+    return (
+      <div className="editor-page-rail flex h-9 items-center justify-between border-t px-3 py-1">
+        <span className="text-[11px] font-bold text-muted">{pages.length} صفحات — اللوحة مطوية</span>
+        <button type="button" onClick={() => setCollapsed(false)} className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-line px-2 text-[11px] font-bold dark:border-white/10" title="إظهار لوحة الصفحات"><ChevronUp className="size-3.5" /> إظهار</button>
+      </div>
+    );
+  }
   return (
     <div className="editor-page-rail flex h-[132px] items-stretch gap-2 border-t px-3 py-2">
       <div className="flex flex-col justify-center gap-1">
@@ -88,6 +99,12 @@ export function PageRail() {
           <Copy className="size-3.5" />
           نسخ
         </button>
+        <div className="flex items-center gap-1 rounded-[6px] border border-line p-1 dark:border-white/10">
+          <button type="button" onClick={() => setThumbScale((s) => Math.max(0.7, Math.round((s - 0.15)*100)/100))} className="grid size-6 place-items-center rounded hover:bg-line-2 dark:hover:bg-white/5" title="تصغير المصغرات"><Minus className="size-3" /></button>
+          <span className="w-8 text-center text-[10px] tabular-nums">{Math.round(thumbScale*100)}%</span>
+          <button type="button" onClick={() => setThumbScale((s) => Math.min(1.4, Math.round((s + 0.15)*100)/100))} className="grid size-6 place-items-center rounded hover:bg-line-2 dark:hover:bg-white/5" title="تكبير المصغرات"><Plus className="size-3" /></button>
+        </div>
+        <button type="button" onClick={() => setCollapsed(true)} className="inline-flex h-7 items-center justify-center gap-1 rounded-[6px] border border-line text-[10px] font-bold dark:border-white/10" title="طي لوحة الصفحات"><ChevronDown className="size-3" /> طي</button>
       </div>
 
       {/*
@@ -99,8 +116,10 @@ export function PageRail() {
         {pages.map((p, i) => {
           const size = pageSize(p);
           const ratio = size.w / size.h;
-          const thumbW = ratio >= 1 ? 92 : 62;
-          const thumbH = ratio >= 1 ? Math.round(92 / ratio) : 88;
+          const baseW = ratio >= 1 ? 92 : 62;
+          const baseH = ratio >= 1 ? Math.round(92 / ratio) : 88;
+          const thumbW = Math.round(baseW * thumbScale);
+          const thumbH = Math.round(baseH * thumbScale);
           return (
             <li
               key={p.id}
@@ -195,7 +214,7 @@ export function PageRail() {
                 {pages.length > 1 && (
                   <button
                     type="button"
-                    onClick={() => deletePage(p.id)}
+                    onClick={() => setConfirmDelete(p.id)}
                     title="حذف الصفحة"
                     aria-label={`حذف ${p.name}`}
                     className="grid size-5 place-items-center rounded bg-white/90 text-danger shadow"
@@ -208,6 +227,18 @@ export function PageRail() {
           );
         })}
       </ul>
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4" role="dialog" aria-modal="true" aria-label="تأكيد حذف الصفحة">
+          <div className="w-full max-w-xs rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]">
+            <strong className="text-[13px]">حذف الصفحة؟</strong>
+            <p className="mt-1 text-[11px] leading-6 text-muted">سيتم حذف الصفحة وكل عناصرها نهائيًا. لا يمكن التراجع إلا بـ ⌘Z فورًا.</p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button type="button" autoFocus onClick={() => setConfirmDelete(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">إلغاء</button>
+              <button type="button" onClick={() => { if (confirmDelete) deletePage(confirmDelete); setConfirmDelete(null); }} className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white">حذف</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
