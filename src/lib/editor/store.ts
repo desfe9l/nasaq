@@ -56,7 +56,7 @@ import { safeImageSrc } from "./images";
 import { clamp, uid } from "@/lib/utils";
 import { canAddDemoPage, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
 
-export type LeftTab = "elements" | "library" | "shapes" | "templates" | "theme" | "pages" | "fonts" | "settings";
+export type LeftTab = "elements" | "shapes" | "templates" | "theme" | "pages" | "fonts" | "settings";
 export type RightTab = "properties" | "layers";
 export type View = "home" | "editor";
 
@@ -222,7 +222,6 @@ interface EditorStore extends Project, Ui, History {
   ungroup: () => void;
   align: (edge: AlignEdge, frame: "selection" | "page") => void;
   distribute: (axis: "h" | "v") => void;
-  makeSameSize: (mode: "w" | "h" | "both") => void;
   /** Rename an element from the layers panel. */
   renameElement: (id: string, name: string) => void;
   setElementFlag: (id: string, flag: "locked" | "hidden", value?: boolean) => void;
@@ -1007,9 +1006,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       // One element aligns against the frame itself (the artboard for "page");
       // several elements align onto their shared box. Group members are
       // resolved through absolute page space inside `alignmentMoves`.
-      // Skip locked elements from alignment
-      const movableIds = s.selectedIds.filter(id => !locate(page, id)?.el.locked);
-      if (movableIds.length) applyPositions(alignmentMoves(page.elements, movableIds, edge, target));
+      applyPositions(alignmentMoves(page.elements, s.selectedIds, edge, target));
     },
 
     distribute: (axis) => {
@@ -1018,33 +1015,13 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return;
       const picked = s.selectedIds
         .map((id) => locate(page, id)?.el)
-        .filter((el): el is CanvasEl => Boolean(el) && !el!.locked);
+        .filter((el): el is CanvasEl => Boolean(el));
       const out = distributePositions(picked, axis);
       if (!out) {
         toast.error("التوزيع يحتاج ثلاثة عناصر أو أكثر");
         return;
       }
       applyPositions(out);
-    },
-    makeSameSize: (mode) => {
-      const s = get();
-      const page = activePageOf(s);
-      if (!page || s.selectedIds.length < 2) {
-        toast.error("اختر عنصرين على الأقل");
-        return;
-      }
-      const primary = locate(page, s.selectedIds[0])?.el;
-      if (!primary) return;
-      for (const id of s.selectedIds.slice(1)) {
-        const found = locate(page, id);
-        if (!found || found.el.locked) continue;
-        const patch: Partial<CanvasEl> = {};
-        if (mode === "w" || mode === "both") patch.w = primary.w;
-        if (mode === "h" || mode === "both") patch.h = primary.h;
-        // Use updateElement for undo history
-        get().updateElement(id, patch, false);
-      }
-      get().commit();
     },
 
     renameElement: (id, name) => {
@@ -1260,7 +1237,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return;
       const picked = s.selectedIds
         .map((id) => locate(page, id)?.el)
-        .filter((el): el is CanvasEl => Boolean(el) && !el!.locked);
+        .filter((el): el is CanvasEl => Boolean(el));
       if (!picked.length) return;
       // Only top-level elements are duplicated onto the page: a group is one
       // element, and copying one of its members would need a new parent.
@@ -1289,7 +1266,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return;
       const picked = s.selectedIds
         .map((id) => locate(page, id)?.el)
-        .filter((el): el is CanvasEl => Boolean(el) && !el!.locked);
+        .filter((el): el is CanvasEl => Boolean(el));
       if (!picked.length) return;
       set({ clipboard: clone(picked.length === 1 ? picked[0] : createGroupFrom(picked) || picked[0]) });
     },

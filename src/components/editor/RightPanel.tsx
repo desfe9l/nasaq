@@ -75,8 +75,6 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({ typography: true, arabic: true, appearance: false, transform: true });
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
   const [dropLayerId, setDropLayerId] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [layerMenu, setLayerMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const reorderLayers = useEditor((s) => s.reorderLayers);
 
   /**
@@ -189,11 +187,6 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
                 dragging={draggedLayerId === layer.id}
                 dropTarget={dropLayerId === layer.id && draggedLayerId !== layer.id}
                 onDragStart={startLayerDrag(layer.id)}
-                onContextMenu={(e: React.MouseEvent) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setLayerMenu({ x: e.clientX, y: e.clientY, id: layer.id });
-                }}
               />
             ))}
           </div>
@@ -1251,65 +1244,10 @@ export function RightPanel({ onReplaceImage }: { onReplaceImage: (id: string) =>
               icon={ImagePlus}
               label="حفظ في المكتبة للرجوع إليه"
             />
+            <Action onClick={deleteSelected} icon={Trash2} label="حذف العنصر" danger />
           </div>
         )}
       </div>
-      {/* Sticky footer — never clipped, always reachable. Fixed at panel bottom
-          with its own border so it stays visible while the properties scroll above. */}
-      {tab === "properties" && el && (
-        <div className="editor-properties-footer shrink-0 sticky bottom-0 z-10 flex flex-col gap-1.5 border-t border-line bg-white p-2 dark:border-white/10 dark:bg-[#161c26]">
-          <div className="grid grid-cols-2 gap-1.5">
-            <button type="button" onClick={() => setConfirmDelete(true)} className="inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border border-red-200 bg-red-50 text-[11px] font-extrabold text-danger dark:border-red-500/30 dark:bg-red-500/10">
-              <Trash2 className="size-3.5" /> حذف العنصر
-            </button>
-            <button type="button" onClick={() => void saveToLibrary(el)} className="inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10">
-              <ImagePlus className="size-3.5" /> حفظ بالمكتبة
-            </button>
-          </div>
-          <p className="text-center text-[9px] leading-3 text-muted">يُحذف العنصر المحدد بعد التأكيد — يمكن التراجع بـ ⌘Z</p>
-        </div>
-      )}
-      {layerMenu && (
-        <div className="fixed inset-0 z-[90]" onPointerDown={() => setLayerMenu(null)} onContextMenu={(e) => e.preventDefault()}>
-          <div
-            className="fixed min-w-[180px] rounded-[8px] border bg-white p-1.5 shadow-2xl dark:bg-[#161c26] dark:border-white/10"
-            style={{ left: Math.min(layerMenu.x, window.innerWidth - 200), top: Math.min(layerMenu.y, window.innerHeight - 260) }}
-            onPointerDown={(e) => e.stopPropagation()}
-            role="menu"
-          >
-            {(() => {
-              const targetId = layerMenu.id;
-              const api = useEditor.getState();
-              const tgt = api.pages.find((p) => p.id === api.activePageId)?.elements.find((e) => e.id === targetId) || null;
-              const actions = [
-                { label: "تحديد", run: () => api.select(targetId) },
-                { label: "تحديد الكل", run: () => api.selectAll() },
-                { label: tgt?.locked ? "فتح القفل" : "قفل", run: () => api.setElementFlag(targetId, "locked") },
-                { label: tgt?.hidden ? "إظهار" : "إخفاء", run: () => api.setElementFlag(targetId, "hidden") },
-                { label: "إعادة تسمية", run: () => { api.select(targetId); /* renaming via LayerRow double click — focus */ } },
-                { label: "تكرار", run: () => { api.select(targetId); api.duplicateSelected(); } },
-                { label: "حذف", run: () => { api.select(targetId); setConfirmDelete(true); }, danger: true },
-                { label: "الخصائص", run: () => { api.select(targetId); api.setRightTab("properties"); } },
-              ];
-              return actions.map((a) => (
-                <button key={a.label} type="button" role="menuitem" onClick={() => { a.run(); setLayerMenu(null); }} className={"flex w-full items-center rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5 " + (a.danger ? "text-red-600" : "")}>{a.label}</button>
-              ));
-            })()}
-          </div>
-        </div>
-      )}
-      {confirmDelete && el && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-navy/45 p-4" role="dialog" aria-modal="true" aria-label="تأكيد حذف العنصر" onKeyDown={(e) => { if (e.key === "Escape") setConfirmDelete(false); }}>
-          <div className="w-full max-w-xs rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]">
-            <strong className="text-[13px]">هل أنت متأكد من الحذف؟</strong>
-            <p className="mt-1 text-[11px] leading-6 text-muted">سيتم حذف «{el.name || TYPE_NAME[el.type]}» من الصفحة نهائيًا. يمكنك التراجع مباشرة بعد الحذف.</p>
-            <div className="mt-3 flex justify-end gap-2">
-              <button type="button" autoFocus onClick={() => setConfirmDelete(false)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">إلغاء</button>
-              <button type="button" onClick={() => { setConfirmDelete(false); deleteSelected(); }} className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white">حذف</button>
-            </div>
-          </div>
-        </div>
-      )}
     </aside>
   );
 }
@@ -1446,14 +1384,12 @@ function LayerRow({
   dragging = false,
   dropTarget = false,
   onDragStart,
-  onContextMenu,
 }: {
   layer: CanvasEl;
   depth?: number;
   dragging?: boolean;
   dropTarget?: boolean;
   onDragStart?: (event: React.PointerEvent) => void;
-  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const selected = useEditor((s) => s.selectedIds.includes(layer.id));
   const select = useEditor((s) => s.select);
@@ -1476,7 +1412,6 @@ function LayerRow({
     <div className="grid gap-1">
       <div
         data-layer-id={depth === 0 ? layer.id : undefined}
-        onContextMenu={onContextMenu}
         className={cn(
           "flex items-center gap-1.5 rounded-[8px] border px-2 py-1.5",
           // Selected layer: a firm ring + tinted row, clearly stronger than the
@@ -1581,7 +1516,7 @@ function LayerRow({
         ?.slice()
         .sort((a, b) => b.z - a.z)
         .map((child) => (
-          <LayerRow key={child.id} layer={child} depth={depth + 1} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); /* bubble to parent handling via closest data-layer-id */ }} />
+          <LayerRow key={child.id} layer={child} depth={depth + 1} />
         ))}
     </div>
   );

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 
 type PendingAsset = Asset & { fileName: string };
 
-export function AssetLibrary({ compact = false }: { compact?: boolean } = {}) {
+export function AssetLibrary() {
   const assets = useEditor((s) => s.assets);
   const assetsLoading = useEditor((s) => s.assetsLoading);
   const addElement = useEditor((s) => s.addElement);
@@ -42,23 +42,10 @@ export function AssetLibrary({ compact = false }: { compact?: boolean } = {}) {
   const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
   const [folderDraft, setFolderDraft] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "compact">("grid");
-  const [assetMenu, setAssetMenu] = useState<{ x: number; y: number; asset: Asset } | null>(null);
-  const [folderMenu, setFolderMenu] = useState<{ x: number; y: number; folderId: string | null } | null>(null);
   const visibleAssets = assets.filter((asset) => (asset.folderId || null) === folderId);
   const currentFolder = folders.find((folder) => folder.id === folderId);
 
   const place = (asset: Asset) => {
-    const isSvgAsset = asset.src.startsWith("data:image/svg+xml") || asset.src.includes("<svg");
-    if (isSvgAsset) {
-      let markup = asset.src;
-      if (markup.startsWith("data:image/svg+xml")) {
-        try { markup = decodeURIComponent(markup.split(",")[1] || markup); } catch { /* keep raw */ }
-      }
-      if (markup.includes("<svg")) {
-        addElement("svg", { content: markup, name: asset.name, w: 90, h: 90 });
-        return;
-      }
-    }
     const max = { w: 90, h: 90 };
     const scale = Math.min(max.w / asset.w, max.h / asset.h, 1);
     addElement("image", {
@@ -147,11 +134,11 @@ export function AssetLibrary({ compact = false }: { compact?: boolean } = {}) {
   };
 
   return (
-    <section className={compact ? "asset-library grid gap-2" : "asset-library grid gap-2"}>
+    <section className="asset-library grid gap-2">
       <header className="flex items-center justify-between gap-2">
         <div>
-          <h3 className="text-[12px] font-extrabold tracking-wide">{compact ? "عناصر محفوظة" : "مكتبة العناصر"}</h3>
-          <p className="mt-0.5 text-[10px] text-muted">{compact ? "مختصرة — افتح تبويب المكتبة للعرض الكامل" : "معاينة قبل الحفظ، ثم إدراج وتعديل مباشر"}</p>
+          <h3 className="text-[12px] font-extrabold tracking-wide">مكتبة العناصر</h3>
+          <p className="mt-0.5 text-[10px] text-muted">معاينة قبل الحفظ، ثم إدراج وتعديل مباشر</p>
         </div>
         <div className="flex items-center gap-1">
           <button type="button" onClick={exportLibrary} aria-label="تصدير المكتبة" title="تصدير المكتبة (ملف واحد بكل المجلدات والعناصر)" className="grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"><Download className="size-3.5" /></button>
@@ -174,11 +161,11 @@ export function AssetLibrary({ compact = false }: { compact?: boolean } = {}) {
       </header>
 
       <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-        <button type="button" onClick={() => setAssetFolder(null)} onContextMenu={(e) => { e.preventDefault(); setFolderMenu({ x: e.clientX, y: e.clientY, folderId: null }); }} className={cn("inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold", !folderId ? "border-navy bg-navy/10" : "border-line dark:border-white/10")}>
+        <button type="button" onClick={() => setAssetFolder(null)} className={cn("inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold", !folderId ? "border-navy bg-navy/10" : "border-line dark:border-white/10")}>
           <Folder className="size-3" /> الكل
         </button>
         {folders.map((folder) => (
-          <button key={folder.id} type="button" onClick={() => setAssetFolder(folder.id)} onContextMenu={(e) => { e.preventDefault(); setFolderMenu({ x: e.clientX, y: e.clientY, folderId: folder.id }); }} className={cn("inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold", folderId === folder.id ? "border-navy bg-navy/10" : "border-line dark:border-white/10")}>
+          <button key={folder.id} type="button" onClick={() => setAssetFolder(folder.id)} className={cn("inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold", folderId === folder.id ? "border-navy bg-navy/10" : "border-line dark:border-white/10")}>
             <Folder className="size-3" /> {folder.name}
           </button>
         ))}
@@ -233,7 +220,7 @@ export function AssetLibrary({ compact = false }: { compact?: boolean } = {}) {
       ) : (
         <div className={cn("grid gap-2", viewMode === "grid" ? "grid-cols-[repeat(auto-fill,minmax(118px,1fr))]" : "grid-cols-[repeat(auto-fill,minmax(92px,1fr))]")}>
           {visibleAssets.map((asset) => (
-            <div key={asset.id} onContextMenu={(e) => { e.preventDefault(); setAssetMenu({ x: e.clientX, y: e.clientY, asset }); }} className={cn("group relative rounded-[8px] border bg-white/60 p-1.5 dark:bg-white/5", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy/5 ring-1 ring-navy/30" : "border-line dark:border-white/10")}>
+            <div key={asset.id} className={cn("group relative rounded-[8px] border bg-white/60 p-1.5 dark:bg-white/5", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy/5 ring-1 ring-navy/30" : "border-line dark:border-white/10")}>
               <button type="button" onClick={() => toggleAssetSelect(asset.id)} aria-label={`تحديد ${asset.name}`} className={cn("absolute right-2 top-2 z-10 grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90", selectedAssetIds.includes(asset.id) ? "border-navy bg-navy text-white" : "border-line dark:border-white/20")}>
                 {selectedAssetIds.includes(asset.id) && <Check className="size-3" />}
               </button>
@@ -322,7 +309,7 @@ export function AssetLibrary({ compact = false }: { compact?: boolean } = {}) {
         ref={fileInputRef}
         onChange={handleFileChange}
         multiple
-        accept="image/*,.svg,image/svg+xml"
+        accept="image/*"
         className="hidden"
       />
 
@@ -364,8 +351,8 @@ export function AssetLibrary({ compact = false }: { compact?: boolean } = {}) {
         >
           {folderDialog === "delete" ? (
             <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]">
-              <strong className="text-[13px]">حذف المجلد؟</strong>
-              <p className="text-[11px] leading-6 text-muted">سيتم حذف المجلد فقط. العناصر الموجودة داخله ستُنقل إلى المكتبة الرئيسية ولن تُحذف.</p>
+              <strong className="text-[13px]">حذف المجلد نهائيًا؟</strong>
+              <p className="text-[11px] leading-6 text-muted">سيتم حذف هذا المجلد ومحتوياته نهائيًا، ولا يمكن التراجع عن هذا الإجراء.</p>
               <div className="flex justify-end gap-2"><button type="button" autoFocus onClick={() => setFolderDialog(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">إلغاء</button><button type="button" onClick={() => { if (currentFolder) void deleteAssetFolder(currentFolder.id); setFolderDialog(null); }} className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white">حذف نهائيًا</button></div>
             </div>
           ) : (
@@ -378,26 +365,6 @@ export function AssetLibrary({ compact = false }: { compact?: boolean } = {}) {
         </div>
       )}
 
-      {assetMenu && (
-        <div className="fixed inset-0 z-[90]" onPointerDown={() => setAssetMenu(null)} onContextMenu={(e) => e.preventDefault()}>
-          <div className="fixed min-w-[170px] rounded-[8px] border bg-white p-1.5 shadow-2xl dark:bg-[#161c26] dark:border-white/10" style={{ left: Math.min(assetMenu.x, window.innerWidth - 190), top: Math.min(assetMenu.y, window.innerHeight - 260) }} onPointerDown={(e) => e.stopPropagation()} role="menu">
-            <button type="button" role="menuitem" onClick={() => { place(assetMenu.asset); setAssetMenu(null); }} className="flex w-full items-center rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5">فتح / إدراج في الصفحة</button>
-            <button type="button" role="menuitem" onClick={() => { setPreview(assetMenu.asset); setAssetMenu(null); }} className="flex w-full items-center rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5">معاينة</button>
-            <button type="button" role="menuitem" onClick={() => { toggleAssetSelect(assetMenu.asset.id); setAssetMenu(null); }} className="flex w-full items-center rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5">{selectedAssetIds.includes(assetMenu.asset.id) ? "إلغاء التحديد" : "تحديد"}</button>
-            <button type="button" role="menuitem" onClick={() => { startRename(assetMenu.asset); setAssetMenu(null); }} className="flex w-full items-center rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5">إعادة تسمية</button>
-            <button type="button" role="menuitem" onClick={() => { const a = assetMenu.asset; setAssetMenu(null); setAssetToDelete(a); }} className="flex w-full items-center rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">حذف</button>
-          </div>
-        </div>
-      )}
-      {folderMenu && (
-        <div className="fixed inset-0 z-[90]" onPointerDown={() => setFolderMenu(null)} onContextMenu={(e) => e.preventDefault()}>
-          <div className="fixed min-w-[170px] rounded-[8px] border bg-white p-1.5 shadow-2xl dark:bg-[#161c26] dark:border-white/10" style={{ left: Math.min(folderMenu.x, window.innerWidth - 190), top: Math.min(folderMenu.y, window.innerHeight - 260) }} onPointerDown={(e) => e.stopPropagation()} role="menu">
-            <button type="button" role="menuitem" onClick={() => { if (folderMenu.folderId) setAssetFolder(folderMenu.folderId); else setAssetFolder(null); setFolderMenu(null); }} className="flex w-full items-center rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5">فتح المجلد</button>
-            <button type="button" role="menuitem" onClick={() => { if (folderMenu.folderId) { const f = folders.find((x) => x.id === folderMenu.folderId); if (f) { setFolderDraft(f.name); setFolderDialog("rename"); } } else { setFolderDraft(""); setFolderDialog("create"); } setFolderMenu(null); }} className="flex w-full items-center rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/5">{folderMenu.folderId ? "إعادة تسمية" : "مجلد جديد"}</button>
-            {folderMenu.folderId && <button type="button" role="menuitem" onClick={() => { setFolderMenu(null); setFolderDialog("delete"); }} className="flex w-full items-center rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10">حذف المجلد</button>}
-          </div>
-        </div>
-      )}
       {assetToDelete && (
         /* Same destructive-action contract as the folder dialog: no confirm on
            backdrop click, Escape cancels, and focus starts on «إلغاء». */
