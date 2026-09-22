@@ -223,7 +223,7 @@ New modules (all pure, no new dependencies): `kashida.ts`, `macros.ts`, `typogra
 ### Acceptance criteria
 
 - [x] A4 canvas fully visible without horizontal scrolling at 1024 px: drawer layout below 1100 px + auto-fit on layout change.
-- [x] Top toolbar never wraps above `md`, and the four global actions (Save, Undo/Redo, Zoom, Export) are pinned at the row's edges.
+- [x] Top toolbar never wraps above `md` (768 px), and the four global actions (Save/Export, Undo/Redo, Zoom/Fit) are pinned at the row's edges — brand + history/zoom cluster + actions stay in row 1 while only the tool tray narrows and scrolls *inside* the row. Below 768 px the tray deliberately keeps its own second line (`flex-wrap` + `order-last` + `min-w-fit`): a phone cannot hold the brand, the four global actions, the menus, the project name and the grid toggle in one 390 px line, and wrapping keeps every control visible instead of hiding half of them behind a horizontal scroll. Making the row a single edge-pinned scrolling strip down to 320 px is a one-line follow-up if the literal reading (one row at *every* width) is wanted.
 - [x] Macros evaluate in every generated document (canvas, standalone HTML, DOCX, PPTX) from one resolution path.
 - [x] Arabic text stays aligned with kashida support and zero character clipping (leading floors per family, floor applied only where multi-line Arabic could actually clip).
 - [x] Client-side only: sheet import reads the file in the browser; no document ever leaves the device.
