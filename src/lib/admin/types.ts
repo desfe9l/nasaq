@@ -3,7 +3,7 @@
  *
  * Everything here is data only. Persistence happens server-side
  * (`functions.ts` → Postgres/PGLite via `getSql`) and writes are gated by the
- * server-side ADMIN_SECRET; the browser never decides who is an admin.
+ * server-side owner authorization; the browser never decides who is an admin.
  */
 
 export interface CommercialSettings {

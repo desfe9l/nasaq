@@ -1,20 +1,17 @@
 /**
  * NASAQ admin — server functions for /admin.
  *
- * Security model (same as the existing licence admin):
- *   • The passcode is NEVER in the client bundle. It lives in the server-side
- *     `ADMIN_SECRET` environment variable (set it to the agreed admin passcode
- *     in Vercel → Project → Settings → Environment Variables).
- *   • Every mutating/privileged call carries the passcode typed by the admin
- *     and is verified here with a constant-time comparison + rate limiting.
- *   • No ADMIN_SECRET configured ⇒ admin is disabled (secure default).
+ * Security model:
+ *   • Every privileged call requires the verified Better Auth session.
+ *   • Owner access is resolved server-side from NASAQ_OWNER_ID or
+ *     NASAQ_OWNER_EMAIL; neither value is sent to the browser.
  *
  * Persistence uses the project's shared SQL client (`getSql`: Neon in
  * production, PGLite in preview) and the tables in migrations/0002.
  */
 
 import { createServerFn } from "@tanstack/react-start";
-import { checkRateLimit } from "@/lib/license/rate-limit";
+import { authMiddleware, optionalAuthMiddleware } from "@/lib/auth/middleware";
 import {
   DEFAULT_SITE_SETTINGS,
   normalizeSection,
@@ -32,34 +29,11 @@ const SECTIONS: SettingsSection[] = ["commercial", "announcement", "texts", "bra
 const MAX_TEMPLATE_BYTES = 4 * 1024 * 1024;
 const MAX_THUMB_BYTES = 600 * 1024;
 
-/** Treat hyphen/en-dash/em-dash alike so "NASAQ-ADMIN-2026" and "NASAQ–ADMIN–2026" match. */
-function normalizePasscode(value: string): string {
-  return value.normalize("NFKC").replace(/[\u2010-\u2015\u2212]/g, "-").trim();
-}
+type VerifiedContext = { userId: string; userEmail: string | null };
 
-async function getIp(): Promise<string> {
-  try {
-    const { getRequest } = await import("@tanstack/react-start/server");
-    const req = getRequest();
-    return (
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip") ||
-      "unknown"
-    );
-  } catch {
-    return "unknown";
-  }
-}
-
-async function verifyAdmin(passcode: unknown): Promise<boolean> {
-  const configured = process.env.ADMIN_SECRET;
-  if (!configured || !configured.trim() || typeof passcode !== "string" || !passcode) return false;
-  const ip = await getIp();
-  if (!checkRateLimit("admin:auth", ip, 20, 60_000)) return false;
-  const { createHash, timingSafeEqual } = await import("node:crypto");
-  const a = createHash("sha256").update(normalizePasscode(passcode)).digest();
-  const b = createHash("sha256").update(normalizePasscode(configured)).digest();
-  return timingSafeEqual(a, b);
+async function verifyAdmin(context: VerifiedContext): Promise<boolean> {
+  const { isOwnerIdentity } = await import("@/lib/auth/owner.server");
+  return isOwnerIdentity({ id: context.userId, email: context.userEmail });
 }
 
 async function sql() {
@@ -134,11 +108,10 @@ function validateContent(kind: TemplateKind, content: string): string | null {
 // ── Auth probe ─────────────────────────────────────────────────────────────
 
 export const adminVerifyFn = createServerFn({ method: "POST" })
-  .validator((data: { passcode: string }) => data)
-  .handler(async ({ data }) => {
-    const configured = Boolean(process.env.ADMIN_SECRET?.trim());
-    if (!configured) return { ok: false, configured: false };
-    return { ok: await verifyAdmin(data.passcode), configured: true };
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const { ownerConfigPresent } = await import("@/lib/auth/owner.server");
+    return { ok: await verifyAdmin(context), configured: ownerConfigPresent() };
   });
 
 // ── Site settings ──────────────────────────────────────────────────────────
@@ -153,9 +126,10 @@ export const getSiteSettingsFn = createServerFn({ method: "GET" }).handler(async
 });
 
 export const adminSaveSettingsFn = createServerFn({ method: "POST" })
-  .validator((data: { passcode: string; section: SettingsSection; value: unknown }) => data)
-  .handler(async ({ data }) => {
-    if (!(await verifyAdmin(data.passcode))) return { ok: false as const, error: "غير مصرح" };
+  .middleware([authMiddleware])
+  .validator((data: { section: SettingsSection; value: unknown }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح" };
     if (!SECTIONS.includes(data.section)) return { ok: false as const, error: "قسم غير معروف" };
     const value = normalizeSection(data.section, data.value);
     const db = await sql();
@@ -188,8 +162,9 @@ export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handle
  * licence key whose server-side entitlements include premium templates.
  */
 export const getPublishedTemplateFn = createServerFn({ method: "POST" })
+  .middleware([optionalAuthMiddleware])
   .validator((data: { id: string; licenseKey?: string }) => data)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const db = await sql();
     const rows = await db.query(`SELECT * FROM admin_templates WHERE id = $1 AND status = 'published' LIMIT 1`, [String(data.id)]);
     if (!rows.length) return { ok: false as const, error: "القالب غير موجود" };
@@ -197,6 +172,14 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
     if (row.tier === "licensed") {
       const key = String(data.licenseKey ?? "").trim();
       let allowed = false;
+      if (context.userId) {
+        const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
+        const access = await getAuthorizationContext({
+          id: context.userId,
+          email: context.userEmail,
+        });
+        allowed = access.isOwner || access.entitlements.premium_templates === true;
+      }
       if (key) {
         const { hashLicenseKey } = await import("@/lib/license/key");
         const { validateLicense } = await import("@/lib/license/server");
@@ -216,9 +199,9 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
   });
 
 export const adminListTemplatesFn = createServerFn({ method: "POST" })
-  .validator((data: { passcode: string }) => data)
-  .handler(async ({ data }) => {
-    if (!(await verifyAdmin(data.passcode))) return { ok: false as const, error: "غير مصرح", templates: [] };
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح", templates: [] };
     const db = await sql();
     const rows = await db.query(
       `SELECT id, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
@@ -228,9 +211,10 @@ export const adminListTemplatesFn = createServerFn({ method: "POST" })
   });
 
 export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
-  .validator((data: { passcode: string; template: AdminTemplateInput }) => data)
-  .handler(async ({ data }) => {
-    if (!(await verifyAdmin(data.passcode))) return { ok: false as const, error: "غير مصرح" };
+  .middleware([authMiddleware])
+  .validator((data: { template: AdminTemplateInput }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح" };
     const t = data.template;
     const kind: TemplateKind = t.kind === "svg" ? "svg" : "json";
     const tier: TemplateTier = t.tier === "licensed" ? "licensed" : "free";
@@ -270,9 +254,10 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
   });
 
 export const adminSetTemplateStatusFn = createServerFn({ method: "POST" })
-  .validator((data: { passcode: string; id: string; status?: TemplateStatus; tier?: TemplateTier }) => data)
-  .handler(async ({ data }) => {
-    if (!(await verifyAdmin(data.passcode))) return { ok: false as const, error: "غير مصرح" };
+  .middleware([authMiddleware])
+  .validator((data: { id: string; status?: TemplateStatus; tier?: TemplateTier }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح" };
     const db = await sql();
     if (data.status && ["draft", "published", "archived"].includes(data.status)) {
       await db.query(`UPDATE admin_templates SET status = $2, updated_at = now() WHERE id = $1`, [data.id, data.status]);
@@ -284,9 +269,10 @@ export const adminSetTemplateStatusFn = createServerFn({ method: "POST" })
   });
 
 export const adminDeleteTemplateFn = createServerFn({ method: "POST" })
-  .validator((data: { passcode: string; id: string }) => data)
-  .handler(async ({ data }) => {
-    if (!(await verifyAdmin(data.passcode))) return { ok: false as const, error: "غير مصرح" };
+  .middleware([authMiddleware])
+  .validator((data: { id: string }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح" };
     const db = await sql();
     await db.query(`DELETE FROM admin_templates WHERE id = $1`, [data.id]);
     return { ok: true as const };
