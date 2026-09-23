@@ -6,10 +6,9 @@
  *
  * The app runs its own Better Auth at `/api/auth/*`, so the session cookie stays
  * on this app's own origin. Sign-in federates to the shared **Grok auth broker**
- * (`GROK_AUTH_ISSUER`) via the `genericOAuth` plugin — the broker brokers the
- * upstream sign-in methods (Google, X, …) and holds their shared secrets; this
- * app only holds its own client id/secret and names the upstream it wants via
- * each provider's `idp` hint.
+ * (`GROK_AUTH_ISSUER`) via the `genericOAuth` plugin — the broker holds the
+ * Google OAuth application secret; this app only holds its own broker client
+ * id/secret and names Google via the provider's `idp` hint.
  *
  * Tri-mode:
  *   - Deployed: the deployer injects a per-app `GROK_AUTH_*` + `BETTER_AUTH_URL`
@@ -129,8 +128,7 @@ const databaseUrl = env("DATABASE_URL");
 
 // Static broker OAuth endpoints (skip OIDC discovery on every sign-in / callback).
 // Discovery would cost an extra network hop to the broker before the popup can
-// even redirect to Google/X — the live-preview popup felt stuck on the app for
-// that whole round-trip. These paths match the broker's discovery document.
+// redirect to Google. These paths match the broker's discovery document.
 const issuerBase = grokIssuer.replace(/\/+$/, "");
 const grokAuthorizationUrl = `${issuerBase}/api/auth/oauth2/authorize`;
 const grokTokenUrl = `${issuerBase}/api/auth/oauth2/token`;
@@ -183,12 +181,9 @@ export const auth = betterAuth({
   // local loopback variants, or clients get "Invalid origin".
   trustedOrigins,
 
-  // Encrypt broker-issued OAuth tokens at rest, and treat the broker's upstreams
-  // as trusted first-party identities. The broker owns identity and X emails are
-  // synthetic/unverified, so WITHOUT this a login can fail with
-  // `account_not_linked` (Better Auth refuses to attach an untrusted, unverified
-  // identity to an existing user). Google and X carry DISTINCT emails, so this
-  // never merges them into one user — they stay separate identities.
+  // Encrypt broker-issued OAuth tokens at rest and treat Google's broker
+  // identity as trusted for account linking. Without this, Better Auth can
+  // reject linking an OAuth identity to an existing user with `account_not_linked`.
   account: {
     encryptOAuthTokens: true,
     accountLinking: {
@@ -197,8 +192,6 @@ export const auth = betterAuth({
         ...GROK_PROVIDERS.map((p) => p.providerId),
         GATE_PROVIDER_ID,
       ],
-      // X's synthetic email is never "verified", so don't gate linking on the
-      // local user's email-verified state.
       requireLocalEmailVerified: false,
     },
   },
@@ -233,8 +226,8 @@ export const auth = betterAuth({
   plugins: [
     gateIdentitySessions(),
 
-    // One genericOAuth provider per upstream (when auth is on), all federating
-    // to the broker with the SAME client and differing only by the `idp` hint.
+    // The Google genericOAuth provider federates to the broker with the app's
+    // single client and the `google` idp hint.
     ...(grokOAuthPlugin ? [grokOAuthPlugin] : []),
 
     // Accept `Authorization: Bearer <session-token>` as an alternative to the
