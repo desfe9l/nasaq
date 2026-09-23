@@ -39,9 +39,28 @@ export const authMiddleware = createMiddleware({ type: "function" })
     // `isolation.server.ts` — keep this import in sync so image `tsc` resolves
     // it, and so Vite does not ship `@tanstack/react-start/server` to the browser.
     const { assertSameSiteRequest } = await import("./isolation.server");
-    const { requireUserId } = await import("./verify.server");
+    const { getSessionUser, requireUserId } = await import("./verify.server");
     // Reject scripted cross-site/sibling requests before touching per-user data.
     assertSameSiteRequest();
-    const userId = await requireUserId(context.bearerToken);
-    return next({ context: { userId } });
+    const sessionUser = await getSessionUser(context.bearerToken);
+    const userId = sessionUser?.id ?? (await requireUserId(context.bearerToken));
+    return next({
+      context: { userId, userEmail: sessionUser?.email ?? null },
+    });
+  });
+
+/** Same-origin-aware identity context for public reads that optionally unlock for the owner. */
+export const optionalAuthMiddleware = createMiddleware({ type: "function" })
+  .client(async ({ next }) => {
+    const { getBearerToken } = await import("./client");
+    return next({ sendContext: { bearerToken: getBearerToken() ?? undefined } });
+  })
+  .server(async ({ next, context }) => {
+    const { assertSameSiteRequest } = await import("./isolation.server");
+    const { getSessionUser } = await import("./verify.server");
+    assertSameSiteRequest();
+    const user = await getSessionUser(context.bearerToken);
+    return next({
+      context: { userId: user?.id ?? null, userEmail: user?.email ?? null },
+    });
   });
