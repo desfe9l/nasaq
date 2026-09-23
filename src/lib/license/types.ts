@@ -70,6 +70,7 @@ export type FeatureId =
   | "unlimited_projects"
   | "unlimited_pages"
   | "data_import"
+  | "ai_report"
   | "collaboration"
   | "team_features"
   | "multi_user_activation";
@@ -85,6 +86,7 @@ export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean
     unlimited_projects: false,
     unlimited_pages: false,
     data_import: false,
+    ai_report: false,
     collaboration: false,
     team_features: false,
     multi_user_activation: false,
@@ -98,6 +100,7 @@ export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean
     unlimited_projects: true,
     unlimited_pages: true,
     data_import: true,
+    ai_report: true,
     collaboration: false,
     team_features: false,
     multi_user_activation: false,
@@ -111,6 +114,7 @@ export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean
     unlimited_projects: true,
     unlimited_pages: true,
     data_import: true,
+    ai_report: true,
     collaboration: true,
     team_features: true,
     multi_user_activation: true,
@@ -124,6 +128,7 @@ export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean
     unlimited_projects: true,
     unlimited_pages: true,
     data_import: true,
+    ai_report: true,
     collaboration: true,
     team_features: true,
     multi_user_activation: true,
@@ -147,6 +152,7 @@ export const FEATURE_LABELS: Record<FeatureId, { name: string; description: stri
   unlimited_projects: { name: "مشاريع غير محدودة", description: "إنشاء عدد غير محدود من المشاريع" },
   unlimited_pages: { name: "صفحات غير محدودة", description: "إضافة عدد غير محدود من الصفحات" },
   data_import: { name: "استيراد البيانات", description: "استيراد البيانات والقوالب من ملفات" },
+  ai_report: { name: "مسودات التقارير بالذكاء الاصطناعي", description: "توليد مسودة قابلة للمراجعة من موجزك" },
   collaboration: { name: "التعاون", description: "مشاركة المشاريع والعمل الجماعي" },
   team_features: { name: "ميزات الفريق", description: "إدارة ميزات ومساحة عمل الفريق" },
   multi_user_activation: { name: "تفعيل متعدد المستخدمين", description: "تفعيل الترخيص لأكثر من مستخدم" },
@@ -168,6 +174,7 @@ export interface LicenseValidateResult {
 
 export interface LicenseStatusResult {
   hasLicense: boolean;
+  isOwner?: boolean;
   license?: LicenseInfo;
   entitlements?: Record<FeatureId, boolean>;
 }
