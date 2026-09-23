@@ -196,7 +196,7 @@ async function createSql(): Promise<Sql> {
         "fails with ENOENT _libs/pglite.data, and its data would not persist " +
         "across invocations). Set DATABASE_URL to a managed Postgres (free " +
         "Neon works) in Vercel → Settings → Environment Variables and redeploy. " +
-        "Migrations apply automatically during the build (npm run db:migrate).",
+        "Migrations apply automatically during the build.",
     );
   }
   return dbSource === "neon" ? createNeonSql() : createPgliteSql();

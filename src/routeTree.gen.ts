@@ -31,7 +31,7 @@ import { Route as ApiCheckoutConfigRouteImport } from './routes/api/checkout/con
 import { Route as ApiLicenseActivateRouteImport } from './routes/api/license/activate'
 import { Route as ApiLicenseDeactivateRouteImport } from './routes/api/license/deactivate'
 import { Route as ApiLicenseValidateRouteImport } from './routes/api/license/validate'
-import { Route as ApiWebhooksLemonsqueezyRouteImport } from './routes/api/webhooks/lemonsqueezy'
+import { Route as ApiWebhooksKeygenRouteImport } from './routes/api/webhooks/keygen'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -144,9 +144,9 @@ const ApiLicenseValidateRoute = ApiLicenseValidateRouteImport.update({
   path: '/api/license/validate',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiWebhooksLemonsqueezyRoute = ApiWebhooksLemonsqueezyRouteImport.update({
-  id: '/api/webhooks/lemonsqueezy',
-  path: '/api/webhooks/lemonsqueezy',
+const ApiWebhooksKeygenRoute = ApiWebhooksKeygenRouteImport.update({
+  id: '/api/webhooks/keygen',
+  path: '/api/webhooks/keygen',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -173,7 +173,7 @@ export interface FileRoutesByFullPath {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
-  '/api/webhooks/lemonsqueezy': typeof ApiWebhooksLemonsqueezyRoute
+  '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -198,7 +198,7 @@ export interface FileRoutesByTo {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
-  '/api/webhooks/lemonsqueezy': typeof ApiWebhooksLemonsqueezyRoute
+  '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -224,7 +224,7 @@ export interface FileRoutesById {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
-  '/api/webhooks/lemonsqueezy': typeof ApiWebhooksLemonsqueezyRoute
+  '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -251,7 +251,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
-    | '/api/webhooks/lemonsqueezy'
+    | '/api/webhooks/keygen'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -276,7 +276,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
-    | '/api/webhooks/lemonsqueezy'
+    | '/api/webhooks/keygen'
   id:
     | '__root__'
     | '/'
@@ -301,7 +301,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
-    | '/api/webhooks/lemonsqueezy'
+    | '/api/webhooks/keygen'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -327,7 +327,7 @@ export interface RootRouteChildren {
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
   ApiLicenseValidateRoute: typeof ApiLicenseValidateRoute
-  ApiWebhooksLemonsqueezyRoute: typeof ApiWebhooksLemonsqueezyRoute
+  ApiWebhooksKeygenRoute: typeof ApiWebhooksKeygenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -486,11 +486,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLicenseValidateRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/webhooks/lemonsqueezy': {
-      id: '/api/webhooks/lemonsqueezy'
-      path: '/api/webhooks/lemonsqueezy'
-      fullPath: '/api/webhooks/lemonsqueezy'
-      preLoaderRoute: typeof ApiWebhooksLemonsqueezyRouteImport
+    '/api/webhooks/keygen': {
+      id: '/api/webhooks/keygen'
+      path: '/api/webhooks/keygen'
+      fullPath: '/api/webhooks/keygen'
+      preLoaderRoute: typeof ApiWebhooksKeygenRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -520,7 +520,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,
   ApiLicenseDeactivateRoute: ApiLicenseDeactivateRoute,
   ApiLicenseValidateRoute: ApiLicenseValidateRoute,
-  ApiWebhooksLemonsqueezyRoute: ApiWebhooksLemonsqueezyRoute,
+  ApiWebhooksKeygenRoute: ApiWebhooksKeygenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

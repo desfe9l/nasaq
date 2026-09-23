@@ -53,7 +53,7 @@ export async function findLicenseByKeyHash(keyHash: string): Promise<License | n
 export async function upsertExternalLicense(params: {
   keyHash: string;
   keyPrefix: string;
-  type: LicenseType;
+  type?: LicenseType;
   userId: string | null;
   expiresAt: string | null;
   activationCount: number;
@@ -62,7 +62,7 @@ export async function upsertExternalLicense(params: {
   metadata: Record<string, string>;
 }): Promise<License> {
   const sql = await getSql();
-  const id = `ls_${params.keyHash.slice(0, 24)}`;
+  const id = `ext_${params.keyHash.slice(0, 24)}`;
   await sql.query(
     `INSERT INTO licenses (id, key_hash, key_prefix, type, status, user_id, activated_at, expires_at, activation_count, max_activations, metadata)
      VALUES ($1, $2, $3, $4, $5, $6, now(), $7, $8, $9, $10::jsonb)
@@ -79,7 +79,7 @@ export async function upsertExternalLicense(params: {
       id,
       params.keyHash,
       params.keyPrefix,
-      params.type,
+       params.type ?? "PRO",
       params.status ?? "ACTIVE",
       params.userId,
       params.expiresAt,
@@ -93,30 +93,62 @@ export async function upsertExternalLicense(params: {
   return license;
 }
 
-export async function applyLemonWebhook(params: {
-  eventId: string;
-  orderId?: string;
-  status: "ACTIVE" | "EXPIRED" | "REVOKED";
-  expiresAt?: string | null;
-}): Promise<boolean> {
-  if (!params.eventId || !params.orderId) return false;
+export async function findLicenseByProviderId(provider: string, providerId: string): Promise<License | null> {
   const sql = await getSql();
   const rows = await sql.query(
-    `SELECT id FROM licenses WHERE metadata->>'source' = 'lemonsqueezy' AND metadata->>'orderId' = $1 LIMIT 1`,
-    [params.orderId],
+    `SELECT * FROM licenses WHERE metadata->>'source' = $1 AND metadata->>'keygenLicenseId' = $2 LIMIT 1`,
+    [provider, providerId],
   );
-  const id = rows[0]?.id;
+  return rows.length > 0 ? rowToLicense(rows[0]) : null;
+}
+
+export async function applyKeygenWebhook(params: {
+  eventId: string;
+  licenseId: string;
+  key?: string;
+  keyHash?: string;
+  keyPrefix?: string;
+  type?: LicenseType;
+  userId?: string | null;
+  status: LicenseStatus;
+  expiresAt?: string | null;
+  metadata?: Record<string, string>;
+}): Promise<boolean> {
+  if (!params.eventId || !params.licenseId) return false;
+  const sql = await getSql();
+  const existing = await findLicenseByProviderId("keygen", params.licenseId);
+  if (!existing && !params.key) return false;
+  if (!existing && params.key) {
+    await upsertExternalLicense({
+      keyHash: params.keyHash || hashLicenseKey(params.key),
+      keyPrefix: params.keyPrefix || params.key.slice(0, 14),
+      type: params.type,
+      userId: params.userId ?? null,
+      expiresAt: params.expiresAt ?? null,
+      activationCount: 0,
+      maxActivations: null,
+      status: params.status,
+      metadata: {
+        source: "keygen",
+        keygenLicenseId: params.licenseId,
+        ...(params.metadata || {}),
+        lastWebhookId: params.eventId,
+      },
+    });
+    return true;
+  }
+  const id = existing?.id;
   if (!id) return false;
-  const values: unknown[] = [id, params.eventId, params.status];
   const expiry = params.expiresAt ?? null;
+  const metadata = params.metadata || {};
   await sql.query(
     `UPDATE licenses
      SET status = $3,
          expires_at = COALESCE($4, expires_at),
-         metadata = metadata || jsonb_build_object('lastWebhookId', $2),
+         metadata = metadata || $5::jsonb,
          updated_at = now()
      WHERE id = $1 AND COALESCE(metadata->>'lastWebhookId', '') <> $2`,
-    [...values, expiry],
+    [id, params.eventId, params.status, expiry, JSON.stringify({ ...metadata, lastWebhookId: params.eventId })],
   );
   return true;
 }
@@ -375,5 +407,15 @@ export async function assignLicense(
       [licenseId, userId],
     );
   }
+  return findLicenseById(licenseId);
+}
+
+/** Remove a user's local binding without changing the provider license. */
+export async function unassignLicense(licenseId: string, userId: string): Promise<License | null> {
+  const sql = await getSql();
+  await sql.query(
+    `UPDATE licenses SET user_id = NULL, updated_at = now() WHERE id = $1 AND user_id = $2`,
+    [licenseId, userId],
+  );
   return findLicenseById(licenseId);
 }

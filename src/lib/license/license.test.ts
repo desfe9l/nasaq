@@ -4,10 +4,10 @@ import {
   generateLicenseKey,
   hashLicenseKey,
   keyPrefix,
-  isLemonSqueezyKeyFormat,
+  isKeygenKeyFormat,
   isValidKeyFormat,
 } from "./key.ts";
-import { entitlementsForPlan, LICENSE_ENTITLEMENTS } from "./types.ts";
+import { entitlementsForPlan, entitlementsFromKeygenCodes, LICENSE_ENTITLEMENTS } from "./types.ts";
 
 describe("License Key Generation", () => {
   it("generates keys matching the expected format", () => {
@@ -99,17 +99,40 @@ describe("License Key Format Validation", () => {
   });
 });
 
-describe("Lemon Squeezy Key Format Validation", () => {
-  it("accepts a Lemon Squeezy UUID license key", () => {
-    assert.ok(isLemonSqueezyKeyFormat("38b1460a-5104-4067-a91d-77b872934d51"));
+describe("Keygen Key Format Validation", () => {
+  it("accepts a provider-defined Keygen key", () => {
+    assert.ok(isKeygenKeyFormat("key/eyJhcHAiOiJuYXNhcSJ9.signature"));
   });
 
-  it("rejects malformed external license keys", () => {
-    assert.ok(!isLemonSqueezyKeyFormat("not-a-license-key"));
+  it("rejects whitespace and empty values", () => {
+    assert.ok(!isKeygenKeyFormat("not a license key"));
+    assert.ok(!isKeygenKeyFormat(""));
   });
 });
 
 describe("License Entitlements", () => {
+  it("maps Keygen entitlement codes to NASAQ gates", () => {
+    const individual = entitlementsFromKeygenCodes([
+      "nasaq.editor",
+      "nasaq.templates",
+      "nasaq.projects",
+      "nasaq.library",
+      "nasaq.export",
+      "nasaq.advanced-export",
+      "nasaq.brand-kit",
+      "nasaq.advanced-tools",
+    ]);
+    assert.ok(individual.core_editor);
+    assert.ok(individual.advanced_export);
+    assert.ok(individual.ai_report);
+    assert.ok(!individual.team_features);
+
+    const team = entitlementsFromKeygenCodes(["nasaq.team"]);
+    assert.ok(team.collaboration);
+    assert.ok(team.team_features);
+    assert.ok(team.multi_user_activation);
+  });
+
   it("keeps team features out of individual plans", () => {
     const individual = entitlementsForPlan("individual-monthly", "PRO");
     const team = entitlementsForPlan("team-monthly", "PRO");

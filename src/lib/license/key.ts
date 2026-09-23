@@ -54,6 +54,8 @@ export function isValidKeyFormat(key: string): boolean {
   );
 }
 
-export function isLemonSqueezyKeyFormat(key: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key.trim());
+/** Keygen keys are provider-defined and may contain signed URL-safe data. */
+export function isKeygenKeyFormat(key: string): boolean {
+  const value = key.trim();
+  return value.length >= 8 && value.length <= 4096 && !/\s/.test(value);
 }
