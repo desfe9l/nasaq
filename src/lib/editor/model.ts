@@ -1278,7 +1278,24 @@ export function createElementDefaults(
   };
   switch (type) {
     case "text":
-      return { ...base, w: 80, h: 14 };
+      /*
+       * New text is borderless and fill-free: only the glyphs carry colour
+       * (#0F172A). An empty background/fill and a zero border keep the frame
+       * transparent so the selection box is the only chrome ever drawn.
+       */
+      return {
+        ...base,
+        w: 80,
+        h: 14,
+        style: {
+          ...base.style,
+          color: "#0F172A",
+          background: "",
+          fill: "",
+          borderWidth: 0,
+          stroke: 0,
+        },
+      };
     case "box":
       return {
         ...base,

@@ -1,6 +1,46 @@
+# Dependencies
 node_modules/
+.pnpm-store/
+
+# Build output
 dist/
-.env
-.env.local
-.DS_Store
+build/
+out/
+.output/
 .vercel/
+.nitro/
+.tanstack/
+*.tsbuildinfo
+
+# Environment & secrets (keep the documented template)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Caches & tooling
+.cache/
+.vite/
+.eslintcache
+coverage/
+.nyc_output/
+.turbo/
+
+# Local agent/tool state
+.openbrowser/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json

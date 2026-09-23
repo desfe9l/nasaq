@@ -126,7 +126,9 @@ export function ProjectCard({
     <div
       className={cn(
         "relative overflow-hidden rounded-[7px] border border-line bg-white shadow-sm dark:border-white/10 dark:bg-white/5",
-        isList ? "h-[76px] w-[56px] shrink-0" : compact ? "h-[84px] w-full" : "h-[108px] w-full",
+        // Real A4 proportions (210 × 297): the page-1 snapshot sits inside a
+        // paper frame instead of being cropped into a banner strip.
+        isList ? "aspect-[210/297] w-[56px] shrink-0" : compact ? "mx-auto aspect-[210/297] h-[150px]" : "mx-auto aspect-[210/297] h-[200px]",
       )}
     >
       {project.thumbnail ? (
@@ -135,7 +137,7 @@ export function ProjectCard({
           alt=""
           aria-hidden
           loading="lazy"
-          className="h-full w-full object-cover object-top"
+          className="h-full w-full bg-white object-contain object-top"
         />
       ) : (
         <span className="flex h-full w-full flex-col">

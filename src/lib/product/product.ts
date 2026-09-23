@@ -82,7 +82,31 @@ export const DEMO_LICENSE: LicenseRecord = {
 
 /** The public experience deliberately opens only a blank, three-page sample. */
 export const DEMO_ALLOWED_PACKS = ["blank"] as const;
-export const DEMO_ALLOWED_EXPORTS = ["pdf", "png", "jpg"] as const;
+/**
+ * Free / demo exports: raster images only, capped at 72 DPI. PDF (raster and
+ * vector), 300 DPI print output, Word, PowerPoint, standalone HTML and the
+ * project file all require a server-validated `advanced_export` entitlement.
+ */
+export const DEMO_ALLOWED_EXPORTS = ["png", "jpg"] as const;
+
+/** html2canvas renders at 96 CSS px per inch, so scale = DPI / 96. */
+export const CSS_DPI = 96;
+export const DEMO_EXPORT_DPI = 72;
+export const PRINT_EXPORT_DPI = 300;
+
+/** Raster capture scale for a DPI target. */
+export function scaleForDpi(dpi: number): number {
+  return dpi / CSS_DPI;
+}
+
+/**
+ * The capture scale actually used for an export: the demo is always clamped to
+ * 72 DPI whatever the UI asked for, so a tampered select can't lift the cap.
+ */
+export function effectiveExportScale(requested: number, hasAdvancedExport = false): number {
+  if (!hasAdvancedExport) return scaleForDpi(DEMO_EXPORT_DPI);
+  return Number.isFinite(requested) && requested > 0 ? requested : scaleForDpi(PRINT_EXPORT_DPI);
+}
 
 export function canUseDemoPack(pack: string): boolean {
   return (DEMO_ALLOWED_PACKS as readonly string[]).includes(pack);

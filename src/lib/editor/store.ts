@@ -387,6 +387,12 @@ interface EditorStore extends Project, Ui, History {
   /** Show/hide the floating contextual bubble (persisted). */
   toggleBubble: (enabled?: boolean) => void;
   /**
+   * 🪄 ضبط وتنسيق مساحة العمل — restore the side panels, the pages tray and
+   * the floating bubble to their default dock positions (persisted). The
+   * shell pairs it with a fit-to-screen so the artboard is centred too.
+   */
+  resetWorkspaceLayout: () => void;
+  /**
    * Bring the smart library up from anywhere (the header button).
    *
    * Docked screens un-collapse the components panel and select the tab — the
@@ -1092,7 +1098,12 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     removeAssets: async (ids) => {
-      const doomed = new Set(ids);
+      // Resolve the EXACT entities first: only ids that are real assets are
+      // deleted. A folder id (or a stale id) that slipped into the selection
+      // is ignored, so a batch can never remove a folder or its parent.
+      const known = new Set(get().assets.map((a) => a.id));
+      const folderIds = new Set(get().assetFolders.map((f) => f.id));
+      const doomed = new Set(ids.filter((id) => known.has(id) && !folderIds.has(id)));
       if (!doomed.size) return;
       // One operation: every selected row is deleted, folders are never
       // touched (deleting nested items must not cascade to their folder).
@@ -1159,13 +1170,16 @@ export const useEditor = create<EditorStore>((set, get) => {
         .map((folder) =>
           folder.parentId === id ? { ...folder, parentId } : folder,
         );
-      const assets = get().assets.map((asset) =>
-        asset.folderId === id ? { ...asset, folderId: null } : asset,
-      );
+      // Items inside the removed folder move up to its parent (never deleted);
+      // only those rows are rewritten — unrelated resources stay untouched.
+      const lifted = new Set<string>();
+      const assets = get().assets.map((asset) => {
+        if (asset.folderId !== id) return asset;
+        lifted.add(asset.id);
+        return { ...asset, folderId: parentId };
+      });
       await Promise.all(
-        assets
-          .filter((asset) => asset.folderId === null)
-          .map((asset) => saveAsset(asset)),
+        assets.filter((asset) => lifted.has(asset.id)).map((asset) => saveAsset(asset)),
       );
       set({
         assetFolders: folders,
@@ -1510,6 +1524,29 @@ export const useEditor = create<EditorStore>((set, get) => {
       const bubbleEnabled = enabled ?? !get().bubbleEnabled;
       set({ bubbleEnabled });
       writeUi({ bubble: bubbleEnabled });
+    },
+    resetWorkspaceLayout: () => {
+      const overlay = isOverlayViewport();
+      const pagesPanelHeight = clampPagesHeight(PAGES_PANEL_DEFAULT);
+      set({
+        focusMode: false,
+        leftCollapsed: false,
+        rightCollapsed: false,
+        // Tablet drawers float over the artwork, so "default" there is closed.
+        leftOpen: overlay ? false : get().leftOpen,
+        rightOpen: overlay ? false : get().rightOpen,
+        pagesPanelHeight,
+        bubbleEnabled: true,
+        contextMenu: null,
+      });
+      void setSetting("focusMode", false);
+      void setSetting("leftCollapsed", false);
+      void setSetting("rightCollapsed", false);
+      if (overlay) {
+        void setSetting("leftOpen", false);
+        void setSetting("rightOpen", false);
+      }
+      writeUi({ pagesPanelHeight, bubble: true });
     },
     setPagesPanelHeight: (height) => {
       const next = clampPagesHeight(height);
