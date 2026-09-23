@@ -25,7 +25,7 @@ import { HeroShowcase } from "@/components/site/HeroShowcase";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 
 /**
- * Six capability cards: the two extra entries carry the privacy
+ * Six capability cards: the two extra entries carry the local-first
  * and multi-format/pagination story. Icons sit on an emerald backlight tile;
  * the card itself uses the shared lift + a soft emerald glow on hover.
  */
@@ -39,7 +39,7 @@ const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
 ];
 
 /** Value badges shown under the features CTA. */
-const CTA_BADGES = ["🔒 معالجة محلية 100%", "📐 جاهز للطباعة 300DPI", "🇸🇦 دعم الخطوط العربية الرسمية"];
+const CTA_BADGES = ["💻 تخزين محلي أولًا", "📐 جاهز للطباعة 300DPI", "🇸🇦 دعم الخطوط العربية الرسمية"];
 
 export function HomePage() {
   const importProject = useEditor((s) => s.importProject);
@@ -169,7 +169,7 @@ export function HomePage() {
         <section className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
           <h2 className="text-[20px] font-extrabold">أحدث المشاريع</h2>
           <p className="mt-1 text-[13px] text-muted">
-            المشاريع محفوظة محلياً في متصفحك — لا تُرسل إلى أي سيرفر.
+            المشاريع تُحفظ محلياً في متصفحك، مع اتصال عند الحاجة للترخيص أو الذكاء الاصطناعي.
           </p>
 
           {projectsLoading ? (
@@ -284,4 +284,3 @@ export function HomePage() {
     </div>
   );
 }
-
