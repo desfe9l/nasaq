@@ -1,17 +1,22 @@
 import { useMemo, useState } from "react";
 import {
   BadgeCheck,
+  BarChart3,
+  ClipboardCheck,
   FileSpreadsheet,
   Hash,
   Sheet as SheetIcon,
   LayoutGrid,
+  ListChecks,
   PenLine,
   Ruler,
   ShieldCheck,
   Stamp,
+  Table2,
 } from "lucide-react";
 import { THEMES } from "@/lib/editor/model";
 import { KPI_CARDS, type KpiKind } from "@/lib/editor/report-tools";
+import { REPORT_BLOCKS, type ReportBlockId } from "@/lib/editor/report-blocks";
 import { runPreflight, preflightSummary } from "@/lib/editor/preflight";
 import {
   DEFAULT_PRINT_GUIDES,
@@ -20,6 +25,7 @@ import {
 import { domImageSize } from "@/lib/editor/images";
 import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
+import { AiReportPanel } from "./AiReportPanel";
 
 const GUIDE_ROWS: {
   key: keyof PrintGuideSettings;
@@ -59,6 +65,7 @@ export function ReportToolsPanel() {
   const togglePrintGuide = useEditor((s) => s.togglePrintGuide);
   const insertSignatureZone = useEditor((s) => s.insertSignatureZone);
   const insertKpiCard = useEditor((s) => s.insertKpiCard);
+  const insertReportBlock = useEditor((s) => s.insertReportBlock);
   const applyHeaderFooter = useEditor((s) => s.applyHeaderFooter);
   const removeHeaderFooter = useEditor((s) => s.removeHeaderFooter);
   const addPageNumbers = useEditor((s) => s.addPageNumbers);
@@ -87,6 +94,46 @@ export function ReportToolsPanel() {
 
   return (
     <>
+      <AiReportPanel />
+
+      {/* ── Structured report blocks ───────────────────────────────────── */}
+      <div className="editor-subgroup">
+        <h4 className="editor-subgroup-title">
+          <span className="inline-flex items-center gap-1.5">
+            <ListChecks className="size-3.5 text-navy-2 dark:text-gold-2" />
+            بناء التقرير
+          </span>
+        </h4>
+        <p className="text-[10px] leading-4 text-muted">
+          أضف وحدة تقرير جاهزة ككتلة واحدة. كل عنوان ونص وجدول يبقى قابلاً للتعديل بعد فك التجميع.
+        </p>
+        <div className="grid grid-cols-2 gap-1.5">
+          {REPORT_BLOCKS.map((block) => (
+            <button
+              key={block.id}
+              type="button"
+              title={block.hint}
+              onClick={() => insertReportBlock(block.id as ReportBlockId)}
+              className="grid min-h-12 gap-0.5 rounded-[8px] border border-line px-2 py-1.5 text-right text-[10px] font-extrabold hover:border-navy-2 dark:border-white/10"
+            >
+              <span className="inline-flex items-center gap-1.5">
+                {block.id === "kpi-strip" ? (
+                  <BarChart3 className="size-3.5 text-navy-2 dark:text-gold-2" />
+                ) : block.id === "data-table" ? (
+                  <Table2 className="size-3.5 text-navy-2 dark:text-gold-2" />
+                ) : block.id === "approval" ? (
+                  <ClipboardCheck className="size-3.5 text-navy-2 dark:text-gold-2" />
+                ) : (
+                  <ListChecks className="size-3.5 text-navy-2 dark:text-gold-2" />
+                )}
+                {block.label}
+              </span>
+              <span className="text-[9px] font-semibold leading-3 text-muted">{block.hint}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* ── KPI / progress cards ───────────────────────────────────────── */}
       <div className="editor-subgroup">
         <h4 className="editor-subgroup-title">

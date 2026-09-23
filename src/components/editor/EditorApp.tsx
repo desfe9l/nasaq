@@ -49,6 +49,8 @@ import { BRAND } from "@/lib/brand";
 import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
 import { ToolbarMenus } from "./ToolbarMenus";
 import { OVERLAY_BREAKPOINT, isOverlayViewport } from "@/lib/editor/ui-state";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useLicense } from "@/lib/license/client";
 
 /**
  * The studio shell.
@@ -60,6 +62,9 @@ import { OVERLAY_BREAKPOINT, isOverlayViewport } from "@/lib/editor/ui-state";
 export function EditorApp() {
   const hydrate = useEditor((s) => s.hydrate);
   const hydrated = useEditor((s) => s.hydrated);
+  const setEntitlements = useEditor((s) => s.setEntitlements);
+  const { user } = useCurrentUserState();
+  const { entitlements } = useLicense(user?.id, user?.primaryEmail);
 
   const projectInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
@@ -76,6 +81,12 @@ export function EditorApp() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  // Keep editor-side limits in sync with the same server-derived entitlements
+  // used by the license and export surfaces.
+  useEffect(() => {
+    setEntitlements(entitlements);
+  }, [entitlements, setEntitlements]);
 
   // The studio is a fixed-height shell; the marketing pages scroll normally.
   useEffect(() => {

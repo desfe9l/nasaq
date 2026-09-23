@@ -33,7 +33,6 @@ import {
   PRINT_EXPORT_DPI,
 } from "@/lib/product/product";
 import { FullVersionModal } from "@/components/site/FullVersionModal";
-import { useLicense } from "@/lib/license/client";
 
 const FORMATS: { id: ExportFormat; title: string; desc: string; icon: typeof FileDown }[] = [
   { id: "pdf", title: "PDF", desc: "طباعة وأرشفة رسمية · 300 DPI", icon: FileDown },
@@ -82,6 +81,7 @@ export function ExportDialog() {
   const updateElement = useEditor((s) => s.updateElement);
   const deletePage = useEditor((s) => s.deletePage);
   const deleteElementsById = useEditor((s) => s.deleteElementsById);
+  const entitlements = useEditor((s) => s.entitlements);
 
   const [format, setFormat] = useState<ExportFormat>("png");
   /** Capture scale (html2canvas px per CSS px). Demo is clamped to 72 DPI. */
@@ -94,8 +94,6 @@ export function ExportDialog() {
   const [error, setError] = useState<string | null>(null);
   const [previewPages, setPreviewPages] = useState<CapturedPage[]>([]);
   const [previewBusy, setPreviewBusy] = useState(false);
-  const { entitlements } = useLicense();
-
   /* Page scope — needed by the pre-flight memo below, so it is computed before
      the early return to keep the hook order stable across open/closed states. */
   const selected =

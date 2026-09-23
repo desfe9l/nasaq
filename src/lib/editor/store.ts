@@ -78,6 +78,12 @@ import {
   typographyPreset,
   type TypographyPresetId,
 } from "./typography";
+import {
+  buildReportBlock,
+  buildReportDraftBlock,
+  type ReportBlockId,
+} from "./report-blocks";
+import type { ReportDraft } from "../ai/contract";
 import { safeImageSrc } from "./images";
 import { captureThumbnail } from "./thumbnail";
 import type { LibraryImportPlan } from "./library-export";
@@ -93,6 +99,10 @@ import {
   canCreateDemoProject,
   canUseDemoPack,
 } from "@/lib/product/product";
+import {
+  LICENSE_ENTITLEMENTS,
+  type FeatureId,
+} from "@/lib/license/types";
 import {
   PAGES_PANEL_DEFAULT,
   clampPagesHeight,
@@ -291,6 +301,9 @@ export interface FontChoice {
 
 interface EditorStore extends Project, Ui, History {
   hydrated: boolean;
+  /** Server-derived access flags mirrored into the client editor state. */
+  entitlements: Record<FeatureId, boolean>;
+  setEntitlements: (entitlements: Record<FeatureId, boolean>) => void;
   clipboard: CanvasEl | null;
   projects: ProjectMeta[];
   projectsLoading: boolean;
@@ -484,6 +497,10 @@ interface EditorStore extends Project, Ui, History {
     kind: KpiKind,
     options: { caption: string; value: number; target?: number },
   ) => void;
+  /** Insert a reusable structured report block as one editable group. */
+  insertReportBlock: (id: ReportBlockId) => string | undefined;
+  /** Insert or replace an AI draft as an editable hierarchy of report elements. */
+  insertReportDraft: (draft: ReportDraft, existingId?: string) => string | undefined;
   /** Apply an Arabic typography preset to the selection (or the next text). */
   applyPreset: (presetId: TypographyPresetId) => void;
   /** Insert a macro token into the selected text element. */
@@ -922,6 +939,8 @@ export const useEditor = create<EditorStore>((set, get) => {
     savedAt: null,
     clockTick: 0,
     hydrated: false,
+    entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
+    setEntitlements: (entitlements) => set({ entitlements: { ...entitlements } }),
     clipboard: null,
     past: [],
     future: [],
@@ -1303,14 +1322,14 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     createProject: async (pack, theme) => {
       const s = get();
-      if (!canUseDemoPack(pack)) {
+      if (!s.entitlements.premium_templates && !canUseDemoPack(pack)) {
         toast.error("هذا القالب متاح ضمن النسخة الكاملة", {
           description:
             "يمكنك استكشافه من صفحة القوالب وطلب النسخة المناسبة لجهتك.",
         });
         return false;
       }
-      if (!canCreateDemoProject(s.projects.length)) {
+      if (!s.entitlements.unlimited_projects && !canCreateDemoProject(s.projects.length)) {
         toast.error("اكتملت مساحة العرض التجريبي", {
           description:
             "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
@@ -1408,6 +1427,17 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     duplicateProject: async (id) => {
+      const s = get();
+      if (
+        !s.entitlements.unlimited_projects &&
+        !canCreateDemoProject(s.projects.length)
+      ) {
+        toast.error("اكتملت مساحة العرض التجريبي", {
+          description:
+            "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
+        });
+        return;
+      }
       const project = await copyProject(id);
       if (!project) {
         toast.error("تعذر تكرار المستند");
@@ -1600,8 +1630,15 @@ export const useEditor = create<EditorStore>((set, get) => {
      * where the overlay lives. On a tablet the panel is a drawer, so the author
      * sees the picker slide in with it instead of a control appearing offscreen.
      */
-    openTablePicker: () =>
-      set({ tablePickerOpen: true, leftTab: "elements", leftOpen: true }),
+    openTablePicker: () => {
+      if (!get().entitlements.data_import) {
+        toast.error("استيراد البيانات متاح في النسخة الكاملة", {
+          description: "فعّل ترخيصاً مناسباً لاستيراد Excel وCSV.",
+        });
+        return;
+      }
+      set({ tablePickerOpen: true, leftTab: "elements", leftOpen: true });
+    },
     closeTablePicker: () => set({ tablePickerOpen: false }),
     setTransactionNo: (transactionNo) => {
       set({ transactionNo });
@@ -2180,6 +2217,93 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
       pushHistory();
       toast.success("تمت إضافة بطاقة المؤشر", { duration: 1800 });
+    },
+
+    insertReportBlock: (id) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return undefined;
+      const block = buildReportBlock(id, s.theme);
+      if (!block) return undefined;
+
+      const size = pageSize(page);
+      const stage = document.querySelector<HTMLElement>(
+        ".editor-canvas-stage",
+      );
+      const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+      const target = centerFor(visible, {
+        w: size.w,
+        h: size.h,
+        elW: block.w,
+        elH: block.h,
+      });
+      block.x = target.x;
+      block.y = target.y;
+      block.z = nextZ(page);
+      constrainElement(block, size);
+      const next = placeElements(page, [block]);
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        selectedId: block.id,
+        selectedIds: [block.id],
+        rightTab: "properties",
+      });
+      pushHistory();
+      toast.success("تمت إضافة كتلة تقرير قابلة للتحرير", { duration: 1800 });
+      return block.id;
+    },
+
+    insertReportDraft: (draft, existingId) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return undefined;
+      const block = buildReportDraftBlock(s.theme, draft);
+      if (!block) return undefined;
+      const existing = existingId ? locate(page, existingId)?.el : undefined;
+      const size = pageSize(page);
+
+      if (existing) {
+        block.id = existing.id;
+        block.x = existing.x;
+        block.y = existing.y;
+        block.z = existing.z;
+        constrainElement(block, size);
+        const next = mapElement(page, existing.id, () => block);
+        set({
+          pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+          selectedId: block.id,
+          selectedIds: [block.id],
+          rightTab: "properties",
+        });
+        pushHistory();
+        toast.success("تم تحديث المسودة المنظمة فقط", { duration: 1800 });
+        return block.id;
+      }
+
+      const stage = document.querySelector<HTMLElement>(
+        ".editor-canvas-stage",
+      );
+      const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+      const target = centerFor(visible, {
+        w: size.w,
+        h: size.h,
+        elW: block.w,
+        elH: block.h,
+      });
+      block.x = target.x;
+      block.y = target.y;
+      block.z = nextZ(page);
+      constrainElement(block, size);
+      const next = placeElements(page, [block]);
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        selectedId: block.id,
+        selectedIds: [block.id],
+        rightTab: "properties",
+      });
+      pushHistory();
+      toast.success("أُدرجت المسودة كأقسام قابلة للتحرير", { duration: 2200 });
+      return block.id;
     },
 
     /**
@@ -2841,7 +2965,7 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     addPage: (sizeId) => {
       const s = get();
-      if (!canAddDemoPage(s.pages.length)) {
+      if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
         toast.error("وصلت إلى حد صفحات العرض التجريبي", {
           description:
             "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
@@ -2868,7 +2992,7 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     addTemplatePage: (id) => {
       const s = get();
-      if (!canAddDemoPage(s.pages.length)) {
+      if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
         toast.error("وصلت إلى حد صفحات العرض التجريبي", {
           description:
             "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
@@ -2887,7 +3011,7 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     duplicatePage: (id) => {
       const s = get();
-      if (!canAddDemoPage(s.pages.length)) {
+      if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
         toast.error("وصلت إلى حد صفحات العرض التجريبي", {
           description:
             "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
