@@ -1,6 +1,6 @@
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { Navigate } from "@tanstack/react-router";
-import { GROK_PROVIDERS, authEnabled, signIn, signOut } from "./client";
+import { GOOGLE_PROVIDER_ID, authEnabled, signIn, signOut } from "./client";
 import { hasGateSessionMarker } from "./gate-session-marker";
 import { resolveSignInGateState } from "./sign-in-gate";
 import { useCurrentUser, useCurrentUserState } from "./use-current-user";
@@ -72,20 +72,64 @@ export function SignInGate({
   return <>{fallback ?? <SignInButtons />}</>;
 }
 
-export function SignInButtons() {
+export function SignInButtons({ callbackURL = "/" }: { callbackURL?: string } = {}) {
+  const [state, setState] = useState<"idle" | "loading" | "success" | "error">(() => {
+    if (typeof window === "undefined") return "idle";
+    return new URLSearchParams(window.location.search).get("oauth") === "error"
+      ? "error"
+      : "idle";
+  });
+
+  const startGoogleSignIn = async () => {
+    setState("loading");
+    try {
+      await signIn(GOOGLE_PROVIDER_ID, { callbackURL, errorCallbackURL: "/login?oauth=error" });
+      setState("success");
+    } catch {
+      setState("error");
+    }
+  };
+
   return (
     <div className="flex w-full max-w-sm flex-col gap-2">
-      {GROK_PROVIDERS.map((p) => (
-        <button
-          key={p.providerId}
-          type="button"
-          onClick={() => signIn(p.providerId, { callbackURL: "/" })}
-          className="w-full cursor-pointer rounded-md border border-neutral-300 px-4 py-2 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-900"
-        >
-          Continue with {p.label}
-        </button>
-      ))}
+      <button
+        type="button"
+        onClick={() => void startGoogleSignIn()}
+        disabled={state === "loading" || state === "success"}
+        className="flex h-11 w-full cursor-pointer items-center justify-center gap-3 rounded-lg border border-neutral-300 bg-white px-4 text-sm font-bold text-neutral-800 shadow-sm transition hover:border-neutral-400 hover:bg-neutral-50 disabled:cursor-wait disabled:opacity-70 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white dark:hover:bg-neutral-900"
+        aria-label="متابعة باستخدام Google"
+      >
+        <GoogleMark />
+        <span>
+          {state === "loading"
+            ? "جارٍ فتح Google…"
+            : state === "success"
+              ? "تم تسجيل الدخول"
+              : "متابعة باستخدام Google"}
+        </span>
+      </button>
+      {state === "error" && (
+        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+          أُلغي تسجيل الدخول أو تعذر إكماله. حاول مرة أخرى.
+        </p>
+      )}
+      {state === "success" && (
+        <p role="status" className="text-center text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+          جارٍ إعادتك إلى NASAQ…
+        </p>
+      )}
     </div>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="size-5" role="img">
+      <path fill="#4285F4" d="M21.35 12.27c0-.7-.06-1.37-.18-2.02H12v3.83h5.23a4.47 4.47 0 0 1-1.94 2.93v2.44h3.14c1.84-1.7 2.92-4.2 2.92-7.18Z" />
+      <path fill="#34A853" d="M12 21.6c2.63 0 4.84-.87 6.45-2.35l-3.14-2.44c-.87.58-1.98.92-3.31.92-2.54 0-4.7-1.72-5.47-4.04H3.28v2.52A9.74 9.74 0 0 0 12 21.6Z" />
+      <path fill="#FBBC05" d="M6.53 13.69a5.86 5.86 0 0 1 0-3.38V7.79H3.28a9.74 9.74 0 0 0 0 8.42l3.25-2.52Z" />
+      <path fill="#EA4335" d="M12 6.27c1.43 0 2.72.49 3.73 1.45l2.8-2.8C16.84 3.39 14.63 2.4 12 2.4a9.74 9.74 0 0 0-8.72 5.39l3.25 2.52C7.3 7.99 9.46 6.27 12 6.27Z" />
+    </svg>
   );
 }
 

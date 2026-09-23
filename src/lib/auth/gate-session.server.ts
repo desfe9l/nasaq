@@ -178,7 +178,7 @@ async function writeGateMarkerCookie(
 /**
  * Clear a stale marker when a `/get-session` arrives without `x-grok-identity`:
  * the browser is no longer behind a gate viewer (returned anonymously, or the
- * session is a broker one), so sign-out must not stay hidden. Emits the
+ * session is a Google OAuth one), so sign-out must not stay hidden. Emits the
  * Max-Age=0 clear only when the marker is actually on the request.
  */
 async function clearGateMarkerIfPresent(
