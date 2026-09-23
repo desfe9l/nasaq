@@ -20,9 +20,11 @@ import { Route as EditorRouteImport } from './routes/editor'
 import { Route as LicenseRouteImport } from './routes/license'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OwnerVaultRouteImport } from './routes/owner-vault'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PurchaseRouteImport } from './routes/purchase'
 import { Route as TemplatesRouteImport } from './routes/templates'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as Char1575Char1604Char1607Char1608Char1610Char1577RouteImport } from './routes/الهوية'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiCheckoutConfigRouteImport } from './routes/api/checkout/config'
@@ -86,6 +88,11 @@ const OwnerVaultRoute = OwnerVaultRouteImport.update({
   path: '/owner-vault',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
@@ -99,6 +106,11 @@ const PurchaseRoute = PurchaseRouteImport.update({
 const TemplatesRoute = TemplatesRouteImport.update({
   id: '/templates',
   path: '/templates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const Char1575Char1604Char1607Char1608Char1610Char1577Route =
@@ -150,9 +162,11 @@ export interface FileRoutesByFullPath {
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/owner-vault': typeof OwnerVaultRoute
+  '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
+  '/terms': typeof TermsRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/checkout/config': typeof ApiCheckoutConfigRoute
@@ -173,9 +187,11 @@ export interface FileRoutesByTo {
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/owner-vault': typeof OwnerVaultRoute
+  '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
+  '/terms': typeof TermsRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/checkout/config': typeof ApiCheckoutConfigRoute
@@ -197,9 +213,11 @@ export interface FileRoutesById {
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/owner-vault': typeof OwnerVaultRoute
+  '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
+  '/terms': typeof TermsRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/checkout/config': typeof ApiCheckoutConfigRoute
@@ -222,9 +240,11 @@ export interface FileRouteTypes {
     | '/license'
     | '/login'
     | '/owner-vault'
+    | '/privacy'
     | '/projects'
     | '/purchase'
     | '/templates'
+    | '/terms'
     | '/الهوية'
     | '/api/auth/$'
     | '/api/checkout/config'
@@ -245,9 +265,11 @@ export interface FileRouteTypes {
     | '/license'
     | '/login'
     | '/owner-vault'
+    | '/privacy'
     | '/projects'
     | '/purchase'
     | '/templates'
+    | '/terms'
     | '/الهوية'
     | '/api/auth/$'
     | '/api/checkout/config'
@@ -268,9 +290,11 @@ export interface FileRouteTypes {
     | '/license'
     | '/login'
     | '/owner-vault'
+    | '/privacy'
     | '/projects'
     | '/purchase'
     | '/templates'
+    | '/terms'
     | '/الهوية'
     | '/api/auth/$'
     | '/api/checkout/config'
@@ -292,9 +316,11 @@ export interface RootRouteChildren {
   LicenseRoute: typeof LicenseRoute
   LoginRoute: typeof LoginRoute
   OwnerVaultRoute: typeof OwnerVaultRoute
+  PrivacyRoute: typeof PrivacyRoute
   ProjectsRoute: typeof ProjectsRoute
   PurchaseRoute: typeof PurchaseRoute
   TemplatesRoute: typeof TemplatesRoute
+  TermsRoute: typeof TermsRoute
   Char1575Char1604Char1607Char1608Char1610Char1577Route: typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiCheckoutConfigRoute: typeof ApiCheckoutConfigRoute
@@ -383,6 +409,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OwnerVaultRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects': {
       id: '/projects'
       path: '/projects'
@@ -402,6 +435,13 @@ declare module '@tanstack/react-router' {
       path: '/templates'
       fullPath: '/templates'
       preLoaderRoute: typeof TemplatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/الهوية': {
@@ -468,9 +508,11 @@ const rootRouteChildren: RootRouteChildren = {
   LicenseRoute: LicenseRoute,
   LoginRoute: LoginRoute,
   OwnerVaultRoute: OwnerVaultRoute,
+  PrivacyRoute: PrivacyRoute,
   ProjectsRoute: ProjectsRoute,
   PurchaseRoute: PurchaseRoute,
   TemplatesRoute: TemplatesRoute,
+  TermsRoute: TermsRoute,
   Char1575Char1604Char1607Char1608Char1610Char1577Route:
     Char1575Char1604Char1607Char1608Char1610Char1577Route,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

@@ -1,7 +1,6 @@
-import { genericOAuthClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { runPreSignInSignOut, runSignOut } from "../../../scripts/sign-out-plan.mjs";
-import { GOOGLE_PROVIDER_ID, GROK_PROVIDERS } from "./providers";
+import { GOOGLE_PROVIDER_ID, SOCIAL_PROVIDERS } from "./providers";
 
 /**
  * Better Auth client for this React SPA (browser-side).
@@ -18,7 +17,6 @@ import { GOOGLE_PROVIDER_ID, GROK_PROVIDERS } from "./providers";
  * the visitor stays signed in.
  */
 export const authClient = createAuthClient({
-  plugins: [genericOAuthClient()],
   fetchOptions: {
     onRequest(ctx) {
       const token = getBearerToken();
@@ -38,7 +36,7 @@ export const authClient = createAuthClient({
 export const authEnabled = import.meta.env.VITE_AUTH_ENABLED !== "false";
 
 /** The upstream providers to render sign-in buttons for. */
-export { GROK_PROVIDERS };
+export { SOCIAL_PROVIDERS };
 export { GOOGLE_PROVIDER_ID };
 
 // ── Live-preview bearer token ────────────────────────────────────────────────
@@ -70,7 +68,7 @@ function setBearerToken(token: string | null): void {
 
 /**
  * The sandbox live preview runs this app inside an iframe on a `*.grok-sandbox.com`
- * host, where a full-page redirect to the broker can't work — so sign-in uses a
+ * host, where a full-page redirect to Google can't work — so sign-in uses a
  * popup there and a normal redirect everywhere else.
  */
 function inLivePreview(): boolean {
@@ -84,21 +82,17 @@ function inLivePreview(): boolean {
 type PopupMessage = { source: "grok-auth-popup"; token: string | null; error?: string };
 
 /**
- * Start sign-in with one upstream provider (`providerId` from `GROK_PROVIDERS`),
- * federating through the Grok auth broker.
+ * Start direct Google sign-in with Better Auth.
  *
- * - **Live preview** (`*.grok-sandbox.com` iframe): opens a POPUP to
- *   `/auth/popup`, served by the template Vite plugin (see `vite.config.ts` +
- *   `popup.server.ts`) — 302s to the broker/upstream login (no app chrome) and,
- *   on return, posts the session bearer token back. We store it and refresh the
- *   session; no top-level navigation of the iframe to the broker.
- * - **Deployed** (and local non-iframe): a normal full-page redirect into the broker.
+ * - **Live preview** (`*.grok-sandbox.com` iframe): opens a popup to the
+ *   template handler and returns the session bearer token to the iframe.
+ * - **Deployed** (and local non-iframe): a normal full-page redirect to Google.
  *
  * Either way it clears any existing local session FIRST so switching providers
  * actually switches identity.
  */
 export async function signIn(
-  providerId: string,
+  providerId: typeof GOOGLE_PROVIDER_ID,
   opts: { callbackURL?: string; errorCallbackURL?: string } = {},
 ): Promise<void> {
   const callbackURL = opts.callbackURL ?? "/";
@@ -144,8 +138,8 @@ export async function signIn(
     return;
   }
 
-  const { data, error } = await authClient.signIn.oauth2({
-    providerId,
+  const { data, error } = await authClient.signIn.social({
+    provider: providerId,
     callbackURL,
     errorCallbackURL,
   });
