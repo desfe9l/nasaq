@@ -125,6 +125,7 @@ export default function AdminDashboard() {
             <strong className="text-[15px] font-black">لوحة إدارة نَسَق</strong>
           </div>
           <div className="flex items-center gap-2">
+            <a href="/owner-vault" className={ghostBtn}><KeyRound className="size-3.5" /> Owner Vault</a>
             <a href="/" className={ghostBtn}>الموقع</a>
             <button
               type="button"

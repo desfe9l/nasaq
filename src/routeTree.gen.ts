@@ -19,6 +19,7 @@ import { Route as DemoRouteImport } from './routes/demo'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as LicenseRouteImport } from './routes/license'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as OwnerVaultRouteImport } from './routes/owner-vault'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PurchaseRouteImport } from './routes/purchase'
 import { Route as TemplatesRouteImport } from './routes/templates'
@@ -78,6 +79,11 @@ const LicenseRoute = LicenseRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OwnerVaultRoute = OwnerVaultRouteImport.update({
+  id: '/owner-vault',
+  path: '/owner-vault',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsRoute = ProjectsRouteImport.update({
@@ -143,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/owner-vault': typeof OwnerVaultRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
@@ -165,6 +172,7 @@ export interface FileRoutesByTo {
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/owner-vault': typeof OwnerVaultRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
@@ -188,6 +196,7 @@ export interface FileRoutesById {
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/owner-vault': typeof OwnerVaultRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
@@ -212,6 +221,7 @@ export interface FileRouteTypes {
     | '/editor'
     | '/license'
     | '/login'
+    | '/owner-vault'
     | '/projects'
     | '/purchase'
     | '/templates'
@@ -234,6 +244,7 @@ export interface FileRouteTypes {
     | '/editor'
     | '/license'
     | '/login'
+    | '/owner-vault'
     | '/projects'
     | '/purchase'
     | '/templates'
@@ -256,6 +267,7 @@ export interface FileRouteTypes {
     | '/editor'
     | '/license'
     | '/login'
+    | '/owner-vault'
     | '/projects'
     | '/purchase'
     | '/templates'
@@ -279,6 +291,7 @@ export interface RootRouteChildren {
   EditorRoute: typeof EditorRoute
   LicenseRoute: typeof LicenseRoute
   LoginRoute: typeof LoginRoute
+  OwnerVaultRoute: typeof OwnerVaultRoute
   ProjectsRoute: typeof ProjectsRoute
   PurchaseRoute: typeof PurchaseRoute
   TemplatesRoute: typeof TemplatesRoute
@@ -361,6 +374,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/owner-vault': {
+      id: '/owner-vault'
+      path: '/owner-vault'
+      fullPath: '/owner-vault'
+      preLoaderRoute: typeof OwnerVaultRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects': {
@@ -447,6 +467,7 @@ const rootRouteChildren: RootRouteChildren = {
   EditorRoute: EditorRoute,
   LicenseRoute: LicenseRoute,
   LoginRoute: LoginRoute,
+  OwnerVaultRoute: OwnerVaultRoute,
   ProjectsRoute: ProjectsRoute,
   PurchaseRoute: PurchaseRoute,
   TemplatesRoute: TemplatesRoute,
