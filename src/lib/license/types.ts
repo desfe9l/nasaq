@@ -8,7 +8,7 @@
 // ── License Types ──────────────────────────────────────────────────────────
 
 export type LicenseType = "FREE" | "TRIAL" | "PRO" | "LIFETIME";
-export type LicenseSource = "manual" | "lemonsqueezy";
+export type LicenseSource = "manual" | "keygen";
 export type LicensePlan = "individual-monthly" | "individual-quarterly" | "team-monthly" | "team-quarterly";
 export type BillingPeriod = "monthly" | "quarterly";
 export type LicenseStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
@@ -157,6 +157,32 @@ export const FEATURE_LABELS: Record<FeatureId, { name: string; description: stri
   team_features: { name: "ميزات الفريق", description: "إدارة ميزات ومساحة عمل الفريق" },
   multi_user_activation: { name: "تفعيل متعدد المستخدمين", description: "تفعيل الترخيص لأكثر من مستخدم" },
 };
+
+/** Keygen entitlement codes mapped to NASAQ feature gates. */
+export const KEYGEN_ENTITLEMENT_FEATURES: Record<string, FeatureId[]> = {
+  "nasaq.editor": ["core_editor"],
+  "nasaq.templates": ["premium_templates"],
+  "nasaq.projects": ["unlimited_projects"],
+  "nasaq.library": ["data_import"],
+  "nasaq.export": ["basic_export"],
+  "nasaq.advanced-export": ["advanced_export"],
+  "nasaq.brand-kit": ["brand_kit"],
+  "nasaq.advanced-tools": ["unlimited_pages", "ai_report"],
+  "nasaq.team": ["collaboration", "team_features", "multi_user_activation"],
+  "nasaq.priority-support": [],
+};
+
+export function entitlementsFromKeygenCodes(codes: string[]): Record<FeatureId, boolean> {
+  const entitlements = Object.fromEntries(
+    (Object.keys(FEATURE_LABELS) as FeatureId[]).map((feature) => [feature, false]),
+  ) as Record<FeatureId, boolean>;
+  for (const code of codes) {
+    for (const feature of KEYGEN_ENTITLEMENT_FEATURES[code] ?? []) {
+      entitlements[feature] = true;
+    }
+  }
+  return entitlements;
+}
 
 // ── API Response Types ─────────────────────────────────────────────────────
 

@@ -1,6 +1,7 @@
 import { findLicensesByUserId } from "@/lib/license/server";
 import {
   entitlementsForPlan,
+  entitlementsFromKeygenCodes,
   LICENSE_ENTITLEMENTS,
   type FeatureId,
   type License,
@@ -47,10 +48,12 @@ export async function getAuthorizationContext(
     isOwner: false,
     license,
     entitlements: license
-      ? entitlementsForPlan(
-          license.metadata?.plan as import("@/lib/license/types").LicensePlan | undefined,
-          license.type,
-        )
+      ? license.metadata?.source === "keygen"
+        ? entitlementsFromKeygenCodes((license.metadata.entitlements || "").split(",").filter(Boolean))
+        : entitlementsForPlan(
+            license.metadata?.plan as import("@/lib/license/types").LicensePlan | undefined,
+            license.type,
+          )
       : { ...LICENSE_ENTITLEMENTS.FREE },
   };
 }
