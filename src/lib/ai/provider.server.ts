@@ -66,7 +66,17 @@ export async function generateReportDraft(
     const text =
       typeof content === "string"
         ? content.replace(/^```(?:json)?\s*|\s*```$/g, "").trim()
-        : "";
+        : Array.isArray(content)
+          ? content
+              .map((part) =>
+                part && typeof part === "object" && "text" in part
+                  ? String((part as { text?: unknown }).text ?? "")
+                  : "",
+              )
+              .join("")
+              .replace(/^```(?:json)?\s*|\s*```$/g, "")
+              .trim()
+          : "";
     return normalizeDraft(JSON.parse(text), input.maxSections);
   } finally {
     clearTimeout(timeout);
