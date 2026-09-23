@@ -8,7 +8,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { hashLicenseKey, isLemonSqueezyKeyFormat, isValidKeyFormat, keyPrefix } from "./key";
+import { hashLicenseKey, isKeygenKeyFormat, isValidKeyFormat, keyPrefix } from "./key";
 import {
   activateLicense as dbActivate,
   validateLicense as dbValidate,
@@ -19,12 +19,23 @@ import {
   updateLicense as dbUpdate,
   extendLicense,
   assignLicense,
+  unassignLicense,
   findLicenseByKeyHash,
+  findLicenseById,
   upsertExternalLicense,
 } from "./server";
-import { activateLemonLicense, deactivateLemonLicense, isLemonSqueezyConfigured, validateLemonLicense } from "./lemonsqueezy.server";
+import {
+  createKeygenLicense,
+  isKeygenConfigured,
+  keygenPlanForLicenseType,
+  reinstateKeygenLicense,
+  suspendKeygenLicense,
+  updateKeygenLicenseExpiry,
+  validateKeygenLicense,
+  type KeygenVerification,
+} from "./keygen";
 import { checkRateLimit } from "./rate-limit";
-import { entitlementsForPlan } from "./types";
+import { entitlementsForPlan, entitlementsFromKeygenCodes } from "./types";
 import type {
   License,
   LicenseActivateResult,
@@ -83,7 +94,7 @@ function publicLicense(license: License): LicenseInfo {
     activatedAt: license.activatedAt,
     expiresAt: license.expiresAt,
     createdAt: license.createdAt,
-    source: license.metadata?.source === "lemonsqueezy" ? "lemonsqueezy" : "manual",
+  source: license.metadata?.source === "keygen" ? "keygen" : "manual",
     plan: license.metadata?.plan as LicenseInfo["plan"],
     billing: license.metadata?.billing as LicenseInfo["billing"],
     variantId: license.metadata?.variantId,
@@ -91,12 +102,37 @@ function publicLicense(license: License): LicenseInfo {
   };
 }
 
-function externalStatus(status: string): License["status"] {
-  return status === "active" ? "ACTIVE" : status === "disabled" ? "REVOKED" : "EXPIRED";
+function entitlementsFor(license: License): Record<import("./types").FeatureId, boolean> {
+  if (license.metadata?.source === "keygen") {
+    return entitlementsFromKeygenCodes((license.metadata?.entitlements || "").split(",").filter(Boolean));
+  }
+  return entitlementsForPlan(license.metadata?.plan as import("./types").LicensePlan | undefined, license.type);
 }
 
-function entitlementsFor(license: License): Record<import("./types").FeatureId, boolean> {
-  return entitlementsForPlan(license.metadata?.plan as import("./types").LicensePlan | undefined, license.type);
+function keygenMessage(verification: KeygenVerification): string {
+  const messages: Record<string, string> = {
+    NOT_FOUND: "مفتاح الترخيص غير صالح أو غير متاح.",
+    EXPIRED: "انتهت صلاحية هذا الترخيص.",
+    SUSPENDED: "تم تعليق هذا الترخيص.",
+    BANNED: "تم إيقاف هذا الترخيص.",
+    PRODUCT_SCOPE_MISMATCH: "مفتاح الترخيص لا يخص منتج NASAQ.",
+    TOO_MANY_USERS: "تم الوصول إلى الحد الأقصى لمستخدمي هذا الترخيص.",
+  };
+  return messages[verification.code] || "تعذر التحقق من حالة الترخيص.";
+}
+
+async function persistKeygenLicense(verification: KeygenVerification, userId: string | null, existing?: License): Promise<License> {
+  return upsertExternalLicense({
+    keyHash: hashLicenseKey(verification.key),
+    keyPrefix: keyPrefix(verification.key),
+    type: verification.type,
+    userId: userId ?? existing?.userId ?? null,
+    expiresAt: verification.expiresAt,
+    activationCount: verification.activationCount,
+    maxActivations: verification.maxActivations,
+    status: verification.status,
+    metadata: verification.metadata,
+  });
 }
 
 // ── Public: Activate License ───────────────────────────────────────────────
@@ -117,8 +153,8 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
 
     const key = data.key.trim();
     const manualKey = isValidKeyFormat(key);
-    const lemonKey = isLemonSqueezyKeyFormat(key);
-    if (!manualKey && !lemonKey) {
+    const keygenKey = !manualKey && isKeygenKeyFormat(key);
+    if (!manualKey && !keygenKey) {
       return {
         success: false,
         message: "مفتاح الترخيص غير صالح.",
@@ -130,54 +166,20 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
     // which account receives the license.
     const sessionUserId = context.userId;
     const local = await findLicenseByKeyHash(keyHash);
-    if (local?.metadata?.source === "lemonsqueezy") {
+    if (keygenKey || local?.metadata?.source === "keygen") {
+      if (!isKeygenConfigured()) {
+        return { success: false, message: "تحقق Keygen غير مهيأ على الخادم." };
+      }
       try {
-        const verified = await validateLemonLicense(key, local.metadata.instanceId);
-        if (verified.status !== "active") return { success: false, message: "الترخيص غير نشط أو منتهٍ." };
-        const license = await upsertExternalLicense({
-          keyHash,
-          keyPrefix: keyPrefix(key),
-          type: "PRO",
-          userId: sessionUserId,
-          expiresAt: verified.expiresAt,
-          activationCount: verified.activationCount,
-          maxActivations: verified.maxActivations,
-          status: externalStatus(verified.status),
-          metadata: verified.metadata,
-        });
+        const verified = await validateKeygenLicense(key);
+        if (!verified.valid) return { success: false, message: keygenMessage(verified) };
+        const license = await persistKeygenLicense(verified, sessionUserId, local ?? undefined);
         return { success: true, message: "تم تفعيل الترخيص بنجاح.", license: publicLicense(license) };
       } catch {
-        return { success: false, message: "تعذر التحقق من حالة ترخيص Lemon Squeezy." };
+        return { success: false, message: "تعذر التحقق من حالة ترخيص Keygen." };
       }
     }
     const result = local ? await dbActivate(keyHash, sessionUserId) : null;
-
-    if (lemonKey && (!local || local.metadata?.source !== "lemonsqueezy")) {
-      if (!isLemonSqueezyConfigured()) {
-        return { success: false, message: "تحقق Lemon Squeezy غير مهيأ على الخادم." };
-      }
-      try {
-        const verified = await activateLemonLicense(key);
-        if (data.email && verified.metadata.customerEmail && data.email.trim().toLowerCase() !== verified.metadata.customerEmail.toLowerCase()) {
-          return { success: false, message: "البريد الإلكتروني لا يطابق بيانات الترخيص." };
-        }
-        if (verified.status !== "active") return { success: false, message: "الترخيص غير نشط أو منتهٍ." };
-        const license = await upsertExternalLicense({
-          keyHash,
-          keyPrefix: keyPrefix(key),
-          type: "PRO",
-          userId: sessionUserId,
-          expiresAt: verified.expiresAt,
-          activationCount: verified.activationCount,
-          maxActivations: verified.maxActivations,
-          status: externalStatus(verified.status),
-          metadata: verified.metadata,
-        });
-        return { success: true, message: "تم تفعيل الترخيص بنجاح.", license: publicLicense(license) };
-      } catch {
-        return { success: false, message: "تعذر التحقق من مفتاح Lemon Squeezy." };
-      }
-    }
 
     if (!result || !result.success) {
       const messages: Record<string, string> = {
@@ -212,46 +214,21 @@ export const validateLicenseFn = createServerFn({ method: "POST" })
     }
 
     const key = data.key.trim();
-    if (!isValidKeyFormat(key) && !isLemonSqueezyKeyFormat(key)) {
+    const manualKey = isValidKeyFormat(key);
+    const keygenKey = !manualKey && isKeygenKeyFormat(key);
+    if (!manualKey && !keygenKey) {
       return { valid: false };
     }
 
     const keyHash = hashLicenseKey(key);
     const local = await findLicenseByKeyHash(keyHash);
-    if (isLemonSqueezyKeyFormat(key) && (!local || local.metadata?.source !== "lemonsqueezy")) {
-      if (!isLemonSqueezyConfigured()) return { valid: false };
+    if (keygenKey || local?.metadata?.source === "keygen") {
+      if (!isKeygenConfigured()) return { valid: false };
       try {
-        const verified = await validateLemonLicense(key);
-          await upsertExternalLicense({
-          keyHash,
-          keyPrefix: keyPrefix(key),
-          type: "PRO",
-          userId: null,
-          expiresAt: verified.expiresAt,
-          activationCount: verified.activationCount,
-          maxActivations: verified.maxActivations,
-            status: externalStatus(verified.status),
-          metadata: verified.metadata,
-        });
-      } catch {
-        return { valid: false };
-      }
-    }
-
-    if (local?.metadata?.source === "lemonsqueezy") {
-      try {
-        const verified = await validateLemonLicense(key, local.metadata.instanceId);
-        await upsertExternalLicense({
-          keyHash,
-          keyPrefix: keyPrefix(key),
-          type: "PRO",
-          userId: local.userId,
-          expiresAt: verified.expiresAt,
-          activationCount: verified.activationCount,
-          maxActivations: verified.maxActivations,
-          status: externalStatus(verified.status),
-          metadata: verified.metadata,
-        });
+        const verified = await validateKeygenLicense(key);
+        if (!verified.valid) return { valid: false };
+        const license = await persistKeygenLicense(verified, local?.userId ?? null, local ?? undefined);
+        return { valid: true, license: publicLicense(license), entitlements: entitlementsFor(license) };
       } catch {
         return { valid: false };
       }
@@ -278,16 +255,17 @@ export const deactivateLicenseFn = createServerFn({ method: "POST" })
     const ip = await getClientIp();
     if (!checkRateLimit("license:deactivate", ip, 5, 60_000)) return { success: false };
     const key = data.key.trim();
-    if (!isLemonSqueezyKeyFormat(key) || !isLemonSqueezyConfigured()) return { success: false };
     const local = await findLicenseByKeyHash(hashLicenseKey(key));
-    const instanceId = local?.metadata?.instanceId;
-    if (!local || !instanceId) return { success: false };
+    if (!local) return { success: false };
     if (local.userId !== context.userId && !(await isOwner(context))) {
       return { success: false };
     }
     try {
-      await deactivateLemonLicense(key, instanceId);
-      await dbRevoke(local.id);
+      if (local.metadata?.source === "keygen") {
+        if (local.userId === context.userId) await unassignLicense(local.id, context.userId);
+      } else {
+        await dbRevoke(local.id);
+      }
       return { success: true };
     } catch {
       return { success: false };
@@ -336,6 +314,36 @@ export const adminCreateLicenseFn = createServerFn({ method: "POST" })
       return { error: "غير مصرح.", licenseId: null as string | null, plainKey: null as string | null, type: null as LicenseType | null, keyPrefix: null as string | null };
     }
 
+    const providerPlan = keygenPlanForLicenseType(data.type);
+    if (providerPlan) {
+      if (!isKeygenConfigured()) {
+        return { error: "Keygen غير مهيأ على الخادم.", licenseId: null as string | null, plainKey: null as string | null, type: null as LicenseType | null, keyPrefix: null as string | null };
+      }
+      try {
+        const verification = await createKeygenLicense({
+          plan: providerPlan,
+          name: `NASAQ ${data.type} license`,
+          expiresAt: data.expiresAt,
+          maxUsers: data.maxActivations,
+          metadata: {
+            source: "keygen",
+            createdBy: context.userId,
+            ...(data.userId ? { nasaqUserId: data.userId } : {}),
+          },
+        });
+        const license = await persistKeygenLicense(verification, data.userId ?? null);
+        return {
+          error: null as string | null,
+          licenseId: license.id,
+          plainKey: verification.key,
+          type: license.type,
+          keyPrefix: license.keyPrefix,
+        };
+      } catch {
+        return { error: "تعذر إنشاء الترخيص لدى Keygen.", licenseId: null as string | null, plainKey: null as string | null, type: null as LicenseType | null, keyPrefix: null as string | null };
+      }
+    }
+
     const result = await dbCreate({
       type: data.type,
       expiresAt: data.expiresAt,
@@ -376,8 +384,16 @@ export const adminRevokeLicenseFn = createServerFn({ method: "POST" })
       return { error: "غير مصرح.", license: null as License | null };
     }
 
-    const license = await dbRevoke(data.licenseId);
-    return { error: null as string | null, license };
+    const current = await findLicenseById(data.licenseId);
+    if (!current) return { error: "الترخيص غير موجود.", license: null as License | null };
+    try {
+      const providerId = current.metadata?.source === "keygen" ? current.metadata.keygenLicenseId : null;
+      if (providerId) await suspendKeygenLicense(providerId);
+      const license = await dbRevoke(data.licenseId);
+      return { error: null as string | null, license };
+    } catch {
+      return { error: "تعذر تعليق الترخيص لدى Keygen.", license: current };
+    }
   });
 
 // ── Admin: Reactivate License ─────────────────────────────────────────────
@@ -390,9 +406,19 @@ export const adminReactivateLicenseFn = createServerFn({ method: "POST" })
       return { error: "غير مصرح.", license: null as License | null };
     }
 
-    const license = await dbReactivate(data.licenseId);
-    return { error: null as string | null, license };
-  });// ── Admin: Update License ─────────────────────────────────────────────────
+    const current = await findLicenseById(data.licenseId);
+    if (!current) return { error: "الترخيص غير موجود.", license: null as License | null };
+    try {
+      const providerId = current.metadata?.source === "keygen" ? current.metadata.keygenLicenseId : null;
+      if (providerId) await reinstateKeygenLicense(providerId);
+      const license = await dbReactivate(data.licenseId);
+      return { error: null as string | null, license };
+    } catch {
+      return { error: "تعذر إعادة تفعيل الترخيص لدى Keygen.", license: current };
+    }
+  });
+
+// ── Admin: Update License ─────────────────────────────────────────────────
 export const adminUpdateLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string; updates: AdminLicenseUpdate }) => data)
@@ -413,6 +439,25 @@ export const extendLicenseFn = createServerFn({ method: "POST" })
     if (!(await isOwner(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
+
+    const current = await findLicenseById(data.licenseId);
+    if (!current) return { error: "الترخيص غير موجود.", license: null };
+
+    let targetExpiresAt = data.newExpiresAt;
+    if (!targetExpiresAt && data.daysToAdd != null && data.daysToAdd > 0) {
+      const base = current.expiresAt ? new Date(current.expiresAt) : new Date();
+      targetExpiresAt = new Date(base.getTime() + data.daysToAdd * 86400000).toISOString();
+    }
+    if (current.metadata?.source === "keygen" && targetExpiresAt) {
+      const providerId = current.metadata.keygenLicenseId;
+      if (!providerId) return { error: "معرّف ترخيص Keygen غير موجود.", license: current };
+      try {
+        await updateKeygenLicenseExpiry(providerId, targetExpiresAt);
+      } catch {
+        return { error: "تعذر تمديد الترخيص لدى Keygen.", license: current };
+      }
+    }
+
     const license = await extendLicense(data.licenseId, data.daysToAdd, data.newExpiresAt);
     return { error: null as string | null, license };
   });

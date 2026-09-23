@@ -35,6 +35,8 @@ const productionUrl = "https://nasaq-sa.vercel.app";
 const vercelDashboard = "https://vercel.com/desfe9l/nasaq";
 const lemonDashboard = "https://app.lemonsqueezy.com";
 const lemonApi = "https://api.lemonsqueezy.com/v1";
+const keygenDashboard = "https://beta.portal.keygen.sh";
+const keygenApi = "https://api.keygen.sh/v1";
 const xaiDashboard = "https://console.x.ai";
 const googleConsole = "https://console.cloud.google.com/apis/credentials";
 
@@ -224,47 +226,62 @@ const ENV_SPECS: EnvSpec[] = [
     guide: guide("اختر نموذجًا مدعومًا من xAI ثم حدّث المتغير واختبر schema المسودة.", xaiDashboard, "NASAQ_AI_MODEL"),
   },
   {
-    key: "LEMONSQUEEZY_API_KEY",
+    key: "KEYGEN_API_TOKEN",
     section: "payments",
-    service: "Lemon Squeezy",
-    account: "Lemon Squeezy API account",
-    label: "مفتاح API الموثق في المثال",
+    service: "Keygen Portal",
+    account: "NASAQ licensing account",
+    label: "Keygen server API token",
     sensitivity: "secret",
-    purpose: "موثق في .env.example فقط؛ لا يوجد استخدام برمجي حاليًا في NASAQ.",
-    loginUrl: lemonDashboard,
-    dashboardUrl: lemonDashboard,
-    apiUrl: lemonApi,
-    configurationLocation: ".env.example:2؛ لا يظهر استدعاء له في src/",
-    guide: guide("إن كان مطلوبًا مستقبلًا، أنشئ API key من Lemon Squeezy ثم أضفه في Vercel؛ لا تفعّله قبل إضافة استخدام مقصود.", lemonDashboard, "LEMONSQUEEZY_API_KEY", "Production / Preview حسب الحاجة", "نعم عند إضافته.", "لا يوجد Webhook مرتبط بهذا المتغير.", "ألغِ المفتاح القديم من Lemon Squeezy بعد التحقق."),
+    purpose: "قراءة entitlements وتنفيذ إجراءات الإدارة من الخادم فقط.",
+    loginUrl: keygenDashboard,
+    dashboardUrl: keygenDashboard,
+    apiUrl: keygenApi,
+    configurationLocation: "Vercel → Settings → Environment Variables؛ server-only في src/lib/license/keygen.ts",
+    guide: guide("أنشئ Product token محدود الصلاحيات من Keygen Portal بصلاحيات entitlement.read وlicense.create وlicense.update وlicense.suspend وlicense.reinstate، ثم أضفه في Vercel ولا ترسله في الدردشة.", keygenDashboard, "KEYGEN_API_TOKEN", "Production / Preview / Development حسب الحاجة", "نعم، إعادة نشر مطلوبة.", "لا يوجد Lemon webhook؛ Keygen webhook يستخدم KEYGEN_PUBLIC_KEY.", "ألغِ token القديم بعد نجاح التحقق."),
   },
   {
-    key: "LEMONSQUEEZY_STORE_ID",
-    section: "payments",
-    service: "Lemon Squeezy",
-    account: "Store",
-    label: "Store ID",
+    key: "KEYGEN_PUBLIC_KEY",
+    section: "webhooks",
+    service: "Keygen Portal",
+    account: "NASAQ licensing account",
+    label: "Keygen webhook public key",
     sensitivity: "sensitive",
-    purpose: "مطابقة metadata الواردة من Lemon Squeezy مع NASAQ.",
-    loginUrl: lemonDashboard,
-    dashboardUrl: lemonDashboard,
-    apiUrl: lemonApi,
-    configurationLocation: "Vercel → Settings → Environment Variables؛ placeholder في .env.example:3",
-    guide: guide("انسخ Store ID من إعدادات المتجر ثم حدّث القيمة في Vercel.", lemonDashboard, "LEMONSQUEEZY_STORE_ID"),
+    purpose: "التحقق من توقيع أحداث Keygen قبل مزامنة حالة الترخيص محليًا.",
+    loginUrl: keygenDashboard,
+    dashboardUrl: keygenDashboard,
+    apiUrl: keygenApi,
+    configurationLocation: "Vercel → Settings → Environment Variables؛ endpoint في src/routes/api/webhooks/keygen.ts",
+    guide: guide("انسخ public key من إعدادات Keygen وأضفه في Vercel؛ هذه ليست قيمة سرية لكنها يجب أن تطابق الحساب.", keygenDashboard, "KEYGEN_PUBLIC_KEY", "Production / Preview حسب endpoint", "نعم، إعادة نشر مطلوبة.", "اربط endpoint /api/webhooks/keygen في Keygen.", "استبدل المفتاح فقط بعد تحديث Keygen والتحقق من التوقيع الجديد."),
   },
   {
-    key: "LEMONSQUEEZY_PRODUCT_ID",
+    key: "KEYGEN_ACCOUNT_SLUG",
     section: "payments",
-    service: "Lemon Squeezy",
-    account: "Product 1372880",
-    label: "Product ID",
+    service: "Keygen Portal",
+    account: "ararcomksa-twilight-fire-2288",
+    label: "Keygen account slug",
     sensitivity: "public",
-    purpose: "مطابقة المنتج المسموح به في license metadata.",
-    loginUrl: lemonDashboard,
-    dashboardUrl: lemonDashboard,
-    apiUrl: lemonApi,
-    configurationLocation: "Vercel environment؛ example value في .env.example:4",
-    exampleValue: "1372880",
-    guide: guide("تأكد من Product ID في Lemon Squeezy ثم حدّثه إذا تغيّر المنتج.", lemonDashboard, "LEMONSQUEEZY_PRODUCT_ID"),
+    purpose: "تحديد حساب NASAQ في Keygen API.",
+    loginUrl: keygenDashboard,
+    dashboardUrl: keygenDashboard,
+    apiUrl: keygenApi,
+    configurationLocation: ".env.example وsrc/lib/license/keygen.ts",
+    exampleValue: "ararcomksa-twilight-fire-2288",
+    guide: guide("حدّث slug فقط إذا نُقل المنتج إلى حساب Keygen آخر.", keygenDashboard, "KEYGEN_ACCOUNT_SLUG", "Production / Preview / Development", "نعم، أعد النشر بعد التغيير."),
+  },
+  {
+    key: "KEYGEN_PRODUCT_ID",
+    section: "payments",
+    service: "Keygen Portal",
+    account: "NASAQ",
+    label: "Keygen product ID",
+    sensitivity: "public",
+    purpose: "تقييد validation على منتج NASAQ فقط.",
+    loginUrl: keygenDashboard,
+    dashboardUrl: keygenDashboard,
+    apiUrl: keygenApi,
+    configurationLocation: ".env.example وsrc/lib/license/keygen.ts",
+    exampleValue: "c109271b-9c97-4827-bc9d-48e7982744fe",
+    guide: guide("انسخ Product ID من Keygen عند تغيير المنتج، ثم حدّث القيمة في بيئات النشر.", keygenDashboard, "KEYGEN_PRODUCT_ID", "Production / Preview / Development", "نعم، أعد النشر بعد التغيير."),
   },
   {
     key: "LEMONSQUEEZY_INDIVIDUAL_MONTHLY_VARIANT_ID",
@@ -346,20 +363,6 @@ const ENV_SPECS: EnvSpec[] = [
     guide: guide("أنشئ أو انسخ checkout URL من Lemon Squeezy ثم حدّث قيمة النشر.", lemonDashboard, `LEMONSQUEEZY_${suffix}_CHECKOUT_URL`),
   })),
   {
-    key: "LEMONSQUEEZY_WEBHOOK_SECRET",
-    section: "webhooks",
-    service: "Lemon Squeezy",
-    account: "NASAQ webhook",
-    label: "Webhook signing secret",
-    sensitivity: "secret",
-    purpose: "التحقق من توقيع webhook قبل تسجيل أو تحديث الترخيص.",
-    loginUrl: lemonDashboard,
-    dashboardUrl: lemonDashboard,
-    apiUrl: `${productionUrl}/api/webhooks/lemonsqueezy`,
-    configurationLocation: "Vercel → Settings → Environment Variables؛ endpoint في src/routes/api/webhooks/lemonsqueezy.ts",
-    guide: guide("ولّد secret جديدًا من إعدادات Webhooks في Lemon Squeezy، حدّث Vercel، ثم اختبر event موقّعًا.", lemonDashboard, "LEMONSQUEEZY_WEBHOOK_SECRET", "Production / Preview حسب endpoint", "نعم، إعادة نشر مطلوبة.", "نعم، حدّث secret في إعدادات Webhook.", "ألغِ secret القديم بعد نجاح event الجديد."),
-  },
-  {
     key: "GROK_GATE_ORIGIN",
     section: "authentication",
     service: "Grok app gate",
@@ -432,7 +435,7 @@ const ROUTES: OwnerRouteInfo[] = [
   { label: "واجهة الهوية", path: "/الهوية", status: "active", purpose: "هوية وتقارير NASAQ." },
   { label: "API المصادقة", path: "/api/auth/*", status: "active", purpose: "Better Auth callbacks والجلسات." },
   { label: "API إعدادات checkout", path: "/api/checkout/config", status: "active", purpose: "إعدادات checkout العامة غير السرية." },
-  { label: "Lemon Squeezy webhook", path: "/api/webhooks/lemonsqueezy", status: "active", purpose: "استقبال أحداث الدفع الموقّعة." },
+  { label: "Keygen webhook", path: "/api/webhooks/keygen", status: "active", purpose: "مزامنة حالة التراخيص الموقّعة من Keygen." },
   { label: "License APIs", path: "/api/license/*", status: "active", purpose: "تفعيل والتحقق وإلغاء التراخيص." },
 ];
 
@@ -675,12 +678,12 @@ function findings(entries: VaultEntry[], ownerConfigured: boolean): OwnerVaultFi
       action: "أضف مفتاح xAI server-only بعد اعتماد حدود الإنفاق.",
     });
   }
-  if (!runtime("LEMONSQUEEZY_WEBHOOK_SECRET")) {
+  if (!runtime("KEYGEN_API_TOKEN")) {
     result.push({
       severity: "medium",
-      title: "Lemon Squeezy webhook غير موثق",
-      detail: "LEMONSQUEEZY_WEBHOOK_SECRET غير موجود؛ endpoint سيرفض الأحداث الموقعة.",
-      action: "أضف secret مطابقًا لإعداد Webhook في Lemon Squeezy.",
+      title: "Keygen API token غير مهيأ",
+      detail: "KEYGEN_API_TOKEN غير موجود؛ لا يمكن قراءة entitlements أو تنفيذ إجراءات الإدارة.",
+      action: "أنشئ token خادم محدود الصلاحيات من Keygen Portal وأضفه يدويًا في Vercel.",
     });
   }
   result.push({
