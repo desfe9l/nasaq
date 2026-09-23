@@ -41,7 +41,13 @@ export type ReportDraftResult =
   | { ok: true; draft: ReportDraft }
   | {
       ok: false;
-      code: "not_configured" | "rate_limited" | "invalid" | "provider_error";
+      code:
+        | "unauthorized"
+        | "license_required"
+        | "not_configured"
+        | "rate_limited"
+        | "invalid"
+        | "provider_error";
       message: string;
     };
 
