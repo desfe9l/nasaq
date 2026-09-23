@@ -7,6 +7,8 @@
  *
  * Status mapping (the whole contract, applied identically by every route):
  *   - CrossSiteRequestError        → 403 (scripted cross-site request)
+ *   - UnauthorizedError             → 401 (missing/invalid session)
+ *   - ForbiddenError                → 403 (authenticated but not permitted)
  *   - "rate limited" marker        → 429 (too many attempts from one IP)
  *   - handler returned failure     → caller-mapped 400/200 (invalid key etc.)
  *   - anything thrown unexpectedly → 500 (never leak the error text)
@@ -16,6 +18,8 @@
  */
 
 import { CrossSiteRequestError } from "@/lib/auth/isolation.server";
+import { UnauthorizedError } from "@/lib/auth/verify.server";
+import { ForbiddenError } from "@/lib/auth/authorization.server";
 
 /** Marker the rate limiter reports through — see functions.ts. */
 const RATE_LIMIT_MARK = "تم تجاوز الحد المسموح";
@@ -48,6 +52,12 @@ export async function respondLicense<T>(
     return new Response(JSON.stringify(result), { status: statusOf(result), headers });
   } catch (err) {
     if (err instanceof CrossSiteRequestError) {
+      return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers });
+    }
+    if (err instanceof UnauthorizedError) {
+      return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401, headers });
+    }
+    if (err instanceof ForbiddenError) {
       return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers });
     }
     // Unexpected — log server-side, return an opaque 500. No stack, no message.

@@ -49,6 +49,15 @@ export function RedirectToSignIn({ to = SIGN_IN_PATH }: { to?: string }) {
   return <Navigate to={to} />;
 }
 
+export function RequireSignedIn({ children }: { children: ReactNode }) {
+  const { user, isPending } = useCurrentUserState();
+  if (isPending) {
+    return <div className="grid min-h-screen place-items-center text-sm text-muted">جارٍ التحقق…</div>;
+  }
+  if (!user) return <RedirectToSignIn />;
+  return <>{children}</>;
+}
+
 export function SignInGate({
   children,
   fallback,

@@ -1,9 +1,9 @@
 /**
  * /admin — NASAQ administration dashboard.
  *
- * The passcode is verified by the server (ADMIN_SECRET env var); it is held in
- * memory only for this tab and sent with every privileged call. All changes
- * are persisted server-side (site_settings / admin_templates tables).
+ * Every privileged call is authorized from the verified Better Auth session.
+ * Owner configuration stays server-side; all changes remain persisted in
+ * site_settings / admin_templates.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -46,6 +46,7 @@ import {
 } from "@/lib/admin/types";
 import AdminLicensePanel from "@/components/license/AdminLicensePanel";
 import { cn } from "@/lib/utils";
+import { signOut } from "@/lib/auth/client";
 
 type Tab = "templates" | "commercial" | "content" | "licenses";
 
@@ -75,65 +76,41 @@ function readFile(file: File, as: "text" | "dataUrl"): Promise<string> {
 }
 
 export default function AdminDashboard() {
-  const [passcode, setPasscode] = useState("");
   const [authed, setAuthed] = useState(false);
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("templates");
 
-  const login = async () => {
-    if (!passcode.trim()) return;
+  useEffect(() => {
     setChecking(true);
-    setError(null);
-    try {
-      const res = await adminVerifyFn({ data: { passcode } });
-      if (!res.configured) setError("لوحة الإدارة غير مهيأة: عيّن متغير البيئة ADMIN_SECRET على الخادم.");
-      else if (!res.ok) setError("رمز الدخول غير صحيح.");
+    void adminVerifyFn()
+      .then((res) => {
+      if (!res.configured) setError("لوحة الإدارة غير مهيأة: عيّن هوية المالك على الخادم.");
+      else if (!res.ok) setError("هذا الحساب لا يملك صلاحية الإدارة.");
       else setAuthed(true);
-    } catch {
-      setError("تعذر الاتصال بالخادم.");
-    } finally {
-      setChecking(false);
-    }
-  };
+      })
+      .catch(() => setError("تعذر التحقق من صلاحيات الحساب."))
+      .finally(() => setChecking(false));
+  }, []);
 
   if (!authed) {
     return (
       <div dir="rtl" className="grid min-h-screen place-items-center bg-[#07110f] p-4 text-white">
         <Toaster position="top-center" richColors dir="rtl" />
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void login();
-          }}
-          className="w-full max-w-sm rounded-2xl border border-emerald-500/25 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-xl"
-        >
+        <section className="w-full max-w-sm rounded-2xl border border-emerald-500/25 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-xl">
           <div className="mb-5 flex items-center gap-3">
             <span className="grid size-11 place-items-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
               <Shield className="size-5" />
             </span>
             <div>
               <h1 className="text-[18px] font-black">لوحة إدارة نَسَق</h1>
-              <p className="text-[12px] text-slate-400">أدخل رمز الإدارة للمتابعة</p>
+              <p className="text-[12px] text-slate-400">الوصول متاح لحساب المالك الموثّق فقط</p>
             </div>
           </div>
-          <input
-            type="password"
-            dir="ltr"
-            autoComplete="current-password"
-            value={passcode}
-            onChange={(e) => setPasscode(e.target.value)}
-            placeholder="••••••••••••"
-            aria-label="رمز الإدارة"
-            className="h-12 w-full rounded-xl border border-white/15 bg-black/40 px-4 font-mono text-[14px] tracking-wider text-emerald-300 outline-none focus:border-emerald-500"
-          />
+          {checking && <p className="text-sm text-slate-300">جارٍ التحقق…</p>}
           {error && <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] font-bold text-red-300">{error}</p>}
-          <button type="submit" disabled={checking} className={cn(primaryBtn, "mt-4 h-11 w-full")}>
-            {checking && <Loader2 className="size-4 animate-spin" />}
-            دخول
-          </button>
-          <p className="mt-4 text-[11px] leading-5 text-slate-500">يُتحقق من الرمز على الخادم فقط، ولا يُحفظ في المتصفح.</p>
-        </form>
+          <a href="/login" className={cn(primaryBtn, "mt-4 h-11 w-full")}>تسجيل الدخول</a>
+        </section>
       </div>
     );
   }
@@ -152,10 +129,7 @@ export default function AdminDashboard() {
             <button
               type="button"
               className={ghostBtn}
-              onClick={() => {
-                setAuthed(false);
-                setPasscode("");
-              }}
+              onClick={() => void signOut("/")}
             >
               <LogOut className="size-3.5" /> خروج
             </button>
@@ -182,12 +156,12 @@ export default function AdminDashboard() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
-        {tab === "templates" && <TemplatesTab passcode={passcode} />}
-        {tab === "commercial" && <SettingsTab passcode={passcode} kind="commercial" />}
-        {tab === "content" && <SettingsTab passcode={passcode} kind="content" />}
+        {tab === "templates" && <TemplatesTab />}
+        {tab === "commercial" && <SettingsTab kind="commercial" />}
+        {tab === "content" && <SettingsTab kind="content" />}
         {tab === "licenses" && (
           <div className="overflow-hidden rounded-xl border border-line dark:border-white/10">
-            <AdminLicensePanel initialSecret={passcode} />
+            <AdminLicensePanel />
           </div>
         )}
       </main>
@@ -224,7 +198,7 @@ const EMPTY_DRAFT: Draft = {
   sortOrder: 0,
 };
 
-function TemplatesTab({ passcode }: { passcode: string }) {
+function TemplatesTab() {
   const [items, setItems] = useState<AdminTemplateSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -234,11 +208,11 @@ function TemplatesTab({ passcode }: { passcode: string }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await adminListTemplatesFn({ data: { passcode } });
+    const res = await adminListTemplatesFn();
     if (res.ok) setItems(res.templates);
     else toast.error(res.error);
     setLoading(false);
-  }, [passcode]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -287,7 +261,6 @@ function TemplatesTab({ passcode }: { passcode: string }) {
     setSaving(true);
     const res = await adminUpsertTemplateFn({
       data: {
-        passcode,
         template: {
           id: draft.id,
           title: draft.title,
@@ -310,14 +283,14 @@ function TemplatesTab({ passcode }: { passcode: string }) {
   };
 
   const setStatus = async (id: string, patch: { status?: TemplateStatus; tier?: TemplateTier }) => {
-    const res = await adminSetTemplateStatusFn({ data: { passcode, id, ...patch } });
+    const res = await adminSetTemplateStatusFn({ data: { id, ...patch } });
     if (!res.ok) return toast.error(res.error);
     setItems((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   };
 
   const remove = async (t: AdminTemplateSummary) => {
     if (!window.confirm(`حذف القالب «${t.title}» نهائيًا؟`)) return;
-    const res = await adminDeleteTemplateFn({ data: { passcode, id: t.id } });
+    const res = await adminDeleteTemplateFn({ data: { id: t.id } });
     if (!res.ok) return toast.error(res.error);
     setItems((list) => list.filter((x) => x.id !== t.id));
     toast.success("تم الحذف");
@@ -454,7 +427,7 @@ function TemplatesTab({ passcode }: { passcode: string }) {
 
 // ── Settings (commercial + content) ────────────────────────────────────────
 
-function SettingsTab({ passcode, kind }: { passcode: string; kind: "commercial" | "content" }) {
+function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
   const [settings, setSettings] = useState<PublicSiteSettings>(DEFAULT_SITE_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<SettingsSection | null>(null);
@@ -468,7 +441,7 @@ function SettingsTab({ passcode, kind }: { passcode: string; kind: "commercial" 
 
   const save = async (section: SettingsSection) => {
     setSaving(section);
-    const res = await adminSaveSettingsFn({ data: { passcode, section, value: settings[section] } });
+    const res = await adminSaveSettingsFn({ data: { section, value: settings[section] } });
     setSaving(null);
     if (!res.ok) return toast.error(res.error);
     setSettings((s) => ({ ...s, [section]: res.value }));

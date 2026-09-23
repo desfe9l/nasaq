@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "@/lib/auth/middleware";
 import { checkRateLimit } from "@/lib/license/rate-limit";
 import {
   normalizeDraftInput,
@@ -24,8 +25,9 @@ async function clientIdentifier(): Promise<string> {
 }
 
 export const generateReportDraftFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .validator((data: ReportDraftInput) => data)
-  .handler(async ({ data }): Promise<ReportDraftResult> => {
+  .handler(async ({ data, context }): Promise<ReportDraftResult> => {
     const input = normalizeDraftInput(data);
     if (!validDraftInput(input)) {
       return {
@@ -35,7 +37,28 @@ export const generateReportDraftFn = createServerFn({ method: "POST" })
       };
     }
 
-    if (!checkRateLimit("ai:report", await clientIdentifier(), 8, 60_000)) {
+    const { getAuthorizationContext, requireFeature } = await import(
+      "@/lib/auth/authorization.server"
+    );
+    const access = await getAuthorizationContext({
+      id: context.userId,
+      email: context.userEmail,
+    });
+    try {
+      requireFeature(access, "ai_report");
+    } catch {
+      return {
+        ok: false,
+        code: "license_required",
+        message: "تحتاج هذه الميزة إلى ترخيص نشط.",
+      };
+    }
+
+    if (
+      !access.isOwner &&
+      (!checkRateLimit("ai:report:user", context.userId, 8, 60_000) ||
+        !checkRateLimit("ai:report:ip", await clientIdentifier(), 16, 60_000))
+    ) {
       return {
         ok: false,
         code: "rate_limited",

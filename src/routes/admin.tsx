@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import AdminDashboard from "@/components/admin/AdminDashboard";
+import { RequireSignedIn } from "@/lib/auth/gates";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -9,5 +10,9 @@ export const Route = createFileRoute("/admin")({
       { name: "robots", content: "noindex, nofollow" },
     ],
   }),
-  component: AdminDashboard,
+  component: () => (
+    <RequireSignedIn>
+      <AdminDashboard />
+    </RequireSignedIn>
+  ),
 });

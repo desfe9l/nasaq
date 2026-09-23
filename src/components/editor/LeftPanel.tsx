@@ -842,7 +842,7 @@ export function LeftPanel({
               <h2 className="mb-2 text-[13px] font-extrabold">التخزين</h2>
               <p className="text-[11px] leading-5 text-muted">
                 {storage.mode === "indexeddb"
-                  ? "المشاريع محفوظة محلياً في IndexedDB داخل متصفحك ولا تُرفع إلى أي سيرفر."
+                  ? "المشاريع محفوظة محلياً في IndexedDB داخل متصفحك؛ قد تتطلب خدمات الترخيص أو الذكاء الاصطناعي اتصالاً."
                   : "IndexedDB غير متاح في هذا المتصفح؛ يتم الحفظ في LocalStorage بمساحة محدودة."}
               </p>
             </section>

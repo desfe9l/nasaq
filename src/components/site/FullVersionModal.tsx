@@ -50,7 +50,7 @@ const COMPARISON: {
   { icon: HardDrive, title: "المشاريع والصفحات المحلية", hint: "تُحفظ في متصفحك", demo: "مشروع واحد · 3 صفحات", full: "بلا حد" },
 ];
 
-const TRUST = ["🔒 معالجة محلية 100%", "⚡ تفعيل فوري", "💬 دعم مباشر"];
+const TRUST = ["💻 تخزين محلي أولًا", "⚡ تفعيل فوري", "💬 دعم مباشر"];
 
 export function FullVersionModal({ open, onClose, defaultTab = "features" }: FullVersionModalProps) {
   const [activeTab, setActiveTab] = useState<"features" | "activate">(defaultTab);

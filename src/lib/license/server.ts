@@ -192,14 +192,15 @@ export async function activateLicense(
     return { success: false, error: "NOT_FOUND" };
   }
 
-  // Check status
   if (license.status === "REVOKED") {
     return { success: false, error: "REVOKED" };
   }
 
-  // Check expiry
-  if (license.expiresAt && new Date(license.expiresAt) < new Date()) {
-    // Auto-expire
+  if (license.status === "EXPIRED") {
+    return { success: false, error: "EXPIRED" };
+  }
+
+  if (license.expiresAt && new Date(license.expiresAt).getTime() <= Date.now()) {
     await sql.query(
       `UPDATE licenses SET status = 'EXPIRED', updated_at = now() WHERE id = $1`,
       [license.id],
@@ -207,28 +208,41 @@ export async function activateLicense(
     return { success: false, error: "EXPIRED" };
   }
 
-  // Check activation limit
-  if (
-    license.maxActivations != null &&
-    license.activationCount >= license.maxActivations
-  ) {
-    return { success: false, error: "ACTIVATION_LIMIT" };
-  }
-
-  // Activate
-  await sql.query(
+  // Enforce the status, expiry, and activation limit in the UPDATE predicate so
+  // concurrent requests cannot both pass a read-then-write check.
+  const rows = await sql.query<Record<string, unknown>>(
     `UPDATE licenses
      SET status = 'ACTIVE',
-         activated_at = COALESCE(activated_at, now()),
-         user_id = COALESCE($2, user_id),
-         activation_count = activation_count + 1,
-         updated_at = now()
-     WHERE id = $1`,
+          activated_at = COALESCE(activated_at, now()),
+          user_id = COALESCE($2, user_id),
+          activation_count = activation_count + 1,
+          updated_at = now()
+     WHERE id = $1
+       AND status = 'ACTIVE'
+       AND (expires_at IS NULL OR expires_at > now())
+       AND (max_activations IS NULL OR activation_count < max_activations)
+     RETURNING *`,
     [license.id, userId],
   );
 
-  const updated = await findLicenseById(license.id);
-  return { success: true, license: updated! };
+  if (rows.length > 0) return { success: true, license: rowToLicense(rows[0]) };
+
+  const current = await findLicenseById(license.id);
+  if (current?.status === "REVOKED") return { success: false, error: "REVOKED" };
+  if (current?.expiresAt && new Date(current.expiresAt).getTime() <= Date.now()) {
+    await sql.query(
+      `UPDATE licenses SET status = 'EXPIRED', updated_at = now() WHERE id = $1`,
+      [license.id],
+    );
+    return { success: false, error: "EXPIRED" };
+  }
+  if (
+    current?.maxActivations != null &&
+    current.activationCount >= current.maxActivations
+  ) {
+    return { success: false, error: "ACTIVATION_LIMIT" };
+  }
+  return { success: false, error: "NOT_FOUND" };
 }
 
 /** Validate a license key hash. Returns validity + entitlements info. */
@@ -245,7 +259,10 @@ export async function validateLicense(
     return { valid: false, license, revoked: true };
   }
 
-  if (license.expiresAt && new Date(license.expiresAt) < new Date()) {
+  if (
+    license.status === "EXPIRED" ||
+    (license.expiresAt && new Date(license.expiresAt).getTime() <= Date.now())
+  ) {
     // Auto-expire
     await sql.query(
       `UPDATE licenses SET status = 'EXPIRED', updated_at = now() WHERE id = $1`,
