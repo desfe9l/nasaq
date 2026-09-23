@@ -1,7 +1,7 @@
 /**
  * NASAQ License — Admin license management panel.
  *
- * Protected by ADMIN_SECRET (server-side verification).
+ * Protected by the verified owner session (server-side verification).
  * Create / view / revoke / reactivate / extend / assign licenses.
  */
 
@@ -14,6 +14,7 @@ import {
   extendLicenseFn,
   assignLicenseFn,
 } from "@/lib/license/functions";
+import { adminVerifyFn } from "@/lib/admin/functions";
 import { LICENSE_TYPE_LABELS, type License, type LicenseType } from "@/lib/license/types";
 import {
   Shield,
@@ -34,11 +35,9 @@ const DURATIONS = [
   { label: "سنة (365 يوم)", days: 365 },
 ];
 
-export default function AdminLicensePanel({ initialSecret }: { initialSecret?: string } = {}) {
-  // Embedded in /admin the passcode was already verified server-side; every
-  // call below still carries it and is re-checked by the server.
-  const [secret, setSecret] = useState(initialSecret ?? "");
-  const [authenticated, setAuthenticated] = useState(Boolean(initialSecret));
+export default function AdminLicensePanel() {
+  const [authenticated, setAuthenticated] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [licenses, setLicenses] = useState<License[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -58,9 +57,8 @@ export default function AdminLicensePanel({ initialSecret }: { initialSecret?: s
   const [assignState, setAssignState] = useState<Record<string, { open: boolean; userId: string }>>({});
 
   const loadLicenses = useCallback(async () => {
-    if (!secret) return;
     setLoading(true);
-    const result = await adminListLicensesFn({ data: { adminSecret: secret, offset: 0, limit: 100 } });
+    const result = await adminListLicensesFn({ data: { offset: 0, limit: 100 } });
     if (result.error) {
       setError(String(result.error));
     } else {
@@ -69,18 +67,18 @@ export default function AdminLicensePanel({ initialSecret }: { initialSecret?: s
       setError(null);
     }
     setLoading(false);
-  }, [secret]);
+  }, []);
 
   useEffect(() => {
-    if (authenticated) loadLicenses();
-  }, [authenticated, loadLicenses]);
+    void adminVerifyFn()
+      .then((result) => setAuthenticated(result.ok))
+      .catch(() => setAuthenticated(false))
+      .finally(() => setChecking(false));
+  }, []);
 
-  const handleAuth = () => {
-    if (secret.trim()) {
-      setAuthenticated(true);
-      setError(null);
-    }
-  };
+  useEffect(() => {
+    if (authenticated) void loadLicenses();
+  }, [authenticated, loadLicenses]);
 
   const computeExpiresAt = (): string | undefined => {
     if (createType === "TRIAL" && trialDays > 0) {
@@ -95,7 +93,7 @@ export default function AdminLicensePanel({ initialSecret }: { initialSecret?: s
   const handleCreate = async () => {
     const expiresAt = computeExpiresAt();
     const result = await adminCreateLicenseFn({
-      data: { adminSecret: secret, type: createType, expiresAt },
+      data: { type: createType, expiresAt },
     });
     if (result.plainKey && typeof result.plainKey === "string") {
       setNewKey(result.plainKey);
@@ -114,23 +112,23 @@ export default function AdminLicensePanel({ initialSecret }: { initialSecret?: s
   };
 
   const handleRevoke = async (id: string) => {
-    await adminRevokeLicenseFn({ data: { adminSecret: secret, licenseId: id } });
+    await adminRevokeLicenseFn({ data: { licenseId: id } });
     loadLicenses();
   };
 
   const handleReactivate = async (id: string) => {
-    await adminReactivateLicenseFn({ data: { adminSecret: secret, licenseId: id } });
+    await adminReactivateLicenseFn({ data: { licenseId: id } });
     loadLicenses();
   };
 
   const handleExtend = async (id: string, days: number) => {
-    await extendLicenseFn({ data: { adminSecret: secret, licenseId: id, daysToAdd: days } });
+    await extendLicenseFn({ data: { licenseId: id, daysToAdd: days } });
     loadLicenses();
     setExtendState((prev) => ({ ...prev, [id]: { open: false, days: 30 } }));
   };
 
   const handleAssign = async (id: string, userId: string) => {
-    await assignLicenseFn({ data: { adminSecret: secret, licenseId: id, userId, activate: true } });
+    await assignLicenseFn({ data: { licenseId: id, userId, activate: true } });
     loadLicenses();
     setAssignState((prev) => ({ ...prev, [id]: { open: false, userId: "" } }));
   };
@@ -148,7 +146,10 @@ export default function AdminLicensePanel({ initialSecret }: { initialSecret?: s
     }
   };
 
-  // Auth screen
+  if (checking) {
+    return <div className="p-8 text-center text-sm text-muted">جارٍ التحقق من صلاحيات المالك…</div>;
+  }
+
   if (!authenticated) {
     return (
       <div className="mx-auto max-w-md space-y-4 p-6">
@@ -156,28 +157,8 @@ export default function AdminLicensePanel({ initialSecret }: { initialSecret?: s
           <Shield className="size-6 text-emerald-600" />
           <h1 className="text-xl font-bold">إدارة التراخيص</h1>
         </div>
-        <div className="rounded-xl border border-line p-6 dark:border-white/10">
-          <label className="mb-2 block text-sm font-bold">Admin Secret</label>
-          <input
-            type="password"
-            value={secret}
-            onChange={(e) => setSecret(e.target.value)}
-            className="mb-3 w-full rounded-lg border border-line bg-transparent px-4 py-2.5 text-sm outline-none focus:border-emerald-500 dark:border-white/10"
-            placeholder="أدخل مفتاح الإدارة"
-            onKeyDown={(e) => e.key === "Enter" && handleAuth()}
-          />
-          <button
-            type="button"
-            onClick={handleAuth}
-            disabled={!secret.trim()}
-            className="w-full rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-          >
-            دخول الإدارة
-          </button>
-          {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        </div>
-        <p className="text-[11px] text-muted">
-          أضف متغير البيئة <code>ADMIN_SECRET</code> في Vercel لتفعيل إدارة التراخيص.
+        <p className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">
+          هذا الحساب لا يملك صلاحية إدارة التراخيص.
         </p>
       </div>
     );
@@ -226,6 +207,7 @@ export default function AdminLicensePanel({ initialSecret }: { initialSecret?: s
           </button>
         </div>
       </div>
+      {error && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">{error}</p>}
 
       {/* New Key Display */}
       {newKey && (
