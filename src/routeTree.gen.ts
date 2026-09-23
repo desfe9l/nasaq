@@ -18,10 +18,12 @@ import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as LicenseRouteImport } from './routes/license'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PurchaseRouteImport } from './routes/purchase'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as Char1575Char1604Char1607Char1608Char1610Char1577RouteImport } from './routes/الهوية'
+import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiCheckoutConfigRouteImport } from './routes/api/checkout/config'
 import { Route as ApiLicenseActivateRouteImport } from './routes/api/license/activate'
 import { Route as ApiLicenseDeactivateRouteImport } from './routes/api/license/deactivate'
@@ -73,6 +75,11 @@ const LicenseRoute = LicenseRouteImport.update({
   path: '/license',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
@@ -94,6 +101,11 @@ const Char1575Char1604Char1607Char1608Char1610Char1577Route =
     path: '/الهوية',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
+  id: '/api/auth/$',
+  path: '/api/auth/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiCheckoutConfigRoute = ApiCheckoutConfigRouteImport.update({
   id: '/api/checkout/config',
   path: '/api/checkout/config',
@@ -130,10 +142,12 @@ export interface FileRoutesByFullPath {
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
+  '/login': typeof LoginRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
@@ -150,10 +164,12 @@ export interface FileRoutesByTo {
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
+  '/login': typeof LoginRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
@@ -171,10 +187,12 @@ export interface FileRoutesById {
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
+  '/login': typeof LoginRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
@@ -193,10 +211,12 @@ export interface FileRouteTypes {
     | '/demo'
     | '/editor'
     | '/license'
+    | '/login'
     | '/projects'
     | '/purchase'
     | '/templates'
     | '/الهوية'
+    | '/api/auth/$'
     | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
@@ -213,10 +233,12 @@ export interface FileRouteTypes {
     | '/demo'
     | '/editor'
     | '/license'
+    | '/login'
     | '/projects'
     | '/purchase'
     | '/templates'
     | '/الهوية'
+    | '/api/auth/$'
     | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
@@ -233,10 +255,12 @@ export interface FileRouteTypes {
     | '/demo'
     | '/editor'
     | '/license'
+    | '/login'
     | '/projects'
     | '/purchase'
     | '/templates'
     | '/الهوية'
+    | '/api/auth/$'
     | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
@@ -254,10 +278,12 @@ export interface RootRouteChildren {
   DemoRoute: typeof DemoRoute
   EditorRoute: typeof EditorRoute
   LicenseRoute: typeof LicenseRoute
+  LoginRoute: typeof LoginRoute
   ProjectsRoute: typeof ProjectsRoute
   PurchaseRoute: typeof PurchaseRoute
   TemplatesRoute: typeof TemplatesRoute
   Char1575Char1604Char1607Char1608Char1610Char1577Route: typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiCheckoutConfigRoute: typeof ApiCheckoutConfigRoute
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
@@ -330,6 +356,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LicenseRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects': {
       id: '/projects'
       path: '/projects'
@@ -356,6 +389,13 @@ declare module '@tanstack/react-router' {
       path: '/الهوية'
       fullPath: '/الهوية'
       preLoaderRoute: typeof Char1575Char1604Char1607Char1608Char1610Char1577RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/$': {
+      id: '/api/auth/$'
+      path: '/api/auth/$'
+      fullPath: '/api/auth/$'
+      preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/checkout/config': {
@@ -406,11 +446,13 @@ const rootRouteChildren: RootRouteChildren = {
   DemoRoute: DemoRoute,
   EditorRoute: EditorRoute,
   LicenseRoute: LicenseRoute,
+  LoginRoute: LoginRoute,
   ProjectsRoute: ProjectsRoute,
   PurchaseRoute: PurchaseRoute,
   TemplatesRoute: TemplatesRoute,
   Char1575Char1604Char1607Char1608Char1610Char1577Route:
     Char1575Char1604Char1607Char1608Char1610Char1577Route,
+  ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiCheckoutConfigRoute: ApiCheckoutConfigRoute,
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,
   ApiLicenseDeactivateRoute: ApiLicenseDeactivateRoute,
