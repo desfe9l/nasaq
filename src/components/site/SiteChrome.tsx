@@ -194,7 +194,7 @@ export function SiteFooter() {
             {CONTACT_PHONE_DISPLAY}
           </a>
           <p className="mt-3 text-[11px] leading-5 text-muted">
-            {texts.footerNote.trim() || "جميع الملفات تُحفظ في متصفحك وتُصدَّر محليًا، فلا تُرفع إلى أي سيرفر."}
+            {texts.footerNote.trim() || "تُحفظ المشاريع في متصفحك وتُصدَّر محليًا، مع اتصال عند الحاجة للترخيص أو الذكاء الاصطناعي."}
           </p>
         </div>
       </div>
