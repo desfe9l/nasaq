@@ -17,6 +17,26 @@ import {
 import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useSiteSettings } from "@/lib/admin/use-site-settings";
+
+/** Saved swatches (localStorage) — colours the author wants to keep at hand. */
+const SAVED_COLORS_KEY = "nasaq.brand.saved-colors.v1";
+function readSavedColors(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(SAVED_COLORS_KEY) || "[]");
+    return Array.isArray(raw) ? raw.filter((c): c is string => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c)).slice(0, 24) : [];
+  } catch {
+    return [];
+  }
+}
+function writeSavedColors(colors: string[]) {
+  try {
+    localStorage.setItem(SAVED_COLORS_KEY, JSON.stringify(colors));
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 /** Saudi-flavoured palette presets — five colours each (paper + text included). */
 const PALETTE_PRESETS: {
@@ -121,6 +141,24 @@ export function BrandKitPage() {
       e.target.value = "";
       void applyImage(key, file);
     };
+
+  const { brandPresets } = useSiteSettings();
+  /** Built-in presets plus the defaults published from /admin. */
+  const allPresets = [...PALETTE_PRESETS, ...brandPresets.map(({ id: _id, ...p }) => p)];
+  const [savedColors, setSavedColors] = useState<string[]>([]);
+  useEffect(() => setSavedColors(readSavedColors()), []);
+  const saveColor = (color: string) => {
+    const c = color.toLowerCase();
+    if (!/^#[0-9a-f]{6}$/.test(c)) return;
+    const next = [c, ...savedColors.filter((x) => x !== c)].slice(0, 24);
+    setSavedColors(next);
+    writeSavedColors(next);
+  };
+  const removeColor = (color: string) => {
+    const next = savedColors.filter((x) => x !== color);
+    setSavedColors(next);
+    writeSavedColors(next);
+  };
 
   const applyPreset = (preset: (typeof PALETTE_PRESETS)[number]) => {
     const { name: _name, ...colors } = preset;
@@ -283,16 +321,16 @@ export function BrandKitPage() {
               <div>
                 <p className="text-[11px] font-extrabold text-muted">لوائح جاهزة سعودية</p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {PALETTE_PRESETS.map((preset) => (
+                  {allPresets.map((preset, index) => (
                     <button
-                      key={preset.name}
+                      key={`${preset.name}-${index}`}
                       type="button"
                       onClick={() => applyPreset(preset)}
                       className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[11px] font-bold transition hover:border-navy-2 dark:border-white/10"
                     >
                       <span className="flex -space-x-1 rtl:space-x-reverse">
-                        {[preset.primaryColor, preset.secondaryColor, preset.accentColor].map((c) => (
-                          <span key={c} className="size-3.5 rounded-full border border-white shadow-sm" style={{ background: c }} />
+                        {[preset.primaryColor, preset.secondaryColor, preset.accentColor, preset.paperColor, preset.textColor].map((c, i) => (
+                          <span key={`${c}-${i}`} className="size-3.5 rounded-full border border-white shadow-sm" style={{ background: c }} />
                         ))}
                       </span>
                       {preset.name}
@@ -308,6 +346,52 @@ export function BrandKitPage() {
                 <ColorField label="ذهبي / لمسة" value={kit.accentColor} onChange={(v) => update("accentColor", v)} />
                 <ColorField label="لون الورق" value={kit.paperColor || DEFAULT_BRAND_KIT.paperColor || "#ffffff"} onChange={(v) => update("paperColor", v)} />
                 <ColorField label="لون النص" value={kit.textColor || DEFAULT_BRAND_KIT.textColor || "#1f2937"} onChange={(v) => update("textColor", v)} />
+              </div>
+
+              {/* Saved colours: keep swatches at hand, click to apply as the accent. */}
+              <div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[11px] font-extrabold text-muted">الألوان المحفوظة</p>
+                  <div className="flex gap-1">
+                    {(["primaryColor", "secondaryColor", "accentColor"] as const).map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => saveColor(kit[key])}
+                        className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-1 text-[10px] font-bold hover:border-emerald-500/50 dark:border-white/10"
+                        title="حفظ هذا اللون"
+                      >
+                        <span className="size-3 rounded-full border border-white shadow-sm" style={{ background: kit[key] }} />
+                        حفظ
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {savedColors.length === 0 ? (
+                  <p className="mt-2 text-[11px] text-muted">لا توجد ألوان محفوظة بعد.</p>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {savedColors.map((c) => (
+                      <span key={c} className="group relative">
+                        <button
+                          type="button"
+                          onClick={() => update("accentColor", c)}
+                          title={`تطبيق ${c} كلون لمسة`}
+                          className="block size-7 rounded-full border-2 border-white shadow ring-1 ring-line dark:ring-white/15"
+                          style={{ background: c }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removeColor(c)}
+                          aria-label={`إزالة ${c}`}
+                          className="absolute -top-1 -left-1 hidden size-4 place-items-center rounded-full bg-white text-[10px] font-black text-danger shadow group-hover:grid"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Official metadata. */}

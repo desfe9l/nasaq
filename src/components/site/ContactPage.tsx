@@ -75,12 +75,13 @@ export function ContactPage() {
 
         <div className="mt-8 grid gap-6 border-y border-line py-7 md:grid-cols-[1fr_auto] md:items-center dark:border-white/10">
           <div>
-            <div className="flex items-center gap-2 text-[13px] font-extrabold text-muted">
+            <div className="flex flex-wrap items-center gap-2 text-[13px] font-extrabold text-muted">
               <Phone className="size-4 text-navy-2 dark:text-gold-2" />
               التواصل المباشر
               {/* Live availability badge + copy-to-clipboard on the number row. */}
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-extrabold text-emerald-700 dark:text-emerald-300">
-                🟢 متاح الآن
+              <span className="flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-extrabold leading-5 text-emerald-700 dark:text-emerald-300">
+                <span aria-hidden>🟢</span>
+                <span>متاح الآن</span>
               </span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3">

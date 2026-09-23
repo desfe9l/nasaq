@@ -12,8 +12,6 @@ import {
   Files,
   Sparkles,
   Zap,
-  MousePointer,
-  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PACKS } from "@/lib/editor/templates";
@@ -23,6 +21,8 @@ import { ProjectCard } from "@/components/site/ProjectCard";
 import { PRODUCT_COPY } from "@/lib/product/copy";
 import { CARD_W, CARD_WRAP, SITE_CARD, iconTint } from "@/components/site/cards";
 import { FullVersionModal } from "@/components/site/FullVersionModal";
+import { HeroShowcase } from "@/components/site/HeroShowcase";
+import { useSiteSettings } from "@/lib/admin/use-site-settings";
 
 /**
  * Six capability cards: the two extra entries carry the privacy
@@ -49,19 +49,12 @@ export function HomePage() {
   const openProject = useEditor((s) => s.openProject);
   const fileInput = useRef<HTMLInputElement>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [previewTab, setPreviewTab] = useState(0);
+  const { texts } = useSiteSettings();
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
-  // Auto-play through document previews
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setPreviewTab((prev) => (prev + 1) % 3);
-    }, 4500);
-    return () => clearInterval(timer);
-  }, []);
 
   const recent = projects.slice(0, 3);
 
@@ -75,58 +68,68 @@ export function HomePage() {
       <SiteHeader current="/" />
 
       <main>
-        {/* Hero Section */}
-        <section className="relative overflow-hidden border-b border-line bg-gradient-to-b from-white via-white to-[#f4f7f4] py-14 sm:py-20 dark:border-white/10 dark:from-[#111722] dark:via-[#161d2b] dark:to-[#111722]">
-          {/* Subtle background glow */}
+        {/* Hero — dark institutional band with a live editor showcase */}
+        <section className="relative overflow-hidden border-b border-white/10 bg-[#07110f] py-14 text-white sm:py-20">
           <div
-            className="pointer-events-none absolute -top-40 right-1/4 h-96 w-96 rounded-full bg-emerald-500/10 blur-3xl dark:bg-emerald-500/15"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.22),transparent_55%),radial-gradient(ellipse_at_bottom_left,rgba(6,59,53,0.55),transparent_60%)]"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.06]"
+            style={{ backgroundImage: "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)", backgroundSize: "44px 44px" }}
             aria-hidden
           />
 
-          <div className="mx-auto grid w-full max-w-6xl gap-12 px-4 sm:px-6 lg:grid-cols-[1.05fr_.95fr] lg:items-center">
+          <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 sm:px-6 lg:grid-cols-[1fr_1.05fr] lg:items-center">
             <div>
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1 text-[12px] font-extrabold text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-300">
-                <Sparkles className="size-3.5 animate-pulse" />
-                <span>{PRODUCT_COPY.hero.eyebrow}</span>
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3.5 py-1 text-[12px] font-extrabold text-emerald-300 backdrop-blur-md">
+                <Sparkles className="size-3.5" />
+                <span>{texts.heroEyebrow.trim() || PRODUCT_COPY.hero.eyebrow}</span>
               </div>
 
-              <h1 className="max-w-3xl text-[34px] font-black leading-[1.25] text-ink drop-shadow-sm sm:text-[50px] dark:text-white dark:drop-shadow-[0_2px_12px_rgba(0,0,0,0.5)]">
-                {PRODUCT_COPY.hero.title}
+              <h1 className="max-w-3xl text-[34px] font-black leading-[1.3] text-white [text-shadow:0_2px_18px_rgba(0,0,0,0.45)] sm:text-[48px]">
+                {texts.heroTitle.trim() || PRODUCT_COPY.hero.title}
               </h1>
 
-              <p className="mt-5 max-w-2xl text-[16px] leading-8 text-muted sm:text-[18px] sm:leading-9">
-                {PRODUCT_COPY.hero.description}
+              <p className="mt-5 max-w-2xl text-[16px] leading-8 text-slate-300 sm:text-[18px] sm:leading-9">
+                {texts.heroDescription.trim() || PRODUCT_COPY.hero.description}
               </p>
 
-              {/* CTAs */}
               <div className="mt-8 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => window.location.assign("/demo")}
-                  className="group inline-flex h-12 items-center gap-2.5 rounded-xl bg-gradient-to-r from-emerald-600 via-emerald-600 to-emerald-500 px-6 text-[14px] font-black text-white shadow-[0_4px_20px_rgba(16,185,129,0.35)] transition-all hover:-translate-y-0.5 hover:from-emerald-500 hover:to-emerald-400 hover:shadow-[0_8px_30px_rgba(16,185,129,0.5)]"
+                <a
+                  href="/demo"
+                  className="group inline-flex h-12 items-center gap-2.5 rounded-xl bg-emerald-500 px-6 text-[15px] font-black text-[#04120d] shadow-[0_8px_28px_-6px_rgba(16,185,129,0.65)] ring-1 ring-emerald-300/50 transition-all hover:-translate-y-0.5 hover:bg-emerald-400"
                 >
-                  <span>{PRODUCT_COPY.hero.primary}</span>
+                  <span>استكشف العرض التجريبي</span>
                   <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-1" />
-                </button>
+                </a>
 
                 <button
                   type="button"
                   onClick={() => setModalOpen(true)}
-                  className="inline-flex h-12 items-center gap-2 rounded-xl border border-line bg-white/70 px-5 text-[14px] font-extrabold text-ink shadow-sm backdrop-blur-md transition hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-700 dark:border-white/15 dark:bg-white/5 dark:text-white dark:hover:border-emerald-400/40 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-300"
+                  className="inline-flex h-12 items-center gap-2 rounded-xl border border-white/20 bg-white/[0.06] px-5 text-[14px] font-extrabold text-white backdrop-blur-md transition hover:border-emerald-400/50 hover:bg-emerald-400/10"
                 >
-                  <Zap className="size-4 text-emerald-600 dark:text-emerald-400" />
+                  <Zap className="size-4 text-emerald-400" />
                   <span>طلب النسخة الكاملة</span>
                 </button>
 
                 <a
                   href="/projects"
-                  className="inline-flex h-12 items-center rounded-xl border border-line/60 bg-line/20 px-4 text-[13px] font-bold text-navy-2 backdrop-blur-sm transition hover:bg-line-2 dark:border-white/10 dark:bg-white/5 dark:text-gold-2 dark:hover:bg-white/10"
+                  className="inline-flex h-12 items-center rounded-xl px-3 text-[13px] font-bold text-slate-300 underline-offset-4 transition hover:text-white hover:underline"
                 >
                   كل مشاريعي
                 </a>
               </div>
 
-              <p className="mt-5 text-[12px] leading-6 text-muted">{PRODUCT_COPY.demoNote}</p>
+              <ul className="mt-7 flex flex-wrap gap-2 text-[12px] font-bold text-slate-300">
+                {CTA_BADGES.map((badge) => (
+                  <li key={badge} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 backdrop-blur-sm">
+                    {badge}
+                  </li>
+                ))}
+              </ul>
+
+              <p className="mt-5 text-[12px] leading-6 text-slate-400">{PRODUCT_COPY.demoNote}</p>
 
               <input
                 ref={fileInput}
@@ -152,176 +155,7 @@ export function HomePage() {
               />
             </div>
 
-            {/* Visual Editor Showcase: macOS-style Window Frame */}
-            <div className="relative mx-auto w-full max-w-lg lg:max-w-none">
-              <div className="relative overflow-hidden rounded-2xl border border-emerald-500/30 bg-[#0d1522] p-1 shadow-[0_20px_50px_rgba(0,0,0,0.35),0_0_40px_-10px_rgba(16,185,129,0.3)]">
-                {/* macOS Titlebar */}
-                <div className="flex items-center justify-between border-b border-white/10 bg-[#162032] px-4 py-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="size-3 rounded-full bg-[#ff5f56] inline-block shadow-sm" />
-                    <span className="size-3 rounded-full bg-[#ffbd2e] inline-block shadow-sm" />
-                    <span className="size-3 rounded-full bg-[#27c93f] inline-block shadow-sm" />
-                  </div>
-                  <div className="flex items-center gap-1.5 rounded-md border border-white/10 bg-black/40 px-3 py-1 text-[11px] font-mono text-gray-300">
-                    <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span>nasaq.app/editor</span>
-                  </div>
-                  <div className="text-[10px] font-extrabold text-emerald-400">NASAQ STUDIO</div>
-                </div>
-
-                {/* Sub-toolbar: Active Doc Tabs */}
-                <div className="flex items-center gap-1 border-b border-white/10 bg-[#121a29] px-3 py-1.5 text-[11px] overflow-x-auto">
-                  {[
-                    "تقرير الأداء المؤسسي 2026",
-                    "لوحة المؤشرات والبيانات",
-                    "خطاب وهوية معتمدة",
-                  ].map((title, idx) => (
-                    <button
-                      key={title}
-                      type="button"
-                      onClick={() => setPreviewTab(idx)}
-                      className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-right transition font-bold ${
-                        previewTab === idx
-                          ? "bg-emerald-600/30 text-emerald-300 border border-emerald-500/40"
-                          : "text-gray-400 hover:text-white"
-                      }`}
-                    >
-                      <span className="size-1.5 rounded-full bg-emerald-400" />
-                      <span>{title}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Simulated Canvas Viewport with Live Document Render */}
-                <div className="relative h-[310px] sm:h-[340px] bg-[#1a2334] p-3 sm:p-5 flex items-center justify-center overflow-hidden">
-                  {/* Subtle Grid backdrop */}
-                  <div
-                    className="absolute inset-0 opacity-15 pointer-events-none"
-                    style={{
-                      backgroundImage: "radial-gradient(#10b981 1px, transparent 1px)",
-                      backgroundSize: "16px 16px",
-                    }}
-                  />
-
-                  {/* A4 Artboard Simulation */}
-                  <div className="relative h-[285px] w-[210px] sm:h-[310px] sm:w-[230px] rounded-sm bg-white text-ink shadow-[0_15px_35px_rgba(0,0,0,0.4)] overflow-hidden flex flex-col justify-between p-3 select-none">
-                    {previewTab === 0 && (
-                      <>
-                        <div className="border-b-2 border-emerald-800 pb-2">
-                          <div className="flex items-center justify-between">
-                            <span className="rounded bg-emerald-900 px-1.5 py-0.5 text-[7px] font-black text-white">
-                              نَسَق
-                            </span>
-                            <span className="text-[7px] text-gray-500 font-mono">Q3-2026</span>
-                          </div>
-                          <h4 className="mt-1 text-[10px] font-black text-emerald-950">
-                            تقرير قياس مؤشرات الربع السنوي
-                          </h4>
-                        </div>
-
-                        {/* Interactive selection box */}
-                        <div className="relative my-1 rounded border-2 border-emerald-500 bg-emerald-50/70 p-2">
-                          <div className="absolute -top-1 -right-1 size-2 rounded-full border border-emerald-500 bg-white" />
-                          <div className="absolute -top-1 -left-1 size-2 rounded-full border border-emerald-500 bg-white" />
-                          <div className="absolute -bottom-1 -right-1 size-2 rounded-full border border-emerald-500 bg-white" />
-                          <div className="absolute -bottom-1 -left-1 size-2 rounded-full border border-emerald-500 bg-white" />
-                          <span className="absolute -top-4 left-1/2 -translate-x-1/2 rounded bg-emerald-600 px-1 py-0.2 text-[7px] font-mono text-white shadow">
-                            190mm × 35mm
-                          </span>
-                          <div className="flex items-center justify-between text-[9px] font-black text-emerald-900">
-                            <span>نسبة إنجاز التحول الرقمي</span>
-                            <span className="text-emerald-700">96.4%</span>
-                          </div>
-                          <div className="mt-1.5 h-1.5 w-full rounded-full bg-emerald-200">
-                            <div className="h-full w-[96.4%] rounded-full bg-emerald-600" />
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-1.5 text-[8px]">
-                          <div className="rounded border border-gray-200 bg-gray-50 p-1.5 text-center">
-                            <span className="block text-gray-500 text-[7px]">إجمالي العمليات</span>
-                            <strong className="text-[10px] font-black text-emerald-800">184,200</strong>
-                          </div>
-                          <div className="rounded border border-gray-200 bg-gray-50 p-1.5 text-center">
-                            <span className="block text-gray-500 text-[7px]">مؤشر الجودة</span>
-                            <strong className="text-[10px] font-black text-emerald-800">99.1%</strong>
-                          </div>
-                        </div>
-
-                        <div className="border-t border-gray-200 pt-1 text-[6.5px] text-gray-400 flex justify-between">
-                          <span>وثيقة رسمية معتمدة</span>
-                          <span>صفحة 1 من 8</span>
-                        </div>
-                      </>
-                    )}
-
-                    {previewTab === 1 && (
-                      <>
-                        <div className="border-b border-gray-200 pb-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[8px] font-black text-emerald-800">📊 لوحة الإحصائيات</span>
-                            <span className="text-[7px] text-gray-500">2026</span>
-                          </div>
-                          <p className="text-[7px] text-gray-500">تحليل الأداء التراكمي وتوزيع الموارد</p>
-                        </div>
-
-                        <div className="my-1 flex items-end gap-1.5 h-20 pt-2 px-1 border-b border-gray-100">
-                          <div className="flex-1 bg-emerald-200 rounded-t h-[40%] text-center text-[6px]">40%</div>
-                          <div className="flex-1 bg-emerald-400 rounded-t h-[65%] text-center text-[6px]">65%</div>
-                          <div className="flex-1 bg-emerald-600 rounded-t h-[88%] text-center text-[6px] text-white">88%</div>
-                          <div className="flex-1 bg-emerald-800 rounded-t h-[98%] text-center text-[6px] text-white font-bold">98%</div>
-                        </div>
-
-                        <div className="rounded bg-emerald-50 p-1.5 text-[8px] border border-emerald-200">
-                          <span className="font-extrabold text-emerald-900 block">نمو قياسي متسارع</span>
-                          <span className="text-[7px] text-emerald-700">تجاوزت المستهدفات بنسبة +24%</span>
-                        </div>
-
-                        <div className="border-t border-gray-200 pt-1 text-[6.5px] text-gray-400 flex justify-between">
-                          <span>نظام التقارير الذكي</span>
-                          <span>صفحة 3 من 5</span>
-                        </div>
-                      </>
-                    )}
-
-                    {previewTab === 2 && (
-                      <>
-                        <div className="text-center border-b border-emerald-800/40 pb-2">
-                          <span className="text-[7px] font-bold text-gray-500 block">المملكة العربية السعودية</span>
-                          <strong className="text-[9px] font-black text-emerald-900 block">خطاب رسمي معتمد</strong>
-                          <span className="text-[6.5px] text-gray-400">الرقم: 4810/ق · التاريخ: 1448هـ</span>
-                        </div>
-
-                        <div className="my-2 space-y-1 text-[7.5px] leading-4 text-gray-700">
-                          <p className="font-bold text-emerald-950">سعادة الرئيس التنفيذي المحترم،</p>
-                          <p>السلام عليكم ورحمة الله وبركاته،</p>
-                          <p>بناءً على الصلاحيات الممنوحة وضمن خطة تطوير المخرجات المؤسسية...</p>
-                        </div>
-
-                        <div className="mt-auto border-t border-gray-200 pt-1 flex items-center justify-between">
-                          <div className="text-[6.5px]">
-                            <span className="block font-bold">الاعتماد والتوقيع:</span>
-                            <span className="text-emerald-800 font-serif italic text-[8px]">فيصل المضياني</span>
-                          </div>
-                          <div className="size-7 rounded-full border-2 border-emerald-700/60 flex items-center justify-center text-[6px] font-black text-emerald-800 rotate-12">
-                            معتمد
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Floating mini tool palette over mockup */}
-                  <div className="absolute bottom-4 right-4 flex items-center gap-1 rounded-xl border border-white/15 bg-black/70 p-1.5 shadow-xl backdrop-blur-md text-white text-[10px]">
-                    <span className="flex items-center gap-1 rounded-lg bg-emerald-500/20 px-2 py-1 text-emerald-300 font-bold">
-                      <MousePointer className="size-3" /> أداة التحريك
-                    </span>
-                    <span className="rounded px-1.5 py-1 text-gray-400 hover:text-white">300 DPI</span>
-                    <span className="rounded bg-emerald-600 px-2 py-0.5 font-bold text-white text-[9px]">تصدير مباشر</span>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <HeroShowcase />
           </div>
         </section>
 

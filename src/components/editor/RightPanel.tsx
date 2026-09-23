@@ -53,6 +53,7 @@ import {
   type FadeOverlay,
 } from "@/lib/editor/fade";
 import { SHAPES } from "@/lib/editor/shapes";
+import { buildShadow, parseShadow } from "@/lib/editor/shadow";
 
 /** Element types that can carry a fade overlay (the image family, step 8). */
 const FADE_TYPES: ReadonlySet<string> = new Set(["image", "logo", "qr"]);
@@ -1855,6 +1856,12 @@ export function RightPanel({
                 <select
                   value={shadowId(el.style.shadow)}
                   onChange={(e) => {
+                    if (e.target.value === "custom") {
+                      updateStyle(el.id, {
+                        shadow: buildShadow(parseShadow(el.style.shadow || SHADOWS[2].value)),
+                      });
+                      return;
+                    }
                     const found = SHADOWS.find((s) => s.id === e.target.value);
                     updateStyle(el.id, { shadow: found?.value || "" });
                   }}
@@ -1864,8 +1871,75 @@ export function RightPanel({
                       {s.label}
                     </option>
                   ))}
+                  <option value="custom">مخصص…</option>
                 </select>
               </Field>
+              {/*
+               * Custom shadow — real values written to the same `style.shadow`
+               * string the canvas renders and html2canvas exports (box-shadow
+               * is supported by the raster export), so preview = output.
+               */}
+              {shadowId(el.style.shadow) === "custom" &&
+                (() => {
+                  const sh = parseShadow(el.style.shadow);
+                  const set = (patch: Partial<typeof sh>, live = true) =>
+                    updateStyle(el.id, { shadow: buildShadow({ ...sh, ...patch }) }, live);
+                  return (
+                    <div className="grid grid-cols-2 gap-2 rounded-[8px] border border-line p-2 dark:border-white/10">
+                      <Field label={`الإزاحة الأفقية X (${sh.x} مم)`}>
+                        <input
+                          type="range"
+                          min={-20}
+                          max={20}
+                          step={0.5}
+                          value={sh.x}
+                          onChange={(e) => set({ x: Number(e.target.value) })}
+                          onPointerUp={() => set({}, false)}
+                        />
+                      </Field>
+                      <Field label={`الإزاحة الرأسية Y (${sh.y} مم)`}>
+                        <input
+                          type="range"
+                          min={-20}
+                          max={20}
+                          step={0.5}
+                          value={sh.y}
+                          onChange={(e) => set({ y: Number(e.target.value) })}
+                          onPointerUp={() => set({}, false)}
+                        />
+                      </Field>
+                      <Field label={`التمويه Blur (${sh.blur} مم)`}>
+                        <input
+                          type="range"
+                          min={0}
+                          max={30}
+                          step={0.5}
+                          value={sh.blur}
+                          onChange={(e) => set({ blur: Number(e.target.value) })}
+                          onPointerUp={() => set({}, false)}
+                        />
+                      </Field>
+                      <Field label={`الشفافية (${Math.round(sh.alpha * 100)}%)`}>
+                        <input
+                          type="range"
+                          min={5}
+                          max={100}
+                          step={1}
+                          value={Math.round(sh.alpha * 100)}
+                          onChange={(e) => set({ alpha: Number(e.target.value) / 100 })}
+                          onPointerUp={() => set({}, false)}
+                        />
+                      </Field>
+                      <Field label="لون الظل" full>
+                        <input
+                          type="color"
+                          value={sh.color}
+                          onChange={(e) => set({ color: e.target.value }, false)}
+                        />
+                      </Field>
+                    </div>
+                  );
+                })()}
             </AccordionSection>
 
             {/*
@@ -2224,8 +2298,9 @@ function setTableCell(
 }
 
 function shadowId(value: string | undefined) {
+  if (!value) return "none";
   const hit = SHADOWS.find((s) => s.value && s.value === value);
-  return hit?.id || "none";
+  return hit?.id || "custom";
 }
 
 /**

@@ -34,9 +34,11 @@ const DURATIONS = [
   { label: "سنة (365 يوم)", days: 365 },
 ];
 
-export default function AdminLicensePanel() {
-  const [secret, setSecret] = useState("");
-  const [authenticated, setAuthenticated] = useState(false);
+export default function AdminLicensePanel({ initialSecret }: { initialSecret?: string } = {}) {
+  // Embedded in /admin the passcode was already verified server-side; every
+  // call below still carries it and is re-checked by the server.
+  const [secret, setSecret] = useState(initialSecret ?? "");
+  const [authenticated, setAuthenticated] = useState(Boolean(initialSecret));
   const [licenses, setLicenses] = useState<License[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);

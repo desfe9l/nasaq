@@ -31,7 +31,8 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
    */
   const thumbBox = (ratio: number) => {
     // Strip the chrome around the thumbnail: labels, padding, drag chips.
-    const chrome = 46;
+    // p-2 card padding + 2px border + label row + ring room inside the rail.
+    const chrome = 60;
     const available = Math.max(48, height - chrome);
     const floor = Math.max(40, minHeight - chrome);
     const h = clamp(Math.round(available), floor, 220);
@@ -114,7 +115,7 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
        * 2px ring with a 2px offset, and without padding those 4px were clipped
        * by this scroll container — the first/last thumbnail showed a cut ring.
        */}
-      <ul className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto px-1 py-1" dir="rtl">
+      <ul className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto overflow-y-hidden px-2 py-2" dir="rtl">
         {pages.map((p, i) => {
           const size = pageSize(p);
           const ratio = size.w / size.h;
@@ -126,17 +127,17 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
                 itemRefs.current[p.id] = n;
               }}
               className={cn(
-                "group relative shrink-0 rounded-lg border p-1.5 transition-colors",
                 /*
-                 * Active page: a 2px primary ring around the thumbnail, drawn in
-                 * the editor's own primary accent (`--primary-accent`, which
-                 * already flips between light and dark chrome), so "you are
-                 * here" matches the library and selection affordances instead of
-                 * borrowing the brand gold used for canvas artwork.
+                 * One self-contained card: preview, page number, border and
+                 * active state all live INSIDE this box. The active ring has no
+                 * offset (an offset ring drew outside the card and was clipped
+                 * by the scroll container into a stray "( )"), and the rail's
+                 * own padding leaves room for the 2px ring on every side.
                  */
+                "group relative shrink-0 rounded-xl border-2 p-2 transition-all",
                 p.id === activePageId
-                  ? "border-transparent ring-2 ring-[var(--primary-accent)] ring-offset-2 ring-offset-white dark:ring-offset-[#111722]"
-                  : "border-line dark:border-white/10",
+                  ? "border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10 ring-2 ring-emerald-500/30"
+                  : "border-line hover:border-emerald-500/40 dark:border-white/10",
                 dragIndex === i && "opacity-50",
                 overIndex === i && dragIndex !== null && dragIndex !== i && "drop-target",
               )}
@@ -144,7 +145,7 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
               <button
                 type="button"
                 onClick={() => setActivePage(p.id)}
-                className="block"
+                className="block rounded-lg text-right"
                 aria-current={p.id === activePageId}
               >
                 <span
@@ -201,11 +202,18 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
                       {p.name}
                     </span>
                   )}
-                  <span className="tabular-nums text-muted">{i + 1}</span>
+                  <span
+                    className={cn(
+                      "grid h-4 min-w-4 shrink-0 place-items-center rounded-full px-1 text-[9px] font-extrabold tabular-nums",
+                      p.id === activePageId ? "bg-emerald-500 text-white" : "bg-line-2 text-muted dark:bg-white/10",
+                    )}
+                  >
+                    {i + 1}
+                  </span>
                 </span>
               </button>
 
-              <span className="absolute top-0.5 left-0.5 flex gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+              <span className="absolute top-1 left-1 flex gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
                 <button
                   type="button"
                   onPointerDown={startDrag(i)}

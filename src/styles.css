@@ -731,9 +731,8 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   /* High-contrast "this is interactive" accent for library/palette items. */
   --primary-accent: #1d4ed8;
   --library-active-bg: rgba(29, 78, 216, 0.1);
-  --sel-color: #1d4ed8;
-  --sel-halo: rgba(255, 255, 255, 0.9);
-  --sel-glow: rgba(29, 78, 216, 0.18);
+  /* Figma-style selection: one crisp NASAQ-emerald hairline, no halo/glow. */
+  --sel-color: #10b981;
   --hover-outline: rgba(29, 78, 216, 0.55);
 }
 /*
@@ -745,9 +744,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .editor-ui.editor-dark {
   --primary-accent: #60a5fa;
   --library-active-bg: rgba(96, 165, 250, 0.18);
-  --sel-color: #3b82f6;
-  --sel-halo: rgba(15, 23, 42, 0.9);
-  --sel-glow: rgba(59, 130, 246, 0.2);
+  --sel-color: #10b981;
   --hover-outline: rgba(59, 130, 246, 0.6);
 }
 /* z-index comes from SELECTION_LAYER_Z in CanvasStage — the one source. */
@@ -758,32 +755,28 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 .selection-frame {
-  --handle-size: calc(2.6mm / var(--editor-zoom, 1));
+  /* 7px circular handles, a constant on-screen size at every zoom. */
+  --handle-size: calc(7px / var(--editor-zoom, 1));
   /* Diagonal reach of the corner rotation grips: close enough to grab without a
      hunt, far enough to clear the corner resize dot underneath. */
-  --rotate-gap: calc(6mm / var(--editor-zoom, 1));
+  --rotate-gap: calc(14px / var(--editor-zoom, 1));
   /*
-   * The page lives in a scaled space, so a plain 1px border renders sub-pixel
-   * (≈0.55px at 82%) and the selection looks faint or invisible — the exact
-   * "no clear highlight" regression. Counter-scaling by --editor-zoom keeps
-   * the rings a constant ≈1.5–2px ON SCREEN at every zoom, hairline yet
-   * unmistakable, same trick the handles above already use.
+   * Tight bounding box (borderScaleFactor: 1): the frame mirrors the element's
+   * exact box, and a single 1px border is drawn INSIDE it (border-box), so the
+   * line touches the artwork's true outer edge with zero artificial padding.
+   * Counter-scaling by --editor-zoom keeps it a crisp 1 screen pixel at every
+   * zoom. No outline, halo, inset ring or tinted fill — one border only.
    */
   position: absolute;
   z-index: 2;
-  border: calc(2.6px / var(--editor-zoom, 1)) solid var(--sel-color, #1d4ed8);
-  outline: calc(1.8px / var(--editor-zoom, 1)) solid
-    var(--sel-halo, rgba(255, 255, 255, 0.9));
-  outline-offset: 0;
-  box-shadow: 0 0 0 calc(1.8px / var(--editor-zoom, 1))
-    var(--sel-halo, rgba(255, 255, 255, 0.9)) inset;
+  box-sizing: border-box;
+  border: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
+  outline: none;
+  box-shadow: none;
+  background: transparent;
   pointer-events: auto;
   touch-action: none;
   cursor: move;
-  /* Subtle overlay + glow: the selection volume is legible even over dense
-     artwork, without a filled box that would hide the content. */
-  background: var(--sel-glow, rgba(59, 130, 246, 0.2));
-  background-clip: padding-box;
 }
 
 /*
@@ -794,8 +787,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .selection-frame.is-secondary {
   z-index: 1;
   border-style: dashed;
-  border-color: color-mix(in srgb, var(--sel-color, #1d4ed8) 85%, transparent);
-  outline-style: dashed;
+  border-color: color-mix(in srgb, var(--sel-color, #10b981) 85%, transparent);
 }
 
 /*
@@ -1017,9 +1009,11 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .rotate-handle {
   position: absolute;
   z-index: 1;
+  /* cornerStyle: circle · cornerColor: #FFFFFF · cornerStrokeColor: emerald */
+  box-sizing: border-box;
   background: #ffffff;
-  border: calc(0.5mm / var(--editor-zoom, 1)) solid var(--sel-color, #1d4ed8);
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+  border: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
+  box-shadow: none;
 }
 
 /*
@@ -1129,7 +1123,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   position: absolute;
   inset: 30%;
   border-radius: 50%;
-  background: var(--sel-color, #1d4ed8);
+  background: var(--sel-color, #10b981);
 }
 
 .rotate-handle:active {
@@ -1158,8 +1152,9 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 @media (pointer: coarse) {
   /* Touch targets grow on tablets; same anchors, larger hit circles. */
   .selection-frame {
-    --handle-size: calc(3.4mm / var(--editor-zoom, 1));
-    --rotate-gap: calc(13mm / var(--editor-zoom, 1));
+    /* Visible dot stays 9px; the 44px hit target comes from ::before above. */
+    --handle-size: calc(9px / var(--editor-zoom, 1));
+    --rotate-gap: calc(26px / var(--editor-zoom, 1));
   }
 }
 

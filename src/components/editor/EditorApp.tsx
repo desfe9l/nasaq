@@ -599,6 +599,37 @@ function Studio({
   fitRef.current = fitToScreen;
 
   /**
+   * 🪄 ضبط وتنسيق مساحة العمل: dock every panel back to its default place,
+   * then — once the columns have re-laid out — fit and centre the artboard.
+   * Zoom only ever changes the canvas viewport; the chrome never scales.
+   */
+  const resetWorkspaceLayout = useEditor((s) => s.resetWorkspaceLayout);
+  const arrangeWorkspace = useCallback(() => {
+    resetWorkspaceLayout();
+    setTimeout(() => fitRef.current(), 80);
+  }, [resetWorkspaceLayout]);
+
+  /*
+   * Safe auto-fit whenever a DIFFERENT document is loaded (opening a project,
+   * creating a new one, importing a file). Keyed on the project id so plain
+   * edits never move the author's view.
+   */
+  const projectId = useEditor((s) => s.id);
+  const lastFitProjectRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!hydrated) return;
+    if (lastFitProjectRef.current === undefined) {
+      // First load is owned by the shell-shape effect above.
+      lastFitProjectRef.current = projectId ?? "";
+      return;
+    }
+    if (lastFitProjectRef.current === (projectId ?? "")) return;
+    lastFitProjectRef.current = projectId ?? "";
+    const timer = setTimeout(() => fitRef.current(), 90);
+    return () => clearTimeout(timer);
+  }, [projectId, hydrated]);
+
+  /**
    * Toolbar/keyboard zoom keeps the middle of the current view stable. With a
    * bare setZoom the artboard rescales around its top edge and whatever the
    * author was looking at flies off-screen — zoom then stops being a way to
@@ -1132,6 +1163,16 @@ function Studio({
           <IconButton onClick={fitToScreen} title="ملاءمة الصفحة">
             <Scan className="size-4" />
           </IconButton>
+          <button
+            type="button"
+            onClick={arrangeWorkspace}
+            title="ضبط وتنسيق مساحة العمل — ملاءمة الصفحة وتوسيطها وإعادة اللوحات لأماكنها"
+            aria-label="ضبط وتنسيق مساحة العمل"
+            className="ms-1 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] border border-emerald-500/40 bg-emerald-500/10 px-2.5 text-[12px] font-extrabold text-emerald-700 transition hover:bg-emerald-500/20 dark:border-emerald-400/40 dark:text-emerald-300"
+          >
+            <span aria-hidden>🪄</span>
+            <span className="hidden xl:inline">ضبط وتنسيق مساحة العمل</span>
+          </button>
         </div>
 
         <div className="editor-pane-scroll order-last flex min-w-fit flex-1 items-center overflow-x-auto whitespace-nowrap md:order-none md:min-w-0">

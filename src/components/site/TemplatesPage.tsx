@@ -26,6 +26,7 @@ import { SIZE_PRESETS, THEMES, type Page, type ThemeId } from "@/lib/editor/mode
 import { useEditor } from "@/lib/editor/store";
 import { getProject } from "@/lib/editor/storage";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
+import { PublishedTemplates } from "@/components/site/PublishedTemplates";
 import { CARD_W, CARD_WRAP } from "@/components/site/cards";
 import { cn } from "@/lib/utils";
 import { DEMO_LICENSE, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
@@ -586,6 +587,15 @@ export function TemplatesPage() {
           القوالب المخصصة تُحفظ في متصفحك (localStorage) وتظهر مباشرةً في الكتالوج بلا إعادة بناء، ويفتح أي
           منها في المحرر بزر «استخدام القالب». القوالب الجاهزة تبقى كما هي، وأي تعديل عليها يُحفظ كنسخة خاصة بك.
         </p>
+
+        <PublishedTemplates
+          hasPremium={entitlements.premium_templates}
+          onLocked={() => window.location.assign("/license")}
+          beforeOpen={async (pageCount) => {
+            await hydrate();
+            return demoBlocked(pageCount);
+          }}
+        />
 
         <a
           href="/editor"

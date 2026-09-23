@@ -9,12 +9,12 @@ import {
   MessageCircle,
   ShieldCheck,
   Lock,
-  Receipt,
 } from "lucide-react";
-import { BRAND, whatsappHref } from "@/lib/brand";
+import { BRAND } from "@/lib/brand";
 import { LEMON_SQUEEZY_WHATSAPP_URL, type BillingPeriod, type PaidPlan } from "@/lib/product/licensing";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { cardClass } from "@/components/site/cards";
+import { useSiteSettings, whatsappLink } from "@/lib/admin/use-site-settings";
 
 const PLAN_CONTENT = {
   individual: {
@@ -29,26 +29,18 @@ const PLAN_CONTENT = {
     ],
   },
   team: {
-    title: "ترخيص فريق",
-    body: "لفريق محتوى أو اتصال مؤسسي صغير.",
+    title: "ترخيص الأعمال / الفريق",
+    body: "لفريق محتوى أو اتصال مؤسسي يعمل على هوية واحدة.",
     items: [
-      "جميع مزايا الفردي",
-      "تفعيل لعدة مستخدمين",
-      "تهيئة هوية الجهة كاملة",
-      "مكتبة موارد مشتركة للمجلدات",
-      "أولوية في الدعم الفني",
+      "جميع مزايا النسخة المتقدمة",
+      "تفعيل التراخيص عبر أكواد سريعة",
+      "استيراد وتصدير حزمة الهوية الموحدة",
+      "تصدير PDF عالي الدقة 300 DPI بدون علامة مائية",
+      "أولوية الدعم الفني",
     ],
   },
 } as const;
 
-/** Monthly list prices in SAR; annual = 12 months with the −20% discount. */
-const MONTHLY_PRICES: Record<PaidPlan, number> = {
-  individual: 79,
-  team: 199,
-};
-
-const annualPrice = (plan: PaidPlan) =>
-  Math.round(MONTHLY_PRICES[plan] * 12 * 0.8);
 
 type CheckoutMatrix = Record<
   PaidPlan,
@@ -59,24 +51,20 @@ type Billing = "monthly" | "annual";
 
 const FAQS: { q: string; a: string }[] = [
   {
-    q: "هل تُرفع ملفاتي أو تصاميمي إلى أي خادم خارجي؟",
-    a: "إطلاقاً. NASAQ مبني وفق بنية Local-First بالكامل: مشاريعك ومستنداتك وصورك وهوياتك تُعالج وتُحفظ مشفرة داخل متصفحك عبر تقنية IndexedDB. لا تُرسل تصاميمك لأي خادم ولا يمكن لأي طرف ثالث الاطلاع عليها.",
+    q: "كيف تُفعَّل التراخيص والهوية البصرية؟",
+    a: "بعد إتمام الطلب يصلك كود رخصة (NASAQ-…). أدخله في «إدخال كود الرخصة» داخل نافذة طلب النسخة الكاملة أو في صفحة التراخيص، فيتحقق منه خادم التراخيص ويفتح المزايا المرخّصة. بعدها يمكنك إعداد هوية جهتك (الشعارات والألوان والخطوط) من صفحة الهوية، وتصدير حزمة الهوية كملف واستيرادها على أجهزة الفريق.",
   },
   {
-    q: "كيف يعمل الحفظ المحلي عبر IndexedDB واسترجاع النسخ الاحتياطية؟",
-    a: "تمنحك قاعدة بيانات IndexedDB داخل المتصفح مساحة حفظ محلية ضخمة ومستقرة، كما يتيح لك النظام تصدير مشروعك واستيراده كملف JSON كامل يحتوي على كافة العناصر والصفحات والصور دون فقدان أي تفاصيل، لسهولة النقل والأرشفة الآمنة.",
+    q: "ما مستوى الأمان والسرية؟ وأين تُعالج ملفاتي؟",
+    a: "يعمل المحرر وفق بنية محلية أولًا (Local-First): المشاريع والصور والهويات تُعالَج وتُحفظ داخل متصفحك عبر IndexedDB ولا تُرفع تصاميمك إلى خوادم نَسَق. ما يُرسَل إلى الخادم هو فقط ما يلزم للتحقق من الرخصة. تبقى حماية البيانات المحلية مرتبطة بأمان جهازك ومتصفحك، لذلك ننصح بأخذ نسخ احتياطية دورية بتصدير المشروع.",
   },
   {
-    q: "هل يمكنني العمل وتصدير الملفات بدون اتصال بالإنترنت (Offline)؟",
-    a: "نعم تماماً. كافة أدوات التحرير والمحركات الرسومية تعمل محلياً داخل جهازك، لذا يمكنك إعداد التقارير وتنسيقها حتى في بيئات العمل المعزولة أو عند انقطاع الشبكة دون توقف.",
+    q: "هل يمكنني العمل بدون اتصال بالإنترنت؟",
+    a: "نعم، بعد تحميل المحرر مرة واحدة تعمل أدوات التحرير والحفظ المحلي والتصدير داخل جهازك حتى عند انقطاع الشبكة. يلزم الاتصال عند تفعيل الرخصة لأول مرة، وعند إعادة التحقق الدورية منها، وعند تحميل الخطوط من الإنترنت إن لم تكن مخزّنة في المتصفح.",
   },
   {
-    q: "كيف يتم استلام وتفعيل كود الرخصة بعد الدفع؟",
-    a: "يتم تسليم كود التفعيل فوراً عبر رسالة تأكيد الدفع أو عبر الواتساب الرسمي. ما عليك سوى نسخه ولصقه في تبويب 'تفعيل كود الرخصة' لتنفتح كافة الميزات والقوالب الحصرية وتصدير 300 DPI مباشرة.",
-  },
-  {
-    q: "هل نوفر عقود ترخيص مخصصة وخوادم خاصة للجهات الكبرى؟",
-    a: "نعم، للشركات والجهات التي تتطلب حزم تراخيص متعددة أو ورش تدريبية للفرق وتخصيص هوية مسبق، نوفر مسار تعاقد مؤسسي مباشر عبر الواتساب وعروض أسعار رسمية تلائم احتياجاتكم.",
+    q: "كيف تعمل آلية التفعيل المباشر؟",
+    a: "عند إدخال الكود يُرسَل إلى خادم التراخيص للتحقق من صلاحيته وحالته وعدد مرات التفعيل المسموح بها، ثم تُمنح الصلاحيات فورًا دون إعادة تثبيت. يُحفظ الكود في المتصفح لتسهيل الاستخدام فقط، ويُعاد التحقق منه تلقائيًا؛ ويمكن لإدارة المنصة إيقاف أي رخصة أو تمديدها أو إعادة تفعيلها من لوحة التحكم.",
   },
 ];
 
@@ -84,6 +72,15 @@ export function PurchasePage() {
   const [billing, setBilling] = useState<Billing>("monthly");
   const [checkouts, setCheckouts] = useState<CheckoutMatrix | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const { commercial } = useSiteSettings();
+  /** Monthly list prices in SAR (admin-managed); annual = 12 months minus the discount. */
+  const MONTHLY_PRICES: Record<PaidPlan, number> = {
+    individual: commercial.priceIndividualMonthly,
+    team: commercial.priceTeamMonthly,
+  };
+  const discount = commercial.annualDiscountPercent;
+  const annualPrice = (plan: PaidPlan) => Math.round(MONTHLY_PRICES[plan] * 12 * (1 - discount / 100));
+  const waHref = (message: string) => whatsappLink(commercial.whatsappNumber, message);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,22 +95,21 @@ export function PurchasePage() {
     };
   }, []);
 
-  const whatsapp =
-    LEMON_SQUEEZY_WHATSAPP_URL ||
-    whatsappHref(`السلام عليكم، أرغب بالاستفسار عن الترخيص المؤسسي لمنصة ${BRAND.platform}.`);
+  const whatsapp = LEMON_SQUEEZY_WHATSAPP_URL || waHref(commercial.whatsappEnterpriseMessage);
 
   /** Paid CTA target: configured checkout for the monthly period, else a prepared WhatsApp inquiry. */
   const planCta = (
     id: PaidPlan,
   ): { href: string; external: boolean; checkout: boolean } => {
     if (billing === "monthly") {
-      const url = checkouts?.[id].monthly?.checkoutUrl;
+      const override = id === "team" ? commercial.checkoutTeamMonthly : commercial.checkoutIndividualMonthly;
+      const url = override || checkouts?.[id].monthly?.checkoutUrl;
       if (url) return { href: url, external: true, checkout: true };
     }
-    const label = id === "team" ? "ترخيص فريق" : "ترخيص فردي";
+    const label = id === "team" ? "ترخيص الأعمال / الفريق" : "ترخيص فردي";
     return {
-      href: whatsappHref(
-        `السلام عليكم، أرغب بالاشتراك ${billing === "annual" ? "السنوي (وفر 20%)" : "الشهري"} في ${label} لمنصة ${BRAND.platform}.`,
+      href: waHref(
+        `السلام عليكم، أرغب بالاشتراك ${billing === "annual" ? `السنوي (وفر ${discount}%)` : "الشهري"} في ${label} لمنصة ${BRAND.platform}.`,
       ),
       external: true,
       checkout: false,
@@ -155,7 +151,7 @@ export function PurchasePage() {
           })}
         </div>
 
-        {/* Billing period: Monthly / Annual (save 20%). */}
+        {/* Billing period: Monthly / Annual (admin-managed discount). */}
         <div
           role="group"
           aria-label="فترة الاشتراك"
@@ -164,7 +160,7 @@ export function PurchasePage() {
           {(
             [
               { id: "monthly", label: "شهري" },
-              { id: "annual", label: "سنوي — وفر 20%" },
+              { id: "annual", label: `سنوي — وفر ${discount}%` },
             ] as { id: Billing; label: string }[]
           ).map((option) => (
             <button
@@ -184,7 +180,7 @@ export function PurchasePage() {
         </div>
         {billing === "annual" && (
           <p className="mt-2 text-[12px] font-bold text-emerald-600 dark:text-emerald-400">
-            اشتراك سنوي — وفر 20% مقارنة بالدفع الشهري (12 شهرًا).
+            اشتراك سنوي — وفر {discount}% مقارنة بالدفع الشهري (12 شهرًا).
           </p>
         )}
 
@@ -223,7 +219,7 @@ export function PurchasePage() {
                 </p>
                 {billing === "annual" && (
                   <p className="mt-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                    يعادل {MONTHLY_PRICES[id]} ر.س شهريًا — وفّرت 20%
+                    يعادل {Math.round(annualPrice(id) / 12)} ر.س شهريًا — وفّرت {discount}%
                   </p>
                 )}
                 <ul className="mt-5 grid gap-2">
@@ -246,25 +242,27 @@ export function PurchasePage() {
                 >
                   {cta.checkout
                     ? `اشترك ${billing === "monthly" ? "شهريًا" : "سنويًا"}`
-                    : `اطلب ${billing === "monthly" ? "الاشتراك الشهري" : "الاشتراك السنوي"} عبر واتساب`}
+                    : isTeam
+                      ? "⚡ طلب الترخيص عبر الواتساب"
+                      : `اطلب ${billing === "monthly" ? "الاشتراك الشهري" : "الاشتراك السنوي"} عبر واتساب`}
                 </a>
               </section>
             );
           })}
           <section className={cardClass("p-5 text-right")}>
-            <h2 className="text-[17px] font-extrabold">ترخيص مؤسسي</h2>
+            <h2 className="text-[17px] font-extrabold">ترخيص المخرجات المؤسسية</h2>
             <p className="mt-2 text-[12px] leading-6 text-muted">
-              حل مخصص للجهات التي تحتاج إلى تهيئة وتسليم ودعم وسياسات استخدام خاصة.
+              للجهات التي تحتاج إلى تجهيز قوالبها وهويتها وخيارات ترخيص مخصصة.
             </p>
             <p className="mt-6 text-[24px] font-extrabold text-navy dark:text-white">
               حل مؤسسي مخصص
             </p>
             <ul className="mt-5 grid gap-2">
               {[
-                "بيئة عمل مخصصة لجهتك",
-                "تدريب للفريق وورشة تسليم",
-                "دعم أولوية واتفاقية مستوى خدمة",
-                "فاتورة وعقد رسمي للجهات",
+                "تهيئة وتجهيز حزم القوالب الخاصة بالجهة",
+                "حفظ محلي داخل أجهزة الجهة (Local-First)",
+                "تفعيل مباشر للتراخيص من لوحة الإدارة",
+                "موارد وخيارات مخصصة حسب احتياج الجهة",
               ].map((feature) => (
                 <li key={feature} className="flex items-center gap-2 text-[12px] font-bold">
                   <CheckCircle2 className="size-3.5 shrink-0 text-ok" />
@@ -278,13 +276,12 @@ export function PurchasePage() {
               rel="noopener noreferrer"
               className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-navy px-5 text-[13px] font-extrabold text-white transition hover:bg-navy-2"
             >
-              <MessageCircle className="size-4" />
-              تواصل معنا
+              💬 تواصل معنا للترخيص المخصص
             </a>
           </section>
         </div>
 
-        {/* FAQ accordion — storage privacy, VAT invoices, RFP purchase orders. */}
+        {/* FAQ accordion — activation, privacy, offline work, direct activation. */}
         <section className="mt-12 border-t border-line pt-8 dark:border-white/10">
           <h2 className="text-[20px] font-extrabold">الأسئلة الشائعة</h2>
           <div className="mt-5 grid gap-2">
@@ -341,7 +338,7 @@ export function PurchasePage() {
           <div className="mt-5 grid gap-5 md:grid-cols-4">
             {[
               [MessageCircle, "1. تحديد الاحتياج", "تختار الترخيص وفترة الاشتراك."],
-              [CreditCard, "2. تأكيد الاشتراك", "تُكمل الدفع عبر رابط آمن أو طلب شراء."],
+              [CreditCard, "2. تأكيد الاشتراك", "تُكمل الدفع عبر رابط آمن أو بالتنسيق عبر واتساب."],
               [ClipboardCheck, "3. تفعيل الترخيص", "يدخل الترخيص في نظام التحقق الحالي."],
               [Download, "4. بدء العمل", "تصل الميزات حسب نطاق الترخيص."],
             ].map(([Icon, title, body]) => {

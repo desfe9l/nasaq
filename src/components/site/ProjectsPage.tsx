@@ -49,6 +49,7 @@ export function ProjectsPage() {
   const [filter, setFilter] = useState<FilterId>("all");
   const [view, setView] = useState<ViewId>("grid");
   const [usedBytes, setUsedBytes] = useState<number | null>(null);
+  const [quotaBytes, setQuotaBytes] = useState<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -61,7 +62,9 @@ export function ProjectsPage() {
     navigator.storage
       ?.estimate?.()
       .then((est) => {
-        if (!cancelled && typeof est.usage === "number") setUsedBytes(est.usage);
+        if (cancelled) return;
+        if (typeof est.usage === "number") setUsedBytes(est.usage);
+        if (typeof est.quota === "number" && est.quota > 0) setQuotaBytes(est.quota);
       })
       .catch(() => undefined);
     return () => {
@@ -156,7 +159,18 @@ export function ProjectsPage() {
                 title="حجم البيانات المحفوظة محليًا في متصفحك"
                 className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-line bg-white px-3 text-[12px] font-bold tabular-nums text-muted dark:border-white/10 dark:bg-white/5"
               >
-                💾 تم استخدام {formatMB(usedBytes)}
+                💾 {formatMB(usedBytes)}
+                {quotaBytes !== null && (
+                  <>
+                    <span className="text-muted/70">من {formatMB(quotaBytes)}</span>
+                    <span className="ms-1 inline-block h-1.5 w-16 overflow-hidden rounded-full bg-line-2 dark:bg-white/10" aria-hidden>
+                      <span
+                        className="block h-full rounded-full bg-emerald-500"
+                        style={{ width: `${Math.min(100, Math.max(2, (usedBytes / quotaBytes) * 100))}%` }}
+                      />
+                    </span>
+                  </>
+                )}
               </span>
             )}
             <button

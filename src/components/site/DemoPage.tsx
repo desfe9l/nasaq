@@ -3,7 +3,7 @@ import { BRAND } from "@/lib/brand";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 
-const DEMO_ITEMS = ["مشروع واحد قابل للتحرير", "حتى 3 صفحات", "تصدير PDF وPNG وJPG"];
+const DEMO_ITEMS = ["مشروع واحد قابل للتحرير", "حتى 3 صفحات", "تصدير PNG وJPG بدقة 72 DPI"];
 const FULL_ITEMS = ["مكتبة القوالب كاملة", "مشاريع وصفحات بلا حد تجريبي", "Word وPowerPoint وHTML وملف المشروع", "هوية مؤسسية وخيارات فريق قابلة للتفعيل"];
 
 export function DemoPage() {

@@ -11,6 +11,7 @@ import {
   TriangleAlert,
   Loader2,
   ShieldCheck,
+  Lock,
 } from "lucide-react";
 import { capturePages, runExport, safeFileName, type CapturedPage, type ExportFormat } from "@/lib/editor/export";
 import { pageSize } from "@/lib/editor/model";
@@ -24,11 +25,18 @@ import { GUTTER_MARGIN_MM, type PrintGuideSettings } from "@/lib/editor/print-gu
 import { domImageSize } from "@/lib/editor/images";
 import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
-import { canUseDemoExport } from "@/lib/product/product";
+import {
+  canUseDemoExport,
+  effectiveExportScale,
+  scaleForDpi,
+  DEMO_EXPORT_DPI,
+  PRINT_EXPORT_DPI,
+} from "@/lib/product/product";
+import { FullVersionModal } from "@/components/site/FullVersionModal";
 import { useLicense } from "@/lib/license/client";
 
 const FORMATS: { id: ExportFormat; title: string; desc: string; icon: typeof FileDown }[] = [
-  { id: "pdf", title: "PDF", desc: "طباعة وأرشفة رسمية", icon: FileDown },
+  { id: "pdf", title: "PDF", desc: "طباعة وأرشفة رسمية · 300 DPI", icon: FileDown },
   { id: "png", title: "PNG", desc: "دقة عالية بلا فقدان", icon: ImageIcon },
   { id: "jpg", title: "JPG", desc: "حجم أصغر للصور", icon: ImageIcon },
   { id: "pptx", title: "PowerPoint", desc: "شرائح قابلة للتعديل", icon: Presentation },
@@ -75,8 +83,10 @@ export function ExportDialog() {
   const deletePage = useEditor((s) => s.deletePage);
   const deleteElementsById = useEditor((s) => s.deleteElementsById);
 
-  const [format, setFormat] = useState<ExportFormat>("pdf");
-  const [quality, setQuality] = useState<2 | 3 | 4>(2);
+  const [format, setFormat] = useState<ExportFormat>("png");
+  /** Capture scale (html2canvas px per CSS px). Demo is clamped to 72 DPI. */
+  const [quality, setQuality] = useState<number>(2);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [scope, setScope] = useState<"all" | "current">("all");
   const [editableOffice, setEditableOffice] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -116,7 +126,10 @@ export function ExportDialog() {
   if (!open) return null;
 
   const needsRaster = RASTER_FORMATS.has(format) || (OFFICE_FORMATS.has(format) && !editableOffice);
-  const formatAllowed = canUseDemoExport(format, entitlements.advanced_export);
+  const licensed = entitlements.advanced_export === true;
+  const formatAllowed = canUseDemoExport(format, licensed);
+  /** Scale actually passed to the capture — never trusts the UI for the demo cap. */
+  const captureScale = effectiveExportScale(quality, licensed);
 
   /**
    * Apply one offered fix.
@@ -152,8 +165,10 @@ export function ExportDialog() {
   };
 
   const run = async () => {
+    // Hard gate: a locked format is never generated before the server has
+    // validated a license carrying `advanced_export`.
     if (!formatAllowed) {
-      setError("هذا النوع من التصدير متاح في النسخة الكاملة. يمكنك طلب الترخيص المناسب من صفحة النسخ والتراخيص.");
+      setUpgradeOpen(true);
       return;
     }
     /*
@@ -184,7 +199,7 @@ export function ExportDialog() {
         if (targets.length !== selected.length) {
           throw new Error("تعذر العثور على صفحات التصدير — أعد تحميل المحرر ثم حاول مرة أخرى");
         }
-        captured = await capturePages(targets, quality, (i, n) => {
+        captured = await capturePages(targets, captureScale, (i, n) => {
           setProgress(`التقاط الصفحة ${i + 1} من ${n}…`);
         });
       }
@@ -217,7 +232,7 @@ export function ExportDialog() {
         return [{ node, w: size.w, h: size.h }];
       });
       if (targets.length !== selected.length) throw new Error("تعذر تجهيز معاينة التصدير");
-      setPreviewPages(await capturePages(targets, Math.min(2, quality), undefined, 0));
+      setPreviewPages(await capturePages(targets, Math.min(2, captureScale), undefined, 0));
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تجهيز المعاينة");
     } finally {
@@ -259,15 +274,30 @@ export function ExportDialog() {
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {FORMATS.map((f) => {
             const Icon = f.icon;
+            const locked = !canUseDemoExport(f.id, licensed);
             return (
               <button
                 key={f.id}
                 type="button"
-                onClick={() => setFormat(f.id)}
+                onClick={() => {
+                  // Locked formats open «طلب النسخة الكاملة» immediately and
+                  // are never selected, so nothing can be generated from them.
+                  if (locked) {
+                    setUpgradeOpen(true);
+                    return;
+                  }
+                  setFormat(f.id);
+                }}
                 aria-pressed={format === f.id}
+                aria-disabled={locked || undefined}
+                title={locked ? "متاح في النسخة الكاملة — اضغط لطلب الترخيص" : undefined}
                 className={cn(
-                  "rounded-[10px] border p-3 text-right",
-                  format === f.id ? "border-navy bg-navy text-white" : "border-line hover:border-navy-2 dark:border-white/10",
+                  "relative rounded-[10px] border p-3 text-right transition",
+                  locked
+                    ? "border-dashed border-line bg-line-2/40 opacity-80 hover:border-emerald-500/50 hover:opacity-100 dark:border-white/10 dark:bg-white/[0.03]"
+                    : format === f.id
+                      ? "border-navy bg-navy text-white"
+                      : "border-line hover:border-navy-2 dark:border-white/10",
                 )}
               >
                 <Icon
@@ -280,7 +310,11 @@ export function ExportDialog() {
                 <span className={cn("text-[11px] leading-4", format === f.id ? "text-white/70" : "text-muted")}>
                   {f.desc}
                 </span>
-                {!canUseDemoExport(f.id, entitlements.advanced_export) && <span className="mt-1 block text-[10px] font-bold text-gold-2">النسخة الكاملة</span>}
+                {locked && (
+                  <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
+                    🔒 النسخة الكاملة
+                  </span>
+                )}
               </button>
             );
           })}
@@ -312,15 +346,29 @@ export function ExportDialog() {
           <div className="mt-4 grid gap-3">
             <label className="grid gap-1 text-[11px] font-extrabold text-muted">
               الجودة
-              <select
-                value={quality}
-                onChange={(e) => setQuality(Number(e.target.value) as 2 | 3 | 4)}
-                className="h-9 rounded-[8px] border border-line bg-white px-2 text-[13px] font-semibold dark:border-white/10 dark:bg-white/5 dark:text-white"
-              >
-                <option value={2}>قياسية — أسرع</option>
-                <option value={3}>عالية</option>
-                <option value={4}>طباعة فائقة (أبطأ)</option>
-              </select>
+              {licensed ? (
+                <select
+                  value={quality}
+                  onChange={(e) => setQuality(Number(e.target.value))}
+                  className="h-9 rounded-[8px] border border-line bg-white px-2 text-[13px] font-semibold dark:border-white/10 dark:bg-white/5 dark:text-white"
+                >
+                  <option value={2}>قياسية — 192 DPI (أسرع)</option>
+                  <option value={scaleForDpi(PRINT_EXPORT_DPI)}>طباعة احترافية — 300 DPI</option>
+                  <option value={4}>طباعة فائقة — 384 DPI (أبطأ)</option>
+                </select>
+              ) : (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line bg-line-2/40 px-2.5 py-2 text-[12px] font-semibold dark:border-white/10 dark:bg-white/5">
+                  <span className="text-ink dark:text-white">قياسية — {DEMO_EXPORT_DPI} DPI (النسخة التجريبية)</span>
+                  <button
+                    type="button"
+                    onClick={() => setUpgradeOpen(true)}
+                    className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-700 hover:underline dark:text-emerald-300"
+                  >
+                    <Lock className="size-3" />
+                    300 DPI للطباعة — النسخة الكاملة
+                  </button>
+                </div>
+              )}
             </label>
           </div>
         )}
@@ -460,7 +508,7 @@ export function ExportDialog() {
           </button>
           <button
             type="button"
-            disabled={busy || !formatAllowed}
+            disabled={busy}
             onClick={() => void run()}
             className="h-11 flex-1 rounded-[10px] bg-navy text-[14px] font-extrabold text-white disabled:opacity-50"
           >
@@ -475,6 +523,8 @@ export function ExportDialog() {
             إلغاء
           </button>
         </div>
+
+        <FullVersionModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
 
         {previewPages.length > 0 && (
           <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="معاينة التصدير">

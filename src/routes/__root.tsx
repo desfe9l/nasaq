@@ -7,15 +7,16 @@ import "@/lib/theme";
 import { BRAND } from "@/lib/brand";
 import appCss from "../styles.css?url";
 
-const APP_NAME = BRAND.name;
-const DESCRIPTION = "نَسَق | NASAQ — منصة عربية لتصميم وتحرير التقارير والمستندات والعروض، مع القوالب وإدارة الصفحات والتصدير.";
+const PAGE_TITLE = "نَسَق | NASAQ — محرر التقارير والمخرجات المؤسسية";
+const DESCRIPTION =
+  "منصة نَسَق (NASAQ) - المحرر المؤسسي الذكي لإعداد وتصميم التقارير، الإحصائيات، والمخرجات البصرية بجودة طباعية عالية ومعالجة محلية 100%.";
 
 export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: APP_NAME },
+      { title: PAGE_TITLE },
       { name: "theme-color", content: "#006C35" },
       { name: "description", content: DESCRIPTION },
       { name: "author", content: BRAND.developer },

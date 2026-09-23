@@ -4,6 +4,31 @@ import { Toaster } from "sonner";
 import { BRAND, CONTACT_PHONE_DISPLAY, NAV_ITEMS, telHref } from "@/lib/brand";
 import { readStoredTheme, writeStoredTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useSiteSettings } from "@/lib/admin/use-site-settings";
+
+/** Admin-managed announcement bar (/admin → محتوى الموقع). */
+function AnnouncementBar() {
+  const { announcement } = useSiteSettings();
+  if (!announcement.enabled || !announcement.text.trim()) return null;
+  const tone =
+    announcement.tone === "warning"
+      ? "bg-amber-500/15 text-amber-900 dark:text-amber-200"
+      : announcement.tone === "success"
+        ? "bg-emerald-600 text-white"
+        : "bg-navy text-white";
+  const body = <span className="font-bold">{announcement.text}</span>;
+  return (
+    <div className={cn("px-4 py-2 text-center text-[12px]", tone)} role="region" aria-label="إعلان">
+      {announcement.href ? (
+        <a href={announcement.href} className="underline-offset-4 hover:underline">
+          {body}
+        </a>
+      ) : (
+        body
+      )}
+    </div>
+  );
+}
 
 export function SiteHeader({ current }: { current: string }) {
   const [open, setOpen] = useState(false);
@@ -31,6 +56,7 @@ export function SiteHeader({ current }: { current: string }) {
      */
     <>
     <Toaster position="top-center" richColors dir="rtl" />
+    <AnnouncementBar />
     {/*
      * Glassmorphic sticky nav.
      *
@@ -133,6 +159,7 @@ export function SiteHeader({ current }: { current: string }) {
 }
 
 export function SiteFooter() {
+  const { texts } = useSiteSettings();
   return (
     <footer className="border-t border-line/60 bg-white dark:border-white/10 dark:bg-[#111722]">
       <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-12 sm:grid-cols-2 sm:px-6 md:grid-cols-3">
@@ -167,7 +194,7 @@ export function SiteFooter() {
             {CONTACT_PHONE_DISPLAY}
           </a>
           <p className="mt-3 text-[11px] leading-5 text-muted">
-            جميع الملفات تُحفظ في متصفحك وتُصدَّر محليًا، فلا تُرفع إلى أي سيرفر.
+            {texts.footerNote.trim() || "جميع الملفات تُحفظ في متصفحك وتُصدَّر محليًا، فلا تُرفع إلى أي سيرفر."}
           </p>
         </div>
       </div>
