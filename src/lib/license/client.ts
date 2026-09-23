@@ -118,7 +118,15 @@ export function useLicense(userId?: string, userEmail?: string | null) {
     if (!userId) return;
     try {
       const result = await getLicenseStatusFn({ data: undefined });
-      if (result.hasLicense && result.license && result.entitlements) {
+      if (result.isOwner && result.entitlements) {
+        setState({
+          isLoading: false,
+          hasLicense: true,
+          license: null,
+          entitlements: result.entitlements,
+          error: null,
+        });
+      } else if (result.hasLicense && result.license && result.entitlements) {
         setState({
           isLoading: false,
           hasLicense: true,

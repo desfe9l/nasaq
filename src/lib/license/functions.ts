@@ -7,6 +7,7 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { authMiddleware } from "@/lib/auth/middleware";
 import { hashLicenseKey, isLemonSqueezyKeyFormat, isValidKeyFormat, keyPrefix } from "./key";
 import {
   activateLicense as dbActivate,
@@ -16,7 +17,6 @@ import {
   revokeLicense as dbRevoke,
   reactivateLicense as dbReactivate,
   updateLicense as dbUpdate,
-  findLicensesByUserId,
   extendLicense,
   assignLicense,
   findLicenseByKeyHash,
@@ -69,29 +69,10 @@ async function getClientIp(): Promise<string> {
   }
 }
 
-/**
- * Admin gate — the one place a caller is recognised as an admin.
- *
- * Accepts the legacy `ADMIN_SECRET` header (still used by the admin panel's
- * server functions) and the platform's elevated-session marker when present.
- * No secret value ever leaves the server; every admin function funnels through
- * here so a gate change is one edit, not seven.
- */
-function adminGate(headers: Headers): boolean {
-  const secret = process.env.ADMIN_SECRET?.trim();
-  if (secret && headers.get("x-admin-secret") === secret) return true;
-  // Platform-admin session (deployed console) — verified server-side marker.
-  try {
-    const request = (globalThis as { __nasaqAdminRequest?: Request }).__nasaqAdminRequest;
-    void request;
-  } catch {
-    /* marker unavailable — header path above still applies */
-  }
-  return false;
+async function isOwner(context: { userId: string; userEmail: string | null }): Promise<boolean> {
+  const { isOwnerIdentity } = await import("@/lib/auth/owner.server");
+  return isOwnerIdentity({ id: context.userId, email: context.userEmail });
 }
-
-/** Back-compat alias so existing call sites read as intent, not mechanics. */
-const isAdmin = adminGate;
 
 function publicLicense(license: License): LicenseInfo {
   return {
@@ -118,29 +99,12 @@ function entitlementsFor(license: License): Record<import("./types").FeatureId, 
   return entitlementsForPlan(license.metadata?.plan as import("./types").LicensePlan | undefined, license.type);
 }
 
-/**
- * Resolve the caller's *verified* identity (session cookie or preview bearer
- * token), or `null` for anonymous visitors.
- *
- * Identity is NEVER taken from request data: a client-sent `userId` would let
- * anyone read another user's license status or link a key to someone else's
- * account. Dynamic import keeps `*.server` code out of the client bundle —
- * the same pattern `auth/middleware.ts` uses.
- */
-async function verifiedUserId(): Promise<string | null> {
-  try {
-    const { getSessionUser } = await import("@/lib/auth/verify.server");
-    return (await getSessionUser())?.id ?? null;
-  } catch {
-    return null;
-  }
-}
-
 // ── Public: Activate License ───────────────────────────────────────────────
 
 export const activateLicenseFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .validator((data: { key: string; email?: string }) => data)
-  .handler(async ({ data }): Promise<LicenseActivateResult> => {
+  .handler(async ({ data, context }): Promise<LicenseActivateResult> => {
     const ip = await getClientIp();
 
     // Rate limit: 5 attempts per minute per IP
@@ -162,11 +126,9 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
     }
 
     const keyHash = hashLicenseKey(key);
-    // Link the activation to the verified session user when there is one;
-    // anonymous activations store an unowned license. (`data.userId` was
-    // removed: the caller must not be able to choose whose account a key
-    // binds to.)
-    const sessionUserId = await verifiedUserId();
+    // Bind activation to the verified session identity. A client cannot choose
+    // which account receives the license.
+    const sessionUserId = context.userId;
     const local = await findLicenseByKeyHash(keyHash);
     if (local?.metadata?.source === "lemonsqueezy") {
       try {
@@ -310,8 +272,9 @@ export const validateLicenseFn = createServerFn({ method: "POST" })
   });
 
 export const deactivateLicenseFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
   .validator((data: { key: string }) => data)
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const ip = await getClientIp();
     if (!checkRateLimit("license:deactivate", ip, 5, 60_000)) return { success: false };
     const key = data.key.trim();
@@ -319,6 +282,9 @@ export const deactivateLicenseFn = createServerFn({ method: "POST" })
     const local = await findLicenseByKeyHash(hashLicenseKey(key));
     const instanceId = local?.metadata?.instanceId;
     if (!local || !instanceId) return { success: false };
+    if (local.userId !== context.userId && !(await isOwner(context))) {
+      return { success: false };
+    }
     try {
       await deactivateLemonLicense(key, instanceId);
       await dbRevoke(local.id);
@@ -331,23 +297,20 @@ export const deactivateLicenseFn = createServerFn({ method: "POST" })
 // ── Auth: Get My License Status ────────────────────────────────────────────
 
 export const getLicenseStatusFn = createServerFn({ method: "POST" })
-  .handler(async (): Promise<LicenseStatusResult> => {
-    // The queried identity is always the verified session user — a client-supplied
-    // `userId` would leak anyone's license status to anyone (see verifiedUserId).
-    const userId = await verifiedUserId();
-    if (!userId) return { hasLicense: false };
-    const licenses = await findLicensesByUserId(userId);
-
-    // Find the most relevant active license
-    const active = licenses.find(
-      (l) => l.status === "ACTIVE" && (!l.expiresAt || new Date(l.expiresAt) > new Date()),
-    );
-
-    if (!active) {
-      return { hasLicense: false };
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<LicenseStatusResult> => {
+    const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
+    const access = await getAuthorizationContext({
+      id: context.userId,
+      email: context.userEmail,
+    });
+    if (access.isOwner) {
+      return { hasLicense: true, isOwner: true, entitlements: access.entitlements };
     }
+    const active = access.license;
+    if (!active) return { hasLicense: false, entitlements: access.entitlements };
 
-    const entitlements = entitlementsFor(active);
+    const entitlements = access.entitlements;
     return {
       hasLicense: true,
       license: {
@@ -366,9 +329,10 @@ export const getLicenseStatusFn = createServerFn({ method: "POST" })
 // ── Admin: Create License ─────────────────────────────────────────────────
 
 export const adminCreateLicenseFn = createServerFn({ method: "POST" })
-  .validator((data: AdminLicenseCreate & { adminSecret: string }) => data)
-  .handler(async ({ data }) => {
-    if (!data.adminSecret || !isAdmin(new Headers({ "x-admin-secret": data.adminSecret }))) {
+  .middleware([authMiddleware])
+  .validator((data: AdminLicenseCreate) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await isOwner(context))) {
       return { error: "غير مصرح.", licenseId: null as string | null, plainKey: null as string | null, type: null as LicenseType | null, keyPrefix: null as string | null };
     }
 
@@ -391,9 +355,10 @@ export const adminCreateLicenseFn = createServerFn({ method: "POST" })
 // ── Admin: List All Licenses ───────────────────────────────────────────────
 
 export const adminListLicensesFn = createServerFn({ method: "POST" })
-  .validator((data: { adminSecret: string; offset?: number; limit?: number }) => data)
-  .handler(async ({ data }) => {
-    if (!data.adminSecret || !isAdmin(new Headers({ "x-admin-secret": data.adminSecret }))) {
+  .middleware([authMiddleware])
+  .validator((data: { offset?: number; limit?: number }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await isOwner(context))) {
       return { error: "غير مصرح.", licenses: [] as License[], total: 0 };
     }
 
@@ -404,9 +369,10 @@ export const adminListLicensesFn = createServerFn({ method: "POST" })
 // ── Admin: Revoke License ─────────────────────────────────────────────────
 
 export const adminRevokeLicenseFn = createServerFn({ method: "POST" })
-  .validator((data: { adminSecret: string; licenseId: string }) => data)
-  .handler(async ({ data }) => {
-    if (!data.adminSecret || !isAdmin(new Headers({ "x-admin-secret": data.adminSecret }))) {
+  .middleware([authMiddleware])
+  .validator((data: { licenseId: string }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await isOwner(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
 
@@ -417,9 +383,10 @@ export const adminRevokeLicenseFn = createServerFn({ method: "POST" })
 // ── Admin: Reactivate License ─────────────────────────────────────────────
 
 export const adminReactivateLicenseFn = createServerFn({ method: "POST" })
-  .validator((data: { adminSecret: string; licenseId: string }) => data)
-  .handler(async ({ data }) => {
-    if (!data.adminSecret || !isAdmin(new Headers({ "x-admin-secret": data.adminSecret }))) {
+  .middleware([authMiddleware])
+  .validator((data: { licenseId: string }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await isOwner(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
 
@@ -427,9 +394,10 @@ export const adminReactivateLicenseFn = createServerFn({ method: "POST" })
     return { error: null as string | null, license };
   });// ── Admin: Update License ─────────────────────────────────────────────────
 export const adminUpdateLicenseFn = createServerFn({ method: "POST" })
-  .validator((data: { adminSecret: string; licenseId: string; updates: AdminLicenseUpdate }) => data)
-  .handler(async ({ data }) => {
-    if (!data.adminSecret || !isAdmin(new Headers({ "x-admin-secret": data.adminSecret }))) {
+  .middleware([authMiddleware])
+  .validator((data: { licenseId: string; updates: AdminLicenseUpdate }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await isOwner(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
 
@@ -439,9 +407,10 @@ export const adminUpdateLicenseFn = createServerFn({ method: "POST" })
 
 // ── Admin: Extend License ─────────────────────────────────────────────────
 export const extendLicenseFn = createServerFn({ method: "POST" })
-  .validator((data: { adminSecret: string; licenseId: string; daysToAdd?: number; newExpiresAt?: string }) => data)
-  .handler(async ({ data }) => {
-    if (!data.adminSecret || !isAdmin(new Headers({ "x-admin-secret": data.adminSecret }))) {
+  .middleware([authMiddleware])
+  .validator((data: { licenseId: string; daysToAdd?: number; newExpiresAt?: string }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await isOwner(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
     const license = await extendLicense(data.licenseId, data.daysToAdd, data.newExpiresAt);
@@ -450,9 +419,10 @@ export const extendLicenseFn = createServerFn({ method: "POST" })
 
 // ── Admin: Assign License to User ────────────────────────────────────────
 export const assignLicenseFn = createServerFn({ method: "POST" })
-  .validator((data: { adminSecret: string; licenseId: string; userId: string; activate?: boolean }) => data)
-  .handler(async ({ data }) => {
-    if (!data.adminSecret || !isAdmin(new Headers({ "x-admin-secret": data.adminSecret }))) {
+  .middleware([authMiddleware])
+  .validator((data: { licenseId: string; userId: string; activate?: boolean }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await isOwner(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
     const license = await assignLicense(data.licenseId, data.userId, data.activate ?? true);
