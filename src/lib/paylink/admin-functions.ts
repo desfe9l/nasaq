@@ -8,6 +8,6 @@ export const getAdminPaylinkTransactions = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     return listPaylinkTransactionsForAdmin(sql);
   });

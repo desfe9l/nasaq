@@ -34,6 +34,7 @@ import type {
   Plan,
 } from "@/lib/commercial/types";
 import { getAdminPaylinkTransactions } from "@/lib/paylink/admin-functions";
+import { getCatalogPlan } from "@/lib/commercial/catalog";
 import { cn } from "@/lib/utils";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
 
@@ -43,14 +44,136 @@ function PaylinkTab() {
   const [rows, setRows] = useState<PaylinkRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
-    try { setRows(await getAdminPaylinkTransactions()); setError(null); }
-    catch (err) { setError(err instanceof Error ? err.message : "تعذر تحميل عمليات Paylink."); }
-    finally { setLoading(false); }
+    try {
+      setRows(await getAdminPaylinkTransactions());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذر تحميل عمليات Paylink.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
-  useEffect(() => { void load(); }, [load]);
-  return <Panel title="عمليات Paylink"><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-right text-[11px]"><thead className="text-muted"><tr><th className="p-2">Transaction No</th><th className="p-2">الحالة</th><th className="p-2">الباقة</th><th className="p-2">المستخدم</th><th className="p-2">License Key (prefix) / License ID / Keygen ID</th><th className="p-2">التاريخ</th><th className="p-2">حالة الرخصة</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id} className="border-t border-line dark:border-white/10"><td className="p-2 font-mono" dir="ltr">{row.transactionNo || "—"}</td><td className="p-2 font-bold">{row.status}</td><td className="p-2">{row.planKey}</td><td className="p-2">{row.userName || row.userEmail || row.userId}</td><td className="p-2 font-mono" dir="ltr">{row.licenseKey || "—"} / {row.licenseId || "—"} / {row.keygenLicenseId || "—"}</td><td className="p-2">{formatDate(row.createdAt)}</td><td className="p-2">{row.licenseStatus || "—"}</td></tr>)}</tbody></table></div>{loading && <p className="text-[12px] text-muted">جارٍ التحميل…</p>}{error && <p className="mt-3 text-[12px] text-danger">{error}</p>}{!loading && rows.length === 0 && <Empty>لا توجد عمليات Paylink بعد.</Empty>}</Panel>;
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <Panel
+      title="عمليات وسجلات فواتير Paylink وتراخيص Keygen"
+      actions={
+        <button
+          type="button"
+          onClick={() => void load()}
+          disabled={loading}
+          className="rounded-[8px] border border-line px-3 py-1 text-[11px] font-bold hover:bg-line-2 dark:border-white/10 dark:hover:bg-white/5"
+        >
+          {loading ? "جارٍ التحديث…" : "تحديث السجلات"}
+        </button>
+      }
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1100px] text-right text-[11px]">
+          <thead className="border-b border-line text-muted dark:border-white/10">
+            <tr>
+              <th className="p-2">رقم العملية (Transaction No)</th>
+              <th className="p-2">رقم الطلب (Order No)</th>
+              <th className="p-2">الباقة</th>
+              <th className="p-2">المبلغ</th>
+              <th className="p-2">حالة الدفع</th>
+              <th className="p-2">العميل / المستخدم</th>
+              <th className="p-2">معرّف الرخصة (License ID)</th>
+              <th className="p-2">Keygen License ID</th>
+              <th className="p-2">بادئة المفتاح</th>
+              <th className="p-2">التاريخ</th>
+              <th className="p-2">حالة الرخصة</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const catalog = getCatalogPlan(row.planKey);
+              const isPaid = row.status === "PAID";
+              const isFailed = row.status === "FAILED" || row.status === "CANCELED";
+              return (
+                <tr
+                  key={row.id}
+                  className="border-t border-line transition hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/[0.02]"
+                >
+                  <td className="p-2 font-mono font-bold" dir="ltr">
+                    {row.transactionNo || "—"}
+                  </td>
+                  <td className="p-2 font-mono text-[10px] text-muted" dir="ltr">
+                    {row.orderNumber}
+                  </td>
+                  <td className="p-2 font-bold">
+                    <span>{catalog?.arabicName || row.planKey}</span>
+                  </td>
+                  <td className="p-2 font-bold">
+                    <span>{row.amount} {row.currency}</span>
+                  </td>
+                  <td className="p-2">
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-extrabold",
+                        isPaid
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                          : isFailed
+                            ? "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+                            : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+                      )}
+                    >
+                      {row.status}
+                      {row.paylinkOrderStatus && row.paylinkOrderStatus !== row.status
+                        ? ` (${row.paylinkOrderStatus})`
+                        : ""}
+                    </span>
+                  </td>
+                  <td className="p-2">
+                    <div className="flex flex-col">
+                      <span className="font-bold">{row.userName || "عميل نَسَق"}</span>
+                      <span className="text-[10px] text-muted" dir="ltr">
+                        {row.userEmail || row.clientEmail || row.userId}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="p-2 font-mono text-[10px] text-muted" dir="ltr">
+                    {row.licenseId || "—"}
+                  </td>
+                  <td className="p-2 font-mono text-[10px] text-muted" dir="ltr">
+                    {row.keygenLicenseId || "—"}
+                  </td>
+                  <td className="p-2 font-mono font-bold" dir="ltr">
+                    {row.licenseKey ? `${row.licenseKey}-****` : "—"}
+                  </td>
+                  <td className="p-2 text-muted">
+                    {formatDate(row.createdAt)}
+                  </td>
+                  <td className="p-2">
+                    <span
+                      className={cn(
+                        "rounded px-1.5 py-0.5 text-[10px] font-bold",
+                        row.licenseStatus === "ACTIVE"
+                          ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
+                          : "text-muted",
+                      )}
+                    >
+                      {row.licenseStatus || (isPaid ? "ACTIVE" : "—")}
+                    </span>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {loading && <p className="py-4 text-[12px] text-muted">جارٍ التحميل…</p>}
+      {error && <p className="mt-3 text-[12px] text-danger">{error}</p>}
+      {!loading && rows.length === 0 && <Empty>لا توجد عمليات Paylink بعد.</Empty>}
+    </Panel>
+  );
 }
 
 type Tab = "requests" | "paylink" | "customers" | "plans" | "settings" | "audit";

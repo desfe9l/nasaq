@@ -169,35 +169,40 @@ export default function LicensePage() {
             const feature = FEATURE_LABELS[featureId];
             const enabled = entitlements[featureId];
             const comingSoon =
-              featureId === "team_features" ||
+              !enabled &&
+              (featureId === "team_features" ||
               featureId === "multi_user_activation" ||
-              featureId === "collaboration";
+              featureId === "collaboration");
             return (
               <div
                 key={featureId}
                 className={`flex items-start gap-3 rounded-lg border p-3 ${
-                  comingSoon
-                    ? "border-amber-300/60 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10"
-                    : enabled
-                      ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-900/10"
+                  enabled
+                    ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-900/10"
+                    : comingSoon
+                      ? "border-amber-300/60 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10"
                       : "border-line bg-gray-50/50 opacity-60 dark:border-white/10 dark:bg-white/5"
                 }`}
               >
-                {comingSoon ? (
-                  <Clock3 className="mt-0.5 size-4 shrink-0 text-amber-600" />
-                ) : enabled ? (
+                {enabled ? (
                   <Unlock className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                ) : comingSoon ? (
+                  <Clock3 className="mt-0.5 size-4 shrink-0 text-amber-600" />
                 ) : (
                   <Lock className="mt-0.5 size-4 shrink-0 text-gray-400" />
                 )}
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-bold">{feature.name}</p>
-                    {comingSoon && (
+                    {enabled ? (
+                      <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
+                        مفعّلة
+                      </span>
+                    ) : comingSoon ? (
                       <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-extrabold text-amber-700 dark:text-amber-300">
                         قريبًا
                       </span>
-                    )}
+                    ) : null}
                   </div>
                   <p className="mt-0.5 text-xs text-muted">{feature.description}</p>
                 </div>

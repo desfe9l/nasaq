@@ -9,91 +9,76 @@ import {
   MessageCircle,
   ShieldCheck,
   Lock,
+  Sparkles,
 } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { createPaylinkCheckout } from "@/lib/commercial/functions";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import type { PaylinkPeriod, PaylinkPlanFamily } from "@/lib/paylink/types";
+import {
+  CENTRAL_PLANS,
+  paylinkPlanKey,
+  type PaylinkPeriod,
+  type PaylinkPlanFamily,
+  type PaylinkPlanKey,
+} from "@/lib/commercial/catalog";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { cardClass } from "@/components/site/cards";
 import { useSiteSettings, whatsappLink } from "@/lib/admin/use-site-settings";
 
-const PLAN_CONTENT = {
-  individual: {
-    title: "ترخيص فردي",
-    body: "للمصمم أو الموظف الذي يعمل على جهازه.",
-    items: [
-      "القوالب الكاملة",
-      "تصدير حتى 300 DPI بلا علامة مائية",
-      "عدة تطبيقات هوية (Brand Kit) كاملة",
-      "قفل العناصر وحماية التصميم",
-      "تحديثات النسخة المرخصة",
-    ],
-  },
-  team: {
-    title: "ترخيص الأعمال / الفريق",
-    body: "لفريق محتوى أو اتصال مؤسسي يعمل على هوية واحدة.",
-    items: [
-      "جميع مزايا النسخة المتقدمة",
-      "تفعيل التراخيص عبر أكواد سريعة",
-      "استيراد وتصدير حزمة الهوية الموحدة",
-      "تصدير PDF عالي الدقة 300 DPI بدون علامة مائية",
-      "أولوية الدعم الفني",
-    ],
-  },
-} as const;
-
-
-type PaidPlan = PaylinkPlanFamily;
-type Billing = PaylinkPeriod;
-
 const FAQS: { q: string; a: string }[] = [
   {
     q: "كيف تُفعَّل التراخيص والهوية البصرية؟",
-    a: "بعد إتمام الطلب يصلك كود رخصة (NASAQ-…). أدخله في «إدخال كود الرخصة» داخل نافذة طلب النسخة الكاملة أو في صفحة التراخيص، فيتحقق منه خادم التراخيص ويفتح المزايا المرخّصة. بعدها يمكنك إعداد هوية جهتك (الشعارات والألوان والخطوط) من صفحة الهوية، وتصدير حزمة الهوية كملف واستيرادها على أجهزة الفريق.",
+    a: "بعد إتمام الدفع عبر Paylink، يُنشئ النظام ترخيص Keygen رسميًا ويربطه بحسابك فورًا. كما يصلك كود الترخيص ويمكنك عرضه وإدارته في صفحة التراخيص أو إدخاله في التطبيق لفتح كافة المزايا المتقدمة.",
+  },
+  {
+    q: "ما الفرق بين الاشتراك الشهري والربع سنوي؟",
+    a: "الاشتراك الشهري يمنحك وصولاً كاملاً لمدة 30 يومًا، بينما الاشتراك الربع سنوي يمنحك وصولاً لمدة 90 يومًا (3 أشهر) بسعر مخفّض وتوفير مباشر مقارنة بالدفع الشهري المتكرر.",
   },
   {
     q: "ما مستوى الأمان والسرية؟ وأين تُعالج ملفاتي؟",
-    a: "يعمل المحرر وفق بنية محلية أولًا (Local-First): المشاريع والصور والهويات تُعالَج وتُحفظ داخل متصفحك عبر IndexedDB في الاستخدام المعتاد. يتصل التطبيق بخادم التراخيص للتحقق من الصلاحيات، وقد تُرسل بيانات الطلب إلى خدمة الذكاء الاصطناعي عند تشغيلها. تبقى حماية البيانات المحلية مرتبطة بأمان جهازك ومتصفحك، لذلك ننصح بأخذ نسخ احتياطية دورية بتصدير المشروع.",
+    a: "يعمل المحرر وفق بنية محلية أولًا (Local-First): المشاريع والصور والهويات تُعالَج وتُحفظ داخل متصفحك عبر IndexedDB في الاستخدام المعتاد. يتصل التطبيق بخادم التراخيص للتحقق من الصلاحيات بأعلى معايير الأمان.",
   },
   {
     q: "هل يمكنني العمل بدون اتصال بالإنترنت؟",
-    a: "نعم، بعد تحميل المحرر مرة واحدة تعمل أدوات التحرير والحفظ المحلي والتصدير داخل جهازك حتى عند انقطاع الشبكة. يلزم الاتصال عند تفعيل الرخصة لأول مرة، وعند إعادة التحقق الدورية منها، وعند تحميل الخطوط من الإنترنت إن لم تكن مخزّنة في المتصفح.",
+    a: "نعم، بعد تحميل المحرر وتفعيل رخصتك تعمل أدوات التحرير والحفظ المحلي والتصدير داخل جهازك حتى عند انقطاع الشبكة، ويلزم الاتصال فقط عند التحقق والتفعيل.",
   },
   {
-    q: "كيف تعمل آلية التفعيل المباشر؟",
-    a: "عند إدخال الكود يُرسَل إلى خادم التراخيص للتحقق من صلاحيته وحالته وعدد مرات التفعيل المسموح بها، ثم تُمنح الصلاحيات فورًا دون إعادة تثبيت. يُحفظ الكود في المتصفح لتسهيل الاستخدام فقط، ويُعاد التحقق منه تلقائيًا؛ ويمكن لإدارة المنصة إيقاف أي رخصة أو تمديدها أو إعادة تفعيلها من لوحة التحكم.",
+    q: "هل تتوفر باقات تجريبية أو مؤسسية؟",
+    a: "نعم! النسخة التجريبية (Trial) مجانية ومتاحة دون الحاجة إلى دفع عبر Paylink. أما التراخيص والاحتياجات المؤسسية الكبرى (Enterprise) فتتم عبر التواصل المباشر وطلب عرض سعر مخصص.",
   },
 ];
 
 export function PurchasePage() {
-  const [billing, setBilling] = useState<Billing>("monthly");
+  const [billing, setBilling] = useState<PaylinkPeriod>("monthly");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [mobile, setMobile] = useState("");
-  const [busyPlan, setBusyPlan] = useState<PaidPlan | null>(null);
+  const [busyPlan, setBusyPlan] = useState<PaylinkPlanKey | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const { user } = useCurrentUserState();
   const { commercial } = useSiteSettings();
-  /** Monthly list prices in SAR (admin-managed); annual = 12 months minus the discount. */
-  const MONTHLY_PRICES: Record<PaidPlan, number> = {
-    individual: commercial.priceIndividualMonthly,
-    team: commercial.priceTeamMonthly,
-  };
-  const discount = commercial.annualDiscountPercent;
-  const annualPrice = (plan: PaidPlan) => Math.round(MONTHLY_PRICES[plan] * 12 * (1 - discount / 100));
-  const waHref = (message: string) => whatsappLink(commercial.whatsappNumber, message);
 
+  const waHref = (message: string) => whatsappLink(commercial.whatsappNumber, message);
   const whatsapp = waHref(commercial.whatsappEnterpriseMessage);
 
-  async function startPaylink(id: PaidPlan) {
+  async function startPaylink(planKey: PaylinkPlanKey) {
     if (!user) {
       window.location.href = "/login";
       return;
     }
+    const cleanMobile = mobile.replace(/\D/g, "");
+    if (cleanMobile.length < 8 || cleanMobile.length > 20) {
+      setCheckoutError("يرجى إدخال رقم جوال صحيح لإتمام فاتورة Paylink (مثال: 0501234567).");
+      return;
+    }
     setCheckoutError(null);
-    setBusyPlan(id);
+    setBusyPlan(planKey);
     try {
-      const result = await createPaylinkCheckout({ data: { family: id, period: billing, clientMobile: mobile } });
+      const result = await createPaylinkCheckout({
+        data: {
+          planKey,
+          clientMobile: cleanMobile,
+        },
+      });
       if (!result.ok) {
         setCheckoutError(result.error);
         return;
@@ -106,27 +91,29 @@ export function PurchasePage() {
     }
   }
 
+  const families: PaylinkPlanFamily[] = ["individual", "team"];
+
   return (
     <div className="min-h-full bg-paper dark:bg-[#111722]">
       <SiteHeader current="/purchase" />
       <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
         <p className="text-[12px] font-extrabold tracking-[0.16em] text-green dark:text-gold-2">
-          نسخ وتراخيص
+          نسخ وتراخيص معتمدة
         </p>
         <h1 className="mt-3 text-[30px] font-extrabold sm:text-[40px]">
-          احصل على نسخة {BRAND.platform} المناسبة لعملك
+          احصل على باقة {BRAND.platform} الرسمية
         </h1>
         <p className="mt-3 max-w-2xl text-[15px] leading-8 text-muted">
-          اختر نوع الترخيص وفترة الاشتراك، وأكمل الطلب عبر رابط الدفع الآمن أو رسالة واتساب
-          الجاهزة — بدون أي مصطلحات تقنية.
+          اختر نوع الترخيص وفترة الاشتراك، وأكمل الدفع الإلكتروني المباشر عبر بوابة Paylink الآمنة.
+          تُفعّل التراخيص الرقمية تلقائيًا فور تأكيد السداد.
         </p>
 
-        {/* Trust badges: local-first, instant activation, secure payment */}
+        {/* Trust badges */}
         <div className="mt-5 flex flex-wrap gap-2">
           {[
-            [Lock, "🔒 دفع آمن وفوري"],
-            [Key, "⚡ تفعيل كود الرخصة"],
-            [ShieldCheck, "💻 تخزين محلي أولًا"],
+            [Lock, "🔒 دفع آمن ومشفر عبر Paylink"],
+            [Key, "⚡ ترخيص رقمي وتفعيل فوري (Keygen)"],
+            [ShieldCheck, "💻 تخزين محلي أولًا (Local-First)"],
           ].map(([Icon, label]) => {
             const BadgeIcon = Icon as typeof Lock;
             return (
@@ -141,139 +128,182 @@ export function PurchasePage() {
           })}
         </div>
 
-        {/* Billing period: Monthly / Annual (admin-managed discount). */}
-        <div
-          role="group"
-          aria-label="فترة الاشتراك"
-          className="mt-7 inline-flex items-center gap-1 rounded-[12px] border border-line bg-white p-1.5 dark:border-white/10 dark:bg-white/5"
-        >
-          {(
-            [
-              { id: "monthly", label: "شهري" },
-              { id: "annual", label: `سنوي — وفر ${discount}%` },
-            ] as { id: Billing; label: string }[]
-          ).map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => setBilling(option.id)}
-              aria-pressed={billing === option.id}
-              className={`rounded-[9px] px-4 py-2.5 text-[13px] font-extrabold transition ${
-                billing === option.id
-                  ? "bg-navy text-white shadow-sm"
-                  : "text-muted hover:text-ink dark:hover:text-white"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
+        {/* Period Selector: Monthly vs Quarterly */}
+        <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div
+            role="group"
+            aria-label="فترة الاشتراك"
+            className="inline-flex items-center gap-1 rounded-[12px] border border-line bg-white p-1.5 dark:border-white/10 dark:bg-white/5"
+          >
+            {[
+              { id: "monthly" as PaylinkPeriod, label: "شهري (30 يومًا)" },
+              { id: "quarterly" as PaylinkPeriod, label: "ربع سنوي (90 يومًا — توفير مميز)" },
+            ].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setBilling(option.id)}
+                aria-pressed={billing === option.id}
+                className={`cursor-pointer rounded-[9px] px-4 py-2.5 text-[13px] font-extrabold transition ${
+                  billing === option.id
+                    ? "bg-navy text-white shadow-sm"
+                    : "text-muted hover:text-ink dark:hover:text-white"
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="max-w-xs">
+            <label className="text-[12px] font-bold text-muted">
+              رقم الجوال لإصدار الفاتورة:
+            </label>
+            <input
+              value={mobile}
+              onChange={(e) => setMobile(e.target.value.replace(/[^\d+]/g, ""))}
+              inputMode="tel"
+              placeholder="05xxxxxxxx"
+              className="mt-1 h-9 w-full rounded-[10px] border border-line bg-surface px-3 text-[13px] font-mono dark:border-white/10"
+              dir="ltr"
+            />
+          </div>
         </div>
-        {billing === "annual" && (
-          <p className="mt-2 text-[12px] font-bold text-emerald-600 dark:text-emerald-400">
-            اشتراك سنوي — وفر {discount}% مقارنة بالدفع الشهري (12 شهرًا).
-          </p>
+
+        {checkoutError && (
+          <div
+            role="alert"
+            className="mt-4 rounded-xl border border-danger/40 bg-danger/10 p-3 text-[13px] font-bold text-danger"
+          >
+            {checkoutError}
+          </div>
         )}
 
+        {/* Pricing Cards Grid */}
         <div className="mt-8 grid gap-4 md:gap-6 lg:grid-cols-3">
-          {(["individual", "team"] as PaidPlan[]).map((id) => {
-            const item = PLAN_CONTENT[id];
-            const isTeam = id === "team";
-            const price =
-              billing === "monthly" ? MONTHLY_PRICES[id] : annualPrice(id);
+          {families.map((family) => {
+            const planKey = paylinkPlanKey(family, billing);
+            const plan = CENTRAL_PLANS[planKey];
+            const isTeam = family === "team";
+            const isQuarterly = billing === "quarterly";
 
             return (
               <section
-                key={id}
+                key={planKey}
                 className={cardClass(
-                  "relative p-5 text-right",
-                  // Team tier: the requested «الأكثر طلباً» treatment —
-                  // emerald glow, elevation, and a floating badge.
+                  "relative flex flex-col justify-between p-6 text-right",
                   isTeam &&
-                    "ring-2 ring-emerald-500/70 shadow-[0_18px_40px_-18px_rgba(16,185,129,0.55)] hover:-translate-y-1.5 dark:ring-emerald-400/60",
+                    "ring-2 ring-emerald-500/70 shadow-[0_18px_40px_-18px_rgba(16,185,129,0.45)] hover:-translate-y-1 dark:ring-emerald-400/60",
                 )}
               >
                 {isTeam && (
                   <span className="absolute -top-3 right-5 inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1 text-[11px] font-extrabold text-white shadow-[0_6px_16px_-6px_rgba(16,185,129,0.8)]">
+                    <Sparkles className="size-3" />
                     الأكثر طلباً 🌟
                   </span>
                 )}
-                <h2 className="text-[17px] font-extrabold">{item.title}</h2>
-                <p className="mt-2 text-[12px] leading-6 text-muted">{item.body}</p>
-                <p className="mt-5 text-[28px] font-extrabold text-navy dark:text-white">
-                  <span className="text-[14px]">ر.س </span>
-                  {price}{" "}
-                  <span className="text-[12px] font-bold text-muted">
-                    / {billing === "monthly" ? "شهريًا" : "سنويًا"}
-                  </span>
-                </p>
-                {billing === "annual" && (
-                  <p className="mt-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                    يعادل {Math.round(annualPrice(id) / 12)} ر.س شهريًا — وفّرت {discount}%
+
+                <div>
+                  <h2 className="text-[18px] font-extrabold">{plan.arabicName}</h2>
+                  <p className="mt-2 text-[12px] leading-6 text-muted">{plan.description}</p>
+
+                  <div className="mt-5">
+                    <p className="text-[32px] font-extrabold text-navy dark:text-white">
+                      <span className="text-[16px]">ر.س </span>
+                      {plan.amount}{" "}
+                      <span className="text-[13px] font-bold text-muted">
+                        / {isQuarterly ? "كل 3 أشهر" : "شهريًا"}
+                      </span>
+                    </p>
+                    {isQuarterly && (
+                      <p className="mt-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                        {isTeam
+                          ? "يعادل 166 ر.س شهريًا تقريبًا — وفّرت 98 ر.س"
+                          : "يعادل 66 ر.س شهريًا تقريبًا — وفّرت 38 ر.س"}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="mt-4 border-t border-line/60 pt-4 dark:border-white/10">
+                    <p className="text-[11px] font-extrabold text-muted">المزايا المشمولة في الترخيص:</p>
+                    <ul className="mt-3 grid gap-2">
+                      {plan.features.map((feature) => (
+                        <li key={feature} className="flex items-center gap-2 text-[12px] font-bold">
+                          <CheckCircle2 className="size-3.5 shrink-0 text-ok" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => void startPaylink(planKey)}
+                    disabled={busyPlan !== null}
+                    className={`inline-flex h-11 w-full items-center justify-center rounded-xl px-5 text-[13px] font-extrabold text-white transition disabled:cursor-wait disabled:opacity-60 ${
+                      isTeam
+                        ? "bg-emerald-600 hover:bg-emerald-700"
+                        : "bg-navy hover:bg-navy-2"
+                    }`}
+                  >
+                    {busyPlan === planKey
+                      ? "جارٍ إنشاء الفاتورة في Paylink…"
+                      : `اشترك الآن (${plan.amount} ر.س) عبر Paylink`}
+                  </button>
+                  <p className="mt-2 text-center text-[10px] text-muted">
+                    ترخيص رقمي فوري صالح لمدة {plan.durationDays} يومًا
                   </p>
-                )}
-                <p className="mt-5 text-[12px] font-bold text-muted">أدخل رقم الجوال لإتمام الدفع عبر Paylink.</p>
-                <input
-                  value={mobile}
-                  onChange={(e) => setMobile(e.target.value.replace(/[^\d+]/g, ""))}
-                  inputMode="tel"
-                  placeholder="05xxxxxxxx"
-                  className="mt-2 h-10 w-full rounded-[10px] border border-line bg-surface px-3 text-[13px] dark:border-white/10"
-                />
-                {checkoutError && <p className="mt-2 text-[12px] text-danger">{checkoutError}</p>}
-                <ul className="mt-5 grid gap-2">
-                  {item.items.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2 text-[12px] font-bold">
-                      <CheckCircle2 className="size-3.5 shrink-0 text-ok" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  onClick={() => void startPaylink(id)}
-                  disabled={busyPlan !== null}
-                  className={`mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl px-5 text-[13px] font-extrabold text-white transition disabled:cursor-wait disabled:opacity-60 ${
-                    isTeam ? "bg-emerald-600 hover:bg-emerald-700" : "bg-navy hover:bg-navy-2"
-                  }`}
-                >
-                  {busyPlan === id ? "جارٍ فتح Paylink…" : `اشترك ${billing === "monthly" ? "شهريًا" : "سنويًا"} عبر Paylink`}
-                </button>
+                </div>
               </section>
             );
           })}
-          <section className={cardClass("p-5 text-right")}>
-            <h2 className="text-[17px] font-extrabold">ترخيص المخرجات المؤسسية</h2>
-            <p className="mt-2 text-[12px] leading-6 text-muted">
-              للجهات التي تحتاج إلى تجهيز قوالبها وهويتها وخيارات ترخيص مخصصة.
-            </p>
-            <p className="mt-6 text-[24px] font-extrabold text-navy dark:text-white">
-              حل مؤسسي مخصص
-            </p>
-            <ul className="mt-5 grid gap-2">
-              {[
-                "تهيئة وتجهيز حزم القوالب الخاصة بالجهة",
-                "حفظ محلي داخل أجهزة الجهة (Local-First)",
-                "تفعيل مباشر للتراخيص من لوحة الإدارة",
-                "موارد وخيارات مخصصة حسب احتياج الجهة",
-              ].map((feature) => (
-                <li key={feature} className="flex items-center gap-2 text-[12px] font-bold">
-                  <CheckCircle2 className="size-3.5 shrink-0 text-ok" />
-                  {feature}
-                </li>
-              ))}
-            </ul>
-            <a
-              href={whatsapp}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-navy px-5 text-[13px] font-extrabold text-white transition hover:bg-navy-2"
-            >
-              💬 تواصل معنا للترخيص المخصص
-            </a>
+
+          {/* Enterprise Section — Custom Quote, NOT an automated payment */}
+          <section className={cardClass("flex flex-col justify-between p-6 text-right")}>
+            <div>
+              <span className="inline-block rounded-full bg-navy/10 px-3 py-1 text-[11px] font-extrabold text-navy dark:bg-white/10 dark:text-gold-2">
+                حلول المؤسسات والجهات
+              </span>
+              <h2 className="mt-2 text-[18px] font-extrabold">ترخيص المخرجات المؤسسية</h2>
+              <p className="mt-2 text-[12px] leading-6 text-muted">
+                للجهات والشركات التي تحتاج إلى تجهيز قوالب وهوية موحدة وخيارات ترخيص مخصصة لفريق العمل.
+              </p>
+              <p className="mt-6 text-[24px] font-extrabold text-navy dark:text-white">
+                حل مؤسسي مخصص
+              </p>
+              <ul className="mt-5 grid gap-2">
+                {[
+                  "تهيئة وتجهيز حزم القوالب الخاصة بالجهة",
+                  "حفظ محلي داخل أجهزة الجهة (Local-First)",
+                  "تفعيل وإدارة مخصصة من لوحة التحكم",
+                  "اتفاقية مستوى خدمة ودعم فني مخصص",
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-[12px] font-bold">
+                    <CheckCircle2 className="size-3.5 shrink-0 text-ok" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="mt-6 pt-4">
+              <a
+                href={whatsapp}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-navy px-5 text-[13px] font-extrabold text-white transition hover:bg-navy-2"
+              >
+                💬 تواصل معنا للترخيص المؤسسي
+              </a>
+              <p className="mt-2 text-center text-[10px] text-muted">
+                طلب تسعير وعقد رسمي مباشر بدون دفع تلقائي
+              </p>
+            </div>
           </section>
         </div>
 
-        {/* FAQ accordion — activation, privacy, offline work, direct activation. */}
+        {/* FAQ accordion */}
         <section className="mt-12 border-t border-line pt-8 dark:border-white/10">
           <h2 className="text-[20px] font-extrabold">الأسئلة الشائعة</h2>
           <div className="mt-5 grid gap-2">
@@ -306,37 +336,38 @@ export function PurchasePage() {
           </div>
         </section>
 
+        {/* License key activation prompt */}
         <section className="mt-10 border-t border-line pt-8 dark:border-white/10">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex-1">
-              <h2 className="text-[15px] font-extrabold">لديك مفتاح ترخيص بالفعل؟</h2>
+              <h2 className="text-[15px] font-extrabold">لديك مفتاح ترخيص بالفعل أو ترغب بنسخة تجريبية؟</h2>
               <p className="mt-1 text-[12px] leading-6 text-muted">
-                إذا أرسل لك المنصّب مفتاح ترخيص (NASAQ-…)، فأدخله في صفحة التراخيص لفتح
-                الميزات فورًا.
+                تفضل بزيارة صفحة التراخيص لتفعيل المفتاح أو الاطلاع على المزايا المرخصة لحسابك.
               </p>
-              <a
-                href="/license"
-                className="mt-3 inline-flex items-center gap-2 rounded-xl border border-line bg-white px-4 py-2 text-[12px] font-bold transition hover:bg-accent dark:border-white/10 dark:bg-white/5"
-              >
-                <Key className="size-3.5" />
-                تفعيل مفتاح الترخيص
-              </a>
             </div>
+            <a
+              href="/license"
+              className="inline-flex items-center gap-2 rounded-xl border border-line bg-white px-4 py-2.5 text-[12px] font-bold transition hover:bg-accent dark:border-white/10 dark:bg-white/5"
+            >
+              <Key className="size-3.5" />
+              إدارة وتفعيل الترخيص
+            </a>
           </div>
         </section>
 
+        {/* Steps */}
         <section className="mt-10">
-          <h2 className="text-[20px] font-extrabold">من الطلب إلى بدء الاستخدام</h2>
+          <h2 className="text-[20px] font-extrabold">من الدفع إلى تفعيل الترخيص</h2>
           <div className="mt-5 grid gap-5 md:grid-cols-4">
             {[
-              [MessageCircle, "1. تحديد الاحتياج", "تختار الترخيص وفترة الاشتراك."],
-              [CreditCard, "2. تأكيد الاشتراك", "تُكمل الدفع عبر رابط آمن أو بالتنسيق عبر واتساب."],
-              [ClipboardCheck, "3. تفعيل الترخيص", "يدخل الترخيص في نظام التحقق الحالي."],
-              [Download, "4. بدء العمل", "تصل الميزات حسب نطاق الترخيص."],
+              [MessageCircle, "1. اختيار الباقة", "اختر الباقة الفردية أو باقة الفريق ومدتها."],
+              [CreditCard, "2. سداد الفاتورة", "ادفع بأمان عبر بطاقة مدى أو البطاقات الائتمانية في Paylink."],
+              [ClipboardCheck, "3. إصدار الترخيص", "يُصدر النظام ترخيص Keygen المعتمد فورًا."],
+              [Download, "4. التفعيل الفوري", "تُفتح جميع المزايا المرخصة بحسابك فور اكتمال الدفع."],
             ].map(([Icon, title, body]) => {
               const StepIcon = Icon as typeof MessageCircle;
               return (
-                <div key={String(title)}>
+                <div key={String(title)} className="rounded-xl border border-line/60 p-4 dark:border-white/10">
                   <StepIcon className="size-5 text-navy-2 dark:text-gold-2" />
                   <h3 className="mt-3 text-[14px] font-extrabold">{String(title)}</h3>
                   <p className="mt-1 text-[12px] leading-6 text-muted">{String(body)}</p>
@@ -348,8 +379,7 @@ export function PurchasePage() {
 
         <p className="mt-10 flex items-start gap-2 text-[12px] leading-6 text-muted">
           <ShieldCheck className="mt-0.5 size-4 shrink-0 text-ok" />
-          يبقى التحقق الحقيقي من الخادم عبر نظام التراخيص الحالي، ولا توجد صلاحية Pro
-          مخزنة في الواجهة فقط.
+          التحقق يتم مركزيًا من خادم التراخيص (Keygen & NASAQ Server)، ولا يمكن التلاعب بالأسعار أو الصلاحيات من الواجهة.
         </p>
       </main>
       <SiteFooter />

@@ -16,7 +16,8 @@ import { getSql } from "@/lib/db";
 import { getAccount } from "./entitlement.server";
 import { getPaymentInstructions } from "./payment-settings.server";
 import { getPurchasablePlan, listEnabledPlans } from "./plans.server";
-import type { PaylinkPeriod, PaylinkPlanFamily } from "@/lib/paylink/types";
+import type { PaylinkPeriod, PaylinkPlanFamily, PaylinkPlanKey } from "@/lib/paylink/types";
+import { isValidPlanKey, paylinkPlanKey } from "@/lib/commercial/catalog";
 import {
   cancelOwnPaymentRequest,
   createPaymentRequest,
@@ -104,14 +105,35 @@ export type SubmitPaymentResult =
 /** Create a Paylink invoice for the verified signed-in customer. */
 export const createPaylinkCheckout = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown): { family: PaylinkPlanFamily; period: PaylinkPeriod; clientMobile: string } => {
-    const data = input as Record<string, unknown> | null;
-    const family = data?.family === "team" ? "team" : data?.family === "individual" ? "individual" : null;
-    const period = data?.period === "annual" ? "annual" : data?.period === "monthly" ? "monthly" : null;
-    const clientMobile = typeof data?.clientMobile === "string" ? data.clientMobile.trim() : "";
-    if (!family || !period || clientMobile.length < 8 || clientMobile.length > 20) throw new Error("بيانات الدفع غير صالحة");
-    return { family, period, clientMobile };
-  })
+  .validator(
+    (
+      input: unknown,
+    ): {
+      planKey: PaylinkPlanKey;
+      clientMobile: string;
+    } => {
+      const data = input as Record<string, unknown> | null;
+      const rawKey = typeof data?.planKey === "string" ? data.planKey.trim() : "";
+      const family =
+        data?.family === "team" ? "team" : data?.family === "individual" ? "individual" : null;
+      const period =
+        data?.period === "quarterly"
+          ? "quarterly"
+          : data?.period === "monthly"
+            ? "monthly"
+            : null;
+      const key = rawKey || (family && period ? paylinkPlanKey(family, period) : "");
+      if (!isValidPlanKey(key)) throw new Error("الباقة المختارة غير صالحة");
+
+      const clientMobile =
+        typeof data?.clientMobile === "string" ? data.clientMobile.trim() : "";
+      const cleanDigits = clientMobile.replace(/\D/g, "");
+      if (cleanDigits.length < 8 || cleanDigits.length > 20) {
+        throw new Error("رقم الجوال غير صالح");
+      }
+      return { planKey: key, clientMobile };
+    },
+  )
   .handler(async ({ context, data }) => {
     const { createPaylinkInvoice } = await import("@/lib/paylink/server");
     const sql = await getSql();
@@ -121,8 +143,7 @@ export const createPaylinkCheckout = createServerFn({ method: "POST" })
       userId: context.userId,
       userName: users[0]?.name ?? null,
       userEmail: context.userEmail,
-      family: data.family,
-      period: data.period,
+      planKey: data.planKey,
       clientMobile: data.clientMobile,
     });
   });
