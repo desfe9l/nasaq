@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Navigate } from "@tanstack/react-router";
 import { BRAND } from "@/lib/brand";
-import { GROK_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
+import { SOCIAL_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
 
@@ -47,7 +47,7 @@ export function SignInPage() {
             </p>
           ) : (
             <div className="mt-5 grid gap-2">
-              {GROK_PROVIDERS.map((provider) => (
+              {SOCIAL_PROVIDERS.map((provider) => (
                 <button
                   key={provider.providerId}
                   type="button"
@@ -55,7 +55,7 @@ export function SignInPage() {
                   onClick={() => {
                     setError(null);
                     setBusy(provider.providerId);
-                    void signIn(provider.providerId, { callbackURL: "/account" }).catch(
+                    void signIn(provider.providerId as "google", { callbackURL: "/account" }).catch(
                       (err: unknown) => {
                         setBusy(null);
                         setError(

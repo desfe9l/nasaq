@@ -1,19 +1,72 @@
 import { toast } from "sonner";
 import { downloadBlob, downloadText } from "@/lib/utils";
 import { BRAND } from "@/lib/brand";
-import { cssFont, pageSize, parseTable, type CanvasEl, type Page, type Project } from "./model";
-import { prepareText } from "./text-render";
+import {
+  cssFont,
+  pageSize,
+  parseTable,
+  type CanvasEl,
+  type Page,
+  type Project,
+} from "./model";
+import { prepareText, type PageContext } from "./text-render";
 import { shapeSvgMarkup, strokeToUnits } from "./shape-render";
 import { applyNumerals } from "./arabic";
 import { safeImageSrc } from "./images";
+import { applySvgColors, safeSvgSrc, sanitizeSvgContent } from "./svg";
 
-export type ExportFormat = "pdf" | "pptx" | "docx" | "png" | "jpg" | "html" | "json";
+export type ExportFormat =
+  "pdf" | "pptx" | "docx" | "png" | "jpg" | "html" | "json";
 
 /** Formats that produce editable Office documents rather than flattened pages. */
 const OFFICE_FORMATS = new Set<ExportFormat>(["pptx", "docx"]);
 
 function waitFrame() {
-  return new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
+  return new Promise<void>((r) =>
+    requestAnimationFrame(() => requestAnimationFrame(() => r())),
+  );
+}
+
+/**
+ * Copy every registered web font into `doc`.
+ *
+ * html2canvas rasterises from a CLONED document inside an iframe, and that clone
+ * re-parses stylesheets from scratch. `@font-face` rules registered at runtime
+ * through `document.fonts.add(...)` (user-uploaded TTF/OTF via the font picker)
+ * exist only in the live document — so in the clone every custom family falls
+ * back, and the exported page ships with a different font and different text
+ * metrics than the canvas the author was looking at. Cloning the FontFace
+ * objects across is what makes the rasteriser see exactly the faces the editor
+ * renders with.
+ */
+function cloneFontsInto(doc: Document) {
+  if (!document.fonts) return;
+  const target = (doc as Document & { fonts?: FontFaceSet }).fonts;
+  if (!target) return;
+  document.fonts.forEach((face) => {
+    try {
+      // A data-URL source is self-contained, so the clone can re-load it with no
+      // network and no CORS involvement. `source` is newer than this project's
+      // DOM typings, hence the guarded read.
+      const src = (face as unknown as { source?: string }).source;
+      const twin = new FontFace(
+        face.family,
+        typeof src === "string" && src
+          ? src
+          : (`url()` as unknown as BufferSource),
+        {
+          weight: face.weight,
+          style: face.style,
+          display: face.display,
+        },
+      );
+      target.add(twin);
+      void twin.load().catch(() => undefined);
+    } catch {
+      // A face that cannot be cloned (blob revoked, etc.) must not abort export;
+      // the family simply falls back as before.
+    }
+  });
 }
 
 async function waitImages(root: HTMLElement) {
@@ -26,7 +79,10 @@ async function waitImages(root: HTMLElement) {
           const done = () => res();
           img.onload = done;
           img.onerror = done;
-          setTimeout(done, 2500);
+          // Large photos at export scale can take longer than a blink to decode;
+          // a too-short timeout here is how pictures silently vanish from the
+          // exported file while being perfectly visible on the canvas.
+          setTimeout(done, 8000);
         }),
     ),
   );
@@ -50,7 +106,26 @@ async function ensureFonts(root: HTMLElement) {
   await Promise.all(
     [...specs].map((spec) => document.fonts.load(spec).catch(() => undefined)),
   );
-  await Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 3000))]);
+  await Promise.race([
+    document.fonts.ready,
+    new Promise((r) => setTimeout(r, 3000)),
+  ]);
+}
+
+/** Editor chrome that must never appear in an export. */
+function stripAuthoringChrome(doc: Document) {
+  // Selection handles are UI, not artwork — and CSS pseudo-elements are never
+  // captured, so only the real handle nodes need removing. The whole selection
+  // layer goes with them: it is overlay chrome above the artwork, not content.
+  doc
+    .querySelectorAll(
+      ".handle, .rotate-handle, .selection-layer, .overflow-badge, .guide-v, .guide-h, .marquee",
+    )
+    .forEach((h) => h.remove());
+  // The selection ring is authoring chrome; it must not bake into the asset.
+  doc.querySelectorAll(".selected, .is-secondary, .locked").forEach((n) => {
+    n.classList.remove("selected", "is-secondary", "locked");
+  });
 }
 
 export interface CapturedPage {
@@ -68,8 +143,13 @@ export interface CapturedPage {
  * element's own millimetre box so the saved asset keeps its print resolution
  * instead of the current zoom level.
  */
-export async function captureElement(elId: string, exportScale: number): Promise<string | null> {
-  const node = document.querySelector<HTMLElement>(`[data-el-id="${CSS.escape(elId)}"]`);
+export async function captureElement(
+  elId: string,
+  exportScale: number,
+): Promise<string | null> {
+  const node = document.querySelector<HTMLElement>(
+    `[data-el-id="${CSS.escape(elId)}"]`,
+  );
   if (!node) return null;
   const html2canvas = (await import("html2canvas")).default;
   await waitFrame();
@@ -88,11 +168,8 @@ export async function captureElement(elId: string, exportScale: number): Promise
     windowWidth: node.offsetWidth,
     windowHeight: node.offsetHeight,
     onclone: (doc) => {
-      doc.querySelectorAll(".handle, .rotate-handle").forEach((h) => h.remove());
-      // The selection ring is authoring chrome; it must not bake into the asset.
-      doc.querySelectorAll(".selected, .is-secondary, .locked").forEach((n) => {
-        n.classList.remove("selected", "is-secondary", "locked");
-      });
+      cloneFontsInto(doc);
+      stripAuthoringChrome(doc);
     },
   });
   return canvas.toDataURL("image/png");
@@ -119,16 +196,36 @@ export async function capturePages(
     await waitFrame();
     await waitImages(node);
     await ensureFonts(node);
+    // The live page allows elements to overflow its edges (free positioning
+    // while editing — see model.ts:constrainElement). Export must still be
+    // page-bounded, so we clip only the *cloned* node html2canvas rasterises,
+    // never the interactive DOM the user is actually working in.
+    const pageId = node.getAttribute("data-export-page");
     const canvas = await html2canvas(node, {
       scale,
       useCORS: true,
       allowTaint: true,
-      backgroundColor: "#ffffff",
+      // The page itself owns its background (including transparent pages). Do
+      // not let html2canvas replace it with a white export backdrop.
+      backgroundColor: null,
       logging: false,
       width: node.offsetWidth,
       height: node.offsetHeight,
       windowWidth: node.offsetWidth,
       windowHeight: node.offsetHeight,
+      onclone: (clonedDoc) => {
+        cloneFontsInto(clonedDoc);
+        const target = pageId
+          ? (clonedDoc.querySelector(
+              `[data-export-page="${CSS.escape(pageId)}"]`,
+            ) as HTMLElement | null)
+          : null;
+        if (target) target.style.overflow = "hidden";
+        // The hidden capture pages are rendered with `interactive={false}`, so
+        // handles and badges never appear — but the shared helper keeps the
+        // guarantee in one place in case an authoring class ever lands here.
+        stripAuthoringChrome(clonedDoc);
+      },
     });
     out.push({ canvas, w, h });
     if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
@@ -168,7 +265,10 @@ export async function exportPdf(pages: CapturedPage[], name: string) {
 export async function exportPptxEditable(pages: Page[], name: string) {
   const { buildScene } = await import("./scene");
   const { writePptx } = await import("./pptx-writer");
-  const blob = await writePptx(buildScene(pages), name);
+  const blob = await writePptx(
+    buildScene(await materializeSvgSources(pages)),
+    name,
+  );
   downloadBlob(blob, `${name}.pptx`);
 }
 
@@ -182,8 +282,47 @@ export async function exportPptxEditable(pages: Page[], name: string) {
 export async function exportDocxEditable(pages: Page[], name: string) {
   const { buildScene } = await import("./scene");
   const { writeDocx } = await import("./docx-writer");
-  const blob = await writeDocx({ scenes: buildScene(pages), title: name });
+  const blob = await writeDocx({
+    scenes: buildScene(await materializeSvgSources(pages)),
+    title: name,
+  });
   downloadBlob(blob, `${name}.docx`);
+}
+
+/**
+ * Materialise every svg element's raster source before scene building.
+ *
+ * SVG elements carry their vector markup in `content`; the Office scene needs
+ * image bytes in `src`. Each svg's PNG is written into a CLONE of the page
+ * list (originals untouched — the editor keeps its vector), then the scene is
+ * built from the clones. Failures leave `src` empty and the element is simply
+ * skipped by the scene mapper, exactly like a broken image.
+ */
+async function materializeSvgSources(pages: Page[]): Promise<Page[]> {
+  const needs = pages.some((p) =>
+    p.elements.some((el) => el.type === "svg" && !safeSvgSrc(el.src)),
+  );
+  if (!needs) return pages;
+  const { svgToPngDataUrl } = await import("./svg");
+  return Promise.all(
+    pages.map(async (page) => ({
+      ...page,
+      elements: await Promise.all(
+        page.elements.map(async (el) => {
+          if (el.type !== "svg" || safeSvgSrc(el.src)) return el;
+          // Rasterise with the same panel overrides the canvas showed, so the
+          // exported file matches what the author sees.
+          const painted = applySvgColors(sanitizeSvgContent(el.content || ""), {
+            fill: el.style.svgFill,
+            stroke: el.style.svgStroke,
+            strokeWidth: el.style.svgStrokeWidth,
+          });
+          const png = await svgToPngDataUrl(painted, el.w, el.h, 2);
+          return png ? { ...el, src: png } : el;
+        }),
+      ),
+    })),
+  );
 }
 
 /**
@@ -194,7 +333,8 @@ export async function exportDocxEditable(pages: Page[], name: string) {
  * result is not editable but is an exact match for the design.
  */
 export async function exportDocxRaster(pages: CapturedPage[], name: string) {
-  const { Document, ImageRun, Packer, Paragraph, convertMillimetersToTwip } = await import("docx");
+  const { Document, ImageRun, Packer, Paragraph, convertMillimetersToTwip } =
+    await import("docx");
   const first = pages[0];
   const landscape = first.w > first.h;
   const section = {
@@ -237,7 +377,11 @@ export async function exportPptxRaster(pages: CapturedPage[], name: string) {
   pptx.rtlMode = true;
   const first = pages[0];
   const layout = "page";
-  pptx.defineLayout({ name: layout, width: first.w / 25.4, height: first.h / 25.4 });
+  pptx.defineLayout({
+    name: layout,
+    width: first.w / 25.4,
+    height: first.h / 25.4,
+  });
   pptx.layout = layout;
   pages.forEach((p) => {
     const slide = pptx.addSlide();
@@ -253,8 +397,14 @@ export async function exportPptxRaster(pages: CapturedPage[], name: string) {
   downloadBlob(blob, `${name}.pptx`);
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality?: number) {
-  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+function canvasToBlob(
+  canvas: HTMLCanvasElement,
+  type: string,
+  quality?: number,
+) {
+  return new Promise<Blob | null>((resolve) =>
+    canvas.toBlob(resolve, type, quality),
+  );
 }
 
 /** PNG bytes for the Word writer, which needs a byte array rather than a URL. */
@@ -270,19 +420,32 @@ function pngDataUrl(canvas: HTMLCanvasElement): string {
   return canvas.toDataURL("image/png");
 }
 
-export async function exportImages(pages: CapturedPage[], name: string, type: "png" | "jpg") {
+export async function exportImages(
+  pages: CapturedPage[],
+  name: string,
+  type: "png" | "jpg",
+) {
   const mime = type === "png" ? "image/png" : "image/jpeg";
   const ext = type === "png" ? "png" : "jpg";
   if (pages.length === 1) {
-    const blob = await canvasToBlob(pages[0].canvas, mime, type === "jpg" ? 0.95 : undefined);
+    const blob = await canvasToBlob(
+      pages[0].canvas,
+      mime,
+      type === "jpg" ? 0.95 : undefined,
+    );
     if (blob) downloadBlob(blob, `${name}.${ext}`);
     return;
   }
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
   for (let i = 0; i < pages.length; i++) {
-    const blob = await canvasToBlob(pages[i].canvas, mime, type === "jpg" ? 0.95 : undefined);
-    if (blob) zip.file(`${name}-p${String(i + 1).padStart(2, "0")}.${ext}`, blob);
+    const blob = await canvasToBlob(
+      pages[i].canvas,
+      mime,
+      type === "jpg" ? 0.95 : undefined,
+    );
+    if (blob)
+      zip.file(`${name}-p${String(i + 1).padStart(2, "0")}.${ext}`, blob);
   }
   const out = await zip.generateAsync({ type: "blob" });
   downloadBlob(out, `${name}-pages.zip`);
@@ -329,43 +492,97 @@ function num(v: unknown, fallback: number, min = -1e6, max = 1e6) {
 
 /** Whitelisted CSS keyword (alignment, object-fit, font style, …). */
 function cssKeyword(v: unknown, allowed: readonly string[], fallback: string) {
-  const value = String(v ?? "").trim().toLowerCase();
+  const value = String(v ?? "")
+    .trim()
+    .toLowerCase();
   return allowed.includes(value) ? value : fallback;
 }
 
-const TEXT_ALIGN = ["right", "left", "center", "justify", "start", "end"] as const;
+const TEXT_ALIGN = [
+  "right",
+  "left",
+  "center",
+  "justify",
+  "start",
+  "end",
+] as const;
 const OBJECT_FIT = ["cover", "contain", "fill", "none", "scale-down"] as const;
 const FONT_STYLE = ["normal", "italic", "oblique"] as const;
 
-function elHtml(el: CanvasEl): string {
+/**
+ * One element as HTML.
+ *
+ * `pageRef` carries the page the element belongs to so `{رقم_الصفحة_من_الكل}`
+ * resolves per page — the standalone file renders the whole document in one
+ * pass, where a single ambient page number would print the same number on every
+ * sheet.
+ */
+function elHtml(el: CanvasEl, pageRef?: PageContext): string {
   const s = el.style || {};
   const wrap = (inner: string) =>
     `<div class="el" style="left:${num(el.x, 0, -1e4, 1e4)}mm;top:${num(el.y, 0, -1e4, 1e4)}mm;width:${num(el.w, 40, 0, 1e4)}mm;height:${num(el.h, 20, 0, 1e4)}mm;transform:rotate(${num(el.rotation, 0, -3600, 3600)}deg);opacity:${num(el.opacity, 1, 0, 1)};z-index:${num(el.z, 1, -1e4, 1e4)};box-shadow:${esc(s.shadow || "none")}">${inner}</div>`;
 
   /** Mirror of the canvas text options so the exported file matches the screen. */
-  const text = prepareText(el);
-  const verticalCss = s.writingMode === "vertical" ? "writing-mode:vertical-rl;text-orientation:mixed;" : "";
+  const text = prepareText(el, pageRef);
+  const verticalCss =
+    s.writingMode === "vertical"
+      ? "writing-mode:vertical-rl;text-orientation:mixed;"
+      : "";
   // `prepareText` already applied the numeral style, so the string is used as-is.
   const body = (fallback = "") => formatMultiline(text.text || fallback);
 
   if (el.hidden) return "";
+  if (el.type === "group") {
+    return wrap(
+      (el.children || [])
+        .slice()
+        .sort((a, b) => num(a.z, 0) - num(b.z, 0))
+        .map((child) => elHtml(child, pageRef))
+        .join(""),
+    );
+  }
   if (el.type === "text") {
     return wrap(
-      `<div class="text" style="font-family:${cssFont(s.fontFamily)};font-size:${num(text.fontSize, 14, 4, 400)}pt;color:${cssColor(s.color, "#172033")};font-weight:${num(s.fontWeight, 600, 100, 900)};text-align:${cssKeyword(s.textAlign, TEXT_ALIGN, "right")};line-height:${num(s.lineHeight, 1.45, 0.5, 5)};font-style:${cssKeyword(s.fontStyle, FONT_STYLE, "normal")};letter-spacing:${num(s.letterSpacing, 0, -10, 50)}mm;direction:rtl;${verticalCss}">${body()}</div>`,
+      `<div class="text" style="font-family:${cssFont(s.fontFamily)};font-size:${num(text.fontSize, 14, 4, 400)}pt;color:${cssColor(s.color, "#172033")};font-weight:${num(s.fontWeight, 600, 100, 900)};text-align:${cssKeyword(s.textAlign, TEXT_ALIGN, "right")};line-height:${num(text.lineHeight, 1.45, 0.5, 5)};font-style:${cssKeyword(s.fontStyle, FONT_STYLE, "normal")};letter-spacing:${num(s.letterSpacing, 0, -10, 50)}mm;direction:rtl;${verticalCss}">${body()}</div>`,
     );
   }
   if (el.type === "box" || el.type === "stat") {
     return wrap(
-      `<div class="box" style="background:${cssColor(s.fill || s.background, "#f7f8fb")};border:${num(s.borderWidth, 0.35, 0, 50)}mm solid ${cssColor(s.borderColor, "#d9dee8")};border-radius:${num(s.radius, 4, 0, 500)}mm;padding:${num(s.padding, 4, 0, 200)}mm;font-family:${cssFont(s.fontFamily)};font-size:${num(text.fontSize, 12, 4, 400)}pt;color:${cssColor(s.color, "#172033")};font-weight:${num(s.fontWeight, 600, 100, 900)};text-align:${cssKeyword(s.textAlign, TEXT_ALIGN, "right")};line-height:${num(s.lineHeight, 1.5, 0.5, 5)};direction:rtl;${verticalCss}">${body()}</div>`,
+      `<div class="box" style="background:${cssColor(s.fill || s.background, "#f7f8fb")};border:${num(s.borderWidth, 0.35, 0, 50)}mm solid ${cssColor(s.borderColor, "#d9dee8")};border-radius:${num(s.radius, 4, 0, 500)}mm;padding:${num(s.padding, 4, 0, 200)}mm;font-family:${cssFont(s.fontFamily)};font-size:${num(text.fontSize, 12, 4, 400)}pt;color:${cssColor(s.color, "#172033")};font-weight:${num(s.fontWeight, 600, 100, 900)};text-align:${cssKeyword(s.textAlign, TEXT_ALIGN, "right")};line-height:${num(text.lineHeight, 1.5, 0.5, 5)};direction:rtl;${verticalCss}">${body()}</div>`,
     );
   }
   if (el.type === "progress") {
     const value = num(s.value, 0, 0, 100);
-    const shown = s.numerals ? `${applyNumerals(String(value), s.numerals)}%` : `${value}%`;
-    const valueHtml = s.showValue === false ? "" : `<span style="flex-shrink:0">${shown}</span>`;
+    const shown = s.numerals
+      ? `${applyNumerals(String(value), s.numerals)}%`
+      : `${value}%`;
+    const valueHtml =
+      s.showValue === false
+        ? ""
+        : `<span style="flex-shrink:0">${shown}</span>`;
+
+    if (s.variant === "steps") {
+      const total = Math.max(2, Math.min(12, Number(s.steps) || 5));
+      const filled = Math.round((value / 100) * total);
+      const dotSize = Math.max(2.4, Math.min(num(el.h, 18, 0, 1e4) * 0.34, 7));
+      const dots = Array.from(
+        { length: total },
+        (_, i) =>
+          `<span style="width:${dotSize}mm;height:${dotSize}mm;border-radius:999px;flex-shrink:0;background:${i < filled ? cssColor(s.fill, "#006c35") : cssColor(s.background, "#e8ecf3")}"></span>`,
+      ).join("");
+      return wrap(
+        `<div style="width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;gap:1.4mm;direction:rtl;overflow:hidden;font-family:${cssFont(s.fontFamily)}">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:2mm;font-size:${num(text.fontSize, 10, 4, 400)}pt;font-weight:${num(s.fontWeight, 700, 100, 900)};color:${cssColor(s.color, "#172033")}"><span class="progress-caption" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${body()}</span>${valueHtml}</div>
+          <div style="display:flex;align-items:center;gap:${dotSize * 0.55}mm;flex-shrink:0">${dots}</div>
+        </div>`,
+      );
+    }
 
     if (s.variant === "ring") {
-      const size = Math.max(8, Math.min(num(el.w, 40, 0, 1e4), num(el.h, 40, 0, 1e4)));
+      const size = Math.max(
+        8,
+        Math.min(num(el.w, 40, 0, 1e4), num(el.h, 40, 0, 1e4)),
+      );
       const thickness = Math.max(1.5, size * 0.11);
       const r = (size - thickness) / 2;
       const circumference = 2 * Math.PI * r;
@@ -397,7 +614,10 @@ function elHtml(el: CanvasEl): string {
       shapeSvgMarkup(s.shapeId || s.shape, {
         fill: cssColor(s.fill, "#006c35"),
         stroke: cssColor(s.borderColor, "transparent"),
-        strokeUnits: strokeToUnits(borderWidth, { w: num(el.w, 40, 1, 1e4), h: num(el.h, 20, 1, 1e4) }),
+        strokeUnits: strokeToUnits(borderWidth, {
+          w: num(el.w, 40, 1, 1e4),
+          h: num(el.h, 20, 1, 1e4),
+        }),
       }),
     );
   }
@@ -459,12 +679,13 @@ function elHtml(el: CanvasEl): string {
 
 export function buildStandaloneHtml(project: Project, pages: Page[]) {
   const body = pages
-    .map((p) => {
+    .map((p, index) => {
       const size = pageSize(p);
+      const pageRef = { number: index + 1, count: pages.length };
       return `<section class="page" style="width:${num(size.w, 210, 10, 1e4)}mm;height:${num(size.h, 297, 10, 1e4)}mm;background:${cssColor(p.bg, "#fff")}">${p.elements
         .slice()
         .sort((a, b) => num(a.z, 0) - num(b.z, 0))
-        .map(elHtml)
+        .map((el) => elHtml(el, pageRef))
         .join("")}</section>`;
     })
     .join("\n");
@@ -485,7 +706,7 @@ export function buildStandaloneHtml(project: Project, pages: Page[]) {
   * { box-sizing: border-box; }
   body { margin: 0; background: #e8eaef; font-family: "Tajawal","Cairo",sans-serif; }
   .page { position: relative; overflow: hidden; background: #fff; margin: 12mm auto; box-shadow: 0 18px 50px rgba(15,23,42,.16); page-break-after: always; }
-  .el { position: absolute; overflow: hidden; }
+  .el { position: absolute; overflow: visible; }
   .text, .box { width: 100%; height: 100%; white-space: pre-wrap; word-break: break-word; }
   img { display: block; }
   @media print {
@@ -501,11 +722,19 @@ ${body}
 }
 
 export function exportJson(project: Project) {
-  downloadText(JSON.stringify(project, null, 2), `${project.name || "report"}.json`, "application/json");
+  downloadText(
+    JSON.stringify(project, null, 2),
+    `${project.name || "report"}.json`,
+    "application/json",
+  );
 }
 
 export function exportHtmlFile(project: Project, pages: Page[]) {
-  downloadText(buildStandaloneHtml(project, pages), `${project.name || "report"}.html`, "text/html");
+  downloadText(
+    buildStandaloneHtml(project, pages),
+    `${project.name || "report"}.html`,
+    "text/html",
+  );
 }
 
 export function safeFileName(name: string) {

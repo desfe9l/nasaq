@@ -4,6 +4,31 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
+ * Editor chrome layer scale.
+ *
+ * One ordered set of tokens instead of scattered magic numbers, so a dropdown
+ * can never end up UNDER the panel it was opened from, and a floating bubble
+ * can never cover a dialog. Order (low → high):
+ *   canvas artwork < selection overlay < panels < drawer backdrop < drawer
+ *   < floating bubble < dropdown < dialog < context menu < command menu < toast
+ * The canvas overlay stays inside the page (see SELECTION_LAYER_Z in
+ * CanvasStage) and is unaffected by these values.
+ */
+:root {
+  --z-canvas: 0;
+  --z-canvas-overlay: 20;
+  --z-panel: 30;
+  --z-drawer-backdrop: 35;
+  --z-drawer: 40;
+  --z-bubble: 60;
+  --z-dropdown: 70;
+  --z-dialog: 90;
+  --z-context: 100;
+  --z-command: 110;
+  --z-toast: 200;
+}
+
+/*
  * Design tokens.
  *
  * Palette is deliberately restrained: white paper, neutral greys, and
@@ -11,9 +36,22 @@
  * thin accent. No gradient-led surfaces, no decorative elements without a function.
  */
 @theme {
-  --font-sans: "Tajawal", "Cairo", "IBM Plex Sans Arabic", "Noto Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    "Tajawal", "Cairo", "IBM Plex Sans Arabic", "Noto Sans Arabic",
+    ui-sans-serif, system-ui, sans-serif;
   --font-display: "Cairo", "Tajawal", sans-serif;
   --font-serif-ar: "Amiri", "Noto Naskh Arabic", serif;
+
+  /*
+   * `lg2` — the editor's own docked/overlay boundary, at 1100px.
+   *
+   * Tailwind's stock `lg` (1024px) is one CSS pixel away from a layout the shell
+   * cannot actually fit: two panels plus a usable A4 artboard need 1100. The Java-
+   * Script boundary lives in `ui-state.ts` (`OVERLAY_BREAKPOINT`) and the
+   * layout's classes use `lg2:`/`max-lg2:` — the two must always be the same
+   * number, which is why neither is spelled out in a component.
+   */
+  --breakpoint-lg2: 1100px;
 
   /*
    * `navy` keeps its name because it is the historical token for the primary
@@ -30,7 +68,12 @@
   --color-ink: #172033;
   --color-paper: #f2f4f8;
   --color-surface: #ffffff;
-  --color-muted: #6b7383;
+  /*
+   * Secondary text. Kept just dark enough to clear WCAG AA for the 11–13px
+   * subtext used across the site and the editor (≈5.8:1 on white); the pale
+   * grey it replaced measured ≈4.7:1 and read as washed out on card surfaces.
+   */
+  --color-muted: #5d6575;
   --color-line: #dde2ea;
   --color-line-2: #edf0f5;
   --color-danger: #b42318;
@@ -40,8 +83,26 @@
   --radius-md: 10px;
   --radius-lg: 14px;
 
-  --shadow-panel: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --shadow-panel:
+    0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
   --shadow-page: 0 24px 64px rgba(15, 23, 42, 0.18);
+
+  /*
+   * Card elevation (site pages + editor cards).
+   *
+   * One soft, low-opacity lift used by every card in the product, so a grid of
+   * cards reads as one surface family instead of a pile of different shadows.
+   * The dark variants add a 1px translucent glow ring on top of the drop
+   * shadow: on a dark page a black shadow alone is nearly invisible, so the
+   * elevation has to come from light as well.
+   * Both are exposed as `shadow-card` / `dark:shadow-card-dark` utilities.
+   */
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  --shadow-card-hover: 0 12px 28px -6px rgba(0, 0, 0, 0.12);
+  --shadow-card-dark:
+    0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-card-dark-hover:
+    0 12px 28px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.09);
 }
 
 @layer base {
@@ -95,6 +156,19 @@
     color: #e9eef5;
   }
 
+  /*
+   * Dark-mode secondary text.
+   *
+   * The light-mode grey is far too dark against a #0f141c page (≈3.7:1, below
+   * AA); the dark theme gets its own, lighter secondary so subtext stays
+   * legible instead of dissolving into the background. Only the muted tone is
+   * re-pointed — every ink/surface token keeps its own light value, and the
+   * editor chrome overrides its tokens separately (.editor-ui … below).
+   */
+  html.dark {
+    --color-muted: #9aa5b4;
+  }
+
   :focus-visible {
     outline: 2px solid var(--color-navy-2);
     outline-offset: 2px;
@@ -124,6 +198,302 @@
   min-height: 0;
 }
 
+/* Photoshop-inspired chrome. These tokens stop at editor chrome boundaries. */
+.editor-ui {
+  --editor-bg: #252627;
+  --editor-panel: #303132;
+  --editor-toolbar: #2b2c2d;
+  --editor-surface: #38393a;
+  --editor-border: #48494a;
+  --editor-text: #d7d8d9;
+  --editor-text-secondary: #9b9d9f;
+  --editor-hover: #414243;
+  --editor-active: #4b4c4d;
+  --editor-disabled: #252627;
+  background: var(--editor-bg);
+  color: var(--editor-text);
+}
+
+.editor-ui.editor-light {
+  --editor-bg: #e2e3e4;
+  --editor-panel: #f0f0f1;
+  --editor-toolbar: #e8e8e9;
+  --editor-surface: #fafafa;
+  /*
+   * Chrome dividers. The previous #c9cacc read as a smudge against the #e8e8e9
+   * toolbar/rail — one shade darker keeps every panel edge, tab divider and
+   * toolbar separator crisp without turning the light chrome grey.
+   */
+  --editor-border: #b6b8bb;
+  --editor-text: #28292a;
+  --editor-text-secondary: #686a6c;
+  --editor-hover: #dedfe0;
+  --editor-active: #d3d4d5;
+  --editor-disabled: #bfc0c1;
+}
+
+.editor-ui .editor-toolbar,
+.editor-ui .editor-sidebar,
+.editor-ui .editor-page-rail,
+.editor-ui .editor-arrange-bar {
+  --color-paper: var(--editor-panel);
+  --color-surface: var(--editor-surface);
+  --color-ink: var(--editor-text);
+  --color-muted: var(--editor-text-secondary);
+  --color-line: var(--editor-border);
+  --color-line-2: var(--editor-hover);
+  --color-navy: var(--editor-active);
+  --color-navy-2: #5b5c5d;
+  --color-navy-3: #666768;
+  --color-white: var(--editor-text);
+  background-color: var(--editor-panel) !important;
+  border-color: var(--editor-border) !important;
+  color: var(--editor-text);
+}
+
+.editor-ui .editor-toolbar {
+  background-color: var(--editor-toolbar) !important;
+}
+
+.editor-ui .editor-canvas-workspace,
+.editor-ui .editor-canvas-stage {
+  background-color: var(--editor-bg) !important;
+  color: var(--editor-text);
+}
+
+.editor-ui .editor-canvas-stage {
+  background-image: none;
+  touch-action: pan-x pan-y;
+  overscroll-behavior: contain;
+  /*
+   * Chrome's scroll anchoring "helpfully" rescrolls the stage whenever the
+   * re-rendered artboard changes size under it — which is exactly what a zoom
+   * step is. That fights the anchored-zoom correction (viewport-tools.ts
+   * `zoomAnchoredAt`) and leaves the anchor point drifting several millimetres
+   * per wheel step. The canvas manages its own scroll on zoom; anchoring off.
+   */
+  overflow-anchor: none;
+}
+
+/* Control surfaces inside chrome only; the report page is not under these selectors. */
+.editor-ui .editor-toolbar button,
+.editor-ui .editor-toolbar input,
+.editor-ui .editor-sidebar button,
+.editor-ui .editor-sidebar input,
+.editor-ui .editor-sidebar select,
+.editor-ui .editor-sidebar textarea,
+.editor-ui .editor-page-rail button,
+.editor-ui .editor-arrange-bar button {
+  border-color: var(--editor-border);
+  color: var(--editor-text);
+}
+
+.editor-ui .editor-toolbar button:hover:not(:disabled),
+.editor-ui .editor-sidebar button:hover:not(:disabled),
+.editor-ui .editor-page-rail button:hover:not(:disabled),
+.editor-ui .editor-arrange-bar button:hover:not(:disabled) {
+  background-color: var(--editor-hover);
+}
+
+.editor-ui .editor-toolbar .bg-navy,
+.editor-ui .editor-sidebar .bg-navy,
+.editor-ui .editor-page-rail .bg-navy {
+  background-color: var(--editor-active) !important;
+  color: var(--editor-text) !important;
+}
+
+.editor-ui .editor-toolbar .bg-white,
+.editor-ui .editor-sidebar .bg-white,
+.editor-ui .editor-page-rail .bg-white {
+  background-color: var(--editor-surface) !important;
+}
+
+.editor-ui .editor-toolbar .text-white,
+.editor-ui .editor-sidebar .text-white,
+.editor-ui .editor-page-rail .text-white {
+  color: var(--editor-text) !important;
+}
+
+.editor-ui .editor-sidebar .text-muted,
+.editor-ui .editor-page-rail .text-muted,
+.editor-ui .editor-toolbar .text-muted {
+  color: var(--editor-text-secondary);
+}
+
+/* Keep property values readable in both editor themes instead of inheriting page-form colors. */
+.editor-ui .editor-properties .editor-property-field {
+  color: var(--editor-text-secondary);
+}
+
+.editor-ui
+  .editor-properties
+  .field-control
+  > input:not([type="range"]):not([type="color"]),
+.editor-ui .editor-properties .field-control > select,
+.editor-ui .editor-properties .field-control > textarea {
+  background-color: var(--editor-surface) !important;
+  border-color: var(--editor-border) !important;
+  color: var(--editor-text) !important;
+}
+
+.editor-ui .editor-properties .field-control > input[type="number"] {
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-ui .editor-properties .field-control > input::placeholder,
+.editor-ui .editor-properties .field-control > textarea::placeholder {
+  color: var(--editor-text-secondary);
+  opacity: 1;
+}
+
+/* Reset inherited UI tokens at the document boundary. No design color is themed. */
+.editor-ui .report-page {
+  --color-ink: #172033;
+  --color-muted: #6b7383;
+  --color-line: #dde2ea;
+  --color-line-2: #edf0f5;
+  --color-surface: #ffffff;
+  --color-paper: #f2f4f8;
+}
+
+.editor-ui.editor-focus .editor-sidebar,
+.editor-ui.editor-focus .editor-page-rail {
+  display: none !important;
+}
+
+.editor-ui.editor-focus .editor-focus-workspace {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.editor-ui .editor-arrange-bar .arrange-count,
+.editor-ui .editor-arrange-bar .arrange-btn {
+  color: var(--editor-text);
+}
+
+.editor-ui .editor-arrange-bar .arrange-sep {
+  background: var(--editor-border);
+}
+
+.editor-ui .editor-status-bar {
+  background: var(--editor-toolbar);
+  border-color: var(--editor-border);
+  color: var(--editor-text-secondary);
+}
+
+.editor-context-backdrop,
+.editor-command-backdrop {
+  background: transparent;
+}
+
+.editor-context-menu,
+.editor-command-menu {
+  background: var(--editor-panel);
+  border-color: var(--editor-border);
+  color: var(--editor-text);
+}
+
+/*
+ * Toolbar dropdowns (المحاذاة/الترتيب/تحويل/عرض) float over the artwork, so
+ * they must be opaque like the context menu — with no background of their own
+ * the page showed straight through the rows and the menu read as a broken
+ * translucent sheet.
+ */
+.editor-dropdown-panel {
+  background: var(--editor-panel);
+  border-color: var(--editor-border);
+  color: var(--editor-text);
+}
+
+.editor-menu-item:hover:not(:disabled),
+.editor-command-active {
+  background: var(--editor-hover);
+}
+
+.editor-menu-danger {
+  color: #e7a3a0 !important;
+}
+
+.editor-command-menu input::placeholder {
+  color: var(--editor-text-secondary);
+}
+
+.editor-command-menu kbd {
+  min-width: 2.5rem;
+  color: var(--editor-text-secondary);
+  font-size: 10px;
+  text-align: left;
+}
+
+.editor-panel-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: calc(var(--z-canvas-overlay) + 1);
+  width: 16px;
+  cursor: col-resize;
+  touch-action: none;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+/* The visible part: a slim grip pill hugging the canvas-facing edge. */
+.editor-panel-resize-grip {
+  width: 4px;
+  border-radius: 999px;
+  background: var(--editor-border);
+  transition:
+    background-color 120ms ease,
+    width 120ms ease;
+}
+
+.editor-panel-resize-handle:hover .editor-panel-resize-grip,
+.editor-panel-resize-handle:focus-visible .editor-panel-resize-grip {
+  width: 6px;
+  background: var(--editor-active);
+}
+
+/* While a drag is live, the whole app shows a resize cursor and text/element
+   selection is suppressed so the gesture never rubber-bands the canvas. */
+body.is-resizing-panel {
+  cursor: col-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
+  width: 6px;
+  background: var(--editor-active);
+}
+
+/* Left panel: inner (canvas-facing) edge is on the DOM-LTR right… which in this
+   RTL app is the LEFT side of the viewport. The handle must sit on the edge
+   that faces the canvas, i.e. the DOM start side of the panel.
+   Left panel  → handle on its canvas side = `left: -8px` in DOM terms.
+   Right panel → handle on its canvas side = `right: -8px`. */
+.editor-panel-resize-left {
+  left: -8px;
+}
+.editor-panel-resize-right {
+  right: -8px;
+}
+
+@media (max-width: 1023px) {
+  /* Handles stay useful on tablets: in landscape the panels sit beside the
+     canvas exactly like desktop, so their edge must stay draggable there.
+     Only portrait hides them — the portrait layout is a bottom sheet with no
+     side edge to drag. */
+  .editor-panel-resize-right {
+    display: none;
+  }
+}
+
+@media (max-width: 1023px) and (orientation: portrait) {
+  .editor-panel-resize-left {
+    display: none;
+  }
+}
+
 /*
  * Panes scroll independently. `overscroll-behavior: contain` stops a flick at
  * the end of a panel list from scrolling the document behind it — the most
@@ -150,19 +520,30 @@
   }
 }
 
+/*
+ * Infinite viewport.
+ *
+ * The stage is a scrolling surface, not a page: a subdued, low-contrast field
+ * (#F3F4F6 light / #1E293B dark) with a faint grid, so the white artboard reads
+ * as a physical sheet floating above the desk. The background is fixed-attached
+ * relative to the scroll container (`background-attachment: local` keeps the
+ * grid moving with the content while the field stays put), which is what makes
+ * the viewport feel unbounded instead of "a big div".
+ */
 .studio-grid {
-  background-color: var(--color-paper);
+  background-color: #f3f4f6;
   background-image:
-    linear-gradient(rgba(7, 29, 61, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(7, 29, 61, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.045) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
-html.dark .studio-grid {
-  background-color: #0f141c;
+.editor-ui.editor-dark .studio-grid {
+  background-color: #1e293b;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 /* Drag-and-drop affordance while an image file hovers the canvas. */
@@ -175,21 +556,69 @@ html.dark .studio-grid {
   outline-offset: 6px;
 }
 
+/*
+ * Canvas containment (fix #3).
+ *
+ * The stage is its own stacking context, so every layer inside an artboard
+ * (grid, guides, marquee, selection frame, handles) resolves against the
+ * artboard and can never paint over a docked sidebar, the top toolbar or a
+ * floating bubble — however large a z-index an element style happens to carry.
+ * Grep `--z-` for the top-level scale these internal values stay under.
+ */
+.editor-canvas-stage {
+  z-index: var(--z-canvas);
+  isolation: isolate;
+}
+
 .page-frame {
   transform-origin: top center;
+  overflow: visible;
 }
 
 .report-page {
   position: relative;
   width: 210mm;
   height: 297mm;
-  overflow: visible; /* تم التعديل هنا ليسمح للعناصر بالخروج عن مساحة العمل البيضاء بحرية */
+  overflow: visible;
   direction: rtl;
   background: #fff;
   color: #172033;
-  box-shadow: var(--shadow-page);
+  /*
+   * The artboard is a direct-manipulation surface: every touch and every
+   * Pencil stroke on it belongs to the editor (marquee, drag, draw tools) —
+   * never to the browser's pan / double-tap-zoom. `touch-action: none` on the
+   * page is also what stops Safari from firing pointercancel mid-drag the
+   * moment it mistakes a finger drag for a scroll; the surrounding workspace
+   * keeps `pan-x pan-y` (set on .editor-canvas-stage) so one-finger
+   * navigation outside the sheet still works natively.
+   */
+  touch-action: none;
+  /* iOS long-press callout (copy/share popover on images) hijacks canvas
+     presses — the editor owns selection instead. */
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  /*
+   * Physical page metaphor: a floating A4 sheet.
+   *
+   * Three stacked shadows give the scale of real paper on a desk — a wide soft
+   * ambient shadow (shadow-2xl scale), a tighter contact shadow, and a 1px
+   * hairline so the page edge stays visible when the artwork itself is white on
+   * a white stage. The sheet therefore reads as "lifted" in both themes.
+   */
+  box-shadow:
+    0 25px 50px -12px rgba(15, 23, 42, 0.34),
+    0 10px 22px -12px rgba(15, 23, 42, 0.2),
+    0 0 0 1px rgba(15, 23, 42, 0.07);
   isolation: isolate;
   user-select: none;
+}
+
+.page-frame-content {
+  overflow: visible;
+}
+
+#export-root .report-page {
+  overflow: hidden;
 }
 
 .report-page.show-grid::before {
@@ -204,6 +633,44 @@ html.dark .studio-grid {
   background-size: 5mm 5mm;
 }
 
+/*
+ * Print guides (safe area / binding margin / bleed).
+ *
+ * Painted above the artwork and below the selection chrome: a guide is a
+ * measuring aid, never something the author can click or drag. Colours are
+ * deliberately quiet in both themes so the guides read as rulers, not as design.
+ */
+.print-guides {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+  color: rgba(37, 99, 235, 0.75);
+}
+
+.print-guides .pg-safe {
+  color: rgba(37, 99, 235, 0.6);
+}
+
+.print-guides .pg-safe text,
+.print-guides .pg-gutter text {
+  fill: rgba(37, 99, 235, 0.85);
+  font-family: "Tajawal", "Cairo", sans-serif;
+  font-weight: 700;
+  direction: rtl;
+}
+
+.print-guides .pg-gutter rect {
+  fill: rgba(217, 119, 6, 0.09);
+}
+
+.print-guides .pg-gutter {
+  color: rgba(217, 119, 6, 0.9);
+}
+
+.print-guides .pg-bleed {
+  color: rgba(220, 38, 38, 0.85);
+}
+
 .canvas-el {
   position: absolute;
   transform-origin: center center;
@@ -211,6 +678,22 @@ html.dark .studio-grid {
   touch-action: none;
   min-width: 3mm;
   min-height: 3mm;
+}
+
+/*
+ * Pencil hover affordance (iPadOS + supported browsers).
+ *
+ * A hovering Apple Pencil fires pointer events with pointerType "pen" but does
+ * NOT flip CSS :hover, so the canvas paints its own hairline on the element
+ * under the tip. Counter-scaled by --editor-zoom so the ring stays a constant
+ * ≈1.5px ON SCREEN at every zoom level — the same trick the selection frame
+ * uses. Applies to the document node and the selection frame alike (the frame
+ * sits above the artwork, so a pen over its handles highlights it instead).
+ */
+.canvas-el.is-pen-hover,
+.selection-frame.is-pen-hover {
+  outline: calc(1.5px / var(--editor-zoom, 1)) solid rgba(217, 119, 6, 0.9);
+  outline-offset: calc(2px / var(--editor-zoom, 1));
 }
 
 /* تعديل لضمان عدم وجود خلفيات صلبة تجبر عناصر الـ PNG على فقدان الشفافية */
@@ -223,22 +706,149 @@ html.dark .studio-grid {
   object-fit: contain;
 }
 
-.canvas-el.selected {
-  outline: 1.5px solid #2563eb !important;
-  outline-offset: 4px;
+/*
+ * Selection & manipulation overlay.
+ *
+ * This layer is a sibling of the document elements and sits above all of them
+ * (SELECTION_LAYER_Z; document z stays at 1..n). It owns the selection outline,
+ * the resize/rotate handles and the drag-capture frame, so artwork that
+ * overlaps a selected element can never cover or steal its controls. The
+ * frame mirrors the element's box and rotation; sizes divide by the
+ * --editor-zoom custom property (set on the canvas stage) because mm scale
+ * with the zoomed page — dividing keeps the chrome a constant on-screen size.
+ */
+/*
+ * Hairline selection with theme-aware colors:
+ *  — Light mode: deep navy on white paper, with a white halo so it never
+ *    disappears against dark artwork.
+ *  — Dark mode: gold — NASAQ's accent — which reads clearly on both the dark
+ *    chrome and the still-white page. The halo flips to dark.
+ * Both are double-ring (contrast ring + color ring) so the selection is
+ * unmistakable over ANY artwork in EITHER theme without covering the element
+ * (borders only, zero fill).
+ */
+.editor-ui.editor-light {
+  /* High-contrast "this is interactive" accent for library/palette items. */
+  --primary-accent: #1d4ed8;
+  --library-active-bg: rgba(29, 78, 216, 0.1);
+  /* Figma-style selection: one crisp NASAQ-emerald hairline, no halo/glow. */
+  --sel-color: #10b981;
+  --hover-outline: rgba(29, 78, 216, 0.55);
+}
+/*
+ * Dark mode used a muted gold that read as hairline gray against the navy
+ * chrome — "I cannot see what is selected". Selection is now a vibrant primary
+ * blue with a translucent glow overlay, which is unmistakable on the dark
+ * stage, on the still-white page, and on top of any artwork.
+ */
+.editor-ui.editor-dark {
+  --primary-accent: #60a5fa;
+  --library-active-bg: rgba(96, 165, 250, 0.18);
+  --sel-color: #10b981;
+  --hover-outline: rgba(59, 130, 246, 0.6);
+}
+/* z-index comes from SELECTION_LAYER_Z in CanvasStage — the one source. */
+.selection-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.selection-frame {
+  /* 7px circular handles, a constant on-screen size at every zoom. */
+  --handle-size: calc(7px / var(--editor-zoom, 1));
+  /* Diagonal reach of the corner rotation grips: close enough to grab without a
+     hunt, far enough to clear the corner resize dot underneath. */
+  --rotate-gap: calc(14px / var(--editor-zoom, 1));
+  /*
+   * Tight bounding box (borderScaleFactor: 1): the frame mirrors the element's
+   * exact box, and a single 1px border is drawn INSIDE it (border-box), so the
+   * line touches the artwork's true outer edge with zero artificial padding.
+   * Counter-scaling by --editor-zoom keeps it a crisp 1 screen pixel at every
+   * zoom. No outline, halo, inset ring or tinted fill — one border only.
+   */
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  border: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: move;
 }
 
 /*
- * Secondary members of a multi-selection get a thinner, dashed ring so the
- * handle-bearing primary element stays visually dominant.
+ * Secondary members of a multi-selection get a dashed boundary, no handles,
+ * and sit below the primary frame, so the handle-bearing element stays
+ * visually dominant even when the two boxes overlap.
  */
-.canvas-el.selected.is-secondary {
-  outline: 1px dashed rgba(37, 99, 235, 0.75);
-  outline-offset: 3px;
+.selection-frame.is-secondary {
+  z-index: 1;
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--sel-color, #10b981) 85%, transparent);
+}
+
+/*
+ * Locked elements: a clearly purple lock cursor state. The dashed frame and
+ * the on-canvas pin both read purple so "this is pinned, it will not move" is
+ * unmistakable from across the canvas.
+ */
+.selection-frame.is-locked {
+  border-style: dashed;
+  border-color: #8b5cf6;
+  cursor: not-allowed;
+}
+
+/*
+ * While the caret is inside the element's in-place text editor the frame must
+ * not intercept clicks, double-clicks or drag-selections meant for the
+ * contentEditable node beneath it.
+ */
+.selection-frame.is-editing {
+  pointer-events: none;
 }
 
 .canvas-el.locked {
   cursor: not-allowed;
+}
+
+/* Purple lock pin pinned to the locked element's top-right corner. */
+.canvas-el.locked::after {
+  content: "🔒";
+  position: absolute;
+  top: calc(-3mm / var(--editor-zoom, 1));
+  right: calc(-3mm / var(--editor-zoom, 1));
+  width: calc(6mm / var(--editor-zoom, 1));
+  height: calc(6mm / var(--editor-zoom, 1));
+  display: grid;
+  place-items: center;
+  font-size: calc(4mm / var(--editor-zoom, 1));
+  line-height: 1;
+  background: #8b5cf6;
+  color: #fff;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/*
+ * Draw-text mode: the whole canvas reads "crosshair" so the author knows the
+ * next page drag draws a text box instead of selecting.
+ */
+.editor-canvas-stage.draw-armed .report-page {
+  cursor: crosshair;
+}
+/* The shape tool shares the crosshair; only the draw gesture differs. */
+.editor-canvas-stage.draw-rect .report-page {
+  cursor: crosshair;
+}
+
+.editor-canvas-stage.draw-armed .marquee {
+  border-style: dashed;
+  border-color: rgba(0, 108, 53, 0.9);
 }
 
 /* Frame drawn around a group the author has stepped into. */
@@ -264,7 +874,7 @@ html.dark .studio-grid {
  */
 .overflow-badge {
   position: absolute;
-  z-index: 30;
+  z-index: var(--z-canvas-overlay);
   padding: 0.6mm 1.8mm;
   border-radius: 999px;
   border: 0;
@@ -283,23 +893,49 @@ html.dark .studio-grid {
 /*
  * Arrangement bar.
  */
+/*
+ * Arrangement bar sits in the workspace row BELOW the canvas (between canvas
+ * and page rail), never floating over it — a top-centred overlay covered
+ * element labels and titles. `position: static` + centring here keeps it in
+ * normal flow so it can never overlap artwork, and it scrolls horizontally on
+ * narrow screens instead of clipping.
+ */
 .arrange-bar {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
+  position: static;
+  z-index: var(--z-canvas-overlay);
   display: flex;
   align-items: center;
   gap: 2px;
   padding: 4px 6px;
+  margin-inline: auto;
   border-radius: 10px;
   border: 1px solid #d8dee9;
   background: rgba(255, 255, 255, 0.97);
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.14);
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
 
-.dark .arrange-bar {
+.arrange-bar::-webkit-scrollbar {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  /* Touch targets grow on tablets; the row wraps rather than overflowing. */
+  .arrange-bar {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 4px;
+  }
+
+  .arrange-btn {
+    width: 34px;
+    height: 34px;
+  }
+}
+
+.editor-ui.editor-dark .arrange-bar {
   border-color: rgba(255, 255, 255, 0.14);
   background: #161c26;
 }
@@ -312,7 +948,7 @@ html.dark .studio-grid {
   white-space: nowrap;
 }
 
-.dark .arrange-count {
+.editor-ui.editor-dark .arrange-count {
   color: rgba(255, 255, 255, 0.75);
 }
 
@@ -323,15 +959,16 @@ html.dark .studio-grid {
   background: #e2e8f0;
 }
 
-.dark .arrange-sep {
+.editor-ui.editor-dark .arrange-sep {
   background: rgba(255, 255, 255, 0.12);
 }
 
 .arrange-btn {
   display: grid;
+  flex-shrink: 0;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 7px;
   border: 0;
   background: transparent;
@@ -339,7 +976,7 @@ html.dark .studio-grid {
   cursor: pointer;
 }
 
-.dark .arrange-btn {
+.editor-ui.editor-dark .arrange-btn {
   color: rgba(255, 255, 255, 0.85);
 }
 
@@ -347,7 +984,7 @@ html.dark .studio-grid {
   background: #eef2f8;
 }
 
-.dark .arrange-btn:hover:not(:disabled) {
+.editor-ui.editor-dark .arrange-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -363,41 +1000,162 @@ html.dark .studio-grid {
   font-weight: 800;
 }
 
+/*
+ * Handles are anchored to the corners/edges of `.selection-frame`, centred on
+ * the point they control — every position is half a handle off the edge, so
+ * they are exactly usable near artboard edges and never offset arbitrarily.
+ */
 .handle,
 .rotate-handle {
   position: absolute;
-  z-index: 50;
+  z-index: 1;
+  /* cornerStyle: circle · cornerColor: #FFFFFF · cornerStrokeColor: emerald */
+  box-sizing: border-box;
   background: #ffffff;
-  border: 0.5mm solid #2563eb;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+  border: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
+  box-shadow: none;
 }
 
+/*
+ * The visible dot stays small (a 44px blob would cover the artwork it is
+ * resizing), but the HIT area is a full 44×44px on touch devices — realised
+ * with a transparent box-shadow spread that keeps the handle's layout size and
+ * anchors untouched while extending the pointer target in every direction.
+ */
 .handle {
-  width: 3.2mm;
-  height: 3.2mm;
+  width: var(--handle-size);
+  height: var(--handle-size);
   border-radius: 50%;
 }
 
-.handle.nw { top: -7.2mm; left: -7.2mm; cursor: nwse-resize; }
-.handle.n  { top: -7.2mm; left: calc(50% - 1.6mm); cursor: ns-resize; }
-.handle.ne { top: -7.2mm; right: -7.2mm; cursor: nesw-resize; }
-.handle.e  { top: calc(50% - 1.6mm); right: -7.2mm; cursor: ew-resize; }
-.handle.se { bottom: -7.2mm; right: -7.2mm; cursor: nwse-resize; }
-.handle.s  { bottom: -7.2mm; left: calc(50% - 1.6mm); cursor: ns-resize; }
-.handle.sw { bottom: -7.2mm; left: -7.2mm; cursor: nesw-resize; }
-.handle.w  { top: calc(50% - 1.6mm); left: -7.2mm; cursor: ew-resize; }
+@media (pointer: coarse) {
+  /*
+   * `box-shadow` is never hit-tested, so the enlarged target is a real
+   * pseudo-element box centred on the handle (the parent element receives the
+   * pointer event). Divides by --editor-zoom because the page is scaled, which
+   * keeps the target a true 44×44 SCREEN pixels at every zoom level.
+   */
+  .handle::before,
+  .rotate-handle::before {
+    content: "";
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: calc(44px / var(--editor-zoom, 1));
+    height: calc(44px / var(--editor-zoom, 1));
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+  }
+}
+
+.handle.nw {
+  top: calc(var(--handle-size) / -2);
+  left: calc(var(--handle-size) / -2);
+  cursor: nwse-resize;
+}
+.handle.n {
+  top: calc(var(--handle-size) / -2);
+  left: calc(50% - var(--handle-size) / 2);
+  cursor: ns-resize;
+}
+.handle.ne {
+  top: calc(var(--handle-size) / -2);
+  right: calc(var(--handle-size) / -2);
+  cursor: nesw-resize;
+}
+.handle.e {
+  top: calc(50% - var(--handle-size) / 2);
+  right: calc(var(--handle-size) / -2);
+  cursor: ew-resize;
+}
+.handle.se {
+  bottom: calc(var(--handle-size) / -2);
+  right: calc(var(--handle-size) / -2);
+  cursor: nwse-resize;
+}
+.handle.s {
+  bottom: calc(var(--handle-size) / -2);
+  left: calc(50% - var(--handle-size) / 2);
+  cursor: ns-resize;
+}
+.handle.sw {
+  bottom: calc(var(--handle-size) / -2);
+  left: calc(var(--handle-size) / -2);
+  cursor: nesw-resize;
+}
+.handle.w {
+  top: calc(50% - var(--handle-size) / 2);
+  left: calc(var(--handle-size) / -2);
+  cursor: ew-resize;
+}
 
 .rotate-handle {
-  width: 4.2mm;
-  height: 4.2mm;
-  top: -15mm;
-  left: calc(50% - 2.1mm);
+  width: var(--handle-size);
+  height: var(--handle-size);
   border-radius: 50%;
   cursor: grab;
 }
 
+/*
+ * Step 7 — a grip on every corner. Each sits on the diagonal OUTSIDE the corner
+ * it controls, so it is reachable no matter how small the element is and it
+ * never covers the resize dots.
+ */
+.rotate-handle.nw {
+  top: calc(var(--rotate-gap) * -1);
+  left: calc(var(--rotate-gap) * -1);
+}
+.rotate-handle.ne {
+  top: calc(var(--rotate-gap) * -1);
+  right: calc(var(--rotate-gap) * -1);
+}
+.rotate-handle.se {
+  bottom: calc(var(--rotate-gap) * -1);
+  right: calc(var(--rotate-gap) * -1);
+}
+.rotate-handle.sw {
+  bottom: calc(var(--rotate-gap) * -1);
+  left: calc(var(--rotate-gap) * -1);
+}
+
+.rotate-handle::after {
+  content: "";
+  position: absolute;
+  inset: 30%;
+  border-radius: 50%;
+  background: var(--sel-color, #10b981);
+}
+
 .rotate-handle:active {
   cursor: grabbing;
+}
+
+/* Live angle readout while dragging a rotation grip. */
+.rotation-hint {
+  position: fixed;
+  z-index: var(--z-bubble);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--editor-border, #c9cacc);
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #172033);
+  font-size: 10px;
+  font-weight: 800;
+  box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.45);
+  pointer-events: none;
+  translate: 14px 14px;
+}
+
+@media (pointer: coarse) {
+  /* Touch targets grow on tablets; same anchors, larger hit circles. */
+  .selection-frame {
+    /* Visible dot stays 9px; the 44px hit target comes from ::before above. */
+    --handle-size: calc(9px / var(--editor-zoom, 1));
+    --rotate-gap: calc(26px / var(--editor-zoom, 1));
+  }
 }
 
 .guide-v {
@@ -458,6 +1216,1034 @@ html.dark .studio-grid {
 }
 
 @media print {
-  body { background: #fff !important; }
-  .no-print { display: none !important; }
+  body {
+    background: #fff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* =====================================================================
+ * UX/UI overhaul — Phase 1 → 7
+ *
+ * Appended as one coherent block so the overhaul is reviewable in isolation.
+ * Everything here is additive: no existing selector's meaning is changed
+ * except where a comment says so explicitly.
+ * ===================================================================== */
+
+/*
+ * PHASE 1 — Panel containment.
+ *
+ * The shell publishes the header's real height as `--editor-header-h`, so the
+ * panels can size themselves with `calc(100vh - header)` instead of a magic
+ * number that drifts the moment the toolbar wraps to a second row.
+ */
+.editor-shell {
+  --editor-header-h: 52px;
+}
+
+.editor-panel-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Explicit height ceiling: on tablets the soft keyboard and browser chrome
+     change 100vh unpredictably, and the panel must still scroll rather than
+     push its last rows out of the viewport. */
+  max-height: calc(100vh - var(--editor-header-h));
+}
+
+/*
+ * Bottom breathing room for every scrolling list.
+ *
+ * The last row of a long palette/layers list used to sit flush against the
+ * panel edge: a drag handle at the very bottom was unreachable, and on touch
+ * the browser's own gesture area swallowed the final tap. 80px of trailing
+ * space (plus matching scroll padding) keeps the bottommost item — and any
+ * drop zone behind it — fully visible and interactive.
+ */
+/*
+ * Scope: the vertical panel bodies only. `.editor-pane-scroll` is also used by
+ * the HORIZONTAL tool strip inside the header — padding there would inflate the
+ * measured header height — so it opts out explicitly.
+ */
+.editor-panel-body {
+  padding-bottom: 80px;
+  scroll-padding-bottom: 80px;
+}
+
+.editor-toolbar .editor-pane-scroll {
+  padding-bottom: 0;
+  scroll-padding-bottom: 0;
+}
+
+/* A row the author is dragging to can always scroll clear of the edge. */
+.layer-row,
+.editor-panel-body > * {
+  scroll-margin-bottom: 80px;
+}
+
+/* …except the media-panel rails, where the padding is only about the last row. */
+.editor-panel-body.no-bottom-pad {
+  padding-bottom: 0;
+  scroll-padding-bottom: 0;
+}
+
+/*
+ * Fluid property rows. Grids collapse to a single column below 300px of usable
+ * panel width, and inputs shrink (`min-width: 0`) instead of overflowing their
+ * cell — the two failure modes that produced overlapping controls before.
+ */
+.property-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
+.editor-property-field {
+  min-width: 0;
+}
+
+.editor-property-field .field-control {
+  min-width: 0;
+}
+
+.editor-property-field .field-control > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Long select labels shrink rather than widening the panel. */
+.editor-property-field select,
+.editor-property-field input {
+  text-overflow: ellipsis;
+}
+
+/*
+ * PHASE 2 — Accordions.
+ */
+.editor-accordion {
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 9px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--editor-surface, #fff) 60%, transparent);
+}
+
+.editor-accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  /* 44px minimum tap height, per the touch brief. */
+  min-height: 44px;
+  padding: 0 0.625rem;
+  border: 0;
+  background: transparent;
+  color: var(--editor-text, #172033);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.editor-accordion-header:hover {
+  background: var(--editor-hover, rgba(15, 23, 42, 0.05));
+}
+
+.editor-accordion-header:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+}
+
+.editor-accordion-chevron {
+  color: var(--editor-text-secondary, #6b7383);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* RTL: the chevron closes toward its own direction, which reads correctly
+   without mirroring the rotation axis. */
+.editor-accordion-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.editor-accordion-body {
+  display: grid;
+  gap: 0.625rem;
+  padding: 0 0.625rem 0.75rem;
+  animation: accordion-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes accordion-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-accordion-body {
+    animation: none;
+  }
+  .editor-accordion-chevron {
+    transition: none;
+  }
+}
+
+.editor-subgroup {
+  display: grid;
+  gap: 0.5rem;
+  border-inline-start: 2px solid
+    color-mix(in srgb, var(--editor-border, #dde2ea) 80%, transparent);
+  padding-inline-start: 0.625rem;
+}
+
+.editor-subgroup-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--editor-text-secondary, #6b7383);
+}
+
+/*
+ * PHASE 2 — Scrubbable inputs.
+ *
+ * The row is a 3-column track: − | value | +. On a fine pointer the steppers
+ * fade until the row is hovered (they are still focusable, so keyboard users
+ * keep them), while on touch they are permanent and full-size.
+ */
+.scrub-input {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+.scrub-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  background: var(--editor-surface, #fff);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.scrub-track:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.scrub-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 34px;
+  padding: 0 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--editor-text, #172033);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  cursor: text;
+}
+
+.scrub-field:focus {
+  outline: none;
+}
+
+.scrub-suffix {
+  padding-inline-end: 0.5rem;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--editor-text-secondary, #6b7383);
+}
+
+.scrub-stepper {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  min-height: 36px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  background: var(--editor-surface, #fff);
+  color: var(--editor-text-secondary, #6b7383);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
+  opacity: 0;
+}
+
+.scrub-input:hover .scrub-stepper,
+.scrub-input:focus-within .scrub-stepper,
+.scrub-stepper:focus-visible {
+  opacity: 1;
+}
+
+.scrub-stepper:hover:not(:disabled) {
+  background: var(--editor-hover, rgba(15, 23, 42, 0.06));
+  color: var(--editor-text, #172033);
+}
+
+.scrub-stepper:disabled {
+  cursor: not-allowed;
+  color: color-mix(
+    in srgb,
+    var(--editor-text-secondary, #6b7383) 50%,
+    transparent
+  );
+}
+
+.scrub-input.is-disabled .scrub-track {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Touch: steppers are always visible and never smaller than 40px. */
+@media (pointer: coarse) {
+  .scrub-stepper {
+    opacity: 1;
+    width: 42px;
+    min-height: 42px;
+  }
+
+  .scrub-field {
+    height: 42px;
+  }
+}
+
+.scrub-label.is-scrubbable {
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.scrub-label.is-scrubbable:hover {
+  color: var(--editor-text, #172033);
+}
+
+/* While a scrub gesture is live the page must not select text or scroll. */
+body.is-scrubbing-value {
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/*
+ * PHASE 1 — Slide-over drawers (<1024px).
+ *
+ * The docked panels become floating cards over the canvas, so the artboard
+ * keeps its full width; a shared backdrop dismisses them. `will-change`
+ * promotes the moving layer so the slide stays smooth on a tablet.
+ */
+.editor-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer-backdrop);
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(1.5px);
+  animation: drawer-backdrop-in 160ms ease;
+}
+
+@keyframes drawer-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (min-width: 1024px) {
+  .editor-drawer-backdrop {
+    display: none;
+  }
+}
+
+/*
+ * PHASE 3 — Resizable pages panel.
+ */
+.editor-page-rail-resizer {
+  position: relative;
+  height: 10px;
+  flex: 0 0 auto;
+  cursor: row-resize;
+  touch-action: none;
+  display: grid;
+  place-items: center;
+  background: transparent;
+}
+
+.editor-page-rail-resizer::before {
+  content: "";
+  width: 46px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--editor-border, #c9cacc);
+  transition:
+    background-color 140ms ease,
+    width 140ms ease;
+}
+
+.editor-page-rail-resizer:hover::before,
+.editor-page-rail-resizer:focus-visible::before,
+body.is-resizing-rail .editor-page-rail-resizer::before {
+  width: 72px;
+  background: var(--editor-active, #4b4c4d);
+}
+
+body.is-resizing-rail {
+  cursor: row-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Manual panel resizing must track the pointer exactly — no easing. */
+.is-resizing-panel .editor-workspace-row {
+  transition: none !important;
+}
+
+.editor-page-rail-resizer:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/*
+ * PHASE 4 — Floating contextual toolbar.
+ *
+ * Rendered in a fixed overlay layer (never inside the scaled page) so its
+ * buttons keep a constant screen size and its 16px gap is a real 16px.
+ */
+.floating-toolbar {
+  position: fixed;
+  z-index: var(--z-bubble);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid var(--editor-border, #c9cacc);
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #172033);
+  box-shadow: 0 10px 30px -8px rgba(15, 23, 42, 0.35);
+  animation: floating-toolbar-in 140ms cubic-bezier(0.22, 1, 0.36, 1);
+  max-width: min(92vw, 640px);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.floating-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * The entrance follows the side the placer chose, so the bubble always appears
+ * to slide *away* from the element it belongs to, never across it.
+ */
+@keyframes floating-toolbar-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.floating-toolbar[data-placement="below"] {
+  animation-name: floating-toolbar-in-down;
+}
+
+.floating-toolbar[data-placement="left"],
+.floating-toolbar[data-placement="right"] {
+  animation-name: floating-toolbar-in-side;
+}
+
+@keyframes floating-toolbar-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes floating-toolbar-in-side {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.floating-toolbar-section {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-inline: 3px;
+}
+
+.floating-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  margin-inline: 3px;
+  background: var(--editor-border, #dde2ea);
+}
+
+.floating-toolbar-btn {
+  display: grid;
+  place-items: center;
+  gap: 0;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.floating-toolbar-btn:hover:not(:disabled) {
+  background: var(--editor-hover, rgba(15, 23, 42, 0.08));
+}
+
+.floating-toolbar-btn[aria-pressed="true"] {
+  background: #3b82f6;
+  color: #fff;
+}
+
+.floating-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.floating-toolbar-select {
+  height: 32px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 7px;
+  background: var(--editor-surface, #fff);
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/*
+ * Opacity is a 0–100% trim, so it stays a slider (a scrubber would hide the
+ * range at a glance) — but a slider needs a real travel: 58px made every
+ * adjustment a single pixel of movement.
+ */
+.floating-toolbar-range {
+  width: 88px;
+  height: 32px;
+  accent-color: #3b82f6;
+  cursor: pointer;
+}
+
+.floating-toolbar-select {
+  max-width: 132px;
+  padding: 0 4px;
+}
+
+/*
+ * Font size inside the toolbar is the shared scrubber, scaled down to toolbar
+ * proportions on a mouse. Coarse pointers keep the 42px steppers from the base
+ * rule (that media query is width-agnostic), so a thumb still gets a real
+ * target — only the desktop chrome is compact.
+ */
+@media (pointer: fine) {
+  .floating-toolbar .scrub-input {
+    width: 92px;
+    flex: 0 0 auto;
+  }
+
+  .floating-toolbar .scrub-field {
+    height: 32px;
+    font-size: 11px;
+  }
+
+  .floating-toolbar .scrub-stepper {
+    width: 26px;
+    min-height: 32px;
+    border-radius: 7px;
+    opacity: 1;
+  }
+
+  .floating-toolbar .scrub-stepper svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .floating-toolbar .scrub-suffix {
+    padding-inline-end: 4px;
+    font-size: 9px;
+  }
+}
+
+.floating-toolbar-swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* Touch: every floating control grows to the 44px guideline. */
+@media (pointer: coarse) {
+  .floating-toolbar-btn {
+    min-width: 44px;
+    height: 44px;
+  }
+
+  .floating-toolbar-select,
+  .floating-toolbar-swatch {
+    height: 44px;
+  }
+
+  .floating-toolbar-range {
+    width: 132px;
+    height: 44px;
+  }
+}
+
+/*
+ * PHASE 5 — Layer tree.
+ */
+.layer-row {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease,
+    background-color 140ms ease;
+}
+
+.layer-row.is-dragging {
+  opacity: 0.6;
+  transform: scale(0.985);
+}
+
+/* Drop indicator: a primary-coloured line on the side the layer will land. */
+.layer-row.is-drop-before::before,
+.layer-row.is-drop-after::after {
+  content: "";
+  position: absolute;
+  inset-inline: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.layer-row.is-drop-before::before {
+  top: -1px;
+}
+.layer-row.is-drop-after::after {
+  bottom: -1px;
+}
+
+.layer-children {
+  display: grid;
+  gap: 2px;
+  margin-inline-start: 10px;
+  padding-inline-start: 6px;
+  border-inline-start: 1px dashed var(--editor-border, #dde2ea);
+  animation: accordion-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.layer-row.is-nested-hidden {
+  opacity: 0.45;
+}
+
+.layer-eye-toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .layer-eye-toggle {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/*
+ * PHASE 6 — Contrast fixes for interactive states in dark mode.
+ */
+.editor-ui.editor-dark input:focus-visible,
+.editor-ui.editor-dark select:focus-visible,
+.editor-ui.editor-dark textarea:focus-visible,
+.editor-ui.editor-dark button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+/* Hover outlines on canvas elements use the same primary blue in dark mode. */
+.editor-ui.editor-dark .canvas-el:hover {
+  outline-color: var(--hover-outline) !important;
+}
+
+/*
+ * Table cell interaction (properties panel grid editor) — the previous
+ * `:focus` styling was a faint gray line that vanished on the dark surface.
+ */
+.editor-properties table td:focus-within,
+.editor-properties table th:focus-within {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.editor-ui.editor-dark .editor-properties table input:focus {
+  background: rgba(59, 130, 246, 0.18);
+  color: #fff;
+}
+
+/* Active tab / toggle indicators keep a primary fill in dark mode. */
+.editor-ui.editor-dark .bg-navy.text-white,
+.editor-ui.editor-dark [data-active="true"] {
+  background: #2563eb !important;
+  color: #fff !important;
+}
+
+/*
+ * PHASE 7 — Library accordions & custom asset cards.
+ */
+.library-grid-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 6px;
+}
+
+/*
+ * Library items — hover / focus contrast (both themes).
+ *
+ * The previous states were a 1px border that changed to a *lighter* blue in
+ * dark mode, i.e. the hovered item looked dimmer than its neighbours. Every
+ * interactive item in the library now gets a real 2px `--primary-accent`
+ * outline plus a tinted fill, with focus-visible matching hover so keyboard
+ * users see exactly the same affordance.
+ */
+.library-asset-card,
+.library-drag-card,
+.library-item {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  background: var(--editor-surface, #fff);
+  color: var(--editor-text, #172033);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease,
+    transform 120ms ease;
+}
+
+.library-asset-card {
+  aspect-ratio: 1;
+}
+
+.library-asset-card:hover,
+.library-drag-card:hover,
+.library-item:hover,
+.library-asset-card:focus-visible,
+.library-drag-card:focus-visible,
+.library-item:focus-visible {
+  border: 2px solid var(--primary-accent, #1d4ed8);
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--primary-accent, #1d4ed8) 25%, transparent);
+  outline: none;
+}
+
+.library-asset-card:active,
+.library-drag-card:active,
+.library-item:active {
+  transform: scale(0.97);
+}
+
+/* Selected/permanent state for a library item (e.g. the active category). */
+.library-item[aria-pressed="true"],
+.library-item[data-active="true"] {
+  border: 2px solid var(--primary-accent, #1d4ed8);
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+}
+
+/*
+ * `library-hit` is the INTERACTION half of the same affordance, with no layout
+ * properties at all: cards that already own their own display/grid rules (the
+ * shape grid, font rows, template cards, saved assets) opt in without any risk
+ * of the shared box model overriding their layout.
+ *
+ * Every selector is scoped to `.editor-sidebar` so it outranks the per-card
+ * Tailwind `hover:` utilities that sit earlier in the bundle — one behaviour,
+ * whichever markup a card was written with.
+ */
+.library-hit,
+.editor-sidebar .library-asset-card,
+.editor-sidebar .library-drag-card,
+.editor-sidebar .library-item {
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+
+.library-hit:hover,
+.library-hit:focus-visible,
+.editor-sidebar .library-asset-card:hover,
+.editor-sidebar .library-asset-card:focus-visible,
+.editor-sidebar .library-drag-card:hover,
+.editor-sidebar .library-drag-card:focus-visible,
+.editor-sidebar .library-item:hover,
+.editor-sidebar .library-item:focus-visible {
+  border: 2px solid var(--primary-accent, #1d4ed8) !important;
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--primary-accent, #1d4ed8) 25%, transparent);
+  outline: none;
+}
+
+.library-hit[aria-pressed="true"],
+.library-hit[data-active="true"],
+.editor-sidebar .library-item[aria-pressed="true"],
+.editor-sidebar .library-item[data-active="true"] {
+  border: 2px solid var(--primary-accent, #1d4ed8) !important;
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+}
+
+/*
+ * Saved-asset card in multi-select (batch move). `.is-selected` sits on the
+ * AssetLibrary card itself, so it is scoped `.asset-library` to outrank the
+ * per-card Tailwind ring/bg utilities (both compile to single-class
+ * selectors) with the same navy family the folder chips use. `pointer-events`
+ * stays explicitly live: selection must never make the card inert to
+ * click-to-insert or drag.
+ */
+.asset-library .is-selected {
+  border-color: var(--color-navy, #006c35);
+  background: color-mix(in srgb, var(--color-navy-2, #00874a) 8%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-navy, #006c35) 45%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--color-navy-2, #00874a) 16%, transparent);
+  pointer-events: auto;
+}
+
+/* Inline SVG icons inside a card follow the accent so they stay legible. */
+.editor-ui.editor-dark .library-asset-card svg,
+.editor-ui.editor-dark .library-item svg {
+  color: currentColor;
+}
+
+/*
+ * Draggable library card (tables / chart templates): the grab cursor plus a
+ * dotted leading edge advertise the drag, because a palette that can only be
+ * clicked should not look draggable — and vice versa.
+ */
+.library-drag-card {
+  cursor: grab;
+  touch-action: manipulation;
+}
+
+.library-drag-card:active {
+  cursor: grabbing;
+}
+
+.library-drag-card::after {
+  content: "";
+  flex: 0 0 auto;
+  align-self: center;
+  width: 10px;
+  height: 14px;
+  border-inline-start: 1px dotted currentColor;
+  border-inline-end: 1px dotted currentColor;
+  opacity: 0.35;
+}
+
+/* Remove chip only appears on hover/focus so the grid stays clean. */
+.library-asset-remove {
+  position: absolute;
+  top: -6px;
+  inset-inline-end: -6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  background: var(--editor-panel, #fff);
+  color: #b42318;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.library-asset-card:hover .library-asset-remove,
+.library-asset-card:focus-within .library-asset-remove {
+  opacity: 1;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * TEXT SELECTION POLICY
+ * ---------------------------------------------------------------------------
+ * UI chrome is not a document: labels, tab names, menu rows, tooltips and icon
+ * buttons must never paint a text selection, which is what makes an interface
+ * feel like a web page instead of an application (and what produced the
+ * "everything got selected blue while I was dragging" complaint).
+ *
+ * Selection is therefore OFF by default (html/body) and switched back ON only
+ * where the text is the content: form fields, in-place editors on the artboard,
+ * and anything explicitly marked `.selectable-value` (copyable data such as a
+ * share link, a font note, a generated id).
+ */
+html,
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable]:not([contenteditable="false"]),
+.selectable-value,
+.selectable-text,
+code,
+pre,
+kbd,
+samp {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The artboard is a document surface, but only its text content is selectable —
+   the page itself stays a canvas the author can drag on. */
+.report-page {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.report-page [contenteditable="true"],
+.report-page .selectable-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Chrome that looks like a control behaves like one, even outside `.editor-ui`
+   (portalled menus, dialogs and toasts render under <body>). */
+button,
+[role="button"],
+[role="menuitem"],
+[role="menuitemcheckbox"],
+[role="menuitemradio"],
+[role="tab"],
+[role="toolbar"],
+[role="separator"],
+label,
+summary,
+.editor-ui aside,
+.editor-ui header,
+.editor-ui nav,
+.editor-ui .no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/*
+ * STEP 7 — orientation controls (rotation helpers + mirrors).
+ *
+ * Small, dense, wrap-friendly buttons: the properties panel is often narrow, so
+ * these must reflow onto a second line rather than overflow. Every one is at
+ * least 32px tall for touch and the active mirror is unmistakable in both
+ * themes (`aria-pressed` drives the fill, not a hover-only style).
+ */
+.property-grid-span {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.editor-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--editor-border, #c9cacc);
+  border-radius: 8px;
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #172033);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.editor-mini-btn:hover:not(:disabled) {
+  border-color: var(--primary-accent);
+  color: var(--primary-accent);
+}
+
+.editor-mini-btn.is-active,
+.editor-mini-btn[aria-pressed="true"] {
+  border-color: var(--primary-accent);
+  background: var(--library-active-bg);
+  color: var(--primary-accent);
+}
+
+.editor-mini-btn:focus-visible {
+  outline: 2px solid var(--primary-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * STEP 8 — طبقة التلاشي (fade overlay).
+ *
+ * A gradient scrim that sits above an image's frame. Its geometry is the image
+ * frame, so it stays put through resizes, rotation and mirroring; `inset: 0` is
+ * what makes it inherit every one of those transforms for free.
+ */
+.fade-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }

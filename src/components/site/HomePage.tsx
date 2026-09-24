@@ -1,39 +1,62 @@
-import { useEffect, useRef } from "react";
-import { ArrowLeft, FileText, FolderOpen, LayoutTemplate, Table2, Gauge, FileDown } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  ArrowLeft,
+  BriefcaseBusiness,
+  FileText,
+  LayoutTemplate,
+  Table2,
+  FileDown,
+  Palette,
+  ShieldCheck,
+  Workflow,
+  Files,
+  Sparkles,
+  Zap,
+} from "lucide-react";
 import { toast } from "sonner";
-import { BRAND } from "@/lib/brand";
 import { PACKS } from "@/lib/editor/templates";
-import { type PackId } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { ProjectCard } from "@/components/site/ProjectCard";
+import { PRODUCT_COPY } from "@/lib/product/copy";
+import { CARD_W, CARD_WRAP, SITE_CARD, iconTint } from "@/components/site/cards";
+import { FullVersionModal } from "@/components/site/FullVersionModal";
+import { HeroShowcase } from "@/components/site/HeroShowcase";
+import { useSiteSettings } from "@/lib/admin/use-site-settings";
 
+/**
+ * Six capability cards: the two extra entries carry the local-first
+ * and multi-format/pagination story. Icons sit on an emerald backlight tile;
+ * the card itself uses the shared lift + a soft emerald glow on hover.
+ */
 const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
-  { icon: LayoutTemplate, title: "صفحات وأغلفة", desc: "أغلفة رسمية وصفحات داخلية جاهزة قابلة للتعديل." },
-  { icon: Table2, title: "جداول وإحصاءات", desc: "جداول قابلة للتحرير وبطاقات أرقام ومؤشرات ونِسب." },
-  { icon: Gauge, title: "ضبط دقيق", desc: "موضع، مقاس، دوران، شفافية، خطوط، ألوان، إطار وظل." },
-  { icon: FileDown, title: "تصدير احترافي", desc: "PDF وPNG وJPG وPowerPoint وWord وHTML بأبعاد دقيقة." },
+  { icon: LayoutTemplate, title: PRODUCT_COPY.capabilities[0][0], desc: PRODUCT_COPY.capabilities[0][1] },
+  { icon: Table2, title: PRODUCT_COPY.capabilities[1][0], desc: PRODUCT_COPY.capabilities[1][1] },
+  { icon: Palette, title: PRODUCT_COPY.capabilities[2][0], desc: PRODUCT_COPY.capabilities[2][1] },
+  { icon: FileDown, title: PRODUCT_COPY.capabilities[3][0], desc: PRODUCT_COPY.capabilities[3][1] },
+  { icon: ShieldCheck, title: PRODUCT_COPY.capabilities[4][0], desc: PRODUCT_COPY.capabilities[4][1] },
+  { icon: Files, title: PRODUCT_COPY.capabilities[5][0], desc: PRODUCT_COPY.capabilities[5][1] },
 ];
 
+/** Value badges shown under the features CTA. */
+const CTA_BADGES = ["💻 تخزين محلي أولًا", "📐 جاهز للطباعة 300DPI", "🇸🇦 دعم الخطوط العربية الرسمية"];
+
 export function HomePage() {
-  const createProject = useEditor((s) => s.createProject);
   const importProject = useEditor((s) => s.importProject);
   const projects = useEditor((s) => s.projects);
   const projectsLoading = useEditor((s) => s.projectsLoading);
   const hydrate = useEditor((s) => s.hydrate);
   const openProject = useEditor((s) => s.openProject);
   const fileInput = useRef<HTMLInputElement>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const { texts } = useSiteSettings();
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
-  const recent = projects.slice(0, 3);
 
-  const start = async (pack: PackId) => {
-    await createProject(pack);
-    window.location.assign("/editor");
-  };
+  const recent = projects.slice(0, 3);
 
   const openEditor = async (id: string) => {
     await openProject(id);
@@ -45,135 +68,181 @@ export function HomePage() {
       <SiteHeader current="/" />
 
       <main>
-        <section className="border-b border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
-          <div className="mx-auto w-full max-w-6xl px-4 py-14 sm:px-6 sm:py-20">
-            <p className="mb-3 text-[12px] font-bold tracking-[0.2em] text-navy-2 dark:text-gold-2">
-              A4 · A3 · 16:9 · RTL أولاً
-            </p>
-            <h1 className="max-w-3xl text-[32px] font-extrabold leading-[1.3] sm:text-[44px]">
-              صمّم تقاريرك باحتراف
-            </h1>
-            <p className="mt-3 text-[15px] font-bold text-navy-2 dark:text-gold-2">
-              {BRAND.lockup} — {BRAND.platformEn}
-            </p>
-            <p className="mt-4 max-w-2xl text-[15px] leading-8 text-muted sm:text-[16px]">
-              {BRAND.description} محرر صفحات متعددة بنصوص وجداول وصور وشعارات ومؤشرات، مع
-              تصدير PDF عالي الجودة ومقاسات دقيقة للمطبوعات.
-            </p>
+        {/* Hero — dark institutional band with a live editor showcase */}
+        <section className="relative overflow-hidden border-b border-white/10 bg-[#07110f] py-14 text-white sm:py-20">
+          <div
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(16,185,129,0.22),transparent_55%),radial-gradient(ellipse_at_bottom_left,rgba(6,59,53,0.55),transparent_60%)]"
+            aria-hidden
+          />
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.06]"
+            style={{ backgroundImage: "linear-gradient(#fff 1px, transparent 1px), linear-gradient(90deg, #fff 1px, transparent 1px)", backgroundSize: "44px 44px" }}
+            aria-hidden
+          />
 
-            <div className="mt-8 flex flex-wrap gap-3">
-              <button
-                type="button"
-                onClick={() => void start("official")}
-                className="inline-flex h-12 items-center gap-2 rounded-[10px] bg-navy px-5 text-[14px] font-extrabold text-white"
-              >
-                إنشاء مشروع جديد
-                <ArrowLeft className="size-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => fileInput.current?.click()}
-                className="inline-flex h-12 items-center gap-2 rounded-[10px] border border-line px-5 text-[14px] font-bold dark:border-white/10"
-              >
-                <FolderOpen className="size-4" />
-                فتح مشروع من ملف
-              </button>
-              <a
-                href="/projects"
-                className="inline-flex h-12 items-center rounded-[10px] px-3 text-[14px] font-bold text-navy-2 underline decoration-line underline-offset-4 dark:text-gold-2"
-              >
-                كل مشاريعي
-              </a>
+          <div className="relative mx-auto grid w-full max-w-6xl gap-12 px-4 sm:px-6 lg:grid-cols-[1fr_1.05fr] lg:items-center">
+            <div>
+              <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3.5 py-1 text-[12px] font-extrabold text-emerald-300 backdrop-blur-md">
+                <Sparkles className="size-3.5" />
+                <span>{texts.heroEyebrow.trim() || PRODUCT_COPY.hero.eyebrow}</span>
+              </div>
+
+              <h1 className="max-w-3xl text-[34px] font-black leading-[1.3] text-white [text-shadow:0_2px_18px_rgba(0,0,0,0.45)] sm:text-[48px]">
+                {texts.heroTitle.trim() || PRODUCT_COPY.hero.title}
+              </h1>
+
+              <p className="mt-5 max-w-2xl text-[16px] leading-8 text-slate-300 sm:text-[18px] sm:leading-9">
+                {texts.heroDescription.trim() || PRODUCT_COPY.hero.description}
+              </p>
+
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <a
+                  href="/demo"
+                  className="group inline-flex h-12 items-center gap-2.5 rounded-xl bg-emerald-500 px-6 text-[15px] font-black text-[#04120d] shadow-[0_8px_28px_-6px_rgba(16,185,129,0.65)] ring-1 ring-emerald-300/50 transition-all hover:-translate-y-0.5 hover:bg-emerald-400"
+                >
+                  <span>استكشف العرض التجريبي</span>
+                  <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-1" />
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(true)}
+                  className="inline-flex h-12 items-center gap-2 rounded-xl border border-white/20 bg-white/[0.06] px-5 text-[14px] font-extrabold text-white backdrop-blur-md transition hover:border-emerald-400/50 hover:bg-emerald-400/10"
+                >
+                  <Zap className="size-4 text-emerald-400" />
+                  <span>طلب النسخة الكاملة</span>
+                </button>
+
+                <a
+                  href="/projects"
+                  className="inline-flex h-12 items-center rounded-xl px-3 text-[13px] font-bold text-slate-300 underline-offset-4 transition hover:text-white hover:underline"
+                >
+                  كل مشاريعي
+                </a>
+              </div>
+
+              <ul className="mt-7 flex flex-wrap gap-2 text-[12px] font-bold text-slate-300">
+                {CTA_BADGES.map((badge) => (
+                  <li key={badge} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 backdrop-blur-sm">
+                    {badge}
+                  </li>
+                ))}
+              </ul>
+
+              <p className="mt-5 text-[12px] leading-6 text-slate-400">{PRODUCT_COPY.demoNote}</p>
+
+              <input
+                ref={fileInput}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    try {
+                      const parsed = JSON.parse(String(reader.result));
+                      void importProject(parsed).then(() => window.location.assign("/editor"));
+                    } catch {
+                      toast.error("تعذر قراءة الملف — تأكد أنه ملف مشروع بصيغة JSON");
+                    }
+                  };
+                  reader.onerror = () => toast.error("تعذر قراءة الملف");
+                  reader.readAsText(file);
+                  e.target.value = "";
+                }}
+              />
             </div>
 
-            <input
-              ref={fileInput}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = () => {
-                  try {
-                    const parsed = JSON.parse(String(reader.result));
-                    void importProject(parsed).then(() => window.location.assign("/editor"));
-                  } catch {
-                    toast.error("تعذر قراءة الملف — تأكد أنه ملف مشروع بصJSON");
-                  }
-                };
-                reader.onerror = () => toast.error("تعذر قراءة الملف");
-                reader.readAsText(file);
-                e.target.value = "";
-              }}
-            />
+            <HeroShowcase />
           </div>
         </section>
 
-        <section className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
+        {/* Features highlight bar */}
+        <section className="border-b border-line bg-[#f6f8f5] dark:border-white/10 dark:bg-[#1c2021]">
+          <div className="mx-auto grid w-full max-w-6xl gap-4 px-4 py-8 sm:grid-cols-3 sm:px-6 md:py-12">
+            {[[BriefcaseBusiness, "للفرق المؤسسية", "إنتاج منظم للمخرجات المتكررة."], [Workflow, "لسير العمل الحقيقي", "من البيانات والهيكل إلى ملف جاهز للعرض."], [ShieldCheck, "لـDemo آمن", "بيانات محلية تجريبية ومسار واضح للنسخة التجارية."]].map(([Icon, title, desc], i) => <div key={String(title)} className={`flex gap-4 rounded-xl bg-white p-4 dark:bg-white/5 ${SITE_CARD}`}><span className={`grid size-10 shrink-0 place-items-center rounded-xl ${iconTint(i)}`}><Icon className="size-5" /></span><div><strong className="block text-[14px] font-extrabold text-ink dark:text-white">{String(title)}</strong><span className="mt-1 block text-[13px] leading-6 text-muted">{String(desc)}</span></div></div>)}
+          </div>
+        </section>
+
+        <section className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
           <h2 className="text-[20px] font-extrabold">أحدث المشاريع</h2>
           <p className="mt-1 text-[13px] text-muted">
-            المشاريع محفوظة محلياً في متصفحك — لا تُرسل إلى أي سيرفر.
+            المشاريع تُحفظ محلياً في متصفحك، مع اتصال عند الحاجة للترخيص أو الذكاء الاصطناعي.
           </p>
 
           {projectsLoading ? (
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-4 sm:grid-cols-3 md:gap-6">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="h-[136px] animate-pulse rounded-[12px] border border-line bg-white dark:border-white/10 dark:bg-white/5" />
+                <div key={i} className="shadow-card dark:shadow-card-dark h-[136px] animate-pulse rounded-xl border border-line bg-white dark:border-white/10 dark:bg-white/5" />
               ))}
             </div>
           ) : recent.length ? (
-            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <div className="mt-6 grid gap-4 sm:grid-cols-3 md:gap-6">
               {recent.map((p) => (
                 <ProjectCard key={p.id} project={p} onOpen={openEditor} compact />
               ))}
             </div>
           ) : (
-            <div className="mt-6 rounded-[12px] border border-dashed border-line p-8 text-center dark:border-white/15">
+            <div className="mt-6 rounded-xl border border-dashed border-line p-8 text-center dark:border-white/15">
               <p className="text-[14px] font-bold">لا توجد مشاريع بعد</p>
               <p className="mt-1 text-[13px] text-muted">ابدأ بتقرير رسمي جاهز أو بصفحة فارغة.</p>
             </div>
           )}
         </section>
 
-        <section className="mx-auto w-full max-w-6xl px-4 pb-12 sm:px-6">
+        <section className="mx-auto w-full max-w-6xl px-4 pb-12 sm:px-6 md:pb-16">
           <h2 className="text-[20px] font-extrabold">قوالب البداية</h2>
           <p className="mt-1 text-[13px] text-muted">كل قالب ينشئ نسخة جديدة داخل مشروعك.</p>
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className={`mt-6 ${CARD_WRAP}`}>
             {PACKS.map((pack) => (
               <button
                 key={pack.id}
                 type="button"
-                onClick={() => void start(pack.id as PackId)}
-                className="rounded-[12px] border border-line bg-white p-5 text-right transition hover:border-navy-2 dark:border-white/10 dark:bg-white/5"
+                onClick={() =>
+                  pack.id === "blank"
+                    ? window.location.assign("/demo")
+                    : setModalOpen(true)
+                }
+                className={`flex flex-col rounded-xl bg-white p-5 text-right hover:border-navy-2 dark:bg-white/5 ${CARD_W} ${SITE_CARD}`}
               >
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="grid size-10 place-items-center rounded-[9px] bg-navy/5 text-navy-2 dark:bg-white/10 dark:text-gold-2">
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <span className={`grid size-10 place-items-center rounded-xl ${iconTint(0)}`}>
                     {pack.id === "blank" ? <FileText className="size-5" /> : <LayoutTemplate className="size-5" />}
                   </span>
                   <span className="text-[11px] font-bold text-muted">{pack.pages}</span>
                 </div>
-                <strong className="block text-[15px] font-extrabold">{pack.title}</strong>
-                <span className="mt-1 block text-[12px] leading-6 text-muted">{pack.desc}</span>
+                <strong className="block text-[15px] font-extrabold text-ink dark:text-white">{pack.title}</strong>
+                <span className="mt-2 block text-[12px] leading-6 text-muted">{pack.desc}</span>
+                <span className="mt-auto inline-flex pt-4 text-[11px] font-extrabold text-navy-2 dark:text-gold-2">
+                  {pack.id === "blank" ? "فتح العرض" : "متاح في النسخة الكاملة 👑"}
+                </span>
               </button>
             ))}
           </div>
         </section>
 
         <section className="border-t border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
-          <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
+          <div className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
             <h2 className="text-[20px] font-extrabold">ماذا تتضمن المنصة</h2>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="mt-6 grid gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
               {HIGHLIGHTS.map((h) => {
                 const Icon = h.icon;
                 return (
-                  <div key={h.title}>
-                    <span className="grid size-10 place-items-center rounded-[9px] bg-navy/5 text-navy-2 dark:bg-white/10 dark:text-gold-2">
-                      <Icon className="size-5" />
+                  <div
+                    key={h.title}
+                    className={`group flex flex-col rounded-2xl bg-paper/60 p-6 dark:bg-white/5 ${SITE_CARD} hover:border-emerald-500/50 hover:shadow-[0_14px_34px_-14px_rgba(16,185,129,0.45)] dark:hover:border-emerald-400/40`}
+                  >
+                    {/* Emerald backlight behind the icon tile. */}
+                    <span className="relative grid size-11 place-items-center">
+                      <span className="absolute inset-0 rounded-xl bg-emerald-500/10 blur-[6px] transition group-hover:bg-emerald-500/20" aria-hidden />
+                      <span className={`relative grid size-10 place-items-center rounded-xl ${iconTint(3)}`}>
+                        <Icon className="size-5" />
+                      </span>
                     </span>
-                    <strong className="mt-3 block text-[14px] font-extrabold">{h.title}</strong>
-                    <p className="mt-1 text-[12px] leading-6 text-muted">{h.desc}</p>
+                    <strong className="mt-4 block text-[15px] font-extrabold text-ink dark:text-white">{h.title}</strong>
+                    <p className="mt-2 text-[13px] leading-6 text-muted">{h.desc}</p>
                   </div>
                 );
               })}
@@ -181,26 +250,37 @@ export function HomePage() {
             <div className="mt-8 flex flex-wrap gap-3">
               <a
                 href="/templates"
-                className="inline-flex h-11 items-center rounded-[10px] border border-line px-4 text-[13px] font-bold dark:border-white/10"
+                className="inline-flex h-11 items-center rounded-xl bg-navy px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-navy-2"
               >
                 استعرض القوالب
               </a>
               <a
                 href="/about"
-                className="inline-flex h-11 items-center rounded-[10px] border border-line px-4 text-[13px] font-bold dark:border-white/10"
+                className="inline-flex h-11 items-center rounded-xl border border-line px-4 text-[13px] font-bold transition hover:bg-line-2 dark:border-white/10 dark:hover:bg-white/5"
               >
                 عن المنصة
               </a>
             </div>
-            <p className="mt-6 text-[12px] text-muted">
-              من تطوير {BRAND.owner} — Developed by {BRAND.developer}
-            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {CTA_BADGES.map((badge) => (
+                <span
+                  key={badge}
+                  className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-bold text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-300"
+                >
+                  {badge}
+                </span>
+              ))}
+            </div>
           </div>
         </section>
       </main>
 
       <SiteFooter />
+
+      <FullVersionModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+      />
     </div>
   );
 }
-

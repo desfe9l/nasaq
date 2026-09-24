@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { Copy, GripVertical, Plus, Trash2 } from "lucide-react";
 import { pageSize, type CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
-import { cn } from "@/lib/utils";
+import { clamp, cn } from "@/lib/utils";
 
 /**
  * Horizontal page rail with drag-and-drop reordering.
@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * Uses the pointer events API rather than HTML5 drag-and-drop: the rail lives
  * inside a scroll container and HTML5 DnD is unreliable in Safari there.
  */
-export function PageRail() {
+export function PageRail({ height = 152, minHeight = 96 }: { height?: number; minHeight?: number }) {
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
   const setActivePage = useEditor((s) => s.setActivePage);
@@ -19,6 +19,26 @@ export function PageRail() {
   const deletePage = useEditor((s) => s.deletePage);
   const reorderPages = useEditor((s) => s.reorderPages);
   const renamePage = useEditor((s) => s.renamePage);
+
+  /*
+   * Fluid thumbnails (Phase 3).
+   *
+   * The panel is drag-resizable, so the thumbnail size is DERIVED from the
+   * available height rather than hard-coded: the box keeps the page's own
+   * aspect ratio (width follows height through `ratio`) and simply scales with
+   * the panel. Nothing is ever squashed or stretched, and the row scrolls
+   * horizontally once the pages no longer fit.
+   */
+  const thumbBox = (ratio: number) => {
+    // Strip the chrome around the thumbnail: labels, padding, drag chips.
+    // p-2 card padding + 2px border + label row + ring room inside the rail.
+    const chrome = 60;
+    const available = Math.max(48, height - chrome);
+    const floor = Math.max(40, minHeight - chrome);
+    const h = clamp(Math.round(available), floor, 220);
+    const w = clamp(Math.round(h * ratio), 34, 240);
+    return { w, h };
+  };
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
@@ -69,7 +89,7 @@ export function PageRail() {
   };
 
   return (
-    <div className="flex h-[132px] items-stretch gap-2 border-t border-line bg-white px-3 py-2 dark:border-white/10 dark:bg-[#161c26]">
+    <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-4 border-t px-4 py-2">
       <div className="flex flex-col justify-center gap-1">
         <button
           type="button"
@@ -90,12 +110,16 @@ export function PageRail() {
         </button>
       </div>
 
-      <ul className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pb-1" dir="rtl">
+      {/*
+       * `px-1 py-1` is ring room, not decoration: the active page is marked by a
+       * 2px ring with a 2px offset, and without padding those 4px were clipped
+       * by this scroll container — the first/last thumbnail showed a cut ring.
+       */}
+      <ul className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto overflow-y-hidden px-2 py-2" dir="rtl">
         {pages.map((p, i) => {
           const size = pageSize(p);
           const ratio = size.w / size.h;
-          const thumbW = ratio >= 1 ? 92 : 62;
-          const thumbH = ratio >= 1 ? Math.round(92 / ratio) : 88;
+          const { w: thumbW, h: thumbH } = thumbBox(ratio);
           return (
             <li
               key={p.id}
@@ -103,8 +127,17 @@ export function PageRail() {
                 itemRefs.current[p.id] = n;
               }}
               className={cn(
-                "group relative shrink-0 rounded-[8px] border p-1.5",
-                p.id === activePageId ? "border-navy bg-navy/5" : "border-line dark:border-white/10",
+                /*
+                 * One self-contained card: preview, page number, border and
+                 * active state all live INSIDE this box. The active ring has no
+                 * offset (an offset ring drew outside the card and was clipped
+                 * by the scroll container into a stray "( )"), and the rail's
+                 * own padding leaves room for the 2px ring on every side.
+                 */
+                "group relative shrink-0 rounded-xl border-2 p-2 transition-all",
+                p.id === activePageId
+                  ? "border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10 ring-2 ring-emerald-500/30"
+                  : "border-line hover:border-emerald-500/40 dark:border-white/10",
                 dragIndex === i && "opacity-50",
                 overIndex === i && dragIndex !== null && dragIndex !== i && "drop-target",
               )}
@@ -112,11 +145,11 @@ export function PageRail() {
               <button
                 type="button"
                 onClick={() => setActivePage(p.id)}
-                className="block"
+                className="block rounded-lg text-right"
                 aria-current={p.id === activePageId}
               >
                 <span
-                  className="relative mb-1 block overflow-hidden rounded-[4px] border border-line bg-white"
+                  className="relative mb-1.5 block overflow-hidden rounded-md border border-line bg-white shadow-sm"
                   style={{ width: `${thumbW}px`, height: `${thumbH}px` }}
                 >
                   {p.elements
@@ -142,7 +175,7 @@ export function PageRail() {
                       />
                     ))}
                 </span>
-                <span className="flex items-center justify-between gap-1 text-[10px]">
+                <span className="flex items-center justify-between gap-1 text-[10px] leading-tight">
                   {renaming === p.id ? (
                     <input
                       autoFocus
@@ -161,18 +194,26 @@ export function PageRail() {
                     />
                   ) : (
                     <span
-                      className="max-w-[86px] truncate font-bold"
+                      className="truncate font-bold"
+                      style={{ maxWidth: `${Math.max(48, thumbW)}px` }}
                       onDoubleClick={() => setRenaming(p.id)}
                       title="انقر مرتين لإعادة التسمية"
                     >
                       {p.name}
                     </span>
                   )}
-                  <span className="tabular-nums text-muted">{i + 1}</span>
+                  <span
+                    className={cn(
+                      "grid h-4 min-w-4 shrink-0 place-items-center rounded-full px-1 text-[9px] font-extrabold tabular-nums",
+                      p.id === activePageId ? "bg-emerald-500 text-white" : "bg-line-2 text-muted dark:bg-white/10",
+                    )}
+                  >
+                    {i + 1}
+                  </span>
                 </span>
               </button>
 
-              <span className="absolute top-0.5 left-0.5 flex gap-0.5 opacity-0 transition group-hover:opacity-100">
+              <span className="absolute top-1 left-1 flex gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
                 <button
                   type="button"
                   onPointerDown={startDrag(i)}

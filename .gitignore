@@ -1,29 +1,46 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Build output
-.vercel/
 dist/
+build/
+out/
+.output/
+.vercel/
+.nitro/
 .tanstack/
 *.tsbuildinfo
 
-# Local database (PGLite) and logs
-.pglite/
-*.log
-
-# Environment secrets — never commit these
+# Environment & secrets (keep the documented template)
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+secrets/
 
-# macOS
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Caches & tooling
+.cache/
+.vite/
+.eslintcache
+coverage/
+.nyc_output/
+.turbo/
+
+# Local agent/tool state
+.openbrowser/
+
+# OS / editor
 .DS_Store
-
-# Editor
-.vscode/
+Thumbs.db
 .idea/
-# Runtime state (preview pid)
-.grok/
-
-# Generated source archive served for download
-public/downloads/*.zip
+.vscode/*
+!.vscode/extensions.json

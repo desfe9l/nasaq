@@ -22,6 +22,7 @@ export interface ShapeDef {
   label: string;
   group: string;
   parts: ShapePart[];
+  aspectRatio?: number;
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -65,28 +66,95 @@ export const SHAPE_GROUPS = [
 
 export const SHAPES: ShapeDef[] = [
   // ── أساسية ─────────────────────────────────────────────────────────────
-  { id: "rect", label: "مستطيل", group: "أساسية", parts: [{ k: "rect", x: 0, y: 0, w: 100, h: 100 }] },
+  {
+    id: "rect",
+    label: "مستطيل",
+    group: "أساسية",
+    parts: [{ k: "rect", x: 0, y: 0, w: 100, h: 100 }],
+  },
   {
     id: "rounded",
     label: "مستطيل مستدير",
     group: "أساسية",
     parts: [{ k: "rect", x: 0, y: 0, w: 100, h: 100, rx: 14 }],
   },
-  { id: "circle", label: "دائرة", group: "أساسية", parts: [{ k: "circle", cx: 50, cy: 50, r: 50 }] },
-  { id: "ellipse", label: "بيضاوي", group: "أساسية", parts: [{ k: "ellipse", cx: 50, cy: 50, rx: 50, ry: 32 }] },
-  { id: "triangle", label: "مثلث", group: "أساسية", parts: [poly("50,2 98,98 2,98")] },
-  { id: "triangle-down", label: "مثلث مقلوب", group: "أساسية", parts: [poly("2,2 98,2 50,98")] },
-  { id: "diamond", label: "معيّن", group: "أساسية", parts: [poly("50,2 98,50 50,98 2,50")] },
-  { id: "parallelogram", label: "متوازي أضلاع", group: "أساسية", parts: [poly("20,2 100,2 80,98 0,98")] },
-  { id: "trapezoid", label: "شبه منحرف", group: "أساسية", parts: [poly("20,2 80,2 100,98 0,98")] },
+  {
+    id: "circle",
+    label: "دائرة",
+    group: "أساسية",
+    aspectRatio: 1,
+    parts: [{ k: "circle", cx: 50, cy: 50, r: 50 }],
+  },
+  {
+    id: "ellipse",
+    label: "بيضاوي",
+    group: "أساسية",
+    aspectRatio: 50 / 32,
+    parts: [{ k: "ellipse", cx: 50, cy: 50, rx: 50, ry: 32 }],
+  },
+  {
+    id: "triangle",
+    label: "مثلث",
+    group: "أساسية",
+    parts: [poly("50,2 98,98 2,98")],
+  },
+  {
+    id: "triangle-down",
+    label: "مثلث مقلوب",
+    group: "أساسية",
+    parts: [poly("2,2 98,2 50,98")],
+  },
+  {
+    id: "diamond",
+    label: "معيّن",
+    group: "أساسية",
+    parts: [poly("50,2 98,50 50,98 2,50")],
+  },
+  {
+    id: "parallelogram",
+    label: "متوازي أضلاع",
+    group: "أساسية",
+    parts: [poly("20,2 100,2 80,98 0,98")],
+  },
+  {
+    id: "trapezoid",
+    label: "شبه منحرف",
+    group: "أساسية",
+    parts: [poly("20,2 80,2 100,98 0,98")],
+  },
 
   // ── متعددة الأضلاع ─────────────────────────────────────────────────────
   { id: "pentagon", label: "خماسي", group: "متعددة الأضلاع", parts: [ngon(5)] },
-  { id: "hexagon", label: "سداسي", group: "متعددة الأضلاع", parts: [ngon(6, 0)] },
-  { id: "octagon", label: "ثماني", group: "متعددة الأضلاع", parts: [ngon(8, 22.5)] },
-  { id: "star5", label: "نجمة خماسية", group: "متعددة الأضلاع", parts: [star(5, 0.44)] },
-  { id: "star6", label: "نجمة سداسية", group: "متعددة الأضلاع", parts: [star(6, 0.577, 30)] },
-  { id: "star12", label: "نجمة ١٢", group: "متعددة الأضلاع", parts: [star(12, 0.62)] },
+  {
+    id: "hexagon",
+    label: "سداسي",
+    group: "متعددة الأضلاع",
+    parts: [ngon(6, 0)],
+  },
+  {
+    id: "octagon",
+    label: "ثماني",
+    group: "متعددة الأضلاع",
+    parts: [ngon(8, 22.5)],
+  },
+  {
+    id: "star5",
+    label: "نجمة خماسية",
+    group: "متعددة الأضلاع",
+    parts: [star(5, 0.44)],
+  },
+  {
+    id: "star6",
+    label: "نجمة سداسية",
+    group: "متعددة الأضلاع",
+    parts: [star(6, 0.577, 30)],
+  },
+  {
+    id: "star12",
+    label: "نجمة ١٢",
+    group: "متعددة الأضلاع",
+    parts: [star(12, 0.62)],
+  },
   { id: "seal", label: "ختم مسنّن", group: "متعددة الأضلاع", parts: [seal] },
 
   // ── زخرفة إسلامية ──────────────────────────────────────────────────────
@@ -139,25 +207,62 @@ export const SHAPES: ShapeDef[] = [
   },
 
   // ─ أسهم ───────────────────────────────────────────────────────────────
-  { id: "arrow-right", label: "سهم يمين", group: "أسهم", parts: [poly("0,26 58,26 58,2 100,50 58,98 58,74 0,74")] },
-  { id: "arrow-left", label: "سهم يسار", group: "أسهم", parts: [poly("100,26 42,26 42,2 0,50 42,98 42,74 100,74")] },
-  { id: "arrow-up", label: "سهم أعلى", group: "أسهم", parts: [poly("26,100 26,42 2,42 50,0 98,42 74,42 74,100")] },
-  { id: "arrow-down", label: "سهم أسفل", group: "أسهم", parts: [poly("26,0 26,58 2,58 50,100 98,58 74,58 74,0")] },
+  {
+    id: "arrow-right",
+    label: "سهم يمين",
+    group: "أسهم",
+    parts: [poly("0,26 58,26 58,2 100,50 58,98 58,74 0,74")],
+  },
+  {
+    id: "arrow-left",
+    label: "سهم يسار",
+    group: "أسهم",
+    parts: [poly("100,26 42,26 42,2 0,50 42,98 42,74 100,74")],
+  },
+  {
+    id: "arrow-up",
+    label: "سهم أعلى",
+    group: "أسهم",
+    parts: [poly("26,100 26,42 2,42 50,0 98,42 74,42 74,100")],
+  },
+  {
+    id: "arrow-down",
+    label: "سهم أسفل",
+    group: "أسهم",
+    parts: [poly("26,0 26,58 2,58 50,100 98,58 74,58 74,0")],
+  },
   {
     id: "arrow-double",
     label: "سهم مزدوج",
     group: "أسهم",
-    parts: [poly("0,50 26,24 26,40 74,40 74,24 100,50 74,76 74,60 26,60 26,76")],
+    parts: [
+      poly("0,50 26,24 26,40 74,40 74,24 100,50 74,76 74,60 26,60 26,76"),
+    ],
   },
-  { id: "chevron", label: "شيفرون", group: "أسهم", parts: [poly("0,2 58,2 100,50 58,98 0,98 42,50")] },
-  { id: "arrow-bend", label: "سهم منعطف", group: "أسهم", parts: [{ k: "path", d: "M0 80H52V20H36L66 0L96 20H80V100H0Z" }] },
+  {
+    id: "chevron",
+    label: "شيفرون",
+    group: "أسهم",
+    parts: [poly("0,2 58,2 100,50 58,98 0,98 42,50")],
+  },
+  {
+    id: "arrow-bend",
+    label: "سهم منعطف",
+    group: "أسهم",
+    parts: [{ k: "path", d: "M0 80H52V20H36L66 0L96 20H80V100H0Z" }],
+  },
 
   // ── شارات وفقاعات ──────────────────────────────────────────────────────
   {
     id: "callout",
     label: "فقاعة حديث",
     group: "شارات وفقاعات",
-    parts: [{ k: "path", d: "M6 2H94A6 6 0 0 1 100 8V66A6 6 0 0 1 94 72H44L22 98V72H6A6 6 0 0 1 0 66V8A6 6 0 0 1 6 2Z" }],
+    parts: [
+      {
+        k: "path",
+        d: "M6 2H94A6 6 0 0 1 100 8V66A6 6 0 0 1 94 72H44L22 98V72H6A6 6 0 0 1 0 66V8A6 6 0 0 1 6 2Z",
+      },
+    ],
   },
   {
     id: "thought",
@@ -185,32 +290,66 @@ export const SHAPES: ShapeDef[] = [
     id: "shield",
     label: "درع",
     group: "شارات وفقاعات",
-    parts: [{ k: "path", d: "M50 0L100 14V54C100 80 78 94 50 100C22 94 0 80 0 54V14Z" }],
+    parts: [
+      {
+        k: "path",
+        d: "M50 0L100 14V54C100 80 78 94 50 100C22 94 0 80 0 54V14Z",
+      },
+    ],
   },
   {
     id: "badge",
     label: "شارة",
     group: "شارات وفقاعات",
-    parts: [{ k: "path", d: "M50 0L64 20H88L80 42L100 56L80 70L88 92H64L50 100L36 92H12L20 70L0 56L20 42L12 20H36Z" }],
+    parts: [
+      {
+        k: "path",
+        d: "M50 0L64 20H88L80 42L100 56L80 70L88 92H64L50 100L36 92H12L20 70L0 56L20 42L12 20H36Z",
+      },
+    ],
   },
-  { id: "heart", label: "قلب", group: "شارات وفقاعات", parts: [{ k: "path", d: "M50 98C18 76 0 58 0 36C0 18 12 6 28 6C38 6 46 12 50 22C54 12 62 6 72 6C88 6 100 18 100 36C100 58 82 76 50 98Z" }] },
+  {
+    id: "heart",
+    label: "قلب",
+    group: "شارات وفقاعات",
+    aspectRatio: 100 / 92,
+    parts: [
+      {
+        k: "path",
+        d: "M50 98C18 76 0 58 0 36C0 18 12 6 28 6C38 6 46 12 50 22C54 12 62 6 72 6C88 6 100 18 100 36C100 58 82 76 50 98Z",
+      },
+    ],
+  },
   {
     id: "cloud",
     label: "سحابة",
     group: "شارات وفقاعات",
-    parts: [{ k: "path", d: "M26 82A24 24 0 0 1 26 34A28 28 0 0 1 76 26A22 22 0 0 1 76 82Z" }],
+    parts: [
+      {
+        k: "path",
+        d: "M26 82A24 24 0 0 1 26 34A28 28 0 0 1 76 26A22 22 0 0 1 76 82Z",
+      },
+    ],
   },
   {
     id: "plus",
     label: "علامة زائد",
     group: "شارات وفقاعات",
-    parts: [poly("36,0 64,0 64,36 100,36 100,64 64,64 64,100 36,100 36,64 0,64 0,36 36,36")],
+    parts: [
+      poly(
+        "36,0 64,0 64,36 100,36 100,64 64,64 64,100 36,100 36,64 0,64 0,36 36,36",
+      ),
+    ],
   },
   {
     id: "cross",
     label: "علامة خطأ",
     group: "شارات وفقاعات",
-    parts: [poly("10,0 50,38 90,0 100,10 62,50 100,90 90,100 50,62 10,100 0,90 38,50 0,10")],
+    parts: [
+      poly(
+        "10,0 50,38 90,0 100,10 62,50 100,90 90,100 50,62 10,100 0,90 38,50 0,10",
+      ),
+    ],
   },
 
   // ─ إطارات ────────────────────────────────────────────────────────────
@@ -224,7 +363,12 @@ export const SHAPES: ShapeDef[] = [
     id: "frame-rounded",
     label: "إطار مستدير",
     group: "إطارات",
-    parts: [{ k: "path", d: "M14 0H86A14 14 0 0 1 100 14V86A14 14 0 0 1 86 100H14A14 14 0 0 1 0 86V14A14 14 0 0 1 14 0ZM14 3A11 11 0 0 0 3 14V86A11 11 0 0 0 14 97H86A11 11 0 0 0 97 86V14A11 11 0 0 0 86 3Z" }],
+    parts: [
+      {
+        k: "path",
+        d: "M14 0H86A14 14 0 0 1 100 14V86A14 14 0 0 1 86 100H14A14 14 0 0 1 0 86V14A14 14 0 0 1 14 0ZM14 3A11 11 0 0 0 3 14V86A11 11 0 0 0 14 97H86A11 11 0 0 0 97 86V14A11 11 0 0 0 86 3Z",
+      },
+    ],
   },
   {
     id: "frame-corners",

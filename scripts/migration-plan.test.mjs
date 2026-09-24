@@ -56,7 +56,7 @@ test("non-.sql entries are dropped (readdir also yields the auth/ directory)", (
   assert.deepEqual(pendingMigrations(["auth", "README.md"], []), []);
 });
 
-test("the auth schema ships outside the globbed directory", () => {
+test("the auth schema is included in the root migration set", () => {
   const migrationsDir = join(projectRoot(), "migrations");
   // The opt-in source always ships, whatever the app decided — otherwise the
   // copy-up step has nothing to copy from.

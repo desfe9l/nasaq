@@ -69,14 +69,21 @@ function hex(color: string): string {
 }
 
 function isTransparent(color: string): boolean {
-  const v = String(color || "").trim().toLowerCase();
+  const v = String(color || "")
+    .trim()
+    .toLowerCase();
   return !v || v === "transparent" || v === "none" || v === "rgba(0,0,0,0)";
 }
 
-function lineOf(stroke: SceneStroke | null): { color: string; width: number } | undefined {
+function lineOf(
+  stroke: SceneStroke | null,
+): { color: string; width: number } | undefined {
   if (!stroke || isTransparent(stroke.color)) return undefined;
   // PowerPoint rejects a zero-width line; 0.25pt is the practical minimum.
-  return { color: hex(stroke.color), width: Math.max(0.25, Number(mm2pt(stroke.width).toFixed(2))) };
+  return {
+    color: hex(stroke.color),
+    width: Math.max(0.25, Number(mm2pt(stroke.width).toFixed(2))),
+  };
 }
 
 /**
@@ -85,7 +92,11 @@ function lineOf(stroke: SceneStroke | null): { color: string; width: number } | 
  * `roundRect` takes its radius from the `adj` guide as a share of the *shorter*
  * side, so a pill-shaped box needs a fraction of half the smaller dimension.
  */
-function rectRadius(radiusMm: number, w: number, h: number): number | undefined {
+function rectRadius(
+  radiusMm: number,
+  w: number,
+  h: number,
+): number | undefined {
   if (!radiusMm || radiusMm <= 0) return undefined;
   const shorter = Math.min(w, h);
   if (shorter <= 0) return undefined;
@@ -126,7 +137,13 @@ export function partsToPoints(parts: ShapePart[], w: number, h: number) {
         points.push({
           x: seg.x,
           y: seg.y,
-          curve: { type: "cubic", x1: seg.x1, y1: seg.y1, x2: seg.x2, y2: seg.y2 },
+          curve: {
+            type: "cubic",
+            x1: seg.x1,
+            y1: seg.y1,
+            x2: seg.x2,
+            y2: seg.y2,
+          },
         });
       } else if (seg.kind === "close") {
         points.push({ close: true });
@@ -203,7 +220,10 @@ export function partsToPoints(parts: ShapePart[], w: number, h: number) {
         break;
       }
       case "poly": {
-        const nums = part.points.trim().split(/\s+/).map((pair) => pair.split(",").map(Number));
+        const nums = part.points
+          .trim()
+          .split(/\s+/)
+          .map((pair) => pair.split(",").map(Number));
         const segments: ReturnType<typeof scaleSegments> = [];
         let first = true;
         for (const [px, py] of nums) {
@@ -228,9 +248,10 @@ export function partsToPoints(parts: ShapePart[], w: number, h: number) {
   return out;
 }
 
-
 function addShapeItem(slide: PptxGenJS.Slide, item: SceneShape, name: string) {
-  const fill = isTransparent(item.fill) ? { color: "FFFFFF", transparency: 100 } : { color: hex(item.fill) };
+  const fill = isTransparent(item.fill)
+    ? { color: "FFFFFF", transparency: 100 }
+    : { color: hex(item.fill) };
   const line = lineOf(item.stroke);
   const preset = PRESET[item.shapeId];
 
@@ -241,9 +262,15 @@ function addShapeItem(slide: PptxGenJS.Slide, item: SceneShape, name: string) {
       w: mm2in(item.w),
       h: mm2in(item.h),
       rotate: item.rotation || undefined,
+      // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+      // editable artwork rather than a baked bitmap.
+      flipH: item.flipX || undefined,
+      flipV: item.flipY || undefined,
       objectName: name,
       fill,
-      line: line ? { color: line.color, width: line.width } : { color: "FFFFFF", width: 0 },
+      line: line
+        ? { color: line.color, width: line.width }
+        : { color: "FFFFFF", width: 0 },
     });
     return;
   }
@@ -255,8 +282,14 @@ function addShapeItem(slide: PptxGenJS.Slide, item: SceneShape, name: string) {
       w: mm2in(item.w),
       h: mm2in(item.h),
       rotate: item.rotation || undefined,
+      // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+      // editable artwork rather than a baked bitmap.
+      flipH: item.flipX || undefined,
+      flipV: item.flipY || undefined,
       fill,
-      line: line ? { color: line.color, width: line.width } : { color: "FFFFFF", width: 0 },
+      line: line
+        ? { color: line.color, width: line.width }
+        : { color: "FFFFFF", width: 0 },
       rectRadius: rectRadius(4, item.w, item.h),
       objectName: name,
     });
@@ -274,21 +307,32 @@ function addShapeItem(slide: PptxGenJS.Slide, item: SceneShape, name: string) {
       h: mm2in(item.h),
       objectName: name,
       fill,
-      line: line ? { color: line.color, width: line.width } : { color: "FFFFFF", width: 0 },
+      line: line
+        ? { color: line.color, width: line.width }
+        : { color: "FFFFFF", width: 0 },
     });
     return;
   }
-  slide.addShape("custGeom" as PptxGenJS.SHAPE_NAME, {
-    x: mm2in(item.x),
-    y: mm2in(item.y),
-    w: mm2in(item.w),
-    h: mm2in(item.h),
-    rotate: item.rotation || undefined,
-    fill,
-    line: line ? { color: line.color, width: line.width } : { color: "FFFFFF", width: 0 },
-    points: points as PptxGenJS.ShapeProps["points"],
-    objectName: name,
-  } as PptxGenJS.ShapeProps);
+  slide.addShape(
+    "custGeom" as PptxGenJS.SHAPE_NAME,
+    {
+      x: mm2in(item.x),
+      y: mm2in(item.y),
+      w: mm2in(item.w),
+      h: mm2in(item.h),
+      rotate: item.rotation || undefined,
+      // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+      // editable artwork rather than a baked bitmap.
+      flipH: item.flipX || undefined,
+      flipV: item.flipY || undefined,
+      fill,
+      line: line
+        ? { color: line.color, width: line.width }
+        : { color: "FFFFFF", width: 0 },
+      points: points as PptxGenJS.ShapeProps["points"],
+      objectName: name,
+    } as PptxGenJS.ShapeProps,
+  );
 }
 
 const ALIGN: Record<string, "left" | "center" | "right" | "justify"> = {
@@ -306,27 +350,38 @@ function addTextItem(
   const lines = item.text.split("\n");
   const runs: PptxGenJS.TextProps[] = [];
   const align = ALIGN[item.align] || "right";
-  const lineSpacingMultiple = Math.max(0.7, Math.min(3, item.lineHeight || 1.4));
+  const lineSpacingMultiple = Math.max(
+    0.7,
+    Math.min(3, item.lineHeight || 1.4),
+  );
 
   lines.forEach((line, idx) => {
     const isLast = idx === lines.length - 1;
     // `paragraphSpacing` is authored in mm and only ever applied between
     // paragraphs, matching how the canvas gaps hard line breaks.
-    const spaceAfter = !isLast && item.paragraphSpacing > 0 ? item.paragraphSpacing : undefined;
+    const spaceAfter =
+      !isLast && item.paragraphSpacing > 0 ? item.paragraphSpacing : undefined;
     runs.push({
       text: line.length ? line : " ",
       options: {
-        fontFace: item.font.split(",")[0].trim().replace(/^["']|["']$/g, ""),
+        fontFace: item.font
+          .split(",")[0]
+          .trim()
+          .replace(/^["']|["']$/g, ""),
         fontSize: item.size,
         bold: item.weight >= 600,
         italic: item.italic || undefined,
+        // PowerPoint wants the style spelled out; "sng" is a single underline.
+        underline: item.underline ? { style: "sng" } : undefined,
         color: hex(item.color),
         align,
         rtlMode: true,
         breakLine: !isLast,
         lineSpacingMultiple,
         charSpacing: item.letterSpacing || undefined,
-        paraSpaceAfter: spaceAfter ? Number(mm2pt(spaceAfter).toFixed(1)) : undefined,
+        paraSpaceAfter: spaceAfter
+          ? Number(mm2pt(spaceAfter).toFixed(1))
+          : undefined,
       },
     });
   });
@@ -346,6 +401,10 @@ function addTextItem(
     w: mm2in(item.w),
     h: mm2in(item.h),
     rotate: item.rotation || undefined,
+    // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+    // editable artwork rather than a baked bitmap.
+    flipH: item.flipX || undefined,
+    flipV: item.flipY || undefined,
     isTextBox: true,
     inset: mm2in(item.padding || 0),
     valign: "middle",
@@ -354,7 +413,8 @@ function addTextItem(
     fill,
     line: line ? { color: line.color, width: line.width } : undefined,
     shape: item.radius > 0 ? ("roundRect" as PptxGenJS.SHAPE_NAME) : undefined,
-    rectRadius: item.radius > 0 ? rectRadius(item.radius, item.w, item.h) : undefined,
+    rectRadius:
+      item.radius > 0 ? rectRadius(item.radius, item.w, item.h) : undefined,
     vert: item.vertical ? "vert" : undefined,
     wrap: true,
     objectName: name,
@@ -370,15 +430,21 @@ function addTableItem(
   const colW = item.w / cols;
   const rows: PptxGenJS.TableRow[] = item.rows.map((row, ri) => {
     const header = ri === 0;
-    const stripe = !header && item.stripeFill && ri % 2 === 0 ? item.stripeFill : null;
+    const stripe =
+      !header && item.stripeFill && ri % 2 === 0 ? item.stripeFill : null;
     return row.map((cell) => ({
       text: cell.length ? cell : " ",
       options: {
-        fontFace: item.font.split(",")[0].trim().replace(/^["']|["']$/g, ""),
+        fontFace: item.font
+          .split(",")[0]
+          .trim()
+          .replace(/^["']|["']$/g, ""),
         fontSize: item.size,
         bold: header,
         color: header ? hex(item.headerColor) : hex("#172033"),
-        fill: { color: hex(stripe || (header ? item.headerFill : item.rowFill)) },
+        fill: {
+          color: hex(stripe || (header ? item.headerFill : item.rowFill)),
+        },
         align: ALIGN[item.align] || "right",
         valign: "middle" as const,
         rtlMode: true,
@@ -407,7 +473,54 @@ function addTableItem(
   } as PptxGenJS.TableProps);
 }
 
-function addProgressItem(slide: PptxGenJS.Slide, item: Extract<SceneItem, { kind: "progress" }>) {
+function addProgressItem(
+  slide: PptxGenJS.Slide,
+  item: Extract<SceneItem, { kind: "progress" }>,
+) {
+  if (item.variant === "steps") {
+    // Stages row: one ellipse per stage, filled up to the value, caption above
+    // — the same composition the canvas draws.
+    const total = item.steps;
+    const filled = Math.round((item.value / 100) * total);
+    const dot = Math.max(2.4, Math.min(item.h * 0.34, 7));
+    const gap = dot * 0.55;
+    const rowW = total * dot + (total - 1) * gap;
+    for (let i = 0; i < total; i++) {
+      // RTL: the first stage sits at the right edge, matching the canvas.
+      const x = item.x + item.w - rowW + i * (dot + gap);
+      slide.addShape("ellipse" as PptxGenJS.SHAPE_NAME, {
+        x: mm2in(x),
+        y: mm2in(item.y + item.h - dot),
+        w: mm2in(dot),
+        h: mm2in(dot),
+        fill: { color: hex(i < filled ? item.fill : item.track) },
+        line: { color: hex(i < filled ? item.fill : item.track), width: 0 },
+      });
+    }
+    slide.addText(
+      `${item.label}${item.showValue ? ` ${item.value}%` : ""}`.trim(),
+      {
+        x: mm2in(item.x),
+        y: mm2in(item.y),
+        w: mm2in(item.w),
+        h: mm2in(Math.max(4, item.h - dot)),
+        fontFace: item.font
+          .split(",")[0]
+          .trim()
+          .replace(/^["']|["']$/g, ""),
+        fontSize: item.size,
+        bold: item.weight >= 600,
+        color: hex(item.color),
+        align: "right",
+        rtlMode: true,
+        valign: "top",
+        isTextBox: true,
+        margin: 0,
+      },
+    );
+    return;
+  }
+
   if (item.variant === "ring") {
     // PowerPoint has a `blockArc` preset but no adjustable donut with a label,
     // so the ring is drawn as a true arc plus the caption beside it.
@@ -418,7 +531,10 @@ function addProgressItem(slide: PptxGenJS.Slide, item: Extract<SceneItem, { kind
       h: mm2in(item.h),
       fill: { color: hex(item.track) },
       line: { color: hex(item.track), width: 0 },
-      angleRange: [270, 270 + Math.round((item.value / 100) * 360)] as [number, number],
+      angleRange: [270, 270 + Math.round((item.value / 100) * 360)] as [
+        number,
+        number,
+      ],
     });
     const labelX = item.x + item.h + 2;
     slide.addText(
@@ -428,7 +544,10 @@ function addProgressItem(slide: PptxGenJS.Slide, item: Extract<SceneItem, { kind
         y: mm2in(item.y),
         w: mm2in(Math.max(10, item.w - item.h - 2)),
         h: mm2in(item.h),
-        fontFace: item.font.split(",")[0].trim().replace(/^["']|["']$/g, ""),
+        fontFace: item.font
+          .split(",")[0]
+          .trim()
+          .replace(/^["']|["']$/g, ""),
         fontSize: item.size,
         bold: item.weight >= 600,
         color: hex(item.color),
@@ -465,13 +584,17 @@ function addProgressItem(slide: PptxGenJS.Slide, item: Extract<SceneItem, { kind
       rectRadius: rectRadius(Math.min(item.radius, track / 2), valueW, track),
     });
   }
-  const caption = `${item.label}${item.showValue ? ` — ${item.value}%` : ""}`.trim();
+  const caption =
+    `${item.label}${item.showValue ? ` — ${item.value}%` : ""}`.trim();
   slide.addText(caption, {
     x: mm2in(item.x),
     y: mm2in(item.y),
     w: mm2in(item.w),
     h: mm2in(track),
-    fontFace: item.font.split(",")[0].trim().replace(/^["']|["']$/g, ""),
+    fontFace: item.font
+      .split(",")[0]
+      .trim()
+      .replace(/^["']|["']$/g, ""),
     fontSize: item.size,
     bold: item.weight >= 600,
     color: hex(item.color),
@@ -502,27 +625,46 @@ function addIconItem(
     w: mm2in(item.w),
     h: mm2in(item.h),
     rotate: item.rotation || undefined,
+    // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+    // editable artwork rather than a baked bitmap.
+    flipH: item.flipX || undefined,
+    flipV: item.flipY || undefined,
     altText: "أيقونة",
     objectName: name,
   });
 }
 
 function base64(input: string): string {
-  if (typeof btoa === "function") return btoa(unescape(encodeURIComponent(input)));
+  if (typeof btoa === "function")
+    return btoa(unescape(encodeURIComponent(input)));
   return Buffer.from(input, "utf8").toString("base64");
 }
 
-function addLineItem(slide: PptxGenJS.Slide, item: Extract<SceneItem, { kind: "line" }>, name: string) {
+function addLineItem(
+  slide: PptxGenJS.Slide,
+  item: Extract<SceneItem, { kind: "line" }>,
+  name: string,
+) {
   const horizontal = !item.vertical;
-  slide.addShape("line" as PptxGenJS.SHAPE_NAME, {
-    x: mm2in(item.x),
-    y: mm2in(item.y),
-    w: mm2in(horizontal ? item.w : 0),
-    h: mm2in(horizontal ? 0 : item.h),
-    line: { color: hex(item.color), width: Math.max(0.25, Number(mm2pt(item.width).toFixed(2))) },
-    rotate: item.rotation || undefined,
-    objectName: name,
-  } as PptxGenJS.ShapeProps);
+  slide.addShape(
+    "line" as PptxGenJS.SHAPE_NAME,
+    {
+      x: mm2in(item.x),
+      y: mm2in(item.y),
+      w: mm2in(horizontal ? item.w : 0),
+      h: mm2in(horizontal ? 0 : item.h),
+      line: {
+        color: hex(item.color),
+        width: Math.max(0.25, Number(mm2pt(item.width).toFixed(2))),
+      },
+      rotate: item.rotation || undefined,
+      // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+      // editable artwork rather than a baked bitmap.
+      flipH: item.flipX || undefined,
+      flipV: item.flipY || undefined,
+      objectName: name,
+    } as PptxGenJS.ShapeProps,
+  );
 }
 
 function addImageItem(
@@ -537,6 +679,10 @@ function addImageItem(
     w: mm2in(item.w),
     h: mm2in(item.h),
     rotate: item.rotation || undefined,
+    // Mirrors (step 7): native PowerPoint flips, so a mirrored logo stays
+    // editable artwork rather than a baked bitmap.
+    flipH: item.flipX || undefined,
+    flipV: item.flipY || undefined,
     sizing:
       item.fit === "contain"
         ? { type: "contain", w: mm2in(item.w), h: mm2in(item.h) }
@@ -597,7 +743,10 @@ function addItem(slide: PptxGenJS.Slide, item: SceneItem, name: string) {
  * slide with identical millimetre dimensions; that keeps the exported PDF/PNG
  * and the `.pptx` in agreement about where every element sits.
  */
-export async function writePptx(scenes: ScenePage[], title: string): Promise<Blob> {
+export async function writePptx(
+  scenes: ScenePage[],
+  title: string,
+): Promise<Blob> {
   const pptx = new PptxGenJS();
   pptx.author = BRAND.developer;
   pptx.company = BRAND.name;

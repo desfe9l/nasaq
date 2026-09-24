@@ -6,7 +6,13 @@ describe("isAcceptedImage", () => {
   const file = (type: string) => ({ type }) as File;
 
   it("accepts the formats the platform renders", () => {
-    for (const type of ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif"]) {
+    for (const type of [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/svg+xml",
+      "image/gif",
+    ]) {
       assert.equal(isAcceptedImage(file(type)), true, type);
     }
   });
@@ -62,8 +68,14 @@ describe("safeImageSrc", () => {
   it("keeps ordinary sources", () => {
     const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
     assert.equal(safeImageSrc(png), png);
-    assert.equal(safeImageSrc("https://example.com/a.png"), "https://example.com/a.png");
-    assert.equal(safeImageSrc("blob:http://localhost/abc"), "blob:http://localhost/abc");
+    assert.equal(
+      safeImageSrc("https://example.com/a.png"),
+      "https://example.com/a.png",
+    );
+    assert.equal(
+      safeImageSrc("blob:http://localhost/abc"),
+      "blob:http://localhost/abc",
+    );
   });
 
   it("drops sources that could execute script", () => {

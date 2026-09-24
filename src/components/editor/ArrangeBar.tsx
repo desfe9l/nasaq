@@ -1,5 +1,6 @@
 import { useEditor } from "@/lib/editor/store";
 import type { AlignEdge } from "@/lib/editor/model";
+import { Link, Unlink } from "lucide-react";
 
 /** Align/distribute/group controls for the current selection. */
 const ALIGN_BUTTONS: { edge: AlignEdge; label: string; icon: string }[] = [
@@ -12,12 +13,7 @@ const ALIGN_BUTTONS: { edge: AlignEdge; label: string; icon: string }[] = [
 ];
 
 /**
- * Floating arrangement bar for multi-selections.
- *
- * Appears only when two or more elements are selected, because every action on
- * it needs at least two targets — a permanently visible bar would be mostly
- * dead controls. Distribute is disabled below three, which is the minimum for
- * there to be anything in the middle to spread.
+ * Arrangement bar for the current selection.
  */
 export function ArrangeBar() {
   const count = useEditor((s) => s.selectedIds.length);
@@ -25,6 +21,8 @@ export function ArrangeBar() {
   const distribute = useEditor((s) => s.distribute);
   const group = useEditor((s) => s.group);
   const ungroup = useEditor((s) => s.ungroup);
+  const linkSelected = useEditor((s) => s.linkSelected);
+  const unlinkSelected = useEditor((s) => s.unlinkSelected);
   const selectedId = useEditor((s) => s.selectedId);
   const groupsSelected = useEditor((s) => {
     const page = s.pages.find((p) => p.id === s.activePageId);
@@ -32,11 +30,11 @@ export function ArrangeBar() {
     return el?.type === "group";
   });
 
-  if (count < 2) return null;
+  if (count < 1) return null;
 
   return (
-    <div className="arrange-bar" dir="rtl">
-      <span className="arrange-count">{count} عناصر</span>
+    <div className="editor-arrange-bar arrange-bar" dir="rtl">
+      <span className="arrange-count">{count === 1 ? "عنصر واحد" : `${count} عناصر`}</span>
       <span className="arrange-sep" />
       {ALIGN_BUTTONS.map((b) => (
         <button
@@ -45,13 +43,13 @@ export function ArrangeBar() {
           className="arrange-btn"
           title={b.label}
           aria-label={b.label}
-          onClick={() => align(b.edge, "selection")}
+          onClick={() => align(b.edge, count === 1 ? "page" : "selection")}
         >
           <AlignIcon kind={b.icon} />
         </button>
       ))}
-      <span className="arrange-sep" />
-      <button
+      {count > 1 && <span className="arrange-sep" />}
+      {count > 1 && <button
         type="button"
         className="arrange-btn"
         title="توزيع أفقي متساوٍ"
@@ -60,8 +58,8 @@ export function ArrangeBar() {
         onClick={() => distribute("h")}
       >
         <AlignIcon kind="dist-h" />
-      </button>
-      <button
+      </button>}
+      {count > 1 && <button
         type="button"
         className="arrange-btn"
         title="توزيع رأسي متساوٍ"
@@ -70,12 +68,12 @@ export function ArrangeBar() {
         onClick={() => distribute("v")}
       >
         <AlignIcon kind="dist-v" />
-      </button>
-      <span className="arrange-sep" />
-      <button type="button" className="arrange-btn wide" title="تجميع (⌘G)" onClick={group}>
+      </button>}
+      {count > 1 && <span className="arrange-sep" />}
+      {count > 1 && <button type="button" className="arrange-btn wide" title="تجميع (⌘G)" onClick={group}>
         تجميع
-      </button>
-      <button
+      </button>}
+      {count > 1 && <button
         type="button"
         className="arrange-btn wide"
         title="فك التجميع (⇧⌘G)"
@@ -83,13 +81,20 @@ export function ArrangeBar() {
         onClick={ungroup}
       >
         فك التجميع
-      </button>
+      </button>}
+      {count > 1 && <button type="button" className="arrange-btn" title="ربط العناصر" aria-label="ربط العناصر" onClick={linkSelected}>
+        <Link className="size-3.5" />
+      </button>}
+      {count > 1 && <button type="button" className="arrange-btn" title="فك ربط العناصر" aria-label="فك ربط العناصر" onClick={unlinkSelected}>
+        <Unlink className="size-3.5" />
+      </button>}
       {selectedId && <span className="sr-only">العنصر الأساسي محدد</span>}
     </div>
   );
 }
 
-function AlignIcon({ kind }: { kind: string }) {
+/** Alignment glyphs shared with the toolbar's Alignment & Distribution menu. */
+export function AlignIcon({ kind }: { kind: string }) {
   const common = {
     width: 14,
     height: 14,

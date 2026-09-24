@@ -1,27 +1,77 @@
 import { useEffect, useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, Moon, Sun, X } from "lucide-react";
+import { Toaster } from "sonner";
 import { BRAND, CONTACT_PHONE_DISPLAY, NAV_ITEMS, telHref } from "@/lib/brand";
+import { readStoredTheme, writeStoredTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import { useSiteSettings } from "@/lib/admin/use-site-settings";
+
+/** Admin-managed announcement bar (/admin → محتوى الموقع). */
+function AnnouncementBar() {
+  const { announcement } = useSiteSettings();
+  if (!announcement.enabled || !announcement.text.trim()) return null;
+  const tone =
+    announcement.tone === "warning"
+      ? "bg-amber-500/15 text-amber-900 dark:text-amber-200"
+      : announcement.tone === "success"
+        ? "bg-emerald-600 text-white"
+        : "bg-navy text-white";
+  const body = <span className="font-bold">{announcement.text}</span>;
+  return (
+    <div className={cn("px-4 py-2 text-center text-[12px]", tone)} role="region" aria-label="إعلان">
+      {announcement.href ? (
+        <a href={announcement.href} className="underline-offset-4 hover:underline">
+          {body}
+        </a>
+      ) : (
+        body
+      )}
+    </div>
+  );
+}
 
 export function SiteHeader({ current }: { current: string }) {
   const [open, setOpen] = useState(false);
+  // Initialised from the shared preference; the root-level theme module has
+  // already applied the class before any route renders, so this never
+  // disagrees with what is on screen.
+  const [dark, setDark] = useState(() => readStoredTheme() ?? false);
 
   useEffect(() => {
     setOpen(false);
   }, [current]);
 
+  const toggleTheme = () => {
+    const next = !dark;
+    setDark(next);
+    writeStoredTheme(next);
+  };
+
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur dark:border-white/10 dark:bg-[#111722]/95">
+    /*
+     * Site-wide toast host. The editor mounts its own inside EditorApp, so
+     * putting one here (every marketing/site page renders SiteHeader) gives
+     * those pages live feedback — imports, saves, clipboard — without ever
+     * doubling up on /editor.
+     */
+    <>
+    <Toaster position="top-center" richColors dir="rtl" />
+    <AnnouncementBar />
+    {/*
+     * Glassmorphic sticky nav.
+     *
+     * `backdrop-filter: blur(12px)` over a translucent surface keeps the page
+     * visible through the bar as it scrolls, while the hairline bottom border +
+     * `shadow-sm` keep a crisp edge against the content underneath (without them
+     * a blurred bar smears into the page it is floating over).
+     */}
+    <header className="sticky top-0 z-40 border-b border-line/60 bg-white/80 shadow-sm backdrop-blur-[12px] dark:border-white/10 dark:bg-[#111722]/80">
       <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <a href="/" className="flex items-center gap-2.5">
-          <Mark />
-          <span className="leading-tight">
-            <strong className="block text-[15px] font-extrabold">{BRAND.lockup}</strong>
-            <span className="block text-[11px] text-muted">{BRAND.platform}</span>
-          </span>
+          <BrandLogo />
         </a>
 
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden items-center gap-1 lg:flex">
           {NAV_ITEMS.map((item) => (
             <a
               key={item.to}
@@ -39,6 +89,19 @@ export function SiteHeader({ current }: { current: string }) {
         </nav>
 
         <div className="flex items-center gap-2">
+          {/* Light/Dark is the visitor's choice: one toggle, applied site-wide
+              and persisted (lib/theme.ts), so every page loads on the same
+              mode instead of each page forcing its own. */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-pressed={dark}
+            aria-label={dark ? "التبديل إلى الوضع الفاتح" : "التبديل إلى الوضع الداكن"}
+            title={dark ? "الوضع الفاتح" : "الوضع الداكن"}
+            className="grid size-9 place-items-center rounded-[8px] border border-line dark:border-white/10"
+          >
+            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </button>
           <a
             href={telHref()}
             className="hidden h-9 items-center gap-2 rounded-[8px] border border-line px-3 text-[12px] font-bold sm:inline-flex dark:border-white/10"
@@ -48,17 +111,17 @@ export function SiteHeader({ current }: { current: string }) {
             </span>
           </a>
           <a
-            href="/editor"
+            href="/demo"
             className="inline-flex h-9 items-center rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-white"
           >
-            افتح المحرر
+            العرض التجريبي
           </a>
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label="القائمة"
-            className="grid size-9 place-items-center rounded-[8px] border border-line md:hidden dark:border-white/10"
+            className="grid size-9 place-items-center rounded-[8px] border border-line lg:hidden dark:border-white/10"
           >
             {open ? <X className="size-4" /> : <Menu className="size-4" />}
           </button>
@@ -66,7 +129,7 @@ export function SiteHeader({ current }: { current: string }) {
       </div>
 
       {open && (
-        <nav className="border-t border-line px-4 pb-3 md:hidden dark:border-white/10">
+        <nav className="border-t border-line px-4 pb-3 lg:hidden dark:border-white/10">
           {NAV_ITEMS.map((item) => (
             <a
               key={item.to}
@@ -79,20 +142,30 @@ export function SiteHeader({ current }: { current: string }) {
               {item.label}
             </a>
           ))}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-pressed={dark}
+            className="mt-1 flex w-full items-center gap-2 rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted"
+          >
+            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            {dark ? "الوضع الفاتح" : "الوضع الداكن"}
+          </button>
         </nav>
       )}
     </header>
+    </>
   );
 }
 
 export function SiteFooter() {
+  const { texts } = useSiteSettings();
   return (
-    <footer className="border-t border-line bg-white dark:border-white/10 dark:bg-[#111722]">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-8 sm:px-6 md:grid-cols-3">
+    <footer className="border-t border-line/60 bg-white dark:border-white/10 dark:bg-[#111722]">
+      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-12 sm:grid-cols-2 sm:px-6 md:grid-cols-3">
         <div>
           <div className="flex items-center gap-2.5">
-            <Mark />
-            <strong className="text-[14px] font-extrabold">{BRAND.lockup}</strong>
+            <BrandLogo compact />
           </div>
           <p className="mt-3 text-[12px] leading-6 text-muted">{BRAND.tagline}</p>
           <p className="mt-2 text-[11px] leading-5 text-muted">
@@ -121,24 +194,71 @@ export function SiteFooter() {
             {CONTACT_PHONE_DISPLAY}
           </a>
           <p className="mt-3 text-[11px] leading-5 text-muted">
-            جميع الملفات تُحفظ في متصفحك وتُصدَّر محليًا، فلا تُرفع إلى أي سيرفر.
+            {texts.footerNote.trim() || "تُحفظ المشاريع في متصفحك وتُصدَّر محليًا، مع اتصال عند الحاجة للترخيص أو الذكاء الاصطناعي."}
           </p>
         </div>
       </div>
-      <div className="border-t border-line py-4 text-center text-[11px] text-muted dark:border-white/10">
-        © {new Date().getFullYear()} {BRAND.lockup} — {BRAND.platform}
+      {/*
+       * Legal line. The lockup prints once — `نَسَق` carries `NASAQ` inside
+       * `BrandLockup`, so printing `BRAND.platform` again would duplicate it.
+       */}
+      <div className="border-t border-line/60 px-4 py-4 dark:border-white/10">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-[11px] text-muted sm:justify-between">
+          <span>
+            © {new Date().getFullYear()} <BrandLockup />
+          </span>
+          {/* Designer signature: small, elegant, part of the footer identity —
+              never competing with the platform name. */}
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="h-3 w-px bg-line dark:bg-white/15" />
+            المصمم والمطور <strong className="font-extrabold text-ink dark:text-white">{BRAND.developer}</strong>
+          </span>
+        </div>
       </div>
     </footer>
   );
 }
 
-function Mark() {
+export function BrandLogo({ compact = false }: { compact?: boolean }) {
   return (
-    <span className="grid size-9 shrink-0 place-items-center rounded-[9px] bg-navy">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
-        <rect x="4.5" y="3" width="13" height="18" rx="1.6" stroke="#e0c894" strokeWidth="1.6" />
-        <path d="M8 8.5h6M8 12.5h6M8 16.5h3.5" stroke="#e0c894" strokeWidth="1.6" strokeLinecap="round" />
-      </svg>
+    <span className="inline-flex items-center gap-2.5" aria-label="نَسَق | NASAQ">
+      {/*
+       * Dark-mode swap: the mark's dark fills (#063b35/#1a1a1a) vanish on the
+       * dark chrome, so the dark theme loads the light-fill variant of the
+       * SAME artwork (only the <style> fills differ — geometry is untouched).
+       * Both files are always fetched from the same origin; the swap is pure
+       * CSS, no JS, and the light variant keeps its original colors.
+       */}
+      <img
+        src="/nasaq-mark.svg"
+        alt=""
+        aria-hidden
+        className={cn(compact ? "size-8 shrink-0" : "size-9 shrink-0", "dark:hidden")}
+      />
+      <img
+        src="/nasaq-mark-inv.svg"
+        alt=""
+        aria-hidden
+        className={cn(compact ? "size-8 shrink-0" : "size-9 shrink-0", "hidden dark:block")}
+      />
+      <span className="grid leading-none">
+        <strong className={compact ? "text-[14px] font-extrabold" : "text-[15px] font-extrabold"}>نَسَق</strong>
+        <span className="mt-1 text-[8px] font-bold tracking-[0.16em] text-muted" dir="ltr">NASAQ</span>
+      </span>
+    </span>
+  );
+}
+
+/**
+ * Text-only bilingual lockup for tight rows (legal lines, signatures).
+ * Renders `نَسَق | NASAQ` once — never repeated with a second copy of the name.
+ */
+export function BrandLockup() {
+  return (
+    <span className="inline-flex items-baseline gap-1.5 font-extrabold text-ink dark:text-white">
+      <span>نَسَق</span>
+      <span aria-hidden className="text-muted">|</span>
+      <span className="text-[10px] tracking-[0.16em] text-muted" dir="ltr">NASAQ</span>
     </span>
   );
 }

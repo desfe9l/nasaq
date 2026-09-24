@@ -1,4 +1,5 @@
-import { clamp, uid } from "@/lib/utils";
+import type { FadeOverlay } from "./fade";
+import { clamp, uid } from "../utils.ts";
 import type { Numerals, TextFit } from "./arabic";
 
 /** A4 portrait, in millimetres — the historical default and page-size fallback. */
@@ -19,7 +20,8 @@ export const LEGACY_STORE_KEY = "diwan-report-project-v2";
 export const UI_KEY = "nasaq-report-ui-v2";
 export const LEGACY_UI_KEY = "diwan-report-ui-v2";
 
-export type SizeId = "a4-portrait" | "a4-landscape" | "slide-16-9" | "a3-portrait" | "custom";
+export type SizeId =
+  "a4-portrait" | "a4-landscape" | "slide-16-9" | "a3-portrait" | "custom";
 
 export interface SizePreset {
   id: SizeId;
@@ -31,11 +33,41 @@ export interface SizePreset {
 
 /** Page presets offered in the editor. `custom` keeps whatever the user types. */
 export const SIZE_PRESETS: SizePreset[] = [
-  { id: "a4-portrait", name: "A4 رأسي", desc: "210 × 297 مم — التقارير الرسمية", w: 210, h: 297 },
-  { id: "a4-landscape", name: "A4 أفقي", desc: "297 × 210 مم — الجداول العريضة", w: 297, h: 210 },
-  { id: "slide-16-9", name: "عرض 16:9", desc: "338.7 × 190.5 مم — العروض التقديمية", w: 338.7, h: 190.5 },
-  { id: "a3-portrait", name: "A3 رأسي", desc: "297 × 420 مم — الملصقات واللوحات", w: 297, h: 420 },
-  { id: "custom", name: "مقاس مخصص", desc: "أدخل العرض والارتفاع بالمليمتر", w: 210, h: 297 },
+  {
+    id: "a4-portrait",
+    name: "A4 رأسي",
+    desc: "210 × 297 مم — التقارير الرسمية",
+    w: 210,
+    h: 297,
+  },
+  {
+    id: "a4-landscape",
+    name: "A4 أفقي",
+    desc: "297 × 210 مم — الجداول العريضة",
+    w: 297,
+    h: 210,
+  },
+  {
+    id: "slide-16-9",
+    name: "عرض 16:9",
+    desc: "338.7 × 190.5 مم — العروض التقديمية",
+    w: 338.7,
+    h: 190.5,
+  },
+  {
+    id: "a3-portrait",
+    name: "A3 رأسي",
+    desc: "297 × 420 مم — الملصقات واللوحات",
+    w: 297,
+    h: 420,
+  },
+  {
+    id: "custom",
+    name: "مقاس مخصص",
+    desc: "أدخل العرض والارتفاع بالمليمتر",
+    w: 210,
+    h: 297,
+  },
 ];
 
 export function sizePreset(id: SizeId | string | undefined): SizePreset {
@@ -43,7 +75,10 @@ export function sizePreset(id: SizeId | string | undefined): SizePreset {
 }
 
 /** Page dimensions in mm; falls back to A4 so pre-upgrade projects keep working. */
-export function pageSize(page?: { w?: number; h?: number } | null): { w: number; h: number } {
+export function pageSize(page?: { w?: number; h?: number } | null): {
+  w: number;
+  h: number;
+} {
   const w = Number(page?.w);
   const h = Number(page?.h);
   return {
@@ -56,7 +91,8 @@ export function pageSize(page?: { w?: number; h?: number } | null): { w: number;
 export function sizeIdOf(page?: { w?: number; h?: number } | null): SizeId {
   const { w, h } = pageSize(page);
   const hit = SIZE_PRESETS.find(
-    (s) => s.id !== "custom" && Math.abs(s.w - w) < 0.5 && Math.abs(s.h - h) < 0.5,
+    (s) =>
+      s.id !== "custom" && Math.abs(s.w - w) < 0.5 && Math.abs(s.h - h) < 0.5,
   );
   return hit?.id || "custom";
 }
@@ -75,6 +111,7 @@ export type ElType =
   | "qr"
   | "stat"
   | "progress"
+  | "svg"
   | "group";
 
 export type ThemeId = "official" | "eid" | "ministry" | "slate" | "sand";
@@ -85,6 +122,8 @@ export interface ElStyle {
   fontSize?: number;
   fontWeight?: number | string;
   fontStyle?: string;
+  /** Underline is a text-decoration, not a font variant — hence its own flag. */
+  underline?: boolean;
   color?: string;
   background?: string;
   fill?: string;
@@ -103,8 +142,31 @@ export interface ElStyle {
   objectY?: number;
   stroke?: number;
   shape?: "rect" | "circle" | "rounded";
+  /**
+   * `svg` elements: independent fill/stroke overrides applied on top of the
+   * author's markup (see svg.ts `applySvgColors`). Unset means the artwork's
+   * own colors stand — overriding is opt-in per channel.
+   */
+  svgFill?: string;
+  svgStroke?: string;
+  /** `svg` elements: stroke width override in mm; unset keeps the markup's. */
+  svgStrokeWidth?: number;
   /** `shape` elements: id from `shapes.ts`. Absent means a plain rectangle. */
   shapeId?: string;
+  /** Preserve the element's intrinsic proportions while resizing. */
+  aspectLock?: boolean;
+  /**
+   * Mirror the element's artwork on that axis (step 7). Purely a render/transform
+   * flag: geometry, position and the layer order are untouched, so flipping is
+   * lossless and reversible — flip twice and the element is byte-identical again.
+   */
+  flipX?: boolean;
+  flipY?: boolean;
+  /**
+   * طبقة التلاشي — a gradient scrim painted above an image (step 8). Percentages
+   * and colours only; `fade.ts` owns the rendering rules.
+   */
+  fade?: FadeOverlay;
   cols?: number;
   rows?: number;
   headerBg?: string;
@@ -119,7 +181,9 @@ export interface ElStyle {
   /** `progress` elements: show the percentage number next to the caption. */
   showValue?: boolean;
   /** `progress` elements: linear bar or radial ring. */
-  variant?: "bar" | "ring";
+  variant?: "bar" | "ring" | "steps";
+  /** Steps variant: number of dots/stages (2–12). */
+  steps?: number;
   /** Arabic typography: numeral style for digits inside the content. */
   numerals?: Numerals;
   /** How text behaves when it exceeds its box. */
@@ -140,6 +204,19 @@ export interface ElStyle {
    * `.justified-rtl` rule, which pins the last line back to the right edge.
    */
   justifyLastLine?: "start" | "stretch";
+  /**
+   * تطويل تلقائي (Auto-Kashida).
+   *
+   * Justify with Arabic elongation instead of word gaps: `kashida.ts` inserts
+   * tatweel strokes only between dual-joining letters, evenly across the line,
+   * and never on a paragraph's last line. This is the correct way to justify
+   * formal Arabic prose — `text-align: justify` spreads the SPACES, which reads
+   * as broken typesetting in Arabic because the whitespace is meant to stay
+   * constant. Opt-in per element: setting it is an authorial choice, and the
+   * rendered string (with its tatweel characters) is what every export writes,
+   * so a document never changes appearance depending on the reader's engine.
+   */
+  kashida?: boolean;
   /** Draw the text vertically, top-to-bottom (titles on covers). */
   writingMode?: "horizontal" | "vertical";
   /** Apply the author's line breaks only; collapse soft wraps. */
@@ -184,6 +261,8 @@ export interface CanvasEl {
   z: number;
   locked?: boolean;
   hidden?: boolean;
+  /** Shared movement relationship; unlike a group, linked elements remain independent. */
+  linkId?: string;
   content?: string;
   src?: string;
   icon?: string;
@@ -198,6 +277,22 @@ export interface CanvasEl {
    * ungrouping.
    */
   children?: CanvasEl[];
+  /**
+   * قناع القص (Clipping Mask): the id of the shape element on the same page
+   * whose geometry clips this element's paint. One shape may clip several
+   * elements; removing the mask clears the ids that point at it.
+   */
+  clippedBy?: string;
+  /**
+   * Page furniture (letterhead / footer strip) that «تثبيت الترويسة والتذييل»
+   * has applied to this element.
+   *
+   * A pure marker: it records that the element belongs to the document's shared
+   * header or footer, which is what makes re-applying idempotent and removing
+   * the furniture exact. Geometry, styling and behaviour are untouched, and an
+   * element without the marker is an ordinary element.
+   */
+  hfRole?: "header" | "footer";
 }
 
 export interface Page {
@@ -215,13 +310,41 @@ export interface Project {
   name: string;
   theme: ThemeId;
   orgName: string;
+  /**
+   * Official transaction / outgoing number printed by the {رقم_المعاملة} macro.
+   *
+   * Optional: documents written before macros existed simply resolve the macro
+   * to a fill-in placeholder, so no migration is needed.
+   */
+  transactionNo?: string;
   pages: Page[];
   /** Library metadata — absent on files exported before the upgrade. */
   id?: string;
   createdAt?: number;
   updatedAt?: number;
   defaultSize?: SizeId;
+  /** Which pack this document was created from (category filters on /projects). */
+  pack?: PackId;
+  /** Starred by the owner. Persisted with the row, never part of undo history. */
+  favorite?: boolean;
+  /**
+   * Page-1 JPEG capture for the projects grid. Written on auto-save only —
+   * deliberately excluded from undo history (`projectSlice`) so snapshots
+   * never carry multi-KB data URLs.
+   */
+  thumbnail?: string;
 }
+
+/**
+ * A Project snapshot that also remembers which page was active. Only
+ * meaningful for in-memory history entries (undo/redo) — persisted project
+ * files don't carry this, since loading always starts on the first page.
+ * Carrying it through history means Undo restores the page the user was
+ * actually on instead of silently jumping back to page 1. Kept out of the
+ * base `Project` type so it doesn't collide with the editor store's own
+ * (always-defined) `activePageId`.
+ */
+export type ProjectSnapshot = Project & { activePageId?: string };
 
 export interface ProjectMeta {
   id: string;
@@ -231,6 +354,9 @@ export interface ProjectMeta {
   pages: number;
   createdAt: number;
   updatedAt: number;
+  pack?: PackId;
+  favorite?: boolean;
+  thumbnail?: string;
 }
 
 export function projectMeta(p: Project): ProjectMeta {
@@ -242,6 +368,9 @@ export function projectMeta(p: Project): ProjectMeta {
     pages: p.pages?.length || 0,
     createdAt: p.createdAt || Date.now(),
     updatedAt: p.updatedAt || Date.now(),
+    pack: p.pack,
+    favorite: p.favorite,
+    thumbnail: p.thumbnail,
   };
 }
 
@@ -373,6 +502,7 @@ export const TYPE_NAME: Record<ElType, string> = {
   qr: "رمز QR",
   stat: "مؤشر",
   progress: "شريط تقدم",
+  svg: "رسم SVG",
   group: "مجموعة",
 };
 
@@ -515,6 +645,20 @@ export const PROGRESS_PRESETS: ProgressPreset[] = [
     h: 44,
     style: { value: 68, showValue: true, fontSize: 11 },
   },
+  {
+    id: "steps",
+    label: "نقاط مراحل",
+    sample: "مراحل المشروع",
+    w: 120,
+    h: 18,
+    style: {
+      value: 60,
+      showValue: true,
+      fontSize: 10,
+      variant: "steps",
+      steps: 5,
+    },
+  },
 ];
 
 /** Multi-step progress sets, for a page of indicators filled at once. */
@@ -541,7 +685,11 @@ export function defaultTable(cols: number, rows: number) {
   return JSON.stringify(data);
 }
 
-export function parseTable(content: string | undefined, cols = 3, rows = 4): string[][] {
+export function parseTable(
+  content: string | undefined,
+  cols = 3,
+  rows = 4,
+): string[][] {
   try {
     const parsed = JSON.parse(content || "[]");
     if (Array.isArray(parsed) && parsed.length) {
@@ -555,7 +703,11 @@ export function parseTable(content: string | undefined, cols = 3, rows = 4): str
   return JSON.parse(defaultTable(cols, rows)) as string[][];
 }
 
-export function createElement(type: ElType, over: Partial<CanvasEl> = {}, theme?: Theme): CanvasEl {
+export function createElement(
+  type: ElType,
+  over: Partial<CanvasEl> = {},
+  theme?: Theme,
+): CanvasEl {
   const t = theme || THEMES.official;
   const defaults: Record<ElType, Partial<CanvasEl>> = {
     text: {
@@ -574,7 +726,8 @@ export function createElement(type: ElType, over: Partial<CanvasEl> = {}, theme?
     box: {
       w: 92,
       h: 36,
-      content: "محتوى المربع — يمكن تعديل النص والمحاذاة والخلفية من لوحة الخصائص.",
+      content:
+        "محتوى المربع — يمكن تعديل النص والمحاذاة والخلفية من لوحة الخصائص.",
       style: {
         fontFamily: "Cairo",
         fontSize: 12,
@@ -665,6 +818,17 @@ export function createElement(type: ElType, over: Partial<CanvasEl> = {}, theme?
       content: "https://",
       style: { fill: "#ffffff", color: t.primary },
     },
+    svg: {
+      w: 60,
+      h: 60,
+      // A tiny sample glyph (stroke-only rounded square + diagonal) so the
+      // element is never empty; the author pastes their own markup in the
+      // properties panel. Content is sanitised before it ever renders —
+      // see sanitizeSvgContent in svg.ts.
+      content:
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="3" stroke="currentColor" stroke-width="2"/><path d="M7 14l3-3 3 3 4-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+      style: { color: t.primary, overflowVisible: true },
+    },
     stat: {
       w: 72,
       h: 36,
@@ -726,16 +890,40 @@ export function createElement(type: ElType, over: Partial<CanvasEl> = {}, theme?
     ...over,
   };
   el.style = { ...(d.style || {}), ...(over.style || {}) };
-  if (type === "table" && !el.content) el.content = defaultTable(el.style.cols || 3, el.style.rows || 4);
+  if (type === "table" && !el.content)
+    el.content = defaultTable(el.style.cols || 3, el.style.rows || 4);
   return el;
 }
 
-export function constrainElement(el: CanvasEl, size: { w: number; h: number } = A4) {
-  el.w = clamp(Number(el.w) || MIN_SIZE, MIN_SIZE, size.w);
-  el.h = clamp(Number(el.h) || MIN_SIZE, MIN_SIZE, size.h);
-  el.x = clamp(Number(el.x) || 0, 0, Math.max(0, size.w - el.w));
-  el.y = clamp(Number(el.y) || 0, 0, Math.max(0, size.h - el.h));
-  el.opacity = clamp(Number.isFinite(Number(el.opacity)) ? Number(el.opacity) : 1, 0, 1);
+/**
+ * Sanitises an element's geometry — NOT a page-bounds clamp.
+ *
+ * Editing is free: an element may sit fully inside the page, straddle its
+ * edge, or move entirely outside it (see WORKSPACE_MARGIN in CanvasStage).
+ * Only export clips content to the page rectangle. This function's only job
+ * is to guard against corrupt/non-finite values (a bad paste, an old file,
+ * a manual edit) — it must never pull a legitimately off-page element back
+ * onto the page, or every drag/reload would silently undo itself.
+ *
+ * `size` (the page size) is still used to size the sanity ceiling: large
+ * enough that any real design fits, small enough that garbage data can't
+ * blow up layout/export math. ±1e4mm matches the bound export.ts already
+ * applies per-field when serialising, so the two stay consistent.
+ */
+export function constrainElement(
+  el: CanvasEl,
+  size: { w: number; h: number } = A4,
+) {
+  const maxDim = Math.max(size.w, size.h, A4.w, A4.h) * 10;
+  el.w = clamp(Number(el.w) || MIN_SIZE, MIN_SIZE, maxDim);
+  el.h = clamp(Number(el.h) || MIN_SIZE, MIN_SIZE, maxDim);
+  el.x = clamp(Number.isFinite(Number(el.x)) ? Number(el.x) : 0, -1e4, 1e4);
+  el.y = clamp(Number.isFinite(Number(el.y)) ? Number(el.y) : 0, -1e4, 1e4);
+  el.opacity = clamp(
+    Number.isFinite(Number(el.opacity)) ? Number(el.opacity) : 1,
+    0,
+    1,
+  );
   el.rotation = Number(el.rotation) || 0;
 }
 
@@ -820,7 +1008,12 @@ export function findElement(
  * Group children store group-relative coordinates, so reaching a nested element
  * means adding every ancestor's origin on the way down.
  */
-export function absolutePosition(els: CanvasEl[], id: string, ox = 0, oy = 0): { x: number; y: number } | null {
+export function absolutePosition(
+  els: CanvasEl[],
+  id: string,
+  ox = 0,
+  oy = 0,
+): { x: number; y: number } | null {
   for (const el of els) {
     const x = ox + el.x;
     const y = oy + el.y;
@@ -852,7 +1045,10 @@ export function scaleChildren(group: CanvasEl, prevW: number, prevH: number) {
  * Wrap elements into a single group, converting their page coordinates into
  * group-relative ones.
  */
-export function createGroupFrom(els: CanvasEl[], name?: string): CanvasEl | null {
+export function createGroupFrom(
+  els: CanvasEl[],
+  name?: string,
+): CanvasEl | null {
   const box = elementsBounds(els);
   if (!box || els.length < 2) return null;
   const children = els.map((el) => ({
@@ -886,7 +1082,8 @@ export function explodeGroup(group: CanvasEl): CanvasEl[] {
   }));
 }
 
-export type AlignEdge = "left" | "right" | "center" | "top" | "middle" | "bottom";
+export type AlignEdge =
+  "left" | "right" | "center" | "top" | "middle" | "bottom";
 
 /**
  * New positions that align elements to a shared edge.
@@ -928,6 +1125,46 @@ export function alignPositions(
 }
 
 /**
+ * Alignment moves for a selection, resolved in absolute page space.
+ *
+ * Group members store group-relative coordinates, so each pick is lifted into
+ * page space, aligned against `frame` (the page or the selection bounds), and
+ * mapped back into the space it actually lives in. Doing the math in mixed
+ * coordinate spaces would fling a group member to the page corner while the
+ * frame said otherwise. With one id this aligns that single element against
+ * the frame — the artboard when the frame is the page box.
+ */
+export function alignmentMoves(
+  pageEls: CanvasEl[],
+  ids: string[],
+  edge: AlignEdge,
+  frame: Box,
+): { id: string; x: number; y: number }[] {
+  const picked = ids.flatMap((id) => {
+    const found = findElement(pageEls, id)?.el;
+    if (!found) return [];
+    const abs = absolutePosition(pageEls, id);
+    return [
+      {
+        el: found,
+        dx: abs ? abs.x - found.x : 0,
+        dy: abs ? abs.y - found.y : 0,
+      },
+    ];
+  });
+  const absPicked = picked.map((p) => ({
+    ...p.el,
+    x: p.el.x + p.dx,
+    y: p.el.y + p.dy,
+  }));
+  return alignPositions(absPicked, edge, frame).map((m, i) => ({
+    id: m.id,
+    x: m.x - picked[i].dx,
+    y: m.y - picked[i].dy,
+  }));
+}
+
+/**
  * Even gaps between elements on one axis ("distribute spacing").
  *
  * The outermost two elements stay put and the rest are spread so the *gaps*
@@ -953,7 +1190,11 @@ export function distributePositions(
   const out: { id: string; x: number; y: number }[] = [];
   let cursor = posOf(first);
   for (const el of sorted) {
-    out.push(axis === "h" ? { id: el.id, x: cursor, y: el.y } : { id: el.id, x: el.x, y: cursor });
+    out.push(
+      axis === "h"
+        ? { id: el.id, x: cursor, y: el.y }
+        : { id: el.id, x: el.x, y: cursor },
+    );
     cursor += sizeOf(el) + gap;
   }
   return out;
@@ -987,3 +1228,175 @@ export const SHADOWS: { id: string; label: string; value: string }[] = [
   { id: "medium", label: "متوسط", value: "0 2mm 5mm rgba(15,23,42,.16)" },
   { id: "strong", label: "قوي", value: "0 3mm 8mm rgba(15,23,42,.24)" },
 ];
+
+// ── Viewer geometry: millimetres ⇄ screen pixels ───────────────────────────
+
+/** Millimetres per CSS pixel at 100% zoom (1px = 25.4/96 mm). */
+export const MM_PER_PX = 25.4 / 96;
+
+/**
+ * Convert a screen-space length to document millimetres at a given zoom.
+ *
+ * All thresholds the editor feels (snap stickiness, auto-pan margins, cursor
+ * hit radii) are specified in *screen* pixels — what the user actually sees —
+ * then converted here so the math stays in document space at every zoom.
+ */
+export function pxToMm(px: number, zoom: number): number {
+  const z = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return (px * MM_PER_PX) / z;
+}
+
+/**
+ * Convert a document-space length to screen pixels at a given zoom.
+ * Inverse of `pxToMm` — used to keep on-screen chrome a constant size.
+ */
+export function mmToPx(mm: number, zoom: number): number {
+  const z = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return (mm * z) / MM_PER_PX;
+}
+
+// ── Element defaults: one source for palette inserts and drawn elements ────
+
+/**
+ * Default geometry and style for a new element of `type`.
+ *
+ * Palette inserts, text drawn on the canvas and pasted fallbacks all start
+ * from this single source, so an element behaves the same however it was
+ * created. Values are document millimetres (and pt for fonts) exactly as the
+ * properties panel expects them.
+ */
+export function createElementDefaults(
+  type: ElType,
+): Partial<CanvasEl> & { style: Partial<ElStyle> } {
+  const base: Partial<CanvasEl> & { style: Partial<ElStyle> } = {
+    style: {
+      fontFamily: "Tajawal",
+      fontSize: 14,
+      color: "#172033",
+      textAlign: "right",
+    },
+  };
+  switch (type) {
+    case "text":
+      /*
+       * New text is borderless and fill-free: only the glyphs carry colour
+       * (#0F172A). An empty background/fill and a zero border keep the frame
+       * transparent so the selection box is the only chrome ever drawn.
+       */
+      return {
+        ...base,
+        w: 80,
+        h: 14,
+        style: {
+          ...base.style,
+          color: "#0F172A",
+          background: "",
+          fill: "",
+          borderWidth: 0,
+          stroke: 0,
+        },
+      };
+    case "box":
+      return {
+        ...base,
+        w: 60,
+        h: 30,
+        style: { ...base.style, fill: "#f7f8fb", radius: 4 },
+      };
+    case "stat":
+      return {
+        ...base,
+        w: 55,
+        h: 32,
+        style: { ...base.style, fill: "#f2f7f3", radius: 6 },
+      };
+    case "shape":
+      return {
+        ...base,
+        w: 40,
+        h: 40,
+        style: { ...base.style, fill: "#006c35" },
+      };
+    case "line":
+      return {
+        ...base,
+        w: 60,
+        h: 4,
+        style: { ...base.style, color: "#c9a86a", stroke: 0.8 },
+      };
+    case "divider":
+      return {
+        ...base,
+        w: 80,
+        h: 6,
+        style: { ...base.style, color: "#c9a86a", stroke: 0.5 },
+      };
+    case "table":
+      return {
+        ...base,
+        w: 150,
+        h: 60,
+        style: { ...base.style, cols: 3, rows: 4 },
+      };
+    case "image":
+      return {
+        ...base,
+        w: 60,
+        h: 45,
+        style: { ...base.style, objectFit: "cover" },
+      };
+    case "logo":
+      return {
+        ...base,
+        w: 24,
+        h: 24,
+        style: { ...base.style, objectFit: "contain" },
+      };
+    case "qr":
+      return { ...base, w: 26, h: 26 };
+    case "icon":
+      return {
+        ...base,
+        w: 10,
+        h: 10,
+        style: { ...base.style, color: "#c9a86a" },
+      };
+    case "progress":
+      return {
+        ...base,
+        w: 70,
+        h: 16,
+        style: { ...base.style, fill: "#006c35", value: 70 },
+      };
+    case "stamp":
+      return {
+        ...base,
+        w: 34,
+        h: 34,
+        style: { ...base.style, color: "#c9a86a" },
+      };
+    default:
+      return { ...base, w: 40, h: 30 };
+  }
+}
+
+/**
+ * Top-left position that centres a `w × h` element inside the visible area of
+ * the workspace (in document millimetres), clamped so the element stays fully
+ * on the page. Palette inserts and drawn text both land here, so what you add
+ * always appears where you are looking — never in a fixed corner.
+ */
+export function centerFor(
+  visible: { x: number; y: number; w: number; h: number },
+  size: { w: number; h: number; elW: number; elH: number },
+): { x: number; y: number } {
+  const cx = visible.x + visible.w / 2;
+  const cy = visible.y + visible.h / 2;
+  const x = clamp(cx - size.elW / 2, 0, Math.max(0, size.w - size.elW));
+  const y = clamp(cy - size.elH / 2, 0, Math.max(0, size.h - size.elH));
+  return { x: round2(x), y: round2(y) };
+}
+
+function round2(v: number): number {
+  return Math.round(v * 100) / 100;
+}
