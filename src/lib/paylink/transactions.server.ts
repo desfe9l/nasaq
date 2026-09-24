@@ -8,9 +8,12 @@ type PaylinkRow = {
   paylink_order_status: string | null; license_id: string | null; keygen_license_id: string | null;
   license_key_prefix: string | null; entitlement_expires_at: string | Date | null;
   last_error: string | null; created_at: string | Date; processed_at: string | Date | null;
+  api_version?: string | null; payment_type?: string | null;
+  merchant_order_number?: string | null; merchant_mobile?: string | null;
+  paid_at?: string | Date | null;
 };
 type AdminRow = PaylinkRow & { user_email: string | null; user_name: string | null; license_status: "ACTIVE" | "EXPIRED" | "REVOKED" | null };
-function iso(value: string | Date | null): string | null { return value === null ? null : value instanceof Date ? value.toISOString() : new Date(value).toISOString(); }
+function iso(value: string | Date | null | undefined): string | null { return value == null ? null : value instanceof Date ? value.toISOString() : new Date(value).toISOString(); }
 function mapRow(row: PaylinkRow): PaylinkTransaction {
   return {
     id: row.id, userId: row.user_id, orderNumber: row.order_number, transactionNo: row.transaction_no,
@@ -19,6 +22,11 @@ function mapRow(row: PaylinkRow): PaylinkTransaction {
     paylinkOrderStatus: row.paylink_order_status, licenseId: row.license_id, keygenLicenseId: row.keygen_license_id,
     licenseKey: row.license_key_prefix, licenseStatus: null, entitlementExpiresAt: iso(row.entitlement_expires_at),
     lastError: row.last_error, createdAt: iso(row.created_at) || "", processedAt: iso(row.processed_at),
+    apiVersion: row.api_version ?? null,
+    paymentType: row.payment_type ?? null,
+    merchantOrderNumber: row.merchant_order_number ?? null,
+    merchantMobile: row.merchant_mobile ?? null,
+    paidAt: iso(row.paid_at),
   };
 }
 
@@ -57,6 +65,34 @@ export async function failPaylinkTransaction(sql: Sql, transactionNo: string, me
 export async function getPaylinkTransactionForUser(sql: Sql, userId: string, transactionNo: string): Promise<PaylinkTransaction | null> {
   const rows = await sql<PaylinkRow>`select * from paylink_transactions where user_id = ${userId} and transaction_no = ${transactionNo} limit 1`;
   return rows[0] ? mapRow(rows[0]) : null;
+}
+
+/**
+ * Record the V2 callback envelope on the transaction.
+ *
+ * Written BEFORE any licence or entitlement work and never gated on status !=
+ * 'PAID', so a redelivered webhook still refreshes the audit columns without
+ * disturbing the row that fulfilment already completed.
+ */
+export async function recordPaylinkWebhook(sql: Sql, input: {
+  transactionNo: string;
+  apiVersion: string;
+  paymentType: string | null;
+  merchantOrderNumber: string | null;
+  merchantMobile: string | null;
+  paid: boolean;
+}): Promise<void> {
+  await sql`
+    update paylink_transactions
+    set api_version = ${input.apiVersion},
+        payment_type = ${input.paymentType},
+        merchant_order_number = ${input.merchantOrderNumber},
+        merchant_mobile = ${input.merchantMobile},
+        webhook_received_at = now(),
+        paid_at = case when ${input.paid} then coalesce(paid_at, now()) else paid_at end,
+        updated_at = now()
+    where transaction_no = ${input.transactionNo}
+  `;
 }
 
 export async function getLatestPaylinkTransactionForUser(sql: Sql, userId: string): Promise<PaylinkTransaction | null> {

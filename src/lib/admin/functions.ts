@@ -123,6 +123,60 @@ export const adminVerifyFn = createServerFn({ method: "POST" })
     return { ok, configured: ok || adminIdentityConfigPresent() };
   });
 
+/**
+ * Licence-administration probe for the owner.
+ *
+ * `adminVerifyFn` answers one yes/no question, which is not enough when the
+ * person reading it is the owner and the answer is wrong. This returns the
+ * *diagnosis*: which of the three signals recognised them, and — when none
+ * did — which one is missing, so the fix is a single environment variable
+ * rather than a support ticket.
+ *
+ * It never returns the configured ids or emails, only booleans.
+ */
+export const adminLicenseAccessFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const [db, { superAdminDiagnostics }] = await Promise.all([
+      sql(),
+      import("@/lib/auth/super-admin.server"),
+    ]);
+    const identity = { id: context.userId, email: context.userEmail };
+    const diagnostics = await superAdminDiagnostics(db, identity);
+    return {
+      ...diagnostics,
+      /**
+       * Whether this identity may repair its own access. True only when the
+       * deployment has already declared them (owner record or super-admin
+       * allowlist) — the button is hidden otherwise, because the endpoint
+       * would refuse anyway.
+       */
+      canBootstrap: diagnostics.ownerConfigured || diagnostics.superAdminConfigured,
+    };
+  });
+
+/**
+ * Owner self-heal: promote the configured owner to SUPER_ADMIN.
+ *
+ * Guarded twice — the caller must be signed in AND match the deployment's own
+ * owner declaration — so this can never be a way to acquire access. It exists
+ * because a fresh database has no `admin_users` row, which previously left the
+ * owner staring at «هذا الحساب لا يملك صلاحية إدارة التراخيص» on their own
+ * product with no way forward short of hand-editing SQL.
+ */
+export const adminBootstrapOwnerFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const [db, { ensureOwnerSuperAdmin, superAdminDiagnostics }] = await Promise.all([
+      sql(),
+      import("@/lib/auth/super-admin.server"),
+    ]);
+    const identity = { id: context.userId, email: context.userEmail };
+    const result = await ensureOwnerSuperAdmin(db, identity);
+    const diagnostics = await superAdminDiagnostics(db, identity);
+    return { ...result, ...diagnostics };
+  });
+
 // ── Site settings ──────────────────────────────────────────────────────────
 
 /** Public read — commercial links, announcement, texts, Brand Kit presets. */

@@ -80,6 +80,19 @@ async function getClientIp(): Promise<string> {
   }
 }
 
+/**
+ * Administrator gate — now with the owner bypass.
+ *
+ * Three independent signals, any one of which is enough:
+ *   1. an administrator identity (config allowlist or `admin_users` row),
+ *   2. the platform owner record (`NASAQ_OWNER_*`),
+ *   3. a `SUPER_ADMIN` row or the super-admin allowlist.
+ *
+ * The owner used to fall through every licence call: the panel asked a single
+ * "are you an admin" question, and an owner whose deployment never wrote an
+ * `admin_users` row answered "no" to their own product. The bypass is checked
+ * server-side from the verified session only — a client cannot claim it.
+ */
 async function isAdministrator(
   context: { userId: string; userEmail: string | null },
 ): Promise<boolean> {
@@ -88,7 +101,17 @@ async function isAdministrator(
     id: context.userId,
     email: context.userEmail,
   });
-  return access.isAdmin;
+  if (access.isAdmin || access.isOwner) return true;
+  const { getSql } = await import("@/lib/db");
+  const { isSuperAdminIdentity } = await import("@/lib/auth/super-admin.server");
+  try {
+    return await isSuperAdminIdentity(await getSql(), {
+      id: context.userId,
+      email: context.userEmail,
+    });
+  } catch {
+    return false;
+  }
 }
 
 function publicLicense(license: License): LicenseInfo {
@@ -481,4 +504,112 @@ export const assignLicenseFn = createServerFn({ method: "POST" })
     }
     const license = await assignLicense(data.licenseId, data.userId, data.activate ?? true);
     return { error: null as string | null, license };
+  });
+
+// ── Super Admin: hand-held licence administration ───────────────────────────
+//
+// The owner's escape hatch. Everything below resolves the target user by EMAIL
+// as well as by id, because "activate licence for the person who paid" is the
+// actual job — an operator should never have to go hunting for a user id in
+// another table to do it.
+
+/** Resolve an email (or an id) to a verified user id. */
+async function resolveUserId(value: string): Promise<string | null> {
+  const needle = value.trim();
+  if (!needle) return null;
+  const { getSql } = await import("@/lib/db");
+  const sql = await getSql();
+  if (needle.includes("@")) {
+    const rows = await sql<{ id: string }>`
+      select id from "user" where lower(email) = ${needle.toLowerCase()} limit 1
+    `;
+    return rows[0]?.id ?? null;
+  }
+  const rows = await sql<{ id: string }>`
+    select id from "user" where id = ${needle} limit 1
+  `;
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * Activate (or re-assign) a licence for a specific account.
+ *
+ * Super-administrator only, and deliberately explicit: it takes the licence and
+ * the target user in one call, so a half-applied manual activation cannot leave
+ * a licence floating with no owner.
+ */
+export const superAdminAssignLicenseFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: { licenseId: string; user: string; activate?: boolean }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await isAdministrator(context))) {
+      return { error: "غير مصرح.", license: null as License | null };
+    }
+    const userId = await resolveUserId(data.user);
+    if (!userId) return { error: "المستخدم غير موجود.", license: null as License | null };
+    const current = await findLicenseById(data.licenseId);
+    if (!current) return { error: "الترخيص غير موجود.", license: null as License | null };
+    try {
+      const license = await assignLicense(data.licenseId, userId, data.activate ?? true);
+      return { error: null as string | null, license };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "تعذّر تعيين الترخيص.",
+        license: null as License | null,
+      };
+    }
+  });
+
+/**
+ * Set an exact expiry — the "precise" half of manual licence control.
+ *
+ * Extending by a number of days compounds rounding drift across renewals; an
+ * absolute date does not. Both remain available, but the operator who needs
+ * "valid until 31 December" now has a way to say exactly that.
+ */
+export const superAdminSetLicenseExpiryFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: { licenseId: string; expiresAt: string | null }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await isAdministrator(context))) {
+      return { error: "غير مصرح.", license: null as License | null };
+    }
+    const current = await findLicenseById(data.licenseId);
+    if (!current) return { error: "الترخيص غير موجود.", license: null as License | null };
+
+    let expiresAt = data.expiresAt;
+    if (expiresAt) {
+      const parsed = new Date(expiresAt);
+      if (Number.isNaN(parsed.getTime())) {
+        return { error: "تاريخ انتهاء غير صالح.", license: current };
+      }
+      expiresAt = parsed.toISOString();
+    }
+
+    if (current.metadata?.source === "keygen" && expiresAt) {
+      const providerId = current.metadata.keygenLicenseId;
+      if (!providerId) {
+        return { error: "معرّف ترخيص Keygen غير موجود.", license: current };
+      }
+      try {
+        await updateKeygenLicenseExpiry(providerId, expiresAt);
+      } catch {
+        return { error: "تعذر تحديث الترخيص لدى Keygen.", license: current };
+      }
+    }
+
+    try {
+      // `extendLicense` only ever moves a date forwards, so clearing an expiry
+      // (an owner converting a term licence to an open one) goes through the
+      // generic update instead.
+      const license = expiresAt
+        ? await extendLicense(data.licenseId, undefined, expiresAt)
+        : await dbUpdate(data.licenseId, { expiresAt: null });
+      return { error: null as string | null, license };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : "تعذّر تحديث الترخيص.",
+        license: null as License | null,
+      };
+    }
   });

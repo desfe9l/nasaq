@@ -46,6 +46,16 @@ export type PaylinkTransaction = {
   lastError: string | null;
   createdAt: string;
   processedAt: string | null;
+  /** Paylink webhook contract marker — `"v2"` once a V2 callback was accepted. */
+  apiVersion: string | null;
+  /** Gateway method that settled the order (mada, visaMastercard, stcpay, …). */
+  paymentType: string | null;
+  /** The order number Paylink echoed back on the V2 callback. */
+  merchantOrderNumber: string | null;
+  /** Merchant mobile as reported by Paylink (V2 merchant block). */
+  merchantMobile: string | null;
+  /** When Paylink confirmed settlement. */
+  paidAt: string | null;
 };
 
 export type AdminPaylinkTransaction = PaylinkTransaction & {

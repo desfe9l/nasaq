@@ -1330,7 +1330,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         return false;
       }
       if (!s.entitlements.unlimited_projects && !canCreateDemoProject(s.projects.length)) {
-        toast.error("اكتملت مساحة العرض التجريبي", {
+        toast.error("اكتملت مساحة تجربة المحرر", {
           description:
             "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
         });
@@ -1432,7 +1432,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         !s.entitlements.unlimited_projects &&
         !canCreateDemoProject(s.projects.length)
       ) {
-        toast.error("اكتملت مساحة العرض التجريبي", {
+        toast.error("اكتملت مساحة تجربة المحرر", {
           description:
             "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
         });
@@ -2966,7 +2966,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     addPage: (sizeId) => {
       const s = get();
       if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
-        toast.error("وصلت إلى حد صفحات العرض التجريبي", {
+        toast.error("وصلت إلى حد صفحات تجربة المحرر", {
           description:
             "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
         });
@@ -2993,7 +2993,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     addTemplatePage: (id) => {
       const s = get();
       if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
-        toast.error("وصلت إلى حد صفحات العرض التجريبي", {
+        toast.error("وصلت إلى حد صفحات تجربة المحرر", {
           description:
             "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
         });
@@ -3012,7 +3012,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     duplicatePage: (id) => {
       const s = get();
       if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
-        toast.error("وصلت إلى حد صفحات العرض التجريبي", {
+        toast.error("وصلت إلى حد صفحات تجربة المحرر", {
           description:
             "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
         });

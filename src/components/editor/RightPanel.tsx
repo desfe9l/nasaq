@@ -80,6 +80,7 @@ function normalizeDeg(deg: number): number {
 import { columnTotals, resizeMatrix, toCsv } from "@/lib/editor/tables";
 import { prepareText } from "@/lib/editor/text-render";
 import { useEditor, type RightTab } from "@/lib/editor/store";
+import { OPEN_REPORT_TOOLS_EVENT } from "./EditorApp";
 import { cn, round } from "@/lib/utils";
 import { toast } from "sonner";
 import { ShapePreview } from "./ShapePreview";
@@ -144,6 +145,23 @@ export function RightPanel({
     fade: false,
     export: false,
   });
+  /**
+   * «أدوات التقرير» is pinned in the toolbar, but it lives here.
+   *
+   * The pinned button broadcasts an event rather than holding a reference to
+   * this panel's state; this listener is the other half of that contract. It
+   * switches to «الخصائص» and force-opens the section, so pressing the button
+   * repeatedly is idempotent (a `toggle` would hide it on the second press).
+   */
+  useEffect(() => {
+    const openReportTools = () => {
+      setRightTab("properties");
+      accordions.open("report");
+    };
+    window.addEventListener(OPEN_REPORT_TOOLS_EVENT, openReportTools);
+    return () => window.removeEventListener(OPEN_REPORT_TOOLS_EVENT, openReportTools);
+  }, [accordions, setRightTab]);
+
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
   const [drop, setDrop] = useState<{
     id: string;

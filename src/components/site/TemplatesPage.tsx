@@ -123,14 +123,14 @@ export function TemplatesPage() {
    */
   const demoBlocked = (pageCount: number): boolean => {
     if (!entitlements.unlimited_projects && !canCreateDemoProject(projects.length)) {
-      toast.error("اكتملت مساحة العرض التجريبي", {
+      toast.error("اكتملت مساحة تجربة المحرر", {
         description: "يتضمن العرض مشروعًا واحدًا. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
       });
       return true;
     }
     const maxPages = DEMO_LICENSE.entitlements.maxPagesPerProject ?? Infinity;
     if (!entitlements.unlimited_pages && pageCount > maxPages) {
-      toast.error("وصلت إلى حد صفحات العرض التجريبي", {
+      toast.error("وصلت إلى حد صفحات تجربة المحرر", {
         description: "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
       });
       return true;

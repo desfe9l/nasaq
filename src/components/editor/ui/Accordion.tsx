@@ -108,9 +108,32 @@ export function useAccordionState<T extends string>(
     [storageKey],
   );
 
+  /**
+   * Force a section open without toggling.
+   *
+   * `toggle` cannot express "make sure this is showing": calling it twice closes
+   * the section again. A pinned toolbar button needs the idempotent version —
+   * pressing «أدوات التقرير» repeatedly must never hide the panel it just opened.
+   */
+  const open = useCallback(
+    (key: T) => {
+      setState((current) => {
+        if (current[key]) return current;
+        const next = { ...current, [key]: true };
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(next));
+        } catch {
+          /* private mode: state simply stops persisting */
+        }
+        return next;
+      });
+    },
+    [storageKey],
+  );
+
   const isOpen = useCallback((key: T, fallback = false) => state[key] ?? fallback, [state]);
 
-  return { isOpen, toggle, state };
+  return { isOpen, toggle, open, state };
 }
 
 /** Non-persistent variant for surfaces where remembering state is unwanted. */

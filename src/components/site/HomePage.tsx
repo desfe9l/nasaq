@@ -108,7 +108,7 @@ export function HomePage() {
                   href="/demo"
                   className="group inline-flex h-12 items-center gap-2.5 rounded-xl bg-emerald-500 px-6 text-[15px] font-black text-[#04120d] shadow-[0_8px_28px_-6px_rgba(16,185,129,0.65)] ring-1 ring-emerald-300/50 transition-all hover:-translate-y-0.5 hover:bg-emerald-400"
                 >
-                  <span>استكشف العرض التجريبي</span>
+                  <span>استكشف تجربة المحرر</span>
                   <ArrowLeft className="size-4 transition-transform group-hover:-translate-x-1" />
                 </a>
 

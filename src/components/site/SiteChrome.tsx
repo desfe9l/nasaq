@@ -13,7 +13,20 @@ import { readStoredTheme, writeStoredTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import { authEnabled, signOut } from "@/lib/auth/client";
-import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
+import { AccountBadge, useAccountTier } from "./AccountBadge";
+
+/**
+ * «مرخص» / «مجاني» badge for the signed-in account.
+ *
+ * Its own component so `useAccountTier` (→ `useLicense`) mounts only once a real
+ * user is on screen: the hook must be called unconditionally, and the signed-out
+ * branch of `HeaderAccount` returns before that point.
+ */
+function SignedInBadge({ user }: { user: AppUser }) {
+  const tier = useAccountTier(user);
+  return <AccountBadge tier={tier} />;
+}
 
 /**
  * «تسجيل الدخول / إنشاء حساب» and the signed-in identity chip.
@@ -81,8 +94,22 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
         )}
       >
         {avatar}
-        <span className={cn("max-w-[140px] truncate", variant === "header" && "hidden sm:inline")}>
-          {label}
+        {/*
+         * The account identity block: the FULL name (never truncated mid-word
+         * by a 140px cap — it collapses with `truncate` only when the chrome
+         * genuinely runs out of room) plus the licence-state badge.
+         */}
+        <span className="flex min-w-0 flex-col items-start leading-tight">
+          <span
+            className={cn(
+              "max-w-[180px] truncate text-[12px] font-extrabold",
+              variant === "header" && "hidden lg:inline",
+            )}
+            title={label}
+          >
+            {label}
+          </span>
+          <SignedInBadge user={user} />
         </span>
         <ChevronDown className="size-3.5 opacity-70" aria-hidden />
       </button>
@@ -95,6 +122,24 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
             variant === "header" ? "absolute end-0 mt-1.5" : "mt-1.5",
           )}
         >
+          {/*
+           * Identity header inside the menu: the full name is the one place a
+           * user goes to confirm WHICH account is signed in, so it prints in
+           * full here even when the collapsed chip hid it.
+           */}
+          <div className="border-b border-line px-3 pb-2 pt-1 dark:border-white/10">
+            <p className="truncate text-[12px] font-extrabold" title={label}>
+              {label}
+            </p>
+            {user.primaryEmail && (
+              <p className="truncate text-[10px] font-medium text-muted" dir="ltr" title={user.primaryEmail}>
+                {user.primaryEmail}
+              </p>
+            )}
+            <div className="mt-1.5">
+              <SignedInBadge user={user} />
+            </div>
+          </div>
           <a
             href="/account#settings"
             role="menuitem"
@@ -276,7 +321,7 @@ export function SiteHeader({ current }: { current: string }) {
             href="/demo"
             className="hidden h-9 items-center whitespace-nowrap rounded-[8px] border border-navy px-3 text-[12px] font-extrabold text-navy lg:inline-flex dark:text-white"
           >
-            العرض التجريبي
+            تجربة المحرر
           </a>
           <HeaderAccount />
           <button
@@ -309,7 +354,7 @@ export function SiteHeader({ current }: { current: string }) {
             href="/demo"
             className="block rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted lg:hidden"
           >
-            العرض التجريبي
+            تجربة المحرر
           </a>
           <button
             type="button"

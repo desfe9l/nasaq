@@ -3,10 +3,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /** Sidebar resize bounds (px) — shared by the drag handler and the persisted default. */
 const PANEL_MIN = { left: 232, right: 264 } as const;
 const PANEL_MAX = { left: 460, right: 520 } as const;
+
+/**
+ * «أدوات التقرير» lives inside the right panel's accordion, whose open/closed
+ * state belongs to `RightPanel`. The pinned toolbar button therefore announces
+ * intent with an event rather than reaching into another component's state —
+ * the panel opens itself, so the two can never disagree about what is showing.
+ */
+export const OPEN_REPORT_TOOLS_EVENT = "nasaq:open-report-tools";
 import {
   BookOpen,
   Check,
+  ClipboardList,
   Download,
+  FolderPlus,
+  Heading1,
   Focus,
   Eye,
   EyeOff,
@@ -51,6 +62,9 @@ import { ToolbarMenus } from "./ToolbarMenus";
 import { OVERLAY_BREAKPOINT, isOverlayViewport } from "@/lib/editor/ui-state";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useLicense } from "@/lib/license/client";
+import { AddLibraryDialog } from "./AddLibraryDialog";
+import { HeadingGeneratorDialog } from "./HeadingGeneratorDialog";
+import { OnboardingTour, hasSeenTour } from "./OnboardingTour";
 
 /**
  * The studio shell.
@@ -415,6 +429,16 @@ function Studio({
   );
   /** First load is what arms the auto-fit below. */
   const hydrated = useEditor((s) => s.hydrated);
+  /** «أضف مكتبة» and «مولد عناوين الفقرات» are modal, so they own no store state. */
+  const [addLibraryOpen, setAddLibraryOpen] = useState(false);
+  const [headingGeneratorOpen, setHeadingGeneratorOpen] = useState(false);
+  /**
+   * First-visit walkthrough. Read once, on mount, so the tour never reappears
+   * mid-session after the author dismisses it.
+   */
+  const [tourOpen, setTourOpen] = useState(
+    () => typeof window !== "undefined" && !hasSeenTour(),
+  );
   /** Only the very first fit may be skipped when the saved zoom already fits. */
   const firstFitRef = useRef(true);
 
@@ -1053,12 +1077,18 @@ function Studio({
               window.dispatchEvent(new CustomEvent("nasaq:draw-text"));
             }}
             className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
-            title="اكتب نصك: اسحب على الصفحة لرسم مربع النص"
+            title="إدراج مربع نص — اسحب على الصفحة لتحديد موضعه وحجمه"
+            aria-label="إدراج مربع نص"
+            data-tour="text-tool"
           >
             <PenLine className="size-4" />
-            {/* Label returns from `lg` up; on a tablet the icon + tooltip carry
-                the action, which is what buys the tool tray its room. */}
-            <span className="hidden lg2:inline">نص بالرسم</span>
+            {/*
+             * Icon-only by design. The old inline caption read as a how-to
+             * rather than a tool name and squeezed the tool tray; the control
+             * now carries a formal Arabic tooltip and an accessible label
+             * instead, exactly like the other single-icon actions.
+             */}
+            <span className="sr-only">إدراج مربع نص</span>
           </button>
           {/**
            * «مشاريعي» → صفحة المشاريع. A real same-tab navigation (anchor) so it
@@ -1073,26 +1103,87 @@ function Studio({
             <BookOpen className="size-4" />
           </a>
           {/**
-           * «المكتبة» → the assets shelf inside the elements panel. Opening the
-           * panel and selecting its «عناصر» tab IS how the library is reached
-           * from anywhere in the editor; the button holds no other state.
+           * PINNED TOOLS — «أدوات التقرير», «المكتبة», «أضف مكتبة», «عناوين
+           * الفقرات».
+           *
+           * These four live in the toolbar itself: outside the scrollable tray
+           * and outside both side panels, because they are the controls a
+           * report author reaches for on every page. Pinning them here means
+           * they survive focus mode, a collapsed panel and a narrow tablet —
+           * nothing has to be opened first.
            */}
+          <span
+            className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10"
+            aria-hidden
+          />
           <button
             type="button"
+            data-tour="report-tools"
             onClick={() => {
-              // The library has its own dedicated tab now — same top strip as
-              // العناصر and الأشكال, so opening it is a tab switch, not a scroll.
+              // Report tools are docked in the RIGHT panel, so pinning the
+              // button means: leave focus mode, open that panel, switch it to
+              // «الخصائص» and expand the section. RightPanel listens for the
+              // event — the accordion state belongs to it, not to the toolbar.
               useEditor.setState({
-                leftTab: "library",
-                leftOpen: true,
-                leftCollapsed: false,
                 focusMode: false,
+                rightCollapsed: false,
+                rightOpen: true,
+                rightTab: "properties",
               });
+              window.dispatchEvent(new CustomEvent(OPEN_REPORT_TOOLS_EVENT));
             }}
             className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
-            title="فتح مكتبة الصور والعناصر"
+            title="أدوات التقرير — بطاقات المؤشرات، الختم، الترويسة والتذييل، ومراجعة ما قبل الطباعة"
+          >
+            <ClipboardList className="size-4" />
+            <span className="hidden 2xl:inline">أدوات التقرير</span>
+          </button>
+          <button
+            type="button"
+            data-tour="library-toggle"
+            onClick={() => {
+              // One button, two directions: a second press retracts the dock
+              // (or closes the drawer), so the Library is a toggle, not a
+              // one-way door.
+              if (libraryVisible) {
+                if (focusMode)
+                  useEditor.setState({
+                    focusMode: false,
+                    leftCollapsed: false,
+                    leftOpen: false,
+                  });
+                else toggleSidebar("left");
+                return;
+              }
+              openLibrary();
+            }}
+            aria-pressed={libraryVisible}
+            className={cn(
+              "inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10",
+              libraryVisible && "bg-navy/10 text-navy dark:bg-white/10 dark:text-gold-2",
+            )}
+            title={libraryVisible ? "إغلاق المكتبة" : "فتح المكتبة"}
           >
             <Library className="size-4" />
+            <span className="hidden 2xl:inline">المكتبة</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAddLibraryOpen(true)}
+            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
+            title="أضف مكتبة — حوّل أي مجلد أو مجموعة ملفات إلى مجلدات بنمط نَسَق"
+          >
+            <FolderPlus className="size-4" />
+            <span className="hidden 2xl:inline">أضف مكتبة</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setHeadingGeneratorOpen(true)}
+            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
+            title="مولد عناوين الفقرات — تصاميم جاهزة وقابلة للتعديل"
+          >
+            <Heading1 className="size-4" />
+            <span className="hidden 2xl:inline">عناوين الفقرات</span>
           </button>
         </div>
 
@@ -1289,35 +1380,10 @@ function Studio({
             <PanelLeft className="size-4" />
           </IconButton>
           {/*
-           * المكتبة — one permanent button, right after the properties toggle
-           * and before the main tools (spec: "between Properties and main
-           * tools"). It docks the library on desktop and slides it in on
-           * tablet/phone, so the panel is always one click away.
+           * The Library toggle now sits with the other pinned tools at the
+           * START of the strip («المكتبة»), so this slot keeps the panel and
+           * focus controls the author needs while actually editing.
            */}
-          <IconButton
-            onClick={() => {
-              // One button, two directions: the second press retracts the dock
-              // (or closes the drawer), so the Library is a toggle, not a
-              // one-way door.
-              if (libraryVisible) {
-                if (focusMode)
-                  useEditor.setState({
-                    focusMode: false,
-                    leftCollapsed: false,
-                    leftOpen: false,
-                  });
-                else toggleSidebar("left");
-                return;
-              }
-              openLibrary();
-            }}
-            active={libraryVisible}
-            title={
-              libraryVisible ? "إغلاق المكتبة الذكية" : "فتح المكتبة الذكية"
-            }
-          >
-            <Library className="size-4" />
-          </IconButton>
           {/*
            * Floating bubble visibility. Tooltips and the bubble itself explain
            * the state, so the icon never has to carry the meaning alone.
@@ -1418,6 +1484,7 @@ function Studio({
         }}
       >
         <div
+          data-tour="left-panel"
           className={cn(
             "editor-sidebar relative z-[var(--z-panel)] h-full min-h-0 overflow-hidden",
             /*
@@ -1625,6 +1692,23 @@ function Studio({
         fitToScreen={fitToScreen}
       />
       <ExportDialog />
+
+      {/*
+       * Modal workbenches, mounted at the shell level so they survive a panel
+       * collapse, a focus-mode toggle or a page switch while open.
+       */}
+      {addLibraryOpen && <AddLibraryDialog onClose={() => setAddLibraryOpen(false)} />}
+      {headingGeneratorOpen && (
+        <HeadingGeneratorDialog onClose={() => setHeadingGeneratorOpen(false)} />
+      )}
+      {/*
+       * First-visit walkthrough. Mounted only after hydration: the tour
+       * measures real controls, and measuring a skeleton would highlight the
+       * wrong rectangle on a slow first paint.
+       */}
+      {tourOpen && hydrated && (
+        <OnboardingTour onFinish={() => setTourOpen(false)} />
+      )}
     </div>
   );
 }
