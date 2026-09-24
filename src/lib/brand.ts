@@ -49,4 +49,5 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/الهوية", label: "الهوية" },
   { to: "/about", label: "عن المنصة" },
   { to: "/contact", label: "التواصل" },
+  { to: "/account", label: "حسابي" },
 ];

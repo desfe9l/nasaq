@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import AdminDashboard from "@/components/admin/AdminDashboard";
+import { AdminPage } from "@/components/site/AdminPage";
 import { RequireSignedIn } from "@/lib/auth/gates";
 
 export const Route = createFileRoute("/admin")({
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/admin")({
   }),
   component: () => (
     <RequireSignedIn>
-      <AdminDashboard />
+      <AdminPage />
     </RequireSignedIn>
   ),
 });

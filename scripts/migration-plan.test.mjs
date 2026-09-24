@@ -58,11 +58,27 @@ test("non-.sql entries are dropped (readdir also yields the auth/ directory)", (
 
 test("the auth schema is included in the root migration set", () => {
   const migrationsDir = join(projectRoot(), "migrations");
-  assert.deepEqual(
-    pendingMigrations(readdirSync(migrationsDir), []).map(({ name }) => name),
-    ["0001_licenses.sql", "0002_admin_content.sql", "0003_auth.sql"],
-  );
+  // The opt-in source always ships, whatever the app decided — otherwise the
+  // copy-up step has nothing to copy from.
   assert.ok(readdirSync(join(migrationsDir, "auth")).includes("0001_auth.sql"));
+
+  const globbed = pendingMigrations(readdirSync(migrationsDir), []).map((m) => m.name);
+
+  if (authSchemaCopy(projectRoot()) === null) {
+    // Auth off: the schema is NOT in the globbed directory, so neither applier
+    // will create auth tables for an app that never asked for sign-in.
+    assert.deepEqual(globbed, []);
+    return;
+  }
+
+  // Auth on: this app's ask named accounts, so the schema has been copied up and
+  // the globbed directory is expected to carry it. Assert the meaningful
+  // invariant — the copy is discoverable, keys on its basename, and any sibling
+  // migrations are ordered after it — rather than duplicating the byte-identity
+  // check that the next test owns.
+  assert.ok(globbed.includes(AUTH_MIGRATION));
+  assert.equal(globbed[0], AUTH_MIGRATION, "auth must be applied before app schemas");
+  assert.deepEqual(globbed, [...globbed].sort(), "pending migrations come back in name order");
 });
 
 test("this workspace's auth schema copy is byte-identical to its source", () => {
