@@ -17,7 +17,13 @@ import {
   completePaylinkTransaction,
   findPaylinkTransactionByNumber,
   recordPaylinkLicense,
+  recordPaylinkWebhook,
 } from "./transactions.server.ts";
+import {
+  PAYLINK_WEBHOOK_API_VERSION,
+  PAYLINK_WEBHOOK_PATH,
+  paylinkWebhookUrl,
+} from "./server.ts";
 import { createTestSql, createUser } from "../commercial/test-db.ts";
 import type { Sql } from "../db.ts";
 import { keygenPolicyId } from "../license/keygen.ts";
@@ -235,5 +241,72 @@ describe("Paylink Transaction Claims & Idempotency in Database", () => {
     assert.equal(finalState.status, "PAID");
     assert.equal(finalState.licenseId, "lic_123");
     assert.equal(finalState.keygenLicenseId, "kg_456");
+  });
+});
+
+describe("Paylink Webhook V2 contract", () => {
+  let sql: Sql;
+  let close: () => Promise<void>;
+  const USER_ID = "usr_test_paylink_v2";
+
+  before(async () => {
+    ({ sql, close } = await createTestSql());
+    await createUser(sql, { id: USER_ID, email: "paylink_v2@example.com" });
+  });
+
+  after(async () => {
+    await close();
+  });
+
+  it("publishes the V2 endpoint the merchant registers in My Paylink", () => {
+    assert.equal(PAYLINK_WEBHOOK_API_VERSION, "v2");
+    assert.equal(PAYLINK_WEBHOOK_PATH, "/api/webhooks/paylink");
+    assert.match(paylinkWebhookUrl(), /\/api\/webhooks\/paylink$/);
+  });
+
+  it("stores the V2 callback envelope (paymentType, merchant block, paidAt)", async () => {
+    const transactionNo = `tx_v2_${Date.now()}`;
+    const orderNumber = `ORD-V2-${Date.now()}`;
+    const plan = CENTRAL_PLANS["team-quarterly"];
+
+    await sql`
+      insert into paylink_transactions
+        (id, user_id, order_number, transaction_no, plan_key, plan_id, amount, currency, status)
+      values
+        (${`pay_${randomUUID()}`}, ${USER_ID}, ${orderNumber}, ${transactionNo},
+         ${plan.key}, ${plan.key}, ${plan.amount}, 'SAR', 'PENDING')
+    `;
+
+    await recordPaylinkWebhook(sql, {
+      transactionNo,
+      apiVersion: "v2",
+      paymentType: "mada",
+      merchantOrderNumber: orderNumber,
+      merchantMobile: "966555123456",
+      paid: true,
+    });
+
+    const row = await findPaylinkTransactionByNumber(sql, transactionNo);
+    assert.ok(row);
+    assert.equal(row.apiVersion, "v2");
+    assert.equal(row.paymentType, "mada");
+    assert.equal(row.merchantOrderNumber, orderNumber);
+    assert.equal(row.merchantMobile, "966555123456");
+    assert.ok(row.paidAt, "paidAt is stamped once Paylink confirms settlement");
+    // The envelope write must not itself fulfil anything.
+    assert.equal(row.status, "PENDING");
+  });
+
+  it("is a no-op for an unknown transaction number", async () => {
+    await recordPaylinkWebhook(sql, {
+      transactionNo: "tx-does-not-exist",
+      apiVersion: "v2",
+      paymentType: null,
+      merchantOrderNumber: null,
+      merchantMobile: null,
+      paid: false,
+    });
+    const row = await findPaylinkTransactionByNumber(sql, "tx-does-not-exist");
+    assert.equal(row, null);
   });
 });

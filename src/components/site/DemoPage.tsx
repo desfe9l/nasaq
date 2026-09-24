@@ -25,7 +25,7 @@ export function DemoPage() {
           <section className="border border-line bg-white p-6 dark:border-white/10 dark:bg-white/5">
             <div className="flex items-center gap-3"><Play className="size-5 text-navy-2 dark:text-gold-2" /><h2 className="text-[18px] font-extrabold">ما يتاح في العرض</h2></div>
             <ul className="mt-5 grid gap-3">{DEMO_ITEMS.map((item) => <li key={item} className="flex items-center gap-2 text-[14px]"><CheckCircle2 className="size-4 text-ok" />{item}</li>)}</ul>
-            <button type="button" onClick={() => void startDemo()} className="mt-7 inline-flex h-11 items-center gap-2 rounded-[8px] bg-navy px-4 text-[13px] font-extrabold text-white"><Play className="size-4" />بدء العرض التجريبي</button>
+            <button type="button" onClick={() => void startDemo()} className="mt-7 inline-flex h-11 items-center gap-2 rounded-[8px] bg-navy px-4 text-[13px] font-extrabold text-white"><Play className="size-4" />بدء تجربة المحرر</button>
           </section>
           <section className="border border-navy/25 bg-[#f6f8f5] p-6 dark:border-gold/30 dark:bg-[#1c2021]">
             <div className="flex items-center gap-3"><LockKeyhole className="size-5 text-navy-2 dark:text-gold-2" /><h2 className="text-[18px] font-extrabold">ما يفتح بعد الشراء</h2></div>

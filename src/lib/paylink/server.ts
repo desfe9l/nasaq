@@ -1,5 +1,19 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import {
+  PAYLINK_PAYMENT_TYPE_LABELS,
+  PAYLINK_WEBHOOK_API_VERSION,
+  PAYLINK_WEBHOOK_PATH,
+} from "./contract.ts";
 import type { Sql } from "../db.ts";
+
+// Re-exported so existing server-side imports keep working. The values live in
+// `contract.ts` because client components need them too, and this module pulls
+// in `node:crypto`.
+export {
+  PAYLINK_PAYMENT_TYPE_LABELS,
+  PAYLINK_WEBHOOK_API_VERSION,
+  PAYLINK_WEBHOOK_PATH,
+};
 import {
   getCatalogPlan,
   paylinkPlanKey,
@@ -57,6 +71,20 @@ function secureBearerMatch(expected: string, actual: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
+/** The absolute webhook URL to paste into My Paylink (derived, never hard-coded). */
+export function paylinkWebhookUrl(): string {
+  return `${publicBaseUrl()}${PAYLINK_WEBHOOK_PATH}`;
+}
+
+/**
+ * Strict webhook authentication.
+ *
+ * The header is the merchant-defined one from My Paylink → Webhook settings
+ * (`Authorization: Bearer <token>`), compared with a length-checked
+ * constant-time comparison so neither the value nor its length leaks through
+ * timing. An unset token fails closed: a deployment that forgot to configure
+ * `PAYLINK_WEBHOOK_TOKEN` must reject callbacks rather than accept them.
+ */
 export function verifyPaylinkWebhookAuthorization(request: Request): boolean {
   const expected = env("PAYLINK_WEBHOOK_TOKEN");
   const actual = request.headers.get("authorization")?.trim() || "";

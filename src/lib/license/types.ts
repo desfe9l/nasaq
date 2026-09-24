@@ -221,6 +221,11 @@ export interface AdminLicenseList {
 
 export interface AdminLicenseUpdate {
   status?: LicenseStatus;
-  expiresAt?: string;
+  /**
+   * `null` clears the expiry (an open-ended licence). `undefined` leaves it
+   * alone — the distinction `updateLicense` relies on to tell "set this" from
+   * "don't touch it".
+   */
+  expiresAt?: string | null;
   maxActivations?: number;
 }

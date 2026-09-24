@@ -233,12 +233,19 @@ export function LeftPanel({
   return (
     <aside className="flex h-full min-h-0 flex-col border-l border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
       {/*
-       * Tab strip (Phase 1): a horizontally scrollable row instead of a fixed
-       * 8-column grid. At the panel's minimum width the old grid squeezed
-       * labels under icons until they overlapped; the strip keeps every tab on
-       * one line and scrolls when it cannot.
+       * Tab strip — SHRINKABLE, never hidden.
+       *
+       * Two layers of defence, because eight tabs have to survive a panel the
+       * author has dragged down to 232px:
+       *   1. the strip is a container query context, so each tab drops its
+       *      caption and becomes icon-only once the strip is too narrow for
+       *      eight labels — the tabs compress instead of overflowing;
+       *   2. `overflow-x-auto` remains as the floor: should the strip ever get
+       *      narrower than eight icons, it scrolls. A tab is therefore never
+       *      clipped out of reach, which is what the old `flex-1 min-w-[52px]`
+       *      row did at the narrowest widths.
        */}
-      <div className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-line p-1.5 dark:border-white/10">
+      <div className="@container flex shrink-0 gap-0.5 overflow-x-auto border-b border-line p-1.5 dark:border-white/10">
         {TABS.map((t) => {
           const Icon = t.icon;
           return (
@@ -247,15 +254,22 @@ export function LeftPanel({
               type="button"
               onClick={() => setLeftTab(t.id)}
               title={t.label}
+              aria-label={t.label}
+              aria-current={tab === t.id}
               className={cn(
-                "grid h-12 min-w-[52px] flex-1 shrink-0 place-items-center gap-0.5 rounded-[8px] text-[9px] font-extrabold",
+                "grid h-12 min-w-[34px] flex-1 basis-0 place-items-center gap-0.5 rounded-[8px] px-0.5 text-[9px] font-extrabold",
                 tab === t.id
                   ? "bg-navy text-white"
                   : "text-muted hover:bg-line-2 dark:text-white/70 dark:hover:bg-white/5",
               )}
             >
-              <Icon className="size-4" />
-              {t.label}
+              <Icon className="size-4 shrink-0" />
+              {/*
+               * The caption is the part that gives: it disappears below a
+               * 380px strip, so the row keeps all eight icons on screen instead
+               * of pushing the last two into overflow.
+               */}
+              <span className="hidden truncate @[380px]:block">{t.label}</span>
             </button>
           );
         })}

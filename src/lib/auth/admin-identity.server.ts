@@ -1,6 +1,31 @@
 import type { Sql } from "@/lib/db";
 import type { OwnerIdentity } from "./owner.server";
 
+/**
+ * Parse a comma-separated identity allowlist.
+ *
+ * Entries containing "@" are emails (lower-cased, because a session may hand
+ * back the address in any case), everything else is a verified user id. Shared
+ * by the administrator and super-administrator readers so one variable's
+ * parsing can never drift from the other's.
+ */
+export function parseIdentityList(
+  ...sources: Array<string | undefined>
+): AdminIdentityConfig {
+  const ids = new Set<string>();
+  const emails = new Set<string>();
+  for (const raw of sources) {
+    if (!raw) continue;
+    for (const entry of raw.split(",")) {
+      const value = entry.trim();
+      if (!value) continue;
+      if (value.includes("@")) emails.add(value.toLowerCase());
+      else ids.add(value);
+    }
+  }
+  return { ids, emails };
+}
+
 export type VerifiedIdentity = OwnerIdentity;
 
 export type AdminIdentityConfig = {
@@ -17,23 +42,19 @@ export type AdminIdentityConfig = {
  * is deliberately no hard-coded fallback address.
  */
 export function readAdminIdentityConfig(): AdminIdentityConfig {
-  const ids = new Set<string>();
-  const emails = new Set<string>();
-  const raw = process.env.NASAQ_ADMIN_USER_IDS?.trim();
-  if (raw) {
-    for (const entry of raw.split(",")) {
-      const value = entry.trim();
-      if (!value) continue;
-      if (value.includes("@")) emails.add(value.toLowerCase());
-      else ids.add(value);
-    }
-  }
-
+  // The super-administrator allowlist counts as an administrator source: an
+  // owner named only there would otherwise pass the licence checks while being
+  // turned away by every ordinary admin surface.
+  const parsed = parseIdentityList(
+    process.env.NASAQ_ADMIN_USER_IDS?.trim(),
+    process.env.NASAQ_SUPER_ADMIN_IDS?.trim(),
+    process.env.NASAQ_SUPER_ADMIN_EMAILS?.trim(),
+  );
   const ownerId = process.env.NASAQ_OWNER_ID?.trim();
   const ownerEmail = process.env.NASAQ_OWNER_EMAIL?.trim().toLowerCase();
-  if (ownerId) ids.add(ownerId);
-  if (ownerEmail) emails.add(ownerEmail);
-  return { ids, emails };
+  if (ownerId) parsed.ids.add(ownerId);
+  if (ownerEmail) parsed.emails.add(ownerEmail);
+  return parsed;
 }
 
 export function adminIdentityConfigPresent(

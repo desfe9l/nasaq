@@ -56,7 +56,11 @@ export async function getAuthorizationContext(
   if (await isAdminIdentity(sql, identity, config)) {
     return {
       ...identity,
-      isOwner: false,
+      // `isOwner` is carried through here, not reset to false. An owner known
+      // only by an `admin_users` row (no `NASAQ_OWNER_*` env pair) used to land
+      // in this branch and lose the flag — and with it every owner-only
+      // surface, licences included.
+      isOwner,
       isAdmin: true,
       license: null,
       entitlements: { ...LICENSE_ENTITLEMENTS.LIFETIME },

@@ -1,12 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getSql } from "@/lib/db";
-import { getPaylinkInvoice, verifyPaylinkWebhookAuthorization } from "@/lib/paylink/server";
+import {
+  getPaylinkInvoice,
+  PAYLINK_WEBHOOK_API_VERSION,
+  verifyPaylinkWebhookAuthorization,
+} from "@/lib/paylink/server";
 import {
   claimPaylinkTransaction,
   completePaylinkTransaction,
   failPaylinkTransaction,
   findPaylinkTransactionByNumber,
   recordPaylinkLicense,
+  recordPaylinkWebhook,
   updatePaylinkStatus,
 } from "@/lib/paylink/transactions.server";
 import { audit, grantEntitlement } from "@/lib/commercial/admin.server";
@@ -16,11 +21,22 @@ import { hashLicenseKey, keyPrefix } from "@/lib/license/key";
 import { computeExpiry, getSubscription } from "@/lib/commercial/entitlement.server";
 import { getCatalogPlan, type PaylinkPlanKey } from "@/lib/commercial/catalog";
 
+/**
+ * Paylink Payment Webhook **V2** body.
+ *
+ * V2 adds the `apiVersion` marker, `paymentType` and the merchant identity
+ * block on top of V1's five fields. `apiVersion` is the tripwire: a merchant
+ * who left the webhook on V1 in My Paylink would otherwise send a payload that
+ * silently satisfies every other check while carrying none of the fields this
+ * handler reasons about.
+ */
 type PaylinkWebhookV2 = {
   amount?: unknown;
   transactionNo?: unknown;
   merchantOrderNumber?: unknown;
   orderStatus?: unknown;
+  paymentType?: unknown;
+  merchantMobile?: unknown;
   apiVersion?: unknown;
 };
 
@@ -145,8 +161,14 @@ export const Route = createFileRoute("/api/webhooks/paylink")({
           return Response.json({ error: "invalid_json" }, { status: 400 });
         }
 
-        if (text(payload.apiVersion) !== "v2") {
-          return Response.json({ error: "webhook_v2_required" }, { status: 400 });
+        if (text(payload.apiVersion).toLowerCase() !== PAYLINK_WEBHOOK_API_VERSION) {
+          return Response.json(
+            {
+              error: "webhook_v2_required",
+              expected: PAYLINK_WEBHOOK_API_VERSION,
+            },
+            { status: 400 },
+          );
         }
 
         const transactionNo = text(payload.transactionNo);
@@ -158,21 +180,44 @@ export const Route = createFileRoute("/api/webhooks/paylink")({
           return Response.json({ error: "invalid_payload" }, { status: 400 });
         }
 
+        // ── Idempotency layer 1: record the envelope before deciding anything.
+        //    A redelivery refreshes the audit columns without touching state.
+        const sql = await getSql();
+        await recordPaylinkWebhook(sql, {
+          transactionNo,
+          apiVersion: PAYLINK_WEBHOOK_API_VERSION,
+          paymentType: text(payload.paymentType) || null,
+          merchantOrderNumber: orderNumber,
+          merchantMobile: text(payload.merchantMobile) || null,
+          paid: orderStatus === "Paid",
+        });
+
+        // Only a settled order fulfils anything. "Pending", "Canceled",
+        // "Failed" and every other status are recorded and acknowledged — never
+        // treated as money.
         if (orderStatus !== "Paid") {
-          const sql = await getSql();
           await updatePaylinkStatus(
             sql,
             transactionNo,
             orderStatus === "Canceled" ? "CANCELED" : "PENDING",
             orderStatus,
           );
-          return Response.json({ received: true, applied: false });
+          return Response.json({ received: true, applied: false, orderStatus });
         }
 
-        const sql = await getSql();
         const transaction = await findPaylinkTransactionByNumber(sql, transactionNo);
         if (!transaction || transaction.orderNumber !== orderNumber) {
           return Response.json({ error: "unknown_transaction" }, { status: 404 });
+        }
+
+        // ── Idempotency layer 2: a transaction already fulfilled is a no-op.
+        //    Paylink retries up to ten times; re-running fulfilment would mint a
+        //    second Keygen licence for the same money.
+        if (transaction.status === "PAID") {
+          return Response.json(
+            { received: true, applied: true, duplicate: true },
+            { status: 200 },
+          );
         }
 
         // Validate amount against the central catalog
