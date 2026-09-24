@@ -74,22 +74,30 @@ export async function isAdminIdentity(
   return rows.length > 0;
 }
 
-/** User-id-only compatibility helper for existing commercial call sites/tests. */
+/** Compatibility helper for commercial call sites/tests, checking ID and optional session email or custom config. */
 export async function isAdminUser(
   sql: Sql,
   userId: string,
-  config = readAdminIdentityConfig(),
+  userEmailOrConfig?: string | null | AdminIdentityConfig,
+  customConfig?: AdminIdentityConfig,
 ): Promise<boolean> {
+  const userEmail = typeof userEmailOrConfig === "string" ? userEmailOrConfig : null;
+  const config =
+    userEmailOrConfig && typeof userEmailOrConfig === "object" && "ids" in userEmailOrConfig
+      ? userEmailOrConfig
+      : customConfig || readAdminIdentityConfig();
+
   const rows = await sql<{ user_id: string }>`
     select user_id from admin_users where user_id = ${userId} limit 1
   `;
   if (rows.length > 0) return true;
   if (config.ids.has(userId)) return true;
+  if (userEmail && config.emails.has(userEmail.trim().toLowerCase())) return true;
   if (config.emails.size === 0) return false;
 
   const userRows = await sql<{ email: string | null }>`
     select email from "user" where id = ${userId} limit 1
   `;
-  const email = userRows[0]?.email ?? null;
+  const email = userEmail || userRows[0]?.email || null;
   return isConfiguredAdminIdentity({ id: userId, email }, config);
 }

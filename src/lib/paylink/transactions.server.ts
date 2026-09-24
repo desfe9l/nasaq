@@ -1,5 +1,5 @@
 import type { Sql } from "@/lib/db";
-import type { AdminPaylinkTransaction, PaylinkPlanKey, PaylinkTransaction, PaylinkTransactionStatus } from "./types";
+import type { AdminPaylinkTransaction, PaylinkPlanKey, PaylinkTransaction, PaylinkTransactionStatus } from "./types.ts";
 
 type PaylinkRow = {
   id: string; user_id: string; order_number: string; transaction_no: string | null;

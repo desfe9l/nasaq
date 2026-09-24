@@ -61,16 +61,24 @@ export class NotFoundError extends Error {
  * `admin_users` table. The customer email used for an allowlist match is read
  * from the database only after the caller id is known, never from a UI flag.
  */
-export async function isAdmin(sql: Sql, userId: string): Promise<boolean> {
-  return isAdminUser(sql, userId);
+export async function isAdmin(
+  sql: Sql,
+  userId: string,
+  userEmail?: string | null,
+): Promise<boolean> {
+  return isAdminUser(sql, userId, userEmail);
 }
 
 /**
  * Gate for every admin server function. Throws `AdminRequiredError` (403) when
  * the caller is not an administrator.
  */
-export async function requireAdmin(sql: Sql, userId: string): Promise<void> {
-  if (!(await isAdmin(sql, userId))) throw new AdminRequiredError();
+export async function requireAdmin(
+  sql: Sql,
+  userId: string,
+  userEmail?: string | null,
+): Promise<void> {
+  if (!(await isAdmin(sql, userId, userEmail))) throw new AdminRequiredError();
 }
 
 type AdminActor = { adminUserId: string };

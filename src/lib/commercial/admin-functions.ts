@@ -60,7 +60,7 @@ export const amIAdmin = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<{ isAdmin: boolean }> => {
     const sql = await getSql();
-    return { isAdmin: await isAdmin(sql, context.userId) };
+    return { isAdmin: await isAdmin(sql, context.userId, context.userEmail) };
   });
 
 /** The admin queue. Optionally filtered by status. */
@@ -83,7 +83,7 @@ export const getAdminPaymentRequests = createServerFn({ method: "GET" })
   })
   .handler(async ({ context, data }): Promise<AdminPaymentRequest[]> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     return listPaymentRequestsForAdmin(sql, data.status);
   });
 
@@ -97,7 +97,7 @@ export const getAdminPaymentRequest = createServerFn({ method: "GET" })
   })
   .handler(async ({ context, data }): Promise<AdminPaymentRequest | null> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     return getPaymentRequestForAdmin(sql, data.requestId);
   });
 
@@ -113,7 +113,7 @@ export const adminApprovePayment = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     try {
       await approvePayment(sql, { adminUserId: context.userId }, data.requestId, data.adminNote);
       return { ok: true };
@@ -136,7 +136,7 @@ export const adminRejectPayment = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     try {
       await rejectPayment(sql, { adminUserId: context.userId }, data.requestId, data.adminNote);
       return { ok: true };
@@ -150,7 +150,7 @@ export const getAdminCustomers = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<AdminCustomer[]> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     return listCustomersForAdmin(sql);
   });
 
@@ -166,7 +166,7 @@ export const adminActivateCustomer = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     try {
       await activateCustomer(sql, { adminUserId: context.userId }, data.userId, data.planId);
       return { ok: true };
@@ -185,7 +185,7 @@ export const adminSuspendCustomer = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     try {
       await suspendCustomer(sql, { adminUserId: context.userId }, data.userId);
       return { ok: true };
@@ -204,7 +204,7 @@ export const adminRestoreCustomer = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     try {
       await restoreCustomer(sql, { adminUserId: context.userId }, data.userId);
       return { ok: true };
@@ -225,7 +225,7 @@ export const adminExtendSubscription = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     try {
       await extendSubscription(sql, { adminUserId: context.userId }, data.userId, data.days);
       return { ok: true };
@@ -248,7 +248,7 @@ export const adminSetExpiration = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     try {
       await setExpiration(
         sql,
@@ -274,7 +274,7 @@ export const adminChangePlan = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     try {
       await changePlan(sql, { adminUserId: context.userId }, data.userId, data.planId);
       return { ok: true };
@@ -288,7 +288,7 @@ export const getAdminPlans = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<Plan[]> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     return listAllPlans(sql);
   });
 
@@ -336,7 +336,7 @@ export const adminUpdatePlan = createServerFn({ method: "POST" })
   )
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     const { planId, ...patch } = data;
     try {
       await updatePlan(sql, planId, patch);
@@ -363,7 +363,7 @@ export const adminUpdatePaymentSettings = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     try {
       await updatePaymentSettings(sql, data);
       return { ok: true };
@@ -377,7 +377,7 @@ export const getAdminAuditLog = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<AdminAuditEntry[]> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     return listAuditLog(sql, 100);
   });
 
@@ -393,7 +393,7 @@ export const adminGrantAdmin = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId);
+    await requireAdmin(sql, context.userId, context.userEmail);
     try {
       await grantAdmin(sql, { adminUserId: context.userId }, data.userId, data.note ?? null);
       return { ok: true };
