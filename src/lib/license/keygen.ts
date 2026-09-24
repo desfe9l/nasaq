@@ -13,6 +13,8 @@ const DEFAULT_POLICIES: Record<KeygenPlan, string> = {
   "individual-quarterly": "7b078b25-8fd0-485d-9dd6-75b92afb24c9",
   "team-monthly": "2b6984ed-1022-4718-a0b3-cc07c4cd5dad",
   "team-quarterly": "6a4b079a-45f8-4e94-90a6-b8864acbfd96",
+  "individual-annual": "",
+  "team-annual": "",
   lifetime: "3704e4a4-5645-4be7-b6c9-2067c722341d",
 };
 
@@ -88,13 +90,17 @@ export function planForKeygenPolicy(policyId: string): LicensePlan | undefined {
     "individual-quarterly",
     "team-monthly",
     "team-quarterly",
+    "individual-annual",
+    "team-annual",
   ];
+  if (!policyId) return undefined;
   return plans.find((plan) => keygenPolicyId(plan) === policyId);
 }
 
 export function typeForKeygenPolicy(policyId: string): LicenseType {
   if (policyId === keygenPolicyId("trial")) return "TRIAL";
   if (policyId === keygenPolicyId("lifetime")) return "LIFETIME";
+  if (!policyId) return "PRO";
   return "PRO";
 }
 
@@ -235,7 +241,7 @@ function verificationFromResponse(key: string, response: KeygenResponse, entitle
       keygenPolicyId: policyId,
       keygenProductId: productId,
       plan: plan || "",
-      billing: plan?.endsWith("quarterly") ? "quarterly" : "monthly",
+      billing: plan?.endsWith("quarterly") ? "quarterly" : plan?.endsWith("annual") ? "annual" : "monthly",
       entitlements: entitlementCodes.join(","),
     },
   };
@@ -269,13 +275,15 @@ export async function createKeygenLicense(params: {
   };
   if (params.expiresAt) attributes.expiry = params.expiresAt;
   if (params.maxUsers != null) attributes.maxUsers = params.maxUsers;
+  const policyId = keygenPolicyId(params.plan);
+  if (!policyId) throw new KeygenConfigurationError(`Keygen policy is not configured for ${params.plan}`);
   const response = await request("/licenses", {
     method: "POST",
     body: JSON.stringify({
       data: {
         type: "licenses",
         attributes,
-        relationships: { policy: { data: { type: "policies", id: keygenPolicyId(params.plan) } } },
+        relationships: { policy: { data: { type: "policies", id: policyId } } },
       },
     }),
   });
@@ -285,6 +293,20 @@ export async function createKeygenLicense(params: {
   const entitlementCodes = await entitlementCodesForLicense(resource?.id || "");
   return verificationFromResponse(key, { ...response, meta: { valid: true, code: "VALID" } }, entitlementCodes);
 }
+export async function findKeygenLicenseByPaylinkTransaction(transactionNo: string): Promise<KeygenVerification | null> {
+  const response = await request(`/licenses?metadata%5BpaylinkTransactionNo%5D=${encodeURIComponent(transactionNo)}&limit=1`);
+  const resource = Array.isArray(response.data) ? response.data[0] : response.data;
+  const key = stringAttribute(resource, "key");
+  if (!resource || !key) return null;
+  const attributes = resource.attributes || {};
+  const expiry = stringAttribute(resource, "expiry");
+  const suspended = attributes.suspended === true;
+  const valid = !suspended && String(attributes.status || "ACTIVE").toUpperCase() !== "EXPIRED" && (!expiry || Date.parse(expiry) > Date.now());
+  const entitlementCodes = await entitlementCodesForLicense(resource.id || "");
+  return verificationFromResponse(key, { ...response, meta: { valid, code: valid ? "VALID" : "EXPIRED" } }, entitlementCodes);
+}
+
+
 
 export async function updateKeygenLicenseExpiry(licenseId: string, expiresAt: string): Promise<void> {
   await request(`/licenses/${encodeURIComponent(licenseId)}`, {

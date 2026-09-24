@@ -33,13 +33,31 @@ import type {
   PaymentRequestStatus,
   Plan,
 } from "@/lib/commercial/types";
+import { getAdminPaylinkTransactions } from "@/lib/paylink/admin-functions";
 import { cn } from "@/lib/utils";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
 
-type Tab = "requests" | "customers" | "plans" | "settings" | "audit";
+type PaylinkRow = Awaited<ReturnType<typeof getAdminPaylinkTransactions>>[number];
+
+function PaylinkTab() {
+  const [rows, setRows] = useState<PaylinkRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setRows(await getAdminPaylinkTransactions()); setError(null); }
+    catch (err) { setError(err instanceof Error ? err.message : "تعذر تحميل عمليات Paylink."); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  return <Panel title="عمليات Paylink"><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-right text-[11px]"><thead className="text-muted"><tr><th className="p-2">Transaction No</th><th className="p-2">الحالة</th><th className="p-2">الباقة</th><th className="p-2">المستخدم</th><th className="p-2">License Key (prefix) / License ID / Keygen ID</th><th className="p-2">التاريخ</th><th className="p-2">حالة الرخصة</th></tr></thead><tbody>{rows.map((row) => <tr key={row.id} className="border-t border-line dark:border-white/10"><td className="p-2 font-mono" dir="ltr">{row.transactionNo || "—"}</td><td className="p-2 font-bold">{row.status}</td><td className="p-2">{row.planKey}</td><td className="p-2">{row.userName || row.userEmail || row.userId}</td><td className="p-2 font-mono" dir="ltr">{row.licenseKey || "—"} / {row.licenseId || "—"} / {row.keygenLicenseId || "—"}</td><td className="p-2">{formatDate(row.createdAt)}</td><td className="p-2">{row.licenseStatus || "—"}</td></tr>)}</tbody></table></div>{loading && <p className="text-[12px] text-muted">جارٍ التحميل…</p>}{error && <p className="mt-3 text-[12px] text-danger">{error}</p>}{!loading && rows.length === 0 && <Empty>لا توجد عمليات Paylink بعد.</Empty>}</Panel>;
+}
+
+type Tab = "requests" | "paylink" | "customers" | "plans" | "settings" | "audit";
 
 const TABS: Array<{ id: Tab; label: string }> = [
-  { id: "requests", label: "طلبات الدفع" },
+  { id: "requests", label: "طلبات الدفع اليدوية" },
+  { id: "paylink", label: "عمليات Paylink" },
   { id: "customers", label: "العملاء" },
   { id: "plans", label: "الباقات" },
   { id: "settings", label: "إعدادات الدفع" },
@@ -134,6 +152,7 @@ export function AdminPage() {
 
         <div className="mt-6">
           {tab === "requests" && <RequestsTab />}
+          {tab === "paylink" && <PaylinkTab />}
           {tab === "customers" && <CustomersTab />}
           {tab === "plans" && <PlansTab />}
           {tab === "settings" && <SettingsTab />}

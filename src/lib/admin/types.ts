@@ -13,9 +13,6 @@ export interface CommercialSettings {
   whatsappLicenseMessage: string;
   /** Prefilled WhatsApp message for institutional/enterprise requests. */
   whatsappEnterpriseMessage: string;
-  /** Optional checkout overrides (https only). Empty = use server env config. */
-  checkoutIndividualMonthly: string;
-  checkoutTeamMonthly: string;
   /** Monthly list prices in SAR. */
   priceIndividualMonthly: number;
   priceTeamMonthly: number;
@@ -62,8 +59,6 @@ export const DEFAULT_SITE_SETTINGS: PublicSiteSettings = {
     whatsappNumber: "966552017111",
     whatsappLicenseMessage: "السلام عليكم، أرغب بطلب ترخيص النسخة الكاملة من منصة نَسَق.",
     whatsappEnterpriseMessage: "السلام عليكم، أرغب بطلب ترخيص مؤسسي مخصص لمنصة نَسَق.",
-    checkoutIndividualMonthly: "",
-    checkoutTeamMonthly: "",
     priceIndividualMonthly: 79,
     priceTeamMonthly: 199,
     annualDiscountPercent: 20,
@@ -150,8 +145,6 @@ export function normalizeSection<K extends SettingsSection>(key: K, raw: unknown
         whatsappNumber: str(r.whatsappNumber, 20, d.commercial.whatsappNumber).replace(/\D/g, "") || d.commercial.whatsappNumber,
         whatsappLicenseMessage: str(r.whatsappLicenseMessage, 500, d.commercial.whatsappLicenseMessage),
         whatsappEnterpriseMessage: str(r.whatsappEnterpriseMessage, 500, d.commercial.whatsappEnterpriseMessage),
-        checkoutIndividualMonthly: httpsOrEmpty(r.checkoutIndividualMonthly),
-        checkoutTeamMonthly: httpsOrEmpty(r.checkoutTeamMonthly),
         priceIndividualMonthly: num(r.priceIndividualMonthly, 0, 100000, d.commercial.priceIndividualMonthly),
         priceTeamMonthly: num(r.priceTeamMonthly, 0, 100000, d.commercial.priceTeamMonthly),
         annualDiscountPercent: num(r.annualDiscountPercent, 0, 90, d.commercial.annualDiscountPercent),

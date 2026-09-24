@@ -9,8 +9,8 @@
 
 export type LicenseType = "FREE" | "TRIAL" | "PRO" | "LIFETIME";
 export type LicenseSource = "manual" | "keygen";
-export type LicensePlan = "individual-monthly" | "individual-quarterly" | "team-monthly" | "team-quarterly";
-export type BillingPeriod = "monthly" | "quarterly";
+export type LicensePlan = "individual-monthly" | "individual-quarterly" | "team-monthly" | "team-quarterly" | "individual-annual" | "team-annual";
+export type BillingPeriod = "monthly" | "quarterly" | "annual";
 export type LicenseStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
 
 /**
@@ -55,8 +55,6 @@ export interface LicenseInfo {
   source?: LicenseSource;
   plan?: LicensePlan;
   billing?: BillingPeriod;
-  variantId?: string;
-  customerEmail?: string;
 }
 
 // ── Feature Entitlements ───────────────────────────────────────────────────
