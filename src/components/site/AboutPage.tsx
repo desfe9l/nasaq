@@ -1,18 +1,28 @@
 import { useEffect } from "react";
-import { BadgeCheck, MessageCircle, Phone } from "lucide-react";
+import {
+  AlertTriangle,
+  BadgeCheck,
+  FileDown,
+  FileJson,
+  FileText,
+  Globe,
+  MessageCircle,
+  Phone,
+  Presentation,
+} from "lucide-react";
 import { BRAND, CONTACT_PHONE_DISPLAY, telHref, whatsappHref } from "@/lib/brand";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 
-/** Export formats as self-describing pill badges — never a run-on sentence. */
+/** Export formats as self-describing pill badges — monochrome SVG, no emoji. */
 const FORMAT_PILLS = [
-  "📄 PDF",
-  "🖼️ PNG",
-  "🖼️ JPG",
-  "📊 PowerPoint",
-  "📝 Word",
-  "🌐 HTML",
-  "💾 JSON",
+  { icon: FileDown, label: "PDF" },
+  { icon: FileText, label: "PNG" },
+  { icon: FileText, label: "JPG" },
+  { icon: Presentation, label: "PowerPoint" },
+  { icon: FileText, label: "Word" },
+  { icon: Globe, label: "HTML" },
+  { icon: FileJson, label: "JSON" },
 ] as const;
 
 /** 3×2 grid of platform guarantees. */
@@ -42,7 +52,7 @@ export function AboutPage() {
           {BRAND.platformEn}
         </p>
         <p className="mt-4 text-[15px] leading-8 text-muted">
-          {BRAND.name} منصة {BRAND.platform} — طوّرها {BRAND.owner} لتصميم وإخراج التقارير
+          {BRAND.name} منصة {BRAND.platform} — من تطوير {BRAND.team} لتصميم وإخراج التقارير
           والمستندات والتصاميم الرسمية. الفكرة بسيطة: بدلاً من إعادة بناء التقرير في كل مرة، تبدأ
           من صفحة أو قالب جاهز، تعدّل النصوص والأرقام والجداول والصور، ثم تصدّر الملف بجودة طباعة
           مناسبة للتسليم الرسمي.
@@ -52,14 +62,18 @@ export function AboutPage() {
         <section className="mt-6">
           <h2 className="text-[13px] font-extrabold text-muted">صيغ التصدير المتاحة</h2>
           <div className="mt-2 flex flex-wrap gap-2" dir="ltr">
-            {FORMAT_PILLS.map((pill) => (
-              <span
-                key={pill}
-                className="inline-flex items-center rounded-full border border-line bg-white px-3 py-1.5 text-[12px] font-bold shadow-sm dark:border-white/10 dark:bg-white/5"
-              >
-                {pill}
-              </span>
-            ))}
+            {FORMAT_PILLS.map((pill) => {
+              const Icon = pill.icon;
+              return (
+                <span
+                  key={pill.label}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1.5 text-[12px] font-bold shadow-sm dark:border-white/10 dark:bg-white/5"
+                >
+                  <Icon className="size-3.5 text-navy-2 dark:text-gold-2" aria-hidden />
+                  {pill.label}
+                </span>
+              );
+            })}
           </div>
         </section>
 
@@ -78,19 +92,19 @@ export function AboutPage() {
           ))}
         </section>
 
-        {/* Verified developer card with direct tel: and WhatsApp actions. */}
+        {/* Verified institutional card with direct tel: and WhatsApp actions. */}
         <section className="shadow-card dark:shadow-card-dark mt-8 rounded-xl border border-line bg-white p-6 dark:border-white/10 dark:bg-white/5">
           <div className="flex items-start gap-4">
             <img src="/nasaq-mark.svg" alt="" aria-hidden className="size-14 shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-[16px] font-extrabold">{BRAND.owner}</h2>
+                <h2 className="text-[16px] font-extrabold">{BRAND.team}</h2>
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-extrabold text-emerald-700 dark:text-emerald-300">
-                  <BadgeCheck className="size-3.5" /> مطوّر موثّق للمنصة
+                  <BadgeCheck className="size-3.5" /> الفريق المعتمد للمنصة
                 </span>
               </div>
               <p className="mt-1 text-[13px] text-muted">
-                المصمم والمطور — <span dir="ltr" className="font-bold">{BRAND.developerEn}</span>
+                التشغيل والدعم — <span dir="ltr" className="font-bold">{BRAND.developerEn}</span>
               </p>
               <dl className="mt-3 grid gap-1.5 text-[13px]">
                 <div className="flex justify-between gap-4">
@@ -123,15 +137,15 @@ export function AboutPage() {
             </div>
           </div>
           <p className="mt-4 border-t border-line pt-3 text-[12px] leading-6 text-muted dark:border-white/10">
-            {BRAND.name} هو اسم المنصة، ولا يُعد اسم المطوّر جزءاً منه. حقوق المنتج والتطوير
-            محفوظة لـ {BRAND.owner}.
+            {BRAND.name} هو اسم المنصة. جميع الحقوق محفوظة لـ {BRAND.platform}.
           </p>
         </section>
 
-        {/* Amber warning banner for the demo-data disclaimer. */}
+        {/* Warning banner for the demo-data disclaimer. */}
         <section className="mt-8 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
-          <h2 className="text-[15px] font-extrabold text-amber-700 dark:text-amber-400">
-            ⚠️ ملاحظة عن البيانات التجريبية
+          <h2 className="flex items-center gap-2 text-[15px] font-extrabold text-amber-700 dark:text-amber-400">
+            <AlertTriangle className="size-4" aria-hidden />
+            ملاحظة عن البيانات التجريبية
           </h2>
           <p className="mt-2 text-[14px] leading-7 text-muted">
             القوالب المرفقة تحتوي على بيانات تجريبية موسومة بوضوح (Demo) للعرض فقط. لا تتضمن المنصة أي

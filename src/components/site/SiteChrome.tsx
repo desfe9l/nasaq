@@ -1,10 +1,115 @@
 import { useEffect, useState } from "react";
-import { Menu, Moon, Sun, X } from "lucide-react";
+import { ChevronDown, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
 import { Toaster } from "sonner";
 import { BRAND, CONTACT_PHONE_DISPLAY, NAV_ITEMS, telHref } from "@/lib/brand";
 import { readStoredTheme, writeStoredTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
+import { authEnabled, signOut } from "@/lib/auth/client";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+
+/**
+ * «تسجيل الدخول / إنشاء حساب» and the signed-in identity chip.
+ *
+ * One entry point for the whole site chrome, driven by the existing Better Auth
+ * session (`useCurrentUserState`). While the session resolves it renders nothing
+ * so a signed-in visitor never sees a sign-in flash on reload. Editing does not
+ * require an account — only exporting does (see `SignInRequiredModal`).
+ */
+function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }) {
+  const { user, isPending } = useCurrentUserState();
+  const [open, setOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [open]);
+
+  if (!authEnabled || isPending) return null;
+
+  if (!user) {
+    return (
+      <a
+        href="/login"
+        className={cn(
+          "items-center gap-1.5 rounded-[8px] border border-line px-3 font-bold text-ink transition hover:border-navy-2 hover:text-navy-2 dark:border-white/15 dark:text-white dark:hover:border-gold-2 dark:hover:text-gold-2",
+          variant === "header" ? "inline-flex h-9 text-[12px]" : "mt-1 flex w-full px-3 py-2.5 text-[13px]",
+        )}
+      >
+        <LogIn className="size-4" aria-hidden />
+        تسجيل الدخول / إنشاء حساب
+      </a>
+    );
+  }
+
+  const label = user.displayName ?? user.primaryEmail ?? "حسابي";
+  const avatar = user.profileImageUrl ? (
+    <img src={user.profileImageUrl} alt="" className="size-6 rounded-full object-cover" />
+  ) : (
+    <span className="grid size-6 place-items-center rounded-full bg-navy text-[10px] font-extrabold text-white">
+      {label.charAt(0).toUpperCase()}
+    </span>
+  );
+
+  return (
+    <div className={cn("relative", variant === "mobile" && "mt-1 w-full")}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((v) => !v);
+        }}
+        className={cn(
+          "flex items-center gap-2 rounded-[8px] border border-line bg-surface/60 font-bold transition hover:border-navy-2 dark:border-white/15 dark:bg-white/5",
+          variant === "header" ? "h-9 px-2 text-[12px]" : "w-full px-3 py-2 text-[13px]",
+        )}
+      >
+        {avatar}
+        <span className={cn("max-w-[140px] truncate", variant === "header" && "hidden sm:inline")}>
+          {label}
+        </span>
+        <ChevronDown className="size-3.5 opacity-70" aria-hidden />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className={cn(
+            "z-50 grid w-52 gap-1 rounded-[10px] border border-line bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#161c26]",
+            variant === "header" ? "absolute end-0 mt-1.5" : "mt-1.5",
+          )}
+        >
+          <a
+            href="/account"
+            role="menuitem"
+            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12px] font-bold hover:bg-line-2 dark:hover:bg-white/5"
+          >
+            <UserRound className="size-4 opacity-70" aria-hidden />
+            حسابي
+          </a>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={signingOut}
+            onClick={() => {
+              setSigningOut(true);
+              void signOut("/").catch(() => setSigningOut(false));
+            }}
+            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-right text-[12px] font-bold text-muted hover:bg-line-2 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-white/5"
+          >
+            <LogOut className="size-4 opacity-70" aria-hidden />
+            {signingOut ? "جارٍ الخروج…" : "تسجيل الخروج"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /** Admin-managed announcement bar (/admin → محتوى الموقع). */
 function AnnouncementBar() {
@@ -116,6 +221,7 @@ export function SiteHeader({ current }: { current: string }) {
           >
             العرض التجريبي
           </a>
+          <HeaderAccount />
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -151,6 +257,7 @@ export function SiteHeader({ current }: { current: string }) {
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
             {dark ? "الوضع الفاتح" : "الوضع الداكن"}
           </button>
+          <HeaderAccount variant="mobile" />
         </nav>
       )}
     </header>
@@ -169,7 +276,7 @@ export function SiteFooter() {
           </div>
           <p className="mt-3 text-[12px] leading-6 text-muted">{BRAND.tagline}</p>
           <p className="mt-2 text-[11px] leading-5 text-muted">
-            من تطوير {BRAND.owner}
+            تُطوَّر وتُدار بواسطة {BRAND.team}
           </p>
         </div>
         <div>
@@ -211,7 +318,7 @@ export function SiteFooter() {
               never competing with the platform name. */}
           <span className="inline-flex items-center gap-1.5">
             <span aria-hidden className="h-3 w-px bg-line dark:bg-white/15" />
-            المصمم والمطور <strong className="font-extrabold text-ink dark:text-white">{BRAND.developer}</strong>
+            بواسطة <strong className="font-extrabold text-ink dark:text-white">{BRAND.team}</strong>
           </span>
         </div>
       </div>

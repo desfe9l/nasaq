@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FolderOpen, Grid2X2, List, Plus, Search } from "lucide-react";
+import { Database, FolderOpen, Grid2X2, List, Plus, Search } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
@@ -159,7 +159,8 @@ export function ProjectsPage() {
                 title="حجم البيانات المحفوظة محليًا في متصفحك"
                 className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-line bg-white px-3 text-[12px] font-bold tabular-nums text-muted dark:border-white/10 dark:bg-white/5"
               >
-                💾 {formatMB(usedBytes)}
+                <Database className="size-3.5" aria-hidden />
+                {formatMB(usedBytes)}
                 {quotaBytes !== null && (
                   <>
                     <span className="text-muted/70">من {formatMB(quotaBytes)}</span>

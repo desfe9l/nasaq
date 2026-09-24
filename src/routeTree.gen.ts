@@ -16,6 +16,7 @@ import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AdminLicensesRouteImport } from './routes/admin-licenses'
 import { Route as BrandKitRouteImport } from './routes/brand-kit'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as CustomDesignRouteImport } from './routes/custom-design'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as LicenseRouteImport } from './routes/license'
@@ -67,6 +68,11 @@ const BrandKitRoute = BrandKitRouteImport.update({
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CustomDesignRoute = CustomDesignRouteImport.update({
+  id: '/custom-design',
+  path: '/custom-design',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DemoRoute = DemoRouteImport.update({
@@ -164,6 +170,7 @@ export interface FileRoutesByFullPath {
   '/admin-licenses': typeof AdminLicensesRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
+  '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
@@ -190,6 +197,7 @@ export interface FileRoutesByTo {
   '/admin-licenses': typeof AdminLicensesRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
+  '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
@@ -217,6 +225,7 @@ export interface FileRoutesById {
   '/admin-licenses': typeof AdminLicensesRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
+  '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
@@ -245,6 +254,7 @@ export interface FileRouteTypes {
     | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
+    | '/custom-design'
     | '/demo'
     | '/editor'
     | '/license'
@@ -271,6 +281,7 @@ export interface FileRouteTypes {
     | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
+    | '/custom-design'
     | '/demo'
     | '/editor'
     | '/license'
@@ -297,6 +308,7 @@ export interface FileRouteTypes {
     | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
+    | '/custom-design'
     | '/demo'
     | '/editor'
     | '/license'
@@ -324,6 +336,7 @@ export interface RootRouteChildren {
   AdminLicensesRoute: typeof AdminLicensesRoute
   BrandKitRoute: typeof BrandKitRoute
   ContactRoute: typeof ContactRoute
+  CustomDesignRoute: typeof CustomDesignRoute
   DemoRoute: typeof DemoRoute
   EditorRoute: typeof EditorRoute
   LicenseRoute: typeof LicenseRoute
@@ -392,6 +405,13 @@ declare module '@tanstack/react-router' {
       path: '/contact'
       fullPath: '/contact'
       preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/custom-design': {
+      id: '/custom-design'
+      path: '/custom-design'
+      fullPath: '/custom-design'
+      preLoaderRoute: typeof CustomDesignRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/demo': {
@@ -524,6 +544,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminLicensesRoute: AdminLicensesRoute,
   BrandKitRoute: BrandKitRoute,
   ContactRoute: ContactRoute,
+  CustomDesignRoute: CustomDesignRoute,
   DemoRoute: DemoRoute,
   EditorRoute: EditorRoute,
   LicenseRoute: LicenseRoute,

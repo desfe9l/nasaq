@@ -22,13 +22,13 @@ export function ContactPage() {
 
   /** Live WhatsApp message: request chip + optional entity + optional deadline. */
   const message = useMemo(() => {
-    let text = `السلام عليكم ${BRAND.owner}، أرغب بالاستفسار عن: ${scope} عبر ${BRAND.nameAr}.`;
+    let text = `السلام عليكم ${BRAND.team}، أرغب بالاستفسار عن: ${scope} عبر ${BRAND.nameAr}.`;
     if (entity.trim()) text += `\nالجهة: ${entity.trim()}`;
     if (deadline.trim()) text += `\nالموعد النهائي: ${deadline.trim()}`;
     return text;
   }, [scope, entity, deadline]);
 
-  const demoBookingMessage = `السلام عليكم ${BRAND.owner}، أرغب بحجز موعد لعرض توضيحي لمدة 15 دقيقة لمنصة ${BRAND.nameAr}.`;
+  const demoBookingMessage = `السلام عليكم ${BRAND.team}، أرغب بحجز موعد لعرض توضيحي لمدة 15 دقيقة لمنصة ${BRAND.nameAr}.`;
 
   // Desktop QR → continue the same WhatsApp thread on the phone.
   useEffect(() => {
@@ -70,7 +70,7 @@ export function ContactPage() {
         <p className="text-[12px] font-extrabold tracking-[0.16em] text-green dark:text-gold-2">تواصل تجاري مباشر</p>
         <h1 className="mt-3 text-[30px] font-extrabold">كيف نساعدك في بدء العمل؟</h1>
         <p className="mt-3 text-[15px] leading-8 text-muted">
-          تحدث مباشرة مع المصمم والمطور {BRAND.owner} للاستفسار عن الترخيص، تجهيز الهوية، أو تسليم نسخة مناسبة لجهتك.
+          تحدث مباشرة مع {BRAND.team} للاستفسار عن الترخيص، تجهيز الهوية، أو تسليم نسخة مناسبة لجهتك.
         </p>
 
         <div className="mt-8 grid gap-6 border-y border-line py-7 md:grid-cols-[1fr_auto] md:items-center dark:border-white/10">
