@@ -85,9 +85,19 @@ export default function AdminDashboard() {
     setChecking(true);
     void adminVerifyFn()
       .then((res) => {
-      if (!res.configured) setError("لوحة الإدارة غير مهيأة: عيّن هوية المالك على الخادم.");
-      else if (!res.ok) setError("هذا الحساب لا يملك صلاحية الإدارة.");
-      else setAuthed(true);
+      if (!res.configured) {
+        // Development bypass: if owner not configured, allow access for any authenticated user
+        // This enables admin access in local development without NASAQ_OWNER_ID/EMAIL env vars
+        if (import.meta.env.DEV) {
+          setAuthed(true);
+        } else {
+          setError("لوحة الإدارة غير مهيأة: عيّن هوية المالك على الخادم.");
+        }
+      } else if (!res.ok) {
+        setError("هذا الحساب لا يملك صلاحية الإدارة.");
+      } else {
+        setAuthed(true);
+      }
       })
       .catch(() => setError("تعذر التحقق من صلاحيات الحساب."))
       .finally(() => setChecking(false));
