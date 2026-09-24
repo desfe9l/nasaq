@@ -13,6 +13,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AdminLicensesRouteImport } from './routes/admin-licenses'
+import { Route as BrandKitRouteImport } from './routes/brand-kit'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as EditorRouteImport } from './routes/editor'
@@ -317,29 +319,20 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
-<<<<<<< HEAD
+  AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRoute
   AdminLicensesRoute: typeof AdminLicensesRoute
   BrandKitRoute: typeof BrandKitRoute
-=======
-  AccountRoute: typeof AccountRoute
-  AdminRoute: typeof AdminRoute
->>>>>>> origin/rebrand-nasaq
   ContactRoute: typeof ContactRoute
   DemoRoute: typeof DemoRoute
   EditorRoute: typeof EditorRoute
-<<<<<<< HEAD
   LicenseRoute: typeof LicenseRoute
   LoginRoute: typeof LoginRoute
   OwnerVaultRoute: typeof OwnerVaultRoute
   PrivacyRoute: typeof PrivacyRoute
-=======
-  LoginRoute: typeof LoginRoute
->>>>>>> origin/rebrand-nasaq
   ProjectsRoute: typeof ProjectsRoute
   PurchaseRoute: typeof PurchaseRoute
   TemplatesRoute: typeof TemplatesRoute
-<<<<<<< HEAD
   TermsRoute: typeof TermsRoute
   Char1575Char1604Char1607Char1608Char1610Char1577Route: typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -348,9 +341,6 @@ export interface RootRouteChildren {
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
   ApiLicenseValidateRoute: typeof ApiLicenseValidateRoute
   ApiWebhooksKeygenRoute: typeof ApiWebhooksKeygenRoute
-=======
-  ApiAuthSplatRoute: typeof ApiAuthSplatRoute
->>>>>>> origin/rebrand-nasaq
 }
 
 declare module '@tanstack/react-router' {
@@ -369,8 +359,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
-<<<<<<< HEAD
-=======
     '/account': {
       id: '/account'
       path: '/account'
@@ -378,7 +366,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountRouteImport
       parentRoute: typeof rootRouteImport
     }
->>>>>>> origin/rebrand-nasaq
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -386,7 +373,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-<<<<<<< HEAD
     '/admin-licenses': {
       id: '/admin-licenses'
       path: '/admin-licenses'
@@ -401,8 +387,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BrandKitRouteImport
       parentRoute: typeof rootRouteImport
     }
-=======
->>>>>>> origin/rebrand-nasaq
     '/contact': {
       id: '/contact'
       path: '/contact'
@@ -424,7 +408,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
-<<<<<<< HEAD
     '/license': {
       id: '/license'
       path: '/license'
@@ -432,8 +415,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LicenseRouteImport
       parentRoute: typeof rootRouteImport
     }
-=======
->>>>>>> origin/rebrand-nasaq
     '/login': {
       id: '/login'
       path: '/login'
@@ -441,7 +422,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-<<<<<<< HEAD
     '/owner-vault': {
       id: '/owner-vault'
       path: '/owner-vault'
