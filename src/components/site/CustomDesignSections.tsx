@@ -33,20 +33,20 @@ export function CustomDesignLogoSlot() {
 
 export function CustomDesignScopes() {
   return (
-    <ul className="mt-4 grid gap-3">
+    <ul className="mt-5 grid gap-3 sm:grid-cols-2">
       {CUSTOM_DESIGN.scopes.map((scope, i) => {
         const Icon = SCOPE_ICONS[i % SCOPE_ICONS.length];
         return (
           <li
             key={scope.id}
-            className="flex items-start gap-3 rounded-xl border border-line p-3 dark:border-white/10"
+            className="group flex h-full items-start gap-3 rounded-xl border border-line bg-paper/60 p-4 transition duration-200 hover:-translate-y-0.5 hover:border-navy-2/40 hover:bg-navy/[0.035] hover:shadow-[0_8px_24px_-18px_rgba(0,108,53,0.55)] dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-gold-2/35 dark:hover:bg-white/[0.06]"
           >
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy/10 text-navy dark:bg-white/10 dark:text-white">
-              <Icon className="size-4" aria-hidden />
+            <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-navy/10 text-navy transition-colors group-hover:bg-navy/15 dark:bg-white/10 dark:text-white">
+              <Icon className="size-5" aria-hidden />
             </span>
-            <span>
+            <span className="min-w-0">
               <strong className="block text-[13px] font-extrabold">{scope.label}</strong>
-              <span className="mt-0.5 block text-[12px] leading-6 text-muted">{scope.hint}</span>
+              <span className="mt-1 block text-[12px] leading-6 text-muted">{scope.hint}</span>
             </span>
           </li>
         );

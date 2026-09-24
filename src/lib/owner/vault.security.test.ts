@@ -7,7 +7,7 @@ const source = readFileSync(new URL("./vault-functions.ts", import.meta.url), "u
 test("owner vault has a server auth boundary", () => {
   assert.match(source, /middleware\(\[authMiddleware\]\)/);
   assert.match(source, /getAuthorizationContext/);
-  assert.match(source, /authorization\.isOwner/);
+  assert.match(source, /authorization\.isAdmin/);
 });
 
 test("platform runtime credentials are explicitly excluded from values", () => {

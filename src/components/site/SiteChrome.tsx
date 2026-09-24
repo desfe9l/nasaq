@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
 import { Toaster } from "sonner";
-import { BRAND, CONTACT_PHONE_DISPLAY, NAV_ITEMS, telHref } from "@/lib/brand";
+import {
+  BRAND,
+  CONTACT_PHONE_DISPLAY,
+  NAV_ITEMS,
+  PRIMARY_NAV_ITEMS,
+  SECONDARY_NAV_ITEMS,
+  telHref,
+} from "@/lib/brand";
 import { readStoredTheme, writeStoredTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
@@ -36,11 +43,15 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
         href="/login"
         className={cn(
           "items-center gap-1.5 rounded-[8px] border border-line px-3 font-bold text-ink transition hover:border-navy-2 hover:text-navy-2 dark:border-white/15 dark:text-white dark:hover:border-gold-2 dark:hover:text-gold-2",
-          variant === "header" ? "inline-flex h-9 text-[12px]" : "mt-1 flex w-full px-3 py-2.5 text-[13px]",
+          variant === "header"
+            ? "inline-flex h-9 max-w-[150px] items-center px-2 text-[11px] sm:px-3 sm:text-[12px] lg:max-w-none"
+            : "mt-1 flex w-full px-3 py-2.5 text-[13px]",
         )}
       >
         <LogIn className="size-4" aria-hidden />
-        تسجيل الدخول / إنشاء حساب
+        <span className="truncate">
+          تسجيل الدخول / إنشاء حساب
+        </span>
       </a>
     );
   }
@@ -85,12 +96,12 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
           )}
         >
           <a
-            href="/account"
+            href="/account#settings"
             role="menuitem"
             className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12px] font-bold hover:bg-line-2 dark:hover:bg-white/5"
           >
             <UserRound className="size-4 opacity-70" aria-hidden />
-            حسابي
+            الحساب والإعدادات
           </a>
           <button
             type="button"
@@ -137,6 +148,7 @@ function AnnouncementBar() {
 
 export function SiteHeader({ current }: { current: string }) {
   const [open, setOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   // Initialised from the shared preference; the root-level theme module has
   // already applied the class before any route renders, so this never
   // disagrees with what is on screen.
@@ -144,7 +156,15 @@ export function SiteHeader({ current }: { current: string }) {
 
   useEffect(() => {
     setOpen(false);
+    setMoreOpen(false);
   }, [current]);
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const close = () => setMoreOpen(false);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, [moreOpen]);
 
   const toggleTheme = () => {
     const next = !dark;
@@ -171,18 +191,18 @@ export function SiteHeader({ current }: { current: string }) {
      * a blurred bar smears into the page it is floating over).
      */}
     <header className="sticky top-0 z-40 border-b border-line/60 bg-white/80 shadow-sm backdrop-blur-[12px] dark:border-white/10 dark:bg-[#111722]/80">
-      <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <a href="/" className="flex items-center gap-2.5">
+      <div className="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_1fr] items-center gap-x-3 px-4 sm:gap-x-4 sm:px-6 lg:flex">
+        <a href="/" className="flex shrink-0 items-center gap-2.5">
           <BrandLogo />
         </a>
 
-        <nav className="hidden items-center gap-1 lg:flex">
-          {NAV_ITEMS.map((item) => (
+        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex" aria-label="الروابط الرئيسية">
+          {PRIMARY_NAV_ITEMS.map((item) => (
             <a
               key={item.to}
               href={item.to}
               className={cn(
-                "rounded-[8px] px-3 py-2 text-[13px] font-bold transition",
+                "whitespace-nowrap rounded-[8px] px-2.5 py-2 text-[12px] font-bold transition xl:text-[13px]",
                 current === item.to
                   ? "bg-navy text-white"
                   : "text-muted hover:bg-line-2 hover:text-ink dark:hover:bg-white/5 dark:hover:text-white",
@@ -191,9 +211,46 @@ export function SiteHeader({ current }: { current: string }) {
               {item.label}
             </a>
           ))}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setMoreOpen((value) => !value);
+              }}
+              aria-expanded={moreOpen}
+              aria-haspopup="menu"
+              className="flex h-9 items-center gap-1 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] font-bold text-muted transition hover:bg-line-2 hover:text-ink dark:hover:bg-white/5 dark:hover:text-white xl:text-[13px]"
+            >
+              المزيد
+              <ChevronDown className={cn("size-3.5 transition", moreOpen && "rotate-180")} aria-hidden />
+            </button>
+            {moreOpen && (
+              <div
+                role="menu"
+                className="absolute end-0 top-11 z-50 grid w-52 gap-1 rounded-[10px] border border-line bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#161c26]"
+              >
+                {SECONDARY_NAV_ITEMS.map((item) => (
+                  <a
+                    key={item.to}
+                    href={item.to}
+                    role="menuitem"
+                    className={cn(
+                      "whitespace-nowrap rounded-[8px] px-3 py-2.5 text-[12px] font-bold transition",
+                      current === item.to
+                        ? "bg-navy text-white"
+                        : "text-muted hover:bg-line-2 hover:text-ink dark:hover:bg-white/5 dark:hover:text-white",
+                    )}
+                  >
+                    {item.label}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-1.5 sm:gap-2">
           {/* Light/Dark is the visitor's choice: one toggle, applied site-wide
               and persisted (lib/theme.ts), so every page loads on the same
               mode instead of each page forcing its own. */}
@@ -209,7 +266,7 @@ export function SiteHeader({ current }: { current: string }) {
           </button>
           <a
             href={telHref()}
-            className="hidden h-9 items-center gap-2 rounded-[8px] border border-line px-3 text-[12px] font-bold sm:inline-flex dark:border-white/10"
+            className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-[8px] border border-line px-3 text-[12px] font-bold xl:inline-flex dark:border-white/10"
           >
             <span className="tabular-nums" dir="ltr">
               {CONTACT_PHONE_DISPLAY}
@@ -217,7 +274,7 @@ export function SiteHeader({ current }: { current: string }) {
           </a>
           <a
             href="/demo"
-            className="inline-flex h-9 items-center rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-white"
+            className="hidden h-9 items-center whitespace-nowrap rounded-[8px] border border-navy px-3 text-[12px] font-extrabold text-navy lg:inline-flex dark:text-white"
           >
             العرض التجريبي
           </a>
@@ -248,6 +305,12 @@ export function SiteHeader({ current }: { current: string }) {
               {item.label}
             </a>
           ))}
+          <a
+            href="/demo"
+            className="block rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted lg:hidden"
+          >
+            العرض التجريبي
+          </a>
           <button
             type="button"
             onClick={toggleTheme}

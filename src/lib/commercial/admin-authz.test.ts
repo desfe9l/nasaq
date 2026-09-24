@@ -14,6 +14,7 @@
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
+import { isAdminUser, type AdminIdentityConfig } from "../auth/admin-identity.server.ts";
 import type { Sql } from "@/lib/db";
 import {
   AdminRequiredError,
@@ -84,6 +85,15 @@ describe("isAdmin", () => {
 
   it("is false for an ordinary customer", async () => {
     assert.equal(await isAdmin(sql, CAROL), false);
+  });
+
+  it("is true only for a verified email present in the explicit admin allowlist", async () => {
+    const config: AdminIdentityConfig = {
+      ids: new Set(),
+      emails: new Set(["carol@example.com"]),
+    };
+    assert.equal(await isAdminUser(sql, CAROL, config), true);
+    assert.equal(await isAdminUser(sql, DAVE, config), false);
   });
 
   it("is false for an unknown user id", async () => {

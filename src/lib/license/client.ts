@@ -45,9 +45,11 @@ export function setCachedLicenseKey(key: string): void {
 export interface LicenseState {
   /** Whether we're still loading the license from the server. */
   isLoading: boolean;
-  /** Whether the user has a valid active license. */
+  /** Whether the user has a valid active license or administrator full access. */
   hasLicense: boolean;
-  /** License info (null if no license or loading). */
+  /** True when access is granted by a verified administrator identity. */
+  isAdmin: boolean;
+  /** License info (null if no license, administrator, or loading). */
   license: LicenseInfo | null;
   /** Feature entitlements (empty object if no license). */
   entitlements: Record<FeatureId, boolean>;
@@ -60,6 +62,7 @@ const EMPTY_ENTITLEMENTS = LICENSE_ENTITLEMENTS.FREE;
 const INITIAL_STATE: LicenseState = {
   isLoading: true,
   hasLicense: false,
+  isAdmin: false,
   license: null,
   entitlements: EMPTY_ENTITLEMENTS,
   error: null,
@@ -81,7 +84,14 @@ export function useLicense(userId?: string, userEmail?: string | null) {
   const validateCached = useCallback(async () => {
     const cachedKey = getCachedLicenseKey();
     if (!cachedKey) {
-      setState((s) => ({ ...s, isLoading: false, hasLicense: false, license: null, entitlements: EMPTY_ENTITLEMENTS }));
+      setState((s) => ({
+        ...s,
+        isLoading: false,
+        hasLicense: false,
+        isAdmin: false,
+        license: null,
+        entitlements: EMPTY_ENTITLEMENTS,
+      }));
       return;
     }
 
@@ -91,6 +101,7 @@ export function useLicense(userId?: string, userEmail?: string | null) {
         setState({
           isLoading: false,
           hasLicense: true,
+          isAdmin: false,
           license: result.license,
           entitlements: result.entitlements,
           error: null,
@@ -101,6 +112,7 @@ export function useLicense(userId?: string, userEmail?: string | null) {
         setState({
           isLoading: false,
           hasLicense: false,
+          isAdmin: false,
           license: null,
           entitlements: EMPTY_ENTITLEMENTS,
           error: null,
@@ -118,10 +130,11 @@ export function useLicense(userId?: string, userEmail?: string | null) {
     if (!userId) return;
     try {
       const result = await getLicenseStatusFn({ data: undefined });
-      if (result.isOwner && result.entitlements) {
+      if ((result.isOwner || result.isAdmin) && result.entitlements) {
         setState({
           isLoading: false,
           hasLicense: true,
+          isAdmin: Boolean(result.isAdmin),
           license: null,
           entitlements: result.entitlements,
           error: null,
@@ -130,6 +143,7 @@ export function useLicense(userId?: string, userEmail?: string | null) {
         setState({
           isLoading: false,
           hasLicense: true,
+          isAdmin: false,
           license: result.license,
           entitlements: result.entitlements,
           error: null,
@@ -162,6 +176,7 @@ export function useLicense(userId?: string, userEmail?: string | null) {
           setState({
             isLoading: false,
             hasLicense: true,
+            isAdmin: false,
             license: validated.license ?? result.license,
             entitlements: validated.entitlements ?? LICENSE_ENTITLEMENTS[result.license.type],
             error: null,
@@ -195,6 +210,7 @@ export function useLicense(userId?: string, userEmail?: string | null) {
     setState({
       isLoading: false,
       hasLicense: false,
+      isAdmin: false,
       license: null,
       entitlements: EMPTY_ENTITLEMENTS,
       error: null,

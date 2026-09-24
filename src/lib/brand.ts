@@ -52,16 +52,47 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { to: "/", label: "الرئيسية" },
-  { to: "/projects", label: "المشاريع" },
-  { to: "/templates", label: "القوالب" },
-  { to: "/purchase", label: "النسخ والتراخيص" },
-  { to: "/custom-design", label: "طلب تصميم خاص" },
-  { to: "/الهوية", label: "الهوية" },
-  { to: "/about", label: "عن المنصة" },
-  { to: "/contact", label: "التواصل" },
-  { to: "/account", label: "حسابي" },
+  {
+    to: "/",
+    label: "الرئيسية",
+  },
+  {
+    to: "/projects",
+    label: "المشاريع",
+  },
+  {
+    to: "/templates",
+    label: "القوالب",
+  },
+  {
+    to: "/purchase",
+    label: "النسخ والتراخيص",
+  },
+  {
+    to: "/custom-design",
+    label: "طلب تصميم خاص",
+  },
+  {
+    to: "/الهوية",
+    label: "الهوية",
+  },
+  {
+    to: "/about",
+    label: "عن المنصة",
+  },
+  {
+    to: "/contact",
+    label: "التواصل",
+  },
+  {
+    to: "/account",
+    label: "حسابي",
+  },
 ];
+
+/** Core navigation stays on one line; supporting links move into More. */
+export const PRIMARY_NAV_ITEMS: NavItem[] = NAV_ITEMS.slice(0, 4);
+export const SECONDARY_NAV_ITEMS: NavItem[] = NAV_ITEMS.slice(4);
 
 /**
  * «طلب تصميم خاص» — institutional request surface.

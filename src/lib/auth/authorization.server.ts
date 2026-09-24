@@ -1,3 +1,4 @@
+import { getSql } from "@/lib/db";
 import { findLicensesByUserId } from "@/lib/license/server";
 import {
   entitlementsForPlan,
@@ -6,10 +7,16 @@ import {
   type FeatureId,
   type License,
 } from "@/lib/license/types";
+import {
+  isAdminIdentity,
+  isConfiguredAdminIdentity,
+  readAdminIdentityConfig,
+} from "./admin-identity.server";
 import { isOwnerIdentity, type OwnerIdentity } from "./owner.server";
 
 export type AuthorizationContext = OwnerIdentity & {
   isOwner: boolean;
+  isAdmin: boolean;
   license: License | null;
   entitlements: Record<FeatureId, boolean>;
 };
@@ -33,10 +40,24 @@ export function isActiveLicense(license: License): boolean {
 export async function getAuthorizationContext(
   identity: OwnerIdentity,
 ): Promise<AuthorizationContext> {
-  if (isOwnerIdentity(identity)) {
+  const config = readAdminIdentityConfig();
+  const isOwner = isOwnerIdentity(identity);
+  if (isConfiguredAdminIdentity(identity, config)) {
     return {
       ...identity,
-      isOwner: true,
+      isOwner,
+      isAdmin: true,
+      license: null,
+      entitlements: { ...LICENSE_ENTITLEMENTS.LIFETIME },
+    };
+  }
+
+  const sql = await getSql();
+  if (await isAdminIdentity(sql, identity, config)) {
+    return {
+      ...identity,
+      isOwner: false,
+      isAdmin: true,
       license: null,
       entitlements: { ...LICENSE_ENTITLEMENTS.LIFETIME },
     };
@@ -46,6 +67,7 @@ export async function getAuthorizationContext(
   return {
     ...identity,
     isOwner: false,
+    isAdmin: false,
     license,
     entitlements: license
       ? license.metadata?.source === "keygen"
@@ -62,7 +84,7 @@ export function requireFeature(
   context: AuthorizationContext,
   feature: FeatureId,
 ): void {
-  if (context.isOwner || context.entitlements[feature]) return;
+  if (context.isOwner || context.isAdmin || context.entitlements[feature]) return;
   throw new ForbiddenError();
 }
 

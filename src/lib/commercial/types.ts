@@ -71,6 +71,8 @@ export type CustomerAccount = {
   expiresAt: string | null;
   /** Whole days remaining; null unless ACTIVE. Never negative. */
   daysRemaining: number | null;
+  /** True for a verified administrator; grants full access independently of a subscription. */
+  isAdmin: boolean;
 };
 
 /** External payment instructions shown to the customer (admin-editable). */

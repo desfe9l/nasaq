@@ -55,7 +55,7 @@ export const generateReportDraftFn = createServerFn({ method: "POST" })
     }
 
     if (
-      !access.isOwner &&
+      !access.isAdmin &&
       (!checkRateLimit("ai:report:user", context.userId, 8, 60_000) ||
         !checkRateLimit("ai:report:ip", await clientIdentifier(), 16, 60_000))
     ) {

@@ -30,10 +30,11 @@ const FREE_USER = "gate-free";
 const ACTIVE_USER = "gate-active";
 const EXPIRED_USER = "gate-expired";
 const SUSPENDED_USER = "gate-suspended";
+const ADMIN_USER = "gate-admin";
 
 before(async () => {
   ({ sql, close } = await createTestSql());
-  for (const id of [FREE_USER, ACTIVE_USER, EXPIRED_USER, SUSPENDED_USER]) {
+  for (const id of [FREE_USER, ACTIVE_USER, EXPIRED_USER, SUSPENDED_USER, ADMIN_USER]) {
     await createUser(sql, { id, email: `${id}@example.com` });
   }
   await giveSubscription(sql, {
@@ -50,6 +51,10 @@ before(async () => {
     status: "SUSPENDED",
     expiresAt: new Date(Date.now() + 86_400_000 * 30).toISOString(),
   });
+  await sql`
+    insert into admin_users (user_id, created_by, note)
+    values (${ADMIN_USER}, 'system', 'admin entitlement regression')
+  `;
 });
 
 after(async () => {
@@ -106,6 +111,13 @@ describe("requireActiveEntitlement fails closed", () => {
     assert.ok(account.expiresAt);
   });
 
+  it("bypasses the subscription check for a verified admin", async () => {
+    const account = await requireActiveEntitlement(sql, ADMIN_USER);
+    assert.equal(account.isAdmin, true);
+    assert.equal(account.status, "FREE");
+    assert.equal(account.planId, null);
+  });
+
   it("is safe to use as a bare statement before a paid operation", async () => {
     // The exact pattern that was broken: call it, then proceed. A FREE user must
     // not reach the code after the call.
@@ -125,12 +137,20 @@ describe("getAccount stays readable without gating", () => {
     // The counterpart to the gate: reading your own state is not a paid feature.
     const account = await getAccount(sql, FREE_USER);
     assert.equal(account.status, "FREE");
+    assert.equal(account.isAdmin, false);
+  });
+
+  it("reports a database-promoted admin as full access even when subscription is FREE", async () => {
+    const account = await getAccount(sql, ADMIN_USER);
+    assert.equal(account.isAdmin, true);
+    assert.equal(account.status, "FREE");
   });
 
   it("reports the dev fallback user (no \"user\" row) without error", async () => {
     // `dev-user` has no row in "user"; a join that required one would break here.
     const account = await getAccount(sql, "dev-user");
     assert.equal(account.status, "FREE");
+    assert.equal(account.isAdmin, false);
     assert.equal(account.planId, null);
   });
 });
