@@ -191,13 +191,10 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
         <h2 className="text-[16px] font-black">الروابط والأسعار</h2>
         <div className="grid gap-3 md:grid-cols-2">
           <label className={label}>رقم واتساب (دولي، أرقام فقط)<input dir="ltr" className={input} value={c.whatsappNumber} onChange={(e) => setC({ whatsappNumber: e.target.value })} /></label>
-          <label className={label}>خصم الاشتراك السنوي (%)<input type="number" className={input} value={c.annualDiscountPercent} onChange={(e) => setC({ annualDiscountPercent: Number(e.target.value) })} /></label>
           <label className={cn(label, "md:col-span-2")}>رسالة واتساب لطلب الترخيص<input className={input} value={c.whatsappLicenseMessage} onChange={(e) => setC({ whatsappLicenseMessage: e.target.value })} /></label>
           <label className={cn(label, "md:col-span-2")}>رسالة واتساب للترخيص المؤسسي<input className={input} value={c.whatsappEnterpriseMessage} onChange={(e) => setC({ whatsappEnterpriseMessage: e.target.value })} /></label>
-          <label className={label}>سعر الترخيص الفردي الشهري (ر.س)<input type="number" className={input} value={c.priceIndividualMonthly} onChange={(e) => setC({ priceIndividualMonthly: Number(e.target.value) })} /></label>
-          <label className={label}>سعر ترخيص الفريق الشهري (ر.س)<input type="number" className={input} value={c.priceTeamMonthly} onChange={(e) => setC({ priceTeamMonthly: Number(e.target.value) })} /></label>
         </div>
-        <p className="text-[11px] text-muted">تُنشأ فواتير الدفع من الخادم عبر Paylink بعد تسجيل الدخول.</p>
+        <p className="text-[11px] text-muted">الأسعار والمدد ثابتة من الكتالوج المركزي. تُنشأ فواتير الدفع من الخادم عبر Paylink بعد اكتمال الربط وتسجيل الدخول.</p>
         <div><SaveBtn section="commercial" /></div>
       </section>
     );

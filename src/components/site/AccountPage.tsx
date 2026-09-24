@@ -1,3 +1,4 @@
+import { getCatalogPlan, planSavings } from "@/lib/commercial/catalog";
 import { useCallback, useEffect, useState } from "react";
 import { RedirectToSignIn } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -321,6 +322,7 @@ function PlanSection({
               <div className="mt-2 text-[17px] font-extrabold tabular-nums">
                 {formatPrice(p.price, p.currency)}
               </div>
+              {getCatalogPlan(p.id)?.period === "quarterly" && <p className="mt-2 text-[12px] font-bold text-ok">3 أشهر — أفضل قيمة · وفّر {planSavings(getCatalogPlan(p.id)!)} ر.س مقارنة بالدفع الشهري</p>}
               {p.description && (
                 <p className="mt-2 text-[12px] leading-6 text-muted">{p.description}</p>
               )}
@@ -341,7 +343,8 @@ function PlanSection({
         })}
       </div>
 
-      {plan && (
+      {plan && (!instructions.iban || !instructions.bankName || !instructions.accountName) && <p className="mt-5 text-[13px] text-muted">الدفع قريبًا — تعليمات التحويل غير مكتملة.</p>}
+      {plan && instructions.iban && instructions.bankName && instructions.accountName && (
         <div className="mt-5 grid gap-4 rounded-[12px] border border-line-2 bg-paper/60 p-4 dark:border-white/10">
           <div>
             <h3 className="text-[13px] font-extrabold">تعليمات الدفع</h3>

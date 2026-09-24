@@ -1174,6 +1174,8 @@ function PlansTab() {
                   <span className="text-[11px] text-muted">السعر ({plan.currency})</span>
                   <input
                     dir="ltr"
+                    readOnly
+                    title="معتمد من الكتالوج المركزي"
                     defaultValue={plan.price}
                     onChange={(e) =>
                       setDraft((prev) => ({
@@ -1188,6 +1190,7 @@ function PlansTab() {
                   <span className="text-[11px] text-muted">المدة (يوم)</span>
                   <input
                     dir="ltr"
+                    readOnly
                     defaultValue={plan.durationDays}
                     onChange={(e) =>
                       setDraft((prev) => ({

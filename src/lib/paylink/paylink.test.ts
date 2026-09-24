@@ -29,9 +29,9 @@ import type { Sql } from "../db.ts";
 import { keygenPolicyId } from "../license/keygen.ts";
 
 describe("Paylink Central Catalog", () => {
-  it("defines exactly the 4 required paid plans", () => {
+  it("defines exactly the 6 required paid plans", () => {
     const plans = listCatalogPlans();
-    assert.equal(plans.length, 4);
+    assert.equal(plans.length, 6);
 
     const keys = plans.map((p) => p.key);
     assert.deepEqual(keys, [
@@ -39,6 +39,8 @@ describe("Paylink Central Catalog", () => {
       "individual-quarterly",
       "team-monthly",
       "team-quarterly",
+      "individual-annual",
+      "team-annual",
     ]);
   });
 
@@ -90,7 +92,7 @@ describe("Paylink Central Catalog", () => {
     assert.equal(isValidPlanKey("enterprise"), false);
     assert.equal(isValidPlanKey("trial"), false);
     assert.equal(isValidPlanKey("annual"), false);
-    assert.equal(isValidPlanKey("individual-annual"), false);
+    assert.equal(isValidPlanKey("individual-annual"), true);
     assert.equal(getCatalogPlan("invalid"), null);
   });
 });

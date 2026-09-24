@@ -134,7 +134,7 @@ export default function LicensePage() {
             {license.plan && (
               <div>
                 <p className="text-muted">الخطة والفوترة</p>
-                <p className="font-bold">{license.plan.startsWith("team-") ? "فريق" : "فردي"} · {license.billing === "quarterly" ? "كل 3 أشهر" : "شهري"}</p>
+                <p className="font-bold">{license.plan.startsWith("team-") ? "فريق" : "فردي"} · {license.billing === "quarterly" ? "كل 3 أشهر" : license.billing === "annual" ? "سنوي" : "شهري"}</p>
               </div>
             )}
           </div>

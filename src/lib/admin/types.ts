@@ -1,3 +1,4 @@
+import { CENTRAL_PLANS, planSavings } from "../commercial/catalog";
 /**
  * NASAQ admin-managed content — shared (client + server) types and defaults.
  *
@@ -59,9 +60,9 @@ export const DEFAULT_SITE_SETTINGS: PublicSiteSettings = {
     whatsappNumber: "966552017111",
     whatsappLicenseMessage: "السلام عليكم، أرغب بطلب ترخيص النسخة الكاملة من منصة نَسَق.",
     whatsappEnterpriseMessage: "السلام عليكم، أرغب بطلب ترخيص مؤسسي مخصص لمنصة نَسَق.",
-    priceIndividualMonthly: 79,
-    priceTeamMonthly: 199,
-    annualDiscountPercent: 20,
+    priceIndividualMonthly: CENTRAL_PLANS["individual-monthly"].amount,
+    priceTeamMonthly: CENTRAL_PLANS["team-monthly"].amount,
+    annualDiscountPercent: Math.round(planSavings(CENTRAL_PLANS["individual-annual"]) / (CENTRAL_PLANS["individual-monthly"].amount * 12) * 100),
   },
   announcement: { enabled: false, text: "", href: "", tone: "info" },
   texts: { heroEyebrow: "", heroTitle: "", heroDescription: "", footerNote: "" },
@@ -109,11 +110,6 @@ function str(value: unknown, max: number, fallback = ""): string {
   return typeof value === "string" ? value.slice(0, max) : fallback;
 }
 
-function num(value: unknown, min: number, max: number, fallback: number): number {
-  const n = Number(value);
-  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
-}
-
 function httpsOrEmpty(value: unknown): string {
   const s = str(value, 500).trim();
   if (!s) return "";
@@ -145,9 +141,9 @@ export function normalizeSection<K extends SettingsSection>(key: K, raw: unknown
         whatsappNumber: str(r.whatsappNumber, 20, d.commercial.whatsappNumber).replace(/\D/g, "") || d.commercial.whatsappNumber,
         whatsappLicenseMessage: str(r.whatsappLicenseMessage, 500, d.commercial.whatsappLicenseMessage),
         whatsappEnterpriseMessage: str(r.whatsappEnterpriseMessage, 500, d.commercial.whatsappEnterpriseMessage),
-        priceIndividualMonthly: num(r.priceIndividualMonthly, 0, 100000, d.commercial.priceIndividualMonthly),
-        priceTeamMonthly: num(r.priceTeamMonthly, 0, 100000, d.commercial.priceTeamMonthly),
-        annualDiscountPercent: num(r.annualDiscountPercent, 0, 90, d.commercial.annualDiscountPercent),
+        priceIndividualMonthly: d.commercial.priceIndividualMonthly,
+        priceTeamMonthly: d.commercial.priceTeamMonthly,
+        annualDiscountPercent: d.commercial.annualDiscountPercent,
       };
       return value as PublicSiteSettings[K];
     }
