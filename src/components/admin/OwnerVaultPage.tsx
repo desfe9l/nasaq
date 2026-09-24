@@ -83,6 +83,8 @@ function sensitivityLabel(entry: VaultEntry): string {
 
 function valueForDisplay(entry: VaultEntry, revealed: boolean): string {
   if (!entry.ownerReadable) return "محجوب بسياسة المنصة";
+  /* Optional services carry an honest human-readable status instead of a
+     misleading "غير مهيأ" error — the status IS the value. */
   if (!entry.value) return "غير مهيأ";
   return revealed ? entry.value : maskVaultValue(entry.value);
 }

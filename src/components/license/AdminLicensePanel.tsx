@@ -26,6 +26,7 @@ import {
   Clock,
   User,
   RefreshCw,
+  X,
 } from "lucide-react";
 
 const DURATIONS = [
@@ -213,15 +214,17 @@ export default function AdminLicensePanel() {
       {newKey && (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-900/20">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
-              ✅ تم إنشاء الترخيص — انسخ المفتاح الآن (لن يظهر مرة أخرى)
+            <p className="flex items-center gap-1.5 text-sm font-bold text-emerald-700 dark:text-emerald-400">
+              <Check className="size-4" aria-hidden />
+              تم إنشاء الترخيص — انسخ المفتاح الآن (لن يظهر مرة أخرى)
             </p>
             <button
               type="button"
               onClick={() => setNewKey(null)}
+              aria-label="إغلاق"
               className="text-emerald-600 hover:text-emerald-800"
             >
-              ✕
+              <X className="size-4" aria-hidden />
             </button>
           </div>
           <div className="flex items-center gap-2">

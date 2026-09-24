@@ -79,7 +79,13 @@ export const VAULT_SECTION_LABELS: Record<VaultSection, string> = {
   authentication: "المصادقة وOAuth",
   domain: "النطاق وDNS",
   webhooks: "Webhooks",
-  services: "خدمات غير موجودة أو قديمة",
+  /**
+   * Non-blocking by design: the platform ships without email/analytics/object
+   * storage/monitoring, so this section reports honest "not needed yet" status
+   * plus the free-tier option to pick IF the feature is ever requested — never
+   * a red "غير مهيأ" error.
+   */
+  services: "خدمات اختيارية (غير مطلوبة حاليًا)",
 };
 
 export function maskVaultValue(value: string | null): string {

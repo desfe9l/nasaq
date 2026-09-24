@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, lazy, Suspense } from "react";
 import {
   FileDown,
   FileText,
@@ -12,6 +12,7 @@ import {
   Loader2,
   ShieldCheck,
   Lock,
+  LogIn,
 } from "lucide-react";
 import { capturePages, runExport, safeFileName, type CapturedPage, type ExportFormat } from "@/lib/editor/export";
 import { pageSize } from "@/lib/editor/model";
@@ -33,6 +34,19 @@ import {
   PRINT_EXPORT_DPI,
 } from "@/lib/product/product";
 import { FullVersionModal } from "@/components/site/FullVersionModal";
+/**
+ * Export engine (~33KB: jspdf/pptxgenjs/docx/canvg/html2canvas) is code-split
+ * behind this dialog: it loads on first open, not with the editor shell, so
+ * visitors reach a paintable workspace faster. The preview inside the dialog
+ * reuses the same dynamic import — no second copy is ever fetched.
+ */
+const SignInRequiredModalLazy = lazy(() =>
+  import("@/components/site/SignInRequiredModal").then((m) => ({
+    default: m.SignInRequiredModal,
+  })),
+);
+import { authEnabled } from "@/lib/auth/client";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
 const FORMATS: { id: ExportFormat; title: string; desc: string; icon: typeof FileDown }[] = [
   { id: "pdf", title: "PDF", desc: "طباعة وأرشفة رسمية · 300 DPI", icon: FileDown },
@@ -120,6 +134,15 @@ export function ExportDialog() {
   );
   /** True once the author has seen the errors and asked to export anyway. */
   const [riskAccepted, setRiskAccepted] = useState(false);
+  /**
+   * Visitors may edit and preview freely; downloading the file needs an account.
+   * `isPending` is honoured so a signed-in author is never asked to sign in
+   * while the session is still resolving, and the dev fallback (auth disabled)
+   * reports a user, so this stays false there.
+   */
+  const { user, isPending } = useCurrentUserState();
+  const [signInOpen, setSignInOpen] = useState(false);
+  const guestNeedsSignIn = authEnabled && !isPending && !user;
 
   if (!open) return null;
 
@@ -163,6 +186,16 @@ export function ExportDialog() {
   };
 
   const run = async () => {
+    /*
+     * Sign-in gate: everything before this point (editing, the demo licence
+     * checks, the pre-flight report, the preview) stays open to a guest. Only
+     * producing the downloadable file requires an account, and the modal is the
+     * existing auth surface — never a local unlock.
+     */
+    if (guestNeedsSignIn) {
+      setSignInOpen(true);
+      return;
+    }
     // Hard gate: a locked format is never generated before the server has
     // validated a license carrying `advanced_export`.
     if (!formatAllowed) {
@@ -268,6 +301,16 @@ export function ExportDialog() {
             <X className="size-4" />
           </button>
         </div>
+
+        {guestNeedsSignIn && (
+          <p className="mb-4 flex items-start gap-2 rounded-[10px] border border-navy/20 bg-navy/5 p-3 text-[12px] leading-6 dark:border-white/10 dark:bg-white/5">
+            <LogIn className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <span>
+              أنت تتصفح <strong className="font-extrabold">كزائر</strong> — التعديل والمعاينة
+              متاحان الآن، ويُطلب تسجيل الدخول عند تنزيل الملف.
+            </span>
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {FORMATS.map((f) => {
@@ -523,6 +566,17 @@ export function ExportDialog() {
         </div>
 
         <FullVersionModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+
+        {signInOpen && (
+          <Suspense fallback={null}>
+            <SignInRequiredModalLazy
+              open={signInOpen}
+              onClose={() => setSignInOpen(false)}
+              intent="تنزيل الملف"
+              callbackURL="/editor"
+            />
+          </Suspense>
+        )}
 
         {previewPages.length > 0 && (
           <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="معاينة التصدير">

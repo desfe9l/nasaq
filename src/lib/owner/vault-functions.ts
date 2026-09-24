@@ -527,6 +527,18 @@ async function sourceEntries(): Promise<VaultEntry[]> {
 }
 
 function serviceEntries(): VaultEntry[] {
+  /*
+   * Optional services, honestly reported. The platform needs none of email /
+   * analytics / object storage / monitoring today (local-first projects, no
+   * transactional mail, no tracking scripts, no server uploads, no external
+   * error pipeline). Each entry therefore:
+   *   • says "غير مطلوب حاليًا" instead of the misleading "غير مهيأ" error,
+   *   • records the free-tier option to adopt IF the feature is ever requested,
+   *   • keeps every credential server-only (Vercel env vars on the day the
+   *     integration lands — nothing in code or git, ever).
+   * The single info-level finding below mirrors this: no red finding, no fake
+   * integration, no paid service without an owner decision.
+   */
   return [
     staticEntry({
       id: "service.github.repository",
@@ -580,73 +592,73 @@ function serviceEntries(): VaultEntry[] {
       id: "service.email.missing",
       section: "services",
       service: "Email delivery",
-      account: "غير مهيأ",
+      account: "غير مطلوب حاليًا",
       label: "إرسال البريد",
-      value: null,
+      value: "غير مطلوب حاليًا — لا توجد ميزة بريد في المنصة",
       configured: false,
       origin: "missing",
       sensitivity: "sensitive",
       loginUrl: null,
       dashboardUrl: null,
       apiUrl: null,
-      purpose: "لم يظهر مزود بريد أو متغير SMTP/transactional email في المصدر.",
+      purpose: "لا تعتمد المنصة على بريد معاملاتي: التفعيل عبر مفاتيح ترخيص، والتواصل عبر قنوات مباشرة. لا يُنشأ أي حساب بريد قبل وجود ميزة بريد فعلية.",
       configurationLocation: "لا يوجد تكامل NASAQ حاليًا.",
       exposedInSource: false,
-      changeGuide: guide("اختر مزودًا وأضف server-only credentials فقط عند طلب ميزة بريد فعلية.", null, "سياسة البنية التحتية والمزود المختار"),
+      changeGuide: guide("عند طلب ميزة بريد فعلية: اعتمد خيار Free Tier (مثل Resend المجانية) ثم أضف server-only credentials في Vercel فقط، بلا أسرار في الكود أو Git.", null, "سياسة البنية التحتية والمزود المختار"),
     }),
     staticEntry({
       id: "service.analytics.missing",
       section: "services",
       service: "Analytics",
-      account: "غير مهيأ",
+      account: "غير مطلوب حاليًا",
       label: "التحليلات",
-      value: null,
+      value: "غير مطلوب حاليًا — لا يوجد تتبع في المنصة",
       configured: false,
       origin: "missing",
       sensitivity: "public",
       loginUrl: null,
       dashboardUrl: null,
       apiUrl: null,
-      purpose: "لم يظهر Google Analytics أو PostHog أو مزود قياس آخر في المصدر.",
+      purpose: "لا تُشغّل المنصة أي سكربت قياس (لا GA ولا PostHog). تُضاف التحليلات فقط بقرار خصوصية واضح.",
       configurationLocation: "لا يوجد تكامل NASAQ حاليًا.",
       exposedInSource: false,
-      changeGuide: guide("أضف تحليلات فقط بعد تحديد سياسة الخصوصية ومكان تحميل السكربت.", null, "سياسة الخصوصية وsrc/routes/__root.tsx"),
+      changeGuide: guide("عند الحاجة: اعتمد خيار Free Tier يحترم الخصوصية (مثل Cloudflare Web Analytics أو Plausible التجريبية) وحدد مكان تحميل السكربت في سياسة الخصوصية أولًا.", null, "سياسة الخصوصية وsrc/routes/__root.tsx"),
     }),
     staticEntry({
       id: "service.storage.missing",
       section: "services",
       service: "Object storage",
-      account: "غير مهيأ",
+      account: "غير مطلوب حاليًا",
       label: "تخزين الملفات",
-      value: null,
+      value: "غير مطلوب حاليًا — التخزين محلي وقاعدة البيانات",
       configured: false,
       origin: "missing",
       sensitivity: "sensitive",
       loginUrl: null,
       dashboardUrl: null,
       apiUrl: null,
-      purpose: "لم يظهر S3 أو R2 أو Blob storage؛ الملفات الحالية تعتمد على قاعدة البيانات أو المتصفح.",
+      purpose: "المشاريع محلية (IndexedDB) والمحتوى الإداري في قاعدة البيانات؛ لا توجد uploads خادمية تحتاج S3/R2/Blob اليوم.",
       configurationLocation: "لا يوجد تكامل NASAQ حاليًا.",
       exposedInSource: false,
-      changeGuide: guide("اختر تخزينًا مناسبًا وأضف signed upload flow قبل تخزين ملفات مستخدمين.", null, "خطة التخزين ومسارات upload server-side"),
+      changeGuide: guide("عند الحاجة لرفع ملفات مستخدمين: اعتمد خيار Free Tier (مثل Cloudflare R2 المجانية) مع signed upload flow خادمي، والأسرار في Vercel فقط.", null, "خطة التخزين ومسارات upload server-side"),
     }),
     staticEntry({
       id: "service.monitoring.missing",
       section: "services",
       service: "Monitoring / error tracking",
-      account: "غير مهيأ",
+      account: "غير مطلوب حاليًا",
       label: "المراقبة",
-      value: null,
+      value: "غير مطلوب حاليًا — سجلات المنصة الافتراضية",
       configured: false,
       origin: "missing",
       sensitivity: "sensitive",
       loginUrl: null,
       dashboardUrl: null,
       apiUrl: null,
-      purpose: "لم يظهر Sentry أو Datadog أو مزود مراقبة خارجي في المصدر.",
+      purpose: "لا توجد pipeline مراقبة خارجية (لا Sentry ولا Datadog)؛ سجلات Vercel الافتراضية تكفي الحجم الحالي.",
       configurationLocation: "لا يوجد تكامل NASAQ حاليًا.",
       exposedInSource: false,
-      changeGuide: guide("اختر مزودًا لا يرسل الأسرار أو محتوى التقارير، ثم أضف source maps وسياسة retention.", null, "خطة المراقبة وVercel project settings"),
+      changeGuide: guide("عند الحاجة: اعتمد خيار Free Tier (مثل Sentry المجانية) مع حجب الأسرار ومحتوى التقارير، ثم أضف source maps وسياسة retention.", null, "خطة المراقبة وVercel project settings"),
     }),
   ];
 }
@@ -670,12 +682,20 @@ function findings(entries: VaultEntry[], ownerConfigured: boolean): OwnerVaultFi
       action: "اربط قاعدة Neon production واختبر migrations قبل فتح الاستخدام العام.",
     });
   }
+  /*
+   * XAI_API_KEY is handled strictly server-side: the key itself never appears
+   * in code or git — only Vercel environment variables (see ENV_SPECS entry,
+   * whose guide walks the owner through creating/rotating it in xAI Console).
+   * The AI draft features already degrade honestly to a server-config error
+   * when it is absent, so a missing key is an optional capability notice —
+   * never an error, and never a reason to touch client code.
+   */
   if (!runtime("XAI_API_KEY")) {
     result.push({
-      severity: "medium",
-      title: "xAI غير مهيأ",
-      detail: "XAI_API_KEY غير موجود؛ ميزات المسودات الحقيقية ستعيد خطأ إعداد الخادم.",
-      action: "أضف مفتاح xAI server-only بعد اعتماد حدود الإنفاق.",
+      severity: "info",
+      title: "تكامل xAI اختياري — غير مفعّل",
+      detail: "XAI_API_KEY (خادمي فقط، يُدار من Vercel) غير موجود؛ ميزات المسودات الذكية متوقفة برسالة إعداد واضحة، وبقية المنصة تعمل طبيعيًا.",
+      action: "فعّله فقط بعد اعتماد حدود الإنفاق: أنشئ المفتاح من xAI Console وأضفه في Vercel → Environment Variables ثم أعد النشر. لا تضع أي مفتاح في الكود أو Git أبدًا.",
     });
   }
   if (!runtime("KEYGEN_API_TOKEN")) {
@@ -688,9 +708,9 @@ function findings(entries: VaultEntry[], ownerConfigured: boolean): OwnerVaultFi
   }
   result.push({
     severity: "info",
-    title: "لا توجد خدمة بريد أو تحليلات أو تخزين ملفات أو مراقبة ظاهرة",
-    detail: "تم إدراجها كغير مهيأة بدل اختراع حسابات أو أسرار غير موجودة.",
-    action: "لا تضف تكاملًا إلا عند وجود حاجة واضحة وقرار من المالك.",
+    title: "خدمات اختيارية غير مطلوبة حاليًا: البريد والتحليلات والتخزين والمراقبة",
+    detail: "المنصة تعمل محليًا أولًا بلا حاجة لها؛ أُدرجت بحالة «غير مطلوب حاليًا» مع بديل Free Tier موثّق لكل منها عند الطلب.",
+    action: "لا تضف تكاملًا إلا عند وجود حاجة واضحة وقرار من المالك — والأسرار خادمية فقط في Vercel، never في الكود أو Git.",
   });
   return result;
 }

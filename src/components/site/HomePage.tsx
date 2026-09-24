@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   BriefcaseBusiness,
+  Cpu,
   FileText,
   LayoutTemplate,
   Table2,
@@ -12,6 +13,9 @@ import {
   Files,
   Sparkles,
   Zap,
+  Ruler,
+  Flag,
+  Crown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { PACKS } from "@/lib/editor/templates";
@@ -38,8 +42,12 @@ const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
   { icon: Files, title: PRODUCT_COPY.capabilities[5][0], desc: PRODUCT_COPY.capabilities[5][1] },
 ];
 
-/** Value badges shown under the features CTA. */
-const CTA_BADGES = ["💻 تخزين محلي أولًا", "📐 جاهز للطباعة 300DPI", "🇸🇦 دعم الخطوط العربية الرسمية"];
+/** Value badges shown under the features CTA — monochrome SVG, no emoji. */
+const CTA_BADGES = [
+  { icon: Cpu, label: "تخزين محلي أولًا" },
+  { icon: Ruler, label: "جاهز للطباعة 300DPI" },
+  { icon: Flag, label: "دعم الخطوط العربية الرسمية" },
+];
 
 export function HomePage() {
   const importProject = useEditor((s) => s.importProject);
@@ -122,11 +130,18 @@ export function HomePage() {
               </div>
 
               <ul className="mt-7 flex flex-wrap gap-2 text-[12px] font-bold text-slate-300">
-                {CTA_BADGES.map((badge) => (
-                  <li key={badge} className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 backdrop-blur-sm">
-                    {badge}
-                  </li>
-                ))}
+                {CTA_BADGES.map((badge) => {
+                  const Icon = badge.icon;
+                  return (
+                    <li
+                      key={badge.label}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 backdrop-blur-sm"
+                    >
+                      <Icon className="size-3.5" aria-hidden />
+                      {badge.label}
+                    </li>
+                  );
+                })}
               </ul>
 
               <p className="mt-5 text-[12px] leading-6 text-slate-400">{PRODUCT_COPY.demoNote}</p>
@@ -215,8 +230,14 @@ export function HomePage() {
                 </div>
                 <strong className="block text-[15px] font-extrabold text-ink dark:text-white">{pack.title}</strong>
                 <span className="mt-2 block text-[12px] leading-6 text-muted">{pack.desc}</span>
-                <span className="mt-auto inline-flex pt-4 text-[11px] font-extrabold text-navy-2 dark:text-gold-2">
-                  {pack.id === "blank" ? "فتح العرض" : "متاح في النسخة الكاملة 👑"}
+                <span className="mt-auto inline-flex items-center gap-1 pt-4 text-[11px] font-extrabold text-navy-2 dark:text-gold-2">
+                  {pack.id === "blank" ? (
+                    "فتح العرض"
+                  ) : (
+                    <>
+                      متاح في النسخة الكاملة <Crown className="size-3.5" aria-hidden />
+                    </>
+                  )}
                 </span>
               </button>
             ))}
@@ -262,14 +283,18 @@ export function HomePage() {
               </a>
             </div>
             <div className="mt-5 flex flex-wrap gap-2">
-              {CTA_BADGES.map((badge) => (
-                <span
-                  key={badge}
-                  className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-bold text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-300"
-                >
-                  {badge}
-                </span>
-              ))}
+              {CTA_BADGES.map((badge) => {
+                const Icon = badge.icon;
+                return (
+                  <span
+                    key={badge.label}
+                    className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-bold text-emerald-700 dark:border-emerald-400/30 dark:text-emerald-300"
+                  >
+                    <Icon className="size-3.5" aria-hidden />
+                    {badge.label}
+                  </span>
+                );
+              })}
             </div>
           </div>
         </section>
