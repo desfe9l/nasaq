@@ -28,12 +28,14 @@ import { Route as PurchaseRouteImport } from './routes/purchase'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as Char1575Char1604Char1607Char1608Char1610Char1577RouteImport } from './routes/الهوية'
+import { Route as PaymentCancelRouteImport } from './routes/payment/cancel'
+import { Route as PaymentSuccessRouteImport } from './routes/payment/success'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as ApiCheckoutConfigRouteImport } from './routes/api/checkout/config'
 import { Route as ApiLicenseActivateRouteImport } from './routes/api/license/activate'
 import { Route as ApiLicenseDeactivateRouteImport } from './routes/api/license/deactivate'
 import { Route as ApiLicenseValidateRouteImport } from './routes/api/license/validate'
 import { Route as ApiWebhooksKeygenRouteImport } from './routes/api/webhooks/keygen'
+import { Route as ApiWebhooksPaylinkRouteImport } from './routes/api/webhooks/paylink'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -131,14 +133,19 @@ const Char1575Char1604Char1607Char1608Char1610Char1577Route =
     path: '/الهوية',
     getParentRoute: () => rootRouteImport,
   } as any)
+const PaymentCancelRoute = PaymentCancelRouteImport.update({
+  id: '/payment/cancel',
+  path: '/payment/cancel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaymentSuccessRoute = PaymentSuccessRouteImport.update({
+  id: '/payment/success',
+  path: '/payment/success',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiCheckoutConfigRoute = ApiCheckoutConfigRouteImport.update({
-  id: '/api/checkout/config',
-  path: '/api/checkout/config',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiLicenseActivateRoute = ApiLicenseActivateRouteImport.update({
@@ -159,6 +166,11 @@ const ApiLicenseValidateRoute = ApiLicenseValidateRouteImport.update({
 const ApiWebhooksKeygenRoute = ApiWebhooksKeygenRouteImport.update({
   id: '/api/webhooks/keygen',
   path: '/api/webhooks/keygen',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWebhooksPaylinkRoute = ApiWebhooksPaylinkRouteImport.update({
+  id: '/api/webhooks/paylink',
+  path: '/api/webhooks/paylink',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -182,12 +194,14 @@ export interface FileRoutesByFullPath {
   '/templates': typeof TemplatesRoute
   '/terms': typeof TermsRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/payment/cancel': typeof PaymentCancelRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
+  '/api/webhooks/paylink': typeof ApiWebhooksPaylinkRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -209,12 +223,14 @@ export interface FileRoutesByTo {
   '/templates': typeof TemplatesRoute
   '/terms': typeof TermsRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/payment/cancel': typeof PaymentCancelRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
+  '/api/webhooks/paylink': typeof ApiWebhooksPaylinkRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -237,12 +253,14 @@ export interface FileRoutesById {
   '/templates': typeof TemplatesRoute
   '/terms': typeof TermsRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/payment/cancel': typeof PaymentCancelRoute
+  '/payment/success': typeof PaymentSuccessRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
-  '/api/checkout/config': typeof ApiCheckoutConfigRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
+  '/api/webhooks/paylink': typeof ApiWebhooksPaylinkRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -266,12 +284,14 @@ export interface FileRouteTypes {
     | '/templates'
     | '/terms'
     | '/الهوية'
+    | '/payment/cancel'
+    | '/payment/success'
     | '/api/auth/$'
-    | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
     | '/api/webhooks/keygen'
+    | '/api/webhooks/paylink'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -293,12 +313,14 @@ export interface FileRouteTypes {
     | '/templates'
     | '/terms'
     | '/الهوية'
+    | '/payment/cancel'
+    | '/payment/success'
     | '/api/auth/$'
-    | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
     | '/api/webhooks/keygen'
+    | '/api/webhooks/paylink'
   id:
     | '__root__'
     | '/'
@@ -320,12 +342,14 @@ export interface FileRouteTypes {
     | '/templates'
     | '/terms'
     | '/الهوية'
+    | '/payment/cancel'
+    | '/payment/success'
     | '/api/auth/$'
-    | '/api/checkout/config'
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
     | '/api/webhooks/keygen'
+    | '/api/webhooks/paylink'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -348,12 +372,14 @@ export interface RootRouteChildren {
   TemplatesRoute: typeof TemplatesRoute
   TermsRoute: typeof TermsRoute
   Char1575Char1604Char1607Char1608Char1610Char1577Route: typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  PaymentCancelRoute: typeof PaymentCancelRoute
+  PaymentSuccessRoute: typeof PaymentSuccessRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
-  ApiCheckoutConfigRoute: typeof ApiCheckoutConfigRoute
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
   ApiLicenseValidateRoute: typeof ApiLicenseValidateRoute
   ApiWebhooksKeygenRoute: typeof ApiWebhooksKeygenRoute
+  ApiWebhooksPaylinkRoute: typeof ApiWebhooksPaylinkRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -491,18 +517,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char1575Char1604Char1607Char1608Char1610Char1577RouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/payment/cancel': {
+      id: '/payment/cancel'
+      path: '/payment/cancel'
+      fullPath: '/payment/cancel'
+      preLoaderRoute: typeof PaymentCancelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/payment/success': {
+      id: '/payment/success'
+      path: '/payment/success'
+      fullPath: '/payment/success'
+      preLoaderRoute: typeof PaymentSuccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/checkout/config': {
-      id: '/api/checkout/config'
-      path: '/api/checkout/config'
-      fullPath: '/api/checkout/config'
-      preLoaderRoute: typeof ApiCheckoutConfigRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/license/activate': {
@@ -533,6 +566,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebhooksKeygenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/webhooks/paylink': {
+      id: '/api/webhooks/paylink'
+      path: '/api/webhooks/paylink'
+      fullPath: '/api/webhooks/paylink'
+      preLoaderRoute: typeof ApiWebhooksPaylinkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -557,12 +597,14 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   Char1575Char1604Char1607Char1608Char1610Char1577Route:
     Char1575Char1604Char1607Char1608Char1610Char1577Route,
+  PaymentCancelRoute: PaymentCancelRoute,
+  PaymentSuccessRoute: PaymentSuccessRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
-  ApiCheckoutConfigRoute: ApiCheckoutConfigRoute,
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,
   ApiLicenseDeactivateRoute: ApiLicenseDeactivateRoute,
   ApiLicenseValidateRoute: ApiLicenseValidateRoute,
   ApiWebhooksKeygenRoute: ApiWebhooksKeygenRoute,
+  ApiWebhooksPaylinkRoute: ApiWebhooksPaylinkRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -196,10 +196,8 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
           <label className={cn(label, "md:col-span-2")}>رسالة واتساب للترخيص المؤسسي<input className={input} value={c.whatsappEnterpriseMessage} onChange={(e) => setC({ whatsappEnterpriseMessage: e.target.value })} /></label>
           <label className={label}>سعر الترخيص الفردي الشهري (ر.س)<input type="number" className={input} value={c.priceIndividualMonthly} onChange={(e) => setC({ priceIndividualMonthly: Number(e.target.value) })} /></label>
           <label className={label}>سعر ترخيص الفريق الشهري (ر.س)<input type="number" className={input} value={c.priceTeamMonthly} onChange={(e) => setC({ priceTeamMonthly: Number(e.target.value) })} /></label>
-          <label className={label}>رابط الدفع — الفردي الشهري (https)<input dir="ltr" className={input} value={c.checkoutIndividualMonthly} onChange={(e) => setC({ checkoutIndividualMonthly: e.target.value })} placeholder="https://…lemonsqueezy.com/checkout/…" /></label>
-          <label className={label}>رابط الدفع — الفريق الشهري (https)<input dir="ltr" className={input} value={c.checkoutTeamMonthly} onChange={(e) => setC({ checkoutTeamMonthly: e.target.value })} placeholder="https://…lemonsqueezy.com/checkout/…" /></label>
         </div>
-        <p className="text-[11px] text-muted">روابط الدفع الفارغة تعود لإعدادات Lemon Squeezy في متغيرات البيئة.</p>
+        <p className="text-[11px] text-muted">تُنشأ فواتير الدفع من الخادم عبر Paylink بعد تسجيل الدخول.</p>
         <div><SaveBtn section="commercial" /></div>
       </section>
     );

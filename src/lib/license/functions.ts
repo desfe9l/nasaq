@@ -103,8 +103,6 @@ function publicLicense(license: License): LicenseInfo {
   source: license.metadata?.source === "keygen" ? "keygen" : "manual",
     plan: license.metadata?.plan as LicenseInfo["plan"],
     billing: license.metadata?.billing as LicenseInfo["billing"],
-    variantId: license.metadata?.variantId,
-    customerEmail: license.metadata?.customerEmail || undefined,
   };
 }
 

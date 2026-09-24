@@ -181,29 +181,38 @@ export async function listAuditLog(
  * suspended — approving a payment must not quietly undo an admin's suspension;
  * restoring is a separate, explicit action.
  */
-async function grantEntitlement(
+export async function grantEntitlement(
   sql: Sql,
-  input: { userId: string; plan: { id: string; durationDays: number } },
+  input: {
+    userId: string;
+    plan: { id: string; durationDays: number };
+    sourceTransactionId?: string;
+    expiresAt?: Date;
+  },
 ): Promise<{ expiresAt: Date }> {
   const current = await getSubscription(sql, input.userId);
+  if (current && input.sourceTransactionId && current.source_transaction_id === input.sourceTransactionId) {
+    return { expiresAt: new Date(current.expires_at) };
+  }
   const live = current && current.status !== "EXPIRED" ? current : null;
-  const expiresAt = computeExpiry(input.plan.durationDays, live);
+  const expiresAt = input.expiresAt || computeExpiry(input.plan.durationDays, live);
 
   if (live) {
     // Keep the existing status (ACTIVE stays ACTIVE, SUSPENDED stays SUSPENDED).
     await sql`
       update subscriptions
       set plan_id = ${input.plan.id}, expires_at = ${expiresAt.toISOString()},
+          source_transaction_id = COALESCE(${input.sourceTransactionId || null}, source_transaction_id),
           updated_at = now()
       where id = ${live.id}
     `;
   } else {
     await sql`
       insert into subscriptions
-        (id, user_id, plan_id, status, activated_at, expires_at)
+        (id, user_id, plan_id, status, activated_at, expires_at, source_transaction_id)
       values
         (${randomUUID()}, ${input.userId}, ${input.plan.id}, 'ACTIVE',
-         now(), ${expiresAt.toISOString()})
+         now(), ${expiresAt.toISOString()}, ${input.sourceTransactionId || null})
     `;
   }
   return { expiresAt };

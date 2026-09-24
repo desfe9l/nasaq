@@ -59,7 +59,7 @@ export const Route = createFileRoute("/api/webhooks/keygen")({
           keygenPolicyId: policyId,
           keygenProductId: String(resource.relationships?.product?.data?.id || ""),
           plan: plan || "",
-          billing: plan?.endsWith("quarterly") ? "quarterly" : "monthly",
+          billing: plan?.endsWith("quarterly") ? "quarterly" : plan?.endsWith("annual") ? "annual" : "monthly",
         };
         const applied = await applyKeygenWebhook({
           eventId,

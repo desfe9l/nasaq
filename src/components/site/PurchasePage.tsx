@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
@@ -11,7 +11,9 @@ import {
   Lock,
 } from "lucide-react";
 import { BRAND } from "@/lib/brand";
-import { LEMON_SQUEEZY_WHATSAPP_URL, type BillingPeriod, type PaidPlan } from "@/lib/product/licensing";
+import { createPaylinkCheckout } from "@/lib/commercial/functions";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import type { PaylinkPeriod, PaylinkPlanFamily } from "@/lib/paylink/types";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { cardClass } from "@/components/site/cards";
 import { useSiteSettings, whatsappLink } from "@/lib/admin/use-site-settings";
@@ -42,12 +44,8 @@ const PLAN_CONTENT = {
 } as const;
 
 
-type CheckoutMatrix = Record<
-  PaidPlan,
-  Record<BillingPeriod, { variantId: string | null; checkoutUrl: string | null }>
->;
-
-type Billing = "monthly" | "annual";
+type PaidPlan = PaylinkPlanFamily;
+type Billing = PaylinkPeriod;
 
 const FAQS: { q: string; a: string }[] = [
   {
@@ -70,8 +68,11 @@ const FAQS: { q: string; a: string }[] = [
 
 export function PurchasePage() {
   const [billing, setBilling] = useState<Billing>("monthly");
-  const [checkouts, setCheckouts] = useState<CheckoutMatrix | null>(null);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const [mobile, setMobile] = useState("");
+  const [busyPlan, setBusyPlan] = useState<PaidPlan | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const { user } = useCurrentUserState();
   const { commercial } = useSiteSettings();
   /** Monthly list prices in SAR (admin-managed); annual = 12 months minus the discount. */
   const MONTHLY_PRICES: Record<PaidPlan, number> = {
@@ -82,39 +83,28 @@ export function PurchasePage() {
   const annualPrice = (plan: PaidPlan) => Math.round(MONTHLY_PRICES[plan] * 12 * (1 - discount / 100));
   const waHref = (message: string) => whatsappLink(commercial.whatsappNumber, message);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/checkout/config")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((value: CheckoutMatrix | null) => {
-        if (!cancelled && value) setCheckouts(value);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const whatsapp = waHref(commercial.whatsappEnterpriseMessage);
 
-  const whatsapp = LEMON_SQUEEZY_WHATSAPP_URL || waHref(commercial.whatsappEnterpriseMessage);
-
-  /** Paid CTA target: configured checkout for the monthly period, else a prepared WhatsApp inquiry. */
-  const planCta = (
-    id: PaidPlan,
-  ): { href: string; external: boolean; checkout: boolean } => {
-    if (billing === "monthly") {
-      const override = id === "team" ? commercial.checkoutTeamMonthly : commercial.checkoutIndividualMonthly;
-      const url = override || checkouts?.[id].monthly?.checkoutUrl;
-      if (url) return { href: url, external: true, checkout: true };
+  async function startPaylink(id: PaidPlan) {
+    if (!user) {
+      window.location.href = "/login";
+      return;
     }
-    const label = id === "team" ? "ترخيص الأعمال / الفريق" : "ترخيص فردي";
-    return {
-      href: waHref(
-        `السلام عليكم، أرغب بالاشتراك ${billing === "annual" ? `السنوي (وفر ${discount}%)` : "الشهري"} في ${label} لمنصة ${BRAND.platform}.`,
-      ),
-      external: true,
-      checkout: false,
-    };
-  };
+    setCheckoutError(null);
+    setBusyPlan(id);
+    try {
+      const result = await createPaylinkCheckout({ data: { family: id, period: billing, clientMobile: mobile } });
+      if (!result.ok) {
+        setCheckoutError(result.error);
+        return;
+      }
+      window.location.assign(result.paymentUrl);
+    } catch (error) {
+      setCheckoutError(error instanceof Error ? error.message : "تعذر بدء عملية الدفع.");
+    } finally {
+      setBusyPlan(null);
+    }
+  }
 
   return (
     <div className="min-h-full bg-paper dark:bg-[#111722]">
@@ -190,7 +180,6 @@ export function PurchasePage() {
             const isTeam = id === "team";
             const price =
               billing === "monthly" ? MONTHLY_PRICES[id] : annualPrice(id);
-            const cta = planCta(id);
 
             return (
               <section
@@ -222,6 +211,15 @@ export function PurchasePage() {
                     يعادل {Math.round(annualPrice(id) / 12)} ر.س شهريًا — وفّرت {discount}%
                   </p>
                 )}
+                <p className="mt-5 text-[12px] font-bold text-muted">أدخل رقم الجوال لإتمام الدفع عبر Paylink.</p>
+                <input
+                  value={mobile}
+                  onChange={(e) => setMobile(e.target.value.replace(/[^\d+]/g, ""))}
+                  inputMode="tel"
+                  placeholder="05xxxxxxxx"
+                  className="mt-2 h-10 w-full rounded-[10px] border border-line bg-surface px-3 text-[13px] dark:border-white/10"
+                />
+                {checkoutError && <p className="mt-2 text-[12px] text-danger">{checkoutError}</p>}
                 <ul className="mt-5 grid gap-2">
                   {item.items.map((feature) => (
                     <li key={feature} className="flex items-center gap-2 text-[12px] font-bold">
@@ -230,22 +228,16 @@ export function PurchasePage() {
                     </li>
                   ))}
                 </ul>
-                <a
-                  href={cta.href}
-                  target={cta.external ? "_blank" : undefined}
-                  rel={cta.external ? "noopener noreferrer" : undefined}
-                  className={`mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl px-5 text-[13px] font-extrabold text-white transition ${
-                    isTeam
-                      ? "bg-emerald-600 hover:bg-emerald-700"
-                      : "bg-navy hover:bg-navy-2"
+                <button
+                  type="button"
+                  onClick={() => void startPaylink(id)}
+                  disabled={busyPlan !== null}
+                  className={`mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl px-5 text-[13px] font-extrabold text-white transition disabled:cursor-wait disabled:opacity-60 ${
+                    isTeam ? "bg-emerald-600 hover:bg-emerald-700" : "bg-navy hover:bg-navy-2"
                   }`}
                 >
-                  {cta.checkout
-                    ? `اشترك ${billing === "monthly" ? "شهريًا" : "سنويًا"}`
-                    : isTeam
-                      ? "⚡ طلب الترخيص عبر الواتساب"
-                      : `اطلب ${billing === "monthly" ? "الاشتراك الشهري" : "الاشتراك السنوي"} عبر واتساب`}
-                </a>
+                  {busyPlan === id ? "جارٍ فتح Paylink…" : `اشترك ${billing === "monthly" ? "شهريًا" : "سنويًا"} عبر Paylink`}
+                </button>
               </section>
             );
           })}

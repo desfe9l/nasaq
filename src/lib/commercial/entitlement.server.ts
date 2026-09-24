@@ -36,6 +36,7 @@ type SubscriptionRow = {
   activated_at: string | Date;
   expires_at: string | Date;
   suspended_at: string | Date | null;
+  source_transaction_id?: string | null;
 };
 
 type PlanRow = {
@@ -98,7 +99,7 @@ export async function getSubscription(
   userId: string,
 ): Promise<SubscriptionRow | null> {
   const rows = await sql<SubscriptionRow>`
-    select id, user_id, plan_id, status, activated_at, expires_at, suspended_at
+    select id, user_id, plan_id, status, activated_at, expires_at, suspended_at, source_transaction_id
     from subscriptions
     where user_id = ${userId}
     order by
