@@ -21,7 +21,8 @@
  * source of truth, and removing the env var never revokes a table-granted admin.
  */
 import { randomUUID } from "node:crypto";
-import type { Sql } from "@/lib/db";
+import { isAdminUser } from "../auth/admin-identity.server.ts";
+import type { Sql } from "../db.ts";
 import {
   computeExpiry,
   deriveStatus,
@@ -54,49 +55,14 @@ export class NotFoundError extends Error {
 }
 
 /**
- * The bootstrap allowlist from `NASAQ_ADMIN_USER_IDS`.
- *
- * Read at call time rather than module load so a change takes effect without a
- * rebuild, and so tests can set it per case.
- */
-function adminAllowlist(): { ids: Set<string>; emails: Set<string> } {
-  const raw = process.env.NASAQ_ADMIN_USER_IDS?.trim();
-  const ids = new Set<string>();
-  const emails = new Set<string>();
-  if (!raw) return { ids, emails };
-  for (const entry of raw.split(",")) {
-    const value = entry.trim();
-    if (!value) continue;
-    if (value.includes("@")) emails.add(value.toLowerCase());
-    else ids.add(value);
-  }
-  return { ids, emails };
-}
-
-/**
  * Is this user an administrator? Authoritative, server-side.
  *
- * Two sources, checked in order: the `admin_users` table, then the bootstrap
- * allowlist. The allowlist is only consulted for users the table does not grant,
- * so a revoked table row cannot be re-granted by a stale env var.
+ * The shared identity helper checks the explicit deployment allowlist and the
+ * `admin_users` table. The customer email used for an allowlist match is read
+ * from the database only after the caller id is known, never from a UI flag.
  */
 export async function isAdmin(sql: Sql, userId: string): Promise<boolean> {
-  const rows = await sql<{ user_id: string }>`
-    select user_id from admin_users where user_id = ${userId} limit 1
-  `;
-  if (rows.length > 0) return true;
-
-  const { ids, emails } = adminAllowlist();
-  if (ids.has(userId)) return true;
-  if (emails.size === 0) return false;
-
-  // Match by email only when the allowlist actually contains emails, so the
-  // common id-only configuration costs no extra query.
-  const userRows = await sql<{ email: string | null }>`
-    select email from "user" where id = ${userId} limit 1
-  `;
-  const email = userRows[0]?.email?.toLowerCase();
-  return Boolean(email && emails.has(email));
+  return isAdminUser(sql, userId);
 }
 
 /**

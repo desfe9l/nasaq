@@ -201,6 +201,8 @@ export interface LicenseValidateResult {
 export interface LicenseStatusResult {
   hasLicense: boolean;
   isOwner?: boolean;
+  /** True when full access comes from a verified administrator identity. */
+  isAdmin?: boolean;
   license?: LicenseInfo;
   entitlements?: Record<FeatureId, boolean>;
 }

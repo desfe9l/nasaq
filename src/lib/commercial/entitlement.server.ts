@@ -18,7 +18,8 @@
  * Every function here takes an `sql` client so it stays testable without a live
  * server, and so callers control the transaction.
  */
-import type { Sql } from "@/lib/db";
+import type { Sql } from "../db.ts";
+import { isAdminUser } from "../auth/admin-identity.server.ts";
 import type {
   AccountStatus,
   CustomerAccount,
@@ -119,6 +120,7 @@ export async function getAccount(
   userId: string,
   now: Date = new Date(),
 ): Promise<CustomerAccount> {
+  const isAdmin = await isAdminUser(sql, userId);
   const subscription = await getSubscription(sql, userId);
   if (!subscription) {
     return {
@@ -129,6 +131,7 @@ export async function getAccount(
       activatedAt: null,
       expiresAt: null,
       daysRemaining: null,
+      isAdmin,
     };
   }
 
@@ -147,6 +150,7 @@ export async function getAccount(
     expiresAt: toIso(subscription.expires_at),
     daysRemaining:
       status === "ACTIVE" ? daysRemaining(subscription.expires_at, now) : null,
+    isAdmin,
   };
 }
 
@@ -186,6 +190,7 @@ export async function requireActiveEntitlement(
   now: Date = new Date(),
 ): Promise<CustomerAccount> {
   const account = await getAccount(sql, userId, now);
+  if (account.isAdmin) return account;
   if (account.status !== "ACTIVE") {
     throw new EntitlementRequiredError(account.status);
   }

@@ -80,9 +80,15 @@ async function getClientIp(): Promise<string> {
   }
 }
 
-async function isOwner(context: { userId: string; userEmail: string | null }): Promise<boolean> {
-  const { isOwnerIdentity } = await import("@/lib/auth/owner.server");
-  return isOwnerIdentity({ id: context.userId, email: context.userEmail });
+async function isAdministrator(
+  context: { userId: string; userEmail: string | null },
+): Promise<boolean> {
+  const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
+  const access = await getAuthorizationContext({
+    id: context.userId,
+    email: context.userEmail,
+  });
+  return access.isAdmin;
 }
 
 function publicLicense(license: License): LicenseInfo {
@@ -257,7 +263,7 @@ export const deactivateLicenseFn = createServerFn({ method: "POST" })
     const key = data.key.trim();
     const local = await findLicenseByKeyHash(hashLicenseKey(key));
     if (!local) return { success: false };
-    if (local.userId !== context.userId && !(await isOwner(context))) {
+    if (local.userId !== context.userId && !(await isAdministrator(context))) {
       return { success: false };
     }
     try {
@@ -282,8 +288,13 @@ export const getLicenseStatusFn = createServerFn({ method: "POST" })
       id: context.userId,
       email: context.userEmail,
     });
-    if (access.isOwner) {
-      return { hasLicense: true, isOwner: true, entitlements: access.entitlements };
+    if (access.isAdmin) {
+      return {
+        hasLicense: true,
+        isOwner: access.isOwner,
+        isAdmin: true,
+        entitlements: access.entitlements,
+      };
     }
     const active = access.license;
     if (!active) return { hasLicense: false, entitlements: access.entitlements };
@@ -310,7 +321,7 @@ export const adminCreateLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: AdminLicenseCreate) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isOwner(context))) {
+    if (!(await isAdministrator(context))) {
       return { error: "غير مصرح.", licenseId: null as string | null, plainKey: null as string | null, type: null as LicenseType | null, keyPrefix: null as string | null };
     }
 
@@ -366,7 +377,7 @@ export const adminListLicensesFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { offset?: number; limit?: number }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isOwner(context))) {
+    if (!(await isAdministrator(context))) {
       return { error: "غير مصرح.", licenses: [] as License[], total: 0 };
     }
 
@@ -380,7 +391,7 @@ export const adminRevokeLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isOwner(context))) {
+    if (!(await isAdministrator(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
 
@@ -402,7 +413,7 @@ export const adminReactivateLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isOwner(context))) {
+    if (!(await isAdministrator(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
 
@@ -423,7 +434,7 @@ export const adminUpdateLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string; updates: AdminLicenseUpdate }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isOwner(context))) {
+    if (!(await isAdministrator(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
 
@@ -436,7 +447,7 @@ export const extendLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string; daysToAdd?: number; newExpiresAt?: string }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isOwner(context))) {
+    if (!(await isAdministrator(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
 
@@ -467,7 +478,7 @@ export const assignLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string; userId: string; activate?: boolean }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isOwner(context))) {
+    if (!(await isAdministrator(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
     const license = await assignLicense(data.licenseId, data.userId, data.activate ?? true);

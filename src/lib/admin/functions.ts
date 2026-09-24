@@ -32,8 +32,14 @@ const MAX_THUMB_BYTES = 600 * 1024;
 type VerifiedContext = { userId: string; userEmail: string | null };
 
 async function verifyAdmin(context: VerifiedContext): Promise<boolean> {
-  const { isOwnerIdentity } = await import("@/lib/auth/owner.server");
-  return isOwnerIdentity({ id: context.userId, email: context.userEmail });
+  const [{ getSql }, { isAdminIdentity }] = await Promise.all([
+    import("@/lib/db"),
+    import("@/lib/auth/admin-identity.server"),
+  ]);
+  return isAdminIdentity(await getSql(), {
+    id: context.userId,
+    email: context.userEmail,
+  });
 }
 
 async function sql() {
@@ -110,8 +116,11 @@ function validateContent(kind: TemplateKind, content: string): string | null {
 export const adminVerifyFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const { ownerConfigPresent } = await import("@/lib/auth/owner.server");
-    return { ok: await verifyAdmin(context), configured: ownerConfigPresent() };
+    const [{ adminIdentityConfigPresent }] = await Promise.all([
+      import("@/lib/auth/admin-identity.server"),
+    ]);
+    const ok = await verifyAdmin(context);
+    return { ok, configured: ok || adminIdentityConfigPresent() };
   });
 
 // ── Site settings ──────────────────────────────────────────────────────────
@@ -178,7 +187,7 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
           id: context.userId,
           email: context.userEmail,
         });
-        allowed = access.isOwner || access.entitlements.premium_templates === true;
+        allowed = access.isAdmin || access.entitlements.premium_templates === true;
       }
       if (key) {
         const { hashLicenseKey } = await import("@/lib/license/key");

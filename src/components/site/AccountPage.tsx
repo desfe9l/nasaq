@@ -53,7 +53,7 @@ export function AccountPage() {
       // Only decides whether to show the admin link. Every admin action
       // re-verifies server-side, so a tampered value here grants nothing.
       const admin = await amIAdmin();
-      setIsAdmin(admin.isAdmin);
+      setIsAdmin(admin.isAdmin || result.account.isAdmin);
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذّر تحميل بيانات الحساب.");
     } finally {
@@ -105,13 +105,15 @@ export function AccountPage() {
           <div className="grid gap-6">
             <StatusCard account={data.account} />
 
-            {data.hasPending && (
+            {!isAdmin && data.hasPending && (
               <p className="rounded-[12px] border border-gold/40 bg-gold/10 p-4 text-[13px] leading-6">
                 لديك طلب دفع قيد التحقق من الإدارة. سيتم تفعيل الباقة بعد الاعتماد.
               </p>
             )}
 
-            {!data.hasPending && (
+            {isAdmin && <AdminAccessCard />}
+
+            {!isAdmin && !data.hasPending && (
               <PlanSection
                 plans={data.plans}
                 instructions={data.instructions}
@@ -120,11 +122,12 @@ export function AccountPage() {
               />
             )}
 
-            <RequestsSection requests={data.requests} onChanged={load} />
+            {!isAdmin && <RequestsSection requests={data.requests} onChanged={load} />}
 
             <AccountSettingsCard
               email={user.primaryEmail}
-              status={data.account.status}
+              status={isAdmin ? "ADMIN" : data.account.status}
+              isAdmin={isAdmin}
             />
           </div>
         )}
@@ -145,6 +148,39 @@ function AccountShell() {
   );
 }
 
+function AdminAccessCard() {
+  return (
+    <section className="rounded-[14px] border border-emerald-600/25 bg-emerald-600/[0.06] p-5">
+      <h2 className="text-[13px] font-extrabold text-emerald-800 dark:text-emerald-300">
+        وصول إداري كامل
+      </h2>
+      <p className="mt-2 text-[12px] leading-6 text-muted">
+        تم التحقق من صلاحية الإدارة على الخادم؛ لا يحتاج هذا الحساب إلى باقة مدفوعة.
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <a
+          href="/admin"
+          className="inline-flex h-9 items-center rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-white"
+        >
+          لوحة الإدارة
+        </a>
+        <a
+          href="/admin-licenses"
+          className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
+        >
+          إدارة التراخيص
+        </a>
+        <a
+          href="/owner-vault"
+          className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
+        >
+          إعدادات المالك
+        </a>
+      </div>
+    </section>
+  );
+}
+
 function StatusCard({ account }: { account: CustomerAccount }) {
   const meta = ACCOUNT_STATUS_META[account.status] ?? ACCOUNT_STATUS_META.FREE;
   return (
@@ -155,13 +191,17 @@ function StatusCard({ account }: { account: CustomerAccount }) {
           <span
             className={cn(
               "mt-2 inline-block rounded-full px-3 py-1 text-[12px] font-extrabold",
-              meta.className,
+              account.isAdmin
+                ? "bg-ok/15 text-ok"
+                : meta.className,
             )}
           >
-            {meta.label}
+            {account.isAdmin ? "إداري — وصول كامل" : meta.label}
           </span>
           <p className="mt-3 max-w-xl text-[13px] leading-6">
-            {ACCOUNT_STATUS_MESSAGE[account.status]}
+            {account.isAdmin
+              ? "هذا الحساب معتمد كمدير، لذلك يتجاوز فحص الاشتراك ويحصل على كامل الصلاحيات."
+              : ACCOUNT_STATUS_MESSAGE[account.status]}
           </p>
         </div>
         <dl className="grid gap-3 text-[12px]">
@@ -494,12 +534,17 @@ function RequestsSection({
 function AccountSettingsCard({
   email,
   status,
+  isAdmin,
 }: {
   email: string | null;
   status: string;
+  isAdmin: boolean;
 }) {
   return (
-    <section className="rounded-[14px] border border-line bg-surface p-5 dark:border-white/10">
+    <section
+      id="settings"
+      className="scroll-mt-24 rounded-[14px] border border-line bg-surface p-5 dark:border-white/10"
+    >
       <h2 className="text-[13px] font-extrabold text-muted">إعدادات الحساب</h2>
       <dl className="mt-3 grid gap-2 text-[12px]">
         <div className="flex justify-between gap-3">
@@ -508,9 +553,11 @@ function AccountSettingsCard({
             {email ?? "—"}
           </dd>
         </div>
-        <div className="flex justify-between gap-3">
-          <dt className="text-muted">حالة الاشتراك</dt>
-          <dd className="font-extrabold">{status}</dd>
+        <div className="flex items-center gap-2">
+          <dt className="text-muted">حالة الوصول</dt>
+          <dd className="font-extrabold">
+            {isAdmin ? "ADMIN — وصول كامل" : status}
+          </dd>
         </div>
       </dl>
       <p className="mt-3 text-[11px] leading-5 text-muted">

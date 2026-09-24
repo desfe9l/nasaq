@@ -733,6 +733,6 @@ export const getOwnerVaultFn = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
     const authorization = await getAuthorizationContext({ id: context.userId, email: context.userEmail });
-    if (!authorization.isOwner) throw new Error("Forbidden");
+    if (!authorization.isAdmin) throw new Error("Forbidden");
     return buildOwnerVaultInventory();
   });

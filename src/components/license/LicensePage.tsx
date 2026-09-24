@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Key,
   ArrowLeft,
+  Clock3,
   Crown,
   Zap,
   Lock,
@@ -35,7 +36,7 @@ const PLAN_CONFIG: Record<LicenseType, { icon: typeof Shield; color: string; bg:
 
 export default function LicensePage() {
   const user = useCurrentUser();
-  const { hasLicense, license, entitlements, activate, deactivate, revalidate, isLoading, error } = useLicense(user?.id, user?.primaryEmail);
+  const { hasLicense, isAdmin, license, entitlements, activate, deactivate, revalidate, isLoading, error } = useLicense(user?.id, user?.primaryEmail);
   const [showActivate, setShowActivate] = useState(false);
   const [activateKey, setActivateKey] = useState("");
   const [activating, setActivating] = useState(false);
@@ -92,14 +93,14 @@ export default function LicensePage() {
             </div>
             <div>
               <p className="text-sm text-muted">الخطة الحالية</p>
-              <p className="text-lg font-bold">{planName}</p>
+              <p className="text-lg font-bold">{isAdmin ? "ADMIN — وصول كامل" : planName}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {hasLicense && license?.status === "ACTIVE" ? (
+            {isAdmin || (hasLicense && license?.status === "ACTIVE") ? (
               <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                 <CheckCircle2 className="size-3" />
-                نشط
+                {isAdmin ? "وصول إداري" : "نشط"}
               </span>
             ) : (
               <span className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-400">
@@ -151,7 +152,7 @@ export default function LicensePage() {
               تفعيل ترخيص
             </button>
           )}
-          {hasLicense && (
+          {hasLicense && !isAdmin && (
             <>
               <button type="button" onClick={() => void revalidate()} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10">تحقق الآن</button>
               <button type="button" onClick={deactivate} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10">إلغاء التفعيل</button>
@@ -167,23 +168,38 @@ export default function LicensePage() {
           {(Object.keys(FEATURE_LABELS) as FeatureId[]).map((featureId) => {
             const feature = FEATURE_LABELS[featureId];
             const enabled = entitlements[featureId];
+            const comingSoon =
+              featureId === "team_features" ||
+              featureId === "multi_user_activation" ||
+              featureId === "collaboration";
             return (
               <div
                 key={featureId}
                 className={`flex items-start gap-3 rounded-lg border p-3 ${
-                  enabled
-                    ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-900/10"
-                    : "border-line bg-gray-50/50 opacity-60 dark:border-white/10 dark:bg-white/5"
+                  comingSoon
+                    ? "border-amber-300/60 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10"
+                    : enabled
+                      ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-900/10"
+                      : "border-line bg-gray-50/50 opacity-60 dark:border-white/10 dark:bg-white/5"
                 }`}
               >
-                {enabled ? (
+                {comingSoon ? (
+                  <Clock3 className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                ) : enabled ? (
                   <Unlock className="mt-0.5 size-4 shrink-0 text-emerald-600" />
                 ) : (
                   <Lock className="mt-0.5 size-4 shrink-0 text-gray-400" />
                 )}
-                <div>
-                  <p className="text-sm font-bold">{feature.name}</p>
-                  <p className="text-xs text-muted">{feature.description}</p>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-bold">{feature.name}</p>
+                    {comingSoon && (
+                      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-extrabold text-amber-700 dark:text-amber-300">
+                        قريبًا
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted">{feature.description}</p>
                 </div>
               </div>
             );
