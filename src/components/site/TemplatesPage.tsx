@@ -31,6 +31,7 @@ import { CARD_W, CARD_WRAP } from "@/components/site/cards";
 import { cn } from "@/lib/utils";
 import { DEMO_LICENSE, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
 import { useLicense } from "@/lib/license/client";
+import { useCurrentUser } from "@/lib/auth/use-current-user";
 import {
   CATALOG_PILLS,
   entryProjectSeed,
@@ -73,7 +74,8 @@ export function TemplatesPage() {
   /** The project currently open in the editor — the default source document. */
   const activeProjectId = useEditor((s) => s.id);
   const orgName = useEditor((s) => s.orgName);
-  const { entitlements } = useLicense();
+  const user = useCurrentUser();
+  const { entitlements } = useLicense(user?.id, user?.primaryEmail);
 
   const [theme, setTheme] = useState<ThemeId>("official");
   const [pill, setPill] = useState<CatalogPillId>("all");

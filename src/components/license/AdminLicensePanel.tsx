@@ -146,6 +146,19 @@ export default function AdminLicensePanel() {
     }
   };
 
+  const statusLabel = (status: string): string => {
+    switch (status) {
+      case "ACTIVE":
+        return "نشيط";
+      case "EXPIRED":
+        return "منتهي";
+      case "REVOKED":
+        return "ملغى";
+      default:
+        return status;
+    }
+  };
+
   if (checking) {
     return <div className="p-8 text-center text-sm text-muted">جارٍ التحقق من صلاحيات المالك…</div>;
   }
@@ -338,9 +351,9 @@ export default function AdminLicensePanel() {
                   </td>
                   <td className="px-4 py-3 font-bold">{LICENSE_TYPE_LABELS[lic.type] ?? lic.type}</td>
                   <td className="px-4 py-3">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${statusBadgeClass(lic.status)}`}>
-                      {lic.status}
-                    </span>
+<span className={`inline-block rounded-full px-2 py-0.5 text-xs font-bold ${statusBadgeClass(lic.status)}`}>
+                        {statusLabel(lic.status)}
+                      </span>
                   </td>
                   <td className="px-4 py-3 text-xs text-muted">{lic.userId ?? "—"}</td>
                   <td className="px-4 py-3">{formatExpiry(lic)}</td>

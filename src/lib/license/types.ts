@@ -148,7 +148,7 @@ export const FEATURE_LABELS: Record<FeatureId, { name: string; description: stri
   basic_export: { name: "التصدير الأساسي", description: "تصدير PDF وPNG وJPG" },
   premium_templates: { name: "القوالب المتميزة", description: "الوصول إلى جميع القوالب الجاهزة" },
   advanced_export: { name: "التصدير المتقدم", description: "تصدير Word وPowerPoint وHTML" },
-  brand_kit: { name: "هوية البراند", description: "管理和 تطبيق الهوية المؤسسية" },
+  brand_kit: { name: "هوية البراند", description: "إدارة وتطبيق الهوية المؤسسية" },
   unlimited_projects: { name: "مشاريع غير محدودة", description: "إنشاء عدد غير محدود من المشاريع" },
   unlimited_pages: { name: "صفحات غير محدودة", description: "إضافة عدد غير محدود من الصفحات" },
   data_import: { name: "استيراد البيانات", description: "استيراد البيانات والقوالب من ملفات" },

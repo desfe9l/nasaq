@@ -57,8 +57,8 @@ import { TablePickerOverlay } from "./TablePicker";
 
 const TABS: { id: LeftTab; label: string; icon: typeof Type }[] = [
   { id: "elements", label: "عناصر", icon: LayoutTemplate },
-  { id: "shapes", label: "أشكال", icon: Shapes },
   { id: "library", label: "المكتبة", icon: FolderOpen },
+  { id: "shapes", label: "shapes", icon: Shapes },
   { id: "templates", label: "قوالب", icon: FileText },
   { id: "pages", label: "صفحات", icon: Layers },
   { id: "theme", label: "سمة", icon: Palette },

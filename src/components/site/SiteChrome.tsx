@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Menu, Moon, Sun, X } from "lucide-react";
+import { Menu, Moon, Sun, X, LogIn, User } from "lucide-react";
 import { Toaster } from "sonner";
 import { BRAND, CONTACT_PHONE_DISPLAY, NAV_ITEMS, telHref } from "@/lib/brand";
 import { readStoredTheme, writeStoredTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
+import { authEnabled, signIn, signOut, GOOGLE_PROVIDER_ID, SOCIAL_PROVIDERS } from "@/lib/auth/client";
+import { useCurrentUser, useCurrentUserState } from "@/lib/auth/use-current-user";
 
 /** Admin-managed announcement bar (/admin → محتوى الموقع). */
 function AnnouncementBar() {
@@ -36,6 +38,7 @@ export function SiteHeader({ current }: { current: string }) {
   // already applied the class before any route renders, so this never
   // disagrees with what is on screen.
   const [dark, setDark] = useState(() => readStoredTheme() ?? false);
+  const { user, isPending } = useCurrentUserState();
 
   useEffect(() => {
     setOpen(false);
@@ -45,6 +48,14 @@ export function SiteHeader({ current }: { current: string }) {
     const next = !dark;
     setDark(next);
     writeStoredTheme(next);
+  };
+
+  const handleGoogleSignIn = async () => {
+    await signIn(GOOGLE_PROVIDER_ID, { callbackURL: "/account", errorCallbackURL: "/login?oauth=error" });
+  };
+
+  const handleSignOut = async () => {
+    await signOut("/");
   };
 
   return (
@@ -116,6 +127,47 @@ export function SiteHeader({ current }: { current: string }) {
           >
             العرض التجريبي
           </a>
+
+          {/* Auth state: sign-in button or user menu */}
+          {isPending ? (
+            <div className="grid size-9 place-items-center" aria-hidden="true">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-muted" />
+            </div>
+          ) : user ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSignOut}
+                className="inline-flex h-9 items-center gap-2 rounded-[8px] border border-line px-3 text-[12px] font-bold transition hover:bg-line-2 dark:border-white/10 dark:hover:bg-white/5"
+              >
+                {user.profileImageUrl ? (
+                  <img src={user.profileImageUrl} alt="" className="h-6 w-6 rounded-full object-cover" />
+                ) : (
+                  <span className="grid h-6 w-6 place-items-center rounded-full bg-navy/10 text-[11px] font-extrabold text-navy-2 dark:bg-white/20 dark:text-white">
+                    {(user.displayName ?? user.primaryEmail ?? "م").charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <span className="hidden sm:inline max-w-[140px] truncate">
+                  {user.displayName ?? user.primaryEmail ?? "حساب"}
+                </span>
+              </button>
+            </div>
+          ) : authEnabled ? (
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              className="inline-flex h-9 items-center gap-2 rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-white transition hover:bg-navy-2"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" role="img">
+                <path fill="#4285F4" d="M21.35 12.27c0-.7-.06-1.37-.18-2.02H12v3.83h5.23a4.47 4.47 0 0 1-1.94 2.93v2.44h3.14c1.84-1.7 2.92-4.2 2.92-7.18Z" />
+                <path fill="#34A853" d="M12 21.6c2.63 0 4.84-.87 6.45-2.35l-3.14-2.44c-.87.58-1.98.92-3.31.92-2.54 0-4.7-1.72-5.47-4.04H3.28v2.52A9.74 9.74 0 0 0 12 21.6Z" />
+                <path fill="#FBBC05" d="M6.53 13.69a5.86 5.86 0 0 1 0-3.38V7.79H3.28a9.74 9.74 0 0 0 0 8.42l3.25-2.52Z" />
+                <path fill="#EA4335" d="M12 6.27c1.43 0 2.72.49 3.73 1.45l2.8-2.8C16.84 3.39 14.63 2.4 12 2.4a9.74 9.74 0 0 0-8.72 5.39l3.25 2.52C7.3 7.99 9.46 6.27 12 6.27Z" />
+              </svg>
+              <span>تسجيل الدخول</span>
+            </button>
+          ) : null}
+
           <button
             type="button"
             onClick={() => setOpen((v) => !v)}
@@ -151,6 +203,31 @@ export function SiteHeader({ current }: { current: string }) {
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
             {dark ? "الوضع الفاتح" : "الوضع الداكن"}
           </button>
+          {!isPending && !user && authEnabled && (
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-[8px] bg-navy px-3 py-2.5 text-[13px] font-extrabold text-white"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="size-4" role="img">
+                <path fill="#4285F4" d="M21.35 12.27c0-.7-.06-1.37-.18-2.02H12v3.83h5.23a4.47 4.47 0 0 1-1.94 2.93v2.44h3.14c1.84-1.7 2.92-4.2 2.92-7.18Z" />
+                <path fill="#34A853" d="M12 21.6c2.63 0 4.84-.87 6.45-2.35l-3.14-2.44c-.87.58-1.98.92-3.31.92-2.54 0-4.7-1.72-5.47-4.04H3.28v2.52A9.74 9.74 0 0 0 12 21.6Z" />
+                <path fill="#FBBC05" d="M6.53 13.69a5.86 5.86 0 0 1 0-3.38V7.79H3.28a9.74 9.74 0 0 0 0 8.42l3.25-2.52Z" />
+                <path fill="#EA4335" d="M12 6.27c1.43 0 2.72.49 3.73 1.45l2.8-2.8C16.84 3.39 14.63 2.4 12 2.4a9.74 9.74 0 0 0-8.72 5.39l3.25 2.52C7.3 7.99 9.46 6.27 12 6.27Z" />
+              </svg>
+              تسجيل الدخول
+            </button>
+          )}
+          {!isPending && user && (
+            <button
+              type="button"
+              onClick={handleSignOut}
+              className="mt-2 flex w-full items-center justify-center gap-2 rounded-[8px] border border-line px-3 py-2.5 text-[13px] font-bold text-muted"
+            >
+              <LogIn className="size-4" />
+              تسجيل الخروج
+            </button>
+          )}
         </nav>
       )}
     </header>

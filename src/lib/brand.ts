@@ -7,9 +7,9 @@
  */
 
 export const BRAND = {
-  owner: "فيصل المضياني",
-  developer: "فيصل المضياني",
-  developerEn: "Faisal Almodhiani",
+  owner: "إدارة المنصة",
+  developer: "فريق تطوير نَسَق",
+  developerEn: "NASAQ Development Team",
   platform: "نَسَق",
   platformEn: "NASAQ",
   name: "نَسَق",
@@ -18,7 +18,7 @@ export const BRAND = {
   short: "نَسَق",
   lockup: "نَسَق",
   description:
-    "منصة احترافية لتصميم التقارير والمستندات والعروض المؤسسية بصيغ قابلة للتحرير — من تصميم وتطوير فيصل المضياني.",
+    "منصة احترافية لتصميم التقارير والمستندات والعروض المؤسسية بصيغ قابلة للتحرير — من تطوير فريق نَسَق.",
 } as const;
 
 /** Local display form: what the owner hands out inside Saudi Arabia. */
@@ -36,6 +36,13 @@ export function whatsappHref(message?: string) {
   return `https://wa.me/${CONTACT_PHONE_INTL}?text=${encodeURIComponent(text)}`;
 }
 
+/** Custom design request contact info (used only in the dedicated section). */
+export const CUSTOM_DESIGN_CONTACT = {
+  phone: CONTACT_PHONE_DISPLAY,
+  phoneIntl: CONTACT_PHONE_INTL,
+  logoPlaceholder: "/custom-logo-placeholder.svg",
+} as const;
+
 export interface NavItem {
   to: string;
   label: string;
@@ -50,4 +57,5 @@ export const NAV_ITEMS: NavItem[] = [
   { to: "/about", label: "عن المنصة" },
   { to: "/contact", label: "التواصل" },
   { to: "/account", label: "حسابي" },
+  { to: "/custom-design", label: "طلب تصميم خاص" },
 ];

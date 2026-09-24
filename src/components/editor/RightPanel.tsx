@@ -131,14 +131,14 @@ export function RightPanel({
    * background/export start closed. The choice persists per device.
    */
   const accordions = useAccordionState<
-    "dimensions" | "text" | "background" | "fade" | "report" | "export"
+    "report" | "dimensions" | "text" | "background" | "fade" | "export"
   >("properties", {
+    // «أدوات التقرير» sits at the top of the inspector and stays open: it is
+    // the toolbox the author reaches for first, and folding it away hid it.
+    report: true,
     dimensions: true,
     text: true,
     background: false,
-    // «أدوات التقرير» opens on demand: it is a toolbox, not a per-element
-    // property, and folding it away keeps the inspector scannable.
-    report: false,
     // Opens by itself the moment a fade exists, so the layer is never invisible
     // state: the author can always see what is painting over the picture.
     fade: false,
@@ -353,6 +353,17 @@ export function RightPanel({
           </div>
         )}
 
+        {tab === "properties" && (
+          <AccordionSection
+            title="أدوات التقرير"
+            id="report"
+            open={accordions.isOpen("report", true)}
+            onToggle={() => accordions.toggle("report")}
+          >
+            <ReportToolsPanel />
+          </AccordionSection>
+        )}
+
         {tab === "properties" && !el && (
           <div className="grid gap-2">
             <EmptyNote>
@@ -371,7 +382,7 @@ export function RightPanel({
           </div>
         )}
 
-        {tab === "properties" && el && (
+{tab === "properties" && el && (
           <div className="grid gap-3">
             {selectedCount > 1 && (
               <div className="rounded-[8px] border border-blue-300 bg-blue-50 px-2.5 py-2 text-[11px] font-bold text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
@@ -2139,25 +2150,7 @@ export function RightPanel({
               label="حذف العنصر"
               danger
             />
-          </div>
-        )}
-
-        {/*
-         * «أدوات التقرير» — document-level tools (KPI cards, the stamp and
-         * signature zone, page furniture and numbering, print guides, the
-         * pre-flight summary). Rendered outside the element blocks so it stays
-         * reachable whether or not something is selected: inserting a card is
-         * not a property of the current selection.
-         */}
-        {tab === "properties" && (
-          <AccordionSection
-            title="أدوات التقرير"
-            id="report"
-            open={accordions.isOpen("report", false)}
-            onToggle={() => accordions.toggle("report")}
-          >
-            <ReportToolsPanel />
-          </AccordionSection>
+</div>
         )}
       </div>
     </aside>
