@@ -98,9 +98,9 @@ export const Route = createFileRoute("/api/webhooks/paylink")({
           return Response.json({ error: "amount_mismatch" }, { status: 400 });
         }
         const remote = await getPaylinkInvoice(transactionNo);
-        const remoteOrderNumber = String(remote.gatewayOrderRequest?.orderNumber || remote.orderNumber || orderNumber).trim();
-        const remoteTransactionNo = String(remote.transactionNo || transactionNo).trim();
-        if (remoteTransactionNo !== transactionNo || remoteOrderNumber !== orderNumber || String(remote.orderStatus || "") !== "Paid") {
+        const remoteOrderNumber = String(remote.gatewayOrderRequest?.orderNumber || remote.orderNumber || "").trim();
+        const remoteTransactionNo = String(remote.transactionNo || "").trim();
+        if (!remoteOrderNumber || !remoteTransactionNo || remoteTransactionNo !== transactionNo || remoteOrderNumber !== orderNumber || String(remote.orderStatus || "") !== "Paid") {
           return Response.json({ received: true, applied: false });
         }
         const remoteAmount = amount(remote.amount ?? remote.gatewayOrderRequest?.amount);
