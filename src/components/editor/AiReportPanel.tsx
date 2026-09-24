@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { FileText, Loader2, Plus, RefreshCw, Sparkles } from "lucide-react";
+import { useState, useMemo } from "react";
+import { FileText, Loader2, Plus, RefreshCw, Sparkles, AlertCircle, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 import { generateReportDraftFn } from "@/lib/ai/functions";
 import {
@@ -10,10 +10,17 @@ import {
   type ReportType,
 } from "@/lib/ai/contract";
 import { useEditor } from "@/lib/editor/store";
+import { useCurrentUser } from "@/lib/auth/use-current-user";
+import { cn } from "@/lib/utils";
 
 /** User-triggered AI intake. It never edits the page until the author inserts it. */
 export function AiReportPanel() {
   const insertReportDraft = useEditor((s) => s.insertReportDraft);
+  const entitlements = useEditor((s) => s.entitlements);
+  const user = useCurrentUser();
+  const isOwner = user?.id === "dev-user" || user?.isDevFallback; // simplified check, real owner check is server-side
+  const hasAiEntitlement = entitlements.ai_report;
+
   const [brief, setBrief] = useState("");
   const [audience, setAudience] = useState("الإدارة العليا");
   const [tone, setTone] = useState<AiTone>("official");
@@ -25,10 +32,12 @@ export function AiReportPanel() {
   const [draft, setDraft] = useState<ReportDraft | null>(null);
   const [draftElementId, setDraftElementId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [providerError, setProviderError] = useState<"not_configured" | null>(null);
 
   const generate = async () => {
     if (!brief.trim() || busy) return;
     setBusy(true);
+    setProviderError(null);
     try {
       const result = await generateReportDraftFn({
         data: {
@@ -43,7 +52,12 @@ export function AiReportPanel() {
         },
       });
       if (!result.ok) {
-        toast.error(result.message);
+        if (result.code === "not_configured") {
+          setProviderError("not_configured");
+          // Don't toast for config errors - show inline
+        } else {
+          toast.error(result.message);
+        }
         return;
       }
       setDraft(result.draft);
@@ -63,6 +77,33 @@ export function AiReportPanel() {
     }
   };
 
+  // Render different UI based on entitlement and provider status
+  if (!hasAiEntitlement) {
+    return (
+      <div className="editor-subgroup ai-report-panel">
+        <h4 className="editor-subgroup-title">
+          <span className="inline-flex items-center gap-1.5">
+            <Sparkles className="size-3.5 text-navy-2 dark:text-gold-2" />
+            مسودة تقرير بالذكاء الاصطناعي
+          </span>
+        </h4>
+        <div className="rounded-[8px] border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="size-4 text-amber-700 dark:text-amber-400" />
+            <div>
+              <p className="text-[11px] font-extrabold text-amber-800 dark:text-amber-300">
+                ميزة الذكاء الاصطناعي تتطلب ترخيصًا نشطًا
+              </p>
+              <p className="text-[10px] leading-4 text-amber-700/80 dark:text-amber-400/80">
+                هذه الميزة متاحة لحاملي تراخيص PRO و LIFETIME والتراخيص التجريبية.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="editor-subgroup ai-report-panel">
       <h4 className="editor-subgroup-title">
@@ -74,6 +115,29 @@ export function AiReportPanel() {
       <p className="text-[10px] leading-4 text-muted">
         اكتب الحقائق أو النقاط المتاحة فقط. لن تُضاف أي نتيجة إلى الصفحة قبل الضغط على «إدراج».
       </p>
+
+      {providerError === "not_configured" && (
+        <div className="mb-2 rounded-[8px] border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-800 dark:bg-amber-900/20">
+          <div className="flex items-start gap-2">
+            <AlertCircle className="size-4 mt-0.5 shrink-0 text-amber-700 dark:text-amber-400" />
+            <div className="min-w-0">
+              <p className="text-[11px] font-extrabold text-amber-800 dark:text-amber-300">
+                مزود الذكاء الاصطناعي غير مهيأ
+              </p>
+              <p className="text-[10px] leading-4 text-amber-700/80 dark:text-amber-400/80">
+                لديك الصلاحية، لكن بيئة النشر لم تُضبط بمزود ذكاء اصطناعي (OpenAI / Azure / أخرى).
+              </p>
+              {isOwner && (
+                <div className="mt-2 flex items-center gap-1.5 text-[10px] text-amber-700/80 dark:text-amber-400/80">
+                  <ExternalLink className="size-3.5" />
+                  <span>راجع متغيرات البيئة: <code className="font-mono">AI_PROVIDER</code>, <code className="font-mono">AI_API_KEY</code>, <code className="font-mono">AI_MODEL</code></span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <label className="grid gap-1 text-[11px] font-extrabold text-muted">
         موجز التقرير
         <textarea

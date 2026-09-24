@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { BRAND, whatsappHref } from "@/lib/brand";
 import { useLicense } from "@/lib/license/client";
+import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
 
 interface FullVersionModalProps {
@@ -59,7 +60,8 @@ export function FullVersionModal({ open, onClose, defaultTab = "features" }: Ful
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const { activate, hasLicense, license } = useLicense();
+  const user = useCurrentUser();
+  const { activate, hasLicense, license } = useLicense(user?.id, user?.primaryEmail);
 
   useEffect(() => {
     if (open) setActiveTab(defaultTab);

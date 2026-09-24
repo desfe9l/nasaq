@@ -8,7 +8,13 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { hashLicenseKey, isKeygenKeyFormat, isValidKeyFormat, keyPrefix } from "./key";
+import {
+  hashLicenseKey,
+  isKeygenKeyFormat,
+  isValidKeyFormat,
+  keyPrefix,
+  normalizeLicenseKey,
+} from "./key.client";
 import {
   activateLicense as dbActivate,
   validateLicense as dbValidate,
@@ -123,7 +129,7 @@ function keygenMessage(verification: KeygenVerification): string {
 
 async function persistKeygenLicense(verification: KeygenVerification, userId: string | null, existing?: License): Promise<License> {
   return upsertExternalLicense({
-    keyHash: hashLicenseKey(verification.key),
+    keyHash: await hashLicenseKey(verification.key),
     keyPrefix: keyPrefix(verification.key),
     type: verification.type,
     userId: userId ?? existing?.userId ?? null,
@@ -151,21 +157,21 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
       };
     }
 
-    const key = data.key.trim();
-    const manualKey = isValidKeyFormat(key);
-    const keygenKey = !manualKey && isKeygenKeyFormat(key);
-    if (!manualKey && !keygenKey) {
-      return {
-        success: false,
-        message: "مفتاح الترخيص غير صالح.",
-      };
-    }
+const key = normalizeLicenseKey(data.key);
+  const manualKey = isValidKeyFormat(key);
+  const keygenKey = !manualKey && isKeygenKeyFormat(key);
+  if (!manualKey && !keygenKey) {
+    return {
+      success: false,
+      message: "مفتاح الترخيص غير صالح.",
+    };
+  }
 
-    const keyHash = hashLicenseKey(key);
-    // Bind activation to the verified session identity. A client cannot choose
-    // which account receives the license.
-    const sessionUserId = context.userId;
-    const local = await findLicenseByKeyHash(keyHash);
+  const keyHash = await hashLicenseKey(key);
+  // Bind activation to the verified session identity. A client cannot choose
+  // which account receives the license.
+  const sessionUserId = context.userId;
+  const local = await findLicenseByKeyHash(keyHash);
     if (keygenKey || local?.metadata?.source === "keygen") {
       if (!isKeygenConfigured()) {
         return { success: false, message: "تحقق Keygen غير مهيأ على الخادم." };
@@ -213,14 +219,14 @@ export const validateLicenseFn = createServerFn({ method: "POST" })
       return { valid: false };
     }
 
-    const key = data.key.trim();
+    const key = normalizeLicenseKey(data.key);
     const manualKey = isValidKeyFormat(key);
     const keygenKey = !manualKey && isKeygenKeyFormat(key);
     if (!manualKey && !keygenKey) {
       return { valid: false };
     }
 
-    const keyHash = hashLicenseKey(key);
+    const keyHash = await hashLicenseKey(key);
     const local = await findLicenseByKeyHash(keyHash);
     if (keygenKey || local?.metadata?.source === "keygen") {
       if (!isKeygenConfigured()) return { valid: false };
@@ -254,8 +260,8 @@ export const deactivateLicenseFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ip = await getClientIp();
     if (!checkRateLimit("license:deactivate", ip, 5, 60_000)) return { success: false };
-    const key = data.key.trim();
-    const local = await findLicenseByKeyHash(hashLicenseKey(key));
+    const key = normalizeLicenseKey(data.key);
+    const local = await findLicenseByKeyHash(await hashLicenseKey(key));
     if (!local) return { success: false };
     if (local.userId !== context.userId && !(await isOwner(context))) {
       return { success: false };

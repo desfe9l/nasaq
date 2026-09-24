@@ -16,6 +16,7 @@ import {
   getLicenseStatusFn,
   deactivateLicenseFn,
 } from "./functions";
+import { normalizeLicenseKey } from "./key.client";
 
 // ── Local Storage Cache (UX only, not source of truth) ─────────────────────
 
@@ -153,12 +154,13 @@ export function useLicense(userId?: string, userEmail?: string | null) {
   const activate = useCallback(
     async (key: string): Promise<{ success: boolean; message: string }> => {
       setState((s) => ({ ...s, error: null }));
+      const normalizedKey = normalizeLicenseKey(key);
       try {
-        const result = await activateLicenseFn({ data: { key, email: userEmail || undefined } });
+        const result = await activateLicenseFn({ data: { key: normalizedKey, email: userEmail || undefined } });
         if (result.success && result.license) {
-          setCachedLicenseKey(key);
+          setCachedLicenseKey(normalizedKey);
           // Re-validate to get full entitlements
-          const validated = await validateLicenseFn({ data: { key } });
+          const validated = await validateLicenseFn({ data: { key: normalizedKey } });
           setState({
             isLoading: false,
             hasLicense: true,

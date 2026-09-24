@@ -113,6 +113,8 @@ export function RightPanel({
   const toggleLock = useEditor((s) => s.toggleLock);
   const toggleHidden = useEditor((s) => s.toggleHidden);
   const alignPage = useEditor((s) => s.alignPage);
+  const distribute = useEditor((s) => s.distribute);
+  const matchSize = useEditor((s) => s.matchSize);
   const fontChoices = useEditor((s) => s.fontChoices);
   const probeFonts = useEditor((s) => s.probeFonts);
   const setLeftTab = useEditor((s) => s.setLeftTab);
@@ -547,6 +549,51 @@ export function RightPanel({
                       {l}
                     </button>
                   ))}
+                </div>
+                <p className="mt-3 mb-1.5 text-[11px] font-extrabold text-muted">
+                  توزيع وتوحيد الأحجام
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => distribute("h")}
+                    className="h-8 rounded-[8px] border border-line text-[11px] font-bold dark:border-white/10"
+                    title="توزيع أفقي"
+                  >
+                    ↔️ أفقي
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => distribute("v")}
+                    className="h-8 rounded-[8px] border border-line text-[11px] font-bold dark:border-white/10"
+                    title="توزيع عمودي"
+                  >
+                    ↕️ عمودي
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => matchSize("both")}
+                    className="h-8 rounded-[8px] border border-line text-[11px] font-bold dark:border-white/10"
+                    title="توحيد العرض والارتفاع"
+                  >
+                    □ متساوي
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => matchSize("width")}
+                    className="h-8 rounded-[8px] border border-line text-[11px] font-bold dark:border-white/10"
+                    title="توحيد العرض"
+                  >
+                    ↔️ عرض
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => matchSize("height")}
+                    className="h-8 rounded-[8px] border border-line text-[11px] font-bold dark:border-white/10"
+                    title="توحيد الارتفاع"
+                  >
+                    ↕️ ارتفاع
+                  </button>
                 </div>
               </div>
             </AccordionSection>

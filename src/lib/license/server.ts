@@ -7,7 +7,8 @@
  */
 
 import { getSql } from "@/lib/db";
-import { generateLicenseKey, hashLicenseKey, keyPrefix } from "./key";
+import { generateLicenseKey } from "./key.server";
+import { hashLicenseKey, keyPrefix } from "./key.client";
 import type {
   AdminLicenseCreate,
   AdminLicenseList,
@@ -120,7 +121,7 @@ export async function applyKeygenWebhook(params: {
   if (!existing && !params.key) return false;
   if (!existing && params.key) {
     await upsertExternalLicense({
-      keyHash: params.keyHash || hashLicenseKey(params.key),
+      keyHash: params.keyHash || await hashLicenseKey(params.key),
       keyPrefix: params.keyPrefix || params.key.slice(0, 14),
       type: params.type,
       userId: params.userId ?? null,
@@ -194,7 +195,7 @@ export async function createLicense(
 ): Promise<{ license: License; plainKey: string }> {
   const sql = await getSql();
   const plainKey = generateLicenseKey();
-  const keyHash = hashLicenseKey(plainKey);
+  const keyHash = await hashLicenseKey(plainKey);
   const prefix = keyPrefix(plainKey);
   const id = `lic_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 

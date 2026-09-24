@@ -172,11 +172,27 @@ export default function AdminDashboard() {
 
 // ── Templates ──────────────────────────────────────────────────────────────
 
+const TEMPLATE_CATEGORIES = [
+  "general",
+  "report",
+  "letter",
+  "certificate",
+  "presentation",
+  "invoice",
+  "contract",
+  "cv",
+  "proposal",
+  "newsletter",
+  "other",
+] as const;
+
+type TemplateCategory = (typeof TEMPLATE_CATEGORIES)[number];
+
 interface Draft {
   id?: string;
   title: string;
   description: string;
-  category: string;
+  category: TemplateCategory;
   tier: TemplateTier;
   status: TemplateStatus;
   kind: TemplateKind;
@@ -318,7 +334,11 @@ function TemplatesTab() {
             </label>
             <label className={label}>
               التصنيف
-              <input className={input} value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value })} />
+              <select className={input} value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value as TemplateCategory })}>
+                {TEMPLATE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </label>
             <label className={cn(label, "md:col-span-2")}>
               الوصف
@@ -410,7 +430,7 @@ function TemplatesTab() {
                   <button type="button" className={ghostBtn} title={t.tier === "licensed" ? "جعله مجانيًا" : "جعله مرخّصًا"} onClick={() => void setStatus(t.id, { tier: t.tier === "licensed" ? "free" : "licensed" })}>
                     {t.tier === "licensed" ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />}
                   </button>
-                  <button type="button" className={ghostBtn} title="تعديل البيانات" onClick={() => setDraft({ ...EMPTY_DRAFT, ...t, content: "", fileName: "", thumbnail: t.thumbnail })}>
+                  <button type="button" className={ghostBtn} title="تعديل البيانات" onClick={() => setDraft({ ...EMPTY_DRAFT, ...t, category: t.category as TemplateCategory, content: "", fileName: "", thumbnail: t.thumbnail })}>
                     تعديل
                   </button>
                   <button type="button" className={cn(ghostBtn, "text-danger")} title="حذف" onClick={() => void remove(t)}>

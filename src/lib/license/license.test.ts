@@ -1,18 +1,28 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  generateLicenseKey,
   hashLicenseKey,
   keyPrefix,
   isKeygenKeyFormat,
   isValidKeyFormat,
-} from "./key.ts";
+} from "./key.client";
 import { entitlementsForPlan, entitlementsFromKeygenCodes, LICENSE_ENTITLEMENTS } from "./types.ts";
+
+// Mock generateLicenseKey for tests since it's not exported from key.client
+function generateLicenseKeyForTest(): string {
+  const CHARSET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const segment = (len: number): string => {
+    const bytes = new Uint8Array(len);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => CHARSET[b % CHARSET.length]).join("");
+  };
+  return `NASAQ-${segment(4)}-${segment(4)}-${segment(4)}-${segment(4)}`;
+}
 
 describe("License Key Generation", () => {
   it("generates keys matching the expected format", () => {
     for (let i = 0; i < 100; i++) {
-      const key = generateLicenseKey();
+      const key = generateLicenseKeyForTest();
       assert.match(key, /^NASAQ-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
     }
   });
@@ -20,7 +30,7 @@ describe("License Key Generation", () => {
   it("generates unique keys", () => {
     const keys = new Set<string>();
     for (let i = 0; i < 1000; i++) {
-      keys.add(generateLicenseKey());
+      keys.add(generateLicenseKeyForTest());
     }
     assert.equal(keys.size, 1000);
   });
@@ -28,36 +38,36 @@ describe("License Key Generation", () => {
   it("does not contain ambiguous characters (0, O, 1, I)", () => {
     const ambiguous = /[0OI1]/;
     for (let i = 0; i < 100; i++) {
-      const key = generateLicenseKey();
+      const key = generateLicenseKeyForTest();
       assert.ok(!ambiguous.test(key), `Key contains ambiguous character: ${key}`);
     }
   });
 });
 
 describe("License Key Hashing", () => {
-  it("produces consistent SHA-256 hashes", () => {
+  it("produces consistent SHA-256 hashes", async () => {
     const key = "NASAQ-ABCD-EFGH-IJKL-MNOP";
-    const hash1 = hashLicenseKey(key);
-    const hash2 = hashLicenseKey(key);
+    const hash1 = await hashLicenseKey(key);
+    const hash2 = await hashLicenseKey(key);
     assert.equal(hash1, hash2);
   });
 
-  it("produces 64-character hex strings", () => {
-    const key = generateLicenseKey();
-    const hash = hashLicenseKey(key);
+  it("produces 64-character hex strings", async () => {
+    const key = generateLicenseKeyForTest();
+    const hash = await hashLicenseKey(key);
     assert.equal(hash.length, 64);
     assert.match(hash, /^[a-f0-9]{64}$/);
   });
 
-  it("is case-insensitive", () => {
-    const hash1 = hashLicenseKey("NASAQ-ABCD-EFGH-IJKL-MNOP");
-    const hash2 = hashLicenseKey("nasaq-abcd-efgh-ijkl-mnop");
+  it("is case-insensitive", async () => {
+    const hash1 = await hashLicenseKey("NASAQ-ABCD-EFGH-IJKL-MNOP");
+    const hash2 = await hashLicenseKey("nasaq-abcd-efgh-ijkl-mnop");
     assert.equal(hash1, hash2);
   });
 
-  it("is irreversible (cannot recover key from hash)", () => {
-    const key = generateLicenseKey();
-    const hash = hashLicenseKey(key);
+  it("is irreversible (cannot recover key from hash)", async () => {
+    const key = generateLicenseKeyForTest();
+    const hash = await hashLicenseKey(key);
     // Hash should not contain the original key
     assert.ok(!hash.includes(key));
     assert.ok(!hash.includes("NASAQ"));

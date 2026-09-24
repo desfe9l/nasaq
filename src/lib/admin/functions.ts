@@ -181,15 +181,10 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
         allowed = access.isOwner || access.entitlements.premium_templates === true;
       }
       if (key) {
-        const { hashLicenseKey } = await import("@/lib/license/key");
-        const { validateLicense } = await import("@/lib/license/server");
-        const { entitlementsForPlan } = await import("@/lib/license/types");
-        const result = await validateLicense(hashLicenseKey(key));
+        const { validateLicenseKey } = await import("@/lib/license/admin.server");
+        const result = await validateLicenseKey(key);
         if (result.valid && result.license) {
-          const ent = entitlementsForPlan(
-            result.license.metadata?.plan as import("@/lib/license/types").LicensePlan | undefined,
-            result.license.type,
-          );
+          const ent = result.entitlements ?? {};
           allowed = ent.premium_templates === true;
         }
       }

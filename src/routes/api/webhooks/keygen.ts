@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { applyKeygenWebhook } from "@/lib/license/server";
-import { hashLicenseKey, keyPrefix } from "@/lib/license/key";
+import { hashLicenseKey, keyPrefix } from "@/lib/license/key.client";
 import {
   planForKeygenPolicy,
   typeForKeygenPolicy,
@@ -65,7 +65,7 @@ export const Route = createFileRoute("/api/webhooks/keygen")({
           eventId,
           licenseId: String(resource.id),
           key,
-          keyHash: key ? hashLicenseKey(key) : undefined,
+          keyHash: key ? await hashLicenseKey(key) : undefined,
           keyPrefix: key ? keyPrefix(key) : undefined,
           type: typeForKeygenPolicy(policyId),
           status: statusForEvent(eventName, licenseAttributes.suspended),

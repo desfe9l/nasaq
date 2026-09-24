@@ -17,6 +17,16 @@ import { cardClass } from "@/components/site/cards";
 import { useSiteSettings, whatsappLink } from "@/lib/admin/use-site-settings";
 
 const PLAN_CONTENT = {
+  free: {
+    title: "مجاني",
+    body: "للاستكشاف والتجربة الشخصية.",
+    items: [
+      "المحرر الأساسي",
+      "تصدير PDF/PNG/JPG",
+      "مشروع واحد · 3 صفحات",
+      "قوالب أساسية فقط",
+    ],
+  },
   individual: {
     title: "ترخيص فردي",
     body: "للمصمم أو الموظف الذي يعمل على جهازه.",
@@ -74,12 +84,13 @@ export function PurchasePage() {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const { commercial } = useSiteSettings();
   /** Monthly list prices in SAR (admin-managed); annual = 12 months minus the discount. */
-  const MONTHLY_PRICES: Record<PaidPlan, number> = {
+  const MONTHLY_PRICES: Record<"individual" | "team", number> = {
     individual: commercial.priceIndividualMonthly,
     team: commercial.priceTeamMonthly,
   };
+  const FREE_PRICE = 0;
   const discount = commercial.annualDiscountPercent;
-  const annualPrice = (plan: PaidPlan) => Math.round(MONTHLY_PRICES[plan] * 12 * (1 - discount / 100));
+  const annualPrice = (plan: "individual" | "team") => Math.round(MONTHLY_PRICES[plan] * 12 * (1 - discount / 100));
   const waHref = (message: string) => whatsappLink(commercial.whatsappNumber, message);
 
   useEffect(() => {
@@ -119,7 +130,7 @@ export function PurchasePage() {
   return (
     <div className="min-h-full bg-paper dark:bg-[#111722]">
       <SiteHeader current="/purchase" />
-      <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
+      <main className="mx-auto w-full max-w-7xl px-4 py-12 sm:px-6 md:py-16">
         <p className="text-[12px] font-extrabold tracking-[0.16em] text-green dark:text-gold-2">
           نسخ وتراخيص
         </p>
@@ -184,21 +195,19 @@ export function PurchasePage() {
           </p>
         )}
 
-        <div className="mt-8 grid gap-4 md:gap-6 lg:grid-cols-3">
-          {(["individual", "team"] as PaidPlan[]).map((id) => {
+        <div className="mt-8 grid gap-4 sm:gap-5 lg:grid-cols-2 xl:grid-cols-4">
+          {(["free", "individual", "team"] as const).map((id) => {
             const item = PLAN_CONTENT[id];
             const isTeam = id === "team";
-            const price =
-              billing === "monthly" ? MONTHLY_PRICES[id] : annualPrice(id);
-            const cta = planCta(id);
+            const isFree = id === "free";
+            const price = isFree ? FREE_PRICE : (billing === "monthly" ? MONTHLY_PRICES[id] : annualPrice(id));
+            const cta = isFree ? { href: "/demo", external: false, checkout: false } : planCta(id);
 
-            return (
+return (
               <section
                 key={id}
                 className={cardClass(
                   "relative p-5 text-right",
-                  // Team tier: the requested «الأكثر طلباً» treatment —
-                  // emerald glow, elevation, and a floating badge.
                   isTeam &&
                     "ring-2 ring-emerald-500/70 shadow-[0_18px_40px_-18px_rgba(16,185,129,0.55)] hover:-translate-y-1.5 dark:ring-emerald-400/60",
                 )}
@@ -208,24 +217,30 @@ export function PurchasePage() {
                     الأكثر طلباً 🌟
                   </span>
                 )}
-                <h2 className="text-[17px] font-extrabold">{item.title}</h2>
-                <p className="mt-2 text-[12px] leading-6 text-muted">{item.body}</p>
-                <p className="mt-5 text-[28px] font-extrabold text-navy dark:text-white">
-                  <span className="text-[14px]">ر.س </span>
-                  {price}{" "}
-                  <span className="text-[12px] font-bold text-muted">
-                    / {billing === "monthly" ? "شهريًا" : "سنويًا"}
-                  </span>
+                <h2 className="text-[16px] font-extrabold">{item.title}</h2>
+                <p className="mt-1 text-[11px] leading-5 text-muted">{item.body}</p>
+                <p className="mt-4 text-[24px] font-extrabold text-navy dark:text-white">
+                  {isFree ? (
+                    <span className="text-emerald-600 dark:text-emerald-400">مجاني</span>
+                  ) : (
+                    <>
+                      <span className="text-[12px]">ر.س </span>
+                      {price}{" "}
+                      <span className="text-[11px] font-bold text-muted">
+                        / {billing === "monthly" ? "شهريًا" : "سنويًا"}
+                      </span>
+                    </>
+                  )}
                 </p>
-                {billing === "annual" && (
-                  <p className="mt-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                {!isFree && billing === "annual" && (
+                  <p className="mt-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
                     يعادل {Math.round(annualPrice(id) / 12)} ر.س شهريًا — وفّرت {discount}%
                   </p>
                 )}
-                <ul className="mt-5 grid gap-2">
+                <ul className="mt-4 grid gap-1.5">
                   {item.items.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2 text-[12px] font-bold">
-                      <CheckCircle2 className="size-3.5 shrink-0 text-ok" />
+                    <li key={feature} className="flex items-center gap-1.5 text-[11px] font-bold">
+                      <CheckCircle2 className="size-3 shrink-0 text-ok" />
                       {feature}
                     </li>
                   ))}
@@ -234,38 +249,42 @@ export function PurchasePage() {
                   href={cta.href}
                   target={cta.external ? "_blank" : undefined}
                   rel={cta.external ? "noopener noreferrer" : undefined}
-                  className={`mt-6 inline-flex h-11 w-full items-center justify-center rounded-xl px-5 text-[13px] font-extrabold text-white transition ${
+                  className={`mt-5 inline-flex h-10 w-full items-center justify-center rounded-lg px-4 text-[12px] font-extrabold text-white transition ${
                     isTeam
                       ? "bg-emerald-600 hover:bg-emerald-700"
+                      : isFree
+                      ? "bg-slate-600 hover:bg-slate-700"
                       : "bg-navy hover:bg-navy-2"
                   }`}
                 >
-                  {cta.checkout
+                  {isFree
+                    ? "جرب المحرر"
+                    : cta.checkout
                     ? `اشترك ${billing === "monthly" ? "شهريًا" : "سنويًا"}`
                     : isTeam
-                      ? "⚡ طلب الترخيص عبر الواتساب"
-                      : `اطلب ${billing === "monthly" ? "الاشتراك الشهري" : "الاشتراك السنوي"} عبر واتساب`}
+                    ? "⚡ طلب الترخيص عبر الواتساب"
+                    : `اطلب ${billing === "monthly" ? "الاشتراك الشهري" : "الاشتراك السنوي"} عبر واتساب`}
                 </a>
               </section>
             );
           })}
           <section className={cardClass("p-5 text-right")}>
-            <h2 className="text-[17px] font-extrabold">ترخيص المخرجات المؤسسية</h2>
-            <p className="mt-2 text-[12px] leading-6 text-muted">
+            <h2 className="text-[16px] font-extrabold">ترخيص المخرجات المؤسسية</h2>
+            <p className="mt-1 text-[11px] leading-5 text-muted">
               للجهات التي تحتاج إلى تجهيز قوالبها وهويتها وخيارات ترخيص مخصصة.
             </p>
-            <p className="mt-6 text-[24px] font-extrabold text-navy dark:text-white">
+            <p className="mt-5 text-[22px] font-extrabold text-navy dark:text-white">
               حل مؤسسي مخصص
             </p>
-            <ul className="mt-5 grid gap-2">
+            <ul className="mt-4 grid gap-1.5">
               {[
                 "تهيئة وتجهيز حزم القوالب الخاصة بالجهة",
                 "حفظ محلي داخل أجهزة الجهة (Local-First)",
                 "تفعيل مباشر للتراخيص من لوحة الإدارة",
                 "موارد وخيارات مخصصة حسب احتياج الجهة",
               ].map((feature) => (
-                <li key={feature} className="flex items-center gap-2 text-[12px] font-bold">
-                  <CheckCircle2 className="size-3.5 shrink-0 text-ok" />
+                <li key={feature} className="flex items-center gap-1.5 text-[11px] font-bold">
+                  <CheckCircle2 className="size-3 shrink-0 text-ok" />
                   {feature}
                 </li>
               ))}
@@ -274,7 +293,7 @@ export function PurchasePage() {
               href={whatsapp}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-6 inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-navy px-5 text-[13px] font-extrabold text-white transition hover:bg-navy-2"
+              className="mt-5 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-navy px-4 text-[12px] font-extrabold text-white transition hover:bg-navy-2"
             >
               💬 تواصل معنا للترخيص المخصص
             </a>

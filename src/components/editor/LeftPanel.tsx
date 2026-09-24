@@ -56,9 +56,9 @@ import { SmartLibraryPanel, TemplatePreview } from "./SmartLibrary";
 import { TablePickerOverlay } from "./TablePicker";
 
 const TABS: { id: LeftTab; label: string; icon: typeof Type }[] = [
-  { id: "elements", label: "عناصر", icon: LayoutTemplate },
   { id: "library", label: "المكتبة", icon: FolderOpen },
-  { id: "shapes", label: "shapes", icon: Shapes },
+  { id: "elements", label: "عناصر", icon: LayoutTemplate },
+  { id: "shapes", label: "أشكال", icon: Shapes },
   { id: "templates", label: "قوالب", icon: FileText },
   { id: "pages", label: "صفحات", icon: Layers },
   { id: "theme", label: "سمة", icon: Palette },
@@ -303,8 +303,8 @@ export function LeftPanel({
                       )}
                     />
                   </button>
-                  {(openGroups[group.title] ?? false) && (
-                    <div className="grid grid-cols-2 gap-2">
+{(openGroups[group.title] ?? false) && (
+                      <div className="grid grid-cols-3 gap-2">
                       {group.items.map((t) => {
                         const Icon = t.icon;
                         return (
