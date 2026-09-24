@@ -119,6 +119,8 @@ export const createPaylinkCheckout = createServerFn({ method: "POST" })
       const period =
         data?.period === "quarterly"
           ? "quarterly"
+          : data?.period === "annual"
+            ? "annual"
           : data?.period === "monthly"
             ? "monthly"
             : null;
@@ -204,6 +206,11 @@ export const submitPayment = createServerFn({ method: "POST" })
     const plan = await getPurchasablePlan(sql, data.planId);
     if (!plan) return { ok: false, error: "الباقة غير متاحة." };
 
+    const instructions = await getPaymentInstructions(sql);
+    if (!instructions.iban || !instructions.bankName || !instructions.accountName) {
+      return { ok: false, error: "الدفع قريبًا — تعليمات التحويل غير مكتملة." };
+    }
+
     // One open request at a time keeps the admin queue truthful: a second
     // submission while the first is unreviewed would double-count the payment.
     if (await hasPendingPaymentRequest(sql, context.userId)) {
@@ -265,3 +272,8 @@ export const getMyPaymentRequest = createServerFn({ method: "GET" })
     const sql = await getSql();
     return getOwnPaymentRequest(sql, context.userId, data.requestId);
   });
+/** Only readiness booleans leave the server; credentials never do. */
+export const getCheckoutAvailability = createServerFn({ method: "GET" }).handler(async () => {
+  const { checkoutAvailability } = await import("@/lib/paylink/server");
+  return checkoutAvailability();
+});

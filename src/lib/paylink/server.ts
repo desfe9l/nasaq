@@ -1,3 +1,6 @@
+import { getPurchasablePlan } from "../commercial/plans.server.ts";
+import { keygenPolicyId } from "../license/keygen.ts";
+import { listCatalogPlans } from "../commercial/catalog.ts";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import {
   PAYLINK_PAYMENT_TYPE_LABELS,
@@ -42,26 +45,32 @@ export function apiBaseUrl(): string {
   } catch {
     throw new Error("PAYLINK_API_BASE_URL is invalid");
   }
-  if (url.protocol !== "https:") throw new Error("PAYLINK_API_BASE_URL must use HTTPS");
+  if (url.protocol !== "https:")
+    throw new Error("PAYLINK_API_BASE_URL must use HTTPS");
   return url.origin;
 }
 
 export function publicBaseUrl(): string {
-  const value = env("PAYLINK_PUBLIC_URL") || env("BETTER_AUTH_URL") || "https://nasaq-sa.vercel.app";
+  const value =
+    env("PAYLINK_PUBLIC_URL") ||
+    env("BETTER_AUTH_URL") ||
+    "https://nasaq-sa.vercel.app";
   let url: URL;
   try {
     url = new URL(value);
   } catch {
     throw new Error("PAYLINK_PUBLIC_URL is invalid");
   }
-  if (url.protocol !== "https:") throw new Error("PAYLINK_PUBLIC_URL must use HTTPS");
+  if (url.protocol !== "https:")
+    throw new Error("PAYLINK_PUBLIC_URL must use HTTPS");
   return url.origin;
 }
 
 function credentials(): { apiId: string; secretKey: string } {
   const apiId = env("PAYLINK_API_ID");
   const secretKey = env("PAYLINK_SECRET_KEY");
-  if (!apiId || !secretKey) throw new Error("Paylink credentials are not configured");
+  if (!apiId || !secretKey)
+    throw new Error("Paylink credentials are not configured");
   return { apiId, secretKey };
 }
 
@@ -94,7 +103,11 @@ export function verifyPaylinkWebhookAuthorization(request: Request): boolean {
 async function accessToken(): Promise<string> {
   const baseUrl = apiBaseUrl();
   const cached = globalRef.__paylinkTokenCache__;
-  if (cached && cached.baseUrl === baseUrl && cached.expiresAt > Date.now() + 30_000) {
+  if (
+    cached &&
+    cached.baseUrl === baseUrl &&
+    cached.expiresAt > Date.now() + 30_000
+  ) {
     return cached.value;
   }
   const { apiId, secretKey } = credentials();
@@ -103,10 +116,16 @@ async function accessToken(): Promise<string> {
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify({ apiId, secretKey, persistToken: true }),
   });
-  const body = (await response.json().catch(() => null)) as { id_token?: unknown } | null;
+  const body = (await response.json().catch(() => null)) as {
+    id_token?: unknown;
+  } | null;
   const token = typeof body?.id_token === "string" ? body.id_token.trim() : "";
   if (!response.ok || !token) throw new Error("Paylink authentication failed");
-  globalRef.__paylinkTokenCache__ = { value: token, expiresAt: Date.now() + TOKEN_TTL_MS, baseUrl };
+  globalRef.__paylinkTokenCache__ = {
+    value: token,
+    expiresAt: Date.now() + TOKEN_TTL_MS,
+    baseUrl,
+  };
   return token;
 }
 
@@ -132,7 +151,10 @@ export type PaylinkApiResponse = {
   } | null;
 };
 
-async function paylinkRequest(path: string, init: RequestInit = {}): Promise<PaylinkApiResponse> {
+async function paylinkRequest(
+  path: string,
+  init: RequestInit = {},
+): Promise<PaylinkApiResponse> {
   const token = await accessToken();
   const response = await fetch(`${apiBaseUrl()}${path}`, {
     ...init,
@@ -143,9 +165,13 @@ async function paylinkRequest(path: string, init: RequestInit = {}): Promise<Pay
       ...(init.headers || {}),
     },
   });
-  const body = (await response.json().catch(() => null)) as PaylinkApiResponse | null;
+  const body = (await response
+    .json()
+    .catch(() => null)) as PaylinkApiResponse | null;
   if (!response.ok || body?.success === false) {
-    throw new Error(String(body?.detail || body?.title || "Paylink request failed"));
+    throw new Error(
+      String(body?.detail || body?.title || "Paylink request failed"),
+    );
   }
   return body || {};
 }
@@ -175,9 +201,10 @@ export function buildPaylinkInvoicePayload(params: {
   clientEmail?: string | null;
   clientMobile: string;
 }) {
+  const plan = requireCatalogPlan(params.plan.key);
   return {
     orderNumber: params.orderNumber,
-    amount: params.plan.amount,
+    amount: plan.amount,
     callBackUrl: `${params.publicUrl}/payment/success`,
     cancelUrl: `${params.publicUrl}/payment/cancel`,
     clientName: params.clientName,
@@ -186,14 +213,29 @@ export function buildPaylinkInvoicePayload(params: {
     currency: "SAR",
     products: [
       {
-        title: params.plan.title,
-        price: params.plan.amount,
+        title: plan.title,
+        price: plan.amount,
         qty: 1,
-        description: params.plan.description,
+        description: plan.description,
         isDigital: true,
       },
     ],
   };
+}
+
+export function checkoutAvailability(): Record<string, boolean> {
+  const ready = Boolean(
+    env("PAYLINK_API_ID") &&
+    env("PAYLINK_SECRET_KEY") &&
+    env("PAYLINK_WEBHOOK_TOKEN") &&
+    env("KEYGEN_API_TOKEN"),
+  );
+  return Object.fromEntries(
+    listCatalogPlans().map((p) => [
+      p.key,
+      ready && Boolean(keygenPolicyId(p.keygenPolicyKey)),
+    ]),
+  );
 }
 
 export async function createPaylinkInvoice(input: {
@@ -206,7 +248,11 @@ export async function createPaylinkInvoice(input: {
   period?: PaylinkPeriod;
   clientMobile: string;
 }): Promise<PaylinkInvoiceResult> {
-  const planKey = input.planKey ?? (input.family && input.period ? paylinkPlanKey(input.family, input.period) : null);
+  const planKey =
+    input.planKey ??
+    (input.family && input.period
+      ? paylinkPlanKey(input.family, input.period)
+      : null);
   if (!planKey) {
     return { ok: false, error: "الباقة المطلوبة غير صالحة" };
   }
@@ -215,9 +261,20 @@ export async function createPaylinkInvoice(input: {
     return { ok: false, error: "الباقة غير متوفرة في الكتالوج المعتمد" };
   }
 
+  if (!checkoutAvailability()[plan.key]) {
+    return {
+      ok: false,
+      error: "الدفع قريبًا — لم يكتمل ربط الدفع لهذه الباقة بعد.",
+    };
+  }
+
   const mobile = input.clientMobile.replace(/\D/g, "");
   if (mobile.length < 8 || mobile.length > 20) {
     return { ok: false, error: "رقم الجوال غير صالح" };
+  }
+
+  if (!(await getPurchasablePlan(input.sql, plan.key))) {
+    return { ok: false, error: "الباقة غير متاحة للشراء حاليًا" };
   }
 
   const id = `pay_${randomUUID()}`;
@@ -264,7 +321,10 @@ export async function createPaylinkInvoice(input: {
 
     return { ok: true, paymentUrl, transactionNo, orderNumber };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Paylink invoice creation failed";
+    const message =
+      error instanceof Error
+        ? error.message
+        : "Paylink invoice creation failed";
     await input.sql`
       update paylink_transactions
       set status = 'FAILED', last_error = ${message.slice(0, 500)}, updated_at = now()
@@ -274,7 +334,9 @@ export async function createPaylinkInvoice(input: {
   }
 }
 
-export async function getPaylinkInvoice(transactionNo: string): Promise<PaylinkApiResponse> {
+export async function getPaylinkInvoice(
+  transactionNo: string,
+): Promise<PaylinkApiResponse> {
   return paylinkRequest(`/api/getInvoice/${encodeURIComponent(transactionNo)}`);
 }
 

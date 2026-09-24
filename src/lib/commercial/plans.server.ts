@@ -1,3 +1,4 @@
+import { getCatalogPlan } from "./catalog.ts";
 /**
  * Plan repository — the one place plan rows are read or written.
  *
@@ -41,16 +42,17 @@ function parseFeatures(value: unknown): string[] {
 }
 
 function toPlan(row: PlanDbRow): Plan {
+  const catalog = getCatalogPlan(row.id);
   return {
     id: row.id,
-    name: row.name,
-    arabicName: row.arabic_name,
-    description: row.description,
+    name: catalog?.name ?? row.name,
+    arabicName: catalog?.arabicName ?? row.arabic_name,
+    description: catalog?.description ?? row.description,
     // numeric arrives as a string on both drivers — keep it exact.
-    price: String(row.price),
-    currency: row.currency,
-    durationDays: Number(row.duration_days),
-    features: parseFeatures(row.features),
+    price: catalog ? String(catalog.amount) : String(row.price),
+    currency: catalog?.currency ?? row.currency,
+    durationDays: catalog?.durationDays ?? Number(row.duration_days),
+    features: catalog ? [...catalog.features] : parseFeatures(row.features),
     enabled: row.enabled,
     sortOrder: Number(row.sort_order),
   };
@@ -65,7 +67,7 @@ export async function listEnabledPlans(sql: Sql): Promise<Plan[]> {
     where enabled = true
     order by sort_order asc, id asc
   `;
-  return rows.map(toPlan);
+  return rows.filter((row) => getCatalogPlan(row.id)).map(toPlan);
 }
 
 /** Every plan including disabled ones — admin views only. */
@@ -76,7 +78,7 @@ export async function listAllPlans(sql: Sql): Promise<Plan[]> {
     from plans
     order by sort_order asc, id asc
   `;
-  return rows.map(toPlan);
+  return rows.filter((row) => getCatalogPlan(row.id)).map(toPlan);
 }
 
 /** One plan by id, enabled or not (an admin may need to inspect a disabled one). */
@@ -95,7 +97,11 @@ export async function getPlan(sql: Sql, planId: string): Promise<Plan | null> {
  * Only plans a customer is actually allowed to purchase. Used by the payment
  * submission path so a disabled plan cannot be bought via a hand-crafted call.
  */
-export async function getPurchasablePlan(sql: Sql, planId: string): Promise<Plan | null> {
+export async function getPurchasablePlan(
+  sql: Sql,
+  planId: string,
+): Promise<Plan | null> {
+  if (!getCatalogPlan(planId)) return null;
   const rows = await sql<PlanDbRow>`
     select id, name, arabic_name, description, price, currency,
            duration_days, features, enabled, sort_order
@@ -120,6 +126,17 @@ export async function updatePlan(
     sortOrder?: number;
   },
 ): Promise<void> {
+  const catalog = getCatalogPlan(planId);
+  if (!catalog) throw new Error("الباقة غير متاحة للبيع");
+  if (
+    (patch.price !== undefined && Number(patch.price) !== catalog.amount) ||
+    (patch.durationDays !== undefined &&
+      patch.durationDays !== catalog.durationDays)
+  ) {
+    throw new Error(
+      "الأسعار والمدد معتمدة مركزيًا ولا يمكن تعديلها من لوحة الإدارة",
+    );
+  }
   // Build the SET list from only the supplied fields so an omitted field is left
   // untouched rather than overwritten with a default.
   const sets: string[] = [];
@@ -135,7 +152,8 @@ export async function updatePlan(
   if (patch.arabicName !== undefined) push("arabic_name", patch.arabicName);
   if (patch.description !== undefined) push("description", patch.description);
   if (patch.price !== undefined) push("price", patch.price);
-  if (patch.durationDays !== undefined) push("duration_days", patch.durationDays);
+  if (patch.durationDays !== undefined)
+    push("duration_days", patch.durationDays);
   if (patch.enabled !== undefined) push("enabled", patch.enabled);
   if (patch.sortOrder !== undefined) push("sort_order", patch.sortOrder);
 

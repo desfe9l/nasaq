@@ -62,7 +62,7 @@ after(async () => {
 });
 
 /** A PENDING request for `userId`. */
-async function requestFor(userId: string, planId = "monthly"): Promise<string> {
+async function requestFor(userId: string, planId = "individual-monthly"): Promise<string> {
   const plans = await listEnabledPlans(sql);
   const plan = plans.find((p) => p.id === planId);
   assert.ok(plan, `precondition: plan "${planId}" exists`);
@@ -172,15 +172,15 @@ describe("customer cannot perform admin operations", () => {
 describe("approval grants access exactly once", () => {
   it("activates the customer with the plan's own duration", async () => {
     const plans = await listEnabledPlans(sql);
-    const monthly = plans.find((p) => p.id === "monthly")!;
+    const monthly = plans.find((p) => p.id === "individual-monthly")!;
     const before = Date.now();
 
-    const id = await requestFor(DAVE, "monthly");
+    const id = await requestFor(DAVE, "individual-monthly");
     const { expiresAt } = await approvePayment(sql, { adminUserId: ADMIN }, id, "verified");
 
     const account = await getAccount(sql, DAVE);
     assert.equal(account.status, "ACTIVE");
-    assert.equal(account.planId, "monthly");
+    assert.equal(account.planId, "individual-monthly");
 
     // The expiry must come from the PLAN (30 days), not a hardcoded period.
     const expected = before + monthly.durationDays * 86_400_000;
