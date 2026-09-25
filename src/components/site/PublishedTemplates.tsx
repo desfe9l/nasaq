@@ -3,13 +3,12 @@ import { LayoutTemplate, Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import { getPublishedTemplateFn } from "@/lib/admin/functions";
 import { usePublishedTemplates } from "@/lib/admin/use-site-settings";
-import { getCachedLicenseKey } from "@/lib/license/client";
 import { useEditor } from "@/lib/editor/store";
 import type { Page } from "@/lib/editor/model";
 
 /**
  * Templates published from /admin. Licensed templates are unlocked by the
- * SERVER (it re-validates the cached licence key) — the client never decides.
+ * SERVER using the signed-in account's verified entitlements — not a cached key.
  */
 export function PublishedTemplates({
   hasPremium,
@@ -59,7 +58,7 @@ export function PublishedTemplates({
     }
     setBusy(id);
     try {
-      const res = await getPublishedTemplateFn({ data: { id, licenseKey: getCachedLicenseKey() || undefined } });
+      const res = await getPublishedTemplateFn({ data: { id } });
       if (!res.ok) {
         if ("locked" in res && res.locked) onLocked();
         else toast.error(res.error);

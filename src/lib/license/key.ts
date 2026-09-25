@@ -27,16 +27,19 @@ export function generateLicenseKey(): string {
 }
 
 /**
- * Normalize a license key the single way the whole system normalizes:
- * trim, drop internal whitespace a paste can introduce, and uppercase.
- *
- * Generator keys (Keygen HEX scheme) are uppercase by definition and never
- * contain spaces, so this normalization is lossless — it only absorbs how the
- * key was typed/pasted, never what the key IS. Verification still happens
- * against the issuing source (Keygen) or the stored SHA-256 hash.
+ * Generator HEX / legacy NASAQ keys are case-insensitive; normalize pasted
+ * whitespace and case for those schemes only. Other provider-defined keys can
+ * be signed, case-sensitive data: uppercasing them changes the key and breaks
+ * validation (or hashes a different value than the issuing provider).
  */
 export function normalizeLicenseKey(key: string): string {
-  return key.trim().replace(/\s+/g, "").toUpperCase();
+  const trimmed = key.trim();
+  const compact = trimmed.replace(/\s+/g, "");
+  if (/^NASAQ-[A-Z0-9]{4}(?:-[A-Z0-9]{4}){3}$/i.test(compact) ||
+      /^[0-9A-F]{6}(?:-[0-9A-F]{6}){4}-V\d+$/i.test(compact)) {
+    return compact.toUpperCase();
+  }
+  return trimmed;
 }
 
 /**

@@ -204,6 +204,9 @@ function StatusCard({ account }: { account: CustomerAccount }) {
               ? "هذا الحساب معتمد كمدير، لذلك يتجاوز فحص الاشتراك ويحصل على كامل الصلاحيات."
               : ACCOUNT_STATUS_MESSAGE[account.status]}
           </p>
+          <a href="/license" className="mt-3 inline-flex text-[12px] font-bold text-emerald-700 underline dark:text-emerald-300">
+            عرض حالة الترخيص والتحقق من التفعيل
+          </a>
         </div>
         <dl className="grid gap-3 text-[12px]">
           <div>

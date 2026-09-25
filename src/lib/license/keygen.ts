@@ -166,6 +166,11 @@ export function isKeygenConfigured(): boolean {
   return Boolean(env("KEYGEN_API_TOKEN"));
 }
 
+/** Safe admin diagnostic. Reads only; never creates or modifies a licence. */
+export async function checkKeygenApiConnection(): Promise<void> {
+  await request("/licenses?limit=1");
+}
+
 export function verifyKeygenWebhookSignature(rawBody: string, request: Request): boolean {
   const publicKey = env("KEYGEN_PUBLIC_KEY");
   const header = request.headers.get("keygen-signature");
@@ -213,7 +218,8 @@ async function request(path: string, init: RequestInit = {}, authenticated = tru
     if (!token) throw new KeygenConfigurationError("KEYGEN_API_TOKEN is not configured");
     headers.set("Authorization", `Bearer ${token}`);
   }
-  const response = await fetch(apiUrl(path), { ...init, headers });
+  const response = await fetch(apiUrl(path), { ...init, headers,
+    signal: init.signal ?? AbortSignal.timeout(12_000) });
   const text = await response.text();
   let payload: KeygenResponse = {};
   try {
@@ -344,6 +350,8 @@ export async function getKeygenLicenseForClaim(licenseId: string): Promise<{
   id: string;
   key: string;
   productId: string;
+  policyId: string;
+  paylinkTransactionNo: string | null;
   ownerId: string | null | undefined;
   usersCount: number | null;
   nasaqUserId: string | null;
@@ -361,6 +369,9 @@ export async function getKeygenLicenseForClaim(licenseId: string): Promise<{
     id: licenseId,
     key: stringAttribute(resource, "key") || "",
     productId: idFromRelationship(resource, "product"),
+    policyId: idFromRelationship(resource, "policy"),
+    paylinkTransactionNo: metadata && typeof metadata === "object" && typeof (metadata as Record<string, unknown>).paylinkTransactionNo === "string"
+      ? (metadata as Record<string, string>).paylinkTransactionNo : null,
     // An omitted relationship is NOT an empty one: fail closed on unknown data.
     ownerId: owner?.data === null ? null : owner?.data?.id,
     usersCount: typeof count === "number" && Number.isInteger(count) && count >= 0 ? count : null,
@@ -462,7 +473,7 @@ export async function findKeygenLicenseByPaylinkTransaction(transactionNo: strin
 
 
 
-export async function updateKeygenLicenseExpiry(licenseId: string, expiresAt: string): Promise<void> {
+export async function updateKeygenLicenseExpiry(licenseId: string, expiresAt: string | null): Promise<void> {
   await request(`/licenses/${encodeURIComponent(licenseId)}`, {
     method: "PATCH",
     body: JSON.stringify({

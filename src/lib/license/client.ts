@@ -53,6 +53,8 @@ export interface LicenseState {
   isLoading: boolean;
   /** Whether the user has a valid active license or administrator full access. */
   hasLicense: boolean;
+  /** The administrator suspended this account, regardless of other licenses. */
+  isSuspended?: boolean;
   /** True when access is granted by a verified administrator identity. */
   isAdmin: boolean;
   /** License info (null if no license, administrator, or loading). */
@@ -166,7 +168,8 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
         });
       } else {
         setState({ isLoading: false, hasLicense: false, isAdmin: false,
-          license: result.license ?? null, entitlements: EMPTY_ENTITLEMENTS, error: null });
+          isSuspended: result.isSuspended === true,
+          license: result.license ?? null, entitlements: EMPTY_ENTITLEMENTS, error: result.message ?? null });
       }
     } catch {
       /* ignore — fallback to key-based validation */
@@ -238,7 +241,12 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
     notifyLicenseChanged();
   }, []);
 
-  return { ...state, activate, deactivate, revalidate: validateCached };
+  const revalidate = useCallback(async () => {
+    await validateCached();
+    await checkUserLicense(); // also repairs historic paid keys with no browser-stored key
+  }, [validateCached, checkUserLicense]);
+
+  return { ...state, activate, deactivate, revalidate };
 }
 
 // ── Standalone Entitlement Check ───────────────────────────────────────────

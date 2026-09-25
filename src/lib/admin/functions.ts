@@ -137,7 +137,7 @@ export const adminVerifyFn = createServerFn({ method: "POST" })
 export const adminLicenseAccessFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const [db, { superAdminDiagnostics }] = await Promise.all([
+    const [db, { superAdminDiagnostics, isConfiguredSuperAdminIdentity }] = await Promise.all([
       sql(),
       import("@/lib/auth/super-admin.server"),
     ]);
@@ -151,7 +151,7 @@ export const adminLicenseAccessFn = createServerFn({ method: "POST" })
        * allowlist) — the button is hidden otherwise, because the endpoint
        * would refuse anyway.
        */
-      canBootstrap: diagnostics.ownerConfigured || diagnostics.superAdminConfigured,
+      canBootstrap: isConfiguredSuperAdminIdentity(identity),
     };
   });
 
@@ -226,35 +226,21 @@ export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handle
  */
 export const getPublishedTemplateFn = createServerFn({ method: "POST" })
   .middleware([optionalAuthMiddleware])
-  .validator((data: { id: string; licenseKey?: string }) => data)
+  .validator((data: { id: string }) => data)
   .handler(async ({ data, context }) => {
     const db = await sql();
     const rows = await db.query(`SELECT * FROM admin_templates WHERE id = $1 AND status = 'published' LIMIT 1`, [String(data.id)]);
     if (!rows.length) return { ok: false as const, error: "القالب غير موجود" };
     const row = rows[0];
     if (row.tier === "licensed") {
-      const key = String(data.licenseKey ?? "").trim();
+      // A plaintext key from the browser is NOT a credential for templates.
+      // Only the verified account's server-side entitlement may unlock them:
+      // this also covers manual subscriptions and checks Keygen's user scope.
       let allowed = false;
       if (context.userId) {
         const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
-        const access = await getAuthorizationContext({
-          id: context.userId,
-          email: context.userEmail,
-        });
+        const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail });
         allowed = access.isAdmin || access.entitlements.premium_templates === true;
-      }
-      if (key) {
-        const { hashLicenseKey } = await import("@/lib/license/key");
-        const { validateLicense } = await import("@/lib/license/server");
-        const { entitlementsForPlan } = await import("@/lib/license/types");
-        const result = await validateLicense(hashLicenseKey(key));
-        if (result.valid && result.license) {
-          const ent = entitlementsForPlan(
-            result.license.metadata?.plan as import("@/lib/license/types").LicensePlan | undefined,
-            result.license.type,
-          );
-          allowed = ent.premium_templates === true;
-        }
       }
       if (!allowed) return { ok: false as const, error: "هذا القالب متاح في النسخة الكاملة", locked: true };
     }

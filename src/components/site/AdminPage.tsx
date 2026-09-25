@@ -345,6 +345,12 @@ function PaylinkTab() {
                       ) : (
                         <span className="text-muted">—</span>
                       )}
+                      {row.licenseId && (
+                        <a href={`/admin-licenses?search=${encodeURIComponent(row.transactionNo || row.licenseKey || row.licenseId)}`}
+                          className="mt-1 block text-[10px] font-bold text-emerald-700 underline dark:text-emerald-300">
+                          إدارة هذا الترخيص
+                        </a>
+                      )}
                       {row.keygenLicenseId && (
                         <div
                           className="mt-0.5 max-w-[140px] truncate font-mono text-[9px] text-muted"
@@ -359,13 +365,15 @@ function PaylinkTab() {
                       <span
                         className={cn(
                           "rounded px-1.5 py-0.5 text-[10px] font-bold",
-                          row.licenseStatus === "ACTIVE"
+                          row.status === "PAID" && row.licenseStatus === "ACTIVE" && row.licenseBound
                             ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
-                            : "text-muted",
+                            : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300",
                         )}
                       >
-                        {row.licenseStatus ||
-                          (row.status === "PAID" ? "ACTIVE" : "—")}
+                        {row.licenseStatus === "ACTIVE" && row.status !== "PAID" ? "بانتظار اكتمال الدفع"
+                          : row.status === "PAID" && (!row.licenseStatus || (row.licenseStatus === "ACTIVE" && !row.licenseBound))
+                            ? "بانتظار ربط Keygen"
+                            : row.licenseStatus || "—"}
                       </span>
                     </td>
                     <td className="p-2.5 text-muted">

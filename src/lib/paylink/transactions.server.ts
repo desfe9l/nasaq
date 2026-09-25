@@ -12,7 +12,7 @@ type PaylinkRow = {
   merchant_order_number?: string | null; merchant_mobile?: string | null;
   paid_at?: string | Date | null;
 };
-type AdminRow = PaylinkRow & { user_email: string | null; user_name: string | null; license_status: "ACTIVE" | "EXPIRED" | "REVOKED" | null };
+type AdminRow = PaylinkRow & { user_email: string | null; user_name: string | null; license_status: "ACTIVE" | "EXPIRED" | "REVOKED" | null; license_bound: boolean };
 function iso(value: string | Date | null | undefined): string | null { return value == null ? null : value instanceof Date ? value.toISOString() : new Date(value).toISOString(); }
 function mapRow(row: PaylinkRow): PaylinkTransaction {
   return {
@@ -102,12 +102,14 @@ export async function getLatestPaylinkTransactionForUser(sql: Sql, userId: strin
 
 export async function listPaylinkTransactionsForAdmin(sql: Sql, limit = 100): Promise<AdminPaylinkTransaction[]> {
   const rows = await sql<AdminRow>`
-    select p.*, u.email as user_email, u.name as user_name, l.status as license_status
+    select p.*, u.email as user_email, u.name as user_name, l.status as license_status,
+      (l.metadata->>'userScopeVerified' = p.user_id) as license_bound
     from paylink_transactions p
     left join "user" u on u.id = p.user_id
     left join licenses l on l.id = p.license_id
     order by p.created_at desc
     limit ${limit}
   `;
-  return rows.map((row) => ({ ...mapRow(row), userEmail: row.user_email, userName: row.user_name, licenseStatus: row.license_status }));
+  return rows.map((row) => ({ ...mapRow(row), userEmail: row.user_email, userName: row.user_name,
+    licenseStatus: row.license_status, licenseBound: row.license_bound === true }));
 }
