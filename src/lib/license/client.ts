@@ -7,7 +7,8 @@
  * doesn't re-enter it every visit) — NOT as a source of truth.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import type { FeatureId, LicenseInfo, LicenseType } from "./types";
 import { LICENSE_ENTITLEMENTS } from "./types";
 import {
@@ -20,6 +21,11 @@ import {
 // ── Local Storage Cache (UX only, not source of truth) ─────────────────────
 
 const LICENSE_KEY_CACHE = "nasaq.license-key";
+const LICENSE_CHANGED = "nasaq:license-changed";
+
+function notifyLicenseChanged(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(LICENSE_CHANGED));
+}
 
 export function getCachedLicenseKey(): string {
   if (typeof window === "undefined") return "";
@@ -77,13 +83,22 @@ const INITIAL_STATE: LicenseState = {
  *   const { hasLicense, license, entitlements, activate, isLoading } = useLicense();
  *   if (entitlements.advanced_export) { ... }
  */
-export function useLicense(userId?: string, userEmail?: string | null) {
+export function useLicense(userId?: string, _userEmail?: string | null) {
+  const { user, isPending } = useCurrentUserState();
+  // Callers without an explicit id (templates / activation modal) still get
+  // the current account's persisted license after reload. No id or email is
+  // ever sent in a license request; the server verifies the session itself.
+  const accountId = userId ?? user?.id;
+  const accountRef = useRef(accountId);
+  accountRef.current = accountId;
   const [state, setState] = useState<LicenseState>(INITIAL_STATE);
 
   // Validate on mount and periodically
   const validateCached = useCallback(async () => {
+    if (!accountId) return;
     const cachedKey = getCachedLicenseKey();
     if (!cachedKey) {
+      if (accountRef.current !== accountId) return;
       setState((s) => ({
         ...s,
         isLoading: false,
@@ -97,6 +112,7 @@ export function useLicense(userId?: string, userEmail?: string | null) {
 
     try {
       const result = await validateLicenseFn({ data: { key: cachedKey } });
+      if (accountRef.current !== accountId) return;
       if (result.valid && result.license && result.entitlements) {
         setState({
           isLoading: false,
@@ -119,17 +135,17 @@ export function useLicense(userId?: string, userEmail?: string | null) {
         });
       }
     } catch {
-      // Server unreachable — use cached entitlements for UX
-      setState((s) => ({ ...s, isLoading: false }));
+      if (accountRef.current === accountId) setState((s) => ({ ...s, isLoading: false }));
     }
-  }, []);
+  }, [accountId]);
 
   // Also check server status for user-linked licenses. The server resolves
   // the identity from the verified session — no client id is sent.
   const checkUserLicense = useCallback(async () => {
-    if (!userId) return;
+    if (!accountId) return;
     try {
       const result = await getLicenseStatusFn({ data: undefined });
+      if (accountRef.current !== accountId) return;
       if ((result.isOwner || result.isAdmin) && result.entitlements) {
         setState({
           isLoading: false,
@@ -148,52 +164,56 @@ export function useLicense(userId?: string, userEmail?: string | null) {
           entitlements: result.entitlements,
           error: null,
         });
+      } else {
+        setState({ isLoading: false, hasLicense: false, isAdmin: false,
+          license: result.license ?? null, entitlements: EMPTY_ENTITLEMENTS, error: null });
       }
     } catch {
       /* ignore — fallback to key-based validation */
     }
-  }, [userId]);
+  }, [accountId]);
 
   useEffect(() => {
-    validateCached().then(() => checkUserLicense());
-    // Re-validate every 5 minutes
-    const interval = setInterval(() => {
-      validateCached().then(() => checkUserLicense());
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [validateCached, checkUserLicense]);
+    if (isPending || !accountId) {
+      setState({ ...INITIAL_STATE, isLoading: isPending });
+      return;
+    }
+    setState(INITIAL_STATE);
+    void validateCached().then(checkUserLicense);
+    const refresh = () => { void validateCached().then(checkUserLicense); };
+    const interval = setInterval(refresh, 5 * 60 * 1000);
+    window.addEventListener(LICENSE_CHANGED, refresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener(LICENSE_CHANGED, refresh);
+    };
+  }, [isPending, accountId, validateCached, checkUserLicense]);
 
   /** Activate a license key. */
   const activate = useCallback(
     async (key: string): Promise<{ success: boolean; message: string }> => {
+      if (!accountId) return { success: false, message: "سجّل الدخول لتفعيل الترخيص." };
       setState((s) => ({ ...s, error: null }));
       try {
-        const result = await activateLicenseFn({ data: { key, email: userEmail || undefined } });
-        if (result.success && result.license) {
+        const result = await activateLicenseFn({ data: { key } });
+        if (accountRef.current !== accountId) return { success: false, message: "تغيّر الحساب؛ أعد المحاولة." };
+        if (result.success && result.license && result.entitlements) {
           setCachedLicenseKey(key);
-          // Re-validate to get full entitlements
-          const validated = await validateLicenseFn({ data: { key } });
-          setState({
-            isLoading: false,
-            hasLicense: true,
-            isAdmin: false,
-            license: validated.license ?? result.license,
-            entitlements: validated.entitlements ?? LICENSE_ENTITLEMENTS[result.license.type],
-            error: null,
-          });
+          setState({ isLoading: false, hasLicense: true, isAdmin: false,
+            license: result.license, entitlements: result.entitlements, error: null });
+          notifyLicenseChanged();
           return { success: true, message: result.message };
         }
-        setState((s) => ({ ...s, error: result.message }));
-        return { success: false, message: result.message };
+        const message = result.success ? "تعذر التحقق من ميزات الترخيص." : result.message;
+        setState((s) => ({ ...s, error: message }));
+        return { success: false, message };
       } catch {
         const msg = "حدث خطأ أثناء تفعيل الترخيص.";
-        setState((s) => ({ ...s, error: msg }));
+        if (accountRef.current === accountId) setState((s) => ({ ...s, error: msg }));
         return { success: false, message: msg };
       }
     },
-    // `activate` no longer sends a client-side identity (server resolves the
-    // session); only userEmail is read.
-    [userEmail],
+    [accountId],
   );
 
   /** Deactivate (clear local license). */
@@ -215,6 +235,7 @@ export function useLicense(userId?: string, userEmail?: string | null) {
       entitlements: EMPTY_ENTITLEMENTS,
       error: null,
     });
+    notifyLicenseChanged();
   }, []);
 
   return { ...state, activate, deactivate, revalidate: validateCached };

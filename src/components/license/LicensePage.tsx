@@ -104,7 +104,7 @@ export default function LicensePage() {
               </span>
             ) : (
               <span className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                مجاني
+                {license?.status === "REVOKED" ? "ملغى" : license?.status === "EXPIRED" ? "منتهي" : "مجاني"}
               </span>
             )}
           </div>
