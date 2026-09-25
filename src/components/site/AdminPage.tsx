@@ -419,14 +419,15 @@ function StatCard({
   );
 }
 
-type Tab = "requests" | "paylink" | "customers" | "plans" | "settings" | "audit";
+type Tab = "dashboard" | "requests" | "paylink" | "customers" | "plans" | "settings" | "audit";
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof Users }> = [
+  { id: "dashboard", label: "لوحة القيادة", icon: LayoutDashboard },
+  { id: "customers", label: "المستخدمون / الحسابات", icon: Users },
   { id: "requests", label: "طلبات الدفع اليدوية", icon: ReceiptText },
-  { id: "paylink", label: "عمليات Paylink", icon: CreditCard },
-  { id: "customers", label: "العملاء", icon: Users },
-  { id: "plans", label: "الباقات", icon: Package },
-  { id: "settings", label: "إعدادات الدفع", icon: Settings },
+  { id: "paylink", label: "التراخيص والمدفوعات", icon: CreditCard },
+  { id: "plans", label: "الباقات والاشتراكات", icon: Package },
+  { id: "settings", label: "إعدادات النظام", icon: Settings },
   { id: "audit", label: "سجل الإجراءات", icon: ScrollText },
 ];
 
@@ -439,10 +440,134 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Users }> = [
  * customer who calls an admin server function directly gets a 403 — the UI is
  * never the thing standing between them and customer data.
  */
+function DashboardTab() {
+  const [customers, setCustomers] = useState<AdminCustomer[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [requests, setRequests] = useState<AdminPaymentRequest[]>([]);
+  const [paylink, setPaylink] = useState<PaylinkRow[]>([]);
+  const [audit, setAudit] = useState<AdminAuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [cust, pl, req, pay, aud] = await Promise.all([
+        getAdminCustomers(),
+        getAdminPlans(),
+        getAdminPaymentRequests({ data: {} }),
+        getAdminPaylinkTransactions().catch(() => [] as PaylinkRow[]),
+        getAdminAuditLog().catch(() => [] as AdminAuditEntry[]),
+      ]);
+      setCustomers(cust);
+      setPlans(pl);
+      setRequests(req);
+      setPaylink(pay);
+      setAudit(aud);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذر تحميل الإحصائيات");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const stats = useMemo(() => {
+    const totalUsers = customers.length;
+    const active = customers.filter((c) => c.status === "ACTIVE").length;
+    const expired = customers.filter((c) => c.status === "EXPIRED").length;
+    const suspended = customers.filter((c) => c.status === "SUSPENDED").length;
+    const free = customers.filter((c) => c.status === "FREE").length;
+    const pendingReq = requests.filter((r) => r.status === "PENDING").length;
+    const approvedReq = requests.filter((r) => r.status === "APPROVED").length;
+    const paidTx = paylink.filter((p) => p.status === "PAID");
+    const revenue = paidTx.reduce((s, r) => s + Number(r.amount || 0), 0);
+    const planDist = plans.map((p) => ({
+      plan: p,
+      count: customers.filter((c) => c.planId === p.id).length,
+    }));
+    return { totalUsers, active, expired, suspended, free, pendingReq, approvedReq, revenue, paidCount: paidTx.length, planDist };
+  }, [customers, plans, requests, paylink]);
+
+  return (
+    <div className="grid gap-4">
+      <Panel
+        title="نظرة عامة — إحصائيات المنصة"
+        actions={
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-line px-3 text-[11px] font-bold hover:bg-line-2 disabled:opacity-60 dark:border-white/10"
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+            تحديث
+          </button>
+        }
+      >
+        {error && <p className="text-[12px] text-danger">{error}</p>}
+        {loading ? (
+          <p className="text-[12px] text-muted">جارٍ التحميل…</p>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="إجمالي المستخدمين" value={String(stats.totalUsers)} />
+              <StatCard label="اشتراكات نشطة" value={String(stats.active)} tone="ok" />
+              <StatCard label="طلبات معلقة" value={String(stats.pendingReq)} tone="warn" />
+              <StatCard label="إيراد Paylink المحصل" value={`${stats.revenue.toFixed(2)} SAR`} tone="ok" />
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="منتهية" value={String(stats.expired)} />
+              <StatCard label="موقوفة" value={String(stats.suspended)} />
+              <StatCard label="مجانية" value={String(stats.free)} />
+              <StatCard label="مدفوعات معتمدة" value={String(stats.approvedReq)} />
+            </div>
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-[12px] border border-line p-4 dark:border-white/10">
+                <h3 className="text-[12px] font-extrabold">توزيع الباقات</h3>
+                <ul className="mt-3 grid gap-2">
+                  {stats.planDist.map(({ plan, count }) => (
+                    <li key={plan.id} className="flex items-center justify-between text-[11px]">
+                      <span className="font-bold">{plan.arabicName}</span>
+                      <span className="tabular-nums">{count} مستخدم</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-[12px] border border-line p-4 dark:border-white/10">
+                <h3 className="text-[12px] font-extrabold">آخر الإجراءات</h3>
+                <ul className="mt-3 grid gap-1.5">
+                  {audit.slice(0, 6).map((a) => (
+                    <li key={a.id} className="flex justify-between gap-2 text-[10px] text-muted">
+                      <span className="font-bold text-ink dark:text-white">{a.action}</span>
+                      <span>{formatDate(a.createdAt)}</span>
+                    </li>
+                  ))}
+                  {audit.length === 0 && <li className="text-[11px] text-muted">لا يوجد سجل بعد.</li>}
+                </ul>
+              </div>
+            </div>
+            <div className="mt-4 rounded-[12px] border border-line p-4 dark:border-white/10">
+              <h3 className="text-[12px] font-extrabold">المشاريع والحسابات</h3>
+              <p className="mt-2 text-[11px] leading-5 text-muted">
+                المشاريع محفوظة محلياً في متصفح كل مستخدم (IndexedDB) ولا تُزامن للخادم. عدد الحسابات المسجلة هو {stats.totalUsers}. التراخيص تُدار عبر Paylink و Keygen.
+              </p>
+            </div>
+          </>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
 export function AdminPage() {
   const { user, isPending } = useCurrentUserState();
   const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [tab, setTab] = useState<Tab>("requests");
+  const [tab, setTab] = useState<Tab>("dashboard");
 
   useEffect(() => {
     if (isPending || !user) return;
@@ -473,14 +598,36 @@ export function AdminPage() {
             <h1 className="text-lg font-extrabold text-danger">لا تملك صلاحية الوصول</h1>
             <p className="mt-2 text-[13px] leading-6">
               هذه الصفحة مخصّصة لإدارة المنصة فقط. إذا كنت تعتقد أن هذا خطأ، تواصل مع
-              الإدارة.
+              الإدارة. إذا كانت قاعدة البيانات جديدة ولا يوجد مسؤول بعد، يمكنك تفعيل حسابك كأول مسؤول.
             </p>
-            <a
-              href="/account"
-              className="mt-4 inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
-            >
-              العودة إلى حسابي
-            </a>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a
+                href="/account"
+                className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
+              >
+                العودة إلى حسابي
+              </a>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const { adminBootstrapFirst } = await import("@/lib/commercial/admin-functions");
+                    const res = await adminBootstrapFirst();
+                    if (res.ok) {
+                      toast.success("تم تفعيل حسابك كمسؤول أول — جارٍ التحديث…");
+                      setTimeout(() => window.location.reload(), 800);
+                    } else {
+                      toast.error(res.wasEmpty ? "فشل التفعيل" : "يوجد مسؤول بالفعل — لا يمكن التفعيل التلقائي");
+                    }
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "تعذر التفعيل");
+                  }
+                }}
+                className="inline-flex h-9 items-center rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-white"
+              >
+                تفعيل كأول مسؤول
+              </button>
+            </div>
           </div>
         </main>
         <SiteFooter />
@@ -576,9 +723,10 @@ export function AdminPage() {
         </nav>
 
         <div className="mt-5">
+          {tab === "dashboard" && <DashboardTab />}
+          {tab === "customers" && <CustomersTab />}
           {tab === "requests" && <RequestsTab />}
           {tab === "paylink" && <PaylinkTab />}
-          {tab === "customers" && <CustomersTab />}
           {tab === "plans" && <PlansTab />}
           {tab === "settings" && <SettingsTab />}
           {tab === "audit" && <AuditTab />}
@@ -1275,63 +1423,83 @@ function SettingsTab() {
   );
 
   return (
-    <Panel title="إعدادات الدفع">
-      <p className="text-[12px] leading-6 text-muted">
-        هذه التعليمات تظهر للعميل عند اختيار الباقة. لا تُدخل أي بيانات سرية أو كلمات
-        مرور — فقط بيانات الحساب البنكي المستلم.
-      </p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {field("bankName", "اسم البنك")}
-        {field("accountName", "اسم الحساب")}
-        {field("iban", "IBAN", "ltr")}
-      </div>
-      <div className="mt-3 grid gap-3">
-        <label className="grid gap-1.5">
-          <span className="text-[12px] font-extrabold">التعليمات (عربي)</span>
-          <textarea
-            rows={3}
-            value={form.instructionsAr}
-            onChange={(e) => setForm({ ...form, instructionsAr: e.target.value })}
-            className="rounded-[10px] border border-line bg-surface p-3 text-[13px] dark:border-white/10"
-          />
-        </label>
-        <label className="grid gap-1.5">
-          <span className="text-[12px] font-extrabold">التعليمات (English)</span>
-          <textarea
-            rows={3}
-            dir="ltr"
-            value={form.instructionsEn}
-            onChange={(e) => setForm({ ...form, instructionsEn: e.target.value })}
-            className="rounded-[10px] border border-line bg-surface p-3 text-[13px] dark:border-white/10"
-          />
-        </label>
-      </div>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() =>
-          void (async () => {
-            setBusy(true);
-            setError(null);
-            setOk(null);
-            try {
-              const result = await adminUpdatePaymentSettings({ data: form });
-              if (!result.ok) {
-                setError(result.error ?? "تعذّر الحفظ.");
-                return;
+    <div className="grid gap-4">
+      <Panel title="إعدادات الدفع">
+        <p className="text-[12px] leading-6 text-muted">
+          هذه التعليمات تظهر للعميل عند اختيار الباقة. لا تُدخل أي بيانات سرية أو كلمات
+          مرور — فقط بيانات الحساب البنكي المستلم.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {field("bankName", "اسم البنك")}
+          {field("accountName", "اسم الحساب")}
+          {field("iban", "IBAN", "ltr")}
+        </div>
+        <div className="mt-3 grid gap-3">
+          <label className="grid gap-1.5">
+            <span className="text-[12px] font-extrabold">التعليمات (عربي)</span>
+            <textarea
+              rows={3}
+              value={form.instructionsAr}
+              onChange={(e) => setForm({ ...form, instructionsAr: e.target.value })}
+              className="rounded-[10px] border border-line bg-surface p-3 text-[13px] dark:border-white/10"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-[12px] font-extrabold">التعليمات (English)</span>
+            <textarea
+              rows={3}
+              dir="ltr"
+              value={form.instructionsEn}
+              onChange={(e) => setForm({ ...form, instructionsEn: e.target.value })}
+              className="rounded-[10px] border border-line bg-surface p-3 text-[13px] dark:border-white/10"
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            void (async () => {
+              setBusy(true);
+              setError(null);
+              setOk(null);
+              try {
+                const result = await adminUpdatePaymentSettings({ data: form });
+                if (!result.ok) {
+                  setError(result.error ?? "تعذّر الحفظ.");
+                  return;
+                }
+                setOk("تم حفظ الإعدادات.");
+              } finally {
+                setBusy(false);
               }
-              setOk("تم حفظ الإعدادات.");
-            } finally {
-              setBusy(false);
-            }
-          })()
-        }
-        className="mt-4 h-10 cursor-pointer rounded-[10px] bg-navy px-5 text-[12px] font-extrabold text-white disabled:cursor-wait disabled:opacity-60"
-      >
-        {busy ? "جارٍ الحفظ…" : "حفظ الإعدادات"}
-      </button>
-      <Notice error={error} ok={ok} />
-    </Panel>
+            })()
+          }
+          className="mt-4 h-10 cursor-pointer rounded-[10px] bg-navy px-5 text-[12px] font-extrabold text-white disabled:cursor-wait disabled:opacity-60"
+        >
+          {busy ? "جارٍ الحفظ…" : "حفظ الإعدادات"}
+        </button>
+        <Notice error={error} ok={ok} />
+      </Panel>
+
+      <Panel title="إعدادات النظام">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <a href="/admin-licenses" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10">
+            إدارة التراخيص — Keygen & Paylink
+          </a>
+          <a href="/owner-vault" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10">
+            خزنة المالك — مفاتيح API
+          </a>
+          <a href="/admin" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10">
+            محتوى الموقع والقوالب — عبر لوحة الإدارة
+          </a>
+          <div className="rounded-[10px] border border-line p-3 text-[11px] leading-5 text-muted dark:border-white/10">
+            <strong className="block text-[12px] text-ink dark:text-white">الحماية</strong>
+            جميع مسارات /admin و /admin-licenses محمية خادمياً عبر requireAdmin — العميل العادي يحصل على 403 حتى لو استدعى الـAPI مباشرة.
+          </div>
+        </div>
+      </Panel>
+    </div>
   );
 }
 

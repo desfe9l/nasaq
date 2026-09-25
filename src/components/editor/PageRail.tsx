@@ -4,12 +4,6 @@ import { pageSize, type CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { clamp, cn } from "@/lib/utils";
 
-/**
- * Horizontal page rail with drag-and-drop reordering.
- *
- * Uses the pointer events API rather than HTML5 drag-and-drop: the rail lives
- * inside a scroll container and HTML5 DnD is unreliable in Safari there.
- */
 export function PageRail({ height = 152, minHeight = 96 }: { height?: number; minHeight?: number }) {
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
@@ -20,18 +14,7 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
   const reorderPages = useEditor((s) => s.reorderPages);
   const renamePage = useEditor((s) => s.renamePage);
 
-  /*
-   * Fluid thumbnails (Phase 3).
-   *
-   * The panel is drag-resizable, so the thumbnail size is DERIVED from the
-   * available height rather than hard-coded: the box keeps the page's own
-   * aspect ratio (width follows height through `ratio`) and simply scales with
-   * the panel. Nothing is ever squashed or stretched, and the row scrolls
-   * horizontally once the pages no longer fit.
-   */
   const thumbBox = (ratio: number) => {
-    // Strip the chrome around the thumbnail: labels, padding, drag chips.
-    // p-2 card padding + 2px border + label row + ring room inside the rail.
     const chrome = 60;
     const available = Math.max(48, height - chrome);
     const floor = Math.max(40, minHeight - chrome);
@@ -56,7 +39,6 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
       for (const [id, node] of Object.entries(itemRefs.current)) {
         if (!node) continue;
         const rect = node.getBoundingClientRect();
-        // RTL rail: the first item sits at the highest x, so compare centres.
         if (ev.clientX >= rect.left && ev.clientX <= rect.right) {
           const found = pages.findIndex((p) => p.id === id);
           if (found >= 0) target = found;
@@ -89,8 +71,8 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
   };
 
   return (
-    <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-4 border-t px-4 py-2">
-      <div className="flex flex-col justify-center gap-1">
+    <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-4 border-t px-4 py-2 bg-white dark:bg-[#161c26] overflow-hidden">
+      <div className="flex shrink-0 flex-col justify-center gap-1">
         <button
           type="button"
           onClick={() => addPage()}
@@ -110,16 +92,12 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
         </button>
       </div>
 
-      {/*
-       * `px-1 py-1` is ring room, not decoration: the active page is marked by a
-       * 2px ring with a 2px offset, and without padding those 4px were clipped
-       * by this scroll container — the first/last thumbnail showed a cut ring.
-       */}
-      <ul className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto overflow-y-hidden px-2 py-2" dir="rtl">
+      <ul className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto overflow-y-visible px-3 py-3 editor-pane-scroll" dir="rtl" style={{ scrollbarGutter: "stable" as any }}>
         {pages.map((p, i) => {
           const size = pageSize(p);
           const ratio = size.w / size.h;
           const { w: thumbW, h: thumbH } = thumbBox(ratio);
+          const active = p.id === activePageId;
           return (
             <li
               key={p.id}
@@ -127,26 +105,29 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
                 itemRefs.current[p.id] = n;
               }}
               className={cn(
-                /*
-                 * One self-contained card: preview, page number, border and
-                 * active state all live INSIDE this box. The active ring has no
-                 * offset (an offset ring drew outside the card and was clipped
-                 * by the scroll container into a stray "( )"), and the rail's
-                 * own padding leaves room for the 2px ring on every side.
-                 */
                 "group relative shrink-0 rounded-xl border-2 p-2 transition-all",
-                p.id === activePageId
-                  ? "border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/10 ring-2 ring-emerald-500/30"
+                active
+                  ? "border-emerald-500 bg-emerald-500/10 shadow-[0_0_0_3px_rgba(16,185,129,0.18)] ring-2 ring-emerald-500/20 ring-offset-2 ring-offset-white dark:ring-offset-[#161c26]"
                   : "border-line hover:border-emerald-500/40 dark:border-white/10",
                 dragIndex === i && "opacity-50",
                 overIndex === i && dragIndex !== null && dragIndex !== i && "drop-target",
               )}
+              style={{ outlineOffset: "2px" }}
             >
               <button
                 type="button"
                 onClick={() => setActivePage(p.id)}
+                onDoubleClick={() => {
+                  setActivePage(p.id);
+                  requestAnimationFrame(() => {
+                    const art = document.querySelector(`[data-page-id=\"${p.id}\"]`);
+                    if (art) art.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+                    itemRefs.current[p.id]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+                  });
+                }}
                 className="block rounded-lg text-right"
-                aria-current={p.id === activePageId}
+                aria-current={active}
+                title="نقرة لاختيار الصفحة — نقرة مزدوجة لفتحها بوضوح في اللوحة"
               >
                 <span
                   className="relative mb-1.5 block overflow-hidden rounded-md border border-line bg-white shadow-sm"
@@ -162,9 +143,6 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
                         key={el.id}
                         className="absolute block"
                         style={{
-                          // Thumbnails are schematic: positions are scaled from
-                          // page mm into the fixed thumbnail box.
-                          position: "absolute",
                           left: `${(el.x / size.w) * 100}%`,
                           top: `${(el.y / size.h) * 100}%`,
                           width: `${(el.w / size.w) * 100}%`,
@@ -205,7 +183,7 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
                   <span
                     className={cn(
                       "grid h-4 min-w-4 shrink-0 place-items-center rounded-full px-1 text-[9px] font-extrabold tabular-nums",
-                      p.id === activePageId ? "bg-emerald-500 text-white" : "bg-line-2 text-muted dark:bg-white/10",
+                      active ? "bg-emerald-500 text-white" : "bg-line-2 text-muted dark:bg-white/10",
                     )}
                   >
                     {i + 1}
@@ -254,7 +232,6 @@ function thumbnailColor(el: CanvasEl) {
   return "#1f3556";
 }
 
-/** True for shapes whose silhouette is a circle/ellipse, drawn as a pill. */
 function isRound(el: CanvasEl) {
   if (el.type !== "shape") return false;
   const id = el.style?.shapeId || el.style?.shape || "";

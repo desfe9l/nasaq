@@ -1,40 +1,14 @@
 /**
  * مولد عناوين الفقرات — the section-heading generator.
- *
- * A report heading is *design*, not just text: an institutional document uses a
- * band, a rule, a hanging index or a filled plate to tell the reader where a new
- * section starts. Writing that by hand every time is why reports drift out of
- * alignment, so the generator emits it as plain canvas elements instead.
- *
- * Contract (the part that makes this editable, not a picture):
- *   · every preset returns ORDINARY elements — `text` for the words, `box` for
- *     bands and rules;
- *   · coordinates are **relative to the heading's own box**, in millimetres, so
- *     the caller places the whole thing in one move;
- *   · nothing is grouped, locked or painted as an image, so the author can
- *     select the title, retype it, restyle the band and delete the ornament.
- *
- * ## One measurement, two consumers
- *
- * {@link headingMetrics} is the single source of geometry for both
- * {@link headingHeight} (how much room to reserve) and {@link buildHeading}
- * (where each part goes). They used to measure independently, which is how a
- * two-line title inside a numbered plate ended up taller than the height it had
- * reserved — the classic way a generated heading clips its own subtitle.
- *
- * Pure and browser-free: no store, no DOM, no path aliases — runnable under
- * `node --experimental-strip-types` like the rest of `src/lib/editor`.
+ * Fixed for RTL balanced layout, organized groups, proper spacing.
  */
 
 export type HeadingField = "title" | "subtitle" | "index";
 
 export interface HeadingPreset {
   id: HeadingPresetId;
-  /** Arabic label shown in the picker. */
   label: string;
-  /** Short description of the visual idea. */
   hint: string;
-  /** Fields the preset renders; drives which inputs the dialog shows. */
   fields: HeadingField[];
 }
 
@@ -48,7 +22,6 @@ export type HeadingPresetId =
   | "indexed-rule"
   | "corner-mark";
 
-/** Every element the generator can emit, described before it exists. */
 export type HeadingPart =
   | {
       kind: "text";
@@ -72,13 +45,10 @@ export type HeadingPart =
 
 export interface HeadingInput {
   preset: HeadingPresetId;
-  /** Heading box width in millimetres (usually the page's text column). */
   width: number;
   title: string;
   subtitle?: string;
-  /** Section number, e.g. `03`. */
   index?: string;
-  /** Small label above the title («محور الأداء» style eyebrow). */
   eyebrow?: string;
 }
 
@@ -90,7 +60,6 @@ export interface HeadingPalette {
   surface: string;
 }
 
-/** Default institutional palette (matches the emerald/gold brand tokens). */
 export const DEFAULT_HEADING_PALETTE: HeadingPalette = {
   primary: "#006C35",
   accent: "#C9A86A",
@@ -99,27 +68,23 @@ export const DEFAULT_HEADING_PALETTE: HeadingPalette = {
   surface: "#FFFFFF",
 };
 
-/**
- * The catalogue. Order matters: it is the order the picker shows, from the most
- * formal to the most editorial.
- */
 export const HEADING_PRESETS: HeadingPreset[] = [
   {
     id: "side-bar",
     label: "شريط جانبي",
-    hint: "عمود لوني سميك يسار العنوان — الأكثر استخداماً في التقارير الرسمية",
+    hint: "عمود لوني سميك يمين العنوان — الأكثر استخداماً في التقارير الرسمية",
     fields: ["title", "subtitle"],
   },
   {
     id: "numbered-plate",
     label: "لوحة مرقّمة",
-    hint: "مربع بلون الهوية يحمل الرقم، وعنوان بمحاذاته",
+    hint: "مربع بلون الهوية يحمل الرقم يميناً، وعنوان بمحاذاته",
     fields: ["title", "subtitle", "index"],
   },
   {
     id: "under-rule",
     label: "خط سفلي",
-    hint: "عنوان كبير مع خط رفيع تحته يمتد بعرض العمود",
+    hint: "عنوان كبير مع خط رفيع تحته وزخرفة ذهبية يميناً",
     fields: ["title", "subtitle"],
   },
   {
@@ -143,34 +108,27 @@ export const HEADING_PRESETS: HeadingPreset[] = [
   {
     id: "indexed-rule",
     label: "ترقيم مع خط",
-    hint: "رقم كبير بخط رفيع، والعنوان تحته بمحاذاة واحدة",
+    hint: "رقم كبير يميناً بخط رفيع، والعنوان تحته",
     fields: ["title", "subtitle", "index"],
   },
   {
     id: "corner-mark",
     label: "علامة ركنية",
-    hint: "قوس لوني في الركن مع عنوان مضغوط — مثالي للأقسام الفرعية",
+    hint: "قوس لوني في الركن الأيمن مع عنوان مضغوط — مثالي للأقسام الفرعية",
     fields: ["title", "subtitle"],
   },
 ];
 
-const TITLE_FONT = 20;
-const TITLE_LINE = 11;
-const CORNER_TITLE_FONT = 17;
-const CORNER_TITLE_LINE = 9.5;
+const TITLE_FONT = 18;
+const TITLE_LINE = 10;
+const CORNER_TITLE_FONT = 16;
+const CORNER_TITLE_LINE = 9;
 const SUBTITLE_FONT = 9.5;
 const SUBTITLE_LINE = 5.4;
 const SUBTITLE_BLOCK = SUBTITLE_LINE + 2;
 const EYEBROW_FONT = 7.4;
 const EYEBROW_BLOCK = EYEBROW_FONT + 3.4;
 
-/**
- * Measure how tall a title needs to be.
- *
- * Approximation, deliberately: the generator must lay out without a DOM. It
- * assumes ~0.52 em per Arabic glyph at the title size, which keeps a long
- * heading on two lines instead of overflowing its band.
- */
 export function estimateTitleHeight(
   text: string,
   width: number,
@@ -184,30 +142,17 @@ export function estimateTitleHeight(
 }
 
 export interface HeadingMetrics {
-  /** Usable column width. */
   width: number;
-  /** Width available to the title once the preset's own ornament is removed. */
   textWidth: number;
-  /** Index plate size (numbered-plate only, 0 elsewhere). */
   plateSize: number;
   titleFont: number;
   titleLine: number;
   titleHeight: number;
-  /** Height of the subtitle block; 0 when there is no subtitle. */
   subtitleHeight: number;
-  /** Height of the eyebrow block; 0 when there is no eyebrow. */
   eyebrowHeight: number;
-  /** Total height the preset needs. */
   height: number;
 }
 
-/**
- * The one measurement both the reservation and the layout read from.
- *
- * Derived entirely from the input, which is what makes
- * `headingHeight(input) >= every part's bottom` true by construction instead of
- * by coincidence.
- */
 export function headingMetrics(input: HeadingInput): HeadingMetrics {
   const width = Math.max(60, input.width);
   const hasIndex = Boolean(input.index?.trim());
@@ -215,17 +160,15 @@ export function headingMetrics(input: HeadingInput): HeadingMetrics {
   const titleFont = isCorner ? CORNER_TITLE_FONT : TITLE_FONT;
   const titleLine = isCorner ? CORNER_TITLE_LINE : TITLE_LINE;
 
-  // The number plate steals width from the title, which is exactly the case
-  // that used to be measured twice with two different answers.
-  const plateSize = hasIndex ? Math.min(18, Math.max(13, width * 0.12)) : 0;
+  const plateSize = hasIndex ? Math.min(16, Math.max(12, width * 0.11)) : 0;
 
   const textWidth =
     input.preset === "side-bar"
-      ? width - 9
+      ? width - 8
       : input.preset === "numbered-plate"
         ? width - plateSize - (hasIndex ? 5 : 0)
         : input.preset === "framed-card"
-          ? width - 12
+          ? width - 10
           : isCorner
             ? width - 4
             : width;
@@ -243,30 +186,31 @@ export function headingMetrics(input: HeadingInput): HeadingMetrics {
   let height: number;
   switch (input.preset) {
     case "side-bar":
-      height = Math.max(20, 2 + body + 3);
+      height = Math.max(18, 2 + body + 3);
       break;
     case "numbered-plate":
-      height = Math.max(plateSize + 1, 1 + body + 4);
+      height = Math.max(plateSize + 2, 1 + body + 4);
       break;
     case "under-rule":
-      // title → rule → (subtitle) with breathing room after the rule.
-      height = Math.max(20, 1 + body + (subtitleHeight ? 4.3 : 2.9));
+      height = Math.max(18, 1 + body + (subtitleHeight ? 4.3 : 2.9));
       break;
     case "framed-card":
-      height = Math.max(26, 4.4 + body + 9);
+      height = Math.max(24, 4.4 + body + 8);
       break;
     case "split-band":
-      height = Math.max(20, 1.8 + 3 + body + 3);
+      height = Math.max(18, 1.8 + 3 + body + 3);
       break;
     case "ribbon":
-      height = Math.max(20, 1 + body + (subtitleHeight ? 3.8 : 2.4));
+      height = Math.max(18, 1 + body + (subtitleHeight ? 3.8 : 2.4));
       break;
     case "indexed-rule":
-      height = Math.max(24, (hasIndex ? 11 : 0) + 0.5 + 2.2 + body + 2);
+      height = Math.max(22, (hasIndex ? 11 : 0) + 0.5 + 2.2 + body + 2);
       break;
     case "corner-mark":
-      height = Math.max(18, 3 + body + 3);
+      height = Math.max(16, 3 + body + 3);
       break;
+    default:
+      height = body + 6;
   }
 
   return {
@@ -282,7 +226,6 @@ export function headingMetrics(input: HeadingInput): HeadingMetrics {
   };
 }
 
-/** Total height the preset needs, so the caller can reserve space. */
 export function headingHeight(input: HeadingInput): number {
   return headingMetrics(input).height;
 }
@@ -310,14 +253,6 @@ function boxPart(
   return { kind: "box", role, x, y, w, h, style };
 }
 
-/**
- * Build the parts for one preset.
- *
- * Coordinates are millimetres relative to the heading's top-left. Every part is
- * placed from {@link headingMetrics}, so the union of them always fits
- * `metrics.height` — a caller that reserves that height never clips its own
- * heading.
- */
 export function buildHeading(
   input: HeadingInput,
   palette: HeadingPalette = DEFAULT_HEADING_PALETTE,
@@ -352,45 +287,40 @@ export function buildHeading(
   };
 
   const parts: HeadingPart[] = [];
-  /** Left edge of the text column for this preset. */
-  const textX =
-    input.preset === "side-bar"
-      ? 7
-      : input.preset === "framed-card"
-        ? 6
-        : 0;
 
   switch (input.preset) {
     case "side-bar": {
-      parts.push(boxPart("band", 0, 0, 3.2, height, { fill: palette.primary, radius: 0 }));
+      // Bar on RIGHT for RTL
+      parts.push(boxPart("band", width - 3.2, 0, 3.2, height, { fill: palette.primary, radius: 1 }));
       let y = 2;
       if (eyebrow) {
-        parts.push(textPart("eyebrow", textX, y, textWidth, EYEBROW_FONT + 1.6, eyebrow, eyebrowStyle));
+        parts.push(textPart("eyebrow", 0, y, textWidth, EYEBROW_FONT + 1.6, eyebrow, eyebrowStyle));
         y += m.eyebrowHeight;
       }
-      parts.push(textPart("title", textX, y, textWidth, titleHeight, title, titleStyle));
+      parts.push(textPart("title", 0, y, textWidth, titleHeight, title, titleStyle));
       y += titleHeight;
       if (subtitle) {
-        parts.push(textPart("subtitle", textX, y, textWidth, subtitleHeight, subtitle, subtitleStyle));
+        parts.push(textPart("subtitle", 0, y, textWidth, subtitleHeight, subtitle, subtitleStyle));
       }
       break;
     }
     case "numbered-plate": {
       const plate = m.plateSize;
       if (index) {
+        // Plate on RIGHT
         parts.push(
           boxPart("plate", width - plate, 0, plate, plate, { fill: palette.primary, radius: 2 }),
         );
         parts.push(
           textPart("index", width - plate, 0, plate, plate, index, {
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: 800,
             color: "#FFFFFF",
             textAlign: "center",
           }),
         );
       }
-      let y = 1;
+      let y = 1.5;
       if (eyebrow) {
         parts.push(textPart("eyebrow", 0, y, textWidth, EYEBROW_FONT + 1.6, eyebrow, eyebrowStyle));
         y += m.eyebrowHeight;
@@ -410,9 +340,10 @@ export function buildHeading(
       }
       parts.push(textPart("title", 0, y, width, titleHeight, title, titleStyle));
       y += titleHeight + 1.2;
-      parts.push(boxPart("rule", 0, y, width, 0.7, { fill: palette.primary, radius: 0 }));
+      parts.push(boxPart("rule", 0, y, width, 0.6, { fill: "#D9E2DC", radius: 0 }));
+      // Accent on RIGHT for RTL
       parts.push(
-        boxPart("accent", 0, y, Math.min(34, width * 0.28), 0.7, { fill: palette.accent, radius: 0 }),
+        boxPart("accent", width - Math.min(36, width * 0.3), y, Math.min(36, width * 0.3), 0.6, { fill: palette.accent, radius: 0 }),
       );
       if (subtitle) {
         parts.push(
@@ -426,38 +357,39 @@ export function buildHeading(
         boxPart("plate", 0, 0, width, height, {
           fill: palette.surface,
           stroke: "#D9E2DC",
-          strokeWidth: 0.4,
-          radius: 2.4,
+          strokeWidth: 0.35,
+          radius: 3,
         }),
       );
-      parts.push(boxPart("band", 0, 0, width, 1.6, { fill: palette.primary, radius: 2.4 }));
-      let y = 4.4;
+      parts.push(boxPart("band", 0, 0, width, 1.4, { fill: palette.primary, radius: 3 }));
+      let y = 4;
       if (eyebrow) {
-        parts.push(textPart("eyebrow", textX, y, textWidth, EYEBROW_FONT + 1.6, eyebrow, eyebrowStyle));
+        parts.push(textPart("eyebrow", 5, y, width - 10, EYEBROW_FONT + 1.6, eyebrow, eyebrowStyle));
         y += m.eyebrowHeight;
       }
-      parts.push(textPart("title", textX, y, textWidth, titleHeight, title, titleStyle));
+      parts.push(textPart("title", 5, y, width - 10, titleHeight, title, titleStyle));
       y += titleHeight;
       if (subtitle) {
-        parts.push(textPart("subtitle", textX, y, textWidth, subtitleHeight, subtitle, subtitleStyle));
+        parts.push(textPart("subtitle", 5, y, width - 10, subtitleHeight, subtitle, subtitleStyle));
       }
       if (index) {
         parts.push(
-          textPart("index", width - 22, height - 8, 16, 6, index, {
-            fontSize: 8.5,
+          textPart("index", 5, height - 7, 14, 5, index, {
+            fontSize: 8,
             fontWeight: 800,
             color: palette.primary,
-            textAlign: "left",
+            textAlign: "right",
           }),
         );
       }
       break;
     }
     case "split-band": {
-      const bandH = 1.8;
-      parts.push(boxPart("band", 0, 0, width * 0.62, bandH, { fill: palette.primary, radius: 0 }));
+      const bandH = 1.6;
+      // RTL: primary on right, accent on left
+      parts.push(boxPart("band", width - width * 0.62, 0, width * 0.62, bandH, { fill: palette.primary, radius: 0 }));
       parts.push(
-        boxPart("accent", width * 0.62, 0, width * 0.38, bandH, { fill: palette.accent, radius: 0 }),
+        boxPart("accent", 0, 0, width * 0.38, bandH, { fill: palette.accent, radius: 0 }),
       );
       let y = bandH + 3;
       if (eyebrow) {
@@ -477,25 +409,24 @@ export function buildHeading(
         parts.push(textPart("eyebrow", 0, y, width, EYEBROW_FONT + 1.6, eyebrow, eyebrowStyle));
         y += m.eyebrowHeight;
       }
-      // The plate sits behind the first word, sized from that word's own length
-      // so a short heading is not swamped by its own band.
       const firstWord = title.split(/\s+/)[0] ?? title;
-      const ribbonW = Math.min(width * 0.7, Math.max(26, firstWord.length * 5.6 + 8));
+      const ribbonW = Math.min(width * 0.68, Math.max(28, firstWord.length * 5.2 + 12));
+      // Ribbon on right for RTL (behind first word which is on right)
       parts.push(
-        boxPart("band", width - ribbonW, y, ribbonW, m.titleLine + 3.4, {
+        boxPart("band", width - ribbonW, y, ribbonW, m.titleLine + 3.2, {
           fill: palette.primary,
-          radius: 1.6,
-          opacity: 0.14,
+          radius: 2,
+          opacity: 0.12,
         }),
       );
       parts.push(
-        boxPart("accent", width - ribbonW, y, 1.4, m.titleLine + 3.4, {
+        boxPart("accent", width - ribbonW, y, 1.2, m.titleLine + 3.2, {
           fill: palette.primary,
           radius: 0,
         }),
       );
-      parts.push(textPart("title", 0, y + 1.4, width, titleHeight, title, titleStyle));
-      y += 1.4 + titleHeight;
+      parts.push(textPart("title", 0, y + 1.2, width, titleHeight, title, titleStyle));
+      y += 1.2 + titleHeight;
       if (subtitle) {
         parts.push(textPart("subtitle", 0, y, width, subtitleHeight, subtitle, subtitleStyle));
       }
@@ -504,19 +435,20 @@ export function buildHeading(
     case "indexed-rule": {
       let y = 0;
       if (index) {
+        // Index on RIGHT for RTL
         parts.push(
-          textPart("index", 0, y, width, 11, index, {
-            fontSize: 16,
+          textPart("index", width - 20, y, 20, 10, index, {
+            fontSize: 15,
             fontWeight: 800,
             color: palette.accent,
             textAlign: "right",
             lineHeight: 1,
           }),
         );
-        y += 11;
+        y += 10;
       }
       parts.push(boxPart("rule", 0, y, width, 0.5, { fill: "#D9E2DC", radius: 0 }));
-      y += 2.2;
+      y += 2;
       if (eyebrow) {
         parts.push(textPart("eyebrow", 0, y, width, EYEBROW_FONT + 1.6, eyebrow, eyebrowStyle));
         y += m.eyebrowHeight;
@@ -529,23 +461,24 @@ export function buildHeading(
       break;
     }
     case "corner-mark": {
-      const markW = Math.min(26, width * 0.3);
-      parts.push(boxPart("accent", width - markW, 0, markW, 0.9, { fill: palette.primary, radius: 0 }));
+      const markW = Math.min(24, width * 0.28);
+      // Marks on RIGHT
+      parts.push(boxPart("accent", width - markW, 0, markW, 0.8, { fill: palette.primary, radius: 0 }));
       parts.push(
-        boxPart("accent", width - 0.9, 0, 0.9, Math.min(12, height), {
+        boxPart("accent", width - 0.8, 0, 0.8, Math.min(11, height), {
           fill: palette.primary,
           radius: 0,
         }),
       );
       let y = 3;
       if (eyebrow) {
-        parts.push(textPart("eyebrow", 0, y, textWidth, EYEBROW_FONT + 1.6, eyebrow, eyebrowStyle));
+        parts.push(textPart("eyebrow", 0, y, width - 4, EYEBROW_FONT + 1.6, eyebrow, eyebrowStyle));
         y += m.eyebrowHeight;
       }
-      parts.push(textPart("title", 0, y, textWidth, titleHeight, title, titleStyle));
+      parts.push(textPart("title", 0, y, width - 4, titleHeight, title, titleStyle));
       y += titleHeight;
       if (subtitle) {
-        parts.push(textPart("subtitle", 0, y, textWidth, subtitleHeight, subtitle, subtitleStyle));
+        parts.push(textPart("subtitle", 0, y, width - 4, subtitleHeight, subtitle, subtitleStyle));
       }
       break;
     }

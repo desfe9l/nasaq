@@ -54,11 +54,12 @@ import { ScrubField } from "./ui/ScrubInput";
 import { AssetLibrary } from "./AssetLibrary";
 import { SmartLibraryPanel, TemplatePreview } from "./SmartLibrary";
 import { TablePickerOverlay } from "./TablePicker";
+import { writeLibraryDrag, type LibraryDropPayload } from "@/lib/editor/library-dnd";
 
 const TABS: { id: LeftTab; label: string; icon: typeof Type }[] = [
+  { id: "library", label: "المكتبة", icon: FolderOpen },
   { id: "elements", label: "عناصر", icon: LayoutTemplate },
   { id: "shapes", label: "أشكال", icon: Shapes },
-  { id: "library", label: "المكتبة", icon: FolderOpen },
   { id: "templates", label: "قوالب", icon: FileText },
   { id: "pages", label: "صفحات", icon: Layers },
   { id: "theme", label: "سمة", icon: Palette },
@@ -219,6 +220,18 @@ export function LeftPanel({
     addElement(type);
   };
 
+  const startDrag = (e: React.DragEvent, type: string, over: Record<string, unknown> = {}) => {
+    const payload: LibraryDropPayload = { items: [{ type, over }] };
+    writeLibraryDrag(e.dataTransfer, payload);
+  };
+
+  const startShapeDrag = (e: React.DragEvent, shapeId: string, label: string) => {
+    const payload: LibraryDropPayload = {
+      items: [{ type: "shape", over: { name: label, style: { shapeId, fill: THEMES[theme].primary } } }],
+    };
+    writeLibraryDrag(e.dataTransfer, payload);
+  };
+
   const applyCustomSize = (scope: "page" | "all") => {
     const w = Math.max(20, Math.min(1000, customSize.w));
     const h = Math.max(20, Math.min(1000, customSize.h));
@@ -293,6 +306,9 @@ export function LeftPanel({
             )}
 
             {/* «عناصر أساسية» — text, images/logos and the code-bearing blocks. */}
+            <div className="mb-2 rounded-[6px] bg-navy-2/5 px-2 py-1 text-[10px] leading-4 text-navy-2 dark:bg-white/5 dark:text-gold-2">
+                💡 اسحب أي عنصر وأفلته في المكان المحدد داخل الـArtboard — يُضاف بدقة في موضع الإفلات
+              </div>
             <AccordionSection
               title="عناصر أساسية"
               id="basics"
@@ -326,19 +342,15 @@ export function LeftPanel({
                             key={t.type}
                             type="button"
                             disabled={qrBusy && t.type === "qr"}
+                            draggable={t.type !== "image" && t.type !== "logo" && t.type !== "svg" && t.type !== "table"}
+                            onDragStart={(e) => {
+                              if (t.type === "qr" || t.type === "table" || t.type === "image" || t.type === "logo" || t.type === "svg") return;
+                              startDrag(e, t.type, { name: t.label });
+                            }}
                             onClick={() => void add(t.type)}
-                            /*
-                             * Horizontal card: label and icon share one compact row
-                             * instead of the icon towering over the label. The fixed
-                             * 64px-tall vertical cards stacked seven rows tall and
-                             * pushed every section below them out of view; at this
-                             * height the whole palette fits with the quick-title
-                             * section still on screen. Labels wrap when long (the
-                             * SVG upload one does), so extra services can be added
-                             * to TOOL_GROUPS later without a new layout.
-                             */
-                            className="library-hit flex min-h-[38px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold leading-snug transition disabled:opacity-50 dark:border-white/10"
-                            title={TYPE_NAME[t.type]}
+                            className="library-hit flex min-h-[38px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold leading-snug transition disabled:opacity-50 dark:border-white/10 cursor-grab active:cursor-grabbing"
+                            title={`${TYPE_NAME[t.type]} — اسحب وأفلت في الموضع المحدد داخل الصفحة`}
+
                           >
                             <span className="min-w-0">{t.label}</span>
                             <Icon className="size-4 shrink-0 text-navy-2 dark:text-gold-2" />
@@ -389,6 +401,8 @@ export function LeftPanel({
                   <button
                     key={p.id}
                     type="button"
+                    draggable
+                    onDragStart={(e) => startDrag(e, "text", { content: p.sample, w: p.w, h: p.h, name: p.label, style: { fontFamily: "Tajawal", textAlign: "right", color: THEMES[theme].ink, ...(p.style as any) } })}
                     onClick={() =>
                       addElement("text", {
                         content: p.sample,
@@ -403,7 +417,7 @@ export function LeftPanel({
                         },
                       } as Partial<CanvasEl>)
                     }
-                    className="flex items-center justify-between rounded-[8px] px-2.5 py-1.5 text-right transition hover:bg-line-2 dark:hover:bg-white/5"
+                    className="flex items-center justify-between rounded-[8px] px-2.5 py-1.5 text-right transition hover:bg-line-2 dark:hover:bg-white/5 cursor-grab active:cursor-grabbing"
                   >
                     <span className="text-[12px] font-bold">{p.label}</span>
                     <span className="text-[11px] text-muted">
@@ -442,7 +456,7 @@ export function LeftPanel({
               <div>
                 <h2 className="text-[13px] font-extrabold">الأشكال</h2>
                 <p className="mt-0.5 text-[11px] leading-5 text-muted">
-                  انقر لإضافة الشكل، ثم عدّل التعبئة والإطار من لوحة الخصائص.
+                  اسحب الشكل وأفلته في الموضع المحدد داخل الصفحة، أو انقر لإضافته في المنتصف. عدّل التعبئة والإطار من لوحة الخصائص.
                 </p>
               </div>
               <span className="text-[11px] text-muted tabular-nums">
@@ -460,14 +474,16 @@ export function LeftPanel({
                     <button
                       key={s.id}
                       type="button"
+                      draggable
+                      onDragStart={(e) => startShapeDrag(e, s.id, s.label)}
                       onClick={() =>
                         addElement("shape", {
                           name: s.label,
                           style: { fill: THEMES[theme].primary, shapeId: s.id },
                         })
                       }
-                      title={s.label}
-                      className="library-hit grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-navy-2 transition dark:border-white/10 dark:text-gold-2"
+                      title={`${s.label} — اسحب وأفلت في الموضع المحدد`}
+                      className="library-hit grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-navy-2 transition dark:border-white/10 dark:text-gold-2 cursor-grab active:cursor-grabbing"
                     >
                       <ShapePreview
                         shapeId={s.id}
@@ -486,15 +502,19 @@ export function LeftPanel({
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
+                  draggable
+                  onDragStart={(e) => startDrag(e, "line", { name: "خط" })}
                   onClick={() => addElement("line")}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10 cursor-grab active:cursor-grabbing"
                 >
                   <Minus className="size-3.5" /> خط
                 </button>
                 <button
                   type="button"
+                  draggable
+                  onDragStart={(e) => startDrag(e, "divider", { name: "فاصل" })}
                   onClick={() => addElement("divider")}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10 cursor-grab active:cursor-grabbing"
                 >
                   <SeparatorHorizontal className="size-3.5" /> فاصل
                 </button>

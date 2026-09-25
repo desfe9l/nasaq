@@ -22,6 +22,7 @@ import {
   insertLibraryDrop,
   parseLibraryDrop,
 } from "@/lib/editor/library-dnd";
+const GRAPHIC_HEADING_MIME = "application/x-nasaq-graphic-heading";
 import {
   clearPenHover,
   fireSyntheticDoubleClick,
@@ -1087,18 +1088,13 @@ export function CanvasStage({
          above, so a trackpad (browser scroll) and a touchscreen behave the
          same way without two competing handlers. */
       onDragOver={(e) => {
-        /*
-         * Two kinds of drop land here: an image file from the OS, and a card
-         * dragged out of the smart library. Both must claim the gesture (that
-         * is what stops the browser from navigating to the file), but only the
-         * library payload should insert anything on `drop`.
-         */
         const isFile = e.dataTransfer.types.includes("Files");
         const isLibrary = e.dataTransfer.types.includes(LIBRARY_DND_MIME);
-        if ((!onDropImage || !isFile) && !isLibrary) return;
+        const isGraphic = e.dataTransfer.types.includes(GRAPHIC_HEADING_MIME);
+        if ((!onDropImage || !isFile) && !isLibrary && !isGraphic) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
-        setDropping(isLibrary ? "library" : "file");
+        setDropping(isLibrary || isGraphic ? "library" : "file");
       }}
       onDragLeave={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
@@ -1106,6 +1102,19 @@ export function CanvasStage({
       }}
       onDrop={(e) => {
         setDropping(null);
+        // Graphic heading drag: precise placement
+        const graphicId = e.dataTransfer.getData(GRAPHIC_HEADING_MIME);
+        if (graphicId) {
+          e.preventDefault();
+          const at = dropPoint(e);
+          if (at) {
+            setActivePage(at.pageId);
+            const store = useEditor.getState();
+            // @ts-ignore
+            if (store.insertGraphicHeadingAt) store.insertGraphicHeadingAt(graphicId as any, { x: at.x, y: at.y });
+          }
+          return;
+        }
         // Library card: place it exactly where it was dropped, on whichever
         // page received it.
         const payload = parseLibraryDrop(

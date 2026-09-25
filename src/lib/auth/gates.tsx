@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Navigate } from "@tanstack/react-router";
 import { GOOGLE_PROVIDER_ID, authEnabled, signIn, signOut } from "./client";
 import { hasGateSessionMarker } from "./gate-session-marker";
@@ -55,6 +55,59 @@ export function RequireSignedIn({ children }: { children: ReactNode }) {
     return <div className="grid min-h-screen place-items-center text-sm text-muted">جارٍ التحقق…</div>;
   }
   if (!user) return <RedirectToSignIn />;
+  return <>{children}</>;
+}
+
+export function RequireAdmin({ children }: { children: ReactNode }) {
+  const { user, isPending } = useCurrentUserState();
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (isPending || !user) return;
+    let cancelled = false;
+    void import("@/lib/commercial/admin-functions").then(({ amIAdmin }) =>
+      amIAdmin()
+        .then((r) => {
+          if (!cancelled) setAllowed(r.isAdmin);
+        })
+        .catch(() => {
+          if (!cancelled) setAllowed(false);
+        }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [isPending, user]);
+
+  if (isPending || allowed === null) {
+    if (!user && !isPending) return <RedirectToSignIn />;
+    return (
+      <div className="grid min-h-screen place-items-center text-sm text-muted">
+        جارٍ التحقق من صلاحية الإدارة…
+      </div>
+    );
+  }
+  if (!user) return <RedirectToSignIn />;
+  if (!allowed) {
+    return (
+      <div className="min-h-screen bg-paper dark:bg-[#111722]">
+        <div className="mx-auto w-full max-w-2xl px-4 py-24">
+          <div className="rounded-[14px] border border-danger/30 bg-danger/5 p-6">
+            <h1 className="text-lg font-extrabold text-danger">لا تملك صلاحية الوصول</h1>
+            <p className="mt-2 text-[13px] leading-6">
+              هذه الصفحة مخصصة لإدارة المنصة فقط. إذا كنت تعتقد أن هذا خطأ، تواصل مع الإدارة.
+            </p>
+            <a
+              href="/account"
+              className="mt-4 inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
+            >
+              العودة إلى حسابي
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
   return <>{children}</>;
 }
 

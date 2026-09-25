@@ -339,35 +339,42 @@ export function RightPanel({
        */}
       <div className="editor-pane-scroll editor-panel-body p-3">
         {tab === "layers" && (
-          <div className="grid gap-1.5">
-            {layers.length === 0 && (
-              <EmptyNote>لا توجد عناصر في هذه الصفحة بعد.</EmptyNote>
-            )}
-            {layers.map((layer) => (
-              <LayerRow
-                key={layer.id}
-                layer={layer}
-                dragging={draggedLayerId === layer.id}
-                dropBefore={
-                  drop?.id === layer.id &&
-                  drop.side === "before" &&
-                  draggedLayerId !== layer.id
-                }
-                dropAfter={
-                  drop?.id === layer.id &&
-                  drop.side === "after" &&
-                  draggedLayerId !== layer.id
-                }
-                onDragStart={startLayerDrag(layer.id)}
-                onRowClick={(event) =>
-                  clickLayerRow(
-                    layer.id,
-                    event.shiftKey,
-                    event.ctrlKey || event.metaKey,
-                  )
-                }
-              />
-            ))}
+          <div className="grid gap-2">
+            <div className="max-h-[40vh] min-h-[120px] overflow-y-auto overflow-x-hidden rounded-[8px] border border-line/50 p-1.5 editor-pane-scroll dark:border-white/10">
+              <div className="grid gap-1.5">
+                {layers.length === 0 && (
+                  <EmptyNote>لا توجد عناصر في هذه الصفحة بعد.</EmptyNote>
+                )}
+                {layers.map((layer) => (
+                  <LayerRow
+                    key={layer.id}
+                    layer={layer}
+                    dragging={draggedLayerId === layer.id}
+                    dropBefore={
+                      drop?.id === layer.id &&
+                      drop.side === "before" &&
+                      draggedLayerId !== layer.id
+                    }
+                    dropAfter={
+                      drop?.id === layer.id &&
+                      drop.side === "after" &&
+                      draggedLayerId !== layer.id
+                    }
+                    onDragStart={startLayerDrag(layer.id)}
+                    onRowClick={(event) =>
+                      clickLayerRow(
+                        layer.id,
+                        event.shiftKey,
+                        event.ctrlKey || event.metaKey,
+                      )
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+            <p className="px-1 text-[10px] leading-4 text-muted">
+              الطبقات مستقلة عن تكبير اللوحة — استخدم السكرول الداخلي عند الحاجة. الترتيب يحدد تكديس العناصر على الصفحة.
+            </p>
           </div>
         )}
 

@@ -83,6 +83,10 @@ import {
   buildReportDraftBlock,
   type ReportBlockId,
 } from "./report-blocks";
+import {
+  buildGraphicHeading,
+  type GraphicHeadingId,
+} from "./graphic-headings";
 import type { ReportDraft } from "../ai/contract";
 import { safeImageSrc } from "./images";
 import { captureThumbnail } from "./thumbnail";
@@ -499,6 +503,9 @@ interface EditorStore extends Project, Ui, History {
   ) => void;
   /** Insert a reusable structured report block as one editable group. */
   insertReportBlock: (id: ReportBlockId) => string | undefined;
+  /** Insert a ready-made graphic heading (editable group) onto the page. */
+  insertGraphicHeading: (id: GraphicHeadingId) => string | undefined;
+  insertGraphicHeadingAt: (id: GraphicHeadingId, at: { x: number; y: number }) => string | undefined;
   /** Insert or replace an AI draft as an editable hierarchy of report elements. */
   insertReportDraft: (draft: ReportDraft, existingId?: string) => string | undefined;
   /** Apply an Arabic typography preset to the selection (or the next text). */
@@ -922,7 +929,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     previewAll: true,
     focusMode: false,
     dark: true,
-    leftTab: "elements",
+    leftTab: "library",
     rightTab: "properties",
     leftOpen: false,
     rightOpen: false,
@@ -2250,6 +2257,61 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
       pushHistory();
       toast.success("تمت إضافة كتلة تقرير قابلة للتحرير", { duration: 1800 });
+      return block.id;
+    },
+
+    insertGraphicHeading: (id) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return undefined;
+      const block = buildGraphicHeading(id, s.theme);
+      if (!block) return undefined;
+      const size = pageSize(page);
+      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+      const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
+      const target = centerFor(visible, {
+        w: size.w,
+        h: size.h,
+        elW: block.w,
+        elH: block.h,
+      });
+      block.x = target.x;
+      block.y = target.y;
+      block.z = nextZ(page);
+      constrainElement(block, size);
+      const next = placeElements(page, [block]);
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        selectedId: block.id,
+        selectedIds: [block.id],
+        rightTab: "properties",
+      });
+      pushHistory();
+      toast.success("تمت إضافة العنوان الجرافيكي", { duration: 1800 });
+      return block.id;
+    },
+
+    insertGraphicHeadingAt: (id, at) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return undefined;
+      const block = buildGraphicHeading(id, s.theme);
+      if (!block) return undefined;
+      const size = pageSize(page);
+      // at is page mm center point where user dropped
+      block.x = at.x - block.w / 2;
+      block.y = at.y - block.h / 2;
+      block.z = nextZ(page);
+      constrainElement(block, size);
+      const next = placeElements(page, [block]);
+      set({
+        pages: s.pages.map((p) => (p.id === page.id ? next : p)),
+        selectedId: block.id,
+        selectedIds: [block.id],
+        rightTab: "properties",
+      });
+      pushHistory();
+      toast.success("تمت إضافة العنوان الجرافيكي في الموضع المحدد", { duration: 1800 });
       return block.id;
     },
 
