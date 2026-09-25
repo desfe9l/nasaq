@@ -4,8 +4,10 @@ import {
   generateLicenseKey,
   hashLicenseKey,
   keyPrefix,
+  isGeneratedKeyFormat,
   isKeygenKeyFormat,
   isValidKeyFormat,
+  normalizeLicenseKey,
 } from "./key.ts";
 import { entitlementsForPlan, entitlementsFromKeygenCodes, LICENSE_ENTITLEMENTS } from "./types.ts";
 
@@ -99,14 +101,69 @@ describe("License Key Format Validation", () => {
   });
 });
 
+describe("License Key Normalization", () => {
+  it("uppercases, trims, and strips pasted whitespace", () => {
+    assert.equal(normalizeLicenseKey("  8bb5c5-56f186-781d92-3c5259-da12b3-v3 \n"), "8BB5C5-56F186-781D92-3C5259-DA12B3-V3");
+    assert.equal(normalizeLicenseKey("8BB5C5-56F186- 781D92-3C5259-DA12B3-V3"), "8BB5C5-56F186-781D92-3C5259-DA12B3-V3");
+  });
+
+  it("keeps hashing stable across typed variants", () => {
+    const a = hashLicenseKey("8BB5C5-56F186-781D92-3C5259-DA12B3-V3");
+    const b = hashLicenseKey(" 8bb5c5 - 56f186-781d92-3c5259-da12b3-v3 ");
+    assert.equal(a, b);
+  });
+});
+
+describe("Generator (Keygen HEX + version) Key Format", () => {
+  it("accepts a key exactly as the generator issues it", () => {
+    assert.ok(isGeneratedKeyFormat("8BB5C5-56F186-781D92-3C5259-DA12B3-V3"));
+  });
+
+  it("accepts lowercase / whitespace variants (normalizes)", () => {
+    assert.ok(isGeneratedKeyFormat("8bb5c5-56f186-781d92-3c5259-da12b3-v3"));
+    assert.ok(isGeneratedKeyFormat(" 8BB5C5-56F186-781D92-3C5259-DA12B3-V3 "));
+  });
+
+  it("accepts other version suffixes the generator can issue", () => {
+    assert.ok(isGeneratedKeyFormat("8BB5C5-56F186-781D92-3C5259-DA12B3-V2"));
+    assert.ok(isGeneratedKeyFormat("8BB5C5-56F186-781D92-3C5259-DA12B3-V10"));
+  });
+
+  it("rejects tampered / random keys with wrong shape", () => {
+    // non-hex character
+    assert.ok(!isGeneratedKeyFormat("GBB5C5-56F186-781D92-3C5259-DA12B3-V3"));
+    // wrong group length
+    assert.ok(!isGeneratedKeyFormat("8BB5C5-56F186-781D92-3C5259-DA12B-V3"));
+    // missing version suffix
+    assert.ok(!isGeneratedKeyFormat("8BB5C5-56F186-781D92-3C5259-DA12B3"));
+    // extra segment
+    assert.ok(!isGeneratedKeyFormat("8BB5C5-56F186-781D92-3C5259-DA12B3-A1B2C3-V3"));
+    // swapped suffix without V
+    assert.ok(!isGeneratedKeyFormat("8BB5C5-56F186-781D92-3C5259-DA12B3-X3"));
+  });
+
+  it("generated keys remain keygen-format keys (single pipeline)", () => {
+    assert.ok(isKeygenKeyFormat("8BB5C5-56F186-781D92-3C5259-DA12B3-V3"));
+    // …and never parse as legacy manual keys
+    assert.ok(!isValidKeyFormat("8BB5C5-56F186-781D92-3C5259-DA12B3-V3"));
+  });
+});
+
 describe("Keygen Key Format Validation", () => {
   it("accepts a provider-defined Keygen key", () => {
     assert.ok(isKeygenKeyFormat("key/eyJhcHAiOiJuYXNhcSJ9.signature"));
   });
 
-  it("rejects whitespace and empty values", () => {
-    assert.ok(!isKeygenKeyFormat("not a license key"));
+  it("rejects empty / whitespace-only values", () => {
     assert.ok(!isKeygenKeyFormat(""));
+    assert.ok(!isKeygenKeyFormat("   "));
+  });
+
+  it("never treats pasted prose as a recognized key format", () => {
+    // Normalization makes verification space/case-insensitive, but garbage
+    // still matches no known format and can only fail real verification.
+    assert.ok(!isGeneratedKeyFormat("not a license key"));
+    assert.ok(!isValidKeyFormat("not a license key"));
   });
 });
 

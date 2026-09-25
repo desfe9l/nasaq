@@ -1,4 +1,5 @@
 import { createHash, createPublicKey, verify as verifySignature } from "node:crypto";
+import { normalizeLicenseKey } from "./key.ts";
 import type { LicensePlan, LicenseType } from "./types";
 
 const API_ORIGIN = "https://api.keygen.sh/v1/accounts";
@@ -48,6 +49,46 @@ type KeygenResponse = {
   included?: KeygenResource[];
   errors?: Array<{ detail?: string }>;
 };
+
+/**
+ * User-facing, Arabic message for every Keygen validation code.
+ * Before it existed, any code outside 6 mapped ones collapsed into the vague
+ * «تعذر التحقق من حالة الترخيص.» — which masked why valid-format keys failed.
+ */
+export const KEYGEN_CODE_MESSAGES: Record<string, string> = {
+  NOT_FOUND: "مفتاح الترخيص غير صالح أو غير موجود.",
+  EXPIRED: "انتهت صلاحية هذا الترخيص.",
+  SUSPENDED: "تم تعليق هذا الترخيص. تواصل مع الدعم لمعرفة السبب.",
+  BANNED: "تم إيقاف هذا الترخيص نهائيًا.",
+  OVERDUE: "هذا الترخيص متأخر عن التجديد. جدد الاشتراك ثم أعد المحاولة.",
+  NO_MACHINE: "هذا الترخيص يتطلب تفعيل جهاز قبل التحقق. تواصل مع الدعم.",
+  NO_MACHINES: "هذا الترخيص لا يملك أجهزة مفعّلة. تواصل مع الدعم.",
+  TOO_MANY_MACHINES: "تم الوصول إلى الحد الأقصى للأجهزة لهذا الترخيص.",
+  TOO_MANY_CORES: "تم تجاوز الحد الأقصى لأنوية الأجهزة لهذا الترخيص.",
+  TOO_MANY_USERS: "تم الوصول إلى الحد الأقصى لمستخدمي هذا الترخيص.",
+  TOO_MANY_PROCESSES: "تم تجاوز الحد الأقصى للعمليات لهذا الترخيص.",
+  PRODUCT_SCOPE_MISMATCH: "مفتاح الترخيص لا يخص منتج NASAQ.",
+  POLICY_SCOPE_MISMATCH: "مفتاح الترخيص لا يطابق سياسة الترخيص المطلوبة.",
+  KEY_SCOPE_MISMATCH: "صيغة مفتاح الترخيص غير معتمدة في هذا التحقق.",
+  USER_SCOPE_MISMATCH: "مفتاح الترخيص لا يخص هذا المستخدم.",
+  MACHINE_SCOPE_MISMATCH: "مفتاح الترخيص غير مفعّل لهذا الجهاز.",
+  FINGERPRINT_SCOPE_MISMATCH: "بصمة الجهاز لا تطابق الترخيص.",
+  HEARTBEAT_DEAD: "انقطع اتصال الترخيص بهذا الجهاز. أعد التفعيل.",
+  HEARTBEAT_NOT_STARTED: "الترخيص لم يبدأ دورة نبض الجهاز بعد. تواصل مع الدعم.",
+  METADATA_SCOPE_MISMATCH: "بيانات الترخيص لا تطابق المطلوب.",
+  TOKEN_EXPIRED: "انتهت صلاحية رمز الوصول. أعد تسجيل الدخول ثم حاول مجددًا.",
+};
+
+/** Precise user-facing message for a Keygen verification result. */
+export function keygenMessage(verification: KeygenVerification): string {
+  const known = KEYGEN_CODE_MESSAGES[verification.code];
+  if (known) return known;
+  // Unknown provider codes stay DIAGNOSABLE — never the old blanket
+  // «تعذر التحقق من حالة الترخيص» for every failure mode.
+  return verification.code
+    ? `تعذّر التحقق من الترخيص (${verification.code}). تواصل مع الدعم واذكر هذا الرمز.`
+    : "تعذّر التحقق من الترخيص. تواصل مع الدعم.";
+}
 
 export class KeygenConfigurationError extends Error {
   constructor(message: string) {
@@ -248,18 +289,22 @@ function verificationFromResponse(key: string, response: KeygenResponse, entitle
 }
 
 export async function validateKeygenLicense(key: string): Promise<KeygenVerification> {
+  // One normalization for the whole system: generator keys are uppercase HEX
+  // with a -V<n> version suffix; Keygen matches keys exactly, so a lowercase
+  // or space-padded paste would wrongly fail without this.
+  const normalizedKey = normalizeLicenseKey(key);
   const response = await request(
     "/licenses/actions/validate-key",
     {
       method: "POST",
-      body: JSON.stringify({ meta: { key: key.trim(), scope: { product: keygenProductId() } } }),
+      body: JSON.stringify({ meta: { key: normalizedKey, scope: { product: keygenProductId() } } }),
     },
     false,
   );
   const resource = Array.isArray(response.data) ? response.data[0] : response.data;
   const licenseId = resource?.id || "";
   const entitlementCodes = response.meta?.valid && licenseId ? await entitlementCodesForLicense(licenseId) : [];
-  return verificationFromResponse(key.trim(), response, entitlementCodes);
+  return verificationFromResponse(normalizedKey, response, entitlementCodes);
 }
 
 export async function createKeygenLicense(params: {
