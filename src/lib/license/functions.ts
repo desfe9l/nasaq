@@ -8,7 +8,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { hashLicenseKey, isKeygenKeyFormat, isValidKeyFormat, keyPrefix } from "./key";
+import { hashLicenseKey, isGeneratedKeyFormat, isKeygenKeyFormat, isValidKeyFormat, keyPrefix, normalizeLicenseKey } from "./key";
 import {
   activateLicense as dbActivate,
   validateLicense as dbValidate,
@@ -27,6 +27,7 @@ import {
 import {
   createKeygenLicense,
   isKeygenConfigured,
+  keygenMessage,
   keygenPlanForLicenseType,
   reinstateKeygenLicense,
   suspendKeygenLicense,
@@ -136,18 +137,6 @@ function entitlementsFor(license: License): Record<import("./types").FeatureId, 
   return entitlementsForPlan(license.metadata?.plan as import("./types").LicensePlan | undefined, license.type);
 }
 
-function keygenMessage(verification: KeygenVerification): string {
-  const messages: Record<string, string> = {
-    NOT_FOUND: "مفتاح الترخيص غير صالح أو غير متاح.",
-    EXPIRED: "انتهت صلاحية هذا الترخيص.",
-    SUSPENDED: "تم تعليق هذا الترخيص.",
-    BANNED: "تم إيقاف هذا الترخيص.",
-    PRODUCT_SCOPE_MISMATCH: "مفتاح الترخيص لا يخص منتج NASAQ.",
-    TOO_MANY_USERS: "تم الوصول إلى الحد الأقصى لمستخدمي هذا الترخيص.",
-  };
-  return messages[verification.code] || "تعذر التحقق من حالة الترخيص.";
-}
-
 async function persistKeygenLicense(verification: KeygenVerification, userId: string | null, existing?: License): Promise<License> {
   return upsertExternalLicense({
     keyHash: hashLicenseKey(verification.key),
@@ -178,13 +167,19 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
       };
     }
 
-    const key = data.key.trim();
+    // Unified normalization: stray spaces or lowercase from a paste never
+    // change what the key is (generator keys are uppercase HEX / NASAQ-…).
+    const key = normalizeLicenseKey(data.key);
+    if (!key) {
+      return { success: false, message: "أدخل مفتاح الترخيص أولًا." };
+    }
     const manualKey = isValidKeyFormat(key);
-    const keygenKey = !manualKey && isKeygenKeyFormat(key);
+    const generatedKey = isGeneratedKeyFormat(key);
+    const keygenKey = generatedKey || (!manualKey && isKeygenKeyFormat(key));
     if (!manualKey && !keygenKey) {
       return {
         success: false,
-        message: "مفتاح الترخيص غير صالح.",
+        message: "صيغة مفتاح الترخيص غير صالحة.",
       };
     }
 
@@ -240,9 +235,11 @@ export const validateLicenseFn = createServerFn({ method: "POST" })
       return { valid: false };
     }
 
-    const key = data.key.trim();
+    const key = normalizeLicenseKey(data.key);
+    if (!key) return { valid: false };
     const manualKey = isValidKeyFormat(key);
-    const keygenKey = !manualKey && isKeygenKeyFormat(key);
+    const generatedKey = isGeneratedKeyFormat(key);
+    const keygenKey = generatedKey || (!manualKey && isKeygenKeyFormat(key));
     if (!manualKey && !keygenKey) {
       return { valid: false };
     }
@@ -281,7 +278,7 @@ export const deactivateLicenseFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const ip = await getClientIp();
     if (!checkRateLimit("license:deactivate", ip, 5, 60_000)) return { success: false };
-    const key = data.key.trim();
+    const key = normalizeLicenseKey(data.key);
     const local = await findLicenseByKeyHash(hashLicenseKey(key));
     if (!local) return { success: false };
     if (local.userId !== context.userId && !(await isAdministrator(context))) {

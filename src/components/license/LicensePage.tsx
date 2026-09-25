@@ -237,12 +237,15 @@ export default function LicensePage() {
               type="text"
               value={activateKey}
               onChange={(e) => setActivateKey(e.target.value)}
-              placeholder="NASAQ-XXXX-XXXX-XXXX-XXXX"
-              className="mb-4 w-full rounded-lg border border-line bg-transparent px-4 py-3 text-center font-mono text-sm font-bold tracking-wider outline-none focus:border-emerald-500 dark:border-white/10"
+              placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX-V3"
+              className="mb-2 w-full rounded-lg border border-line bg-transparent px-4 py-3 text-center font-mono text-sm font-bold tracking-wider outline-none focus:border-emerald-500 dark:border-white/10"
               dir="ltr"
               onKeyDown={(e) => e.key === "Enter" && handleActivate()}
               autoFocus
             />
+            <p className="mb-4 text-center text-xs text-muted">
+              ألصق المفتاح كما وصلك من مولّد التراخيص (مثل 8BB5C5-…-V3) — وتُقبل أيضًا مفاتيح NASAQ- القديمة.
+            </p>
 
             {activateMessage && (
               <div
