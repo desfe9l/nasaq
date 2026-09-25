@@ -61,4 +61,6 @@ export type PaylinkTransaction = {
 export type AdminPaylinkTransaction = PaylinkTransaction & {
   userEmail: string | null;
   userName: string | null;
+  /** A local paid row alone is not proof of Keygen user-scope activation. */
+  licenseBound: boolean;
 };

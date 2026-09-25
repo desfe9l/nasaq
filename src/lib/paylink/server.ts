@@ -100,11 +100,11 @@ export function verifyPaylinkWebhookAuthorization(request: Request): boolean {
   return Boolean(expected && secureBearerMatch(expected, actual));
 }
 
-async function accessToken(): Promise<string> {
+async function accessToken(forceRefresh = false): Promise<string> {
   const baseUrl = apiBaseUrl();
   const cached = globalRef.__paylinkTokenCache__;
   if (
-    cached &&
+    !forceRefresh && cached &&
     cached.baseUrl === baseUrl &&
     cached.expiresAt > Date.now() + 30_000
   ) {
@@ -114,6 +114,7 @@ async function accessToken(): Promise<string> {
   const response = await fetch(`${baseUrl}/api/auth`, {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
+    signal: AbortSignal.timeout(12_000),
     body: JSON.stringify({ apiId, secretKey, persistToken: true }),
   });
   const body = (await response.json().catch(() => null)) as {
@@ -127,6 +128,11 @@ async function accessToken(): Promise<string> {
     baseUrl,
   };
   return token;
+}
+
+/** Safe admin connectivity check: authenticates only; no invoice is created. */
+export async function checkPaylinkApiConnection(): Promise<void> {
+  await accessToken(true); // don't report a cached token as a live connection
 }
 
 export type PaylinkApiResponse = {

@@ -15,9 +15,8 @@ import {
   updatePaylinkStatus,
 } from "@/lib/paylink/transactions.server";
 import { audit, grantEntitlement } from "@/lib/commercial/admin.server";
-import { createKeygenLicense, findKeygenLicenseByPaylinkTransaction, type KeygenPlan } from "@/lib/license/keygen";
-import { findLicenseByPaylinkTransaction, upsertExternalLicense } from "@/lib/license/server";
-import { hashLicenseKey, keyPrefix } from "@/lib/license/key";
+import { type KeygenPlan } from "@/lib/license/keygen";
+import { issuePaidKeygenLicense } from "@/lib/license/paylink-fulfillment.server";
 import { computeExpiry, getSubscription } from "@/lib/commercial/entitlement.server";
 import { getCatalogPlan, type PaylinkPlanKey } from "@/lib/commercial/catalog";
 
@@ -66,46 +65,26 @@ async function fulfillClaimedPaylink(
   try {
     const catalogPlan = getCatalogPlan(claimed.planKey as PaylinkPlanKey);
     const durationDays = catalogPlan?.durationDays ?? (claimed.planKey.includes("quarterly") ? 90 : claimed.planKey.includes("annual") ? 365 : 30);
-    const existingLicense = await findLicenseByPaylinkTransaction(transactionNo);
+    const users = await sql<{ email: string }>`select email from "user" where id = ${claimed.userId} limit 1`;
+    const email = users[0]?.email;
+    if (!email) throw new Error("Paid user has no verified account email");
     const currentSubscription = await getSubscription(sql, claimed.userId);
     const live = currentSubscription && currentSubscription.status !== "EXPIRED" ? currentSubscription : null;
-    const expiresAt = computeExpiry(durationDays, live);
+    const plannedExpiry = computeExpiry(durationDays, live);
 
-    let license = existingLicense;
-    let verification = null as Awaited<ReturnType<typeof createKeygenLicense>> | null;
-    if (!license) {
-      verification = await findKeygenLicenseByPaylinkTransaction(transactionNo);
-      if (!verification) {
-        verification = await createKeygenLicense({
-          plan: resolveKeygenPlan(claimed.planKey),
-          name: `NASAQ ${catalogPlan?.name || claimed.planKey} License`,
-          expiresAt: expiresAt.toISOString(),
-          metadata: {
-            source: "keygen",
-            paylinkTransactionNo: transactionNo,
-            paylinkOrderNumber: claimed.orderNumber,
-            nasaqUserId: claimed.userId,
-            plan: claimed.planKey,
-          },
-        });
-      }
-      license = await upsertExternalLicense({
-        keyHash: hashLicenseKey(verification.key),
-        keyPrefix: keyPrefix(verification.key),
-        type: verification.type,
-        userId: claimed.userId,
-        expiresAt: verification.expiresAt,
-        activationCount: verification.activationCount,
-        maxActivations: verification.maxActivations,
-        status: verification.status,
-        metadata: {
-          ...verification.metadata,
-          paylinkTransactionNo: transactionNo,
-          paylinkOrderNumber: claimed.orderNumber,
-        },
-      });
-    }
-
+    // Keygen is the authority: bind and validate for the purchaser before
+    // recording a licence or marking the Paylink transaction PAID. Retried
+    // callbacks reuse the remote licence by transaction number.
+    const license = await issuePaidKeygenLicense({
+      transactionNo,
+      orderNumber: claimed.orderNumber,
+      userId: claimed.userId,
+      userEmail: email,
+      plan: resolveKeygenPlan(claimed.planKey),
+      planName: catalogPlan?.name || claimed.planKey,
+      expiresAt: plannedExpiry.toISOString(),
+    });
+    const expiresAt = new Date(license.expiresAt!);
     await grantEntitlement(sql, {
       userId: claimed.userId,
       plan: { id: claimed.planId, durationDays },

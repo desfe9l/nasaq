@@ -112,6 +112,14 @@ describe("License Key Normalization", () => {
     const b = hashLicenseKey(" 8bb5c5 - 56f186-781d92-3c5259-da12b3-v3 ");
     assert.equal(a, b);
   });
+
+  it("preserves case for signed provider keys", () => {
+    const signed = "key/eyJhcHAiOiJuYXNhcSJ9.AbCdSignature";
+    assert.equal(normalizeLicenseKey(`  ${signed}  `), signed);
+    assert.notEqual(hashLicenseKey(signed), hashLicenseKey(signed.toUpperCase()));
+    assert.ok(isKeygenKeyFormat(signed));
+    assert.ok(!isKeygenKeyFormat("key/eyJhcH AiOiJuYXNhcSJ9.AbCdSignature"));
+  });
 });
 
 describe("Generator (Keygen HEX + version) Key Format", () => {
@@ -200,6 +208,11 @@ describe("License Entitlements", () => {
     assert.ok(team.team_features);
     assert.ok(team.multi_user_activation);
   });
+  it("cannot use a stale plan to promote a FREE or TRIAL license", () => {
+    assert.equal(entitlementsForPlan("individual-monthly", "FREE").premium_templates, false);
+    assert.equal(entitlementsForPlan("team-monthly", "TRIAL").team_features, false);
+  });
+
   it("FREE tier has only core features", () => {
     const free = LICENSE_ENTITLEMENTS.FREE;
     assert.ok(free.core_editor);

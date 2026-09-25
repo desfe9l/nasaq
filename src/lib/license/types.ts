@@ -134,6 +134,9 @@ export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean
 };
 
 export function entitlementsForPlan(plan: LicensePlan | undefined, type: LicenseType): Record<FeatureId, boolean> {
+  // A stale plan string must never upgrade a revoked/downgraded FREE licence or
+  // turn a TRIAL into PRO. The verified licence type is the upper bound.
+  if (type === "FREE" || type === "TRIAL") return LICENSE_ENTITLEMENTS[type];
   if (plan?.startsWith("individual-")) {
     return { ...LICENSE_ENTITLEMENTS.PRO, collaboration: false, team_features: false, multi_user_activation: false };
   }
@@ -171,9 +174,10 @@ export const KEYGEN_ENTITLEMENT_FEATURES: Record<string, FeatureId[]> = {
 };
 
 export function entitlementsFromKeygenCodes(codes: string[]): Record<FeatureId, boolean> {
-  const entitlements = Object.fromEntries(
-    (Object.keys(FEATURE_LABELS) as FeatureId[]).map((feature) => [feature, false]),
-  ) as Record<FeatureId, boolean>;
+  // A provider may omit codes for features already available on the FREE tier.
+  // Missing paid codes still fail closed, but a paid account never loses the
+  // editor and basic export simply because Keygen didn't return their codes.
+  const entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
   for (const code of codes) {
     for (const feature of KEYGEN_ENTITLEMENT_FEATURES[code] ?? []) {
       entitlements[feature] = true;
@@ -202,21 +206,30 @@ export interface LicenseStatusResult {
   isOwner?: boolean;
   /** True when full access comes from a verified administrator identity. */
   isAdmin?: boolean;
+  isSuspended?: boolean;
   license?: LicenseInfo;
   entitlements?: Record<FeatureId, boolean>;
+  /** A paid/local key is not yet validated at Keygen; never unlock on this basis. */
+  message?: string;
 }
 
 // ── Admin Types ────────────────────────────────────────────────────────────
 
 export interface AdminLicenseCreate {
   type: LicenseType;
+  /** Keygen policy for PRO; defaults to individual-monthly for old clients. */
+  plan?: LicensePlan;
   expiresAt?: string;
+  /** Verified customer email or id, resolved on the server. */
+  user?: string;
   userId?: string;
   maxActivations?: number;
 }
 
+export type AdminLicenseRow = Omit<License, "keyHash"> & { userEmail: string | null };
+
 export interface AdminLicenseList {
-  licenses: License[];
+  licenses: AdminLicenseRow[];
   total: number;
 }
 

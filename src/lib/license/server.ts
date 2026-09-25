@@ -217,19 +217,37 @@ export async function findLicensesByUserId(userId: string): Promise<License[]> {
   return rows.map(rowToLicense);
 }
 
-/** List all licenses (admin). */
+/** Search and paginate at SQL level so administrators can reach every licence. */
 export async function listAllLicenses(
   offset = 0,
   limit = 50,
+  search = "",
+  status: LicenseStatus | "ALL" = "ALL",
 ): Promise<AdminLicenseList> {
   const sql = await getSql();
-  const countRows = await sql.query(`SELECT count(*) as total FROM licenses`);
-  const total = Number(countRows[0]?.total ?? 0);
-  const rows = await sql.query(
-    `SELECT * FROM licenses ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-    [limit, offset],
+  const pageSize = Number.isSafeInteger(limit) ? Math.max(1, Math.min(limit, 100)) : 50;
+  const start = Number.isSafeInteger(offset) ? Math.max(0, offset) : 0;
+  const needle = `%${search.trim().slice(0, 100)}%`;
+  const filterStatus = ["ACTIVE", "EXPIRED", "REVOKED"].includes(status) ? status : "ALL";
+  const where = `WHERE ($1 = '%%' OR l.key_prefix ILIKE $1 OR l.id ILIKE $1
+    OR COALESCE(l.user_id, '') ILIKE $1 OR COALESCE(u.email, '') ILIKE $1
+    OR COALESCE(l.metadata->>'source', '') ILIKE $1
+    OR COALESCE(l.metadata->>'paylinkTransactionNo', '') ILIKE $1)
+    AND ($2 = 'ALL' OR l.status = $2)`;
+  const joins = `FROM licenses l LEFT JOIN "user" u ON u.id = l.user_id`;
+  const countRows = await sql.query<{ total: number }>(
+    `SELECT count(*) as total ${joins} ${where}`, [needle, filterStatus],
   );
-  return { licenses: rows.map(rowToLicense), total };
+  const rows = await sql.query<Record<string, unknown>>(
+    `SELECT l.*, u.email AS user_email ${joins} ${where}
+     ORDER BY l.created_at DESC, l.id DESC LIMIT $3 OFFSET $4`,
+    [needle, filterStatus, pageSize, start],
+  );
+  // No browser, even an administrator's, needs the SHA-256 key hash.
+  return { licenses: rows.map((row) => {
+    const { keyHash: _keyHash, ...license } = rowToLicense(row);
+    return { ...license, userEmail: (row.user_email as string | null) ?? null };
+  }), total: Number(countRows[0]?.total ?? 0) };
 }
 
 /** Create a new license. Returns the plain-text key (shown once to admin). */

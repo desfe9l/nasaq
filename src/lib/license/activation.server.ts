@@ -16,6 +16,7 @@ import {
   upsertExternalLicense,
 } from "./server.ts";
 import type { License } from "./types.ts";
+import { getSql } from "@/lib/db";
 
 /** Supplied ONLY by authMiddleware's verified Better Auth session. */
 export type LicenseSession = { userId: string; userEmail: string | null };
@@ -89,15 +90,21 @@ export async function activateKeygenForSession(key: string, session: LicenseSess
       return { success: false, message: "تعذر تحديد صاحب الترخيص لدى Keygen." };
     }
     const unassigned = remote.ownerId === null && remote.usersCount === 0;
-    if (!verified.valid && !unassigned) return { success: false, message: NOT_OWNER };
-    if (unassigned && (remote.suspended || !["ACTIVE", "INACTIVE", "EXPIRING"].includes(remote.status) ||
+    // Some Keygen policies require an attached user even when the licence has
+    // an owner. Only attach the *verified account's own* Keygen user when that
+    // account is already the authoritative owner and no users are attached.
+    const ownedButUnlinked = !verified.valid && remote.ownerId !== null && remote.usersCount === 0 &&
+      remote.ownerId === await ensureKeygenUser({ userId: session.userId, userEmail: session.userEmail }, false);
+    if (!verified.valid && !unassigned && !ownedButUnlinked) return { success: false, message: NOT_OWNER };
+    if ((unassigned || ownedButUnlinked) && (remote.suspended || !["ACTIVE", "INACTIVE", "EXPIRING"].includes(remote.status) ||
         (remote.expiresAt && (!Number.isFinite(Date.parse(remote.expiresAt)) || Date.parse(remote.expiresAt) <= Date.now())))) {
       return { success: false, message: "هذا الترخيص غير نشط أو انتهت صلاحيته." };
     }
     if (!(await reserveKeygenClaim(hash, session.userId))) return { success: false, message: NOT_OWNER };
 
-    if (unassigned) {
-      const keygenUserId = await ensureKeygenUser({ userId: session.userId, userEmail: session.userEmail });
+    if (unassigned || ownedButUnlinked) {
+      const keygenUserId = ownedButUnlinked ? remote.ownerId! :
+        await ensureKeygenUser({ userId: session.userId, userEmail: session.userEmail });
       try {
         await attachKeygenUser(remote.id, keygenUserId);
       } catch (error) {
@@ -116,6 +123,37 @@ export async function activateKeygenForSession(key: string, session: LicenseSess
   }
   const license = await persistKeygenLicense(verified, session.userId);
   return { success: true, license, verification: verified };
+}
+
+/**
+ * Repair an older Paylink purchase that was stored before checkout attached its
+ * Keygen user. A browser cannot recover the plaintext key from its prefix.
+ * Only the purchaser named on a PAID transaction can initiate this repair; a
+ * local assignment or a subscription alone is never proof of purchase. The
+ * normal activation path still requires a user-scoped Keygen validation.
+ */
+export async function claimPaidKeygenForSession(local: License, session: LicenseSession): Promise<License | null> {
+  const providerId = local.metadata?.keygenLicenseId;
+  const transactionNo = local.metadata?.paylinkTransactionNo;
+  if (!session.userEmail || local.userId !== session.userId || local.status !== "ACTIVE" ||
+      (local.expiresAt && Date.parse(local.expiresAt) <= Date.now()) ||
+      local.metadata?.source !== "keygen" || !providerId || !transactionNo ||
+      local.metadata.nasaqUserId !== session.userId || boundToOther(local, session)) return null;
+
+  const sql = await getSql();
+  const paid = await sql.query(
+    `SELECT 1 FROM paylink_transactions WHERE transaction_no = $1 AND user_id = $2
+       AND license_id = $3 AND keygen_license_id = $4 AND status = 'PAID'
+       AND (entitlement_expires_at IS NULL OR entitlement_expires_at > now()) LIMIT 1`,
+    [transactionNo, session.userId, local.id, providerId],
+  );
+  if (!paid.length) return null;
+
+  const remote = await getKeygenLicenseForClaim(providerId);
+  if (remote.productId !== keygenProductId() || remote.nasaqUserId !== session.userId ||
+      hashLicenseKey(remote.key) !== local.keyHash) return null;
+  const result = await activateKeygenForSession(remote.key, session);
+  return result.success ? result.license : null;
 }
 
 /** Reload a verified license using its provider ID, without browser key storage. */

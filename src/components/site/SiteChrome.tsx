@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
+import { ChevronDown, KeyRound, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
 import { Toaster } from "sonner";
 import {
   BRAND,
@@ -147,6 +147,11 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
           >
             <UserRound className="size-4 opacity-70" aria-hidden />
             الحساب والإعدادات
+          </a>
+          <a href="/license" role="menuitem"
+            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12px] font-bold hover:bg-line-2 dark:hover:bg-white/5">
+            <KeyRound className="size-4 opacity-70" aria-hidden />
+            ترخيصي وتفعيله
           </a>
           <button
             type="button"

@@ -19,7 +19,6 @@ import {
   updateLicense as dbUpdate,
   extendLicense,
   assignLicense,
-  unassignLicense,
   findLicenseByKeyHash,
   findLicenseById,
   findLicensesByUserId,
@@ -29,18 +28,23 @@ import {
   createKeygenLicense,
   ensureKeygenUser,
   isKeygenConfigured,
+  keygenPolicyId,
+  keygenProductId,
+  getKeygenLicenseForClaim,
   KeygenOwnershipError,
   keygenPlanForLicenseType,
   reinstateKeygenLicense,
   suspendKeygenLicense,
   updateKeygenLicenseExpiry,
-  validateKeygenLicense,
 } from "./keygen";
-import { activateKeygenForSession, persistKeygenLicense, revalidateKeygenForSession, revalidateLinkedKeygenLicense } from "./activation.server";
+import { activateKeygenForSession, claimPaidKeygenForSession, persistKeygenLicense, revalidateKeygenForSession } from "./activation.server";
 import { checkRateLimit } from "./rate-limit";
+import { licensingIntegrationReadiness } from "./integrations.server";
+import { getCatalogPlan } from "@/lib/commercial/catalog";
 import { entitlementsForPlan, entitlementsFromKeygenCodes, LICENSE_ENTITLEMENTS } from "./types";
 import type {
   License,
+  AdminLicenseRow,
   LicenseActivateResult,
   LicenseValidateResult,
   LicenseStatusResult,
@@ -117,6 +121,19 @@ async function isAdministrator(
   }
 }
 
+async function accountSuspended(userId: string): Promise<boolean> {
+  const { getSql } = await import("@/lib/db");
+  const { getSubscription } = await import("@/lib/commercial/entitlement.server");
+  return (await getSubscription(await getSql(), userId))?.status === "SUSPENDED";
+}
+
+async function isSuperAdministrator(context: { userId: string; userEmail: string | null }): Promise<boolean> {
+  if (!(await isAdministrator(context))) return false;
+  const { getSql } = await import("@/lib/db");
+  const { isSuperAdminIdentity } = await import("@/lib/auth/super-admin.server");
+  return isSuperAdminIdentity(await getSql(), { id: context.userId, email: context.userEmail });
+}
+
 function publicLicense(license: License): LicenseInfo {
   return {
     id: license.id,
@@ -126,7 +143,7 @@ function publicLicense(license: License): LicenseInfo {
     activatedAt: license.activatedAt,
     expiresAt: license.expiresAt,
     createdAt: license.createdAt,
-  source: license.metadata?.source === "keygen" ? "keygen" : "manual",
+    source: license.metadata?.source === "keygen" ? "keygen" : "manual",
     plan: license.metadata?.plan as LicenseInfo["plan"],
     billing: license.metadata?.billing as LicenseInfo["billing"],
   };
@@ -171,6 +188,9 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
       };
     }
 
+    if (await accountSuspended(context.userId)) {
+      return { success: false, message: "أوقفت الإدارة وصول هذا الحساب مؤقتًا. تواصل معها لاستعادة التفعيل." };
+    }
     const keyHash = hashLicenseKey(key);
     const local = await findLicenseByKeyHash(keyHash);
     if (keygenKey || local?.metadata?.source === "keygen") {
@@ -238,6 +258,7 @@ export const validateLicenseFn = createServerFn({ method: "POST" })
       return { valid: false };
     }
 
+    if (await accountSuspended(context.userId)) return { valid: false };
     const keyHash = hashLicenseKey(key);
     const local = await findLicenseByKeyHash(keyHash);
     // Validation cannot be used as a second, unauthenticated activation path.
@@ -276,19 +297,11 @@ export const deactivateLicenseFn = createServerFn({ method: "POST" })
     const key = normalizeLicenseKey(data.key);
     const local = await findLicenseByKeyHash(hashLicenseKey(key));
     if (!local) return { success: false };
-    if (local.userId !== context.userId && !(await isAdministrator(context))) {
-      return { success: false };
-    }
-    try {
-      if (local.metadata?.source === "keygen") {
-        if (local.userId === context.userId) await unassignLicense(local.id, context.userId);
-      } else {
-        await dbRevoke(local.id);
-      }
-      return { success: true };
-    } catch {
-      return { success: false };
-    }
+    // This is a *device cache* operation. A customer must not be able to
+    // suspend a purchased Keygen key (or revoke a manual key) by pressing
+    // "remove saved key". Provider/admin revocation uses its own gated route.
+    // The browser removes the plaintext key; the account binding survives.
+    return { success: local.userId === context.userId };
   });
 
 // ── Auth: Get My License Status ────────────────────────────────────────────
@@ -309,35 +322,70 @@ export const getLicenseStatusFn = createServerFn({ method: "POST" })
         entitlements: access.entitlements,
       };
     }
-    const active = access.license;
-    if (active?.metadata?.source === "keygen" && active.metadata.userScopeVerified) {
-      // After a successful activation, check the provider again on reload even
-      // if this browser no longer has the plaintext key. Paid pre-issued rows
-      // without a Keygen user keep their existing fulfillment behavior.
-      if (active.metadata.userScopeVerified !== context.userId) {
-        return { hasLicense: false, entitlements: { ...LICENSE_ENTITLEMENTS.FREE } };
-      }
-      try {
-        if (!isKeygenConfigured()) throw new Error("Keygen verification unavailable");
-        const current = await revalidateLinkedKeygenLicense(active, context);
-        if (current) {
-          return { hasLicense: true, license: publicLicense(current), entitlements: entitlementsFor(current) };
-        }
-      } catch {
-        // Upstream unavailable: fail closed, but don't incorrectly revoke it.
-        return { hasLicense: false, entitlements: { ...LICENSE_ENTITLEMENTS.FREE } };
-      }
-    } else if (active) {
-      return { hasLicense: true, license: publicLicense(active), entitlements: access.entitlements };
+    if (access.isSuspended) {
+      return { hasLicense: false, isSuspended: true, entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
+        message: "أوقفت الإدارة وصول هذا الحساب مؤقتًا. تواصل مع الإدارة لاستعادة التفعيل." };
     }
-    const previous = (await findLicensesByUserId(context.userId))[0];
+    if (access.license) {
+      // getAuthorizationContext already revalidated Keygen for this very
+      // request; do not issue a second provider call from the status page.
+      return { hasLicense: true, license: publicLicense(access.license), entitlements: access.entitlements };
+    }
+    const ownLicenses = await findLicensesByUserId(context.userId);
+    if (isKeygenConfigured()) {
+      for (const pendingPaid of ownLicenses) {
+        if (pendingPaid.metadata?.source !== "keygen" || !pendingPaid.metadata.paylinkTransactionNo ||
+            pendingPaid.metadata.userScopeVerified === context.userId || pendingPaid.status !== "ACTIVE") continue;
+        try {
+          const repaired = await claimPaidKeygenForSession(pendingPaid, context);
+          if (repaired) {
+            return { hasLicense: true, license: publicLicense(repaired), entitlements: entitlementsFor(repaired) };
+          }
+        } catch {
+          // An old payment or unavailable provider cannot unlock via SQL alone.
+          // Leave the record intact so a later status refresh can retry safely.
+        }
+      }
+    }
+    const previous = ownLicenses[0];
     if (!previous) return { hasLicense: false, entitlements: access.entitlements };
     // Keep the type and inactive state visible without unlocking features.
     const info = publicLicense(previous);
     if (info.status === "ACTIVE" && info.expiresAt && Date.parse(info.expiresAt) <= Date.now()) {
       info.status = "EXPIRED";
     }
-    return { hasLicense: false, license: info, entitlements: { ...LICENSE_ENTITLEMENTS.FREE } };
+    const message = info.status === "ACTIVE" && previous.metadata?.source === "keygen"
+      ? previous.metadata.userScopeVerified === context.userId
+        ? "تعذر التحقق من Keygen حاليًا. أعد المحاولة؛ لن تُفعّل الميزات دون تحقق."
+        : "الترخيص بانتظار الربط مع Keygen. أعد التحقق أو أدخل المفتاح إذا كان لديك."
+      : undefined;
+    return { hasLicense: false, license: info, entitlements: { ...LICENSE_ENTITLEMENTS.FREE }, message };
+  });
+
+// ── Admin: Provider setup & non-financial connectivity checks ───────────────
+
+export const adminLicenseIntegrationsFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    if (!(await isAdministrator(context))) return { error: "غير مصرح.", readiness: null };
+    return { error: null as string | null, readiness: licensingIntegrationReadiness() };
+  });
+
+export const adminCheckLicenseConnectionsFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    if (!(await isAdministrator(context))) {
+      return { error: "غير مصرح.", keygen: false, paylink: false };
+    }
+    const { checkKeygenApiConnection } = await import("./keygen");
+    const { checkPaylinkApiConnection } = await import("@/lib/paylink/server");
+    const readiness = licensingIntegrationReadiness();
+    // The checks never create licences/invoices or return tokens/provider errors.
+    const [keygen, paylink] = await Promise.all([
+      readiness.keygen.token ? checkKeygenApiConnection().then(() => true, () => false) : false,
+      readiness.paylink.credentials ? checkPaylinkApiConnection().then(() => true, () => false) : false,
+    ]);
+    return { error: null as string | null, keygen, paylink };
   });
 
 // ── Admin: Create License ─────────────────────────────────────────────────
@@ -346,86 +394,76 @@ export const adminCreateLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: AdminLicenseCreate) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isAdministrator(context))) {
-      return { error: "غير مصرح.", licenseId: null as string | null, plainKey: null as string | null, type: null as LicenseType | null, keyPrefix: null as string | null };
+    const fail = (error: string) => ({ error, licenseId: null as string | null,
+      plainKey: null as string | null, type: null as LicenseType | null, keyPrefix: null as string | null });
+    if (!(await isSuperAdministrator(context))) return fail("إنشاء التراخيص لصلاحية المالك فقط.");
+    if (!["FREE", "TRIAL", "PRO", "LIFETIME"].includes(data.type) ||
+        (data.plan && data.type !== "PRO")) return fail("نوع الترخيص غير صالح.");
+    const plan = data.type === "PRO" ? getCatalogPlan(data.plan || "individual-monthly") : null;
+    if (data.type === "PRO" && !plan) return fail("باقة Keygen غير معروفة.");
+    if (data.maxActivations !== undefined && (!Number.isInteger(data.maxActivations) ||
+        data.maxActivations < 1 || data.maxActivations > 100)) return fail("عدد التفعيلات غير صالح.");
+    const userInput = data.user?.trim() || data.userId?.trim() || "";
+    const target = userInput ? await resolveUser(userInput) : null;
+    if (userInput && !target) return fail("المستخدم غير موجود. أدخل بريد حساب مسجّل أو معرّفه.");
+    const duration = plan?.durationDays ?? (data.type === "TRIAL" ? 30 : null);
+    const expiresAt = data.expiresAt || (duration ? new Date(Date.now() + duration * 86400000).toISOString() : undefined);
+    if (expiresAt && (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= Date.now())) {
+      return fail("تاريخ الانتهاء يجب أن يكون مستقبلًا.");
     }
 
-    const providerPlan = keygenPlanForLicenseType(data.type);
+    const providerPlan = plan?.keygenPolicyKey || keygenPlanForLicenseType(data.type);
     if (providerPlan) {
-      if (!isKeygenConfigured()) {
-        return { error: "Keygen غير مهيأ على الخادم.", licenseId: null as string | null, plainKey: null as string | null, type: null as LicenseType | null, keyPrefix: null as string | null };
-      }
+      if (!isKeygenConfigured()) return fail("KEYGEN_API_TOKEN غير مهيأ على الخادم.");
+      if (!keygenPolicyId(providerPlan)) return fail(`سياسة Keygen للباقة ${providerPlan} غير مهيأة.`);
       try {
-        let targetEmail: string | undefined;
-        let ownerId: string | undefined;
-        if (data.userId) {
-          const { getSql } = await import("@/lib/db");
-          const users = await (await getSql()).query<{ email: string }>(
-            `SELECT email FROM "user" WHERE id = $1 LIMIT 1`, [data.userId],
-          );
-          targetEmail = users[0]?.email;
-          if (!targetEmail) {
-            return { error: "المستخدم غير موجود.", licenseId: null as string | null, plainKey: null as string | null, type: null as LicenseType | null, keyPrefix: null as string | null };
-          }
-          ownerId = await ensureKeygenUser({ userId: data.userId, userEmail: targetEmail });
-        }
+        const ownerId = target ? await ensureKeygenUser({ userId: target.id, userEmail: target.email }) : undefined;
         const issued = await createKeygenLicense({
           plan: providerPlan,
-          name: `NASAQ ${data.type} license`,
-          expiresAt: data.expiresAt,
+          name: `NASAQ ${providerPlan} license`,
+          expiresAt,
           maxUsers: data.maxActivations,
           ownerId,
           metadata: {
             source: "keygen",
             createdBy: context.userId,
-            ...(data.userId ? { nasaqUserId: data.userId } : {}),
+            ...(target ? { nasaqUserId: target.id } : {}),
           },
         });
-        // A pre-assigned license must really validate for the assigned user
-        // before it is exposed by getLicenseStatusFn. Unassigned keys will be
-        // user-locked at their first activation instead.
-        const verification = targetEmail ? await validateKeygenLicense(issued.key, targetEmail) : issued;
-        if (!verification.valid) throw new Error(`Keygen issued invalid license: ${verification.code}`);
-        const license = await persistKeygenLicense(verification, data.userId ?? null);
-        return {
-          error: null as string | null,
-          licenseId: license.id,
-          plainKey: verification.key,
-          type: license.type,
-          keyPrefix: license.keyPrefix,
-        };
-      } catch {
-        return { error: "تعذر إنشاء الترخيص لدى Keygen.", licenseId: null as string | null, plainKey: null as string | null, type: null as LicenseType | null, keyPrefix: null as string | null };
+        // The assigned user's Keygen identity must validate BEFORE this
+        // licence becomes available to their account. For policies requiring
+        // license.users.attach, the common activation path handles that too.
+        const activation = target
+          ? await activateKeygenForSession(issued.key, { userId: target.id, userEmail: target.email })
+          : null;
+        if (activation && !activation.success) throw new Error(activation.message);
+        const license = activation ? activation.license : await persistKeygenLicense(issued, null);
+        return { error: null as string | null, licenseId: license.id,
+          plainKey: issued.key, type: license.type, keyPrefix: license.keyPrefix };
+      } catch (error) {
+        console.error("[license] admin issuance failed", error);
+        return fail("تعذر إصدار أو ربط الترخيص لدى Keygen. تحقق من الصلاحيات والاتصال.");
       }
     }
 
-    const result = await dbCreate({
-      type: data.type,
-      expiresAt: data.expiresAt,
-      userId: data.userId,
-      maxActivations: data.maxActivations,
-    });
-
-    return {
-      error: null as string | null,
-      licenseId: result.license.id,
-      plainKey: result.plainKey,
-      type: result.license.type,
-      keyPrefix: result.license.keyPrefix,
-    };
+    const result = await dbCreate({ type: data.type, expiresAt,
+      userId: target?.id, maxActivations: data.maxActivations });
+    return { error: null as string | null, licenseId: result.license.id,
+      plainKey: result.plainKey, type: result.license.type, keyPrefix: result.license.keyPrefix };
   });
 
 // ── Admin: List All Licenses ───────────────────────────────────────────────
 
 export const adminListLicensesFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((data: { offset?: number; limit?: number }) => data)
+  .validator((data: { offset?: number; limit?: number; search?: string; status?: "ALL" | "ACTIVE" | "EXPIRED" | "REVOKED" }) => data)
   .handler(async ({ data, context }) => {
     if (!(await isAdministrator(context))) {
-      return { error: "غير مصرح.", licenses: [] as License[], total: 0 };
+      return { error: "غير مصرح.", licenses: [] as AdminLicenseRow[], total: 0 };
     }
 
-    const result = await dbListAll(data.offset ?? 0, data.limit ?? 50);
+    const result = await dbListAll(data.offset ?? 0, data.limit ?? 50,
+      typeof data.search === "string" ? data.search : "", data.status ?? "ALL");
     return { error: null as string | null, licenses: result.licenses, total: result.total };
   });
 
@@ -435,7 +473,7 @@ export const adminRevokeLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isAdministrator(context))) {
+    if (!(await isSuperAdministrator(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
 
@@ -443,6 +481,7 @@ export const adminRevokeLicenseFn = createServerFn({ method: "POST" })
     if (!current) return { error: "الترخيص غير موجود.", license: null as License | null };
     try {
       const providerId = current.metadata?.source === "keygen" ? current.metadata.keygenLicenseId : null;
+      if (current.metadata?.source === "keygen" && !providerId) return { error: "معرّف ترخيص Keygen غير موجود.", license: current };
       if (providerId) await suspendKeygenLicense(providerId);
       const license = await dbRevoke(data.licenseId);
       return { error: null as string | null, license };
@@ -457,14 +496,18 @@ export const adminReactivateLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isAdministrator(context))) {
+    if (!(await isSuperAdministrator(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
 
     const current = await findLicenseById(data.licenseId);
     if (!current) return { error: "الترخيص غير موجود.", license: null as License | null };
+    if (current.expiresAt && Date.parse(current.expiresAt) <= Date.now()) {
+      return { error: "مدّد تاريخ انتهاء الترخيص أولًا، ثم أعد التفعيل.", license: current };
+    }
     try {
       const providerId = current.metadata?.source === "keygen" ? current.metadata.keygenLicenseId : null;
+      if (current.metadata?.source === "keygen" && !providerId) return { error: "معرّف ترخيص Keygen غير موجود.", license: current };
       if (providerId) await reinstateKeygenLicense(providerId);
       const license = await dbReactivate(data.licenseId);
       return { error: null as string | null, license };
@@ -478,10 +521,15 @@ export const adminUpdateLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string; updates: AdminLicenseUpdate }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isAdministrator(context))) {
+    if (!(await isSuperAdministrator(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
 
+    const current = await findLicenseById(data.licenseId);
+    if (!current) return { error: "الترخيص غير موجود.", license: null as License | null };
+    if (current.metadata?.source === "keygen") {
+      return { error: "عدّل ترخيص Keygen عبر إجراء الإيقاف أو التمديد المخصص لمزامنة المزوّد.", license: current };
+    }
     const license = await dbUpdate(data.licenseId, data.updates);
     return { error: null as string | null, license };
   });
@@ -491,19 +539,27 @@ export const extendLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string; daysToAdd?: number; newExpiresAt?: string }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isAdministrator(context))) {
+    if (!(await isSuperAdministrator(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
 
     const current = await findLicenseById(data.licenseId);
     if (!current) return { error: "الترخيص غير موجود.", license: null };
 
-    let targetExpiresAt = data.newExpiresAt;
-    if (!targetExpiresAt && data.daysToAdd != null && data.daysToAdd > 0) {
-      const base = current.expiresAt ? new Date(current.expiresAt) : new Date();
-      targetExpiresAt = new Date(base.getTime() + data.daysToAdd * 86400000).toISOString();
+    const days = data.daysToAdd;
+    if (days != null && (!Number.isInteger(days) || days <= 0 || days > 3650)) {
+      return { error: "مدة التمديد يجب أن تكون بين يوم و3650 يومًا.", license: current };
     }
-    if (current.metadata?.source === "keygen" && targetExpiresAt) {
+    let targetExpiresAt = data.newExpiresAt;
+    if (targetExpiresAt && (!Number.isFinite(Date.parse(targetExpiresAt)) || Date.parse(targetExpiresAt) <= Date.now())) {
+      return { error: "تاريخ التمديد يجب أن يكون مستقبلًا.", license: current };
+    }
+    if (!targetExpiresAt && days) {
+      const base = Math.max(Date.now(), current.expiresAt ? Date.parse(current.expiresAt) : 0);
+      targetExpiresAt = new Date(base + days * 86400000).toISOString();
+    }
+    if (!targetExpiresAt) return { error: "أدخل مدة أو تاريخ انتهاء جديدًا.", license: current };
+    if (current.metadata?.source === "keygen") {
       const providerId = current.metadata.keygenLicenseId;
       if (!providerId) return { error: "معرّف ترخيص Keygen غير موجود.", license: current };
       try {
@@ -513,7 +569,7 @@ export const extendLicenseFn = createServerFn({ method: "POST" })
       }
     }
 
-    const license = await extendLicense(data.licenseId, data.daysToAdd, data.newExpiresAt);
+    const license = await extendLicense(data.licenseId, undefined, targetExpiresAt);
     return { error: null as string | null, license };
   });
 
@@ -522,11 +578,13 @@ export const assignLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string; userId: string; activate?: boolean }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isAdministrator(context))) {
+    if (!(await isSuperAdministrator(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
+    const target = await resolveUser(data.userId);
+    if (!target) return { error: "المستخدم غير موجود.", license: null as License | null };
     try {
-      const license = await assignLicense(data.licenseId, data.userId, data.activate ?? true);
+      const license = await assignLicense(data.licenseId, target.id, data.activate ?? true);
       return { error: null as string | null, license };
     } catch (error) {
       if (error instanceof LicenseOwnershipError) {
@@ -543,22 +601,22 @@ export const assignLicenseFn = createServerFn({ method: "POST" })
 // actual job — an operator should never have to go hunting for a user id in
 // another table to do it.
 
-/** Resolve an email (or an id) to a verified user id. */
-async function resolveUserId(value: string): Promise<string | null> {
+/** Resolve an email (or an id) to an actual Better Auth user. */
+async function resolveUser(value: string): Promise<{ id: string; email: string } | null> {
   const needle = value.trim();
   if (!needle) return null;
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
   if (needle.includes("@")) {
-    const rows = await sql<{ id: string }>`
-      select id from "user" where lower(email) = ${needle.toLowerCase()} limit 1
+    const rows = await sql<{ id: string; email: string }>`
+      select id, email from "user" where lower(email) = ${needle.toLowerCase()} limit 1
     `;
-    return rows[0]?.id ?? null;
+    return rows[0] ?? null;
   }
-  const rows = await sql<{ id: string }>`
-    select id from "user" where id = ${needle} limit 1
+  const rows = await sql<{ id: string; email: string }>`
+    select id, email from "user" where id = ${needle} limit 1
   `;
-  return rows[0]?.id ?? null;
+  return rows[0] ?? null;
 }
 
 /**
@@ -572,23 +630,42 @@ export const superAdminAssignLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string; user: string; activate?: boolean }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isAdministrator(context))) {
-      return { error: "غير مصرح.", license: null as License | null };
+    if (!(await isSuperAdministrator(context))) {
+      return { error: "تعيين التراخيص لصلاحية المالك فقط.", license: null as License | null };
     }
-    const userId = await resolveUserId(data.user);
-    if (!userId) return { error: "المستخدم غير موجود.", license: null as License | null };
+    const target = await resolveUser(data.user);
+    if (!target) return { error: "المستخدم غير موجود.", license: null as License | null };
     const current = await findLicenseById(data.licenseId);
     if (!current) return { error: "الترخيص غير موجود.", license: null as License | null };
     try {
-      const license = await assignLicense(data.licenseId, userId, data.activate ?? true);
+      if (current.metadata?.source === "keygen") {
+        if (!current.metadata.keygenLicenseId ||
+            (current.userId && current.userId !== target.id) ||
+            (current.metadata.nasaqUserId && current.metadata.nasaqUserId !== target.id)) {
+          return { error: "هذا الترخيص مربوط بحساب آخر لدى Keygen.", license: null as License | null };
+        }
+        if (current.metadata.paylinkTransactionNo) {
+          const repaired = await claimPaidKeygenForSession(current, { userId: target.id, userEmail: target.email });
+          return repaired
+            ? { error: null as string | null, license: repaired }
+            : { error: "لا يمكن ربط ترخيص الدفع قبل تأكيد Paylink والتحقق من Keygen.", license: null as License | null };
+        }
+        const remote = await getKeygenLicenseForClaim(current.metadata.keygenLicenseId);
+        if (remote.productId !== keygenProductId() ||
+            hashLicenseKey(remote.key) !== current.keyHash) {
+          return { error: "بيانات ترخيص Keygen لا تطابق السجل المحلي.", license: null as License | null };
+        }
+        const result = await activateKeygenForSession(remote.key, { userId: target.id, userEmail: target.email });
+        return result.success
+          ? { error: null as string | null, license: result.license }
+          : { error: result.message, license: null as License | null };
+      }
+      const license = await assignLicense(data.licenseId, target.id, data.activate ?? true);
       return { error: null as string | null, license };
     } catch (error) {
-      return {
-        error: error instanceof LicenseOwnershipError
-          ? "لا يمكن تعيين ترخيص Keygen دون ربطه بالمستخدم لدى Keygen."
-          : error instanceof Error ? error.message : "تعذّر تعيين الترخيص.",
-        license: null as License | null,
-      };
+      return { error: error instanceof LicenseOwnershipError || error instanceof KeygenOwnershipError
+        ? "مفتاح الترخيص لا يخص هذا المستخدم."
+        : "تعذّر ربط الترخيص. تحقق من اتصال Keygen وبيانات المستخدم.", license: null as License | null };
     }
   });
 
@@ -603,7 +680,7 @@ export const superAdminSetLicenseExpiryFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { licenseId: string; expiresAt: string | null }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await isAdministrator(context))) {
+    if (!(await isSuperAdministrator(context))) {
       return { error: "غير مصرح.", license: null as License | null };
     }
     const current = await findLicenseById(data.licenseId);
@@ -612,18 +689,20 @@ export const superAdminSetLicenseExpiryFn = createServerFn({ method: "POST" })
     let expiresAt = data.expiresAt;
     if (expiresAt) {
       const parsed = new Date(expiresAt);
-      if (Number.isNaN(parsed.getTime())) {
-        return { error: "تاريخ انتهاء غير صالح.", license: current };
+      if (!Number.isFinite(parsed.getTime()) || parsed.getTime() <= Date.now()) {
+        return { error: "تاريخ الانتهاء يجب أن يكون مستقبلًا.", license: current };
       }
       expiresAt = parsed.toISOString();
     }
 
-    if (current.metadata?.source === "keygen" && expiresAt) {
+    if (current.metadata?.source === "keygen") {
       const providerId = current.metadata.keygenLicenseId;
       if (!providerId) {
         return { error: "معرّف ترخيص Keygen غير موجود.", license: current };
       }
       try {
+        // Clearing an expiry must clear it at Keygen too; otherwise a local
+        // "مدى الحياة" row would be rejected by the provider on next check.
         await updateKeygenLicenseExpiry(providerId, expiresAt);
       } catch {
         return { error: "تعذر تحديث الترخيص لدى Keygen.", license: current };

@@ -1,10 +1,10 @@
-import { Crown, Loader2, ShieldCheck, Sparkles } from "lucide-react";
+import { Crown, Loader2, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
 import { useLicense } from "@/lib/license/client";
 import type { AppUser } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
 
 /**
- * Account state badge — «مرخص» / «مجاني».
+ * Account state badge — «مرخص» / «موقوف» / «مجاني».
  *
  * Mounted as its own component (rather than called as a hook inside
  * `HeaderAccount`) for two reasons: `useLicense` must run unconditionally, and
@@ -15,15 +15,16 @@ import { cn } from "@/lib/utils";
  * (`getLicenseStatusFn`): a licence row, an administrator identity or a cached
  * key. The browser never decides which badge it deserves.
  */
-export type AccountTier = "LOADING" | "LICENSED" | "ADMIN" | "FREE";
+export type AccountTier = "LOADING" | "LICENSED" | "ADMIN" | "SUSPENDED" | "FREE";
 
 export function useAccountTier(user: AppUser | null): AccountTier {
   // `useLicense` short-circuits when there is no cached key and no user id, so
   // mounting this for a real user costs exactly one status call.
-  const { isLoading, hasLicense, isAdmin } = useLicense(user?.id, user?.primaryEmail ?? null);
+  const { isLoading, hasLicense, isAdmin, isSuspended } = useLicense(user?.id, user?.primaryEmail ?? null);
   if (!user) return "FREE";
   if (isLoading) return "LOADING";
   if (isAdmin) return "ADMIN";
+  if (isSuspended) return "SUSPENDED";
   return hasLicense ? "LICENSED" : "FREE";
 }
 
@@ -48,6 +49,12 @@ const BADGE_META: Record<
     className:
       "border-amber-500/50 bg-amber-500/12 text-amber-700 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-300",
     Icon: Crown,
+  },
+  SUSPENDED: {
+    label: "موقوف",
+    className:
+      "border-red-500/40 bg-red-500/10 text-red-700 dark:border-red-400/40 dark:bg-red-400/10 dark:text-red-300",
+    Icon: ShieldAlert,
   },
   FREE: {
     label: "مجاني",
@@ -87,6 +94,8 @@ export function AccountBadge({
           ? "حساب مرخص — صلاحيات إدارية كاملة"
           : tier === "LICENSED"
             ? "حساب مرخص"
+            : tier === "SUSPENDED"
+              ? "الحساب موقوف مؤقتًا بقرار الإدارة"
             : tier === "LOADING"
               ? "جارٍ التحقق من حالة الترخيص"
               : "حساب مجاني — الترخيص يفتح المزايا المتقدمة"

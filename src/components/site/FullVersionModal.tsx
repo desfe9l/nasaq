@@ -101,7 +101,7 @@ export function FullVersionModal({ open, onClose, defaultTab = "features" }: Ful
         {hasLicense && license && (
           <div className="mx-6 mt-4 flex items-center gap-2 rounded-[10px] border border-[#006C35]/20 bg-[#006C35]/5 px-3 py-2 text-[12px] font-semibold text-[#0F1E33] dark:border-white/10 dark:bg-white/5 dark:text-white/70">
             <CheckCircle2 className="size-4 text-[#006C35]" />
-            لديك رخصة نشطة ({license.keyPrefix}…) — مزايا النسخة الكاملة مفعلة.
+            {license.keyPrefix ? `لديك رخصة نشطة (${license.keyPrefix}…)` : "اشتراكك مفعّل من الإدارة"} — مزايا النسخة الكاملة مفعلة.
           </div>
         )}
 

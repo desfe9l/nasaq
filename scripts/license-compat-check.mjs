@@ -67,6 +67,12 @@ globalThis.fetch = async (url, init = {}) => {
     records.set(key, record);
     return json({ data: licenseResource(record) }, 201);
   }
+  if (path === "/licenses" && method === "GET") {
+    if (!authorized(init)) return error(403, "missing token");
+    const transactionNo = parsed.searchParams.get("metadata[paylinkTransactionNo]");
+    const match = [...records.values()].find((record) => record.metadata.paylinkTransactionNo === transactionNo);
+    return json({ data: match ? [licenseResource(match)] : [] });
+  }
   if (path === "/licenses/actions/validate-key" && method === "POST") {
     const key = body?.meta?.key || "";
     const record = records.get(key);
@@ -283,6 +289,99 @@ assert.equal(await activation.revalidateLinkedKeygenLicense(revokedActive.licens
 assert.equal((await activation.revalidateKeygenForSession(revoked.key, USER)).valid, false);
 assert.equal((await db.findLicenseByKeyHash(keys.hashLicenseKey(revoked.key)))?.status, "REVOKED");
 console.log("  ok  TRIAL, EXPIRED and REVOKED revoke gated access on revalidation");
+
+// Paylink fulfilment must bind the payer at Keygen before it can report PAID.
+// Retries reuse the same provider key; a pre-existing unbound historical PAID
+// row can be repaired for its purchaser, but never for a different account.
+const { issuePaidKeygenLicense } = await import("../src/lib/license/paylink-fulfillment.server.ts");
+const PAID = { userId: "auth-paid", userEmail: "paid@nasaq.example" };
+await sql.query(`insert into "user" (id, name, email, "emailVerified") values ($1, $2, $3, true)`,
+  [PAID.userId, "Paid customer", PAID.userEmail]);
+const paidExpiry = new Date(Date.now() + 30 * 86400000).toISOString();
+const txNumber = "tx-paid-compat-1";
+const paidInput = { transactionNo: txNumber, orderNumber: "ORD-PAID-1", userId: PAID.userId,
+  userEmail: PAID.userEmail, plan: "individual-monthly", planName: "Individual Monthly", expiresAt: paidExpiry };
+const countBeforePaid = records.size;
+const boundPaid = await issuePaidKeygenLicense(paidInput);
+assert.equal(records.size, countBeforePaid + 1);
+assert.equal(boundPaid.userId, PAID.userId);
+assert.equal(boundPaid.metadata?.userScopeVerified, PAID.userId);
+assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).entitlements.advanced_export, true);
+assert.equal((await issuePaidKeygenLicense(paidInput)).id, boundPaid.id);
+assert.equal(records.size, countBeforePaid + 1, "a webhook retry must never mint again");
+await assert.rejects(() => issuePaidKeygenLicense({ ...paidInput, userId: OTHER.userId, userEmail: OTHER.userEmail }));
+assert.equal((await db.listAllLicenses(0, 10, PAID.userEmail)).licenses[0]?.userEmail, PAID.userEmail);
+assert.equal("keyHash" in (await db.listAllLicenses(0, 10, PAID.userEmail)).licenses[0], false);
+console.log("  ok  paid checkout → Keygen user scope → account, idempotency and admin search");
+
+const oldTx = "tx-legacy-paid-compat";
+const oldPaid = await keygen.createKeygenLicense({ plan: "individual-monthly", expiresAt: paidExpiry,
+  metadata: { paylinkTransactionNo: oldTx, nasaqUserId: PAID.userId } });
+const oldLocal = await activation.persistKeygenLicense(oldPaid, PAID.userId);
+assert.equal(oldLocal.metadata.userScopeVerified, undefined);
+assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).license?.id, boundPaid.id);
+await sql.query(`insert into paylink_transactions (id, user_id, order_number, transaction_no, plan_key, plan_id,
+    amount, currency, status, license_id, keygen_license_id, entitlement_expires_at)
+  values ($1, $2, $3, $4, 'individual-monthly', 'individual-monthly', 79, 'SAR', 'PAID', $5, $6, $7)`,
+  ["pay-compat-1", PAID.userId, "OLD-ORDER", oldTx, oldLocal.id, oldLocal.metadata.keygenLicenseId, paidExpiry]);
+assert.equal(await activation.claimPaidKeygenForSession(oldLocal, OTHER), null);
+assert.equal((await activation.claimPaidKeygenForSession(oldLocal, PAID))?.metadata.userScopeVerified, PAID.userId);
+assert.equal((await db.findLicenseById(oldLocal.id))?.status, "ACTIVE");
+console.log("  ok  historic PAID row repaired only after matching account, receipt and Keygen");
+
+// Provider outages must not leave stale paid features usable via server gates.
+const fetchOnline = globalThis.fetch;
+globalThis.fetch = async (url, init) => {
+  if (String(url).endsWith("/licenses/actions/validate-key")) throw new Error("provider offline");
+  return fetchOnline(url, init);
+};
+assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).entitlements.advanced_export, false);
+assert.equal((await db.findLicenseById(boundPaid.id))?.status, "ACTIVE", "outage must not revoke");
+globalThis.fetch = fetchOnline;
+console.log("  ok  paid features fail closed while Keygen is unreachable without revocation");
+
+// Existing administrator-approved subscriptions are an independent activation
+// path. They work without a browser key, take their plan from the catalog,
+// expire on the server, and explicit account suspension overrides all keys.
+const admin = await import("../src/lib/commercial/admin.server.ts");
+const ACTOR = { adminUserId: "offline-admin" };
+const MANUAL = { id: "manual-user", email: "manual@nasaq.example" };
+await admin.activateCustomer(sql, ACTOR, MANUAL.id, "team-monthly");
+const manual = await getAuthorizationContext(MANUAL);
+assert.equal(manual.license?.metadata?.source, "manual");
+assert.equal(manual.entitlements.advanced_export, true);
+assert.equal(manual.entitlements.team_features, true);
+await admin.suspendCustomer(sql, ACTOR, MANUAL.id);
+const suspended = await getAuthorizationContext(MANUAL);
+assert.equal(suspended.isSuspended, true);
+assert.equal(suspended.license, null);
+assert.equal(suspended.entitlements.advanced_export, false);
+await admin.restoreCustomer(sql, ACTOR, MANUAL.id);
+assert.equal((await getAuthorizationContext(MANUAL)).entitlements.advanced_export, true);
+await admin.setExpiration(sql, ACTOR, MANUAL.id, new Date(Date.now() - 86400000));
+assert.equal((await getAuthorizationContext(MANUAL)).entitlements.advanced_export, false);
+console.log("  ok  manual activation → plan features → suspension → restore → expiry");
+
+await admin.grantEntitlement(sql, { userId: PAID.userId,
+  plan: { id: "individual-monthly", durationDays: 30 }, sourceTransactionId: oldTx });
+await admin.suspendCustomer(sql, ACTOR, PAID.userId);
+assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).entitlements.advanced_export, false,
+  "a suspended customer cannot use an otherwise valid Keygen license");
+await admin.restoreCustomer(sql, ACTOR, PAID.userId);
+assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).entitlements.advanced_export, true);
+// A deliberate manual reactivation supersedes the prior Paylink source. Only
+// then is it safe to allow features while Keygen is down.
+await admin.activateCustomer(sql, ACTOR, PAID.userId, "individual-monthly");
+const { getSubscription } = await import("../src/lib/commercial/entitlement.server.ts");
+assert.equal((await getSubscription(sql, PAID.userId))?.source_transaction_id, null);
+globalThis.fetch = async (url, init) => {
+  if (String(url).endsWith("/licenses/actions/validate-key")) throw new Error("provider offline");
+  return fetchOnline(url, init);
+};
+assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).license?.metadata?.source, "manual");
+assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).entitlements.advanced_export, true);
+globalThis.fetch = fetchOnline;
+console.log("  ok  suspension overrides Keygen; explicit manual activation supersedes Paylink dependency");
 
 const legacy = await db.createLicense({ type: "PRO" });
 const legacyHash = keys.hashLicenseKey(legacy.plainKey);

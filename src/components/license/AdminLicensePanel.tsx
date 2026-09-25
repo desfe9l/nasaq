@@ -20,8 +20,10 @@
  *      `SUPER_ADMIN` row. The server refuses that for anyone else.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
+  adminCheckLicenseConnectionsFn,
+  adminLicenseIntegrationsFn,
   adminCreateLicenseFn,
   adminListLicensesFn,
   adminReactivateLicenseFn,
@@ -31,7 +33,8 @@ import {
   superAdminSetLicenseExpiryFn,
 } from "@/lib/license/functions";
 import { adminBootstrapOwnerFn, adminLicenseAccessFn } from "@/lib/admin/functions";
-import { LICENSE_TYPE_LABELS, type License, type LicenseType } from "@/lib/license/types";
+import { LICENSE_TYPE_LABELS, type AdminLicenseRow, type LicensePlan, type LicenseType } from "@/lib/license/types";
+import { getCatalogPlan, listCatalogPlans } from "@/lib/commercial/catalog";
 import {
   Ban,
   CalendarClock,
@@ -46,6 +49,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   UserPlus,
+  Link2,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -66,24 +70,35 @@ function toDateInput(value: string | null | undefined): string {
 }
 
 type Access = Awaited<ReturnType<typeof adminLicenseAccessFn>>;
+type Readiness = NonNullable<Awaited<ReturnType<typeof adminLicenseIntegrationsFn>>["readiness"]>;
+const PAGE_SIZE = 50;
 
 export default function AdminLicensePanel() {
   const [checking, setChecking] = useState(true);
   const [access, setAccess] = useState<Access | null>(null);
-  const [licenses, setLicenses] = useState<License[]>([]);
+  const [licenses, setLicenses] = useState<AdminLicenseRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [connections, setConnections] = useState<{ keygen: boolean; paylink: boolean } | null>(null);
+  const [checkingConnections, setCheckingConnections] = useState(false);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createType, setCreateType] = useState<LicenseType>("PRO");
+  const [createPlan, setCreatePlan] = useState<LicensePlan>("individual-monthly");
+  const [createUser, setCreateUser] = useState("");
+  const [creating, setCreating] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   const [trialDays, setTrialDays] = useState(30);
-  const [proExpiry, setProExpiry] = useState<"none" | "year">("none");
 
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => typeof window === "undefined" ? "" :
+    new URLSearchParams(window.location.search).get("search")?.slice(0, 100) || "");
+  const [search, setSearch] = useState(query);
+  const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "EXPIRED" | "REVOKED">(
     "ALL",
   );
@@ -97,16 +112,21 @@ export default function AdminLicensePanel() {
 
   const loadLicenses = useCallback(async () => {
     setLoading(true);
-    const result = await adminListLicensesFn({ data: { offset: 0, limit: 200 } });
-    if (result.error) {
-      setError(String(result.error));
-    } else {
-      setLicenses(result.licenses as License[]);
-      setTotal(result.total);
-      setError(null);
+    try {
+      const result = await adminListLicensesFn({ data: {
+        offset: page * PAGE_SIZE, limit: PAGE_SIZE, search, status: statusFilter,
+      } });
+      if (result.error) setError(result.error);
+      else {
+        setLicenses(result.licenses);
+        setTotal(result.total);
+      }
+    } catch {
+      setError("تعذر تحميل التراخيص. تحقق من اتصال قاعدة البيانات وأعد المحاولة.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, []);
+  }, [page, search, statusFilter]);
 
   const loadAccess = useCallback(async () => {
     setChecking(true);
@@ -119,125 +139,136 @@ export default function AdminLicensePanel() {
     }
   }, []);
 
+  useEffect(() => { void loadAccess(); }, [loadAccess]);
   useEffect(() => {
-    void loadAccess();
-  }, [loadAccess]);
-
+    const timer = window.setTimeout(() => setSearch(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
   useEffect(() => {
     if (access?.isAdmin) void loadLicenses();
-  }, [access, loadLicenses]);
+  }, [access?.isAdmin, loadLicenses]);
+  useEffect(() => {
+    if (!access?.isAdmin) return;
+    void adminLicenseIntegrationsFn().then((result) => {
+      if (result.readiness) setReadiness(result.readiness);
+    }).catch(() => setReadiness(null));
+  }, [access?.isAdmin]);
+
+  const checkConnections = async () => {
+    setCheckingConnections(true);
+    setConnections(null);
+    try {
+      const result = await adminCheckLicenseConnectionsFn();
+      if (result.error) setError(result.error);
+      else setConnections({ keygen: result.keygen, paylink: result.paylink });
+    } catch {
+      setError("تعذر الاتصال بمزوّدي التفعيل. حاول مجددًا.");
+    } finally {
+      setCheckingConnections(false);
+    }
+  };
 
   const bootstrap = async () => {
     setBusyId("bootstrap");
     try {
       const result = await adminBootstrapOwnerFn();
       await loadAccess();
-      if (!result.ok && result.reason === "not_owner") {
-        setError(
-          "هذا الحساب غير مُعلن كمالك في إعدادات النشر. أضف NASAQ_OWNER_EMAIL أو NASAQ_SUPER_ADMIN_IDS ثم أعد المحاولة.",
-        );
-      }
+      if (!result.ok) setError("تعذر تفعيل صلاحيات المالك. تأكد من هوية الحساب في إعدادات النشر.");
+    } catch {
+      setError("تعذر التحقق من صلاحيات المالك. حاول مجددًا.");
     } finally {
       setBusyId(null);
     }
   };
 
   const computeExpiresAt = (): string | undefined => {
-    if (createType === "TRIAL" && trialDays > 0) {
-      return new Date(Date.now() + trialDays * 86400000).toISOString();
-    }
-    if (createType === "PRO" && proExpiry === "year") {
-      return new Date(Date.now() + 365 * 86400000).toISOString();
-    }
-    return undefined;
+    const days = createType === "TRIAL" ? trialDays
+      : createType === "PRO" ? getCatalogPlan(createPlan)?.durationDays : null;
+    return days ? new Date(Date.now() + days * 86400000).toISOString() : undefined;
   };
 
   const handleCreate = async () => {
-    const result = await adminCreateLicenseFn({
-      data: { type: createType, expiresAt: computeExpiresAt() },
-    });
-    if (result.plainKey && typeof result.plainKey === "string") {
-      setNewKey(result.plainKey);
-      setShowCreate(false);
-      void loadLicenses();
-    } else if (result.error) {
-      setError(String(result.error));
-    }
-  };
-
-  const handleCopyKey = () => {
-    if (newKey) {
-      void navigator.clipboard.writeText(newKey);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  const withBusy = async (id: string, run: () => Promise<void>) => {
-    setBusyId(id);
+    setCreating(true);
+    setError(null);
     try {
-      await run();
+      const result = await adminCreateLicenseFn({ data: {
+        type: createType, plan: createType === "PRO" ? createPlan : undefined,
+        user: createUser.trim() || undefined, expiresAt: computeExpiresAt(),
+      } });
+      if (result.plainKey) {
+        setNewKey(result.plainKey);
+        setCopied(false);
+        setShowCreate(false);
+        setNotice(createUser.trim()
+          ? createType === "FREE" ? "تم إصدار الترخيص المجاني وربطه بحساب المستخدم."
+            : "تم إصدار الترخيص وربطه بالمستخدم بعد التحقق لدى Keygen."
+          : "تم إصدار الترخيص. انسخ المفتاح قبل مغادرة الصفحة.");
+        setPage(0); setQuery(""); setSearch(""); setStatusFilter("ALL");
+        void loadLicenses();
+      } else setError(result.error || "تعذر إصدار الترخيص.");
+    } catch {
+      setError("تعذر إصدار الترخيص. تحقق من الاتصال وأعد المحاولة.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCopyKey = async () => {
+    if (!newKey) return;
+    try {
+      await navigator.clipboard.writeText(newKey);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("تعذر النسخ تلقائيًا؛ حدد المفتاح وانسخه يدويًا.");
+    }
+  };
+
+  const withBusy = async (
+    id: string, run: () => Promise<{ error: string | null }>,
+    success: string, onSuccess?: () => void,
+  ) => {
+    setBusyId(id);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await run();
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      onSuccess?.();
+      setNotice(success);
+      await loadLicenses();
+    } catch {
+      setError("تعذر تنفيذ الإجراء. لم نؤكد التغيير لدى Keygen؛ أعد المحاولة بعد التحقق.");
     } finally {
       setBusyId(null);
-      void loadLicenses();
     }
   };
 
   const handleRevoke = (id: string) =>
-    withBusy(id, async () => {
-      await adminRevokeLicenseFn({ data: { licenseId: id } });
-    });
+    withBusy(id, () => adminRevokeLicenseFn({ data: { licenseId: id } }), "تم إيقاف الترخيص لدى Keygen وفي المنصة.");
 
   const handleReactivate = (id: string) =>
-    withBusy(id, async () => {
-      await adminReactivateLicenseFn({ data: { licenseId: id } });
-    });
+    withBusy(id, () => adminReactivateLicenseFn({ data: { licenseId: id } }), "تمت إعادة تفعيل الترخيص.");
 
   const handleExtend = (id: string, days: number) =>
-    withBusy(id, async () => {
-      await extendLicenseFn({ data: { licenseId: id, daysToAdd: days } });
-      setExtendState((prev) => ({ ...prev, [id]: { open: false, days: 30 } }));
-    });
+    withBusy(id, () => extendLicenseFn({ data: { licenseId: id, daysToAdd: days } }),
+      "تم تمديد الترخيص ومزامنة Keygen.",
+      () => setExtendState((prev) => ({ ...prev, [id]: { open: false, days: 30 } })));
 
   const handleSetExpiry = (id: string, value: string) =>
-    withBusy(id, async () => {
-      const iso = value ? new Date(`${value}T23:59:59.000Z`).toISOString() : null;
-      await superAdminSetLicenseExpiryFn({ data: { licenseId: id, expiresAt: iso } });
-      setExpiryState((prev) => ({ ...prev, [id]: { open: false, value } }));
-    });
+    withBusy(id, () => superAdminSetLicenseExpiryFn({
+      data: { licenseId: id, expiresAt: value ? new Date(`${value}T23:59:59.000Z`).toISOString() : null },
+    }), "تم تحديث تاريخ الانتهاء لدى Keygen وفي المنصة.",
+    () => setExpiryState((prev) => ({ ...prev, [id]: { open: false, value } })));
 
-  /**
-   * Assignment accepts an EMAIL or a user id.
-   *
-   * The operator's mental object is "the person who paid", not "row 47 in
-   * `user`"; making them leave this screen to look up an id is how manual
-   * activations get applied to the wrong account.
-   */
   const handleAssign = (id: string, user: string) =>
-    withBusy(id, async () => {
-      const result = await superAdminAssignLicenseFn({
-        data: { licenseId: id, user, activate: true },
-      });
-      if (result.error) {
-        setError(String(result.error));
-        return;
-      }
-      setAssignState((prev) => ({ ...prev, [id]: { open: false, user: "" } }));
-    });
-
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return licenses.filter((lic) => {
-      if (statusFilter !== "ALL" && lic.status !== statusFilter) return false;
-      if (!needle) return true;
-      return (
-        lic.keyPrefix.toLowerCase().includes(needle) ||
-        (lic.userId ?? "").toLowerCase().includes(needle) ||
-        lic.type.toLowerCase().includes(needle) ||
-        (lic.metadata?.source ?? "").toLowerCase().includes(needle)
-      );
-    });
-  }, [licenses, query, statusFilter]);
+    withBusy(id, () => superAdminAssignLicenseFn({
+      data: { licenseId: id, user, activate: true },
+    }), "تم ربط الترخيص بالحساب والتحقق من التفعيل.",
+    () => setAssignState((prev) => ({ ...prev, [id]: { open: false, user: "" } })));
 
   const statusBadgeClass = (status: string): string => {
     switch (status) {
@@ -315,8 +346,8 @@ export default function AdminLicensePanel() {
     );
   }
 
-  const formatExpiry = (lic: License) => {
-    if (!lic.expiresAt) return <span className="text-muted">مدى الحياة</span>;
+  const formatExpiry = (lic: AdminLicenseRow) => {
+    if (!lic.expiresAt) return <span className="text-muted">{lic.type === "LIFETIME" ? "مدى الحياة" : "بدون تاريخ انتهاء"}</span>;
     const d = new Date(lic.expiresAt);
     const expired = d.getTime() < Date.now();
     return (
@@ -340,7 +371,7 @@ export default function AdminLicensePanel() {
               <div>
                 <h1 className="text-[17px] font-extrabold">إدارة التراخيص</h1>
                 <p className="text-[11px] text-muted">
-                  لوحة المالك — {total} ترخيص مسجل في منصة نَسَق
+                  {total} ترخيص مطابق · Paylink → Keygen → حساب العميل
                 </p>
               </div>
             </div>
@@ -355,7 +386,7 @@ export default function AdminLicensePanel() {
                 title={
                   access.isSuperAdmin
                     ? "صلاحيات مالك كاملة: إنشاء وتفعيل وتعيين التراخيص يدويًا"
-                    : "صلاحيات إدارية — لا تشمل إنشاء التراخيص"
+                    : "صلاحية اطلاع فقط؛ إصدار وتعديل التراخيص للمالك"
                 }
               >
                 {access.isSuperAdmin ? (
@@ -363,8 +394,9 @@ export default function AdminLicensePanel() {
                 ) : (
                   <ShieldCheck className="size-3" aria-hidden />
                 )}
-                {access.isSuperAdmin ? "مالك (SUPER_ADMIN)" : "مدير (ADMIN)"}
+                {access.isSuperAdmin ? "مالك (SUPER_ADMIN)" : "مدير — عرض فقط"}
               </span>
+              <a href="/admin" className="inline-flex h-9 items-center rounded-[9px] border border-line px-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10 dark:hover:bg-white/5">لوحة الإدارة</a>
               <button
                 type="button"
                 onClick={() => void loadLicenses()}
@@ -374,23 +406,58 @@ export default function AdminLicensePanel() {
                 <RefreshCw className={cn("size-3.5", loading && "animate-spin")} aria-hidden />
                 تحديث
               </button>
-              <button
-                type="button"
-                onClick={() => setShowCreate(true)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-emerald-600 px-3 text-[12px] font-extrabold text-white hover:bg-emerald-700"
-              >
-                <Plus className="size-4" aria-hidden />
-                إنشاء ترخيص
-              </button>
+              {access.isSuperAdmin && (
+                <button
+                  type="button"
+                  onClick={() => { setError(null); setShowCreate(true); }}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-emerald-600 px-3 text-[12px] font-extrabold text-white hover:bg-emerald-700"
+                >
+                  <Plus className="size-4" aria-hidden />
+                  إصدار ترخيص
+                </button>
+              )}
             </div>
           </div>
         </header>
 
-        {error && (
-          <p className="rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">
-            {error}
+        <section className="rounded-[14px] border border-line bg-white p-4 dark:border-white/10 dark:bg-[#161c26]" aria-label="جاهزية تكامل التراخيص">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Link2 className="size-4 text-emerald-700" aria-hidden />
+              <h2 className="text-[13px] font-extrabold">جاهزية التفعيل والربط</h2>
+            </div>
+            <button type="button" onClick={() => void checkConnections()} disabled={checkingConnections}
+              className="inline-flex h-9 items-center gap-2 rounded-[9px] border border-line px-3 text-[12px] font-bold hover:bg-line-2 disabled:opacity-50 dark:border-white/10">
+              <RefreshCw className={cn("size-3.5", checkingConnections && "animate-spin")} aria-hidden />
+              {checkingConnections ? "جارٍ اختبار الاتصال…" : "اختبار الاتصال دون إصدار أو دفع"}
+            </button>
+          </div>
+          {readiness ? (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-[10px] border border-line bg-paper/50 p-3 text-[12px] dark:border-white/10 dark:bg-white/[0.03]">
+                <p className="font-extrabold">Keygen · جهة التفعيل</p>
+                <p className="mt-2 text-muted">رمز API: {readiness.keygen.token ? "مضبوط" : "ناقص (KEYGEN_API_TOKEN)"} · توقيع Webhook: {readiness.keygen.webhookSignature ? "مضبوط" : "ناقص (KEYGEN_PUBLIC_KEY)"}</p>
+                <p className="mt-1 text-muted">سياسات الباقات: {readiness.keygen.missingPolicies.length ? `تنقص ${readiness.keygen.missingPolicies.map((key) => getCatalogPlan(key)?.arabicName || key).join("، ")}` : "مهيأة"}</p>
+                {connections && <p className={cn("mt-2 font-extrabold", connections.keygen ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>اتصال API: {connections.keygen ? "تم التحقق" : "فشل أو لم يُضبط"}</p>}
+              </div>
+              <div className="rounded-[10px] border border-line bg-paper/50 p-3 text-[12px] dark:border-white/10 dark:bg-white/[0.03]">
+                <p className="font-extrabold">Paylink · بوابة الدفع</p>
+                <p className="mt-2 text-muted">مفاتيح API: {readiness.paylink.credentials ? "مضبوطة" : "ناقصة (PAYLINK_API_ID / PAYLINK_SECRET_KEY)"}</p>
+                <p className="mt-1 text-muted">رمز Webhook: {readiness.paylink.webhookToken ? "مضبوط" : "ناقص (PAYLINK_WEBHOOK_TOKEN)"} · رابط العودة: {readiness.paylink.publicUrl ? "مضبوط" : "غير مهيأ"}</p>
+                {connections && <p className={cn("mt-2 font-extrabold", connections.paylink ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>اتصال API: {connections.paylink ? "تم التحقق" : "فشل أو لم يُضبط"}</p>}
+              </div>
+            </div>
+          ) : <p className="mt-3 text-[12px] text-muted">جارٍ قراءة إعدادات التكامل…</p>}
+          <p className="mt-3 text-[11px] leading-6 text-muted">
+            {readiness?.checkoutConfigured ? "متغيرات الدفع والإصدار مكتملة." : "بعض متغيرات الدفع أو التفعيل ناقصة؛ تظل التراخيص اليدوية المحلية قابلة للإدارة."}
+            {" "}اختبار الاتصال لا يثبت تسجيل Webhook لدى المزوّدين؛ سجّل
+            <code dir="ltr"> /api/webhooks/paylink </code> (V2) و<code dir="ltr"> /api/webhooks/keygen </code>
+            في لوحتي Paylink وKeygen. <a href="/owner-vault" className="font-bold text-emerald-700 underline dark:text-emerald-300">دليل إعدادات المالك</a>
           </p>
-        )}
+        </section>
+
+        {error && <p role="alert" className="rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">{error}</p>}
+        {notice && <p role="status" className="rounded-[10px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{notice}</p>}
 
         {newKey && (
           <div className="rounded-[12px] border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-900/20">
@@ -436,8 +503,9 @@ export default function AdminLicensePanel() {
             />
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="ابحث بالبادئة أو المستخدم أو المصدر…"
+              onChange={(e) => { setQuery(e.target.value); setPage(0); }}
+              placeholder="ابحث بالمفتاح أو البريد أو رقم Paylink…"
+              aria-label="بحث في كل التراخيص"
               className="h-9 w-full rounded-[9px] border border-line bg-white pe-9 ps-3 text-[12px] font-bold outline-none focus:border-emerald-600 dark:border-white/10 dark:bg-[#161c26]"
             />
           </label>
@@ -453,7 +521,7 @@ export default function AdminLicensePanel() {
               <button
                 key={value}
                 type="button"
-                onClick={() => setStatusFilter(value)}
+                onClick={() => { setStatusFilter(value); setPage(0); }}
                 className={cn(
                   "h-7 rounded-[7px] px-2.5 text-[11px] font-extrabold transition",
                   statusFilter === value
@@ -489,7 +557,7 @@ export default function AdminLicensePanel() {
                   </td>
                 </tr>
               )}
-              {!loading && visible.length === 0 && (
+              {!loading && licenses.length === 0 && (
                 <tr>
                   <td colSpan={7} className="p-8 text-center text-muted">
                     لا توجد تراخيص مطابقة.
@@ -497,7 +565,7 @@ export default function AdminLicensePanel() {
                 </tr>
               )}
               {!loading &&
-                visible.map((lic) => (
+                licenses.map((lic) => (
                   <tr
                     key={lic.id}
                     className="border-b border-line last:border-0 hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/[0.02]"
@@ -518,12 +586,18 @@ export default function AdminLicensePanel() {
                             ? "منتهي"
                             : "موقوف"}
                       </span>
+                      {lic.metadata?.source === "keygen" && lic.userId && !lic.metadata.userScopeVerified && (
+                        <span className="mt-1 block text-[10px] font-bold text-amber-700 dark:text-amber-300">بانتظار ربط Keygen</span>
+                      )}
                     </td>
                     <td className="p-3 text-[11px] text-muted">
                       {lic.metadata?.source === "keygen" ? "Keygen" : "يدوي"}
+                      {lic.metadata?.paylinkTransactionNo && <span className="mt-1 block max-w-[130px] truncate font-mono" dir="ltr" title={lic.metadata.paylinkTransactionNo}>{lic.metadata.paylinkTransactionNo}</span>}
                     </td>
                     <td className="p-3">
-                      {assignState[lic.id]?.open ? (
+                      {!access.isSuperAdmin || (lic.metadata?.source === "keygen" && lic.userId && lic.metadata.userScopeVerified === lic.userId) ? (
+                        <span className="max-w-[190px] truncate text-[11px]" title={lic.userEmail || lic.userId || "غير معيّن"}>{lic.userEmail || lic.userId || "— غير معيّن —"}</span>
+                      ) : assignState[lic.id]?.open ? (
                         <div className="flex items-center gap-1">
                           <input
                             value={assignState[lic.id]!.user}
@@ -567,18 +641,18 @@ export default function AdminLicensePanel() {
                           onClick={() =>
                             setAssignState((prev) => ({
                               ...prev,
-                              [lic.id]: { open: true, user: lic.userId ?? "" },
+                              [lic.id]: { open: true, user: lic.userEmail ?? lic.userId ?? "" },
                             }))
                           }
                           className="max-w-[190px] truncate text-[11px] text-muted hover:text-emerald-700 hover:underline"
                           title="تعيين الترخيص لمستخدم (بالبريد أو المعرّف)"
                         >
-                          {lic.userId ?? "— غير معيّن —"}
+                          {lic.userEmail || lic.userId || "— غير معيّن —"}
                         </button>
                       )}
                     </td>
                     <td className="p-3">
-                      {expiryState[lic.id]?.open ? (
+                      {!access.isSuperAdmin ? formatExpiry(lic) : expiryState[lic.id]?.open ? (
                         <div className="flex items-center gap-1">
                           <input
                             type="date"
@@ -631,6 +705,7 @@ export default function AdminLicensePanel() {
                     </td>
                     <td className="p-3">
                       <div className="flex flex-wrap items-center gap-2">
+                        {!access.isSuperAdmin ? <span className="text-[11px] text-muted">للمالك فقط</span> : <>
                         {extendState[lic.id]?.open ? (
                           <div className="flex items-center gap-1">
                             <select
@@ -709,6 +784,7 @@ export default function AdminLicensePanel() {
                             إعادة تفعيل
                           </button>
                         )}
+                        </>}
                       </div>
                     </td>
                   </tr>
@@ -716,9 +792,18 @@ export default function AdminLicensePanel() {
             </tbody>
           </table>
         </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-muted">
+          <span>عرض {total ? page * PAGE_SIZE + 1 : 0}–{Math.min((page + 1) * PAGE_SIZE, total)} من {total} ترخيص مطابق</span>
+          <div className="flex gap-2">
+            <button type="button" disabled={loading || page === 0} onClick={() => setPage((p) => p - 1)}
+              className="h-9 rounded-[8px] border border-line px-3 font-bold disabled:opacity-40 dark:border-white/10">السابق</button>
+            <button type="button" disabled={loading || (page + 1) * PAGE_SIZE >= total} onClick={() => setPage((p) => p + 1)}
+              className="h-9 rounded-[8px] border border-line px-3 font-bold disabled:opacity-40 dark:border-white/10">التالي</button>
+          </div>
+        </div>
       </div>
 
-      {showCreate && (
+      {showCreate && access.isSuperAdmin && (
         <div
           className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
           role="dialog"
@@ -762,28 +847,35 @@ export default function AdminLicensePanel() {
 
             {createType === "PRO" && (
               <>
-                <label className="mb-2 block text-[12px] font-extrabold">المدة (اختياري)</label>
-                <select
-                  value={proExpiry}
-                  onChange={(e) => setProExpiry(e.target.value as "none" | "year")}
-                  className="mb-4 h-10 w-full rounded-[9px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-emerald-600 dark:border-white/10"
-                >
-                  <option value="none">بدون انتهاء (غير محدود)</option>
-                  <option value="year">سنة واحدة</option>
+                <label htmlFor="license-plan" className="mb-2 block text-[12px] font-extrabold">سياسة الترخيص وفترته</label>
+                <select id="license-plan" value={createPlan} onChange={(e) => setCreatePlan(e.target.value as LicensePlan)}
+                  className="mb-2 h-10 w-full rounded-[9px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-emerald-600 dark:border-white/10">
+                  {listCatalogPlans().map((plan) => <option key={plan.key} value={plan.key}>{plan.arabicName} — {plan.durationDays} يومًا</option>)}
                 </select>
+                {readiness?.keygen.missingPolicies.includes(createPlan) &&
+                  <p className="mb-3 text-[11px] font-bold text-amber-700">معرّف سياسة Keygen لهذه الباقة ناقص؛ أضفه لإصدار الترخيص.</p>}
               </>
             )}
-
+            <label htmlFor="license-target" className="mb-2 block text-[12px] font-extrabold">حساب المستخدم (اختياري)</label>
+            <input id="license-target" type="text" value={createUser} onChange={(e) => setCreateUser(e.target.value)}
+              placeholder="البريد الإلكتروني أو معرّف الحساب" dir="auto" autoComplete="off"
+              className="mb-2 h-10 w-full rounded-[9px] border border-line bg-transparent px-3 text-[12px] outline-none focus:border-emerald-600 dark:border-white/10" />
+            <p className="mb-3 text-[11px] leading-5 text-muted">{createType === "FREE"
+              ? "يربط الترخيص المجاني بالحساب محليًا، ولا يتطلب Keygen."
+              : "تحديد حساب يربط الترخيص به لدى Keygen ويفعّله بعد التحقق. بدونه يُصدر مفتاح غير مخصص ويُفعّله صاحبه من صفحة الترخيص."}</p>
+            {error && <p role="alert" className="mb-3 rounded-[8px] bg-red-50 p-2 text-[11px] font-bold text-red-700 dark:bg-red-900/20 dark:text-red-300">{error}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => void handleCreate()}
-                className="h-10 flex-1 rounded-[9px] bg-emerald-600 text-[13px] font-extrabold text-white hover:bg-emerald-700"
+                disabled={creating || (createType === "PRO" && readiness?.keygen.missingPolicies.includes(createPlan))}
+                className="h-10 flex-1 rounded-[9px] bg-emerald-600 text-[13px] font-extrabold text-white hover:bg-emerald-700 disabled:opacity-50"
               >
-                إنشاء
+                {creating ? "جارٍ الإصدار…" : createUser.trim() ? "إصدار وربط الترخيص" : "إصدار مفتاح"}
               </button>
               <button
                 type="button"
+                disabled={creating}
                 onClick={() => setShowCreate(false)}
                 className="h-10 rounded-[9px] border border-line px-4 text-[13px] font-bold hover:bg-line-2 dark:border-white/10"
               >

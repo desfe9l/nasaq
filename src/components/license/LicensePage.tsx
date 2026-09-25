@@ -6,7 +6,7 @@
  */
 
 import { useState } from "react";
-import { useLicense } from "@/lib/license/client";
+import { getCachedLicenseKey, useLicense } from "@/lib/license/client";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { BRAND } from "@/lib/brand";
 import {
@@ -36,7 +36,7 @@ const PLAN_CONFIG: Record<LicenseType, { icon: typeof Shield; color: string; bg:
 
 export default function LicensePage() {
   const user = useCurrentUser();
-  const { hasLicense, isAdmin, license, entitlements, activate, deactivate, revalidate, isLoading, error } = useLicense(user?.id, user?.primaryEmail);
+  const { hasLicense, isAdmin, isSuspended, license, entitlements, activate, deactivate, revalidate, isLoading, error } = useLicense(user?.id, user?.primaryEmail);
   const [showActivate, setShowActivate] = useState(false);
   const [activateKey, setActivateKey] = useState("");
   const [activating, setActivating] = useState(false);
@@ -103,8 +103,10 @@ export default function LicensePage() {
                 {isAdmin ? "وصول إداري" : "نشط"}
               </span>
             ) : (
-              <span className="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                {license?.status === "REVOKED" ? "ملغى" : license?.status === "EXPIRED" ? "منتهي" : "مجاني"}
+              <span className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${isSuspended
+                ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"}`}>
+                {isSuspended ? "موقوف بقرار الإدارة" : license?.status === "REVOKED" ? "ملغى" : license?.status === "EXPIRED" ? "منتهي" : "مجاني"}
               </span>
             )}
           </div>
@@ -140,9 +142,16 @@ export default function LicensePage() {
           </div>
         )}
 
+        {license?.source === "manual" && !license.keyPrefix && (
+          <p className="mt-4 text-sm text-muted">فُعّل اشتراكك من الإدارة، ولا تحتاج إلى إدخال مفتاح ترخيص.</p>
+        )}
+        {/* Server verification, not the local Keygen row, decides access. */}
+        {!hasLicense && error && (
+          <p role="status" className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm leading-6 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">{error}</p>
+        )}
         {/* Actions */}
-        <div className="mt-4 flex gap-2">
-          {!hasLicense && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {!hasLicense && !isSuspended && (
             <button
               type="button"
               onClick={() => setShowActivate(true)}
@@ -152,10 +161,15 @@ export default function LicensePage() {
               تفعيل ترخيص
             </button>
           )}
+          {!hasLicense && license?.status === "ACTIVE" && (
+            <button type="button" onClick={() => void revalidate()} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10">إعادة التحقق من الدفع والترخيص</button>
+          )}
           {hasLicense && !isAdmin && (
             <>
               <button type="button" onClick={() => void revalidate()} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10">تحقق الآن</button>
-              <button type="button" onClick={deactivate} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10">إلغاء التفعيل</button>
+              {getCachedLicenseKey() && (
+                <button type="button" onClick={deactivate} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10">مسح المفتاح من هذا المتصفح</button>
+              )}
             </>
           )}
         </div>
@@ -212,8 +226,8 @@ export default function LicensePage() {
         </div>
       </div>
 
-      {/* Error Display */}
-      {error && (
+      {/* Action errors when an active plan still exists (unverified status is above). */}
+      {error && hasLicense && (
         <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
           {error}
         </div>
