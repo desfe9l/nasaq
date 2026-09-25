@@ -235,7 +235,7 @@ export function SiteHeader({ current }: { current: string }) {
      * `shadow-sm` keep a crisp edge against the content underneath (without them
      * a blurred bar smears into the page it is floating over).
      */}
-    <header className="sticky top-0 z-40 border-b border-line/60 bg-white/80 shadow-sm backdrop-blur-[12px] dark:border-white/10 dark:bg-[#111722]/80">
+    <header className="sticky top-0 z-40 border-b border-line bg-white dark:border-white/10 dark:bg-[#111722]">
       <div className="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_1fr] items-center gap-x-3 px-4 sm:gap-x-4 sm:px-6 lg:flex">
         <a href="/" className="flex shrink-0 items-center gap-2.5">
           <BrandLogo />

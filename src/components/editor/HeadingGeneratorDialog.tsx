@@ -13,17 +13,6 @@ import {
 } from "@/lib/editor/heading-generator";
 import { cn } from "@/lib/utils";
 
-/**
- * مولد عناوين الفقرات — the section-heading generator dialog.
- *
- * Headings are the one part of an institutional report that is pure repetition:
- * the same band, the same rule, the same spacing, over and over. This dialog
- * inserts one as ordinary elements, so the result stays editable — the author
- * can retype the title, restyle the band, or delete the ornament, because none
- * of it was baked into a picture.
- */
-
-/** Palette derived from the project's own theme, so a heading never clashes. */
 function paletteForTheme(themeId: keyof typeof THEMES): HeadingPalette {
   const t = THEMES[themeId];
   return {
@@ -35,12 +24,6 @@ function paletteForTheme(themeId: keyof typeof THEMES): HeadingPalette {
   };
 }
 
-/**
- * Generated style → `ElStyle`. Bands and rules are `box` elements: `fill`
- * paints them and `borderWidth`\/`borderColor` outline them, which is the same
- * pair the properties panel edits — so what the author sees in the inspector is
- * what the generator actually produced.
- */
 function boxStyle(part: Record<string, string | number>): ElStyle {
   const style: ElStyle = { fill: String(part.fill ?? "") };
   if (part.radius != null) style.radius = Number(part.radius);
@@ -74,7 +57,6 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
 
   const page = pages.find((p) => p.id === activePageId) ?? pages[0];
   const size = page ? pageSize(page) : { w: 210, h: 297 };
-  // The text column: page width minus the usual 15mm margins on both sides.
   const columnWidth = Math.max(60, Math.round(size.w - 30));
 
   const [preset, setPreset] = useState<HeadingPresetId>("side-bar");
@@ -99,8 +81,6 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
     if (!page) return;
     setBusy(true);
     try {
-      // Place the heading inside the text column, below whatever is already at
-      // the top of the page, so successive insertions stack instead of colliding.
       const lowest = page.elements.reduce(
         (max, el) => Math.max(max, el.y + el.h),
         15,
@@ -141,8 +121,6 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
                 y: y + part.y,
                 w: Math.max(0.4, part.w),
                 h: Math.max(0.4, part.h),
-                // `opacity` lives on the element, not on `ElStyle` — the ribbon
-                // plate is a tint, so it is the element that is translucent.
                 ...(part.style.opacity != null
                   ? { opacity: Number(part.style.opacity) }
                   : {}),
@@ -156,16 +134,13 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
         return;
       }
 
-      // Group the pieces so the heading travels as one unit. `group()` keeps
-      // them individually editable — ungroup and every part is a normal element
-      // again, which is what distinguishes this from stamping an image.
       if (created.length > 1) {
         selectMany(created);
         groupSelection();
       } else {
         selectMany(created);
       }
-      toast.success("تم إدراج عنوان الفقرة — يمكنك تعديله بالكامل", { duration: 2200 });
+      toast.success("تم إدراج عنوان الفقرة — منظّم ومتوازن وجاهز للتعديل", { duration: 2200 });
       onClose();
     } finally {
       setBusy(false);
@@ -176,7 +151,7 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-2 sm:p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="مولد عناوين الفقرات"
@@ -184,8 +159,8 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
         if (e.target === e.currentTarget && !busy) onClose();
       }}
     >
-      <div className="flex max-h-[88vh] w-full max-w-2xl flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-2xl dark:border-white/10 dark:bg-[#161c26]">
-        <header className="flex items-center justify-between border-b border-line px-4 py-3 dark:border-white/10">
+      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-2xl dark:border-white/10 dark:bg-[#161c26]">
+        <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3 dark:border-white/10">
           <div className="flex items-center gap-2">
             <Heading1 className="size-4 text-navy dark:text-gold-2" aria-hidden />
             <div>
@@ -206,8 +181,8 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
           </button>
         </header>
 
-        <div className="grid flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-[1fr_240px]">
-          <div className="grid gap-3">
+        <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-4 md:grid-cols-[1fr_260px] editor-pane-scroll">
+          <div className="grid gap-3 content-start">
             <label className="block">
               <span className="mb-1 block text-[11px] font-extrabold">عنوان الفقرة</span>
               <input
@@ -258,7 +233,7 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
 
             <div>
               <h3 className="mb-2 text-[11px] font-extrabold">التصميم</h3>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2">
                 {HEADING_PRESETS.map((item) => (
                   <button
                     key={item.id}
@@ -266,30 +241,30 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
                     onClick={() => setPreset(item.id)}
                     title={item.hint}
                     className={cn(
-                      "relative rounded-[8px] border px-2 py-2 text-[10px] font-extrabold transition",
+                      "relative flex min-h-[46px] items-center justify-center rounded-[8px] border px-2 py-2.5 text-[11px] font-extrabold transition",
                       preset === item.id
                         ? "border-navy bg-navy/5 text-navy dark:text-gold-2"
-                        : "border-line text-muted hover:border-navy/50 dark:border-white/10",
+                        : "border-line bg-white text-muted hover:border-navy/50 dark:border-white/10 dark:bg-white/[0.03]",
                     )}
                   >
                     {preset === item.id && (
-                      <Check className="absolute end-1 top-1 size-3" aria-hidden />
+                      <Check className="absolute end-1.5 top-1.5 size-3 text-navy dark:text-gold-2" aria-hidden />
                     )}
-                    {item.label}
+                    <span className="line-clamp-2 text-center leading-4">{item.label}</span>
                   </button>
                 ))}
               </div>
-              <p className="mt-2 text-[10px] leading-5 text-muted">
+              <p className="mt-2 rounded-[6px] bg-paper px-2 py-1.5 text-[10px] leading-5 text-muted dark:bg-white/5">
                 {HEADING_PRESETS.find((p) => p.id === preset)?.hint}
               </p>
             </div>
           </div>
 
-          <div className="grid gap-2">
+          <div className="grid gap-2 content-start">
             <h3 className="text-[11px] font-extrabold">معاينة</h3>
             <div className="rounded-[8px] border border-line bg-paper p-3 dark:border-white/10 dark:bg-white/5">
               <div
-                className="relative mx-auto overflow-hidden bg-white dark:bg-[#101722]"
+                className="relative mx-auto overflow-hidden rounded-[4px] bg-white shadow-sm dark:bg-[#101722]"
                 style={{
                   width: "100%",
                   aspectRatio: `${columnWidth} / ${height}`,
@@ -345,15 +320,14 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
                 })}
               </div>
             </div>
-            <p className="text-[10px] leading-5 text-muted">
+            <p className="rounded-[6px] bg-line-2/40 px-2 py-1.5 text-[10px] leading-5 text-muted dark:bg-white/5">
               بعرض عمود النص ({columnWidth} مم) وارتفاع {Math.round(height)} مم. بعد الإدراج
-              تحتفظ كل قطعة بحرية التعديل: حرّكها، بدّل لونها، أو احذف الزخرفة دون المساس
-              بالعنوان.
+              تحتفظ كل قطعة بحرية التعديل. يُضاف ككتلة منظمة بمحاذاة صحيحة ومسافات مضبوطة، جاهز للتصميم فوراً.
             </p>
           </div>
         </div>
 
-        <footer className="flex items-center justify-end gap-2 border-t border-line px-4 py-3 dark:border-white/10">
+        <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-line px-4 py-3 dark:border-white/10 bg-white dark:bg-[#161c26]">
           <button
             type="button"
             onClick={onClose}

@@ -401,3 +401,16 @@ export const adminGrantAdmin = createServerFn({ method: "POST" })
       return { ok: false, error: err instanceof Error ? err.message : "تعذّر المنح." };
     }
   });
+
+/** Bootstrap first admin when admin_users is empty — no prior admin required. */
+export const adminBootstrapFirst = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<{ ok: boolean; wasEmpty: boolean; error?: string }> => {
+    const sql = await getSql();
+    try {
+      const res = await (await import("./admin.server")).bootstrapFirstAdmin(sql, context.userId);
+      return res;
+    } catch (err) {
+      return { ok: false, wasEmpty: false, error: err instanceof Error ? err.message : "تعذر التفعيل." };
+    }
+  });

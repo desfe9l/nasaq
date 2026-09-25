@@ -596,3 +596,31 @@ export async function grantAdmin(
     detail: { granted: true },
   });
 }
+
+/**
+ * Bootstrap first admin when table is empty.
+ * Allows the very first authenticated user to become admin without env var,
+ * preserving existing admin accounts and fixing role/session binding for fresh DBs.
+ */
+export async function bootstrapFirstAdmin(
+  sql: Sql,
+  userId: string,
+): Promise<{ ok: boolean; wasEmpty: boolean }> {
+  const count = await sql<{ c: number }>`select count(*)::int as c from admin_users`;
+  if ((count[0]?.c ?? 0) > 0) {
+    return { ok: false, wasEmpty: false };
+  }
+  await sql`
+    insert into admin_users (user_id, created_by, note)
+    values (${userId}, 'system:bootstrap', 'أول مسؤول — تفعيل تلقائي')
+    on conflict (user_id) do nothing
+  `;
+  await audit(sql, {
+    adminUserId: userId,
+    action: "admin.granted",
+    targetType: "admin_user",
+    targetId: userId,
+    detail: { bootstrap: true },
+  });
+  return { ok: true, wasEmpty: true };
+}

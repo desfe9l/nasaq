@@ -17,6 +17,10 @@ import {
 import { THEMES } from "@/lib/editor/model";
 import { KPI_CARDS, type KpiKind } from "@/lib/editor/report-tools";
 import { REPORT_BLOCKS, type ReportBlockId } from "@/lib/editor/report-blocks";
+import {
+  GRAPHIC_HEADINGS,
+  type GraphicHeadingId,
+} from "@/lib/editor/graphic-headings";
 import { runPreflight, preflightSummary } from "@/lib/editor/preflight";
 import {
   DEFAULT_PRINT_GUIDES,
@@ -66,6 +70,7 @@ export function ReportToolsPanel() {
   const insertSignatureZone = useEditor((s) => s.insertSignatureZone);
   const insertKpiCard = useEditor((s) => s.insertKpiCard);
   const insertReportBlock = useEditor((s) => s.insertReportBlock);
+  const insertGraphicHeading = useEditor((s) => s.insertGraphicHeading);
   const applyHeaderFooter = useEditor((s) => s.applyHeaderFooter);
   const removeHeaderFooter = useEditor((s) => s.removeHeaderFooter);
   const addPageNumbers = useEditor((s) => s.addPageNumbers);
@@ -129,6 +134,104 @@ export function ReportToolsPanel() {
                 {block.label}
               </span>
               <span className="text-[9px] font-semibold leading-3 text-muted">{block.hint}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Graphic Headings — العناوين الجرافيكية ──────────────────────── */}
+      <div className="editor-subgroup ring-1 ring-transparent hover:ring-navy-2/10 transition rounded-[8px] p-1">
+        <h4 className="editor-subgroup-title">
+          <span className="inline-flex items-center gap-1.5">
+            <PenLine className="size-3.5 text-navy-2 dark:text-gold-2" />
+            العناوين الجرافيكية
+          </span>
+          <span className="ms-auto rounded-full bg-navy-2/10 px-2 py-0.5 text-[9px] font-bold text-navy-2 dark:text-gold-2">اسحب أو انقر</span>
+        </h4>
+        <p className="text-[10px] leading-4 text-muted">
+          عناوين جاهزة كعناصر جرافيكية قابلة للتحرير — اسحبها وأفلتها في الموضع المحدد داخل اللوحة، أو انقر للإضافة في المنتصف. مجموعة منظمة، RTL صحيح، النص الطويل يتكيف.
+        </p>
+        <div className="mb-2 rounded-[6px] bg-amber-50 px-2 py-1 text-[10px] leading-4 text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+          💡 تلميح: اسحب العنوان وضعه بدقة في المكان الذي تريده داخل الـArtboard — يبقى Group واحد قابل للتحديد والتحريك.
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {GRAPHIC_HEADINGS.map((h) => (
+            <button
+              key={h.id}
+              type="button"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData("application/x-nasaq-graphic-heading", h.id);
+                e.dataTransfer.effectAllowed = "copy";
+              }}
+              title={`${h.hint} — اسحب وأفلت في الموضع المحدد داخل الصفحة`}
+              onClick={() => insertGraphicHeading(h.id as GraphicHeadingId)}
+              className="group relative flex min-h-[68px] flex-col gap-1 overflow-hidden rounded-[10px] border border-line bg-white px-2.5 py-2.5 text-right transition hover:border-navy-2 hover:shadow-sm dark:border-white/10 dark:bg-white/[0.04]"
+            >
+              {/* Thumbnail preview - fixed height, balanced */}
+              <span className="pointer-events-none flex h-[18px] w-full items-center">
+                {h.thumbnail === "main" && (
+                  <span className="flex w-full flex-col items-end gap-1">
+                    <span className="block h-[8px] w-[72%] rounded-[2px] bg-navy-2/90 dark:bg-white/80" />
+                    <span className="block h-[2px] w-[28%] rounded bg-gold-2" />
+                  </span>
+                )}
+                {h.thumbnail === "section" && (
+                  <span className="flex w-full items-center justify-end gap-1">
+                    <span className="h-[6px] w-[56%] rounded-[2px] bg-ink/80 dark:bg-white/70" />
+                    <span className="h-[12px] w-[3px] rounded bg-navy-2" />
+                  </span>
+                )}
+                {h.thumbnail === "sub" && (
+                  <span className="flex w-full items-center justify-end gap-1">
+                    <span className="h-[5px] w-[48%] rounded-[2px] bg-ink/70 dark:bg-white/60" />
+                    <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-gold-2" />
+                  </span>
+                )}
+                {h.thumbnail === "bar" && (
+                  <span className="flex h-[14px] w-full items-center rounded-[4px] bg-navy-2 px-1.5">
+                    <span className="block h-[5px] w-[70%] rounded-[2px] bg-white/90" />
+                  </span>
+                )}
+                {h.thumbnail === "card" && (
+                  <span className="flex h-[14px] w-full items-center rounded-[6px] border border-line bg-white px-1.5 shadow-sm dark:bg-white/10">
+                    <span className="block h-[5px] w-[60%] rounded-[2px] bg-ink/80 dark:bg-white/70" />
+                  </span>
+                )}
+                {h.thumbnail === "numbered" && (
+                  <span className="flex w-full items-center justify-end gap-1.5">
+                    <span className="h-[5px] w-[52%] rounded-[2px] bg-ink/80 dark:bg-white/70" />
+                    <span className="flex h-[12px] w-[12px] shrink-0 items-center justify-center rounded-full bg-navy-2 text-[6px] text-white">١</span>
+                  </span>
+                )}
+                {h.thumbnail === "separator" && (
+                  <span className="flex w-full items-center gap-1">
+                    <span className="h-[1px] flex-1 bg-line dark:bg-white/15" />
+                    <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-gold-2" />
+                    <span className="h-[5px] w-[36%] shrink-0 rounded-[2px] bg-ink/80 dark:bg-white/70" />
+                  </span>
+                )}
+                {h.thumbnail === "institutional" && (
+                  <span className="flex h-[14px] w-full items-center justify-center rounded-[2px] border border-navy-2/60 px-1">
+                    <span className="block h-[5px] w-[52%] rounded-[2px] bg-navy-2/80 dark:bg-white/70" />
+                  </span>
+                )}
+                {h.thumbnail === "modern" && (
+                  <span className="flex h-[14px] w-full overflow-hidden rounded-[6px] border border-line">
+                    <span className="flex h-full flex-1 items-center px-1">
+                      <span className="h-[4px] w-[68%] rounded-[2px] bg-ink/70 dark:bg-white/60" />
+                    </span>
+                    <span className="h-full w-[28%] bg-navy-2" />
+                  </span>
+                )}
+                {h.thumbnail === "simple" && (
+                  <span className="flex w-full justify-end">
+                    <span className="block h-[6px] w-[58%] rounded-[2px] bg-ink/80 dark:bg-white/70" />
+                  </span>
+                )}
+              </span>
+              <span className="line-clamp-1 text-[10px] font-extrabold leading-4 text-ink dark:text-white">{h.label}</span>
+              <span className="line-clamp-1 text-[9px] font-semibold leading-3 text-muted">{h.hint}</span>
             </button>
           ))}
         </div>
