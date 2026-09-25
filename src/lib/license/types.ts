@@ -188,6 +188,7 @@ export interface LicenseActivateResult {
   success: boolean;
   message: string;
   license?: LicenseInfo;
+  entitlements?: Record<FeatureId, boolean>;
 }
 
 export interface LicenseValidateResult {

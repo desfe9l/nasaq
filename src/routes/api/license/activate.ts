@@ -8,8 +8,8 @@ export const Route = createFileRoute("/api/license/activate")({
       POST: async ({ request }) => {
         const body = await request.json().catch(() => ({}));
         const key = typeof body?.key === "string" ? body.key : "";
-        const email = typeof body?.email === "string" ? body.email : undefined;
-        return respondLicense(activateLicenseFn({ data: { key, email } }), (r) => (r.success ? 200 : 400));
+        // Identity is resolved by authMiddleware from the session, never JSON.
+        return respondLicense(activateLicenseFn({ data: { key } }), (r) => (r.success ? 200 : 400));
       },
     },
   },

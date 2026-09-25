@@ -40,6 +40,33 @@ function rowToLicense(row: Record<string, unknown>): License {
 
 // ── License CRUD ───────────────────────────────────────────────────────────
 
+export class LicenseOwnershipError extends Error {
+  constructor() {
+    super("License is bound to a different NASAQ account");
+    this.name = "LicenseOwnershipError";
+  }
+}
+
+/** Atomic, durable first claim; the reservation itself never grants entitlements. */
+export async function reserveKeygenClaim(keyHash: string, userId: string): Promise<boolean> {
+  const sql = await getSql();
+  await sql.query(
+    `INSERT INTO license_claims (key_hash, user_id) VALUES ($1, $2)
+     ON CONFLICT (key_hash) DO NOTHING`,
+    [keyHash, userId],
+  );
+  const rows = await sql.query<{ user_id: string }>(
+    `SELECT user_id FROM license_claims WHERE key_hash = $1`, [keyHash],
+  );
+  return rows[0]?.user_id === userId;
+}
+
+/** Invalidate cached provider access when its user-scoped validation fails. */
+export async function setLicenseStatusForUser(id: string, userId: string, status: "EXPIRED" | "REVOKED"): Promise<void> {
+  const sql = await getSql();
+  await sql.query(`UPDATE licenses SET status = $3, updated_at = now() WHERE id = $1 AND user_id = $2`, [id, userId, status]);
+}
+
 /** Find a license by its key hash. */
 export async function findLicenseByKeyHash(keyHash: string): Promise<License | null> {
   const sql = await getSql();
@@ -63,23 +90,25 @@ export async function upsertExternalLicense(params: {
 }): Promise<License> {
   const sql = await getSql();
   const id = `ext_${params.keyHash.slice(0, 24)}`;
-  await sql.query(
+  const rows = await sql.query<Record<string, unknown>>(
     `INSERT INTO licenses (id, key_hash, key_prefix, type, status, user_id, activated_at, expires_at, activation_count, max_activations, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, now(), $7, $8, $9, $10::jsonb)
+     VALUES ($1, $2, $3, $4, $5, $6, CASE WHEN $6::text IS NULL THEN NULL ELSE now() END, $7, $8, $9, $10::jsonb)
      ON CONFLICT (key_hash) DO UPDATE SET
        status = EXCLUDED.status,
-       user_id = COALESCE(EXCLUDED.user_id, licenses.user_id),
+       user_id = COALESCE(licenses.user_id, EXCLUDED.user_id),
        activated_at = COALESCE(licenses.activated_at, EXCLUDED.activated_at),
        expires_at = EXCLUDED.expires_at,
        activation_count = EXCLUDED.activation_count,
        max_activations = EXCLUDED.max_activations,
-       metadata = EXCLUDED.metadata,
-       updated_at = now()`,
+       metadata = COALESCE(licenses.metadata, '{}'::jsonb) || EXCLUDED.metadata,
+       updated_at = now()
+     WHERE EXCLUDED.user_id IS NULL OR licenses.user_id IS NULL OR licenses.user_id = EXCLUDED.user_id
+     RETURNING *`,
     [
       id,
       params.keyHash,
       params.keyPrefix,
-       params.type ?? "PRO",
+      params.type ?? "PRO",
       params.status ?? "ACTIVE",
       params.userId,
       params.expiresAt,
@@ -88,9 +117,8 @@ export async function upsertExternalLicense(params: {
       JSON.stringify(params.metadata),
     ],
   );
-  const license = await findLicenseByKeyHash(params.keyHash);
-  if (!license) throw new Error("Failed to persist external license");
-  return license;
+  if (!rows[0]) throw new LicenseOwnershipError();
+  return rowToLicense(rows[0]);
 }
 
 export async function findLicenseByProviderId(provider: string, providerId: string): Promise<License | null> {
@@ -175,8 +203,15 @@ export async function findLicenseById(id: string): Promise<License | null> {
 /** Find all licenses for a user. */
 export async function findLicensesByUserId(userId: string): Promise<License[]> {
   const sql = await getSql();
+  // A local admin reassignment (or stale import) must not make a Keygen key
+  // usable by an account other than the one verified with the provider.
   const rows = await sql.query(
-    `SELECT * FROM licenses WHERE user_id = $1 ORDER BY created_at DESC`,
+    `SELECT * FROM licenses WHERE user_id = $1
+       AND (metadata->>'source' IS DISTINCT FROM 'keygen' OR (
+         (metadata->>'nasaqUserId' IS NULL OR metadata->>'nasaqUserId' = $1)
+         AND (metadata->>'userScopeVerified' IS NULL OR metadata->>'userScopeVerified' = $1)
+       ))
+     ORDER BY created_at DESC`,
     [userId],
   );
   return rows.map(rowToLicense);
@@ -232,6 +267,7 @@ export async function activateLicense(
   if (!license) {
     return { success: false, error: "NOT_FOUND" };
   }
+  if (!userId) return { success: false, error: "USER_SCOPE_REQUIRED" };
 
   if (license.status === "REVOKED") {
     return { success: false, error: "REVOKED" };
@@ -249,19 +285,23 @@ export async function activateLicense(
     return { success: false, error: "EXPIRED" };
   }
 
-  // Enforce the status, expiry, and activation limit in the UPDATE predicate so
-  // concurrent requests cannot both pass a read-then-write check.
+  // Already bound keys cannot move to a second account simply because someone
+  // knows their plaintext. Repeat activation by the same account is idempotent.
+  if (license.userId && license.userId !== userId) {
+    return { success: false, error: license.maxActivations != null && license.activationCount >= license.maxActivations
+      ? "ACTIVATION_LIMIT" : "USER_SCOPE_MISMATCH" };
+  }
   const rows = await sql.query<Record<string, unknown>>(
     `UPDATE licenses
-     SET status = 'ACTIVE',
-          activated_at = COALESCE(activated_at, now()),
-          user_id = COALESCE($2, user_id),
-          activation_count = activation_count + 1,
+     SET activated_at = COALESCE(activated_at, now()),
+          user_id = COALESCE(user_id, $2),
+          activation_count = activation_count + CASE WHEN activated_at IS NULL THEN 1 ELSE 0 END,
           updated_at = now()
      WHERE id = $1
+       AND (user_id IS NULL OR user_id = $2)
        AND status = 'ACTIVE'
        AND (expires_at IS NULL OR expires_at > now())
-       AND (max_activations IS NULL OR activation_count < max_activations)
+       AND (activated_at IS NOT NULL OR max_activations IS NULL OR activation_count < max_activations)
      RETURNING *`,
     [license.id, userId],
   );
@@ -279,10 +319,11 @@ export async function activateLicense(
   }
   if (
     current?.maxActivations != null &&
-    current.activationCount >= current.maxActivations
+    current.activationCount >= current.maxActivations && current.userId !== userId
   ) {
     return { success: false, error: "ACTIVATION_LIMIT" };
   }
+  if (current?.userId && current.userId !== userId) return { success: false, error: "USER_SCOPE_MISMATCH" };
   return { success: false, error: "NOT_FOUND" };
 }
 
@@ -405,6 +446,17 @@ export async function assignLicense(
   const sql = await getSql();
   const license = await findLicenseById(licenseId);
   if (!license) return null;
+  if (license.metadata?.source === "keygen") {
+    const verifiedFor = license.metadata.userScopeVerified || license.metadata.nasaqUserId;
+    // An administrator's local assignment does not attach/change a Keygen
+    // user. Never let this route turn an unlinked or someone else's key into
+    // an entitlement: issue it for that user, or activate it in their session.
+    if (!verifiedFor || verifiedFor !== userId ||
+        (license.metadata.nasaqUserId && license.metadata.nasaqUserId !== userId)) {
+      throw new LicenseOwnershipError();
+    }
+    if (license.userId === userId) return license;
+  }
   if (activate) {
     await sql.query(
       `UPDATE licenses SET user_id = $2, activated_at = COALESCE(activated_at, now()), activation_count = activation_count + 1, updated_at = now() WHERE id = $1`,

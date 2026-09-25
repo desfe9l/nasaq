@@ -27,6 +27,8 @@ export interface KeygenVerification {
   plan?: LicensePlan;
   type: LicenseType;
   valid: boolean;
+  /** True only after validate-key with the authenticated session's user scope. */
+  userScopeVerified: boolean;
   code: string;
   status: "ACTIVE" | "EXPIRED" | "REVOKED";
   expiresAt: string | null;
@@ -40,7 +42,7 @@ type KeygenResource = {
   id?: string;
   type?: string;
   attributes?: Record<string, unknown>;
-  relationships?: Record<string, { data?: { id?: string; type?: string } | null }>;
+  relationships?: Record<string, { data?: { id?: string; type?: string } | null; meta?: { count?: number } }>;
 };
 
 type KeygenResponse = {
@@ -70,6 +72,7 @@ export const KEYGEN_CODE_MESSAGES: Record<string, string> = {
   PRODUCT_SCOPE_MISMATCH: "مفتاح الترخيص لا يخص منتج NASAQ.",
   POLICY_SCOPE_MISMATCH: "مفتاح الترخيص لا يطابق سياسة الترخيص المطلوبة.",
   KEY_SCOPE_MISMATCH: "صيغة مفتاح الترخيص غير معتمدة في هذا التحقق.",
+  USER_SCOPE_REQUIRED: "يتطلب هذا الترخيص هوية حساب مسجّل الدخول للتحقق.",
   USER_SCOPE_MISMATCH: "مفتاح الترخيص لا يخص هذا المستخدم.",
   MACHINE_SCOPE_MISMATCH: "مفتاح الترخيص غير مفعّل لهذا الجهاز.",
   FINGERPRINT_SCOPE_MISMATCH: "بصمة الجهاز لا تطابق الترخيص.",
@@ -104,6 +107,13 @@ export class KeygenRequestError extends Error {
     super(message);
     this.name = "KeygenRequestError";
     this.status = status;
+  }
+}
+
+export class KeygenOwnershipError extends Error {
+  constructor() {
+    super("Keygen user belongs to a different NASAQ account");
+    this.name = "KeygenOwnershipError";
   }
 }
 
@@ -244,12 +254,14 @@ async function entitlementCodesForLicense(licenseId: string): Promise<string[]> 
   return codes;
 }
 
-function verificationFromResponse(key: string, response: KeygenResponse, entitlementCodes: string[]): KeygenVerification {
+function verificationFromResponse(key: string, response: KeygenResponse, entitlementCodes: string[], scoped = false): KeygenVerification {
   const resource = Array.isArray(response.data) ? response.data[0] : response.data;
   const policyId = idFromRelationship(resource, "policy");
   const productId = idFromRelationship(resource, "product");
   const plan = planForKeygenPolicy(policyId);
-  const valid = response.meta?.valid === true;
+  // A provider response without an actual license for our product is never an
+  // entitlement, even if a malformed upstream response says meta.valid=true.
+  const valid = response.meta?.valid === true && resource?.type === "licenses" && Boolean(resource.id) && productId === keygenProductId();
   const code = String(response.meta?.code || (valid ? "VALID" : "INVALID"));
   const status: KeygenVerification["status"] = valid
     ? "ACTIVE"
@@ -269,6 +281,7 @@ function verificationFromResponse(key: string, response: KeygenResponse, entitle
     plan,
     type,
     valid,
+    userScopeVerified: scoped && valid,
     code,
     status,
     expiresAt: typeof attrs.expiry === "string" ? attrs.expiry : null,
@@ -288,23 +301,115 @@ function verificationFromResponse(key: string, response: KeygenResponse, entitle
   };
 }
 
-export async function validateKeygenLicense(key: string): Promise<KeygenVerification> {
-  // One normalization for the whole system: generator keys are uppercase HEX
-  // with a -V<n> version suffix; Keygen matches keys exactly, so a lowercase
-  // or space-padded paste would wrongly fail without this.
+function userScope(email: string): { product: string; user: string } {
+  // Keygen's scope.user is a Keygen user UUID *or email*, not the Better Auth
+  // user.id. Only server functions may supply the email from the verified session.
+  const user = email?.trim().toLowerCase();
+  if (!user || !user.includes("@")) throw new KeygenConfigurationError("Verified session email is required for Keygen user scope");
+  return { product: keygenProductId(), user };
+}
+
+export async function validateKeygenLicense(key: string, sessionEmail: string): Promise<KeygenVerification> {
+  // Do not relax a user-locked policy: both activation and later validation
+  // must supply the same identity, obtained server-side from Better Auth.
   const normalizedKey = normalizeLicenseKey(key);
   const response = await request(
     "/licenses/actions/validate-key",
     {
       method: "POST",
-      body: JSON.stringify({ meta: { key: normalizedKey, scope: { product: keygenProductId() } } }),
+      body: JSON.stringify({ meta: { key: normalizedKey, scope: userScope(sessionEmail) } }),
     },
     false,
   );
   const resource = Array.isArray(response.data) ? response.data[0] : response.data;
   const licenseId = resource?.id || "";
   const entitlementCodes = response.meta?.valid && licenseId ? await entitlementCodesForLicense(licenseId) : [];
-  return verificationFromResponse(normalizedKey, response, entitlementCodes);
+  return verificationFromResponse(normalizedKey, response, entitlementCodes, true);
+}
+
+/** Revalidate a linked license after reload, without a browser-stored plaintext key. */
+export async function validateKeygenLicenseById(licenseId: string, sessionEmail: string): Promise<KeygenVerification> {
+  const response = await request(`/licenses/${encodeURIComponent(licenseId)}`); // license.read
+  const resource = Array.isArray(response.data) ? response.data[0] : response.data;
+  const key = stringAttribute(resource, "key");
+  if (resource?.type !== "licenses" || resource.id !== licenseId || !key ||
+      idFromRelationship(resource, "product") !== keygenProductId()) {
+    throw new KeygenRequestError("Keygen did not return the requested product license", 502);
+  }
+  return validateKeygenLicense(key, sessionEmail);
+}
+
+/** Authoritative (authenticated) read before a first-come claim of an unowned key. */
+export async function getKeygenLicenseForClaim(licenseId: string): Promise<{
+  id: string;
+  key: string;
+  productId: string;
+  ownerId: string | null | undefined;
+  usersCount: number | null;
+  nasaqUserId: string | null;
+  expiresAt: string | null;
+  suspended: boolean;
+  status: string;
+}> {
+  const response = await request(`/licenses/${encodeURIComponent(licenseId)}`);
+  const resource = Array.isArray(response.data) ? response.data[0] : response.data;
+  if (resource?.type !== "licenses" || resource.id !== licenseId) throw new KeygenRequestError("Keygen license not found", 404);
+  const owner = resource.relationships?.owner;
+  const count = resource.relationships?.users?.meta?.count;
+  const metadata = resource.attributes?.metadata;
+  return {
+    id: licenseId,
+    key: stringAttribute(resource, "key") || "",
+    productId: idFromRelationship(resource, "product"),
+    // An omitted relationship is NOT an empty one: fail closed on unknown data.
+    ownerId: owner?.data === null ? null : owner?.data?.id,
+    usersCount: typeof count === "number" && Number.isInteger(count) && count >= 0 ? count : null,
+    nasaqUserId: metadata && typeof metadata === "object" && typeof (metadata as Record<string, unknown>).nasaqUserId === "string"
+      ? (metadata as Record<string, string>).nasaqUserId : null,
+    expiresAt: stringAttribute(resource, "expiry"),
+    suspended: resource.attributes?.suspended === true,
+    status: String(resource.attributes?.status || ""),
+  };
+}
+
+/** Locate or create a passwordless Keygen user for the verified NASAQ identity. */
+export async function ensureKeygenUser(session: { userId: string; userEmail: string }, create = true): Promise<string> {
+  const email = userScope(session.userEmail).user;
+  const path = `/users/${encodeURIComponent(email)}`;
+  let response: KeygenResponse;
+  try {
+    response = await request(path); // user.read; never create one for an invalid key
+  } catch (error) {
+    if (!(error instanceof KeygenRequestError) || error.status !== 404 || !create) throw error;
+    try {
+      response = await request("/users", {
+        method: "POST",
+        body: JSON.stringify({ data: { type: "users", attributes: {
+          email, metadata: { nasaqUserId: session.userId },
+        } } }),
+      }); // user.create
+    } catch (createError) {
+      // Another request may have created this email concurrently.
+      if (!(createError instanceof KeygenRequestError) || createError.status !== 409) throw createError;
+      response = await request(path);
+    }
+  }
+  const user = Array.isArray(response.data) ? response.data[0] : response.data;
+  const metadata = user?.attributes?.metadata;
+  const nasaqId = metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>).nasaqUserId : undefined;
+  if (user?.type !== "users" || !user.id || stringAttribute(user, "email")?.toLowerCase() !== email) {
+    throw new KeygenRequestError("Keygen user identity mismatch", 502);
+  }
+  if (nasaqId != null && nasaqId !== session.userId) throw new KeygenOwnershipError();
+  return user.id;
+}
+
+/** Attach a single user (least privilege), not a license-owner transfer. */
+export async function attachKeygenUser(licenseId: string, keygenUserId: string): Promise<void> {
+  await request(`/licenses/${encodeURIComponent(licenseId)}/users`, {
+    method: "POST",
+    body: JSON.stringify({ data: [{ type: "users", id: keygenUserId }] }),
+  }); // license.users.attach
 }
 
 export async function createKeygenLicense(params: {
@@ -313,6 +418,7 @@ export async function createKeygenLicense(params: {
   expiresAt?: string;
   maxUsers?: number;
   metadata?: Record<string, string>;
+  ownerId?: string; // Keygen user UUID, resolved from the NASAQ account before issuance
 }): Promise<KeygenVerification> {
   const attributes: Record<string, unknown> = {
     name: params.name || "NASAQ license",
@@ -328,7 +434,10 @@ export async function createKeygenLicense(params: {
       data: {
         type: "licenses",
         attributes,
-        relationships: { policy: { data: { type: "policies", id: policyId } } },
+        relationships: {
+          policy: { data: { type: "policies", id: policyId } },
+          ...(params.ownerId ? { owner: { data: { type: "users", id: params.ownerId } } } : {}),
+        },
       },
     }),
   });
