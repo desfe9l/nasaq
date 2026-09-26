@@ -15,7 +15,7 @@ import PptxGenJS from "pptxgenjs";
 import type { SceneItem, ScenePage, SceneShape, SceneStroke } from "./scene";
 import type { ShapePart } from "./shapes";
 import { parseSvgPath, scaleSegments } from "./vector-path.ts";
-import { BRAND } from "@/lib/brand";
+import { BRAND } from "../brand.ts";
 
 /** Millimetres → inches, the unit `pptxgenjs` expects. */
 const mm2in = (mm: number) => mm / 25.4;

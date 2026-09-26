@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { ArrowLeft, Briefcase, FileText, LayoutTemplate, Table2, FileDown, Palette, ShieldCheck, Workflow, Files, Ruler, Building2, Users, Megaphone, PenTool, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Briefcase, FileText, LayoutTemplate, Table2, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";

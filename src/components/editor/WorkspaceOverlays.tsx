@@ -13,7 +13,6 @@ import {
   CopyPlus,
   Download,
   Eye,
-  EyeOff,
   FlipHorizontal2,
   FlipVertical2,
   Focus,
@@ -22,7 +21,6 @@ import {
   Layers,
   Lock,
   Maximize2,
-  Minimize2,
   Move,
   PenLine,
   Redo2,
@@ -43,7 +41,7 @@ import {
 } from "lucide-react";
 import { useEditor, type ContextMenuPoint } from "@/lib/editor/store";
 import { normalizeFade } from "@/lib/editor/fade";
-import { findElement, type AlignEdge } from "@/lib/editor/model";
+import { findElement } from "@/lib/editor/model";
 import type { PrintGuideSettings } from "@/lib/editor/print-guides";
 import { cn } from "@/lib/utils";
 

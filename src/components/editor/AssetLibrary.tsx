@@ -29,13 +29,10 @@ import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
 import {
   downloadLibraryFile,
   planLibraryImport,
-  type LibraryImportPlan,
 } from "@/lib/editor/library-export";
 import {
   planLibraryImportBlueprint,
-  importKindFor,
   assetLabel,
-  extensionOf,
   MAX_IMPORT_BYTES,
   type ImportEntry,
 } from "@/lib/editor/library-import";
@@ -130,7 +127,6 @@ export function AssetLibrary() {
   const assets = useEditor((s) => s.assets);
   const assetsLoading = useEditor((s) => s.assetsLoading);
   const addElement = useEditor((s) => s.addElement);
-  const addElementAt = useEditor((s) => s.addElementAt);
   const removeAsset = useEditor((s) => s.removeAsset);
   const removeAssets = useEditor((s) => s.removeAssets);
   const renameAsset = useEditor((s) => s.renameAsset);
@@ -293,7 +289,9 @@ export function AssetLibrary() {
             ],
           };
         }
-      } catch {}
+      } catch {
+        /* malformed SVG data URL — fall back to the image payload */
+      }
     }
     return {
       items: [
@@ -385,7 +383,9 @@ export function AssetLibrary() {
         for (const f of newFolders) {
           try {
             await createAssetFolder(f.name, f.parentId ?? null);
-          } catch {}
+          } catch {
+            /* folder already exists or store rejected it — assets fall back to the root */
+          }
         }
 
         // Refresh folder map after creation (store may have minted different ids, so re-resolve by name)
@@ -440,7 +440,9 @@ export function AssetLibrary() {
                 svg: markup,
                 kind: "icon",
               });
-            } catch {}
+            } catch {
+              /* icon store unavailable — the asset below still lands in the grid */
+            }
             const dataUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(markup)))}`;
             const size = await measure(dataUrl);
             const saved = await addAsset({
@@ -478,7 +480,9 @@ export function AssetLibrary() {
               });
               const res = await importLibraryPlan(plan);
               added += res.added;
-            } catch {}
+            } catch {
+              /* not a valid library file — counted as skipped by the summary below */
+            }
           }
         }
 
@@ -519,28 +523,6 @@ export function AssetLibrary() {
     }));
     e.target.value = "";
     await processPickedFiles(picked);
-  };
-
-  const handleFileChangeLegacy = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
-    const next: PendingAsset[] = [];
-    for (const file of Array.from(files)) {
-      const src = await readAsDataUrl(file);
-      if (!src) continue;
-      const dimensions = await measure(src);
-      next.push({
-        id: `pending-${file.name}-${file.lastModified}`,
-        fileName: file.name,
-        name: file.name.replace(/\.[^/.]+$/, "").slice(0, 40) || "عنصر",
-        src,
-        w: dimensions.w,
-        h: dimensions.h,
-        addedAt: Date.now(),
-      });
-    }
-    setPending(next);
-    e.target.value = "";
   };
 
   const savePending = async () => {
@@ -984,7 +966,7 @@ export function AssetLibrary() {
                 <>
                   <button
                     type="button"
-                    title={`إدراج \"${asset.name}\" في مساحة العمل — اسحبه على اللوحة لوضع مخصص`}
+                    title={`إدراج "${asset.name}" في مساحة العمل — اسحبه على اللوحة لوضع مخصص`}
                     className={cn(
                       "library-hit grid w-full place-items-center overflow-hidden rounded-[6px]",
                       viewMode === "grid" ? "h-20" : "h-14",

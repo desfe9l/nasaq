@@ -148,7 +148,9 @@ describe("مولد عناوين الفقرات", () => {
       title: "تقرير الأداء السنوي لبرنامج التحول المؤسسي والخدمات المشتركة",
     });
     assert.ok(long > short);
-    assert.ok(estimateTitleHeight("عنوان", 180) >= 11);
+    // A one-word title still reserves a full title line (TITLE_LINE = 10mm in
+    // heading-generator.ts; it was 11mm before the RTL heading rework).
+    assert.ok(estimateTitleHeight("عنوان", 180) >= 10);
   });
 
   it("fits every part inside the reserved height", () => {

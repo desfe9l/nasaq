@@ -120,7 +120,7 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
                 onDoubleClick={() => {
                   setActivePage(p.id);
                   requestAnimationFrame(() => {
-                    const art = document.querySelector(`[data-page-id=\"${p.id}\"]`);
+                    const art = document.querySelector(`[data-page-id="${p.id}"]`);
                     if (art) art.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
                     itemRefs.current[p.id]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
                   });
