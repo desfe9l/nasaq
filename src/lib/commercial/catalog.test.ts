@@ -62,9 +62,12 @@ describe("Final pricing contract", () => {
       "team-monthly",
     );
     // Checkout deep links carry the tier AND the recurrence, monthly by default.
+    // Gumroad reads `variant=` (tier name) — `tier=` is ignored by Gumroad and
+    // would silently open the default tier's price.
     const monthly = gumroadCheckoutUrl("individual-monthly");
     assert.ok(monthly.includes("monthly=true"));
-    assert.ok(monthly.includes("tier="));
+    assert.ok(monthly.includes("variant="));
+    assert.ok(!monthly.includes("tier="));
     assert.ok(!gumroadCheckoutUrl("team-quarterly").includes("monthly=true"));
   });
 

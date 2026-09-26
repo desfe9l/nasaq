@@ -16,11 +16,36 @@
 - محتوى المنتج يبقى صفحة/رسالة توجيه: «سجّل الدخول إلى نَسَق بنفس بريد الشراء».
   لا تُرفع ملفات نَسَق إلى Gumroad؛ الوصول الحقيقي عبر حساب NASAQ + ترخيص Keygen.
 
+## إنشاء Gumroad Application (مرة واحدة — بلا OAuth)
+
+المطلوب من لوحة Gumroad هو **تطبيق واحد خاص بحساب المتجر**، ووظيفته الوحيدة
+أنه الحاوية التي زرُّ «Generate access token» يعيش داخلها. NASAQ لا يطلب من أي
+مستخدم الربط بحسابه في Gumroad، ولا يوجد في الكود أي OAuth handler ولا أي قراءة
+لـ`Application ID` أو `Application Secret` — هما **غير مطلوبين** ولا يُخزَّنان.
+
+`Settings → Advanced → Applications → Create application`، والقيم بالحرف:
+
+| الخانة | القيمة | ملاحظة |
+| --- | --- | --- |
+| Application icon | اتركها فارغة | اختياري تمامًا (Gumroad يقبل JPG/JPEG/PNG فقط إن أردت رفع شعار نَسَق) |
+| Application name | `NASAQ — نَسَق (تكامل الخادم)` | أي اسم واضح يكفي؛ لا يُقرأ برمجيًا |
+| Redirect URI | `http://127.0.0.1` | **إلزامي في النموذج، وغير مستخدم في NASAQ.** يجب أن يحمل scheme وhost وبلا `#fragment`؛ لذلك يُرفض `localhost` وحده وتُقبل `http://127.0.0.1` |
+
+ثم في نفس الصفحة: `Your applications → Edit → Generate access token` → انسخ
+القيمة إلى `GUMROAD_ACCESS_TOKEN` في Vercel (Production) وأعد النشر.
+
+- المفتاح لا ينتهي تلقائيًا؛ إعادة الضغط على الزر تُعيد **نفس** المفتاح ولا
+  تُدوّره — للإلغاء يجب حذف التطبيق أو استخدام خيار Revoke من Gumroad.
+- للتحقق من أن المفتاح حيّ: افتح **Owner Vault → Gumroad · بوابة الدفع**؛ البطاقة
+  تنادي `GET /v2/user` فعليًا وتعرض اسم/رابط الحساب، وتفرّق بوضوح بين
+  «المفتاح مرفوض (401)» و«المنتج غير موجود».
+- عند تغيير المفتاح حدّث قيمة Vercel فقط؛ لا شيء آخر في المشروع يعتمد عليه.
+
 ## متغيرات البيئة (Vercel فقط — لا قيم في Git أو الدردشة)
 
 | المتغير | أين | القيمة |
 | --- | --- | --- |
-| `GUMROAD_ACCESS_TOKEN` | الخادم فقط — **إلزامي** | Gumroad → Settings → Advanced → Applications → Generate access token |
+| `GUMROAD_ACCESS_TOKEN` | الخادم فقط — **إلزامي** | القيمة من `Edit application → Generate access token` (انظر القسم أعلاه) |
 | `GUMROAD_PRODUCT_ID` | الخادم فقط — **اختياري** | من صفحة المنتج → قسم License key، أو `GET /v2/products` |
 | `GUMROAD_PRODUCT_PERMALINK` | اختياري | الافتراضي `auaewk` |
 | `GUMROAD_STORE_BASE_URL` | اختياري | الافتراضي `https://nasaqar.gumroad.com` |
@@ -80,18 +105,41 @@ POST https://nasaq-sa.vercel.app/api/webhooks/gumroad
 ## عمليات المالك (Owner Vault → Gumroad · بوابة الدفع)
 
 - Product/API/Ping/Tier/Keygen mapping status + حالة Subscriptions.
+- **API status**: نداء حقيقي `GET /v2/user` يثبت أن `GUMROAD_ACCESS_TOKEN` حيّ
+  ويعرض اسم/رابط حساب Gumroad الذي يخصّه؛ ويميّز «401 مفتاح مرفوض» عن
+  «المنتج غير موجود» لأن إصلاح كل حالة مختلف.
 - **فحص Ping**: يرسل Ping اصطناعي `test=true` للـ endpoint الحي ويتحقق من 2xx.
 - **اختبار تحقق الشراء**: يتأكد أن المُحقق يرفض معرفات بيع غير معروفة.
 - **مزامنة اشتراك**: يعيد قراءة حالة المشترك من Gumroad API بالبريد.
 
 ## روابط الشراء (Monthly افتراضي)
 
-كل زر في `/purchase` (و`/pricing`) يفتح نموذج الدفع مباشرة بالـ Tier والفترة الصحيحين:
+كل زر في `/purchase` (و`/pricing`) يفتح **Gumroad Checkout مباشرة** بالـ Tier والفترة
+الصحيحين، دون مرور على صفحة المنتج العامة:
 
 ```
-https://nasaqar.gumroad.com/l/auaewk?tier=<Tier>&monthly=true&wanted=true
-https://nasaqar.gumroad.com/l/auaewk?tier=<Tier>&quarterly=true&wanted=true
+https://nasaqar.gumroad.com/l/auaewk?variant=<Tier>&monthly=true&wanted=true
+https://nasaqar.gumroad.com/l/auaewk?variant=<Tier>&quarterly=true&wanted=true
 ```
+
+- `variant=<اسم الـTier>` — Gumroad يطابقه بالاسم ثم يحوّله داخليًا إلى معرّف الـoption
+  ويهرّب المشتري إلى `/checkout`، وهذا ما يجعل `wanted=true` لازمًا.
+- `<monthly|quarterly>=true` — تُترجم إلى `recurrence` الخاص بالعضوية.
+- `email=<بريد المشتري>` يُضاف تلقائيًا للزائر المسجّل (autofill موثّق) ليكون بريد
+  الشراء هو نفسه بريد الحساب الذي سيُربط به الترخيص.
+- **لا تستخدم `?tier=`**: Gumroad لا يقرأه إطلاقًا ويسقط إلى الـTier الافتراضي (فردي)،
+  وهو خطأ قديم مُصلَح في `gumroadCheckoutUrl()` ويحرسه اختبار انحدار.
+
+التحقق الحي (2026-09-26) بقراءة السعر الذي يعرضه الـcheckout فعليًا:
+
+| الرابط | السعر الظاهر |
+| --- | --- |
+| `variant=نَسَق \| فردي & monthly=true` | US$21.06 Monthly (79 SAR) |
+| `variant=نَسَق \| فردي & quarterly=true` | US$53.06 Quarterly (199 SAR) |
+| `variant=نَسَق \| فريق & monthly=true` | US$53.06 Monthly (199 SAR) |
+| `variant=نَسَق \| فريق & quarterly=true` | US$133.07 Quarterly (499 SAR) |
+
+«مؤسسات» ليست منتج Gumroad: زرّها في `/purchase` يوجّه إلى `/contact` لعرض سعر مخصص.
 
 ## العودة بعد الدفع
 

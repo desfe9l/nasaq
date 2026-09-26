@@ -37,14 +37,21 @@ export interface GumroadGatewayStatus {
     publicPageUrl: string;
     remoteName: string | null;
     remotePublished: boolean | null;
+    /** The product list was actually read from Gumroad in this pass. */
     remoteChecked: boolean;
+    /** Why `state` is what it is — shown verbatim in the owner card. */
+    detail: string;
     state: GumroadReadyState;
   };
   api: {
     configured: boolean;
+    /** The access token was accepted by Gumroad in this pass (401 ⇒ false). */
     reachable: boolean | null;
     detail: string;
     state: GumroadReadyState;
+    /** Public name/profile of the account the token belongs to. Never a secret. */
+    accountName: string | null;
+    accountUrl: string | null;
   };
   ping: {
     endpointUrl: string;

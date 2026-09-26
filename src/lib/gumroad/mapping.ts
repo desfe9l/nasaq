@@ -148,19 +148,54 @@ function extractTierName(variants: Record<string, string> | string | null | unde
 }
 
 /**
- * Deep link that opens Gumroad's payment form with the correct tier AND
- * recurrence preselected (Gumroad help article 144: tier first, then the
- * frequency flag, then `wanted=true`). Monthly is the product default.
+ * Deep link that opens Gumroad's checkout with the correct tier AND recurrence
+ * already selected — and without a stop on the public product page.
+ *
+ * The parameter names are Gumroad's, not ours:
+ *   · `variant=<tier name>` — the seller's product page resolves this to the
+ *     tier's option id server-side (links_controller: `params[:option] ||=
+ *     params[:variant] && product.options.find { |o| o[:name] == params[:variant] }`)
+ *     and then redirects into the checkout.
+ *   · `monthly=true` / `quarterly=true` — translated into the membership's
+ *     recurrence (`params[:recurrence] ||= r if params[r] == "true"`).
+ *   · `wanted=true` — required for that resolution to run; it is what sends the
+ *     buyer straight to the payment form.
+ *
+ * VERIFIED against the live product (2026-09-26), by reading the price the
+ * checkout actually renders:
+ *   variant=نَسَق | فردي & monthly=true   & wanted=true → US$21.06 Monthly   (79 SAR)
+ *   variant=نَسَق | فردي & quarterly=true & wanted=true → US$53.06 Quarterly (199 SAR)
+ *   variant=نَسَق | فريق & monthly=true   & wanted=true → US$53.06 Monthly   (199 SAR)
+ *   variant=نَسَق | فريق & quarterly=true & wanted=true → US$133.07 Quarterly (499 SAR)
+ *
+ * `tier=` — which this function used before — is NOT read by Gumroad; it fell
+ * back to the default tier, so every team button opened the individual price.
+ * Do not reintroduce it.
  */
 export function gumroadCheckoutUrl(
   planKey: GumroadPlanKey,
   config: GumroadPublicConfig = DEFAULT_GUMROAD_PUBLIC_CONFIG,
+  options: { email?: string | null } = {},
 ): string {
   const family: GumroadTierFamily = planKey.startsWith("team-") ? "team" : "individual";
   const recurrence: GumroadRecurrence = planKey.endsWith("-quarterly") ? "quarterly" : "monthly";
   const tierParam = encodeURIComponent(config.tierNames[family]);
   const base = `${config.storeBaseUrl.replace(/\/+$/, "")}/l/${config.productPermalink}`;
-  return `${base}?tier=${tierParam}&${recurrence}=true&wanted=true`;
+  const url = `${base}?variant=${tierParam}&${recurrence}=true&wanted=true`;
+  return withGumroadPrefilledEmail(url, options.email);
+}
+
+/**
+ * Add Gumroad's documented `email=` autofill (help article 270) so the buyer
+ * checks out with the same address their NASAQ account uses — that address is
+ * what binds the membership to the account, so a typo here costs a support
+ * round trip. An empty/blank email leaves the URL untouched.
+ */
+export function withGumroadPrefilledEmail(url: string, email: string | null | undefined): string {
+  const value = email?.trim();
+  if (!value || !value.includes("@")) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}email=${encodeURIComponent(value)}`;
 }
 
 /** True when a verified sale's amount matches the NASAQ catalog price exactly. */

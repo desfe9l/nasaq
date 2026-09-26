@@ -10,6 +10,12 @@
  *     (Gumroad documents this endpoint as open); it proves a license key really
  *     was sold by THIS product, which is exactly the claim a ping makes.
  *
+ * Plus one read-only owner diagnostic: `fetchGumroadUser` — GET /user, which
+ * proves the access token itself is live and shows which account it belongs to.
+ * Personal tokens (Settings → Advanced → Applications → Generate access token)
+ * are all NASAQ ever needs; no client id, secret or per-user OAuth flow exists
+ * anywhere in this codebase.
+ *
  * The access token never appears in thrown errors, logs or return values.
  */
 
@@ -153,6 +159,34 @@ export async function fetchGumroadSale(saleId: string): Promise<GumroadSaleView 
   if (status >= 400) throw new GumroadApiError("Gumroad API request failed", status);
   const sale = asRecord(payload?.sale);
   return sale ? saleFromRecord(sale) : null;
+}
+
+/**
+ * The Gumroad account an access token belongs to — public, non-secret fields.
+ *
+ * A token pasted from the application's Edit page is only *assumed* to be live
+ * until Gumroad itself answers. This call is that answer: it separates "the
+ * token was revoked / mistyped (401)" from "the token works but this product is
+ * not in the store", two failures that otherwise look identical in the vault.
+ */
+export interface GumroadAccountView {
+  name: string | null;
+  profileUrl: string | null;
+}
+
+/** Owner diagnostic: prove the access token is live by reading its account. */
+export async function fetchGumroadUser(): Promise<GumroadAccountView> {
+  const token = requireToken();
+  const { status, payload } = await apiFetch("/user", { params: { access_token: token } });
+  if (status === 401 || status === 403) {
+    throw new GumroadApiError("Gumroad rejected the access token", 401);
+  }
+  if (status >= 400) throw new GumroadApiError("Gumroad API request failed", status);
+  const user = asRecord(payload?.user) ?? asRecord(payload);
+  return {
+    name: user ? asString(user.name) : null,
+    profileUrl: user ? (asString(user.url) ?? asString(user.profile_url)) : null,
+  };
 }
 
 /**
