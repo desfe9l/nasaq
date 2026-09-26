@@ -279,6 +279,10 @@ export interface CanvasEl {
    * other part of its state.
    */
   resizeLocked?: boolean;
+  /** قفل عرض مستقل — يمنع تغيير العرض فقط، متوافق مع البنية الحالية */
+  widthLocked?: boolean;
+  /** قفل ارتفاع مستقل — يمنع تغيير الارتفاع فقط */
+  heightLocked?: boolean;
   hidden?: boolean;
   /** Shared movement relationship; unlike a group, linked elements remain independent. */
   linkId?: string;

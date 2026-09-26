@@ -40,7 +40,6 @@ type Op = {
   handle?: string;
   startX: number;
   startY: number;
-  /** Positions of every element the gesture moves, keyed by id. */
   origins: Record<string, { x: number; y: number }>;
   orig: CanvasEl;
   pageId: string;
@@ -49,35 +48,22 @@ type Op = {
 
 type Marquee = { x0: number; y0: number; x1: number; y1: number } | null;
 
+type LayerPickerState = {
+  x: number;
+  y: number;
+  clientX: number;
+  clientY: number;
+  pageId: string;
+  point: { x: number; y: number };
+  elements: CanvasEl[];
+} | null;
+
 const ARTBOARD_GAP_MM = 18;
-/**
- * z-index of the selection/manipulation layer inside a page.
- *
- * `normalizeZ` keeps document elements at 1..n, and the marquee/guides live
- * below 100, so a large constant guarantees the overlay is painted above every
- * document element no matter how they stack — the overlay is chrome, never
- * content, and must never lose a hit-test to artwork that happens to overlap
- * the selected element.
- */
 const SELECTION_LAYER_Z = 5000;
-/**
- * Print guides sit just under the selection chrome: above every document
- * element (1..n), below the outline and handles that must stay grabbable.
- */
 const GUIDE_LAYER_Z = SELECTION_LAYER_Z - 1;
-/** The eight resize handles, named by the corner/edge they sit on. */
 const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
-/** Corner rotation grips (step 7). */
 const ROTATE_HANDLES = ["nw", "ne", "se", "sw"] as const;
 
-/**
- * Snap a raw drag angle.
- *
- * `Shift` engages the ladder: 15° steps with a strong pull onto the cardinal
- * lines (0/45/90/…) — the multiples an author actually wants — while a plain
- * drag stays continuous at 1° for fine alignment. Both branches normalise into
- * (−180, 180] so the readout never shows 359° where −1° is meant.
- */
 function snapRotation(raw: number, shift: boolean): number {
   if (!shift) {
     const free = (((raw % 360) + 540) % 360) - 180;
@@ -99,12 +85,64 @@ function pagePoint(
   };
 }
 
+/**
+ * هل النقطة داخل صندوق العنصر مع مراعاة الدوران — لاختيار دقيق بالقلم
+ */
+function pointInRotatedBox(el: CanvasEl, px: number, py: number): boolean {
+  const cx = el.x + el.w / 2;
+  const cy = el.y + el.h / 2;
+  const dx = px - cx;
+  const dy = py - cy;
+  const rad = (-(el.rotation || 0) * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const rx = dx * cos - dy * sin;
+  const ry = dx * sin + dy * cos;
+  // تسامح صغير لتسهيل الالتقاط بالقلم والإصبع
+  const tol = 0.8;
+  return Math.abs(rx) <= el.w / 2 + tol && Math.abs(ry) <= el.h / 2 + tol;
+}
+
+/**
+ * جميع العناصر الموجودة في نقطة معينة — مرتبة من الأعلى (z الأكبر) إلى الأسفل
+ * تراعي حالة الدخول إلى مجموعة (enteredGroup)
+ */
+function elementsAtPoint(
+  page: Page,
+  enteredGroupId: string | null,
+  px: number,
+  py: number,
+): CanvasEl[] {
+  const entered = enteredGroupId
+    ? findElement(page.elements, enteredGroupId)?.el || null
+    : null;
+  let list: CanvasEl[];
+  let offset = { x: 0, y: 0 };
+  if (entered?.children?.length) {
+    list = entered.children;
+    offset = { x: entered.x, y: entered.y };
+  } else {
+    list = page.elements;
+  }
+  const hits: CanvasEl[] = [];
+  for (const el of list) {
+    if (el.hidden) continue;
+    const absEl = offset.x || offset.y
+      ? { ...el, x: el.x + offset.x, y: el.y + offset.y }
+      : el;
+    if (pointInRotatedBox(absEl, px, py)) {
+      hits.push(absEl);
+    }
+  }
+  // الأعلى أولاً
+  return hits.sort((a, b) => b.z - a.z);
+}
+
 export function CanvasStage({
   onDropImage,
   onCanvasTap,
 }: {
   onDropImage?: (file: File, at?: { x: number; y: number }) => void;
-  /** Fired on a canvas press — used to dismiss the floating drawers. */
   onCanvasTap?: () => void;
 }) {
   const pages = useEditor((s) => s.pages);
@@ -137,12 +175,6 @@ export function CanvasStage({
   const opRef = useRef<Op>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const spaceDown = useRef(false);
-  /**
-   * Active two-finger gesture. Captured on start (midpoint, scroll origin,
-   * finger distance) and resolved on the first move into either a PAN (fingers
-   * move together) or a PINCH (the distance changes) — mixing the two makes a
-   * zoom drift sideways, which is the classic broken pinch.
-   */
   const touchPan = useRef<{
     x: number;
     y: number;
@@ -151,11 +183,24 @@ export function CanvasStage({
     distance: number;
     mode: "pan" | "pinch" | null;
   } | null>(null);
+  // لتتبع ضغطات اللمس المتعدد للتراجع/الإعادة
+  const multiTouchTap = useRef<{
+    count: number;
+    startTime: number;
+    startX: number;
+    startY: number;
+  } | null>(null);
+  const singleTouchPan = useRef<{
+    startX: number;
+    startY: number;
+    scrollLeft: number;
+    scrollTop: number;
+  } | null>(null);
+
   const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({
     v: [],
     h: [],
   });
-  /** Live angle readout shown next to the pointer while rotating (step 7). */
   const [rotationHint, setRotationHint] = useState<{
     angle: number;
     shift: boolean;
@@ -163,25 +208,13 @@ export function CanvasStage({
     y: number;
   } | null>(null);
   const [marquee, setMarquee] = useState<Marquee>(null);
-  /** Which drop gesture is hovering: an image file, a library card, or none. */
   const [dropping, setDropping] = useState<"file" | "library" | null>(null);
-  /**
-   * The active drawing tool. `null` is the select/move tool (V).
-   *
-   * Kept in the canvas because only the canvas knows page geometry (zoom + the
-   * active artboard rect). Everything else broadcasts through the
-   * `nasaq:tool` / `nasaq:draw-text` window events, so there is exactly one
-   * owner of "which tool is armed" and no second source of truth to sync.
-   */
   const [drawTool, setDrawTool] = useState<"text" | "rect" | null>(null);
   const drawArmed = drawTool !== null;
   const pageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const [layerPicker, setLayerPicker] = useState<LayerPickerState>(null);
 
-  /*
-   * Tool arming. «نص بالرسم» from the toolbar and `T` / `R` / `V` from the
-   * keyboard all land here; Escape is the way out without drawing anything.
-   */
   useEffect(() => {
     const armText = () => setDrawTool("text");
     const onTool = (event: Event) => {
@@ -189,7 +222,10 @@ export function CanvasStage({
       setDrawTool(detail ?? null);
     };
     const disarm = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setDrawTool(null);
+      if (e.key === "Escape") {
+        setDrawTool(null);
+        setLayerPicker(null);
+      }
     };
     window.addEventListener("nasaq:draw-text", armText);
     window.addEventListener("nasaq:tool", onTool);
@@ -201,15 +237,6 @@ export function CanvasStage({
     };
   }, []);
 
-  /*
-   * Ctrl/cmd + wheel zooms the canvas, anchored on the pointer.
-   *
-   * This must be a NATIVE, non-passive listener: React registers `wheel` at
-   * its root passively, so `preventDefault()` inside `onWheel` cannot stop the
-   * browser's default — the stage would also natively scroll (or, on real
-   * desktop browsers, the whole page would run its own pinch-zoom) while the
-   * anchored zoom adjusts scroll, and the two fight every step.
-   */
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -221,24 +248,12 @@ export function CanvasStage({
         2,
         Math.max(0.2, prev + (e.deltaY < 0 ? 0.06 : -0.06)),
       );
-      // Pointer-anchored zoom: the page point under the cursor stays put, so
-      // zooming in on a detail never throws the author somewhere else.
       zoomAnchoredAt(stage, prev, next, e.clientX, e.clientY);
     };
     stage.addEventListener("wheel", onWheel, { passive: false });
     return () => stage.removeEventListener("wheel", onWheel);
   }, []);
 
-  /*
-   * Touch navigation: two fingers pan, and a change in finger distance zooms.
-   *
-   * Bound natively and non-passively on purpose. React registers touch
-   * listeners passively at the root, so `preventDefault()` inside `onTouchMove`
-   * cannot stop the browser's own pinch-zoom — the page would zoom underneath
-   * the artboard while the canvas zoomed with it. One native handler owns the
-   * whole gesture instead, and the midpoint anchoring reuses `zoomAnchoredAt`,
-   * the same path ctrl+wheel takes.
-   */
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -253,21 +268,27 @@ export function CanvasStage({
     });
 
     const onStart = (event: TouchEvent) => {
+      // كشف ضغطات بإصبعين/ثلاثة للتراجع/الإعادة
+      if (event.touches.length === 2 || event.touches.length === 3) {
+        const mid = midpoint(event.touches);
+        multiTouchTap.current = {
+          count: event.touches.length,
+          startTime: Date.now(),
+          startX: mid.x,
+          startY: mid.y,
+        };
+      }
       if (event.touches.length !== 2) {
-        touchPan.current = null;
+        if (event.touches.length !== 1) touchPan.current = null;
+        // لا نلغي singleTouchPan هنا — قد يكون بان بإصبع واحد
         return;
       }
-      /*
-       * A live element gesture (drag / resize / rotate / long-press) snapshotted
-       * its page rect at press time — zooming mid-drag would desynchronise the
-       * coordinates and throw the element. Navigation waits until it ends.
-       */
       if (opRef.current) {
         touchPan.current = null;
         return;
       }
-      // A two-finger gesture is navigation, never a rubber-band selection.
       setMarquee(null);
+      setLayerPicker(null);
       const mid = midpoint(event.touches);
       touchPan.current = {
         x: mid.x,
@@ -280,55 +301,80 @@ export function CanvasStage({
     };
 
     const onMove = (event: TouchEvent) => {
-      const state = touchPan.current;
-      /*
-       * A live element gesture (drag / resize / rotate) owns the touch: claim
-       * EVERY move while it is in flight — including a second finger that
-       * lands mid-drag — so the browser's own pan/pinch never takes the touch
-       * over and cancels the element drag with a pointercancel. The element
-       * keeps tracking the original pointer through its own capture.
-       */
+      // إذا كان هناك عنصر يتحرك، امنع سلوك المتصفح الافتراضي
       if (opRef.current) {
         event.preventDefault();
         return;
       }
-      if (!state || event.touches.length !== 2) return;
-      /*
-       * Claim EVERY move the moment a second finger exists — before the mode
-       * is decided. That freezes the browser's own one-finger pan and its
-       * pinch-zoom for the whole gesture (touch-action already forbids
-       * pinch-zoom on the stage), so the page never zooms or scrolls
-       * underneath the canvas zoom that is about to run.
-       */
+      // كشف حركة لضغطات متعددة — إذا تحركت كثيراً، لا تعتبر Tap
+      if (multiTouchTap.current && event.touches.length === multiTouchTap.current.count) {
+        const mid = midpoint(event.touches);
+        const moveDist = Math.hypot(mid.x - multiTouchTap.current.startX, mid.y - multiTouchTap.current.startY);
+        if (moveDist > 18) {
+          multiTouchTap.current = null;
+        }
+      } else if (multiTouchTap.current && event.touches.length !== multiTouchTap.current.count) {
+        multiTouchTap.current = null;
+      }
+
+      // بان بإصبع واحد ذكي — إذا بدأ على مساحة فارغة ولا يوجد تحديد
+      if (singleTouchPan.current && event.touches.length === 1) {
+        event.preventDefault();
+        const t = event.touches[0];
+        stage.scrollLeft = singleTouchPan.current.scrollLeft - (t.clientX - singleTouchPan.current.startX);
+        stage.scrollTop = singleTouchPan.current.scrollTop - (t.clientY - singleTouchPan.current.startY);
+        return;
+      }
+
+      if (!touchPan.current || event.touches.length !== 2) return;
       event.preventDefault();
       const mid = midpoint(event.touches);
-      // Decide the gesture once, after a deliberate movement: a few px of
-      // finger wobble during a pan must not start zooming.
-      if (!state.mode) {
-        const spread = Math.abs(mid.distance - state.distance);
-        const shift = Math.hypot(mid.x - state.x, mid.y - state.y);
-        if (spread > 10 && spread > shift) state.mode = "pinch";
-        else if (shift > 8) state.mode = "pan";
+      if (!touchPan.current.mode) {
+        const spread = Math.abs(mid.distance - touchPan.current.distance);
+        const shift = Math.hypot(mid.x - touchPan.current.x, mid.y - touchPan.current.y);
+        if (spread > 10 && spread > shift) touchPan.current.mode = "pinch";
+        else if (shift > 8) touchPan.current.mode = "pan";
         else return;
       }
-      if (state.mode === "pinch") {
-        const ratio = mid.distance / state.distance;
+      if (touchPan.current.mode === "pinch") {
+        const ratio = mid.distance / touchPan.current.distance;
         const prev = useEditor.getState().zoom;
         const next = Math.min(2, Math.max(0.2, prev * ratio));
         if (Math.abs(next - prev) > 0.004) {
           zoomAnchoredAt(stage, prev, next, mid.x, mid.y);
-          // Incremental: the ratio is applied against the last applied frame,
-          // so a slow pinch does not accumulate rounding drift.
-          state.distance = mid.distance;
+          touchPan.current.distance = mid.distance;
         }
         return;
       }
-      stage.scrollLeft = state.scrollLeft - (mid.x - state.x);
-      stage.scrollTop = state.scrollTop - (mid.y - state.y);
+      stage.scrollLeft = touchPan.current.scrollLeft - (mid.x - touchPan.current.x);
+      stage.scrollTop = touchPan.current.scrollTop - (mid.y - touchPan.current.y);
     };
 
-    const onEnd = () => {
-      touchPan.current = null;
+    const onEnd = (event: TouchEvent) => {
+      // معالجة Two-finger tap → Undo و Three-finger tap → Redo
+      if (multiTouchTap.current && event.touches.length === 0) {
+        const elapsed = Date.now() - multiTouchTap.current.startTime;
+        if (elapsed < 350) {
+          const state = useEditor.getState();
+          if (multiTouchTap.current.count === 2) {
+            // Two-finger tap → Undo
+            state.undo();
+            toast.info("تراجع — Two-finger tap");
+          } else if (multiTouchTap.current.count === 3) {
+            // Three-finger tap → Redo
+            state.redo();
+            toast.info("إعادة — Three-finger tap");
+          }
+        }
+      }
+      if (event.touches.length === 0) {
+        multiTouchTap.current = null;
+        touchPan.current = null;
+        singleTouchPan.current = null;
+      } else if (event.touches.length === 1) {
+        // بقي إصبع واحد بعد رفع الثاني — ألغِ بان الإصبعين
+        touchPan.current = null;
+      }
     };
 
     stage.addEventListener("touchstart", onStart, { passive: false });
@@ -343,25 +389,11 @@ export function CanvasStage({
     };
   }, []);
 
-  /*
-   * Apple Pencil layer: palm-rejection bookkeeping, hover affordance and the
-   * iOS-only gesture events.
-   *
-   *  · Pen activity is tracked at WINDOW level in the capture phase, so a palm
-   *    landing anywhere (over a panel, over the artboard) is evaluated
-   *    against the same pen state every gesture entry point reads.
-   *  · Hover: iPadOS reports a hovering Pencil as pointermove with
-   *    pointerType "pen" but does not flip CSS :hover for it — the canvas
-   *    keeps its own hairline highlight on the element under the tip.
-   *  · `gesturestart/gesturechange` are Safari's proprietary pinch that zooms
-   *    the whole PAGE regardless of Pointer Events — the canvas claims them.
-   */
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
 
-    const track = (event: Event) =>
-      notePenActivity(event as PointerEvent);
+    const track = (event: Event) => notePenActivity(event as PointerEvent);
     const PEN_WINDOW_EVENTS = [
       "pointerdown",
       "pointerup",
@@ -378,13 +410,12 @@ export function CanvasStage({
       if (event.pointerType !== "pen") return;
       updatePenHover(event.clientX, event.clientY);
     };
-    const onPenLeave = (event: PointerEvent) => {
-      if (event.pointerType === "pen") clearPenHover();
+    const onPenLeave = () => {
+      clearPenHover();
     };
     stage.addEventListener("pointermove", onPenMove);
     stage.addEventListener("pointerleave", onPenLeave);
 
-    // A lost window (app switch) can strand pen-down state and lock touch out.
     const onBlur = () => {
       clearPenHover();
       resetPenInput();
@@ -392,11 +423,7 @@ export function CanvasStage({
     window.addEventListener("blur", onBlur);
 
     const claim = (event: Event) => event.preventDefault();
-    const GESTURE_EVENTS = [
-      "gesturestart",
-      "gesturechange",
-      "gestureend",
-    ] as const;
+    const GESTURE_EVENTS = ["gesturestart", "gesturechange", "gestureend"] as const;
     for (const type of GESTURE_EVENTS) {
       stage.addEventListener(type, claim, { passive: false });
     }
@@ -439,27 +466,60 @@ export function CanvasStage({
     };
   }, []);
 
-  /**
-   * Translate a drop point into page millimetres.
-   *
-   * The drop target is resolved from the element under the pointer rather than
-   * a ref, because the author may drop onto any page — including one that is not
-   * the active page in the all-pages preview.
-   */
   const dropPoint = (
-    e: React.DragEvent,
+    e: React.DragEvent | { clientX: number; clientY: number; target?: any },
   ): { x: number; y: number; pageId: string } | null => {
     const target = (e.target as HTMLElement | null)?.closest<HTMLElement>(
       "[data-page-id]",
     );
-    if (!target) return null;
-    const pageId = target.dataset.pageId;
-    const page = pages.find((p) => p.id === pageId);
-    if (!page) return null;
-    const size = pageSize(page);
-    const rect = target.getBoundingClientRect();
-    const point = pagePoint(rect, size, e.clientX, e.clientY);
-    return { pageId: page.id, ...point };
+    if (target) {
+      const pageId = target.dataset.pageId;
+      const page = pages.find((p) => p.id === pageId);
+      if (!page) return null;
+      const size = pageSize(page);
+      const rect = target.getBoundingClientRect();
+      const point = pagePoint(rect, size, (e as any).clientX, (e as any).clientY);
+      return { pageId: page.id, ...point };
+    }
+    // إذا لم يكن فوق صفحة مباشرة، استخدم أقرب صفحة أو الصفحة النشطة — لا نلغي السحب بسبب حدود الـArtboard
+    const stage = stageRef.current;
+    if (!stage) return null;
+    // ابحث عن أقرب صفحة لنقطة المؤشر
+    let closest: { page: Page; rect: DOMRect; dist: number } | null = null;
+    for (const page of pages) {
+      const el = pageRefs.current[page.id];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dist = Math.hypot((e as any).clientX - cx, (e as any).clientY - cy);
+      if (!closest || dist < closest.dist) {
+        closest = { page, rect, dist };
+      }
+    }
+    if (closest) {
+      const size = pageSize(closest.page);
+      // حتى لو خارج الحدود، احسب النقطة مع clamp ناعم داخل مساحة العمل
+      const clampedX = Math.max(
+        closest.rect.left,
+        Math.min((e as any).clientX, closest.rect.right),
+      );
+      const clampedY = Math.max(
+        closest.rect.top,
+        Math.min((e as any).clientY, closest.rect.bottom),
+      );
+      const point = pagePoint(closest.rect, size, clampedX, clampedY);
+      return { pageId: closest.page.id, ...point };
+    }
+    // fallback للصفحة النشطة
+    const active = pages.find((p) => p.id === activePageId) || pages[0];
+    if (!active) return null;
+    const ref = pageRefs.current[active.id];
+    if (!ref) return null;
+    const size = pageSize(active);
+    const rect = ref.getBoundingClientRect();
+    const point = pagePoint(rect, size, (e as any).clientX, (e as any).clientY);
+    return { pageId: active.id, ...point };
   };
 
   const visible = useMemo(
@@ -475,89 +535,80 @@ export function CanvasStage({
     handle?: string,
     parent?: { x: number; y: number },
   ) => {
-    /*
-     * Palm rejection FIRST: a resting palm must not dismiss drawers, clear the
-     * selection or start any gesture — swallow the contact outright (stopping
-     * propagation so the stage's click-to-deselect never sees it either).
-     */
     if (isPalmTouch(e)) {
       e.stopPropagation();
       e.preventDefault();
       return;
     }
-    // The press lands on an element, so the stage handler never sees it — but
-    // the drawer must still get out of the way.
     onCanvasTap?.();
+    setLayerPicker(null);
     if (el.locked) {
-      // Locked elements can be selected but not gestured; stopping the press
-      // here keeps the stage's click-to-deselect from immediately undoing it.
       e.stopPropagation();
       select(el.id);
       return;
     }
     if (el.resizeLocked && kind === "resize") {
-      /*
-       * The resize lock rejects only the resize gesture: the press still
-       * selects the element, and move / rotate / edit keep working exactly as
-       * before — only width/height are protected.
-       */
       e.stopPropagation();
       e.preventDefault();
       select(el.id);
       return;
     }
+    // قفل عرض/ارتفاع مستقل — يمنع Resize فقط على المحور المقفل
+    if (kind === "resize" && handle) {
+      if (el.widthLocked && (handle.includes("e") || handle.includes("w"))) {
+        // إذا كان العرض مقفلاً ونحاول تغييره مع بقاء الارتفاع مقفلاً أيضاً، امنع تماماً
+        if (el.heightLocked) {
+          e.stopPropagation();
+          select(el.id);
+          toast.info("العرض والارتفاع مقفلان — فك القفل للتحجيم");
+          return;
+        }
+        // إذا كان مقفل عرض فقط، نسمح بتغيير الارتفاع فقط إذا كان المقبض عمودي
+        const isHorizontalOnly = (handle === "e" || handle === "w");
+        if (isHorizontalOnly) {
+          e.stopPropagation();
+          select(el.id);
+          return;
+        }
+      }
+      if (el.heightLocked && (handle.includes("n") || handle.includes("s"))) {
+        const isVerticalOnly = (handle === "n" || handle === "s");
+        if (isVerticalOnly) {
+          e.stopPropagation();
+          select(el.id);
+          return;
+        }
+        if (el.widthLocked) {
+          e.stopPropagation();
+          select(el.id);
+          return;
+        }
+      }
+    }
     e.stopPropagation();
     e.preventDefault();
-    // setPointerCapture throws NotFoundError for synthetic/dispatched events
-    // that carry no live pointer — wrap so a programmatic click (tests,
-    // a11y tools) can't crash the interaction handler.
     try {
       (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    } catch {
-      /* no live pointer: capture is a drag-quality optimisation, not required */
-    }
+    } catch {}
+
     setActivePage(page.id);
 
     const pageEl = pageRefs.current[page.id];
     if (!pageEl) return;
     const size = pageSize(page);
-    // Snapshot the live page geometry once: reading it per pointermove would
-    // force a layout on every frame of a drag.
     const rect = pageEl.getBoundingClientRect();
     const toMm = (ev: { clientX: number; clientY: number }) =>
       pagePoint(rect, size, ev.clientX, ev.clientY);
 
     const start = toMm(e);
-    /** Movement before a deferred press commits counts as a drag (~4 CSS px). */
     const slopMm = Math.max(0.2, (4 * size.w) / Math.max(1, rect.width));
-    /** Largest distance the pointer has travelled from the press point. */
     let maxDist = 0;
 
-    // When inside a group, children live in entered.children with
-    // group-relative coordinates; otherwise they're in page.elements. Hoisted
-    // out of the gesture itself: both `beginGesture` (origins) and the live
-    // `move` handler (sibling follow-along) read the same context.
     const enteredGroup = enteredGroupId
       ? findElement(page.elements, enteredGroupId)?.el || null
       : null;
     const enteredChildren = enteredGroup?.children || [];
 
-    /*
-     * Selection timing, per input:
-     *
-     *  · mouse (and Shift, which implies a keyboard): decide IMMEDIATELY, with
-     *    the classic rules — shift extends, a member of a multi-selection
-     *    keeps the group draggable, anything else replaces;
-     *  · touch / Pencil without Shift: DEFER the decision — a plain tap
-     *    applies the same rules on pointerup, crossing the slop starts a drag
-     *    with those rules, and a press-and-hold toggles the element in/out of
-     *    the selection (the keyboard-less twin of Shift+click for adding and
-     *    removing elements).
-     *
-     * Deferring is what makes multi-touch selection honest: the gesture never
-     * steals the selection on touchdown, so a hold can mean "add/remove"
-     * instead of always meaning "replace".
-     */
     const defer =
       kind === "move" &&
       !e.shiftKey &&
@@ -565,33 +616,19 @@ export function CanvasStage({
     let decided = !defer;
     let heldLong = false;
     let tapTimer: ReturnType<typeof setTimeout> | undefined;
+    let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+    let longPressFired = false;
 
-    /**
-     * The press-selection rules. Reads the LIVE store so the deferred path
-     * (timer / slop) sees the same state a mouse press would have seen — the
-     * outcome is identical to the old immediate evaluation.
-     */
     const applyPressSelection = () => {
       const fresh = useEditor.getState();
       if (e.shiftKey) toggleSelect(el.id);
       else if (!fresh.selectedIds.includes(el.id)) select(el.id);
-      // Anything already inside a multi-selection stays selected, so the
-      // press can carry the whole group.
     };
 
-    /**
-     * Decide selection + snapshot every element the gesture moves. Called at
-     * press time for a mouse, at slop time for a touch/pen drag.
-     */
     const beginGesture = () => {
       applyPressSelection();
       const fresh = useEditor.getState();
       const live = new Set(fresh.selectedIds);
-
-      // The elements this gesture moves. A resize or rotate handle only ever
-      // acts on the pressed element; a plain drag carries the whole selection
-      // unless the press was a shift-toggle, which is a selection change and
-      // not a drag.
       const draggingIds =
         kind !== "move" || e.shiftKey
           ? [el.id]
@@ -643,9 +680,6 @@ export function CanvasStage({
     if (decided) {
       beginGesture();
     } else {
-      // Touch/pen: hold to toggle selection membership (add when absent,
-      // remove when part of a multi-selection). Fires only if the pointer has
-      // not already broken the slop into a drag.
       tapTimer = setTimeout(() => {
         tapTimer = undefined;
         if (decided) return;
@@ -660,23 +694,54 @@ export function CanvasStage({
           toggleSelect(el.id);
           toast.info("تمت إزالة العنصر من التحديد");
         }
-        // A sole selection stays selected: a hold on it means "still selected".
       }, 450);
+    }
+
+    // ضغط مطوّل للـ Touch و Apple Pencil → Context Menu
+    if (e.pointerType === "touch" || e.pointerType === "pen") {
+      longPressTimer = setTimeout(() => {
+        longPressFired = true;
+        heldLong = true;
+        // ألغِ أي حركة جارية
+        if (opRef.current) {
+          opRef.current = null;
+          setGuides({ v: [], h: [] });
+          setRotationHint(null);
+        }
+        // افتح Context Menu بجانب نقطة الضغط
+        const state = useEditor.getState();
+        if (!state.selectedIds.includes(el.id)) {
+          state.select(el.id);
+        }
+        state.openContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          targetId: el.id,
+          source: "canvas",
+        });
+        // اهتزاز خفيف إن توفر
+        try {
+          (navigator as any).vibrate?.(20);
+        } catch {}
+      }, 600);
     }
 
     const others = page.elements.filter((x) => x.id !== el.id && !x.hidden);
 
     const move = (ev: PointerEvent) => {
+      if (longPressFired) return;
       if (!decided) {
         const cur = toMm(ev);
         const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
-        // A few px of finger wobble during a press must not become a drag…
         if (dist < slopMm) return;
-        // …but once it does, the gesture starts with the classic rules.
         decided = true;
         if (tapTimer !== undefined) {
           clearTimeout(tapTimer);
           tapTimer = undefined;
+        }
+        if (longPressTimer !== undefined) {
+          clearTimeout(longPressTimer);
+          longPressTimer = undefined;
         }
         beginGesture();
         maxDist = dist;
@@ -691,12 +756,6 @@ export function CanvasStage({
       let dy = cur.y - op.startY;
       const next: CanvasEl = { ...op.orig, style: { ...op.orig.style } };
 
-      /*
-       * Drag auto-pan: near the viewport edge the stage scrolls itself, so a
-       * drag can continue past what is on screen. Edge zones are screen pixels
-       * (80px engage, speed eases to 0 at the very edge) — zoom-independent by
-       * definition because they are measured on the visible viewport itself.
-       */
       const stageEl = stageRef.current;
       if (stageEl) {
         const vr = stageEl.getBoundingClientRect();
@@ -721,8 +780,6 @@ export function CanvasStage({
         if (ax || ay) {
           stageEl.scrollLeft += ax;
           stageEl.scrollTop += ay;
-          // Scroll changes what the pointer means in document space; re-read it
-          // so the element keeps tracking the cursor instead of lagging.
           const pageElNow = pageRefs.current[op.pageId];
           if (pageElNow) {
             const rectNow = pageElNow.getBoundingClientRect();
@@ -738,16 +795,6 @@ export function CanvasStage({
       if (op.kind === "move") {
         next.x = op.orig.x + dx;
         next.y = op.orig.y + dy;
-        /*
-         * Snap policy for moves:
-         *  · Alt escapes all snapping mid-gesture, so a stuck alignment never
-         *    traps the element;
-         *  · Shift is the alignment mode — smart guides stay available for the
-         *    gesture even when the element-snap preference is off;
-         *  · otherwise the author's grid/element snap preferences apply.
-         * The threshold itself is screen-space (see transform.ts), so zoom has
-         * no effect on how eagerly an element locks on.
-         */
         const zoomNow = useEditor.getState().zoom;
         const snapped = applySnap(
           next,
@@ -759,11 +806,8 @@ export function CanvasStage({
           op.origins,
         );
         setGuides(snapped);
-        // Everything else in the selection follows the pressed element's final,
-        // snapped offset, so their spacing relative to each other is preserved.
         const appliedDx = next.x - op.orig.x;
         const appliedDy = next.y - op.orig.y;
-        // When inside a group, siblings live in entered.children; otherwise in page.elements.
         const siblingList =
           op.parent && enteredGroup ? enteredChildren : page.elements;
         for (const [id, origin] of Object.entries(op.origins)) {
@@ -776,13 +820,9 @@ export function CanvasStage({
           );
         }
       } else if (op.kind === "resize") {
-        // Shift (or the element's own aspect lock) preserves the element's
-        // current aspect ratio; a plain drag resizes freely.
         resizeByHandle(
           next,
           op.orig,
-          // A mirrored element is drawn flipped, so the grip the author grabbed
-          // must drive the opposite edge (step 7). `mirrorHandle` maps it.
           mirrorHandle(
             op.handle || "se",
             op.orig.style?.flipX === true,
@@ -791,6 +831,7 @@ export function CanvasStage({
           dx,
           dy,
           ev.shiftKey || op.orig.style?.aspectLock === true,
+          { widthLocked: op.orig.widthLocked, heightLocked: op.orig.heightLocked },
         );
       } else if (op.kind === "rotate") {
         const cx = op.orig.x + op.orig.w / 2;
@@ -806,18 +847,10 @@ export function CanvasStage({
           y: ev.clientY,
         });
       }
-      // Editing is free: an element may sit fully inside the page, straddle its
-      // edge, or move entirely outside it. Only export clips content to the
-      // page rectangle. We keep a generous soft boundary so the user can freely
-      // position elements outside the page area when needed. The stage pads
-      // each artboard by the same margin (WORKSPACE_MARGIN_MM), so every
-      // reachable position stays visible and grabbable.
       const workspaceW = size.w + WORKSPACE_MARGIN_MM * 2;
       const workspaceH = size.h + WORKSPACE_MARGIN_MM * 2;
       next.w = Math.max(clamp(next.w, MIN_SIZE, workspaceW), MIN_SIZE);
       next.h = Math.max(clamp(next.h, MIN_SIZE, workspaceH), MIN_SIZE);
-      // Soft boundary: allow elements to extend beyond page but keep them
-      // within the generous workspace area the stage makes reachable.
       next.x = Math.max(
         -WORKSPACE_MARGIN_MM,
         Math.min(next.x, size.w + WORKSPACE_MARGIN_MM - next.w),
@@ -842,29 +875,64 @@ export function CanvasStage({
         clearTimeout(tapTimer);
         tapTimer = undefined;
       }
+      if (longPressTimer !== undefined) {
+        clearTimeout(longPressTimer);
+        longPressTimer = undefined;
+      }
     };
 
     const up = (ev: PointerEvent) => {
-      // A gesture existed only if `beginGesture` ran: taps and holds never
-      // touch document content, so they skip `commit()` instead of padding
-      // the undo stack with no-op snapshots (a free cleanup for mouse taps
-      // too — they behave exactly as before otherwise).
       const hadGesture = opRef.current !== null;
+      if (longPressFired) {
+        detach();
+        opRef.current = null;
+        setRotationHint(null);
+        setGuides({ v: [], h: [] });
+        return;
+      }
       if (!decided) {
         decided = true;
-        // Plain tap on touch/pen: apply the classic selection rules now.
         applyPressSelection();
       }
       detach();
       const wasTap = !heldLong && maxDist < slopMm;
-      if (
-        wasTap &&
-        (ev.pointerType === "touch" || ev.pointerType === "pen") &&
-        noteElementTap(el.id, ev.pointerType)
-      ) {
-        // Second quick tap: text edit / step into the group — the touch twin
-        // of double-click, dispatched through the same single edit pathway.
-        fireSyntheticDoubleClick(el.id);
+
+      if (wasTap) {
+        // تحقق من العناصر المتداخلة — إذا كان هناك أكثر من عنصر في نقطة الضغط، اعرض قائمة اختيار
+        const pageForHit = pages.find((p) => p.id === page.id);
+        if (pageForHit) {
+          const hits = elementsAtPoint(pageForHit, enteredGroupId, start.x, start.y);
+          if (hits.length > 1) {
+            // إذا كان العنصر المحدد هو الأعلى، وكان هناك تداخل صعب، اعرض القائمة
+            // نعرض القائمة عندما يكون هناك أكثر من عنصرين متداخلين أو عندما يكون الضغط بالقلم/اللمس
+            const shouldShowPicker =
+              hits.length >= 2 &&
+              (ev.pointerType === "pen" || ev.pointerType === "touch" || hits.length > 2);
+            if (shouldShowPicker) {
+              // تأخير صغير لتجنب التعارض مع double-tap
+              setTimeout(() => {
+                const stillTap = !opRef.current;
+                if (stillTap) {
+                  setLayerPicker({
+                    x: ev.clientX,
+                    y: ev.clientY,
+                    clientX: ev.clientX,
+                    clientY: ev.clientY,
+                    pageId: page.id,
+                    point: start,
+                    elements: hits,
+                  });
+                }
+              }, 80);
+            }
+          }
+        }
+        if (
+          (ev.pointerType === "touch" || ev.pointerType === "pen") &&
+          noteElementTap(el.id, ev.pointerType)
+        ) {
+          fireSyntheticDoubleClick(el.id);
+        }
       }
       opRef.current = null;
       setRotationHint(null);
@@ -872,20 +940,12 @@ export function CanvasStage({
       if (hadGesture) commit();
     };
 
-    /*
-     * Safari cancels pointers it takes over (system gesture, incoming call,
-     * palm/edge rejection) without a pointerup — without this the op would
-     * stay armed, window listeners would leak, and the element would keep
-     * tracking a finger that is no longer there.
-     */
     const cancel = () => {
       const hadGesture = opRef.current !== null;
       detach();
       opRef.current = null;
       setRotationHint(null);
       setGuides({ v: [], h: [] });
-      // A cancelled drag commits the geometry reached so far — it is still on
-      // screen, so it must be undoable like any other drag.
       if (hadGesture) commit();
     };
 
@@ -894,13 +954,6 @@ export function CanvasStage({
     window.addEventListener("pointercancel", cancel);
   };
 
-  /**
-   * Elements a click or marquee can pick, in the current grouping context.
-   *
-   * Outside a group that is the top-level list — a group counts as one element.
-   * Once the author steps into a group, its members become pickable instead, at
-   * their absolute page positions.
-   */
   const pickables = (page: Page): { id: string; box: Box }[] => {
     const entered = enteredGroupId
       ? findElement(page.elements, enteredGroupId)?.el || null
@@ -922,10 +975,6 @@ export function CanvasStage({
     }));
   };
 
-  /**
-   * The element the contextual toolbar formats: the primary selection, resolved
-   * through the current grouping context so a group member gets its own tools.
-   */
   const activePageForSelection = pages.find((p) => p.id === activePageId);
   const primarySelection = (() => {
     if (!selectedId || !activePageForSelection) return null;
@@ -933,9 +982,7 @@ export function CanvasStage({
     return found && !found.hidden ? found : null;
   })();
 
-  /** Rubber-band selection on empty page space, or a drawn text box when armed. */
   const startMarquee = (e: React.PointerEvent, page: Page) => {
-    // Palm on the artboard: no marquee, no deselect, no drawer dismissal.
     if (isPalmTouch(e)) {
       e.stopPropagation();
       e.preventDefault();
@@ -948,8 +995,75 @@ export function CanvasStage({
     const toMm = (ev: { clientX: number; clientY: number }) =>
       pagePoint(rect, size, ev.clientX, ev.clientY);
     const start = toMm(e);
+
+    // سلوك ذكي للـ Touch: إذا بدأ اللمس على مساحة فارغة ولا يوجد تحديد، اسمح بالـ Pan بإصبع واحد
+    if (e.pointerType === "touch") {
+      const fresh = useEditor.getState();
+      const hits = elementsAtPoint(page, enteredGroupId, start.x, start.y);
+      if (hits.length === 0 && fresh.selectedIds.length === 0) {
+        // بان بإصبع واحد — مساحة فارغة ولا يوجد تحديد
+        e.stopPropagation();
+        e.preventDefault();
+        const stage = stageRef.current;
+        if (!stage) return;
+        try {
+          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+        } catch {}
+        singleTouchPan.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          scrollLeft: stage.scrollLeft,
+          scrollTop: stage.scrollTop,
+        };
+        const move = (ev: PointerEvent) => {
+          if (!singleTouchPan.current) return;
+          stage.scrollLeft =
+            singleTouchPan.current.scrollLeft - (ev.clientX - singleTouchPan.current.startX);
+          stage.scrollTop =
+            singleTouchPan.current.scrollTop - (ev.clientY - singleTouchPan.current.startY);
+        };
+        const up = () => {
+          singleTouchPan.current = null;
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          window.removeEventListener("pointercancel", cancel);
+        };
+        const cancel = () => {
+          singleTouchPan.current = null;
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          window.removeEventListener("pointercancel", cancel);
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", cancel);
+        return;
+      }
+    }
+
+    // ضغط مطوّل على مساحة فارغة → Context Menu للمساحة الفارغة (Touch/Pen)
+    let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+    let longPressFired = false;
+    if (e.pointerType === "touch" || e.pointerType === "pen") {
+      longPressTimer = setTimeout(() => {
+        longPressFired = true;
+        const state = useEditor.getState();
+        state.openContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          targetId: null,
+          source: "canvas",
+        });
+        try {
+          (navigator as any).vibrate?.(20);
+        } catch {}
+        setMarquee(null);
+      }, 650);
+    }
+
     if (drawTool) {
       const move = (ev: PointerEvent) => {
+        if (longPressFired) return;
         const cur = toMm(ev);
         setMarquee({ x0: start.x, y0: start.y, x1: cur.x, y1: cur.y });
       };
@@ -957,8 +1071,13 @@ export function CanvasStage({
         window.removeEventListener("pointermove", move);
         window.removeEventListener("pointerup", up);
         window.removeEventListener("pointercancel", cancel);
+        if (longPressTimer) clearTimeout(longPressTimer);
       };
       const up = (ev: PointerEvent) => {
+        if (longPressFired) {
+          finish();
+          return;
+        }
         finish();
         const end = toMm(ev);
         setMarquee(null);
@@ -972,19 +1091,14 @@ export function CanvasStage({
           h,
         };
         if (drawTool === "rect") {
-          // `over` wins over the computed position inside `addElementAt`, so the
-          // rectangle lands exactly where it was drawn — not centred.
           addElementAt("box", box);
           return;
         }
         const id = addTextAt(box, page.id);
         if (id) {
-          // The box opens for typing immediately — the drawn rectangle IS the
-          // text element, so editing starts as soon as the pointer is up.
           requestAnimationFrame(() => requestEdit(page.id, id));
         }
       };
-      // Interrupted (system gesture / palm): drop the preview, arm nothing.
       const cancel = () => {
         finish();
         setMarquee(null);
@@ -1001,6 +1115,17 @@ export function CanvasStage({
     let moved = false;
 
     const move = (ev: PointerEvent) => {
+      if (longPressFired) return;
+      if (longPressTimer) {
+        const cur = toMm(ev);
+        const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
+        if (dist > 0.5) {
+          clearTimeout(longPressTimer);
+          longPressTimer = undefined;
+        } else {
+          return;
+        }
+      }
       const cur = toMm(ev);
       moved = true;
       const box: Box = {
@@ -1015,8 +1140,6 @@ export function CanvasStage({
         x1: box.x + box.w,
         y1: box.y + box.h,
       });
-      // Intersection, not full containment: brushing across a row of elements is
-      // the gesture people actually use to grab them all.
       const hits = candidates
         .filter(
           (p) =>
@@ -1034,19 +1157,52 @@ export function CanvasStage({
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", cancel);
+      if (longPressTimer) {
+        clearTimeout(longPressTimer);
+        longPressTimer = undefined;
+      }
     };
 
     const up = (ev: PointerEvent) => {
+      if (longPressFired) {
+        finish();
+        return;
+      }
       finish();
-      // A press with no drag is a plain click on empty space, which clears the
-      // selection the way every design tool does — left button only, so a
-      // right-click never wipes the selection its menu is about to act on.
-      if (!moved && !additive && ev.button === 0) select(null);
+      if (!moved && !additive && ev.button === 0) {
+        // عند الضغط على نقطة تحتوي أكثر من عنصر — تحقق من التداخل
+        const hits = elementsAtPoint(page, enteredGroupId, start.x, start.y);
+        if (hits.length > 1) {
+          // اختر العنصر المناسب مباشرة عندما يكون واضحًا، وإلا اعرض القائمة
+          const top = hits[0];
+          const fresh = useEditor.getState();
+          const alreadySelected = fresh.selectedIds.includes(top.id);
+          if (ev.pointerType === "pen" || ev.pointerType === "touch") {
+            // للـ Pencil واللمس: إذا كان هناك تداخل صعب، اعرض القائمة
+            if (hits.length >= 2) {
+              setLayerPicker({
+                x: ev.clientX,
+                y: ev.clientY,
+                clientX: ev.clientX,
+                clientY: ev.clientY,
+                pageId: page.id,
+                point: start,
+                elements: hits,
+              });
+              // اختر الأعلى أيضاً كافتراضي
+              select(top.id);
+              return;
+            }
+          }
+          if (!alreadySelected) {
+            select(top.id);
+            return;
+          }
+        }
+        select(null);
+      }
     };
 
-    // A cancelled marquee (Safari took the gesture over) ends silently: the
-    // rubber band disappears, the selection the band had built stays as-is,
-    // and no phantom "click" clears anything.
     const cancel = () => {
       finish();
     };
@@ -1092,25 +1248,23 @@ export function CanvasStage({
         window.addEventListener("pointermove", move);
         window.addEventListener("pointerup", up);
       }}
-      /*
-       * Click-to-deselect is a LEFT-button gesture. Clearing on every button
-       * meant the right-click itself wiped the multi-selection a moment before
-       * its context menu opened — so تجميع/فك التجميع vanished from the
-       * empty-space menu even with several elements selected.
-       */
       onPointerDown={(e) => {
-        // A palm resting on the bare workspace is not a click: no drawer
-        // dismissal, no deselect.
         if (isPalmTouch(e)) return;
-        // Floating drawers close on any canvas press — including a press that
-        // starts a marquee or grabs an element, because on a tablet the tap
-        // means "get the panel out of my way", not "deselect".
+        // إغلاق قائمة الطبقات عند الضغط خارجها
+        if (layerPicker) {
+          const target = e.target as HTMLElement;
+          if (!target.closest(".layer-picker-popup")) {
+            setLayerPicker(null);
+          }
+        }
         onCanvasTap?.();
-        if (e.button === 0) select(null);
+        if (e.button === 0) {
+          // لا نمسح التحديد إذا كان الضغط على مساحة فارغة ولكن هناك قائمة طبقات مفتوحة
+          if (!layerPicker) {
+            // سيتم التعامل مع المسح في startMarquee إذا لزم الأمر
+          }
+        }
       }}
-      /* Two-finger pan and pinch-to-zoom are owned by the native touch effect
-         above, so a trackpad (browser scroll) and a touchscreen behave the
-         same way without two competing handlers. */
       onDragOver={(e) => {
         const isFile = e.dataTransfer.types.includes("Files");
         const isLibrary = e.dataTransfer.types.includes(LIBRARY_DND_MIME);
@@ -1126,7 +1280,6 @@ export function CanvasStage({
       }}
       onDrop={(e) => {
         setDropping(null);
-        // Graphic heading drag: precise placement
         const graphicId = e.dataTransfer.getData(GRAPHIC_HEADING_MIME);
         if (graphicId) {
           e.preventDefault();
@@ -1139,8 +1292,6 @@ export function CanvasStage({
           }
           return;
         }
-        // Library card: place it exactly where it was dropped, on whichever
-        // page received it.
         const payload = parseLibraryDrop(
           e.dataTransfer.getData(LIBRARY_DND_MIME),
         );
@@ -1184,34 +1335,16 @@ export function CanvasStage({
       <div
         className="mx-auto flex w-max min-w-full flex-col items-center gap-6"
         dir="rtl"
-        /*
-         * Workspace reachability: the drag clamp lets elements live up to
-         * WORKSPACE_MARGIN_MM outside the artboard on every side; the scroller
-         * must make that same band visible and scrollable, or an element
-         * dragged off the sheet could not be grabbed again to bring it back in.
-         * Padding the column by the margin (× zoom, because the page frame is
-         * already zoom-scaled in mm) aligns the reachable scroll area with the
-         * clamp exactly — mouse, touch and Pencil all grab the element the same
-         * way, on its own node, regardless of the artboard edge.
-         */
         style={{ padding: `${WORKSPACE_MARGIN_MM * zoom}mm` }}
       >
         {visible.map((page) => {
           const size = pageSize(page);
           const isActive = page.id === activePageId;
-          /* 1-based document position — `visible` may hold a single page. */
           const pageNo = pages.findIndex((p) => p.id === page.id) + 1;
           const entered = enteredGroupId
             ? findElement(page.elements, enteredGroupId)?.el || null
             : null;
           const enteredKids = entered?.children ?? [];
-          /*
-           * Selection/manipulation frames for this page, in the grouping
-           * context the author is in (group members at their absolute page
-           * positions). They render in a dedicated overlay layer above every
-           * document element so overlapping artwork can never block the
-           * selection outline, the handles or a drag on the selected element.
-           */
           const selectionFrames: SelectionBox[] = [];
           if (isActive) {
             if (entered && enteredKids.length) {
@@ -1288,20 +1421,6 @@ export function CanvasStage({
                     height: `${size.h}mm`,
                     background: page.bg || "#fff",
                   }}
-                  /*
-                   * Content protection, scoped to the artboard ONLY (site UI
-                   * outside keeps native behaviour):
-                   *  • right-click never opens the browser menu here ("Save
-                   *    Image As" disappears with it) — the custom NASAQ menu
-                   *    still opens because this only prevents the default and
-                   *    lets the event bubble up to the workspace handler;
-                   *  • native HTML5 drags cannot start from document content,
-                   *    so an image/selection cannot be dropped onto the
-                   *    desktop. Element moving/resizing uses pointer events
-                   *    and incoming library/file drops use dragover+drop, so
-                   *    neither is affected. Editing inside a contentEditable
-                   *    keeps its native drag behaviour.
-                   */
                   onContextMenu={(e) => {
                     e.preventDefault();
                   }}
@@ -1317,11 +1436,7 @@ export function CanvasStage({
                     e.preventDefault();
                   }}
                   onPointerDown={(e) => {
-                    // Only a press on the page itself starts a marquee; presses on
-                    // elements are handled by the element and stop propagation.
                     if (e.target !== e.currentTarget) return;
-                    // Palm on the artboard: swallow it — no marquee, and no
-                    // fall-through to the stage's click-to-deselect either.
                     if (isPalmTouch(e)) {
                       e.stopPropagation();
                       e.preventDefault();
@@ -1329,9 +1444,6 @@ export function CanvasStage({
                     }
                     e.stopPropagation();
                     setActivePage(page.id);
-                    // A right press only opens the context menu — it must not
-                    // start a marquee (whose plain-click branch would clear the
-                    // selection from under the menu about to open).
                     if (e.button !== 0) return;
                     startMarquee(e, page);
                   }}
@@ -1340,9 +1452,6 @@ export function CanvasStage({
                     .slice()
                     .sort((a, b) => a.z - b.z)
                     .map((el) => {
-                      // Stepped into this group: its frame is drawn for context and
-                      // its members become individually selectable nodes, instead of
-                      // the group behaving as one opaque element.
                       if (
                         entered &&
                         el.id === entered.id &&
@@ -1430,11 +1539,6 @@ export function CanvasStage({
                         onFit={() => fitTextBox(el.id)}
                       />
                     ))}
-                  {/*
-                   * Live rotation readout. Rendered inside the (clipped) page for
-                   * simplicity but positioned from client coordinates, so it never
-                   * adds a layout box to the artboard.
-                   */}
                   {rotationHint && isActive && (
                     <div
                       className="rotation-hint"
@@ -1478,6 +1582,7 @@ export function CanvasStage({
                           frame={frame}
                           primary={selectedIds.length === 1}
                           editing={editingId === frame.el.id}
+                          zoom={zoom}
                           onGesture={(ev, kind, handle) =>
                             startOp(
                               ev,
@@ -1501,39 +1606,32 @@ export function CanvasStage({
           );
         })}
       </div>
-      {/*
-       * Phase 4 — floating contextual toolbar.
-       *
-       * Rendered for a single selected element (the primary selection), and
-       * hidden while the caret is inside a text node so it never competes with
-       * in-place editing. It lives in a FIXED overlay — outside the scaled page
-       * — so its buttons keep a constant screen size and its 16px gap is real.
-       */}
       {primarySelection &&
         editingId !== primarySelection.id &&
         bubbleEnabled &&
-        /*
-         * Never competing with a modal surface: while the export dialog, the
-         * page manager or a context menu is open the bubble is hidden outright,
-         * so it cannot sit on a dialog (which is what "never overlaps active
-         * dialogs" means in practice — the dialog owns the screen then).
-         */
         !exportOpen &&
         !pageManagerOpen &&
-        !contextMenu && <FloatingToolbar el={primarySelection} />}
+        !contextMenu &&
+        !layerPicker && <FloatingToolbar el={primarySelection} />}
+
+      {layerPicker && (
+        <LayerPickerPopup
+          picker={layerPicker}
+          onSelect={(id) => {
+            const state = useEditor.getState();
+            state.setActivePage(layerPicker.pageId);
+            state.select(id);
+            setLayerPicker(null);
+          }}
+          onClose={() => setLayerPicker(null)}
+        />
+      )}
 
       <ExportCapture pages={pages} />
     </div>
   );
 }
 
-/**
- * Overflow marker for an element whose text does not fit its box.
- *
- * Drawn as a sibling of the element rather than inside it, because `.canvas-el`
- * clips its own content — a badge placed inside would be cut off by exactly the
- * element it is warning about. Clicking it applies the fix.
- */
 function OverflowFlag({ el, onFit }: { el: CanvasEl; onFit: () => void }) {
   if (el.hidden || el.type === "group") return null;
   const prepared = prepareText(el);
@@ -1555,36 +1653,23 @@ function OverflowFlag({ el, onFit }: { el: CanvasEl; onFit: () => void }) {
   );
 }
 
-/** A selected element to draw a manipulation frame for, plus its group offset. */
 interface SelectionBox {
-  /** Absolute page-space geometry (group members already offset). */
   el: CanvasEl;
-  /** Group-relative coordinate offset, when stepping inside a group. */
   parent?: { x: number; y: number };
 }
 
-/**
- * Manipulation frame for one selected element, rendered in the selection layer.
- *
- * This is the editor's separation of concerns in practice: the document layer
- * (ElementNode) paints content in z-order, while this frame — always above all
- * artwork — owns selection chrome and pointer interaction for the selection.
- * Overlapping elements can never steal its handles, its drag, or its outline.
- *
- * The frame mirrors the element's box and rotation exactly, so the handles sit
- * on the true rotated corners; `--editor-zoom` keeps their screen size stable
- * at every zoom level.
- */
 function SelectionFrame({
   frame,
   primary,
   editing,
+  zoom,
   onGesture,
   onEditRequest,
 }: {
   frame: SelectionBox;
   primary: boolean;
   editing: boolean;
+  zoom: number;
   onGesture: (
     e: React.PointerEvent,
     kind: "move" | "resize" | "rotate",
@@ -1594,6 +1679,28 @@ function SelectionFrame({
 }) {
   const select = useEditor((s) => s.select);
   const el = frame.el;
+
+  // حتى لا يصبح العنصر غير قابل للتحكم بسبب صغر حجمه — حد أدنى بصري للإطار
+  // نحافظ على موضع ونسبة العنصر أثناء Resize عبر توسيط الإطار المصغر على مركز العنصر
+  const MIN_SCREEN_PX = 32;
+  const pxPerMm = 96 / 25.4;
+  const screenW = el.w * zoom * pxPerMm;
+  const screenH = el.h * zoom * pxPerMm;
+  let visualW = el.w;
+  let visualH = el.h;
+  let visualX = el.x;
+  let visualY = el.y;
+  if (screenW < MIN_SCREEN_PX) {
+    const minWmm = MIN_SCREEN_PX / (zoom * pxPerMm);
+    visualX = el.x - (minWmm - el.w) / 2;
+    visualW = minWmm;
+  }
+  if (screenH < MIN_SCREEN_PX) {
+    const minHmm = MIN_SCREEN_PX / (zoom * pxPerMm);
+    visualY = el.y - (minHmm - el.h) / 2;
+    visualH = minHmm;
+  }
+
   return (
     <div
       className={cn(
@@ -1601,26 +1708,18 @@ function SelectionFrame({
         !primary && "is-secondary",
         el.locked && "is-locked",
         el.resizeLocked && "is-resize-locked",
+        (el.widthLocked || el.heightLocked) && "is-dimension-locked",
         editing && "is-editing",
       )}
-      /*
-       * Carry the element id: the workspace context menu resolves its target
-       * with `closest("[data-el-id]")`, and the frame — not the element node —
-       * is what a right-click on SELECTED artwork actually lands on. Without
-       * this the menu opened as the empty-space menu (paste/select-all) even
-       * though the author was pointing at an element.
-       */
       data-el-id={el.id}
       style={{
-        left: `${el.x}mm`,
-        top: `${el.y}mm`,
-        width: `${el.w}mm`,
-        height: `${el.h}mm`,
+        left: `${visualX}mm`,
+        top: `${visualY}mm`,
+        width: `${visualW}mm`,
+        height: `${visualH}mm`,
         transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
       }}
       onPointerDown={(e) => {
-        // Palm rejection also covers the manipulation frame: a resting hand
-        // must not drag the selection or steal it from under the pen.
         if (isPalmTouch(e)) {
           e.stopPropagation();
           e.preventDefault();
@@ -1636,36 +1735,41 @@ function SelectionFrame({
         onGesture(e, "move");
       }}
       onDoubleClick={(e) => {
-        // Text editing, group stepping: delegate to the element node itself so
-        // there is exactly one edit pathway, never a duplicate.
         e.stopPropagation();
         onEditRequest();
       }}
     >
-      {/*
-       * Resize handles render only while the element's own resize lock is off
-       * — the badge below marks the locked state so their absence reads as a
-       * deliberate lock, not as missing chrome. Move, rotate and text editing
-       * are all still available on a resize-locked element.
-       */}
-      {primary && !el.locked && !editing && !el.resizeLocked && (
+      {primary && !el.locked && !editing && (
         <>
-          {HANDLES.map((h) => (
-            <div
-              key={h}
-              className={cn("handle", h)}
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                onGesture(e, "resize", h);
-              }}
-            />
-          ))}
-          {/*
-           * Step 7 — a rotation grip on EVERY corner, not just the top edge,
-           * so the element can be spun with whichever hand is already there.
-           * Mirroring the frame (flipX/flipY) is handled by CSS, so the grips
-           * always sit on the corners the author can see.
-           */}
+          {/* Resize handles — Hit Area أكبر من المرئي، مناسب لـ Apple Pencil */}
+          {!el.resizeLocked &&
+            HANDLES.map((h) => {
+              const isLockedAxis =
+                (el.widthLocked && (h.includes("e") || h.includes("w"))) ||
+                (el.heightLocked && (h.includes("n") || h.includes("s")));
+              if (isLockedAxis && el.widthLocked && el.heightLocked) return null;
+              return (
+                <div
+                  key={h}
+                  className={cn("handle", h, isLockedAxis && "is-axis-locked")}
+                  data-handle={h}
+                  onPointerDown={(e) => {
+                    if (isLockedAxis) {
+                      // إذا كان المحور مقفلاً، لا نسمح بالتحجيم في هذا الاتجاه
+                      if (
+                        (h === "e" || h === "w") && el.widthLocked ||
+                        (h === "n" || h === "s") && el.heightLocked
+                      ) {
+                        e.stopPropagation();
+                        return;
+                      }
+                    }
+                    e.stopPropagation();
+                    onGesture(e, "resize", h);
+                  }}
+                />
+              );
+            })}
           {ROTATE_HANDLES.map((corner) => (
             <div
               key={`rot-${corner}`}
@@ -1677,43 +1781,105 @@ function SelectionFrame({
               }}
             />
           ))}
-        </>
-      )}
-      {/*
-       * The resize lock must not hide the rotation grips: rotation changes
-       * orientation, not size, so it stays fully available next to the badge.
-       */}
-      {primary && !el.locked && !editing && el.resizeLocked && (
-        <>
-          {ROTATE_HANDLES.map((corner) => (
-            <div
-              key={`rot-${corner}`}
-              className={cn("rotate-handle", corner)}
-              title="اسحب للتدوير — Shift للالتقاط بزوايا 15° / 45° / 90°"
-              onPointerDown={(e) => {
-                e.stopPropagation();
-                onGesture(e, "rotate");
-              }}
-            />
-          ))}
-          <span
-            className="resize-lock-badge"
-            title="التحجيم مقفل — فك القفل من القائمة السياقية أو الخصائص"
-          >
-            🔒
-          </span>
+          {(el.resizeLocked || el.widthLocked || el.heightLocked) && (
+            <span
+              className="resize-lock-badge"
+              title="التحجيم مقفل — فك القفل من القائمة السياقية أو الخصائص"
+            >
+              🔒
+            </span>
+          )}
         </>
       )}
     </div>
   );
 }
 
-/**
- * Forward a double-click on the manipulation frame to the element node beneath
- * it, which owns in-place text editing and group stepping. Dispatching a real
- * `dblclick` keeps one editing implementation instead of duplicating it in the
- * overlay.
- */
+function LayerPickerPopup({
+  picker,
+  onSelect,
+  onClose,
+}: {
+  picker: NonNullable<LayerPickerState>;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [pos, setPos] = useState({ left: picker.clientX, top: picker.clientY });
+
+  useEffect(() => {
+    // ضمان عدم خروج القائمة خارج الشاشة
+    const margin = 12;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const estimatedW = 220;
+    const estimatedH = Math.min(320, picker.elements.length * 44 + 40);
+    let left = picker.clientX + 12;
+    let top = picker.clientY + 12;
+    if (left + estimatedW > vw - margin) left = vw - estimatedW - margin;
+    if (top + estimatedH > vh - margin) top = vh - estimatedH - margin;
+    if (left < margin) left = margin;
+    if (top < margin) top = margin;
+    setPos({ left, top });
+  }, [picker]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[var(--z-context)]"
+      onPointerDown={(e) => {
+        // إغلاق عند الضغط خارج القائمة
+        if (!(e.target as HTMLElement).closest(".layer-picker-popup")) {
+          onClose();
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
+      <div
+        className="layer-picker-popup fixed min-w-[200px] max-w-[260px] rounded-[10px] border border-line bg-white p-1.5 shadow-2xl dark:border-white/15 dark:bg-[#1e2633]"
+        style={{ left: pos.left, top: pos.top }}
+        onPointerDown={(e) => e.stopPropagation()}
+        role="menu"
+        aria-label="اختيار طبقة متداخلة"
+      >
+        <div className="mb-1.5 px-2 py-1 text-[10px] font-extrabold text-muted">
+          {picker.elements.length} عناصر في هذه النقطة — اختر المطلوب
+        </div>
+        <div className="max-h-[280px] overflow-auto">
+          {picker.elements.map((el, idx) => (
+            <button
+              key={el.id}
+              type="button"
+              role="menuitem"
+              onClick={() => onSelect(el.id)}
+              className="flex w-full items-center gap-2 rounded-[7px] px-2.5 py-2 text-right text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/10"
+            >
+              <span className="grid size-6 shrink-0 place-items-center rounded-[5px] bg-navy/10 text-[10px] font-extrabold text-navy dark:bg-white/10 dark:text-gold-2">
+                {idx + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                <span className="block truncate">{el.name || el.type}</span>
+                <span className="block truncate text-[9px] font-semibold text-muted">
+                  {el.type} · z:{el.z}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-1 border-t border-line pt-1 dark:border-white/10">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-[6px] px-2.5 py-1.5 text-center text-[10px] font-bold text-muted hover:bg-line-2 dark:hover:bg-white/10"
+          >
+            إغلاق — Esc
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function requestEdit(pageId: string, elId: string) {
   const host = document.querySelector<HTMLElement>(
     `[data-page-id="${pageId}"]`,
@@ -1726,10 +1892,6 @@ function requestEdit(pageId: string, elId: string) {
   );
 }
 
-/**
- * Hidden 1:1 pages used by export capture. Rendered off-screen (not
- * `display:none`) so html2canvas still measures real boxes and loads images.
- */
 function ExportCapture({ pages }: { pages: Page[] }) {
   return (
     <div
