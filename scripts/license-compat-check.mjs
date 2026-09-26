@@ -69,8 +69,9 @@ globalThis.fetch = async (url, init = {}) => {
   }
   if (path === "/licenses" && method === "GET") {
     if (!authorized(init)) return error(403, "missing token");
-    const transactionNo = parsed.searchParams.get("metadata[paylinkTransactionNo]");
-    const match = [...records.values()].find((record) => record.metadata.paylinkTransactionNo === transactionNo);
+    const metadataFilters = [...parsed.searchParams.entries()].filter(([name]) => name.startsWith("metadata["));
+    const match = [...records.values()].find((record) => metadataFilters.every(([name, value]) =>
+      record.metadata?.[name.slice("metadata[".length, -1)] === value));
     return json({ data: match ? [licenseResource(match)] : [] });
   }
   if (path === "/licenses/actions/validate-key" && method === "POST") {
@@ -290,44 +291,29 @@ assert.equal((await activation.revalidateKeygenForSession(revoked.key, USER)).va
 assert.equal((await db.findLicenseByKeyHash(keys.hashLicenseKey(revoked.key)))?.status, "REVOKED");
 console.log("  ok  TRIAL, EXPIRED and REVOKED revoke gated access on revalidation");
 
-// Paylink fulfilment must bind the payer at Keygen before it can report PAID.
-// Retries reuse the same provider key; a pre-existing unbound historical PAID
-// row can be repaired for its purchaser, but never for a different account.
-const { issuePaidKeygenLicense } = await import("../src/lib/license/paylink-fulfillment.server.ts");
+// Gumroad fulfilment must bind the payer at Keygen before it can report PAID.
+// Retries reuse the same provider key; the licence can never move to another account.
+const { issueGumroadKeygenLicense } = await import("../src/lib/license/gumroad-fulfillment.server.ts");
 const PAID = { userId: "auth-paid", userEmail: "paid@nasaq.example" };
 await sql.query(`insert into "user" (id, name, email, "emailVerified") values ($1, $2, $3, true)`,
   [PAID.userId, "Paid customer", PAID.userEmail]);
 const paidExpiry = new Date(Date.now() + 30 * 86400000).toISOString();
-const txNumber = "tx-paid-compat-1";
-const paidInput = { transactionNo: txNumber, orderNumber: "ORD-PAID-1", userId: PAID.userId,
-  userEmail: PAID.userEmail, plan: "individual-monthly", planName: "Individual Monthly", expiresAt: paidExpiry };
+const subscriptionId = "gum-sub-compat-1";
+const paidInput = { saleId: "gum-sale-compat-1", subscriptionId, userId: PAID.userId,
+  userEmail: PAID.userEmail, plan: "individual-monthly", planName: "Individual Monthly",
+  expiresAt: paidExpiry, recurringCharge: false };
 const countBeforePaid = records.size;
-const boundPaid = await issuePaidKeygenLicense(paidInput);
+const boundPaid = await issueGumroadKeygenLicense(paidInput);
 assert.equal(records.size, countBeforePaid + 1);
 assert.equal(boundPaid.userId, PAID.userId);
 assert.equal(boundPaid.metadata?.userScopeVerified, PAID.userId);
 assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).entitlements.advanced_export, true);
-assert.equal((await issuePaidKeygenLicense(paidInput)).id, boundPaid.id);
-assert.equal(records.size, countBeforePaid + 1, "a webhook retry must never mint again");
-await assert.rejects(() => issuePaidKeygenLicense({ ...paidInput, userId: OTHER.userId, userEmail: OTHER.userEmail }));
+assert.equal((await issueGumroadKeygenLicense(paidInput)).id, boundPaid.id);
+assert.equal(records.size, countBeforePaid + 1, "a ping retry must never mint again");
+await assert.rejects(() => issueGumroadKeygenLicense({ ...paidInput, userId: OTHER.userId, userEmail: OTHER.userEmail }));
 assert.equal((await db.listAllLicenses(0, 10, PAID.userEmail)).licenses[0]?.userEmail, PAID.userEmail);
 assert.equal("keyHash" in (await db.listAllLicenses(0, 10, PAID.userEmail)).licenses[0], false);
-console.log("  ok  paid checkout → Keygen user scope → account, idempotency and admin search");
-
-const oldTx = "tx-legacy-paid-compat";
-const oldPaid = await keygen.createKeygenLicense({ plan: "individual-monthly", expiresAt: paidExpiry,
-  metadata: { paylinkTransactionNo: oldTx, nasaqUserId: PAID.userId } });
-const oldLocal = await activation.persistKeygenLicense(oldPaid, PAID.userId);
-assert.equal(oldLocal.metadata.userScopeVerified, undefined);
-assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).license?.id, boundPaid.id);
-await sql.query(`insert into paylink_transactions (id, user_id, order_number, transaction_no, plan_key, plan_id,
-    amount, currency, status, license_id, keygen_license_id, entitlement_expires_at)
-  values ($1, $2, $3, $4, 'individual-monthly', 'individual-monthly', 79, 'SAR', 'PAID', $5, $6, $7)`,
-  ["pay-compat-1", PAID.userId, "OLD-ORDER", oldTx, oldLocal.id, oldLocal.metadata.keygenLicenseId, paidExpiry]);
-assert.equal(await activation.claimPaidKeygenForSession(oldLocal, OTHER), null);
-assert.equal((await activation.claimPaidKeygenForSession(oldLocal, PAID))?.metadata.userScopeVerified, PAID.userId);
-assert.equal((await db.findLicenseById(oldLocal.id))?.status, "ACTIVE");
-console.log("  ok  historic PAID row repaired only after matching account, receipt and Keygen");
+console.log("  ok  verified Gumroad charge → Keygen user scope → account, idempotency and admin search");
 
 // Provider outages must not leave stale paid features usable via server gates.
 const fetchOnline = globalThis.fetch;
@@ -363,13 +349,13 @@ assert.equal((await getAuthorizationContext(MANUAL)).entitlements.advanced_expor
 console.log("  ok  manual activation → plan features → suspension → restore → expiry");
 
 await admin.grantEntitlement(sql, { userId: PAID.userId,
-  plan: { id: "individual-monthly", durationDays: 30 }, sourceTransactionId: oldTx });
+  plan: { id: "individual-monthly", durationDays: 30 }, sourceTransactionId: "gumroad:sale-compat-manual" });
 await admin.suspendCustomer(sql, ACTOR, PAID.userId);
 assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).entitlements.advanced_export, false,
   "a suspended customer cannot use an otherwise valid Keygen license");
 await admin.restoreCustomer(sql, ACTOR, PAID.userId);
 assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).entitlements.advanced_export, true);
-// A deliberate manual reactivation supersedes the prior Paylink source. Only
+// A deliberate manual reactivation supersedes the prior paid source. Only
 // then is it safe to allow features while Keygen is down.
 await admin.activateCustomer(sql, ACTOR, PAID.userId, "individual-monthly");
 const { getSubscription } = await import("../src/lib/commercial/entitlement.server.ts");
@@ -381,7 +367,7 @@ globalThis.fetch = async (url, init) => {
 assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).license?.metadata?.source, "manual");
 assert.equal((await getAuthorizationContext({ id: PAID.userId, email: PAID.userEmail })).entitlements.advanced_export, true);
 globalThis.fetch = fetchOnline;
-console.log("  ok  suspension overrides Keygen; explicit manual activation supersedes Paylink dependency");
+console.log("  ok  suspension overrides Keygen; explicit manual activation supersedes the paid source");
 
 const legacy = await db.createLicense({ type: "PRO" });
 const legacyHash = keys.hashLicenseKey(legacy.plainKey);

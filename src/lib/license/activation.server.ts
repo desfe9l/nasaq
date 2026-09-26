@@ -16,7 +16,6 @@ import {
   upsertExternalLicense,
 } from "./server.ts";
 import type { License } from "./types.ts";
-import { getSql } from "@/lib/db";
 
 /** Supplied ONLY by authMiddleware's verified Better Auth session. */
 export type LicenseSession = { userId: string; userEmail: string | null };
@@ -48,7 +47,6 @@ export async function persistKeygenLicense(verification: KeygenVerification, use
     metadata: {
       ...verification.metadata,
       // Only a successful user-scoped Keygen validation sets this local marker.
-      // Previously issued Paylink rows without a Keygen user remain claimable.
       ...(userId && verification.userScopeVerified ? { userScopeVerified: userId } : {}),
     },
   });
@@ -123,37 +121,6 @@ export async function activateKeygenForSession(key: string, session: LicenseSess
   }
   const license = await persistKeygenLicense(verified, session.userId);
   return { success: true, license, verification: verified };
-}
-
-/**
- * Repair an older Paylink purchase that was stored before checkout attached its
- * Keygen user. A browser cannot recover the plaintext key from its prefix.
- * Only the purchaser named on a PAID transaction can initiate this repair; a
- * local assignment or a subscription alone is never proof of purchase. The
- * normal activation path still requires a user-scoped Keygen validation.
- */
-export async function claimPaidKeygenForSession(local: License, session: LicenseSession): Promise<License | null> {
-  const providerId = local.metadata?.keygenLicenseId;
-  const transactionNo = local.metadata?.paylinkTransactionNo;
-  if (!session.userEmail || local.userId !== session.userId || local.status !== "ACTIVE" ||
-      (local.expiresAt && Date.parse(local.expiresAt) <= Date.now()) ||
-      local.metadata?.source !== "keygen" || !providerId || !transactionNo ||
-      local.metadata.nasaqUserId !== session.userId || boundToOther(local, session)) return null;
-
-  const sql = await getSql();
-  const paid = await sql.query(
-    `SELECT 1 FROM paylink_transactions WHERE transaction_no = $1 AND user_id = $2
-       AND license_id = $3 AND keygen_license_id = $4 AND status = 'PAID'
-       AND (entitlement_expires_at IS NULL OR entitlement_expires_at > now()) LIMIT 1`,
-    [transactionNo, session.userId, local.id, providerId],
-  );
-  if (!paid.length) return null;
-
-  const remote = await getKeygenLicenseForClaim(providerId);
-  if (remote.productId !== keygenProductId() || remote.nasaqUserId !== session.userId ||
-      hashLicenseKey(remote.key) !== local.keyHash) return null;
-  const result = await activateKeygenForSession(remote.key, session);
-  return result.success ? result.license : null;
 }
 
 /** Reload a verified license using its provider ID, without browser key storage. */

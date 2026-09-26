@@ -23,6 +23,7 @@ import { Route as EditorRouteImport } from './routes/editor'
 import { Route as LicenseRouteImport } from './routes/license'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OwnerVaultRouteImport } from './routes/owner-vault'
+import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PurchaseRouteImport } from './routes/purchase'
@@ -37,7 +38,6 @@ import { Route as ApiLicenseDeactivateRouteImport } from './routes/api/license/d
 import { Route as ApiLicenseValidateRouteImport } from './routes/api/license/validate'
 import { Route as ApiWebhooksGumroadRouteImport } from './routes/api/webhooks/gumroad'
 import { Route as ApiWebhooksKeygenRouteImport } from './routes/api/webhooks/keygen'
-import { Route as ApiWebhooksPaylinkRouteImport } from './routes/api/webhooks/paylink'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -107,6 +107,11 @@ const LoginRoute = LoginRouteImport.update({
 const OwnerVaultRoute = OwnerVaultRouteImport.update({
   id: '/owner-vault',
   path: '/owner-vault',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PricingRoute = PricingRouteImport.update({
+  id: '/pricing',
+  path: '/pricing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -180,11 +185,6 @@ const ApiWebhooksKeygenRoute = ApiWebhooksKeygenRouteImport.update({
   path: '/api/webhooks/keygen',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiWebhooksPaylinkRoute = ApiWebhooksPaylinkRouteImport.update({
-  id: '/api/webhooks/paylink',
-  path: '/api/webhooks/paylink',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -201,6 +201,7 @@ export interface FileRoutesByFullPath {
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/owner-vault': typeof OwnerVaultRoute
+  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
@@ -215,7 +216,6 @@ export interface FileRoutesByFullPath {
   '/api/license/validate': typeof ApiLicenseValidateRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
-  '/api/webhooks/paylink': typeof ApiWebhooksPaylinkRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -232,6 +232,7 @@ export interface FileRoutesByTo {
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/owner-vault': typeof OwnerVaultRoute
+  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
@@ -246,7 +247,6 @@ export interface FileRoutesByTo {
   '/api/license/validate': typeof ApiLicenseValidateRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
-  '/api/webhooks/paylink': typeof ApiWebhooksPaylinkRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -264,6 +264,7 @@ export interface FileRoutesById {
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/owner-vault': typeof OwnerVaultRoute
+  '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRoute
   '/purchase': typeof PurchaseRoute
@@ -278,7 +279,6 @@ export interface FileRoutesById {
   '/api/license/validate': typeof ApiLicenseValidateRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
-  '/api/webhooks/paylink': typeof ApiWebhooksPaylinkRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -297,6 +297,7 @@ export interface FileRouteTypes {
     | '/license'
     | '/login'
     | '/owner-vault'
+    | '/pricing'
     | '/privacy'
     | '/projects'
     | '/purchase'
@@ -311,7 +312,6 @@ export interface FileRouteTypes {
     | '/api/license/validate'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
-    | '/api/webhooks/paylink'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -328,6 +328,7 @@ export interface FileRouteTypes {
     | '/license'
     | '/login'
     | '/owner-vault'
+    | '/pricing'
     | '/privacy'
     | '/projects'
     | '/purchase'
@@ -342,7 +343,6 @@ export interface FileRouteTypes {
     | '/api/license/validate'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
-    | '/api/webhooks/paylink'
   id:
     | '__root__'
     | '/'
@@ -359,6 +359,7 @@ export interface FileRouteTypes {
     | '/license'
     | '/login'
     | '/owner-vault'
+    | '/pricing'
     | '/privacy'
     | '/projects'
     | '/purchase'
@@ -373,7 +374,6 @@ export interface FileRouteTypes {
     | '/api/license/validate'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
-    | '/api/webhooks/paylink'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -391,6 +391,7 @@ export interface RootRouteChildren {
   LicenseRoute: typeof LicenseRoute
   LoginRoute: typeof LoginRoute
   OwnerVaultRoute: typeof OwnerVaultRoute
+  PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
   ProjectsRoute: typeof ProjectsRoute
   PurchaseRoute: typeof PurchaseRoute
@@ -405,7 +406,6 @@ export interface RootRouteChildren {
   ApiLicenseValidateRoute: typeof ApiLicenseValidateRoute
   ApiWebhooksGumroadRoute: typeof ApiWebhooksGumroadRoute
   ApiWebhooksKeygenRoute: typeof ApiWebhooksKeygenRoute
-  ApiWebhooksPaylinkRoute: typeof ApiWebhooksPaylinkRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -508,6 +508,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OwnerVaultRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pricing': {
+      id: '/pricing'
+      path: '/pricing'
+      fullPath: '/pricing'
+      preLoaderRoute: typeof PricingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/privacy': {
       id: '/privacy'
       path: '/privacy'
@@ -606,13 +613,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebhooksKeygenRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/webhooks/paylink': {
-      id: '/api/webhooks/paylink'
-      path: '/api/webhooks/paylink'
-      fullPath: '/api/webhooks/paylink'
-      preLoaderRoute: typeof ApiWebhooksPaylinkRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -631,6 +631,7 @@ const rootRouteChildren: RootRouteChildren = {
   LicenseRoute: LicenseRoute,
   LoginRoute: LoginRoute,
   OwnerVaultRoute: OwnerVaultRoute,
+  PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,
   ProjectsRoute: ProjectsRoute,
   PurchaseRoute: PurchaseRoute,
@@ -646,7 +647,6 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLicenseValidateRoute: ApiLicenseValidateRoute,
   ApiWebhooksGumroadRoute: ApiWebhooksGumroadRoute,
   ApiWebhooksKeygenRoute: ApiWebhooksKeygenRoute,
-  ApiWebhooksPaylinkRoute: ApiWebhooksPaylinkRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

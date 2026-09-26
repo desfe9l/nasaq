@@ -108,7 +108,7 @@ export async function getAuthorizationContext(
   }
 
   // An explicit manual approval/activation is authoritative for its selected
-  // plan. Paid Paylink subscriptions carry a transaction id and never fall
+  // plan. Paid Gumroad subscriptions carry a transaction id and never fall
   // back to this path when provider verification is unavailable.
   let license: License | null = subscription ? manualSubscriptionLicense(subscription, identity.id) : null;
   if (!license) {

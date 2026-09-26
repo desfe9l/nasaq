@@ -18,20 +18,21 @@ Existing trial/lifetime licenses and historical payment records are preserved,
 but are not purchasable tiers.
 
 Each paid plan-duration has a stable `key`, `productId` and versioned `priceId`.
-These are internal identifiers, not invented gateway-issued IDs. Paylink uses
-server-built invoice line items; a future gateway adapter can map the identifiers
-to its own products/prices. Client payloads select a plan key (or family + period)
-and mobile only. The invoice builder re-resolves the catalog and ignores altered
-amounts. Free/unknown/legacy/disabled plans cannot create new payments.
+These are internal identifiers, not invented gateway-issued IDs. Gumroad is the
+only payment provider: the purchase page deep-links each plan to the product's
+matching tier + recurrence, and every sale is re-verified server-side against
+the Gumroad API before Keygen issues the license (see `docs/gumroad-integration.md`).
+Amounts are never taken from client input; the verified sale must match the
+catalog price for the mapped plan.
 
-Checkout fails closed *before inserting a transaction* unless the deployment has
-`PAYLINK_API_ID`, `PAYLINK_SECRET_KEY`, `PAYLINK_WEBHOOK_TOKEN`,
-`KEYGEN_API_TOKEN`, and a Keygen policy for the selected plan. Annual plans require
-`KEYGEN_POLICY_INDIVIDUAL_ANNUAL_ID` / `KEYGEN_POLICY_TEAM_ANNUAL_ID`.
-The browser receives readiness booleans only and shows “الدفع قريبًا” otherwise.
-No test invoice or simulated payment is generated. The existing manual-transfer
-workflow is preserved, but requires complete bank/account/IBAN instructions and
-uses catalog prices; it never automatically verifies a payment.
+Fulfillment fails closed unless the deployment has `GUMROAD_ACCESS_TOKEN`
+(recommended), `GUMROAD_PRODUCT_ID`, `KEYGEN_API_TOKEN`, and a Keygen policy for
+the purchased plan. Annual plans require `KEYGEN_POLICY_INDIVIDUAL_ANNUAL_ID` /
+`KEYGEN_POLICY_TEAM_ANNUAL_ID`; until those exist the annual catalog rows stay
+unpurchasable. The browser receives readiness booleans only — never a secret.
+The existing manual-transfer workflow is preserved, but requires complete
+bank/account/IBAN instructions and uses catalog prices; it never automatically
+verifies a payment.
 
 Migration `0007_final_pricing.sql` is a catalog snapshot: updates the six paid
 rows and disables old purchase rows without deleting subscription history or
@@ -41,7 +42,7 @@ remain disabled. It runs through the normal deployment migration pipeline.
 Verification:
 - `npm run typecheck`
 - `npm run build`
-- `node --experimental-strip-types --test src/lib/commercial/*.test.ts src/lib/paylink/paylink.test.ts src/lib/license/license.test.ts`
+- `node --experimental-strip-types --test src/lib/commercial/*.test.ts src/lib/license/license.test.ts`
 - `node scripts/pricing-browser-check.mjs` (Playwright Chromium; optional
   `CHROMIUM_PATH` and `PRICING_TEST_URL` overrides). Run without payment secrets;
   verifies desktop/mobile rendering, duration selection, prices, savings, Free,

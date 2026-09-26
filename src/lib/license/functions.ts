@@ -37,7 +37,7 @@ import {
   suspendKeygenLicense,
   updateKeygenLicenseExpiry,
 } from "./keygen";
-import { activateKeygenForSession, claimPaidKeygenForSession, persistKeygenLicense, revalidateKeygenForSession } from "./activation.server";
+import { activateKeygenForSession, persistKeygenLicense, revalidateKeygenForSession } from "./activation.server";
 import { checkRateLimit } from "./rate-limit";
 import { licensingIntegrationReadiness } from "./integrations.server";
 import { getCatalogPlan } from "@/lib/commercial/catalog";
@@ -332,21 +332,6 @@ export const getLicenseStatusFn = createServerFn({ method: "POST" })
       return { hasLicense: true, license: publicLicense(access.license), entitlements: access.entitlements };
     }
     const ownLicenses = await findLicensesByUserId(context.userId);
-    if (isKeygenConfigured()) {
-      for (const pendingPaid of ownLicenses) {
-        if (pendingPaid.metadata?.source !== "keygen" || !pendingPaid.metadata.paylinkTransactionNo ||
-            pendingPaid.metadata.userScopeVerified === context.userId || pendingPaid.status !== "ACTIVE") continue;
-        try {
-          const repaired = await claimPaidKeygenForSession(pendingPaid, context);
-          if (repaired) {
-            return { hasLicense: true, license: publicLicense(repaired), entitlements: entitlementsFor(repaired) };
-          }
-        } catch {
-          // An old payment or unavailable provider cannot unlock via SQL alone.
-          // Leave the record intact so a later status refresh can retry safely.
-        }
-      }
-    }
     const previous = ownLicenses[0];
     if (!previous) return { hasLicense: false, entitlements: access.entitlements };
     // Keep the type and inactive state visible without unlocking features.
@@ -375,17 +360,15 @@ export const adminCheckLicenseConnectionsFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     if (!(await isAdministrator(context))) {
-      return { error: "غير مصرح.", keygen: false, paylink: false };
+      return { error: "غير مصرح.", keygen: false };
     }
     const { checkKeygenApiConnection } = await import("./keygen");
-    const { checkPaylinkApiConnection } = await import("@/lib/paylink/server");
     const readiness = licensingIntegrationReadiness();
-    // The checks never create licences/invoices or return tokens/provider errors.
-    const [keygen, paylink] = await Promise.all([
-      readiness.keygen.token ? checkKeygenApiConnection().then(() => true, () => false) : false,
-      readiness.paylink.credentials ? checkPaylinkApiConnection().then(() => true, () => false) : false,
-    ]);
-    return { error: null as string | null, keygen, paylink };
+    // The check never creates licences or returns tokens/provider errors.
+    const keygen = readiness.keygen.token
+      ? await checkKeygenApiConnection().then(() => true, () => false)
+      : false;
+    return { error: null as string | null, keygen };
   });
 
 // ── Admin: Create License ─────────────────────────────────────────────────
@@ -643,12 +626,6 @@ export const superAdminAssignLicenseFn = createServerFn({ method: "POST" })
             (current.userId && current.userId !== target.id) ||
             (current.metadata.nasaqUserId && current.metadata.nasaqUserId !== target.id)) {
           return { error: "هذا الترخيص مربوط بحساب آخر لدى Keygen.", license: null as License | null };
-        }
-        if (current.metadata.paylinkTransactionNo) {
-          const repaired = await claimPaidKeygenForSession(current, { userId: target.id, userEmail: target.email });
-          return repaired
-            ? { error: null as string | null, license: repaired }
-            : { error: "لا يمكن ربط ترخيص الدفع قبل تأكيد Paylink والتحقق من Keygen.", license: null as License | null };
         }
         const remote = await getKeygenLicenseForClaim(current.metadata.keygenLicenseId);
         if (remote.productId !== keygenProductId() ||

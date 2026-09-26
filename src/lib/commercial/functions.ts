@@ -16,8 +16,6 @@ import { getSql } from "@/lib/db";
 import { getAccount } from "./entitlement.server";
 import { getPaymentInstructions } from "./payment-settings.server";
 import { getPurchasablePlan, listEnabledPlans } from "./plans.server";
-import type { PaylinkPeriod, PaylinkPlanFamily, PaylinkPlanKey } from "@/lib/paylink/types";
-import { isValidPlanKey, paylinkPlanKey } from "@/lib/commercial/catalog";
 import {
   cancelOwnPaymentRequest,
   createPaymentRequest,
@@ -107,72 +105,6 @@ export const getPaymentInstructionsPublic = createServerFn({ method: "GET" })
 export type SubmitPaymentResult =
   | { ok: true; request: CustomerPaymentRequest }
   | { ok: false; error: string };
-
-/** Create a Paylink invoice for the verified signed-in customer. */
-export const createPaylinkCheckout = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .validator(
-    (
-      input: unknown,
-    ): {
-      planKey: PaylinkPlanKey;
-      clientMobile: string;
-    } => {
-      const data = input as Record<string, unknown> | null;
-      const rawKey = typeof data?.planKey === "string" ? data.planKey.trim() : "";
-      const family =
-        data?.family === "team" ? "team" : data?.family === "individual" ? "individual" : null;
-      const period =
-        data?.period === "quarterly"
-          ? "quarterly"
-          : data?.period === "annual"
-            ? "annual"
-          : data?.period === "monthly"
-            ? "monthly"
-            : null;
-      const key = rawKey || (family && period ? paylinkPlanKey(family, period) : "");
-      if (!isValidPlanKey(key)) throw new Error("الباقة المختارة غير صالحة");
-
-      const clientMobile =
-        typeof data?.clientMobile === "string" ? data.clientMobile.trim() : "";
-      const cleanDigits = clientMobile.replace(/\D/g, "");
-      if (cleanDigits.length < 8 || cleanDigits.length > 20) {
-        throw new Error("رقم الجوال غير صالح");
-      }
-      return { planKey: key, clientMobile };
-    },
-  )
-  .handler(async ({ context, data }) => {
-    const { createPaylinkInvoice } = await import("@/lib/paylink/server");
-    const sql = await getSql();
-    const users = await sql<{ name: string | null }>`select name from "user" where id = ${context.userId} limit 1`;
-    return createPaylinkInvoice({
-      sql,
-      userId: context.userId,
-      userName: users[0]?.name ?? null,
-      userEmail: context.userEmail,
-      planKey: data.planKey,
-      clientMobile: data.clientMobile,
-    });
-  });
-
-/** Read the caller's own Paylink transaction by the callback transaction number. */
-export const getMyPaylinkTransaction = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .validator((input: unknown): { transactionNo?: string } => {
-    const transactionNo = typeof (input as Record<string, unknown> | null)?.transactionNo === "string"
-      ? String((input as Record<string, unknown>).transactionNo).trim()
-      : undefined;
-    if (transactionNo && transactionNo.length > 160) throw new Error("رقم العملية طويل جداً");
-    return { transactionNo };
-  })
-  .handler(async ({ context, data }) => {
-    const { getLatestPaylinkTransactionForUser, getPaylinkTransactionForUser } = await import("@/lib/paylink/transactions.server");
-    const sql = await getSql();
-    return data.transactionNo
-      ? getPaylinkTransactionForUser(sql, context.userId, data.transactionNo)
-      : getLatestPaylinkTransactionForUser(sql, context.userId);
-  });
 
 /**
  * Submit a payment reference for review.
@@ -278,8 +210,3 @@ export const getMyPaymentRequest = createServerFn({ method: "GET" })
     const sql = await getSql();
     return getOwnPaymentRequest(sql, context.userId, data.requestId);
   });
-/** Only readiness booleans leave the server; credentials never do. */
-export const getCheckoutAvailability = createServerFn({ method: "GET" }).handler(async () => {
-  const { checkoutAvailability } = await import("@/lib/paylink/server");
-  return checkoutAvailability();
-});

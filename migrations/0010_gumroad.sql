@@ -1,7 +1,7 @@
 -- Gumroad post-sale pipeline (Ping + Resource subscriptions → NASAQ → Keygen).
 --
 -- Gumroad is the PAYMENT authority; Keygen stays the LICENSING authority and
--- NASAQ entitlements stay the ACCESS authority (mirrors the Paylink layout).
+-- NASAQ entitlements stay the ACCESS authority.
 -- Three tables, three concerns:
 --
 --   gumroad_pings         every raw notification envelope (idempotency + audit)
@@ -13,8 +13,8 @@
 
 -- ── gumroad_pings ────────────────────────────────────────────────────────────
 -- `dedupe_key` is the replay boundary. A redelivered ping collides here and is
--- acknowledged 200 without reprocessing, exactly like paylink_transactions for
--- Paylink. Sale-like resources dedupe on sale_id; membership lifecycle events
+-- acknowledged 200 without reprocessing. Sale-like resources dedupe on
+-- sale_id; membership lifecycle events
 -- (cancellation/ended/restarted) dedupe on subscription_id + the event's own
 -- timestamp, because a subscription can legitimately be cancelled → restarted →
 -- cancelled again.

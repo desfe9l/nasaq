@@ -1,12 +1,11 @@
 /**
  * Gumroad → Keygen fulfillment.
  *
- * Structure mirrors `paylink-fulfillment.server.ts` on purpose: the Paylink path
- * is the verified, audited pattern (search-before-mint, authoritative claim
- * check, user-scoped revalidation), and this module reuses exactly that shape
- * with Gumroad's ids (sale/subscription) instead of Paylink's transaction
- * number. Keygen remains the sole licensing authority; Gumroad only ever says
- * "money happened" — this module turns that into a bound, user-scoped license.
+ * This is the verified, audited fulfillment pattern (search-before-mint,
+ * authoritative claim check, user-scoped revalidation) keyed on Gumroad's ids
+ * (sale/subscription). Keygen remains the sole licensing authority; Gumroad
+ * only ever says "money happened" — this module turns that into a bound,
+ * user-scoped license.
  *
  * One license per Gumroad subscription: the first charge mints it (metadata
  * gumroadSubscriptionId), renewals EXTEND its expiry instead of minting a
@@ -89,7 +88,7 @@ export async function issueGumroadKeygenLicense(input: {
   }
 
   // Check the authoritative resource BEFORE attaching the user or persisting
-  // any access (same fail-closed order as the Paylink path).
+  // any access (fail-closed order).
   const remote = await getKeygenLicenseForClaim(id);
   if (
     remote.productId !== keygenProductId() ||

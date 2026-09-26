@@ -12,16 +12,18 @@ export function licensingIntegrationReadiness() {
     webhookSignature: configured("KEYGEN_PUBLIC_KEY"),
     missingPolicies,
   };
-  const paylink = {
-    credentials: configured("PAYLINK_API_ID") && configured("PAYLINK_SECRET_KEY"),
-    webhookToken: configured("PAYLINK_WEBHOOK_TOKEN"),
-    publicUrl: configured("PAYLINK_PUBLIC_URL") || configured("BETTER_AUTH_URL"),
+  // Gumroad is the payment gateway. Only presence flags are reported; the
+  // access token itself never leaves the server.
+  const gumroad = {
+    accessToken: configured("GUMROAD_ACCESS_TOKEN"),
+    productId: configured("GUMROAD_PRODUCT_ID"),
+    pingEndpoint: "/api/webhooks/gumroad",
   };
   return {
     keygen,
-    paylink,
+    gumroad,
     checkoutConfigured: keygen.token && keygen.webhookSignature && !missingPolicies.length &&
-      paylink.credentials && paylink.webhookToken && paylink.publicUrl,
+      gumroad.accessToken && gumroad.productId,
     // Registration of webhooks in the providers' own portals is NOT knowable
     // from env presence or an API ping. The UI says so explicitly.
   };
