@@ -1,5 +1,10 @@
 import { isCompoundShape, shapeDef, type ShapePart } from "@/lib/editor/shapes";
-import { shapeIdOf, strokeToUnits } from "@/lib/editor/shape-render";
+import {
+  applyRectRadius,
+  dashArrayForUnits,
+  shapeIdOf,
+  strokeToUnits,
+} from "@/lib/editor/shape-render";
 
 interface Props {
   /** Resolved shape id; falls back to the legacy `shape` enum. */
@@ -11,6 +16,10 @@ interface Props {
   box: { w: number; h: number };
   /** Dash pattern in viewBox units — the clipping-mask outline marker. */
   strokeDasharray?: string;
+  /** style.borderDash: dash the author's outline with the shared pattern. */
+  dash?: boolean;
+  /** style.radius (mm): round rect-family corners, per-axis for true circles. */
+  radiusMm?: number;
 }
 
 /**
@@ -34,7 +43,18 @@ export function ShapeParts({ parts, fillRule }: { parts: ShapePart[]; fillRule?:
       {parts.map((part, i) => {
         const shared = { strokeLinejoin: "round" as const, fillRule };
         if (part.k === "rect") {
-          return <rect key={i} {...shared} x={part.x} y={part.y} width={part.w} height={part.h} rx={part.rx} />;
+          return (
+            <rect
+              key={i}
+              {...shared}
+              x={part.x}
+              y={part.y}
+              width={part.w}
+              height={part.h}
+              rx={part.rx}
+              ry={part.ry}
+            />
+          );
         }
         if (part.k === "circle") {
           return <circle key={i} {...shared} cx={part.cx} cy={part.cy} r={part.r} />;
@@ -51,11 +71,23 @@ export function ShapeParts({ parts, fillRule }: { parts: ShapePart[]; fillRule?:
   );
 }
 
-export function ShapeGlyph({ style, fill, stroke, borderWidthMm, box, strokeDasharray }: Props) {
+export function ShapeGlyph({
+  style,
+  fill,
+  stroke,
+  borderWidthMm,
+  box,
+  strokeDasharray,
+  dash,
+  radiusMm,
+}: Props) {
   const def = shapeDef(shapeIdOf(style));
   const strokeUnits = strokeToUnits(borderWidthMm, box);
   const inner = Math.max(1, 100 - strokeUnits);
   const transform = strokeUnits > 0 ? `translate(${strokeUnits / 2} ${strokeUnits / 2}) scale(${inner / 100})` : undefined;
+  const parts = applyRectRadius(def.parts, radiusMm, box);
+  // The mask marker (explicit `strokeDasharray`) wins over the author's dash.
+  const dashArray = strokeDasharray ?? (dash ? dashArrayForUnits(strokeUnits) : undefined);
 
   return (
     <svg
@@ -72,10 +104,10 @@ export function ShapeGlyph({ style, fill, stroke, borderWidthMm, box, strokeDash
         fillRule={isCompoundShape(def.id) ? "evenodd" : undefined}
         stroke={strokeUnits > 0 ? stroke : undefined}
         strokeWidth={strokeUnits > 0 ? strokeUnits : undefined}
-        strokeDasharray={strokeDasharray}
+        strokeDasharray={dashArray}
         strokeLinejoin="round"
       >
-        <ShapeParts parts={def.parts} fillRule={isCompoundShape(def.id) ? "evenodd" : undefined} />
+        <ShapeParts parts={parts} fillRule={isCompoundShape(def.id) ? "evenodd" : undefined} />
       </g>
     </svg>
   );

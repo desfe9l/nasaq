@@ -776,7 +776,8 @@ function Studio({
       if (meta && key === "v") {
         if (typing) return;
         e.preventDefault();
-        pasteClipboard();
+        // ⇧⌘V = لصق في مكانه (paste in place); ⌘V keeps the nudged paste.
+        pasteClipboard(e.shiftKey);
         return;
       }
       if (meta && key === "a") {

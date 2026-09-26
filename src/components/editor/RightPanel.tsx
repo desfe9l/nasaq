@@ -86,6 +86,12 @@ import { cn, round } from "@/lib/utils";
 import { toast } from "sonner";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, SubGroup, useAccordionState } from "./ui/Accordion";
+import { ColorField } from "./ui/ColorField";
+import {
+  getRecentColors,
+  recordRecentColor,
+  subscribeRecentColors,
+} from "@/lib/editor/recent-colors";
 import { ArabicTextTools } from "./ArabicTextTools";
 import { ReportToolsPanel } from "./ReportToolsPanel";
 import { ScrubField, ScrubInput } from "./ui/ScrubInput";
@@ -132,16 +138,17 @@ export function RightPanel({
    * Phase 2 — the inspector is organised into four collapsible groups:
    * «الأبعاد والتحاذي» · «النص» · «الخلفية والحدود» · «تصدير».
    *
-   * Dimensions and text start open (they hold the controls people reach for
-   * every few seconds; collapsed-by-default reads as "the feature is missing"),
-   * background/export start closed. The choice persists per device.
+   * Dimensions, text AND background start open: fill/stroke/opacity are core
+   * properties and hiding them behind a closed tab reads as "the feature is
+   * missing" (the panel scrolls internally, so openness costs no screen).
+   * report/fade/export start closed. The choice persists per device.
    */
   const accordions = useAccordionState<
     "dimensions" | "text" | "background" | "fade" | "report" | "export"
   >("properties", {
     dimensions: true,
     text: true,
-    background: false,
+    background: true,
     // «أدوات التقرير» opens on demand: it is a toolbox, not a per-element
     // property, and folding it away keeps the inspector scannable.
     report: false,
@@ -223,6 +230,13 @@ export function RightPanel({
   // properties rather than nothing.
   const el =
     page && selectedId ? findElement(page.elements, selectedId)?.el : undefined;
+  /**
+   * Corner radius control: only rect-family shapes have corners to round
+   * (circle/polygon/path geometry has none). `rounded` shows its preset
+   * (14% of the width) until the author scrubs an explicit value.
+   */
+  const shapeId = el?.type === "shape" ? el.style?.shapeId || el.style?.shape || "rect" : "";
+  const rectFamilyShape = shapeId === "rect" || shapeId === "rounded";
   /*
    * Step 8 state: the normalised overlay (so a hand-edited save renders the
    * same values the panel shows) plus one writer that keeps every edit in the
@@ -393,7 +407,7 @@ export function RightPanel({
             <button
               type="button"
               disabled={!clipboard}
-              onClick={pasteClipboard}
+              onClick={() => pasteClipboard()}
               className="h-9 rounded-[8px] border border-line text-[12px] font-extrabold disabled:opacity-40 dark:border-white/10"
             >
               لصق العنصر المنسوخ
@@ -687,15 +701,15 @@ export function RightPanel({
                   </Field>
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="لون النص">
-                      <input
-                        type="color"
-                        value={toColor(el.style.color, theme.ink)}
-                        onChange={(e) =>
-                          updateStyle(el.id, { color: e.target.value }, true)
+                      <ColorField
+                        value={el.style.color}
+                        fallback={theme.ink}
+                        label="لون النص"
+                        onChange={(v) =>
+                          updateStyle(el.id, { color: v }, true)
                         }
-                        onBlur={() =>
-                          updateStyle(el.id, { color: el.style.color })
-                        }
+                        onCommit={(v) => updateStyle(el.id, { color: v })}
+                        className="h-9 w-full"
                       />
                     </Field>
                     <ScrubField
@@ -999,61 +1013,47 @@ export function RightPanel({
             <AccordionSection
               title="الخلفية والحدود"
               id="background"
-              open={accordions.isOpen("background", false)}
+              open={accordions.isOpen("background", true)}
               onToggle={() => accordions.toggle("background")}
             >
               {["box", "stat", "progress"].includes(el.type) && (
                 <SubGroup title="المظهر والتعبئة">
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="التعبئة">
-                      <input
-                        type="color"
-                        value={toColor(el.style.fill, theme.surface)}
-                        onChange={(e) =>
-                          updateStyle(el.id, { fill: e.target.value }, true)
+                      <ColorField
+                        value={el.style.fill}
+                        fallback={theme.surface}
+                        label="لون التعبئة"
+                        allowNone
+                        onChange={(v) =>
+                          updateStyle(el.id, { fill: v }, true)
                         }
-                        onBlur={() =>
-                          updateStyle(el.id, { fill: el.style.fill })
-                        }
+                        onCommit={(v) => updateStyle(el.id, { fill: v })}
+                        className="h-9 w-full"
                       />
                     </Field>
                     <Field label="لون الخلفية">
-                      <input
-                        type="color"
-                        value={toColor(
-                          el.style.background || el.style.fill,
-                          theme.surface,
-                        )}
-                        onChange={(e) =>
-                          updateStyle(
-                            el.id,
-                            { background: e.target.value },
-                            true,
-                          )
+                      <ColorField
+                        value={el.style.background || el.style.fill}
+                        fallback={theme.surface}
+                        label="لون الخلفية"
+                        onChange={(v) =>
+                          updateStyle(el.id, { background: v }, true)
                         }
-                        onBlur={() =>
-                          updateStyle(el.id, {
-                            background: el.style.background,
-                          })
-                        }
+                        onCommit={(v) => updateStyle(el.id, { background: v })}
+                        className="h-9 w-full"
                       />
                     </Field>
                     <Field label="الإطار">
-                      <input
-                        type="color"
-                        value={toColor(el.style.borderColor, theme.line)}
-                        onChange={(e) =>
-                          updateStyle(
-                            el.id,
-                            { borderColor: e.target.value },
-                            true,
-                          )
+                      <ColorField
+                        value={el.style.borderColor}
+                        fallback={theme.line}
+                        label="لون الإطار"
+                        onChange={(v) =>
+                          updateStyle(el.id, { borderColor: v }, true)
                         }
-                        onBlur={() =>
-                          updateStyle(el.id, {
-                            borderColor: el.style.borderColor,
-                          })
-                        }
+                        onCommit={(v) => updateStyle(el.id, { borderColor: v })}
+                        className="h-9 w-full"
                       />
                     </Field>
                     <ScrubField
@@ -1065,6 +1065,13 @@ export function RightPanel({
                         updateStyle(el.id, { borderWidth: v }, true)
                       }
                       onCommit={(v) => updateStyle(el.id, { borderWidth: v })}
+                    />
+                    <StrokeStyleField
+                      dash={el.style.borderDash === true}
+                      onPick={(dashed) => {
+                        if (dashed === (el.style.borderDash === true)) return;
+                        updateStyle(el.id, { borderDash: dashed });
+                      }}
                     />
                     <ScrubField
                       label="الزوايا مم"
@@ -1258,33 +1265,28 @@ export function RightPanel({
 
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="التعبئة">
-                      <input
-                        type="color"
-                        value={toColor(el.style.fill, theme.primary)}
-                        onChange={(e) =>
-                          updateStyle(el.id, { fill: e.target.value }, true)
+                      <ColorField
+                        value={el.style.fill}
+                        fallback={theme.primary}
+                        label="لون التعبئة"
+                        allowNone
+                        onChange={(v) =>
+                          updateStyle(el.id, { fill: v }, true)
                         }
-                        onBlur={() =>
-                          updateStyle(el.id, { fill: el.style.fill })
-                        }
+                        onCommit={(v) => updateStyle(el.id, { fill: v })}
+                        className="h-9 w-full"
                       />
                     </Field>
                     <Field label="لون الإطار">
-                      <input
-                        type="color"
-                        value={toColor(el.style.borderColor, "#c9a86a")}
-                        onChange={(e) =>
-                          updateStyle(
-                            el.id,
-                            { borderColor: e.target.value },
-                            true,
-                          )
+                      <ColorField
+                        value={el.style.borderColor}
+                        fallback="#c9a86a"
+                        label="لون الإطار"
+                        onChange={(v) =>
+                          updateStyle(el.id, { borderColor: v }, true)
                         }
-                        onBlur={() =>
-                          updateStyle(el.id, {
-                            borderColor: el.style.borderColor,
-                          })
-                        }
+                        onCommit={(v) => updateStyle(el.id, { borderColor: v })}
+                        className="h-9 w-full"
                       />
                     </Field>
                     <ScrubField
@@ -1297,6 +1299,31 @@ export function RightPanel({
                       }
                       onCommit={(v) => updateStyle(el.id, { borderWidth: v })}
                     />
+                    <StrokeStyleField
+                      dash={el.style.borderDash === true}
+                      onPick={(dashed) => {
+                        if (dashed === (el.style.borderDash === true)) return;
+                        updateStyle(el.id, { borderDash: dashed });
+                      }}
+                    />
+                    {rectFamilyShape && (
+                      <ScrubField
+                        label="استدارة الزوايا مم"
+                        value={
+                          el.style.radius != null
+                            ? round(Number(el.style.radius) || 0)
+                            : shapeId === "rounded"
+                              ? round(el.w * 0.14)
+                              : 0
+                        }
+                        min={0}
+                        step={0.5}
+                        onChange={(v) =>
+                          updateStyle(el.id, { radius: v }, true)
+                        }
+                        onCommit={(v) => updateStyle(el.id, { radius: v })}
+                      />
+                    )}
                     <Field label="بلا إطار">
                       <button
                         type="button"
@@ -1417,15 +1444,15 @@ export function RightPanel({
               {(el.type === "line" || el.type === "divider") && (
                 <div className="grid grid-cols-2 gap-2">
                   <Field label="اللون">
-                    <input
-                      type="color"
-                      value={toColor(el.style.color, theme.accent)}
-                      onChange={(e) =>
-                        updateStyle(el.id, { color: e.target.value }, true)
+                    <ColorField
+                      value={el.style.color}
+                      fallback={theme.accent}
+                      label="لون الخط"
+                      onChange={(v) =>
+                        updateStyle(el.id, { color: v }, true)
                       }
-                      onBlur={() =>
-                        updateStyle(el.id, { color: el.style.color })
-                      }
+                      onCommit={(v) => updateStyle(el.id, { color: v })}
+                      className="h-9 w-full"
                     />
                   </Field>
                   <ScrubField
@@ -1813,9 +1840,7 @@ export function RightPanel({
                       value={el.style.svgFill || ""}
                       fallback={el.style.color || "#172033"}
                       onChange={(v) => updateStyle(el.id, { svgFill: v }, true)}
-                      onCommit={() =>
-                        updateStyle(el.id, { svgFill: el.style.svgFill })
-                      }
+                      onCommit={(v) => updateStyle(el.id, { svgFill: v })}
                     />
                   </Field>
                   <Field label="لون الإطار (Stroke)" full>
@@ -1825,9 +1850,7 @@ export function RightPanel({
                       onChange={(v) =>
                         updateStyle(el.id, { svgStroke: v }, true)
                       }
-                      onCommit={() =>
-                        updateStyle(el.id, { svgStroke: el.style.svgStroke })
-                      }
+                      onCommit={(v) => updateStyle(el.id, { svgStroke: v })}
                     />
                   </Field>
                   {/*
@@ -2691,6 +2714,47 @@ function CommitRange({
 }
 
 /**
+ * نوع الحد — solid / dashed, the shared stroke-style toggle for boxes and
+ * shapes. One component so both sections read and write `style.borderDash`
+ * exactly the same way (canvas + exporter honour it identically).
+ */
+function StrokeStyleField({
+  dash,
+  onPick,
+}: {
+  dash: boolean;
+  onPick: (dashed: boolean) => void;
+}) {
+  return (
+    <Field label="نوع الحد">
+      <div className="grid grid-cols-2 gap-1.5">
+        {(
+          [
+            ["solid", "متصل"],
+            ["dashed", "متقطع"],
+          ] as const
+        ).map(([kind, label]) => (
+          <button
+            key={kind}
+            type="button"
+            aria-pressed={(dash ? "dashed" : "solid") === kind}
+            onClick={() => onPick(kind === "dashed")}
+            className={cn(
+              "h-9 rounded-[8px] border text-[11px] font-extrabold",
+              (dash ? "dashed" : "solid") === kind
+                ? "border-navy-2 bg-navy-2/5 text-navy-2 dark:text-gold-2"
+                : "border-line dark:border-white/10",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </Field>
+  );
+}
+
+/**
  * صف اختيار اللون: منتقي لون + الألوان المحفوظة (من هوية المشروع) + مسح.
  *
  * Reused by every color field (نص، تعبئة، إطار، SVG fill/stroke) so "saved
@@ -2706,10 +2770,21 @@ function ColorRow({
   value: string;
   fallback: string;
   onChange: (v: string) => void;
-  onCommit: () => void;
+  /** Receives the value being committed — never a stale render closure. */
+  onCommit: (v: string) => void;
 }) {
   const themeId = useEditor((s) => s.theme);
   const theme = THEMES[themeId];
+  const [recents, setRecents] = useState<string[]>(() => getRecentColors());
+  useEffect(() => subscribeRecentColors(() => setRecents(getRecentColors())), []);
+  // One session = one entry + one recents push, same contract as ColorField.
+  // `v` lets immediate actions (swatch chips) commit the NEW colour while
+  // blurs commit what the element already holds — passing it through means
+  // the commit can never re-apply a pre-click (stale) value.
+  const commit = (v: string = value) => {
+    recordRecentColor(v);
+    onCommit(v);
+  };
   const saved = [
     theme.primary,
     theme.accent,
@@ -2726,7 +2801,7 @@ function ColorRow({
           type="color"
           value={toColor(value, fallback)}
           onChange={(e) => onChange(e.target.value)}
-          onBlur={onCommit}
+          onBlur={() => commit()}
           className="h-9 w-12 shrink-0"
         />
         <input
@@ -2738,7 +2813,7 @@ function ColorRow({
             const v = e.target.value.trim();
             if (/^#[0-9a-fA-F]{0,8}$/.test(v)) onChange(v);
           }}
-          onBlur={onCommit}
+          onBlur={() => commit()}
           className="h-9 min-w-0 flex-1 rounded-[8px] border border-line px-2 text-[12px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
         />
         <button
@@ -2747,7 +2822,7 @@ function ColorRow({
           aria-label="إرجاع اللون الافتراضي"
           onClick={() => {
             onChange("");
-            onCommit();
+            commit("");
           }}
           className="grid size-9 shrink-0 place-items-center rounded-[8px] border border-line text-muted hover:text-ink dark:border-white/10"
         >
@@ -2763,7 +2838,7 @@ function ColorRow({
             aria-label={`اللون المحفوظ ${c}`}
             onClick={() => {
               onChange(c);
-              onCommit();
+              commit(c);
             }}
             style={{ background: c }}
             className={cn(
@@ -2775,6 +2850,29 @@ function ColorRow({
           />
         ))}
       </div>
+      {recents.length > 0 && (
+        <div className="flex flex-wrap gap-1" aria-label="الألوان الأخيرة">
+          {recents.map((c) => (
+            <button
+              key={c}
+              type="button"
+              title={`لون أخير ${c}`}
+              aria-label={`لون أخير ${c}`}
+              onClick={() => {
+                onChange(c);
+                commit(c);
+              }}
+              style={{ background: c }}
+              className={cn(
+                "size-5 rounded-[5px] border",
+                value.toLowerCase() === c.toLowerCase()
+                  ? "border-navy ring-2 ring-navy/40"
+                  : "border-line dark:border-white/20",
+              )}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -9,13 +9,17 @@ import {
   Copy,
   FlipHorizontal2,
   FlipVertical2,
+  Group,
   Italic,
   Layers,
+  Lock,
   MoveDown,
   MoveUp,
   Scaling,
   Trash2,
   Underline,
+  Ungroup,
+  Unlock,
   X,
 } from "lucide-react";
 import { TYPE_NAME, type CanvasEl } from "@/lib/editor/model";
@@ -23,6 +27,7 @@ import { useEditor } from "@/lib/editor/store";
 import { placeFloatingToolbar } from "@/lib/editor/ui-state";
 import { cn } from "@/lib/utils";
 import { ScrubInput } from "./ui/ScrubInput";
+import { ColorField } from "./ui/ColorField";
 
 /** Elements that render an editable text body. */
 const TEXT_TYPES = new Set(["text", "box", "stat", "stamp", "progress"]);
@@ -65,6 +70,10 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const toggleBubble = useEditor((s) => s.toggleBubble);
   const flipSelected = useEditor((s) => s.flipSelected);
   const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
+  const toggleLock = useEditor((s) => s.toggleLock);
+  const group = useEditor((s) => s.group);
+  const ungroup = useEditor((s) => s.ungroup);
+  const selectedIds = useEditor((s) => s.selectedIds);
 
   /**
    * Place the toolbar 16px beyond the grips, flipping below when there is no
@@ -269,19 +278,13 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
           </div>
           <span className="floating-toolbar-sep" aria-hidden />
           <div className="floating-toolbar-section">
-            <input
+            <ColorField
               className="floating-toolbar-swatch"
-              type="color"
-              aria-label="لون النص"
-              title="لون النص"
-              value={style.color || "#172033"}
-              onChange={(event) =>
-                updateStyle(el.id, { color: event.target.value }, true)
-              }
-              onBlur={() => {
-                updateStyle(el.id, { color: style.color });
-                commit();
-              }}
+              label="لون النص"
+              value={style.color}
+              fallback="#172033"
+              onChange={(v) => updateStyle(el.id, { color: v }, true)}
+              onCommit={(v) => updateStyle(el.id, { color: v })}
             />
           </div>
           <span className="floating-toolbar-sep" aria-hidden />
@@ -318,19 +321,14 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
             <span className="px-1 text-[10px] font-extrabold text-muted">
               تعبئة
             </span>
-            <input
+            <ColorField
               className="floating-toolbar-swatch"
-              type="color"
-              aria-label="لون التعبئة"
-              title="لون التعبئة"
-              value={style.fill || style.background || "#006c35"}
-              onChange={(event) =>
-                updateStyle(el.id, { fill: event.target.value }, true)
-              }
-              onBlur={() => {
-                updateStyle(el.id, { fill: style.fill });
-                commit();
-              }}
+              label="لون التعبئة"
+              value={style.fill}
+              fallback={style.background || "#006c35"}
+              allowNone
+              onChange={(v) => updateStyle(el.id, { fill: v }, true)}
+              onCommit={(v) => updateStyle(el.id, { fill: v })}
             />
           </div>
           <span className="floating-toolbar-sep" aria-hidden />
@@ -338,19 +336,13 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
             <span className="px-1 text-[10px] font-extrabold text-muted">
               إطار
             </span>
-            <input
+            <ColorField
               className="floating-toolbar-swatch"
-              type="color"
-              aria-label="لون الإطار"
-              title="لون الإطار"
-              value={style.borderColor || style.color || "#c9a86a"}
-              onChange={(event) =>
-                updateStyle(el.id, { borderColor: event.target.value }, true)
-              }
-              onBlur={() => {
-                updateStyle(el.id, { borderColor: style.borderColor });
-                commit();
-              }}
+              label="لون الإطار"
+              value={style.borderColor}
+              fallback={style.color || "#c9a86a"}
+              onChange={(v) => updateStyle(el.id, { borderColor: v }, true)}
+              onCommit={(v) => updateStyle(el.id, { borderColor: v })}
             />
           </div>
           <span className="floating-toolbar-sep" aria-hidden />
@@ -383,6 +375,46 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
 
       <span className="floating-toolbar-sep" aria-hidden />
       <div className="floating-toolbar-section">
+        {/*
+         * القفل أول زر: الحالة أحادية اللمس (بنفس بنفس same purple as the
+         * locked frame) والعنصر يبقى محددًا — الفتح من هنا أو من Properties.
+         */}
+        <button
+          type="button"
+          className={cn(
+            "floating-toolbar-btn",
+            el.locked && "is-locked-active",
+          )}
+          aria-pressed={el.locked === true}
+          title={el.locked ? "فتح القفل" : "قفل العنصر (منع التحرير)"}
+          aria-label={el.locked ? "فتح القفل" : "قفل العنصر"}
+          onClick={() => toggleLock()}
+        >
+          {el.locked ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />}
+        </button>
+        {/* التجميع السريع — فقط عند تحديد عنصرين فأكثر / فك تجميع مجموعة. */}
+        {selectedIds.length >= 2 && (
+          <button
+            type="button"
+            className="floating-toolbar-btn"
+            title="تجميع (⌘G)"
+            aria-label="تجميع"
+            onClick={() => group()}
+          >
+            <Group className="size-3.5" />
+          </button>
+        )}
+        {el.type === "group" && (
+          <button
+            type="button"
+            className="floating-toolbar-btn"
+            title="فك التجميع (⇧⌘G)"
+            aria-label="فك التجميع"
+            onClick={() => ungroup()}
+          >
+            <Ungroup className="size-3.5" />
+          </button>
+        )}
         <button
           type="button"
           className="floating-toolbar-btn"
