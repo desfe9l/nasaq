@@ -79,6 +79,12 @@ export const getMyAccountPage = createServerFn({ method: "GET" })
       const sql = await getSql();
       // A FREE customer must reach their own dashboard to buy a plan, so this
       // reads state rather than gating on it.
+      //
+      // Gumroad claim point: if this verified email bought on Gumroad before
+      // having a NASAQ account, bind + fulfill the membership now (Keygen
+      // stays the licensing authority; failures never break the page).
+      const { claimGumroadSubscriptionsForUser } = await import("@/lib/gumroad/claim.server");
+      await claimGumroadSubscriptionsForUser(sql, { userId: context.userId, userEmail: context.userEmail }).catch(() => undefined);
       const account = await getAccount(sql, context.userId);
       const [requests, instructions, plans, hasPending] = await Promise.all([
         listOwnPaymentRequests(sql, context.userId),
