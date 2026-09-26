@@ -34,7 +34,9 @@ import {
   resetGumroadProductIdCache,
   resolveGumroadProductId,
 } from "./config.server.ts";
-import { verifyGumroadLicense, verifyGumroadSale } from "./api.server.ts";
+import { fetchGumroadUser, GumroadApiError, verifyGumroadLicense, verifyGumroadSale } from "./api.server.ts";
+import { missingGumroadVariables } from "./config.server.ts";
+import { buildGumroadGatewayStatus } from "./gateway.server.ts";
 
 // ── Fixture helpers ──────────────────────────────────────────────────────────
 
@@ -743,5 +745,139 @@ describe("Gumroad product id resolution", () => {
       assert.ok(!body.includes("product_permalink"), "never falls back to the permalink when the id is known");
       assert.ok(body.includes("increment_uses_count=false"), "verification never burns a license use");
     });
+  });
+});
+
+// ── Access-token health ──────────────────────────────────────────────────────
+// The credential an owner actually creates is a personal token from a one-off
+// Gumroad application: no client id, no client secret, no per-user OAuth. These
+// cases pin that contract (and the 401-vs-missing-product distinction).
+
+describe("Gumroad access-token health", () => {
+  it("requires GUMROAD_ACCESS_TOKEN and nothing else — no Application ID/Secret", async () => {
+    await withGumroadEnv({}, async () => {
+      assert.deepEqual(missingGumroadVariables(), ["GUMROAD_ACCESS_TOKEN"]);
+    });
+    await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "tok" }, async () => {
+      assert.deepEqual(
+        missingGumroadVariables(),
+        [],
+        "a single personal access token is the whole credential",
+      );
+    });
+  });
+
+  it("proves the token is live and reports the account it belongs to", async () => {
+    await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "tok" }, async () => {
+      const { result, urls } = await withStubbedFetch(
+        () => ({
+          status: 200,
+          payload: { success: true, user: { name: "NASAQ", url: "https://gumroad.com/nasaqar" } },
+        }),
+        () => fetchGumroadUser(),
+      );
+      assert.deepEqual(result, { name: "NASAQ", profileUrl: "https://gumroad.com/nasaqar" });
+      assert.ok(urls[0]?.includes("/v2/user"), "reads the account, not the product list");
+      assert.ok(urls[0]?.includes("access_token=tok"), "authenticated with the access token");
+    });
+  });
+
+  it("surfaces a rejected token as 401 so the vault can tell it from a missing product", async () => {
+    await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "revoked" }, async () => {
+      await assert.rejects(
+        () =>
+          withStubbedFetch(
+            () => ({ status: 401, payload: { success: false, message: "invalid token" } }),
+            () => fetchGumroadUser(),
+          ),
+        (error: unknown) => error instanceof GumroadApiError && error.status === 401,
+      );
+    });
+  });
+
+  it("never prints the token in the error it throws", async () => {
+    await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "super-secret-value" }, async () => {
+      const message = await withStubbedFetch(
+        () => ({ status: 401, payload: { success: false } }),
+        async () => {
+          try {
+            await fetchGumroadUser();
+            return "resolved";
+          } catch (error) {
+            return error instanceof Error ? error.message : "unknown";
+          }
+        },
+      );
+      assert.equal(message.result.includes("super-secret-value"), false);
+    });
+  });
+
+  it("attempts no network call at all when no token is configured", async () => {
+    await withGumroadEnv({}, async () => {
+      const { result, urls } = await withStubbedFetch(
+        () => ({ status: 200, payload: {} }),
+        async () => {
+          try {
+            await fetchGumroadUser();
+            return "resolved";
+          } catch (error) {
+            return error instanceof GumroadApiError ? `threw:${error.status}` : "threw";
+          }
+        },
+      );
+      assert.equal(result, "threw:401");
+      assert.equal(urls.length, 0, "nothing is attempted without a token");
+    });
+  });
+});
+
+describe("Gumroad gateway status (owner card)", () => {
+  it("reports Ready and names the account once the token is accepted", async () => {
+    const { sql, close } = await createTestSql();
+    setTestSql(sql);
+    try {
+      await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "tok" }, async () => {
+        const { result, urls } = await withStubbedFetch(
+          (url) =>
+            url.includes("/v2/user")
+              ? { status: 200, payload: { success: true, user: { name: "NASAQ", url: "https://gumroad.com/nasaqar" } } }
+              : { status: 200, payload: { products: [{ id: "PRODUCT", permalink: "auaewk", published: true, name: "نَسَق" }] } },
+          () => buildGumroadGatewayStatus(),
+        );
+        assert.equal(result.api.state, "Ready");
+        assert.equal(result.api.reachable, true);
+        assert.equal(result.api.accountName, "NASAQ");
+        assert.equal(result.product.state, "Ready");
+        assert.equal(result.product.remoteName, "نَسَق");
+        assert.equal(result.product.productId, "PRODUCT");
+        assert.ok(urls.some((url) => url.includes("/v2/user")));
+        assert.ok(urls.some((url) => url.includes("/v2/products")));
+      });
+    } finally {
+      setTestSql(undefined);
+      await close();
+    }
+  });
+
+  it("reports a revoked token as Failed and never blames the product", async () => {
+    const { sql, close } = await createTestSql();
+    setTestSql(sql);
+    try {
+      await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "revoked", GUMROAD_PRODUCT_ID: "PRODUCT" }, async () => {
+        const { result, urls } = await withStubbedFetch(
+          () => ({ status: 401, payload: { success: false } }),
+          () => buildGumroadGatewayStatus(),
+        );
+        assert.equal(result.api.state, "Failed");
+        assert.equal(result.api.reachable, false);
+        assert.ok(result.api.detail.includes("401"));
+        assert.ok(!result.api.detail.includes("revoked"), "the token itself is never echoed");
+        assert.equal(result.product.state, "Failed");
+        assert.equal(urls.length, 1, "a rejected token must not trigger the product lookup");
+      });
+    } finally {
+      setTestSql(undefined);
+      await close();
+    }
   });
 });

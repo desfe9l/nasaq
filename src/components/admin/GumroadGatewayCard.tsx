@@ -104,6 +104,7 @@ export function GumroadGatewayCard({ visible }: { visible: boolean }) {
               typeof status.product.remoteProductCount === "number" && status.product.remoteProductCount > 1
                 ? ` · المتجر يحتوي ${status.product.remoteProductCount} منتجات — ثبّت GUMROAD_PRODUCT_ID`
                 : "",
+              ` · ${status.product.detail}`,
             ].join("")}
             href={status.product.publicPageUrl}
           />
@@ -177,6 +178,34 @@ export function GumroadGatewayCard({ visible }: { visible: boolean }) {
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                 معرّف المنتج غير مُستخرج: أضف <code className="font-mono">GUMROAD_ACCESS_TOKEN</code> ليُشتق من Gumroad API، أو ثبّت <code className="font-mono">GUMROAD_PRODUCT_ID</code> يدويًا.
               </p>
+            )}
+            {(status.api.state === "Missing" || status.api.state === "Failed") && (
+              <div className="mt-2 rounded-lg border border-pink-300/25 bg-pink-300/[0.06] p-3 text-[11px] leading-6 text-slate-300">
+                <p className="font-black text-pink-200">إصدار GUMROAD_ACCESS_TOKEN (مرة واحدة — بلا OAuth للمستخدمين)</p>
+                <ol className="mt-1 list-inside list-decimal space-y-0.5">
+                  <li>
+                    <code className="font-mono">Gumroad → Settings → Advanced → Applications → Create application</code>
+                  </li>
+                  <li>
+                    <span className="font-black text-slate-200">Application name:</span>{" "}
+                    <code className="font-mono">NASAQ — نَسَق (تكامل الخادم)</code>
+                  </li>
+                  <li>
+                    <span className="font-black text-slate-200">Redirect URI:</span>{" "}
+                    <code className="font-mono">http://127.0.0.1</code> — مطلوب في النموذج فقط، وقيمته غير مستخدمة إطلاقًا في NASAQ
+                  </li>
+                  <li>
+                    <span className="font-black text-slate-200">Application icon:</span> اختياري — اتركه فارغًا
+                  </li>
+                  <li>
+                    بعد الإنشاء: <code className="font-mono">Your applications → Edit → Generate access token</code> ثم انسخ القيمة إلى{" "}
+                    <code className="font-mono">GUMROAD_ACCESS_TOKEN</code> في Vercel (Production) وأعد النشر.
+                  </li>
+                </ol>
+                <p className="mt-1 text-slate-400">
+                  <code className="font-mono">Application ID</code> و<code className="font-mono">Application Secret</code> غير مطلوبين ولا يُقرآن في الكود — لا تضعهما في أي متغير.
+                </p>
+              </div>
             )}
           </div>
 

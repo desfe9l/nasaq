@@ -48,25 +48,73 @@ export async function buildGumroadGatewayStatus(): Promise<GumroadGatewayStatus>
   // came from. Never a secret — a product id is public information.
   const resolved = await resolveGumroadProductId();
 
-  // ── Product status: verify against the live API when the token allows it.
+  // ── Token health: prove the access token is LIVE before blaming the product.
+  // A 401 (revoked / mistyped token) and "product not in the store" otherwise
+  // look identical here, and they need different repairs.
+  let tokenChecked = false;
+  let tokenRejected = false;
+  let accountName: string | null = null;
+  let accountUrl: string | null = null;
+  if (gumroadApiConfigured()) {
+    try {
+      const { fetchGumroadUser } = await import("./api.server");
+      const account = await fetchGumroadUser();
+      tokenChecked = true;
+      accountName = account.name;
+      accountUrl = account.profileUrl;
+    } catch (error) {
+      tokenChecked = true;
+      tokenRejected = error instanceof Error && "status" in error && error.status === 401;
+    }
+  }
+
+  // ── Product status: only worth asking once the token is accepted.
   let remoteName: string | null = null;
   let remotePublished: boolean | null = null;
-  let remoteChecked = false;
+  let productsChecked = false;
   let remoteProductCount: number | null = null;
-  if (gumroadApiConfigured()) {
+  if (gumroadApiConfigured() && !tokenRejected) {
     try {
       const { listGumroadProducts } = await import("./api.server");
       const products = await listGumroadProducts();
-      remoteChecked = true;
+      productsChecked = true;
       remoteProductCount = products.length;
       const match =
         products.find((product) => product.permalink === gumroadProductPermalink()) ?? null;
       remoteName = match?.name ?? null;
       remotePublished = match?.published ?? null;
     } catch {
-      remoteChecked = true;
+      productsChecked = false;
     }
   }
+  const productState: GumroadReadyState = !gumroadApiConfigured()
+    ? resolved.id
+      ? "Needs Setup"
+      : "Missing"
+    : tokenRejected
+      ? "Failed"
+      : !productsChecked
+        ? "Needs Setup"
+        : remoteName
+          ? remotePublished === false
+            ? "Failed"
+            : "Ready"
+          : resolved.id
+            ? "Needs Setup"
+            : "Failed";
+  const productDetail = !gumroadApiConfigured()
+    ? "أضف GUMROAD_ACCESS_TOKEN ليُشتق معرّف المنتج من Gumroad API."
+    : tokenRejected
+      ? "توقف الفحص: Gumroad رفض المفتاح (401) — أعد إصدار access token من نفس التطبيق."
+      : !productsChecked
+        ? "المفتاح سليم لكن تعذّر الوصول إلى قائمة المنتجات الآن — أعد التحديث."
+        : remoteName
+          ? remotePublished === false
+            ? "المنتج موجود في Gumroad لكنه غير منشور."
+            : "المنتج موجود ومنشور في Gumroad."
+          : resolved.id
+            ? "لم يُطابق الـ permalink أي منتج، لكن معرّف المنتج مثبَّت يدويًا — التحقق يعمل بهذا المعرّف."
+            : "لم يُعثر على المنتج في قائمة Gumroad بهذا الـ permalink.";
 
   // ── Ping status: what has actually arrived on the live endpoint?
   const pingRows = await sql<{ status: string | null; note: string | null; received_at: string | Date }>`
@@ -140,22 +188,23 @@ export async function buildGumroadGatewayStatus(): Promise<GumroadGatewayStatus>
       publicPageUrl: `${config.storeBaseUrl.replace(/\/+$/, "")}/l/${gumroadProductPermalink()}`,
       remoteName,
       remotePublished,
-      remoteChecked,
-      state: remoteChecked
-        ? (remoteName ? (remotePublished === false ? "Failed" : "Ready") : "Failed")
-        : resolved.id
-          ? "Needs Setup"
-          : "Missing",
+      remoteChecked: productsChecked,
+      detail: productDetail,
+      state: productState,
     },
     api: {
       configured: gumroadApiConfigured(),
-      reachable: remoteChecked ? remoteName != null : null,
-      detail: gumroadApiConfigured()
-        ? remoteChecked
-          ? "تم التحقق من المفتاح عبر استدعاء حقيقي لـGumroad API."
-          : "المفتاح مضبوط؛ لم يتم التحقق من الاتصال بعد."
-        : "أضف GUMROAD_ACCESS_TOKEN في Vercel لتفعيل التحقق الآلي من البيع والاشتراكات.",
-      state: gumroadApiConfigured() ? (remoteChecked ? (remoteName ? "Ready" : "Failed") : "Needs Setup") : "Missing",
+      reachable: tokenChecked ? !tokenRejected : null,
+      detail: !gumroadApiConfigured()
+        ? "أضف GUMROAD_ACCESS_TOKEN في Vercel لتفعيل التحقق الآلي من البيع والاشتراكات."
+        : tokenRejected
+          ? "Gumroad رفض المفتاح (401): أعد إصدار access token من التطبيق (Edit → Generate access token) والصق القيمة الجديدة في Vercel ثم أعد النشر."
+          : tokenChecked
+            ? `تم التحقق من المفتاح عبر استدعاء حقيقي لـGumroad API${accountName ? ` — الحساب: ${accountName}` : ""}${accountUrl ? ` (${accountUrl})` : ""}.`
+            : "المفتاح مضبوط؛ لم يتم التحقق من الاتصال بعد.",
+      state: !gumroadApiConfigured() ? "Missing" : tokenRejected ? "Failed" : tokenChecked ? "Ready" : "Needs Setup",
+      accountName,
+      accountUrl,
     },
     ping: {
       endpointUrl: `${displayOrigin()}${GUMROAD_PING_PATH}`,
