@@ -46,6 +46,43 @@ export function whatsappHref(message?: string) {
   return `https://wa.me/${CONTACT_PHONE_INTL}?text=${encodeURIComponent(text)}`;
 }
 
+/**
+ * Official NASAQ social accounts.
+ *
+ * One list, one source of truth: the contact page and the footer both render
+ * it, so adding or renaming an account is a single edit here and never a hunt
+ * through components. `handle` is what the UI shows; `href` is the canonical
+ * profile URL — every one of these is external and opens in a new tab.
+ */
+export interface SocialAccount {
+  /** Stable key, also used as the lucide/inline icon selector. */
+  id: "instagram" | "tiktok" | "x";
+  label: string;
+  handle: string;
+  href: string;
+}
+
+export const SOCIAL_ACCOUNTS: readonly SocialAccount[] = [
+  {
+    id: "instagram",
+    label: "إنستغرام",
+    handle: "@nasaq_ar",
+    href: "https://www.instagram.com/nasaq_ar",
+  },
+  {
+    id: "tiktok",
+    label: "تيك توك",
+    handle: "@nasaq_ar",
+    href: "https://www.tiktok.com/@nasaq_ar",
+  },
+  {
+    id: "x",
+    label: "منصة X",
+    handle: "@nasaqdocs",
+    href: "https://x.com/nasaqdocs",
+  },
+] as const;
+
 export interface NavItem {
   to: string;
   label: string;

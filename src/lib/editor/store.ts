@@ -1106,6 +1106,21 @@ export const useEditor = create<EditorStore>((set, get) => {
         set({
           assets: [saved, ...get().assets.filter((a) => a.id !== saved.id)],
         });
+        // Mirror the bytes into object storage when a bucket is configured.
+        // Deliberately not awaited and self-swallowing: the library stays
+        // local-first, so a storage outage must never delay or fail the save
+        // the author just made.
+        void import("@/lib/storage/mirror")
+          .then(({ mirrorAssetToStorage }) =>
+            mirrorAssetToStorage({
+              name: saved.name,
+              src: saved.src,
+              w: saved.w,
+              h: saved.h,
+              projectId: get().id ?? null,
+            }),
+          )
+          .catch(() => null);
         return saved;
       } catch {
         // A full or unavailable store must not lose the element the author is

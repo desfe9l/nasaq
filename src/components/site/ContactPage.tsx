@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { BRAND, CONTACT_PHONE_DISPLAY, CONTACT_PHONE_INTL, telHref, whatsappHref } from "@/lib/brand";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
+import { SocialLinks } from "@/components/site/SocialLinks";
 
 const SCOPES = ["تقرير رسمي", "عرض تقديمي", "غلاف ومستند", "تصميم إنفوجرافيك", "استفسار آخر"];
 
@@ -99,6 +100,14 @@ export function ContactPage() {
               </button>
             </div>
             <p className="mt-2 text-[12px] text-muted">رقم دولي للاتصال وواتساب. اختر نوع الطلب أدناه ليُضاف تلقائياً إلى رسالتك.</p>
+            {/* Official accounts live inside the existing contact block — the
+                same place a visitor is already looking for a channel, so no
+                new section is added to the page. Handles are shown in full
+                here because picking the right account is the point. */}
+            <div className="mt-4">
+              <p className="text-[11px] font-extrabold text-muted">الحسابات الرسمية</p>
+              <SocialLinks variant="full" className="mt-2" />
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2">

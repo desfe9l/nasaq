@@ -752,7 +752,11 @@ function serviceEntries(): VaultEntry[] {
   ];
 }
 
-function findings(entries: VaultEntry[], ownerConfigured: boolean): OwnerVaultFinding[] {
+function findings(
+  entries: VaultEntry[],
+  ownerConfigured: boolean,
+  missingPolicies: string[],
+): OwnerVaultFinding[] {
   const result: OwnerVaultFinding[] = [];
   const runtime = (key: string) => entries.find((entry) => entry.variable === key)?.configured;
   if (!ownerConfigured) {
@@ -795,6 +799,40 @@ function findings(entries: VaultEntry[], ownerConfigured: boolean): OwnerVaultFi
       action: "أنشئ token خادم محدود الصلاحيات من Keygen Portal وأضفه يدويًا في Vercel.",
     });
   }
+  /*
+   * Two unrelated secrets must never carry the same value: Better Auth signs
+   * every session cookie with BETTER_AUTH_SECRET, while GOOGLE_CLIENT_SECRET is
+   * handed to Google's token endpoint. Pasting one into both fields makes a
+   * Google-client rotation silently invalidate all sessions, and widens the
+   * blast radius of either leak to both systems. Compare values only; the
+   * finding never reveals them.
+   */
+  const betterAuthSecret = envValue("BETTER_AUTH_SECRET");
+  const googleClientSecret = envValue("GOOGLE_CLIENT_SECRET");
+  if (betterAuthSecret && googleClientSecret && betterAuthSecret === googleClientSecret) {
+    result.push({
+      severity: "high",
+      title: "BETTER_AUTH_SECRET وGOOGLE_CLIENT_SECRET يحملان القيمة نفسها",
+      detail:
+        "سر جلسات Better Auth وسر عميل Google OAuth مضبوطان بالقيمة نفسها في runtime الحالي؛ وهما سرّان مستقلان لنظامين مختلفين.",
+      action:
+        "ولّد سرًا عشوائيًا جديدًا لـ BETTER_AUTH_SECRET في Vercel (سينهي الجلسات الحالية)، وأبقِ GOOGLE_CLIENT_SECRET كما هو من Google Cloud، ثم أعد النشر.",
+    });
+  }
+  /*
+   * The annual plans ship in the central catalog but stay unpurchasable until
+   * their Keygen policies exist — `paylinkPlanAvailability` already gates them,
+   * so this is a configuration gap to surface, not a runtime failure.
+   */
+  if (missingPolicies.length) {
+    result.push({
+      severity: "medium",
+      title: "سياسات Keygen ناقصة لبعض الباقات",
+      detail: `الباقات التالية معروضة في الكتالوج بلا Policy ID: ${missingPolicies.join("، ")} — وتبقى غير قابلة للشراء حتى تُضبط.`,
+      action:
+        "أنشئ Policy مطابقًا لكل باقة في Keygen Portal ثم أضف المعرف في Vercel باسم KEYGEN_POLICY_<PLAN>_ID وأعد النشر.",
+    });
+  }
   result.push({
     severity: "info",
     title: "خدمات اختيارية غير مطلوبة حاليًا: البريد والتحليلات والتخزين والمراقبة",
@@ -806,6 +844,17 @@ function findings(entries: VaultEntry[], ownerConfigured: boolean): OwnerVaultFi
 
 export async function buildOwnerVaultInventory(): Promise<OwnerVaultInventory> {
   const entries = [...ENV_SPECS.map(envEntry), ...(await sourceEntries()), ...serviceEntries()];
+  /*
+   * Keygen lives behind `node:crypto`, and this module is imported by the owner
+   * vault page. Resolve policy ids through a dynamic import so the server-only
+   * graph never reaches the browser bundle — the same rule the authorization
+   * import below follows.
+   */
+  const { listCatalogPlans } = await import("@/lib/commercial/catalog");
+  const { keygenPolicyId } = await import("@/lib/license/keygen");
+  const missingPolicies = listCatalogPlans()
+    .filter((plan) => !keygenPolicyId(plan.keygenPolicyKey))
+    .map((plan) => plan.key);
   const ownerConfigured = Boolean(envValue("NASAQ_OWNER_ID") || envValue("NASAQ_OWNER_EMAIL"));
   return {
     generatedAt: new Date().toISOString(),
@@ -813,7 +862,7 @@ export async function buildOwnerVaultInventory(): Promise<OwnerVaultInventory> {
     ownerConfigured,
     entries,
     routes: ROUTES,
-    findings: findings(entries, ownerConfigured),
+    findings: findings(entries, ownerConfigured, missingPolicies),
   };
 }
 

@@ -148,7 +148,7 @@ export function ProjectsPage() {
           <div>
             <h1 className="text-[26px] font-extrabold">مشاريعي</h1>
             <p className="mt-1 text-[13px] leading-6 text-muted">
-              {BRAND.nameAr} — {BRAND.platform}. كل مشروع يحتوي صفحات متعددة، وتُحفظ الملفات{" "}
+              {BRAND.nameAr} — {BRAND.platformEn}. كل مشروع يحتوي صفحات متعددة، وتُحفظ الملفات{" "}
               {storage.mode === "indexeddb" ? "في IndexedDB داخل متصفحك" : "في LocalStorage"}.
             </p>
           </div>
