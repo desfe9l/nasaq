@@ -2,6 +2,7 @@ import { getCatalogPlan, planSavings } from "@/lib/commercial/catalog";
 import { useCallback, useEffect, useState } from "react";
 import { RedirectToSignIn } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { accountIdentity } from "@/lib/auth/identity";
 import { amIAdmin } from "@/lib/commercial/admin-functions";
 import {
   cancelMyPaymentRequest,
@@ -78,7 +79,7 @@ export function AccountPage() {
           <div>
             <h1 className="text-2xl font-extrabold">حسابي</h1>
             <p className="mt-1 text-[13px] text-muted">
-              {user.displayName ?? user.primaryEmail ?? "—"}
+              {accountIdentity(user).label}
             </p>
           </div>
           {isAdmin && (
