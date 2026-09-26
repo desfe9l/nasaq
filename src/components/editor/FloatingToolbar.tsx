@@ -27,7 +27,7 @@ import { ScrubInput } from "./ui/ScrubInput";
 /** Elements that render an editable text body. */
 const TEXT_TYPES = new Set(["text", "box", "stat", "stamp", "progress"]);
 
-/** Gap between the selected element and the toolbar (spec: 16px). */
+/** Gap between the selection interaction bounds and the toolbar. */
 const GAP = 16;
 /** Minimum distance from the viewport edges. */
 const MARGIN = 8;
@@ -67,18 +67,29 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
 
   /**
-   * Place the toolbar 16px above the element, flipping below when there is no
+   * Place the toolbar 16px beyond the grips, flipping below when there is no
    * room, and clamp horizontally so it can never leave the viewport.
    */
   const place = useCallback(() => {
     const target = document.querySelector<HTMLElement>(
-      `[data-el-id="${CSS.escape(el.id)}"]`,
+      `.editor-canvas-stage [data-page-id] [data-el-id="${CSS.escape(el.id)}"]`,
     );
     const toolbar = boxRef.current;
     if (!target || !toolbar) return;
     const rect = target.getBoundingClientRect();
     const size = toolbar.getBoundingClientRect();
     if (!rect.width && !rect.height) return;
+    // Keep the bubble clear of the real, outward-expanded grip hit regions,
+    // not just the visible 7px dots. These measurements include rotation/zoom.
+    const grips = [...document.querySelectorAll<HTMLElement>(
+      `.selection-frame[data-el-id="${CSS.escape(el.id)}"] .handle, .selection-frame[data-el-id="${CSS.escape(el.id)}"] .rotate-handle`,
+    )].map(node => node.getBoundingClientRect());
+    const leftEdge = Math.min(rect.left, ...grips.map(r => r.left));
+    const rightEdge = Math.max(rect.right, ...grips.map(r => r.right));
+    const topEdge = Math.min(rect.top, ...grips.map(r => r.top));
+    const bottomEdge = Math.max(rect.bottom, ...grips.map(r => r.bottom));
+    const interactionBox = { left: leftEdge, right: rightEdge, top: topEdge,
+      bottom: bottomEdge, width: rightEdge - leftEdge, height: bottomEdge - topEdge };
     /*
      * Obstacles: the header, both sidebars, the pages rail and the status bar
      * all mark themselves `data-editor-obstacle`. Measuring them at placement
@@ -94,12 +105,12 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     // The arithmetic is pure and unit-tested (`placeFloatingToolbar`); this
     // callback only feeds it live screen measurements.
     const { left, top, placement } = placeFloatingToolbar(
-      rect,
+      interactionBox,
       { width: size.width, height: size.height },
       { width: window.innerWidth, height: window.innerHeight },
       GAP,
       MARGIN,
-      avoid,
+      [...avoid, ...grips],
     );
     setPos({ left, top });
     setSide(placement);
@@ -116,7 +127,12 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     schedule();
     window.addEventListener("scroll", schedule, true);
     window.addEventListener("resize", schedule);
+    window.addEventListener("transitionend", schedule, true);
+    const observer = new ResizeObserver(schedule);
+    document.querySelectorAll(".touch-properties-sheet").forEach(node => observer.observe(node));
     return () => {
+      observer.disconnect();
+      window.removeEventListener("transitionend", schedule, true);
       cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule, true);
       window.removeEventListener("resize", schedule);

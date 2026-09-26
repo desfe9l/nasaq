@@ -1,3 +1,5 @@
+import { TouchPropertiesSheet } from "./TouchPropertiesSheet";
+import { isTouchPropertiesViewport } from "@/lib/editor/ui-state";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Sidebar resize bounds (px) — shared by the drag handler and the persisted default. */
@@ -427,6 +429,15 @@ function Studio({
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window === "undefined" || !isOverlayViewport(),
   );
+  const [touchProperties, setTouchProperties] = useState(isTouchPropertiesViewport);
+  const rightDockCollapsed = rightCollapsed || touchProperties;
+  useEffect(() => {
+    const media = window.matchMedia("(any-pointer: coarse)");
+    const update = () => setTouchProperties(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   /** First load is what arms the auto-fit below. */
   const hydrated = useEditor((s) => s.hydrated);
   /** «أضف مكتبة» and «مولد عناوين الفقرات» are modal, so they own no store state. */
@@ -537,7 +548,7 @@ function Studio({
   }, []);
 
   /** True while a floating drawer is open (tablet/phone only). */
-  const drawerOpen = !isDesktop && (leftOpen || rightOpen);
+  const drawerOpen = !isDesktop && (leftOpen || (!touchProperties && rightOpen));
 
   /*
    * Pages panel height — drag handle on its top border.
@@ -640,15 +651,23 @@ function Studio({
    */
   const projectId = useEditor((s) => s.id);
   const lastFitProjectRef = useRef<string | undefined>(undefined);
+  const lastFitFirstPageRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!hydrated) return;
+    const firstPageId = useEditor.getState().pages[0]?.id;
     if (lastFitProjectRef.current === undefined) {
       // First load is owned by the shell-shape effect above.
       lastFitProjectRef.current = projectId ?? "";
+      lastFitFirstPageRef.current = firstPageId;
       return;
     }
     if (lastFitProjectRef.current === (projectId ?? "")) return;
+    // First autosave assigns an id to the SAME document. Do not interpret a
+    // drag's save as opening a project and reset the author's current zoom.
+    const assignedId = lastFitProjectRef.current === "" && lastFitFirstPageRef.current === firstPageId;
     lastFitProjectRef.current = projectId ?? "";
+    lastFitFirstPageRef.current = firstPageId;
+    if (assignedId) return;
     const timer = setTimeout(() => fitRef.current(), 90);
     return () => clearTimeout(timer);
   }, [projectId, hydrated]);
@@ -1360,15 +1379,15 @@ function Studio({
                 useEditor.setState({
                   focusMode: false,
                   rightCollapsed: false,
-                  rightOpen: false,
+                  rightOpen: touchProperties,
                 });
                 return;
               }
               toggleSidebar("right");
             }}
-            active={isDesktop ? !rightCollapsed && !focusMode : rightOpen}
+            active={isDesktop && !touchProperties ? !rightCollapsed && !focusMode : rightOpen}
             title={
-              isDesktop
+              isDesktop && !touchProperties
                 ? rightCollapsed
                   ? "إظهار لوحة الخصائص"
                   : "طي لوحة الخصائص"
@@ -1451,11 +1470,11 @@ function Studio({
         }}
         className={cn(
           "editor-focus-workspace editor-workspace-row relative grid min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden",
-          focusMode || (leftCollapsed && rightCollapsed)
+          focusMode || (leftCollapsed && rightDockCollapsed)
             ? "lg2:grid-cols-[minmax(0,1fr)]"
             : leftCollapsed
               ? "lg2:grid-cols-[minmax(360px,1fr)_320px] xl:grid-cols-[minmax(420px,1fr)_336px]"
-              : rightCollapsed
+              : rightDockCollapsed
                 ? "lg2:grid-cols-[280px_minmax(360px,1fr)] xl:grid-cols-[292px_minmax(420px,1fr)]"
                 : "lg2:grid-cols-[280px_minmax(360px,1fr)_320px] xl:grid-cols-[292px_minmax(420px,1fr)_336px]",
         )}
@@ -1470,7 +1489,7 @@ function Studio({
           transition:
             "grid-template-columns 180ms cubic-bezier(0.22, 1, 0.36, 1)",
           gridTemplateColumns:
-            focusMode || (leftCollapsed && rightCollapsed)
+            focusMode || (leftCollapsed && rightDockCollapsed)
               ? isDesktop
                 ? "minmax(0, 1fr)"
                 : undefined
@@ -1478,7 +1497,7 @@ function Studio({
                 ? undefined
                 : leftCollapsed
                   ? `minmax(360px, 1fr) ${panelWidths.right}px`
-                  : rightCollapsed
+                  : rightDockCollapsed
                     ? `${panelWidths.left}px minmax(360px, 1fr)`
                     : `${panelWidths.left}px minmax(360px, 1fr) ${panelWidths.right}px`,
         }}
@@ -1581,52 +1600,58 @@ function Studio({
           <WorkspaceStatusBar />
         </div>
 
-        <div
-          className={cn(
-            "editor-sidebar editor-properties relative z-[var(--z-panel)] h-full min-h-0 overflow-hidden",
-            /*
-             * The properties panel is the visual LEFT sidebar; it slides in from
-             * the physical left edge on tablet/phone, identically in landscape
-             * and portrait so muscle memory carries across orientations.
-             */
-            /*
-             * Tablet width: the Properties/Layers drawer is compact by default
-             * (288px ≈ `w-72`) between 768 and 1024px, so it covers noticeably
-             * less of the artboard it floats over; phones keep the roomier
-             * `min(340px, 90vw)` slide-over, where the canvas is stacked behind
-             * the drawer anyway.
-             */
-            "max-lg2:fixed max-lg2:inset-y-0 max-lg2:left-0 max-lg2:z-[var(--z-drawer)] max-lg2:w-[min(340px,90vw)] max-lg2:shadow-2xl md:max-lg2:w-72",
-            "max-lg2:transition-transform max-lg2:duration-200 max-lg2:ease-out",
-            !rightOpen && "max-lg2:-translate-x-full",
-            !rightOpen && "max-lg2:pointer-events-none",
-            rightCollapsed && "lg2:hidden",
-          )}
-        >
-          {/* Same in-flow close row for the properties panel. */}
-          <div className="flex items-center justify-end border-b border-line px-1.5 py-1 dark:border-white/10">
-            <button
-              type="button"
-              onClick={() =>
-                isDesktop ? toggle("rightCollapsed") : closeFloatingPanels()
-              }
-              aria-label="إغلاق لوحة الخصائص"
-              title="إغلاق لوحة الخصائص"
-              className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-line px-2 text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
-            >
-              <X className="size-3.5" /> إغلاق
-            </button>
+        {touchProperties ? (
+          <TouchPropertiesSheet open={rightOpen && !focusMode} onClose={() => useEditor.setState({ rightOpen: false })}>
+            <RightPanel onReplaceImage={onReplaceImage} />
+          </TouchPropertiesSheet>
+        ) : (
+          <div
+            className={cn(
+              "editor-sidebar editor-properties relative z-[var(--z-panel)] h-full min-h-0 overflow-hidden",
+              /*
+               * The properties panel is the visual LEFT sidebar; it slides in from
+               * the physical left edge on tablet/phone, identically in landscape
+               * and portrait so muscle memory carries across orientations.
+               */
+              /*
+               * Tablet width: the Properties/Layers drawer is compact by default
+               * (288px ≈ `w-72`) between 768 and 1024px, so it covers noticeably
+               * less of the artboard it floats over; phones keep the roomier
+               * `min(340px, 90vw)` slide-over, where the canvas is stacked behind
+               * the drawer anyway.
+               */
+              "max-lg2:fixed max-lg2:inset-y-0 max-lg2:left-0 max-lg2:z-[var(--z-drawer)] max-lg2:w-[min(340px,90vw)] max-lg2:shadow-2xl md:max-lg2:w-72",
+              "max-lg2:transition-transform max-lg2:duration-200 max-lg2:ease-out",
+              !rightOpen && "max-lg2:-translate-x-full",
+              !rightOpen && "max-lg2:pointer-events-none",
+              rightCollapsed && "lg2:hidden",
+            )}
+          >
+            {/* Same in-flow close row for the properties panel. */}
+            <div className="flex items-center justify-end border-b border-line px-1.5 py-1 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() =>
+                  isDesktop ? toggle("rightCollapsed") : closeFloatingPanels()
+                }
+                aria-label="إغلاق لوحة الخصائص"
+                title="إغلاق لوحة الخصائص"
+                className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-line px-2 text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
+              >
+                <X className="size-3.5" /> إغلاق
+              </button>
+            </div>
+            <RightPanel onReplaceImage={onReplaceImage} />
+            {!rightCollapsed && !focusMode && (
+              <PanelResizeHandle
+                side="right"
+                onStart={(event) =>
+                  resizePanel("right", event.clientX, panelWidths.right)
+                }
+              />
+            )}
           </div>
-          <RightPanel onReplaceImage={onReplaceImage} />
-          {!rightCollapsed && !focusMode && (
-            <PanelResizeHandle
-              side="right"
-              onStart={(event) =>
-                resizePanel("right", event.clientX, panelWidths.right)
-              }
-            />
-          )}
-        </div>
+        )}
       </div>
 
       {/*
