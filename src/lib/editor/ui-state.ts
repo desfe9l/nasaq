@@ -25,6 +25,12 @@ export function isOverlayViewport(): boolean {
   return !window.matchMedia(`(min-width: ${OVERLAY_BREAKPOINT}px)`).matches;
 }
 
+/** Includes iPad Pro landscape and touch devices with a paired mouse. */
+export function isTouchPropertiesViewport(): boolean {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" &&
+    window.matchMedia("(any-pointer: coarse)").matches;
+}
+
 /**
  * Bottom pages panel (الصفحات) height bounds.
  *

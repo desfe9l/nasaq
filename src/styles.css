@@ -263,7 +263,8 @@
 
 .editor-ui .editor-canvas-stage {
   background-image: none;
-  touch-action: pan-x pan-y;
+  touch-action: none;
+  -webkit-touch-callout: none;
   overscroll-behavior: contain;
   /*
    * Chrome's scroll anchoring "helpfully" rescrolls the stage whenever the
@@ -588,9 +589,8 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
    * Pencil stroke on it belongs to the editor (marquee, drag, draw tools) —
    * never to the browser's pan / double-tap-zoom. `touch-action: none` on the
    * page is also what stops Safari from firing pointercancel mid-drag the
-   * moment it mistakes a finger drag for a scroll; the surrounding workspace
-   * keeps `pan-x pan-y` (set on .editor-canvas-stage) so one-finger
-   * navigation outside the sheet still works natively.
+   * moment it mistakes a finger drag for a scroll. The surrounding workspace
+   * uses the same Pointer Events owner, including outside-artboard content.
    */
   touch-action: none;
   /* iOS long-press callout (copy/share popover on images) hijacks canvas
@@ -759,10 +759,11 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   --handle-size: calc(7px / var(--editor-zoom, 1));
   /* Hit area أكبر من المرئي — 32px دائماً (Apple Pencil precision) */
   --handle-hit-size: calc(32px / var(--editor-zoom, 1));
+  --handle-inset: calc(var(--handle-size) / 2);
   --rotate-hit-size: calc(32px / var(--editor-zoom, 1));
   /* Diagonal reach of the corner rotation grips: close enough to grab without a
      hunt, far enough to clear the corner resize dot underneath. */
-  --rotate-gap: calc(18px / var(--editor-zoom, 1));
+  --rotate-gap: calc(52px / var(--editor-zoom, 1));
   /*
    * Tight bounding box (borderScaleFactor: 1): the frame mirrors the element's
    * exact box, and a single 1px border is drawn INSIDE it (border-box), so the
@@ -1054,7 +1055,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 /*
  * Handles — تحسين لـ Apple Pencil واللمس:
  * - الحجم المرئي ثابت بغض النظر عن الزوم (7px/zoom)
- * - مساحة اللمس أكبر من المرئي (32px/zoom) بشكل دائم، و 48px/zoom على الشاشات اللمسية
+ * - مساحة اللمس أكبر من المرئي (32px/zoom) بشكل دائم، و 44px/zoom على الشاشات اللمسية
  * - المقابض لا تختفي ولا تصغر بسبب الزوم — visual constant size via --editor-zoom inverse
  * - Hit-area أكبر من المرئي بكثير لسهولة الإمساك بالقلم
  * - تم تحقيق ذلك بجعل div المقبض نفسه هو مساحة اللمس (شفاف) والنقطة المرئية ::after
@@ -1074,7 +1075,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .handle {
   width: var(--handle-hit-size);
   height: var(--handle-hit-size);
-  border-radius: 50%;
+  border-radius: 0;
 }
 
 .handle::after {
@@ -1094,46 +1095,30 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   opacity: 0.5;
 }
 
-.handle.nw {
-  top: calc(var(--handle-hit-size) / -2);
-  left: calc(var(--handle-hit-size) / -2);
-  cursor: nwse-resize;
-}
-.handle.n {
-  top: calc(var(--handle-hit-size) / -2);
-  left: calc(50% - var(--handle-hit-size) / 2);
-  cursor: ns-resize;
-}
-.handle.ne {
-  top: calc(var(--handle-hit-size) / -2);
-  right: calc(var(--handle-hit-size) / -2);
-  cursor: nesw-resize;
-}
-.handle.e {
-  top: calc(50% - var(--handle-hit-size) / 2);
-  right: calc(var(--handle-hit-size) / -2);
-  cursor: ew-resize;
-}
-.handle.se {
-  bottom: calc(var(--handle-hit-size) / -2);
-  right: calc(var(--handle-hit-size) / -2);
-  cursor: nwse-resize;
-}
-.handle.s {
-  bottom: calc(var(--handle-hit-size) / -2);
-  left: calc(50% - var(--handle-hit-size) / 2);
-  cursor: ns-resize;
-}
-.handle.sw {
-  bottom: calc(var(--handle-hit-size) / -2);
-  left: calc(var(--handle-hit-size) / -2);
-  cursor: nesw-resize;
-}
-.handle.w {
-  top: calc(50% - var(--handle-hit-size) / 2);
-  left: calc(var(--handle-hit-size) / -2);
-  cursor: ew-resize;
-}
+/* Grow targets OUTWARD, keeping the same 7px dots at the frame boundary.
+   Only the visible dot reaches into the body. Side targets occupy the gap
+   between corners; even a 32px frame has distinct move/resize/rotate regions. */
+.handle::after { position: absolute; }
+.handle.nw { top: calc(var(--handle-inset) - var(--handle-hit-size)); left: calc(var(--handle-inset) - var(--handle-hit-size)); cursor: nwse-resize; }
+.handle.ne { top: calc(var(--handle-inset) - var(--handle-hit-size)); right: calc(var(--handle-inset) - var(--handle-hit-size)); cursor: nesw-resize; }
+.handle.se { bottom: calc(var(--handle-inset) - var(--handle-hit-size)); right: calc(var(--handle-inset) - var(--handle-hit-size)); cursor: nwse-resize; }
+.handle.sw { bottom: calc(var(--handle-inset) - var(--handle-hit-size)); left: calc(var(--handle-inset) - var(--handle-hit-size)); cursor: nesw-resize; }
+.handle.nw::after { right: 0; bottom: 0; }
+.handle.ne::after { left: 0; bottom: 0; }
+.handle.se::after { left: 0; top: 0; }
+.handle.sw::after { right: 0; top: 0; }
+.handle.n, .handle.s { width: min(var(--handle-hit-size), calc(100% - var(--handle-size))); left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.handle.n { top: calc(var(--handle-inset) - var(--handle-hit-size)); }
+.handle.s { bottom: calc(var(--handle-inset) - var(--handle-hit-size)); }
+.handle.n::after, .handle.s::after { left: 50%; transform: translateX(-50%); }
+.handle.n::after { bottom: 0; }
+.handle.s::after { top: 0; }
+.handle.e, .handle.w { height: min(var(--handle-hit-size), calc(100% - var(--handle-size))); top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+.handle.e { right: calc(var(--handle-inset) - var(--handle-hit-size)); }
+.handle.w { left: calc(var(--handle-inset) - var(--handle-hit-size)); }
+.handle.e::after, .handle.w::after { top: 50%; transform: translateY(-50%); }
+.handle.e::after { left: 0; }
+.handle.w::after { right: 0; }
 
 .rotate-handle {
   width: var(--rotate-hit-size);
@@ -1184,20 +1169,20 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * never covers the resize dots.
  */
 .rotate-handle.nw {
-  top: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
-  left: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
+  top: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
+  left: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
 }
 .rotate-handle.ne {
-  top: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
-  right: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
+  top: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
+  right: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
 }
 .rotate-handle.se {
-  bottom: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
-  right: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
+  bottom: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
+  right: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
 }
 .rotate-handle.sw {
-  bottom: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
-  left: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
+  bottom: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
+  left: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
 }
 
 .rotate-handle:active {
@@ -1234,7 +1219,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
     --handle-size: calc(11px / var(--editor-zoom, 1));
     --handle-hit-size: calc(48px / var(--editor-zoom, 1));
     --rotate-hit-size: calc(48px / var(--editor-zoom, 1));
-    --rotate-gap: calc(36px / var(--editor-zoom, 1));
+    --rotate-gap: calc(52px / var(--editor-zoom, 1));
   }
 }
 
@@ -2341,4 +2326,50 @@ summary,
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+/* The visible dots do not grow. Outward targets stay finger-sized at every
+   zoom; the separate rotation targets clear the resize corners completely. */
+@media (any-pointer: coarse) {
+  .selection-frame {
+    --handle-hit-size: calc(44px / var(--editor-zoom, 1));
+    --rotate-hit-size: calc(44px / var(--editor-zoom, 1));
+    --rotate-gap: calc(68px / var(--editor-zoom, 1));
+  }
+}
+
+/* Touch properties float above, never below/in the canvas grid. No backdrop:
+   users can adjust properties and manipulate artwork without dismissing them. */
+.touch-properties-sheet {
+  position: fixed;
+  z-index: var(--z-drawer);
+  bottom: max(12px, env(safe-area-inset-bottom));
+  left: max(12px, env(safe-area-inset-left));
+  width: min(380px, calc(100vw - 24px));
+  max-height: min(72dvh, calc(100dvh - var(--editor-header-h) - 24px));
+  min-height: 56px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--editor-border);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px #0003;
+  transform: translateY(calc(100% + 32px));
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 200ms ease, height 180ms ease, visibility 200ms;
+}
+.touch-properties-sheet.is-open { transform: none; visibility: visible; pointer-events: auto; }
+.touch-properties-sheet.is-dragging { transition: none; }
+.touch-properties-header { display: flex; align-items: center; flex: 0 0 54px; border-bottom: 1px solid var(--editor-border); padding-inline: 8px; }
+.touch-properties-header button { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; }
+.touch-properties-grip { flex: 1; align-self: stretch; display: flex; align-items: center; gap: 10px; touch-action: none; cursor: ns-resize; font-size: 12px; font-weight: 700; user-select: none; }
+.touch-properties-grip > span:first-child { width: 32px; height: 4px; background: var(--editor-border); border-radius: 4px; }
+.touch-properties-content { flex: 1; min-height: 0; overflow: hidden; }
+.touch-properties-content > * { height: 100%; min-height: 0; }
+@media (orientation: landscape) {
+  .touch-properties-sheet { width: min(340px, 42vw); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .touch-properties-sheet { transition: none; }
 }

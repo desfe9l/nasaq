@@ -17,7 +17,7 @@ import { ElementNode } from "./ElementNode";
 import { PrintGuides } from "./PrintGuides";
 import { FloatingToolbar } from "./FloatingToolbar";
 import { toast } from "sonner";
-import { zoomAnchoredAt } from "@/lib/editor/viewport";
+import { beginCanvasNavigation, zoomAnchoredAt } from "@/lib/editor/viewport";
 import {
   LIBRARY_DND_MIME,
   insertLibraryDrop,
@@ -33,6 +33,8 @@ import {
   resetPenInput,
   updatePenHover,
 } from "@/lib/editor/pen-input";
+
+import { CanvasPointerSession, LONG_PRESS_MS, POINTER_SLOP } from "@/lib/editor/canvas-pointer";
 
 type Op = {
   kind: "move" | "resize" | "rotate";
@@ -175,27 +177,13 @@ export function CanvasStage({
   const opRef = useRef<Op>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const spaceDown = useRef(false);
-  const touchPan = useRef<{
-    x: number;
-    y: number;
-    scrollLeft: number;
-    scrollTop: number;
-    distance: number;
-    mode: "pan" | "pinch" | null;
-  } | null>(null);
-  // لتتبع ضغطات اللمس المتعدد للتراجع/الإعادة
-  const multiTouchTap = useRef<{
-    count: number;
-    startTime: number;
-    startX: number;
-    startY: number;
-  } | null>(null);
-  const singleTouchPan = useRef<{
-    startX: number;
-    startY: number;
-    scrollLeft: number;
-    scrollTop: number;
-  } | null>(null);
+  const input = useRef<CanvasPointerSession | null>(null);
+  if (!input.current) input.current = new CanvasPointerSession({
+    navigate: (start) => stageRef.current
+      ? beginCanvasNavigation(stageRef.current, start) : () => {},
+    undo: () => useEditor.getState().undo(),
+    redo: () => useEditor.getState().redo(),
+  });
 
   const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({
     v: [],
@@ -255,137 +243,24 @@ export function CanvasStage({
   }, []);
 
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-
-    const midpoint = (touches: TouchList) => ({
-      x: (touches[0].clientX + touches[1].clientX) / 2,
-      y: (touches[0].clientY + touches[1].clientY) / 2,
-      distance: Math.hypot(
-        touches[0].clientX - touches[1].clientX,
-        touches[0].clientY - touches[1].clientY,
-      ),
-    });
-
-    const onStart = (event: TouchEvent) => {
-      // كشف ضغطات بإصبعين/ثلاثة للتراجع/الإعادة
-      if (event.touches.length === 2 || event.touches.length === 3) {
-        const mid = midpoint(event.touches);
-        multiTouchTap.current = {
-          count: event.touches.length,
-          startTime: Date.now(),
-          startX: mid.x,
-          startY: mid.y,
-        };
-      }
-      if (event.touches.length !== 2) {
-        if (event.touches.length !== 1) touchPan.current = null;
-        // لا نلغي singleTouchPan هنا — قد يكون بان بإصبع واحد
-        return;
-      }
-      if (opRef.current) {
-        touchPan.current = null;
-        return;
-      }
-      setMarquee(null);
-      setLayerPicker(null);
-      const mid = midpoint(event.touches);
-      touchPan.current = {
-        x: mid.x,
-        y: mid.y,
-        scrollLeft: stage.scrollLeft,
-        scrollTop: stage.scrollTop,
-        distance: Math.max(24, mid.distance),
-        mode: null,
-      };
-    };
-
-    const onMove = (event: TouchEvent) => {
-      // إذا كان هناك عنصر يتحرك، امنع سلوك المتصفح الافتراضي
-      if (opRef.current) {
-        event.preventDefault();
-        return;
-      }
-      // كشف حركة لضغطات متعددة — إذا تحركت كثيراً، لا تعتبر Tap
-      if (multiTouchTap.current && event.touches.length === multiTouchTap.current.count) {
-        const mid = midpoint(event.touches);
-        const moveDist = Math.hypot(mid.x - multiTouchTap.current.startX, mid.y - multiTouchTap.current.startY);
-        if (moveDist > 18) {
-          multiTouchTap.current = null;
-        }
-      } else if (multiTouchTap.current && event.touches.length !== multiTouchTap.current.count) {
-        multiTouchTap.current = null;
-      }
-
-      // بان بإصبع واحد ذكي — إذا بدأ على مساحة فارغة ولا يوجد تحديد
-      if (singleTouchPan.current && event.touches.length === 1) {
-        event.preventDefault();
-        const t = event.touches[0];
-        stage.scrollLeft = singleTouchPan.current.scrollLeft - (t.clientX - singleTouchPan.current.startX);
-        stage.scrollTop = singleTouchPan.current.scrollTop - (t.clientY - singleTouchPan.current.startY);
-        return;
-      }
-
-      if (!touchPan.current || event.touches.length !== 2) return;
-      event.preventDefault();
-      const mid = midpoint(event.touches);
-      if (!touchPan.current.mode) {
-        const spread = Math.abs(mid.distance - touchPan.current.distance);
-        const shift = Math.hypot(mid.x - touchPan.current.x, mid.y - touchPan.current.y);
-        if (spread > 10 && spread > shift) touchPan.current.mode = "pinch";
-        else if (shift > 8) touchPan.current.mode = "pan";
-        else return;
-      }
-      if (touchPan.current.mode === "pinch") {
-        const ratio = mid.distance / touchPan.current.distance;
-        const prev = useEditor.getState().zoom;
-        const next = Math.min(2, Math.max(0.2, prev * ratio));
-        if (Math.abs(next - prev) > 0.004) {
-          zoomAnchoredAt(stage, prev, next, mid.x, mid.y);
-          touchPan.current.distance = mid.distance;
-        }
-        return;
-      }
-      stage.scrollLeft = touchPan.current.scrollLeft - (mid.x - touchPan.current.x);
-      stage.scrollTop = touchPan.current.scrollTop - (mid.y - touchPan.current.y);
-    };
-
-    const onEnd = (event: TouchEvent) => {
-      // معالجة Two-finger tap → Undo و Three-finger tap → Redo
-      if (multiTouchTap.current && event.touches.length === 0) {
-        const elapsed = Date.now() - multiTouchTap.current.startTime;
-        if (elapsed < 350) {
-          const state = useEditor.getState();
-          if (multiTouchTap.current.count === 2) {
-            // Two-finger tap → Undo
-            state.undo();
-            toast.info("تراجع — Two-finger tap");
-          } else if (multiTouchTap.current.count === 3) {
-            // Three-finger tap → Redo
-            state.redo();
-            toast.info("إعادة — Three-finger tap");
-          }
-        }
-      }
-      if (event.touches.length === 0) {
-        multiTouchTap.current = null;
-        touchPan.current = null;
-        singleTouchPan.current = null;
-      } else if (event.touches.length === 1) {
-        // بقي إصبع واحد بعد رفع الثاني — ألغِ بان الإصبعين
-        touchPan.current = null;
-      }
-    };
-
-    stage.addEventListener("touchstart", onStart, { passive: false });
-    stage.addEventListener("touchmove", onMove, { passive: false });
-    stage.addEventListener("touchend", onEnd);
-    stage.addEventListener("touchcancel", onEnd);
+    const session = input.current!;
+    const move = (event: PointerEvent) => session.move(event);
+    const up = (event: PointerEvent) => session.end(event);
+    const cancel = (event: PointerEvent) => session.end(event, true);
+    const reset = () => session.reset();
+    const visibility = () => { if (document.hidden) reset(); };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("blur", reset);
+    document.addEventListener("visibilitychange", visibility);
     return () => {
-      stage.removeEventListener("touchstart", onStart);
-      stage.removeEventListener("touchmove", onMove);
-      stage.removeEventListener("touchend", onEnd);
-      stage.removeEventListener("touchcancel", onEnd);
+      reset();
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("blur", reset);
+      document.removeEventListener("visibilitychange", visibility);
     };
   }, []);
 
@@ -540,6 +415,7 @@ export function CanvasStage({
       e.preventDefault();
       return;
     }
+    if (e.button !== 0 || input.current!.busy) return;
     onCanvasTap?.();
     setLayerPicker(null);
     if (el.locked) {
@@ -586,10 +462,12 @@ export function CanvasStage({
       }
     }
     e.stopPropagation();
+    // Direct manipulation replaces native text/image dragging, only here.
     e.preventDefault();
-    try {
-      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    } catch {}
+    const captureTarget = stageRef.current!;
+    if (e.pointerType !== "mouse") {
+      try { captureTarget.setPointerCapture(e.pointerId); } catch { /* detached */ }
+    }
 
     setActivePage(page.id);
 
@@ -598,10 +476,10 @@ export function CanvasStage({
     const size = pageSize(page);
     const rect = pageEl.getBoundingClientRect();
     const toMm = (ev: { clientX: number; clientY: number }) =>
-      pagePoint(rect, size, ev.clientX, ev.clientY);
+      pagePoint(pageEl.getBoundingClientRect(), size, ev.clientX, ev.clientY);
 
     const start = toMm(e);
-    const slopMm = Math.max(0.2, (4 * size.w) / Math.max(1, rect.width));
+    const slopMm = Math.max(0.2, (POINTER_SLOP * size.w) / Math.max(1, rect.width));
     let maxDist = 0;
 
     const enteredGroup = enteredGroupId
@@ -615,7 +493,6 @@ export function CanvasStage({
       (e.pointerType === "touch" || e.pointerType === "pen");
     let decided = !defer;
     let heldLong = false;
-    let tapTimer: ReturnType<typeof setTimeout> | undefined;
     let longPressTimer: ReturnType<typeof setTimeout> | undefined;
     let longPressFired = false;
 
@@ -677,53 +554,20 @@ export function CanvasStage({
       };
     };
 
-    if (decided) {
-      beginGesture();
-    } else {
-      tapTimer = setTimeout(() => {
-        tapTimer = undefined;
-        if (decided) return;
-        decided = true;
-        heldLong = true;
-        const fresh = useEditor.getState();
-        const had = fresh.selectedIds.includes(el.id);
-        if (!had) {
-          toggleSelect(el.id);
-          toast.info("تمت إضافة العنصر إلى التحديد");
-        } else if (fresh.selectedIds.length > 1) {
-          toggleSelect(el.id);
-          toast.info("تمت إزالة العنصر من التحديد");
-        }
-      }, 450);
-    }
+    if (decided) beginGesture();
 
-    // ضغط مطوّل للـ Touch و Apple Pencil → Context Menu
-    if (e.pointerType === "touch" || e.pointerType === "pen") {
+    // One long-press timer, only for element bodies. Handles never open menus.
+    if (defer) {
       longPressTimer = setTimeout(() => {
+        input.current!.lock(e.pointerId);
         longPressFired = true;
         heldLong = true;
-        // ألغِ أي حركة جارية
-        if (opRef.current) {
-          opRef.current = null;
-          setGuides({ v: [], h: [] });
-          setRotationHint(null);
-        }
-        // افتح Context Menu بجانب نقطة الضغط
-        const state = useEditor.getState();
-        if (!state.selectedIds.includes(el.id)) {
-          state.select(el.id);
-        }
-        state.openContextMenu({
-          x: e.clientX,
-          y: e.clientY,
-          targetId: el.id,
-          source: "canvas",
+        decided = true;
+        applyPressSelection();
+        useEditor.getState().openContextMenu({
+          x: e.clientX, y: e.clientY, targetId: el.id, source: "canvas",
         });
-        // اهتزاز خفيف إن توفر
-        try {
-          (navigator as any).vibrate?.(20);
-        } catch {}
-      }, 600);
+      }, LONG_PRESS_MS);
     }
 
     const others = page.elements.filter((x) => x.id !== el.id && !x.hidden);
@@ -735,14 +579,11 @@ export function CanvasStage({
         const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
         if (dist < slopMm) return;
         decided = true;
-        if (tapTimer !== undefined) {
-          clearTimeout(tapTimer);
-          tapTimer = undefined;
-        }
         if (longPressTimer !== undefined) {
           clearTimeout(longPressTimer);
           longPressTimer = undefined;
         }
+        input.current!.lock(e.pointerId);
         beginGesture();
         maxDist = dist;
       }
@@ -868,13 +709,8 @@ export function CanvasStage({
     };
 
     const detach = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", cancel);
-      if (tapTimer !== undefined) {
-        clearTimeout(tapTimer);
-        tapTimer = undefined;
-      }
+      // Capture belongs to the stage until native up/cancel, including promotion
+      // from a pending element press to a two-finger gesture.
       if (longPressTimer !== undefined) {
         clearTimeout(longPressTimer);
         longPressTimer = undefined;
@@ -895,7 +731,7 @@ export function CanvasStage({
         applyPressSelection();
       }
       detach();
-      const wasTap = !heldLong && maxDist < slopMm;
+      const wasTap = kind === "move" && !heldLong && maxDist < slopMm;
 
       if (wasTap) {
         // تحقق من العناصر المتداخلة — إذا كان هناك أكثر من عنصر في نقطة الضغط، اعرض قائمة اختيار
@@ -911,7 +747,7 @@ export function CanvasStage({
             if (shouldShowPicker) {
               // تأخير صغير لتجنب التعارض مع double-tap
               setTimeout(() => {
-                const stillTap = !opRef.current;
+                const stillTap = !input.current!.busy;
                 if (stillTap) {
                   setLayerPicker({
                     x: ev.clientX,
@@ -949,9 +785,7 @@ export function CanvasStage({
       if (hadGesture) commit();
     };
 
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", cancel);
+    input.current!.claim(e, { move, end: up, cancel, yieldable: defer });
   };
 
   const pickables = (page: Page): { id: string; box: Box }[] => {
@@ -983,233 +817,91 @@ export function CanvasStage({
   })();
 
   const startMarquee = (e: React.PointerEvent, page: Page) => {
-    if (isPalmTouch(e)) {
-      e.stopPropagation();
-      e.preventDefault();
-      return;
-    }
+    if (e.button !== 0 || input.current!.busy || isPalmTouch(e)) return;
     const pageEl = pageRefs.current[page.id];
     if (!pageEl) return;
+    e.stopPropagation();
     const size = pageSize(page);
-    const rect = pageEl.getBoundingClientRect();
     const toMm = (ev: { clientX: number; clientY: number }) =>
-      pagePoint(rect, size, ev.clientX, ev.clientY);
+      pagePoint(pageEl.getBoundingClientRect(), size, ev.clientX, ev.clientY);
     const start = toMm(e);
-
-    // سلوك ذكي للـ Touch: إذا بدأ اللمس على مساحة فارغة ولا يوجد تحديد، اسمح بالـ Pan بإصبع واحد
-    if (e.pointerType === "touch") {
-      const fresh = useEditor.getState();
-      const hits = elementsAtPoint(page, enteredGroupId, start.x, start.y);
-      if (hits.length === 0 && fresh.selectedIds.length === 0) {
-        // بان بإصبع واحد — مساحة فارغة ولا يوجد تحديد
-        e.stopPropagation();
-        e.preventDefault();
-        const stage = stageRef.current;
-        if (!stage) return;
-        try {
-          (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-        } catch {}
-        singleTouchPan.current = {
-          startX: e.clientX,
-          startY: e.clientY,
-          scrollLeft: stage.scrollLeft,
-          scrollTop: stage.scrollTop,
-        };
-        const move = (ev: PointerEvent) => {
-          if (!singleTouchPan.current) return;
-          stage.scrollLeft =
-            singleTouchPan.current.scrollLeft - (ev.clientX - singleTouchPan.current.startX);
-          stage.scrollTop =
-            singleTouchPan.current.scrollTop - (ev.clientY - singleTouchPan.current.startY);
-        };
-        const up = () => {
-          singleTouchPan.current = null;
-          window.removeEventListener("pointermove", move);
-          window.removeEventListener("pointerup", up);
-          window.removeEventListener("pointercancel", cancel);
-        };
-        const cancel = () => {
-          singleTouchPan.current = null;
-          window.removeEventListener("pointermove", move);
-          window.removeEventListener("pointerup", up);
-          window.removeEventListener("pointercancel", cancel);
-        };
-        window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", up);
-        window.addEventListener("pointercancel", cancel);
-        return;
-      }
-    }
-
-    // ضغط مطوّل على مساحة فارغة → Context Menu للمساحة الفارغة (Touch/Pen)
-    let longPressTimer: ReturnType<typeof setTimeout> | undefined;
-    let longPressFired = false;
-    if (e.pointerType === "touch" || e.pointerType === "pen") {
-      longPressTimer = setTimeout(() => {
-        longPressFired = true;
-        const state = useEditor.getState();
-        state.openContextMenu({
-          x: e.clientX,
-          y: e.clientY,
-          targetId: null,
-          source: "canvas",
-        });
-        try {
-          (navigator as any).vibrate?.(20);
-        } catch {}
-        setMarquee(null);
-      }, 650);
-    }
-
-    if (drawTool) {
-      const move = (ev: PointerEvent) => {
-        if (longPressFired) return;
-        const cur = toMm(ev);
-        setMarquee({ x0: start.x, y0: start.y, x1: cur.x, y1: cur.y });
-      };
-      const finish = () => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
-        window.removeEventListener("pointercancel", cancel);
-        if (longPressTimer) clearTimeout(longPressTimer);
-      };
-      const up = (ev: PointerEvent) => {
-        if (longPressFired) {
-          finish();
-          return;
-        }
-        finish();
-        const end = toMm(ev);
-        setMarquee(null);
-        setDrawTool(null);
-        const w = Math.max(MIN_SIZE, Math.abs(end.x - start.x));
-        const h = Math.max(MIN_SIZE, Math.abs(end.y - start.y));
-        const box = {
-          x: Math.min(start.x, end.x),
-          y: Math.min(start.y, end.y),
-          w,
-          h,
-        };
-        if (drawTool === "rect") {
-          addElementAt("box", box);
-          return;
-        }
-        const id = addTextAt(box, page.id);
-        if (id) {
-          requestAnimationFrame(() => requestEdit(page.id, id));
-        }
-      };
-      const cancel = () => {
-        finish();
-        setMarquee(null);
-        setDrawTool(null);
-      };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
-      window.addEventListener("pointercancel", cancel);
-      return;
-    }
-    const additive = e.shiftKey;
-    const before = additive ? [...selectedIds] : [];
+    const stage = stageRef.current!;
+    const scroll = { x: stage.scrollLeft, y: stage.scrollTop };
+    const pan = e.pointerType === "touch" && !drawTool && !selectedIds.length;
+    const before = e.shiftKey ? [...selectedIds] : [];
     const candidates = pickables(page);
     let moved = false;
-
-    const move = (ev: PointerEvent) => {
-      if (longPressFired) return;
-      if (longPressTimer) {
-        const cur = toMm(ev);
-        const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
-        if (dist > 0.5) {
-          clearTimeout(longPressTimer);
-          longPressTimer = undefined;
-        } else {
+    let held = false;
+    const timer = !drawTool && e.pointerType !== "mouse" ? setTimeout(() => {
+      held = true;
+      input.current!.lock(e.pointerId);
+      useEditor.getState().openContextMenu({
+        x: e.clientX, y: e.clientY, targetId: null, source: "canvas",
+      });
+    }, LONG_PRESS_MS) : undefined;
+    const finish = () => {
+      clearTimeout(timer);
+      setMarquee(null);
+    };
+    input.current!.claim(e, {
+      yieldable: e.pointerType === "touch",
+      move: (ev) => {
+        if (held) return;
+        if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < POINTER_SLOP) return;
+        clearTimeout(timer);
+        moved = true;
+        // A blank one-finger pan may promote to a two-finger navigation;
+        // drawing/marquee selection, like an element drag, owns its pointer.
+        if (!pan) input.current!.lock(e.pointerId);
+        if (pan) {
+          stage.scrollLeft = scroll.x - (ev.clientX - e.clientX);
+          stage.scrollTop = scroll.y - (ev.clientY - e.clientY);
           return;
         }
-      }
-      const cur = toMm(ev);
-      moved = true;
-      const box: Box = {
-        x: Math.min(start.x, cur.x),
-        y: Math.min(start.y, cur.y),
-        w: Math.abs(cur.x - start.x),
-        h: Math.abs(cur.y - start.y),
-      };
-      setMarquee({
-        x0: box.x,
-        y0: box.y,
-        x1: box.x + box.w,
-        y1: box.y + box.h,
-      });
-      const hits = candidates
-        .filter(
-          (p) =>
-            p.box.x < box.x + box.w &&
-            p.box.x + p.box.w > box.x &&
-            p.box.y < box.y + box.h &&
-            p.box.y + p.box.h > box.y,
-        )
-        .map((p) => p.id);
-      selectMany([...before, ...hits.filter((id) => !before.includes(id))]);
-    };
-
-    const finish = () => {
-      setMarquee(null);
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", cancel);
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = undefined;
-      }
-    };
-
-    const up = (ev: PointerEvent) => {
-      if (longPressFired) {
-        finish();
-        return;
-      }
-      finish();
-      if (!moved && !additive && ev.button === 0) {
-        // عند الضغط على نقطة تحتوي أكثر من عنصر — تحقق من التداخل
-        const hits = elementsAtPoint(page, enteredGroupId, start.x, start.y);
-        if (hits.length > 1) {
-          // اختر العنصر المناسب مباشرة عندما يكون واضحًا، وإلا اعرض القائمة
-          const top = hits[0];
-          const fresh = useEditor.getState();
-          const alreadySelected = fresh.selectedIds.includes(top.id);
-          if (ev.pointerType === "pen" || ev.pointerType === "touch") {
-            // للـ Pencil واللمس: إذا كان هناك تداخل صعب، اعرض القائمة
-            if (hits.length >= 2) {
-              setLayerPicker({
-                x: ev.clientX,
-                y: ev.clientY,
-                clientX: ev.clientX,
-                clientY: ev.clientY,
-                pageId: page.id,
-                point: start,
-                elements: hits,
-              });
-              // اختر الأعلى أيضاً كافتراضي
-              select(top.id);
-              return;
-            }
-          }
-          if (!alreadySelected) {
-            select(top.id);
-            return;
-          }
+        const cur = toMm(ev);
+        const box = { x: Math.min(start.x, cur.x), y: Math.min(start.y, cur.y),
+          w: Math.abs(cur.x - start.x), h: Math.abs(cur.y - start.y) };
+        setMarquee({ x0: box.x, y0: box.y, x1: box.x + box.w, y1: box.y + box.h });
+        if (!drawTool) {
+          const hits = candidates.filter(p => p.box.x < box.x + box.w && p.box.x + p.box.w > box.x &&
+            p.box.y < box.y + box.h && p.box.y + p.box.h > box.y).map(p => p.id);
+          selectMany([...new Set([...before, ...hits])]);
         }
-        select(null);
+      },
+      end: (ev) => {
+        finish();
+        if (held) return;
+        if (drawTool) {
+          const end = toMm(ev);
+          const box = { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y),
+            w: Math.max(MIN_SIZE, Math.abs(end.x - start.x)), h: Math.max(MIN_SIZE, Math.abs(end.y - start.y)) };
+          setDrawTool(null);
+          if (drawTool === "rect") addElementAt("box", box);
+          else {
+            const id = addTextAt(box, page.id);
+            if (id) requestAnimationFrame(() => requestEdit(page.id, id));
+          }
+        } else if (!moved && !e.shiftKey) select(null);
+      },
+      cancel: finish,
+    });
+  };
+
+  // Geometry is relative to each artboard, NOT bounded by it. Rendering and
+  // export clipping stay unchanged; visible workspace overflow remains usable.
+  const workspaceHit = (x: number, y: number) => {
+    for (const page of [...visible].reverse()) {
+      const node = pageRefs.current[page.id];
+      if (!node) continue;
+      const point = pagePoint(node.getBoundingClientRect(), pageSize(page), x, y);
+      const hits = elementsAtPoint(page, enteredGroupId, point.x, point.y).filter(el => !el.locked);
+      const el = hits.find(el => selectedSet.has(el.id)) || hits[0];
+      if (el) {
+        const group = enteredGroupId ? findElement(page.elements, enteredGroupId)?.el : null;
+        return { page, el, parent: group ? { x: group.x, y: group.y } : undefined };
       }
-    };
-
-    const cancel = () => {
-      finish();
-    };
-
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", cancel);
+    }
+    return null;
   };
 
   return (
@@ -1223,47 +915,50 @@ export function CanvasStage({
       )}
       style={{ "--editor-zoom": zoom } as React.CSSProperties}
       dir="ltr"
+      onLostPointerCapture={(e) => input.current!.end(e.nativeEvent, true)}
       onPointerDownCapture={(e) => {
-        if (isPalmTouch(e)) {
+        if (isPalmTouch(e)) { e.stopPropagation(); return; }
+        const target = e.target as HTMLElement;
+        if (target.closest("button, input, textarea, select, [contenteditable=true], .floating-toolbar, .layer-picker-popup")) return;
+        if (input.current!.down(e.nativeEvent)) {
           e.stopPropagation();
-          e.preventDefault();
+          try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* detached */ }
           return;
         }
-        if (!spaceDown.current || !stageRef.current) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const stage = stageRef.current;
-        const startX = e.clientX;
-        const startY = e.clientY;
-        const scrollLeft = stage.scrollLeft;
-        const scrollTop = stage.scrollTop;
-        const move = (event: PointerEvent) => {
-          stage.scrollLeft = scrollLeft - (event.clientX - startX);
-          stage.scrollTop = scrollTop - (event.clientY - startY);
-        };
-        const up = () => {
-          window.removeEventListener("pointermove", move);
-          window.removeEventListener("pointerup", up);
-        };
-        window.addEventListener("pointermove", move);
-        window.addEventListener("pointerup", up);
+        if (spaceDown.current && e.pointerType === "mouse" && e.button === 0 && !target.closest(".handle, .rotate-handle")) {
+          e.preventDefault(); // Space+drag replaces native text selection.
+          e.stopPropagation();
+          const stage = e.currentTarget;
+          const left = stage.scrollLeft, top = stage.scrollTop;
+          input.current!.claim(e, { yieldable: false,
+            move: ev => { stage.scrollLeft = left - (ev.clientX - e.clientX); stage.scrollTop = top - (ev.clientY - e.clientY); },
+            end: () => {}, cancel: () => {},
+          });
+          return;
+        }
+        // Handles keep first refusal. Geometry then resolves selected artwork
+        // ahead of other elements, including overflow outside the page DOM box.
+        if (e.button === 0 && !target.closest(".handle, .rotate-handle")) {
+          const hit = workspaceHit(e.clientX, e.clientY);
+          if (hit) startOp(e, hit.page, hit.el, "move", undefined, hit.parent);
+        }
       }}
       onPointerDown={(e) => {
-        if (isPalmTouch(e)) return;
-        // إغلاق قائمة الطبقات عند الضغط خارجها
-        if (layerPicker) {
-          const target = e.target as HTMLElement;
-          if (!target.closest(".layer-picker-popup")) {
-            setLayerPicker(null);
-          }
-        }
+        if (isPalmTouch(e) || input.current!.busy) return;
+        const target = e.target as HTMLElement;
+        if (target.closest("button, input, textarea, select, [contenteditable=true], .floating-toolbar, .layer-picker-popup")) return;
+        setLayerPicker(null);
         onCanvasTap?.();
-        if (e.button === 0) {
-          // لا نمسح التحديد إذا كان الضغط على مساحة فارغة ولكن هناك قائمة طبقات مفتوحة
-          if (!layerPicker) {
-            // سيتم التعامل مع المسح في startMarquee إذا لزم الأمر
-          }
-        }
+        const page = pages.find(p => p.id === activePageId);
+        if (page) startMarquee(e, page);
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault(); // Only the canvas replaces the browser context menu.
+        e.stopPropagation();
+        const hit = workspaceHit(e.clientX, e.clientY);
+        const state = useEditor.getState();
+        if (hit) { state.setActivePage(hit.page.id); if (!state.selectedIds.includes(hit.el.id)) state.select(hit.el.id); }
+        state.openContextMenu({ x: e.clientX, y: e.clientY, targetId: hit?.el.id ?? null, source: "canvas" });
       }}
       onDragOver={(e) => {
         const isFile = e.dataTransfer.types.includes("Files");
@@ -1287,7 +982,6 @@ export function CanvasStage({
           if (at) {
             setActivePage(at.pageId);
             const store = useEditor.getState();
-            // @ts-ignore
             if (store.insertGraphicHeadingAt) store.insertGraphicHeadingAt(graphicId as any, { x: at.x, y: at.y });
           }
           return;
@@ -1718,7 +1412,7 @@ function SelectionFrame({
         width: `${visualW}mm`,
         height: `${visualH}mm`,
         transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
-      }}
+      } as React.CSSProperties}
       onPointerDown={(e) => {
         if (isPalmTouch(e)) {
           e.stopPropagation();

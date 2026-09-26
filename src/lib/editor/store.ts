@@ -112,6 +112,7 @@ import {
   clampPagesHeight,
   extractSvgMarkup,
   isOverlayViewport,
+  isTouchPropertiesViewport,
 } from "./ui-state";
 
 /*
@@ -1556,7 +1557,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     setRightTab: (rightTab) => set({ rightTab, rightOpen: true }),
 
     toggleSidebar: (side) => {
-      const overlay = isOverlayViewport();
+      const overlay = isOverlayViewport() || (side === "right" && isTouchPropertiesViewport());
       // Docked panels persist as `*Collapsed`; floating ones as `*Open`.
       const key =
         side === "left"
@@ -1701,7 +1702,7 @@ export const useEditor = create<EditorStore>((set, get) => {
          * on every canvas tap would fight the "tap the canvas to dismiss the
          * drawer" rule (the tap would close it and instantly reopen it).
          */
-        rightOpen: id && !isOverlayViewport() ? true : s.rightOpen,
+        rightOpen: id && !isOverlayViewport() && !isTouchPropertiesViewport() ? true : s.rightOpen,
       })),
 
     setEditing: (id) => set({ editingId: id }),
