@@ -93,12 +93,32 @@ export function GumroadGatewayCard({ visible }: { visible: boolean }) {
         <p className="p-6 text-center text-xs text-slate-500">{busy ? "جارٍ التحميل…" : "لا توجد بيانات بعد."}</p>
       ) : (
         <div className="grid gap-4 p-4 lg:grid-cols-2">
-          <StatusRow label="Product status" state={status.product.state} detail={status.product.remoteName ? `${status.product.remoteName}${status.product.remotePublished === false ? " (غير منشور!)" : ""}` : status.product.publicPageUrl} href={status.product.publicPageUrl} />
+          <StatusRow
+            label="Product status"
+            state={status.product.state}
+            detail={[
+              status.product.remoteName ?? status.product.publicPageUrl,
+              status.product.remotePublished === false ? " — غير منشور!" : "",
+              ` · product_id: ${status.product.productId ?? "غير مُستخرج"}`,
+              status.product.productIdSource === "api" ? " (من Gumroad API)" : status.product.productIdSource === "env" ? " (من المتغيرات)" : "",
+              typeof status.product.remoteProductCount === "number" && status.product.remoteProductCount > 1
+                ? ` · المتجر يحتوي ${status.product.remoteProductCount} منتجات — ثبّت GUMROAD_PRODUCT_ID`
+                : "",
+            ].join("")}
+            href={status.product.publicPageUrl}
+          />
           <StatusRow label="API status" state={status.api.state} detail={status.api.detail} />
           <StatusRow
             label="Ping status"
             state={status.ping.state}
             detail={`${status.ping.endpointUrl}${status.ping.lastPingAt ? ` · آخر Ping: ${status.ping.lastPingStatus} ${new Date(status.ping.lastPingAt).toLocaleString("ar")}` : " · لم يصل أي Ping بعد"}`}
+          />
+          <StatusRow
+            label="الربط (Buyer → حساب)"
+            state={status.binding.state}
+            detail={`${status.binding.bound} مربوطة من ${status.binding.total} عضوية · ${status.binding.pendingClaim} بانتظار ربط حساب${
+              status.binding.unboundEmails > 0 ? ` · ${status.binding.unboundEmails} بريد بلا حساب بعد` : ""
+            }`}
           />
           <StatusRow
             label="Product/Tier mapping"
@@ -144,6 +164,18 @@ export function GumroadGatewayCard({ visible }: { visible: boolean }) {
               <p className="mt-2 flex items-start gap-2 text-[11px] leading-5 text-amber-300">
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                 متغيرات ناقصة في Vercel: <code className="font-mono">{status.missingVariables.join(", ")}</code> — تُضاف في Vercel فقط دون إرسالها في الدردشة.
+              </p>
+            )}
+            {status.recommendedVariables.length > 0 && status.missingVariables.length === 0 && (
+              <p className="mt-2 flex items-start gap-2 text-[11px] leading-5 text-slate-400">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                اختياري لكن مُستحسن: <code className="font-mono">{status.recommendedVariables.join(", ")}</code> — بدونه يُستخرج معرّف المنتج تلقائيًا من Gumroad API بالـ permalink.
+              </p>
+            )}
+            {status.product.state === "Missing" && (
+              <p className="mt-2 flex items-start gap-2 text-[11px] leading-5 text-amber-300">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                معرّف المنتج غير مُستخرج: أضف <code className="font-mono">GUMROAD_ACCESS_TOKEN</code> ليُشتق من Gumroad API، أو ثبّت <code className="font-mono">GUMROAD_PRODUCT_ID</code> يدويًا.
               </p>
             )}
           </div>

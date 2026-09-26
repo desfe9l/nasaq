@@ -30,6 +30,11 @@ import {
   type GumroadPingFields,
 } from "./ping.server.ts";
 import { claimGumroadSubscriptionsForUser } from "./claim.server.ts";
+import {
+  resetGumroadProductIdCache,
+  resolveGumroadProductId,
+} from "./config.server.ts";
+import { verifyGumroadLicense, verifyGumroadSale } from "./api.server.ts";
 
 // ── Fixture helpers ──────────────────────────────────────────────────────────
 
@@ -550,5 +555,193 @@ describe("Gumroad pipeline end-to-end", () => {
       setTestSql(undefined);
       await close();
     }
+  });
+});
+
+// ── Product-id resolution (never assume the permalink IS the product id) ─────
+
+const GUMROAD_ENV_KEYS = ["GUMROAD_ACCESS_TOKEN", "GUMROAD_PRODUCT_ID"] as const;
+
+/** Snapshot/restore the Gumroad env so tests never leak into each other. */
+function withGumroadEnv<T>(values: Partial<Record<(typeof GUMROAD_ENV_KEYS)[number], string>>, run: () => Promise<T>): Promise<T> {
+  const saved = new Map<string, string | undefined>();
+  for (const key of GUMROAD_ENV_KEYS) saved.set(key, process.env[key]);
+  for (const key of GUMROAD_ENV_KEYS) delete process.env[key];
+  for (const [key, value] of Object.entries(values)) if (value !== undefined) process.env[key] = value;
+  resetGumroadProductIdCache();
+  return run().finally(() => {
+    for (const [key, value] of saved) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    resetGumroadProductIdCache();
+  });
+}
+
+/** Stub globalThis.fetch for the duration of one call; returns what was sent. */
+async function withStubbedFetch<T>(
+  handler: (url: string) => { status: number; payload: unknown },
+  run: () => Promise<T>,
+): Promise<{ result: T; urls: string[]; bodies: string[] }> {
+  const original = globalThis.fetch;
+  const urls: string[] = [];
+  const bodies: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    urls.push(url);
+    // `apiFetch` sends a URLSearchParams instance for POST, so stringify either.
+    const raw = init?.body;
+    bodies.push(
+      typeof raw === "string"
+        ? raw
+        : raw instanceof URLSearchParams
+          ? raw.toString()
+          : raw
+            ? String(raw)
+            : "",
+    );
+    const { status, payload } = handler(url);
+    return new Response(JSON.stringify(payload), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  }) as typeof fetch;
+  try {
+    const result = await run();
+    return { result, urls, bodies };
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+describe("Gumroad product id resolution", () => {
+  it("prefers the explicitly configured GUMROAD_PRODUCT_ID over the API", async () => {
+    await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "tok", GUMROAD_PRODUCT_ID: "PINNED_ID" }, async () => {
+      const { result, urls } = await withStubbedFetch(
+        () => ({ status: 200, payload: { products: [{ id: "API_ID", permalink: "auaewk" }] } }),
+        () => resolveGumroadProductId(),
+      );
+      assert.deepEqual(result, { id: "PINNED_ID", source: "env" });
+      assert.equal(urls.length, 0, "an explicit id must not cost an API round trip");
+    });
+  });
+
+  it("derives the real product id from the API by permalink when unset", async () => {
+    await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "tok" }, async () => {
+      const { result, urls } = await withStubbedFetch(
+        () => ({
+          status: 200,
+          payload: {
+            products: [
+              { id: "OTHER_ID", permalink: "something-else", published: true },
+              { id: "32-nPainqpLj1B_WIwVlMw==", permalink: "auaewk", published: true },
+            ],
+          },
+        }),
+        () => resolveGumroadProductId(),
+      );
+      assert.deepEqual(result, { id: "32-nPainqpLj1B_WIwVlMw==", source: "api" });
+      assert.ok(urls[0]?.includes("/v2/products"), "looked the product up on the Gumroad API");
+      assert.ok(urls[0]?.includes("access_token=tok"), "the lookup is authenticated");
+    });
+  });
+
+  it("matches a product by custom_permalink and by its URL segment too", async () => {
+    await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "tok" }, async () => {
+      const { result } = await withStubbedFetch(
+        () => ({
+          status: 200,
+          payload: {
+            products: [
+              { id: "BY_CUSTOM", custom_permalink: "auaewk" },
+              { id: "BY_URL", url: "https://nasaqar.gumroad.com/l/auaewk?wanted=true" },
+            ],
+          },
+        }),
+        () => resolveGumroadProductId(),
+      );
+      assert.equal(result.id, "BY_CUSTOM");
+    });
+  });
+
+  it("stays unresolved without a token, so license verify falls back to the permalink", async () => {
+    await withGumroadEnv({}, async () => {
+      const { result, urls } = await withStubbedFetch(
+        () => ({ status: 200, payload: { products: [] } }),
+        () => resolveGumroadProductId(),
+      );
+      assert.deepEqual(result, { id: null, source: "unresolved" });
+      assert.equal(urls.length, 0, "no token means no API call is attempted");
+    });
+  });
+
+  it("does not cache a failed lookup, so a transient Gumroad error cannot poison the process", async () => {
+    await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "tok" }, async () => {
+      await withStubbedFetch(
+        () => ({ status: 500, payload: {} }),
+        () => resolveGumroadProductId(),
+      );
+      const second = await withStubbedFetch(
+        () => ({ status: 200, payload: { products: [{ id: "RECOVERED", permalink: "auaewk" }] } }),
+        () => resolveGumroadProductId(),
+      );
+      assert.deepEqual(second.result, { id: "RECOVERED", source: "api" });
+      assert.equal(second.urls.length, 1, "the failure was not memoised");
+    });
+  });
+
+  it("rejects a verified sale that belongs to a DIFFERENT Gumroad product", async () => {
+    await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "tok", GUMROAD_PRODUCT_ID: "OUR_PRODUCT" }, async () => {
+      const { result, urls } = await withStubbedFetch(
+        (url) =>
+          url.includes("/sales/")
+            ? { status: 200, payload: { sale: { id: "SALE-X", product_id: "SOMEONE_ELSES", email: "b@example.com" } } }
+            : { status: 404, payload: {} },
+        () => verifyGumroadSale({ saleId: "SALE-X", licenseKey: null }),
+      );
+      assert.equal(result.via, "none");
+      if (result.via === "none") assert.equal(result.reason, "product_mismatch");
+      assert.equal(urls.length, 1, "one authenticated sale lookup, then rejected locally");
+    });
+  });
+
+  it("rejects a license-verified sale from a different product", async () => {
+    await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "tok", GUMROAD_PRODUCT_ID: "OUR_PRODUCT" }, async () => {
+      const { result } = await withStubbedFetch(
+        () => ({
+          status: 200,
+          payload: {
+            success: true,
+            purchase: { id: "SALE-Y", product_id: "SOMEONE_ELSES", email: "b@example.com" },
+          },
+        }),
+        () => verifyGumroadSale({ saleId: null, licenseKey: "LICENSE-KEY" }),
+      );
+      assert.equal(result.via, "none");
+      if (result.via === "none") assert.equal(result.reason, "product_mismatch");
+    });
+  });
+
+  it("verifies by product_id (not permalink) once the id is known", async () => {
+    await withGumroadEnv({ GUMROAD_ACCESS_TOKEN: "tok", GUMROAD_PRODUCT_ID: "OUR_PRODUCT" }, async () => {
+      const { result, urls, bodies } = await withStubbedFetch(
+        () => ({
+          status: 200,
+          payload: {
+            success: true,
+            uses: 1,
+            purchase: { id: "SALE-Z", product_id: "OUR_PRODUCT", email: "b@example.com" },
+          },
+        }),
+        () => verifyGumroadLicense("LICENSE-KEY"),
+      );
+      assert.ok(result, "a sale on our own product verifies");
+      assert.equal(urls.length, 1);
+      // A POST carries its params in the form-encoded body, not the query string.
+      const body = bodies[0] ?? "";
+      assert.ok(body.includes("product_id=OUR_PRODUCT"), "bound by the real product id");
+      assert.ok(!body.includes("product_permalink"), "never falls back to the permalink when the id is known");
+      assert.ok(body.includes("increment_uses_count=false"), "verification never burns a license use");
+    });
   });
 });

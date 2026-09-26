@@ -13,17 +13,22 @@ export function licensingIntegrationReadiness() {
     missingPolicies,
   };
   // Gumroad is the payment gateway. Only presence flags are reported; the
-  // access token itself never leaves the server.
+  // access token itself never leaves the server. The product id is NOT required
+  // here: with a token present it is resolved from the Gumroad API by
+  // permalink (`resolveGumroadProductId`), so a single-product store is fully
+  // automated with the token alone.
+  const gumroadAccessTokenConfigured = configured("GUMROAD_ACCESS_TOKEN");
   const gumroad = {
-    accessToken: configured("GUMROAD_ACCESS_TOKEN"),
+    accessToken: gumroadAccessTokenConfigured,
     productId: configured("GUMROAD_PRODUCT_ID"),
+    productIdResolved: gumroadAccessTokenConfigured,
     pingEndpoint: "/api/webhooks/gumroad",
   };
   return {
     keygen,
     gumroad,
     checkoutConfigured: keygen.token && keygen.webhookSignature && !missingPolicies.length &&
-      gumroad.accessToken && gumroad.productId,
+      gumroad.accessToken,
     // Registration of webhooks in the providers' own portals is NOT knowable
     // from env presence or an API ping. The UI says so explicitly.
   };

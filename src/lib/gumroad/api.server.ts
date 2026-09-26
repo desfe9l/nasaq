@@ -13,7 +13,12 @@
  * The access token never appears in thrown errors, logs or return values.
  */
 
-import { gumroadAccessToken, gumroadApiConfigured, gumroadProductId, gumroadProductPermalink } from "./config.server.ts";
+import {
+  gumroadAccessToken,
+  gumroadApiConfigured,
+  gumroadProductPermalink,
+  resolveGumroadProductId,
+} from "./config.server.ts";
 
 const API_ORIGIN = "https://api.gumroad.com/v2";
 
@@ -153,11 +158,16 @@ export async function fetchGumroadSale(saleId: string): Promise<GumroadSaleView 
 /**
  * Path 2: tokenless license verification. `purchase` echoes the original sale
  * including refunded/chargeback/subscription state for membership products.
+ *
+ * Verification is bound to the real product: the explicit `GUMROAD_PRODUCT_ID`
+ * when set, otherwise the id resolved from the Gumroad API by permalink. Only
+ * when neither is available do we fall back to `product_permalink`, which
+ * products created before Jan 2023 still accept.
  */
 export async function verifyGumroadLicense(
   licenseKey: string,
 ): Promise<{ uses: number | null; purchase: GumroadSaleView } | null> {
-  const productId = gumroadProductId();
+  const { id: productId } = await resolveGumroadProductId();
   const permalink = gumroadProductPermalink();
   // Products created on/after Jan 9 2023 MUST verify by product_id; older ones
   // accept the permalink. Prefer the id, fall back to the permalink.
@@ -186,19 +196,34 @@ export type GumroadVerificationResult =
  * Production verifier: prefer the authenticated API, fall back to the
  * tokenless license check when the ping carries a license key. Test pings are
  * never passed here — they carry no real money and are answered earlier.
+ *
+ * Both paths are additionally pinned to THIS product: a sale that belongs to a
+ * different Gumroad product can never fulfill a NASAQ plan, whatever the ping
+ * body claimed.
  */
 export async function verifyGumroadSale(input: {
   saleId: string | null;
   licenseKey: string | null;
 }): Promise<GumroadVerificationResult> {
+  const { id: expectedProductId } = await resolveGumroadProductId();
   if (gumroadApiConfigured() && input.saleId) {
     const sale = await fetchGumroadSale(input.saleId);
-    if (sale) return { via: "api", sale };
+    if (sale) {
+      if (expectedProductId && sale.productId && sale.productId !== expectedProductId) {
+        return { via: "none", reason: "product_mismatch" };
+      }
+      return { via: "api", sale };
+    }
     if (!input.licenseKey) return { via: "none", reason: "sale_not_found" };
   }
   if (input.licenseKey) {
     const verified = await verifyGumroadLicense(input.licenseKey);
-    if (verified) return { via: "license", sale: verified.purchase };
+    if (verified) {
+      if (expectedProductId && verified.purchase.productId && verified.purchase.productId !== expectedProductId) {
+        return { via: "none", reason: "product_mismatch" };
+      }
+      return { via: "license", sale: verified.purchase };
+    }
     return { via: "none", reason: "license_not_verified" };
   }
   return { via: "none", reason: gumroadApiConfigured() ? "sale_not_found" : "verification_unavailable" };
@@ -242,8 +267,10 @@ function subscriberFromRecord(record: Record<string, unknown>): GumroadSubscribe
 /** Look up a membership subscriber by buyer email (owner-triggered sync only). */
 export async function findGumroadSubscriberByEmail(email: string): Promise<GumroadSubscriberView | null> {
   const token = requireToken();
-  const productId = gumroadProductId();
-  if (!productId) throw new GumroadApiError("GUMROAD_PRODUCT_ID is not configured", 401);
+  // The product id is resolved (env → API by permalink) rather than required:
+  // a deployment that only sets the access token can still sync subscribers.
+  const { id: productId } = await resolveGumroadProductId();
+  if (!productId) throw new GumroadApiError("Gumroad product id could not be resolved", 401);
   const { status, payload } = await apiFetch(
     `/products/${encodeURIComponent(productId)}/subscribers`,
     { params: { access_token: token, email, paginated: "true" } },
@@ -269,6 +296,18 @@ export interface GumroadProductView {
   currency: string | null;
 }
 
+/**
+ * Last path segment of a Gumroad product URL — the value a buyer sees and the
+ * one an operator copies into `GUMROAD_PRODUCT_PERMALINK`.
+ */
+function permalinkFromUrl(value: unknown): string | null {
+  const url = asString(value);
+  if (!url) return null;
+  const withoutQuery = url.split("?")[0]?.replace(/\/+$/, "") ?? "";
+  const segment = withoutQuery.split("/").filter(Boolean).pop();
+  return segment ? segment.toLowerCase() : null;
+}
+
 /** Product status for the owner vault card (read-only diagnostic). */
 export async function fetchGumroadProductByPermalink(
   permalink: string,
@@ -277,21 +316,62 @@ export async function fetchGumroadProductByPermalink(
   const { status, payload } = await apiFetch("/products", { params: { access_token: token } });
   if (status === 401) throw new GumroadApiError("Gumroad rejected the access token", 401);
   if (status >= 400) throw new GumroadApiError("Gumroad API request failed", status);
+  const wanted = permalink.trim().toLowerCase();
   const products = Array.isArray(payload?.products) ? payload.products : [];
   for (const entry of products) {
     const record = asRecord(entry);
     if (!record) continue;
     const id = asString(record.id);
-    const productPermalink = asString(record.permalink);
-    if (!id || !productPermalink || productPermalink !== permalink) continue;
+    // Gumroad has used several field names for the same idea; a product matches
+    // when ANY of them equals the configured permalink. Matching loosely here
+    // is what lets a store rename a custom permalink without breaking
+    // product-id resolution.
+    const candidates = [
+      asString(record.permalink),
+      asString(record.custom_permalink),
+      permalinkFromUrl(record.url),
+      permalinkFromUrl(record.short_url),
+    ]
+      .filter((value): value is string => Boolean(value))
+      .map((value) => value.toLowerCase());
+    if (!id || !candidates.includes(wanted)) continue;
     return {
       id,
       name: asString(record.name),
-      permalink: productPermalink,
+      permalink: asString(record.permalink) ?? asString(record.custom_permalink) ?? wanted,
       published: typeof record.published === "boolean" ? record.published : null,
       priceCents: typeof record.price_cents === "number" ? record.price_cents : null,
       currency: asString(record.currency_code),
     };
   }
   return null;
+}
+
+/**
+ * Every product the token can see, normalised. Used by the owner card to prove
+ * which real product id the integration is bound to (and to warn when a store
+ * hosts several products, where an explicit `GUMROAD_PRODUCT_ID` is required).
+ */
+export async function listGumroadProducts(): Promise<GumroadProductView[]> {
+  const token = requireToken();
+  const { status, payload } = await apiFetch("/products", { params: { access_token: token } });
+  if (status === 401) throw new GumroadApiError("Gumroad rejected the access token", 401);
+  if (status >= 400) throw new GumroadApiError("Gumroad API request failed", status);
+  const products = Array.isArray(payload?.products) ? payload.products : [];
+  const views: GumroadProductView[] = [];
+  for (const entry of products) {
+    const record = asRecord(entry);
+    if (!record) continue;
+    const id = asString(record.id);
+    if (!id) continue;
+    views.push({
+      id,
+      name: asString(record.name),
+      permalink: asString(record.permalink) ?? asString(record.custom_permalink) ?? null,
+      published: typeof record.published === "boolean" ? record.published : null,
+      priceCents: typeof record.price_cents === "number" ? record.price_cents : null,
+      currency: asString(record.currency_code),
+    });
+  }
+  return views;
 }

@@ -233,7 +233,8 @@ export async function listAllLicenses(
   const where = `WHERE ($1 = '%%' OR l.key_prefix ILIKE $1 OR l.id ILIKE $1
     OR COALESCE(l.user_id, '') ILIKE $1 OR COALESCE(u.email, '') ILIKE $1
     OR COALESCE(l.metadata->>'source', '') ILIKE $1
-    OR COALESCE(l.metadata->>'paylinkTransactionNo', '') ILIKE $1)
+    OR COALESCE(l.metadata->>'gumroadSaleId', '') ILIKE $1
+    OR COALESCE(l.metadata->>'gumroadSubscriptionId', '') ILIKE $1)
     AND ($2 = 'ALL' OR l.status = $2)`;
   const joins = `FROM licenses l LEFT JOIN "user" u ON u.id = l.user_id`;
   const countRows = await sql.query<{ total: number }>(
