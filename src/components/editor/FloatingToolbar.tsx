@@ -13,6 +13,7 @@ import {
   Layers,
   MoveDown,
   MoveUp,
+  Scaling,
   Trash2,
   Underline,
   X,
@@ -63,6 +64,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const bring = useEditor((s) => s.bring);
   const toggleBubble = useEditor((s) => s.toggleBubble);
   const flipSelected = useEditor((s) => s.flipSelected);
+  const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
 
   /**
    * Place the toolbar 16px above the element, flipping below when there is no
@@ -420,6 +422,24 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
           onClick={() => flipSelected("y")}
         >
           <FlipVertical2 className="size-3.5" />
+        </button>
+        {/*
+         * قفل التحجيم — independent of the element lock: freezes width/height
+         * (handles + size fields) while move, rotate and edit stay free.
+         */}
+        <button
+          type="button"
+          className={cn("floating-toolbar-btn", el.resizeLocked && "is-active")}
+          aria-pressed={el.resizeLocked === true}
+          title={
+            el.resizeLocked
+              ? "فتح قفل التحجيم"
+              : "قفل التحجيم (منع تغيير العرض/الارتفاع)"
+          }
+          aria-label="قفل التحجيم"
+          onClick={() => toggleResizeLock()}
+        >
+          <Scaling className="size-3.5" />
         </button>
         <button
           type="button"

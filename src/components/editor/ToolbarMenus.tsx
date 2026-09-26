@@ -284,6 +284,7 @@ function ArrangeMenu() {
   const group = useEditor((s) => s.group);
   const ungroup = useEditor((s) => s.ungroup);
   const toggleLock = useEditor((s) => s.toggleLock);
+  const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
   const toggleHidden = useEditor((s) => s.toggleHidden);
 
   return (
@@ -297,6 +298,11 @@ function ArrangeMenu() {
       <MenuItem label="فك التجميع (⇧⌘G)" disabled={!hasGroup} onClick={() => ungroup()} />
       <MenuSep />
       <MenuItem label="قفل / فتح القفل" disabled={!count} onClick={() => toggleLock()} />
+      <MenuItem
+        label="قفل التحجيم / فتح قفل التحجيم"
+        disabled={!count}
+        onClick={() => toggleResizeLock()}
+      />
       <MenuItem label="إخفاء / إظهار" disabled={!count} onClick={() => toggleHidden()} />
     </>
   );

@@ -544,6 +544,15 @@ interface EditorStore extends Project, Ui, History {
   applyClipMask: (sourceId: string, shapeId: string) => void;
   removeClipMask: (shapeId: string) => void;
   toggleLock: () => void;
+  /**
+   * قفل التحجيم — per-element resize lock on the current selection.
+   *
+   * Toggles `CanvasEl.resizeLocked` on each selected element (no group
+   * cascade: it is an independent, per-element state). Blocking happens at
+   * the gesture layer — the flag itself only records the author's intent and
+   * travels with the element through save/copy/undo.
+   */
+  toggleResizeLock: () => void;
   toggleHidden: () => void;
   /**
    * قلب أفقي / قلب رأسي — mirror the selection on an axis (step 7).
@@ -2946,6 +2955,23 @@ export const useEditor = create<EditorStore>((set, get) => {
       const next = mapElements(page, ids, (el) =>
         cascadeFlag(el, "locked", !el.locked),
       );
+      set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
+      pushHistory();
+    },
+
+    toggleResizeLock: () => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const ids = new Set(s.selectedIds);
+      if (!ids.size) return;
+      // Independent per-element state: no folder cascade, and the flag never
+      // touches `locked` — a resize-locked element still moves, rotates and
+      // edits exactly like an unlocked one.
+      const next = mapElements(page, ids, (el) => ({
+        ...el,
+        resizeLocked: !el.resizeLocked,
+      }));
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
     },

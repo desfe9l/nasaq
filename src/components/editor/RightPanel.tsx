@@ -22,6 +22,7 @@ import {
   Lock,
   RotateCcw,
   RotateCw,
+  Scaling,
   Scissors,
   Trash2,
   Unlock,
@@ -112,6 +113,7 @@ export function RightPanel({
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const bring = useEditor((s) => s.bring);
   const toggleLock = useEditor((s) => s.toggleLock);
+  const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
   const toggleHidden = useEditor((s) => s.toggleHidden);
   const alignPage = useEditor((s) => s.alignPage);
   const fontChoices = useEditor((s) => s.fontChoices);
@@ -437,18 +439,27 @@ export function RightPanel({
                * one column as the panel narrows instead of overlapping.
                */}
               <div className="property-grid">
-                {(["x", "y", "w", "h"] as const).map((k) => (
-                  <ScrubField
-                    key={k}
-                    label={LABELS[k]}
-                    value={round(el[k])}
-                    min={k === "w" || k === "h" ? 1 : -500}
-                    step={0.5}
-                    suffix="مم"
-                    onChange={(v) => updateElement(el.id, { [k]: v }, true)}
-                    onCommit={(v) => updateElement(el.id, { [k]: v })}
-                  />
-                ))}
+                {(["x", "y", "w", "h"] as const).map((k) => {
+                  /*
+                   * The resize lock protects width/height everywhere they can
+                   * be typed, not only on the canvas handles: position (x/y)
+                   * stays free, and so do rotate, flip and every other field.
+                   */
+                  const sizeLocked = Boolean(el.resizeLocked) && (k === "w" || k === "h");
+                  return (
+                    <ScrubField
+                      key={k}
+                      label={LABELS[k]}
+                      value={round(el[k])}
+                      min={k === "w" || k === "h" ? 1 : -500}
+                      step={0.5}
+                      suffix="مم"
+                      disabled={sizeLocked}
+                      onChange={(v) => updateElement(el.id, { [k]: v }, true)}
+                      onCommit={(v) => updateElement(el.id, { [k]: v })}
+                    />
+                  );
+                })}
                 {/*
                  * Step 7 — quarter-turn helpers next to the free-form angle: the
                  * scrubbable field is right for exactness, these two are right
@@ -2148,6 +2159,11 @@ export function RightPanel({
                 label={el.locked ? "فتح القفل" : "قفل"}
               />
               <Action
+                onClick={toggleResizeLock}
+                icon={Scaling}
+                label={el.resizeLocked ? "فتح قفل التحجيم" : "قفل التحجيم"}
+              />
+              <Action
                 onClick={toggleHidden}
                 icon={el.hidden ? Eye : EyeOff}
                 label={el.hidden ? "إظهار" : "إخفاء"}
@@ -2490,6 +2506,12 @@ function LayerRow({
               </span>
               <span className="flex items-center gap-1 pr-1 text-muted">
                 {layer.locked && <Lock className="size-3.5" />}
+                {layer.resizeLocked && (
+                  <Scaling
+                    className="size-3.5 text-[#8b5cf6]"
+                    aria-label="التحجيم مقفل"
+                  />
+                )}
                 {layer.hidden && <EyeOff className="size-3.5" />}
                 {layer.linkId && <Link className="size-3.5 text-gold-2" />}
                 {/* The mask relationship is visible in the tree, not only on canvas. */}
