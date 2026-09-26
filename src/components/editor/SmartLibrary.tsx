@@ -27,6 +27,7 @@ import {
   type LibraryDropItem,
   type LibraryDropPayload,
 } from "@/lib/editor/library-dnd";
+import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
 import { ShapePreview } from "./ShapePreview";
 import { TablePickerOverlay } from "./TablePicker";
 import { AccordionSection, useAccordionState } from "./ui/Accordion";
@@ -1201,6 +1202,11 @@ export function SmartLibraryPanel({
               onDragStart={(event) =>
                 startLibraryDrag(event, tableDrop(t.cols, t.rows, t.label))
               }
+              onPointerDown={(event) => {
+                if (event.pointerType === "touch" || event.pointerType === "pen") {
+                  startPointerLibraryDrag(event, tableDrop(t.cols, t.rows, t.label), t.label);
+                }
+              }}
               onClick={() => insertDrop(tableDrop(t.cols, t.rows, t.label))}
               className="library-drag-card flex min-h-[46px] flex-col items-start justify-center gap-0.5 rounded-[8px] border border-line px-2.5 py-1.5 text-start transition hover:border-navy-2 hover:bg-navy-2/5 dark:border-white/10"
             >
@@ -1218,6 +1224,11 @@ export function SmartLibraryPanel({
               onDragStart={(event) =>
                 startLibraryDrag(event, { items: chartItems(chart) })
               }
+              onPointerDown={(event) => {
+                if (event.pointerType === "touch" || event.pointerType === "pen") {
+                  startPointerLibraryDrag(event, { items: chartItems(chart) }, chart.label);
+                }
+              }}
               onClick={() => insertDrop({ items: chartItems(chart) })}
               className="library-drag-card flex min-h-[44px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold transition hover:border-navy-2 hover:bg-navy-2/5 dark:border-white/10 dark:hover:border-gold/60"
             >

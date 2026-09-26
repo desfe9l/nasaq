@@ -757,9 +757,12 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .selection-frame {
   /* 7px circular handles, a constant on-screen size at every zoom. */
   --handle-size: calc(7px / var(--editor-zoom, 1));
+  /* Hit area أكبر من المرئي — 32px دائماً (Apple Pencil precision) */
+  --handle-hit-size: calc(32px / var(--editor-zoom, 1));
+  --rotate-hit-size: calc(32px / var(--editor-zoom, 1));
   /* Diagonal reach of the corner rotation grips: close enough to grab without a
      hunt, far enough to clear the corner resize dot underneath. */
-  --rotate-gap: calc(14px / var(--editor-zoom, 1));
+  --rotate-gap: calc(18px / var(--editor-zoom, 1));
   /*
    * Tight bounding box (borderScaleFactor: 1): the frame mirrors the element's
    * exact box, and a single 1px border is drawn INSIDE it (border-box), so the
@@ -807,6 +810,12 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   border-color: #8b5cf6;
   cursor: not-allowed;
   pointer-events: none;
+}
+
+.selection-frame.is-resize-locked,
+.selection-frame.is-dimension-locked {
+  border-color: #f59e0b;
+  border-style: dashed;
 }
 
 /*
@@ -1043,101 +1052,130 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 /*
- * Handles are anchored to the corners/edges of `.selection-frame`, centred on
- * the point they control — every position is half a handle off the edge, so
- * they are exactly usable near artboard edges and never offset arbitrarily.
+ * Handles — تحسين لـ Apple Pencil واللمس:
+ * - الحجم المرئي ثابت بغض النظر عن الزوم (7px/zoom)
+ * - مساحة اللمس أكبر من المرئي (32px/zoom) بشكل دائم، و 48px/zoom على الشاشات اللمسية
+ * - المقابض لا تختفي ولا تصغر بسبب الزوم — visual constant size via --editor-zoom inverse
+ * - Hit-area أكبر من المرئي بكثير لسهولة الإمساك بالقلم
+ * - تم تحقيق ذلك بجعل div المقبض نفسه هو مساحة اللمس (شفاف) والنقطة المرئية ::after
  */
 .handle,
 .rotate-handle {
   position: absolute;
-  z-index: 1;
-  /* cornerStyle: circle · cornerColor: #FFFFFF · cornerStrokeColor: emerald */
+  z-index: 2;
   box-sizing: border-box;
-  background: #ffffff;
-  border: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
-  box-shadow: none;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  touch-action: none;
 }
 
-/*
- * The visible dot stays small (a 44px blob would cover the artwork it is
- * resizing), but the HIT area is a full 44×44px on touch devices — realised
- * with a transparent box-shadow spread that keeps the handle's layout size and
- * anchors untouched while extending the pointer target in every direction.
- */
 .handle {
-  width: var(--handle-size);
-  height: var(--handle-size);
+  width: var(--handle-hit-size);
+  height: var(--handle-hit-size);
   border-radius: 50%;
 }
 
-@media (pointer: coarse) {
-  /*
-   * `box-shadow` is never hit-tested, so the enlarged target is a real
-   * pseudo-element box centred on the handle (the parent element receives the
-   * pointer event). Divides by --editor-zoom because the page is scaled, which
-   * keeps the target a true 48×48 SCREEN pixels at every zoom level — the hit
-   * circle always out-reaches the visible dot, and never shrinks as the
-   * element is resized or the canvas zoomed.
-   */
-  .handle::before,
-  .rotate-handle::before {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: calc(48px / var(--editor-zoom, 1));
-    height: calc(48px / var(--editor-zoom, 1));
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-  }
+.handle::after {
+  content: "";
+  width: var(--handle-size);
+  height: var(--handle-size);
+  border-radius: 50%;
+  background: #ffffff;
+  border: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+  box-sizing: border-box;
+}
+
+.handle.is-axis-locked::after {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  opacity: 0.5;
 }
 
 .handle.nw {
-  top: calc(var(--handle-size) / -2);
-  left: calc(var(--handle-size) / -2);
+  top: calc(var(--handle-hit-size) / -2);
+  left: calc(var(--handle-hit-size) / -2);
   cursor: nwse-resize;
 }
 .handle.n {
-  top: calc(var(--handle-size) / -2);
-  left: calc(50% - var(--handle-size) / 2);
+  top: calc(var(--handle-hit-size) / -2);
+  left: calc(50% - var(--handle-hit-size) / 2);
   cursor: ns-resize;
 }
 .handle.ne {
-  top: calc(var(--handle-size) / -2);
-  right: calc(var(--handle-size) / -2);
+  top: calc(var(--handle-hit-size) / -2);
+  right: calc(var(--handle-hit-size) / -2);
   cursor: nesw-resize;
 }
 .handle.e {
-  top: calc(50% - var(--handle-size) / 2);
-  right: calc(var(--handle-size) / -2);
+  top: calc(50% - var(--handle-hit-size) / 2);
+  right: calc(var(--handle-hit-size) / -2);
   cursor: ew-resize;
 }
 .handle.se {
-  bottom: calc(var(--handle-size) / -2);
-  right: calc(var(--handle-size) / -2);
+  bottom: calc(var(--handle-hit-size) / -2);
+  right: calc(var(--handle-hit-size) / -2);
   cursor: nwse-resize;
 }
 .handle.s {
-  bottom: calc(var(--handle-size) / -2);
-  left: calc(50% - var(--handle-size) / 2);
+  bottom: calc(var(--handle-hit-size) / -2);
+  left: calc(50% - var(--handle-hit-size) / 2);
   cursor: ns-resize;
 }
 .handle.sw {
-  bottom: calc(var(--handle-size) / -2);
-  left: calc(var(--handle-size) / -2);
+  bottom: calc(var(--handle-hit-size) / -2);
+  left: calc(var(--handle-hit-size) / -2);
   cursor: nesw-resize;
 }
 .handle.w {
-  top: calc(50% - var(--handle-size) / 2);
-  left: calc(var(--handle-size) / -2);
+  top: calc(50% - var(--handle-hit-size) / 2);
+  left: calc(var(--handle-hit-size) / -2);
   cursor: ew-resize;
 }
 
 .rotate-handle {
+  width: var(--rotate-hit-size);
+  height: var(--rotate-hit-size);
+  border-radius: 50%;
+  cursor: grab;
+}
+
+.rotate-handle::after {
+  content: "";
   width: var(--handle-size);
   height: var(--handle-size);
   border-radius: 50%;
-  cursor: grab;
+  background: var(--sel-color, #10b981);
+  border: 1px solid #ffffff;
+  box-sizing: border-box;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.rotate-handle::before {
+  content: "";
+  position: absolute;
+  width: 1px;
+  height: calc(var(--rotate-gap) - var(--rotate-hit-size) / 2);
+  background: color-mix(in srgb, var(--sel-color, #10b981) 60%, transparent);
+  top: 50%;
+  left: 50%;
+  transform-origin: top center;
+  pointer-events: none;
+}
+
+.rotate-handle.nw::before {
+  transform: translate(-50%, 0) rotate(-45deg);
+}
+.rotate-handle.ne::before {
+  transform: translate(-50%, 0) rotate(45deg);
+}
+.rotate-handle.se::before {
+  transform: translate(-50%, 0) rotate(135deg);
+}
+.rotate-handle.sw::before {
+  transform: translate(-50%, 0) rotate(-135deg);
 }
 
 /*
@@ -1146,28 +1184,20 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * never covers the resize dots.
  */
 .rotate-handle.nw {
-  top: calc(var(--rotate-gap) * -1);
-  left: calc(var(--rotate-gap) * -1);
+  top: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
+  left: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
 }
 .rotate-handle.ne {
-  top: calc(var(--rotate-gap) * -1);
-  right: calc(var(--rotate-gap) * -1);
+  top: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
+  right: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
 }
 .rotate-handle.se {
-  bottom: calc(var(--rotate-gap) * -1);
-  right: calc(var(--rotate-gap) * -1);
+  bottom: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
+  right: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
 }
 .rotate-handle.sw {
-  bottom: calc(var(--rotate-gap) * -1);
-  left: calc(var(--rotate-gap) * -1);
-}
-
-.rotate-handle::after {
-  content: "";
-  position: absolute;
-  inset: 30%;
-  border-radius: 50%;
-  background: var(--sel-color, #10b981);
+  bottom: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
+  left: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2 + var(--handle-hit-size) / 2);
 }
 
 .rotate-handle:active {
@@ -1196,16 +1226,15 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 @media (pointer: coarse) {
   /*
    * Touch/Pencil targets grow on tablets: bigger visible dots, same anchors
-   * on the element's true edges, and the 48px hit circle from ::above always
-   * out-reaches the dot. Both values divide by --editor-zoom, so the handles
-   * stay a constant, grabbable on-screen size at any canvas zoom and any
-   * element size — anchored to the frame, which mirrors the element's box.
+   * on the element's true edges, and the 48px hit circle always out-reaches
+   * the dot. Both values divide by --editor-zoom, so the handles stay a
+   * constant, grabbable on-screen size at any canvas zoom and any element size.
    */
   .selection-frame {
-    /* Visible dot 11px; the 48px hit target comes from ::before above. */
     --handle-size: calc(11px / var(--editor-zoom, 1));
-    /* Grips sit further off the corner so a Pencil finds them without hunt. */
-    --rotate-gap: calc(30px / var(--editor-zoom, 1));
+    --handle-hit-size: calc(48px / var(--editor-zoom, 1));
+    --rotate-hit-size: calc(48px / var(--editor-zoom, 1));
+    --rotate-gap: calc(36px / var(--editor-zoom, 1));
   }
 }
 

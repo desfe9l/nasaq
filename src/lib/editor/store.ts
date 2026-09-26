@@ -553,6 +553,12 @@ interface EditorStore extends Project, Ui, History {
    * travels with the element through save/copy/undo.
    */
   toggleResizeLock: () => void;
+  /** قفل عرض مستقل — يمنع تغيير العرض فقط */
+  toggleWidthLock: () => void;
+  /** قفل ارتفاع مستقل */
+  toggleHeightLock: () => void;
+  /** قفل نسبة العرض إلى الارتفاع لكل عنصر */
+  toggleAspectLock: () => void;
   toggleHidden: () => void;
   /**
    * قلب أفقي / قلب رأسي — mirror the selection on an axis (step 7).
@@ -2971,6 +2977,48 @@ export const useEditor = create<EditorStore>((set, get) => {
       const next = mapElements(page, ids, (el) => ({
         ...el,
         resizeLocked: !el.resizeLocked,
+      }));
+      set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
+      pushHistory();
+    },
+
+    toggleWidthLock: () => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const ids = new Set(s.selectedIds);
+      if (!ids.size) return;
+      const next = mapElements(page, ids, (el) => ({
+        ...el,
+        widthLocked: !el.widthLocked,
+      }));
+      set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
+      pushHistory();
+    },
+
+    toggleHeightLock: () => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const ids = new Set(s.selectedIds);
+      if (!ids.size) return;
+      const next = mapElements(page, ids, (el) => ({
+        ...el,
+        heightLocked: !el.heightLocked,
+      }));
+      set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
+      pushHistory();
+    },
+
+    toggleAspectLock: () => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page) return;
+      const ids = new Set(s.selectedIds);
+      if (!ids.size) return;
+      const next = mapElements(page, ids, (el) => ({
+        ...el,
+        style: { ...el.style, aspectLock: !el.style?.aspectLock },
       }));
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();

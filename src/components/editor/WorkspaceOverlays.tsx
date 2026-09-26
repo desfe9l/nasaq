@@ -1,12 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlignCenter,
+  AlignEndHorizontal,
+  AlignEndVertical,
+  AlignHorizontalJustifyCenter,
+  AlignStartHorizontal,
+  AlignStartVertical,
+  AlignVerticalJustifyCenter,
   ClipboardPaste,
   Contrast,
   Copy,
   CopyPlus,
   Download,
   Eye,
+  EyeOff,
   FlipHorizontal2,
   FlipVertical2,
   Focus,
@@ -15,9 +22,12 @@ import {
   Layers,
   Lock,
   Maximize2,
+  Minimize2,
   Move,
   PenLine,
   Redo2,
+  RotateCw,
+  RotateCcw,
   Scaling,
   Scissors,
   Search,
@@ -27,20 +37,16 @@ import {
   Type,
   Ungroup,
   Undo2,
+  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import { useEditor, type ContextMenuPoint } from "@/lib/editor/store";
 import { normalizeFade } from "@/lib/editor/fade";
-import { findElement } from "@/lib/editor/model";
+import { findElement, type AlignEdge } from "@/lib/editor/model";
 import type { PrintGuideSettings } from "@/lib/editor/print-guides";
 import { cn } from "@/lib/utils";
 
-/**
- * The menu is opened by the canvas AND by the layer tree; both write the same
- * store slot, so the type lives there (`ContextMenuPoint`) and this file only
- * re-exports it for the shell.
- */
 type MenuPoint = ContextMenuPoint;
 type ContextAction = {
   label: string;
@@ -49,6 +55,7 @@ type ContextAction = {
   disabled?: boolean;
   danger?: boolean;
   sepBefore?: boolean;
+  hint?: string;
 };
 
 const ACTIONS = [
@@ -63,18 +70,9 @@ const ACTIONS = [
   { id: "zoom-out", label: "تصغير", hint: "⌘ -", icon: ZoomOut },
   { id: "focus", label: "وضع التركيز", hint: "", icon: Focus },
   { id: "export", label: "تصدير", hint: "⌘ E", icon: Download },
-  /*
-   * Tools (step 9) — listed so the V/T/R muscle memory is discoverable from the
-   * palette, not only from the keyboard.
-   */
   { id: "tool-move", label: "أداة التحديد والتحريك", hint: "V", icon: Move },
   { id: "tool-text", label: "أداة النص (ارسم صندوقًا)", hint: "T", icon: Type },
-  {
-    id: "tool-shape",
-    label: "أداة الأشكال (ارسم مستطيلًا)",
-    hint: "R",
-    icon: Square,
-  },
+  { id: "tool-shape", label: "أداة الأشكال (ارسم مستطيلًا)", hint: "R", icon: Square },
 ];
 
 export function WorkspaceOverlays({
@@ -101,7 +99,11 @@ export function WorkspaceOverlays({
   const bring = useEditor((s) => s.bring);
   const toggleLock = useEditor((s) => s.toggleLock);
   const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
+  const toggleWidthLock = useEditor((s) => s.toggleWidthLock);
+  const toggleHeightLock = useEditor((s) => s.toggleHeightLock);
+  const toggleAspectLock = useEditor((s) => s.toggleAspectLock);
   const flipSelected = useEditor((s) => s.flipSelected);
+  const align = useEditor((s) => s.align);
   const setLeftTab = useEditor((s) => s.setLeftTab);
   const toggleHidden = useEditor((s) => s.toggleHidden);
   const toggle = useEditor((s) => s.toggle);
@@ -199,13 +201,7 @@ export function WorkspaceOverlays({
     onCloseMenu();
   };
 
-  /** Print-guide toggles shared by the status bar (see `WorkspaceStatusBar`). */
   const selectedTypes = selectedElements().map((item) => item.type);
-  /*
-   * قناع القص (Clipping Mask): applies only when the selection is exactly an
-   * image-family element (image/logo/svg/qr) + a shape — the only pair the
-   * mask has meaning for. Any other selection hides the entries entirely.
-   */
   const applyMask = useEditor((s) => s.applyClipMask);
   const removeMask = useEditor((s) => s.removeClipMask);
   const selectedEls = selectedElements();
@@ -219,11 +215,6 @@ export function WorkspaceOverlays({
     !!maskSource && !!maskShape && selectedEls.length === 2;
   const maskRemovable = selectedEls.length === 1 && !!selectedEls[0].clippedBy;
   const toggleFadeOverlay = useEditor((s) => s.toggleFadeOverlay);
-  /*
-   * Step 8 — the fade entry is offered for the image family only, and flips its
-   * wording once an overlay exists, so the menu never claims to "add" something
-   * the author can already see.
-   */
   const fadeApplicable = selectedEls.some(
     (el) => el.type === "image" || el.type === "logo" || el.type === "qr",
   );
@@ -231,7 +222,6 @@ export function WorkspaceOverlays({
     Boolean(normalizeFade(el.style?.fade)),
   );
   const renameElement = useEditor((s) => s.renameElement);
-  // selectedElements() preserves selection order with the primary LAST.
   const primaryName = selectedEls.length
     ? selectedEls[selectedEls.length - 1].name
     : undefined;
@@ -241,8 +231,6 @@ export function WorkspaceOverlays({
   const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(
     null,
   );
-  /** Group, then open the naming dialog for the fresh group right away — grouping
-   *  without naming leaves «مجموعة 1» rows that nobody can tell apart. */
   const groupAndName = () => {
     const id = group();
     if (!id) return;
@@ -254,13 +242,49 @@ export function WorkspaceOverlays({
   const openProperties = () => {
     const state = useEditor.getState();
     state.setRightTab("properties");
-    // The properties tab is useless while the panel is collapsed or focus mode
-    // is hiding it — the action must actually bring the panel up.
     useEditor.setState({ rightCollapsed: false, focusMode: false });
   };
+
+  const rotateSelected = (deg: number) => {
+    const state = useEditor.getState();
+    const page = state.pages.find((p) => p.id === state.activePageId);
+    if (!page) return;
+    for (const el of selectedEls) {
+      if (el.locked) continue;
+      const nextRot = (el.rotation || 0) + deg;
+      const normalized = (((nextRot % 360) + 540) % 360) - 180;
+      state.replaceElement({ ...el, rotation: normalized }, true);
+    }
+    state.commit();
+  };
+
+  const scaleSelected = (factor: number) => {
+    const state = useEditor.getState();
+    for (const el of selectedEls) {
+      if (el.locked || el.resizeLocked) continue;
+      const newW = Math.max(4, el.w * factor);
+      const newH = Math.max(4, el.h * factor);
+      const cx = el.x + el.w / 2;
+      const cy = el.y + el.h / 2;
+      state.replaceElement(
+        { ...el, x: cx - newW / 2, y: cy - newH / 2, w: newW, h: newH },
+        true,
+      );
+    }
+    state.commit();
+  };
+
   const contextActions: ContextAction[] = menu?.targetId
     ? [
-        { label: "نسخ", icon: Copy, run: copy },
+        {
+          label: "تحديد",
+          icon: Move,
+          run: () => {
+            if (menu.targetId) select(menu.targetId);
+          },
+          hint: "Tap",
+        },
+        { label: "نسخ", icon: Copy, run: copy, hint: "⌘C" },
         {
           label: "قص",
           icon: Scissors,
@@ -268,33 +292,110 @@ export function WorkspaceOverlays({
             copy();
             deleteSelected();
           },
+          hint: "⌘X",
         },
         {
           label: "لصق",
           icon: ClipboardPaste,
           run: paste,
           disabled: !clipboard,
+          hint: "⌘V",
           sepBefore: true,
         },
-        { label: "تكرار العنصر", icon: CopyPlus, run: duplicate },
+        {
+          label: "تكرار العنصر",
+          icon: CopyPlus,
+          run: duplicate,
+          hint: "⌘J",
+        },
+        {
+          label: "حذف",
+          icon: Trash2,
+          run: deleteSelected,
+          danger: true,
+        },
         {
           label: "إحضار للأمام",
           icon: Layers,
           run: () => bring("forward"),
+          hint: "⌘]",
           sepBefore: true,
         },
-        { label: "إرسال للخلف", icon: Layers, run: () => bring("back") },
+        {
+          label: "إرسال للخلف",
+          icon: Layers,
+          run: () => bring("back"),
+          hint: "⌘[",
+        },
         {
           label: "إلى المقدمة تمامًا",
           icon: Layers,
           run: () => bring("front"),
+          hint: "⇧⌘]",
         },
-        { label: "إلى الخلف تمامًا", icon: Layers, run: () => bring("bottom") },
-        /*
-         * Step 7 — mirrors sit right under the stacking actions, the same slot
-         * Photoshop uses for Transform commands, so the eye finds them where it
-         * already looks for a change of orientation.
-         */
+        {
+          label: "إلى الخلف تمامًا",
+          icon: Layers,
+          run: () => bring("bottom"),
+          hint: "⇧⌘[",
+        },
+        {
+          label: "محاذاة يسار",
+          icon: AlignStartHorizontal,
+          run: () => align("left", "selection"),
+          sepBefore: true,
+        },
+        {
+          label: "محاذاة وسط أفقي",
+          icon: AlignHorizontalJustifyCenter,
+          run: () => align("center", "selection"),
+        },
+        {
+          label: "محاذاة يمين",
+          icon: AlignEndHorizontal,
+          run: () => align("right", "selection"),
+        },
+        {
+          label: "محاذاة أعلى",
+          icon: AlignStartVertical,
+          run: () => align("top", "selection"),
+        },
+        {
+          label: "محاذاة وسط رأسي",
+          icon: AlignVerticalJustifyCenter,
+          run: () => align("middle", "selection"),
+        },
+        {
+          label: "محاذاة أسفل",
+          icon: AlignEndVertical,
+          run: () => align("bottom", "selection"),
+        },
+        {
+          label: "تدوير 90° يمين",
+          icon: RotateCw,
+          run: () => rotateSelected(90),
+          sepBefore: true,
+        },
+        {
+          label: "تدوير 90° يسار",
+          icon: RotateCcw,
+          run: () => rotateSelected(-90),
+        },
+        {
+          label: "تدوير 180°",
+          icon: RotateCw,
+          run: () => rotateSelected(180),
+        },
+        {
+          label: "تكبير 10%",
+          icon: ZoomIn,
+          run: () => scaleSelected(1.1),
+        },
+        {
+          label: "تصغير 10%",
+          icon: ZoomOut,
+          run: () => scaleSelected(0.9),
+        },
         {
           label: "قلب أفقي",
           icon: FlipHorizontal2,
@@ -312,6 +413,7 @@ export function WorkspaceOverlays({
                 label: "تجميع العناصر",
                 icon: Group,
                 run: groupAndName,
+                hint: "⌘G",
                 sepBefore: true,
               } as ContextAction,
             ]
@@ -331,6 +433,7 @@ export function WorkspaceOverlays({
                 label: "فك تجميع العناصر",
                 icon: Ungroup,
                 run: ungroup,
+                hint: "⇧⌘G",
               } as ContextAction,
             ]
           : []),
@@ -376,6 +479,21 @@ export function WorkspaceOverlays({
           icon: Scaling,
           run: toggleResizeLock,
         },
+        {
+          label: "قفل العرض / فك قفل العرض",
+          icon: AlignStartVertical,
+          run: toggleWidthLock,
+        },
+        {
+          label: "قفل الارتفاع / فك قفل الارتفاع",
+          icon: AlignStartHorizontal,
+          run: toggleHeightLock,
+        },
+        {
+          label: "قفل النسبة / فك قفل النسبة",
+          icon: Scaling,
+          run: toggleAspectLock,
+        },
         { label: "إخفاء / إظهار", icon: Eye, run: toggleHidden },
         {
           label: primaryIsGroup ? "تسمية المجموعة…" : "إعادة تسمية…",
@@ -384,14 +502,7 @@ export function WorkspaceOverlays({
             setRenaming({ id: menu.targetId!, name: primaryName || "" }),
           disabled: selectedCount > 1,
         },
-        { label: "الخصائص", icon: Settings2, run: openProperties },
-        {
-          label: "حذف",
-          icon: Trash2,
-          run: deleteSelected,
-          danger: true,
-          sepBefore: true,
-        },
+        { label: "الخصائص", icon: Settings2, run: openProperties, sepBefore: true },
       ]
     : [
         {
@@ -399,20 +510,23 @@ export function WorkspaceOverlays({
           icon: ClipboardPaste,
           run: paste,
           disabled: !clipboard,
+          hint: "⌘V",
         },
-        /*
-         * The selection — not the point — decides grouping here: a right-click
-         * that missed the artwork still has the selected elements in the store,
-         * so تجميع/فك التجميع must appear exactly as they do over an element.
-         * Their absence here is what hid grouping from the empty-space menu
-         * even with several elements selected.
-         */
+        { label: "تحديد الكل", icon: AlignCenter, run: selectAll, hint: "⌘A" },
+        {
+          label: "إلغاء التحديد",
+          icon: X,
+          run: () => select(null),
+          hint: "⌘D",
+          sepBefore: true,
+        },
         ...(selectedCount >= 2
           ? [
               {
                 label: "تجميع العناصر",
                 icon: Group,
                 run: groupAndName,
+                hint: "⌘G",
                 sepBefore: true,
               } as ContextAction,
             ]
@@ -423,13 +537,15 @@ export function WorkspaceOverlays({
                 label: "فك تجميع العناصر",
                 icon: Ungroup,
                 run: ungroup,
+                hint: "⇧⌘G",
               } as ContextAction,
             ]
           : []),
-        { label: "تحديد الكل", icon: AlignCenter, run: selectAll },
-        { label: "عكس التحديد", icon: FlipHorizontal2, run: invertSelection },
-        { label: "عرض الصفحة بالكامل", icon: Maximize2, run: fitToScreen },
-        { label: "وضع التركيز", icon: Focus, run: () => toggle("focusMode") },
+        { label: "عكس التحديد", icon: FlipHorizontal2, run: invertSelection, sepBefore: true },
+        { label: "ملاءمة مساحة العمل", icon: Maximize2, run: fitToScreen, hint: "⌘0" },
+        { label: "تكبير", icon: ZoomIn, run: () => setZoom(zoom + 0.12), hint: "⌘+" },
+        { label: "تصغير", icon: ZoomOut, run: () => setZoom(Math.max(0.2, zoom - 0.12)), hint: "⌘-" },
+        { label: "وضع التركيز", icon: Focus, run: () => toggle("focusMode"), sepBefore: true },
         {
           label: "إظهار / إخفاء الشبكة",
           icon: Eye,
@@ -437,12 +553,32 @@ export function WorkspaceOverlays({
         },
       ];
 
+  const menuStyle = (() => {
+    if (!menu) return {};
+    const margin = 8;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const estimatedW = 260;
+    const estimatedH = 520;
+    let left = menu.x;
+    let top = menu.y;
+    if (left + estimatedW > vw - margin) left = vw - estimatedW - margin;
+    if (top + estimatedH > vh - margin) top = vh - estimatedH - margin;
+    if (left < margin) left = margin;
+    if (top < margin) top = margin;
+    return { left, top };
+  })();
+
   return (
     <>
       {menu && (
         <div
           className="editor-context-backdrop fixed inset-0 z-[var(--z-context)]"
           onPointerDown={onCloseMenu}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            onCloseMenu();
+          }}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               event.preventDefault();
@@ -453,12 +589,10 @@ export function WorkspaceOverlays({
           autoFocus
         >
           <div
-            className="editor-context-menu fixed min-w-[210px] rounded-[8px] border p-1.5 shadow-2xl"
-            style={{
-              left: Math.min(menu.x, window.innerWidth - 230),
-              top: Math.min(menu.y, window.innerHeight - 480),
-            }}
+            className="editor-context-menu fixed min-w-[240px] max-w-[280px] max-h-[85vh] overflow-auto rounded-[10px] border bg-white p-1.5 shadow-2xl dark:border-white/15 dark:bg-[#1e2633]"
+            style={menuStyle}
             onPointerDown={(event) => event.stopPropagation()}
+            onContextMenu={(e) => e.preventDefault()}
             role="menu"
           >
             {contextActions.map((action) => {
@@ -479,28 +613,28 @@ export function WorkspaceOverlays({
                       onCloseMenu();
                     }}
                     className={cn(
-                      "editor-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold disabled:opacity-35",
-                      action.danger && "editor-menu-danger",
+                      "editor-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold disabled:opacity-35 hover:bg-line-2 dark:hover:bg-white/10",
+                      action.danger && "editor-menu-danger text-red-600 dark:text-red-400",
                     )}
                   >
                     <Icon className="size-3.5 shrink-0" />
-                    <span>{action.label}</span>
+                    <span className="flex-1">{action.label}</span>
+                    {action.hint && (
+                      <span className="text-[9px] text-muted">{action.hint}</span>
+                    )}
                   </button>
                 </div>
               );
             })}
             <div className="my-1 border-t border-[var(--editor-border)]" />
             <span className="flex items-center gap-2 px-2.5 py-1.5 text-[9px] text-[var(--editor-text-secondary)]">
-              <Keyboard className="size-3" /> اضغط Escape للإغلاق
+              <Keyboard className="size-3" /> اضغط Escape للإغلاق · Right-click داخل Artboard
             </span>
           </div>
         </div>
       )}
 
       {renaming && (
-        /* Inline rename for the element the menu was opened on — the same
-           contract as the library dialogs: backdrop does not confirm, focus
-           starts on the input, Enter saves, Escape cancels. */
         <div
           className="fixed inset-0 z-[calc(var(--z-context)+1)] grid place-items-center bg-navy/45 p-4"
           role="dialog"
@@ -636,22 +770,11 @@ export function WorkspaceStatusBar() {
   const activePageId = useEditor((s) => s.activePageId);
   const selectedIds = useEditor((s) => s.selectedIds);
   const page = pages.find((item) => item.id === activePageId);
-  /*
-   * The page summary lives here instead of a floating pill over the canvas:
-   * a badge pinned inside the canvas area covered element labels and had to be
-   * dodged by the arrange bar. The status bar is part of the workspace chrome,
-   * so it can never overlap artwork.
-   */
   return (
     <div
       data-editor-obstacle="status-bar"
       className="editor-status-bar flex h-7 shrink-0 items-center justify-between gap-3 border-t px-3 text-[10px] tabular-nums"
     >
-      {/*
-       * `selectable-value`: page size / element count / zoom are numbers an
-       * author copies into a brief, so they opt back into text selection while
-       * the rest of the chrome stays unselectable.
-       */}
       <span className="selectable-value min-w-0 truncate">
         {page?.name || "صفحة"}
         {page
@@ -663,13 +786,6 @@ export function WorkspaceStatusBar() {
         {selectedIds.length ? `${selectedIds.length} محدد` : "لا يوجد تحديد"}
       </span>
       <span className="flex items-center gap-1">
-        {/*
-         * Print guides, one toggle each, in the workspace chrome.
-         *
-         * They live here rather than in a dialog because they are a viewing aid
-         * the author flicks on and off while arranging a page — and the status
-         * bar is already the home of "what am I looking at" (page, size, zoom).
-         */}
         {GUIDE_TOGGLES.map((guide) => (
           <button
             key={guide.key}
@@ -693,7 +809,6 @@ export function WorkspaceStatusBar() {
   );
 }
 
-/** Print-guide toggles, with the wording the status bar shows. */
 const GUIDE_TOGGLES: {
   key: keyof PrintGuideSettings;
   label: string;

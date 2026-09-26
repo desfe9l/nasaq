@@ -55,6 +55,7 @@ import { AssetLibrary } from "./AssetLibrary";
 import { SmartLibraryPanel, TemplatePreview } from "./SmartLibrary";
 import { TablePickerOverlay } from "./TablePicker";
 import { writeLibraryDrag, type LibraryDropPayload } from "@/lib/editor/library-dnd";
+import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
 
 const TABS: { id: LeftTab; label: string; icon: typeof Type }[] = [
   { id: "library", label: "المكتبة", icon: FolderOpen },
@@ -232,6 +233,29 @@ export function LeftPanel({
     writeLibraryDrag(e.dataTransfer, payload);
   };
 
+  const startPointerDrag = (
+    e: React.PointerEvent,
+    type: string,
+    over: Record<string, unknown> = {},
+    label = type,
+  ) => {
+    if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+    const payload: LibraryDropPayload = { items: [{ type, over } as any] };
+    startPointerLibraryDrag(e, payload, label);
+  };
+
+  const startPointerShapeDrag = (
+    e: React.PointerEvent,
+    shapeId: string,
+    label: string,
+  ) => {
+    if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+    const payload: LibraryDropPayload = {
+      items: [{ type: "shape", over: { name: label, style: { shapeId, fill: THEMES[theme].primary } } }],
+    };
+    startPointerLibraryDrag(e, payload, label);
+  };
+
   const applyCustomSize = (scope: "page" | "all") => {
     const w = Math.max(20, Math.min(1000, customSize.w));
     const h = Math.max(20, Math.min(1000, customSize.h));
@@ -347,6 +371,10 @@ export function LeftPanel({
                               if (t.type === "qr" || t.type === "table" || t.type === "image" || t.type === "logo" || t.type === "svg") return;
                               startDrag(e, t.type, { name: t.label });
                             }}
+                            onPointerDown={(e) => {
+                              if (t.type === "qr" || t.type === "table" || t.type === "image" || t.type === "logo" || t.type === "svg") return;
+                              startPointerDrag(e, t.type, { name: t.label }, t.label);
+                            }}
                             onClick={() => void add(t.type)}
                             className="library-hit flex min-h-[38px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold leading-snug transition disabled:opacity-50 dark:border-white/10 cursor-grab active:cursor-grabbing"
                             title={`${TYPE_NAME[t.type]} — اسحب وأفلت في الموضع المحدد داخل الصفحة`}
@@ -403,6 +431,14 @@ export function LeftPanel({
                     type="button"
                     draggable
                     onDragStart={(e) => startDrag(e, "text", { content: p.sample, w: p.w, h: p.h, name: p.label, style: { fontFamily: "Tajawal", textAlign: "right", color: THEMES[theme].ink, ...(p.style as any) } })}
+                    onPointerDown={(e) =>
+                      startPointerDrag(
+                        e,
+                        "text",
+                        { content: p.sample, w: p.w, h: p.h, name: p.label, style: { fontFamily: "Tajawal", textAlign: "right", color: THEMES[theme].ink, ...(p.style as any) } },
+                        p.label,
+                      )
+                    }
                     onClick={() =>
                       addElement("text", {
                         content: p.sample,
@@ -476,6 +512,7 @@ export function LeftPanel({
                       type="button"
                       draggable
                       onDragStart={(e) => startShapeDrag(e, s.id, s.label)}
+                      onPointerDown={(e) => startPointerShapeDrag(e, s.id, s.label)}
                       onClick={() =>
                         addElement("shape", {
                           name: s.label,

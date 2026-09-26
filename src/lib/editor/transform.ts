@@ -79,25 +79,33 @@ export function resizeByHandle(
   dx: number,
   dy: number,
   preserveRatio: boolean,
+  locks?: { widthLocked?: boolean; heightLocked?: boolean },
 ): void {
+  const wLocked = Boolean(locks?.widthLocked);
+  const hLocked = Boolean(locks?.heightLocked);
+
   if (!preserveRatio) {
     let { x, y, w, h } = orig;
-    if (handle.includes("e")) w = orig.w + dx;
-    if (handle.includes("s")) h = orig.h + dy;
-    if (handle.includes("w")) {
-      x = orig.x + dx;
-      w = orig.w - dx;
+    if (!wLocked) {
+      if (handle.includes("e")) w = orig.w + dx;
+      if (handle.includes("w")) {
+        x = orig.x + dx;
+        w = orig.w - dx;
+      }
     }
-    if (handle.includes("n")) {
-      y = orig.y + dy;
-      h = orig.h - dy;
+    if (!hLocked) {
+      if (handle.includes("s")) h = orig.h + dy;
+      if (handle.includes("n")) {
+        y = orig.y + dy;
+        h = orig.h - dy;
+      }
     }
     if (w < MIN_SIZE) {
-      if (handle.includes("w")) x = orig.x + orig.w - MIN_SIZE;
+      if (!wLocked && handle.includes("w")) x = orig.x + orig.w - MIN_SIZE;
       w = MIN_SIZE;
     }
     if (h < MIN_SIZE) {
-      if (handle.includes("n")) y = orig.y + orig.h - MIN_SIZE;
+      if (!hLocked && handle.includes("n")) y = orig.y + orig.h - MIN_SIZE;
       h = MIN_SIZE;
     }
     next.x = x;
@@ -107,43 +115,82 @@ export function resizeByHandle(
     return;
   }
 
-  // Proportional scaling: pick the axis the pointer travelled furthest on so
-  // the gesture feels 1:1, then derive the other axis from the locked ratio.
   const ratio = orig.w / Math.max(orig.h, MIN_SIZE);
   const horizontal = handle.includes("e") || handle.includes("w");
   const vertical = handle.includes("n") || handle.includes("s");
   let scale = 1;
+  if (wLocked && hLocked) {
+    next.x = orig.x;
+    next.y = orig.y;
+    next.w = orig.w;
+    next.h = orig.h;
+    return;
+  }
   if (horizontal && vertical) {
-    const widthScale =
-      (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
-    const heightScale =
-      (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
-    scale =
-      Math.abs(widthScale - 1) >= Math.abs(heightScale - 1)
-        ? widthScale
-        : heightScale;
+    if (wLocked) {
+      const heightScale =
+        (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
+      scale = heightScale;
+    } else if (hLocked) {
+      const widthScale =
+        (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
+      scale = widthScale;
+    } else {
+      const widthScale =
+        (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
+      const heightScale =
+        (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
+      scale =
+        Math.abs(widthScale - 1) >= Math.abs(heightScale - 1)
+          ? widthScale
+          : heightScale;
+    }
   } else if (horizontal) {
+    if (wLocked) {
+      next.x = orig.x;
+      next.y = orig.y;
+      next.w = orig.w;
+      next.h = orig.h;
+      return;
+    }
     scale =
       (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
   } else if (vertical) {
+    if (hLocked) {
+      next.x = orig.x;
+      next.y = orig.y;
+      next.w = orig.w;
+      next.h = orig.h;
+      return;
+    }
     scale =
       (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
   }
-  // Keep the result on the same side of MIN_SIZE as the scale itself: a
-  // negative scale means the pointer crossed the far edge, and clamping the
-  // width while keeping a negative height derivative would flip the box.
-  const nextW = Math.max(MIN_SIZE, orig.w * Math.max(scale, 0.01));
-  const nextH = Math.max(MIN_SIZE, nextW / ratio);
-  if (handle.includes("w")) next.x = orig.x + orig.w - nextW;
+  const nextW = wLocked ? orig.w : Math.max(MIN_SIZE, orig.w * Math.max(scale, 0.01));
+  const nextH = hLocked ? orig.h : Math.max(MIN_SIZE, (wLocked ? orig.h * Math.max(scale, 0.01) : nextW / ratio));
+  let finalW = nextW;
+  let finalH = nextH;
+  if (wLocked && !hLocked) {
+    finalH = Math.max(MIN_SIZE, orig.h * Math.max(scale, 0.01));
+    finalW = orig.w;
+  } else if (!wLocked && hLocked) {
+    finalW = Math.max(MIN_SIZE, orig.w * Math.max(scale, 0.01));
+    finalH = orig.h;
+  } else if (!wLocked && !hLocked) {
+    finalW = nextW;
+    finalH = nextH;
+  }
+
+  if (handle.includes("w")) next.x = orig.x + orig.w - finalW;
   else if (handle.includes("e")) next.x = orig.x;
-  else next.x = orig.x + (orig.w - nextW) / 2;
+  else next.x = orig.x + (orig.w - finalW) / 2;
 
-  if (handle.includes("n")) next.y = orig.y + orig.h - nextH;
+  if (handle.includes("n")) next.y = orig.y + orig.h - finalH;
   else if (handle.includes("s")) next.y = orig.y;
-  else next.y = orig.y + (orig.h - nextH) / 2;
+  else next.y = orig.y + (orig.h - finalH) / 2;
 
-  next.w = nextW;
-  next.h = nextH;
+  next.w = finalW;
+  next.h = finalH;
 }
 
 /** A box that can act as a snap candidate (any element). */
@@ -184,8 +231,6 @@ export function applySnap(
   }
   if (smart) {
     const threshold = snapThresholdMm(zoom);
-    // Elements that are moving with this gesture are not candidates: snapping
-    // a dragged element to a sibling travelling beside it would fight the drag.
     const stable = others.filter((o) => !moving[o.id as string]);
     const edges = [
       0,

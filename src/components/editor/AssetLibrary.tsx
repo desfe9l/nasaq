@@ -25,6 +25,7 @@ import {
 import { useEditor } from "@/lib/editor/store";
 import type { Asset, AssetFolder } from "@/lib/editor/storage";
 import { writeLibraryDrag } from "@/lib/editor/library-dnd";
+import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
 import {
   downloadLibraryFile,
   planLibraryImport,
@@ -911,6 +912,12 @@ export function AssetLibrary() {
               draggable={editingId !== asset.id}
               onDragStart={(event) => {
                 writeLibraryDrag(event.dataTransfer, dragPayloadFor(asset));
+              }}
+              onPointerDown={(event) => {
+                if (editingId === asset.id) return;
+                if (event.pointerType === "touch" || event.pointerType === "pen") {
+                  startPointerLibraryDrag(event, dragPayloadFor(asset), asset.name);
+                }
               }}
               onContextMenu={(event) => {
                 event.preventDefault();

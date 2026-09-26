@@ -114,6 +114,9 @@ export function RightPanel({
   const bring = useEditor((s) => s.bring);
   const toggleLock = useEditor((s) => s.toggleLock);
   const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
+  const toggleWidthLock = useEditor((s) => s.toggleWidthLock);
+  const toggleHeightLock = useEditor((s) => s.toggleHeightLock);
+  const toggleAspectLock = useEditor((s) => s.toggleAspectLock);
   const toggleHidden = useEditor((s) => s.toggleHidden);
   const alignPage = useEditor((s) => s.alignPage);
   const fontChoices = useEditor((s) => s.fontChoices);
@@ -445,7 +448,10 @@ export function RightPanel({
                    * be typed, not only on the canvas handles: position (x/y)
                    * stays free, and so do rotate, flip and every other field.
                    */
-                  const sizeLocked = Boolean(el.resizeLocked) && (k === "w" || k === "h");
+                  const sizeLocked =
+                    Boolean(el.resizeLocked) ||
+                    (k === "w" && Boolean(el.widthLocked)) ||
+                    (k === "h" && Boolean(el.heightLocked));
                   return (
                     <ScrubField
                       key={k}
@@ -2162,6 +2168,21 @@ export function RightPanel({
                 onClick={toggleResizeLock}
                 icon={Scaling}
                 label={el.resizeLocked ? "فتح قفل التحجيم" : "قفل التحجيم"}
+              />
+              <Action
+                onClick={toggleWidthLock}
+                icon={Scaling}
+                label={el.widthLocked ? "فك قفل العرض" : "قفل العرض"}
+              />
+              <Action
+                onClick={toggleHeightLock}
+                icon={Scaling}
+                label={el.heightLocked ? "فك قفل الارتفاع" : "قفل الارتفاع"}
+              />
+              <Action
+                onClick={toggleAspectLock}
+                icon={Scaling}
+                label={el.style?.aspectLock ? "فك قفل النسبة" : "قفل النسبة"}
               />
               <Action
                 onClick={toggleHidden}
