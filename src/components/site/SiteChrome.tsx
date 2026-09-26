@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronDown, KeyRound, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
+import { ChevronDown, FilePlus2, KeyRound, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
 import { Toaster } from "sonner";
 import {
   BRAND,
@@ -46,6 +46,53 @@ function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile"
     >
       {entry.label}
     </a>
+  );
+}
+
+/**
+ * «مستند جديد» — the licensed author's fast path into a blank document.
+ *
+ * Rendered only while the account holds an ACTIVE licence (administrators
+ * included): the licence state is the server's (`useAccountTier` →
+ * `getLicenseStatusFn`), never the browser's, and the click goes through the
+ * shared `openNewDocument` resolver — blank project first, then `/editor`.
+ * Registered accounts without a licence keep «افتح المحرر» and the free-tier
+ * restrictions; this shortcut simply does not appear for them.
+ */
+function NewDocumentButton({ variant = "header" }: { variant?: "header" | "mobile" }) {
+  const { user, isPending } = useCurrentUserState();
+  if (!authEnabled || isPending || !user) return null;
+  return <NewDocumentForUser user={user} variant={variant} />;
+}
+
+/** Own component so `useAccountTier` only mounts for a real signed-in session. */
+function NewDocumentForUser({
+  user,
+  variant,
+}: {
+  user: AppUser;
+  variant: "header" | "mobile";
+}) {
+  const tier = useAccountTier(user);
+  const { entry, openNewDocument } = useEditorEntry();
+  // Nothing until the session AND the licence state resolve — exactly like
+  // `EditorEntryLink`, a licensed author must not see the button flash late.
+  if (!entry.ready || !entry.direct) return null;
+  if (tier !== "LICENSED" && tier !== "ADMIN") return null;
+  return (
+    <button
+      type="button"
+      onClick={() => void openNewDocument()}
+      title="مستند جديد"
+      className={cn(
+        variant === "header"
+          ? "hidden h-9 items-center gap-1.5 whitespace-nowrap rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-white transition hover:bg-navy-2 lg:inline-flex"
+          : "mt-1 flex w-full items-center gap-2 rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted lg:hidden",
+      )}
+    >
+      <FilePlus2 className="size-4" aria-hidden />
+      مستند جديد
+    </button>
   );
 }
 
@@ -351,6 +398,7 @@ export function SiteHeader({ current }: { current: string }) {
               {CONTACT_PHONE_DISPLAY}
             </span>
           </a>
+          <NewDocumentButton />
           <EditorEntryLink />
           <HeaderAccount />
           <button
@@ -380,6 +428,7 @@ export function SiteHeader({ current }: { current: string }) {
             </a>
           ))}
           <EditorEntryLink variant="mobile" />
+          <NewDocumentButton variant="mobile" />
           <button
             type="button"
             onClick={toggleTheme}

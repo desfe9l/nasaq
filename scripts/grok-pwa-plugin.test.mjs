@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   appNameFromHost,
+  applyDocumentCachePolicy,
   createHeadInjector,
+  DOCUMENT_CACHE_CONTROL,
   grokXCreatorHeadTags,
   injectGrokPwaHead,
   isDocumentPath,
@@ -502,5 +504,63 @@ test("vite plugin bakes og identity as a virtual module", () => {
   const plugin = readFileSync(join(TEMPLATE_ROOT, "scripts/grok-pwa-plugin.mjs"), "utf8");
   assert.match(plugin, /virtual:grok-og-identity/);
   assert.match(plugin, /snapshotOgIdentity/);
+});
+
+// ── Document cache policy (versioning vs stale deployments) ────────────────
+//
+// HTML documents are the only unversioned URL in the chain: the assets they
+// reference are content-hashed and `immutable`. Without an explicit policy a
+// browser/intermediary can keep serving the previous deployment's HTML, and
+// the user runs the old Workspace/editor until they clear caches by hand.
+// The contract: every HTML document revalidates (`no-cache`) on both serving
+// layers — deployed Nitro middleware and the dev/preview Vite plugin — while
+// nothing touches storage (no service worker, no cache clearing).
+
+test("document cache policy revalidates but is not no-store", () => {
+  assert.equal(DOCUMENT_CACHE_CONTROL, "no-cache");
+  assert.equal(DOCUMENT_CACHE_CONTROL.includes("no-store"), false);
+});
+
+function headerBag(initial = {}) {
+  const headers = new Map(Object.entries(initial));
+  return [
+    (name) => (headers.has(name.toLowerCase()) ? headers.get(name.toLowerCase()) : null),
+    (name, value) => headers.set(name.toLowerCase(), value),
+    headers,
+  ];
+}
+
+test("applyDocumentCachePolicy sets no-cache when no policy exists", () => {
+  const [get, set, headers] = headerBag();
+  applyDocumentCachePolicy(get, set);
+  assert.equal(headers.get("cache-control"), "no-cache");
+});
+
+test("applyDocumentCachePolicy treats null and empty as unset", () => {
+  for (const initial of [{}, { "cache-control": "" }, { "cache-control": "   " }]) {
+    const [get, set, headers] = headerBag(initial);
+    applyDocumentCachePolicy(get, set);
+    assert.equal(headers.get("cache-control"), "no-cache");
+  }
+});
+
+test("applyDocumentCachePolicy never overrides an explicit policy", () => {
+  for (const existing of ["no-store", "private, max-age=0", DOCUMENT_CACHE_CONTROL]) {
+    const [get, set, headers] = headerBag({ "cache-control": existing });
+    applyDocumentCachePolicy(get, set);
+    assert.equal(headers.get("cache-control"), existing);
+  }
+});
+
+test("deployed middleware applies the document cache policy", () => {
+  const middleware = readFileSync(join(TEMPLATE_ROOT, "server/middleware/grok-pwa.ts"), "utf8");
+  assert.match(middleware, /applyDocumentCachePolicy/);
+  assert.match(middleware, /grok-pwa-shared\.mjs/);
+});
+
+test("dev/preview plugin applies the document cache policy", () => {
+  const plugin = readFileSync(join(TEMPLATE_ROOT, "scripts/grok-pwa-plugin.mjs"), "utf8");
+  assert.match(plugin, /applyDocumentCachePolicy/);
+  assert.match(plugin, /grok-pwa-shared\.mjs/);
 });
 

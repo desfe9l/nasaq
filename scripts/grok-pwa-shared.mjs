@@ -124,6 +124,39 @@ export function isInstallQuery(url) {
   return (install === "1" || install === "true") && platform === "ios";
 }
 
+/**
+ * The document half of the versioning contract.
+ *
+ * Versioning here is asset-hashes + revalidated HTML — there is deliberately
+ * NO service worker that could serve a stale shell or wipe local data:
+ *  - built JS/CSS under `/assets/*` carry content-hashed filenames and ship
+ *    `cache-control: public, max-age=31536000, immutable` (safe forever — the
+ *    URL changes when the bytes do);
+ *  - every HTML *document* must therefore revalidate on each navigation, so
+ *    the HTML — the only unversioned URL in the chain — always resolves to
+ *    the current deployment's asset hashes.
+ *
+ * Without this, a browser (or any intermediary) is free to keep serving the
+ * previous deployment's HTML, and the user sees the old Workspace/editor
+ * until they manually clear the cache. `no-cache` (NOT `no-store`) disables
+ * freshness without touching stored user data, cookies, authorisations or
+ * the back/forward cache: projects, Library, sessions and settings survive
+ * untouched, and every new deployment simply loads on the next navigation.
+ */
+export const DOCUMENT_CACHE_CONTROL = "no-cache";
+
+/**
+ * Applies the document cache policy to a response, unless one was already
+ * declared explicitly (the license API's `no-store`, the install page, etc.).
+ * Read/write through callbacks so the same rule serves Fetch `Headers`
+ * (deployed) and Node's `ServerResponse` (dev/preview).
+ */
+export function applyDocumentCachePolicy(getHeader, setHeader) {
+  const current = getHeader("cache-control");
+  if (current !== null && current !== undefined && String(current).trim()) return;
+  setHeader("cache-control", DOCUMENT_CACHE_CONTROL);
+}
+
 /** Paths that can carry an app document (vs assets / API / internals). */
 export function isDocumentPath(pathname) {
   const path = String(pathname ?? "");

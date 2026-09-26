@@ -9,6 +9,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   acceptsHtml,
+  applyDocumentCachePolicy,
   createHeadInjector,
   injectGrokPwaHead,
   isDocumentPath,
@@ -98,6 +99,23 @@ function wrapHtmlResponses(middlewares, cwd) {
       next();
       return;
     }
+
+    /*
+     * The document cache policy — applied BEFORE the handler runs. Streaming
+     * SSR flushes headers ahead of the first body chunk, so a header set
+     * inside the wrapped write/end below races the flush and gets dropped.
+     * Set early, `no-cache` is the document default: a handler that declares
+     * an explicit policy afterwards (setHeader) simply overwrites it, the
+     * exact same "never overrides an explicit policy" result as the deployed
+     * Nitro middleware (server/middleware/grok-pwa.ts) gets by mutating the
+     * Fetch Response after `next()`. HTML then revalidates every navigation
+     * while hashed assets stay immutable — a new build loads without any
+     * cache clearing, and no storage/session data is touched.
+     */
+    applyDocumentCachePolicy(
+      (name) => res.getHeader(name),
+      (name, value) => res.setHeader(name, value),
+    );
 
     const originalWrite = res.write.bind(res);
     const originalEnd = res.end.bind(res);

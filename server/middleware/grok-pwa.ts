@@ -18,6 +18,7 @@ import installPageTemplate from "../../scripts/install-page.html?raw";
 import { grokOgIdentity } from "virtual:grok-og-identity";
 import {
   acceptsHtml,
+  applyDocumentCachePolicy,
   createHeadInjector,
   isDocumentPath,
   isInstallQuery,
@@ -101,11 +102,25 @@ export default async function grokPwaMiddleware(
   const result = await next();
   if (
     result instanceof Response &&
-    result.body &&
-    String(result.headers.get("content-type") ?? "").includes("text/html") &&
-    !result.headers.get("content-encoding")
+    String(result.headers.get("content-type") ?? "").includes("text/html")
   ) {
-    return injectHeadStreaming(result, requestHost(event));
+    /*
+     * Every HTML document revalidates on each navigation. The hashed
+     * `/assets/*` files the document points at are `immutable`, so the
+     * document itself is the only link that can strand a user on the old
+     * deployment — `no-cache` (set only when nothing declared a policy) is
+     * the root fix for "browser keeps loading the old version after a
+     * deploy". Storage, sessions and settings are untouched: no service
+     * worker, no cache clearing.
+     */
+    applyDocumentCachePolicy(
+      (name: string) => result.headers.get(name),
+      (name: string, value: string) => result.headers.set(name, value),
+    );
+    if (result.body && !result.headers.get("content-encoding")) {
+      return injectHeadStreaming(result, requestHost(event));
+    }
+    return result;
   }
   return result;
 }
