@@ -1,16 +1,17 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, ChevronDown, ClipboardCheck, CreditCard, Download, Key, MessageCircle, ShieldCheck, Lock } from "lucide-react";
+import { CheckCircle2, ChevronDown, CreditCard, Key, ShieldCheck, Lock } from "lucide-react";
 import { BRAND } from "@/lib/brand";
-import { createPaylinkCheckout, getCheckoutAvailability } from "@/lib/commercial/functions";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { getGumroadCheckoutLinksFn } from "@/lib/gumroad/functions";
 import { CENTRAL_PLANS, FREE_PLAN, BILLING_PERIODS, planSavings, paylinkPlanKey, type PaylinkPeriod, type PaylinkPlanFamily, type PaylinkPlanKey } from "@/lib/commercial/catalog";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { cardClass } from "@/components/site/cards";
 import { useSiteSettings, whatsappLink } from "@/lib/admin/use-site-settings";
 
 const FAQS: { q: string; a: string }[] = [
-  { q: "كيف تُفعَّل التراخيص؟", a: "بعد إتمام الدفع عبر Paylink، يُنشئ النظام ترخيصًا رقميًا عبر Keygen ويربطه بحسابك تلقائيًا. يصلك كود الترخيص ويمكنك إدارته من صفحة التراخيص." },
-  { q: "ما مدد الاشتراك المتاحة؟", a: "تتوفر ثلاث مدد: شهري 30 يومًا، ربع سنوي 90 يومًا بسعر مخفض، وسنوي 365 يومًا. جميعها تراخيص رقمية فورية." },
+  { q: "كيف تُفعَّل التراخيص؟", a: "بعد إتمام الدفع عبر Gumroad، يتحقق النظام من العملية خادميًا ثم يُنشئ ترخيصًا رقميًا عبر Keygen ويربطه بحسابك تلقائيًا بنفس بريد الشراء. تدير الترخيص من صفحة التراخيص." },
+  { q: "ماذا لو لم أكن مسجلًا قبل الشراء؟", a: "لا مشكلة: أكمل الدفع على Gumroad بنفس البريد الذي ستسجّل به في نَسَق، وعند أول تسجيل دخول يُربط الاشتراك بحسابك تلقائيًا." },
+  { q: "ما مدد الاشتراك المتاحة؟", a: "يتوفر اشتراك شهري (30 يومًا) وربع سنوي (90 يومًا) للفردي والفريق، بتجديد تلقائي يمكن إلغاؤه في أي وقت من Gumroad. جميعها تراخيص رقمية فورية." },
   { q: "أين تُعالج ملفاتي؟", a: "المحرر يعمل بتخزين محلي أولًا: المشاريع والصور والهويات تُحفظ داخل المتصفح عبر IndexedDB. الاتصال مطلوب فقط للتحقق من الترخيص." },
   { q: "هل يمكنني العمل بدون اتصال؟", a: "نعم، بعد التفعيل تعمل أدوات التحرير والحفظ والتصدير محليًا حتى عند انقطاع الشبكة." },
   { q: "هل الخطة المجانية محدودة المدة؟", a: "لا، الخطة المجانية دائمة دون تاريخ انتهاء، مع قيود على المزايا المتقدمة." },
@@ -19,49 +20,31 @@ const FAQS: { q: string; a: string }[] = [
 export function PurchasePage() {
   const [billing, setBilling] = useState<PaylinkPeriod>("monthly");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
-  const [mobile, setMobile] = useState("");
-  const [busyPlan, setBusyPlan] = useState<PaylinkPlanKey | null>(null);
-  const [checkoutError, setCheckoutError] = useState<string | null>(null);
-  const [availability, setAvailability] = useState<Record<string, boolean>>({});
+  const [checkoutLinks, setCheckoutLinks] = useState<Record<string, string>>({});
   useEffect(() => {
-    getCheckoutAvailability().then(setAvailability).catch(() => setAvailability({}));
+    getGumroadCheckoutLinksFn()
+      .then((links) => setCheckoutLinks(Object.fromEntries(links.map((link) => [link.planKey, link.url]))))
+      .catch(() => setCheckoutLinks({}));
   }, []);
   const { user } = useCurrentUserState();
   const { commercial } = useSiteSettings();
 
   const whatsapp = whatsappLink(commercial.whatsappNumber, commercial.whatsappEnterpriseMessage);
 
-  async function startPaylink(planKey: PaylinkPlanKey) {
-    if (!availability[planKey]) {
-      setCheckoutError("خدمة الدفع غير متاحة حاليًا، يرجى التواصل عبر الواتساب.");
-      return;
-    }
-    if (!user) {
-      window.location.href = "/login";
-      return;
-    }
-    const cleanMobile = mobile.replace(/\D/g, "");
-    if (cleanMobile.length < 8 || cleanMobile.length > 20) {
-      setCheckoutError("يرجى إدخال رقم جوال صحيح لإصدار الفاتورة، مثال: 05xxxxxxxx");
-      return;
-    }
-    setCheckoutError(null);
-    setBusyPlan(planKey);
-    try {
-      const result = await createPaylinkCheckout({ data: { planKey, clientMobile: cleanMobile } });
-      if (!result.ok) {
-        setCheckoutError(result.error);
-        return;
-      }
-      window.location.assign(result.paymentUrl);
-    } catch (error) {
-      setCheckoutError(error instanceof Error ? error.message : "تعذر بدء عملية الدفع.");
-    } finally {
-      setBusyPlan(null);
-    }
+  /**
+   * Gumroad is the primary checkout: each card deep-links straight to the
+   * correct tier + recurrence payment form (monthly by default). The buyer
+   * pays on Gumroad; access is bound server-side by the verified buyer email —
+   * never by redirect params — and Keygen issues the license.
+   */
+  function gumroadUrlFor(planKey: PaylinkPlanKey): string | null {
+    return checkoutLinks[planKey] ?? null;
   }
 
   const families: PaylinkPlanFamily[] = ["individual", "team"];
+  // Gumroad يبيع شهري وربع سنوي فقط حاليًا؛ تبقى الباقات السنوية في الكتالوج
+  // غير قابلة للشراء إلى حين إضافة Tier خاص بها (سلوك مطابق لقاعدة التوفر).
+  const purchasablePeriods = BILLING_PERIODS.filter((option) => option.id !== "annual");
 
   return (
     <div className="min-h-full bg-white dark:bg-[#111722]">
@@ -105,7 +88,8 @@ export function PurchasePage() {
         {/* Trust */}
         <div className="mt-5 flex flex-wrap gap-2">
           {[
-            [Lock, "دفع آمن ومشفر عبر Paylink"],
+            [Lock, "دفع آمن عبر Gumroad"],
+            [CreditCard, "تجديد تلقائي قابل للإلغاء"],
             [Key, "ترخيص رقمي وتفعيل فوري"],
             [ShieldCheck, "تخزين محلي أولًا"],
           ].map(([Icon, label]) => (
@@ -116,25 +100,26 @@ export function PurchasePage() {
           ))}
         </div>
 
-        {/* Billing selector */}
+        {/* Billing selector — شهري افتراضيًا */}
         <div className="mt-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="mb-2 text-[12px] font-bold text-[#0F1E33] dark:text-white">فترة الاشتراك — قارن أولًا ثم اختر</p>
             <div role="group" aria-label="فترة الاشتراك" className="inline-flex rounded-[10px] border border-line bg-white p-1 dark:border-white/10 dark:bg-white/5">
-              {BILLING_PERIODS.map((option) => (
+              {purchasablePeriods.map((option) => (
                 <button key={option.id} type="button" onClick={() => setBilling(option.id)} aria-pressed={billing === option.id} className={`rounded-[8px] px-4 py-2 text-[13px] font-bold transition ${billing === option.id ? "bg-[#0F1E33] text-white shadow-sm ring-1 ring-[#0F1E33] dark:bg-white dark:text-[#0F1E33] dark:ring-white/60" : "text-[#667085] hover:bg-[#f8faf9] hover:text-[#0F1E33] dark:text-white/50 dark:hover:bg-white/5"}`}>
                   {option.label}
                 </button>
               ))}
             </div>
           </div>
-          <div className="w-full max-w-xs">
-            <label className="text-[12px] font-bold text-[#0F1E33] dark:text-white">رقم الجوال لإصدار الفاتورة</label>
-            <input value={mobile} onChange={(e) => setMobile(e.target.value.replace(/[^\d+]/g, ""))} inputMode="tel" placeholder="05xxxxxxxx" className="mt-1.5 h-10 w-full rounded-[10px] border border-line bg-white px-3 text-[13px] font-mono dark:border-white/10 dark:bg-[#161c26]" dir="ltr" />
+          <div className="max-w-md text-[12px] leading-6 text-[#475467] dark:text-white/60">
+            {user ? (
+              <p>سيُربط الاشتراك تلقائيًا بحسابك الحالي (<span className="font-bold" dir="ltr">{user.primaryEmail}</span>). للشراء لحساب آخر استخدم بريد ذاك الحساب على Gumroad.</p>
+            ) : (
+              <p>أكمل الدفع على Gumroad بنفس البريد الذي ستسجّل به في نَسَق، وسيُربط الاشتراك بحسابك تلقائيًا عند أول تسجيل دخول — لا حاجة للتسجيل قبل الشراء.</p>
+            )}
           </div>
         </div>
-
-        {checkoutError && <div role="alert" className="mt-4 rounded-[10px] border border-red-200 bg-red-50 p-3 text-[13px] font-semibold text-[#b42318] dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">{checkoutError}</div>}
 
         {/* Cards — متوازنة */}
         <div className="mt-6 grid items-stretch gap-4 lg:grid-cols-3">
@@ -191,10 +176,16 @@ export function PurchasePage() {
                   </div>
                 </div>
                 <div className="mt-5">
-                  <button type="button" onClick={() => void startPaylink(planKey)} disabled={busyPlan !== null} className={`inline-flex h-9 w-full items-center justify-center rounded-[10px] text-[13px] font-bold text-white transition disabled:opacity-60 ${isTeam ? "bg-[#006C35] hover:bg-[#00542a]" : "bg-[#0F1E33] hover:bg-black dark:bg-white dark:text-[#0F1E33]"}`}>
-                    {busyPlan === planKey ? "جارٍ إنشاء الفاتورة" : `اختيار ${isTeam ? "فريق" : "فردي"} — ${plan.amount} ر.س`}
-                  </button>
-                  <p className="mt-2 text-center text-[11px] text-[#98a2b3]">ترخيص رقمي فوري · دفع آمن عبر Paylink</p>
+                  {gumroadUrlFor(planKey) ? (
+                    <a href={gumroadUrlFor(planKey)!} target="_blank" rel="noreferrer noopener" className={`inline-flex h-9 w-full items-center justify-center rounded-[10px] text-[13px] font-bold text-white transition ${isTeam ? "bg-[#006C35] hover:bg-[#00542a]" : "bg-[#0F1E33] hover:bg-black dark:bg-white dark:text-[#0F1E33]"}`}>
+                      اشترك الآن {isTeam ? "— فريق" : "— فردي"} — {plan.amount} ر.س{billing === "quarterly" ? " / 3 أشهر" : " / شهريًا"}
+                    </a>
+                  ) : (
+                    <span aria-disabled="true" className="inline-flex h-9 w-full cursor-not-allowed items-center justify-center rounded-[10px] bg-[#0F1E33]/40 text-[13px] font-bold text-white/70 dark:bg-white/20">
+                      جارٍ تجهيز بوابة الدفع…
+                    </span>
+                  )}
+                  <p className="mt-2 text-center text-[11px] text-[#98a2b3]">ترخيص رقمي فوري · دفع آمن عبر Gumroad</p>
                 </div>
               </div>
             );

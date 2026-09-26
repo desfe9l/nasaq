@@ -459,7 +459,12 @@ export async function createKeygenLicense(params: {
   return verificationFromResponse(key, { ...response, meta: { valid: true, code: "VALID" } }, entitlementCodes);
 }
 export async function findKeygenLicenseByPaylinkTransaction(transactionNo: string): Promise<KeygenVerification | null> {
-  const response = await request(`/licenses?metadata%5BpaylinkTransactionNo%5D=${encodeURIComponent(transactionNo)}&limit=1`);
+  return findKeygenLicenseByMetadataField("paylinkTransactionNo", transactionNo);
+}
+
+/** Generic metadata search — used by the Gumroad pipeline (gumroadSubscriptionId). */
+export async function findKeygenLicenseByMetadataField(field: string, value: string): Promise<KeygenVerification | null> {
+  const response = await request(`/licenses?metadata%5B${encodeURIComponent(field)}%5D=${encodeURIComponent(value)}&limit=1`);
   const resource = Array.isArray(response.data) ? response.data[0] : response.data;
   const key = stringAttribute(resource, "key");
   if (!resource || !key) return null;

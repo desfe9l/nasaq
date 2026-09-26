@@ -35,6 +35,7 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiLicenseActivateRouteImport } from './routes/api/license/activate'
 import { Route as ApiLicenseDeactivateRouteImport } from './routes/api/license/deactivate'
 import { Route as ApiLicenseValidateRouteImport } from './routes/api/license/validate'
+import { Route as ApiWebhooksGumroadRouteImport } from './routes/api/webhooks/gumroad'
 import { Route as ApiWebhooksKeygenRouteImport } from './routes/api/webhooks/keygen'
 import { Route as ApiWebhooksPaylinkRouteImport } from './routes/api/webhooks/paylink'
 
@@ -169,6 +170,11 @@ const ApiLicenseValidateRoute = ApiLicenseValidateRouteImport.update({
   path: '/api/license/validate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiWebhooksGumroadRoute = ApiWebhooksGumroadRouteImport.update({
+  id: '/api/webhooks/gumroad',
+  path: '/api/webhooks/gumroad',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiWebhooksKeygenRoute = ApiWebhooksKeygenRouteImport.update({
   id: '/api/webhooks/keygen',
   path: '/api/webhooks/keygen',
@@ -207,6 +213,7 @@ export interface FileRoutesByFullPath {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
+  '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
   '/api/webhooks/paylink': typeof ApiWebhooksPaylinkRoute
 }
@@ -237,6 +244,7 @@ export interface FileRoutesByTo {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
+  '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
   '/api/webhooks/paylink': typeof ApiWebhooksPaylinkRoute
 }
@@ -268,6 +276,7 @@ export interface FileRoutesById {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
+  '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
   '/api/webhooks/paylink': typeof ApiWebhooksPaylinkRoute
 }
@@ -300,6 +309,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
+    | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
     | '/api/webhooks/paylink'
   fileRoutesByTo: FileRoutesByTo
@@ -330,6 +340,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
+    | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
     | '/api/webhooks/paylink'
   id:
@@ -360,6 +371,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
+    | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
     | '/api/webhooks/paylink'
   fileRoutesById: FileRoutesById
@@ -391,6 +403,7 @@ export interface RootRouteChildren {
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
   ApiLicenseValidateRoute: typeof ApiLicenseValidateRoute
+  ApiWebhooksGumroadRoute: typeof ApiWebhooksGumroadRoute
   ApiWebhooksKeygenRoute: typeof ApiWebhooksKeygenRoute
   ApiWebhooksPaylinkRoute: typeof ApiWebhooksPaylinkRoute
 }
@@ -579,6 +592,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLicenseValidateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/webhooks/gumroad': {
+      id: '/api/webhooks/gumroad'
+      path: '/api/webhooks/gumroad'
+      fullPath: '/api/webhooks/gumroad'
+      preLoaderRoute: typeof ApiWebhooksGumroadRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/webhooks/keygen': {
       id: '/api/webhooks/keygen'
       path: '/api/webhooks/keygen'
@@ -624,6 +644,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,
   ApiLicenseDeactivateRoute: ApiLicenseDeactivateRoute,
   ApiLicenseValidateRoute: ApiLicenseValidateRoute,
+  ApiWebhooksGumroadRoute: ApiWebhooksGumroadRoute,
   ApiWebhooksKeygenRoute: ApiWebhooksKeygenRoute,
   ApiWebhooksPaylinkRoute: ApiWebhooksPaylinkRoute,
 }
