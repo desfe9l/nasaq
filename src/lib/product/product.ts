@@ -157,17 +157,8 @@ export function demoModeFromLocation(): boolean {
 // license system. The new system is the source of truth; the old model
 // is kept for backward compatibility.
 
-import type { FeatureId, LicensePlan } from "@/lib/license/types";
+import type { LicensePlan } from "@/lib/license/types";
 import { entitlementsForPlan, LICENSE_ENTITLEMENTS } from "@/lib/license/types";
-
-/** Map old FeatureEntitlements keys to new FeatureId keys. */
-const FEATURE_MAP: Record<string, FeatureId> = {
-  premiumTemplates: "premium_templates",
-  advancedExports: "advanced_export",
-  brandKit: "brand_kit",
-  dataImport: "data_import",
-  collaboration: "collaboration",
-};
 
 /** Convert a LicenseType from the new system to the old LicenseRecord shape. */
 export function licenseRecordFromEntitlements(

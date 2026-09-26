@@ -50,7 +50,7 @@ import {
   scaleSegments,
   type PathSegment,
 } from "./vector-path.ts";
-import { BRAND } from "@/lib/brand";
+import { BRAND } from "../brand.ts";
 
 const mm2pt = (v: number) => v * (72 / 25.4);
 /** Word sizes strokes in eighths of a point; 2 (¼pt) is the practical minimum. */

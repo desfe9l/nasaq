@@ -136,7 +136,9 @@ export function startPointerLibraryDrag(
     window.removeEventListener("pointercancel", onCancel);
     try {
       target.releasePointerCapture?.(pointerId);
-    } catch {}
+    } catch {
+      /* capture already released or target detached */
+    }
   };
 
   const onMove = (ev: PointerEvent) => {
@@ -181,7 +183,9 @@ export function startPointerLibraryDrag(
 
   try {
     target.setPointerCapture?.(pointerId);
-  } catch {}
+  } catch {
+    /* pointer already gone (detached target) — drag still works via window listeners */
+  }
   // تأخير بسيط لتجنب التعارض مع tap
   longPressTimer = setTimeout(() => {
     // إذا لم يتحرك بعد 500ms، لا نبدأ سحب — قد يكون ضغط مطوّل للقائمة
