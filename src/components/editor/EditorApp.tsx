@@ -61,6 +61,7 @@ import { cn } from "@/lib/utils";
 import { EditorWorkspaceSkeleton } from "@/components/ui/Skeleton";
 import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
 import { ToolbarMenus } from "./ToolbarMenus";
+import { EditorAccountMenu } from "./EditorAccountMenu";
 import { OVERLAY_BREAKPOINT, isOverlayViewport } from "@/lib/editor/ui-state";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useLicense } from "@/lib/license/client";
@@ -1441,6 +1442,7 @@ function Studio({
             <Download className="size-4" />
             تصدير
           </button>
+          <EditorAccountMenu />
         </div>
       </header>
 

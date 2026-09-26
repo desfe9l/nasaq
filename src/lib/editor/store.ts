@@ -386,6 +386,15 @@ interface EditorStore extends Project, Ui, History {
       | "pageManagerOpen"
     >,
   ) => void;
+  /**
+   * Set the colour mode directly (rather than flipping it).
+   *
+   * «الإعدادات → المحرر» offers «داكن» / «فاتح» as an explicit choice, so it
+   * needs a setter that cannot land on the wrong side when the author picks the
+   * mode they are already on. Persistence goes through the same shared theme
+   * module `toggle("dark")` uses, so one preference still rules the whole site.
+   */
+  setDark: (dark: boolean) => void;
   setLeftTab: (t: LeftTab) => void;
   setRightTab: (t: RightTab) => void;
   /**
@@ -1104,6 +1113,9 @@ export const useEditor = create<EditorStore>((set, get) => {
               : PAGES_PANEL_DEFAULT,
           ),
           bubbleEnabled: ui.bubble !== false,
+          showGrid: ui.showGrid ?? WORKSPACE_TOGGLE_DEFAULTS.showGrid,
+          snapGrid: ui.snapGrid ?? WORKSPACE_TOGGLE_DEFAULTS.snapGrid,
+          snapElements: ui.snapElements ?? WORKSPACE_TOGGLE_DEFAULTS.snapElements,
           printGuides: {
             ...DEFAULT_PRINT_GUIDES,
             ...(ui.printGuides ?? {}),
@@ -1584,6 +1596,12 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (key === "dark") {
         writeStoredTheme(next);
       }
+      // Workspace switches exposed in «الإعدادات → المحرر» are remembered like
+      // the rest of the shell state, so the panel and the toolbar agree after
+      // a reload instead of one of them silently reverting.
+      if (key === "showGrid" || key === "snapGrid" || key === "snapElements") {
+        writeUi({ [key]: next });
+      }
       if (
         key === "focusMode" ||
         key === "leftOpen" ||
@@ -1593,6 +1611,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       ) {
         void setSetting(key, next);
       }
+    },
+    setDark: (dark) => {
+      if (get().dark === dark) return;
+      set({ dark });
+      writeStoredTheme(dark);
     },
     setLeftTab: (leftTab) => {
       set({ leftTab, leftOpen: true });
@@ -3391,7 +3414,28 @@ interface PersistedUi {
   bubble?: boolean;
   /** Print-guide visibility (absent = all off). */
   printGuides?: PrintGuideSettings;
+  /** Canvas grid (absent = off). */
+  showGrid?: boolean;
+  /** Snap to the grid (absent = on). */
+  snapGrid?: boolean;
+  /** Snap to other elements (absent = on). */
+  snapElements?: boolean;
 }
+
+/**
+ * The workspace preferences that survive a reload.
+ *
+ * They live in the same slot as the rest of the shell state so «الإعدادات →
+ * المحرر» and the toolbar switches can never hold two versions of the truth.
+ */
+type PersistedWorkspaceToggle = "showGrid" | "snapGrid" | "snapElements";
+
+/** Absent-means-default for each persisted workspace toggle. */
+const WORKSPACE_TOGGLE_DEFAULTS: Record<PersistedWorkspaceToggle, boolean> = {
+  showGrid: false,
+  snapGrid: true,
+  snapElements: true,
+};
 
 /** Merge a patch into the persisted UI slot (zoom, panels, pages height…). */
 function writeUi(patch: PersistedUi): void {

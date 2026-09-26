@@ -15,7 +15,39 @@ import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
+import { accountIdentity } from "@/lib/auth/identity";
+import { useEditorEntry } from "@/lib/auth/use-editor-entry";
+import { AccountAvatar } from "./AccountAvatar";
 import { AccountBadge, useAccountTier } from "./AccountBadge";
+
+/**
+ * The editor call-to-action in the site chrome.
+ *
+ * A signed-in account walks straight into the editor — licensed, trial, expired,
+ * revoked or registered without a licence alike. What that account may use is
+ * settled inside the editor by the server-resolved entitlements, never by the
+ * link that leads there, so nobody with an account is asked to "try" a product
+ * they already signed up for. Only a visitor with no session is routed through
+ * the limited `/demo` page.
+ */
+function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile" }) {
+  const { entry } = useEditorEntry();
+  // Nothing until the session resolves, exactly like `HeaderAccount`: a
+  // signed-in author must never see the demo wording flash first.
+  if (!entry.ready) return null;
+  return (
+    <a
+      href={entry.href}
+      className={cn(
+        variant === "header"
+          ? "hidden h-9 items-center whitespace-nowrap rounded-[8px] border border-navy px-3 text-[12px] font-extrabold text-navy lg:inline-flex dark:text-white"
+          : "block rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted lg:hidden",
+      )}
+    >
+      {entry.label}
+    </a>
+  );
+}
 
 /**
  * «مرخص» / «مجاني» badge for the signed-in account.
@@ -70,14 +102,10 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
     );
   }
 
-  const label = user.displayName ?? user.primaryEmail ?? "حسابي";
-  const avatar = user.profileImageUrl ? (
-    <img src={user.profileImageUrl} alt="" className="size-6 rounded-full object-cover" />
-  ) : (
-    <span className="grid size-6 place-items-center rounded-full bg-navy text-[10px] font-extrabold text-white">
-      {label.charAt(0).toUpperCase()}
-    </span>
-  );
+  // Resolved by the shared identity helper, so this chip and the editor's
+  // account area always print the same name for the same session.
+  const { label, email } = accountIdentity(user);
+  const avatar = <AccountAvatar user={user} size={24} />;
 
   return (
     <div className={cn("relative", variant === "mobile" && "mt-1 w-full")}>
@@ -132,9 +160,9 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
             <p className="truncate text-[12px] font-extrabold" title={label}>
               {label}
             </p>
-            {user.primaryEmail && (
-              <p className="truncate text-[10px] font-medium text-muted" dir="ltr" title={user.primaryEmail}>
-                {user.primaryEmail}
+            {email && (
+              <p className="truncate text-[10px] font-medium text-muted" dir="ltr" title={email}>
+                {email}
               </p>
             )}
             <div className="mt-1.5">
@@ -323,12 +351,7 @@ export function SiteHeader({ current }: { current: string }) {
               {CONTACT_PHONE_DISPLAY}
             </span>
           </a>
-          <a
-            href="/demo"
-            className="hidden h-9 items-center whitespace-nowrap rounded-[8px] border border-navy px-3 text-[12px] font-extrabold text-navy lg:inline-flex dark:text-white"
-          >
-            تجربة المحرر
-          </a>
+          <EditorEntryLink />
           <HeaderAccount />
           <button
             type="button"
@@ -356,12 +379,7 @@ export function SiteHeader({ current }: { current: string }) {
               {item.label}
             </a>
           ))}
-          <a
-            href="/demo"
-            className="block rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted lg:hidden"
-          >
-            تجربة المحرر
-          </a>
+          <EditorEntryLink variant="mobile" />
           <button
             type="button"
             onClick={toggleTheme}

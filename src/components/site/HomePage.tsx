@@ -10,6 +10,7 @@ import { CARD_W, CARD_WRAP, SITE_CARD } from "@/components/site/cards";
 import { FullVersionModal } from "@/components/site/FullVersionModal";
 import { HeroShowcase } from "@/components/site/HeroShowcase";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
+import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 
 const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
   { icon: LayoutTemplate, title: PRODUCT_COPY.capabilities[0][0], desc: PRODUCT_COPY.capabilities[0][1] },
@@ -28,6 +29,19 @@ export function HomePage() {
   const openProject = useEditor((s) => s.openProject);
   const fileInput = useRef<HTMLInputElement>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  /**
+   * «صفحة فارغة» entry.
+   *
+   * A signed-in account gets a real blank project inside the editor; only a
+   * visitor with no session is sent to the limited demo page. Whether the
+   * account is licensed is not this component's business — the editor applies
+   * the server's entitlements once it opens.
+   */
+  const { entry, openNewDocument } = useEditorEntry();
+  const startBlank = () => {
+    if (entry.ready && entry.direct) void openNewDocument();
+    else window.location.assign("/demo");
+  };
   const { texts } = useSiteSettings();
 
   useEffect(() => {
@@ -190,7 +204,7 @@ export function HomePage() {
           <p className="mt-1 text-[13px] text-[#667085] dark:text-white/50">كل قالب ينشئ نسخة جديدة داخل مشروعك.</p>
           <div className={`mt-6 ${CARD_WRAP}`}>
             {PACKS.map((pack) => (
-              <button key={pack.id} type="button" onClick={() => pack.id === "blank" ? window.location.assign("/demo") : setModalOpen(true)} className={`flex flex-col rounded-[12px] border border-line/70 bg-white p-5 text-right hover:border-[#0F1E33]/20 dark:border-white/10 dark:bg-white/[0.03] ${CARD_W} ${SITE_CARD}`}>
+              <button key={pack.id} type="button" onClick={() => pack.id === "blank" ? startBlank() : setModalOpen(true)} className={`flex flex-col rounded-[12px] border border-line/70 bg-white p-5 text-right hover:border-[#0F1E33]/20 dark:border-white/10 dark:bg-white/[0.03] ${CARD_W} ${SITE_CARD}`}>
                 <div className="mb-3 flex items-center justify-between">
                   <span className="grid size-8 place-items-center rounded-[8px] bg-[#f8faf9] text-[#0F1E33] dark:bg-white/5 dark:text-white/70">
                     <FileText className="size-4" />
@@ -199,7 +213,11 @@ export function HomePage() {
                 </div>
                 <strong className="block text-[14px] font-bold text-[#0F1E33] dark:text-white">{pack.title}</strong>
                 <span className="mt-1 block text-[12px] leading-5 text-[#667085] dark:text-white/50">{pack.desc}</span>
-                <span className="mt-auto pt-4 text-[11px] font-bold text-[#006C35]">{pack.id === "blank" ? "فتح العرض" : "متاح في النسخة الكاملة"}</span>
+                <span className="mt-auto pt-4 text-[11px] font-bold text-[#006C35]">{pack.id === "blank"
+                    ? entry.ready && entry.direct
+                      ? "فتح المحرر"
+                      : "فتح العرض"
+                    : "متاح في النسخة الكاملة"}</span>
               </button>
             ))}
           </div>

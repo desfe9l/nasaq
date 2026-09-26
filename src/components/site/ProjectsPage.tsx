@@ -5,6 +5,7 @@ import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import type { ProjectMeta } from "@/lib/editor/model";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
+import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 import { ProjectCard } from "@/components/site/ProjectCard";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +95,7 @@ export function ProjectsPage() {
     const created = await createProject("blank");
     if (created) window.location.assign("/editor");
   };
+  const { entry } = useEditorEntry();
 
   /** Pinned first cell: the dashed «create document» tile every view starts with. */
   const createCard = (
@@ -128,7 +130,16 @@ export function ProjectsPage() {
             <button
               key={pack.id}
               type="button"
-              onClick={() => window.location.assign(pack.id === "blank" ? "/demo" : "/purchase")}
+              onClick={() => {
+                if (pack.id !== "blank") {
+                  window.location.assign("/purchase");
+                  return;
+                }
+                // A signed-in account starts a real document in the editor;
+                // only a visitor with no session is sent to the demo page.
+                if (entry.ready && entry.direct) void startNew();
+                else window.location.assign("/demo");
+              }}
               className="rounded-[8px] border border-line px-3 py-2 text-[12px] font-bold dark:border-white/10"
             >
               {pack.title}
