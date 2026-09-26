@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronDown,
+  FilePlus2,
   KeyRound,
   LogIn,
   LogOut,
@@ -13,6 +14,7 @@ import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
 import { AccountAvatar } from "@/components/site/AccountAvatar";
 import { AccountBadge, useAccountTier } from "@/components/site/AccountBadge";
+import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { EditorSettingsDialog } from "./EditorSettingsDialog";
 
@@ -42,6 +44,52 @@ const MENU_WIDTH = 252;
 function MenuBadge({ user }: { user: AppUser }) {
   const tier = useAccountTier(user);
   return <AccountBadge tier={tier} />;
+}
+
+/**
+ * «مستند جديد» — starts a blank document without leaving the workspace.
+ *
+ * Licensed accounts only (administrators included): the tier is the server's
+ * (`useAccountTier` → `getLicenseStatusFn`), and the store's own entitlement
+ * ceiling still applies underneath, so the item can never widen free-tier
+ * access. Its own component so `useAccountTier` mounts only while the menu is
+ * open for a real session, exactly like `MenuBadge`.
+ */
+function NewDocumentMenuItem({
+  user,
+  className,
+  onDone,
+}: {
+  user: AppUser;
+  className: string;
+  onDone: () => void;
+}) {
+  const tier = useAccountTier(user);
+  const [creating, setCreating] = useState(false);
+  if (tier !== "LICENSED" && tier !== "ADMIN") return null;
+  const create = async () => {
+    setCreating(true);
+    try {
+      // The store applies the fresh project immediately — no navigation, no
+      // reload — and a refused create toasts inside the store itself.
+      const created = await useEditor.getState().createProject("blank");
+      if (created) onDone();
+    } finally {
+      setCreating(false);
+    }
+  };
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={creating}
+      onClick={() => void create()}
+      className={cn(className, "disabled:cursor-wait disabled:opacity-60")}
+    >
+      <FilePlus2 className="size-4 opacity-70" aria-hidden />
+      {creating ? "جارٍ إنشاء المستند…" : "مستند جديد"}
+    </button>
+  );
 }
 
 export function EditorAccountMenu() {
@@ -193,6 +241,11 @@ export function EditorAccountMenu() {
                 </div>
               </div>
 
+              <NewDocumentMenuItem
+                user={user}
+                className={menuItem}
+                onDone={() => setOpen(false)}
+              />
               <button
                 type="button"
                 role="menuitem"
