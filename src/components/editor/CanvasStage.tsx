@@ -1253,6 +1253,34 @@ export function CanvasStage({
                     height: `${size.h}mm`,
                     background: page.bg || "#fff",
                   }}
+                  /*
+                   * Content protection, scoped to the artboard ONLY (site UI
+                   * outside keeps native behaviour):
+                   *  • right-click never opens the browser menu here ("Save
+                   *    Image As" disappears with it) — the custom NASAQ menu
+                   *    still opens because this only prevents the default and
+                   *    lets the event bubble up to the workspace handler;
+                   *  • native HTML5 drags cannot start from document content,
+                   *    so an image/selection cannot be dropped onto the
+                   *    desktop. Element moving/resizing uses pointer events
+                   *    and incoming library/file drops use dragover+drop, so
+                   *    neither is affected. Editing inside a contentEditable
+                   *    keeps its native drag behaviour.
+                   */
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                  }}
+                  onDragStart={(e) => {
+                    const t = e.target as HTMLElement;
+                    if (
+                      t.closest?.(
+                        '[contenteditable="true"], [contenteditable=""], input, textarea',
+                      )
+                    ) {
+                      return;
+                    }
+                    e.preventDefault();
+                  }}
                   onPointerDown={(e) => {
                     // Only a press on the page itself starts a marquee; presses on
                     // elements are handled by the element and stop propagation.

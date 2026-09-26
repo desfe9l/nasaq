@@ -17,7 +17,7 @@ const FAQS: { q: string; a: string }[] = [
 ];
 
 export function PurchasePage() {
-  const [billing, setBilling] = useState<PaylinkPeriod>("quarterly");
+  const [billing, setBilling] = useState<PaylinkPeriod>("monthly");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [mobile, setMobile] = useState("");
   const [busyPlan, setBusyPlan] = useState<PaylinkPlanKey | null>(null);
@@ -122,7 +122,7 @@ export function PurchasePage() {
             <p className="mb-2 text-[12px] font-bold text-[#0F1E33] dark:text-white">فترة الاشتراك — قارن أولًا ثم اختر</p>
             <div role="group" aria-label="فترة الاشتراك" className="inline-flex rounded-[10px] border border-line bg-white p-1 dark:border-white/10 dark:bg-white/5">
               {BILLING_PERIODS.map((option) => (
-                <button key={option.id} type="button" onClick={() => setBilling(option.id)} aria-pressed={billing === option.id} className={`rounded-[8px] px-4 py-2 text-[13px] font-bold transition ${billing === option.id ? "bg-[#0F1E33] text-white dark:bg-white dark:text-[#0F1E33]" : "text-[#667085] hover:text-[#0F1E33] dark:text-white/50"}`}>
+                <button key={option.id} type="button" onClick={() => setBilling(option.id)} aria-pressed={billing === option.id} className={`rounded-[8px] px-4 py-2 text-[13px] font-bold transition ${billing === option.id ? "bg-[#0F1E33] text-white shadow-sm ring-1 ring-[#0F1E33] dark:bg-white dark:text-[#0F1E33] dark:ring-white/60" : "text-[#667085] hover:bg-[#f8faf9] hover:text-[#0F1E33] dark:text-white/50 dark:hover:bg-white/5"}`}>
                   {option.label}
                 </button>
               ))}
@@ -137,16 +137,20 @@ export function PurchasePage() {
         {checkoutError && <div role="alert" className="mt-4 rounded-[10px] border border-red-200 bg-red-50 p-3 text-[13px] font-semibold text-[#b42318] dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300">{checkoutError}</div>}
 
         {/* Cards — متوازنة */}
-        <div className="mt-6 grid items-stretch gap-5 lg:grid-cols-3">
-          {/* Free */}
-          <div className={cardClass("flex flex-col p-6")}>
+        <div className="mt-6 grid items-stretch gap-4 lg:grid-cols-3">
+          {/* Free — deliberately quieter than the paid cards: muted tinted
+              surface, no lift, small badge; reads free at a glance. */}
+          <div className="flex flex-col rounded-xl border border-line/70 bg-[#f8faf9] p-5 dark:border-white/10 dark:bg-white/[0.03]">
             <div className="flex-1">
-              <h2 className="text-[16px] font-bold text-[#0F1E33] dark:text-white">مجاني — Free</h2>
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="text-[15px] font-bold text-[#0F1E33] dark:text-white">مجاني — Free</h2>
+                <span className="shrink-0 rounded-full border border-line/70 bg-white px-2.5 py-1 text-[10px] font-bold text-[#667085] dark:border-white/15 dark:bg-white/5 dark:text-white/60">مجانية دائمًا</span>
+              </div>
               <p className="mt-2 text-[12px] leading-6 text-[#667085] dark:text-white/50">خطة مجانية دائمة للتقييم والبدء، دون دفع أو تاريخ انتهاء.</p>
-              <p className="mt-5 text-[28px] font-extrabold text-[#0F1E33] dark:text-white">0 <span className="text-[14px] font-bold text-[#667085]">ر.س</span></p>
+              <p className="mt-4 text-[24px] font-extrabold text-[#0F1E33] dark:text-white">0 <span className="text-[13px] font-bold text-[#667085]">ر.س</span></p>
               <p className="text-[11px] text-[#98a2b3]">المدة: دائمة</p>
-              <div className="mt-5 border-t border-line/60 pt-4 dark:border-white/10">
-                <ul className="grid gap-2">
+              <div className="mt-4 border-t border-line/60 pt-3.5 dark:border-white/10">
+                <ul className="grid gap-1.5">
                   {FREE_PLAN.features.map((f) => (
                     <li key={f} className="flex items-start gap-2 text-[12px] leading-5 text-[#344054] dark:text-white/60">
                       <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[#98a2b3]" /> {f}
@@ -155,7 +159,7 @@ export function PurchasePage() {
                 </ul>
               </div>
             </div>
-            <a href="/editor" className="mt-6 inline-flex h-10 w-full items-center justify-center rounded-[10px] border border-line bg-white text-[13px] font-bold text-[#0F1E33] hover:bg-[#f8faf9] dark:border-white/15 dark:bg-white/5 dark:text-white">ابدأ مجانًا</a>
+            <a href="/editor" className="mt-5 inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-line bg-white text-[13px] font-bold text-[#0F1E33] hover:bg-[#f8faf9] dark:border-white/15 dark:bg-white/5 dark:text-white">ابدأ مجانًا</a>
           </div>
 
           {families.map((family) => {
@@ -163,21 +167,21 @@ export function PurchasePage() {
             const plan = CENTRAL_PLANS[planKey];
             const isTeam = family === "team";
             return (
-              <div key={planKey} className={cardClass(`flex flex-col p-6 ${isTeam ? "border-[#006C35]/20 shadow-sm" : ""}`)}>
+              <div key={planKey} className={cardClass(`flex flex-col p-5 ${isTeam ? "border-[#006C35]/30 shadow-sm" : ""}`)}>
                 <div className="flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h2 className="text-[16px] font-bold text-[#0F1E33] dark:text-white">{isTeam ? "فريق — Team" : "فردي — Pro"}</h2>
+                      <h2 className="text-[15px] font-bold text-[#0F1E33] dark:text-white">{isTeam ? "فريق — Team" : "فردي — Pro"}</h2>
                       <p className="mt-1 text-[12px] leading-5 text-[#667085] dark:text-white/50">{plan.description}</p>
                     </div>
                     {plan.popular && <span className="shrink-0 rounded-full bg-[#0F1E33] px-2.5 py-1 text-[10px] font-bold text-white dark:bg-white dark:text-[#0F1E33]">الأكثر طلبًا</span>}
                   </div>
-                  <p className="mt-5 text-[28px] font-extrabold text-[#0F1E33] dark:text-white">{plan.amount.toLocaleString("en-US")} <span className="text-[14px] font-bold text-[#667085]">ر.س</span> <span className="text-[12px] font-bold text-[#667085]">/ {billing === "quarterly" ? "3 أشهر" : billing === "annual" ? "سنوي" : "شهري"}</span></p>
+                  <p className="mt-4 text-[24px] font-extrabold text-[#0F1E33] dark:text-white">{plan.amount.toLocaleString("en-US")} <span className="text-[13px] font-bold text-[#667085]">ر.س</span> <span className="text-[12px] font-bold text-[#667085]">/ {billing === "quarterly" ? "3 أشهر" : billing === "annual" ? "سنوي" : "شهري"}</span></p>
                   <p className="text-[11px] text-[#98a2b3]">{plan.durationDays} يوم · {billing === "monthly" ? "شهري" : billing === "quarterly" ? "ربع سنوي" : "سنوي"}</p>
                   {billing !== "monthly" && <p className="mt-1 text-[11px] font-semibold text-[#006C35]">وفّر {planSavings(plan)} ر.س مقارنة بالشهري</p>}
-                  <div className="mt-5 border-t border-line/60 pt-4 dark:border-white/10">
+                  <div className="mt-4 border-t border-line/60 pt-3.5 dark:border-white/10">
                     <p className="text-[11px] font-bold text-[#0F1E33] dark:text-white/70">المزايا المشمولة:</p>
-                    <ul className="mt-3 grid gap-2">
+                    <ul className="mt-2.5 grid gap-1.5">
                       {plan.features.map((f) => (
                         <li key={f} className="flex items-start gap-2 text-[12px] leading-5 text-[#344054] dark:text-white/70">
                           <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[#006C35]" /> {f}
@@ -186,8 +190,8 @@ export function PurchasePage() {
                     </ul>
                   </div>
                 </div>
-                <div className="mt-6">
-                  <button type="button" onClick={() => void startPaylink(planKey)} disabled={busyPlan !== null} className={`inline-flex h-10 w-full items-center justify-center rounded-[10px] text-[13px] font-bold text-white transition disabled:opacity-60 ${isTeam ? "bg-[#006C35] hover:bg-[#00542a]" : "bg-[#0F1E33] hover:bg-black dark:bg-white dark:text-[#0F1E33]"}`}>
+                <div className="mt-5">
+                  <button type="button" onClick={() => void startPaylink(planKey)} disabled={busyPlan !== null} className={`inline-flex h-9 w-full items-center justify-center rounded-[10px] text-[13px] font-bold text-white transition disabled:opacity-60 ${isTeam ? "bg-[#006C35] hover:bg-[#00542a]" : "bg-[#0F1E33] hover:bg-black dark:bg-white dark:text-[#0F1E33]"}`}>
                     {busyPlan === planKey ? "جارٍ إنشاء الفاتورة" : `اختيار ${isTeam ? "فريق" : "فردي"} — ${plan.amount} ر.س`}
                   </button>
                   <p className="mt-2 text-center text-[11px] text-[#98a2b3]">ترخيص رقمي فوري · دفع آمن عبر Paylink</p>

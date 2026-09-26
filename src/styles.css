@@ -2166,6 +2166,21 @@ samp {
   user-select: text;
 }
 
+/*
+ * Content protection (artboard only): images on the document surface must not
+ * be grabbable by the browser's native drag ("drag to desktop") nor offer the
+ * long-press save callout on touch devices. The native right-click menu is
+ * suppressed at the element level (see CanvasStage), which also removes
+ * "Save Image As". This is a friction layer against casual saving, not DRM —
+ * site imagery outside `.report-page` is untouched.
+ */
+.report-page img {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 /* Chrome that looks like a control behaves like one, even outside `.editor-ui`
    (portalled menus, dialogs and toasts render under <body>). */
 button,

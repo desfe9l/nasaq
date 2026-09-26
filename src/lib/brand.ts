@@ -66,20 +66,20 @@ export const SOCIAL_ACCOUNTS: readonly SocialAccount[] = [
   {
     id: "instagram",
     label: "إنستغرام",
-    handle: "@nasaq_ar",
-    href: "https://www.instagram.com/nasaq_ar",
+    handle: "@nasaqdocs",
+    href: "https://www.instagram.com/nasaqdocs",
   },
   {
     id: "tiktok",
     label: "تيك توك",
-    handle: "@nasaq_ar",
-    href: "https://www.tiktok.com/@nasaq_ar",
+    handle: "@nasaqdocs",
+    href: "https://www.tiktok.com/@nasaqdocs",
   },
   {
     id: "x",
     label: "منصة X",
-    handle: "@nasaqdocs",
-    href: "https://x.com/nasaqdocs",
+    handle: "@nasaq_ar",
+    href: "https://x.com/nasaq_ar",
   },
 ] as const;
 

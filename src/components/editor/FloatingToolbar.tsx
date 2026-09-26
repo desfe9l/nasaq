@@ -151,9 +151,14 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
         visibility: pos ? "visible" : "hidden",
       }}
       // The toolbar is chrome over the document: pointer events must never
-      // reach the canvas beneath it.
+      // reach the canvas beneath it. Right-click is stopped here too — the
+      // stopPropagation means the workspace handler never runs, so without
+      // preventDefault the browser's own menu would appear over the canvas.
       onPointerDown={(event) => event.stopPropagation()}
-      onContextMenu={(event) => event.stopPropagation()}
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
       role="toolbar"
       aria-label={`أدوات ${el.name || TYPE_NAME[el.type]}`}
     >

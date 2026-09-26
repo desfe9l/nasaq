@@ -52,7 +52,7 @@ export function SocialLinks({
             target="_blank"
             rel="noopener noreferrer"
             // The handle repeats across accounts, so the accessible name carries
-            // the platform too — a screen reader must not hear "@nasaq_ar" twice
+            // the platform too — a screen reader must not hear "@nasaqdocs" twice
             // with no way to tell the two links apart.
             aria-label={`${account.label} — ${account.handle}`}
             title={`${account.label} ${account.handle}`}

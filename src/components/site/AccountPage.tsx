@@ -166,6 +166,12 @@ function AdminAccessCard() {
           لوحة الإدارة
         </a>
         <a
+          href="/admin-dashboard"
+          className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
+        >
+          القوالب ومحتوى الموقع
+        </a>
+        <a
           href="/admin-licenses"
           className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
         >
