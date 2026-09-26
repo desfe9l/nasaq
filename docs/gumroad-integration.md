@@ -2,7 +2,9 @@
 
 هذا المستند يصف بالضبط ما يجب إدخاله في لوحة Gumroad، وبأي قيم، حتى يعمل
 مسار **Gumroad → NASAQ → Keygen** من أول مرة. Gumroad هو مزوّد الدفع الوحيد في
-المنصة؛ أُزيل مزوّد الدفع القديم من الكود بالكامل.
+المنصة؛ أُزيل مزوّد الدفع القديم (Paylink) من الكود بالكامل — بما في ذلك جداوله
+(`migrations/0011_drop_paylink.sql`) ومتغيّراته `PAYLINK_API_ID` /
+`PAYLINK_SECRET_KEY`.
 
 ## المنتج (لا يُنشأ منتج جديد)
 
@@ -18,11 +20,30 @@
 
 | المتغير | أين | القيمة |
 | --- | --- | --- |
-| `GUMROAD_ACCESS_TOKEN` | الخادم فقط | Gumroad → Settings → Advanced → Applications → Generate access token |
-| `GUMROAD_PRODUCT_ID` | الخادم فقط (يُنصح) | من صفحة المنتج → قسم License key، أو `GET /v2/products` |
+| `GUMROAD_ACCESS_TOKEN` | الخادم فقط — **إلزامي** | Gumroad → Settings → Advanced → Applications → Generate access token |
+| `GUMROAD_PRODUCT_ID` | الخادم فقط — **اختياري** | من صفحة المنتج → قسم License key، أو `GET /v2/products` |
 | `GUMROAD_PRODUCT_PERMALINK` | اختياري | الافتراضي `auaewk` |
 | `GUMROAD_STORE_BASE_URL` | اختياري | الافتراضي `https://nasaqar.gumroad.com` |
 | `GUMROAD_TIER_INDIVIDUAL_NAME` / `GUMROAD_TIER_TEAM_NAME` | اختياري | الافتراضي «نَسَق | فردي» / «نَسَق | فريق» |
+
+### استخراج معرّف المنتج تلقائيًا
+
+لا يُفترض أن الـ permalink (`auaewk`) هو معرّف المنتج. `resolveGumroadProductId()`
+في `src/lib/gumroad/config.server.ts` يحسم المعرّف بهذا الترتيب:
+
+1. `GUMROAD_PRODUCT_ID` إن ضُبط — قيمة صريحة تفوز دائمًا.
+2. خلاف ذلك، وبوجود `GUMROAD_ACCESS_TOKEN`، يُستخرج المعرّف الحقيقي من
+   `GET /v2/products` بمطابقة الـ permalink (مع التسامح مع `custom_permalink`
+   ومسار `url`).
+3. خلاف ذلك يبقى غير مُستخرج، ويعود التحقق إلى `product_permalink` (تقبله
+   المنتجات المنشأة قبل 2023).
+
+نتيجة البحث تُحفظ في ذاكرة العملية؛ الفشل **لا** يُحفظ، حتى لا يُعطّل خطأ عابر
+من Gumroad البيع التالي. هذا يجعل `GUMROAD_PRODUCT_ID` اختياريًا بالكامل في
+متجر يحتوي منتجًا واحدًا، ومطلوبًا فقط عندما يستضيف المتجر أكثر من منتج.
+
+كل عملية بيع تُتحقق أيضًا من أنها تخص **هذا** المنتج: بيع يتبع منتج Gumroad
+آخر يُرفض بسبب `product_mismatch` ولا يُفعّل شيئًا.
 
 ## ربط Ping / Resource subscriptions
 

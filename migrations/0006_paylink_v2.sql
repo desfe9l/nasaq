@@ -1,5 +1,8 @@
 -- 0006_paylink_v2.sql
 -- Paylink Payment Webhook V2 fields.
+-- RETIRED: Paylink is no longer a payment provider — see 0011_drop_paylink.sql,
+-- which drops the paylink_transactions table these fields lived on. The file is
+-- left untouched because it is already recorded in `_migrations`.
 --
 -- V2 of the Paylink webhook carries far more than V1 did: the payment method
 -- (`paymentType`), the merchant identity block (`merchantMobile`,

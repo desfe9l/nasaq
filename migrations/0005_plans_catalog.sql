@@ -1,5 +1,5 @@
 -- 0005_plans_catalog.sql
--- NASAQ Central Plans Catalog for Paylink & Keygen fulfillment
+-- NASAQ Central Plans Catalog for Gumroad & Keygen fulfillment
 -- Standardizes the 4 commercial paid plans with authoritative prices and durations.
 
 insert into plans (id, name, arabic_name, description, price, currency, duration_days, features, enabled, sort_order)

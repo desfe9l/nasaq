@@ -1,4 +1,7 @@
 -- Paylink invoices and their Keygen fulfillment.
+-- RETIRED: Paylink is no longer a payment provider — see 0011_drop_paylink.sql,
+-- which drops this table. The file is left untouched because it is already
+-- recorded in `_migrations` on existing deployments.
 -- The unique transaction number is the provider idempotency boundary. A webhook
 -- may be delivered more than once, so processing claims are made in SQL before
 -- Keygen or entitlement writes happen.

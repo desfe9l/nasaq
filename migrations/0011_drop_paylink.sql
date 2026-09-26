@@ -1,0 +1,16 @@
+-- Retire Paylink completely.
+--
+-- Gumroad is the only payment provider (see docs/gumroad-integration.md); the
+-- Paylink gateway was removed from the application code and its credentials
+-- (PAYLINK_API_ID / PAYLINK_SECRET_KEY) were never part of the runtime env.
+-- What is left is the schema its invoices lived in, plus the historical
+-- migrations 0004_paylink.sql and 0006_paylink_v2.sql.
+--
+-- Those two files are kept untouched on purpose: they are already recorded in
+-- `_migrations` on any existing deployment, and rewriting an applied migration
+-- would desynchronise the ledger. Removing the tables here is the forward-only
+-- equivalent, and it is what makes the removal real rather than cosmetic.
+--
+-- Drop order matters for the FKs declared in 0002_commercial.sql; CASCADE keeps
+-- the statement safe even where a later migration added a dependent object.
+drop table if exists paylink_transactions cascade;

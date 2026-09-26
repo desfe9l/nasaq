@@ -14,6 +14,8 @@ import {
   gumroadPublicConfig,
   missingGumroadVariables,
   nasaqPublicOrigin,
+  recommendedGumroadVariables,
+  resolveGumroadProductId,
 } from "./config.server";
 import {
   DEFAULT_GUMROAD_PUBLIC_CONFIG,
@@ -40,20 +42,27 @@ export async function buildGumroadGatewayStatus(): Promise<GumroadGatewayStatus>
   const sql = await getSql();
   const config = gumroadPublicConfig();
   const missing = missingGumroadVariables();
+  const recommended = recommendedGumroadVariables();
+
+  // ── Product identity: the real id the runtime verifies with, and where it
+  // came from. Never a secret — a product id is public information.
+  const resolved = await resolveGumroadProductId();
 
   // ── Product status: verify against the live API when the token allows it.
   let remoteName: string | null = null;
   let remotePublished: boolean | null = null;
   let remoteChecked = false;
+  let remoteProductCount: number | null = null;
   if (gumroadApiConfigured()) {
     try {
-      const { fetchGumroadProductByPermalink } = await import("./api.server");
-      const product = await fetchGumroadProductByPermalink(gumroadProductPermalink());
+      const { listGumroadProducts } = await import("./api.server");
+      const products = await listGumroadProducts();
       remoteChecked = true;
-      if (product) {
-        remoteName = product.name;
-        remotePublished = product.published;
-      }
+      remoteProductCount = products.length;
+      const match =
+        products.find((product) => product.permalink === gumroadProductPermalink()) ?? null;
+      remoteName = match?.name ?? null;
+      remotePublished = match?.published ?? null;
     } catch {
       remoteChecked = true;
     }
@@ -115,19 +124,28 @@ export async function buildGumroadGatewayStatus(): Promise<GumroadGatewayStatus>
             : "Ready")
     : "Needs Setup";
 
+  const boundCount = subTotals
+    .filter((row) => row.status !== "PENDING")
+    .reduce((sum, row) => sum + row.count, 0);
+
   return {
     mode: "Production",
     product: {
       permalink: gumroadProductPermalink(),
       storeBaseUrl: config.storeBaseUrl,
       productIdConfigured: Boolean(gumroadProductId()),
+      productId: resolved.id,
+      productIdSource: resolved.source,
+      remoteProductCount,
       publicPageUrl: `${config.storeBaseUrl.replace(/\/+$/, "")}/l/${gumroadProductPermalink()}`,
       remoteName,
       remotePublished,
       remoteChecked,
       state: remoteChecked
         ? (remoteName ? (remotePublished === false ? "Failed" : "Ready") : "Failed")
-        : "Needs Setup",
+        : resolved.id
+          ? "Needs Setup"
+          : "Missing",
     },
     api: {
       configured: gumroadApiConfigured(),
@@ -152,6 +170,19 @@ export async function buildGumroadGatewayStatus(): Promise<GumroadGatewayStatus>
         rejected: totalFor("REJECTED"),
       },
     },
+    binding: {
+      total: subTotal,
+      bound: boundCount,
+      pendingClaim: pendingClaimRows[0]?.count ?? 0,
+      unboundEmails: unboundEmails[0]?.count ?? 0,
+      state: subTotal === 0
+        ? "Needs Setup"
+        : pendingClaimRows[0]?.count
+          ? "Needs Setup"
+          : boundCount === subTotal
+            ? "Ready"
+            : "Needs Setup",
+    },
     tierMapping,
     keygenMapping,
     subscriptions: {
@@ -161,6 +192,7 @@ export async function buildGumroadGatewayStatus(): Promise<GumroadGatewayStatus>
       unboundEmails: unboundEmails[0]?.count ?? 0,
     },
     missingVariables: missing,
+    recommendedVariables: recommended,
     generatedAt: new Date().toISOString(),
   };
 }
