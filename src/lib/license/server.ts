@@ -130,15 +130,6 @@ export async function findLicenseByProviderId(provider: string, providerId: stri
   return rows.length > 0 ? rowToLicense(rows[0]) : null;
 }
 
-export async function findLicenseByPaylinkTransaction(transactionNo: string): Promise<License | null> {
-  const sql = await getSql();
-  const rows = await sql.query(
-    `SELECT * FROM licenses WHERE metadata->>'paylinkTransactionNo' = $1 LIMIT 1`,
-    [transactionNo],
-  );
-  return rows.length > 0 ? rowToLicense(rows[0]) : null;
-}
-
 /** Local mirror lookup for the Gumroad pipeline (one license per membership). */
 export async function findLicenseByGumroadSubscription(subscriptionId: string): Promise<License | null> {
   const sql = await getSql();

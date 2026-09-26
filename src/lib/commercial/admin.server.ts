@@ -211,8 +211,9 @@ export async function grantEntitlement(
       update subscriptions
       set plan_id = ${input.plan.id}, expires_at = ${expiresAt.toISOString()},
           -- Explicit manual approval/activation takes ownership of access;
-          -- never leave a stale Paylink source that would make server licence
-          -- gates demand Keygen for this independently approved entitlement.
+          -- never leave a stale paid-source marker that would make server
+          -- licence gates demand Keygen for this independently approved
+          -- entitlement.
           source_transaction_id = ${input.sourceTransactionId ?? null},
           updated_at = now()
       where id = ${live.id}

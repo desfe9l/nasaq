@@ -1,8 +1,8 @@
 # Gumroad — بوابة الدفع الأساسية (تشغيل كامل)
 
 هذا المستند يصف بالضبط ما يجب إدخاله في لوحة Gumroad، وبأي قيم، حتى يعمل
-مسار **Gumroad → NASAQ → Keygen** من أول مرة. مسار Paylink القديم يبقى في الكود
-ولا يُحذف، لكنه خارج مسار الشراء الجديد.
+مسار **Gumroad → NASAQ → Keygen** من أول مرة. Gumroad هو مزوّد الدفع الوحيد في
+المنصة؛ أُزيل مزوّد الدفع القديم من الكود بالكامل.
 
 ## المنتج (لا يُنشأ منتج جديد)
 
@@ -65,9 +65,24 @@ POST https://nasaq-sa.vercel.app/api/webhooks/gumroad
 
 ## روابط الشراء (Monthly افتراضي)
 
-كل زر في `/purchase` يفتح نموذج الدفع مباشرة بالـ Tier والفترة الصحيحين:
+كل زر في `/purchase` (و`/pricing`) يفتح نموذج الدفع مباشرة بالـ Tier والفترة الصحيحين:
 
 ```
 https://nasaqar.gumroad.com/l/auaewk?tier=<Tier>&monthly=true&wanted=true
 https://nasaqar.gumroad.com/l/auaewk?tier=<Tier>&quarterly=true&wanted=true
 ```
+
+## العودة بعد الدفع
+
+اضبط في Gumroad (Product → Content / Purchase receipt) رابط العودة إلى:
+
+```
+https://nasaq-sa.vercel.app/payment/success
+```
+
+صفحة العودة لا تعتبر الرابط دليل سداد؛ تعرض فقط حالة الحساب الحقيقية كما
+يقرؤها الخادم (وتُجري ربط الاشتراك ببريد الجلسة تلقائيًا عند كل تحديث).
+
+> ملاحظة: رابط المتجر الحالي للمنتج هو `https://nasaqar.gumroad.com/l/auaewk`.
+> إذا تغيّر اسم المتجر (مثل `desfe9l.gumroad.com`) حدّث `GUMROAD_STORE_BASE_URL`
+> في Vercel فقط — لا يلزم أي تغيير في الكود.

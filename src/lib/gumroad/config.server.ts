@@ -63,13 +63,11 @@ export function gumroadPublicConfig(): GumroadPublicConfig {
 
 /**
  * This deployment's public origin — used by owner diagnostics to send a test
- * ping to the LIVE production endpoint. Reuses the origin the Paylink module
- * already configured so no new required variable is introduced.
+ * ping to the LIVE production endpoint.
  */
 export function nasaqPublicOrigin(): string {
   return (
     env("NASAQ_PUBLIC_URL") ||
-    env("PAYLINK_PUBLIC_URL") ||
     (env("VERCEL_ENV") && env("VERCEL_PROJECT_PRODUCTION_URL")
       ? `https://${env("VERCEL_PROJECT_PRODUCTION_URL")}`
       : undefined) ||

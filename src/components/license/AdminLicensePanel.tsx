@@ -82,7 +82,7 @@ export default function AdminLicensePanel() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
-  const [connections, setConnections] = useState<{ keygen: boolean; paylink: boolean } | null>(null);
+  const [connections, setConnections] = useState<{ keygen: boolean } | null>(null);
   const [checkingConnections, setCheckingConnections] = useState(false);
 
   const [showCreate, setShowCreate] = useState(false);
@@ -160,7 +160,7 @@ export default function AdminLicensePanel() {
     try {
       const result = await adminCheckLicenseConnectionsFn();
       if (result.error) setError(result.error);
-      else setConnections({ keygen: result.keygen, paylink: result.paylink });
+      else setConnections({ keygen: result.keygen });
     } catch {
       setError("تعذر الاتصال بمزوّدي التفعيل. حاول مجددًا.");
     } finally {
@@ -371,7 +371,7 @@ export default function AdminLicensePanel() {
               <div>
                 <h1 className="text-[17px] font-extrabold">إدارة التراخيص</h1>
                 <p className="text-[11px] text-muted">
-                  {total} ترخيص مطابق · Paylink → Keygen → حساب العميل
+                  {total} ترخيص مطابق · Gumroad → Keygen → حساب العميل
                 </p>
               </div>
             </div>
@@ -441,18 +441,18 @@ export default function AdminLicensePanel() {
                 {connections && <p className={cn("mt-2 font-extrabold", connections.keygen ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>اتصال API: {connections.keygen ? "تم التحقق" : "فشل أو لم يُضبط"}</p>}
               </div>
               <div className="rounded-[10px] border border-line bg-paper/50 p-3 text-[12px] dark:border-white/10 dark:bg-white/[0.03]">
-                <p className="font-extrabold">Paylink · بوابة الدفع</p>
-                <p className="mt-2 text-muted">مفاتيح API: {readiness.paylink.credentials ? "مضبوطة" : "ناقصة (PAYLINK_API_ID / PAYLINK_SECRET_KEY)"}</p>
-                <p className="mt-1 text-muted">رمز Webhook: {readiness.paylink.webhookToken ? "مضبوط" : "ناقص (PAYLINK_WEBHOOK_TOKEN)"} · رابط العودة: {readiness.paylink.publicUrl ? "مضبوط" : "غير مهيأ"}</p>
-                {connections && <p className={cn("mt-2 font-extrabold", connections.paylink ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>اتصال API: {connections.paylink ? "تم التحقق" : "فشل أو لم يُضبط"}</p>}
+                <p className="font-extrabold">Gumroad · بوابة الدفع</p>
+                <p className="mt-2 text-muted">مفتاح API: {readiness.gumroad.accessToken ? "مضبوط" : "ناقص (GUMROAD_ACCESS_TOKEN)"} · معرّف المنتج: {readiness.gumroad.productId ? "مضبوط" : "ناقص (GUMROAD_PRODUCT_ID)"}</p>
+                <p className="mt-1 text-muted">نقطة استقبال الإشعارات: <code dir="ltr">{readiness.gumroad.pingEndpoint}</code> — تُسجَّل في Gumroad → Settings → Advanced.</p>
+                <p className="mt-2 text-muted">الحالة التفصيلية (Product/API/Ping/الربط) في بطاقة «Gumroad · بوابة الدفع» داخل <a href="/owner-vault" className="font-bold text-emerald-700 underline dark:text-emerald-300">خزنة المالك</a>.</p>
               </div>
             </div>
           ) : <p className="mt-3 text-[12px] text-muted">جارٍ قراءة إعدادات التكامل…</p>}
           <p className="mt-3 text-[11px] leading-6 text-muted">
             {readiness?.checkoutConfigured ? "متغيرات الدفع والإصدار مكتملة." : "بعض متغيرات الدفع أو التفعيل ناقصة؛ تظل التراخيص اليدوية المحلية قابلة للإدارة."}
             {" "}اختبار الاتصال لا يثبت تسجيل Webhook لدى المزوّدين؛ سجّل
-            <code dir="ltr"> /api/webhooks/paylink </code> (V2) و<code dir="ltr"> /api/webhooks/keygen </code>
-            في لوحتي Paylink وKeygen. <a href="/owner-vault" className="font-bold text-emerald-700 underline dark:text-emerald-300">دليل إعدادات المالك</a>
+            <code dir="ltr"> /api/webhooks/gumroad </code> و<code dir="ltr"> /api/webhooks/keygen </code>
+            في لوحتي Gumroad وKeygen. <a href="/owner-vault" className="font-bold text-emerald-700 underline dark:text-emerald-300">دليل إعدادات المالك</a>
           </p>
         </section>
 
@@ -504,7 +504,7 @@ export default function AdminLicensePanel() {
             <input
               value={query}
               onChange={(e) => { setQuery(e.target.value); setPage(0); }}
-              placeholder="ابحث بالمفتاح أو البريد أو رقم Paylink…"
+              placeholder="ابحث بالمفتاح أو البريد أو رقم العملية…"
               aria-label="بحث في كل التراخيص"
               className="h-9 w-full rounded-[9px] border border-line bg-white pe-9 ps-3 text-[12px] font-bold outline-none focus:border-emerald-600 dark:border-white/10 dark:bg-[#161c26]"
             />
@@ -592,7 +592,6 @@ export default function AdminLicensePanel() {
                     </td>
                     <td className="p-3 text-[11px] text-muted">
                       {lic.metadata?.source === "keygen" ? "Keygen" : "يدوي"}
-                      {lic.metadata?.paylinkTransactionNo && <span className="mt-1 block max-w-[130px] truncate font-mono" dir="ltr" title={lic.metadata.paylinkTransactionNo}>{lic.metadata.paylinkTransactionNo}</span>}
                     </td>
                     <td className="p-3">
                       {!access.isSuperAdmin || (lic.metadata?.source === "keygen" && lic.userId && lic.metadata.userScopeVerified === lic.userId) ? (

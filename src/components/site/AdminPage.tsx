@@ -33,375 +33,24 @@ import type {
   PaymentRequestStatus,
   Plan,
 } from "@/lib/commercial/types";
-import { getAdminPaylinkTransactions } from "@/lib/paylink/admin-functions";
-import { getCatalogPlan } from "@/lib/commercial/catalog";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  Copy,
-  CreditCard,
   KeyRound,
   LayoutDashboard,
   Package,
   ReceiptText,
   RefreshCw,
   ScrollText,
-  Search,
   Settings,
   ShieldCheck,
   Users,
 } from "lucide-react";
-import {
-  PAYLINK_PAYMENT_TYPE_LABELS,
-  PAYLINK_WEBHOOK_PATH,
-} from "@/lib/paylink/contract";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
-
-type PaylinkRow = Awaited<ReturnType<typeof getAdminPaylinkTransactions>>[number];
-
-/** Arabic label + tone for the gateway settlement status. */
-const PAYLINK_STATUS_META: Record<string, { label: string; className: string }> = {
-  PAID: {
-    label: "مدفوعة",
-    className:
-      "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
-  },
-  PENDING: {
-    label: "قيد الانتظار",
-    className: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
-  },
-  PROCESSING: {
-    label: "قيد المعالجة",
-    className: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
-  },
-  FAILED: {
-    label: "فاشلة",
-    className: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
-  },
-  CANCELED: {
-    label: "ملغاة",
-    className: "bg-line-2 text-muted dark:bg-white/10",
-  },
-};
+import { GUMROAD_PING_PATH } from "@/lib/gumroad/mapping";
 
 
-function paylinkStatusMeta(status: string) {
-  return (
-    PAYLINK_STATUS_META[status] ?? {
-      label: status,
-      className: "bg-line-2 text-muted dark:bg-white/10",
-    }
-  );
-}
-
-/**
- * «عمليات Paylink» — the settlement ledger.
- *
- * This is the reconciliation surface: for every invoice NASAQ created, what
- * Paylink says happened to it and which licence it produced. It reads from
- * `paylink_transactions` joined to the licence, so the transaction number, the
- * gateway status, the plan, the customer, the licence key and the date are all
- * on one row — an operator should never have to open three screens to answer
- * "did this customer's payment turn into a licence?".
- */
-function PaylinkTab() {
-  const [rows, setRows] = useState<PaylinkRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "PAID" | "PENDING" | "FAILED">(
-    "ALL",
-  );
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      setRows(await getAdminPaylinkTransactions());
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "تعذر تحميل عمليات Paylink.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (statusFilter === "PAID" && row.status !== "PAID") return false;
-      if (statusFilter === "PENDING" && !["PENDING", "PROCESSING"].includes(row.status))
-        return false;
-      if (statusFilter === "FAILED" && !["FAILED", "CANCELED"].includes(row.status))
-        return false;
-      if (!needle) return true;
-      return [
-        row.transactionNo,
-        row.orderNumber,
-        row.planKey,
-        row.userEmail,
-        row.userName,
-        row.licenseKey,
-        row.licenseId,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(needle));
-    });
-  }, [rows, query, statusFilter]);
-
-  const summary = useMemo(() => {
-    const paid = rows.filter((row) => row.status === "PAID");
-    return {
-      count: rows.length,
-      paid: paid.length,
-      pending: rows.filter((row) => ["PENDING", "PROCESSING"].includes(row.status)).length,
-      failed: rows.filter((row) => ["FAILED", "CANCELED"].includes(row.status)).length,
-      revenue: paid.reduce((sum, row) => sum + Number(row.amount || 0), 0),
-      currency: paid[0]?.currency ?? "SAR",
-    };
-  }, [rows]);
-
-  const copy = (value: string) => {
-    void navigator.clipboard.writeText(value);
-    toast.success("تم النسخ");
-  };
-
-  return (
-    <div className="grid gap-4">
-      {/* KPI strip — the four numbers an operator scans first. */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="إجمالي العمليات" value={String(summary.count)} />
-        <StatCard
-          label="عمليات مكتملة"
-          value={String(summary.paid)}
-          tone="ok"
-        />
-        <StatCard
-          label="قيد الانتظار"
-          value={String(summary.pending)}
-          tone="warn"
-        />
-        <StatCard
-          label="الإيراد المحصّل"
-          value={`${summary.revenue.toFixed(2)} ${summary.currency}`}
-          tone="ok"
-        />
-      </div>
-
-      <Panel
-        title="سجل معاملات Paylink وتراخيص Keygen"
-        actions={
-          <button
-            type="button"
-            onClick={() => void load()}
-            disabled={loading}
-            className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-line px-3 text-[11px] font-bold hover:bg-line-2 disabled:opacity-60 dark:border-white/10 dark:hover:bg-white/5"
-          >
-            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} aria-hidden />
-            {loading ? "جارٍ التحديث…" : "تحديث السجلات"}
-          </button>
-        }
-      >
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <label className="relative min-w-[220px] flex-1">
-            <Search
-              className="pointer-events-none absolute end-3 top-1/2 size-3.5 -translate-y-1/2 text-muted"
-              aria-hidden
-            />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="ابحث برقم المعاملة أو الطلب أو العميل أو المفتاح…"
-              className="h-9 w-full rounded-[8px] border border-line bg-white pe-9 ps-3 text-[12px] font-bold outline-none focus:border-navy dark:border-white/10 dark:bg-[#161c26]"
-            />
-          </label>
-          <div className="flex items-center gap-1 rounded-[8px] border border-line p-1 dark:border-white/10">
-            {(
-              [
-                ["ALL", "الكل"],
-                ["PAID", "مدفوعة"],
-                ["PENDING", "معلّقة"],
-                ["FAILED", "فاشلة"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setStatusFilter(value)}
-                className={cn(
-                  "h-7 rounded-[6px] px-2.5 text-[11px] font-extrabold transition",
-                  statusFilter === value
-                    ? "bg-navy text-white"
-                    : "text-muted hover:bg-line-2 dark:hover:bg-white/5",
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="overflow-x-auto rounded-[10px] border border-line dark:border-white/10">
-          <table className="w-full min-w-[1180px] text-right text-[11px]">
-            <thead className="border-b border-line bg-paper/60 text-muted dark:border-white/10">
-              <tr>
-                <th className="p-2.5">رقم المعاملة</th>
-                <th className="p-2.5">حالة الدفع</th>
-                <th className="p-2.5">طريقة الدفع</th>
-                <th className="p-2.5">الباقة</th>
-                <th className="p-2.5">المبلغ</th>
-                <th className="p-2.5">المستخدم</th>
-                <th className="p-2.5">مفتاح الترخيص</th>
-                <th className="p-2.5">حالة الترخيص</th>
-                <th className="p-2.5">التاريخ</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((row) => {
-                const catalog = getCatalogPlan(row.planKey);
-                const meta = paylinkStatusMeta(row.status);
-                return (
-                  <tr
-                    key={row.id}
-                    className="border-t border-line transition hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/[0.02]"
-                  >
-                    <td className="p-2.5">
-                      <button
-                        type="button"
-                        onClick={() => copy(row.transactionNo || row.orderNumber)}
-                        title="نسخ رقم المعاملة"
-                        className="inline-flex items-center gap-1 font-mono text-[11px] font-bold hover:text-navy"
-                        dir="ltr"
-                      >
-                        {row.transactionNo || "—"}
-                        <Copy className="size-3 opacity-50" aria-hidden />
-                      </button>
-                      <div className="mt-0.5 font-mono text-[9px] text-muted" dir="ltr">
-                        {row.orderNumber}
-                      </div>
-                    </td>
-                    <td className="p-2.5">
-                      <span
-                        className={cn(
-                          "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-extrabold",
-                          meta.className,
-                        )}
-                      >
-                        {meta.label}
-                      </span>
-                      {row.paylinkOrderStatus && row.paylinkOrderStatus !== row.status && (
-                        <div className="mt-0.5 text-[9px] text-muted" dir="ltr">
-                          {row.paylinkOrderStatus}
-                        </div>
-                      )}
-                      {row.lastError && (
-                        <div className="mt-0.5 max-w-[180px] truncate text-[9px] text-danger">
-                          {row.lastError}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-2.5 text-[10px] font-bold">
-                      {row.paymentType
-                        ? PAYLINK_PAYMENT_TYPE_LABELS[row.paymentType] ?? row.paymentType
-                        : "—"}
-                      {row.apiVersion && (
-                        <span className="ms-1 rounded bg-line-2 px-1 py-0.5 text-[9px] font-extrabold text-muted dark:bg-white/10">
-                          {row.apiVersion.toUpperCase()}
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-2.5">
-                      <span className="font-bold">{catalog?.arabicName || row.planKey}</span>
-                      <div className="mt-0.5 text-[9px] text-muted" dir="ltr">
-                        {row.planKey}
-                      </div>
-                    </td>
-                    <td className="p-2.5 font-bold tabular-nums">
-                      {row.amount} {row.currency}
-                    </td>
-                    <td className="p-2.5">
-                      <div className="flex flex-col">
-                        <span className="font-bold">{row.userName || "عميل نَسَق"}</span>
-                        <span className="text-[10px] text-muted" dir="ltr">
-                          {row.userEmail || row.clientEmail || row.userId}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="p-2.5">
-                      {row.licenseKey ? (
-                        <button
-                          type="button"
-                          onClick={() => copy(row.licenseKey as string)}
-                          title="نسخ بادئة مفتاح الترخيص"
-                          className="inline-flex items-center gap-1 font-mono text-[11px] font-bold hover:text-navy"
-                          dir="ltr"
-                        >
-                          {row.licenseKey}-****
-                          <Copy className="size-3 opacity-50" aria-hidden />
-                        </button>
-                      ) : (
-                        <span className="text-muted">—</span>
-                      )}
-                      {row.licenseId && (
-                        <a href={`/admin-licenses?search=${encodeURIComponent(row.transactionNo || row.licenseKey || row.licenseId)}`}
-                          className="mt-1 block text-[10px] font-bold text-emerald-700 underline dark:text-emerald-300">
-                          إدارة هذا الترخيص
-                        </a>
-                      )}
-                      {row.keygenLicenseId && (
-                        <div
-                          className="mt-0.5 max-w-[140px] truncate font-mono text-[9px] text-muted"
-                          dir="ltr"
-                          title={row.keygenLicenseId}
-                        >
-                          {row.keygenLicenseId}
-                        </div>
-                      )}
-                    </td>
-                    <td className="p-2.5">
-                      <span
-                        className={cn(
-                          "rounded px-1.5 py-0.5 text-[10px] font-bold",
-                          row.status === "PAID" && row.licenseStatus === "ACTIVE" && row.licenseBound
-                            ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
-                            : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300",
-                        )}
-                      >
-                        {row.licenseStatus === "ACTIVE" && row.status !== "PAID" ? "بانتظار اكتمال الدفع"
-                          : row.status === "PAID" && (!row.licenseStatus || (row.licenseStatus === "ACTIVE" && !row.licenseBound))
-                            ? "بانتظار ربط Keygen"
-                            : row.licenseStatus || "—"}
-                      </span>
-                    </td>
-                    <td className="p-2.5 text-muted">
-                      {formatDate(row.createdAt)}
-                      {row.paidAt && (
-                        <div className="mt-0.5 text-[9px] text-emerald-700 dark:text-emerald-400">
-                          سُدّدت {formatDate(row.paidAt)}
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {loading && <p className="py-4 text-[12px] text-muted">جارٍ التحميل…</p>}
-        {error && <p className="mt-3 text-[12px] text-danger">{error}</p>}
-        {!loading && rows.length === 0 && <Empty>لا توجد عمليات Paylink بعد.</Empty>}
-        {!loading && rows.length > 0 && filtered.length === 0 && (
-          <Empty>لا توجد عمليات مطابقة للبحث.</Empty>
-        )}
-      </Panel>
-    </div>
-  );
-}
-
-/** Compact KPI card used by the Paylink ledger header. */
+/** Compact KPI card used by the dashboard header. */
 function StatCard({
   label,
   value,
@@ -427,13 +76,12 @@ function StatCard({
   );
 }
 
-type Tab = "dashboard" | "requests" | "paylink" | "customers" | "plans" | "settings" | "audit";
+type Tab = "dashboard" | "requests" | "customers" | "plans" | "settings" | "audit";
 
 const TABS: Array<{ id: Tab; label: string; icon: typeof Users }> = [
   { id: "dashboard", label: "لوحة القيادة", icon: LayoutDashboard },
   { id: "customers", label: "المستخدمون / الحسابات", icon: Users },
   { id: "requests", label: "طلبات الدفع اليدوية", icon: ReceiptText },
-  { id: "paylink", label: "التراخيص والمدفوعات", icon: CreditCard },
   { id: "plans", label: "الباقات والاشتراكات", icon: Package },
   { id: "settings", label: "إعدادات النظام", icon: Settings },
   { id: "audit", label: "سجل الإجراءات", icon: ScrollText },
@@ -452,7 +100,6 @@ function DashboardTab() {
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [requests, setRequests] = useState<AdminPaymentRequest[]>([]);
-  const [paylink, setPaylink] = useState<PaylinkRow[]>([]);
   const [audit, setAudit] = useState<AdminAuditEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -460,17 +107,15 @@ function DashboardTab() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [cust, pl, req, pay, aud] = await Promise.all([
+      const [cust, pl, req, aud] = await Promise.all([
         getAdminCustomers(),
         getAdminPlans(),
         getAdminPaymentRequests({ data: {} }),
-        getAdminPaylinkTransactions().catch(() => [] as PaylinkRow[]),
         getAdminAuditLog().catch(() => [] as AdminAuditEntry[]),
       ]);
       setCustomers(cust);
       setPlans(pl);
       setRequests(req);
-      setPaylink(pay);
       setAudit(aud);
       setError(null);
     } catch (e) {
@@ -492,14 +137,12 @@ function DashboardTab() {
     const free = customers.filter((c) => c.status === "FREE").length;
     const pendingReq = requests.filter((r) => r.status === "PENDING").length;
     const approvedReq = requests.filter((r) => r.status === "APPROVED").length;
-    const paidTx = paylink.filter((p) => p.status === "PAID");
-    const revenue = paidTx.reduce((s, r) => s + Number(r.amount || 0), 0);
     const planDist = plans.map((p) => ({
       plan: p,
       count: customers.filter((c) => c.planId === p.id).length,
     }));
-    return { totalUsers, active, expired, suspended, free, pendingReq, approvedReq, revenue, paidCount: paidTx.length, planDist };
-  }, [customers, plans, requests, paylink]);
+    return { totalUsers, active, expired, suspended, free, pendingReq, approvedReq, planDist };
+  }, [customers, plans, requests]);
 
   return (
     <div className="grid gap-4">
@@ -526,7 +169,6 @@ function DashboardTab() {
               <StatCard label="إجمالي المستخدمين" value={String(stats.totalUsers)} />
               <StatCard label="اشتراكات نشطة" value={String(stats.active)} tone="ok" />
               <StatCard label="طلبات معلقة" value={String(stats.pendingReq)} tone="warn" />
-              <StatCard label="إيراد Paylink المحصل" value={`${stats.revenue.toFixed(2)} SAR`} tone="ok" />
             </div>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatCard label="منتهية" value={String(stats.expired)} />
@@ -562,7 +204,7 @@ function DashboardTab() {
             <div className="mt-4 rounded-[12px] border border-line p-4 dark:border-white/10">
               <h3 className="text-[12px] font-extrabold">المشاريع والحسابات</h3>
               <p className="mt-2 text-[11px] leading-5 text-muted">
-                المشاريع محفوظة محلياً في متصفح كل مستخدم (IndexedDB) ولا تُزامن للخادم. عدد الحسابات المسجلة هو {stats.totalUsers}. التراخيص تُدار عبر Paylink و Keygen.
+                المشاريع محفوظة محليًا في متصفح كل مستخدم (IndexedDB) ولا تُزامَن مع الخادم. عدد الحسابات المسجلة هو {stats.totalUsers}. الاشتراكات تُدار عبر Gumroad، والتراخيص عبر Keygen.
               </p>
             </div>
           </>
@@ -691,14 +333,13 @@ export function AdminPage() {
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-line bg-paper/60 px-5 py-2 text-[10px] text-muted dark:border-white/10">
             <span>
-              مزوّد الدفع: <strong className="font-extrabold text-ink dark:text-white">Paylink</strong>
+              مزوّد الدفع: <strong className="font-extrabold text-ink dark:text-white">Gumroad</strong>
             </span>
             <span>
               Webhook:{" "}
               <code dir="ltr" className="font-bold">
-                {PAYLINK_WEBHOOK_PATH}
-              </code>{" "}
-              (V2)
+                {GUMROAD_PING_PATH}
+              </code>
             </span>
             <span>
               جهة إصدار التراخيص:{" "}
@@ -734,7 +375,6 @@ export function AdminPage() {
           {tab === "dashboard" && <DashboardTab />}
           {tab === "customers" && <CustomersTab />}
           {tab === "requests" && <RequestsTab />}
-          {tab === "paylink" && <PaylinkTab />}
           {tab === "plans" && <PlansTab />}
           {tab === "settings" && <SettingsTab />}
           {tab === "audit" && <AuditTab />}
@@ -1493,7 +1133,7 @@ function SettingsTab() {
       <Panel title="إعدادات النظام">
         <div className="grid gap-3 sm:grid-cols-2">
           <a href="/admin-licenses" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10">
-            إدارة التراخيص — Keygen & Paylink
+            إدارة التراخيص — Gumroad وKeygen
           </a>
           <a href="/owner-vault" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10">
             خزنة المالك — مفاتيح API

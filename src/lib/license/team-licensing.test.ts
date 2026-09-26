@@ -96,8 +96,8 @@ describe("Keygen policy → plan mapping", () => {
     for (const plan of ["team-monthly", "team-quarterly"] as const) {
       const policyId = keygenPolicyId(plan);
       assert.ok(policyId, `${plan} has no policy id configured`);
-      // The reverse mapping is what the Paylink webhook uses to name the plan
-      // on a freshly issued licence; a mismatch here silently mislabels it.
+      // The reverse mapping is what the Gumroad pipeline uses to name the
+      // plan on a freshly issued licence; a mismatch here silently mislabels it.
       assert.equal(planForKeygenPolicy(policyId), plan);
     }
   });

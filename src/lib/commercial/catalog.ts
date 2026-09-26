@@ -8,7 +8,7 @@
 
 import type { KeygenPlan } from "../license/keygen.ts";
 
-export const PAYLINK_PLAN_KEYS = [
+export const PLAN_KEYS = [
   "individual-monthly",
   "individual-quarterly",
   "team-monthly",
@@ -17,16 +17,16 @@ export const PAYLINK_PLAN_KEYS = [
   "team-annual",
 ] as const;
 
-export type PaylinkPlanKey = (typeof PAYLINK_PLAN_KEYS)[number];
-export type PaylinkPlanFamily = "individual" | "team";
-export type PaylinkPeriod = "monthly" | "quarterly" | "annual";
+export type PlanKey = (typeof PLAN_KEYS)[number];
+export type PlanFamily = "individual" | "team";
+export type PlanPeriod = "monthly" | "quarterly" | "annual";
 
 export interface CatalogPlan {
-  readonly key: PaylinkPlanKey;
+  readonly key: PlanKey;
   readonly productId: string;
   readonly priceId: string;
-  readonly family: PaylinkPlanFamily;
-  readonly period: PaylinkPeriod;
+  readonly family: PlanFamily;
+  readonly period: PlanPeriod;
   readonly name: string;
   readonly arabicName: string;
   readonly title: string;
@@ -41,7 +41,7 @@ export interface CatalogPlan {
   readonly popular?: boolean;
 }
 
-export const CENTRAL_PLANS: Record<PaylinkPlanKey, CatalogPlan> = {
+export const CENTRAL_PLANS: Record<PlanKey, CatalogPlan> = {
   "individual-monthly": {
     key: "individual-monthly",
     productId: "nasaq-individual-monthly",
@@ -191,7 +191,7 @@ export const CENTRAL_PLANS: Record<PaylinkPlanKey, CatalogPlan> = {
   },
 };
 
-export function isValidPlanKey(key: string): key is PaylinkPlanKey {
+export function isValidPlanKey(key: string): key is PlanKey {
   return Object.prototype.hasOwnProperty.call(CENTRAL_PLANS, key);
 }
 
@@ -210,10 +210,10 @@ export function requireCatalogPlan(key: string): CatalogPlan {
   return plan;
 }
 
-export function paylinkPlanKey(
-  family: PaylinkPlanFamily,
-  period: PaylinkPeriod,
-): PaylinkPlanKey {
+export function planKeyFor(
+  family: PlanFamily,
+  period: PlanPeriod,
+): PlanKey {
   const key = `${family}-${period}`;
   if (isValidPlanKey(key)) return key;
   throw new Error(`خطة غير معروفة: ${key}`);
@@ -237,14 +237,14 @@ export const FREE_PLAN = {
 
 export const BILLING_PERIODS = [
   { id: "monthly", label: "شهري", months: 1 },
-  { id: "quarterly", label: "3 أشهر — أفضل قيمة", months: 3 },
+  { id: "quarterly", label: "كل 3 أشهر — أفضل قيمة", months: 3 },
   { id: "annual", label: "سنوي", months: 12 },
 ] as const;
 
 export function planSavings(plan: CatalogPlan): number {
   const months = BILLING_PERIODS.find((p) => p.id === plan.period)!.months;
   return (
-    CENTRAL_PLANS[paylinkPlanKey(plan.family, "monthly")].amount * months -
+    CENTRAL_PLANS[planKeyFor(plan.family, "monthly")].amount * months -
     plan.amount
   );
 }

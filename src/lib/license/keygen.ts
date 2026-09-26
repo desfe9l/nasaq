@@ -351,7 +351,6 @@ export async function getKeygenLicenseForClaim(licenseId: string): Promise<{
   key: string;
   productId: string;
   policyId: string;
-  paylinkTransactionNo: string | null;
   ownerId: string | null | undefined;
   usersCount: number | null;
   nasaqUserId: string | null;
@@ -370,8 +369,6 @@ export async function getKeygenLicenseForClaim(licenseId: string): Promise<{
     key: stringAttribute(resource, "key") || "",
     productId: idFromRelationship(resource, "product"),
     policyId: idFromRelationship(resource, "policy"),
-    paylinkTransactionNo: metadata && typeof metadata === "object" && typeof (metadata as Record<string, unknown>).paylinkTransactionNo === "string"
-      ? (metadata as Record<string, string>).paylinkTransactionNo : null,
     // An omitted relationship is NOT an empty one: fail closed on unknown data.
     ownerId: owner?.data === null ? null : owner?.data?.id,
     usersCount: typeof count === "number" && Number.isInteger(count) && count >= 0 ? count : null,
@@ -458,10 +455,6 @@ export async function createKeygenLicense(params: {
   const entitlementCodes = await entitlementCodesForLicense(resource?.id || "");
   return verificationFromResponse(key, { ...response, meta: { valid: true, code: "VALID" } }, entitlementCodes);
 }
-export async function findKeygenLicenseByPaylinkTransaction(transactionNo: string): Promise<KeygenVerification | null> {
-  return findKeygenLicenseByMetadataField("paylinkTransactionNo", transactionNo);
-}
-
 /** Generic metadata search — used by the Gumroad pipeline (gumroadSubscriptionId). */
 export async function findKeygenLicenseByMetadataField(field: string, value: string): Promise<KeygenVerification | null> {
   const response = await request(`/licenses?metadata%5B${encodeURIComponent(field)}%5D=${encodeURIComponent(value)}&limit=1`);

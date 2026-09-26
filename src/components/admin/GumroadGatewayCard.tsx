@@ -49,7 +49,7 @@ export function GumroadGatewayCard({ visible }: { visible: boolean }) {
           <div>
             <h3 className="text-sm font-black text-white">Gumroad · بوابة الدفع</h3>
             <p className="mt-0.5 text-[11px] text-slate-400">
-              مزود الدفع الأساسي الجديد — المنتج {status ? status.product.permalink : "…"}
+              مزوّد الدفع الوحيد — المنتج {status ? status.product.permalink : "…"}
               {status?.mode ? ` · ${status.mode}` : ""}
             </p>
           </div>

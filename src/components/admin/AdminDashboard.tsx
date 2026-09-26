@@ -194,7 +194,7 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
           <label className={cn(label, "md:col-span-2")}>رسالة واتساب لطلب الترخيص<input className={input} value={c.whatsappLicenseMessage} onChange={(e) => setC({ whatsappLicenseMessage: e.target.value })} /></label>
           <label className={cn(label, "md:col-span-2")}>رسالة واتساب للترخيص المؤسسي<input className={input} value={c.whatsappEnterpriseMessage} onChange={(e) => setC({ whatsappEnterpriseMessage: e.target.value })} /></label>
         </div>
-        <p className="text-[11px] text-muted">الأسعار والمدد ثابتة من الكتالوج المركزي. تُنشأ فواتير الدفع من الخادم عبر Paylink بعد اكتمال الربط وتسجيل الدخول.</p>
+        <p className="text-[11px] text-muted">الأسعار والمدد ثابتة من الكتالوج المركزي. يتم الدفع عبر Gumroad، ويُفعَّل الاشتراك خادميًا عبر Keygen بعد تأكيد العملية.</p>
         <div><SaveBtn section="commercial" /></div>
       </section>
     );
