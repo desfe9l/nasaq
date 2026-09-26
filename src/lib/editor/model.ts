@@ -138,6 +138,12 @@ export interface ElStyle {
   fill?: string;
   borderColor?: string;
   borderWidth?: number;
+  /**
+   * Stroke style: `true` renders the border/outline dashed (box border via
+   * `border-style`, shape outline via `stroke-dasharray`), unset/false is the
+   * solid default. Mirrored exactly by the exporter so canvas and PDF agree.
+   */
+  borderDash?: boolean;
   radius?: number;
   textAlign?: "right" | "center" | "left" | "justify";
   lineHeight?: number;
@@ -789,7 +795,6 @@ export function createElement(
         fill: t.primary,
         borderColor: t.primary,
         borderWidth: 0,
-        radius: 0,
         shape: "rect",
         shapeId: "rect",
       },

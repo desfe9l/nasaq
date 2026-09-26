@@ -161,7 +161,10 @@ export function ElementNode({
     node.classList.remove("editing");
     const next = node.innerText;
     const changed = next !== el.content;
-    if (changed) updateElement(el.id, { content: next });
+    // Live update + ONE commit: writing through the non-live path here and
+    // then committing would record the same text edit twice (the first Undo
+    // would appear to do nothing).
+    if (changed) updateElement(el.id, { content: next }, true);
     // Re-measure after committing: an auto-height box has to grow now, not on
     // the next unrelated render, or the author sees their text cut mid-typing.
     if (changed) fitTextBox(el.id);
@@ -327,7 +330,7 @@ function ElementContent({
         style={{
           ...textStyle,
           background: s.fill || s.background || "#f7f8fb",
-          border: `${s.borderWidth ?? 0.35}mm solid ${s.borderColor || "#d9dee8"}`,
+          border: `${s.borderWidth ?? 0.35}mm ${s.borderDash ? "dashed" : "solid"} ${s.borderColor || "#d9dee8"}`,
           borderRadius: `${s.radius ?? 4}mm`,
           padding: `${pad}mm`,
           display: "flex",
@@ -542,6 +545,8 @@ function ElementContent({
         stroke={maskOutline ? "var(--color-gold)" : s.borderColor || "transparent"}
         borderWidthMm={maskOutline ? 0.25 : Number(s.borderWidth) || 0}
         strokeDasharray={maskOutline ? "2 2" : undefined}
+        dash={!maskOutline && s.borderDash === true}
+        radiusMm={s.radius}
         box={{ w: el.w, h: el.h }}
       />
     );

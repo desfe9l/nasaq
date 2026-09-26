@@ -9,7 +9,7 @@ import {
   type ElType,
   type Page,
 } from "@/lib/editor/model";
-import { applySnap, mirrorHandle, resizeByHandle } from "@/lib/editor/transform";
+import { applyResizeSnap, applySnap, mirrorHandle, resizeByHandle } from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
@@ -661,19 +661,47 @@ export function CanvasStage({
           );
         }
       } else if (op.kind === "resize") {
+        const mirrored = mirrorHandle(
+          op.handle || "se",
+          op.orig.style?.flipX === true,
+          op.orig.style?.flipY === true,
+        );
+        const ratioLocked =
+          ev.shiftKey || op.orig.style?.aspectLock === true;
         resizeByHandle(
           next,
           op.orig,
-          mirrorHandle(
-            op.handle || "se",
-            op.orig.style?.flipX === true,
-            op.orig.style?.flipY === true,
-          ),
+          mirrored,
           dx,
           dy,
-          ev.shiftKey || op.orig.style?.aspectLock === true,
+          ratioLocked,
           { widthLocked: op.orig.widthLocked, heightLocked: op.orig.heightLocked },
         );
+        /*
+         * Alt = التحويل من المركز (center-based resize): the original centre
+         * stays pinned while both sides move — the same modifier the move
+         * gesture uses to suspend snapping, so holding Alt always means
+         * "raw, unassisted transform". Snapping is skipped while Alt is held
+         * and during ratio-locked resizes (the dragged edge would fight the
+         * proportion constraint).
+         */
+        if (ev.altKey) {
+          next.x = op.orig.x + op.orig.w / 2 - next.w / 2;
+          next.y = op.orig.y + op.orig.h / 2 - next.h / 2;
+        } else if (!ratioLocked) {
+          const zoomNow = useEditor.getState().zoom;
+          setGuides(
+            applyResizeSnap(
+              next,
+              mirrored,
+              others,
+              size,
+              snapGrid,
+              snapElements,
+              zoomNow,
+            ),
+          );
+        }
       } else if (op.kind === "rotate") {
         const cx = op.orig.x + op.orig.w / 2;
         const cy = op.orig.y + op.orig.h / 2;

@@ -11,7 +11,7 @@
  */
 
 export type ShapePart =
-  | { k: "rect"; x: number; y: number; w: number; h: number; rx?: number }
+  | { k: "rect"; x: number; y: number; w: number; h: number; rx?: number; ry?: number }
   | { k: "circle"; cx: number; cy: number; r: number }
   | { k: "ellipse"; cx: number; cy: number; rx: number; ry: number }
   | { k: "poly"; points: string }

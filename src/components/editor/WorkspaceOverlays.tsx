@@ -96,6 +96,7 @@ export function WorkspaceOverlays({
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const copy = useEditor((s) => s.copySelected);
   const paste = useEditor((s) => s.pasteClipboard);
+  const distribute = useEditor((s) => s.distribute);
   const bring = useEditor((s) => s.bring);
   const toggleLock = useEditor((s) => s.toggleLock);
   const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
@@ -297,10 +298,17 @@ export function WorkspaceOverlays({
         {
           label: "لصق",
           icon: ClipboardPaste,
-          run: paste,
+          run: () => paste(),
           disabled: !clipboard,
           hint: "⌘V",
           sepBefore: true,
+        },
+        {
+          label: "لصق في مكانه",
+          icon: ClipboardPaste,
+          run: () => paste(true),
+          disabled: !clipboard,
+          hint: "⇧⌘V",
         },
         {
           label: "تكرار العنصر",
@@ -369,6 +377,18 @@ export function WorkspaceOverlays({
           label: "محاذاة أسفل",
           icon: AlignEndVertical,
           run: () => align("bottom", "selection"),
+        },
+        {
+          label: "توزيع أفقي (مسافات متساوية)",
+          icon: AlignHorizontalJustifyCenter,
+          run: () => distribute("h"),
+          disabled: selectedCount < 3,
+        },
+        {
+          label: "توزيع رأسي (مسافات متساوية)",
+          icon: AlignVerticalJustifyCenter,
+          run: () => distribute("v"),
+          disabled: selectedCount < 3,
         },
         {
           label: "تدوير 90° يمين",
@@ -508,9 +528,16 @@ export function WorkspaceOverlays({
         {
           label: "لصق",
           icon: ClipboardPaste,
-          run: paste,
+          run: () => paste(),
           disabled: !clipboard,
           hint: "⌘V",
+        },
+        {
+          label: "لصق في مكانه",
+          icon: ClipboardPaste,
+          run: () => paste(true),
+          disabled: !clipboard,
+          hint: "⇧⌘V",
         },
         { label: "تحديد الكل", icon: AlignCenter, run: selectAll, hint: "⌘A" },
         {

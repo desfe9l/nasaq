@@ -5,8 +5,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { MIN_SIZE, type CanvasEl } from "./model.ts";
+import { GRID, MIN_SIZE, type CanvasEl } from "./model.ts";
 import {
+  applyResizeSnap,
   applySnap,
   mirrorHandle,
   resizeByHandle,
@@ -245,4 +246,57 @@ test("a mirrored corner grip drags the edge the author can see", () => {
   resizeByHandle(next, orig, mirrorHandle("nw", true, false), 10, 0, false);
   assert.equal(next.w, 50);
   assert.equal(next.x, 20);
+});
+
+test("equal-spacing snap centres a box between two row neighbours", () => {
+  const size = { w: 210, h: 297 };
+  const others = [
+    { id: "left", x: 0, y: 0, w: 40, h: 60 },
+    { id: "right", x: 100, y: 0, w: 40, h: 60 },
+  ];
+  // 20mm box 1mm off the perfect centre of the 60mm gap (ideal x = 60).
+  const el = box(61, 25, 20, 20);
+  const guides = applySnap(el, others, size, false, true, 1, {});
+  assert.equal(el.x, 60, "both gaps become 20mm");
+  assert.deepEqual(
+    guides.v.sort((a, b) => a - b),
+    [50, 90],
+    "a guide marks the middle of each gap",
+  );
+});
+
+test("equal-spacing stays quiet when nothing flanks the box", () => {
+  const size = { w: 210, h: 297 };
+  const others = [{ id: "lonely", x: 150, y: 0, w: 40, h: 60 }];
+  const el = box(61, 25, 20, 20);
+  const guides = applySnap(el, others, size, false, true, 1, {});
+  assert.equal(el.x, 61, "a lone neighbour on one side never fakes a gap");
+  assert.deepEqual(guides, { v: [], h: [] });
+});
+
+test("resize snap moves ONLY the dragged edge", () => {
+  const size = { w: 210, h: 297 };
+  const others = [{ id: "a", x: 100, y: 0, w: 40, h: 40 }];
+
+  // se: right edge 1.6mm short of the neighbour's left edge → grows to meet it.
+  const se = { x: 10, y: 10, w: 88.4, h: 30 };
+  const seGuides = applyResizeSnap(se, "se", others, size, false, true, 1);
+  assert.equal(se.x, 10, "the anchored west edge never drifts");
+  assert.equal(se.w, 90, "east edge lands exactly on the target");
+  assert.deepEqual(seGuides.v, [100]);
+
+  // w handle: left edge snaps, the right edge stays put.
+  const w = { x: 101.2, y: 10, w: 50, h: 30 };
+  const wGuides = applyResizeSnap(w, "w", others, size, false, true, 1);
+  assert.equal(w.x, 100, "west edge lands on the target");
+  assert.equal(w.w, 51.2, "east edge is preserved (151.2mm)");
+  assert.deepEqual(wGuides.v, [100]);
+});
+
+test("resize grid snap rounds the live edge to the grid", () => {
+  const box2 = { x: 10, y: 10, w: 88.4, h: 30 };
+  applyResizeSnap(box2, "se", [], { w: 210, h: 297 }, true, false, 1);
+  assert.equal(box2.x, 10, "grid snap never touches the anchored edge");
+  assert.equal(box2.w, 90, `east edge 98.4 → ${10 + box2.w - 10 + 10} = grid multiple`);
+  assert.equal((box2.x + box2.w) % GRID, 0);
 });

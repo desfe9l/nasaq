@@ -178,6 +178,17 @@ export function ScrubInput({
             const parsed = Number(String(draft ?? "").replace(/[^\d.-]/g, ""));
             if (draft === "" && allowUnset) onClear?.();
             else if (draft !== null && Number.isFinite(parsed)) commitValue(parsed);
+            else {
+              /*
+               * Typing path: every keystroke already applied the value live
+               * (and the [value] effect clears the draft before blur arrives),
+               * so the ONLY missing half is the history boundary. Commit the
+               * current value unconditionally — `pushHistory` dedupes an
+               * unchanged state, so a plain focus-then-blur still records
+               * exactly ONE entry for a typed edit instead of none.
+               */
+              onCommit?.(latest.current);
+            }
             setDraft(null);
           }}
           onKeyDown={(event) => {

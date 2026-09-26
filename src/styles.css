@@ -1901,6 +1901,35 @@ body.is-resizing-rail {
 }
 
 /*
+ * Unified colour picker (ColorField): the swatch button that opens the popup.
+ * Dimensions come from the context (properties Field / toolbar swatch); this
+ * rule only makes it read as a swatch everywhere — flat, clickable, focusable.
+ */
+.color-field-trigger {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.color-field-trigger:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+/* قفل العنصر — the locked state must read clearly in BOTH themes as purple,
+   matching the locked selection frame, never the blue "active" tint. */
+.floating-toolbar-btn.is-locked-active {
+  background: #8b5cf6;
+  color: #fff;
+}
+
+.floating-toolbar-btn.is-locked-active:hover:not(:disabled) {
+  background: #7c3aed;
+}
+
+/*
  * PHASE 5 — Layer tree.
  */
 .layer-row {

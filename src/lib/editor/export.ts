@@ -548,7 +548,7 @@ function elHtml(el: CanvasEl, pageRef?: PageContext): string {
   }
   if (el.type === "box" || el.type === "stat") {
     return wrap(
-      `<div class="box" style="background:${cssColor(s.fill || s.background, "#f7f8fb")};border:${num(s.borderWidth, 0.35, 0, 50)}mm solid ${cssColor(s.borderColor, "#d9dee8")};border-radius:${num(s.radius, 4, 0, 500)}mm;padding:${num(s.padding, 4, 0, 200)}mm;font-family:${cssFont(s.fontFamily)};font-size:${num(text.fontSize, 12, 4, 400)}pt;color:${cssColor(s.color, "#172033")};font-weight:${num(s.fontWeight, 600, 100, 900)};text-align:${cssKeyword(s.textAlign, TEXT_ALIGN, "right")};line-height:${num(text.lineHeight, 1.5, 0.5, 5)};direction:rtl;${verticalCss}">${body()}</div>`,
+      `<div class="box" style="background:${cssColor(s.fill || s.background, "#f7f8fb")};border:${num(s.borderWidth, 0.35, 0, 50)}mm ${s.borderDash ? "dashed" : "solid"} ${cssColor(s.borderColor, "#d9dee8")};border-radius:${num(s.radius, 4, 0, 500)}mm;padding:${num(s.padding, 4, 0, 200)}mm;font-family:${cssFont(s.fontFamily)};font-size:${num(text.fontSize, 12, 4, 400)}pt;color:${cssColor(s.color, "#172033")};font-weight:${num(s.fontWeight, 600, 100, 900)};text-align:${cssKeyword(s.textAlign, TEXT_ALIGN, "right")};line-height:${num(text.lineHeight, 1.5, 0.5, 5)};direction:rtl;${verticalCss}">${body()}</div>`,
     );
   }
   if (el.type === "progress") {
@@ -610,14 +610,15 @@ function elHtml(el: CanvasEl, pageRef?: PageContext): string {
   }
   if (el.type === "shape") {
     const borderWidth = num(s.borderWidth, 0, 0, 50);
+    const box = { w: num(el.w, 40, 1, 1e4), h: num(el.h, 20, 1, 1e4) };
     return wrap(
       shapeSvgMarkup(s.shapeId || s.shape, {
         fill: cssColor(s.fill, "#006c35"),
         stroke: cssColor(s.borderColor, "transparent"),
-        strokeUnits: strokeToUnits(borderWidth, {
-          w: num(el.w, 40, 1, 1e4),
-          h: num(el.h, 20, 1, 1e4),
-        }),
+        strokeUnits: strokeToUnits(borderWidth, box),
+        dash: s.borderDash === true,
+        radiusMm: s.radius == null ? undefined : num(s.radius, 0, 0, 1e4),
+        box,
       }),
     );
   }

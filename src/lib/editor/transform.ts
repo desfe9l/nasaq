@@ -271,6 +271,155 @@ export function applySnap(
       el.y += bestH.delta;
       h.push(bestH.target);
     }
+    /*
+     * تباعد متساوٍ (equal spacing): when the moving box sits between two
+     * neighbours in the same row/column, snap it so both gaps are identical —
+     * the classic "distribute while dragging". Only fires when no edge/centre
+     * snap claimed that axis, so the common alignment case keeps priority,
+     * and only inside the same screen-scale threshold as every other snap.
+     */
+    if (!bestV) {
+      const overlapV = (o: SnapCandidate) =>
+        o.y < el.y + el.h && o.y + o.h > el.y;
+      let left: SnapCandidate | null = null;
+      let right: SnapCandidate | null = null;
+      for (const o of stable) {
+        if (!overlapV(o)) continue;
+        if (o.x + o.w <= el.x + threshold && (!left || o.x + o.w > left.x + left.w))
+          left = o;
+        if (o.x >= el.x + el.w - threshold && (!right || o.x < right.x)) right = o;
+      }
+      if (left && right) {
+        const span = right.x - (left.x + left.w);
+        const gap = (span - el.w) / 2;
+        if (gap >= 0) {
+          const ideal = left.x + left.w + gap;
+          if (Math.abs(el.x - ideal) <= threshold) {
+            el.x = ideal;
+            v.push(left.x + left.w + gap / 2, el.x + el.w + gap / 2);
+          }
+        }
+      }
+    }
+    if (!bestH) {
+      const overlapH = (o: SnapCandidate) =>
+        o.x < el.x + el.w && o.x + o.w > el.x;
+      let above: SnapCandidate | null = null;
+      let below: SnapCandidate | null = null;
+      for (const o of stable) {
+        if (!overlapH(o)) continue;
+        if (o.y + o.h <= el.y + threshold && (!above || o.y + o.h > above.y + above.h))
+          above = o;
+        if (o.y >= el.y + el.h - threshold && (!below || o.y < below.y)) below = o;
+      }
+      if (above && below) {
+        const span = below.y - (above.y + above.h);
+        const gap = (span - el.h) / 2;
+        if (gap >= 0) {
+          const ideal = above.y + above.h + gap;
+          if (Math.abs(el.y - ideal) <= threshold) {
+            el.y = ideal;
+            h.push(above.y + above.h + gap / 2, el.y + el.h + gap / 2);
+          }
+        }
+      }
+    }
+  }
+  return { v: [...new Set(v)], h: [...new Set(h)] };
+}
+
+/**
+ * Snap a RESIZED box: the edges the author is actually dragging line up with
+ * the artboard, object edges/centres (smart) and the grid — while the opposite,
+ * anchored edge stays exactly where it is.
+ *
+ * `handle` selects which edges are live (`"se"` = right+bottom, `"e"` =
+ * right, …); non-live edges are never nudged, so a resize anchored on its
+ * left edge can never drift left. Mutates `box` and returns the guides, same
+ * contract as `applySnap`.
+ */
+export function applyResizeSnap(
+  box: GestureBox,
+  handle: string,
+  others: SnapCandidate[],
+  size: { w: number; h: number },
+  grid: boolean,
+  smart: boolean,
+  zoom: number,
+): SnapGuides {
+  const v: number[] = [];
+  const h: number[] = [];
+  const liveLeft = handle.includes("w");
+  const liveRight = handle.includes("e");
+  const liveTop = handle.includes("n");
+  const liveBottom = handle.includes("s");
+  const threshold = snapThresholdMm(zoom);
+
+  const edgesFor = (axis: "x" | "y", extent: number) =>
+    axis === "x"
+      ? [0, extent / 2, extent, ...others.flatMap((o) => [o.x, o.x + o.w / 2, o.x + o.w])]
+      : [0, extent / 2, extent, ...others.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h])];
+
+  const nearest = (value: number, targets: number[]) => {
+    let best: { delta: number; target: number } | null = null;
+    for (const t of targets) {
+      const delta = t - value;
+      if (
+        Math.abs(delta) <= threshold &&
+        (!best || Math.abs(delta) < Math.abs(best.delta))
+      ) {
+        best = { delta, target: t };
+      }
+    }
+    return best;
+  };
+
+  // Grid first (unconditional, same as move), then smart guides win if closer.
+  if (grid) {
+    if (liveLeft) {
+      const gx = Math.round(box.x / GRID) * GRID;
+      box.w += box.x - gx;
+      box.x = gx;
+    }
+    if (liveRight) box.w = Math.round((box.x + box.w) / GRID) * GRID - box.x;
+    if (liveTop) {
+      const gy = Math.round(box.y / GRID) * GRID;
+      box.h += box.y - gy;
+      box.y = gy;
+    }
+    if (liveBottom) box.h = Math.round((box.y + box.h) / GRID) * GRID - box.y;
+  }
+  if (smart) {
+    const xTargets = edgesFor("x", size.w);
+    const yTargets = edgesFor("y", size.h);
+    if (liveLeft) {
+      const best = nearest(box.x, xTargets);
+      if (best) {
+        box.x += best.delta;
+        box.w -= best.delta;
+        v.push(best.target);
+      }
+    } else if (liveRight) {
+      const best = nearest(box.x + box.w, xTargets);
+      if (best) {
+        box.w += best.delta;
+        v.push(best.target);
+      }
+    }
+    if (liveTop) {
+      const best = nearest(box.y, yTargets);
+      if (best) {
+        box.y += best.delta;
+        box.h -= best.delta;
+        h.push(best.target);
+      }
+    } else if (liveBottom) {
+      const best = nearest(box.y + box.h, yTargets);
+      if (best) {
+        box.h += best.delta;
+        h.push(best.target);
+      }
+    }
   }
   return { v: [...new Set(v)], h: [...new Set(h)] };
 }

@@ -534,7 +534,12 @@ interface EditorStore extends Project, Ui, History {
   fitTextBox: (id: string) => void;
   duplicateSelected: () => void;
   copySelected: () => void;
-  pasteClipboard: () => void;
+  /**
+   * اللصق — `inPlace` pastes exactly on top of the original (Paste in Place),
+   * the default keeps the +8mm nudge so a plain ⌘V never hides the copy.
+   * Either way it is ONE history entry and the group's layer order survives.
+   */
+  pasteClipboard: (inPlace?: boolean) => void;
   deleteSelected: () => void;
   bring: (dir: "forward" | "back" | "front" | "bottom") => void;
   /**
@@ -869,9 +874,19 @@ export const useEditor = create<EditorStore>((set, get) => {
 
   const pushHistory = () => {
     const snapStr = JSON.stringify(projectSlice(get()));
-    const past = [...get().past, snapStr];
-    if (past.length > 60) past.shift();
-    set({ past, future: [] });
+    const { past } = get();
+    // Dedupe: a commit that changes nothing (a blur after a live edit already
+    // recorded its state, a double `commit()` after `updateStyle`) must not
+    // push a second identical entry — the first Undo would look dead. The
+    // future stack is only discarded by a REAL change (see `set` below), so
+    // Redo survives a no-op commit after an Undo.
+    if (past.length && past[past.length - 1] === snapStr) {
+      scheduleSave();
+      return;
+    }
+    const nextPast = [...past, snapStr];
+    if (nextPast.length > 60) nextPast.shift();
+    set({ past: nextPast, future: [] });
     scheduleSave();
   };
 
@@ -901,7 +916,37 @@ export const useEditor = create<EditorStore>((set, get) => {
   };
 
   /**
-   * Apply a batch of new positions as one undoable step.
+   * Undo/Redo restore — keep the author's selection when the ids still exist
+   * in the restored snapshot (Figma-class behaviour: undoing a move must not
+   * deselect the thing you just moved). Ids that the snapshot no longer
+   * contains drop out; an empty result falls back to the cleared selection
+   * `applyProject` installs.
+   */
+  const restoreSelectionExtra = (
+    incoming: ProjectSnapshot,
+  ): Partial<EditorStore> => {
+    const s = get();
+    const alive = new Set<string>();
+    const walk = (list: CanvasEl[]) => {
+      for (const el of list) {
+        alive.add(el.id);
+        if (el.children?.length) walk(el.children);
+      }
+    };
+    for (const page of incoming.pages) walk(page.elements);
+    const kept = s.selectedIds.filter((id) => alive.has(id));
+    const primary =
+      s.selectedId && alive.has(s.selectedId)
+        ? s.selectedId
+        : kept.length
+          ? kept[kept.length - 1]
+          : null;
+    const keptGroup =
+      s.enteredGroupId && alive.has(s.enteredGroupId) ? s.enteredGroupId : null;
+    return { selectedIds: kept, selectedId: primary, enteredGroupId: keptGroup };
+  };
+
+  /** Apply a batch of new positions as one undoable step.
    *
    * Align and distribute move several elements at once; writing each through
    * `updateElement` would push one history entry per element and make Undo
@@ -2729,7 +2774,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
     },
 
-    pasteClipboard: () => {
+    pasteClipboard: (inPlace) => {
       const s = get();
       if (!s.clipboard) return;
       const page = activePageOf(s);
@@ -2746,8 +2791,10 @@ export const useEditor = create<EditorStore>((set, get) => {
           });
         reid(el.children);
       }
-      el.x += 8;
-      el.y += 8;
+      if (!inPlace) {
+        el.x += 8;
+        el.y += 8;
+      }
       el.z = nextZ(page);
       constrainElement(el, pageSize(page));
       set({
@@ -3310,7 +3357,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (past.length <= 1) return;
       const current = past[past.length - 1];
       const prev = past[past.length - 2];
-      applyProject(JSON.parse(prev) as Project);
+      const restored = JSON.parse(prev) as ProjectSnapshot;
+      applyProject(restored, restoreSelectionExtra(restored));
       set({ past: past.slice(0, -1), future: [current, ...future] });
       scheduleSave(300);
     },
@@ -3319,7 +3367,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       const { past, future } = get();
       if (!future.length) return;
       const [next, ...rest] = future;
-      applyProject(JSON.parse(next) as Project);
+      const restored = JSON.parse(next) as ProjectSnapshot;
+      applyProject(restored, restoreSelectionExtra(restored));
       set({ past: [...past, next], future: rest });
       scheduleSave(300);
     },
