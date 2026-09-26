@@ -1498,7 +1498,7 @@ function SettingsTab() {
           <a href="/owner-vault" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10">
             خزنة المالك — مفاتيح API
           </a>
-          <a href="/admin" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10">
+          <a href="/admin-dashboard" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10">
             محتوى الموقع والقوالب — عبر لوحة الإدارة
           </a>
           <div className="rounded-[10px] border border-line p-3 text-[11px] leading-5 text-muted dark:border-white/10">

@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AdminDashboardRouteImport } from './routes/admin-dashboard'
 import { Route as AdminLicensesRouteImport } from './routes/admin-licenses'
 import { Route as BrandKitRouteImport } from './routes/brand-kit'
 import { Route as ContactRouteImport } from './routes/contact'
@@ -55,6 +56,11 @@ const AccountRoute = AccountRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminDashboardRoute = AdminDashboardRouteImport.update({
+  id: '/admin-dashboard',
+  path: '/admin-dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminLicensesRoute = AdminLicensesRouteImport.update({
@@ -179,6 +185,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/admin-dashboard': typeof AdminDashboardRoute
   '/admin-licenses': typeof AdminLicensesRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
@@ -208,6 +215,7 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/admin-dashboard': typeof AdminDashboardRoute
   '/admin-licenses': typeof AdminLicensesRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
@@ -238,6 +246,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRoute
+  '/admin-dashboard': typeof AdminDashboardRoute
   '/admin-licenses': typeof AdminLicensesRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
@@ -269,6 +278,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account'
     | '/admin'
+    | '/admin-dashboard'
     | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
@@ -298,6 +308,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account'
     | '/admin'
+    | '/admin-dashboard'
     | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
@@ -327,6 +338,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account'
     | '/admin'
+    | '/admin-dashboard'
     | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
@@ -357,6 +369,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRoute
+  AdminDashboardRoute: typeof AdminDashboardRoute
   AdminLicensesRoute: typeof AdminLicensesRoute
   BrandKitRoute: typeof BrandKitRoute
   ContactRoute: typeof ContactRoute
@@ -410,6 +423,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-dashboard': {
+      id: '/admin-dashboard'
+      path: '/admin-dashboard'
+      fullPath: '/admin-dashboard'
+      preLoaderRoute: typeof AdminDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin-licenses': {
@@ -581,6 +601,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AccountRoute: AccountRoute,
   AdminRoute: AdminRoute,
+  AdminDashboardRoute: AdminDashboardRoute,
   AdminLicensesRoute: AdminLicensesRoute,
   BrandKitRoute: BrandKitRoute,
   ContactRoute: ContactRoute,
