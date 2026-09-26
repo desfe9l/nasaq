@@ -18,8 +18,10 @@ import {
   GUMROAD_PLAN_PRICE_CENTS,
   gumroadCheckoutUrl,
   gumroadPriceMatches,
+  listGumroadPlanKeys,
   matchGumroadTierFamily,
   resolveGumroadPlanKey,
+  withGumroadPrefilledEmail,
 } from "./mapping.ts";
 import {
   classifyGumroadPing,
@@ -186,12 +188,28 @@ describe("Gumroad tier mapping", () => {
 
   it("maps the checkout deep links to the right tier + recurrence", () => {
     const monthly = gumroadCheckoutUrl("individual-monthly");
-    assert.ok(monthly.includes(`tier=${encodeURIComponent(TIERS.individual)}`));
+    assert.ok(monthly.includes(`variant=${encodeURIComponent(TIERS.individual)}`));
     assert.ok(monthly.includes("monthly=true") && monthly.includes("wanted=true"));
     const teamQuarterly = gumroadCheckoutUrl("team-quarterly");
-    assert.ok(teamQuarterly.includes(`tier=${encodeURIComponent(TIERS.team)}`));
+    assert.ok(teamQuarterly.includes(`variant=${encodeURIComponent(TIERS.team)}`));
     assert.ok(teamQuarterly.includes("quarterly=true"));
     assert.ok(teamQuarterly.startsWith("https://nasaqar.gumroad.com/l/auaewk"));
+    // `tier=` is not a Gumroad parameter: it silently fell back to the default
+    // tier, so a team button used to open the individual price. Regression guard.
+    for (const planKey of listGumroadPlanKeys()) {
+      assert.ok(!gumroadCheckoutUrl(planKey).includes("tier="), `${planKey} must not use tier=`);
+    }
+  });
+
+  it("prefills the buyer email only when there is a usable address", () => {
+    const base = gumroadCheckoutUrl("team-monthly");
+    assert.equal(gumroadCheckoutUrl("team-monthly", undefined, { email: "  " }), base);
+    assert.equal(gumroadCheckoutUrl("team-monthly", undefined, { email: "not-an-email" }), base);
+    const prefilled = gumroadCheckoutUrl("team-monthly", undefined, { email: "buyer@example.com" });
+    assert.ok(prefilled.endsWith("&email=buyer%40example.com"));
+    assert.ok(prefilled.startsWith(base), "prefill appends, never rebuilds");
+    assert.equal(withGumroadPrefilledEmail("https://gumroad.com/checkout?product=x", "a@b.co"), "https://gumroad.com/checkout?product=x&email=a%40b.co");
+    assert.equal(withGumroadPrefilledEmail("https://gumroad.com/checkout", "a@b.co"), "https://gumroad.com/checkout?email=a%40b.co");
   });
 
   it("matches tier names tolerantly and rejects unknown tiers", () => {

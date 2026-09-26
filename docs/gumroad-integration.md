@@ -114,12 +114,32 @@ POST https://nasaq-sa.vercel.app/api/webhooks/gumroad
 
 ## روابط الشراء (Monthly افتراضي)
 
-كل زر في `/purchase` (و`/pricing`) يفتح نموذج الدفع مباشرة بالـ Tier والفترة الصحيحين:
+كل زر في `/purchase` (و`/pricing`) يفتح **Gumroad Checkout مباشرة** بالـ Tier والفترة
+الصحيحين، دون مرور على صفحة المنتج العامة:
 
 ```
-https://nasaqar.gumroad.com/l/auaewk?tier=<Tier>&monthly=true&wanted=true
-https://nasaqar.gumroad.com/l/auaewk?tier=<Tier>&quarterly=true&wanted=true
+https://nasaqar.gumroad.com/l/auaewk?variant=<Tier>&monthly=true&wanted=true
+https://nasaqar.gumroad.com/l/auaewk?variant=<Tier>&quarterly=true&wanted=true
 ```
+
+- `variant=<اسم الـTier>` — Gumroad يطابقه بالاسم ثم يحوّله داخليًا إلى معرّف الـoption
+  ويهرّب المشتري إلى `/checkout`، وهذا ما يجعل `wanted=true` لازمًا.
+- `<monthly|quarterly>=true` — تُترجم إلى `recurrence` الخاص بالعضوية.
+- `email=<بريد المشتري>` يُضاف تلقائيًا للزائر المسجّل (autofill موثّق) ليكون بريد
+  الشراء هو نفسه بريد الحساب الذي سيُربط به الترخيص.
+- **لا تستخدم `?tier=`**: Gumroad لا يقرأه إطلاقًا ويسقط إلى الـTier الافتراضي (فردي)،
+  وهو خطأ قديم مُصلَح في `gumroadCheckoutUrl()` ويحرسه اختبار انحدار.
+
+التحقق الحي (2026-09-26) بقراءة السعر الذي يعرضه الـcheckout فعليًا:
+
+| الرابط | السعر الظاهر |
+| --- | --- |
+| `variant=نَسَق \| فردي & monthly=true` | US$21.06 Monthly (79 SAR) |
+| `variant=نَسَق \| فردي & quarterly=true` | US$53.06 Quarterly (199 SAR) |
+| `variant=نَسَق \| فريق & monthly=true` | US$53.06 Monthly (199 SAR) |
+| `variant=نَسَق \| فريق & quarterly=true` | US$133.07 Quarterly (499 SAR) |
+
+«مؤسسات» ليست منتج Gumroad: زرّها في `/purchase` يوجّه إلى `/contact` لعرض سعر مخصص.
 
 ## العودة بعد الدفع
 

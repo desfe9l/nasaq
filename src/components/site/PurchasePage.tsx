@@ -1,13 +1,21 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, ChevronDown, CreditCard, Key, ShieldCheck, Lock } from "lucide-react";
+import { Building2, CheckCircle2, ChevronDown, CreditCard, Key, ShieldCheck, Lock } from "lucide-react";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { getGumroadCheckoutLinksFn } from "@/lib/gumroad/functions";
+import { withGumroadPrefilledEmail } from "@/lib/gumroad/mapping";
+import { getMyAccountPage } from "@/lib/commercial/functions";
+import { getLicenseStatusFn } from "@/lib/license/functions";
+import type { LicenseInfo } from "@/lib/license/types";
+import { purchaseStateView, type PurchaseStateTone } from "@/lib/commercial/plan-state";
+import type { CustomerAccount } from "@/lib/commercial/types";
 import { CENTRAL_PLANS, FREE_PLAN, BILLING_PERIODS, planSavings, planKeyFor, type PlanPeriod, type PlanFamily, type PlanKey } from "@/lib/commercial/catalog";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { cardClass } from "@/components/site/cards";
 
 const FAQS: { q: string; a: string }[] = [
   { q: "كيف تُفعَّل التراخيص؟", a: "بعد إتمام الدفع عبر Gumroad، يتحقق النظام من العملية خادميًا ثم يُنشئ ترخيصًا رقميًا عبر Keygen ويربطه بحسابك تلقائيًا بنفس بريد الشراء. تدير الترخيص من صفحة التراخيص." },
+  { q: "هل أحتاج إدخال مفتاح ترخيص أثناء الدفع؟", a: "لا. لا يُطلب منك أي مفتاح أثناء الشراء ولا بعده: الترخيص يُنشأ ويُربط بحسابك تلقائيًا. خانات الدفع في Gumroad تقتصر على بيانات البطاقة والبريد." },
+  { q: "ما حالات الاشتراك في نَسَق؟", a: "النوع: Free (مجاني)، Trial (تجريبي)، Pro (احترافي شهري أو ربع سنوي)، Lifetime (مدى الحياة). والحالة: Active (نشط)، Expired (منتهي)، Revoked (ملغى أو موقوف). تظهر حالتك الحالية في أعلى هذه الصفحة." },
   { q: "ماذا لو لم أكن مسجلًا قبل الشراء؟", a: "لا مشكلة: أكمل الدفع عبر Gumroad بنفس البريد الذي ستسجّل به في نَسَق، وعند أول تسجيل دخول يُربط الاشتراك بحسابك تلقائيًا." },
   { q: "ما مدد الاشتراك المتاحة؟", a: "يتوفر اشتراك شهري (30 يومًا) وربع سنوي (90 يومًا) للفردي والفريق، بتجديد تلقائي يمكن إلغاء التجديد في أي وقت من حسابك في Gumroad. جميعها تراخيص رقمية فورية." },
   { q: "أين تُعالج ملفاتي؟", a: "المحرر يعمل بتخزين محلي أولًا: المشاريع والصور والهويات تُحفظ داخل المتصفح عبر IndexedDB. الاتصال مطلوب فقط للتحقق من الترخيص." },
@@ -15,10 +23,20 @@ const FAQS: { q: string; a: string }[] = [
   { q: "هل الخطة المجانية محدودة المدة؟", a: "لا، الخطة المجانية دائمة دون تاريخ انتهاء، مع قيود على المزايا المتقدمة." },
 ];
 
+const TONE_STYLES: Record<PurchaseStateTone, string> = {
+  ok: "bg-ok/15 text-ok",
+  muted: "bg-line-2 text-muted",
+  warn: "bg-gold/20 text-ink",
+  danger: "bg-danger/10 text-danger",
+};
+
 export function PurchasePage() {
   const [billing, setBilling] = useState<PlanPeriod>("monthly");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [checkoutLinks, setCheckoutLinks] = useState<Record<string, string>>({});
+  const [account, setAccount] = useState<CustomerAccount | null>(null);
+  const [license, setLicense] = useState<LicenseInfo | null>(null);
+  const [isSuspended, setIsSuspended] = useState(false);
   useEffect(() => {
     getGumroadCheckoutLinksFn()
       .then((links) => setCheckoutLinks(Object.fromEntries(links.map((link) => [link.planKey, link.url]))))
@@ -26,14 +44,60 @@ export function PurchasePage() {
   }, []);
   const { user } = useCurrentUserState();
 
+  // Current subscription state. `getMyAccountPage` is also the Gumroad claim
+  // point: a membership bought with this verified email (webhook missed or the
+  // buyer registered later) is bound and fulfilled before the status is read,
+  // so this strip shows the truth, not a stale "Free".
+  const userId = user?.id ?? null;
+  const isDevFallback = user?.isDevFallback ?? false;
+  useEffect(() => {
+    if (!userId || isDevFallback) return;
+    let active = true;
+    void (async () => {
+      try {
+        const page = await getMyAccountPage();
+        if (active) setAccount(page.account);
+      } catch {
+        // Status is informational: never block buying because it could not load.
+      }
+      try {
+        const status = await getLicenseStatusFn();
+        if (!active) return;
+        setLicense(status.license ?? null);
+        setIsSuspended(status.isSuspended ?? false);
+      } catch {
+        // Same: the plan cards work without it.
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [userId, isDevFallback]);
+
+  // The buyer email that will end up on the Gumroad receipt: the signed-in
+  // user's verified address. The dev fallback identity is NOT a buyer — its
+  // placeholder address must never be prefilled into a real checkout.
+  const buyerEmail = user && !isDevFallback ? user.primaryEmail : null;
+
+  const stateView = purchaseStateView({
+    signedIn: Boolean(user) && !isDevFallback,
+    account,
+    license,
+    isSuspended,
+  });
+  const currentPlanKey = account?.status === "ACTIVE" ? account.planId : null;
+
   /**
-   * Gumroad is the primary checkout: each card deep-links straight to the
-   * correct tier + recurrence payment form (monthly by default). The buyer
-   * pays on Gumroad; access is bound server-side by the verified buyer email —
-   * never by redirect params — and Keygen issues the license.
+   * Gumroad is the only checkout: each card deep-links straight to the right
+   * tier + recurrence payment form (`variant=<tier>&<recurrence>=true&wanted=true`),
+   * so the buyer never passes through the public product page. The signed-in
+   * buyer's email is prefilled so the purchase lands on the same address the
+   * account uses — that address is what binds the license.
    */
   function gumroadUrlFor(planKey: PlanKey): string | null {
-    return checkoutLinks[planKey] ?? null;
+    const url = checkoutLinks[planKey];
+    if (!url) return null;
+    return withGumroadPrefilledEmail(url, buyerEmail);
   }
 
   const families: PlanFamily[] = ["individual", "team"];
@@ -47,9 +111,17 @@ export function PurchasePage() {
       <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:py-12">
         {/* Header */}
         <div className="max-w-3xl">
-          <p className="text-[11px] font-bold tracking-[0.14em] text-[#006C35]">النسخ والتراخيص</p>
+          <p className="text-[11px] font-bold tracking-[0.14em] text-[#006C35]">الاشتراكات والتراخيص</p>
           <h1 className="mt-2 text-[28px] font-extrabold leading-tight text-[#0F1E33] dark:text-white sm:text-[32px]">اختر الترخيص المناسب لاحتياج مؤسستك</h1>
           <p className="mt-3 text-[14px] leading-7 text-[#475467] dark:text-white/60">قارن الخطط أولًا، ثم اختر فترة الاشتراك وأكمل الدفع بأمان عبر Gumroad. جميع التراخيص رقمية وتُفعَّل فور التحقق من السداد خادميًا.</p>
+        </div>
+
+        {/* Current state — Free / Trial / Pro / Lifetime × Active / Expired / Revoked */}
+        <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[12px] border border-line/70 bg-[#fcfdfc] px-4 py-3 dark:border-white/10 dark:bg-white/[0.02]">
+          <span className="text-[11px] font-bold text-[#667085] dark:text-white/50">حالتك الحالية</span>
+          <span className={`rounded-full px-3 py-1 text-[11px] font-extrabold ${TONE_STYLES[stateView.tone]}`}>{stateView.label}</span>
+          <span className="text-[12px] leading-6 text-[#475467] dark:text-white/60">{stateView.detail}</span>
+          <a href="/license" className="ms-auto text-[12px] font-bold text-[#006C35] underline dark:text-emerald-300">تفاصيل الترخيص</a>
         </div>
 
         {/* كيف تعمل التراخيص */}
@@ -60,7 +132,7 @@ export function PurchasePage() {
               <span className="grid size-7 place-items-center rounded-full bg-[#0F1E33] text-[11px] font-bold text-white dark:bg-white dark:text-[#0F1E33]">1</span>
               <div>
                 <p className="text-[13px] font-bold text-[#0F1E33] dark:text-white">اختيار الباقة</p>
-                <p className="mt-1 text-[12px] leading-6 text-[#667085] dark:text-white/50">حدد نوع الترخيص: فردي للأفراد أو فريق لإدارات الاتصال.</p>
+                <p className="mt-1 text-[12px] leading-6 text-[#667085] dark:text-white/50">حدد نوع الترخيص: فردي للمصممين المستقلين، أو فريق لفرق العمل، أو عرض سعر مخصص للمؤسسات.</p>
               </div>
             </div>
             <div className="flex gap-3">
@@ -108,8 +180,8 @@ export function PurchasePage() {
             </div>
           </div>
           <div className="max-w-md text-[12px] leading-6 text-[#475467] dark:text-white/60">
-            {user ? (
-              <p>سيُربط الاشتراك تلقائيًا بحسابك الحالي (<span className="font-bold" dir="ltr">{user.primaryEmail}</span>). للشراء لحساب آخر استخدم بريد ذاك الحساب على Gumroad.</p>
+            {buyerEmail ? (
+              <p>سيُربط الاشتراك تلقائيًا بحسابك الحالي (<span className="font-bold" dir="ltr">{buyerEmail}</span>)، وبريدك مُعبّأ مسبقًا في نموذج الدفع. للشراء لحساب آخر استخدم بريد ذاك الحساب على Gumroad.</p>
             ) : (
               <p>أكمل الدفع عبر Gumroad بنفس البريد الذي ستسجّل به في نَسَق، وسيُربط الاشتراك بحسابك تلقائيًا عند أول تسجيل دخول — لا حاجة للتسجيل قبل الشراء.</p>
             )}
@@ -117,7 +189,7 @@ export function PurchasePage() {
         </div>
 
         {/* Cards — متوازنة */}
-        <div className="mt-6 grid items-stretch gap-4 lg:grid-cols-3">
+        <div className="mt-6 grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {/* Free — deliberately quieter than the paid cards: muted tinted
               surface, no lift, small badge; reads free at a glance. */}
           <div className="flex flex-col rounded-xl border border-line/70 bg-[#f8faf9] p-5 dark:border-white/10 dark:bg-white/[0.03]">
@@ -146,6 +218,10 @@ export function PurchasePage() {
             const planKey = planKeyFor(family, billing);
             const plan = CENTRAL_PLANS[planKey];
             const isTeam = family === "team";
+            // Renewing/duplicating an active membership is done from the account
+            // page: Gumroad refuses to sell a second subscription of a
+            // membership the buyer already holds, so that button would dead-end.
+            const isCurrentPlan = currentPlanKey === planKey;
             return (
               <div key={planKey} className={cardClass(`flex flex-col p-5 ${isTeam ? "border-[#006C35]/30 shadow-sm" : ""}`)}>
                 <div className="flex-1">
@@ -154,7 +230,11 @@ export function PurchasePage() {
                       <h2 className="text-[15px] font-bold text-[#0F1E33] dark:text-white">{isTeam ? "نَسَق | فريق" : "نَسَق | فردي"}</h2>
                       <p className="mt-1 text-[12px] leading-5 text-[#667085] dark:text-white/50">{plan.description}</p>
                     </div>
-                    {plan.popular && <span className="shrink-0 rounded-full bg-[#0F1E33] px-2.5 py-1 text-[10px] font-bold text-white dark:bg-white dark:text-[#0F1E33]">الأكثر طلبًا</span>}
+                    {isCurrentPlan ? (
+                      <span className="shrink-0 rounded-full bg-[#006C35] px-2.5 py-1 text-[10px] font-bold text-white">خطتك الحالية</span>
+                    ) : plan.popular ? (
+                      <span className="shrink-0 rounded-full bg-[#0F1E33] px-2.5 py-1 text-[10px] font-bold text-white dark:bg-white dark:text-[#0F1E33]">الأكثر طلبًا</span>
+                    ) : null}
                   </div>
                   <p className="mt-4 text-[24px] font-extrabold text-[#0F1E33] dark:text-white">{plan.amount.toLocaleString("en-US")} <span className="text-[13px] font-bold text-[#667085]">ر.س</span> <span className="text-[12px] font-bold text-[#667085]">/ {billing === "quarterly" ? "كل 3 أشهر" : billing === "annual" ? "سنوي" : "شهري"}</span></p>
                   <p className="text-[11px] text-[#98a2b3]">مدة الترخيص {plan.durationDays} يومًا · {billing === "monthly" ? "تجديد شهري" : billing === "quarterly" ? "تجديد كل 3 أشهر" : "تجديد سنوي"}</p>
@@ -171,8 +251,18 @@ export function PurchasePage() {
                   </div>
                 </div>
                 <div className="mt-5">
-                  {gumroadUrlFor(planKey) ? (
-                    <a href={gumroadUrlFor(planKey)!} target="_blank" rel="noreferrer noopener" className={`inline-flex h-9 w-full items-center justify-center rounded-[10px] text-[13px] font-bold text-white transition ${isTeam ? "bg-[#006C35] hover:bg-[#00542a]" : "bg-[#0F1E33] hover:bg-black dark:bg-white dark:text-[#0F1E33]"}`}>
+                  {isCurrentPlan ? (
+                    <a href="/account" className="inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-[#006C35]/40 bg-[#006C35]/10 text-[13px] font-bold text-[#006C35] hover:bg-[#006C35]/15 dark:border-emerald-300/30 dark:text-emerald-200">
+                      إدارة الاشتراك
+                    </a>
+                  ) : gumroadUrlFor(planKey) ? (
+                    <a
+                      href={gumroadUrlFor(planKey)!}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      aria-label={`اشترك الآن — ${plan.arabicName} عبر Gumroad`}
+                      className={`inline-flex h-9 w-full items-center justify-center rounded-[10px] text-[13px] font-bold text-white transition ${isTeam ? "bg-[#006C35] hover:bg-[#00542a]" : "bg-[#0F1E33] hover:bg-black dark:bg-white dark:text-[#0F1E33]"}`}
+                    >
                       اشترك الآن
                     </a>
                   ) : (
@@ -180,11 +270,51 @@ export function PurchasePage() {
                       جارٍ تجهيز بوابة الدفع…
                     </span>
                   )}
-                  <p className="mt-2 text-center text-[11px] text-[#98a2b3]">ترخيص رقمي فوري · دفع آمن عبر Gumroad</p>
+                  <p className="mt-2 text-center text-[11px] text-[#98a2b3]">
+                    {isCurrentPlan ? "تفاصيل التجديد والترخيص في حسابك" : "ترخيص رقمي فوري · دفع آمن عبر Gumroad"}
+                  </p>
                 </div>
               </div>
             );
           })}
+
+          {/* مؤسسات — لا منتج Gumroad لها: عرض سعر مخصص عبر التواصل المباشر. */}
+          <div className="flex flex-col rounded-xl border border-line/70 bg-[#f8faf9] p-5 dark:border-white/10 dark:bg-white/[0.03]">
+            <div className="flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="text-[15px] font-bold text-[#0F1E33] dark:text-white">مؤسسات</h2>
+                <span className="shrink-0 rounded-full border border-line/70 bg-white px-2.5 py-1 text-[10px] font-bold text-[#667085] dark:border-white/15 dark:bg-white/5 dark:text-white/60">
+                  <Building2 className="me-1 inline size-3" /> عرض سعر
+                </span>
+              </div>
+              <p className="mt-2 text-[12px] leading-6 text-[#667085] dark:text-white/50">
+                للجهات والفرق الكبيرة: مقاعد متعددة، تعاقد وفاتورة رسمية، وتهيئة حسب احتياج الجهة.
+              </p>
+              <p className="mt-4 text-[24px] font-extrabold text-[#0F1E33] dark:text-white">
+                تواصل معنا <span className="text-[12px] font-bold text-[#667085]">لعرض سعر مخصص</span>
+              </p>
+              <p className="text-[11px] text-[#98a2b3]">المدة: حسب العقد</p>
+              <div className="mt-4 border-t border-line/60 pt-3.5 dark:border-white/10">
+                <ul className="grid gap-1.5">
+                  {[
+                    "عدد مقاعد مخصص حسب حجم الجهة",
+                    "فاتورة رسمية وتعاقد مباشر",
+                    "تهيئة أولية ودعم بأولوية",
+                  ].map((f) => (
+                    <li key={f} className="flex items-start gap-2 text-[12px] leading-5 text-[#344054] dark:text-white/60">
+                      <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[#98a2b3]" /> {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <div className="mt-5">
+              <a href="/contact" className="inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-line bg-white text-[13px] font-bold text-[#0F1E33] hover:bg-[#f8faf9] dark:border-white/15 dark:bg-white/5 dark:text-white">
+                تواصل معنا
+              </a>
+              <p className="mt-2 text-center text-[11px] text-[#98a2b3]">عرض سعر مخصص — دون دفع فوري</p>
+            </div>
+          </div>
         </div>
 
         {/* FAQ */}
@@ -208,8 +338,10 @@ export function PurchasePage() {
 
         <section className="mt-10 flex flex-wrap items-center justify-between gap-4 rounded-[12px] border border-line/60 bg-[#f8faf9] p-4 dark:border-white/10 dark:bg-white/[0.02]">
           <div>
-            <h3 className="text-[13px] font-bold text-[#0F1E33] dark:text-white">لديك مفتاح ترخيص بالفعل؟</h3>
-            <p className="mt-1 text-[12px] text-[#667085] dark:text-white/50">انتقل إلى صفحة التراخيص لتفعيل المفتاح.</p>
+            <h3 className="text-[13px] font-bold text-[#0F1E33] dark:text-white">لا تحتاج إدخال أي مفتاح ترخيص أثناء الدفع</h3>
+            <p className="mt-1 text-[12px] text-[#667085] dark:text-white/50">
+              يُنشأ الترخيص ويُربط بحسابك تلقائيًا بعد التحقق من الدفع. وإن كان لديك مفتاح ترخيص سابق، فأدره من صفحة التراخيص.
+            </p>
           </div>
           <a href="/license" className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-line bg-white px-4 text-[12px] font-bold text-[#0F1E33] hover:bg-white dark:border-white/15 dark:bg-white/5 dark:text-white">
             <Key className="size-3.5" /> إدارة الترخيص
