@@ -157,8 +157,8 @@ export function demoModeFromLocation(): boolean {
 // license system. The new system is the source of truth; the old model
 // is kept for backward compatibility.
 
-import type { FeatureId } from "@/lib/license/types";
-import { LICENSE_ENTITLEMENTS } from "@/lib/license/types";
+import type { FeatureId, LicensePlan } from "@/lib/license/types";
+import { entitlementsForPlan, LICENSE_ENTITLEMENTS } from "@/lib/license/types";
 
 /** Map old FeatureEntitlements keys to new FeatureId keys. */
 const FEATURE_MAP: Record<string, FeatureId> = {
@@ -173,12 +173,16 @@ const FEATURE_MAP: Record<string, FeatureId> = {
 export function licenseRecordFromEntitlements(
   type: import("@/lib/license/types").LicenseType,
   id?: string,
+  plan?: LicensePlan,
 ): LicenseRecord {
-  const e = LICENSE_ENTITLEMENTS[type];
+  // The plan matters: an individual PRO licence must not present itself as a
+  // team workspace, and a team plan must carry collaboration through to the
+  // product capabilities. Without it every paid licence looked identical here.
+  const e = plan ? entitlementsForPlan(plan, type) : LICENSE_ENTITLEMENTS[type];
   return {
     id: id ?? `server-${type}`,
     edition: type === "FREE" ? "demo" : type === "TRIAL" ? "demo" : "commercial",
-    scope: "individual",
+    scope: e.team_features ? "team" : "individual",
     status: type === "FREE" ? "DEMO" : type === "TRIAL" ? "TRIAL" : "ACTIVE",
     entitlements: {
       maxProjects: e.unlimited_projects ? null : 1,

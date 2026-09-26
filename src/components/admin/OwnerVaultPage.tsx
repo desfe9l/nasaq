@@ -33,6 +33,7 @@ import {
   type VaultSection,
 } from "@/lib/owner/vault";
 import { cn } from "@/lib/utils";
+import { OwnerSetupPanel } from "./OwnerSetupPanel";
 
 const sections: VaultSection[] = [
   "accounts",
@@ -188,6 +189,10 @@ export default function OwnerVaultPage() {
           </div>
         </div>
       </header>
+
+      <div className="mx-auto max-w-[1500px] px-4 pt-5">
+        <OwnerSetupPanel />
+      </div>
 
       <main className="mx-auto grid max-w-[1500px] gap-5 px-4 py-5 lg:grid-cols-[240px_minmax(0,1fr)_390px]">
         <aside className="space-y-4 print:hidden">

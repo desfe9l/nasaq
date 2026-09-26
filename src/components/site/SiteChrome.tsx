@@ -9,6 +9,7 @@ import {
   SECONDARY_NAV_ITEMS,
   telHref,
 } from "@/lib/brand";
+import { SocialLinks } from "@/components/site/SocialLinks";
 import { readStoredTheme, writeStoredTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
@@ -391,6 +392,9 @@ export function SiteFooter() {
           <p className="mt-2 text-[11px] leading-5 text-muted">
             تُطوَّر وتُدار بواسطة {BRAND.team}
           </p>
+          {/* Official accounts, next to the NASAQ badge — icon-only so the
+              column keeps its weight on every breakpoint. */}
+          <SocialLinks className="mt-3" />
         </div>
         <div>
           <h3 className="mb-2 text-[12px] font-extrabold text-muted">روابط</h3>
