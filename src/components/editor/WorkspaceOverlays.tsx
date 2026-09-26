@@ -18,6 +18,7 @@ import {
   Move,
   PenLine,
   Redo2,
+  Scaling,
   Scissors,
   Search,
   Settings2,
@@ -99,6 +100,7 @@ export function WorkspaceOverlays({
   const paste = useEditor((s) => s.pasteClipboard);
   const bring = useEditor((s) => s.bring);
   const toggleLock = useEditor((s) => s.toggleLock);
+  const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
   const flipSelected = useEditor((s) => s.flipSelected);
   const setLeftTab = useEditor((s) => s.setLeftTab);
   const toggleHidden = useEditor((s) => s.toggleHidden);
@@ -368,6 +370,11 @@ export function WorkspaceOverlays({
           icon: Lock,
           run: toggleLock,
           sepBefore: true,
+        },
+        {
+          label: "قفل التحجيم / فتح قفل التحجيم",
+          icon: Scaling,
+          run: toggleResizeLock,
         },
         { label: "إخفاء / إظهار", icon: Eye, run: toggleHidden },
         {

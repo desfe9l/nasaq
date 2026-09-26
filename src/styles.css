@@ -794,11 +794,19 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * Locked elements: a clearly purple lock cursor state. The dashed frame and
  * the on-canvas pin both read purple so "this is pinned, it will not move" is
  * unmistakable from across the canvas.
+ *
+ * `pointer-events: none` is the protection that keeps locked artwork from
+ * SHIELDING the document: a press on (or through) a locked element — and on
+ * its selection frame — falls straight through to whichever element is under
+ * it, so an open element overlapping a locked one is always one tap away,
+ * above or below. Locked elements are reached (and unlocked) through the
+ * layer tree, the marquee and the menus, never by clicking the artwork.
  */
 .selection-frame.is-locked {
   border-style: dashed;
   border-color: #8b5cf6;
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 /*
@@ -810,8 +818,15 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   pointer-events: none;
 }
 
+/*
+ * A locked element is hit-test transparent: pointer events pass straight
+ * through to the document layer beneath, so open elements above or below it
+ * select directly even where the locked artwork overlaps them. The lock pin
+ * (pointer-events: none already) keeps the state visible.
+ */
 .canvas-el.locked {
   cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* Purple lock pin pinned to the locked element's top-right corner. */
@@ -832,6 +847,33 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
   pointer-events: none;
   z-index: 1;
+}
+
+/*
+ * Resize-lock badge: sits on the selection frame's top edge (where the north
+ * resize handle used to be), so its presence plus the missing handles reads
+ * as one statement — "size locked, everything else free". Purple like the
+ * element lock (lock semantics), counter-scaled by --editor-zoom like every
+ * other piece of chrome. Purely visual: presses fall through to the frame
+ * beneath, which still moves and rotates the element.
+ */
+.resize-lock-badge {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  display: grid;
+  place-items: center;
+  width: calc(16px / var(--editor-zoom, 1));
+  height: calc(16px / var(--editor-zoom, 1));
+  border-radius: 999px;
+  background: #8b5cf6;
+  color: #fff;
+  font-size: calc(10px / var(--editor-zoom, 1));
+  line-height: 1;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  z-index: 3;
 }
 
 /*
@@ -1033,7 +1075,9 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
    * `box-shadow` is never hit-tested, so the enlarged target is a real
    * pseudo-element box centred on the handle (the parent element receives the
    * pointer event). Divides by --editor-zoom because the page is scaled, which
-   * keeps the target a true 44×44 SCREEN pixels at every zoom level.
+   * keeps the target a true 48×48 SCREEN pixels at every zoom level — the hit
+   * circle always out-reaches the visible dot, and never shrinks as the
+   * element is resized or the canvas zoomed.
    */
   .handle::before,
   .rotate-handle::before {
@@ -1041,8 +1085,8 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: calc(44px / var(--editor-zoom, 1));
-    height: calc(44px / var(--editor-zoom, 1));
+    width: calc(48px / var(--editor-zoom, 1));
+    height: calc(48px / var(--editor-zoom, 1));
     transform: translate(-50%, -50%);
     border-radius: 50%;
   }
@@ -1150,11 +1194,18 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 @media (pointer: coarse) {
-  /* Touch targets grow on tablets; same anchors, larger hit circles. */
+  /*
+   * Touch/Pencil targets grow on tablets: bigger visible dots, same anchors
+   * on the element's true edges, and the 48px hit circle from ::above always
+   * out-reaches the dot. Both values divide by --editor-zoom, so the handles
+   * stay a constant, grabbable on-screen size at any canvas zoom and any
+   * element size — anchored to the frame, which mirrors the element's box.
+   */
   .selection-frame {
-    /* Visible dot stays 9px; the 44px hit target comes from ::before above. */
-    --handle-size: calc(9px / var(--editor-zoom, 1));
-    --rotate-gap: calc(26px / var(--editor-zoom, 1));
+    /* Visible dot 11px; the 48px hit target comes from ::before above. */
+    --handle-size: calc(11px / var(--editor-zoom, 1));
+    /* Grips sit further off the corner so a Pencil finds them without hunt. */
+    --rotate-gap: calc(30px / var(--editor-zoom, 1));
   }
 }
 

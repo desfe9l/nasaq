@@ -3,6 +3,7 @@ import {
   findElement,
   MIN_SIZE,
   pageSize,
+  WORKSPACE_MARGIN_MM,
   type Box,
   type CanvasEl,
   type ElType,
@@ -280,6 +281,17 @@ export function CanvasStage({
 
     const onMove = (event: TouchEvent) => {
       const state = touchPan.current;
+      /*
+       * A live element gesture (drag / resize / rotate) owns the touch: claim
+       * EVERY move while it is in flight — including a second finger that
+       * lands mid-drag — so the browser's own pan/pinch never takes the touch
+       * over and cancels the element drag with a pointercancel. The element
+       * keeps tracking the original pointer through its own capture.
+       */
+      if (opRef.current) {
+        event.preventDefault();
+        return;
+      }
       if (!state || event.touches.length !== 2) return;
       /*
        * Claim EVERY move the moment a second finger exists — before the mode
@@ -480,6 +492,17 @@ export function CanvasStage({
       // Locked elements can be selected but not gestured; stopping the press
       // here keeps the stage's click-to-deselect from immediately undoing it.
       e.stopPropagation();
+      select(el.id);
+      return;
+    }
+    if (el.resizeLocked && kind === "resize") {
+      /*
+       * The resize lock rejects only the resize gesture: the press still
+       * selects the element, and move / rotate / edit keep working exactly as
+       * before — only width/height are protected.
+       */
+      e.stopPropagation();
+      e.preventDefault();
       select(el.id);
       return;
     }
@@ -786,21 +809,22 @@ export function CanvasStage({
       // Editing is free: an element may sit fully inside the page, straddle its
       // edge, or move entirely outside it. Only export clips content to the
       // page rectangle. We keep a generous soft boundary so the user can freely
-      // position elements outside the page area when needed.
-      const workspaceMargin = 120; // extra workspace area around page (mm)
-      const workspaceW = size.w + workspaceMargin * 2;
-      const workspaceH = size.h + workspaceMargin * 2;
+      // position elements outside the page area when needed. The stage pads
+      // each artboard by the same margin (WORKSPACE_MARGIN_MM), so every
+      // reachable position stays visible and grabbable.
+      const workspaceW = size.w + WORKSPACE_MARGIN_MM * 2;
+      const workspaceH = size.h + WORKSPACE_MARGIN_MM * 2;
       next.w = Math.max(clamp(next.w, MIN_SIZE, workspaceW), MIN_SIZE);
       next.h = Math.max(clamp(next.h, MIN_SIZE, workspaceH), MIN_SIZE);
       // Soft boundary: allow elements to extend beyond page but keep them
-      // within a generous workspace area so nothing disappears unexpectedly.
+      // within the generous workspace area the stage makes reachable.
       next.x = Math.max(
-        -workspaceMargin,
-        Math.min(next.x, size.w + workspaceMargin - next.w),
+        -WORKSPACE_MARGIN_MM,
+        Math.min(next.x, size.w + WORKSPACE_MARGIN_MM - next.w),
       );
       next.y = Math.max(
-        -workspaceMargin,
-        Math.min(next.y, size.h + workspaceMargin - next.h),
+        -WORKSPACE_MARGIN_MM,
+        Math.min(next.y, size.h + WORKSPACE_MARGIN_MM - next.h),
       );
       replaceElement(
         op.parent
@@ -1160,6 +1184,17 @@ export function CanvasStage({
       <div
         className="mx-auto flex w-max min-w-full flex-col items-center gap-6"
         dir="rtl"
+        /*
+         * Workspace reachability: the drag clamp lets elements live up to
+         * WORKSPACE_MARGIN_MM outside the artboard on every side; the scroller
+         * must make that same band visible and scrollable, or an element
+         * dragged off the sheet could not be grabbed again to bring it back in.
+         * Padding the column by the margin (× zoom, because the page frame is
+         * already zoom-scaled in mm) aligns the reachable scroll area with the
+         * clamp exactly — mouse, touch and Pencil all grab the element the same
+         * way, on its own node, regardless of the artboard edge.
+         */
+        style={{ padding: `${WORKSPACE_MARGIN_MM * zoom}mm` }}
       >
         {visible.map((page) => {
           const size = pageSize(page);
@@ -1565,6 +1600,7 @@ function SelectionFrame({
         "selection-frame",
         !primary && "is-secondary",
         el.locked && "is-locked",
+        el.resizeLocked && "is-resize-locked",
         editing && "is-editing",
       )}
       /*
@@ -1606,7 +1642,13 @@ function SelectionFrame({
         onEditRequest();
       }}
     >
-      {primary && !el.locked && !editing && (
+      {/*
+       * Resize handles render only while the element's own resize lock is off
+       * — the badge below marks the locked state so their absence reads as a
+       * deliberate lock, not as missing chrome. Move, rotate and text editing
+       * are all still available on a resize-locked element.
+       */}
+      {primary && !el.locked && !editing && !el.resizeLocked && (
         <>
           {HANDLES.map((h) => (
             <div
@@ -1635,6 +1677,31 @@ function SelectionFrame({
               }}
             />
           ))}
+        </>
+      )}
+      {/*
+       * The resize lock must not hide the rotation grips: rotation changes
+       * orientation, not size, so it stays fully available next to the badge.
+       */}
+      {primary && !el.locked && !editing && el.resizeLocked && (
+        <>
+          {ROTATE_HANDLES.map((corner) => (
+            <div
+              key={`rot-${corner}`}
+              className={cn("rotate-handle", corner)}
+              title="اسحب للتدوير — Shift للالتقاط بزوايا 15° / 45° / 90°"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onGesture(e, "rotate");
+              }}
+            />
+          ))}
+          <span
+            className="resize-lock-badge"
+            title="التحجيم مقفل — فك القفل من القائمة السياقية أو الخصائص"
+          >
+            🔒
+          </span>
         </>
       )}
     </div>

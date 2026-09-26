@@ -8,6 +8,15 @@ export const A4 = { w: 210, h: 297 } as const;
 export const MIN_SIZE = 4;
 export const GRID = 5;
 /**
+ * How far an element may travel beyond the artboard edges (mm, page space).
+ *
+ * The stage's scroll surface pads each artboard by exactly this amount, so
+ * every position the drag clamp allows is also visible and reachable — an
+ * element dragged off the sheet can always be grabbed again and dragged back
+ * in, with mouse, touch or Pencil.
+ */
+export const WORKSPACE_MARGIN_MM = 120;
+/**
  * Legacy single-project autosave slot, migrated into the library on first run.
  *
  * The keys were renamed with the NASAQ rebrand. The old names are kept as
@@ -260,6 +269,16 @@ export interface CanvasEl {
   opacity: number;
   z: number;
   locked?: boolean;
+  /**
+   * Resize lock — independent of `locked`.
+   *
+   * When true the element's width and height cannot be changed through the
+   * resize handles (or the width/height fields), while selecting, moving,
+   * rotating and every other operation stay fully available. It is a per
+   * element flag that travels with the element (copy, group, save) like any
+   * other part of its state.
+   */
+  resizeLocked?: boolean;
   hidden?: boolean;
   /** Shared movement relationship; unlike a group, linked elements remain independent. */
   linkId?: string;
