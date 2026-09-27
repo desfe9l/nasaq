@@ -35,8 +35,8 @@ function categoryLabel(cat: string): string {
 
 export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
   const [template, setTemplate] = useState<AdminTemplateSummary | null>(initialTemplate ?? null);
-  const [loadingMeta, setLoadingMeta] = useState(!initialTemplate);
-  const [notFound, setNotFound] = useState(false);
+  const [loadingMeta, setLoadingMeta] = useState(initialTemplate === undefined);
+  const [notFound, setNotFound] = useState(initialTemplate === null);
   const [using, setUsing] = useState(false);
   const [copied, setCopied] = useState(false);
   const { isPending: userPending } = useCurrentUserState();
@@ -45,7 +45,7 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
 
   // Fetch meta if not provided (client fallback, SSR should provide)
   useEffect(() => {
-    if (initialTemplate) return;
+    if (initialTemplate !== undefined) return;
     let alive = true;
     setLoadingMeta(true);
     void (async () => {

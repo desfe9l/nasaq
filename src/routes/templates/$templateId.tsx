@@ -4,6 +4,7 @@ import { getPublishedTemplateMetaFn } from "@/lib/admin/functions";
 import { publishedTemplateAbsoluteUrl, templateDisplaySlug } from "@/lib/templates/published";
 
 export const Route = createFileRoute("/templates/$templateId")({
+  ssr: true,
   // SSR enabled for SEO/social preview
   loader: async ({ params }) => {
     const idOrSlug = params.templateId;
