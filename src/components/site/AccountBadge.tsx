@@ -1,4 +1,6 @@
-import { Crown, Loader2, ShieldAlert, ShieldCheck, Sparkles } from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
+import { NasaqPremiumMark } from "./NasaqPremiumMark";
+import { Loader2, ShieldAlert, Sparkles } from "lucide-react";
 import { useLicense } from "@/lib/license/client";
 import type { AppUser } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
@@ -30,7 +32,7 @@ export function useAccountTier(user: AppUser | null): AccountTier {
 
 const BADGE_META: Record<
   AccountTier,
-  { label: string; className: string; Icon: typeof ShieldCheck }
+  { label: string; className: string; Icon: ComponentType<SVGProps<SVGSVGElement>> }
 > = {
   LOADING: {
     label: "جارٍ التحقق",
@@ -42,13 +44,13 @@ const BADGE_META: Record<
     label: "مرخص",
     className:
       "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-300",
-    Icon: ShieldCheck,
+    Icon: NasaqPremiumMark,
   },
   ADMIN: {
     label: "مرخص",
     className:
       "border-amber-500/50 bg-amber-500/12 text-amber-700 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-300",
-    Icon: Crown,
+    Icon: NasaqPremiumMark,
   },
   SUSPENDED: {
     label: "موقوف",

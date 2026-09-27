@@ -3562,3 +3562,28 @@ summary,
 @media (any-pointer: coarse) {
   .editor-toolbar button { min-width: 44px; min-height: 44px; }
 }
+
+/* Element-tool sorting uses the existing panel scroller, never a nested one. */
+.sortable-sections { position: relative; display: grid; gap: 10px; min-width: 0; }
+.sortable-sections > [data-sortable-section] { min-width: 0; }
+.section-drag-handle {
+  display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px;
+  color: var(--editor-text-secondary); background: transparent; border: 0;
+  cursor: grab; touch-action: none; user-select: none; -webkit-touch-callout: none;
+}
+.section-drag-handle:hover { color: var(--editor-text); background: var(--editor-hover); }
+.section-drag-handle:active { cursor: grabbing; }
+.section-drag-handle:focus-visible { outline: 2px solid var(--editor-text-secondary); outline-offset: -4px; border-radius: 8px; }
+.sortable-sections .editor-accordion-header { flex: 1; min-width: 0; width: auto; }
+.section-drop-placeholder {
+  outline: 1.5px dashed var(--editor-text-secondary); outline-offset: -1px; border-radius: 9px;
+  background: color-mix(in srgb, var(--editor-text-secondary) 8%, transparent);
+}
+.section-drop-placeholder > .editor-accordion { opacity: 0; pointer-events: none; }
+.section-drag-ghost {
+  position: fixed; z-index: 200; display: flex; align-items: center; gap: 12px;
+  height: 44px; padding: 0 14px; border: 1px solid var(--editor-text-secondary);
+  border-radius: 9px; pointer-events: none; user-select: none;
+  color: var(--editor-text); background: var(--editor-surface);
+  box-shadow: 0 10px 28px #0003; font-size: 11px; font-weight: 800;
+}

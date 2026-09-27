@@ -465,24 +465,24 @@ export function LeftPanel({
           </div>
         )}
 
-        {tab === "library" && (
-          /*
-           * The Library tab opens on the Library itself: its toolbar, search,
-           * categories and quick actions are the first thing in the panel and
-           * stay pinned (sticky) while uploaded media and the ready-made design
-           * assets below them scroll — one scroller, one scrollbar.
-           */
-          <AssetLibrary>
-            <div className="mt-1 border-t border-line pt-3 dark:border-white/10">
-              <SmartLibraryPanel
-                theme={theme}
-                onAddCustomAsset={onAddCustomAsset}
-                onOpenShapes={() => setLeftTab("shapes")}
-                onOpenTemplates={() => setLeftTab("templates")}
-                onPreviewTemplate={setPreviewTemplate}
-              />
-            </div>
-          </AssetLibrary>
+        {tab === "library" && <AssetLibrary />}
+
+        {tab === "tools" && (
+          <div className="element-tools-panel">
+            <header className="mb-3">
+              <h2 className="text-[13px] font-extrabold">أدوات العناصر</h2>
+              <p className="mt-1 text-[11px] leading-5 text-muted">
+                افتح القسم لإضافة عناصره، واسحب مقبضه لترتيبه كما يناسبك.
+              </p>
+            </header>
+            <SmartLibraryPanel
+              theme={theme}
+              onAddCustomAsset={onAddCustomAsset}
+              onOpenShapes={() => setLeftTab("shapes")}
+              onOpenTemplates={() => setLeftTab("templates")}
+              onPreviewTemplate={setPreviewTemplate}
+            />
+          </div>
         )}
 
         {tab === "shapes" && (

@@ -22,6 +22,7 @@ export function AccordionSection({
   onToggle,
   children,
   badge,
+  handle,
 }: {
   title: string;
   id: string;
@@ -30,21 +31,26 @@ export function AccordionSection({
   children: ReactNode;
   /** Small trailing hint (e.g. the element type a section applies to). */
   badge?: ReactNode;
+  /** Optional sibling drag handle, never nested inside the toggle button. */
+  handle?: ReactNode;
 }) {
   const panelId = useId();
   return (
     <section className="editor-accordion" data-inspector-section={id} data-open={open || undefined}>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={onToggle}
-        className="editor-accordion-header"
-      >
-        <span className="min-w-0 flex-1 truncate text-start">{title}</span>
-        {badge}
-        <ChevronDown className={cn("editor-accordion-chevron size-4 shrink-0", open && "is-open")} aria-hidden />
-      </button>
+      <div className="flex min-w-0 items-center">
+        {handle}
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={onToggle}
+          className="editor-accordion-header"
+        >
+          <span className="min-w-0 flex-1 truncate text-start">{title}</span>
+          {badge}
+          <ChevronDown className={cn("editor-accordion-chevron size-4 shrink-0", open && "is-open")} aria-hidden />
+        </button>
+      </div>
       {open && (
         <div id={panelId} className="editor-accordion-body">
           {children}
