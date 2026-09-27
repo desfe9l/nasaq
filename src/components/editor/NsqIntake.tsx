@@ -21,8 +21,9 @@ const DEFER_KEY = "nasaq-nsq-gate-deferred";
 export function NsqIntake() {
   const { signedIn, resolving } = useNsqSignedIn();
   const [pending, setPending] = useState<
-    (PendingSummary & { receivedAt: number }) | null
+    (PendingSummary & { id: string; receivedAt: number }) | null
   >(null);
+  const [restoreFailed, setRestoreFailed] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const signedInRef = useRef(signedIn);
@@ -38,11 +39,20 @@ export function NsqIntake() {
     }
     if (signedIn) {
       setGateOpen(false);
-      setPending(null);
-      await resumePending();
+      const ok = await resumePending();
+      setRestoreFailed(!ok);
+      setPending(
+        ok
+          ? null
+          : { ...entry.summary, id: entry.id, receivedAt: entry.receivedAt },
+      );
       return;
     }
-    setPending({ ...entry.summary, receivedAt: entry.receivedAt });
+    setPending({
+      ...entry.summary,
+      id: entry.id,
+      receivedAt: entry.receivedAt,
+    });
     let deferred = false;
     try {
       deferred = sessionStorage.getItem(DEFER_KEY) === String(entry.receivedAt);
@@ -125,11 +135,17 @@ export function NsqIntake() {
   }, [pending]);
 
   const discard = useCallback(async () => {
-    await clearPending();
+    try {
+      await clearPending(pending?.id);
+    } catch {
+      toast.error("تعذر إزالة الملف من التخزين. حاول مجددًا.");
+      return;
+    }
+    setRestoreFailed(false);
     setGateOpen(false);
     setPending(null);
     toast.message("أُزيل الملف المستلم");
-  }, []);
+  }, [pending?.id]);
 
   return (
     <>
@@ -142,6 +158,32 @@ export function NsqIntake() {
             <FileDown className="size-5" />
             أفلت ملف نَسَق (.nsq) لفتحه كمشروع قابل للتعديل
           </div>
+        </div>
+      )}
+
+      {pending && signedIn && restoreFailed && (
+        <div
+          role="alert"
+          className="fixed bottom-4 left-4 z-[var(--z-dialog)] max-w-sm rounded-xl border bg-white p-4 text-sm text-navy shadow-xl"
+        >
+          <p>
+            لم يكتمل فتح «{pending.title}». الملف محفوظ، ولم يتغير مشروعك
+            الحالي.
+          </p>
+          <button
+            type="button"
+            className="mt-2 px-3 font-bold underline"
+            onClick={() => void check()}
+          >
+            إعادة المحاولة
+          </button>
+          <button
+            type="button"
+            className="mt-2 px-3 underline"
+            onClick={() => void discard()}
+          >
+            إزالة الملف
+          </button>
         </div>
       )}
 

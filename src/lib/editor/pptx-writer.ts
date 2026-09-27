@@ -12,6 +12,7 @@
  */
 
 import PptxGenJS from "pptxgenjs";
+import { assertUniformSlideSize } from "./render-units";
 import type { SceneItem, ScenePage, SceneShape, SceneStroke } from "./scene";
 import type { ShapePart } from "./shapes";
 import { parseSvgPath, scaleSegments } from "./vector-path.ts";
@@ -690,7 +691,7 @@ function addImageItem(
           ? { type: "cover", w: mm2in(item.w), h: mm2in(item.h) }
           : undefined,
     altText: "صورة",
-    objectName: name,
+    objectName: item.name || name,
   } as PptxGenJS.ImageProps);
 }
 
@@ -747,6 +748,7 @@ export async function writePptx(
   scenes: ScenePage[],
   title: string,
 ): Promise<Blob> {
+  assertUniformSlideSize(scenes);
   const pptx = new PptxGenJS();
   pptx.author = BRAND.developer;
   pptx.company = BRAND.name;
@@ -754,8 +756,8 @@ export async function writePptx(
   pptx.subject = `${BRAND.name} — ${BRAND.platformEn}`;
   pptx.rtlMode = true;
 
-  // Declare every distinct page size up front: a project can mix A4 portrait,
-  // A4 landscape and 16:9 slides, and each needs its own slide master.
+  // PowerPoint has one presentation-wide size. The guard above deliberately
+  // rejects mixed sizes rather than silently distorting the earlier slides.
   const layoutName = (scene: ScenePage) => `page-${scene.w}x${scene.h}`;
   const declared = new Set<string>();
   for (const scene of scenes) {

@@ -9,9 +9,10 @@
  * until the font is available.
  */
 
-import { BUNDLED_FONTS, type NsqFontEntry } from "./format";
+import { type NsqFontEntry } from "./format";
 
 const uploaded = new Map<string, string>();
+const faces = new Map<string, { source: string; face: FontFace }>();
 
 /** Remember an uploaded font's source so `.nsq` saves can embed it. */
 export function rememberUploadedFont(family: string, dataUrl: string): void {
@@ -27,13 +28,28 @@ export function uploadedFontSources(): { family: string; dataUrl: string }[] {
 export async function loadEmbeddedFonts(
   fonts: { family: string; dataUrl: string }[],
   register: (family: string) => void,
+  stillCurrent: () => boolean = () => true,
 ): Promise<Set<string>> {
   const loaded = new Set<string>();
   if (typeof FontFace === "undefined" || !document.fonts) return loaded;
   for (const font of fonts) {
+    if (!stillCurrent()) break;
     try {
-      const face = new FontFace(font.family, `url(${font.dataUrl})`);
-      document.fonts.add(await face.load());
+      const previous = faces.get(font.family);
+      if (previous?.source === font.dataUrl) {
+        register(font.family);
+        loaded.add(font.family);
+        continue;
+      }
+      const face = new FontFace(
+        font.family,
+        `url(${JSON.stringify(font.dataUrl)})`,
+      );
+      await face.load();
+      if (!stillCurrent()) break;
+      document.fonts.add(face);
+      if (previous) document.fonts.delete(previous.face);
+      faces.set(font.family, { source: font.dataUrl, face });
       rememberUploadedFont(font.family, font.dataUrl);
       register(font.family);
       loaded.add(font.family);
@@ -51,7 +67,7 @@ export async function loadEmbeddedFonts(
  * family it has no face for.
  */
 export function isFontAvailable(family: string): boolean {
-  if (BUNDLED_FONTS.has(family)) return true;
+  // Bundled webfonts may still be unavailable offline. Check actual metrics.
   try {
     const ctx = document.createElement("canvas").getContext("2d");
     if (!ctx) return true;
@@ -73,8 +89,18 @@ export function missingFonts(
   loaded: Set<string>,
 ): string[] {
   return entries
-    .filter(
-      (f) => !f.bundled && !loaded.has(f.family) && !isFontAvailable(f.family),
-    )
+    .filter((f) => !loaded.has(f.family) && !isFontAvailable(f.family))
     .map((f) => f.family);
+}
+
+/** Account changes must not leave another user's uploaded font bytes in memory. */
+export function clearUploadedFonts(): void {
+  if (typeof document !== "undefined" && document.fonts) {
+    document.fonts.forEach((face) => {
+      if (uploaded.has(face.family.replace(/^["']|["']$/g, "")))
+        document.fonts.delete(face);
+    });
+  }
+  uploaded.clear();
+  faces.clear();
 }

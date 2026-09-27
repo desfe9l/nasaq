@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   FileArchive,
   FolderOpen,
@@ -24,11 +24,6 @@ import {
 import { SiteFooter, SiteHeader } from "./SiteChrome";
 import { cn } from "@/lib/utils";
 
-type LaunchParams = { files?: { getFile: () => Promise<File> }[] };
-type LaunchWindow = Window & {
-  launchQueue?: { setConsumer: (fn: (params: LaunchParams) => void) => void };
-};
-
 /**
  * «افتح ملف نَسَق» — recognise, validate and preserve a received `.nsq`, then
  * continue straight into the editor, where the project opens (after sign-in
@@ -44,7 +39,9 @@ export function OpenNsqPage() {
   >({ kind: "idle" });
   const [over, setOver] = useState(false);
 
+  const busyRef = useRef(false);
   const handle = useCallback(async (file: File) => {
+    if (busyRef.current) return;
     if (!isProjectFileName(file.name)) {
       setState({
         kind: "error",
@@ -53,9 +50,10 @@ export function OpenNsqPage() {
       });
       return;
     }
+    busyRef.current = true;
     setState({ kind: "checking", name: file.name });
     try {
-      const result = await validateProjectFile(file);
+      const result = await validateProjectFile(file, true);
       await putPending({
         fileName: file.name,
         size: file.size,
@@ -70,17 +68,10 @@ export function OpenNsqPage() {
         message: nsqErrorMessage(err),
         name: file.name,
       });
+    } finally {
+      busyRef.current = false;
     }
   }, []);
-
-  // Files the OS hands to the installed app (PWA `file_handlers`).
-  useEffect(() => {
-    const queue = (window as LaunchWindow).launchQueue;
-    queue?.setConsumer((params) => {
-      const first = params.files?.[0];
-      if (first) void first.getFile().then(handle);
-    });
-  }, [handle]);
 
   const checking = state.kind === "checking";
 
@@ -156,6 +147,9 @@ export function OpenNsqPage() {
             <TriangleAlert className="mt-1 size-4 shrink-0" aria-hidden />
             <span>
               {state.message}
+              <a className="mt-2 block underline" href={NSQ_RESUME_URL}>
+                متابعة الملف المحفوظ في المحرر
+              </a>
               {state.name ? (
                 <span className="block text-[11px] opacity-80">
                   {state.name}

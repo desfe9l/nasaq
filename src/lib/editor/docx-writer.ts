@@ -52,12 +52,14 @@ import {
 } from "./vector-path.ts";
 import { BRAND } from "../brand.ts";
 
+import { mmToPx, mmToEmu } from "./render-units";
+
 const mm2pt = (v: number) => v * (72 / 25.4);
 /** Word sizes strokes in eighths of a point; 2 (¼pt) is the practical minimum. */
 const strokeEighths = (widthMm: number) =>
   Math.max(2, Math.round(mm2pt(widthMm) * 8));
 /** DrawingML distances are EMU: 1 mm = 36000 EMU. */
-const mm2emu = (v: number) => Math.round(v * 36000);
+const mm2emu = mmToEmu;
 
 function hex(color: string): string {
   const v = String(color || "").trim();
@@ -504,18 +506,18 @@ export function imageOptions(item: SceneImage): IImageOptions | null {
   const kind = match[1].toLowerCase();
   const type =
     kind === "jpg" || kind === "jpeg" ? "jpg" : (kind as "png" | "gif" | "bmp");
-  const data = Buffer.from(match[2], "base64");
+  const data = Uint8Array.from(atob(match[2]), (char) => char.charCodeAt(0));
 
   return {
     type,
     data,
-    transformation: { width: mm(item.w), height: mm(item.h) },
+    transformation: { width: mmToPx(item.w), height: mmToPx(item.h), rotation: item.rotation || 0, flip: { horizontal: !!item.flipX, vertical: !!item.flipY } },
     floating: {
-      horizontalPosition: { relative: "page", offset: mm(item.x) },
-      verticalPosition: { relative: "page", offset: mm(item.y) },
+      horizontalPosition: { relative: "page", offset: mm2emu(item.x) },
+      verticalPosition: { relative: "page", offset: mm2emu(item.y) },
       behindDocument: false,
       allowOverlap: true,
-      zIndex: 1,
+      zIndex: shapeSeq + 1,
     },
     // `ImageRun` ignores `docProperties` and derives the drawing id from
     // `altText`, numbering from 1 for every picture. That collides with the ids
@@ -523,7 +525,7 @@ export function imageOptions(item: SceneImage): IImageOptions | null {
     // the id from the shared counter here instead.
     altText: {
       id: String(++shapeSeq),
-      name: "صورة",
+      name: item.name || "صورة",
       description: `صورة من ${BRAND.nameAr}`,
     },
   } as IImageOptions;
@@ -535,7 +537,7 @@ function imageParagraph(item: SceneImage): Paragraph | null {
   if (!options) return null;
   return new Paragraph({
     children: [new ImageRun(options) as unknown as ParagraphChild],
-    spacing: { before: 0, after: 0, line: 240, lineRule: "auto" },
+    spacing: { before: 0, after: 0, line: 1, lineRule: "exact" },
   });
 }
 
@@ -606,12 +608,12 @@ function iconParagraph(item: Extract<SceneItem, { kind: "icon" }>): Paragraph {
           type: "png",
           data: new Uint8Array(0),
         },
-        transformation: { width: mm(item.w), height: mm(item.h) },
+        transformation: { width: mmToPx(item.w), height: mmToPx(item.h), rotation: item.rotation || 0, flip: { horizontal: !!item.flipX, vertical: !!item.flipY } },
         floating: {
-          horizontalPosition: { relative: "page", offset: mm(item.x) },
-          verticalPosition: { relative: "page", offset: mm(item.y) },
+          horizontalPosition: { relative: "page", offset: mm2emu(item.x) },
+          verticalPosition: { relative: "page", offset: mm2emu(item.y) },
           allowOverlap: true,
-          zIndex: 1,
+          zIndex: shapeSeq + 1,
         },
         altText: {
           id: String(++shapeSeq),
@@ -785,7 +787,17 @@ export async function writeDocx(options: DocxOptions): Promise<Blob> {
         margin: { top: 0, right: 0, bottom: 0, left: 0 },
       },
     },
-    children: scene.items.flatMap(blocksFor),
+    // Picture-only fidelity pages share one tiny anchor paragraph. One normal
+    // paragraph per layer would create extra pages on long designs.
+    children: scene.items.length && scene.items.every((item) => item.kind === "image")
+      ? [new Paragraph({
+          children: scene.items.flatMap((item) => {
+            const options = imageOptions(item as SceneImage);
+            return options ? [new ImageRun(options)] : [];
+          }),
+          spacing: { before: 0, after: 0, line: 1, lineRule: "exact" },
+        })]
+      : scene.items.flatMap(blocksFor),
   }));
 
   const doc = new Document({

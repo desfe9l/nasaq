@@ -9,6 +9,7 @@
 
 import { toast } from "sonner";
 import { downloadBlob } from "@/lib/utils";
+import { getStorageOwner } from "../editor/storage-owner";
 import { useEditor } from "@/lib/editor/store";
 import {
   NSQ_EXTENSION,
@@ -18,6 +19,8 @@ import {
 } from "./format";
 import { writeNsq, type NsqWriteResult } from "./package";
 import { uploadedFontSources } from "./fonts";
+import { pageSize, clone } from "../editor/model";
+import { writeAtomically, type NsqSaveHandle } from "./atomic-file";
 
 /** Longest edge of the embedded preview, in px. */
 const THUMB_EDGE = 512;
@@ -26,7 +29,11 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Uint8Array | null> {
   return new Promise((resolve) => {
     try {
       canvas.toBlob(async (blob) => {
-        resolve(blob ? new Uint8Array(await blob.arrayBuffer()) : null);
+        try {
+          resolve(blob ? new Uint8Array(await blob.arrayBuffer()) : null);
+        } catch {
+          resolve(null);
+        }
       }, "image/png");
     } catch {
       resolve(null);
@@ -36,105 +43,156 @@ function canvasToPng(canvas: HTMLCanvasElement): Promise<Uint8Array | null> {
 
 /**
  * Render the first page to a PNG preview. Uses the same offscreen export DOM
- * the PDF exporter captures; falls back to the stored card thumbnail. Returns
- * null when neither is available — the package is valid without a preview.
+ * the export engine captures. No stale/generic fallback: if unavailable the
+ * editable package remains complete without a preview.
  */
-export async function captureFirstPagePreview(): Promise<{
+export async function captureFirstPagePreview(
+  expectedPageId?: string,
+): Promise<{
   bytes: Uint8Array;
   width: number;
   height: number;
 } | null> {
   try {
-    const page = document.querySelector<HTMLElement>(
-      "#export-root [data-export-page]",
+    const first = useEditor.getState().pages[0];
+    if (!first || (expectedPageId && expectedPageId !== first.id)) return null;
+    const node = document.querySelector<HTMLElement>(
+      `#export-root [data-export-page="${CSS.escape(first.id)}"]`,
     );
-    if (page && page.offsetWidth && page.offsetHeight) {
-      const html2canvas = (await import("html2canvas")).default;
-      const scale = THUMB_EDGE / Math.max(page.offsetWidth, page.offsetHeight);
-      const canvas = await html2canvas(page, {
-        scale,
-        useCORS: true,
-        allowTaint: false,
-        backgroundColor: "#ffffff",
-        logging: false,
-        width: page.offsetWidth,
-        height: page.offsetHeight,
-        windowWidth: page.offsetWidth,
-        windowHeight: page.offsetHeight,
-      });
-      const bytes = await canvasToPng(canvas);
-      if (bytes) return { bytes, width: canvas.width, height: canvas.height };
-    }
-  } catch (err) {
-    console.warn("[nsq] preview capture failed", err);
+    if (!node) return null;
+    const { snapshotPage, paintSnapshot } =
+      await import("../editor/render-snapshot");
+    const { mmToPx } = await import("../editor/render-units");
+    const size = pageSize(first);
+    const snapshot = await snapshotPage({ node, ...size });
+    const canvas = await paintSnapshot(
+      snapshot,
+      THUMB_EDGE / Math.max(mmToPx(size.w), mmToPx(size.h)),
+    );
+    const bytes = await canvasToPng(canvas);
+    return bytes ? { bytes, width: canvas.width, height: canvas.height } : null;
+  } catch (error) {
+    console.warn(
+      "[nsq] thumbnail unavailable; editable document is unaffected",
+      error,
+    );
+    return null;
   }
-  // Fallback: the card thumbnail auto-save keeps (a JPEG data URL) → PNG.
-  const stored = useEditor.getState().thumbnail;
-  if (stored && /^data:image\//.test(stored)) {
-    try {
-      const img = new Image();
-      img.src = stored;
-      await img.decode();
-      const canvas = document.createElement("canvas");
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      canvas.getContext("2d")?.drawImage(img, 0, 0);
-      const bytes = await canvasToPng(canvas);
-      if (bytes) return { bytes, width: canvas.width, height: canvas.height };
-    } catch {
-      /* no preview — still a complete project */
-    }
-  }
-  return null;
 }
 
 async function fetchImage(url: string): Promise<Blob | null> {
   try {
-    const res = await fetch(url, { mode: "cors", credentials: "omit" });
-    if (!res.ok) return null;
-    const blob = await res.blob();
+    const res = await fetch(url, {
+      mode: "cors",
+      credentials: "omit",
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok || Number(res.headers.get("content-length")) > 64 * 1024 * 1024)
+      return null;
+    const reader = res.body?.getReader();
+    if (!reader) return null;
+    const chunks: Uint8Array<ArrayBuffer>[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        size += value.byteLength;
+        if (size > 64 * 1024 * 1024) {
+          await reader.cancel();
+          return null;
+        }
+        chunks.push(new Uint8Array(value));
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const blob = new Blob(chunks, {
+      type:
+        res.headers.get("content-type")?.split(";")[0] ||
+        "application/octet-stream",
+    });
     return blob.type.startsWith("image/") || /^blob:/i.test(url) ? blob : null;
   } catch {
     return null;
   }
 }
 
-/** Package the project that is open in the editor right now. */
-export async function buildCurrentNsq(): Promise<NsqWriteResult> {
+/** Freeze the whole editable document at the user gesture, before any await. */
+function saveSnapshot() {
   const s = useEditor.getState();
-  const meta = s.projects.find((p) => p.id === s.id);
-  const activePageIndex = Math.max(
-    0,
-    s.pages.findIndex((p) => p.id === s.activePageId),
-  );
-  return writeNsq({
-    project: {
-      version: s.version,
-      name: s.name,
-      theme: s.theme,
-      orgName: s.orgName,
-      transactionNo: s.transactionNo,
-      pages: s.pages,
-      id: s.id,
-      createdAt: s.createdAt,
-      updatedAt: Date.now(),
-      defaultSize: s.defaultSize,
-      pack: s.pack ?? meta?.pack,
-      nsqOrigin: s.nsqOrigin,
+  return {
+    id: s.id,
+    owner: getStorageOwner(),
+    pages: s.pages,
+    input: {
+      project: clone({
+        version: s.version,
+        name: s.name,
+        theme: s.theme,
+        orgName: s.orgName,
+        transactionNo: s.transactionNo,
+        pages: s.pages,
+        id: s.id,
+        createdAt: s.createdAt,
+        updatedAt: Date.now(),
+        defaultSize: s.defaultSize,
+        pack: s.pack,
+        nsqOrigin: s.nsqOrigin,
+        embeddedFonts: s.embeddedFonts,
+        nativeSourceProjectId: s.nativeSourceProjectId,
+      }),
+      activePageIndex: Math.max(
+        0,
+        s.pages.findIndex((p) => p.id === s.activePageId),
+      ),
+      settings: {
+        printGuides: { ...s.printGuides },
+        showGrid: s.showGrid,
+        snapGrid: s.snapGrid,
+        snapElements: s.snapElements,
+      },
+      fontSources: uploadedFontSources(),
+      resolveExternal: fetchImage,
+      site: typeof window !== "undefined" ? window.location.origin : undefined,
     },
-    activePageIndex,
-    settings: { printGuides: s.printGuides },
-    thumbnail: await captureFirstPagePreview(),
-    fontSources: uploadedFontSources(),
-    resolveExternal: fetchImage,
-    site: typeof window !== "undefined" ? window.location.origin : undefined,
+  };
+}
+
+/** Only a thumbnail of this snapshot may be attached; never a stale card image. */
+export async function buildCurrentNsq(
+  snapshot = saveSnapshot(),
+): Promise<NsqWriteResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const thumbnail = await Promise.race([
+    captureFirstPagePreview(snapshot.input.project.pages[0]?.id),
+    new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), 5000);
+    }),
+  ]).finally(() => clearTimeout(timer));
+  const now = useEditor.getState();
+  const unchanged =
+    now.id === snapshot.id &&
+    now.pages === snapshot.pages &&
+    now.theme === snapshot.input.project.theme &&
+    now.orgName === snapshot.input.project.orgName &&
+    now.transactionNo === snapshot.input.project.transactionNo;
+  return writeNsq({
+    ...snapshot.input,
+    thumbnail: unchanged ? thumbnail : null,
   });
 }
 
-/** Adopt the provenance record the first save created, so re-saves keep it. */
-function adoptOrigin(result: NsqWriteResult) {
+function adoptOrigin(
+  result: NsqWriteResult,
+  snapshot: ReturnType<typeof saveSnapshot>,
+) {
   const s = useEditor.getState();
-  if (!s.nsqOrigin)
+  if (
+    getStorageOwner() === snapshot.owner &&
+    s.id === snapshot.id &&
+    !s.nsqOrigin
+  )
     useEditor.setState({ nsqOrigin: result.manifest.attribution });
 }
 
@@ -144,12 +202,7 @@ function reportWarnings(warnings: string[]) {
 
 // ── File System Access (Chromium) with download fallback ────────────────────
 
-type WritableLike = {
-  write: (data: Blob) => Promise<void>;
-  close: () => Promise<void>;
-  abort?: () => Promise<void>;
-};
-type SaveHandle = { name: string; createWritable: () => Promise<WritableLike> };
+type SaveHandle = NsqSaveHandle;
 type SavePickerWindow = Window & {
   showSaveFilePicker?: (opts: unknown) => Promise<SaveHandle>;
 };
@@ -166,34 +219,19 @@ export function supportsSavePicker(): boolean {
 
 /** Name of the linked `.nsq` file for the open project, if one was chosen. */
 export function linkedFileName(projectId: string | undefined): string | null {
-  return (projectId && handles.get(projectId)?.name) || null;
-}
-
-async function writeToHandle(
-  handle: SaveHandle,
-  build: () => Promise<NsqWriteResult>,
-) {
-  // The package is built and verified BEFORE the writable opens, and the
-  // writable only swaps in on close() — the existing file is never truncated
-  // by a failed or interrupted save.
-  const result = await build();
-  const writable = await handle.createWritable();
-  try {
-    await writable.write(result.blob);
-    await writable.close();
-  } catch (err) {
-    await writable.abort?.().catch(() => undefined);
-    throw err;
-  }
-  return result;
+  return (
+    (projectId && handles.get(`${getStorageOwner()}:${projectId}`)?.name) ||
+    null
+  );
 }
 
 /** «حفظ باسم…» — choose a location, then write the package there. */
-export async function saveCurrentNsqAs(): Promise<boolean> {
+async function saveAs(): Promise<boolean> {
   const s = useEditor.getState();
-  const suggestedName = nsqFileName(s.name);
+  const snapshot = saveSnapshot();
+  const suggestedName = nsqFileName(snapshot.input.project.name);
   const picker = (window as SavePickerWindow).showSaveFilePicker;
-  if (!picker) return downloadCurrentNsq();
+  if (!picker) return download(snapshot);
   let handle: SaveHandle;
   try {
     // Must run first, while the click's user activation is still valid.
@@ -206,13 +244,15 @@ export async function saveCurrentNsqAs(): Promise<boolean> {
     });
   } catch (err) {
     if ((err as { name?: string })?.name === "AbortError") return false;
-    return downloadCurrentNsq();
+    return download(snapshot);
   }
   const toastId = toast.loading("جارٍ حفظ ملف نَسَق…");
   try {
-    const result = await writeToHandle(handle, buildCurrentNsq);
-    if (s.id) handles.set(s.id, handle);
-    adoptOrigin(result);
+    const result = await writeAtomically(handle, () =>
+      buildCurrentNsq(snapshot),
+    );
+    if (s.id) handles.set(`${snapshot.owner}:${s.id}`, handle);
+    adoptOrigin(result, snapshot);
     toast.success(`تم الحفظ في «${handle.name}»`, { id: toastId });
     reportWarnings(result.warnings);
     return true;
@@ -227,14 +267,17 @@ export async function saveCurrentNsqAs(): Promise<boolean> {
 }
 
 /** «حفظ» — write back to the linked file; falls back to «حفظ باسم». */
-export async function saveCurrentNsq(): Promise<boolean> {
+async function save(): Promise<boolean> {
   const s = useEditor.getState();
-  const handle = s.id ? handles.get(s.id) : undefined;
-  if (!handle) return saveCurrentNsqAs();
+  const snapshot = saveSnapshot();
+  const handle = s.id ? handles.get(`${snapshot.owner}:${s.id}`) : undefined;
+  if (!handle) return saveAs();
   const toastId = toast.loading("جارٍ حفظ ملف نَسَق…");
   try {
-    const result = await writeToHandle(handle, buildCurrentNsq);
-    adoptOrigin(result);
+    const result = await writeAtomically(handle, () =>
+      buildCurrentNsq(snapshot),
+    );
+    adoptOrigin(result, snapshot);
     toast.success(`تم الحفظ في «${handle.name}»`, { id: toastId });
     reportWarnings(result.warnings);
     return true;
@@ -249,12 +292,12 @@ export async function saveCurrentNsq(): Promise<boolean> {
 }
 
 /** «تنزيل ‎.nsq» — a regular browser download of the verified package. */
-export async function downloadCurrentNsq(): Promise<boolean> {
+async function download(snapshot = saveSnapshot()): Promise<boolean> {
   const toastId = toast.loading("جارٍ تجهيز ملف نَسَق…");
   try {
-    const result = await buildCurrentNsq();
-    downloadBlob(result.blob, nsqFileName(useEditor.getState().name));
-    adoptOrigin(result);
+    const result = await buildCurrentNsq(snapshot);
+    downloadBlob(result.blob, nsqFileName(result.manifest.title));
+    adoptOrigin(result, snapshot);
     toast.success("تم تنزيل ملف المشروع (.nsq)", { id: toastId });
     reportWarnings(result.warnings);
     return true;
@@ -266,3 +309,18 @@ export async function downloadCurrentNsq(): Promise<boolean> {
     return false;
   }
 }
+
+let saving = false;
+function exclusiveSave(action: () => Promise<boolean>): Promise<boolean> {
+  if (saving) {
+    toast.message("انتظر اكتمال حفظ الملف الحالي.");
+    return Promise.resolve(false);
+  }
+  saving = true;
+  return action().finally(() => {
+    saving = false;
+  });
+}
+export const saveCurrentNsqAs = () => exclusiveSave(saveAs);
+export const saveCurrentNsq = () => exclusiveSave(save);
+export const downloadCurrentNsq = () => exclusiveSave(() => download());

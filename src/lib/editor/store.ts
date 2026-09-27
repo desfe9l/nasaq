@@ -1,3 +1,4 @@
+import { clearUploadedFonts } from "../nsq/fonts";
 import { create } from "zustand";
 import { toast } from "sonner";
 import {
@@ -84,10 +85,7 @@ import {
   buildReportDraftBlock,
   type ReportBlockId,
 } from "./report-blocks";
-import {
-  buildGraphicHeading,
-  type GraphicHeadingId,
-} from "./graphic-headings";
+import { buildGraphicHeading, type GraphicHeadingId } from "./graphic-headings";
 import type { ReportDraft } from "../ai/contract";
 import { safeImageSrc } from "./images";
 import { captureThumbnail } from "./thumbnail";
@@ -105,10 +103,7 @@ import {
   canCreateDemoProject,
   canUseDemoPack,
 } from "@/lib/product/product";
-import {
-  LICENSE_ENTITLEMENTS,
-  type FeatureId,
-} from "@/lib/license/types";
+import { LICENSE_ENTITLEMENTS, type FeatureId } from "@/lib/license/types";
 import {
   PAGES_PANEL_DEFAULT,
   clampPagesHeight,
@@ -147,7 +142,7 @@ export type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 
 /** Export formats the studio can produce (mirrors `export.ts`). */
 export type ExportPreset =
-  "pdf" | "png" | "jpg" | "docx" | "pptx" | "html" | "json" | "nsq";
+  "pdf" | "png" | "jpg" | "docx" | "pptx" | "html" | "svg" | "json" | "nsq";
 
 /**
  * Where a right-click menu was opened from.
@@ -384,7 +379,10 @@ interface EditorStore extends Project, Ui, History {
    * never collides with an existing one. Same entitlement ceilings as
    * `createProject`; resolves `false` when refused.
    */
-  createDocument: (project: Project, options?: { autoName?: boolean }) => Promise<boolean>;
+  createDocument: (
+    project: Project,
+    options?: { autoName?: boolean },
+  ) => Promise<boolean>;
   openProject: (id: string) => Promise<void>;
   saveNow: () => Promise<void>;
   renameProject: (id: string, name: string) => Promise<void>;
@@ -399,7 +397,12 @@ interface EditorStore extends Project, Ui, History {
    */
   importProject: (
     data: Partial<Project>,
-    opts?: { activePageIndex?: number; successMessage?: string | null },
+    opts?: {
+      activePageIndex?: number;
+      successMessage?: string | null;
+      expectedOwner?: string;
+      importId?: string;
+    },
   ) => Promise<boolean>;
   setZoom: (z: number) => void;
   toggle: (
@@ -548,9 +551,15 @@ interface EditorStore extends Project, Ui, History {
   insertReportBlock: (id: ReportBlockId) => string | undefined;
   /** Insert a ready-made graphic heading (editable group) onto the page. */
   insertGraphicHeading: (id: GraphicHeadingId) => string | undefined;
-  insertGraphicHeadingAt: (id: GraphicHeadingId, at: { x: number; y: number }) => string | undefined;
+  insertGraphicHeadingAt: (
+    id: GraphicHeadingId,
+    at: { x: number; y: number },
+  ) => string | undefined;
   /** Insert or replace an AI draft as an editable hierarchy of report elements. */
-  insertReportDraft: (draft: ReportDraft, existingId?: string) => string | undefined;
+  insertReportDraft: (
+    draft: ReportDraft,
+    existingId?: string,
+  ) => string | undefined;
   /** Apply an Arabic typography preset to the selection (or the next text). */
   applyPreset: (presetId: TypographyPresetId) => void;
   /** Insert a macro token into the selected text element. */
@@ -659,6 +668,11 @@ interface EditorStore extends Project, Ui, History {
 function projectSlice(s: ProjectSnapshot): ProjectSnapshot {
   return {
     version: s.version,
+    nativeFormat: s.nativeFormat,
+    nativeSourceProjectId: s.nativeSourceProjectId,
+    editorSettings: s.editorSettings,
+    transactionNo: s.transactionNo,
+    pack: s.pack,
     name: s.name,
     theme: s.theme,
     orgName: s.orgName,
@@ -876,13 +890,17 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
       // could execute script before they reach the canvas or an export.
       if (el.src) el.src = safeImageSrc(el.src);
       if (el.children?.length) el.children.forEach(normalizeEl);
-      constrainElement(el, size);
+      if (!incoming.nativeFormat) constrainElement(el, size);
     };
     p.elements.forEach(normalizeEl);
-    normalizeZ(p);
+    if (!incoming.nativeFormat) normalizeZ(p);
   });
   return {
     version: incoming.version || 2,
+    nativeFormat: incoming.nativeFormat,
+    nativeSourceProjectId: incoming.nativeSourceProjectId,
+    embeddedFonts: incoming.embeddedFonts,
+    editorSettings: incoming.editorSettings,
     name: incoming.name || "تقرير",
     theme: incoming.theme || "official",
     orgName: incoming.orgName || "",
@@ -905,6 +923,7 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
 
 export const useEditor = create<EditorStore>((set, get) => {
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  let saveQueue: Promise<void> = Promise.resolve();
 
   /** Debounced autosave. Kept off the render path: no store writes until it fires. */
   const scheduleSave = (delay = 900) => {
@@ -949,6 +968,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         : undefined) || project.pages[0]?.id;
     set({
       ...project,
+      ...project.editorSettings,
       activePageId,
       selectedId: null,
       selectedIds: [],
@@ -956,6 +976,17 @@ export const useEditor = create<EditorStore>((set, get) => {
       editingId: null,
       ...extra,
     });
+  };
+
+  const restoreFonts = async (project: Project) => {
+    if (!project.embeddedFonts?.length) return;
+    const owner = getStorageOwner();
+    const { loadEmbeddedFonts } = await import("../nsq/fonts");
+    await loadEmbeddedFonts(
+      project.embeddedFonts,
+      (family) => get().registerFont(family, "خط من ملف نَسَق"),
+      () => getStorageOwner() === owner,
+    );
   };
 
   /**
@@ -986,7 +1017,13 @@ export const useEditor = create<EditorStore>((set, get) => {
           : null;
     const keptGroup =
       s.enteredGroupId && alive.has(s.enteredGroupId) ? s.enteredGroupId : null;
-    return { selectedIds: kept, selectedId: primary, enteredGroupId: keptGroup };
+    return {
+      selectedIds: kept,
+      selectedId: primary,
+      enteredGroupId: keptGroup,
+      embeddedFonts: s.embeddedFonts,
+      nsqOrigin: s.nsqOrigin,
+    };
   };
 
   /** Apply a batch of new positions as one undoable step.
@@ -1052,7 +1089,8 @@ export const useEditor = create<EditorStore>((set, get) => {
     hydrated: false,
     sessionOwner: null,
     entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
-    setEntitlements: (entitlements) => set({ entitlements: { ...entitlements } }),
+    setEntitlements: (entitlements) =>
+      set({ entitlements: { ...entitlements } }),
     clipboard: null,
     past: [],
     future: [],
@@ -1104,6 +1142,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     resetUserScopedState: () => {
+      clearUploadedFonts();
       // Cancel any pending autosave first — it must not fire mid-reset and
       // write the outgoing session's document under the new owner.
       if (saveTimer) {
@@ -1117,6 +1156,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({
         hydrated: false,
         sessionOwner: null,
+        fontChoices: bundledFontChoices(),
+        fontsProbed: false,
         projects: [],
         projectsLoading: true,
         assets: [],
@@ -1140,9 +1181,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       // pins the shared dev user, matching the server-side verifier.)
       let owner: string;
       try {
-        const { syncStorageOwner } = await import(
-          "@/lib/auth/storage-owner-sync"
-        );
+        const { syncStorageOwner } =
+          await import("@/lib/auth/storage-owner-sync");
         owner = await syncStorageOwner();
       } catch {
         // Auth bridge unavailable (unit tests, exotic bundles): keep whatever
@@ -1204,13 +1244,18 @@ export const useEditor = create<EditorStore>((set, get) => {
           bubbleEnabled: ui.bubble !== false,
           showGrid: ui.showGrid ?? WORKSPACE_TOGGLE_DEFAULTS.showGrid,
           snapGrid: ui.snapGrid ?? WORKSPACE_TOGGLE_DEFAULTS.snapGrid,
-          snapElements: ui.snapElements ?? WORKSPACE_TOGGLE_DEFAULTS.snapElements,
+          snapElements:
+            ui.snapElements ?? WORKSPACE_TOGGLE_DEFAULTS.snapElements,
           printGuides: {
             ...DEFAULT_PRINT_GUIDES,
             ...(ui.printGuides ?? {}),
           },
         });
-        if (active) applyProject(active, { zoom: get().zoom });
+        if (active) {
+          await restoreFonts(active);
+          if (getStorageOwner() === owner && get().sessionOwner === owner)
+            applyProject(active, { zoom: get().zoom });
+        }
       } catch {
         set({ projectsLoading: false });
       }
@@ -1306,7 +1351,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       // is ignored, so a batch can never remove a folder or its parent.
       const known = new Set(get().assets.map((a) => a.id));
       const folderIds = new Set(get().assetFolders.map((f) => f.id));
-      const doomed = new Set(ids.filter((id) => known.has(id) && !folderIds.has(id)));
+      const doomed = new Set(
+        ids.filter((id) => known.has(id) && !folderIds.has(id)),
+      );
       if (!doomed.size) return;
       // One operation: every selected row is deleted, folders are never
       // touched (deleting nested items must not cascade to their folder).
@@ -1382,7 +1429,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         return { ...asset, folderId: parentId };
       });
       await Promise.all(
-        assets.filter((asset) => lifted.has(asset.id)).map((asset) => saveAsset(asset)),
+        assets
+          .filter((asset) => lifted.has(asset.id))
+          .map((asset) => saveAsset(asset)),
       );
       set({
         assetFolders: folders,
@@ -1513,7 +1562,10 @@ export const useEditor = create<EditorStore>((set, get) => {
         });
         return false;
       }
-      if (!s.entitlements.unlimited_projects && !canCreateDemoProject(s.projects.length)) {
+      if (
+        !s.entitlements.unlimited_projects &&
+        !canCreateDemoProject(s.projects.length)
+      ) {
         toast.error("اكتملت مساحة تجربة المحرر", {
           description:
             "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
@@ -1557,7 +1609,10 @@ export const useEditor = create<EditorStore>((set, get) => {
         });
         return false;
       }
-      if (!s.entitlements.unlimited_projects && !canCreateDemoProject(s.projects.length)) {
+      if (
+        !s.entitlements.unlimited_projects &&
+        !canCreateDemoProject(s.projects.length)
+      ) {
         toast.error("اكتملت مساحة تجربة المحرر", {
           description:
             "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
@@ -1567,7 +1622,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       const maxPages = DEMO_LICENSE.entitlements.maxPagesPerProject ?? Infinity;
       if (!s.entitlements.unlimited_pages && project.pages.length > maxPages) {
         toast.error("وصلت إلى حد صفحات تجربة المحرر", {
-          description: "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
+          description:
+            "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
         });
         return false;
       }
@@ -1578,7 +1634,10 @@ export const useEditor = create<EditorStore>((set, get) => {
         ...project,
         version: project.version || 2,
         name: options?.autoName
-          ? nextDefaultName(project.name, get().projects.map((p) => p.name))
+          ? nextDefaultName(
+              project.name,
+              get().projects.map((p) => p.name),
+            )
           : project.name,
         id: uid("proj"),
         createdAt: Date.now(),
@@ -1601,12 +1660,16 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     openProject: async (id) => {
+      const owner = getStorageOwner();
       const project = await getProject(id);
       if (!project) {
         toast.error("تعذر فتح المشروع");
         await get().refreshProjects();
         return;
       }
+      if (getStorageOwner() !== owner) return;
+      await restoreFonts(project);
+      if (getStorageOwner() !== owner) return;
       applyProject(project, { zoom: get().zoom || 0.82 });
       set({
         past: [JSON.stringify(projectSlice(get()))],
@@ -1618,36 +1681,75 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     saveNow: async () => {
-      const s = get();
-      if (!s.pages?.length) return;
-      set({ saveState: "saving" });
-      try {
-        // Page-1 thumbnail: throttle-safe (`null` → keep whatever the row has)
-        // and merged from the projects meta so an in-flight favorite flip or a
-        // previous capture is never wiped by a later auto-save.
-        const meta = s.projects.find((p) => p.id === s.id);
-        const captured = await captureThumbnail();
-        const saved = await saveProject({
-          ...projectSlice(s),
-          version: s.version,
-          updatedAt: Date.now(),
-          pack: s.pack ?? meta?.pack,
-          favorite: meta?.favorite ?? s.favorite ?? false,
-          thumbnail: captured ?? s.thumbnail ?? meta?.thumbnail,
-          nsqOrigin: s.nsqOrigin,
-        });
-        set({
-          id: saved.id,
-          createdAt: saved.createdAt,
-          saveState: "saved",
-          savedAt: Date.now(),
-        });
-        await setSetting("activeProjectId", saved.id);
-        await get().refreshProjects();
-      } catch (err) {
-        console.error("[editor] autosave failed", err);
-        set({ saveState: "error" });
-      }
+      const requestOwner = getStorageOwner(),
+        requestId = get().id;
+      const save = async () => {
+        if (getStorageOwner() !== requestOwner || get().id !== requestId)
+          return;
+        const s = get();
+        if (!s.pages?.length) return;
+        const owner = getStorageOwner();
+        set({ saveState: "saving" });
+        try {
+          // Page-1 thumbnail: throttle-safe (`null` → keep whatever the row has)
+          // and merged from the projects meta so an in-flight favorite flip or a
+          // previous capture is never wiped by a later auto-save.
+          const meta = s.projects.find((p) => p.id === s.id);
+          const captured = await captureThumbnail();
+          if (getStorageOwner() !== owner || get().id !== s.id) return;
+          const { uploadedFontSources } = await import("../nsq/fonts");
+          const { collectFontFamilies } = await import("../nsq/format");
+          const families = new Set(collectFontFamilies(s.pages));
+          const embeddedFonts = [
+            ...new Map(
+              [...(s.embeddedFonts || []), ...uploadedFontSources()]
+                .filter((f) => families.has(f.family))
+                .map((f) => [f.family, f]),
+            ).values(),
+          ];
+          if (getStorageOwner() !== owner || get().id !== s.id) return;
+          const saved = await saveProject({
+            ...projectSlice(s),
+            embeddedFonts,
+            editorSettings: {
+              printGuides: s.printGuides,
+              showGrid: s.showGrid,
+              snapGrid: s.snapGrid,
+              snapElements: s.snapElements,
+            },
+            version: s.version,
+            updatedAt: Date.now(),
+            pack: s.pack ?? meta?.pack,
+            favorite: meta?.favorite ?? s.favorite ?? false,
+            thumbnail: captured ?? s.thumbnail ?? meta?.thumbnail,
+            nsqOrigin: s.nsqOrigin,
+          });
+          if (getStorageOwner() !== owner || get().id !== s.id) return;
+          const changed =
+            get().pages !== s.pages ||
+            get().name !== s.name ||
+            get().orgName !== s.orgName ||
+            get().theme !== s.theme ||
+            get().transactionNo !== s.transactionNo ||
+            get().editorSettings !== s.editorSettings;
+          set({
+            embeddedFonts,
+            id: saved.id,
+            createdAt: saved.createdAt,
+            saveState: changed ? "dirty" : "saved",
+            savedAt: Date.now(),
+          });
+          await setSetting("activeProjectId", saved.id);
+          await get().refreshProjects();
+        } catch (err) {
+          console.error("[editor] autosave failed", err);
+          if (getStorageOwner() === owner && get().id === s.id)
+            set({ saveState: "error" });
+        }
+      };
+      const pending = saveQueue.then(save, save);
+      saveQueue = pending;
+      await pending;
     },
 
     renameProject: async (id, name) => {
@@ -1705,35 +1807,73 @@ export const useEditor = create<EditorStore>((set, get) => {
         toast.error("ملف المشروع غير صالح — لا يحتوي على صفحات");
         return false;
       }
-      const incoming = normalizeProject({
-        version: data.version || 2,
-        name: data.name || "مشروع مستورد",
-        theme: (data.theme as ThemeId) || "official",
-        orgName: data.orgName || "",
-        transactionNo: data.transactionNo || "",
-        defaultSize: data.defaultSize,
-        pack: data.pack,
-        pages: data.pages,
-        id: uid("proj"),
-        createdAt: Date.now(),
-        // Only an inline raster preview is accepted as the card thumbnail.
-        thumbnail:
-          typeof data.thumbnail === "string" &&
-          /^data:image\/(png|jpeg|webp);base64,/i.test(data.thumbnail)
-            ? data.thumbnail
-            : undefined,
-        nsqOrigin: data.nsqOrigin,
-      });
+      const owner = opts.expectedOwner ?? getStorageOwner();
+      const sameOwner = () =>
+        getStorageOwner() === owner &&
+        (!opts.expectedOwner || get().sessionOwner === owner);
+      if (!sameOwner()) return false;
+      let current = get();
+      const sameContent = () =>
+        get().pages === current.pages &&
+        get().name === current.name &&
+        get().orgName === current.orgName &&
+        get().transactionNo === current.transactionNo &&
+        get().theme === current.theme &&
+        get().editorSettings === current.editorSettings;
+      const sameDocument = () => get().id === current.id && sameContent();
+      if (get().saveState === "dirty" || get().saveState === "saving") {
+        await get().saveNow();
+        if (get().saveState === "error" || !sameOwner() || !sameContent())
+          return false;
+        // A first autosave assigns an ID; that is not a user switching documents.
+        current = get();
+      }
+      const importId =
+        opts.importId && /^[\w-]{1,100}$/.test(opts.importId)
+          ? `nsq-${opts.importId}`
+          : undefined;
+      const existing = importId ? await getProject(importId) : null;
+      if (!sameOwner()) return false;
+      const incoming =
+        existing ||
+        normalizeProject({
+          version: data.version || 2,
+          nativeFormat: data.nativeFormat,
+          nativeSourceProjectId: data.nativeSourceProjectId,
+          embeddedFonts: data.embeddedFonts,
+          editorSettings: data.editorSettings,
+          name: data.name || "مشروع مستورد",
+          theme: (data.theme as ThemeId) || "official",
+          orgName: data.orgName || "",
+          transactionNo: data.transactionNo || "",
+          defaultSize: data.defaultSize,
+          pack: data.pack,
+          pages: data.pages,
+          id: importId || uid("proj"),
+          createdAt: data.createdAt || Date.now(),
+          // Only an inline raster preview is accepted as the card thumbnail.
+          thumbnail:
+            typeof data.thumbnail === "string" &&
+            /^data:image\/(png|jpeg|webp);base64,/i.test(data.thumbnail)
+              ? data.thumbnail
+              : undefined,
+          nsqOrigin: data.nsqOrigin,
+        });
       let saved: Project;
       try {
         // Persist first: if storage refuses (quota, private mode), nothing on
         // screen changes and the author's current document stays as it was.
-        saved = await saveProject(incoming);
+        saved = existing || (await saveProject(incoming));
       } catch (err) {
         console.error("[editor] import save failed", err);
-        toast.error("تعذّر حفظ المشروع المستورد — تحقق من مساحة التخزين في المتصفح");
+        toast.error(
+          "تعذّر حفظ المشروع المستورد — تحقق من مساحة التخزين في المتصفح",
+        );
         return false;
       }
+      if (!sameOwner()) return false;
+      await restoreFonts(saved);
+      if (!sameOwner() || !sameDocument()) return false;
       const pageIndex = opts.activePageIndex ?? 0;
       applyProject(saved, {
         activePageId: saved.pages[pageIndex]?.id || saved.pages[0]?.id,
@@ -1771,6 +1911,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       // a reload instead of one of them silently reverting.
       if (key === "showGrid" || key === "snapGrid" || key === "snapElements") {
         writeUi({ [key]: next });
+        set({ editorSettings: { ...get().editorSettings, [key]: next } });
+        scheduleSave(500);
       }
       if (
         key === "focusMode" ||
@@ -1795,7 +1937,9 @@ export const useEditor = create<EditorStore>((set, get) => {
     setRightTab: (rightTab) => set({ rightTab, rightOpen: true }),
 
     toggleSidebar: (side) => {
-      const overlay = isOverlayViewport() || (side === "right" && isTouchPropertiesViewport());
+      const overlay =
+        isOverlayViewport() ||
+        (side === "right" && isTouchPropertiesViewport());
       // Docked panels persist as `*Collapsed`; floating ones as `*Open`.
       const key =
         side === "left"
@@ -1940,7 +2084,10 @@ export const useEditor = create<EditorStore>((set, get) => {
          * on every canvas tap would fight the "tap the canvas to dismiss the
          * drawer" rule (the tap would close it and instantly reopen it).
          */
-        rightOpen: id && !isOverlayViewport() && !isTouchPropertiesViewport() ? true : s.rightOpen,
+        rightOpen:
+          id && !isOverlayViewport() && !isTouchPropertiesViewport()
+            ? true
+            : s.rightOpen,
       })),
 
     setEditing: (id) => set({ editingId: id }),
@@ -2357,7 +2504,11 @@ export const useEditor = create<EditorStore>((set, get) => {
         ...get().printGuides,
         [kind]: !get().printGuides[kind],
       };
-      set({ printGuides: next });
+      set({
+        printGuides: next,
+        editorSettings: { ...get().editorSettings, printGuides: next },
+      });
+      scheduleSave(500);
       writeUi({ printGuides: next });
     },
 
@@ -2503,9 +2654,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!block) return undefined;
 
       const size = pageSize(page);
-      const stage = document.querySelector<HTMLElement>(
-        ".editor-canvas-stage",
-      );
+      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
       const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
       const target = centerFor(visible, {
         w: size.w,
@@ -2580,7 +2729,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         rightTab: "properties",
       });
       pushHistory();
-      toast.success("تمت إضافة العنوان الجرافيكي في الموضع المحدد", { duration: 1800 });
+      toast.success("تمت إضافة العنوان الجرافيكي في الموضع المحدد", {
+        duration: 1800,
+      });
       return block.id;
     },
 
@@ -2611,9 +2762,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         return block.id;
       }
 
-      const stage = document.querySelector<HTMLElement>(
-        ".editor-canvas-stage",
-      );
+      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
       const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
       const target = centerFor(visible, {
         w: size.w,

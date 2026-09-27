@@ -397,6 +397,7 @@ export async function getProject(id: string): Promise<Project | null> {
 }
 
 export async function saveProject(project: Project): Promise<Project> {
+  const ownerId = getStorageOwner();
   const stamped: Project = {
     ...project,
     id: project.id || uid("proj"),
@@ -404,12 +405,14 @@ export async function saveProject(project: Project): Promise<Project> {
     updatedAt: Date.now(),
   };
   const db = await openDb();
+  if (ownerId !== getStorageOwner())
+    throw new Error("Storage owner changed during save");
   if (!db) {
     fallback.put(stamped);
     return stamped;
   }
   await tx(db, PROJECTS, "readwrite", (t) =>
-    request(t.objectStore(PROJECTS).put(own(clone(stamped)))),
+    request(t.objectStore(PROJECTS).put({ ...clone(stamped), ownerId })),
   );
   return stamped;
 }

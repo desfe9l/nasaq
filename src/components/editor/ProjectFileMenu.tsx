@@ -31,9 +31,8 @@ export const NSQ_SAVE_AS_EVENT = "nasaq:nsq-save-as";
  *
  * New / Open are available to everyone (opening a received file is how new
  * people discover NASAQ). Saving and downloading a project file follow the
- * exact policy the export dialog already applies to project files: a guest is
- * asked to sign in first, and the file requires the `advanced_export`
- * entitlement.
+ * same account gate as the export dialog. Native project portability is
+ * available on every plan; other export entitlements are unchanged.
  */
 export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
   const [open, setOpen] = useState(false);
@@ -92,6 +91,7 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
 
   /** Same gate as the export dialog's project file. */
   const allowed = (): boolean => {
+    if (isPending) return false;
     if (guest) {
       setSignInOpen(true);
       return false;
@@ -148,7 +148,12 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
             role="menu"
             aria-label="ملف المشروع"
             className="editor-dropdown-panel fixed z-[var(--z-dropdown)] rounded-[10px] border p-1.5 shadow-2xl"
-            style={{ top: pos.top, right: pos.right, width: MENU_W, maxWidth: "calc(100vw - 16px)" }}
+            style={{
+              top: pos.top,
+              right: pos.right,
+              width: MENU_W,
+              maxWidth: "calc(100vw - 16px)",
+            }}
           >
             <Item
               icon={<FilePlus2 className="size-4" />}

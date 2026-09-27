@@ -1,3 +1,4 @@
+import { mmToPx, PX_PER_MM } from "@/lib/editor/render-units";
 import { likelyNsqDrag } from "@/lib/nsq/format";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -1112,7 +1113,7 @@ export function CanvasStage({
                 className="page-frame-content"
                 dir="ltr"
                 style={{
-                  width: `${size.w}mm`,
+                  width: `${mmToPx(size.w)}px`,
                   height: `${size.h + 12}mm`,
                   transform: `scale(${zoom})`,
                   transformOrigin: "top left",
@@ -1143,8 +1144,8 @@ export function CanvasStage({
                   data-page-id={page.id}
                   className={`report-page ${showGrid ? "show-grid" : ""} ${isActive ? "ring-2 ring-gold ring-offset-8" : ""}`}
                   style={{
-                    width: `${size.w}mm`,
-                    height: `${size.h}mm`,
+                    width: `${mmToPx(size.w)}px`,
+                    height: `${mmToPx(size.h)}px`,
                     background: page.bg || "#fff",
                   }}
                   onContextMenu={(e) => {
@@ -1409,7 +1410,7 @@ function SelectionFrame({
   // حتى لا يصبح العنصر غير قابل للتحكم بسبب صغر حجمه — حد أدنى بصري للإطار
   // نحافظ على موضع ونسبة العنصر أثناء Resize عبر توسيط الإطار المصغر على مركز العنصر
   const MIN_SCREEN_PX = 32;
-  const pxPerMm = 96 / 25.4;
+  const pxPerMm = PX_PER_MM;
   const screenW = el.w * zoom * pxPerMm;
   const screenH = el.h * zoom * pxPerMm;
   let visualW = el.w;
@@ -1625,7 +1626,7 @@ function ExportCapture({ pages }: { pages: Page[] }) {
       className="pointer-events-none fixed top-0 left-[-2400px] z-[-1]"
       aria-hidden
     >
-      {pages.map((page) => {
+      {pages.map((page, pageIndex) => {
         const size = pageSize(page);
         return (
           <div
@@ -1633,8 +1634,8 @@ function ExportCapture({ pages }: { pages: Page[] }) {
             data-export-page={page.id}
             className="report-page"
             style={{
-              width: `${size.w}mm`,
-              height: `${size.h}mm`,
+              width: `${mmToPx(size.w)}px`,
+              height: `${mmToPx(size.h)}px`,
               background: page.bg || "#fff",
             }}
           >
@@ -1646,6 +1647,8 @@ function ExportCapture({ pages }: { pages: Page[] }) {
                   key={el.id}
                   el={el}
                   interactive={false}
+                  pageNo={pageIndex + 1}
+                  siblings={page.elements}
                   onPointerDown={() => {}}
                 />
               ))}

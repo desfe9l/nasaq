@@ -1,122 +1,157 @@
-/**
- * The `.nsq` inbox — a received file, preserved until it can be opened.
- *
- * When a visitor opens an `.nsq` before signing in, the file is validated and
- * then kept here (the raw bytes, in a dedicated IndexedDB database) so the
- * sign-in round trip — including a full-page OAuth redirect — can never lose
- * it. The inbox is deliberately NOT owner-scoped like the project library:
- * the file belongs to whoever is at this browser, and it moves into the
- * signed-in account's library the moment they authenticate.
- *
- * Falls back to memory when IndexedDB is unavailable (the popup sign-in used
- * in the live preview never reloads the page, so memory survives it).
- */
-
-const DB_NAME = "nasaq-inbox";
-const STORE = "pending";
-const KEY = "current";
-/** A received file waits at most this long for its owner to sign in. */
+/** Durable handoff across OAuth/reloads. Never promise durability via memory. */
+import { NSQ_LIMITS, NsqError } from "./format";
+const DB_NAME = "nasaq-inbox",
+  STORE = "pending",
+  KEY = "current";
 export const INBOX_TTL_MS = 3 * 24 * 60 * 60 * 1000;
-
 export interface PendingSummary {
   title: string;
   pageCount: number;
-  /** PNG data URL of the first page, when the file carries one. */
   thumbnail?: string;
   createdWith?: string;
 }
-
 export interface PendingNsq {
+  id: string;
   fileName: string;
   size: number;
   receivedAt: number;
   summary: PendingSummary;
   blob: Blob;
 }
-
-let memory: PendingNsq | null = null;
-
-function openDb(): Promise<IDBDatabase | null> {
-  return new Promise((resolve) => {
-    if (typeof indexedDB === "undefined") return resolve(null);
+type Row = Omit<PendingNsq, "blob"> & { buffer: ArrayBuffer; type: string };
+function openDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === "undefined")
+      return reject(new NsqError("storage"));
     let req: IDBOpenDBRequest;
     try {
       req = indexedDB.open(DB_NAME, 1);
     } catch {
-      return resolve(null);
+      reject(new NsqError("storage"));
+      return;
     }
+    let settled = false;
+    const fail = () => {
+      settled = true;
+      reject(new NsqError("storage"));
+    };
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE))
         req.result.createObjectStore(STORE);
     };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => resolve(null);
-    req.onblocked = () => resolve(null);
+    req.onsuccess = () => {
+      if (settled) req.result.close();
+      else {
+        req.result.onversionchange = () => req.result.close();
+        resolve(req.result);
+      }
+    };
+    req.onerror = fail;
+    req.onblocked = fail;
   });
 }
 
-async function run<T>(
+/** A read-modify-write transaction; settles on COMMIT, never request success. */
+async function transaction<T>(
   mode: IDBTransactionMode,
-  fn: (s: IDBObjectStore) => IDBRequest<T>,
-): Promise<T | undefined> {
+  operation: (
+    store: IDBObjectStore,
+    done: (value: T) => void,
+    fail: (error: Error) => void,
+  ) => void,
+): Promise<T> {
   const db = await openDb();
-  if (!db) throw new Error("indexeddb unavailable");
   try {
-    return await new Promise<T | undefined>((resolve, reject) => {
+    return await new Promise<T>((resolve, reject) => {
       const tx = db.transaction(STORE, mode);
-      const req = fn(tx.objectStore(STORE));
-      tx.oncomplete = () => resolve(req.result);
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error);
+      let result: T, reason: Error | undefined;
+      tx.oncomplete = () => resolve(result);
+      tx.onabort = tx.onerror = () => reject(reason || new NsqError("storage"));
+      try {
+        operation(
+          tx.objectStore(STORE),
+          (value) => {
+            result = value;
+          },
+          (error) => {
+            reason = error;
+            tx.abort();
+          },
+        );
+      } catch {
+        reason = new NsqError("storage");
+        tx.abort();
+      }
     });
   } finally {
     db.close();
   }
 }
+const rowId = (row: Row) => row.id || `legacy-${row.receivedAt}`;
 
-/** Preserve a validated file. Resolves once it is durably stored. */
-export async function putPending(entry: PendingNsq): Promise<void> {
-  memory = entry;
-  try {
-    // Store the bytes as an ArrayBuffer: Blob-in-IndexedDB is unreliable in
-    // some Safari versions, an ArrayBuffer is not.
-    const buffer = await entry.blob.arrayBuffer();
-    const { blob: _blob, ...rest } = entry;
-    await run("readwrite", (s) =>
-      s.put({ ...rest, buffer, type: entry.blob.type }, KEY),
-    );
-  } catch {
-    /* memory copy still serves this page session */
-  }
+/** Never overwrite an unconsumed received file. Quota failures keep the old row. */
+export async function putPending(
+  entry: Omit<PendingNsq, "id">,
+): Promise<PendingNsq> {
+  if (entry.blob.size > NSQ_LIMITS.maxFileBytes)
+    throw new NsqError("too-large");
+  const id = crypto.randomUUID();
+  const buffer = await entry.blob.arrayBuffer();
+  const { blob, ...metadata } = entry;
+  await transaction<void>("readwrite", (store, done, fail) => {
+    const read = store.get(KEY);
+    read.onsuccess = () => {
+      const previous = read.result as Row | undefined;
+      if (previous && Date.now() - previous.receivedAt <= INBOX_TTL_MS) {
+        fail(new NsqError("pending"));
+        return;
+      }
+      store.put(
+        { ...metadata, id, size: blob.size, buffer, type: blob.type },
+        KEY,
+      );
+      done(undefined);
+    };
+  });
+  return { ...entry, id, size: blob.size };
 }
 
 export async function getPending(): Promise<PendingNsq | null> {
-  let entry: PendingNsq | null = memory;
-  if (!entry) {
-    try {
-      const row = (await run("readonly", (s) => s.get(KEY))) as
-        | (Omit<PendingNsq, "blob"> & { buffer: ArrayBuffer; type?: string })
-        | undefined;
-      if (row?.buffer) {
-        const { buffer, type, ...rest } = row;
-        entry = { ...rest, blob: new Blob([buffer], { type: type || "" }) };
-      }
-    } catch {
-      entry = null;
-    }
-  }
-  if (entry && Date.now() - entry.receivedAt > INBOX_TTL_MS) {
-    await clearPending();
+  let row: Row | undefined;
+  try {
+    row = await transaction<Row | undefined>("readonly", (store, done) => {
+      const req = store.get(KEY);
+      req.onsuccess = () => done(req.result);
+    });
+  } catch {
     return null;
   }
-  return entry;
+  if (!row) return null;
+  if (
+    !(row.buffer instanceof ArrayBuffer) ||
+    row.buffer.byteLength > NSQ_LIMITS.maxFileBytes ||
+    !Number.isFinite(row.receivedAt) ||
+    Date.now() - row.receivedAt > INBOX_TTL_MS
+  ) {
+    await clearPending(rowId(row));
+    return null;
+  }
+  const { buffer, type, ...rest } = row;
+  return {
+    ...rest,
+    id: rowId(row),
+    blob: new Blob([buffer], { type: type || "" }),
+  };
 }
 
-export async function clearPending(): Promise<void> {
-  memory = null;
-  try {
-    await run("readwrite", (s) => s.delete(KEY));
-  } catch {
-    /* nothing persisted */
-  }
+/** Compare-and-delete: a stale completion must never discard a newer file. */
+export async function clearPending(expectedId?: string): Promise<void> {
+  await transaction<void>("readwrite", (store, done) => {
+    const req = store.get(KEY);
+    req.onsuccess = () => {
+      if (req.result && (!expectedId || rowId(req.result) === expectedId))
+        store.delete(KEY);
+      done(undefined);
+    };
+  });
 }

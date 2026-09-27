@@ -13,7 +13,8 @@
 import { GRID, MIN_SIZE } from "./model.ts";
 
 /** CSS millimetres to screen pixels at 100% zoom (1mm = 96/25.4 px). */
-export const PX_PER_MM = 96 / 25.4;
+import { PX_PER_MM } from "./render-units.ts";
+export { PX_PER_MM } from "./render-units.ts";
 
 /**
  * Smart-guide snap radius in *screen* pixels. It is converted to page

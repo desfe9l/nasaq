@@ -89,8 +89,9 @@ export const DEMO_ALLOWED_PACKS = ["blank"] as const;
  */
 export const DEMO_ALLOWED_EXPORTS = ["png", "jpg"] as const;
 
-/** html2canvas renders at 96 CSS px per inch, so scale = DPI / 96. */
-export const CSS_DPI = 96;
+/** Layout stays at 96 CSS px/in; output DPI only controls raster sampling. */
+import { CSS_DPI } from "../editor/render-units.ts";
+export { CSS_DPI } from "../editor/render-units.ts";
 export const DEMO_EXPORT_DPI = 72;
 export const PRINT_EXPORT_DPI = 300;
 
@@ -121,7 +122,9 @@ export function canCreateDemoProject(projectCount: number): boolean {
 }
 
 export function canUseDemoExport(format: string, hasAdvancedExport = false): boolean {
-  if (hasAdvancedExport) return true;
+  // Native source-file portability is available on every plan.
+  // Premium presentation/print export gates remain unchanged.
+  if (hasAdvancedExport || format === "nsq") return true;
   return (DEMO_ALLOWED_EXPORTS as readonly string[]).includes(format);
 }
 
