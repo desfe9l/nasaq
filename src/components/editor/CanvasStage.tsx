@@ -1,7 +1,18 @@
 import { mmToPx, PX_PER_MM } from "@/lib/editor/render-units";
 import { likelyNsqDrag } from "@/lib/nsq/format";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { EyeOff, LockKeyholeOpen, Trash2 } from "lucide-react";
+import {
+  Copy,
+  Columns2,
+  Download,
+  Eye,
+  EyeOff,
+  Lock,
+  LockKeyholeOpen,
+  Plus,
+  Rows2,
+  Trash2,
+} from "lucide-react";
 import {
   findElement,
   MIN_SIZE,
@@ -27,6 +38,7 @@ import {
   insertLibraryDrop,
   parseLibraryDrop,
 } from "@/lib/editor/library-dnd";
+import { ARTBOARD_GUTTER_MM } from "@/lib/editor/artboard";
 const GRAPHIC_HEADING_MIME = "application/x-nasaq-graphic-heading";
 import {
   clearPenHover,
@@ -177,6 +189,18 @@ export function CanvasStage({
   const commit = useEditor((s) => s.commit);
   const setActivePage = useEditor((s) => s.setActivePage);
   const editingId = useEditor((s) => s.editingId);
+  const artboardGridCols = useEditor((s) => s.artboardGridCols);
+  const renamePage = useEditor((s) => s.renamePage);
+  const duplicatePage = useEditor((s) => s.duplicatePage);
+  const deletePage = useEditor((s) => s.deletePage);
+  const toggleArtboardLock = useEditor((s) => s.toggleArtboardLock);
+  const toggleArtboardHidden = useEditor((s) => s.toggleArtboardHidden);
+  const splitArtboardPage = useEditor((s) => s.splitArtboardPage);
+  const addArtboardAdjacent = useEditor((s) => s.addArtboardAdjacent);
+  const openExport = useEditor((s) => s.openExport);
+
+  const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
+  const [splitMenuOpenFor, setSplitMenuOpenFor] = useState<string | null>(null);
 
   const opRef = useRef<Op>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -1072,278 +1096,525 @@ export function CanvasStage({
         </div>
       )}
       <div
-        className="mx-auto flex w-max min-w-full flex-col items-center gap-6"
-        dir="rtl"
+        className="mx-auto flex w-max min-w-full items-center justify-center"
+        dir="ltr"
         style={{ padding: `${WORKSPACE_MARGIN_MM * zoom}mm` }}
       >
-        {visible.map((page) => {
-          const size = pageSize(page);
-          const isActive = page.id === activePageId;
-          const pageNo = pages.findIndex((p) => p.id === page.id) + 1;
-          const entered = enteredGroupId
-            ? findElement(page.elements, enteredGroupId)?.el || null
-            : null;
-          const enteredKids = entered?.children ?? [];
-          const selectionFrames: SelectionBox[] = [];
-          if (isActive) {
-            if (entered && enteredKids.length) {
-              for (const child of enteredKids) {
-                if (selectedSet.has(child.id) && !child.hidden) {
-                  selectionFrames.push({
-                    el: {
-                      ...child,
-                      x: entered.x + child.x,
-                      y: entered.y + child.y,
-                    },
-                    parent: { x: entered.x, y: entered.y },
-                  });
+        <div
+          className="artboard-grid"
+          dir="ltr"
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${Math.max(1, artboardGridCols)}, auto)`,
+            gap: `${ARTBOARD_GUTTER_MM * zoom}mm`,
+            alignItems: "start",
+            justifyContent: "center",
+          }}
+        >
+          {visible.map((page) => {
+            const size = pageSize(page);
+            const isActive = page.id === activePageId;
+            const isLocked = Boolean(page.locked);
+            const isHidden = Boolean(page.hidden);
+            const pageNo = pages.findIndex((p) => p.id === page.id) + 1;
+            const entered = enteredGroupId
+              ? findElement(page.elements, enteredGroupId)?.el || null
+              : null;
+            const enteredKids = entered?.children ?? [];
+            const selectionFrames: SelectionBox[] = [];
+            if (isActive && !isLocked && !isHidden) {
+              if (entered && enteredKids.length) {
+                for (const child of enteredKids) {
+                  if (selectedSet.has(child.id) && !child.hidden) {
+                    selectionFrames.push({
+                      el: {
+                        ...child,
+                        x: entered.x + child.x,
+                        y: entered.y + child.y,
+                      },
+                      parent: { x: entered.x, y: entered.y },
+                    });
+                  }
                 }
-              }
-            } else {
-              for (const el of page.elements) {
-                if (
-                  selectedSet.has(el.id) &&
-                  !el.hidden &&
-                  el.id !== entered?.id
-                ) {
-                  selectionFrames.push({ el, parent: undefined });
+              } else {
+                for (const el of page.elements) {
+                  if (
+                    selectedSet.has(el.id) &&
+                    !el.hidden &&
+                    el.id !== entered?.id
+                  ) {
+                    selectionFrames.push({ el, parent: undefined });
+                  }
                 }
               }
             }
-          }
-          return (
-            <div
-              key={page.id}
-              className="page-frame shrink-0"
-              dir="ltr"
-              style={{
-                width: `${size.w * zoom}mm`,
-                height: `${(size.h + 12 + ARTBOARD_GAP_MM) * zoom}mm`,
-              }}
-            >
+            return (
               <div
-                className="page-frame-content"
+                key={page.id}
+                className={`artboard-cell relative shrink-0 ${isActive ? "is-active" : ""}`}
                 dir="ltr"
                 style={{
-                  width: `${mmToPx(size.w)}px`,
-                  height: `${size.h + 12}mm`,
-                  transform: `scale(${zoom})`,
-                  transformOrigin: "top left",
+                  width: `${size.w * zoom}mm`,
+                  paddingTop: "24px",
                 }}
               >
+                {/* Artboard Header */}
                 <div
-                  className="canvas-page-meta mb-2 flex items-center justify-between gap-4 text-[12px] text-muted"
+                  className="artboard-header mb-1.5 flex items-center justify-between gap-2 px-1 text-[11px] select-none"
                   dir="rtl"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActivePage(page.id);
+                  }}
                 >
-                  <strong className="text-ink dark:text-white">
-                    {page.name}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {renamingPageId === page.id ? (
+                      <input
+                        type="text"
+                        autoFocus
+                        defaultValue={page.name}
+                        className="h-5 rounded border border-accent bg-[#1e252b] px-1.5 text-[11px] font-bold text-white outline-none ring-1 ring-accent"
+                        onBlur={(e) => {
+                          const val = e.currentTarget.value.trim();
+                          if (val) renamePage(page.id, val);
+                          setRenamingPageId(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            const val = e.currentTarget.value.trim();
+                            if (val) renamePage(page.id, val);
+                            setRenamingPageId(null);
+                          } else if (e.key === "Escape") {
+                            setRenamingPageId(null);
+                          }
+                          e.stopPropagation();
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : (
+                      <span
+                        className={`truncate font-semibold cursor-pointer transition-colors ${
+                          isActive
+                            ? "text-accent font-bold"
+                            : "text-[#9aa0a6] hover:text-white"
+                        }`}
+                        title="انقر مرتين لإعادة التسمية"
+                        onDoubleClick={(e) => {
+                          e.stopPropagation();
+                          setRenamingPageId(page.id);
+                        }}
+                      >
+                        {page.name}
+                      </span>
+                    )}
+
+                    {isLocked && (
+                      <span title="لوحة الرسم مقفلة" className="inline-flex items-center">
+                        <Lock className="h-3 w-3 text-amber-400 shrink-0" />
+                      </span>
+                    )}
+                    {isHidden && (
+                      <span title="محتوى لوحة الرسم مخفي" className="inline-flex items-center">
+                        <EyeOff className="h-3 w-3 text-[#707880] shrink-0" />
+                      </span>
+                    )}
+
                     {entered && (
-                      <span className="ms-2 font-semibold text-gold-2">
+                      <span className="ms-1 text-[10px] text-gold-2">
                         · داخل «{entered.name}»
                       </span>
                     )}
-                  </strong>
-                  <span className="tabular-nums">
-                    {previewAll
-                      ? `صفحة ${pages.findIndex((p) => p.id === page.id) + 1} من ${pages.length}`
-                      : `${round(size.w)} × ${round(size.h)} مم`}
+                  </div>
+
+                  <span className="tabular-nums text-[10px] text-[#6d757d] shrink-0" dir="ltr">
+                    {Math.round(size.w)} × {Math.round(size.h)} mm
                   </span>
                 </div>
+
+                {/* Floating Top Control Overlay for Active Artboard */}
+                {isActive && (
+                  <div
+                    className="artboard-toolbar-overlay"
+                    dir="rtl"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      className={`artboard-overlay-btn ${isLocked ? "active" : ""}`}
+                      onClick={() => toggleArtboardLock(page.id)}
+                      title={isLocked ? "إلغاء قفل لوحة الرسم" : "قفل لوحة الرسم"}
+                    >
+                      {isLocked ? (
+                        <Lock className="h-3.5 w-3.5 text-amber-400" />
+                      ) : (
+                        <LockKeyholeOpen className="h-3.5 w-3.5" />
+                      )}
+                      <span>{isLocked ? "مقفلة" : "قفل"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`artboard-overlay-btn ${isHidden ? "active" : ""}`}
+                      onClick={() => toggleArtboardHidden(page.id)}
+                      title={isHidden ? "إظهار محتوى لوحة الرسم" : "إخفاء محتوى لوحة الرسم"}
+                    >
+                      {isHidden ? (
+                        <EyeOff className="h-3.5 w-3.5 text-amber-400" />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5" />
+                      )}
+                      <span>{isHidden ? "إظهار" : "إخفاء"}</span>
+                    </button>
+
+                    <div className="h-3.5 w-[1px] bg-white/20 mx-0.5" />
+
+                    {/* Split Artboard Menu */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        className="artboard-overlay-btn"
+                        onClick={() =>
+                          setSplitMenuOpenFor(
+                            splitMenuOpenFor === page.id ? null : page.id,
+                          )
+                        }
+                        title="تقسيم لوحة الرسم إلى لوحتين متساويتين"
+                      >
+                        <Columns2 className="h-3.5 w-3.5" />
+                        <span>تقسيم</span>
+                      </button>
+
+                      {splitMenuOpenFor === page.id && (
+                        <div
+                          className="absolute top-full mt-1.5 start-0 z-50 flex flex-col min-w-[170px] rounded-lg border border-white/15 bg-[#181d21]/95 p-1 text-[11px] text-white shadow-xl backdrop-blur-md"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 rounded px-2.5 py-1.5 text-start hover:bg-white/10"
+                            onClick={() => {
+                              splitArtboardPage(page.id, "horizontal");
+                              setSplitMenuOpenFor(null);
+                            }}
+                          >
+                            <Rows2 className="h-3.5 w-3.5 text-accent" />
+                            <span>تقسيم أفقياً (أعلى / أسفل)</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="flex items-center gap-2 rounded px-2.5 py-1.5 text-start hover:bg-white/10"
+                            onClick={() => {
+                              splitArtboardPage(page.id, "vertical");
+                              setSplitMenuOpenFor(null);
+                            }}
+                          >
+                            <Columns2 className="h-3.5 w-3.5 text-accent" />
+                            <span>تقسيم رأسياً (يمين / يسار)</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="h-3.5 w-[1px] bg-white/20 mx-0.5" />
+
+                    <button
+                      type="button"
+                      className="artboard-overlay-btn"
+                      onClick={() => openExport("png")}
+                      title="تصدير لوحة الرسم المحددة (PNG/PDF)"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      <span>تصدير</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className="artboard-overlay-btn"
+                      onClick={() => duplicatePage(page.id)}
+                      title="مضاعفة لوحة الرسم"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      <span>نسخ</span>
+                    </button>
+
+                    {pages.length > 1 && (
+                      <button
+                        type="button"
+                        className="artboard-overlay-btn text-rose-300 hover:text-rose-200"
+                        onClick={() => deletePage(page.id)}
+                        title="حذف لوحة الرسم"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* Scaled Page Container */}
                 <div
-                  ref={(n) => {
-                    pageRefs.current[page.id] = n;
-                  }}
-                  data-page-id={page.id}
-                  className={`report-page ${showGrid ? "show-grid" : ""} ${isActive ? "ring-2 ring-gold ring-offset-8" : ""}`}
+                  className="page-frame-content relative"
+                  dir="ltr"
                   style={{
                     width: `${mmToPx(size.w)}px`,
-                    height: `${mmToPx(size.h)}px`,
-                    background: page.bg || "#fff",
-                  }}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                  }}
-                  onDragStart={(e) => {
-                    const t = e.target as HTMLElement;
-                    if (
-                      t.closest?.(
-                        '[contenteditable="true"], [contenteditable=""], input, textarea',
-                      )
-                    ) {
-                      return;
-                    }
-                    e.preventDefault();
-                  }}
-                  onPointerDown={(e) => {
-                    if (e.target !== e.currentTarget) return;
-                    if (isPalmTouch(e)) {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      return;
-                    }
-                    e.stopPropagation();
-                    setActivePage(page.id);
-                    if (e.button !== 0) return;
-                    startMarquee(e, page);
+                    height: `${size.h}mm`,
+                    transform: `scale(${zoom})`,
+                    transformOrigin: "top left",
                   }}
                 >
-                  {page.elements
-                    .slice()
-                    .sort((a, b) => a.z - b.z)
-                    .map((el) => {
+                  <div
+                    ref={(n) => {
+                      pageRefs.current[page.id] = n;
+                    }}
+                    data-page-id={page.id}
+                    className={`report-page ${showGrid ? "show-grid" : ""} ${
+                      isActive ? "artboard-active-outline ring-2 ring-accent ring-offset-4 ring-offset-[#181d21]" : ""
+                    } ${isLocked ? "artboard-locked" : ""} ${isHidden ? "artboard-hidden-content" : ""}`}
+                    style={{
+                      width: `${mmToPx(size.w)}px`,
+                      height: `${mmToPx(size.h)}px`,
+                      background: page.bg || "#fff",
+                      opacity: isHidden ? 0.35 : 1,
+                      pointerEvents: isLocked ? "none" : undefined,
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                    }}
+                    onDragStart={(e) => {
+                      const t = e.target as HTMLElement;
                       if (
-                        entered &&
-                        el.id === entered.id &&
-                        enteredKids.length
+                        t.closest?.(
+                          '[contenteditable="true"], [contenteditable=""], input, textarea',
+                        )
                       ) {
-                        return (
-                          <div key={el.id}>
-                            <div
-                              className="canvas-el group-frame"
-                              style={{
-                                left: `${el.x}mm`,
-                                top: `${el.y}mm`,
-                                width: `${el.w}mm`,
-                                height: `${el.h}mm`,
-                                transform: `rotate(${el.rotation || 0}deg)`,
-                                zIndex: el.z,
-                              }}
-                            />
-                            {enteredKids
-                              .slice()
-                              .sort((a, b) => a.z - b.z)
-                              .map((child) => {
-                                const abs = {
-                                  ...child,
-                                  x: entered.x + child.x,
-                                  y: entered.y + child.y,
-                                };
-                                return (
-                                  <ElementNode
-                                    key={child.id}
-                                    el={abs}
-                                    pageNo={pageNo}
-                                    interactive
-                                    onPointerDown={(ev, kind, handle) =>
-                                      startOp(ev, page, abs, kind, handle, {
-                                        x: entered.x,
-                                        y: entered.y,
-                                      })
-                                    }
-                                  />
-                                );
-                              })}
-                          </div>
-                        );
+                        return;
                       }
-                      if (entered && el.id === entered.id) return null;
-                      return (
-                        <ElementNode
+                      e.preventDefault();
+                    }}
+                    onPointerDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (isPalmTouch(e)) {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        return;
+                      }
+                      e.stopPropagation();
+                      setActivePage(page.id);
+                      if (e.button !== 0 || isLocked) return;
+                      startMarquee(e, page);
+                    }}
+                  >
+                    {page.elements
+                      .slice()
+                      .sort((a, b) => a.z - b.z)
+                      .map((el) => {
+                        if (
+                          entered &&
+                          el.id === entered.id &&
+                          enteredKids.length
+                        ) {
+                          return (
+                            <div key={el.id}>
+                              <div
+                                className="canvas-el group-frame"
+                                style={{
+                                  left: `${el.x}mm`,
+                                  top: `${el.y}mm`,
+                                  width: `${el.w}mm`,
+                                  height: `${el.h}mm`,
+                                  transform: `rotate(${el.rotation || 0}deg)`,
+                                  zIndex: el.z,
+                                }}
+                              />
+                              {enteredKids
+                                .slice()
+                                .sort((a, b) => a.z - b.z)
+                                .map((child) => {
+                                  const abs = {
+                                    ...child,
+                                    x: entered.x + child.x,
+                                    y: entered.y + child.y,
+                                  };
+                                  return (
+                                    <ElementNode
+                                      key={child.id}
+                                      el={abs}
+                                      pageNo={pageNo}
+                                      interactive={!isLocked && !isHidden}
+                                      onPointerDown={(ev, kind, handle) =>
+                                        startOp(ev, page, abs, kind, handle, {
+                                          x: entered.x,
+                                          y: entered.y,
+                                        })
+                                      }
+                                    />
+                                  );
+                                })}
+                            </div>
+                          );
+                        }
+                        if (entered && el.id === entered.id) return null;
+                        return (
+                          <ElementNode
+                            key={el.id}
+                            el={el}
+                            pageNo={pageNo}
+                            interactive={!isLocked && !isHidden}
+                            onEnterGroup={
+                              el.type === "group"
+                                ? () => enterGroup(el.id)
+                                : undefined
+                            }
+                            onPointerDown={(ev, kind, handle) =>
+                              startOp(ev, page, el, kind, handle)
+                            }
+                          />
+                        );
+                      })}
+                    <PrintGuides
+                      page={page}
+                      settings={printGuides}
+                      zIndex={GUIDE_LAYER_Z}
+                    />
+                    {marquee && (
+                      <div
+                        className="marquee"
+                        style={{
+                          left: `${marquee.x0}mm`,
+                          top: `${marquee.y0}mm`,
+                          width: `${Math.abs(marquee.x1 - marquee.x0)}mm`,
+                          height: `${Math.abs(marquee.y1 - marquee.y0)}mm`,
+                        }}
+                      />
+                    )}
+                    {isActive &&
+                      !isLocked &&
+                      !isHidden &&
+                      page.elements.map((el) => (
+                        <OverflowFlag
                           key={el.id}
                           el={el}
-                          pageNo={pageNo}
-                          interactive
-                          onEnterGroup={
-                            el.type === "group"
-                              ? () => enterGroup(el.id)
-                              : undefined
-                          }
-                          onPointerDown={(ev, kind, handle) =>
-                            startOp(ev, page, el, kind, handle)
-                          }
-                        />
-                      );
-                    })}
-                  <PrintGuides
-                    page={page}
-                    settings={printGuides}
-                    zIndex={GUIDE_LAYER_Z}
-                  />
-                  {marquee && (
-                    <div
-                      className="marquee"
-                      style={{
-                        left: `${marquee.x0}mm`,
-                        top: `${marquee.y0}mm`,
-                        width: `${Math.abs(marquee.x1 - marquee.x0)}mm`,
-                        height: `${Math.abs(marquee.y1 - marquee.y0)}mm`,
-                      }}
-                    />
-                  )}
-                  {isActive &&
-                    page.elements.map((el) => (
-                      <OverflowFlag
-                        key={el.id}
-                        el={el}
-                        onFit={() => fitTextBox(el.id)}
-                      />
-                    ))}
-                  {rotationHint && isActive && (
-                    <div
-                      className="rotation-hint"
-                      dir="ltr"
-                      style={{ left: rotationHint.x, top: rotationHint.y }}
-                    >
-                      <strong className="tabular-nums">
-                        {Math.round(rotationHint.angle)}°
-                      </strong>
-                      <span>
-                        {rotationHint.shift
-                          ? "التقاط 15°/45°/90°"
-                          : "Shift للالتقاط"}
-                      </span>
-                    </div>
-                  )}
-                  {isActive &&
-                    guides.v.map((x) => (
-                      <div
-                        key={`v${x}`}
-                        className="guide-v"
-                        style={{ left: `${x}mm` }}
-                      />
-                    ))}
-                  {isActive &&
-                    guides.h.map((y) => (
-                      <div
-                        key={`h${y}`}
-                        className="guide-h"
-                        style={{ top: `${y}mm` }}
-                      />
-                    ))}
-                  {isActive && selectionFrames.length > 0 && (
-                    <div
-                      className="selection-layer"
-                      style={{ zIndex: SELECTION_LAYER_Z }}
-                    >
-                      {selectionFrames.map((frame) => (
-                        <SelectionFrame
-                          key={frame.el.id}
-                          frame={frame}
-                          primary={selectedIds.length === 1}
-                          editing={editingId === frame.el.id}
-                          zoom={zoom}
-                          onGesture={(ev, kind, handle) =>
-                            startOp(
-                              ev,
-                              page,
-                              frame.el,
-                              kind,
-                              handle,
-                              frame.parent,
-                            )
-                          }
-                          onEditRequest={() =>
-                            requestEdit(page.id, frame.el.id)
-                          }
+                          onFit={() => fitTextBox(el.id)}
                         />
                       ))}
-                    </div>
-                  )}
+                    {rotationHint && isActive && (
+                      <div
+                        className="rotation-hint"
+                        dir="ltr"
+                        style={{ left: rotationHint.x, top: rotationHint.y }}
+                      >
+                        <strong className="tabular-nums">
+                          {Math.round(rotationHint.angle)}°
+                        </strong>
+                        <span>
+                          {rotationHint.shift
+                            ? "التقاط 15°/45°/90°"
+                            : "Shift للالتقاط"}
+                        </span>
+                      </div>
+                    )}
+                    {isActive &&
+                      !isLocked &&
+                      guides.v.map((x) => (
+                        <div
+                          key={`v${x}`}
+                          className="guide-v"
+                          style={{ left: `${x}mm` }}
+                        />
+                      ))}
+                    {isActive &&
+                      !isLocked &&
+                      guides.h.map((y) => (
+                        <div
+                          key={`h${y}`}
+                          className="guide-h"
+                          style={{ top: `${y}mm` }}
+                        />
+                      ))}
+                    {isActive && !isLocked && !isHidden && selectionFrames.length > 0 && (
+                      <div
+                        className="selection-layer"
+                        style={{ zIndex: SELECTION_LAYER_Z }}
+                      >
+                        {selectionFrames.map((frame) => (
+                          <SelectionFrame
+                            key={frame.el.id}
+                            frame={frame}
+                            primary={selectedIds.length === 1}
+                            editing={editingId === frame.el.id}
+                            zoom={zoom}
+                            onGesture={(ev, kind, handle) =>
+                              startOp(
+                                ev,
+                                page,
+                                frame.el,
+                                kind,
+                                handle,
+                                frame.parent,
+                              )
+                            }
+                            onEditRequest={() =>
+                              requestEdit(page.id, frame.el.id)
+                            }
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {/* Contextual '+' edge buttons for active artboard to insert adjacent artboards */}
+                {isActive && (
+                  <>
+                    <button
+                      type="button"
+                      className="artboard-edge-adder adder-top"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addArtboardAdjacent(page.id, "top");
+                      }}
+                      title="إضافة لوحة رسم أعلى هذه اللوحة"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      className="artboard-edge-adder adder-bottom"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addArtboardAdjacent(page.id, "bottom");
+                      }}
+                      title="إضافة لوحة رسم أسفل هذه اللوحة"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      className="artboard-edge-adder adder-left"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addArtboardAdjacent(page.id, "left");
+                      }}
+                      title="إضافة لوحة رسم على يسار هذه اللوحة"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      className="artboard-edge-adder adder-right"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        addArtboardAdjacent(page.id, "right");
+                      }}
+                      title="إضافة لوحة رسم على يمين هذه اللوحة"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                )}
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
       {primarySelection &&
         editingId !== primarySelection.id &&

@@ -380,6 +380,8 @@ function ViewMenu({ fitToScreen, fitToSelection, close }: { fitToScreen: () => v
   const focusMode = useEditor((s) => s.focusMode);
   const dark = useEditor((s) => s.dark);
   const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
+  const artboardGridCols = useEditor((s) => s.artboardGridCols);
+  const setArtboardGridCols = useEditor((s) => s.setArtboardGridCols);
   const toggle = useEditor((s) => s.toggle);
   const toggleBubble = useEditor((s) => s.toggleBubble);
 
@@ -421,6 +423,28 @@ function ViewMenu({ fitToScreen, fitToSelection, close }: { fitToScreen: () => v
       <ToggleItem label="محاذاة للشبكة" value={snapGrid} onClick={() => toggle("snapGrid")} />
       <ToggleItem label="محاذاة للعناصر" value={snapElements} onClick={() => toggle("snapElements")} />
       <ToggleItem label="عرض كل الصفحات" value={previewAll} onClick={() => toggle("previewAll")} />
+      <MenuSep />
+      <div className="px-2.5 py-1.5 text-right text-[10px] font-bold text-muted">
+        تخطيط شبكة اللوحات (أعمدة)
+      </div>
+      <div className="flex items-center justify-between gap-1 px-2.5 pb-2" dir="ltr">
+        {[1, 2, 3, 4, 6].map((cols) => (
+          <button
+            key={cols}
+            type="button"
+            onClick={() => setArtboardGridCols(cols)}
+            className={cn(
+              "flex-1 rounded-[5px] py-1 text-center text-[11px] font-extrabold transition",
+              artboardGridCols === cols
+                ? "bg-[var(--editor-accent)] text-white shadow-xs"
+                : "border border-line/40 hover:bg-[var(--editor-hover)] text-muted hover:text-[var(--editor-text)]",
+            )}
+            title={`${cols} أعمدة للوحات`}
+          >
+            {cols}
+          </button>
+        ))}
+      </div>
       <MenuSep />
       <ToggleItem label="الوضع الداكن للاستوديو" value={dark} onClick={() => toggle("dark")} />
       <ToggleItem label="الشريط العائم للعنصر المحدد" value={bubbleEnabled} onClick={() => toggleBubble()} />

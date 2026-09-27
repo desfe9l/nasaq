@@ -64,6 +64,7 @@ import {
 import { detectDeviceFonts, type DetectedFont } from "./fonts";
 import { resolveTextBox, setTextContext } from "./text-render";
 import { DEFAULT_PRINT_GUIDES, type PrintGuideSettings } from "./print-guides";
+import { splitArtboard } from "./artboard";
 import {
   applyFurniture,
   boundsOf,
@@ -239,6 +240,8 @@ interface Ui {
   rightOpen: boolean;
   leftCollapsed: boolean;
   rightCollapsed: boolean;
+  /** Number of artboard grid columns for multi-artboard canvas layout. */
+  artboardGridCols: number;
   /** Height (px) of the bottom pages panel — drag-resizable, persisted. */
   pagesPanelHeight: number;
   /** Right-click menu shared by the canvas and the layers panel. */
@@ -405,6 +408,14 @@ interface EditorStore extends Project, Ui, History {
     },
   ) => Promise<boolean>;
   setZoom: (z: number) => void;
+  setArtboardGridCols: (cols: number) => void;
+  toggleArtboardLock: (id?: string) => void;
+  toggleArtboardHidden: (id?: string) => void;
+  splitArtboardPage: (id?: string, direction?: "horizontal" | "vertical") => void;
+  addArtboardAdjacent: (
+    targetId: string,
+    direction: "row" | "col" | "top" | "bottom" | "left" | "right",
+  ) => void;
   toggle: (
     key: keyof Pick<
       Ui,
@@ -1076,6 +1087,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     rightOpen: false,
     leftCollapsed: false,
     rightCollapsed: false,
+    artboardGridCols: 4,
     pagesPanelHeight: PAGES_PANEL_DEFAULT,
     contextMenu: null,
     bubbleEnabled: true,
@@ -1241,6 +1253,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           rightOpen: Boolean(ui.rightOpen),
           leftCollapsed: Boolean(ui.leftCollapsed),
           rightCollapsed: Boolean(ui.rightCollapsed),
+          artboardGridCols: typeof ui.artboardGridCols === "number" ? clamp(ui.artboardGridCols, 1, 8) : 4,
           previewAll: true,
           zoom: typeof ui.zoom === "number" ? clamp(ui.zoom, 0.35, 1.6) : 0.82,
           pagesPanelHeight: clampPagesHeight(
@@ -1930,6 +1943,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       ) {
         void setSetting(key, next);
       }
+    },
+    setArtboardGridCols: (cols: number) => {
+      const artboardGridCols = clamp(Math.round(cols), 1, 8);
+      set({ artboardGridCols });
+      writeUi({ artboardGridCols });
     },
     setDark: (dark) => {
       if (get().dark === dark) return;
@@ -3582,6 +3600,107 @@ export const useEditor = create<EditorStore>((set, get) => {
       pushHistory();
     },
 
+    toggleArtboardLock: (id) => {
+      const s = get();
+      const targetId = id || s.activePageId;
+      const targetPage = s.pages.find((p) => p.id === targetId);
+      if (!targetPage) return;
+      const newLocked = !targetPage.locked;
+      const pages = s.pages.map((p) =>
+        p.id === targetId ? { ...p, locked: newLocked } : p,
+      );
+      set({ pages });
+      pushHistory();
+      toast.success(newLocked ? "تم قفل لوحة التصميم" : "تم فك قفل لوحة التصميم");
+    },
+
+    toggleArtboardHidden: (id) => {
+      const s = get();
+      const targetId = id || s.activePageId;
+      const targetPage = s.pages.find((p) => p.id === targetId);
+      if (!targetPage) return;
+      const newHidden = !targetPage.hidden;
+      const pages = s.pages.map((p) =>
+        p.id === targetId ? { ...p, hidden: newHidden } : p,
+      );
+      set({ pages });
+      pushHistory();
+      toast.success(newHidden ? "تم إخفاء لوحة التصميم" : "تم إظهار لوحة التصميم");
+    },
+
+    splitArtboardPage: (id, direction = "horizontal") => {
+      const s = get();
+      if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length + 1)) {
+        toast.error("وصلت إلى حد صفحات تجربة المحرر", {
+          description: "افتح النسخة الكاملة لتقسيم اللوحات والمزيد من الصفحات.",
+        });
+        return;
+      }
+      const targetId = id || s.activePageId;
+      const targetPage = s.pages.find((p) => p.id === targetId);
+      if (!targetPage) return;
+
+      const { firstPage, secondPage } = splitArtboard(targetPage, direction);
+      const idx = s.pages.findIndex((p) => p.id === targetId);
+      const nextPages = [...s.pages];
+      nextPages.splice(idx, 1, firstPage, secondPage);
+
+      set({
+        pages: nextPages,
+        activePageId: secondPage.id,
+        selectedId: null,
+        selectedIds: [],
+        previewAll: true,
+      });
+      pushHistory();
+      toast.success(
+        direction === "horizontal"
+          ? "تم تقسيم لوحة التصميم أفقياً إلى جزأين"
+          : "تم تقسيم لوحة التصميم رأسياً إلى جزأين",
+      );
+    },
+
+    addArtboardAdjacent: (targetId, direction) => {
+      const s = get();
+      if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
+        toast.error("وصلت إلى حد صفحات تجربة المحرر", {
+          description: "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
+        });
+        return;
+      }
+      const page = s.pages.find((p) => p.id === targetId) || s.pages[0];
+      const size = pageSize(page);
+      const newArtboard: Page = {
+        id: uid("page"),
+        name: `لوحة ${s.pages.length + 1}`,
+        elements: [],
+        bg: page?.bg || THEMES[s.theme].paper,
+        w: size.w,
+        h: size.h,
+      };
+
+      const idx = s.pages.findIndex((p) => p.id === targetId);
+      const pages = [...s.pages];
+      // Insert before for 'top'/'left', after for 'bottom'/'right'/'row'/'col'
+      const insertAt =
+        direction === "top" || direction === "left"
+          ? Math.max(0, idx)
+          : idx >= 0
+            ? idx + 1
+            : pages.length;
+      pages.splice(insertAt, 0, newArtboard);
+
+      set({
+        pages,
+        activePageId: newArtboard.id,
+        selectedId: null,
+        selectedIds: [],
+        previewAll: true,
+      });
+      pushHistory();
+      toast.success("تمت إضافة لوحة تصميم بجانب اللوحة المحددة");
+    },
+
     deletePage: (id) => {
       const s = get();
       if (s.pages.length <= 1) {
@@ -3735,6 +3854,7 @@ interface PersistedUi {
   rightOpen?: boolean;
   leftCollapsed?: boolean;
   rightCollapsed?: boolean;
+  artboardGridCols?: number;
   pagesPanelHeight?: number;
   /** Floating bubble visibility (absent = shown). */
   bubble?: boolean;

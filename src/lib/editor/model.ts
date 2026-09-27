@@ -332,6 +332,10 @@ export interface Page {
   w?: number;
   h?: number;
   elements: CanvasEl[];
+  /** Whether the artboard layout and elements are locked against edits. */
+  locked?: boolean;
+  /** Whether the artboard is visually hidden in the multi-artboard cluster. */
+  hidden?: boolean;
 }
 
 export interface Project {

@@ -657,6 +657,8 @@ export function validatePages(
         throw new NsqError("invalid", "page dimensions");
     if (finite(rawPage.w)) page.w = rawPage.w;
     if (finite(rawPage.h)) page.h = rawPage.h;
+    if (typeof rawPage.locked === "boolean") page.locked = rawPage.locked;
+    if (typeof rawPage.hidden === "boolean") page.hidden = rawPage.hidden;
     return page;
   });
   if (opts.strict) {

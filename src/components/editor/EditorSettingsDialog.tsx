@@ -322,6 +322,8 @@ function EditorSection() {
   const snapGrid = useEditor((s) => s.snapGrid);
   const snapElements = useEditor((s) => s.snapElements);
   const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
+  const artboardGridCols = useEditor((s) => s.artboardGridCols);
+  const setArtboardGridCols = useEditor((s) => s.setArtboardGridCols);
   const printGuides = useEditor((s) => s.printGuides);
   const toggle = useEditor((s) => s.toggle);
   const toggleBubble = useEditor((s) => s.toggleBubble);
@@ -392,6 +394,31 @@ function EditorSection() {
             checked={bubbleEnabled}
             onChange={() => toggleBubble()}
           />
+        </div>
+        <div className="mt-3 border-t border-line pt-3 dark:border-white/5">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <span className="block text-[12px] font-bold">تخطيط شبكة اللوحات (أعمدة)</span>
+              <span className="block text-[10px] text-muted">تنظيم لوحات التصميم في أعمدة وصفوف متقاربة</span>
+            </div>
+            <div className="flex gap-1" dir="ltr">
+              {[1, 2, 3, 4, 6].map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setArtboardGridCols(c)}
+                  className={cn(
+                    "grid size-7 place-items-center rounded-[6px] text-[11px] font-extrabold transition",
+                    artboardGridCols === c
+                      ? "bg-navy text-white shadow-xs"
+                      : "border border-line/60 hover:bg-line-2 dark:border-white/10 dark:hover:bg-white/5",
+                  )}
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 

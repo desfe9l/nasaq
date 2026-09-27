@@ -3444,3 +3444,257 @@ summary,
   outline: 2px solid var(--editor-accent-hover);
   outline-offset: 1px;
 }
+/* =========================================================================
+   Advanced Multi-Artboard Canvas System (Photoshop / Figma inspired)
+   ========================================================================= */
+
+/* Artboard grid container */
+.artboard-grid-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  margin: 0 auto;
+  gap: 1.5rem;
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Individual Artboard Frame */
+.artboard-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transition: transform 120ms ease;
+  user-select: none;
+}
+
+.artboard-frame.is-hidden {
+  opacity: 0.35;
+  filter: grayscale(0.85);
+}
+
+/* Artboard Header / Label */
+.artboard-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 2px 4px;
+  font-family: inherit;
+  color: var(--editor-canvas-text-secondary, #9aa5ae);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.artboard-header:hover {
+  color: var(--editor-canvas-text, #cfd6db);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.artboard-frame.is-active .artboard-header {
+  color: #fff;
+}
+
+.artboard-header-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: text;
+}
+
+.artboard-header-title strong {
+  font-weight: 800;
+}
+
+.artboard-title-input {
+  background: var(--editor-surface, #242d34);
+  color: #fff;
+  border: 1px solid var(--editor-accent, #3b6e9c);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  outline: none;
+  min-width: 100px;
+}
+
+.artboard-header-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+/* Active Outline (Crisp Accent Blue Line) */
+.artboard-surface-wrap {
+  position: relative;
+  border-radius: 2px;
+  transition: box-shadow 150ms ease, outline 150ms ease;
+}
+
+.artboard-frame.is-active .artboard-surface-wrap {
+  outline: 2px solid var(--editor-accent, #3b6e9c);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 0 16px rgba(59, 110, 156, 0.25);
+}
+
+/* Edge Add (+) Contextual Buttons */
+.artboard-add-btn {
+  position: absolute;
+  z-index: 25;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background: var(--editor-surface, #242d34);
+  border: 1px solid var(--editor-border, #33404b);
+  color: var(--editor-text, #e9eef3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+  transition: all 120ms ease;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.artboard-frame.is-active .artboard-add-btn,
+.artboard-frame:hover .artboard-add-btn {
+  opacity: 0.75;
+  pointer-events: auto;
+}
+
+.artboard-add-btn:hover {
+  opacity: 1 !important;
+  background: var(--editor-accent, #3b6e9c);
+  color: #fff;
+  border-color: var(--editor-accent-hover, #4a86b4);
+  transform: scale(1.15);
+}
+
+.artboard-add-btn.add-right {
+  top: 50%;
+  right: -14px;
+  transform: translateY(-50%);
+}
+
+.artboard-add-btn.add-right:hover {
+  transform: translateY(-50%) scale(1.15);
+}
+
+.artboard-add-btn.add-left {
+  top: 50%;
+  left: -14px;
+  transform: translateY(-50%);
+}
+
+.artboard-add-btn.add-left:hover {
+  transform: translateY(-50%) scale(1.15);
+}
+
+.artboard-add-btn.add-bottom {
+  bottom: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.artboard-add-btn.add-bottom:hover {
+  transform: translateX(-50%) scale(1.15);
+}
+
+/* Floating Artboard Control Overlay */
+.artboard-control-overlay {
+  position: absolute;
+  top: -42px;
+  right: 0;
+  z-index: 45;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  background: rgba(26, 34, 41, 0.94);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid var(--editor-border, #33404b);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  user-select: none;
+}
+
+.artboard-overlay-btn {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  border: none;
+  background: transparent;
+  color: var(--editor-text-secondary, #9aa5ae);
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.artboard-overlay-btn:hover {
+  background: var(--editor-hover, #2a353e);
+  color: var(--editor-text, #fff);
+}
+
+.artboard-overlay-btn.is-active {
+  color: var(--editor-accent, #3b6e9c);
+  background: rgba(59, 110, 156, 0.18);
+}
+
+.artboard-overlay-btn.is-danger:hover {
+  background: rgba(220, 38, 38, 0.2);
+  color: #f87171;
+}
+
+.artboard-overlay-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--editor-border, #33404b);
+}
+
+/* Split dropdown menu */
+.artboard-split-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--editor-panel, #1e252b);
+  border: 1px solid var(--editor-border, #33404b);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  padding: 4px;
+  z-index: 50;
+  min-width: 170px;
+}
+
+.artboard-split-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--editor-text, #e9eef3);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.artboard-split-item:hover {
+  background: var(--editor-hover, #2a353e);
+  color: #fff;
+}
