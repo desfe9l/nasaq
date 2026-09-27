@@ -1,12 +1,12 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Baseline,
+  Blocks,
   FileText,
   FolderOpen,
   Layers,
   LayoutTemplate,
   Palette,
-  Puzzle,
   Settings2,
   Shapes,
   SlidersHorizontal,
@@ -17,20 +17,9 @@ import type { LeftTab, RightTab } from "@/lib/editor/store";
  * Main tabs of the two side panels. Shared by each panel's tab header and by
  * the collapsed icon dock, so both always show the same tabs in the same order.
  */
-export const LEFT_PANEL_TABS: {
-  id: LeftTab;
-  label: string;
-  /** Full name for tooltips/aria where the strip caption may truncate. */
-  longLabel?: string;
-  icon: LucideIcon;
-}[] = [
+export const LEFT_PANEL_TABS: { id: LeftTab; label: string; icon: LucideIcon }[] = [
   { id: "library", label: "المكتبة", icon: FolderOpen },
-  {
-    id: "elementTools",
-    label: "الأدوات",
-    longLabel: "أدوات العناصر",
-    icon: Puzzle,
-  },
+  { id: "tools", label: "أدوات العناصر", icon: Blocks },
   { id: "elements", label: "عناصر", icon: LayoutTemplate },
   { id: "shapes", label: "أشكال", icon: Shapes },
   { id: "templates", label: "قوالب", icon: FileText },

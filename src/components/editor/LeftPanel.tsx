@@ -258,13 +258,13 @@ export function LeftPanel({
       {/*
        * Tab strip — SHRINKABLE, never hidden.
        *
-       * Two layers of defence, because nine tabs have to survive a panel the
+       * Two layers of defence, because eight tabs have to survive a panel the
        * author has dragged down to 232px:
        *   1. the strip is a container query context, so each tab drops its
        *      caption and becomes icon-only once the strip is too narrow for
-       *      nine labels — the tabs compress instead of overflowing;
+       *      eight labels — the tabs compress instead of overflowing;
        *   2. `overflow-x-auto` remains as the floor: should the strip ever get
-       *      narrower than nine icons, it scrolls. A tab is therefore never
+       *      narrower than eight icons, it scrolls. A tab is therefore never
        *      clipped out of reach, which is what the old `flex-1 min-w-[52px]`
        *      row did at the narrowest widths.
        */}
@@ -277,8 +277,8 @@ export function LeftPanel({
               key={t.id}
               type="button"
               onClick={() => setLeftTab(t.id)}
-              title={t.longLabel ?? t.label}
-              aria-label={t.longLabel ?? t.label}
+              title={t.label}
+              aria-label={t.label}
               role="tab"
               aria-selected={tab === t.id}
               aria-current={tab === t.id}
@@ -465,30 +465,14 @@ export function LeftPanel({
           </div>
         )}
 
-        {tab === "library" && (
-          /*
-           * المكتبة = files & folders ONLY: its toolbar, search, categories and
-           * quick actions are the first thing in the panel and stay pinned
-           * (sticky) while uploaded media scrolls — one scroller, one scrollbar.
-           * The ready-made element tools (shapes, icons, dividers, indicators,
-           * tables, forms) moved to the «الأدوات» tab below.
-           */
-          <AssetLibrary />
-        )}
+        {tab === "library" && <AssetLibrary />}
 
-        {tab === "elementTools" && (
-          /*
-           * أدوات العناصر — the six element categories, separated from the
-           * Library tab. Each category collapses (open/closed persisted) and
-           * reorders by drag & drop from its grip — open or closed — with a
-           * ghost, a placeholder and animated reshuffle (`SortableSections`).
-           */
-          <div>
-            <header className="mb-2.5">
+        {tab === "tools" && (
+          <div className="element-tools-panel">
+            <header className="mb-3">
               <h2 className="text-[13px] font-extrabold">أدوات العناصر</h2>
-              <p className="mt-0.5 text-[11px] leading-5 text-muted">
-                أشكال ورموز وفواصل ومؤشرات وإنجازات وجداول ونماذج جاهزة. انقر
-                على عنوان القسم لطيّه أو فتحه، واسحب المقبض لتغيير الترتيب.
+              <p className="mt-1 text-[11px] leading-5 text-muted">
+                افتح القسم لإضافة عناصره، واسحب مقبضه لترتيبه كما يناسبك.
               </p>
             </header>
             <SmartLibraryPanel

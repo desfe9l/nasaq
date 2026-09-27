@@ -20,7 +20,6 @@ import {
 } from "@/lib/editor/model";
 import { SHAPES } from "@/lib/editor/shapes";
 import { PAGE_TEMPLATES, type PageTemplateDef } from "@/lib/editor/templates";
-import type { SmartSectionId } from "@/lib/editor/section-order";
 import { useEditor } from "@/lib/editor/store";
 import {
   insertLibraryDrop,
@@ -32,7 +31,7 @@ import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
 import { ShapePreview } from "./ShapePreview";
 import { TablePickerOverlay } from "./TablePicker";
 import { AccordionSection, useAccordionState } from "./ui/Accordion";
-import { SortableSectionStack } from "./ui/SortableSections";
+import { SortableSections } from "./ui/SortableSections";
 
 /**
  * Quick tables for the «جداول وإحصائيات» category.
@@ -763,7 +762,7 @@ function ProgressPreview({
 }
 
 /**
- * أدوات العناصر — the element-tools shelf, in its own left-panel tab.
+ * Element tools — an independent shelf in the «أدوات العناصر» tab.
  *
  * Six accordion categories (أشكال · رموز وأيقونات · خطوط وفواصل · مؤشرات
  * وإنجازات · جداول وإحصانات · نماذج جاهزة) over the same store actions the rest
@@ -773,11 +772,6 @@ function ProgressPreview({
  * Cards are clickable (inserted centred on the visible page) *and* draggable
  * (inserted where they are dropped); `library-dnd.ts` owns that arithmetic, so
  * both gestures produce the same layout.
- *
- * The categories themselves live in a `SortableSectionStack`: each one is
- * collapsible (open/closed persisted by `useAccordionState`) and reorderable by
- * real drag & drop — ghost + placeholder + animated reshuffle, open or closed —
- * with the order persisted by `section-order.ts`.
  */
 export function SmartLibraryPanel({
   theme,
@@ -799,10 +793,9 @@ export function SmartLibraryPanel({
     open
       ? useEditor.getState().openTablePicker()
       : useEditor.getState().closeTablePicker();
-  const library = useAccordionState<SmartSectionId>("library", {
-    shapes: true,
-    icons: true,
-  });
+  const library = useAccordionState<
+    "shapes" | "icons" | "dividers" | "indicators" | "tables" | "templates"
+  >("library", { shapes: true, icons: true });
   const addElement = useEditor((s) => s.addElement);
   const addElementAt = useEditor((s) => s.addElementAt);
   const removeCustomIcon = useEditor((s) => s.removeCustomIcon);
@@ -838,7 +831,7 @@ export function SmartLibraryPanel({
   };
 
   return (
-    <SortableSectionStack>
+    <>
       {/*
        * The table builder sits at the top of the category that needs it: a table
        * has no meaningful default shape, so the author picks rows/columns first.
@@ -861,6 +854,7 @@ export function SmartLibraryPanel({
        * The accordion categories. Every item inserts a REAL element on the page
        * (no parallel model, no second renderer).
        */}
+      <SortableSections>
       <AccordionSection
         title="أشكال"
         id="shapes"
@@ -1284,6 +1278,7 @@ export function SmartLibraryPanel({
           {PAGE_TEMPLATES.length})
         </button>
       </AccordionSection>
-    </SortableSectionStack>
+      </SortableSections>
+    </>
   );
 }

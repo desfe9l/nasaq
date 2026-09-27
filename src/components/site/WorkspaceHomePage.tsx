@@ -40,8 +40,7 @@ import { OPEN_NEW_DOCUMENT_EVENT } from "@/lib/auth/use-workspace-entry";
 import { licenseSummary } from "@/lib/license/summary";
 import { useLicense, type LicenseState } from "@/lib/license/client";
 import { Navigate } from "@tanstack/react-router";
-import { canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
-import { toast } from "sonner";
+import { canUseDemoPack } from "@/lib/product/product";
 import {
   CATALOG_PILLS,
   entryProjectSeed,
@@ -743,25 +742,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
             </>
           )}
 
-          <PublishedTemplates
-            hasPremium={entitlements.premium_templates}
-            onLocked={() => window.location.assign("/license")}
-            beforeOpen={async () => {
-              await hydrate();
-              // Same project ceiling the store applies to every new document.
-              const count = useEditor.getState().projects.length;
-              if (
-                !entitlements.unlimited_projects &&
-                !canCreateDemoProject(count)
-              ) {
-                toast.error("اكتملت مساحة تجربة المحرر", {
-                  description: "اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
-                });
-                return true;
-              }
-              return false;
-            }}
-          />
+          <PublishedTemplates />
         </section>
       </main>
 

@@ -22,7 +22,7 @@ export function AccordionSection({
   onToggle,
   children,
   badge,
-  dragHandle,
+  handle,
 }: {
   title: string;
   id: string;
@@ -31,37 +31,26 @@ export function AccordionSection({
   children: ReactNode;
   /** Small trailing hint (e.g. the element type a section applies to). */
   badge?: ReactNode;
-  /**
-   * Optional reorder grip, rendered as a sibling of the header button (never
-   * nested inside it — two buttons cannot nest). Owned by
-   * `SortableSectionStack`; without it the markup is unchanged.
-   */
-  dragHandle?: ReactNode;
+  /** Optional sibling drag handle, never nested inside the toggle button. */
+  handle?: ReactNode;
 }) {
   const panelId = useId();
-  const header = (
-    <button
-      type="button"
-      aria-expanded={open}
-      aria-controls={panelId}
-      onClick={onToggle}
-      className="editor-accordion-header"
-    >
-      <span className="min-w-0 flex-1 truncate text-start">{title}</span>
-      {badge}
-      <ChevronDown className={cn("editor-accordion-chevron size-4 shrink-0", open && "is-open")} aria-hidden />
-    </button>
-  );
   return (
     <section className="editor-accordion" data-inspector-section={id} data-open={open || undefined}>
-      {dragHandle ? (
-        <div className="editor-accordion-headrow">
-          {dragHandle}
-          {header}
-        </div>
-      ) : (
-        header
-      )}
+      <div className="flex min-w-0 items-center">
+        {handle}
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={panelId}
+          onClick={onToggle}
+          className="editor-accordion-header"
+        >
+          <span className="min-w-0 flex-1 truncate text-start">{title}</span>
+          {badge}
+          <ChevronDown className={cn("editor-accordion-chevron size-4 shrink-0", open && "is-open")} aria-hidden />
+        </button>
+      </div>
       {open && (
         <div id={panelId} className="editor-accordion-body">
           {children}
@@ -122,7 +111,7 @@ function writeAccordionMap(
  * instance's possibly stale copy: two surfaces share the «library» key (the
  * basic tools and the element-tools sections) and mount at different times, so
  * a write from stale state would silently reopen a section the author just
- * collapsed.
+ * collapsed — losing the state across the reload the panel promises.
  */
 export function useAccordionState<T extends string>(
   panelKey: string,

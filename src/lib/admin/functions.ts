@@ -244,7 +244,14 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
       }
       if (!allowed) return { ok: false as const, error: "هذا القالب متاح في النسخة الكاملة", locked: true };
     }
-    return { ok: true as const, template: { ...rowToSummary(row), content: String(row.content) } as AdminTemplate };
+    // A published project may have been uploaded with private metadata (owner,
+    // project id, settings, etc.). The public payload contains ONLY the pages
+    // intentionally published; the editor creates a new project identity.
+    const content = String(row.content);
+    const publicContent = row.kind === "json"
+      ? JSON.stringify({ pages: (parseJson(content) as { pages?: unknown } | null)?.pages })
+      : content;
+    return { ok: true as const, template: { ...rowToSummary(row), content: publicContent } as AdminTemplate };
   });
 
 export const adminListTemplatesFn = createServerFn({ method: "POST" })

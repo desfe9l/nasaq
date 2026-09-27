@@ -128,8 +128,8 @@ export {
 } from "./ui-state";
 
 export type LeftTab =
+  | "tools"
   | "elements"
-  | "elementTools"
   | "shapes"
   | "library"
   | "templates"
@@ -2077,7 +2077,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         });
         return;
       }
-      const hosting = get().leftTab === "elementTools" || get().leftTab === "elements";
+      const hosting = get().leftTab === "tools" || get().leftTab === "elements";
       set({
         tablePickerOpen: true,
         leftTab: hosting ? get().leftTab : "elements",

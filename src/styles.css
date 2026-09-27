@@ -1489,120 +1489,6 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   }
 }
 
-/*
- * Sortable section stack (أدوات العناصر) — real pointer-based Drag & Drop.
- *
- * The grip is the only drag origin (the header keeps its toggle), the ghost
- * follows the pointer clamped inside the panel, and the placeholder marks the
- * landing slot. FLIP transforms are applied inline by `SortableSections.tsx`
- * and ride the transition below, so the list reshuffles smoothly instead of
- * jumping — with sections open or closed.
- */
-.smart-sections {
-  position: relative;
-  display: grid;
-  gap: 6px;
-}
-
-/* Layout anchor for FLIP offsets + home of the dragged slot. */
-.sortable-section-slot {
-  position: relative;
-  min-width: 0;
-}
-
-.editor-accordion-headrow {
-  display: flex;
-  align-items: stretch;
-  min-width: 0;
-}
-
-.editor-accordion-headrow .editor-accordion-header {
-  flex: 1 1 auto;
-  width: auto;
-  min-width: 0;
-}
-
-/*
- * The reorder grip: a sibling of the header button (never nested — two
- * buttons cannot nest), with `touch-action: none` so an iPad drag reorders
- * instead of scrolling the panel. Coarse pointers get a 44px target (Apple
- * HIG) — the same contract as the page-rail handle.
- */
-.sortable-grip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  min-width: 30px;
-  touch-action: none;
-  cursor: grab;
-  color: var(--editor-text-secondary, #6b7383);
-  background: transparent;
-  border: 0;
-  transition:
-    color 120ms ease,
-    background-color 120ms ease;
-}
-
-.sortable-grip:hover {
-  color: var(--primary-accent, #1d4ed8);
-  background: var(--editor-hover, rgba(15, 23, 42, 0.05));
-}
-
-.sortable-grip:active {
-  cursor: grabbing;
-}
-
-@media (pointer: coarse) {
-  .sortable-grip {
-    width: 44px;
-    min-width: 44px;
-  }
-}
-
-/* Landing slot: the dragged section's exact height, dashed so the drop reads. */
-.sortable-section-slot.is-placeholder {
-  border: 2px dashed
-    color-mix(in srgb, var(--primary-accent, #1d4ed8) 55%, transparent);
-  border-radius: 9px;
-  background: color-mix(
-    in srgb,
-    var(--primary-accent, #1d4ed8) 8%,
-    transparent
-  );
-}
-
-/*
- * Ghost — the dragged section itself, cloned. Fixed to the viewport and
- * clamped inside the panel body by the drag code, so it can never leave the
- * interface; `pointer-events: none` keeps it from swallowing the drop.
- */
-.sortable-ghost {
-  position: fixed;
-  z-index: var(--z-drawer);
-  pointer-events: none;
-  margin: 0;
-  opacity: 0.94;
-  overflow: hidden;
-  transform: scale(1.015);
-  background: var(--editor-surface, #fff);
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
-  will-change: left, top;
-}
-
-/* A drag in flight never selects text — anywhere. */
-body.is-sorting-sections {
-  user-select: none;
-  -webkit-user-select: none;
-  cursor: grabbing;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sortable-ghost {
-    transition: none;
-  }
-}
-
 .editor-subgroup {
   display: grid;
   gap: 0.5rem;
@@ -3675,4 +3561,29 @@ summary,
 }
 @media (any-pointer: coarse) {
   .editor-toolbar button { min-width: 44px; min-height: 44px; }
+}
+
+/* Element-tool sorting uses the existing panel scroller, never a nested one. */
+.sortable-sections { position: relative; display: grid; gap: 10px; min-width: 0; }
+.sortable-sections > [data-sortable-section] { min-width: 0; }
+.section-drag-handle {
+  display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px;
+  color: var(--editor-text-secondary); background: transparent; border: 0;
+  cursor: grab; touch-action: none; user-select: none; -webkit-touch-callout: none;
+}
+.section-drag-handle:hover { color: var(--editor-text); background: var(--editor-hover); }
+.section-drag-handle:active { cursor: grabbing; }
+.section-drag-handle:focus-visible { outline: 2px solid var(--editor-text-secondary); outline-offset: -4px; border-radius: 8px; }
+.sortable-sections .editor-accordion-header { flex: 1; min-width: 0; width: auto; }
+.section-drop-placeholder {
+  outline: 1.5px dashed var(--editor-text-secondary); outline-offset: -1px; border-radius: 9px;
+  background: color-mix(in srgb, var(--editor-text-secondary) 8%, transparent);
+}
+.section-drop-placeholder > .editor-accordion { opacity: 0; pointer-events: none; }
+.section-drag-ghost {
+  position: fixed; z-index: 200; display: flex; align-items: center; gap: 12px;
+  height: 44px; padding: 0 14px; border: 1px solid var(--editor-text-secondary);
+  border-radius: 9px; pointer-events: none; user-select: none;
+  color: var(--editor-text); background: var(--editor-surface);
+  box-shadow: 0 10px 28px #0003; font-size: 11px; font-weight: 800;
 }

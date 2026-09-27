@@ -34,6 +34,7 @@ import {
   Trash2,
   Unlock,
   Upload,
+  Share2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -53,6 +54,7 @@ import { getProject, listProjects } from "@/lib/editor/storage";
 import { syncStorageOwner } from "@/lib/auth/storage-owner-sync";
 import type { ProjectMeta } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
+import { publishedTemplatePath } from "@/lib/templates/published";
 
 interface Draft {
   id?: string;
@@ -593,6 +595,11 @@ export function AdminTemplatesPanel() {
                   >
                     <Eye className="size-3.5" /> معاينة
                   </button>
+                  {t.status === "published" && <button type="button" className={ghostBtn} onClick={() => {
+                    void navigator.clipboard.writeText(new URL(publishedTemplatePath(t.id), window.location.origin).href)
+                      .then(() => toast.success("تم نسخ رابط القالب"))
+                      .catch(() => toast.error("تعذر نسخ الرابط"));
+                  }} title="نسخ الرابط العام"><Share2 className="size-3.5" /> نسخ الرابط</button>}
                   <button
                     type="button"
                     disabled={busyId === t.id}
