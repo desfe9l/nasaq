@@ -335,6 +335,17 @@ export interface Page {
 }
 
 export interface Project {
+  /** Validated native documents retain authored geometry during reload/undo. */
+  nativeFormat?: number;
+  nativeSourceProjectId?: string;
+  /** Embedded, owner-scoped font files survive autosave, reload and re-export. */
+  embeddedFonts?: { family: string; dataUrl: string }[];
+  editorSettings?: {
+    printGuides?: { safe: boolean; gutter: boolean; bleed: boolean };
+    showGrid?: boolean;
+    snapGrid?: boolean;
+    snapElements?: boolean;
+  };
   version: number;
   name: string;
   theme: ThemeId;

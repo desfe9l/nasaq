@@ -12,6 +12,8 @@
  */
 
 import JSZip from "jszip";
+import { inspectZip, readZipEntry } from "./zip-container.ts";
+import { assertPassiveSvg } from "./passive-svg.ts";
 import type { CanvasEl, Page, Project } from "../editor/model.ts";
 import {
   ASSET_REF,
@@ -32,6 +34,7 @@ import {
   migrateDocument,
   validateManifest,
   validatePages,
+  validateProjectSettings,
   type NsqAssetEntry,
   type NsqDocument,
   type NsqFontEntry,
@@ -118,14 +121,19 @@ export function sniffFontMime(bytes: Uint8Array): string | null {
 /** Normalise an image MIME type to one the format accepts. */
 function imageMime(mime: string, bytes: Uint8Array): string | null {
   const m = mime === "image/jpg" ? "image/jpeg" : mime;
-  if (IMAGE_MIME_EXT[m]) return m;
+  // Validate magic rather than trusting a declared image MIME carrying HTML.
+  if (
+    m === "image/avif" &&
+    new TextDecoder().decode(bytes.subarray(4, 32)).includes("ftypavif")
+  )
+    return m;
   // Sniff when the declared type is missing or generic.
   if (bytes[0] === 0x89 && bytes[1] === 0x50) return "image/png";
   if (bytes[0] === 0xff && bytes[1] === 0xd8) return "image/jpeg";
   if (bytes[0] === 0x47 && bytes[1] === 0x49) return "image/gif";
   if (bytes[8] === 0x57 && bytes[9] === 0x45) return "image/webp";
   const head = new TextDecoder().decode(bytes.subarray(0, 256));
-  if (/<svg[\s>]/i.test(head) || /^\s*<\?xml/i.test(head))
+  if (/<svg[\s/>]/i.test(head) || /^\s*<\?xml/i.test(head))
     return "image/svg+xml";
   return null;
 }
@@ -162,7 +170,10 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
   if (!project || !Array.isArray(project.pages) || !project.pages.length) {
     throw new NsqError("invalid", "project has no pages");
   }
+  validatePages(project.pages, { strict: true });
+  if (project.version > 2) throw new NsqError("too-new", "editor model");
   const warnings = new Set<string>();
+  let assetBytes = 0;
   const zip = new JSZip();
   const now = Date.now();
   // `mimetype` first and uncompressed, so the type is readable at a fixed offset.
@@ -174,11 +185,17 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
   const assets: NsqAssetEntry[] = [];
   const bySource = new Map<string, string>();
   const byHash = new Map<string, string>();
-  const external = new Set<string>();
 
   const addAsset = async (bytes: Uint8Array, mime: string): Promise<string> => {
+    if (!bytes.length || bytes.length > NSQ_LIMITS.maxAssetBytes)
+      throw new NsqError("too-large", "asset");
+    if (mime === "image/svg+xml")
+      assertPassiveSvg(new TextDecoder().decode(bytes));
     const sha = await sha256Hex(bytes);
     if (sha && byHash.has(sha)) return byHash.get(sha)!;
+    assetBytes += bytes.length;
+    if (assetBytes > NSQ_LIMITS.maxUncompressedBytes)
+      throw new NsqError("too-large");
     const id = sha ? sha.slice(0, 32) : `a${assets.length + 1}`;
     const ext = IMAGE_MIME_EXT[mime];
     const path = `assets/${id}.${ext}`;
@@ -198,40 +215,29 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
     let bytes: Uint8Array | null = null;
     let mime: string | null = null;
     if (/^data:/i.test(src)) {
+      if (src.length > NSQ_LIMITS.maxAssetBytes * 1.4 + 1024)
+        throw new NsqError("too-large", "inline asset");
       const parsed = parseDataUrl(src);
       if (parsed) {
         bytes = parsed.bytes;
         mime = imageMime(parsed.mime, parsed.bytes);
       }
-    } else if (/^(https?:|blob:)/i.test(src)) {
+    } else if (/^(https?:|blob:|\/[^/]|\.\.?\/)/i.test(src)) {
       const blob = input.resolveExternal
         ? await input.resolveExternal(src).catch(() => null)
         : null;
       if (blob && blob.size) {
+        if (blob.size > NSQ_LIMITS.maxAssetBytes)
+          throw new NsqError("too-large", "remote asset");
         bytes = new Uint8Array(await blob.arrayBuffer());
         mime = imageMime((blob.type || "").toLowerCase(), bytes);
       }
-      if (!bytes || !mime) {
-        if (/^https?:/i.test(src)) {
-          // Kept as a link (listed in the manifest) rather than silently lost.
-          external.add(src);
-          warnings.add(
-            "تعذّر تضمين بعض الصور الخارجية — ستُحمَّل من رابطها الأصلي.",
-          );
-          return src;
-        }
-        warnings.add("تعذّر تضمين صورة مؤقتة من الجلسة الحالية.");
-        return undefined;
-      }
+      if (!bytes || !mime) throw new NsqError("missing-asset", src);
     } else {
-      // Local file paths and other schemes never travel between devices.
-      warnings.add("تم تجاهل مرجع صورة لمسار محلي لا يمكن نقله.");
-      return undefined;
+      // Never silently drop paths/temporary images or ship an external link.
+      throw new NsqError("missing-asset", "image is not portable");
     }
-    if (!bytes || !mime) {
-      warnings.add("تم تجاهل صورة بصيغة غير مدعومة.");
-      return undefined;
-    }
+    if (!bytes || !mime) throw new NsqError("invalid", "unsupported image");
     const id = await addAsset(bytes, mime);
     bySource.set(src, id);
     return ASSET_REF + id;
@@ -257,8 +263,10 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
       }
       out.content = ASSET_REF + id;
     }
-    if (el.children?.length)
-      out.children = await Promise.all(el.children.map(packEl));
+    if (el.children?.length) {
+      out.children = [];
+      for (const child of el.children) out.children.push(await packEl(child));
+    }
     return out;
   };
 
@@ -271,7 +279,9 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
 
   // Fonts: record every family, embed uploaded files where this device has them.
   const fontSources = new Map(
-    (input.fontSources || []).map((f) => [f.family, f.dataUrl]),
+    [...(project.embeddedFonts || []), ...(input.fontSources || [])].map(
+      (f) => [f.family, f.dataUrl],
+    ),
   );
   const fonts: NsqFontEntry[] = [];
   for (const family of collectFontFamilies(project.pages)) {
@@ -281,11 +291,13 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
       bundled,
       fallback: DEFAULT_FALLBACK_FONT,
     };
-    const source = !bundled ? fontSources.get(family) : undefined;
+    const source = fontSources.get(family);
     if (source) {
       const parsed = parseDataUrl(source);
       const mime = parsed ? sniffFontMime(parsed.bytes) : null;
       if (parsed && mime) {
+        if (parsed.bytes.length > NSQ_LIMITS.maxFontBytes)
+          throw new NsqError("too-large", "font");
         const sha = await sha256Hex(parsed.bytes);
         const ext = FONT_MIME_EXT[mime];
         const path = `fonts/${(sha || `f${fonts.length + 1}`).slice(0, 32)}.${ext}`;
@@ -310,15 +322,17 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
       transactionNo: project.transactionNo || "",
       defaultSize: project.defaultSize,
       pack: project.pack,
-      sourceProjectId: project.id,
+      sourceProjectId: project.nativeSourceProjectId || project.id,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt || now,
     },
     pages,
     view: { activePageIndex: Math.max(0, input.activePageIndex ?? 0) },
-    settings: input.settings,
+    settings: validateProjectSettings(input.settings || project.editorSettings),
   };
   const docBytes = utf8.encode(JSON.stringify(doc));
+  if (docBytes.length > NSQ_LIMITS.maxDocumentBytes)
+    throw new NsqError("too-large", "document");
   zip.file(NSQ_PATHS.document, docBytes, {
     binary: true,
     compression: "DEFLATE",
@@ -326,7 +340,12 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
   });
 
   let thumbnail: NsqManifest["thumbnail"] = null;
-  if (input.thumbnail?.bytes?.length) {
+  if (
+    input.thumbnail?.bytes?.length &&
+    input.thumbnail.bytes.length <= NSQ_LIMITS.maxThumbnailBytes &&
+    input.thumbnail.bytes[0] === 0x89 &&
+    input.thumbnail.bytes[1] === 0x50
+  ) {
     const opts = {
       binary: true,
       compression: "STORE" as const,
@@ -372,7 +391,7 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
     thumbnail,
     assets,
     fonts,
-    external: [...external],
+    external: [],
     attribution: origin,
   };
   zip.file(NSQ_PATHS.manifest, JSON.stringify(manifest, null, 2), {
@@ -393,6 +412,8 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
     { compression: "DEFLATE", date: new Date(now) },
   );
 
+  if (assets.length + fonts.length + 10 > NSQ_LIMITS.maxEntries)
+    throw new NsqError("too-large", "entries");
   const type = JSZip.support.blob ? "blob" : "uint8array";
   const generated = await zip.generateAsync({
     type,
@@ -455,7 +476,11 @@ async function head(input: ReadInput, n: number): Promise<Uint8Array> {
  */
 export async function readNsq(
   input: ReadInput,
-  opts: { verifyOnly?: boolean } = {},
+  opts: {
+    verifyOnly?: boolean;
+    allowLegacy?: boolean;
+    includeThumbnail?: boolean;
+  } = {},
 ): Promise<NsqReadResult> {
   const size = byteSize(input);
   if (!size) throw new NsqError("empty");
@@ -467,11 +492,16 @@ export async function readNsq(
     magic[1] === 0x4b &&
     magic[2] === 0x03 &&
     magic[3] === 0x04;
-  if (!isZip) return readLegacyJson(input);
+  if (!isZip) {
+    if (opts.allowLegacy === false) throw new NsqError("not-nsq");
+    return readLegacyJson(input);
+  }
+  const archiveBytes = await toBytes(input);
+  const directory = inspectZip(archiveBytes);
 
   let zip: JSZip;
   try {
-    zip = await JSZip.loadAsync(await toBytes(input), { checkCRC32: true });
+    zip = await JSZip.loadAsync(archiveBytes, { checkCRC32: false });
   } catch (err) {
     throw new NsqError(
       "corrupt",
@@ -479,32 +509,31 @@ export async function readNsq(
     );
   }
 
-  const entries = Object.values(zip.files);
-  if (entries.length > NSQ_LIMITS.maxEntries)
-    throw new NsqError("invalid", "too many entries");
-  const declared = entries.reduce(
-    (sum, f) =>
-      sum +
-      Number(
-        (f as unknown as { _data?: { uncompressedSize?: number } })._data
-          ?.uncompressedSize || 0,
-      ),
-    0,
-  );
-  if (declared > NSQ_LIMITS.maxUncompressedBytes)
-    throw new NsqError("too-large");
+  // JSZip can interpret Unicode-name extra fields. They must not remap an
+  // entry around the raw-directory checks or collapse two files into one.
+  const decodedNames = Object.keys(zip.files);
+  if (
+    decodedNames.length !== directory.size ||
+    decodedNames.some((name) => !directory.has(name))
+  )
+    throw new NsqError("invalid", "zip filename remapping");
 
+  const readEntry = (name: string, limit: number) =>
+    readZipEntry(zip, directory, name, limit);
+  const textEntry = async (name: string, limit: number) =>
+    new TextDecoder().decode(await readEntry(name, limit));
   const mimeEntry = zip.file(NSQ_PATHS.mimetype);
-  if (mimeEntry) {
-    const mime = (await mimeEntry.async("string").catch(() => "")).trim();
-    if (mime !== NSQ_MIME) throw new NsqError("not-nsq", `mimetype ${mime}`);
-  }
+  if (!mimeEntry) throw new NsqError("not-nsq", "mimetype missing");
+  if ((await textEntry(NSQ_PATHS.mimetype, 128)).trim() !== NSQ_MIME)
+    throw new NsqError("not-nsq", "mimetype");
   const manifestEntry = zip.file(NSQ_PATHS.manifest);
   if (!manifestEntry) throw new NsqError("not-nsq", "no manifest");
   let manifest: NsqManifest;
   try {
     manifest = validateManifest(
-      JSON.parse(await manifestEntry.async("string")),
+      JSON.parse(
+        await textEntry(NSQ_PATHS.manifest, NSQ_LIMITS.maxManifestBytes),
+      ),
     );
   } catch (err) {
     if (err instanceof NsqError) throw err;
@@ -514,11 +543,10 @@ export async function readNsq(
   const warnings: string[] = [];
   const docEntry = zip.file(manifest.document.path);
   if (!docEntry) throw new NsqError("invalid", "document missing");
-  const docBytes = await docEntry.async("uint8array").catch(() => {
-    throw new NsqError("corrupt", "document unreadable");
-  });
-  if (docBytes.length > NSQ_LIMITS.maxDocumentBytes)
-    throw new NsqError("too-large");
+  const docBytes = await readEntry(
+    manifest.document.path,
+    NSQ_LIMITS.maxDocumentBytes,
+  );
   if (manifest.document.sha256) {
     const sha = await sha256Hex(docBytes);
     if (sha && sha !== manifest.document.sha256)
@@ -530,43 +558,57 @@ export async function readNsq(
   } catch {
     throw new NsqError("corrupt", "document json");
   }
-  if (manifest.formatVersion > NSQ_FORMAT_VERSION) {
-    warnings.push(
-      "أُنشئ الملف بإصدار أحدث من نَسَق — قد لا تظهر بعض الميزات الجديدة.",
-    );
-  }
-  const doc = migrateDocument(
-    rawDoc,
-    Math.min(manifest.formatVersion, NSQ_FORMAT_VERSION),
-  );
+  if (manifest.document.size !== docBytes.length)
+    throw new NsqError("integrity", "document size");
+  const doc = migrateDocument(rawDoc, manifest.formatVersion);
+  if (
+    !Number.isInteger(doc.modelVersion) ||
+    Number(doc.modelVersion) < 1 ||
+    Number(doc.modelVersion) > 2
+  )
+    throw new NsqError("too-new", "editor model");
   if (doc.schema !== NSQ_DOCUMENT_SCHEMA)
     throw new NsqError("invalid", "document schema");
-  const { pages, warnings: pageWarnings } = validatePages(doc.pages);
+  const { pages, warnings: pageWarnings } = validatePages(doc.pages, {
+    strict: true,
+  });
   warnings.push(...pageWarnings);
 
   // Resolve asset references back into data URLs / markup.
   const assetById = new Map(manifest.assets.map((a) => [a.id, a]));
   const resolved = new Map<string, { dataUrl: string; text?: string }>();
   const loadAsset = async (id: string, wantText: boolean) => {
-    const key = `${id}:${wantText ? "t" : "b"}`;
+    const key = id;
     const hit = resolved.get(key);
-    if (hit) return hit;
+    if (hit) {
+      if (wantText && hit.text === undefined)
+        throw new NsqError("invalid", "svg asset mime");
+      return hit;
+    }
     const entry = assetById.get(id);
     const file = entry ? zip.file(entry.path) : null;
     if (!entry || !file) throw new NsqError("missing-asset", id);
-    const bytes = await file.async("uint8array").catch(() => {
-      throw new NsqError("corrupt", `asset ${id}`);
-    });
+    const bytes = await readEntry(entry.path, NSQ_LIMITS.maxAssetBytes);
     if (entry.sha256) {
       const sha = await sha256Hex(bytes);
       if (sha && sha !== entry.sha256)
         throw new NsqError("integrity", `asset ${id}`);
     }
-    const value = wantText
-      ? { dataUrl: "", text: new TextDecoder().decode(bytes) }
-      : { dataUrl: opts.verifyOnly ? "" : bytesToDataUrl(bytes, entry.mime) };
+    if (entry.size !== bytes.length)
+      throw new NsqError("integrity", `asset size ${id}`);
+    if (imageMime(entry.mime, bytes) !== entry.mime)
+      throw new NsqError("invalid", "asset content type");
     if (wantText && entry.mime !== "image/svg+xml")
       throw new NsqError("invalid", "svg asset mime");
+    const text =
+      entry.mime === "image/svg+xml"
+        ? new TextDecoder().decode(bytes)
+        : undefined;
+    if (text !== undefined) assertPassiveSvg(text);
+    const value = {
+      dataUrl: opts.verifyOnly ? "" : bytesToDataUrl(bytes, entry.mime),
+      text,
+    };
     resolved.set(key, value);
     return value;
   };
@@ -577,15 +619,25 @@ export async function readNsq(
         el.src = (
           await loadAsset(el.src.slice(ASSET_REF.length), false)
         ).dataUrl;
-      } else if (!/^(data:image\/|https?:\/\/)/i.test(el.src)) {
-        warnings.push("تم تجاهل مرجع صورة غير قابل للنقل.");
-        delete el.src;
+      } else if (/^data:image\//i.test(el.src)) {
+        const data = parseDataUrl(el.src);
+        if (!data || !imageMime(data.mime, data.bytes))
+          throw new NsqError("invalid", "inline image");
+        if (data.mime === "image/svg+xml")
+          assertPassiveSvg(new TextDecoder().decode(data.bytes));
+      } else {
+        throw new NsqError("missing-asset", "external or local reference");
       }
     }
-    if (typeof el.content === "string" && el.content.startsWith(ASSET_REF)) {
+    if (
+      el.type === "svg" &&
+      typeof el.content === "string" &&
+      el.content.startsWith(ASSET_REF)
+    ) {
       el.content =
         (await loadAsset(el.content.slice(ASSET_REF.length), true)).text || "";
     }
+    if (el.type === "svg" && el.content) assertPassiveSvg(el.content);
     for (const child of el.children || []) await resolveEl(child);
   };
   for (const page of pages) for (const el of page.elements) await resolveEl(el);
@@ -598,11 +650,17 @@ export async function readNsq(
       warnings.push(`ملف الخط «${font.family}» مفقود — سيُستخدم خط بديل.`);
       continue;
     }
-    const bytes = await file.async("uint8array").catch(() => null);
-    if (!bytes || !sniffFontMime(bytes)) continue;
+    const bytes = await readEntry(font.path, NSQ_LIMITS.maxFontBytes);
+    if (!bytes || !sniffFontMime(bytes)) {
+      warnings.push(`تعذر تحميل الخط «${font.family}» — سيُستخدم خط بديل.`);
+      continue;
+    }
     if (font.sha256) {
       const sha = await sha256Hex(bytes);
-      if (sha && sha !== font.sha256) continue;
+      if (sha && sha !== font.sha256) {
+        warnings.push(`ملف الخط «${font.family}» تالف — سيُستخدم خط بديل.`);
+        continue;
+      }
     }
     if (!opts.verifyOnly)
       embeddedFonts.push({
@@ -612,11 +670,11 @@ export async function readNsq(
   }
 
   let thumbnail: string | undefined;
-  if (manifest.thumbnail && !opts.verifyOnly) {
-    const bytes = await zip
-      .file(manifest.thumbnail.path)
-      ?.async("uint8array")
-      .catch(() => null);
+  if (manifest.thumbnail && (!opts.verifyOnly || opts.includeThumbnail)) {
+    const bytes = await readEntry(
+      manifest.thumbnail.path,
+      NSQ_LIMITS.maxThumbnailBytes,
+    ).catch(() => null);
     if (bytes && bytes[0] === 0x89 && bytes[1] === 0x50)
       thumbnail = bytesToDataUrl(bytes, "image/png");
   }
@@ -629,7 +687,7 @@ export async function readNsq(
     : 0;
 
   return {
-    project: documentToProject(doc, pages),
+    project: { ...documentToProject(doc, pages), embeddedFonts },
     manifest,
     thumbnail,
     embeddedFonts,
@@ -664,13 +722,19 @@ async function readLegacyJson(input: ReadInput): Promise<NsqReadResult> {
       for (const el of list) {
         if (el.src && !/^(data:image\/|https?:\/\/)/i.test(el.src))
           delete el.src;
+        if (el.type === "svg" && el.content) assertPassiveSvg(el.content);
+        if (el.src?.startsWith("data:image/svg+xml")) {
+          const parsed = parseDataUrl(el.src);
+          if (!parsed) throw new NsqError("invalid", "inline SVG");
+          assertPassiveSvg(new TextDecoder().decode(parsed.bytes));
+        }
         if (el.children) walk(el.children);
       }
     };
     walk(page.elements);
   }
   return {
-    project: documentToProject(doc, pages),
+    project: { ...documentToProject(doc, pages), nativeFormat: undefined },
     manifest: null,
     embeddedFonts: [],
     fontEntries: collectFontFamilies(pages).map((family) => ({

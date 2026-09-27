@@ -12,7 +12,12 @@ export function useNsqSignedIn(): { signedIn: boolean; resolving: boolean } {
   const owner = useEditor((s) => s.sessionOwner);
   const hydrated = useEditor((s) => s.hydrated);
   return {
-    signedIn: Boolean(user) && hydrated && !!owner && owner !== ANON_OWNER,
-    resolving: isPending || !hydrated,
+    signedIn:
+      Boolean(user) &&
+      hydrated &&
+      !!owner &&
+      owner !== ANON_OWNER &&
+      owner === user?.id,
+    resolving: isPending || !hydrated || (Boolean(user) && owner !== user?.id),
   };
 }

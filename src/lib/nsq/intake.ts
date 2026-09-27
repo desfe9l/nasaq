@@ -12,8 +12,6 @@
 
 import { toast } from "sonner";
 import { useEditor } from "@/lib/editor/store";
-import { sanitizeSvgContent } from "@/lib/editor/svg";
-import type { CanvasEl } from "@/lib/editor/model";
 import { isNsqFileName, nsqErrorMessage } from "./format";
 import type { NsqReadResult } from "./package";
 import {
@@ -22,6 +20,7 @@ import {
   putPending,
   type PendingSummary,
 } from "./inbox";
+import { getStorageOwner, ANON_OWNER } from "../editor/storage-owner";
 import { loadEmbeddedFonts, missingFonts } from "./fonts";
 
 /** Fired on `window` when a received file is waiting in the inbox. */
@@ -33,9 +32,16 @@ const loadPackage = () => import("./package");
 
 export type ReceiveOutcome = "imported" | "pending" | "failed";
 
-export async function validateProjectFile(file: Blob): Promise<NsqReadResult> {
+export async function validateProjectFile(
+  file: Blob,
+  verifyOnly = false,
+): Promise<NsqReadResult> {
   const { readNsq } = await loadPackage();
-  return readNsq(file);
+  return readNsq(file, {
+    verifyOnly,
+    includeThumbnail: true,
+    allowLegacy: !("name" in file && isNsqFileName(String(file.name))),
+  });
 }
 
 export function summaryOf(
@@ -53,12 +59,17 @@ export function summaryOf(
 /** Recognise, validate and preserve an `.nsq` in the inbox. */
 export async function preserveNsq(
   file: File,
-): Promise<{ summary: PendingSummary; result: NsqReadResult } | null> {
+  materialize = false,
+): Promise<{
+  id: string;
+  summary: PendingSummary;
+  result: NsqReadResult;
+} | null> {
   const toastId = toast.loading("جارٍ التحقق من ملف نَسَق…");
   try {
-    const result = await validateProjectFile(file);
+    const result = await validateProjectFile(file, !materialize);
     const summary = summaryOf(result, file.name);
-    await putPending({
+    const entry = await putPending({
       fileName: file.name,
       size: file.size,
       receivedAt: Date.now(),
@@ -66,7 +77,7 @@ export async function preserveNsq(
       blob: file,
     });
     toast.dismiss(toastId);
-    return { summary, result };
+    return { id: entry.id, summary, result };
   } catch (err) {
     toast.error(nsqErrorMessage(err), { id: toastId, description: file.name });
     return null;
@@ -76,38 +87,22 @@ export async function preserveNsq(
 /**
  * Handle a project file picked or dropped inside the editor.
  *
- * Legacy JSON backups keep their historical behaviour (imported directly).
- * `.nsq` files go through the inbox: opened at once for a signed-in account,
+ * Both native containers and legacy backups go through the durable inbox: opened at once for a signed-in account,
  * or held behind the account gate for a visitor (`NSQ_PENDING_EVENT`).
  */
 export async function receiveProjectFile(
   file: File,
   signedIn: boolean,
 ): Promise<ReceiveOutcome> {
-  if (!isNsqFileName(file.name)) {
-    const toastId = toast.loading("جارٍ قراءة ملف المشروع…");
-    try {
-      const result = await validateProjectFile(file);
-      toast.dismiss(toastId);
-      return (await importReadResult(result, {
-        successMessage: "تم استيراد المشروع",
-      }))
-        ? "imported"
-        : "failed";
-    } catch (err) {
-      toast.error(nsqErrorMessage(err), {
-        id: toastId,
-        description: file.name,
-      });
-      return "failed";
-    }
-  }
-  const preserved = await preserveNsq(file);
+  const preserved = await preserveNsq(file, signedIn);
   if (!preserved) return "failed";
   if (signedIn) {
     // Already validated — import the parsed result, then empty the inbox.
-    const ok = await importReadResult(preserved.result);
-    if (ok) await clearPending();
+    const ok = await importReadResult(preserved.result, {
+      importId: preserved.id,
+    });
+    if (ok) await clearPending(preserved.id).catch(() => undefined);
+    else window.dispatchEvent(new CustomEvent(NSQ_PENDING_EVENT));
     return ok ? "imported" : "failed";
   }
   window.dispatchEvent(new CustomEvent(NSQ_PENDING_EVENT));
@@ -121,33 +116,42 @@ export async function receiveAndContinueInEditor(file: File): Promise<boolean> {
   return true;
 }
 
-function sanitizeSvgElements(list: CanvasEl[] | undefined) {
-  for (const el of list || []) {
-    if (el.type === "svg" && typeof el.content === "string" && el.content) {
-      el.content = sanitizeSvgContent(el.content);
-    }
-    if (el.children?.length) sanitizeSvgElements(el.children);
-  }
-}
-
 /** Turn a validated read result into an open, editable library project. */
 export async function importReadResult(
   result: NsqReadResult,
-  opts: { successMessage?: string } = {},
+  opts: { successMessage?: string; importId?: string } = {},
 ): Promise<boolean> {
   const store = useEditor.getState();
-  for (const page of result.project.pages || [])
-    sanitizeSvgElements(page.elements);
-  const loaded = await loadEmbeddedFonts(result.embeddedFonts, (family) =>
-    useEditor.getState().registerFont(family, "خط من ملف نَسَق"),
+  const expectedOwner = getStorageOwner();
+  if (
+    expectedOwner === ANON_OWNER ||
+    !store.hydrated ||
+    store.sessionOwner !== expectedOwner
+  )
+    return false;
+  const loaded = await loadEmbeddedFonts(
+    result.embeddedFonts,
+    (family) => useEditor.getState().registerFont(family, "خط من ملف نَسَق"),
+    () => getStorageOwner() === expectedOwner,
   );
+  if (
+    getStorageOwner() !== expectedOwner ||
+    useEditor.getState().sessionOwner !== expectedOwner
+  )
+    return false;
   const ok = await store.importProject(
     {
       ...result.project,
       thumbnail: result.thumbnail,
       nsqOrigin: result.origin,
+      embeddedFonts: result.embeddedFonts,
     },
-    { activePageIndex: result.activePageIndex, successMessage: null },
+    {
+      activePageIndex: result.activePageIndex,
+      successMessage: null,
+      expectedOwner,
+      importId: opts.importId,
+    },
   );
   if (!ok) return false;
   toast.success(
@@ -197,25 +201,35 @@ let resuming: Promise<boolean> | null = null;
  */
 export function resumePending(): Promise<boolean> {
   if (resuming) return resuming;
-  resuming = (async () => {
+  const resume = async () => {
     const entry = await getPending();
     if (!entry) return false;
     let result: NsqReadResult;
     try {
-      result = await validateProjectFile(entry.blob);
+      const { readNsq } = await loadPackage();
+      result = await readNsq(entry.blob, {
+        allowLegacy: !isNsqFileName(entry.fileName),
+      });
+      const ok = await importReadResult(result, { importId: entry.id });
+      if (ok) {
+        await clearPending(entry.id);
+        dropResumeParam();
+      }
+      return ok;
     } catch (err) {
-      await clearPending();
+      // Preserve even on failure. The user can retry or explicitly discard;
+      // an unavailable account/storage service is not a reason to lose a file.
       toast.error(nsqErrorMessage(err), { description: entry.fileName });
       return false;
     }
-    const ok = await importReadResult(result);
-    // A failed save keeps the file in the inbox so nothing is lost.
-    if (ok) {
-      await clearPending();
-      dropResumeParam();
-    }
-    return ok;
-  })().finally(() => {
+  };
+  // Serializes two tabs finishing the same OAuth handoff. The deterministic
+  // import ID is also a crash-safe fallback where Web Locks is unavailable.
+  resuming = Promise.resolve(
+    typeof navigator !== "undefined" && navigator.locks
+      ? navigator.locks.request("nasaq-native-import", resume)
+      : resume(),
+  ).finally(() => {
     resuming = null;
   });
   return resuming;

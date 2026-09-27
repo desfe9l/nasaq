@@ -382,7 +382,7 @@ describe("nsq invalid input", () => {
     );
   });
 
-  it("opens forward-compatible newer files with a warning", async () => {
+  it("rejects newer containers even when they claim an older reader version", async () => {
     const { blob } = await writeNsq({ project: sampleProject() });
     const zip = await JSZip.loadAsync(await blob.arrayBuffer());
     const m = JSON.parse(await zip.file("manifest.json")!.async("string"));
@@ -394,8 +394,9 @@ describe("nsq invalid input", () => {
         minReaderVersion: 1,
       }),
     );
-    const read = await readNsq(await zip.generateAsync({ type: "uint8array" }));
-    assert.equal(read.project.pages!.length, 2);
-    assert.ok(read.warnings.some((w) => w.includes("أحدث")));
+    await expectCode(
+      await zip.generateAsync({ type: "uint8array" }),
+      "too-new",
+    );
   });
 });

@@ -122,7 +122,9 @@ export function canCreateDemoProject(projectCount: number): boolean {
 }
 
 export function canUseDemoExport(format: string, hasAdvancedExport = false): boolean {
-  if (hasAdvancedExport) return true;
+  // Native source-file portability is available on every plan.
+  // Premium presentation/print export gates remain unchanged.
+  if (hasAdvancedExport || format === "nsq") return true;
   return (DEMO_ALLOWED_EXPORTS as readonly string[]).includes(format);
 }
 

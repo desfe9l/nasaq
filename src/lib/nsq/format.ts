@@ -26,7 +26,7 @@ export const NSQ_MIME = "application/vnd.nasaq.project+zip";
 export const NSQ_FORMAT = "nasaq.project";
 export const NSQ_DOCUMENT_SCHEMA = "nasaq.document";
 /** Bump on any breaking change to the container or document, and add a migration. */
-export const NSQ_FORMAT_VERSION = 1;
+export const NSQ_FORMAT_VERSION = 2;
 /** File-picker `accept` string: the native format plus legacy JSON backups. */
 export const NSQ_ACCEPT = `${NSQ_EXTENSION},${NSQ_MIME},application/json,.json`;
 
@@ -48,6 +48,11 @@ export const NSQ_LIMITS = {
   maxUncompressedBytes: 600 * 1024 * 1024,
   maxEntries: 5000,
   maxDocumentBytes: 64 * 1024 * 1024,
+  maxManifestBytes: 2 * 1024 * 1024,
+  maxAssetBytes: 64 * 1024 * 1024,
+  maxFontBytes: 32 * 1024 * 1024,
+  maxThumbnailBytes: 4 * 1024 * 1024,
+  maxTotalElements: 50000,
   maxPages: 500,
   maxElementsPerPage: 5000,
   maxDepth: 12,
@@ -215,10 +220,15 @@ export type NsqErrorCode =
   | "too-new"
   | "missing-asset"
   | "integrity"
-  | "unsupported-env";
+  | "unsupported-env"
+  | "storage"
+  | "pending";
 
 /** Author-facing Arabic messages, one per failure class. */
 export const NSQ_ERROR_MESSAGES: Record<NsqErrorCode, string> = {
+  storage:
+    "تعذر حفظ الملف بأمان في المتصفح. أتح التخزين أو حرّر مساحة ثم أعد المحاولة؛ لم يبدأ تسجيل الدخول.",
+  pending: "يوجد ملف نَسَق بانتظار الفتح. افتحه أو أزله قبل استقبال ملف آخر.",
   empty: "الملف فارغ — لا يحتوي على أي بيانات.",
   "too-large": "حجم الملف أكبر من الحد المسموح لملفات نَسَق.",
   "not-nsq": "هذا ليس ملف مشروع نَسَق (.nsq).",
@@ -287,7 +297,13 @@ export function collectFontFamilies(pages: Page[]): string[] {
   const seen = new Set<string>();
   const walk = (list: CanvasEl[] | undefined) => {
     for (const el of list || []) {
-      const family = el.style?.fontFamily;
+      const family =
+        el.style?.fontFamily ||
+        (["text", "box", "stat", "table", "progress", "stamp"].includes(el.type)
+          ? el.type === "stamp"
+            ? "Amiri"
+            : "Tajawal"
+          : undefined);
       if (typeof family === "string" && family.trim()) seen.add(family.trim());
       if (el.children?.length) walk(el.children);
     }
@@ -315,13 +331,21 @@ export function validateManifest(raw: unknown): NsqManifest {
   const minReader = Number.isInteger(raw.minReaderVersion)
     ? (raw.minReaderVersion as number)
     : (raw.formatVersion as number);
-  if (minReader > NSQ_FORMAT_VERSION) throw new NsqError("too-new");
+  if (
+    (raw.formatVersion as number) > NSQ_FORMAT_VERSION ||
+    minReader > NSQ_FORMAT_VERSION
+  )
+    throw new NsqError("too-new");
+  if (minReader < 1 || minReader > (raw.formatVersion as number))
+    throw new NsqError("invalid", "reader version");
   const doc = raw.document;
   if (!isRecord(doc) || !isSafeEntryPath(doc.path))
     throw new NsqError("invalid", "document entry");
   const assets = Array.isArray(raw.assets) ? raw.assets : [];
   if (assets.length > NSQ_LIMITS.maxEntries)
     throw new NsqError("invalid", "too many assets");
+  const assetIds = new Set<string>(),
+    assetPaths = new Set<string>();
   const cleanAssets: NsqAssetEntry[] = assets.map((a) => {
     if (
       !isRecord(a) ||
@@ -330,6 +354,15 @@ export function validateManifest(raw: unknown): NsqManifest {
       !isSafeEntryPath(a.path)
     )
       throw new NsqError("invalid", "asset entry");
+    if (
+      a.id.length > 128 ||
+      assetIds.has(a.id) ||
+      assetPaths.has(a.path) ||
+      !a.path.startsWith("assets/")
+    )
+      throw new NsqError("invalid", "duplicate/invalid asset");
+    assetIds.add(a.id);
+    assetPaths.add(a.path);
     const mime = String(a.mime || "");
     if (!IMAGE_MIME_EXT[mime])
       throw new NsqError("invalid", `asset mime ${mime}`);
@@ -429,28 +462,39 @@ export interface DocumentValidation {
  * values that could pull remote resources or inject markup are removed. The
  * result is plain data — nothing in it is ever evaluated.
  */
-export function validatePages(rawPages: unknown): DocumentValidation {
+export function validatePages(
+  rawPages: unknown,
+  opts: { strict?: boolean } = {},
+): DocumentValidation {
   if (!Array.isArray(rawPages) || !rawPages.length)
     throw new NsqError("invalid", "document has no pages");
   if (rawPages.length > NSQ_LIMITS.maxPages)
     throw new NsqError("invalid", "too many pages");
   const warnings = new Set<string>();
   const ids = new Set<string>();
-  let counter = 0;
+  let counter = 0,
+    totalElements = 0;
   const freshId = (prefix: string) =>
     `${prefix}-nsq${Date.now().toString(36)}${(counter++).toString(36)}`;
 
   const cleanStyle = (raw: unknown): Record<string, unknown> => {
-    if (!isRecord(raw)) return {};
+    if (!isRecord(raw)) {
+      if (opts.strict && raw !== undefined)
+        throw new NsqError("invalid", "element style");
+      return {};
+    }
     const out: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(raw)) {
       if (key === "__proto__" || key === "constructor" || key === "prototype")
         continue;
       if (typeof value === "string") {
         if (STYLE_UNSAFE.test(value)) {
+          if (opts.strict) throw new NsqError("invalid", "unsafe style");
           warnings.add("أُزيلت قيم تنسيق غير آمنة من الملف.");
           continue;
         }
+        if (opts.strict && value.length > 2000)
+          throw new NsqError("too-large", "style value");
         out[key] = value.slice(0, 2000);
       } else if (typeof value === "number") {
         if (Number.isFinite(value)) out[key] = value;
@@ -467,32 +511,53 @@ export function validatePages(rawPages: unknown): DocumentValidation {
   };
 
   const cleanEl = (raw: unknown, depth: number): CanvasEl | null => {
-    if (!isRecord(raw)) return null;
+    if (++totalElements > NSQ_LIMITS.maxTotalElements)
+      throw new NsqError("too-large", "element count");
+    if (!isRecord(raw)) {
+      if (opts.strict)
+        throw new NsqError("invalid", "element must be an object");
+      return null;
+    }
     if (depth > NSQ_LIMITS.maxDepth) {
+      if (opts.strict) throw new NsqError("invalid", "group depth");
       warnings.add("تم تجاهل مجموعات متداخلة بعمق غير مدعوم.");
       return null;
     }
     const type = raw.type as ElType;
     if (!KNOWN_TYPES.includes(type)) {
+      if (opts.strict)
+        throw new NsqError("too-new", "unsupported element type");
       warnings.add("تم تجاهل عناصر من نوع لا يدعمه هذا الإصدار من نَسَق.");
       return null;
     }
     let id =
       typeof raw.id === "string" && raw.id.trim() ? raw.id.slice(0, 120) : "";
+    if ((!id || ids.has(id)) && opts.strict)
+      throw new NsqError("invalid", "duplicate/missing element id");
     if (!id || ids.has(id)) id = freshId("el");
     ids.add(id);
     const num = (v: unknown, fallback: number) => {
+      if (opts.strict && v !== undefined && (!finite(v) || Math.abs(v) > 1e6))
+        throw new NsqError("invalid", "element geometry");
+      if (v === undefined) return fallback;
       const n = Number(v);
       return Number.isFinite(n) ? n : fallback;
     };
+    if (
+      opts.strict &&
+      ((finite(raw.w) && raw.w < 0) ||
+        (finite(raw.h) && raw.h < 0) ||
+        (finite(raw.opacity) && (raw.opacity < 0 || raw.opacity > 1)))
+    )
+      throw new NsqError("invalid", "element bounds");
     const el: CanvasEl = {
       id,
       type,
       name: typeof raw.name === "string" ? raw.name.slice(0, 200) : "",
       x: num(raw.x, 0),
       y: num(raw.y, 0),
-      w: Math.max(0.1, num(raw.w, 20)),
-      h: Math.max(0.1, num(raw.h, 20)),
+      w: Math.max(opts.strict ? 0 : 0.1, num(raw.w, 20)),
+      h: Math.max(opts.strict ? 0 : 0.1, num(raw.h, 20)),
       rotation: num(raw.rotation, 0),
       opacity: Math.min(1, Math.max(0, num(raw.opacity, 1))),
       z: num(raw.z, 1),
@@ -515,8 +580,30 @@ export function validatePages(rawPages: unknown): DocumentValidation {
       el.hfRole = raw.hfRole;
     if (typeof raw.content === "string") el.content = raw.content;
     if (typeof raw.src === "string") el.src = raw.src;
+    if (type === "table") {
+      if (Number(el.style.rows) > 1000 || Number(el.style.cols) > 100)
+        throw new NsqError("too-large", "table dimensions");
+      if (el.content) {
+        let cells: unknown;
+        try {
+          cells = JSON.parse(el.content);
+        } catch {
+          if (opts.strict) throw new NsqError("invalid", "table JSON");
+        }
+        if (
+          Array.isArray(cells) &&
+          (cells.length > 1000 ||
+            cells.some((row) => Array.isArray(row) && row.length > 100))
+        )
+          throw new NsqError("too-large", "table cells");
+      }
+    }
     if (type === "group") {
+      if (opts.strict && !Array.isArray(raw.children))
+        throw new NsqError("invalid", "group children");
       const kids = Array.isArray(raw.children) ? raw.children : [];
+      if (kids.length > NSQ_LIMITS.maxElementsPerPage)
+        throw new NsqError("too-large", "group count");
       el.children = kids
         .map((k) => cleanEl(k, depth + 1))
         .filter((k): k is CanvasEl => k !== null);
@@ -528,6 +615,8 @@ export function validatePages(rawPages: unknown): DocumentValidation {
   const pages: Page[] = rawPages.map((rawPage, index) => {
     if (!isRecord(rawPage))
       throw new NsqError("invalid", `page ${index} is not an object`);
+    if (opts.strict && !Array.isArray(rawPage.elements))
+      throw new NsqError("invalid", "page elements");
     const rawEls = Array.isArray(rawPage.elements) ? rawPage.elements : [];
     if (rawEls.length > NSQ_LIMITS.maxElementsPerPage)
       throw new NsqError("invalid", `page ${index} has too many elements`);
@@ -535,6 +624,8 @@ export function validatePages(rawPages: unknown): DocumentValidation {
       typeof rawPage.id === "string" && rawPage.id.trim()
         ? rawPage.id.slice(0, 120)
         : "";
+    if ((!id || pageIds.has(id)) && opts.strict)
+      throw new NsqError("invalid", "duplicate/missing page id");
     if (!id || pageIds.has(id)) id = freshId("page");
     pageIds.add(id);
     const page: Page = {
@@ -547,12 +638,45 @@ export function validatePages(rawPages: unknown): DocumentValidation {
         .map((e) => cleanEl(e, 0))
         .filter((e): e is CanvasEl => e !== null),
     };
+    if (
+      opts.strict &&
+      typeof rawPage.bg === "string" &&
+      STYLE_UNSAFE.test(rawPage.bg)
+    )
+      throw new NsqError("invalid", "page background");
     if (typeof rawPage.bg === "string" && !STYLE_UNSAFE.test(rawPage.bg))
       page.bg = rawPage.bg.slice(0, 400);
+    for (const key of ["w", "h"])
+      if (
+        opts.strict &&
+        rawPage[key] !== undefined &&
+        (!finite(rawPage[key]) ||
+          (rawPage[key] as number) <= 0 ||
+          (rawPage[key] as number) > 10000)
+      )
+        throw new NsqError("invalid", "page dimensions");
     if (finite(rawPage.w)) page.w = rawPage.w;
     if (finite(rawPage.h)) page.h = rawPage.h;
     return page;
   });
+  if (opts.strict) {
+    const checkMasks = (elements: CanvasEl[]) => {
+      for (const el of elements) {
+        if (
+          el.clippedBy &&
+          !elements.some(
+            (mask) =>
+              mask.id === el.clippedBy &&
+              mask.id !== el.id &&
+              (mask.type === "shape" || mask.type === "svg"),
+          )
+        )
+          throw new NsqError("invalid", "clipping reference");
+        if (el.children) checkMasks(el.children);
+      }
+    };
+    pages.forEach((p) => checkMasks(p.elements));
+  }
   return { pages, warnings: [...warnings] };
 }
 
@@ -568,6 +692,9 @@ export const DOCUMENT_MIGRATIONS: Record<
   number,
   (doc: Record<string, unknown>) => Record<string, unknown>
 > = {
+  // v2 makes self-contained assets mandatory and persists project settings.
+  // v1 geometry is unchanged; missing settings default safely.
+  1: (doc) => ({ ...doc, settings: validateProjectSettings(doc.settings) }),
   0: (legacy) => ({
     schema: NSQ_DOCUMENT_SCHEMA,
     modelVersion: Number(legacy.version) || 2,
@@ -591,6 +718,9 @@ export function migrateDocument(
   raw: unknown,
   fromVersion: number,
 ): Record<string, unknown> {
+  if (!Number.isInteger(fromVersion) || fromVersion < 0)
+    throw new NsqError("invalid", "migration version");
+  if (fromVersion > NSQ_FORMAT_VERSION) throw new NsqError("too-new");
   if (!isRecord(raw))
     throw new NsqError("invalid", "document is not an object");
   let doc = raw;
@@ -616,6 +746,11 @@ export function documentToProject(
   ): T | undefined => (allowed.includes(v as T) ? (v as T) : undefined);
   return {
     version: Number(doc.modelVersion) || 2,
+    nativeFormat: NSQ_FORMAT_VERSION,
+    nativeSourceProjectId: str(meta.sourceProjectId),
+    createdAt: finite(meta.createdAt) ? meta.createdAt : undefined,
+    updatedAt: finite(meta.updatedAt) ? meta.updatedAt : undefined,
+    editorSettings: validateProjectSettings(doc.settings),
     name: str(meta.name) || "مشروع نَسَق",
     theme: oneOf(meta.theme, THEME_IDS) || "official",
     orgName: str(meta.orgName) || "",
@@ -643,4 +778,21 @@ export function likelyNsqDrag(
   return (
     items.length > 0 && items.every((i) => i.type === "" || i.type === NSQ_MIME)
   );
+}
+
+/** Only document settings travel; never import auth, licenses or device paths. */
+export function validateProjectSettings(
+  raw: unknown,
+): NonNullable<Project["editorSettings"]> {
+  if (!isRecord(raw)) return {};
+  const settings: NonNullable<Project["editorSettings"]> = {};
+  if (isRecord(raw.printGuides))
+    settings.printGuides = {
+      safe: raw.printGuides.safe === true,
+      gutter: raw.printGuides.gutter === true,
+      bleed: raw.printGuides.bleed === true,
+    };
+  for (const key of ["showGrid", "snapGrid", "snapElements"] as const)
+    if (typeof raw[key] === "boolean") settings[key] = raw[key];
+  return settings;
 }
