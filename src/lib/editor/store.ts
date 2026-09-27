@@ -129,6 +129,7 @@ export {
 
 export type LeftTab =
   | "elements"
+  | "elementTools"
   | "shapes"
   | "library"
   | "templates"
@@ -2066,6 +2067,8 @@ export const useEditor = create<EditorStore>((set, get) => {
      * Opening the builder also reveals the components panel, because that is
      * where the overlay lives. On a tablet the panel is a drawer, so the author
      * sees the picker slide in with it instead of a control appearing offscreen.
+     * Tabs that already host the overlay keep their place — jumping out of
+     * «أدوات العناصر» mid-arrangement would lose the author's context.
      */
     openTablePicker: () => {
       if (!get().entitlements.data_import) {
@@ -2074,7 +2077,12 @@ export const useEditor = create<EditorStore>((set, get) => {
         });
         return;
       }
-      set({ tablePickerOpen: true, leftTab: "elements", leftOpen: true });
+      const hosting = get().leftTab === "elementTools" || get().leftTab === "elements";
+      set({
+        tablePickerOpen: true,
+        leftTab: hosting ? get().leftTab : "elements",
+        leftOpen: true,
+      });
     },
     closeTablePicker: () => set({ tablePickerOpen: false }),
     setTransactionNo: (transactionNo) => {

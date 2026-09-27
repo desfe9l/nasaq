@@ -1489,6 +1489,120 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   }
 }
 
+/*
+ * Sortable section stack (أدوات العناصر) — real pointer-based Drag & Drop.
+ *
+ * The grip is the only drag origin (the header keeps its toggle), the ghost
+ * follows the pointer clamped inside the panel, and the placeholder marks the
+ * landing slot. FLIP transforms are applied inline by `SortableSections.tsx`
+ * and ride the transition below, so the list reshuffles smoothly instead of
+ * jumping — with sections open or closed.
+ */
+.smart-sections {
+  position: relative;
+  display: grid;
+  gap: 6px;
+}
+
+/* Layout anchor for FLIP offsets + home of the dragged slot. */
+.sortable-section-slot {
+  position: relative;
+  min-width: 0;
+}
+
+.editor-accordion-headrow {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.editor-accordion-headrow .editor-accordion-header {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+/*
+ * The reorder grip: a sibling of the header button (never nested — two
+ * buttons cannot nest), with `touch-action: none` so an iPad drag reorders
+ * instead of scrolling the panel. Coarse pointers get a 44px target (Apple
+ * HIG) — the same contract as the page-rail handle.
+ */
+.sortable-grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-width: 30px;
+  touch-action: none;
+  cursor: grab;
+  color: var(--editor-text-secondary, #6b7383);
+  background: transparent;
+  border: 0;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+
+.sortable-grip:hover {
+  color: var(--primary-accent, #1d4ed8);
+  background: var(--editor-hover, rgba(15, 23, 42, 0.05));
+}
+
+.sortable-grip:active {
+  cursor: grabbing;
+}
+
+@media (pointer: coarse) {
+  .sortable-grip {
+    width: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Landing slot: the dragged section's exact height, dashed so the drop reads. */
+.sortable-section-slot.is-placeholder {
+  border: 2px dashed
+    color-mix(in srgb, var(--primary-accent, #1d4ed8) 55%, transparent);
+  border-radius: 9px;
+  background: color-mix(
+    in srgb,
+    var(--primary-accent, #1d4ed8) 8%,
+    transparent
+  );
+}
+
+/*
+ * Ghost — the dragged section itself, cloned. Fixed to the viewport and
+ * clamped inside the panel body by the drag code, so it can never leave the
+ * interface; `pointer-events: none` keeps it from swallowing the drop.
+ */
+.sortable-ghost {
+  position: fixed;
+  z-index: var(--z-drawer);
+  pointer-events: none;
+  margin: 0;
+  opacity: 0.94;
+  overflow: hidden;
+  transform: scale(1.015);
+  background: var(--editor-surface, #fff);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
+  will-change: left, top;
+}
+
+/* A drag in flight never selects text — anywhere. */
+body.is-sorting-sections {
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: grabbing;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sortable-ghost {
+    transition: none;
+  }
+}
+
 .editor-subgroup {
   display: grid;
   gap: 0.5rem;

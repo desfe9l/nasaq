@@ -258,13 +258,13 @@ export function LeftPanel({
       {/*
        * Tab strip — SHRINKABLE, never hidden.
        *
-       * Two layers of defence, because eight tabs have to survive a panel the
+       * Two layers of defence, because nine tabs have to survive a panel the
        * author has dragged down to 232px:
        *   1. the strip is a container query context, so each tab drops its
        *      caption and becomes icon-only once the strip is too narrow for
-       *      eight labels — the tabs compress instead of overflowing;
+       *      nine labels — the tabs compress instead of overflowing;
        *   2. `overflow-x-auto` remains as the floor: should the strip ever get
-       *      narrower than eight icons, it scrolls. A tab is therefore never
+       *      narrower than nine icons, it scrolls. A tab is therefore never
        *      clipped out of reach, which is what the old `flex-1 min-w-[52px]`
        *      row did at the narrowest widths.
        */}
@@ -277,8 +277,8 @@ export function LeftPanel({
               key={t.id}
               type="button"
               onClick={() => setLeftTab(t.id)}
-              title={t.label}
-              aria-label={t.label}
+              title={t.longLabel ?? t.label}
+              aria-label={t.longLabel ?? t.label}
               role="tab"
               aria-selected={tab === t.id}
               aria-current={tab === t.id}
@@ -467,22 +467,38 @@ export function LeftPanel({
 
         {tab === "library" && (
           /*
-           * The Library tab opens on the Library itself: its toolbar, search,
-           * categories and quick actions are the first thing in the panel and
-           * stay pinned (sticky) while uploaded media and the ready-made design
-           * assets below them scroll — one scroller, one scrollbar.
+           * المكتبة = files & folders ONLY: its toolbar, search, categories and
+           * quick actions are the first thing in the panel and stay pinned
+           * (sticky) while uploaded media scrolls — one scroller, one scrollbar.
+           * The ready-made element tools (shapes, icons, dividers, indicators,
+           * tables, forms) moved to the «الأدوات» tab below.
            */
-          <AssetLibrary>
-            <div className="mt-1 border-t border-line pt-3 dark:border-white/10">
-              <SmartLibraryPanel
-                theme={theme}
-                onAddCustomAsset={onAddCustomAsset}
-                onOpenShapes={() => setLeftTab("shapes")}
-                onOpenTemplates={() => setLeftTab("templates")}
-                onPreviewTemplate={setPreviewTemplate}
-              />
-            </div>
-          </AssetLibrary>
+          <AssetLibrary />
+        )}
+
+        {tab === "elementTools" && (
+          /*
+           * أدوات العناصر — the six element categories, separated from the
+           * Library tab. Each category collapses (open/closed persisted) and
+           * reorders by drag & drop from its grip — open or closed — with a
+           * ghost, a placeholder and animated reshuffle (`SortableSections`).
+           */
+          <div>
+            <header className="mb-2.5">
+              <h2 className="text-[13px] font-extrabold">أدوات العناصر</h2>
+              <p className="mt-0.5 text-[11px] leading-5 text-muted">
+                أشكال ورموز وفواصل ومؤشرات وإنجازات وجداول ونماذج جاهزة. انقر
+                على عنوان القسم لطيّه أو فتحه، واسحب المقبض لتغيير الترتيب.
+              </p>
+            </header>
+            <SmartLibraryPanel
+              theme={theme}
+              onAddCustomAsset={onAddCustomAsset}
+              onOpenShapes={() => setLeftTab("shapes")}
+              onOpenTemplates={() => setLeftTab("templates")}
+              onPreviewTemplate={setPreviewTemplate}
+            />
+          </div>
         )}
 
         {tab === "shapes" && (
@@ -613,54 +629,6 @@ export function LeftPanel({
                 </p>
               )}
             </div>
-            {previewTemplate && (
-              <div
-                className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-black/45 p-4"
-                role="dialog"
-                aria-modal="true"
-                aria-label={`معاينة ${previewTemplate.title}`}
-                onClick={() => setPreviewTemplate(null)}
-              >
-                <div
-                  className="w-full max-w-sm rounded-[10px] border border-line bg-white p-3 shadow-2xl dark:border-white/10 dark:bg-[#303132]"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="mb-3 flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-[14px] font-extrabold">
-                        {previewTemplate.title}
-                      </h3>
-                      <p className="mt-0.5 text-[10px] uppercase tracking-wide text-green">
-                        {previewTemplate.concept || "Template"}
-                      </p>
-                      <p className="mt-1 text-[11px] leading-5 text-muted">
-                        {previewTemplate.desc}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewTemplate(null)}
-                      className="grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"
-                      title="إغلاق المعاينة"
-                      aria-label="إغلاق المعاينة"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                  <TemplatePreview variant={previewTemplate.preview} large />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addTemplatePage(previewTemplate.id);
-                      setPreviewTemplate(null);
-                    }}
-                    className="mt-3 h-9 w-full rounded-[7px] bg-navy text-[11px] font-extrabold text-white"
-                  >
-                    إضافة القالب كصفحة قابلة للتحرير
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -932,6 +900,59 @@ export function LeftPanel({
           </div>
         )}
       </div>
+      {/*
+       * Template preview dialog — global to the panel: the «نماذج جاهزة»
+       * cards in أدوات العناصر preview through the same dialog as the
+       * القوالب tab, so it must render outside any single tab's markup.
+       */}
+      {previewTemplate && (
+        <div
+          className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`معاينة ${previewTemplate.title}`}
+          onClick={() => setPreviewTemplate(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-[10px] border border-line bg-white p-3 shadow-2xl dark:border-white/10 dark:bg-[#303132]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-[14px] font-extrabold">
+                  {previewTemplate.title}
+                </h3>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-green">
+                  {previewTemplate.concept || "Template"}
+                </p>
+                <p className="mt-1 text-[11px] leading-5 text-muted">
+                  {previewTemplate.desc}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewTemplate(null)}
+                className="grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"
+                title="إغلاق المعاينة"
+                aria-label="إغلاق المعاينة"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+            <TemplatePreview variant={previewTemplate.preview} large />
+            <button
+              type="button"
+              onClick={() => {
+                addTemplatePage(previewTemplate.id);
+                setPreviewTemplate(null);
+              }}
+              className="mt-3 h-9 w-full rounded-[7px] bg-navy text-[11px] font-extrabold text-white"
+            >
+              إضافة القالب كصفحة قابلة للتحرير
+            </button>
+          </div>
+        </div>
+      )}
       {/*
        * Quick actions — the panel's bottom toolbar (Layers-panel anatomy:
        * header tabs, content rows, action bar). Each button reuses the same

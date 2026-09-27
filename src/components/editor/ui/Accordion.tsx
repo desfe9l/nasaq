@@ -22,6 +22,7 @@ export function AccordionSection({
   onToggle,
   children,
   badge,
+  dragHandle,
 }: {
   title: string;
   id: string;
@@ -30,21 +31,37 @@ export function AccordionSection({
   children: ReactNode;
   /** Small trailing hint (e.g. the element type a section applies to). */
   badge?: ReactNode;
+  /**
+   * Optional reorder grip, rendered as a sibling of the header button (never
+   * nested inside it — two buttons cannot nest). Owned by
+   * `SortableSectionStack`; without it the markup is unchanged.
+   */
+  dragHandle?: ReactNode;
 }) {
   const panelId = useId();
+  const header = (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-controls={panelId}
+      onClick={onToggle}
+      className="editor-accordion-header"
+    >
+      <span className="min-w-0 flex-1 truncate text-start">{title}</span>
+      {badge}
+      <ChevronDown className={cn("editor-accordion-chevron size-4 shrink-0", open && "is-open")} aria-hidden />
+    </button>
+  );
   return (
     <section className="editor-accordion" data-inspector-section={id} data-open={open || undefined}>
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={panelId}
-        onClick={onToggle}
-        className="editor-accordion-header"
-      >
-        <span className="min-w-0 flex-1 truncate text-start">{title}</span>
-        {badge}
-        <ChevronDown className={cn("editor-accordion-chevron size-4 shrink-0", open && "is-open")} aria-hidden />
-      </button>
+      {dragHandle ? (
+        <div className="editor-accordion-headrow">
+          {dragHandle}
+          {header}
+        </div>
+      ) : (
+        header
+      )}
       {open && (
         <div id={panelId} className="editor-accordion-body">
           {children}
@@ -70,12 +87,42 @@ export function SubGroup({ title, children }: { title: string; children: ReactNo
 
 const STORAGE_PREFIX = "nasaq.accordion.";
 
+/** Read the freshest stored map for a panel key (never throws). */
+function readAccordionMap(storageKey: string): Record<string, boolean> {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(storageKey) || "{}");
+    return raw && typeof raw === "object"
+      ? (raw as Record<string, boolean>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeAccordionMap(
+  storageKey: string,
+  map: Record<string, boolean>,
+): void {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(map));
+  } catch {
+    /* private mode: state simply stops persisting */
+  }
+}
+
 /**
  * Accordion open/closed state that survives reloads.
  *
  * Property panels are personal: someone who keeps «الخلفية والحدود» closed will
  * want it closed tomorrow too. State is namespaced per panel so the library and
  * the properties inspector never share a key.
+ *
+ * Writes always merge over the **freshest stored map** rather than the
+ * instance's possibly stale copy: two surfaces share the «library» key (the
+ * basic tools and the element-tools sections) and mount at different times, so
+ * a write from stale state would silently reopen a section the author just
+ * collapsed.
  */
 export function useAccordionState<T extends string>(
   panelKey: string,
@@ -84,24 +131,17 @@ export function useAccordionState<T extends string>(
   const storageKey = `${STORAGE_PREFIX}${panelKey}`;
   const [state, setState] = useState<Record<string, boolean>>(() => {
     const seed = { ...defaults } as Record<string, boolean>;
-    if (typeof localStorage === "undefined") return seed;
-    try {
-      const raw = JSON.parse(localStorage.getItem(storageKey) || "{}");
-      return { ...seed, ...((raw && typeof raw === "object" ? raw : {}) as Record<string, boolean>) };
-    } catch {
-      return seed;
-    }
+    return { ...seed, ...readAccordionMap(storageKey) };
   });
 
   const toggle = useCallback(
     (key: T) => {
       setState((current) => {
-        const next = { ...current, [key]: !(current[key] ?? false) };
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          /* private mode: state simply stops persisting */
-        }
+        const next = {
+          ...readAccordionMap(storageKey),
+          [key]: !(current[key] ?? false),
+        };
+        writeAccordionMap(storageKey, next);
         return next;
       });
     },
@@ -119,12 +159,8 @@ export function useAccordionState<T extends string>(
     (key: T) => {
       setState((current) => {
         if (current[key]) return current;
-        const next = { ...current, [key]: true };
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          /* private mode: state simply stops persisting */
-        }
+        const next = { ...readAccordionMap(storageKey), [key]: true };
+        writeAccordionMap(storageKey, next);
         return next;
       });
     },
