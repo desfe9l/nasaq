@@ -11,6 +11,7 @@ import { FullVersionModal } from "@/components/site/FullVersionModal";
 import { HeroShowcase } from "@/components/site/HeroShowcase";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import { useEditorEntry } from "@/lib/auth/use-editor-entry";
+import { WORKSPACE_HOME_PATH, openNewDocumentFlow, useWorkspaceEntry } from "@/lib/auth/use-workspace-entry";
 
 const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
   { icon: LayoutTemplate, title: PRODUCT_COPY.capabilities[0][0], desc: PRODUCT_COPY.capabilities[0][1] },
@@ -38,8 +39,11 @@ export function HomePage() {
    * the server's entitlements once it opens.
    */
   const { entry, openNewDocument } = useEditorEntry();
+  // A licensed account starts from its Home and configures new documents there.
+  const workspace = useWorkspaceEntry();
   const startBlank = () => {
-    if (entry.ready && entry.direct) void openNewDocument();
+    if (workspace.licensed) openNewDocumentFlow();
+    else if (entry.ready && entry.direct) void openNewDocument();
     else window.location.assign("/demo");
   };
   const { texts } = useSiteSettings();
@@ -77,8 +81,8 @@ export function HomePage() {
               </p>
 
               <div className="mt-6 flex flex-wrap items-center gap-3">
-                <a href="/editor" className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-[#006C35] px-6 text-[14px] font-bold text-white shadow-sm transition hover:bg-[#00542a]">
-                  <span>فتح المحرر</span>
+                <a href={workspace.licensed ? WORKSPACE_HOME_PATH : "/editor"} className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-[#006C35] px-6 text-[14px] font-bold text-white shadow-sm transition hover:bg-[#00542a]">
+                  <span>{workspace.licensed ? "مساحة العمل" : "فتح المحرر"}</span>
                   <ArrowLeft className="size-4" />
                 </a>
                 <a href="/purchase" className="inline-flex h-11 items-center rounded-[10px] border border-line bg-white px-5 text-[13px] font-bold text-[#0F1E33] hover:bg-[#f8faf9] dark:border-white/15 dark:bg-white/5 dark:text-white">

@@ -14,9 +14,9 @@ import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
 import { AccountAvatar } from "@/components/site/AccountAvatar";
 import { AccountBadge, useAccountTier } from "@/components/site/AccountBadge";
-import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { EditorSettingsDialog } from "./EditorSettingsDialog";
+import { NewDocumentDialog } from "@/components/site/NewDocumentDialog";
 
 /**
  * The editor's account area: who is signed in, and the door to their settings.
@@ -47,47 +47,30 @@ function MenuBadge({ user }: { user: AppUser }) {
 }
 
 /**
- * «مستند جديد» — starts a blank document without leaving the workspace.
+ * «مستند جديد» — opens the new-document configuration without leaving the
+ * workspace (the same dialog the licensed Home uses).
  *
  * Licensed accounts only (administrators included): the tier is the server's
  * (`useAccountTier` → `getLicenseStatusFn`), and the store's own entitlement
- * ceiling still applies underneath, so the item can never widen free-tier
- * access. Its own component so `useAccountTier` mounts only while the menu is
- * open for a real session, exactly like `MenuBadge`.
+ * ceiling still applies underneath (`createDocument`), so the item can never
+ * widen free-tier access. Its own component so `useAccountTier` mounts only
+ * while the menu is open for a real session, exactly like `MenuBadge`.
  */
 function NewDocumentMenuItem({
   user,
   className,
-  onDone,
+  onRequest,
 }: {
   user: AppUser;
   className: string;
-  onDone: () => void;
+  onRequest: () => void;
 }) {
   const tier = useAccountTier(user);
-  const [creating, setCreating] = useState(false);
   if (tier !== "LICENSED" && tier !== "ADMIN") return null;
-  const create = async () => {
-    setCreating(true);
-    try {
-      // The store applies the fresh project immediately — no navigation, no
-      // reload — and a refused create toasts inside the store itself.
-      const created = await useEditor.getState().createProject("blank");
-      if (created) onDone();
-    } finally {
-      setCreating(false);
-    }
-  };
   return (
-    <button
-      type="button"
-      role="menuitem"
-      disabled={creating}
-      onClick={() => void create()}
-      className={cn(className, "disabled:cursor-wait disabled:opacity-60")}
-    >
+    <button type="button" role="menuitem" onClick={onRequest} className={className}>
       <FilePlus2 className="size-4 opacity-70" aria-hidden />
-      {creating ? "جارٍ إنشاء المستند…" : "مستند جديد"}
+      مستند جديد
     </button>
   );
 }
@@ -98,6 +81,7 @@ export function EditorAccountMenu() {
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [newDocOpen, setNewDocOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
@@ -244,7 +228,10 @@ export function EditorAccountMenu() {
               <NewDocumentMenuItem
                 user={user}
                 className={menuItem}
-                onDone={() => setOpen(false)}
+                onRequest={() => {
+                  setOpen(false);
+                  setNewDocOpen(true);
+                }}
               />
               <button
                 type="button"
@@ -288,6 +275,20 @@ export function EditorAccountMenu() {
         )}
 
       {settingsOpen && <EditorSettingsDialog onClose={() => setSettingsOpen(false)} />}
+      {/*
+       * The store applies the new project in place — no navigation, no reload.
+       * Portaled to <body>: the toolbar is its own stacking context, so a
+       * dialog left inside it would sit under the side drawers on a tablet.
+       */}
+      {newDocOpen &&
+        createPortal(
+          <NewDocumentDialog
+            submitLabel="إنشاء المستند"
+            onClose={() => setNewDocOpen(false)}
+            onCreated={() => setNewDocOpen(false)}
+          />,
+          document.body,
+        )}
     </>
   );
 }

@@ -65,6 +65,7 @@ import { EditorAccountMenu } from "./EditorAccountMenu";
 import { OVERLAY_BREAKPOINT, isOverlayViewport } from "@/lib/editor/ui-state";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useLicense } from "@/lib/license/client";
+import { WORKSPACE_HOME_PATH } from "@/lib/auth/use-workspace-entry";
 import { AddLibraryDialog } from "./AddLibraryDialog";
 import { HeadingGeneratorDialog } from "./HeadingGeneratorDialog";
 import { OnboardingTour, hasSeenTour } from "./OnboardingTour";
@@ -87,7 +88,13 @@ export function EditorApp() {
   const hydrated = useEditor((s) => s.hydrated);
   const setEntitlements = useEditor((s) => s.setEntitlements);
   const { user } = useCurrentUserState();
-  const { entitlements } = useLicense(user?.id, user?.primaryEmail);
+  const { entitlements, hasLicense, isAdmin, isSuspended } = useLicense(
+    user?.id,
+    user?.primaryEmail,
+  );
+  /** A licensed account's «الرئيسية» is its NASAQ Home; everyone else's is the site. */
+  const homeHref =
+    !isSuspended && (hasLicense || isAdmin) ? WORKSPACE_HOME_PATH : "/";
   const { signedIn: nsqSignedIn } = useNsqSignedIn();
 
   const projectInput = useRef<HTMLInputElement>(null);
@@ -335,6 +342,7 @@ export function EditorApp() {
         onDropImage={ingestImage}
         onUploadSvg={uploadSvg}
         onAddCustomAsset={importCustomAsset}
+        homeHref={homeHref}
       />
     </div>
   );
@@ -347,6 +355,7 @@ function Studio({
   onDropImage,
   onUploadSvg,
   onAddCustomAsset,
+  homeHref,
 }: {
   onOpenFile: () => void;
   onUpload: (kind: "image" | "logo" | "font" | "library") => void;
@@ -354,6 +363,8 @@ function Studio({
   onDropImage: (file: File, at?: { x: number; y: number }) => Promise<void>;
   onUploadSvg: () => void;
   onAddCustomAsset: (kind: "icon" | "divider") => void;
+  /** Where «الرئيسية» leads: the licensed Home, or the site for everyone else. */
+  homeHref: string;
 }) {
   const name = useEditor((s) => s.name);
   const setName = useEditor((s) => s.setName);
@@ -707,6 +718,23 @@ function Studio({
     }, 20000);
     return () => clearInterval(id);
   }, []);
+
+  /**
+   * Leaving the editor through its own links (Home, مشاريعي).
+   *
+   * The debounced auto-save and the page-1 thumbnail capture are async; a plain
+   * anchor tears the page down before they finish, so the last edits could be
+   * lost. Finish the pending save first, then navigate. A modified click (new
+   * tab/window) is left to the browser — this tab keeps editing.
+   */
+  const leaveEditor = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    const state = useEditor.getState();
+    if (state.saveState !== "dirty" && state.saveState !== "saving") return;
+    event.preventDefault();
+    const href = event.currentTarget.href;
+    void state.saveNow().finally(() => window.location.assign(href));
+  };
 
   // Flush pending work when the tab is hidden or closed mid-edit.
   useEffect(() => {
@@ -1093,9 +1121,11 @@ function Studio({
       >
         <div className="flex shrink-0 items-center gap-2">
           <a
-            href="/"
+            href={homeHref}
+            onClick={leaveEditor}
             className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
-            title="العودة إلى الصفحة الرئيسية"
+            title="العودة إلى الرئيسية"
+            aria-label="العودة إلى الرئيسية"
           >
             <Home className="size-4" />
           </a>
@@ -1130,6 +1160,7 @@ function Studio({
            */}
           <a
             href="/projects"
+            onClick={leaveEditor}
             className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
             title="الانتقال إلى مشاريعي"
           >

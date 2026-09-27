@@ -20,6 +20,7 @@ import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CustomDesignRouteImport } from './routes/custom-design'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as EditorRouteImport } from './routes/editor'
+import { Route as HomeRouteImport } from './routes/home'
 import { Route as LicenseRouteImport } from './routes/license'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OpenRouteImport } from './routes/open'
@@ -93,6 +94,11 @@ const DemoRoute = DemoRouteImport.update({
 const EditorRoute = EditorRouteImport.update({
   id: '/editor',
   path: '/editor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LicenseRoute = LicenseRouteImport.update({
@@ -204,6 +210,7 @@ export interface FileRoutesByFullPath {
   '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
+  '/home': typeof HomeRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/open': typeof OpenRoute
@@ -236,6 +243,7 @@ export interface FileRoutesByTo {
   '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
+  '/home': typeof HomeRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/open': typeof OpenRoute
@@ -269,6 +277,7 @@ export interface FileRoutesById {
   '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
+  '/home': typeof HomeRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/open': typeof OpenRoute
@@ -303,6 +312,7 @@ export interface FileRouteTypes {
     | '/custom-design'
     | '/demo'
     | '/editor'
+    | '/home'
     | '/license'
     | '/login'
     | '/open'
@@ -335,6 +345,7 @@ export interface FileRouteTypes {
     | '/custom-design'
     | '/demo'
     | '/editor'
+    | '/home'
     | '/license'
     | '/login'
     | '/open'
@@ -367,6 +378,7 @@ export interface FileRouteTypes {
     | '/custom-design'
     | '/demo'
     | '/editor'
+    | '/home'
     | '/license'
     | '/login'
     | '/open'
@@ -400,6 +412,7 @@ export interface RootRouteChildren {
   CustomDesignRoute: typeof CustomDesignRoute
   DemoRoute: typeof DemoRoute
   EditorRoute: typeof EditorRoute
+  HomeRoute: typeof HomeRoute
   LicenseRoute: typeof LicenseRoute
   LoginRoute: typeof LoginRoute
   OpenRoute: typeof OpenRoute
@@ -498,6 +511,13 @@ declare module '@tanstack/react-router' {
       path: '/editor'
       fullPath: '/editor'
       preLoaderRoute: typeof EditorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/license': {
@@ -648,6 +668,7 @@ const rootRouteChildren: RootRouteChildren = {
   CustomDesignRoute: CustomDesignRoute,
   DemoRoute: DemoRoute,
   EditorRoute: EditorRoute,
+  HomeRoute: HomeRoute,
   LicenseRoute: LicenseRoute,
   LoginRoute: LoginRoute,
   OpenRoute: OpenRoute,

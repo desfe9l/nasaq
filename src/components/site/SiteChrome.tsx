@@ -17,6 +17,11 @@ import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
 import { useEditorEntry } from "@/lib/auth/use-editor-entry";
+import {
+  WORKSPACE_HOME_PATH,
+  openNewDocumentFlow,
+  useWorkspaceEntry,
+} from "@/lib/auth/use-workspace-entry";
 import { AccountAvatar } from "./AccountAvatar";
 import { AccountBadge, useAccountTier } from "./AccountBadge";
 
@@ -32,19 +37,25 @@ import { AccountBadge, useAccountTier } from "./AccountBadge";
  */
 function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile" }) {
   const { entry } = useEditorEntry();
+  const workspace = useWorkspaceEntry();
   // Nothing until the session resolves, exactly like `HeaderAccount`: a
   // signed-in author must never see the demo wording flash first.
   if (!entry.ready) return null;
+  // A licensed account starts from its Home (`/home`), so the door waits for
+  // the server's licence answer instead of flashing «افتح المحرر» first.
+  if (entry.direct && !workspace.ready) return null;
+  const href = workspace.licensed ? WORKSPACE_HOME_PATH : entry.href;
+  const label = workspace.licensed ? "مساحة العمل" : entry.label;
   return (
     <a
-      href={entry.href}
+      href={href}
       className={cn(
         variant === "header"
           ? "hidden h-9 items-center whitespace-nowrap rounded-[8px] border border-navy px-3 text-[12px] font-extrabold text-navy lg:inline-flex dark:text-white"
           : "block rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted lg:hidden",
       )}
     >
-      {entry.label}
+      {label}
     </a>
   );
 }
@@ -54,8 +65,8 @@ function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile"
  *
  * Rendered only while the account holds an ACTIVE licence (administrators
  * included): the licence state is the server's (`useAccountTier` →
- * `getLicenseStatusFn`), never the browser's, and the click goes through the
- * shared `openNewDocument` resolver — blank project first, then `/editor`.
+ * `getLicenseStatusFn`), never the browser's, and the click opens the
+ * «إنشاء مستند جديد» configuration on the licensed Home (`openNewDocumentFlow`).
  * Registered accounts without a licence keep «افتح المحرر» and the free-tier
  * restrictions; this shortcut simply does not appear for them.
  */
@@ -74,7 +85,7 @@ function NewDocumentForUser({
   variant: "header" | "mobile";
 }) {
   const tier = useAccountTier(user);
-  const { entry, openNewDocument } = useEditorEntry();
+  const { entry } = useEditorEntry();
   // Nothing until the session AND the licence state resolve — exactly like
   // `EditorEntryLink`, a licensed author must not see the button flash late.
   if (!entry.ready || !entry.direct) return null;
@@ -82,7 +93,8 @@ function NewDocumentForUser({
   return (
     <button
       type="button"
-      onClick={() => void openNewDocument()}
+      // Always through the configuration step on Home — never a silent blank.
+      onClick={() => openNewDocumentFlow()}
       title="مستند جديد"
       className={cn(
         variant === "header"

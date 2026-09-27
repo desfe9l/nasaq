@@ -19,7 +19,7 @@ const PILL_CHOICES = CATALOG_PILLS.filter((p) => p.id !== "all");
 
 /* ── shared chrome ───────────────────────────────────────────────────────── */
 
-function Modal({
+export function Modal({
   label,
   onClose,
   children,
@@ -65,7 +65,7 @@ function Modal({
   );
 }
 
-function DialogHeader({
+export function DialogHeader({
   title,
   subtitle,
   onClose,
@@ -92,9 +92,9 @@ function DialogHeader({
   );
 }
 
-const PRIMARY_BTN =
+export const PRIMARY_BTN =
   "inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-navy-2 disabled:opacity-50";
-const GHOST_BTN =
+export const GHOST_BTN =
   "inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line px-4 text-[13px] font-bold text-ink transition hover:bg-line-2 dark:border-white/10 dark:text-white dark:hover:bg-white/5";
 
 /* ── quick view ──────────────────────────────────────────────────────────── */
@@ -113,10 +113,11 @@ export function QuickViewDialog({
   themeId: ThemeId;
   onClose: () => void;
   onUse: () => void;
-  onEdit: () => void;
-  onDuplicate: () => void;
-  onEditMeta: () => void;
-  onDelete: () => void;
+  /** Management actions are optional — the licensed Home only starts documents. */
+  onEdit?: () => void;
+  onDuplicate?: () => void;
+  onEditMeta?: () => void;
+  onDelete?: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const [full, setFull] = useState(false);
@@ -236,13 +237,17 @@ export function QuickViewDialog({
             <button type="button" onClick={onUse} className={PRIMARY_BTN}>
               <Plus className="size-4" /> استخدام القالب
             </button>
-            <button type="button" onClick={onEdit} className={GHOST_BTN}>
-              <Pencil className="size-4" /> تعديل القالب
-            </button>
-            <button type="button" onClick={onDuplicate} className={GHOST_BTN}>
-              <FileText className="size-4" /> تكرار
-            </button>
-            {entry.kind === "custom" && (
+            {onEdit && (
+              <button type="button" onClick={onEdit} className={GHOST_BTN}>
+                <Pencil className="size-4" /> تعديل القالب
+              </button>
+            )}
+            {onDuplicate && (
+              <button type="button" onClick={onDuplicate} className={GHOST_BTN}>
+                <FileText className="size-4" /> تكرار
+              </button>
+            )}
+            {entry.kind === "custom" && onEditMeta && onDelete && (
               <>
                 <button type="button" onClick={onEditMeta} className={GHOST_BTN}>
                   <FolderOpen className="size-4" /> تعديل البيانات
