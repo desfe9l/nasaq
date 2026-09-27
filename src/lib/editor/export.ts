@@ -16,7 +16,7 @@ import { safeImageSrc } from "./images";
 import { applySvgColors, safeSvgSrc, sanitizeSvgContent } from "./svg";
 
 export type ExportFormat =
-  "pdf" | "pptx" | "docx" | "png" | "jpg" | "html" | "json";
+  "pdf" | "pptx" | "docx" | "png" | "jpg" | "html" | "json" | "nsq";
 
 /** Formats that produce editable Office documents rather than flattened pages. */
 const OFFICE_FORMATS = new Set<ExportFormat>(["pptx", "docx"]);
@@ -761,6 +761,11 @@ export async function runExport(
 ) {
   const name = safeFileName(project.name);
   try {
+    if (format === "nsq") {
+      const { downloadCurrentNsq } = await import("@/lib/nsq/editor-io");
+      await downloadCurrentNsq();
+      return;
+    }
     if (format === "json") {
       exportJson({ ...project, pages: project.pages, updatedAt: Date.now() });
       toast.success("تم تنزيل ملف المشروع");

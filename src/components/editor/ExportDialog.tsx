@@ -6,6 +6,7 @@ import {
   Presentation,
   FileCode2,
   FileJson,
+  FileArchive,
   Eye,
   X,
   TriangleAlert,
@@ -25,6 +26,7 @@ import {
 import { GUTTER_MARGIN_MM, type PrintGuideSettings } from "@/lib/editor/print-guides";
 import { domImageSize } from "@/lib/editor/images";
 import { useEditor } from "@/lib/editor/store";
+import { downloadCurrentNsq } from "@/lib/nsq/editor-io";
 import { cn } from "@/lib/utils";
 import {
   canUseDemoExport,
@@ -49,7 +51,8 @@ const FORMATS: { id: ExportFormat; title: string; desc: string; icon: typeof Fil
   { id: "pptx", title: "PowerPoint", desc: "شرائح قابلة للتعديل", icon: Presentation },
   { id: "docx", title: "Word", desc: "نصوص وجداول قابلة للتعديل", icon: FileText },
   { id: "html", title: "HTML مستقل", desc: "ملف واحد قابل للطباعة", icon: FileCode2 },
-  { id: "json", title: "ملف المشروع", desc: "نسخة احتياطية قابلة للاستيراد", icon: FileJson },
+  { id: "nsq", title: "ملف نَسَق (.nsq)", desc: "مشروع قابل للتحرير على أي جهاز", icon: FileArchive },
+  { id: "json", title: "JSON احتياطي", desc: "نسخة احتياطية بالصيغة القديمة", icon: FileJson },
 ];
 
 const FIX_LABEL: Record<NonNullable<PreflightIssue["fix"]>, string> = {
@@ -153,6 +156,20 @@ export function ExportDialog() {
     }
     if (!formatAllowed) {
       setUpgradeOpen(true);
+      return;
+    }
+    if (format === "nsq") {
+      // The native project file packages the WHOLE editable project (every
+      // page, asset and font) — print preflight and page range don't apply.
+      setBusy(true);
+      setError(null);
+      setProgress("تجهيز ملف نَسَق…");
+      try {
+        if (await downloadCurrentNsq()) toggle("exportOpen");
+      } finally {
+        setBusy(false);
+        setProgress("");
+      }
       return;
     }
     if (report.counts.error > 0 && !riskAccepted) {
@@ -362,17 +379,26 @@ export function ExportDialog() {
             </div>
           )}
 
-          <label className="mt-3 grid gap-1 text-[11px] font-extrabold text-muted">
-            النطاق
-            <select
-              value={scope}
-              onChange={(e) => setScope(e.target.value as "all" | "current")}
-              className="h-9 rounded-[8px] border border-line bg-white px-2 text-[13px] font-semibold dark:border-white/10 dark:bg-white/5 dark:text-white"
-            >
-              <option value="all">كل الصفحات ({pages.length})</option>
-              <option value="current">الصفحة الحالية فقط</option>
-            </select>
-          </label>
+          {format !== "nsq" && (
+            <label className="mt-3 grid gap-1 text-[11px] font-extrabold text-muted">
+              النطاق
+              <select
+                value={scope}
+                onChange={(e) => setScope(e.target.value as "all" | "current")}
+                className="h-9 rounded-[8px] border border-line bg-white px-2 text-[13px] font-semibold dark:border-white/10 dark:bg-white/5 dark:text-white"
+              >
+                <option value="all">كل الصفحات ({pages.length})</option>
+                <option value="current">الصفحة الحالية فقط</option>
+              </select>
+            </label>
+          )}
+
+          {format === "nsq" && (
+            <p className="mt-3 rounded-[8px] border border-line bg-line-2/60 p-3 text-[11px] leading-5 text-muted dark:border-white/10 dark:bg-white/5">
+              ملف نَسَق يضم المشروع كاملًا — كل الصفحات والنصوص والصور والرسوم والخطوط المرفوعة والطبقات والمجموعات —
+              في ملف واحد مضغوط يُفتح قابلًا للتعديل على أي جهاز، بما في ذلك معاينة للصفحة الأولى.
+            </p>
+          )}
 
           {format === "json" && (
             <p className="mt-3 rounded-[8px] border border-line bg-line-2/60 p-3 text-[11px] leading-5 text-muted dark:border-white/10 dark:bg-white/5">

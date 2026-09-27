@@ -24,7 +24,6 @@ import {
   Eye,
   EyeOff,
   GalleryHorizontalEnd,
-  FolderOpen,
   Grid3x3,
   Home,
   Library,
@@ -68,6 +67,12 @@ import { useLicense } from "@/lib/license/client";
 import { AddLibraryDialog } from "./AddLibraryDialog";
 import { HeadingGeneratorDialog } from "./HeadingGeneratorDialog";
 import { OnboardingTour, hasSeenTour } from "./OnboardingTour";
+import { NsqIntake } from "./NsqIntake";
+import { useNsqSignedIn } from "@/lib/nsq/use-nsq-session";
+import { ProjectFileMenu, NSQ_SAVE_AS_EVENT } from "./ProjectFileMenu";
+import { NSQ_ACCEPT } from "@/lib/nsq/format";
+import { receiveProjectFile } from "@/lib/nsq/intake";
+import { rememberUploadedFont } from "@/lib/nsq/fonts";
 
 /**
  * The studio shell.
@@ -82,6 +87,7 @@ export function EditorApp() {
   const setEntitlements = useEditor((s) => s.setEntitlements);
   const { user } = useCurrentUserState();
   const { entitlements } = useLicense(user?.id, user?.primaryEmail);
+  const { signedIn: nsqSignedIn } = useNsqSignedIn();
 
   const projectInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
@@ -202,29 +208,24 @@ export function EditorApp() {
     <div className="h-full min-h-0">
       <Toaster position="top-center" richColors dir="rtl" />
 
+      {/*
+       * Project files: native `.nsq` packages plus legacy JSON backups. Both go
+       * through the validated `.nsq` intake — nothing is imported unchecked.
+       */}
       <input
         ref={projectInput}
         type="file"
-        accept="application/json,.json"
+        accept={NSQ_ACCEPT}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            try {
-              void useEditor
-                .getState()
-                .importProject(JSON.parse(String(reader.result)));
-            } catch {
-              toast.error("تعذر قراءة الملف — تأكد أنه ملف مشروع بصيغة JSON");
-            }
-          };
-          reader.onerror = () => toast.error("تعذر قراءة الملف");
-          reader.readAsText(file);
           e.target.value = "";
+          if (!file) return;
+          void receiveProjectFile(file, nsqSignedIn);
         }}
       />
+
+      <NsqIntake />
 
       <input
         ref={imageInput}
@@ -312,6 +313,8 @@ export function EditorApp() {
               .load()
               .then((loaded) => {
                 document.fonts.add(loaded);
+                // Kept so a `.nsq` save can embed the font file it uses.
+                rememberUploadedFont(fontName, String(reader.result));
                 // Registering with the store is what makes the font selectable;
                 // adding it to `document.fonts` alone leaves it invisible to the UI.
                 useEditor.getState().registerFont(fontName);
@@ -748,7 +751,14 @@ function Studio({
       }
       if (meta && key === "s") {
         e.preventDefault();
-        void saveNow();
+        // ⇧⌘S — «حفظ باسم» a native `.nsq` file; ⌘S keeps saving to the library.
+        if (e.shiftKey) window.dispatchEvent(new CustomEvent(NSQ_SAVE_AS_EVENT));
+        else void saveNow();
+        return;
+      }
+      if (meta && key === "o" && !e.shiftKey) {
+        e.preventDefault();
+        onOpenFile();
         return;
       }
       if (meta && key === "e") {
@@ -932,6 +942,7 @@ function Studio({
     undo,
     redo,
     saveNow,
+    onOpenFile,
     toggle,
     duplicateSelected,
     deleteSelected,
@@ -1431,9 +1442,7 @@ function Studio({
           >
             <Focus className="size-4" />
           </IconButton>
-          <IconButton onClick={onOpenFile} title="استيراد مشروع من ملف JSON">
-            <FolderOpen className="size-4" />
-          </IconButton>
+          <ProjectFileMenu onOpenFile={onOpenFile} />
           <button
             type="button"
             onClick={() => toggle("exportOpen")}
