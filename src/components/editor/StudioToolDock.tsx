@@ -1,24 +1,28 @@
 import { useCallback, useEffect, useRef, useState, type ComponentType } from "react";
 import {
+  ChevronDown,
   ChevronsLeft,
   ChevronsRight,
   FolderOpen,
   ImagePlus,
   Layers,
+  Minus,
   MousePointer2,
   Palette,
+  SeparatorHorizontal,
   Shapes,
   SlidersHorizontal,
   Square,
   SquareDashedMousePointer,
   Type,
+  Waypoints,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEditor, type LeftTab, type RightTab } from "@/lib/editor/store";
 
 type DrawTool = "text" | "rect" | null;
-type FlyoutName = "text" | "shapes" | "colors";
+type FlyoutName = "text" | "shapes" | "colors" | "connectors";
 
 const DEFAULT_COLORS = { foreground: "#2563eb", background: "#f4f5f6" } as const;
 /** Long-press delay for tool submenus (touch, pen, and a held mouse button). */
@@ -57,10 +61,24 @@ function ResetGlyph() {
 }
 
 /**
- * Photoshop-inspired main toolbar. Every tool dispatches the exact same event
- * (`nasaq:tool`) or store action the header, the keyboard map (V / T / R) and
- * the command palette already use — the dock is another way to reach them,
- * never a second implementation.
+ * The unified toolbox («Click & Draw» rail).
+ *
+ * ONE slim, expandable rail merges what used to be scattered across bars:
+ *
+ *   Primary drawer (top)   — Select (arrow), Text (T) and Shapes (square),
+ *     the direct-creation modes: click the tool, then drag the shape right
+ *     out on the canvas. Each carries an explicit chevron that opens its
+ *     flyout (long-press/right-click still work).
+ *   Secondary drawer       — grouped by function, never duplicated: media
+ *     upload (+image, or drop a file onto the canvas), project files (.nsq),
+ *     then the panel gateways — layers stack, properties/settings, colour
+ *     palette and connectors — separated by dividers.
+ *   Width toggle («/»)     — collapses/expands the rail, touch-friendly.
+ *
+ * Every tool dispatches the exact same event (`nasaq:tool`) or store action
+ * the header, the keyboard map (V / T / R) and the command palette already
+ * use — the dock is another way to reach them, never a second
+ * implementation.
  *
  * Desktop: its own grid track between the panels and the canvas.
  * Tablet (`floating`): a floating rail inside the canvas area only, so it can
@@ -70,11 +88,14 @@ export function StudioToolDock({
   onOpenLeft,
   onOpenRight,
   onUploadImage,
+  onOpenFiles,
   floating = false,
 }: {
   onOpenLeft: (tab: LeftTab) => void;
   onOpenRight: (tab: RightTab) => void;
   onUploadImage: () => void;
+  /** «ملفات المشروع» — opens a `.nsq` straight into the workspace. */
+  onOpenFiles: () => void;
   floating?: boolean;
 }) {
   const [wide, setWide] = useState(() => {
@@ -247,7 +268,7 @@ export function StudioToolDock({
     shortcut: string,
     action: () => void,
     active = false,
-    submenu?: "text" | "shapes",
+    submenu?: FlyoutName,
   ) => (
     <button
       key={name}
@@ -279,6 +300,41 @@ export function StudioToolDock({
       <Icon className="tool-dock-icon" strokeWidth={1.6} aria-hidden="true" />
       {submenu && <FlyoutMark />}
     </button>
+  );
+
+  /**
+   * Primary creation tool: a two-part control.
+   *
+   * The main hit area arms «Click & Draw» instantly (draw a text box / a
+   * square right on the canvas); the explicit chevron opens the mode flyout
+   * on a plain tap, so the submenu is discoverable instead of hidden behind
+   * a long-press alone.
+   */
+  const splitTool = (
+    name: string,
+    Icon: LucideIcon,
+    label: string,
+    shortcut: string,
+    action: () => void,
+    active: boolean,
+    submenu: FlyoutName,
+  ) => (
+    <div key={name} className="tool-dock-split">
+      {toolButton(name, Icon, label, shortcut, action, active, submenu)}
+      <button
+        type="button"
+        className="tool-dock-chevron"
+        aria-label={`${label} — فتح القائمة الفرعية`}
+        aria-haspopup="menu"
+        aria-expanded={flyout?.name === submenu}
+        onClick={(event) => {
+          const anchor = event.currentTarget.closest<HTMLElement>(".tool-dock-split");
+          openFlyout(submenu, anchor ?? event.currentTarget);
+        }}
+      >
+        <ChevronDown className="size-[9px]" strokeWidth={2.4} aria-hidden />
+      </button>
+    </div>
   );
 
   const menuItem = (Icon: ComponentType<{ className?: string; strokeWidth?: number }>, label: string, onSelect: () => void, hint?: string) => (
@@ -321,15 +377,19 @@ export function StudioToolDock({
         {wide ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
       </button>
       <div className="tool-dock-tools" onScroll={() => { setTip(null); setFlyout(null); }}>
+        {/* Primary drawer — direct creation modes («Click & Draw»). */}
         {toolButton("select", MousePointer2, "تحديد وتحريك", "V", () => arm(null), activeTool === null)}
-        {toolButton("text", Type, "نص بالرسم", "T", () => { onOpenLeft("elements"); arm("text"); }, activeTool === "text", "text")}
-        {toolButton("shape", Square, "مستطيل / أشكال", "R", () => { onOpenLeft("shapes"); arm("rect"); }, activeTool === "rect", "shapes")}
+        {splitTool("text", Type, "نص بالرسم", "T", () => { onOpenLeft("elements"); arm("text"); }, activeTool === "text", "text")}
+        {splitTool("shape", Square, "رسم مربع / أشكال", "R", () => { onOpenLeft("shapes"); arm("rect"); }, activeTool === "rect", "shapes")}
         <span className="tool-dock-sep" aria-hidden="true" />
-        {toolButton("image", ImagePlus, "إضافة صورة", "", onUploadImage)}
-        {toolButton("library", FolderOpen, "المكتبة", "", () => onOpenLeft("library"))}
+        {/* Secondary drawer — media, project files, then panel gateways. */}
+        {toolButton("image", ImagePlus, "الوسائط — صورة (إفلات حر على اللوحة)", "", onUploadImage)}
+        {toolButton("files", FolderOpen, "ملفات المشروع — فتح ملف .nsq", "", onOpenFiles)}
+        <span className="tool-dock-sep" aria-hidden="true" />
         {toolButton("layers", Layers, "الطبقات", "", () => onOpenRight("layers"))}
-        {toolButton("properties", SlidersHorizontal, "الخصائص", "", () => onOpenRight("properties"))}
-        {toolButton("colors", Palette, "ألوان التعبئة والإطار", "", () => openPicker(foregroundInput.current))}
+        {toolButton("properties", SlidersHorizontal, "الخصائص والإعدادات", "", () => onOpenRight("properties"))}
+        {toolButton("colors", Palette, "لوحة الألوان — تعبئة وإطار", "", () => openPicker(foregroundInput.current))}
+        {splitTool("connectors", Waypoints, "الموصلات والخطوط", "", () => onOpenLeft("shapes"), false, "connectors")}
       </div>
 
       {/*
@@ -412,7 +472,7 @@ export function StudioToolDock({
           className={cn("tool-dock-flyout", flyout.name === "colors" && "is-bottom")}
           style={flyout.name === "colors" ? undefined : { top: flyout.top }}
           role="menu"
-          aria-label={flyout.name === "text" ? "أدوات النص" : flyout.name === "shapes" ? "أدوات الأشكال" : "الألوان"}
+          aria-label={flyout.name === "text" ? "أدوات النص" : flyout.name === "shapes" ? "أدوات الأشكال" : flyout.name === "connectors" ? "الموصلات والخطوط" : "الألوان"}
         >
           {flyout.name === "text" && (
             <>
@@ -422,8 +482,15 @@ export function StudioToolDock({
           )}
           {flyout.name === "shapes" && (
             <>
-              {menuItem(Square, "مستطيل بالرسم", () => { onOpenLeft("shapes"); arm("rect"); }, "R")}
+              {menuItem(Square, "رسم مربع — انقر واسحب على اللوحة", () => { onOpenLeft("shapes"); arm("rect"); }, "R")}
               {menuItem(Shapes, "مكتبة الأشكال", () => onOpenLeft("shapes"))}
+            </>
+          )}
+          {flyout.name === "connectors" && (
+            <>
+              {menuItem(Minus, "خط مستقيم", () => useEditor.getState().addElement("line"))}
+              {menuItem(SeparatorHorizontal, "فاصل", () => useEditor.getState().addElement("divider"))}
+              {menuItem(Waypoints, "كل الموصلات والخطوط", () => onOpenLeft("shapes"))}
             </>
           )}
           {flyout.name === "colors" && (

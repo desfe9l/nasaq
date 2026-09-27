@@ -200,16 +200,16 @@
 
 /* Photoshop-inspired chrome. These tokens stop at editor chrome boundaries. */
 .editor-ui {
-  --editor-bg: #252627;
-  --editor-panel: #303132;
-  --editor-toolbar: #2b2c2d;
-  --editor-surface: #38393a;
-  --editor-border: #48494a;
-  --editor-text: #d7d8d9;
-  --editor-text-secondary: #9b9d9f;
-  --editor-hover: #414243;
-  --editor-active: #4b4c4d;
-  --editor-disabled: #252627;
+  --editor-bg: #181d21;
+  --editor-panel: #1e252b;
+  --editor-toolbar: #1a2229;
+  --editor-surface: #242d34;
+  --editor-border: #33404b;
+  --editor-text: #e9eef3;
+  --editor-text-secondary: #9fb0bd;
+  --editor-hover: #2a353e;
+  --editor-active: #39505f;
+  --editor-disabled: #1b232a;
   background: var(--editor-bg);
   color: var(--editor-text);
 }
@@ -751,21 +751,20 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   /* High-contrast "this is interactive" accent for library/palette items. */
   --primary-accent: #1d4ed8;
   --library-active-bg: rgba(29, 78, 216, 0.1);
-  /* Figma-style selection: one crisp NASAQ-emerald hairline, no halo/glow. */
-  --sel-color: #10b981;
+  /* Figma-style selection: one crisp NASAQ-blue hairline, no halo/glow. */
+  --sel-color: #2f6fb0;
   --hover-outline: rgba(29, 78, 216, 0.55);
 }
 /*
- * Dark mode used a muted gold that read as hairline gray against the navy
- * chrome — "I cannot see what is selected". Selection is now a vibrant primary
- * blue with a translucent glow overlay, which is unmistakable on the dark
+ * The studio-dark selection is the interface's own blue — a brighter step of
+ * the #3b6e9c accent so the frame stays unmistakable on the dark charcoal
  * stage, on the still-white page, and on top of any artwork.
  */
 .editor-ui.editor-dark {
-  --primary-accent: #60a5fa;
-  --library-active-bg: rgba(96, 165, 250, 0.18);
-  --sel-color: #10b981;
-  --hover-outline: rgba(59, 130, 246, 0.6);
+  --primary-accent: #58a2d8;
+  --library-active-bg: rgba(88, 162, 216, 0.16);
+  --sel-color: #58a2d8;
+  --hover-outline: rgba(88, 162, 216, 0.6);
 }
 /* z-index comes from SELECTION_LAYER_Z in CanvasStage — the one source. */
 .selection-layer {
@@ -1821,8 +1820,8 @@ body.is-resizing-rail {
 }
 
 .floating-toolbar-btn[aria-pressed="true"] {
-  background: #3b82f6;
-  color: #fff;
+  background: var(--editor-accent, #3b82f6);
+  color: var(--editor-accent-text, #fff);
 }
 
 .floating-toolbar-btn:disabled {
@@ -2437,23 +2436,29 @@ summary,
  * Library workspace — desktop and tablet.
  * ===================================================================== */
 
-/* Refined muted dark palette: soft neutrals, comfortable (not glaring)
-   contrast — body text ≈ 9.5:1, secondary text ≈ 5.6:1 on the panels. */
+/*
+ * Studio dark — the redesign's single chrome palette.
+ *
+ * Deep slate charcoal stages (#181d21 stage / #1e252b panels) with one clean
+ * blue (#3b6e9c) reserved for action and active states, and crisp
+ * white/silver for icons and text. Contrast: body text ≈ 11:1, secondary
+ * text ≈ 6.2:1 on the panels — comfortable at tablet distances.
+ */
 .editor-ui {
-  --editor-bg: #1e252b;
-  --editor-panel: #252d34;
-  --editor-toolbar: #222a31;
-  --editor-surface: #2b343c;
-  --editor-border: #39434c;
-  --editor-text: #cfd6db;
-  --editor-text-secondary: #9aa5ae;
-  --editor-hover: #313b44;
-  --editor-active: #3a4753;
-  --editor-disabled: #20272d;
-  --editor-accent: #3b6790;
-  --editor-accent-hover: #44729c;
-  --editor-accent-text: #f1f5f8;
-  --editor-accent-soft: rgba(90, 145, 196, 0.16);
+  --editor-bg: #181d21;
+  --editor-panel: #1e252b;
+  --editor-toolbar: #1a2229;
+  --editor-surface: #242d34;
+  --editor-border: #33404b;
+  --editor-text: #e9eef3;
+  --editor-text-secondary: #9fb0bd;
+  --editor-hover: #2a353e;
+  --editor-active: #39505f;
+  --editor-disabled: #1b232a;
+  --editor-accent: #3b6e9c;
+  --editor-accent-hover: #4a86b4;
+  --editor-accent-text: #ffffff;
+  --editor-accent-soft: rgba(59, 110, 156, 0.2);
 }
 
 .editor-ui.editor-light {
@@ -3091,4 +3096,351 @@ summary,
   .asset-card { transition: none; }
   .asset-library-categories,
   .editor-ui .editor-panel-body { scroll-behavior: auto; }
+}
+
+/* =====================================================================
+ * Studio redesign — unified chrome (v3)
+ *
+ * One dark slate workspace (#181d21 / #1e252b) with a single blue accent
+ * (#3b6e9c). The header is three aligned zones, the dock is a slim
+ * draw-and-drop rail, and every selected element carries an explicit
+ * scale / hide / lock contextual overlay.
+ * ===================================================================== */
+
+/* ---------- Header: three zones, one line ---------- */
+
+.editor-header-zone {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+/* The centre capsule keeps the document name and its view controls in one
+ * perfectly centered unit — no drifting alignment at any width. */
+.editor-header-center {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+}
+
+.editor-doc-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid var(--editor-border);
+  border-radius: 11px;
+  background: var(--editor-surface);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.editor-ui .editor-doc-name {
+  width: 11ch;
+  min-width: 6ch;
+  max-width: 22ch;
+  height: 28px;
+  flex: 0 1 auto;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--editor-text);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  outline: none;
+  transition: background-color 120ms ease;
+}
+.editor-ui .editor-doc-name:hover,
+.editor-ui .editor-doc-name:focus {
+  background: var(--editor-hover);
+}
+.editor-ui .editor-doc-name:focus {
+  box-shadow: 0 0 0 1.5px var(--editor-accent);
+}
+
+/* One 32px chrome control for everything inside the capsule. */
+.editor-capsule-btn {
+  display: grid;
+  width: 30px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--editor-text-secondary);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.editor-capsule-btn:hover:not(:disabled) {
+  background: var(--editor-hover) !important;
+  color: var(--editor-text);
+}
+.editor-capsule-btn.is-active {
+  background: var(--editor-accent) !important;
+  color: var(--editor-accent-text) !important;
+}
+.editor-capsule-btn:disabled { opacity: 0.4; cursor: default; }
+
+.editor-capsule-sep,
+.editor-header-sep {
+  width: 1px;
+  flex: 0 0 auto;
+  background: var(--editor-border);
+}
+.editor-capsule-sep { height: 18px; margin: 0 2px; }
+.editor-header-sep { height: 22px; margin: 0 5px; }
+
+/* Zoom cluster: one bordered group so scaling controls never scatter. */
+.editor-zoom-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--editor-border);
+  border-radius: 10px;
+  background: var(--editor-surface);
+}
+.editor-zoom-cluster .editor-capsule-btn { border-radius: 8px; }
+.editor-ui .editor-zoom-readout {
+  min-width: 46px;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--editor-text);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: pointer;
+}
+.editor-ui .editor-zoom-readout:hover { background: var(--editor-hover) !important; }
+
+/*
+ * «ضبط وتنسيق مساحة العمل» — the one primary utility on the bar.
+ * Accent-blue, clearly labelled, always fully visible (never icon-only).
+ * Scoped under .editor-ui so the chrome's global button colour remap can
+ * never wash the accent text out.
+ */
+.editor-ui .editor-wand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  flex: 0 0 auto;
+  padding: 0 13px;
+  border: 1px solid color-mix(in srgb, var(--editor-accent) 65%, #ffffff 10%);
+  border-radius: 9px;
+  background:
+    linear-gradient(180deg, var(--editor-accent-hover), var(--editor-accent));
+  color: var(--editor-accent-text);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 30, 45, 0.35);
+  transition: filter 120ms ease, transform 120ms ease;
+}
+.editor-ui .editor-wand-btn:hover { filter: brightness(1.08); }
+.editor-ui .editor-wand-btn:active { transform: translateY(0.5px); }
+.editor-ui.editor-light .editor-wand-btn { box-shadow: 0 2px 8px rgba(23, 43, 66, 0.25); }
+
+/* Gradient-free primary red-button counterpart (export) — same accent. */
+.editor-ui .editor-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  flex: 0 0 auto;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--editor-accent);
+  color: var(--editor-accent-text);
+  font-size: 12.5px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.editor-ui .editor-export-btn:hover { background: var(--editor-accent-hover) !important; }
+
+/* Touch: every header control grows to a 44px-friendly hit target. */
+@media (pointer: coarse) {
+  .editor-capsule-btn { width: 42px; height: 40px; }
+  .editor-ui .editor-zoom-readout { height: 40px; min-width: 54px; }
+  .editor-doc-capsule { padding: 4px; border-radius: 13px; }
+  .editor-ui .editor-doc-name { height: 36px; }
+  .editor-wand-btn { height: 42px; padding-inline: 16px; }
+  .editor-ui .editor-export-btn { height: 42px; padding-inline: 18px; }
+}
+
+/* ---------- Selection: unified scale / hide / lock overlay ---------- */
+
+/*
+ * The contextual overlay pinned above the selected element: explicit corner
+ * and side handles scale/resize, and this pill carries Hide (eye), Lock and
+ * Delete so none of them needs a menu. Inverse-scaled by the live zoom so it
+ * stays a constant, thumb-sized target at any magnification, and
+ * counter-rotated so it always sits level above rotated artwork.
+ */
+.selection-actions {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--editor-border, rgba(148, 163, 180, 0.35));
+  border-radius: 999px;
+  background: var(--editor-panel, #1e252b);
+  box-shadow:
+    0 6px 18px rgba(10, 16, 20, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.selection-actions-btn {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--editor-text, #e9eef3);
+  cursor: pointer;
+  transition: background-color 110ms ease, color 110ms ease;
+}
+@media (pointer: coarse) {
+  .selection-actions-btn { width: 42px; height: 42px; }
+}
+.selection-actions-btn:hover {
+  background: var(--editor-hover, rgba(255, 255, 255, 0.1));
+}
+.selection-actions-btn.is-danger:hover {
+  background: rgba(220, 38, 38, 0.18);
+  color: #f87171;
+}
+.selection-actions-btn.is-active {
+  background: var(--editor-accent, #3b6e9c);
+  color: var(--editor-accent-text, #fff);
+}
+.selection-actions-label {
+  padding: 0 8px 0 4px;
+  color: var(--editor-text-secondary, #9fb0bd);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+}
+
+/* ---------- Tool dock: primary draw tools with explicit dropdowns ---------- */
+
+/* A two-part tool: the main hit area arms direct drawing; the chevron opens
+ * the flyout on a plain tap (long-press still works, the chevron just makes
+ * the submenu discoverable). */
+.tool-dock-split {
+  position: relative;
+  display: grid;
+  width: var(--tool-size);
+  height: var(--tool-size);
+  flex: 0 0 auto;
+  place-items: center;
+}
+.tool-dock-split .tool-dock-button { width: 100%; height: 100%; }
+.tool-dock-chevron {
+  position: absolute;
+  inset-inline-end: 1px;
+  bottom: 1px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  opacity: 0.75;
+  cursor: pointer;
+}
+.tool-dock-chevron:hover { opacity: 1; background: var(--editor-hover); }
+@media (pointer: coarse) {
+  .tool-dock-chevron { width: 20px; height: 20px; }
+}
+/* When the split carries a submenu, it owns the whole control — retire the
+   corner triangle marker the plain buttons draw for the same job. */
+.tool-dock-split .tool-dock-flyout-mark { display: none; }
+
+/* Section captions inside the dock rail (قراءة مائلة للمجموعات). */
+.tool-dock-caption {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  color: var(--editor-text-secondary);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  text-align: center;
+  opacity: 0.85;
+}
+.studio-tool-dock.is-wide .tool-dock-caption { display: none; }
+
+/* ---------- Focus-visible ring shared by the new chrome ---------- */
+.editor-capsule-btn:focus-visible,
+.editor-ui .editor-zoom-readout:focus-visible,
+.editor-wand-btn:focus-visible,
+.editor-ui .editor-export-btn:focus-visible,
+.selection-actions-btn:focus-visible,
+.tool-dock-chevron:focus-visible {
+  outline: 2px solid var(--editor-accent-hover);
+  outline-offset: 1px;
+}
+
+/* Uniform 34px icon control for the header's tool clusters. */
+.editor-header-btn {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--editor-text);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.editor-header-btn:hover:not(:disabled) {
+  background: var(--editor-hover) !important;
+}
+.editor-header-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+.editor-header-btn.is-active {
+  background: var(--editor-accent) !important;
+  color: var(--editor-accent-text) !important;
+}
+@media (pointer: coarse) {
+  .editor-header-btn { width: 44px; height: 44px; }
+}
+.editor-header-btn:focus-visible {
+  outline: 2px solid var(--editor-accent-hover);
+  outline-offset: 1px;
 }

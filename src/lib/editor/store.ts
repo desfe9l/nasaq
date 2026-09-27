@@ -1220,11 +1220,18 @@ export const useEditor = create<EditorStore>((set, get) => {
         const activeId =
           (await getSetting<string>("activeProjectId")) || ui.activeProjectId;
         const active = activeId ? await getProject(activeId) : null;
-        // One shared site-wide preference (lib/theme.ts): the editor no longer
-        // invents its own default or storage channel — the visitor's choice
-        // made on any page (or the toolbar here) is what loads everywhere.
-        const dark = readStoredTheme() ?? false;
+        // One shared site-wide preference (lib/theme.ts): the visitor's
+        // explicit choice always wins. With no stored choice the studio opens
+        // on its signature dark-slate chrome — the designed default for a
+        // design workspace. The html class is applied too (Tailwind's `dark:`
+        // variant keys off it) but NOT persisted, so the visitor has not been
+        // opted into anything: their first explicit toggle writes the slot.
+        const storedTheme = readStoredTheme();
+        const dark = storedTheme ?? true;
         applyStoredTheme();
+        if (storedTheme === null && typeof document !== "undefined") {
+          document.documentElement.classList.toggle("dark", dark);
+        }
         set({
           projects: list,
           projectsLoading: false,

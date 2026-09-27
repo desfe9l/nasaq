@@ -7,6 +7,7 @@ import {
   AlignRight,
   Bold,
   Copy,
+  EyeOff,
   FlipHorizontal2,
   FlipVertical2,
   Group,
@@ -71,6 +72,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const flipSelected = useEditor((s) => s.flipSelected);
   const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
   const toggleLock = useEditor((s) => s.toggleLock);
+  const toggleHidden = useEditor((s) => s.toggleHidden);
   const group = useEditor((s) => s.group);
   const ungroup = useEditor((s) => s.ungroup);
   const selectedIds = useEditor((s) => s.selectedIds);
@@ -376,7 +378,20 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       <span className="floating-toolbar-sep" aria-hidden />
       <div className="floating-toolbar-section">
         {/*
-         * القفل أول زر: الحالة أحادية اللمس (بنفس بنفس same purple as the
+         * الظهور أولًا: تبديل إخفاء/إظهار العنصر بعين واحدة — أحد أزرار
+         * «التحكم والإخفاء» الموحدة حول العنصر المحدد.
+         */}
+        <button
+          type="button"
+          className="floating-toolbar-btn"
+          title="إخفاء العنصر (يظهر مرة أخرى من شجرة الطبقات)"
+          aria-label="إخفاء العنصر"
+          onClick={() => toggleHidden()}
+        >
+          <EyeOff className="size-3.5" />
+        </button>
+        {/*
+         * القفل: الحالة أحادية اللمس (بنفس بنفس same purple as the
          * locked frame) والعنصر يبقى محددًا — الفتح من هنا أو من Properties.
          */}
         <button
