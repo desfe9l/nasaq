@@ -254,7 +254,7 @@ export function LeftPanel({
   );
 
   return (
-    <aside className="flex h-full min-h-0 flex-col border-l border-line bg-surface">
+    <aside className="flex h-full min-h-0 flex-col border-l border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
       {/*
        * Tab strip — SHRINKABLE, never hidden.
        *
@@ -268,7 +268,7 @@ export function LeftPanel({
        *      clipped out of reach, which is what the old `flex-1 min-w-[52px]`
        *      row did at the narrowest widths.
        */}
-      <div className="editor-panel-header flex shrink-0 items-center gap-1 border-b border-line p-1.5">
+      <div className="editor-panel-header flex shrink-0 items-center gap-1 border-b border-line p-1.5 dark:border-white/10">
         <div className="editor-panel-tabs @container flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" role="tablist" aria-label="أقسام لوحة العناصر">
         {LEFT_PANEL_TABS.map((t) => {
           const Icon = t.icon;
@@ -286,7 +286,7 @@ export function LeftPanel({
                 "editor-panel-tab grid h-12 min-w-[44px] flex-1 basis-0 place-items-center gap-0.5 rounded-[8px] px-0.5 text-[9px] font-extrabold",
                 tab === t.id
                   ? "bg-navy text-white"
-                  : "text-muted hover:bg-line-2",
+                  : "text-muted hover:bg-line-2 dark:text-white/70 dark:hover:bg-white/5",
               )}
             >
               <Icon className="size-4 shrink-0" />
@@ -303,7 +303,7 @@ export function LeftPanel({
         <button
           type="button"
           onClick={() => { const st = useEditor.getState(); if (isOverlayViewport()) st.closeFloatingPanels(); else if (!st.leftCollapsed) st.toggle("leftCollapsed"); }}
-          className="editor-panel-collapse grid size-11 shrink-0 place-items-center rounded-[8px] text-muted hover:bg-line-2"
+          className="editor-panel-collapse grid size-11 shrink-0 place-items-center rounded-[8px] text-muted hover:bg-line-2 dark:hover:bg-white/10"
           aria-label="طي لوحة العناصر"
           title="طي لوحة العناصر"
         >
@@ -329,7 +329,7 @@ export function LeftPanel({
             )}
 
             {/* «عناصر أساسية» — text, images/logos and the code-bearing blocks. */}
-            <div className="mb-2 rounded-[6px] bg-navy-2/5 px-2 py-1 text-[10px] leading-4 text-brand-hover">
+            <div className="mb-2 rounded-[6px] bg-navy-2/5 px-2 py-1 text-[10px] leading-4 text-navy-2 dark:bg-white/5 dark:text-gold-2">
                 💡 اسحب أي عنصر وأفلته في المكان المحدد داخل الـArtboard — يُضاف بدقة في موضع الإفلات
               </div>
             <AccordionSection
@@ -344,7 +344,7 @@ export function LeftPanel({
                     type="button"
                     onClick={() => toggleGroup(group.title)}
                     aria-expanded={openGroups[group.title] ?? false}
-                    className="mb-2 flex w-full items-center justify-between text-[11px] font-extrabold tracking-wide text-muted transition hover:text-ink"
+                    className="mb-2 flex w-full items-center justify-between text-[11px] font-extrabold tracking-wide text-muted transition hover:text-ink dark:hover:text-white"
                   >
                     {group.title}
                     <ChevronDown
@@ -375,12 +375,12 @@ export function LeftPanel({
                               startPointerDrag(e, t.type, { name: t.label }, t.label);
                             }}
                             onClick={() => void add(t.type)}
-                            className="library-hit flex min-h-[38px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold leading-snug transition disabled:opacity-50 cursor-grab active:cursor-grabbing"
+                            className="library-hit flex min-h-[38px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold leading-snug transition disabled:opacity-50 dark:border-white/10 cursor-grab active:cursor-grabbing"
                             title={`${TYPE_NAME[t.type]} — اسحب وأفلت في الموضع المحدد داخل الصفحة`}
 
                           >
                             <span className="min-w-0">{t.label}</span>
-                            <Icon className="size-4 shrink-0 text-brand-hover" />
+                            <Icon className="size-4 shrink-0 text-navy-2 dark:text-gold-2" />
                           </button>
                         );
                       })}
@@ -403,7 +403,7 @@ export function LeftPanel({
                           <button
                             type="button"
                             onClick={() => onUpload("logo")}
-                            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
+                            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
                           >
                             <BadgePercent className="size-3.5" /> رفع شعار
                           </button>
@@ -452,7 +452,7 @@ export function LeftPanel({
                         },
                       } as Partial<CanvasEl>)
                     }
-                    className="flex items-center justify-between rounded-[8px] px-2.5 py-1.5 text-right transition hover:bg-line-2 cursor-grab active:cursor-grabbing"
+                    className="flex items-center justify-between rounded-[8px] px-2.5 py-1.5 text-right transition hover:bg-line-2 dark:hover:bg-white/5 cursor-grab active:cursor-grabbing"
                   >
                     <span className="text-[12px] font-bold">{p.label}</span>
                     <span className="text-[11px] text-muted">
@@ -465,24 +465,24 @@ export function LeftPanel({
           </div>
         )}
 
-        {tab === "library" && (
-          /*
-           * The Library tab opens on the Library itself: its toolbar, search,
-           * categories and quick actions are the first thing in the panel and
-           * stay pinned (sticky) while uploaded media and the ready-made design
-           * assets below them scroll — one scroller, one scrollbar.
-           */
-          <AssetLibrary>
-            <div className="mt-1 border-t border-line pt-3">
-              <SmartLibraryPanel
-                theme={theme}
-                onAddCustomAsset={onAddCustomAsset}
-                onOpenShapes={() => setLeftTab("shapes")}
-                onOpenTemplates={() => setLeftTab("templates")}
-                onPreviewTemplate={setPreviewTemplate}
-              />
-            </div>
-          </AssetLibrary>
+        {tab === "library" && <AssetLibrary />}
+
+        {tab === "tools" && (
+          <div className="element-tools-panel">
+            <header className="mb-3">
+              <h2 className="text-[13px] font-extrabold">أدوات العناصر</h2>
+              <p className="mt-1 text-[11px] leading-5 text-muted">
+                افتح القسم لإضافة عناصره، واسحب مقبضه لترتيبه كما يناسبك.
+              </p>
+            </header>
+            <SmartLibraryPanel
+              theme={theme}
+              onAddCustomAsset={onAddCustomAsset}
+              onOpenShapes={() => setLeftTab("shapes")}
+              onOpenTemplates={() => setLeftTab("templates")}
+              onPreviewTemplate={setPreviewTemplate}
+            />
+          </div>
         )}
 
         {tab === "shapes" && (
@@ -519,7 +519,7 @@ export function LeftPanel({
                         })
                       }
                       title={`${s.label} — اسحب وأفلت في الموضع المحدد`}
-                      className="library-hit grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-brand-hover transition cursor-grab active:cursor-grabbing"
+                      className="library-hit grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-navy-2 transition dark:border-white/10 dark:text-gold-2 cursor-grab active:cursor-grabbing"
                     >
                       <ShapePreview
                         shapeId={s.id}
@@ -541,7 +541,7 @@ export function LeftPanel({
                   draggable
                   onDragStart={(e) => startDrag(e, "line", { name: "خط" })}
                   onClick={() => addElement("line")}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold cursor-grab active:cursor-grabbing"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10 cursor-grab active:cursor-grabbing"
                 >
                   <Minus className="size-3.5" /> خط
                 </button>
@@ -550,7 +550,7 @@ export function LeftPanel({
                   draggable
                   onDragStart={(e) => startDrag(e, "divider", { name: "فاصل" })}
                   onClick={() => addElement("divider")}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold cursor-grab active:cursor-grabbing"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10 cursor-grab active:cursor-grabbing"
                 >
                   <SeparatorHorizontal className="size-3.5" /> فاصل
                 </button>
@@ -590,13 +590,13 @@ export function LeftPanel({
                   key={t.id}
                   type="button"
                   onClick={() => setPreviewTemplate(t)}
-                  className="library-hit grid grid-cols-[72px_1fr_auto] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition"
+                  className="library-hit grid grid-cols-[72px_1fr_auto] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition dark:border-white/10"
                 >
                   <TemplatePreview variant={t.preview} />
                   <span className="min-w-0">
                     <strong className="block text-[12px]">{t.title}</strong>
                     {t.concept && (
-                      <span className="block text-[9px] font-bold uppercase tracking-wide text-ink">
+                      <span className="block text-[9px] font-bold uppercase tracking-wide text-green">
                         {t.concept}
                       </span>
                     )}
@@ -615,14 +615,14 @@ export function LeftPanel({
             </div>
             {previewTemplate && (
               <div
-                className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-scrim p-4"
+                className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-black/45 p-4"
                 role="dialog"
                 aria-modal="true"
                 aria-label={`معاينة ${previewTemplate.title}`}
                 onClick={() => setPreviewTemplate(null)}
               >
                 <div
-                  className="w-full max-w-sm rounded-[10px] border border-line bg-surface p-3 shadow-2xl"
+                  className="w-full max-w-sm rounded-[10px] border border-line bg-white p-3 shadow-2xl dark:border-white/10 dark:bg-[#303132]"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <div className="mb-3 flex items-start justify-between gap-2">
@@ -630,7 +630,7 @@ export function LeftPanel({
                       <h3 className="text-[14px] font-extrabold">
                         {previewTemplate.title}
                       </h3>
-                      <p className="mt-0.5 text-[10px] uppercase tracking-wide text-ink">
+                      <p className="mt-0.5 text-[10px] uppercase tracking-wide text-green">
                         {previewTemplate.concept || "Template"}
                       </p>
                       <p className="mt-1 text-[11px] leading-5 text-muted">
@@ -640,7 +640,7 @@ export function LeftPanel({
                     <button
                       type="button"
                       onClick={() => setPreviewTemplate(null)}
-                      className="grid size-7 place-items-center rounded-[6px] border border-line"
+                      className="grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"
                       title="إغلاق المعاينة"
                       aria-label="إغلاق المعاينة"
                     >
@@ -680,11 +680,11 @@ export function LeftPanel({
                     "rounded-[8px] border p-2",
                     p.id === activePageId
                       ? "border-navy-2 bg-navy-2/5"
-                      : "border-line",
+                      : "border-line dark:border-white/10",
                   )}
                 >
                   <div className="mb-1.5 flex items-center gap-1.5">
-                    <span className="grid size-5 shrink-0 place-items-center rounded bg-line-2 text-[10px] font-extrabold text-muted">
+                    <span className="grid size-5 shrink-0 place-items-center rounded bg-line-2 text-[10px] font-extrabold text-muted dark:bg-white/10">
                       {i + 1}
                     </span>
                     <input
@@ -692,7 +692,7 @@ export function LeftPanel({
                       onChange={(e) => renamePage(p.id, e.target.value)}
                       onFocus={() => setActivePage(p.id)}
                       aria-label={`اسم الصفحة ${i + 1}`}
-                      className="h-7 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-[12px] font-bold hover:border-line focus:border-navy-2 focus:bg-surface"
+                      className="h-7 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-[12px] font-bold hover:border-line focus:border-navy-2 focus:bg-white dark:focus:bg-white/5"
                     />
                   </div>
                   <p className="mb-2 text-[10px] text-muted tabular-nums">
@@ -767,7 +767,7 @@ export function LeftPanel({
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[13px] font-semibold text-ink"
+                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-white px-2.5 text-[13px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
               />
             </label>
             <label className="mb-3 block text-[11px] font-extrabold text-muted">
@@ -776,7 +776,7 @@ export function LeftPanel({
                 value={orgName}
                 onChange={(e) => setOrg(e.target.value)}
                 placeholder="اسم الجهة أو العميل"
-                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[13px] font-semibold text-ink"
+                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-white px-2.5 text-[13px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
               />
             </label>
             <div className="grid gap-2">
@@ -790,7 +790,7 @@ export function LeftPanel({
                       "flex items-center gap-2.5 rounded-[8px] border p-2.5 text-right",
                       theme === t.id
                         ? "border-navy-2 bg-navy-2/5"
-                        : "border-line",
+                        : "border-line dark:border-white/10",
                     )}
                   >
                     <span className="flex size-9 shrink-0 overflow-hidden rounded-md border border-line">
@@ -838,7 +838,7 @@ export function LeftPanel({
                       "rounded-[8px] border px-2.5 py-2 text-right",
                       activeSizeId === s.id
                         ? "border-navy-2 bg-navy-2/5"
-                        : "border-line",
+                        : "border-line dark:border-white/10",
                     )}
                   >
                     <strong className="block text-[12px]">{s.name}</strong>
@@ -872,14 +872,14 @@ export function LeftPanel({
                 <button
                   type="button"
                   onClick={() => applyCustomSize("page")}
-                  className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold"
+                  className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
                 >
                   تطبيق على الصفحة
                 </button>
                 <button
                   type="button"
                   onClick={() => applyCustomSize("all")}
-                  className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold"
+                  className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
                 >
                   تطبيق على الكل
                 </button>
@@ -1051,7 +1051,7 @@ function FontsTab() {
                   "library-hit flex items-center justify-between gap-2 rounded-[8px] border px-2.5 py-2 text-right disabled:opacity-55",
                   current === f.family
                     ? "border-navy-2 bg-navy-2/5"
-                    : "border-line",
+                    : "border-line dark:border-white/10",
                 )}
                 aria-pressed={current === f.family}
               >
@@ -1094,14 +1094,14 @@ function FontsTab() {
                     className={cn(
                       "grid size-6 place-items-center rounded-[6px]",
                       fav
-                        ? "text-warning"
-                        : "text-muted/50 hover:text-warning",
+                        ? "text-amber-500"
+                        : "text-muted/50 hover:text-amber-500",
                     )}
                   >
                     <Star className={cn("size-3.5", fav && "fill-amber-400")} />
                   </span>
                   {current === f.family && (
-                    <span className="text-[10px] font-extrabold text-brand-hover">
+                    <span className="text-[10px] font-extrabold text-navy-2">
                       مُطبَّق
                     </span>
                   )}
@@ -1130,7 +1130,7 @@ function FontsTab() {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="اكتب اسم الخط"
-          className="h-9 rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-semibold text-ink outline-none focus:border-navy-2"
+          className="h-9 rounded-[8px] border border-line bg-white px-2.5 text-[12px] font-semibold text-ink outline-none focus:border-navy-2 dark:border-white/10 dark:bg-white/5 dark:text-white"
         />
       </label>
 
@@ -1182,8 +1182,8 @@ function MiniButton({
       className={cn(
         "h-7 rounded-[6px] border text-[10px] font-extrabold disabled:opacity-40",
         danger
-          ? "border-danger/30 text-error hover:bg-danger/10"
-          : "border-line text-muted hover:border-navy-2 hover:text-ink",
+          ? "border-red-200 text-danger hover:bg-red-50"
+          : "border-line text-muted hover:border-navy-2 hover:text-ink dark:border-white/10 dark:text-white/70",
       )}
     >
       {children}
@@ -1208,7 +1208,7 @@ function CategoryChip({
         "rounded-full border px-2.5 py-1 text-[11px] font-bold",
         active
           ? "border-navy-2 bg-navy-2 text-white"
-          : "border-line text-muted",
+          : "border-line text-muted dark:border-white/10",
       )}
     >
       {label}
@@ -1230,7 +1230,7 @@ function ToggleRow({
       type="button"
       onClick={onChange}
       aria-pressed={value}
-      className="flex items-center justify-between rounded-[8px] border border-line px-2.5 py-2 text-[12px] font-bold"
+      className="flex items-center justify-between rounded-[8px] border border-line px-2.5 py-2 text-[12px] font-bold dark:border-white/10"
     >
       <span>{label}</span>
       <span
@@ -1241,7 +1241,7 @@ function ToggleRow({
       >
         <span
           className={cn(
-            "absolute top-0.5 size-4 rounded-full bg-surface shadow transition-all",
+            "absolute top-0.5 size-4 rounded-full bg-white shadow transition-all",
             value ? "right-0.5" : "right-[18px]",
           )}
         />

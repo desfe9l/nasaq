@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Baseline,
+  Blocks,
   FileText,
   FolderOpen,
   Layers,
@@ -18,6 +19,7 @@ import type { LeftTab, RightTab } from "@/lib/editor/store";
  */
 export const LEFT_PANEL_TABS: { id: LeftTab; label: string; icon: LucideIcon }[] = [
   { id: "library", label: "المكتبة", icon: FolderOpen },
+  { id: "tools", label: "أدوات العناصر", icon: Blocks },
   { id: "elements", label: "عناصر", icon: LayoutTemplate },
   { id: "shapes", label: "أشكال", icon: Shapes },
   { id: "templates", label: "قوالب", icon: FileText },
