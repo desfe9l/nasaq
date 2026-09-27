@@ -7,6 +7,12 @@ import {
   ImagePlus,
   Layers,
   Minus,
+  MoreHorizontal,
+  RotateCcw,
+  Eye,
+  EyeOff,
+  ArrowUp,
+  ArrowDown,
   MousePointer2,
   Palette,
   SeparatorHorizontal,
@@ -19,6 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { loadToolDockConfig, saveToolDockConfig, resetToolDockConfig, type ToolDockItemConfig } from "@/lib/editor/tool-dock-config";
 import { useEditor, type LeftTab, type RightTab } from "@/lib/editor/store";
 
 type DrawTool = "text" | "rect" | null;
@@ -101,6 +108,8 @@ export function StudioToolDock({
   const [wide, setWide] = useState(() => {
     try { return localStorage.getItem("nasaq.tool-dock-wide") === "true"; } catch { return false; }
   });
+  const [dockConfig, setDockConfig] = useState<ToolDockItemConfig[]>(loadToolDockConfig);
+  const [customizing, setCustomizing] = useState(false);
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
   const [flyout, setFlyout] = useState<{ name: FlyoutName; top: number } | null>(null);
   const [tip, setTip] = useState<{ label: string; shortcut: string; top: number } | null>(null);
@@ -377,19 +386,55 @@ export function StudioToolDock({
         {wide ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
       </button>
       <div className="tool-dock-tools" onScroll={() => { setTip(null); setFlyout(null); }}>
-        {/* Primary drawer — direct creation modes («Click & Draw»). */}
-        {toolButton("select", MousePointer2, "تحديد وتحريك", "V", () => arm(null), activeTool === null)}
-        {splitTool("text", Type, "نص بالرسم", "T", () => { onOpenLeft("elements"); arm("text"); }, activeTool === "text", "text")}
-        {splitTool("shape", Square, "رسم مربع / أشكال", "R", () => { onOpenLeft("shapes"); arm("rect"); }, activeTool === "rect", "shapes")}
+        {dockConfig
+          .filter((t) => t.visible && t.category !== "extra")
+          .map((item) => {
+            switch (item.id) {
+              case "select":
+                return toolButton("select", MousePointer2, "تحديد وتحريك", "V", () => arm(null), activeTool === null);
+              case "text":
+                return splitTool("text", Type, "نص بالرسم", "T", () => { onOpenLeft("elements"); arm("text"); }, activeTool === "text", "text");
+              case "shape":
+                return splitTool("shape", Square, "رسم مربع / أشكال", "R", () => { onOpenLeft("shapes"); arm("rect"); }, activeTool === "rect", "shapes");
+              case "image":
+                return toolButton("image", ImagePlus, "الوسائط — صورة (إفلات حر على اللوحة)", "", onUploadImage);
+              case "files":
+                return toolButton("files", FolderOpen, "ملفات المشروع — فتح ملف .nsq", "⌘O", onOpenFiles);
+              case "layers":
+                return toolButton("layers", Layers, "الطبقات", "", () => onOpenRight("layers"));
+              case "properties":
+                return toolButton("properties", SlidersHorizontal, "الخصائص والإعدادات", "", () => onOpenRight("properties"));
+              case "colors":
+                return toolButton("colors", Palette, "لوحة الألوان — تعبئة وإطار", "", () => openPicker(foregroundInput.current));
+              default:
+                return null;
+            }
+          })}
+        {dockConfig.some((t) => t.visible && t.category === "extra") && (
+          <>
+            <span className="tool-dock-sep" aria-hidden="true" />
+            {dockConfig
+              .filter((t) => t.visible && t.category === "extra")
+              .map((item) => {
+                if (item.id === "connectors") {
+                  return splitTool("connectors", Waypoints, "الموصلات والخطوط", "", () => onOpenLeft("shapes"), false, "connectors");
+                }
+                return null;
+              })}
+          </>
+        )}
         <span className="tool-dock-sep" aria-hidden="true" />
-        {/* Secondary drawer — media, project files, then panel gateways. */}
-        {toolButton("image", ImagePlus, "الوسائط — صورة (إفلات حر على اللوحة)", "", onUploadImage)}
-        {toolButton("files", FolderOpen, "ملفات المشروع — فتح ملف .nsq", "", onOpenFiles)}
-        <span className="tool-dock-sep" aria-hidden="true" />
-        {toolButton("layers", Layers, "الطبقات", "", () => onOpenRight("layers"))}
-        {toolButton("properties", SlidersHorizontal, "الخصائص والإعدادات", "", () => onOpenRight("properties"))}
-        {toolButton("colors", Palette, "لوحة الألوان — تعبئة وإطار", "", () => openPicker(foregroundInput.current))}
-        {splitTool("connectors", Waypoints, "الموصلات والخطوط", "", () => onOpenLeft("shapes"), false, "connectors")}
+        <button
+          type="button"
+          className="tool-dock-btn"
+          title="تخصيص شريط الأدوات"
+          aria-label="تخصيص شريط الأدوات"
+          onClick={() => setCustomizing(true)}
+          onPointerEnter={(e) => { if (e.pointerType === "mouse") showTip(e.currentTarget, "تخصيص الأدوات", ""); }}
+          onMouseLeave={() => setTip(null)}
+        >
+          <MoreHorizontal className="tool-dock-icon" strokeWidth={1.6} />
+        </button>
       </div>
 
       {/*
@@ -501,6 +546,141 @@ export function StudioToolDock({
               {menuItem(ResetGlyph, "الألوان الافتراضية", resetColors)}
             </>
           )}
+        </div>
+      )}
+      {customizing && (
+        <div
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          dir="rtl"
+          onClick={() => setCustomizing(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-xl border border-white/15 bg-[#181d21] p-5 text-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-sm font-bold">تخصيص شريط الأدوات (Photoshop-style)</h3>
+              <button
+                type="button"
+                className="rounded p-1 text-white/60 hover:bg-white/10 hover:text-white"
+                onClick={() => setCustomizing(false)}
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mb-3 text-[12px] text-white/70">
+              قم بإعادة ترتيب الأدوات، إخفائها أو إظهارها، ونقلها إلى قسم الأدوات الإضافية (Extra Tools):
+            </p>
+            <div className="max-h-[300px] space-y-1.5 overflow-y-auto pe-1">
+              {dockConfig.map((item, index) => {
+                const labels: Record<string, string> = {
+                  select: "تحديد وتحريك (V)",
+                  text: "نص بالرسم (T)",
+                  shape: "رسم مربع / أشكال (R)",
+                  image: "الوسائط والصور",
+                  files: "ملفات المشروع (.nsq)",
+                  layers: "شجرة الطبقات",
+                  properties: "لوحة الخصائص",
+                  colors: "لوحة الألوان",
+                  connectors: "الموصلات والخطوط",
+                };
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[12px]"
+                  >
+                    <span className={cn("font-medium", !item.visible && "text-white/40 line-through")}>
+                      {labels[item.id] || item.id}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        className="rounded p-1 hover:bg-white/10 disabled:opacity-30"
+                        disabled={index === 0}
+                        onClick={() => {
+                          const next = [...dockConfig];
+                          const [swapped] = next.splice(index, 1);
+                          next.splice(index - 1, 0, swapped);
+                          next.forEach((x, i) => (x.order = i));
+                          setDockConfig(next);
+                          saveToolDockConfig(next);
+                        }}
+                        title="تحريك لأعلى"
+                      >
+                        <ArrowUp className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded p-1 hover:bg-white/10 disabled:opacity-30"
+                        disabled={index === dockConfig.length - 1}
+                        onClick={() => {
+                          const next = [...dockConfig];
+                          const [swapped] = next.splice(index, 1);
+                          next.splice(index + 1, 0, swapped);
+                          next.forEach((x, i) => (x.order = i));
+                          setDockConfig(next);
+                          saveToolDockConfig(next);
+                        }}
+                        title="تحريك لأسفل"
+                      >
+                        <ArrowDown className="size-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        className={cn("rounded p-1 hover:bg-white/10", item.category === "extra" ? "text-accent" : "text-white/60")}
+                        onClick={() => {
+                          const next: ToolDockItemConfig[] = dockConfig.map((x) =>
+                            x.id === item.id
+                              ? { ...x, category: (x.category === "extra" ? "primary" : "extra") as "primary" | "extra" }
+                              : x,
+                          );
+                          setDockConfig(next);
+                          saveToolDockConfig(next);
+                        }}
+                        title={item.category === "extra" ? "نقل للأدوات الرئيسية" : "نقل لقسم Extra Tools"}
+                      >
+                        {item.category === "extra" ? "★ Extra" : "☆"}
+                      </button>
+                      <button
+                        type="button"
+                        className={cn("rounded p-1 hover:bg-white/10", item.visible ? "text-emerald-400" : "text-white/40")}
+                        onClick={() => {
+                          const next = dockConfig.map((x) =>
+                            x.id === item.id ? { ...x, visible: !x.visible } : x,
+                          );
+                          setDockConfig(next);
+                          saveToolDockConfig(next);
+                        }}
+                        title={item.visible ? "إخفاء الأداة" : "إظهار الأداة"}
+                      >
+                        {item.visible ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
+              <button
+                type="button"
+                className="flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white/80 hover:bg-white/10 hover:text-white"
+                onClick={() => {
+                  const restored = resetToolDockConfig();
+                  setDockConfig(restored);
+                }}
+              >
+                <RotateCcw className="size-3.5" />
+                <span>استعادة الافتراضي</span>
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-accent px-4 py-1.5 text-[12px] font-bold text-white hover:bg-accent/90"
+                onClick={() => setCustomizing(false)}
+              >
+                تم
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </aside>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlignCenter,
   AlignEndHorizontal,
@@ -578,17 +578,44 @@ export function WorkspaceOverlays({
         },
       ];
 
-  const menuStyle = (() => {
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [adjustedPos, setAdjustedPos] = useState<{ left: number; top: number } | null>(null);
+
+  useEffect(() => {
+    if (!menu) {
+      setAdjustedPos(null);
+      return;
+    }
+    const margin = 10;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const node = menuRef.current;
+    const rect = node?.getBoundingClientRect();
+    const w = rect ? rect.width : 260;
+    const h = rect ? rect.height : 420;
+
+    let left = menu.x;
+    let top = menu.y;
+
+    if (left + w > vw - margin) left = Math.max(margin, vw - w - margin);
+    if (top + h > vh - margin) top = Math.max(margin, vh - h - margin);
+    if (left < margin) left = margin;
+    if (top < margin) top = margin;
+
+    setAdjustedPos({ left, top });
+  }, [menu]);
+
+  const menuStyle = adjustedPos ?? (() => {
     if (!menu) return {};
-    const margin = 8;
+    const margin = 10;
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const estimatedW = 260;
-    const estimatedH = 520;
+    const estimatedH = 420;
     let left = menu.x;
     let top = menu.y;
-    if (left + estimatedW > vw - margin) left = vw - estimatedW - margin;
-    if (top + estimatedH > vh - margin) top = vh - estimatedH - margin;
+    if (left + estimatedW > vw - margin) left = Math.max(margin, vw - estimatedW - margin);
+    if (top + estimatedH > vh - margin) top = Math.max(margin, vh - estimatedH - margin);
     if (left < margin) left = margin;
     if (top < margin) top = margin;
     return { left, top };
@@ -614,6 +641,7 @@ export function WorkspaceOverlays({
           autoFocus
         >
           <div
+            ref={menuRef}
             className="editor-context-menu fixed min-w-[240px] max-w-[280px] max-h-[85vh] overflow-auto rounded-[10px] border bg-white p-1.5 shadow-2xl dark:border-white/15 dark:bg-[#1e2633]"
             style={menuStyle}
             onPointerDown={(event) => event.stopPropagation()}
