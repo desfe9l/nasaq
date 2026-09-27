@@ -55,7 +55,13 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
     if (!r) return;
     setPos({
       top: r.bottom + 6,
-      right: Math.max(8, window.innerWidth - r.right),
+      // Anchored to the trigger's right edge, but clamped on BOTH sides so a
+      // trigger near the physical-left end of the header never pushes the
+      // menu off-screen (the left edge used to go negative).
+      right: Math.max(
+        8,
+        Math.min(window.innerWidth - r.right, window.innerWidth - MENU_W - 8),
+      ),
     });
   };
 
@@ -142,7 +148,7 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
             role="menu"
             aria-label="ملف المشروع"
             className="editor-dropdown-panel fixed z-[var(--z-dropdown)] rounded-[10px] border p-1.5 shadow-2xl"
-            style={{ top: pos.top, right: pos.right, width: MENU_W }}
+            style={{ top: pos.top, right: pos.right, width: MENU_W, maxWidth: "calc(100vw - 16px)" }}
           >
             <Item
               icon={<FilePlus2 className="size-4" />}

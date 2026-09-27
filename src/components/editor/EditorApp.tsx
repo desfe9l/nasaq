@@ -541,9 +541,9 @@ function Studio({
   /*
    * Publish the header's REAL height as `--editor-header-h`.
    *
-   * Phase 1 sizes the panel bodies with `calc(100vh - header)`. The header is
-   * one row at every width now, but it is still measured rather than
-   * hard-coded: on a coarse pointer the icon buttons grow to 44px, and the
+   * Phase 1 sizes the panel bodies with `calc(100vh - header)`. The header
+   * wraps onto extra lines when the viewport cannot hold every group, so it
+   * is measured rather than hard-coded: on a coarse pointer the icon buttons grow to 44px, and the
    * safe-area insets add to the padding, so the real height is never 52px on
    * every device. Measuring it is what keeps the last property row reachable.
    */
@@ -1179,7 +1179,7 @@ function Studio({
       <header
         ref={headerRef}
         data-editor-obstacle="header"
-        className="editor-toolbar z-[var(--z-panel)] flex flex-nowrap items-center gap-x-2 overflow-x-auto whitespace-nowrap border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]"
+        className="editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 whitespace-nowrap border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]"
       >
         <div className="flex shrink-0 items-center gap-2">
           <a
@@ -1314,26 +1314,19 @@ function Studio({
         </div>
 
         {/*
-         * Scrolls rather than clipping when the viewport cannot hold every
-         * control. The inner `w-max` wrapper is what keeps centering safe:
-         * `justify-center` on a scroll container lets overflowing items spill
-         * over BOTH edges and pile onto the neighbouring groups, while
-         * `mx-auto` centers only when the row fits and scrolls from its start
-         * edge when it does not.
-         */}
-        {/*
-         * Tool tray.
+         * Header layout: WRAPS, never scrolls.
          *
-         * Below `md` it is `min-w-fit` + `order-last`: `min-w-fit` keeps it at
-         * its natural width so it never scrolls inside its own box — it simply
-         * takes part in the row's scroll — and `order-last` puts it at the END
-         * of that single row (brand ▸ history/zoom ▸ actions ▸ tray), so the
-         * menus, the project name and the grid toggle stay one swipe away
-         * instead of wrapping the toolbar into a second line. From `md` up
-         * `md:order-none` returns it to the middle and `min-w-0` lets it shrink
-         * into whatever space the outer groups leave, and its own
-         * `overflow-x-auto` then does the scrolling (the tablet behaviour)
-         * rather than the row.
+         * Every group (brand + pinned tools ▸ history/zoom ▸ tool tray ▸
+         * actions) is an unbreakable unit, and the header is `flex-wrap`, so a
+         * viewport that cannot hold them all moves whole groups onto another
+         * line instead of hiding controls behind a horizontal scroll (which
+         * always left a button cut in half at the scroller's edge). The tray is
+         * `flex-auto` from its natural width: it stays in the middle while it
+         * fits, drops to the next line when it does not, and on a line narrower
+         * than itself its own items wrap. The actions group is `ms-auto`, so it
+         * keeps its place at the far end of whichever line it lands on. The
+         * shell measures the header's real height (`--editor-header-h`), so the
+         * workspace below simply gets what is left.
          */}
         {/*
          * Pinned cluster — history + zoom.
@@ -1392,8 +1385,8 @@ function Studio({
           </button>
         </div>
 
-        <div className="editor-pane-scroll order-last flex min-w-fit flex-1 items-center overflow-x-auto whitespace-nowrap md:order-none md:min-w-0">
-          <div className="mx-auto flex w-max items-center gap-1">
+        <div className="flex min-w-0 flex-auto items-center">
+          <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-1">
             {/* Secondary tools grouped into four real, keyboard-accessible menus.
               Fit/100% live in the View menu (قائمة «عرض»). */}
             <span
@@ -1424,7 +1417,7 @@ function Studio({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-1.5">
+        <div className="ms-auto flex shrink-0 items-center justify-end gap-1.5">
           <SaveBadge
             state={saveState}
             label={label}
