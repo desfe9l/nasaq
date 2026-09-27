@@ -614,7 +614,7 @@ export function AssetLibrary({
   return (
     <section
       className={cn(
-        "asset-library grid gap-2 rounded-[10px] border border-transparent p-1 transition",
+ "asset-library grid gap-2 rounded-[10px] border border-transparent p-1 transition",
         dragOver && "border-navy bg-navy/5 border-dashed",
       )}
       onDragOver={(e) => {
@@ -640,7 +640,7 @@ export function AssetLibrary({
             onClick={exportLibrary}
             aria-label="تصدير المكتبة"
             title="تصدير المكتبة"
-            className="asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"
+            className="asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border border-line"
           >
             <Download className="size-3.5" />
           </button>
@@ -649,7 +649,7 @@ export function AssetLibrary({
             onClick={() => libraryImportRef.current?.click()}
             aria-label="استيراد مكتبة"
             title="استيراد مكتبة من ملف"
-            className="asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"
+            className="asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border border-line"
           >
             <Upload className="size-3.5" />
           </button>
@@ -671,8 +671,8 @@ export function AssetLibrary({
             title="عرض شبكي"
             aria-pressed={viewMode === "grid"}
             className={cn(
-              "asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border",
-              viewMode === "grid" ? "border-navy bg-navy/10" : "border-line dark:border-white/10",
+ "asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border",
+              viewMode === "grid" ? "border-navy bg-navy/10" : "border-line",
             )}
           >
             <Grid2X2 className="size-3.5" />
@@ -684,8 +684,8 @@ export function AssetLibrary({
             title="عرض مضغوط"
             aria-pressed={viewMode === "compact"}
             className={cn(
-              "asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border",
-              viewMode === "compact" ? "border-navy bg-navy/10" : "border-line dark:border-white/10",
+ "asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border",
+              viewMode === "compact" ? "border-navy bg-navy/10" : "border-line",
             )}
           >
             <List className="size-3.5" />
@@ -702,7 +702,7 @@ export function AssetLibrary({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="بحث في المكتبة…"
             aria-label="بحث في المكتبة"
-            className="asset-library-search h-9 w-full rounded-[8px] border border-line bg-white pe-8 ps-3 text-[12px] font-bold outline-none focus:border-navy dark:border-white/10 dark:bg-white/5"
+            className="asset-library-search h-9 w-full rounded-[8px] border border-line bg-surface pe-8 ps-3 text-[12px] font-bold outline-none focus:border-navy"
           />
         </label>
         <div className="asset-library-filters flex flex-wrap items-center gap-1">
@@ -717,14 +717,14 @@ export function AssetLibrary({
               onClick={() => setTypeFilter(id as TypeFilter)}
               aria-pressed={typeFilter === id}
               className={cn(
-                "asset-library-chip h-7 rounded-full px-3 text-[10px] font-extrabold",
-                typeFilter === id ? "bg-navy text-white" : "border border-line text-muted dark:border-white/10",
+ "asset-library-chip h-7 rounded-full px-3 text-[10px] font-extrabold",
+                typeFilter === id ? "bg-navy text-white" : "border border-line text-muted",
               )}
             >
               {label}
             </button>
           ))}
-          <span className="ms-auto rounded-full bg-line-2 px-2 py-1 text-[10px] font-bold tabular-nums text-muted dark:bg-white/10">
+          <span className="ms-auto rounded-full bg-line-2 px-2 py-1 text-[10px] font-bold tabular-nums text-muted">
             {visibleAssets.length} / {assets.length}
           </span>
         </div>
@@ -742,8 +742,8 @@ export function AssetLibrary({
           onClick={() => setAssetFolder(null)}
           aria-pressed={!folderId}
           className={cn(
-            "asset-library-chip inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold",
-            !folderId ? "border-navy bg-navy/10" : "border-line dark:border-white/10",
+ "asset-library-chip inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold",
+            !folderId ? "border-navy bg-navy/10" : "border-line",
           )}
         >
           <Folder className="size-3" /> الكل
@@ -755,8 +755,8 @@ export function AssetLibrary({
             onClick={() => setAssetFolder(folder.id)}
             aria-pressed={folderId === folder.id}
             className={cn(
-              "asset-library-chip inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold",
-              folderId === folder.id ? "border-navy bg-navy/10" : "border-line dark:border-white/10",
+ "asset-library-chip inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold",
+              folderId === folder.id ? "border-navy bg-navy/10" : "border-line",
             )}
           >
             <Folder className="size-3" /> {folder.name}
@@ -768,7 +768,7 @@ export function AssetLibrary({
             setFolderDraft("");
             setFolderDialog("create");
           }}
-          className="asset-lib-icon-btn grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="asset-lib-icon-btn grid size-7 shrink-0 place-items-center rounded-[6px] border border-line"
           title="مجلد جديد"
           aria-label="مجلد جديد"
         >
@@ -782,7 +782,7 @@ export function AssetLibrary({
                 setFolderDraft(currentFolder.name);
                 setFolderDialog("rename");
               }}
-              className="asset-lib-icon-btn grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10"
+              className="asset-lib-icon-btn grid size-7 shrink-0 place-items-center rounded-[6px] border border-line"
               title="إعادة تسمية المجلد"
               aria-label="إعادة تسمية المجلد"
             >
@@ -791,7 +791,7 @@ export function AssetLibrary({
             <button
               type="button"
               onClick={() => setFolderDialog("delete")}
-              className="asset-lib-icon-btn grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-red-600 dark:border-white/10"
+              className="asset-lib-icon-btn grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-error"
               title="حذف المجلد"
               aria-label="حذف المجلد"
             >
@@ -816,7 +816,7 @@ export function AssetLibrary({
           type="button"
           onClick={() => anyFileInputRef.current?.click()}
           disabled={importing}
-          className="inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border border-line text-[10px] font-extrabold dark:border-white/10 disabled:opacity-50"
+          className="inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border border-line text-[10px] font-extrabold disabled:opacity-50"
         >
           <FilePlus className="size-3.5" /> إضافة ملف
         </button>
@@ -824,7 +824,7 @@ export function AssetLibrary({
           type="button"
           onClick={() => folderInputRef.current?.click()}
           disabled={importing}
-          className="inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border border-line text-[10px] font-extrabold dark:border-white/10 disabled:opacity-50"
+          className="inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border border-line text-[10px] font-extrabold disabled:opacity-50"
         >
           <FolderInput className="size-3.5" /> إضافة مجلد
         </button>
@@ -845,7 +845,7 @@ export function AssetLibrary({
       />
 
       {dragOver && (
-        <div className="rounded-[8px] border-2 border-dashed border-navy bg-navy/5 p-3 text-center text-[11px] font-bold text-navy">
+        <div className="rounded-[8px] border-2 border-dashed border-navy bg-navy/5 p-3 text-center text-[11px] font-bold text-brand">
           أفلت الملفات هنا — يُستخرج الاسم والتصنيف تلقائياً ويُحفظ بنية المجلدات
         </div>
       )}
@@ -855,8 +855,8 @@ export function AssetLibrary({
       )}
 
       {selectedAssetIds.length > 0 && (
-        <div className="flex items-center gap-2 rounded-[7px] border border-emerald-500/50 bg-emerald-500/10 p-1.5 text-[10px]">
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-2 py-0.5 font-extrabold text-white tabular-nums">
+        <div className="flex items-center gap-2 rounded-[7px] border border-brand/50 bg-ok/10 p-1.5 text-[10px]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-ok px-2 py-0.5 font-extrabold text-white tabular-nums">
             {selectedAssetIds.length} محدد
           </span>
           <select
@@ -865,7 +865,7 @@ export function AssetLibrary({
             onChange={(e) => {
               if (e.target.value !== "") void moveAssetsToFolder(selectedAssetIds, e.target.value === "root" ? null : e.target.value);
             }}
-            className="h-7 min-w-0 flex-1 rounded border border-emerald-500/40 bg-transparent px-1 text-[10px] dark:border-white/10"
+            className="h-7 min-w-0 flex-1 rounded border border-brand/70 bg-transparent px-1 text-[10px]"
           >
             <option value="">نقل إلى…</option>
             <option value="root">المكتبة الرئيسية</option>
@@ -878,7 +878,7 @@ export function AssetLibrary({
           <button
             type="button"
             onClick={() => setBatchDeleting(true)}
-            className="inline-flex h-7 items-center gap-1 rounded-[6px] bg-red-600 px-2 font-extrabold text-white"
+            className="inline-flex h-7 items-center gap-1 rounded-[6px] bg-danger px-2 font-extrabold text-white"
           >
             <Trash2 className="size-3" /> حذف
           </button>
@@ -889,7 +889,7 @@ export function AssetLibrary({
       )}
 
       {pending.length > 0 && (
-        <div className="rounded-[8px] border border-gold/60 bg-gold/2 p-2 dark:bg-gold/10">
+        <div className="rounded-[8px] border border-gold/60 bg-gold/2 p-2">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div>
               <p className="text-[11px] font-extrabold">معاينة قبل الحفظ</p>
@@ -905,9 +905,9 @@ export function AssetLibrary({
                 key={item.id}
                 type="button"
                 onClick={() => setPreview(item)}
-                className="overflow-hidden rounded-[6px] border border-line bg-white p-1 text-start dark:border-white/10 dark:bg-white/5"
+                className="overflow-hidden rounded-[6px] border border-line bg-surface p-1 text-start"
               >
-                <div className="grid h-14 place-items-center bg-line-2/50 dark:bg-white/5">
+                <div className="grid h-14 place-items-center bg-line-2/50">
                   <img src={item.src} alt={item.name} className="max-h-12 max-w-full object-contain" />
                 </div>
                 <span className="mt-1 block truncate text-[9px]">{item.name}</span>
@@ -928,7 +928,7 @@ export function AssetLibrary({
       {assetsLoading ? (
         <p className="text-[10px] text-muted">جارٍ تحميل المكتبة…</p>
       ) : visibleAssets.length === 0 ? (
-        <div className="rounded-[8px] border border-dashed border-line p-3 text-center dark:border-white/10">
+        <div className="rounded-[8px] border border-dashed border-line p-3 text-center">
           <p className="text-[10px] leading-5 text-muted">
             {query || typeFilter !== "all" || folderId
               ? "لا نتائج مطابقة — جرّب بحثاً آخر أو تصفية مختلفة"
@@ -959,11 +959,11 @@ export function AssetLibrary({
                 onCardActivate(asset, event);
               }}
               className={cn(
-                "asset-card group relative rounded-[8px] border bg-white/60 p-1.5 transition dark:bg-white/5",
+ "asset-card group relative rounded-[8px] border bg-surface-2 p-1.5 transition",
                 editingId !== asset.id && "cursor-pointer",
                 selectedAssetIds.includes(asset.id)
-                  ? "is-selected border-emerald-500/70 bg-emerald-500/10 ring-2 ring-emerald-500/40"
-                  : "border-line hover:border-emerald-500/40 dark:border-white/10",
+                  ? "is-selected border-brand bg-ok/10 ring-2 ring-brand/40"
+                  : "border-line hover:border-brand",
               )}
             >
               <button
@@ -976,14 +976,14 @@ export function AssetLibrary({
                 aria-label={`تحديد ${asset.name}`}
                 aria-pressed={selectedAssetIds.includes(asset.id)}
                 className={cn(
-                  "asset-card-check absolute right-1 top-1 z-[2] grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90",
-                  selectedAssetIds.includes(asset.id) ? "border-emerald-600 bg-emerald-600 text-white" : "border-line dark:border-white/20",
+ "asset-card-check absolute right-1 top-1 z-[2] grid size-5 place-items-center rounded-full border bg-surface-2",
+                  selectedAssetIds.includes(asset.id) ? "border-brand bg-ok text-white" : "border-line",
                 )}
               >
                 {selectedAssetIds.includes(asset.id) && <Check className="size-3" />}
               </button>
               {editingId === asset.id ? (
-                <div className="flex h-20 flex-col gap-1 rounded-[6px] border border-navy-2 p-1 dark:border-gold/60">
+                <div className="flex h-20 flex-col gap-1 rounded-[6px] border border-navy-2 p-1">
                   <input
                     autoFocus
                     value={draftName}
@@ -992,13 +992,13 @@ export function AssetLibrary({
                       if (e.key === "Enter") commitRename();
                       if (e.key === "Escape") setEditingId(null);
                     }}
-                    className="h-5 w-full rounded-[4px] border border-line px-1 text-[9px] dark:border-white/10 dark:bg-white/5"
+                    className="h-5 w-full rounded-[4px] border border-line px-1 text-[9px] bg-surface-2"
                   />
                   <div className="flex gap-1">
                     <button type="button" onClick={commitRename} className="grid h-5 flex-1 place-items-center rounded-[4px] bg-navy text-white">
                       <Check className="size-3" />
                     </button>
-                    <button type="button" onClick={() => setEditingId(null)} className="grid h-5 flex-1 place-items-center rounded-[4px] border border-line dark:border-white/10">
+                    <button type="button" onClick={() => setEditingId(null)} className="grid h-5 flex-1 place-items-center rounded-[4px] border border-line">
                       <X className="size-3" />
                     </button>
                   </div>
@@ -1009,9 +1009,9 @@ export function AssetLibrary({
                     type="button"
                     title={`إدراج "${asset.name}" في مساحة العمل — اسحبه على اللوحة لوضع مخصص`}
                     className={cn(
-                      "library-hit grid w-full place-items-center overflow-hidden rounded-[6px]",
+ "library-hit grid w-full place-items-center overflow-hidden rounded-[6px]",
                       viewMode === "grid" ? "h-20" : "h-14",
-                      "border border-line bg-white transition dark:border-white/10 dark:bg-white/5",
+ "border border-line bg-surface transition",
                     )}
                   >
                     <img src={asset.src} alt={asset.name} className={cn("max-w-full object-contain", viewMode === "grid" ? "max-h-[4.5rem]" : "max-h-[3.25rem]")} />
@@ -1023,7 +1023,7 @@ export function AssetLibrary({
                       onClick={(e) => openMenu(e, asset)}
                       aria-label={`خيارات ${asset.name}`}
                       title="خيارات العنصر"
-                      className="grid size-7 place-items-center rounded-[5px] border border-line text-muted dark:border-white/10"
+                      className="grid size-7 place-items-center rounded-[5px] border border-line text-muted"
                     >
                       <MoreHorizontal className="size-3.5" />
                     </button>
@@ -1056,7 +1056,7 @@ export function AssetLibrary({
               role="menu"
               aria-label={`خيارات ${menu.asset.name}`}
               onPointerDown={(e) => e.stopPropagation()}
-              className="absolute min-w-[200px] rounded-[10px] border border-line bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#161c26]"
+              className="absolute min-w-[200px] rounded-[10px] border border-line bg-surface p-1.5 shadow-xl"
               style={{
                 left: Math.max(8, Math.min(menu.x, window.innerWidth - 216)),
                 top: Math.max(8, Math.min(menu.y, window.innerHeight - 330)),
@@ -1065,7 +1065,7 @@ export function AssetLibrary({
               {pickFolder ? (
                 <>
                   <MenuRow icon={ArrowRight} label="رجوع" onClick={() => setPickFolder(false)} />
-                  <div className="my-1 border-t border-line dark:border-white/10" />
+                  <div className="my-1 border-t border-line" />
                   <MenuRow
                     icon={FolderOpen}
                     label="المكتبة الرئيسية"
@@ -1109,7 +1109,7 @@ export function AssetLibrary({
                   <MenuRow icon={Eye} label="معاينة" onClick={() => { setPreview(menu.asset); closeMenu(); }} />
                   <MenuRow icon={Pencil} label="إعادة تسمية" onClick={() => { startRename(menu.asset); closeMenu(); }} />
                   <MenuRow icon={Download} label="تنزيل الصورة" onClick={() => { downloadAsset(menu.asset); closeMenu(); }} />
-                  <div className="my-1 border-t border-line dark:border-white/10" />
+                  <div className="my-1 border-t border-line" />
                   <MenuRow icon={Trash2} label="🗑️ حذف…" danger onClick={() => { setAssetToDelete(menu.asset); closeMenu(); }} />
                 </>
               )}
@@ -1121,17 +1121,17 @@ export function AssetLibrary({
       {preview &&
         createPortal(
           <div className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/55 p-4" role="dialog" aria-modal="true" onClick={() => setPreview(null)}>
-            <div className="w-full max-w-sm rounded-[10px] bg-white p-3 shadow-xl dark:bg-[#161c26]" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-sm rounded-[10px] bg-surface p-3 shadow-xl" onClick={(e) => e.stopPropagation()}>
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[12px] font-extrabold">معاينة العنصر</p>
                   <p className="max-w-[15rem] truncate text-[10px] text-muted">{preview.name}</p>
                 </div>
-                <button type="button" onClick={() => setPreview(null)} className="grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10">
+                <button type="button" onClick={() => setPreview(null)} className="grid size-7 place-items-center rounded-[6px] border border-line">
                   <X className="size-4" />
                 </button>
               </div>
-              <div className="grid min-h-48 place-items-center rounded-[8px] border border-line bg-line-2/50 p-4 dark:border-white/10 dark:bg-white/5">
+              <div className="grid min-h-48 place-items-center rounded-[8px] border border-line bg-line-2/50 p-4">
                 <img src={preview.src} alt={preview.name} className="max-h-64 max-w-full object-contain" />
               </div>
               <div className="mt-3 flex items-center justify-between gap-2 text-[10px] text-muted">
@@ -1158,11 +1158,11 @@ export function AssetLibrary({
         createPortal(
           <div className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/45 p-4" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === "Escape") setFolderDialog(null); }}>
             {folderDialog === "delete" ? (
-              <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]">
+              <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-surface p-4 shadow-xl">
                 <strong className="text-[13px]">حذف المجلد نهائيًا؟</strong>
                 <p className="text-[11px] leading-6 text-muted">سيتم حذف هذا المجلد ومحتوياته نهائيًا، ولا يمكن التراجع.</p>
                 <div className="flex justify-end gap-2">
-                  <button type="button" autoFocus onClick={() => setFolderDialog(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">
+                  <button type="button" autoFocus onClick={() => setFolderDialog(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px]">
                     إلغاء
                   </button>
                   <button
@@ -1171,7 +1171,7 @@ export function AssetLibrary({
                       if (currentFolder) void deleteAssetFolder(currentFolder.id);
                       setFolderDialog(null);
                     }}
-                    className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white"
+                    className="h-8 rounded-[6px] bg-danger px-3 text-[11px] font-bold text-white"
                   >
                     حذف نهائيًا
                   </button>
@@ -1179,7 +1179,7 @@ export function AssetLibrary({
               </div>
             ) : (
               <form
-                className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]"
+                className="grid w-full max-w-xs gap-3 rounded-[10px] bg-surface p-4 shadow-xl"
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (folderDialog === "create") void createAssetFolder(folderDraft);
@@ -1188,9 +1188,9 @@ export function AssetLibrary({
                 }}
               >
                 <strong className="text-[12px]">{folderDialog === "create" ? "مجلد جديد" : "إعادة تسمية المجلد"}</strong>
-                <input autoFocus value={folderDraft} onChange={(e) => setFolderDraft(e.target.value)} aria-label="اسم المجلد" className="h-9 rounded-[7px] border border-line px-2 text-[12px] dark:border-white/10 dark:bg-white/5" />
+                <input autoFocus value={folderDraft} onChange={(e) => setFolderDraft(e.target.value)} aria-label="اسم المجلد" className="h-9 rounded-[7px] border border-line px-2 text-[12px] bg-surface-2" />
                 <div className="flex justify-end gap-2">
-                  <button type="button" onClick={() => setFolderDialog(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">
+                  <button type="button" onClick={() => setFolderDialog(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px]">
                     إلغاء
                   </button>
                   <button type="submit" className="h-8 rounded-[6px] bg-navy px-3 text-[11px] font-bold text-white">
@@ -1206,11 +1206,11 @@ export function AssetLibrary({
       {batchDeleting &&
         createPortal(
           <div className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/45 p-4" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === "Escape") setBatchDeleting(false); }}>
-            <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]">
+            <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-surface p-4 shadow-xl">
               <strong className="text-[13px]">حذف {selectedAssetIds.length} عنصرًا؟</strong>
               <p className="text-[11px] leading-6 text-muted">ستُحذف العناصر المحددة نهائيًا من المكتبة. المجلدات تبقى كما هي.</p>
               <div className="flex justify-end gap-2">
-                <button type="button" autoFocus onClick={() => setBatchDeleting(false)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">
+                <button type="button" autoFocus onClick={() => setBatchDeleting(false)} className="h-8 rounded-[6px] border border-line px-3 text-[11px]">
                   إلغاء
                 </button>
                 <button
@@ -1222,7 +1222,7 @@ export function AssetLibrary({
                       toast.success(`تم حذف ${ids.length} عنصرًا`);
                     });
                   }}
-                  className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white"
+                  className="h-8 rounded-[6px] bg-danger px-3 text-[11px] font-bold text-white"
                 >
                   حذف نهائيًا
                 </button>
@@ -1235,11 +1235,11 @@ export function AssetLibrary({
       {assetToDelete &&
         createPortal(
           <div className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/45 p-4" role="dialog" aria-modal="true" onKeyDown={(e) => { if (e.key === "Escape") setAssetToDelete(null); }}>
-            <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-white p-4 shadow-xl dark:bg-[#161c26]">
+            <div className="grid w-full max-w-xs gap-3 rounded-[10px] bg-surface p-4 shadow-xl">
               <strong className="text-[13px]">هل أنت متأكد من الحذف؟</strong>
               <p className="text-[11px] leading-6 text-muted">سيتم حذف «{assetToDelete.name}» من المكتبة نهائيًا.</p>
               <div className="flex justify-end gap-2">
-                <button type="button" autoFocus onClick={() => setAssetToDelete(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px] dark:border-white/10">
+                <button type="button" autoFocus onClick={() => setAssetToDelete(null)} className="h-8 rounded-[6px] border border-line px-3 text-[11px]">
                   إلغاء
                 </button>
                 <button
@@ -1249,7 +1249,7 @@ export function AssetLibrary({
                     setAssetToDelete(null);
                     void removeAsset(target.id);
                   }}
-                  className="h-8 rounded-[6px] bg-red-600 px-3 text-[11px] font-bold text-white"
+                  className="h-8 rounded-[6px] bg-danger px-3 text-[11px] font-bold text-white"
                 >
                   حذف
                 </button>
@@ -1270,8 +1270,8 @@ function MenuRow({ icon: Icon, label, danger, disabled, onClick }: { icon: any; 
       disabled={disabled}
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold transition hover:bg-line-2 disabled:opacity-35 disabled:hover:bg-transparent dark:hover:bg-white/10",
-        danger && "text-red-600 dark:text-red-400",
+ "flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold transition hover:bg-line-2 disabled:opacity-35 disabled:hover:bg-transparent",
+        danger && "text-error",
       )}
     >
       <Icon className="size-3.5 shrink-0" />

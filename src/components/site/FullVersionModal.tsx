@@ -81,36 +81,36 @@ export function FullVersionModal({ open, onClose, defaultTab = "features" }: Ful
   const enterpriseWhatsappText = `السلام عليكم، أرغب بطلب ترخيص مؤسسي للنسخة الكاملة من منصة ${BRAND.platform}.`;
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="طلب النسخة الكاملة" dir="rtl" className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-[#0F1E33]/30 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="relative my-auto w-full max-w-2xl overflow-hidden rounded-[14px] border border-line bg-white shadow-xl dark:border-white/10 dark:bg-[#161c26]" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between gap-3 border-b border-line/70 bg-[#fcfdfc] px-6 py-4 dark:border-white/10 dark:bg-white/[0.02]">
+    <div role="dialog" aria-modal="true" aria-label="طلب النسخة الكاملة" dir="rtl" className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-inverse/30 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative my-auto w-full max-w-2xl overflow-hidden rounded-[14px] border border-line bg-surface shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-3 border-b border-line/70 bg-surface-2 px-6 py-4">
           <div className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-[9px] border border-[#006C35]/15 bg-[#006C35]/10 text-[#006C35]">
+            <span className="grid size-9 place-items-center rounded-[9px] border border-brand/15 bg-navy/10 text-brand">
               <FileText className="size-4" />
             </span>
             <div>
-              <h3 className="text-[16px] font-bold text-[#0F1E33] dark:text-white">طلب النسخة الكاملة</h3>
-              <p className="mt-0.5 text-[12px] text-[#667085] dark:text-white/50">مقارنة النسخة التجريبية والنسخة الكاملة</p>
+              <h3 className="text-[16px] font-bold text-ink">طلب النسخة الكاملة</h3>
+              <p className="mt-0.5 text-[12px] text-muted">مقارنة النسخة التجريبية والنسخة الكاملة</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="grid size-8 place-items-center rounded-[8px] border border-line text-[#667085] hover:bg-[#f8faf9] dark:border-white/10 dark:hover:bg-white/5" aria-label="إغلاق">
+          <button type="button" onClick={onClose} className="grid size-8 place-items-center rounded-[8px] border border-line text-muted hover:bg-surface-2" aria-label="إغلاق">
             <X className="size-4" />
           </button>
         </div>
 
         {hasLicense && license && (
-          <div className="mx-6 mt-4 flex items-center gap-2 rounded-[10px] border border-[#006C35]/20 bg-[#006C35]/5 px-3 py-2 text-[12px] font-semibold text-[#0F1E33] dark:border-white/10 dark:bg-white/5 dark:text-white/70">
-            <CheckCircle2 className="size-4 text-[#006C35]" />
+          <div className="mx-6 mt-4 flex items-center gap-2 rounded-[10px] border border-brand bg-navy/5 px-3 py-2 text-[12px] font-semibold text-ink">
+            <CheckCircle2 className="size-4 text-brand" />
             {license.keyPrefix ? `لديك رخصة نشطة (${license.keyPrefix}…)` : "اشتراكك مفعّل من الإدارة"} — مزايا النسخة الكاملة مفعلة.
           </div>
         )}
 
-        <div className="flex border-b border-line/60 bg-white px-2 dark:border-white/10 dark:bg-[#161c26]" role="tablist">
+        <div className="flex border-b border-line/60 bg-surface px-2" role="tablist">
           {[
             ["features", "المقارنة والمزايا"],
             ["activate", "إدخال كود الرخصة"],
           ].map(([id, label]) => (
-            <button key={id} type="button" role="tab" aria-selected={activeTab === id} onClick={() => setActiveTab(id as any)} className={cn("border-b-2 px-4 py-3 text-[13px] font-bold transition", activeTab === id ? "border-[#0F1E33] text-[#0F1E33] dark:border-white dark:text-white" : "border-transparent text-[#667085] hover:text-[#0F1E33] dark:text-white/50")}>
+            <button key={id} type="button" role="tab" aria-selected={activeTab === id} onClick={() => setActiveTab(id as any)} className={cn("border-b-2 px-4 py-3 text-[13px] font-bold transition", activeTab === id ? "border-inverse text-ink" : "border-transparent text-muted hover:text-ink")}>
               {label}
             </button>
           ))}
@@ -119,25 +119,25 @@ export function FullVersionModal({ open, onClose, defaultTab = "features" }: Ful
         <div className="p-6">
           {activeTab === "features" ? (
             <div className="space-y-5">
-              <div className="overflow-hidden rounded-[10px] border border-line/70 dark:border-white/10">
-                <div className="grid grid-cols-[1.5fr_1fr_1fr] border-b border-line/60 bg-[#f8faf9] px-4 py-2.5 text-[11px] font-bold text-[#475467] dark:border-white/10 dark:bg-white/[0.03] dark:text-white/50">
+              <div className="overflow-hidden rounded-[10px] border border-line/70">
+                <div className="grid grid-cols-[1.5fr_1fr_1fr] border-b border-line/60 bg-surface-2 px-4 py-2.5 text-[11px] font-bold text-muted">
                   <span>الميزة</span>
                   <span className="text-center">التجريبية</span>
-                  <span className="text-center text-[#0F1E33] dark:text-white">النسخة الكاملة</span>
+                  <span className="text-center text-ink">النسخة الكاملة</span>
                 </div>
-                <div className="divide-y divide-line/50 dark:divide-white/5">
+                <div className="divide-y divide-line/50">
                   {COMPARISON.map((row) => (
                     <div key={row.title} className="grid grid-cols-[1.5fr_1fr_1fr] items-center gap-2 px-4 py-3">
                       <div className="flex items-center gap-2.5">
-                        <row.icon className="size-4 shrink-0 text-[#0F1E33]/60 dark:text-white/40" />
+                        <row.icon className="size-4 shrink-0 text-ink/60" />
                         <div>
-                          <strong className="block text-[13px] font-bold text-[#0F1E33] dark:text-white">{row.title}</strong>
-                          <span className="text-[11px] text-[#667085] dark:text-white/40">{row.hint}</span>
+                          <strong className="block text-[13px] font-bold text-ink">{row.title}</strong>
+                          <span className="text-[11px] text-muted">{row.hint}</span>
                         </div>
                       </div>
-                      <div className="text-center text-[12px] text-[#667085] dark:text-white/40">{row.demo === false ? <Minus className="mx-auto size-4 text-[#d0d5dd]" /> : row.demo}</div>
+                      <div className="text-center text-[12px] text-muted">{row.demo === false ? <Minus className="mx-auto size-4 text-muted" /> : row.demo}</div>
                       <div className="text-center">
-                        <span className="inline-flex items-center gap-1 rounded-full border border-[#006C35]/20 bg-[#006C35]/5 px-2.5 py-1 text-[11px] font-bold text-[#0F1E33] dark:border-white/10 dark:bg-white/5 dark:text-white/70">
+                        <span className="inline-flex items-center gap-1 rounded-full border border-brand bg-navy/5 px-2.5 py-1 text-[11px] font-bold text-ink">
                           <Check className="size-3" /> {row.full}
                         </span>
                       </div>
@@ -147,27 +147,27 @@ export function FullVersionModal({ open, onClose, defaultTab = "features" }: Ful
               </div>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <button type="button" onClick={() => setActiveTab("activate")} className="inline-flex h-11 items-center justify-center rounded-[10px] bg-[#0F1E33] px-5 text-[13px] font-bold text-white hover:bg-black dark:bg-white dark:text-[#0F1E33]">تفعيل الرخصة</button>
-                <a href={whatsappHref(enterpriseWhatsappText)} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center justify-center rounded-[10px] border border-line bg-white px-5 text-[13px] font-bold text-[#0F1E33] hover:bg-[#f8faf9] dark:border-white/10 dark:bg-white/5 dark:text-white">طلب ترخيص مؤسسي عبر الواتساب</a>
+                <button type="button" onClick={() => setActiveTab("activate")} className="inline-flex h-11 items-center justify-center rounded-[10px] bg-inverse px-5 text-[13px] font-bold text-on-inverse hover:bg-inverse-hover">تفعيل الرخصة</button>
+                <a href={whatsappHref(enterpriseWhatsappText)} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center justify-center rounded-[10px] border border-line bg-surface px-5 text-[13px] font-bold text-ink hover:bg-surface-2">طلب ترخيص مؤسسي عبر الواتساب</a>
               </div>
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-[10px] border border-line/70 p-4 dark:border-white/10 dark:bg-white/[0.02]">
-                <label htmlFor="nasaq-license-key" className="mb-2 block text-[13px] font-bold text-[#0F1E33] dark:text-white">إدخال كود الرخصة</label>
+              <div className="rounded-[10px] border border-line/70 p-4 bg-surface-2">
+                <label htmlFor="nasaq-license-key" className="mb-2 block text-[13px] font-bold text-ink">إدخال كود الرخصة</label>
                 <div className="relative">
-                  <input id="nasaq-license-key" type="text" dir="ltr" autoComplete="off" spellCheck={false} value={licenseKey} onChange={(e) => { setLicenseKey(e.target.value); setErrorMessage(null); }} onKeyDown={(e) => { if (e.key === "Enter") void handleActivate(); }} placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX-V3" className="h-11 w-full rounded-[10px] border border-line bg-white pe-4 ps-10 font-mono text-[13px] font-semibold tracking-wider text-[#0F1E33] placeholder:text-[#98a2b3] focus:border-[#0F1E33] focus:outline-none dark:border-white/10 dark:bg-[#111722] dark:text-white" />
-                  <Key className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-[#98a2b3]" />
+                  <input id="nasaq-license-key" type="text" dir="ltr" autoComplete="off" spellCheck={false} value={licenseKey} onChange={(e) => { setLicenseKey(e.target.value); setErrorMessage(null); }} onKeyDown={(e) => { if (e.key === "Enter") void handleActivate(); }} placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX-V3" className="h-11 w-full rounded-[10px] border border-line bg-page pe-4 ps-10 font-mono text-[13px] font-semibold tracking-wider text-ink placeholder:text-muted focus:border-inverse focus:outline-none" />
+                  <Key className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted" />
                 </div>
-                {errorMessage && <p className="mt-3 rounded-[8px] border border-red-200 bg-red-50 px-3 py-2 text-[12px] font-semibold text-[#b42318] dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-300" role="alert">{errorMessage}</p>}
-                {successMessage && <p className="mt-3 flex items-center gap-2 rounded-[8px] border border-[#006C35]/20 bg-[#006C35]/5 px-3 py-2 text-[12px] font-semibold text-[#0F1E33] dark:border-white/10 dark:bg-white/5" role="status"><CheckCircle2 className="size-4 text-[#006C35]" />{successMessage}</p>}
+                {errorMessage && <p className="mt-3 rounded-[8px] border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] font-semibold text-error" role="alert">{errorMessage}</p>}
+                {successMessage && <p className="mt-3 flex items-center gap-2 rounded-[8px] border border-brand bg-navy/5 px-3 py-2 text-[12px] font-semibold text-ink" role="status"><CheckCircle2 className="size-4 text-brand" />{successMessage}</p>}
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
-                <button type="button" disabled={isActivating} onClick={() => void handleActivate()} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-[#0F1E33] px-5 text-[13px] font-bold text-white hover:bg-black disabled:opacity-60 dark:bg-white dark:text-[#0F1E33]">
+                <button type="button" disabled={isActivating} onClick={() => void handleActivate()} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-inverse px-5 text-[13px] font-bold text-on-inverse hover:bg-inverse-hover disabled:opacity-60">
                   {isActivating ? <Loader2 className="size-4 animate-spin" /> : null}
                   {isActivating ? "جارٍ التحقق" : "تفعيل الرخصة"}
                 </button>
-                <a href={whatsappHref(enterpriseWhatsappText)} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center justify-center rounded-[10px] border border-line bg-white px-5 text-[13px] font-bold text-[#0F1E33] hover:bg-[#f8faf9] dark:border-white/10 dark:bg-white/5 dark:text-white">طلب ترخيص مؤسسي</a>
+                <a href={whatsappHref(enterpriseWhatsappText)} target="_blank" rel="noopener noreferrer" className="inline-flex h-11 items-center justify-center rounded-[10px] border border-line bg-surface px-5 text-[13px] font-bold text-ink hover:bg-surface-2">طلب ترخيص مؤسسي</a>
               </div>
             </div>
           )}

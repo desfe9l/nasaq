@@ -657,7 +657,7 @@ export function WorkspaceOverlays({
         >
           <div
             ref={menuRef}
-            className="editor-context-menu fixed min-w-[240px] max-w-[280px] max-h-[85vh] overflow-auto rounded-[10px] border bg-white p-1.5 shadow-2xl dark:border-white/15 dark:bg-[#1e2633]"
+            className="editor-context-menu fixed min-w-[240px] max-w-[280px] max-h-[85vh] overflow-auto rounded-[10px] border bg-surface p-1.5 shadow-2xl"
             style={menuStyle}
             onPointerDown={(event) => event.stopPropagation()}
             onContextMenu={(e) => e.preventDefault()}
@@ -681,8 +681,8 @@ export function WorkspaceOverlays({
                       onCloseMenu();
                     }}
                     className={cn(
-                      "editor-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold disabled:opacity-35 hover:bg-line-2 dark:hover:bg-white/10",
-                      action.danger && "editor-menu-danger text-red-600 dark:text-red-400",
+                      "editor-menu-item flex w-full items-center gap-2 rounded-[6px] px-2.5 py-2 text-right text-[11px] font-bold disabled:opacity-35 hover:bg-line-2",
+                      action.danger && "editor-menu-danger text-error",
                     )}
                   >
                     <Icon className="size-3.5 shrink-0" />
@@ -714,7 +714,7 @@ export function WorkspaceOverlays({
           onPointerDown={onCloseMenu}
         >
           <form
-            className="grid w-full max-w-xs gap-3 rounded-[10px] border border-line bg-white p-4 shadow-xl dark:border-white/10 dark:bg-[#161c26]"
+            className="grid w-full max-w-xs gap-3 rounded-[10px] border border-line bg-surface p-4 shadow-xl"
             onPointerDown={(event) => event.stopPropagation()}
             onSubmit={(event) => {
               event.preventDefault();
@@ -734,7 +734,7 @@ export function WorkspaceOverlays({
                 setRenaming((r) => (r ? { ...r, name: event.target.value } : r))
               }
               aria-label="اسم العنصر"
-              className="h-9 rounded-[7px] border border-line px-2 text-[12px] font-bold dark:border-white/15 dark:bg-white/5"
+              className="h-9 rounded-[7px] border border-line px-2 text-[12px] font-bold bg-surface-2"
             />
             <div className="flex justify-end gap-2">
               <button
@@ -743,7 +743,7 @@ export function WorkspaceOverlays({
                   setRenaming(null);
                   onCloseMenu();
                 }}
-                className="h-8 rounded-[6px] border border-line px-3 text-[11px] font-bold dark:border-white/10"
+                className="h-8 rounded-[6px] border border-line px-3 text-[11px] font-bold"
               >
                 إلغاء
               </button>
@@ -864,7 +864,7 @@ export function WorkspaceStatusBar() {
             className={cn(
               "rounded-[5px] border px-1.5 py-0.5 text-[10px] font-extrabold",
               printGuides?.[guide.key]
-                ? "border-navy-2 bg-navy-2/10 text-navy-2 dark:border-gold/50 dark:text-gold-2"
+                ? "border-navy-2 bg-navy-2/10 text-brand-hover"
                 : "border-transparent text-muted",
             )}
           >

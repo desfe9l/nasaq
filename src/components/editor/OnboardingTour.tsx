@@ -183,12 +183,12 @@ export function OnboardingTour({
       {rect && (
         <>
           <span
-            className="absolute bg-black/45"
+            className="absolute bg-scrim"
             style={{ top: 0, left: 0, right: 0, height: Math.max(0, rect.top) }}
             aria-hidden
           />
           <span
-            className="absolute bg-black/45"
+            className="absolute bg-scrim"
             style={{
               top: rect.top + rect.height,
               left: 0,
@@ -198,7 +198,7 @@ export function OnboardingTour({
             aria-hidden
           />
           <span
-            className="absolute bg-black/45"
+            className="absolute bg-scrim"
             style={{
               top: rect.top,
               left: 0,
@@ -208,7 +208,7 @@ export function OnboardingTour({
             aria-hidden
           />
           <span
-            className="absolute bg-black/45"
+            className="absolute bg-scrim"
             style={{
               top: rect.top,
               left: rect.left + rect.width,
@@ -218,7 +218,7 @@ export function OnboardingTour({
             aria-hidden
           />
           <span
-            className="pointer-events-none absolute rounded-[10px] ring-2 ring-gold-2 dark:ring-gold-2"
+            className="pointer-events-none absolute rounded-[10px] ring-2 ring-gold-2"
             style={{
               top: rect.top,
               left: rect.left,
@@ -230,22 +230,22 @@ export function OnboardingTour({
           />
         </>
       )}
-      {!rect && <div className="absolute inset-0 bg-black/45" aria-hidden />}
+      {!rect && <div className="absolute inset-0 bg-scrim" aria-hidden />}
 
       <div
-        className="absolute w-[300px] rounded-[12px] border border-line bg-white p-3 shadow-2xl dark:border-white/10 dark:bg-[#161c26]"
+        className="absolute w-[300px] rounded-[12px] border border-line bg-surface p-3 shadow-2xl"
         style={{ top: tooltip.top, left: tooltip.left }}
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-1.5">
-            <Sparkles className="size-3.5 text-navy dark:text-gold-2" aria-hidden />
+            <Sparkles className="size-3.5 text-brand" aria-hidden />
             <h3 className="text-[12px] font-extrabold">{step?.title}</h3>
           </div>
           <button
             type="button"
             onClick={finish}
             aria-label="تخطي الجولة"
-            className="grid size-6 shrink-0 place-items-center rounded-[6px] text-muted hover:bg-line-2 dark:hover:bg-white/5"
+            className="grid size-6 shrink-0 place-items-center rounded-[6px] text-muted hover:bg-line-2"
           >
             <X className="size-3.5" />
           </button>
@@ -260,7 +260,7 @@ export function OnboardingTour({
               type="button"
               onClick={() => setIndex((i) => Math.max(0, i - 1))}
               disabled={index === 0}
-              className="inline-flex h-7 items-center gap-1 rounded-[7px] border border-line px-2 text-[11px] font-bold disabled:opacity-40 dark:border-white/10"
+              className="inline-flex h-7 items-center gap-1 rounded-[7px] border border-line px-2 text-[11px] font-bold disabled:opacity-40"
             >
               <ArrowRight className="size-3" aria-hidden />
               السابق

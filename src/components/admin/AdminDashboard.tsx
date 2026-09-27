@@ -18,7 +18,8 @@ import {
   Plus,
   LogOut,
 } from "lucide-react";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner";
+import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   adminSaveSettingsFn,
   adminVerifyFn,
@@ -45,12 +46,12 @@ const TABS: { id: Tab; label: string; icon: typeof Shield }[] = [
 ];
 
 const input =
-  "h-10 w-full rounded-lg border border-line bg-white px-3 text-[13px] font-semibold outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 dark:border-white/10 dark:bg-white/5 dark:text-white";
+ "h-10 w-full rounded-lg border border-line bg-surface px-3 text-[13px] font-semibold outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
 const label = "grid gap-1.5 text-[12px] font-extrabold text-muted";
 const primaryBtn =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-[13px] font-extrabold text-white transition hover:bg-emerald-500 disabled:opacity-50";
+ "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-navy px-4 text-[13px] font-extrabold text-on-brand transition hover:bg-ok disabled:opacity-50";
 const ghostBtn =
-  "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-[12px] font-bold transition hover:border-emerald-500/50 disabled:opacity-50 dark:border-white/10";
+ "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-[12px] font-bold transition hover:border-brand/30 disabled:opacity-50";
 
 export default function AdminDashboard() {
   const [authed, setAuthed] = useState(false);
@@ -72,20 +73,20 @@ export default function AdminDashboard() {
 
   if (!authed) {
     return (
-      <div dir="rtl" className="grid min-h-screen place-items-center bg-[#07110f] p-4 text-white">
-        <Toaster position="top-center" richColors dir="rtl" />
-        <section className="w-full max-w-sm rounded-2xl border border-emerald-500/25 bg-white/[0.04] p-6 shadow-2xl backdrop-blur-xl">
+      <div dir="rtl" className="grid min-h-screen place-items-center bg-[#07110f] p-4 text-on-inverse">
+        <ThemedToaster position="top-center" richColors dir="rtl" />
+        <section className="w-full max-w-sm rounded-2xl border border-brand bg-surface/[0.04] p-6 shadow-2xl backdrop-blur-xl">
           <div className="mb-5 flex items-center gap-3">
-            <span className="grid size-11 place-items-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-400">
+            <span className="grid size-11 place-items-center rounded-xl border border-brand bg-ok/10 text-success">
               <Shield className="size-5" />
             </span>
             <div>
               <h1 className="text-[18px] font-black">لوحة إدارة نَسَق</h1>
-              <p className="text-[12px] text-slate-400">الوصول متاح لحساب المالك الموثّق فقط</p>
+              <p className="text-[12px] text-muted">الوصول متاح لحساب المالك الموثّق فقط</p>
             </div>
           </div>
-          {checking && <p className="text-sm text-slate-300">جارٍ التحقق…</p>}
-          {error && <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] font-bold text-red-300">{error}</p>}
+          {checking && <p className="text-sm text-muted">جارٍ التحقق…</p>}
+          {error && <p className="mt-3 rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] font-bold text-red-300">{error}</p>}
           <a href="/login" className={cn(primaryBtn, "mt-4 h-11 w-full")}>تسجيل الدخول</a>
         </section>
       </div>
@@ -93,12 +94,12 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div dir="rtl" className="min-h-screen bg-paper text-ink dark:bg-[#111722] dark:text-white">
-      <Toaster position="top-center" richColors dir="rtl" />
-      <header className="sticky top-0 z-20 border-b border-line bg-white/80 backdrop-blur-md dark:border-white/10 dark:bg-[#111722]/80">
+    <div dir="rtl" className="min-h-screen bg-paper text-ink">
+      <ThemedToaster position="top-center" richColors dir="rtl" />
+      <header className="sticky top-0 z-20 border-b border-line bg-surface/80 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <div className="flex items-center gap-2">
-            <Shield className="size-5 text-emerald-600" />
+            <Shield className="size-5 text-brand" />
             <strong className="text-[15px] font-black">لوحة إدارة نَسَق</strong>
           </div>
           <div className="flex items-center gap-2">
@@ -122,8 +123,8 @@ export default function AdminDashboard() {
               aria-selected={tab === t.id}
               onClick={() => setTab(t.id)}
               className={cn(
-                "flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-[13px] font-extrabold transition",
-                tab === t.id ? "border-emerald-500 text-emerald-700 dark:text-emerald-300" : "border-transparent text-muted hover:text-ink dark:hover:text-white",
+ "flex shrink-0 items-center gap-2 border-b-2 px-3 py-2.5 text-[13px] font-extrabold transition",
+                tab === t.id ? "border-brand text-success" : "border-transparent text-muted hover:text-ink",
               )}
             >
               <t.icon className="size-4" />
@@ -138,7 +139,7 @@ export default function AdminDashboard() {
         {tab === "commercial" && <SettingsTab kind="commercial" />}
         {tab === "content" && <SettingsTab kind="content" />}
         {tab === "licenses" && (
-          <div className="overflow-hidden rounded-xl border border-line dark:border-white/10">
+          <div className="overflow-hidden rounded-xl border border-line">
             <AdminLicensePanel />
           </div>
         )}
@@ -187,7 +188,7 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
 
   if (kind === "commercial") {
     return (
-      <section className="grid gap-4 rounded-xl border border-line bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
+      <section className="grid gap-4 rounded-xl border border-line bg-surface p-5">
         <h2 className="text-[16px] font-black">الروابط والأسعار</h2>
         <div className="grid gap-3 md:grid-cols-2">
           <label className={label}>رقم واتساب (دولي، أرقام فقط)<input dir="ltr" className={input} value={c.whatsappNumber} onChange={(e) => setC({ whatsappNumber: e.target.value })} /></label>
@@ -206,10 +207,10 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
 
   return (
     <div className="grid gap-5">
-      <section className="grid gap-3 rounded-xl border border-line bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
+      <section className="grid gap-3 rounded-xl border border-line bg-surface p-5">
         <h2 className="text-[16px] font-black">شريط الإعلانات</h2>
         <label className="flex items-center gap-2 text-[13px] font-bold">
-          <input type="checkbox" checked={a.enabled} onChange={(e) => setA({ enabled: e.target.checked })} className="size-4 accent-emerald-600" />
+          <input type="checkbox" checked={a.enabled} onChange={(e) => setA({ enabled: e.target.checked })} className="size-4 accent-navy" />
           إظهار الإعلان في أعلى صفحات الموقع
         </label>
         <div className="grid gap-3 md:grid-cols-[2fr_1fr_1fr]">
@@ -226,7 +227,7 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
         <div><SaveBtn section="announcement" /></div>
       </section>
 
-      <section className="grid gap-3 rounded-xl border border-line bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
+      <section className="grid gap-3 rounded-xl border border-line bg-surface p-5">
         <h2 className="text-[16px] font-black">نصوص الموقع</h2>
         <p className="text-[11px] text-muted">اترك الحقل فارغًا لاستخدام النص الافتراضي.</p>
         <label className={label}>شارة الواجهة<input className={input} value={t.heroEyebrow} onChange={(e) => setT({ heroEyebrow: e.target.value })} /></label>
@@ -236,7 +237,7 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
         <div><SaveBtn section="texts" /></div>
       </section>
 
-      <section className="grid gap-3 rounded-xl border border-line bg-white p-5 dark:border-white/10 dark:bg-white/[0.03]">
+      <section className="grid gap-3 rounded-xl border border-line bg-surface p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-[16px] font-black">لوحات الهوية الافتراضية (Brand Kit)</h2>
           <button type="button" className={ghostBtn} onClick={() => setPresets([...presets, { id: `preset-${Date.now()}`, name: "لوحة جديدة", primaryColor: "#0c3d2c", secondaryColor: "#145c42", accentColor: "#c6a05a", paperColor: "#fbfaf6", textColor: "#1f2937" }])}>
@@ -245,12 +246,12 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
         </div>
         {presets.length === 0 && <p className="text-[12px] text-muted">لا توجد لوحات مخصصة — تُعرض اللوحات المدمجة في صفحة الهوية.</p>}
         {presets.map((p, i) => (
-          <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-line p-2 dark:border-white/10">
+          <div key={p.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-line p-2">
             <input className={cn(input, "w-40")} value={p.name} onChange={(e) => setPresets(presets.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} aria-label="اسم اللوحة" />
             {colorKeys.map((k) => (
-              <input key={k} type="color" value={String(p[k])} aria-label={k} className="h-9 w-10 cursor-pointer rounded border border-line bg-transparent dark:border-white/10" onChange={(e) => setPresets(presets.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)))} />
+              <input key={k} type="color" value={String(p[k])} aria-label={k} className="h-9 w-10 cursor-pointer rounded border border-line bg-transparent" onChange={(e) => setPresets(presets.map((x, j) => (j === i ? { ...x, [k]: e.target.value } : x)))} />
             ))}
-            <button type="button" className={cn(ghostBtn, "text-danger")} onClick={() => setPresets(presets.filter((_, j) => j !== i))} aria-label="حذف اللوحة">
+            <button type="button" className={cn(ghostBtn, "text-error")} onClick={() => setPresets(presets.filter((_, j) => j !== i))} aria-label="حذف اللوحة">
               <Trash2 className="size-3.5" />
             </button>
           </div>

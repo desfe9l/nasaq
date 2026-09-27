@@ -57,10 +57,10 @@ const FORMATS: { id: ExportFormat; title: string; desc: string; icon: typeof Fil
 ];
 
 const FIX_LABEL: Record<NonNullable<PreflightIssue["fix"]>, string> = {
-  "fit-text": "ملاءمة الإطار",
-  "move-inward": "إبعادها عن الهامش",
-  "delete-page": "حذف الصفحة",
-  "delete-element": "حذف العناصر",
+ "fit-text": "ملاءمة الإطار",
+ "move-inward": "إبعادها عن الهامش",
+ "delete-page": "حذف الصفحة",
+ "delete-element": "حذف العناصر",
 };
 
 const GUIDE_LABELS: {
@@ -246,7 +246,7 @@ export function ExportDialog() {
       onClick={() => !busy && toggle("exportOpen")}
     >
       <div
-        className="flex max-h-[92vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-2xl dark:border-white/10 dark:bg-[#161c26]"
+        className="flex max-h-[92vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[14px] border border-line bg-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         dir="rtl"
         role="dialog"
@@ -254,9 +254,9 @@ export function ExportDialog() {
         aria-label="تصدير المستند"
       >
         {/* Header - fixed */}
-        <div className="flex shrink-0 items-start justify-between border-b border-line/70 px-5 py-4 dark:border-white/10">
+        <div className="flex shrink-0 items-start justify-between border-b border-line/70 px-5 py-4">
           <div>
-            <h2 className="text-[18px] font-extrabold text-navy dark:text-white">تصدير المستند</h2>
+            <h2 className="text-[18px] font-extrabold text-brand">تصدير المستند</h2>
             <p className="mt-0.5 text-[12px] text-muted">
               {selected.length} صفحة · {safeFileName(name)}
             </p>
@@ -264,7 +264,7 @@ export function ExportDialog() {
           <button
             type="button"
             disabled={busy || previewBusy}
-            className="grid size-9 place-items-center rounded-[8px] border border-line disabled:opacity-40 dark:border-white/10"
+            className="grid size-9 place-items-center rounded-[8px] border border-line disabled:opacity-40"
             onClick={() => toggle("exportOpen")}
             aria-label="إغلاق"
           >
@@ -275,7 +275,7 @@ export function ExportDialog() {
         {/* Scrollable body */}
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 editor-pane-scroll">
           {guestNeedsSignIn && (
-            <p className="mb-4 flex items-start gap-2 rounded-[10px] border border-navy/20 bg-navy/5 p-3 text-[12px] leading-6 dark:border-white/10 dark:bg-white/5">
+            <p className="mb-4 flex items-start gap-2 rounded-[10px] border border-navy/20 bg-navy/5 p-3 text-[12px] leading-6">
               <LogIn className="mt-0.5 size-4 shrink-0" aria-hidden />
               <span>
                 أنت تتصفح <strong className="font-extrabold">كزائر</strong> — التعديل والمعاينة
@@ -303,18 +303,18 @@ export function ExportDialog() {
                   aria-disabled={locked || undefined}
                   title={locked ? "متاح في النسخة الكاملة — اضغط لطلب الترخيص" : undefined}
                   className={cn(
-                    "relative flex min-h-[88px] flex-col rounded-[10px] border p-3 text-right transition",
+ "relative flex min-h-[88px] flex-col rounded-[10px] border p-3 text-right transition",
                     locked
-                      ? "border-dashed border-line bg-line-2/40 opacity-80 hover:border-emerald-500/50 hover:opacity-100 dark:border-white/10 dark:bg-white/[0.03]"
+                      ? "border-dashed border-line bg-line-2/40 opacity-80 hover:border-brand hover:opacity-100"
                       : format === f.id
                         ? "border-navy bg-navy text-white"
-                        : "border-line hover:border-navy-2 dark:border-white/10",
+                        : "border-line hover:border-navy-2",
                   )}
                 >
                   <Icon
                     className={cn(
-                      "mb-2 size-5",
-                      format === f.id ? "text-gold-2" : "text-navy-2 dark:text-gold-2",
+ "mb-2 size-5",
+                      format === f.id ? "text-gold-2" : "text-brand-hover",
                     )}
                   />
                   <strong className="block text-[13px]">{f.title}</strong>
@@ -322,7 +322,7 @@ export function ExportDialog() {
                     {f.desc}
                   </span>
                   {locked && (
-                    <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
+                    <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-brand bg-ok/10 px-1.5 py-0.5 text-[10px] font-extrabold text-success">
                       🔒 النسخة الكاملة
                     </span>
                   )}
@@ -332,7 +332,7 @@ export function ExportDialog() {
           </div>
 
           {OFFICE_FORMATS.has(format) && (
-            <div className="mt-4 grid gap-2 rounded-[10px] border border-line p-3 dark:border-white/10">
+            <div className="mt-4 grid gap-2 rounded-[10px] border border-line p-3">
               <label className="flex cursor-pointer items-start gap-2">
                 <input
                   type="checkbox"
@@ -341,7 +341,7 @@ export function ExportDialog() {
                   className="mt-0.5 size-4 accent-navy"
                 />
                 <span>
-                  <strong className="block text-[12px] text-navy dark:text-white">
+                  <strong className="block text-[12px] text-brand">
                     عناصر قابلة للتعديل
                   </strong>
                   <span className="text-[11px] leading-4 text-muted">
@@ -361,19 +361,19 @@ export function ExportDialog() {
                   <select
                     value={quality}
                     onChange={(e) => setQuality(Number(e.target.value))}
-                    className="h-9 rounded-[8px] border border-line bg-white px-2 text-[13px] font-semibold dark:border-white/10 dark:bg-white/5 dark:text-white"
+                    className="h-9 rounded-[8px] border border-line bg-surface px-2 text-[13px] font-semibold"
                   >
                     <option value={2}>قياسية — 192 DPI (أسرع)</option>
                     <option value={scaleForDpi(PRINT_EXPORT_DPI)}>طباعة احترافية — 300 DPI</option>
                     <option value={4}>طباعة فائقة — 384 DPI (أبطأ)</option>
                   </select>
                 ) : (
-                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line bg-line-2/40 px-2.5 py-2 text-[12px] font-semibold dark:border-white/10 dark:bg-white/5">
-                    <span className="text-ink dark:text-white">قياسية — {DEMO_EXPORT_DPI} DPI (النسخة التجريبية)</span>
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line bg-line-2/40 px-2.5 py-2 text-[12px] font-semibold">
+                    <span className="text-ink">قياسية — {DEMO_EXPORT_DPI} DPI (النسخة التجريبية)</span>
                     <button
                       type="button"
                       onClick={() => setUpgradeOpen(true)}
-                      className="inline-flex items-center gap-1 text-[11px] font-extrabold text-emerald-700 hover:underline dark:text-emerald-300"
+                      className="inline-flex items-center gap-1 text-[11px] font-extrabold text-success hover:underline"
                     >
                       <Lock className="size-3" />
                       300 DPI للطباعة — النسخة الكاملة
@@ -390,7 +390,7 @@ export function ExportDialog() {
               <select
                 value={scope}
                 onChange={(e) => setScope(e.target.value as "all" | "current")}
-                className="h-9 rounded-[8px] border border-line bg-white px-2 text-[13px] font-semibold dark:border-white/10 dark:bg-white/5 dark:text-white"
+                className="h-9 rounded-[8px] border border-line bg-surface px-2 text-[13px] font-semibold"
               >
                 <option value="all">كل الصفحات ({pages.length})</option>
                 <option value="current">الصفحة الحالية فقط</option>
@@ -399,38 +399,38 @@ export function ExportDialog() {
           )}
 
           {format === "nsq" && (
-            <p className="mt-3 rounded-[8px] border border-line bg-line-2/60 p-3 text-[11px] leading-5 text-muted dark:border-white/10 dark:bg-white/5">
+            <p className="mt-3 rounded-[8px] border border-line bg-line-2/60 p-3 text-[11px] leading-5 text-muted">
               ملف نَسَق يضم المشروع كاملًا — كل الصفحات والنصوص والصور والرسوم والخطوط المرفوعة والطبقات والمجموعات —
               في ملف واحد مضغوط يُفتح قابلًا للتعديل على أي جهاز، بما في ذلك معاينة للصفحة الأولى.
             </p>
           )}
 
           {format === "json" && (
-            <p className="mt-3 rounded-[8px] border border-line bg-line-2/60 p-3 text-[11px] leading-5 text-muted dark:border-white/10 dark:bg-white/5">
+            <p className="mt-3 rounded-[8px] border border-line bg-line-2/60 p-3 text-[11px] leading-5 text-muted">
               ملف المشروع يحفظ الصفحات والعناصر والصور، ويمكن استيراده على أي جهاز من صفحة المشاريع.
             </p>
           )}
 
           {(format === "png" || format === "jpg") && selected.length > 1 && (
-            <p className="mt-3 rounded-[8px] border border-line bg-line-2/60 p-3 text-[11px] leading-5 text-muted dark:border-white/10 dark:bg-white/5">
+            <p className="mt-3 rounded-[8px] border border-line bg-line-2/60 p-3 text-[11px] leading-5 text-muted">
               عند اختيار أكثر من صفحة يتم تنزيل ملف ZIP يحتوي صورة مستقلة لكل صفحة.
             </p>
           )}
 
-          <div className="mt-4 rounded-[10px] border border-line p-3 dark:border-white/10">
+          <div className="mt-4 rounded-[10px] border border-line p-3">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <strong className="inline-flex items-center gap-1.5 text-[12px] text-navy dark:text-white">
-                <ShieldCheck className="size-4 text-navy-2 dark:text-gold-2" />
+              <strong className="inline-flex items-center gap-1.5 text-[12px] text-brand">
+                <ShieldCheck className="size-4 text-brand-hover" />
                 فحص ما قبل التصدير
               </strong>
               <span
                 className={cn(
-                  "rounded-full px-2 py-0.5 text-[11px] font-extrabold",
+ "rounded-full px-2 py-0.5 text-[11px] font-extrabold",
                   report.counts.error
-                    ? "bg-red-100 text-danger dark:bg-red-500/15"
+                    ? "bg-danger/10 text-error"
                     : report.counts.warning
-                      ? "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200"
-                      : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200",
+                      ? "bg-gold/15 text-warning"
+                      : "bg-ok/10 text-success",
                 )}
               >
                 {preflightSummary(report)}
@@ -448,12 +448,12 @@ export function ExportDialog() {
                   <li
                     key={`${issue.kind}-${issue.pageId}-${index}`}
                     className={cn(
-                      "rounded-[8px] border p-2",
+ "rounded-[8px] border p-2",
                       issue.severity === "error"
-                        ? "border-red-200 bg-red-50/70 dark:border-red-500/30 dark:bg-red-500/10"
+                        ? "border-danger/30 bg-danger/10"
                         : issue.severity === "warning"
-                          ? "border-amber-200 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10"
-                          : "border-line dark:border-white/10",
+                          ? "border-gold/40 bg-gold/15"
+                          : "border-line",
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -467,7 +467,7 @@ export function ExportDialog() {
                         <button
                           type="button"
                           onClick={() => applyFix(issue)}
-                          className="shrink-0 rounded-[6px] border border-line px-2 py-1 text-[10px] font-extrabold hover:border-navy-2 dark:border-white/10"
+                          className="shrink-0 rounded-[6px] border border-line px-2 py-1 text-[10px] font-extrabold hover:border-navy-2"
                         >
                           {FIX_LABEL[issue.fix]}
                         </button>
@@ -479,7 +479,7 @@ export function ExportDialog() {
               </ul>
             )}
 
-            <div className="mt-2 flex flex-wrap gap-3 border-t border-line pt-2 dark:border-white/10">
+            <div className="mt-2 flex flex-wrap gap-3 border-t border-line pt-2">
               {GUIDE_LABELS.map((guide) => (
                 <label
                   key={guide.key}
@@ -499,16 +499,16 @@ export function ExportDialog() {
         </div>
 
         {/* Footer - always visible */}
-        <div className="shrink-0 border-t border-line/70 bg-white px-5 py-3 dark:border-white/10 dark:bg-[#161c26]">
+        <div className="shrink-0 border-t border-line/70 bg-surface px-5 py-3">
           {busy && (
-            <p className="mb-2 inline-flex w-full items-center justify-center gap-2 text-center text-[12px] font-bold text-navy-2 dark:text-gold-2">
+            <p className="mb-2 inline-flex w-full items-center justify-center gap-2 text-center text-[12px] font-bold text-brand-hover">
               <Loader2 className="size-4 animate-spin" />
               {progress || "جاري التصدير…"}
             </p>
           )}
 
           {error && (
-            <p className="mb-2 inline-flex w-full items-start justify-center gap-2 rounded-[8px] border border-red-200 bg-red-50 p-3 text-[12px] font-bold leading-5 text-danger dark:border-red-500/30 dark:bg-red-500/10">
+            <p className="mb-2 inline-flex w-full items-start justify-center gap-2 rounded-[8px] border border-danger/30 bg-danger/10 p-3 text-[12px] font-bold leading-5 text-error">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" />
               {error}
             </p>
@@ -519,7 +519,7 @@ export function ExportDialog() {
               type="button"
               disabled={busy || previewBusy || !formatAllowed}
               onClick={() => void preview()}
-              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13px] font-bold disabled:opacity-40 dark:border-white/10"
+              className="inline-flex h-11 items-center justify-center gap-1.5 rounded-[10px] border border-line px-4 text-[13px] font-bold disabled:opacity-40"
             >
               <Eye className="size-4" />
               {previewBusy ? "جاري المعاينة…" : "معاينة"}
@@ -536,7 +536,7 @@ export function ExportDialog() {
               type="button"
               disabled={busy || previewBusy}
               onClick={() => toggle("exportOpen")}
-              className="h-11 rounded-[10px] border border-line px-4 text-[13px] font-bold disabled:opacity-40 dark:border-white/10"
+              className="h-11 rounded-[10px] border border-line px-4 text-[13px] font-bold disabled:opacity-40"
             >
               إلغاء
             </button>
@@ -557,11 +557,11 @@ export function ExportDialog() {
         )}
 
         {previewPages.length > 0 && (
-          <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="معاينة التصدير">
-            <div className="flex max-h-[92vh] w-full max-w-4xl flex-col rounded-[12px] border border-line bg-white p-4 dark:border-white/10 dark:bg-[#303132]">
+          <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center bg-scrim p-4" role="dialog" aria-modal="true" aria-label="معاينة التصدير">
+            <div className="flex max-h-[92vh] w-full max-w-4xl flex-col rounded-[12px] border border-line bg-surface p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
                 <div><h3 className="text-[15px] font-extrabold">معاينة التصدير</h3><p className="text-[11px] text-muted">{previewPages.length} صفحة · {OFFICE_FORMATS.has(format) && editableOffice ? "معاينة التصميم؛ قد يختلف توزيع النص في وضع التحرير داخل Office" : "محرك الرسم نفسه · 96 DPI للأبعاد"}</p></div>
-                <button type="button" onClick={() => setPreviewPages([])} className="grid size-8 place-items-center rounded-[7px] border border-line dark:border-white/10" title="إغلاق المعاينة" aria-label="إغلاق المعاينة"><X className="size-4" /></button>
+                <button type="button" onClick={() => setPreviewPages([])} className="grid size-8 place-items-center rounded-[7px] border border-line" title="إغلاق المعاينة" aria-label="إغلاق المعاينة"><X className="size-4" /></button>
               </div>
               <div className="editor-pane-scroll min-h-0 flex-1 overflow-auto rounded-[8px] bg-[#252627] p-4">
                 <div className="grid gap-5 justify-items-center">

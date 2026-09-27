@@ -61,7 +61,7 @@ function Section({
   return (
     <section className="grid gap-2.5">
       <div className="flex items-baseline justify-between gap-3">
-        <h3 className="text-[12px] font-extrabold text-ink dark:text-white">
+        <h3 className="text-[12px] font-extrabold text-ink">
           {title}
         </h3>
         {hint && (
@@ -96,8 +96,8 @@ function Choice({
       className={cn(
         "rounded-xl border text-right transition-all duration-150",
         active
-          ? "border-navy bg-navy/[0.06] ring-2 ring-navy/20 dark:border-gold-2/70 dark:bg-white/[0.06] dark:ring-gold-2/20"
-          : "border-line bg-white hover:border-navy-2 hover:bg-paper/60 dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/25",
+          ? "border-brand bg-navy/[0.06] ring-2 ring-navy/20"
+          : "border-line bg-surface hover:border-brand hover:bg-paper/60",
         className,
       )}
     >
@@ -124,7 +124,7 @@ function SheetGlyph({
         className={cn(
           "block rounded-[2px] border-[1.5px]",
           active
-            ? "border-navy bg-navy/10 dark:border-gold-2 dark:bg-gold-2/10"
+            ? "border-brand bg-navy/10"
             : "border-muted/60",
         )}
         style={{ width: Math.round(w * scale), height: Math.round(h * scale) }}
@@ -235,11 +235,11 @@ export function NewDocumentDialog({
                   onClick={() => set({ start: "blank" })}
                   className="flex items-start gap-3 p-3.5"
                 >
-                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy/10 text-navy dark:bg-white/10 dark:text-gold-2">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy/10 text-brand">
                     <FileText className="size-4" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-extrabold text-ink dark:text-white">
+                    <span className="block text-[13px] font-extrabold text-ink">
                       مستند فارغ
                     </span>
                     <span className="mt-0.5 block text-[11px] leading-5 text-muted">
@@ -252,11 +252,11 @@ export function NewDocumentDialog({
                   onClick={() => set({ start: "template" })}
                   className="flex items-start gap-3 p-3.5"
                 >
-                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-gold/25 text-green dark:bg-gold/20 dark:text-gold-2">
+                  <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-gold/25 text-ink">
                     <LayoutTemplate className="size-4" />
                   </span>
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-extrabold text-ink dark:text-white">
+                    <span className="block text-[13px] font-extrabold text-ink">
                       من قالب مرخّص
                     </span>
                     <span className="mt-0.5 block text-[11px] leading-5 text-muted">
@@ -283,7 +283,7 @@ export function NewDocumentDialog({
                         onClick={() => set({ pack: pack.id })}
                         className="flex flex-col p-2"
                       >
-                        <span className="grid h-[104px] place-items-center rounded-lg bg-paper/70 p-2 dark:bg-white/[0.04]">
+                        <span className="grid h-[104px] place-items-center rounded-lg bg-paper/70 p-2">
                           <span
                             className="block"
                             style={{
@@ -295,11 +295,11 @@ export function NewDocumentDialog({
                           >
                             <TemplatePreview
                               page={page}
-                              className="rounded-[2px] border border-line shadow-sm dark:border-white/15"
+                              className="rounded-[2px] border border-line shadow-sm"
                             />
                           </span>
                         </span>
-                        <span className="mt-2 block text-[12px] font-extrabold leading-5 text-ink dark:text-white">
+                        <span className="mt-2 block text-[12px] font-extrabold leading-5 text-ink">
                           {pack.title}
                         </span>
                         <span className="text-[10px] font-bold text-muted">
@@ -327,7 +327,7 @@ export function NewDocumentDialog({
                         }
                         className="px-3.5 py-2"
                       >
-                        <span className="block text-[12px] font-extrabold text-ink dark:text-white">
+                        <span className="block text-[12px] font-extrabold text-ink">
                           {kind.title}
                         </span>
                         <span className="block text-[10px] font-bold text-muted">
@@ -369,7 +369,7 @@ export function NewDocumentDialog({
                               h={landscape ? short : long}
                               active={active}
                             />
-                            <span className="text-[12px] font-extrabold text-ink dark:text-white">
+                            <span className="text-[12px] font-extrabold text-ink">
                               {size.name}
                             </span>
                             <span
@@ -407,7 +407,7 @@ export function NewDocumentDialog({
                           )}
                         >
                           <Icon className="size-6 text-muted" aria-hidden />
-                          <span className="text-[12px] font-extrabold text-ink dark:text-white">
+                          <span className="text-[12px] font-extrabold text-ink">
                             {label}
                           </span>
                         </Choice>
@@ -438,7 +438,7 @@ export function NewDocumentDialog({
                               },
                             })
                           }
-                          className="h-10 rounded-xl border border-line bg-white px-3 text-[13px] font-bold tabular-nums text-ink outline-none focus:border-navy dark:border-white/10 dark:bg-white/5 dark:text-white"
+                          className="h-10 rounded-xl border border-line bg-surface px-3 text-[13px] font-bold tabular-nums text-ink outline-none focus:border-brand"
                           dir="ltr"
                         />
                       </label>
@@ -462,7 +462,7 @@ export function NewDocumentDialog({
                         set({ pages: clampPages(config.pages - 1, maxPages) })
                       }
                       disabled={config.pages <= 1}
-                      className="grid size-10 place-items-center rounded-xl border border-line text-ink transition hover:bg-line-2 disabled:opacity-40 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
+                      className="grid size-10 place-items-center rounded-xl border border-line text-ink transition hover:bg-line-2 disabled:opacity-40"
                     >
                       <Minus className="size-4" />
                     </button>
@@ -478,7 +478,7 @@ export function NewDocumentDialog({
                           pages: clampPages(Number(e.target.value), maxPages),
                         })
                       }
-                      className="h-10 w-20 rounded-xl border border-line bg-white text-center text-[14px] font-extrabold tabular-nums text-ink outline-none focus:border-navy dark:border-white/10 dark:bg-white/5 dark:text-white"
+                      className="h-10 w-20 rounded-xl border border-line bg-surface text-center text-[14px] font-extrabold tabular-nums text-ink outline-none focus:border-brand"
                     />
                     <button
                       type="button"
@@ -487,7 +487,7 @@ export function NewDocumentDialog({
                         set({ pages: clampPages(config.pages + 1, maxPages) })
                       }
                       disabled={config.pages >= maxPages}
-                      className="grid size-10 place-items-center rounded-xl border border-line text-ink transition hover:bg-line-2 disabled:opacity-40 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
+                      className="grid size-10 place-items-center rounded-xl border border-line text-ink transition hover:bg-line-2 disabled:opacity-40"
                     >
                       <Plus className="size-4" />
                     </button>
@@ -513,15 +513,15 @@ export function NewDocumentDialog({
                       aria-hidden
                     >
                       <span
-                        className="size-3.5 rounded-full ring-2 ring-white dark:ring-[#161c26]"
+                        className="size-3.5 rounded-full ring-2 ring-white"
                         style={{ background: THEMES[id].primary }}
                       />
                       <span
-                        className="size-3.5 rounded-full ring-2 ring-white dark:ring-[#161c26]"
+                        className="size-3.5 rounded-full ring-2 ring-white"
                         style={{ background: THEMES[id].accent }}
                       />
                     </span>
-                    <span className="text-[12px] font-extrabold text-ink dark:text-white">
+                    <span className="text-[12px] font-extrabold text-ink">
                       {THEMES[id].name}
                     </span>
                   </Choice>
@@ -531,7 +531,7 @@ export function NewDocumentDialog({
 
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="grid gap-1.5">
-                <span className="text-[12px] font-extrabold text-ink dark:text-white">
+                <span className="text-[12px] font-extrabold text-ink">
                   اسم المستند
                 </span>
                 <input
@@ -539,11 +539,11 @@ export function NewDocumentDialog({
                   onChange={(e) => set({ name: e.target.value })}
                   placeholder={placeholderName}
                   maxLength={120}
-                  className="h-10 rounded-xl border border-line bg-white px-3 text-[13px] font-semibold text-ink outline-none placeholder:text-muted/70 focus:border-navy dark:border-white/10 dark:bg-white/5 dark:text-white"
+                  className="h-10 rounded-xl border border-line bg-surface px-3 text-[13px] font-semibold text-ink outline-none placeholder:text-muted/70 focus:border-brand"
                 />
               </label>
               <label className="grid gap-1.5">
-                <span className="text-[12px] font-extrabold text-ink dark:text-white">
+                <span className="text-[12px] font-extrabold text-ink">
                   اسم الجهة
                 </span>
                 <input
@@ -551,7 +551,7 @@ export function NewDocumentDialog({
                   onChange={(e) => set({ orgName: e.target.value })}
                   placeholder="يظهر في تذييل الصفحات"
                   maxLength={120}
-                  className="h-10 rounded-xl border border-line bg-white px-3 text-[13px] font-semibold text-ink outline-none placeholder:text-muted/70 focus:border-navy dark:border-white/10 dark:bg-white/5 dark:text-white"
+                  className="h-10 rounded-xl border border-line bg-surface px-3 text-[13px] font-semibold text-ink outline-none placeholder:text-muted/70 focus:border-brand"
                 />
               </label>
             </div>
@@ -559,18 +559,18 @@ export function NewDocumentDialog({
 
           {/* ── live preview ──────────────────────────────────────────── */}
           <aside className="order-first lg:order-none">
-            <div className="grid gap-3 rounded-2xl border border-line bg-paper/60 p-4 lg:sticky lg:top-0 dark:border-white/10 dark:bg-white/[0.03]">
+            <div className="grid gap-3 rounded-2xl border border-line bg-paper/60 p-4 lg:sticky lg:top-0">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-extrabold tracking-wide text-muted">
                   معاينة الصفحة الأولى
                 </span>
-                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-extrabold text-muted dark:bg-white/10 dark:text-white/80">
+                <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-extrabold text-muted">
                   {pagesText(preview.pages.length)}
                 </span>
               </div>
               {/* Compact beside the summary on tablets; full height beside the form on desktop. */}
               <div className="grid gap-3 [--pv-h:170px] sm:grid-cols-[minmax(0,240px)_minmax(0,1fr)] sm:items-center lg:grid-cols-1 lg:[--pv-h:300px]">
-                <div className="grid place-items-center rounded-xl bg-white/70 p-3 dark:bg-black/10">
+                <div className="grid place-items-center rounded-xl bg-surface-2 p-3">
                   <div
                     className="mx-auto w-full"
                     style={{
@@ -579,14 +579,14 @@ export function NewDocumentDialog({
                   >
                     <TemplatePreview
                       page={previewPage}
-                      className="rounded-[3px] border border-line shadow-lg dark:border-white/15"
+                      className="rounded-[3px] border border-line shadow-lg"
                     />
                   </div>
                 </div>
                 <dl className="grid gap-1.5 text-[12px]">
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-muted">البداية</dt>
-                    <dd className="font-bold text-ink dark:text-white">
+                    <dd className="font-bold text-ink">
                       {isTemplate
                         ? PACKS.find((p) => p.id === config.pack)?.title
                         : `مستند فارغ · ${docKind(config.kind).title}`}
@@ -594,7 +594,7 @@ export function NewDocumentDialog({
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-muted">المقاس</dt>
-                    <dd className="font-bold text-ink dark:text-white">
+                    <dd className="font-bold text-ink">
                       {describeConfig({
                         ...config,
                         pages: clampPages(config.pages, maxPages),
@@ -604,7 +604,7 @@ export function NewDocumentDialog({
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-muted">الأبعاد</dt>
                     <dd
-                      className="font-bold tabular-nums text-ink dark:text-white"
+                      className="font-bold tabular-nums text-ink"
                       dir="ltr"
                     >
                       {Math.round(previewSize.w * 10) / 10} ×{" "}
@@ -613,7 +613,7 @@ export function NewDocumentDialog({
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <dt className="text-muted">السمة</dt>
-                    <dd className="font-bold text-ink dark:text-white">
+                    <dd className="font-bold text-ink">
                       {THEMES[preview.theme]?.name}
                     </dd>
                   </div>
@@ -624,7 +624,7 @@ export function NewDocumentDialog({
         </div>
 
         {/* Pinned to the dialog's bottom edge, so «إنشاء» never scrolls out of reach on a tablet. */}
-        <div className="sticky -bottom-5 z-10 -mx-5 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line bg-white px-5 pt-4 pb-5 dark:border-white/10 dark:bg-[#161c26]">
+        <div className="sticky -bottom-5 z-10 -mx-5 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface px-5 pt-4 pb-5">
           <p className="text-[11px] font-semibold text-muted">
             يُحفظ المستند في مشاريعك تلقائيًا، ويمكن تغيير كل إعداد لاحقًا من
             المحرر.

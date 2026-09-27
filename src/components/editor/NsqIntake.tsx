@@ -154,7 +154,7 @@ export function NsqIntake() {
           className="pointer-events-none fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center bg-navy/35 p-6 backdrop-blur-[1px]"
           aria-hidden
         >
-          <div className="flex items-center gap-3 rounded-[14px] border-2 border-dashed border-gold bg-white/95 px-6 py-4 text-[14px] font-extrabold text-navy shadow-2xl dark:bg-[#161c26] dark:text-gold-2">
+          <div className="flex items-center gap-3 rounded-[14px] border-2 border-dashed border-gold bg-surface/95 px-6 py-4 text-[14px] font-extrabold text-brand shadow-2xl">
             <FileDown className="size-5" />
             أفلت ملف نَسَق (.nsq) لفتحه كمشروع قابل للتعديل
           </div>
@@ -164,7 +164,7 @@ export function NsqIntake() {
       {pending && signedIn && restoreFailed && (
         <div
           role="alert"
-          className="fixed bottom-4 left-4 z-[var(--z-dialog)] max-w-sm rounded-xl border bg-white p-4 text-sm text-navy shadow-xl"
+          className="fixed bottom-4 left-4 z-[var(--z-dialog)] max-w-sm rounded-xl border bg-surface p-4 text-sm text-brand shadow-xl"
         >
           <p>
             لم يكتمل فتح «{pending.title}». الملف محفوظ، ولم يتغير مشروعك
@@ -199,7 +199,7 @@ export function NsqIntake() {
         <button
           type="button"
           onClick={() => setGateOpen(true)}
-          className="fixed bottom-[max(1rem,var(--safe-bottom,0px))] left-4 z-[var(--z-dropdown)] inline-flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-gold/50 bg-white px-4 py-2 text-[12px] font-extrabold text-navy shadow-lg transition hover:bg-line-2 dark:bg-[#161c26] dark:text-gold-2"
+          className="fixed bottom-[max(1rem,var(--safe-bottom,0px))] left-4 z-[var(--z-dropdown)] inline-flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-full border border-gold/50 bg-surface px-4 py-2 text-[12px] font-extrabold text-brand shadow-lg transition hover:bg-line-2"
         >
           <FolderInput className="size-4 shrink-0" />
           <span className="truncate">

@@ -84,12 +84,12 @@ const EMPTY_DRAFT: Draft = {
 };
 
 const input =
-  "h-10 w-full rounded-lg border border-line bg-white px-3 text-[13px] font-semibold outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 dark:border-white/10 dark:bg-white/5 dark:text-white";
+ "h-10 w-full rounded-lg border border-line bg-surface px-3 text-[13px] font-semibold outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
 const label = "grid gap-1.5 text-[12px] font-extrabold text-muted";
 const primaryBtn =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-[13px] font-extrabold text-white transition hover:bg-emerald-500 disabled:opacity-50";
+ "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-navy px-4 text-[13px] font-extrabold text-on-brand transition hover:bg-ok disabled:opacity-50";
 const ghostBtn =
-  "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-[12px] font-bold transition hover:border-emerald-500/50 disabled:opacity-50 dark:border-white/10";
+ "inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-line px-3 text-[12px] font-bold transition hover:border-brand disabled:opacity-50";
 
 const STATUS_LABEL: Record<TemplateStatus, string> = {
   draft: "مسودة",
@@ -317,7 +317,7 @@ export function AdminTemplatesPanel() {
       </div>
 
       {draft && (
-        <section className="grid gap-4 rounded-xl border border-emerald-500/30 bg-white p-4 dark:bg-white/[0.03]">
+        <section className="grid gap-4 rounded-xl border border-brand bg-surface p-4">
           <div className="flex items-center justify-between gap-2">
             <strong className="text-[13px] font-black">
               {draft.id ? `تعديل: ${draft.title || "قالب"}` : "قالب جديد"}
@@ -325,7 +325,7 @@ export function AdminTemplatesPanel() {
             <button
               type="button"
               onClick={() => setDraft(null)}
-              className="grid size-8 place-items-center rounded-lg border border-line dark:border-white/10"
+              className="grid size-8 place-items-center rounded-lg border border-line"
               aria-label="إغلاق النموذج"
             >
               <X className="size-4" />
@@ -450,7 +450,7 @@ export function AdminTemplatesPanel() {
                 <img
                   src={draft.thumbnail}
                   alt=""
-                  className="h-14 w-10 rounded border border-line bg-white object-contain"
+                  className="h-14 w-10 rounded border border-line bg-surface object-contain"
                 />
                 <button
                   type="button"
@@ -514,7 +514,7 @@ export function AdminTemplatesPanel() {
           <Loader2 className="size-4 animate-spin" /> جارٍ تحميل القوالب…
         </p>
       ) : filtered.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-line p-8 text-center text-[13px] text-muted dark:border-white/15">
+        <p className="rounded-xl border border-dashed border-line p-8 text-center text-[13px] text-muted">
           {items.length === 0 ? "لا توجد قوالب مُدارة بعد." : "لا نتائج مطابقة للتصفية."}
         </p>
       ) : (
@@ -522,14 +522,14 @@ export function AdminTemplatesPanel() {
           {filtered.map((t) => (
             <article
               key={t.id}
-              className="flex flex-col gap-3 rounded-xl border border-line bg-white p-3 dark:border-white/10 dark:bg-white/[0.03]"
+              className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3"
             >
               <div className="flex gap-3">
-                <div className="grid aspect-[210/297] w-16 shrink-0 place-items-center overflow-hidden rounded border border-line bg-white">
+                <div className="grid aspect-[210/297] w-16 shrink-0 place-items-center overflow-hidden rounded border border-line bg-surface">
                   {t.thumbnail ? (
                     <img src={t.thumbnail} alt="" className="h-full w-full object-contain" />
                   ) : (
-                    <LayoutTemplate className="size-5 text-slate-300" />
+                    <LayoutTemplate className="size-5 text-muted" />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -540,20 +540,20 @@ export function AdminTemplatesPanel() {
                     </span>
                   )}
                   <div className="mt-1.5 flex flex-wrap gap-1 text-[10px] font-extrabold">
-                    <span className="rounded bg-line-2 px-1.5 py-0.5 dark:bg-white/10">
+                    <span className="rounded bg-line-2 px-1.5 py-0.5">
                       {t.kind.toUpperCase()}
                     </span>
                     <span
                       className={cn(
-                        "rounded px-1.5 py-0.5",
+ "rounded px-1.5 py-0.5",
                         t.tier === "licensed"
-                          ? "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200"
-                          : "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200",
+                          ? "bg-gold/15 text-warning"
+                          : "bg-ok/10 text-success",
                       )}
                     >
                       {t.tier === "licensed" ? "مرخّص" : "مجاني"}
                     </span>
-                    <span className="rounded bg-line-2 px-1.5 py-0.5 dark:bg-white/10">
+                    <span className="rounded bg-line-2 px-1.5 py-0.5">
                       {STATUS_LABEL[t.status]}
                     </span>
                   </div>
@@ -561,13 +561,13 @@ export function AdminTemplatesPanel() {
               </div>
               {confirmId === t.id ? (
                 <div className="rounded-lg border border-danger/30 bg-danger/5 p-2.5 text-[11px]">
-                  <p className="font-bold text-danger">حذف «{t.title}» نهائيًا؟</p>
+                  <p className="font-bold text-error">حذف «{t.title}» نهائيًا؟</p>
                   <div className="mt-2 flex gap-2">
                     <button
                       type="button"
                       disabled={busyId === t.id}
                       onClick={() => void remove(t)}
-                      className="inline-flex h-8 items-center gap-1 rounded-lg bg-danger px-3 font-extrabold text-white disabled:opacity-60"
+                      className="inline-flex h-8 items-center gap-1 rounded-lg bg-danger px-3 font-extrabold text-on-brand disabled:opacity-60"
                     >
                       {busyId === t.id ? (
                         <Loader2 className="size-3.5 animate-spin" />
@@ -579,7 +579,7 @@ export function AdminTemplatesPanel() {
                     <button
                       type="button"
                       onClick={() => setConfirmId(null)}
-                      className="h-8 rounded-lg border border-line px-3 font-bold dark:border-white/10"
+                      className="h-8 rounded-lg border border-line px-3 font-bold"
                     >
                       إلغاء
                     </button>
@@ -634,7 +634,7 @@ export function AdminTemplatesPanel() {
                   </button>
                   <button
                     type="button"
-                    className={cn(ghostBtn, "text-danger")}
+                    className={cn(ghostBtn, "text-error")}
                     title="حذف"
                     onClick={() => setConfirmId(t.id)}
                   >
@@ -657,7 +657,7 @@ export function AdminTemplatesPanel() {
           onClick={() => setPreview(null)}
         >
           <div
-            className="w-full max-w-lg rounded-[14px] border border-line bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#161c26]"
+            className="w-full max-w-lg rounded-[14px] border border-line bg-surface p-5 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-3">
@@ -672,18 +672,18 @@ export function AdminTemplatesPanel() {
               <button
                 type="button"
                 onClick={() => setPreview(null)}
-                className="grid size-8 place-items-center rounded-lg border border-line dark:border-white/10"
+                className="grid size-8 place-items-center rounded-lg border border-line"
                 aria-label="إغلاق المعاينة"
               >
                 <X className="size-4" />
               </button>
             </div>
 
-            <div className="mt-4 grid place-items-center rounded-xl border border-line bg-line-2/30 p-4 dark:border-white/10 dark:bg-white/[0.03]">
+            <div className="mt-4 grid place-items-center rounded-xl border border-line bg-line-2/30 p-4">
               {preview.item.thumbnail ? (
                 <img src={preview.item.thumbnail} alt="" className="max-h-[46vh] w-auto object-contain" />
               ) : (
-                <div className="grid aspect-[210/297] w-40 place-items-center rounded border border-dashed border-line text-muted dark:border-white/15">
+                <div className="grid aspect-[210/297] w-40 place-items-center rounded border border-dashed border-line text-muted">
                   <LayoutTemplate className="size-6" />
                 </div>
               )}

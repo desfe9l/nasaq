@@ -61,24 +61,24 @@ export default function PaymentSuccessPage() {
     <div className="min-h-screen bg-paper">
       <SiteHeader current="/purchase" />
       <main className="mx-auto max-w-xl px-4 py-24 text-center">
-        <div className="rounded-2xl border border-line bg-surface p-8 shadow-sm dark:border-white/10">
+        <div className="rounded-2xl border border-line bg-surface p-8 shadow-sm">
           {state === "ACTIVE" ? (
             <>
-              <CheckCircle2 className="mx-auto size-10 text-emerald-600" aria-hidden />
-              <h1 className="mt-4 text-2xl font-extrabold text-ok">تم تفعيل اشتراكك</h1>
+              <CheckCircle2 className="mx-auto size-10 text-brand" aria-hidden />
+              <h1 className="mt-4 text-2xl font-extrabold text-success">تم تفعيل اشتراكك</h1>
               <p className="mt-3 text-sm leading-7 text-muted">
                 تحقّق النظام من عملية الدفع في Gumroad خادميًا، وأصدر ترخيص Keygen وربطه بحسابك.
-                {planName ? <> الباقة المفعّلة: <span className="font-extrabold text-ink dark:text-white">{planName}</span>.</> : null}
+                {planName ? <> الباقة المفعّلة: <span className="font-extrabold text-ink">{planName}</span>.</> : null}
                 {expiresAt ? <> سارية حتى <span className="font-extrabold" dir="ltr">{new Date(expiresAt).toLocaleDateString("ar-SA")}</span>.</> : null}
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
-                <a href="/editor" className="inline-flex h-11 items-center justify-center rounded-xl bg-emerald-600 px-6 text-sm font-extrabold text-white">افتح المحرر</a>
+                <a href="/editor" className="inline-flex h-11 items-center justify-center rounded-xl bg-navy px-6 text-sm font-extrabold text-on-brand">افتح المحرر</a>
                 <a href="/account" className="inline-flex h-11 items-center justify-center rounded-xl border border-line px-6 text-sm font-extrabold">حسابي</a>
               </div>
             </>
           ) : state === "FAILED" ? (
             <>
-              <ShieldCheck className="mx-auto size-10 text-navy" aria-hidden />
+              <ShieldCheck className="mx-auto size-10 text-brand" aria-hidden />
               <h1 className="mt-4 text-2xl font-extrabold">سجّل الدخول لمتابعة التفعيل</h1>
               <p className="mt-3 text-sm leading-7 text-muted">
                 {authFailed
@@ -86,13 +86,13 @@ export default function PaymentSuccessPage() {
                   : "لم نتمكن من قراءة حالة الحساب حاليًا."}
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
-                <a href="/login" className="inline-flex h-11 items-center justify-center rounded-xl bg-navy px-6 text-sm font-extrabold text-white">تسجيل الدخول</a>
+                <a href="/login" className="inline-flex h-11 items-center justify-center rounded-xl bg-navy px-6 text-sm font-extrabold text-on-brand">تسجيل الدخول</a>
                 <a href="/purchase" className="inline-flex h-11 items-center justify-center rounded-xl border border-line px-6 text-sm font-extrabold">العودة إلى الباقات</a>
               </div>
             </>
           ) : (
             <>
-              <Loader2 className="mx-auto size-10 animate-spin text-emerald-600" aria-hidden />
+              <Loader2 className="mx-auto size-10 animate-spin text-brand" aria-hidden />
               <h1 className="mt-4 text-2xl font-extrabold">جارٍ تأكيد الاشتراك…</h1>
               <p className="mt-3 text-sm leading-7 text-muted">
                 وصلتنا عودتك من Gumroad. يجري التحقق من العملية وإصدار ترخيص Keygen على الخادم،

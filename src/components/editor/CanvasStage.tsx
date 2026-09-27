@@ -1073,7 +1073,7 @@ export function CanvasStage({
       }}
     >
       {dropping && (
-        <div className="pointer-events-none sticky top-0 z-[var(--z-canvas-overlay)] mx-auto w-max rounded-full border border-gold/40 bg-white/95 px-4 py-1.5 text-[11px] font-extrabold text-navy shadow-sm dark:bg-[#161c26] dark:text-gold-2">
+        <div className="pointer-events-none sticky top-0 z-[var(--z-canvas-overlay)] mx-auto w-max rounded-full border border-gold/40 bg-white/95 px-4 py-1.5 text-[11px] font-extrabold text-brand shadow-sm dark:bg-[#161c26] dark:text-gold-2">
           {dropping === "library"
             ? "أفلت العنصر ليُضاف في هذا الموضع"
             : "أفلت الصورة لإضافتها إلى الصفحة"}
@@ -1710,7 +1710,7 @@ function LayerPickerPopup({
               onClick={() => onSelect(el.id)}
               className="flex w-full items-center gap-2 rounded-[7px] px-2.5 py-2 text-right text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/10"
             >
-              <span className="grid size-6 shrink-0 place-items-center rounded-[5px] bg-navy/10 text-[10px] font-extrabold text-navy dark:bg-white/10 dark:text-gold-2">
+              <span className="grid size-6 shrink-0 place-items-center rounded-[5px] bg-navy/10 text-[10px] font-extrabold text-brand dark:bg-white/10 dark:text-gold-2">
                 {idx + 1}
               </span>
               <span className="min-w-0 flex-1 truncate">

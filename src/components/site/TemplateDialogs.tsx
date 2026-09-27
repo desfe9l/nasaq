@@ -55,7 +55,7 @@ export function Modal({
         aria-label={label}
         tabIndex={-1}
         className={cn(
-          "shadow-card dark:shadow-card-dark max-h-[92vh] w-full overflow-auto rounded-2xl border border-line bg-white p-5 outline-none dark:border-white/10 dark:bg-[#161c26]",
+          "shadow-card max-h-[92vh] w-full overflow-auto rounded-2xl border border-line bg-surface p-5 outline-none",
           className,
         )}
       >
@@ -75,16 +75,16 @@ export function DialogHeader({
   onClose: () => void;
 }) {
   return (
-    <div className="mb-4 flex items-start justify-between gap-4 border-b border-line pb-4 dark:border-white/10">
+    <div className="mb-4 flex items-start justify-between gap-4 border-b border-line pb-4">
       <div>
-        <h2 className="text-[18px] font-extrabold text-ink dark:text-white">{title}</h2>
+        <h2 className="text-[18px] font-extrabold text-ink">{title}</h2>
         {subtitle && <p className="mt-1 text-[12px] leading-6 text-muted">{subtitle}</p>}
       </div>
       <button
         type="button"
         onClick={onClose}
         aria-label="إغلاق"
-        className="grid size-8 shrink-0 place-items-center rounded-lg border border-line text-muted transition hover:bg-line-2 hover:text-ink dark:border-white/10 dark:hover:bg-white/5 dark:hover:text-white"
+        className="grid size-8 shrink-0 place-items-center rounded-lg border border-line text-muted transition hover:bg-line-2 hover:text-ink"
       >
         <X className="size-4" />
       </button>
@@ -93,9 +93,9 @@ export function DialogHeader({
 }
 
 export const PRIMARY_BTN =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-navy-2 disabled:opacity-50";
+  "inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2 disabled:opacity-50";
 export const GHOST_BTN =
-  "inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line px-4 text-[13px] font-bold text-ink transition hover:bg-line-2 dark:border-white/10 dark:text-white dark:hover:bg-white/5";
+  "inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line px-4 text-[13px] font-bold text-ink transition hover:bg-line-2";
 
 /* ── quick view ──────────────────────────────────────────────────────────── */
 
@@ -145,18 +145,18 @@ export function QuickViewDialog({
             <button
               type="button"
               onClick={() => setFull((v) => !v)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[11px] font-bold text-muted transition hover:bg-line-2 hover:text-ink dark:border-white/10 dark:hover:bg-white/5 dark:hover:text-white"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[11px] font-bold text-muted transition hover:bg-line-2 hover:text-ink"
             >
               {full ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
               {full ? "ملاءمة الصفحة" : "الحجم الكامل"}
             </button>
           </div>
-          <div className="max-h-[58vh] overflow-auto rounded-xl bg-paper p-4 dark:bg-white/5">
+          <div className="max-h-[58vh] overflow-auto rounded-xl bg-paper p-4">
             <div
               className="mx-auto"
               style={{ width: full ? `${size.w}mm` : `min(100%, ${Math.max(160, Math.round(580 * (size.w / size.h)))}px)` }}
             >
-              <TemplatePreview page={page} className="rounded-md border border-line shadow-lg dark:border-white/10" />
+              <TemplatePreview page={page} className="rounded-md border border-line shadow-lg" />
             </div>
           </div>
           {entry.pages.length > 1 && (
@@ -173,8 +173,8 @@ export function QuickViewDialog({
                     className={cn(
                       "w-20 rounded-lg border p-1 transition",
                       i === index
-                        ? "border-navy ring-2 ring-navy/30 dark:border-gold-2"
-                        : "border-line hover:border-navy-2 dark:border-white/10",
+                        ? "border-brand ring-2 ring-navy/30"
+                        : "border-line hover:border-brand",
                     )}
                     style={{ aspectRatio: `${thumb.w} / ${thumb.h}` }}
                   >
@@ -194,10 +194,10 @@ export function QuickViewDialog({
                 className={cn(
                   "rounded-full px-2.5 py-1 text-[10px] font-extrabold",
                   badge.tone === "custom"
-                    ? "bg-navy/10 text-navy dark:bg-white/10 dark:text-gold-2"
+                    ? "bg-navy/10 text-brand"
                     : badge.tone === "new"
-                      ? "bg-gold/25 text-green dark:bg-gold/20 dark:text-gold-2"
-                      : "bg-line-2 text-muted dark:bg-white/10 dark:text-white/80",
+                      ? "bg-gold/25 text-ink"
+                      : "bg-line-2 text-muted",
                 )}
               >
                 {badge.label}
@@ -208,32 +208,32 @@ export function QuickViewDialog({
           <dl className="grid gap-1.5 text-[12px]">
             <div className="flex items-center justify-between gap-3">
               <dt className="text-muted">النوع</dt>
-              <dd className="font-bold text-ink dark:text-white">{entry.kindLabel}</dd>
+              <dd className="font-bold text-ink">{entry.kindLabel}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
               <dt className="text-muted">التصنيف</dt>
-              <dd className="font-bold text-ink dark:text-white">{entry.categoryLabel}</dd>
+              <dd className="font-bold text-ink">{entry.categoryLabel}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
               <dt className="text-muted">الصفحات</dt>
-              <dd className="font-bold text-ink dark:text-white">{pagesLabel(entry.pages.length)}</dd>
+              <dd className="font-bold text-ink">{pagesLabel(entry.pages.length)}</dd>
             </div>
             <div className="flex items-center justify-between gap-3">
               <dt className="text-muted">السمة</dt>
-              <dd className="font-bold text-ink dark:text-white">{THEMES[themeId]?.name ?? "رسمي"}</dd>
+              <dd className="font-bold text-ink">{THEMES[themeId]?.name ?? "رسمي"}</dd>
             </div>
           </dl>
           {entry.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {entry.tags.map((tag) => (
-                <span key={tag} className="rounded-full border border-line px-2 py-0.5 text-[10px] font-bold text-muted dark:border-white/10">
+                <span key={tag} className="rounded-full border border-line px-2 py-0.5 text-[10px] font-bold text-muted">
                   {tag}
                 </span>
               ))}
             </div>
           )}
 
-          <div className="mt-1 grid gap-2 border-t border-line pt-4 dark:border-white/10">
+          <div className="mt-1 grid gap-2 border-t border-line pt-4">
             <button type="button" onClick={onUse} className={PRIMARY_BTN}>
               <Plus className="size-4" /> استخدام القالب
             </button>
@@ -255,7 +255,7 @@ export function QuickViewDialog({
                 <button
                   type="button"
                   onClick={onDelete}
-                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-danger/40 px-4 text-[13px] font-bold text-danger transition hover:bg-danger/10"
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-danger/40 px-4 text-[13px] font-bold text-error transition hover:bg-danger/10"
                 >
                   <Trash2 className="size-4" /> حذف القالب
                 </button>
@@ -285,7 +285,7 @@ export function ConfirmDialog({
 }) {
   return (
     <Modal label={title} onClose={onClose} className="max-w-md">
-      <h2 className="text-[17px] font-extrabold text-ink dark:text-white">{title}</h2>
+      <h2 className="text-[17px] font-extrabold text-ink">{title}</h2>
       <p className="mt-2 text-[13px] leading-7 text-muted">{body}</p>
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <button type="button" onClick={onClose} className={GHOST_BTN}>
@@ -294,7 +294,7 @@ export function ConfirmDialog({
         <button
           type="button"
           onClick={onConfirm}
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-danger px-4 text-[13px] font-extrabold text-white transition hover:opacity-90"
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-danger px-4 text-[13px] font-extrabold text-on-brand transition hover:opacity-90"
         >
           <Trash2 className="size-4" /> {confirmLabel}
         </button>
@@ -391,7 +391,7 @@ export function TemplateFormDialog({
   };
 
   const field =
-    "h-10 w-full rounded-xl border border-line bg-white px-3 text-[13px] font-semibold text-ink outline-none transition focus:border-navy dark:border-white/10 dark:bg-white/5 dark:text-white";
+    "h-10 w-full rounded-xl border border-line bg-surface px-3 text-[13px] font-semibold text-ink outline-none transition focus:border-brand";
 
   return (
     <Modal
@@ -428,7 +428,7 @@ export function TemplateFormDialog({
             onChange={(e) => setDesc(e.target.value)}
             rows={2}
             placeholder="ما الذي يميز هذا القالب؟"
-            className="w-full rounded-xl border border-line bg-white px-3 py-2 text-[13px] font-semibold leading-7 text-ink outline-none transition focus:border-navy dark:border-white/10 dark:bg-white/5 dark:text-white"
+            className="w-full rounded-xl border border-line bg-surface px-3 py-2 text-[13px] font-semibold leading-7 text-ink outline-none transition focus:border-brand"
           />
         </label>
 
@@ -467,8 +467,8 @@ export function TemplateFormDialog({
                   className={cn(
                     "rounded-full border px-3 py-1.5 text-[11px] font-bold transition",
                     active
-                      ? "border-navy bg-navy text-white"
-                      : "border-line text-muted hover:border-navy-2 dark:border-white/10",
+                      ? "border-brand bg-navy text-on-brand"
+                      : "border-line text-muted hover:border-brand",
                   )}
                 >
                   {pill.label}
@@ -479,7 +479,7 @@ export function TemplateFormDialog({
         </div>
 
         {mode === "create" && (
-          <div className="grid gap-3 rounded-xl border border-line p-3 dark:border-white/10">
+          <div className="grid gap-3 rounded-xl border border-line p-3">
             <span className="text-[12px] font-extrabold text-muted">مصدر القالب</span>
             <div className="flex flex-wrap gap-1.5">
               {(
@@ -498,8 +498,8 @@ export function TemplateFormDialog({
                   className={cn(
                     "rounded-full border px-3 py-1.5 text-[11px] font-bold transition disabled:opacity-40",
                     sourceKind === option.id
-                      ? "border-navy bg-navy text-white"
-                      : "border-line text-muted hover:border-navy-2 dark:border-white/10",
+                      ? "border-brand bg-navy text-on-brand"
+                      : "border-line text-muted hover:border-brand",
                   )}
                 >
                   {option.label}
@@ -532,7 +532,7 @@ export function TemplateFormDialog({
         )}
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4 dark:border-white/10">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
         <span className="inline-flex items-center gap-1.5 text-[11px] text-muted">
           <Eye className="size-3.5" /> يُحفظ محليًا في متصفحك ويظهر في الكتالوج مباشرة.
         </span>

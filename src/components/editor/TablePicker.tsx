@@ -214,7 +214,7 @@ export function TablePicker({ theme, onAdd }: Props) {
         <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">
           سحب لتحديد الحجم
         </h3>
-        <div className="rounded-[8px] border border-line p-2 dark:border-white/10">
+        <div className="rounded-[8px] border border-line p-2">
           <div
             className="grid gap-[3px]"
             style={{
@@ -237,7 +237,7 @@ export function TablePicker({ theme, onAdd }: Props) {
                     "h-[13px] rounded-[2px] border transition-colors",
                     active
                       ? "border-navy-2 bg-navy-2/25"
-                      : "border-line bg-transparent dark:border-white/10",
+                      : "border-line bg-transparent",
                   )}
                 />
               );
@@ -258,7 +258,7 @@ export function TablePicker({ theme, onAdd }: Props) {
         <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">
           إدخال يدوي للأبعاد
         </h3>
-        <div className="rounded-[8px] border border-line p-2 dark:border-white/10">
+        <div className="rounded-[8px] border border-line p-2">
           <div className="flex flex-wrap items-end gap-2">
             <label className="min-w-[68px] flex-1 text-[10px] font-bold text-muted">
               الصفوف
@@ -273,7 +273,7 @@ export function TablePicker({ theme, onAdd }: Props) {
                   if (e.key === "Enter") addManual();
                 }}
                 aria-label="عدد الصفوف"
-                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-white px-2 text-[12px] font-extrabold tabular-nums dark:border-white/10 dark:bg-white/5 dark:text-white"
+                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-surface px-2 text-[12px] font-extrabold tabular-nums"
               />
             </label>
             <span className="pb-2 text-[12px] font-extrabold text-muted">
@@ -292,7 +292,7 @@ export function TablePicker({ theme, onAdd }: Props) {
                   if (e.key === "Enter") addManual();
                 }}
                 aria-label="عدد الأعمدة"
-                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-white px-2 text-[12px] font-extrabold tabular-nums dark:border-white/10 dark:bg-white/5 dark:text-white"
+                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-surface px-2 text-[12px] font-extrabold tabular-nums"
               />
             </label>
             <button
@@ -320,7 +320,7 @@ export function TablePicker({ theme, onAdd }: Props) {
               key={s.id}
               type="button"
               onClick={() => addGrid(s.cols, s.rows, s.header)}
-              className="library-hit rounded-[8px] border border-line px-2 py-2 text-right dark:border-white/10"
+              className="library-hit rounded-[8px] border border-line px-2 py-2 text-right"
               title={s.hint}
             >
               <strong className="block text-[11px]">{s.label}</strong>
@@ -337,7 +337,7 @@ export function TablePicker({ theme, onAdd }: Props) {
           type="button"
           onClick={() => setShowPaste((v) => !v)}
           aria-expanded={showPaste}
-          className="flex w-full items-center justify-between rounded-[8px] border border-line px-2.5 py-2 text-[11px] font-extrabold dark:border-white/10"
+          className="flex w-full items-center justify-between rounded-[8px] border border-line px-2.5 py-2 text-[11px] font-extrabold"
         >
           <span className="inline-flex items-center gap-1.5">
             <ClipboardPaste className="size-3.5" /> لصق بيانات (Excel / CSV)
@@ -355,7 +355,7 @@ export function TablePicker({ theme, onAdd }: Props) {
                 "الصق هنا مباشرة من Excel، أو اكتب صفوفاً:\nالاسم | المبلغ\nأحمد | 1000"
               }
               dir="rtl"
-              className="w-full rounded-[8px] border border-line bg-white p-2 text-[12px] leading-6 dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="w-full rounded-[8px] border border-line bg-surface p-2 text-[12px] leading-6"
             />
             <div className="flex items-center justify-between gap-2">
               <span className="text-[10px] text-muted tabular-nums">
@@ -407,7 +407,7 @@ export function TablePicker({ theme, onAdd }: Props) {
             "rounded-[8px] border border-dashed p-3 text-center transition-colors",
             dragOver
               ? "border-navy-2 bg-navy-2/10"
-              : "border-line dark:border-white/15",
+              : "border-line",
           )}
         >
           <input
@@ -425,7 +425,7 @@ export function TablePicker({ theme, onAdd }: Props) {
             type="button"
             onClick={() => fileRef.current?.click()}
             disabled={importing}
-            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-3 text-[11px] font-extrabold disabled:opacity-50 dark:border-white/10"
+            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-3 text-[11px] font-extrabold disabled:opacity-50"
           >
             {importing ? (
               <Loader2 className="size-3.5 animate-spin" />
@@ -442,14 +442,14 @@ export function TablePicker({ theme, onAdd }: Props) {
           {importError && (
             <p
               role="alert"
-              className="mt-2 text-[10px] font-bold text-[#b42318]"
+              className="mt-2 text-[10px] font-bold text-error"
             >
               {importError}
             </p>
           )}
 
           {imported && (
-            <div className="mt-2 rounded-[8px] border border-line p-2 dark:border-white/10">
+            <div className="mt-2 rounded-[8px] border border-line p-2">
               <p className="text-[11px] font-extrabold tabular-nums">
                 {imported.label ? `«${imported.label}» — ` : ""}
                 {imported.rowCount} صف × {imported.cols} عمود
@@ -489,7 +489,7 @@ export function TablePickerOverlay({
   onClose: () => void;
 }) {
   return (
-    <section className="rounded-[10px] border border-navy-2 bg-navy-2/5 p-3 dark:border-gold/40">
+    <section className="rounded-[10px] border border-navy-2 bg-navy-2/5 p-3">
       <header className="mb-2 flex items-center justify-between">
         <h3 className="inline-flex items-center gap-1.5 text-[12px] font-extrabold">
           <Table2 className="size-3.5" /> إنشاء جدول
@@ -497,7 +497,7 @@ export function TablePickerOverlay({
         <button
           type="button"
           onClick={onClose}
-          className="h-7 rounded-[6px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10"
+          className="h-7 rounded-[6px] border border-line px-2 text-[10px] font-extrabold"
         >
           إلغاء
         </button>

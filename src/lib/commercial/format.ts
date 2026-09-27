@@ -35,9 +35,9 @@ export const ACCOUNT_STATUS_META: Record<
 > = {
   FREE: { label: "بدون باقة", className: "bg-line-2 text-muted" },
   PENDING: { label: "قيد التحقق", className: "bg-gold/20 text-ink" },
-  ACTIVE: { label: "مُفعّل", className: "bg-ok/15 text-ok" },
-  EXPIRED: { label: "منتهي", className: "bg-danger/10 text-danger" },
-  SUSPENDED: { label: "موقوف", className: "bg-danger/10 text-danger" },
+  ACTIVE: { label: "مُفعّل", className: "bg-ok/15 text-success" },
+  EXPIRED: { label: "منتهي", className: "bg-danger/10 text-error" },
+  SUSPENDED: { label: "موقوف", className: "bg-danger/10 text-error" },
 };
 
 export const PAYMENT_STATUS_META: Record<
@@ -45,8 +45,8 @@ export const PAYMENT_STATUS_META: Record<
   { label: string; className: string }
 > = {
   PENDING: { label: "قيد التحقق", className: "bg-gold/20 text-ink" },
-  APPROVED: { label: "مقبول", className: "bg-ok/15 text-ok" },
-  REJECTED: { label: "مرفوض", className: "bg-danger/10 text-danger" },
+  APPROVED: { label: "مقبول", className: "bg-ok/15 text-success" },
+  REJECTED: { label: "مرفوض", className: "bg-danger/10 text-error" },
   CANCELLED: { label: "ملغي", className: "bg-line-2 text-muted" },
 };
 

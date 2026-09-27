@@ -26,7 +26,8 @@
     "format": "prettier --write .",
     "test:team": "node --experimental-strip-types --import ./scripts/test-alias-register.mjs --test src/lib/license/team-licensing.test.ts",
     "test:nsq": "node --experimental-strip-types --import ./scripts/test-alias-register.mjs --test src/lib/nsq/*.test.ts",
-    "test:nsq:browser": "node scripts/test-nsq-browser.mjs"
+    "test:nsq:browser": "node scripts/test-nsq-browser.mjs",
+    "theme:check": "node scripts/theme-check.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
