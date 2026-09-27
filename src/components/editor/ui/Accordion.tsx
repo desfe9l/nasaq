@@ -76,12 +76,42 @@ export function SubGroup({ title, children }: { title: string; children: ReactNo
 
 const STORAGE_PREFIX = "nasaq.accordion.";
 
+/** Read the freshest stored map for a panel key (never throws). */
+function readAccordionMap(storageKey: string): Record<string, boolean> {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(storageKey) || "{}");
+    return raw && typeof raw === "object"
+      ? (raw as Record<string, boolean>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeAccordionMap(
+  storageKey: string,
+  map: Record<string, boolean>,
+): void {
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(map));
+  } catch {
+    /* private mode: state simply stops persisting */
+  }
+}
+
 /**
  * Accordion open/closed state that survives reloads.
  *
  * Property panels are personal: someone who keeps «الخلفية والحدود» closed will
  * want it closed tomorrow too. State is namespaced per panel so the library and
  * the properties inspector never share a key.
+ *
+ * Writes always merge over the **freshest stored map** rather than the
+ * instance's possibly stale copy: two surfaces share the «library» key (the
+ * basic tools and the element-tools sections) and mount at different times, so
+ * a write from stale state would silently reopen a section the author just
+ * collapsed — losing the state across the reload the panel promises.
  */
 export function useAccordionState<T extends string>(
   panelKey: string,
@@ -90,24 +120,17 @@ export function useAccordionState<T extends string>(
   const storageKey = `${STORAGE_PREFIX}${panelKey}`;
   const [state, setState] = useState<Record<string, boolean>>(() => {
     const seed = { ...defaults } as Record<string, boolean>;
-    if (typeof localStorage === "undefined") return seed;
-    try {
-      const raw = JSON.parse(localStorage.getItem(storageKey) || "{}");
-      return { ...seed, ...((raw && typeof raw === "object" ? raw : {}) as Record<string, boolean>) };
-    } catch {
-      return seed;
-    }
+    return { ...seed, ...readAccordionMap(storageKey) };
   });
 
   const toggle = useCallback(
     (key: T) => {
       setState((current) => {
-        const next = { ...current, [key]: !(current[key] ?? false) };
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          /* private mode: state simply stops persisting */
-        }
+        const next = {
+          ...readAccordionMap(storageKey),
+          [key]: !(current[key] ?? false),
+        };
+        writeAccordionMap(storageKey, next);
         return next;
       });
     },
@@ -125,12 +148,8 @@ export function useAccordionState<T extends string>(
     (key: T) => {
       setState((current) => {
         if (current[key]) return current;
-        const next = { ...current, [key]: true };
-        try {
-          localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          /* private mode: state simply stops persisting */
-        }
+        const next = { ...readAccordionMap(storageKey), [key]: true };
+        writeAccordionMap(storageKey, next);
         return next;
       });
     },

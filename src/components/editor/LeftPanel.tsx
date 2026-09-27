@@ -613,54 +613,6 @@ export function LeftPanel({
                 </p>
               )}
             </div>
-            {previewTemplate && (
-              <div
-                className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-black/45 p-4"
-                role="dialog"
-                aria-modal="true"
-                aria-label={`معاينة ${previewTemplate.title}`}
-                onClick={() => setPreviewTemplate(null)}
-              >
-                <div
-                  className="w-full max-w-sm rounded-[10px] border border-line bg-surface p-3 shadow-2xl "
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="mb-3 flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-[14px] font-extrabold">
-                        {previewTemplate.title}
-                      </h3>
-                      <p className="mt-0.5 text-[10px] uppercase tracking-wide text-ink">
-                        {previewTemplate.concept || "Template"}
-                      </p>
-                      <p className="mt-1 text-[11px] leading-5 text-muted">
-                        {previewTemplate.desc}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewTemplate(null)}
-                      className="grid size-7 place-items-center rounded-[6px] border border-line "
-                      title="إغلاق المعاينة"
-                      aria-label="إغلاق المعاينة"
-                    >
-                      <X className="size-3.5" />
-                    </button>
-                  </div>
-                  <TemplatePreview variant={previewTemplate.preview} large />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      addTemplatePage(previewTemplate.id);
-                      setPreviewTemplate(null);
-                    }}
-                    className="mt-3 h-9 w-full rounded-[7px] bg-navy text-[11px] font-extrabold text-white"
-                  >
-                    إضافة القالب كصفحة قابلة للتحرير
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -932,6 +884,59 @@ export function LeftPanel({
           </div>
         )}
       </div>
+      {/*
+       * Template preview dialog — global to the panel: the «نماذج جاهزة»
+       * cards in أدوات العناصر preview through the same dialog as the
+       * القوالب tab, so it must render outside any single tab's markup.
+       */}
+      {previewTemplate && (
+        <div
+          className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-black/45 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`معاينة ${previewTemplate.title}`}
+          onClick={() => setPreviewTemplate(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-[10px] border border-line bg-surface p-3 shadow-2xl "
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <div>
+                <h3 className="text-[14px] font-extrabold">
+                  {previewTemplate.title}
+                </h3>
+                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-ink">
+                  {previewTemplate.concept || "Template"}
+                </p>
+                <p className="mt-1 text-[11px] leading-5 text-muted">
+                  {previewTemplate.desc}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewTemplate(null)}
+                className="grid size-7 place-items-center rounded-[6px] border border-line "
+                title="إغلاق المعاينة"
+                aria-label="إغلاق المعاينة"
+              >
+                <X className="size-3.5" />
+              </button>
+            </div>
+            <TemplatePreview variant={previewTemplate.preview} large />
+            <button
+              type="button"
+              onClick={() => {
+                addTemplatePage(previewTemplate.id);
+                setPreviewTemplate(null);
+              }}
+              className="mt-3 h-9 w-full rounded-[7px] bg-navy text-[11px] font-extrabold text-white"
+            >
+              إضافة القالب كصفحة قابلة للتحرير
+            </button>
+          </div>
+        </div>
+      )}
       {/*
        * Quick actions — the panel's bottom toolbar (Layers-panel anatomy:
        * header tabs, content rows, action bar). Each button reuses the same

@@ -127,9 +127,9 @@ export function AssetLibrary({
   children,
 }: {
   /**
-   * Content that belongs to the same Library workspace (the ready-made design
-   * assets). Rendered inside this section so the sticky Library controls stay
-   * pinned for the whole tab instead of scrolling away at the section's end.
+   * Optional extra content rendered after the library grid. The Library tab
+   * itself is files & folders only (the element tools live in their own tab),
+   * but the slot stays so callers can still append same-workspace content.
    */
   children?: React.ReactNode;
 } = {}) {
