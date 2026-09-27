@@ -588,14 +588,7 @@ export function TemplatesPage() {
           منها في المحرر بزر «استخدام القالب». القوالب الجاهزة تبقى كما هي، وأي تعديل عليها يُحفظ كنسخة خاصة بك.
         </p>
 
-        <PublishedTemplates
-          hasPremium={entitlements.premium_templates}
-          onLocked={() => window.location.assign("/license")}
-          beforeOpen={async (pageCount) => {
-            await hydrate();
-            return demoBlocked(pageCount);
-          }}
-        />
+        <PublishedTemplates />
 
         <a
           href="/editor"
