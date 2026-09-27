@@ -21,6 +21,7 @@ import {
   FileText,
   Baseline,
   ChevronDown,
+  ChevronsRight,
   Eye,
   X,
   FolderOpen,
@@ -48,6 +49,7 @@ import {
 } from "@/lib/editor/templates";
 import { useEditor, type LeftTab } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
+import { isOverlayViewport } from "@/lib/editor/ui-state";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, useAccordionState } from "./ui/Accordion";
 import { ScrubField } from "./ui/ScrubInput";
@@ -282,7 +284,8 @@ export function LeftPanel({
        *      clipped out of reach, which is what the old `flex-1 min-w-[52px]`
        *      row did at the narrowest widths.
        */}
-      <div className="@container flex shrink-0 gap-0.5 overflow-x-auto border-b border-line p-1.5 dark:border-white/10">
+      <div className="flex shrink-0 items-center gap-1 border-b border-line p-1.5 dark:border-white/10">
+        <div className="@container flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
         {TABS.map((t) => {
           const Icon = t.icon;
           return (
@@ -294,7 +297,7 @@ export function LeftPanel({
               aria-label={t.label}
               aria-current={tab === t.id}
               className={cn(
-                "grid h-12 min-w-[34px] flex-1 basis-0 place-items-center gap-0.5 rounded-[8px] px-0.5 text-[9px] font-extrabold",
+                "grid h-12 min-w-[44px] flex-1 basis-0 place-items-center gap-0.5 rounded-[8px] px-0.5 text-[9px] font-extrabold",
                 tab === t.id
                   ? "bg-navy text-white"
                   : "text-muted hover:bg-line-2 dark:text-white/70 dark:hover:bg-white/5",
@@ -310,6 +313,16 @@ export function LeftPanel({
             </button>
           );
         })}
+        </div>
+        <button
+          type="button"
+          onClick={() => useEditor.setState(isOverlayViewport() ? { leftOpen: false } : { leftCollapsed: true })}
+          className="grid size-11 shrink-0 place-items-center rounded-[8px] text-muted hover:bg-line-2 dark:hover:bg-white/10"
+          aria-label="طي لوحة العناصر"
+          title="طي لوحة العناصر"
+        >
+          <ChevronsRight className="size-4" />
+        </button>
       </div>
 
       <div className="editor-pane-scroll editor-panel-body p-3">
@@ -469,19 +482,19 @@ export function LeftPanel({
         {tab === "library" && (
           <>
             {/*
-             * The smart library (Phase 7) lives with the assets, so «المكتبة» is
-             * one shelf: ready-made elements behind accordions, then the files
-             * the author uploaded. Both read the same store actions.
+             * Keep uploaded media first in the Library workspace; its sticky
+             * controls remain reachable while the media list scrolls. Ready-made
+             * design assets follow below in the same panel.
              */}
-            <SmartLibraryPanel
-              theme={theme}
-              onAddCustomAsset={onAddCustomAsset}
-              onOpenShapes={() => setLeftTab("shapes")}
-              onOpenTemplates={() => setLeftTab("templates")}
-              onPreviewTemplate={setPreviewTemplate}
-            />
+            <AssetLibrary />
             <div className="mt-3 border-t border-line pt-3 dark:border-white/10">
-              <AssetLibrary />
+              <SmartLibraryPanel
+                theme={theme}
+                onAddCustomAsset={onAddCustomAsset}
+                onOpenShapes={() => setLeftTab("shapes")}
+                onOpenTemplates={() => setLeftTab("templates")}
+                onPreviewTemplate={setPreviewTemplate}
+              />
             </div>
           </>
         )}

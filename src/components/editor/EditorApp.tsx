@@ -53,6 +53,7 @@ import { fitImageBox, prepareImage } from "@/lib/editor/images";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { LeftPanel } from "./LeftPanel";
 import { RightPanel } from "./RightPanel";
+import { StudioToolDock, CollapsedPanelDock } from "./StudioToolDock";
 import { CanvasStage } from "./CanvasStage";
 import { ArrangeBar } from "./ArrangeBar";
 import { PageRail } from "./PageRail";
@@ -1491,18 +1492,11 @@ function Studio({
            */
           transition:
             "grid-template-columns 180ms cubic-bezier(0.22, 1, 0.36, 1)",
-          gridTemplateColumns:
-            focusMode || (leftCollapsed && rightDockCollapsed)
-              ? isDesktop
-                ? "minmax(0, 1fr)"
-                : undefined
-              : !isDesktop
-                ? undefined
-                : leftCollapsed
-                  ? `minmax(360px, 1fr) ${panelWidths.right}px`
-                  : rightDockCollapsed
-                    ? `${panelWidths.left}px minmax(360px, 1fr)`
-                    : `${panelWidths.left}px minmax(360px, 1fr) ${panelWidths.right}px`,
+          gridTemplateColumns: !isDesktop
+            ? undefined
+            : focusMode
+              ? "minmax(0, 1fr)"
+              : `${leftCollapsed ? "42px" : `minmax(${PANEL_MIN.left}px, min(${panelWidths.left}px, 28vw))`} max-content minmax(360px, 1fr) ${rightDockCollapsed ? "42px" : `minmax(${PANEL_MIN.right}px, min(${panelWidths.right}px, 30vw))`}`,
         }}
       >
         <div
@@ -1521,6 +1515,7 @@ function Studio({
             !leftOpen && "max-lg2:pointer-events-none",
             leftCollapsed && "lg2:hidden",
           )}
+          style={!isDesktop ? { width: `min(${panelWidths.left}px, 86vw)` } : undefined}
         >
           {/*
            * Panel close button — inside the tab-strip row's own flow, not
@@ -1556,6 +1551,20 @@ function Studio({
             />
           )}
         </div>
+        {isDesktop && leftCollapsed && !focusMode && (
+          <CollapsedPanelDock
+            side="left"
+            onExpand={() => useEditor.setState({ leftCollapsed: false, leftOpen: true })}
+            onTab={() => useEditor.setState({ leftTab: "library", leftCollapsed: false, leftOpen: true })}
+          />
+        )}
+        {!focusMode && (
+          <StudioToolDock
+            onOpenLeft={(tab) => useEditor.setState({ focusMode: false, leftTab: tab, leftCollapsed: false, leftOpen: true })}
+            onOpenRight={(tab) => useEditor.setState({ focusMode: false, rightTab: tab, rightCollapsed: false, rightOpen: true })}
+            onUploadImage={() => onUpload("image")}
+          />
+        )}
 
         <div className="editor-canvas-workspace relative grid min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden">
           {/*
@@ -1603,6 +1612,13 @@ function Studio({
           <WorkspaceStatusBar />
         </div>
 
+        {isDesktop && rightDockCollapsed && !focusMode && (
+          <CollapsedPanelDock
+            side="right"
+            onExpand={() => useEditor.setState({ rightCollapsed: false, rightOpen: true })}
+            onTab={() => useEditor.setState({ rightTab: "layers", rightCollapsed: false, rightOpen: true })}
+          />
+        )}
         {touchProperties ? (
           <TouchPropertiesSheet open={rightOpen && !focusMode} onClose={() => useEditor.setState({ rightOpen: false })}>
             <RightPanel onReplaceImage={onReplaceImage} />
@@ -1629,6 +1645,7 @@ function Studio({
               !rightOpen && "max-lg2:pointer-events-none",
               rightCollapsed && "lg2:hidden",
             )}
+            style={!isDesktop ? { width: `min(${panelWidths.right}px, 90vw)` } : undefined}
           >
             {/* Same in-flow close row for the properties panel. */}
             <div className="flex items-center justify-end border-b border-line px-1.5 py-1 dark:border-white/10">

@@ -8,7 +8,10 @@ import {
   ArrowUp,
   Baseline,
   ChevronDown,
+  ChevronsRight,
   Copy,
+  CopyPlus,
+  ClipboardPaste,
   Download,
   Contrast,
   Eye,
@@ -83,6 +86,7 @@ import { prepareText } from "@/lib/editor/text-render";
 import { useEditor, type RightTab } from "@/lib/editor/store";
 import { OPEN_REPORT_TOOLS_EVENT } from "./EditorApp";
 import { cn, round } from "@/lib/utils";
+import { isOverlayViewport } from "@/lib/editor/ui-state";
 import { toast } from "sonner";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, SubGroup, useAccordionState } from "./ui/Accordion";
@@ -328,7 +332,8 @@ export function RightPanel({
 
   return (
     <aside className="editor-properties flex h-full min-h-0 flex-col border-r border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
-      <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-line p-2 dark:border-white/10">
+      <div className="flex shrink-0 items-center gap-1 border-b border-line p-2 dark:border-white/10">
+        <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
         {(
           [
             ["properties", "خصائص"],
@@ -340,7 +345,7 @@ export function RightPanel({
             type="button"
             onClick={() => setRightTab(id)}
             className={cn(
-              "h-9 rounded-[8px] text-[12px] font-extrabold",
+              "min-h-11 rounded-[8px] px-2 text-[12px] font-extrabold",
               tab === id
                 ? "bg-navy text-white"
                 : "text-muted hover:bg-line-2 dark:text-white/70 dark:hover:bg-white/5",
@@ -349,6 +354,16 @@ export function RightPanel({
             {label}
           </button>
         ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => useEditor.setState(isOverlayViewport() ? { rightOpen: false } : { rightCollapsed: true })}
+          className="grid size-11 shrink-0 place-items-center rounded-[8px] text-muted hover:bg-line-2 dark:hover:bg-white/10"
+          aria-label="طي لوحة الخصائص"
+          title="طي لوحة الخصائص"
+        >
+          <ChevronsRight className="size-4" />
+        </button>
       </div>
 
       {/*
@@ -356,7 +371,7 @@ export function RightPanel({
        * the real header height (`editor-panel-body`), so a short window scrolls
        * inside the panel instead of clipping the last controls.
        */}
-      <div className="editor-pane-scroll editor-panel-body p-3">
+      <div className="editor-pane-scroll editor-panel-body no-bottom-pad p-3">
         {tab === "layers" && (
           <div className="grid gap-2">
             <div className="max-h-[40vh] min-h-[120px] overflow-y-auto overflow-x-hidden rounded-[8px] border border-line/50 p-1.5 editor-pane-scroll dark:border-white/10">
@@ -2245,6 +2260,12 @@ export function RightPanel({
           </AccordionSection>
         )}
       </div>
+      <footer className="editor-panel-footer grid shrink-0 grid-cols-4 gap-1 border-t border-line p-2 dark:border-white/10">
+        <button type="button" onClick={duplicateSelected} disabled={!selectedId} aria-label="تكرار العنصر" title="تكرار العنصر" className="grid min-h-11 place-items-center rounded-[7px] hover:bg-line-2 disabled:opacity-40 dark:hover:bg-white/10"><CopyPlus className="size-4" /></button>
+        <button type="button" onClick={copySelected} disabled={!selectedId} aria-label="نسخ العنصر" title="نسخ العنصر" className="grid min-h-11 place-items-center rounded-[7px] hover:bg-line-2 disabled:opacity-40 dark:hover:bg-white/10"><Copy className="size-4" /></button>
+        <button type="button" onClick={() => pasteClipboard()} disabled={!clipboard} aria-label="لصق العنصر" title="لصق العنصر" className="grid min-h-11 place-items-center rounded-[7px] hover:bg-line-2 disabled:opacity-40 dark:hover:bg-white/10"><ClipboardPaste className="size-4" /></button>
+        <button type="button" onClick={deleteSelected} disabled={!selectedId} aria-label="حذف العنصر" title="حذف العنصر" className="grid min-h-11 place-items-center rounded-[7px] text-red-400 hover:bg-red-500/10 disabled:opacity-40"><Trash2 className="size-4" /></button>
+      </footer>
     </aside>
   );
 }

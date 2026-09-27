@@ -479,21 +479,8 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   right: -8px;
 }
 
-@media (max-width: 1023px) {
-  /* Handles stay useful on tablets: in landscape the panels sit beside the
-     canvas exactly like desktop, so their edge must stay draggable there.
-     Only portrait hides them — the portrait layout is a bottom sheet with no
-     side edge to drag. */
-  .editor-panel-resize-right {
-    display: none;
-  }
-}
-
-@media (max-width: 1023px) and (orientation: portrait) {
-  .editor-panel-resize-left {
-    display: none;
-  }
-}
+/* Tablet drawers are overlays, so resizing either side changes drawer width
+   without consuming any of the canvas workspace behind it. */
 
 /*
  * Panes scroll independently. `overscroll-behavior: contain` stops a flick at
@@ -2401,4 +2388,301 @@ summary,
 }
 @media (prefers-reduced-motion: reduce) {
   .touch-properties-sheet { transition: none; }
+}
+
+/* NASAQ muted Photoshop-inspired workspace and responsive editor rails. */
+.editor-ui {
+  --editor-bg: #1e252b;
+  --editor-panel: #252d34;
+  --editor-toolbar: #222a31;
+  --editor-surface: #2c353d;
+  --editor-border: #3c464f;
+  --editor-text: #d9dfe3;
+  --editor-text-secondary: #a3adb5;
+  --editor-hover: #35414a;
+  --editor-active: #40515e;
+  --editor-disabled: #20272d;
+}
+
+.editor-ui.editor-light {
+  --editor-bg: #e2e3e4;
+  --editor-panel: #f0f0f1;
+  --editor-toolbar: #e8e8e9;
+  --editor-surface: #fafafa;
+  --editor-border: #b6b8bb;
+  --editor-text: #28292a;
+  --editor-text-secondary: #686a6c;
+  --editor-hover: #dedfe0;
+  --editor-active: #d3d4d5;
+  --editor-disabled: #bfc0c1;
+}
+
+.editor-ui.editor-dark .studio-grid {
+  background-color: #1e252b;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+}
+
+/* Main tool dock occupies its own desktop track; tablets retain the full canvas and float the dock at its edge. */
+.studio-tool-dock {
+  position: relative;
+  z-index: var(--z-panel);
+  display: flex;
+  width: 52px;
+  min-width: 52px;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  align-self: stretch;
+  overflow: visible;
+  padding: 8px 4px;
+  border-inline: 1px solid var(--editor-border);
+  background: var(--editor-panel);
+  color: var(--editor-text);
+  transition: width 160ms ease, min-width 160ms ease;
+}
+
+.studio-tool-dock.is-wide {
+  width: 100px;
+  min-width: 100px;
+}
+
+.tool-dock-layout,
+.tool-dock-button {
+  display: grid;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  touch-action: manipulation;
+}
+
+.tool-dock-layout:hover,
+.tool-dock-button:hover,
+.tool-dock-button:focus-visible {
+  background: var(--editor-hover);
+  outline: none;
+}
+
+.tool-dock-layout {
+  align-self: center;
+  border: 1px solid var(--editor-border);
+}
+
+.tool-dock-tools {
+  display: grid;
+  width: 100%;
+  min-height: 0;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 4px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.studio-tool-dock.is-wide .tool-dock-tools {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tool-dock-item { min-width: 0; }
+.tool-dock-button { position: relative; cursor: pointer; }
+.tool-dock-button.is-active {
+  background: #385f83;
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(149, 198, 239, .3);
+}
+.tool-dock-label,
+.tool-dock-shortcut { display: none; }
+.tool-dock-flyout-mark {
+  position: absolute;
+  inset-inline-end: 3px;
+  bottom: 2px;
+  font-size: 10px;
+  line-height: 1;
+  opacity: .7;
+}
+.tool-dock-flyout {
+  position: absolute;
+  inset-inline-start: calc(100% + 5px);
+  top: 0;
+  z-index: calc(var(--z-panel) + 4);
+  display: grid;
+  min-width: 166px;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid var(--editor-border);
+  border-radius: 9px;
+  background: var(--editor-panel);
+  box-shadow: 0 8px 24px rgba(0,0,0,.28);
+}
+.tool-dock-flyout button {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--editor-text);
+  text-align: start;
+  white-space: nowrap;
+}
+.tool-dock-flyout button:hover { background: var(--editor-hover); }
+.tool-dock-colors {
+  position: relative;
+  width: 44px;
+  height: 54px;
+  flex: 0 0 54px;
+  margin-top: auto;
+  margin-bottom: 2px;
+}
+.tool-color-swatch {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  overflow: hidden;
+  border: 2px solid #e5e7eb;
+  border-radius: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+}
+.tool-color-background { inset-inline-end: 0; top: 0; }
+.tool-color-foreground { inset-inline-start: 0; bottom: 0; z-index: 1; }
+.tool-color-swatch input[type="color"] {
+  position: absolute;
+  inset: -8px;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.collapsed-panel-dock {
+  display: flex;
+  width: 42px;
+  min-width: 42px;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 2px;
+  border-inline: 1px solid var(--editor-border);
+  background: var(--editor-panel);
+  color: var(--editor-text-secondary);
+}
+.collapsed-dock-expand,
+.collapsed-dock-tab {
+  display: grid;
+  width: 38px;
+  min-height: 42px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+}
+.collapsed-dock-expand:hover,
+.collapsed-dock-tab:hover { background: var(--editor-hover); color: var(--editor-text); }
+
+/* Library controls stay together at the top of their own scrollable panel. */
+.asset-library { min-width: 0; container: assetlibrary / inline-size; }
+.asset-library-controls {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  min-width: 0;
+  margin: -4px -4px 0;
+  padding: 4px;
+  background: var(--editor-panel);
+  box-shadow: 0 5px 10px -10px rgba(0,0,0,.65);
+}
+.asset-library-controls > * { min-width: 0; }
+.asset-library-controls .overflow-x-auto {
+  scroll-behavior: smooth;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+.asset-library-add-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  gap: 6px;
+}
+.asset-library-add-actions > button {
+  min-width: 0;
+  min-height: 42px;
+  padding-inline: 5px;
+  white-space: normal;
+  line-height: 1.25;
+}
+.asset-media-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+.asset-media-grid > * { min-width: 0; }
+.asset-media-grid.is-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.asset-card-actions > button { min-width: 28px; min-height: 28px; }
+.layer-row { min-height: 44px; padding: 7px 9px; }
+
+@container assetlibrary (max-width: 292px) {
+  .asset-media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1099px) {
+  .studio-tool-dock {
+    position: absolute;
+    inset-inline-start: 6px;
+    top: 50%;
+    max-height: calc(100% - 24px);
+    transform: translateY(-50%);
+    border: 1px solid var(--editor-border);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.22);
+  }
+  .studio-tool-dock.is-wide { width: 100px; }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tool-dock-button:hover .tool-dock-label,
+  .tool-dock-button:hover .tool-dock-shortcut { display: block; }
+  .tool-dock-label {
+    position: absolute;
+    inset-inline-start: calc(100% + 10px);
+    z-index: 2;
+    padding: 4px 7px;
+    border: 1px solid var(--editor-border);
+    border-radius: 5px;
+    background: var(--editor-toolbar);
+    color: var(--editor-text);
+    font-size: 11px;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+  .tool-dock-shortcut {
+    position: absolute;
+    inset-inline-end: 1px;
+    bottom: 1px;
+    color: var(--editor-text-secondary);
+    font: 9px ui-monospace, monospace;
+    pointer-events: none;
+  }
+}
+
+@media (any-pointer: coarse) {
+  .asset-library-controls button { min-height: 42px; }
+  .asset-library-controls button.grid { min-width: 42px; }
+  .asset-card-actions > button { width: 42px; min-width: 42px; min-height: 42px; }
+  .asset-library .absolute.right-1.top-1 { width: 34px; height: 34px; }
+  .editor-properties .layer-row button { min-height: 42px; }
 }
