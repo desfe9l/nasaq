@@ -174,7 +174,12 @@ export function OnboardingTour({
   }, [rect, step?.placement]);
 
   return (
-    <div className="fixed inset-0 z-[90]" role="dialog" aria-modal="false" aria-label="جولة تعريفية">
+    <div
+      className="pointer-events-none fixed inset-0 z-[90]"
+      role="dialog"
+      aria-modal="false"
+      aria-label="جولة تعريفية"
+    >
       {/*
        * Four dim panels around the cut-out rather than one full-screen layer:
        * the highlighted control itself is never covered, so it stays clickable
@@ -183,12 +188,12 @@ export function OnboardingTour({
       {rect && (
         <>
           <span
-            className="absolute bg-scrim"
+            className="pointer-events-none absolute bg-scrim"
             style={{ top: 0, left: 0, right: 0, height: Math.max(0, rect.top) }}
             aria-hidden
           />
           <span
-            className="absolute bg-scrim"
+            className="pointer-events-none absolute bg-scrim"
             style={{
               top: rect.top + rect.height,
               left: 0,
@@ -198,7 +203,7 @@ export function OnboardingTour({
             aria-hidden
           />
           <span
-            className="absolute bg-scrim"
+            className="pointer-events-none absolute bg-scrim"
             style={{
               top: rect.top,
               left: 0,
@@ -208,7 +213,7 @@ export function OnboardingTour({
             aria-hidden
           />
           <span
-            className="absolute bg-scrim"
+            className="pointer-events-none absolute bg-scrim"
             style={{
               top: rect.top,
               left: rect.left + rect.width,
@@ -230,10 +235,10 @@ export function OnboardingTour({
           />
         </>
       )}
-      {!rect && <div className="absolute inset-0 bg-scrim" aria-hidden />}
+      {!rect && <div className="pointer-events-none absolute inset-0 bg-scrim" aria-hidden />}
 
       <div
-        className="absolute w-[300px] rounded-[12px] border border-line bg-surface p-3 shadow-2xl"
+        className="pointer-events-auto absolute w-[300px] rounded-[12px] border border-line bg-surface p-3 shadow-2xl"
         style={{ top: tooltip.top, left: tooltip.left }}
       >
         <div className="flex items-start justify-between gap-2">
