@@ -31,6 +31,7 @@ import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
 import { ShapePreview } from "./ShapePreview";
 import { TablePickerOverlay } from "./TablePicker";
 import { AccordionSection, useAccordionState } from "./ui/Accordion";
+import { SortableSections } from "./ui/SortableSections";
 
 /**
  * Quick tables for the «جداول وإحصائيات» category.
@@ -761,7 +762,7 @@ function ProgressPreview({
 }
 
 /**
- * المكتبة الذكية — the smart library shelf, rendered in the «المكتبة» tab.
+ * Element tools — an independent shelf in the «أدوات العناصر» tab.
  *
  * Six accordion categories (أشكال · رموز وأيقونات · خطوط وفواصل · مؤشرات
  * وإنجازات · جداول وإحصانات · نماذج جاهزة) over the same store actions the rest
@@ -853,6 +854,7 @@ export function SmartLibraryPanel({
        * The accordion categories. Every item inserts a REAL element on the page
        * (no parallel model, no second renderer).
        */}
+      <SortableSections>
       <AccordionSection
         title="أشكال"
         id="shapes"
@@ -1276,6 +1278,7 @@ export function SmartLibraryPanel({
           {PAGE_TEMPLATES.length})
         </button>
       </AccordionSection>
+      </SortableSections>
     </>
   );
 }

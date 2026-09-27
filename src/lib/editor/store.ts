@@ -128,6 +128,7 @@ export {
 } from "./ui-state";
 
 export type LeftTab =
+  | "tools"
   | "elements"
   | "shapes"
   | "library"
