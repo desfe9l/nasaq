@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { ArrowLeft, Briefcase, FileText, LayoutTemplate, Table2, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, CheckCircle2 } from "lucide-react";
-import { toast } from "sonner";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
@@ -12,6 +11,7 @@ import { HeroShowcase } from "@/components/site/HeroShowcase";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 import { WORKSPACE_HOME_PATH, openNewDocumentFlow, useWorkspaceEntry } from "@/lib/auth/use-workspace-entry";
+import { ProjectFileButton } from "@/components/site/ProjectFileButton";
 
 const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
   { icon: LayoutTemplate, title: PRODUCT_COPY.capabilities[0][0], desc: PRODUCT_COPY.capabilities[0][1] },
@@ -23,12 +23,10 @@ const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
 ];
 
 export function HomePage() {
-  const importProject = useEditor((s) => s.importProject);
   const projects = useEditor((s) => s.projects);
   const projectsLoading = useEditor((s) => s.projectsLoading);
   const hydrate = useEditor((s) => s.hydrate);
   const openProject = useEditor((s) => s.openProject);
-  const fileInput = useRef<HTMLInputElement>(null);
   const [modalOpen, setModalOpen] = useState(false);
   /**
    * «صفحة فارغة» entry.
@@ -101,22 +99,10 @@ export function HomePage() {
 
               <p className="mt-4 text-[11px] leading-6 text-muted ">{PRODUCT_COPY.demoNote}</p>
 
-              <input ref={fileInput} type="file" accept="application/json,.json" className="hidden" onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = () => {
-                  try {
-                    const parsed = JSON.parse(String(reader.result));
-                    void importProject(parsed).then(() => window.location.assign("/editor"));
-                  } catch {
-                    toast.error("تعذر قراءة الملف — تأكد أنه ملف مشروع بصيغة JSON");
-                  }
-                };
-                reader.onerror = () => toast.error("تعذر قراءة الملف");
-                reader.readAsText(file);
-                e.target.value = "";
-              }} />
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <ProjectFileButton />
+                <span className="text-[11px] text-muted">افتح ملف ‎.nsq‎ أو نسخة JSON محفوظة سابقًا</span>
+              </div>
             </div>
 
             <div>

@@ -57,6 +57,7 @@ import { PublishedTemplates } from "./PublishedTemplates";
 import { NewDocumentDialog } from "./NewDocumentDialog";
 import { useCatalogEntries } from "./useCatalog";
 import { CARD_W, CARD_WRAP } from "./cards";
+import { ProjectFileButton } from "./ProjectFileButton";
 
 type FeaturedPill = "featured" | CatalogPillId;
 
@@ -557,6 +558,12 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
                 </span>
               </button>
             </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-line bg-surface-2 px-4 py-3">
+            <ProjectFileButton />
+            <span className="text-[11px] font-semibold text-muted">
+              لديك مشروع محفوظ؟ افتح ملف ‎.nsq‎ أو نسخة JSON لمتابعة العمل.
+            </span>
           </div>
         </section>
 
