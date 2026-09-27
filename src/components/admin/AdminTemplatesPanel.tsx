@@ -50,6 +50,7 @@ import type {
   TemplateTier,
 } from "@/lib/admin/types";
 import { getProject, listProjects } from "@/lib/editor/storage";
+import { syncStorageOwner } from "@/lib/auth/storage-owner-sync";
 import type { ProjectMeta } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
 
@@ -163,7 +164,13 @@ export function AdminTemplatesPanel() {
 
   /** Local projects are only offered when the editor library actually has some. */
   useEffect(() => {
-    void listProjects()
+    // This panel reads the local library directly (the admin route never runs
+    // the editor's hydrate), so pin the storage owner to the live session
+    // FIRST: only the signed-in admin's own projects may be offered, never
+    // rows left in this browser by another account.
+    void syncStorageOwner()
+      .catch(() => undefined)
+      .then(() => listProjects())
       .then(setLocalProjects)
       .catch(() => setLocalProjects([]));
   }, []);

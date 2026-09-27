@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  CLEAR_LOCAL_STATE_TIMEOUT_MS,
   DEPLOYED_SIGN_OUT_TIMEOUT_MS,
   PREVIEW_SIGN_OUT_TIMEOUT_MS,
   runPreSignInSignOut,
@@ -245,4 +246,91 @@ test("the defaults are bounded, and deployed waits longer than preview", async (
   t.mock.timers.tick(PREVIEW_SIGN_OUT_TIMEOUT_MS);
   await done;
   assert.deepEqual(h.order, ["clear", "redirect"]);
+});
+
+// ── Local identity clear (user-scoped stores/caches) ─────────────────────────
+// The sign-out is not done when the token is gone: the outgoing account's
+// in-memory library state must be dropped BEFORE the redirect, so the
+// signed-out page can never render it — and a failed sign-out must not clear
+// anything, because the visitor is still signed in.
+
+test("preview: the local state clear runs between the token clear and the redirect", async () => {
+  /** @type {string[]} */
+  const order = [];
+  await runSignOut({
+    livePreview: true,
+    hasBearer: true,
+    requestSignOut: () => Promise.resolve(),
+    clearToken: () => order.push("clear"),
+    clearLocalState: () => order.push("local"),
+    redirect: () => order.push("redirect"),
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+  assert.deepEqual(order, ["clear", "local", "redirect"]);
+});
+
+test("deployed: a confirmed sign-out also clears local state before redirecting", async () => {
+  /** @type {string[]} */
+  const order = [];
+  await runSignOut({
+    livePreview: false,
+    hasBearer: true,
+    requestSignOut: () => Promise.resolve(),
+    clearToken: () => order.push("clear"),
+    clearLocalState: () => order.push("local"),
+    redirect: () => order.push("redirect"),
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+  assert.deepEqual(order, ["clear", "local", "redirect"]);
+});
+
+test("deployed: a FAILED sign-out clears nothing — the visitor is still signed in", async () => {
+  /** @type {string[]} */
+  const order = [];
+  await assert.rejects(
+    runSignOut({
+      livePreview: false,
+      hasBearer: true,
+      requestSignOut: rejects,
+      clearToken: () => order.push("clear"),
+      clearLocalState: () => order.push("local"),
+      redirect: () => order.push("redirect"),
+      timeoutMs: TEST_TIMEOUT_MS,
+    }),
+    /still signed in/,
+  );
+  assert.deepEqual(order, []);
+});
+
+test("a local clear that fails or hangs never strands the redirect", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const rejectsClear = preview({ clearLocalState: rejects });
+  const doneRejects = rejectsClear.run();
+  await flush();
+  t.mock.timers.tick(CLEAR_LOCAL_STATE_TIMEOUT_MS);
+  await doneRejects;
+  assert.deepEqual(rejectsClear.order, ["clear", "redirect"]);
+
+  const hangsClear = preview({ clearLocalState: hangs });
+  const doneHangs = hangsClear.run();
+  // Let the run reach the clearLocalState wait so its bound is registered on
+  // the mocked clock before the clock advances.
+  await flush();
+  t.mock.timers.tick(CLEAR_LOCAL_STATE_TIMEOUT_MS);
+  await doneHangs;
+  assert.deepEqual(hangsClear.order, ["clear", "redirect"]);
+});
+
+test("pre-sign-in: the outgoing identity's local state is cleared too", async () => {
+  /** @type {string[]} */
+  const order = [];
+  await runPreSignInSignOut({
+    livePreview: true,
+    hasBearer: true,
+    requestSignOut: () => Promise.resolve(),
+    clearToken: () => order.push("clear"),
+    clearLocalState: () => order.push("local"),
+    timeoutMs: TEST_TIMEOUT_MS,
+  });
+  assert.deepEqual(order, ["clear", "local"]);
 });
