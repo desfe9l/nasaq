@@ -1,0 +1,48 @@
+name: Editor tools live QA
+
+# Runs against the real public deployment, not a local server or a mocked app.
+# The push trigger bootstraps this session's verification without adding a
+# workflow to main merely to make workflow_dispatch available.
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Public deployment URL to verify
+        required: true
+        default: https://nasaq-sa.vercel.app
+        type: string
+  push:
+    branches: [arena/01a0e38c-nasaq]
+    paths: [.github/workflows/editor-tools-live-qa.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  live-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      TOOLS_TEST_URL: ${{ inputs.base_url || 'https://nasaq-sa.vercel.app' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Test desktop and iPad interactions on production
+        run: |
+          mkdir -p live-qa-results
+          set -o pipefail
+          node scripts/test-element-tools-browser.mjs 2>&1 | tee live-qa-results/browser.log
+      - name: Preserve screenshots and verdict
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-tools-live-qa
+          path: |
+            live-qa-results/
+            screenshots/editor-focused/
+          retention-days: 7
