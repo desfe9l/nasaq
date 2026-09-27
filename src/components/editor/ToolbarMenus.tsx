@@ -378,7 +378,10 @@ function ViewMenu({ fitToScreen, fitToSelection, close }: { fitToScreen: () => v
   const snapElements = useEditor((s) => s.snapElements);
   const previewAll = useEditor((s) => s.previewAll);
   const focusMode = useEditor((s) => s.focusMode);
+  const dark = useEditor((s) => s.dark);
+  const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
   const toggle = useEditor((s) => s.toggle);
+  const toggleBubble = useEditor((s) => s.toggleBubble);
 
   const ToggleItem = ({ label, value, onClick }: { label: string; value: boolean; onClick: () => void }) => (
     <MenuItem
@@ -404,11 +407,23 @@ function ViewMenu({ fitToScreen, fitToSelection, close }: { fitToScreen: () => v
       />
       <MenuItem label="مقياس 100%" onClick={() => setZoom(1)} />
       <MenuItem label="ملاءمة التحديد" onClick={() => { close(); fitToSelection(); }} />
+      <MenuItem
+        label="ملء الشاشة (Full Screen)"
+        checked={typeof document !== "undefined" && !!document.fullscreenElement}
+        onClick={() => {
+          close();
+          if (document.fullscreenElement) void document.exitFullscreen();
+          else void document.documentElement.requestFullscreen?.().catch(() => {});
+        }}
+      />
       <MenuSep />
       <ToggleItem label="إظهار الشبكة" value={showGrid} onClick={() => toggle("showGrid")} />
       <ToggleItem label="محاذاة للشبكة" value={snapGrid} onClick={() => toggle("snapGrid")} />
       <ToggleItem label="محاذاة للعناصر" value={snapElements} onClick={() => toggle("snapElements")} />
       <ToggleItem label="عرض كل الصفحات" value={previewAll} onClick={() => toggle("previewAll")} />
+      <MenuSep />
+      <ToggleItem label="الوضع الداكن للاستوديو" value={dark} onClick={() => toggle("dark")} />
+      <ToggleItem label="الشريط العائم للعنصر المحدد" value={bubbleEnabled} onClick={() => toggleBubble()} />
       <ToggleItem label="وضع التركيز" value={focusMode} onClick={() => toggle("focusMode")} />
     </>
   );

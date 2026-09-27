@@ -16,30 +16,25 @@ const DRAWER_COLLAPSE_DRAG = 72;
  */
 export const OPEN_REPORT_TOOLS_EVENT = "nasaq:open-report-tools";
 import {
-  BookOpen,
   Check,
   ClipboardList,
   Download,
-  FolderPlus,
-  Heading1,
-  Focus,
   Eye,
-  EyeOff,
-  GalleryHorizontalEnd,
+  FolderPlus,
   Grid3x3,
+  Heading1,
   Home,
   Library,
-  Moon,
-  PanelLeft,
-  PanelRight,
+  Maximize,
+  Minimize,
+  Minus,
   PenLine,
+  Plus,
   Redo2,
   Save,
-  Sun,
-  Undo2,
-  ZoomIn,
-  ZoomOut,
   Scan,
+  Undo2,
+  Wand2,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import {
@@ -398,8 +393,6 @@ function Studio({
   const pagesPanelHeight = useEditor((s) => s.pagesPanelHeight);
   const setPagesPanelHeight = useEditor((s) => s.setPagesPanelHeight);
   const contextMenu = useEditor((s) => s.contextMenu);
-  const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
-  const toggleBubble = useEditor((s) => s.toggleBubble);
   const leftTab = useEditor((s) => s.leftTab);
   const rightTab = useEditor((s) => s.rightTab);
   const openLibrary = useEditor((s) => s.openLibrary);
@@ -664,6 +657,28 @@ function Studio({
     resetWorkspaceLayout();
     setTimeout(() => fitRef.current(), 80);
   }, [resetWorkspaceLayout]);
+
+  /*
+   * ملء الشاشة — part of the unified canvas-scaling cluster: the whole
+   * studio (chrome + artboard) fills the device, so a tablet becomes a
+   * true drafting surface. Tracked live so the glyph reflects an Escape
+   * exit as faithfully as the button itself.
+   */
+  const [isFullscreen, setIsFullscreen] = useState(
+    () => typeof document !== "undefined" && !!document.fullscreenElement,
+  );
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onChange);
+    return () => document.removeEventListener("fullscreenchange", onChange);
+  }, []);
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen?.().catch(() => {});
+    } else {
+      void document.documentElement.requestFullscreen?.().catch(() => {});
+    }
+  }, []);
 
   /*
    * Safe auto-fit whenever a DIFFERENT document is loaded (opening a project,
@@ -1157,42 +1172,123 @@ function Studio({
       )}
     >
       {/*
-       * Toolbar row — ONE line at every width.
+       * Toolbar — three zones in one logical order at every width.
        *
-       * The row is `flex-nowrap` and is itself the horizontal scroller
-       * (`overflow-x-auto` + `whitespace-nowrap`): the brand group, the history
-       * + zoom cluster and the actions group are all `shrink-0`, so nothing is
-       * ever squeezed onto a second line, and nothing is clipped off the edge
-       * either. At `md` and up the tool tray is `min-w-0` and absorbs the
-       * slack — it narrows and scrolls inside its own box (`md:overflow-x-auto`
-       * is the tray's, not the row's) so the row itself rarely needs to scroll.
-       * On a phone the four groups are together wider than the screen, so the
-       * row scrolls: the strip slides under the finger instead of breaking into
-       * a stack of ragged lines, which is what used to push controls past the
-       * right edge.
+       *   ① اللوحة: a single scaling cluster (− / % / + / fit / fullscreen),
+       *     then history (تراجع/إعادة), then the document tools the author
+       *     reaches for every page (نص بالرسم، أدوات التقرير، المكتبة، أضف
+       *     مكتبة، عناوين الفقرات، الرئيسية) — each with a single, distinct
+       *     home, separated by dividers so nothing cramps.
+       *   ② المركز: the document itself — its name in one perfectly centered
+       *     capsule with the document view controls (معاينة الصفحات، الشبكة،
+       *     ثم قوائم المحاذاة/الترتيب/التحويل/العرض), plus the one primary
+       *     utility «ضبط وتنسيق مساحة العمل».
+       *   ③ مساحة العمل والحساب: save state, the project-file menu, the
+       *     «تصدير» primary action and the account menu.
        *
-       * The global actions the author reaches for constantly are the first
-       * controls on that strip — Undo/Redo and Zoom/Fit (pinned cluster) right
-       * after the brand group, then Save and Export — so at most one short
-       * swipe separates the author from any of them at any width.
+       * The bar wraps by whole zones on narrow tablets (clusters are
+       * `shrink-0`, never split mid-group), and every control grows to a
+       * ≥42px hit target on coarse pointers — the strip auto-adjusts its
+       * footprint instead of cramping or half-clipping a button.
        */}
       <header
         ref={headerRef}
         data-editor-obstacle="header"
-        className="editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 whitespace-nowrap border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]"
+        className="editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]"
       >
-        <div className="flex shrink-0 items-center gap-2">
-          <a
-            href={homeHref}
-            onClick={leaveEditor}
-            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
-            title="العودة إلى الرئيسية"
-            aria-label="العودة إلى الرئيسية"
+        {/* ① Canvas scaling, history, and the document tools. */}
+        <div className="editor-header-zone">
+          <div
+            className="editor-zoom-cluster"
+            role="group"
+            aria-label="مقياس مساحة العمل"
           >
-            <Home className="size-4" />
-          </a>
+            <button
+              type="button"
+              className="editor-capsule-btn"
+              onClick={() => zoomCentered(zoom - 0.08)}
+              title="تصغير المقياس (⌘−)"
+              aria-label="تصغير المقياس"
+            >
+              <Minus className="size-4" />
+            </button>
+            <button
+              type="button"
+              className="editor-zoom-readout"
+              onClick={() => zoomCentered(1)}
+              title="المقياس الحالي — انقر للعودة إلى 100%"
+              aria-label="إعادة المقياس إلى مئة بالمئة"
+            >
+              {Math.round(zoom * 100)}%
+            </button>
+            <button
+              type="button"
+              className="editor-capsule-btn"
+              onClick={() => zoomCentered(zoom + 0.08)}
+              title="تكبير المقياس (⌘+)"
+              aria-label="تكبير المقياس"
+            >
+              <Plus className="size-4" />
+            </button>
+            <button
+              type="button"
+              className="editor-capsule-btn"
+              onClick={fitToScreen}
+              title="ملاءمة الصفحة (⌘0)"
+              aria-label="ملاءمة الصفحة"
+            >
+              <Scan className="size-4" />
+            </button>
+            <button
+              type="button"
+              className={cn("editor-capsule-btn", isFullscreen && "is-active")}
+              onClick={toggleFullscreen}
+              title={isFullscreen ? "الخروج من ملء الشاشة" : "ملء الشاشة"}
+              aria-label={isFullscreen ? "الخروج من ملء الشاشة" : "ملء الشاشة"}
+              aria-pressed={isFullscreen}
+            >
+              {isFullscreen ? (
+                <Minimize className="size-4" />
+              ) : (
+                <Maximize className="size-4" />
+              )}
+            </button>
+          </div>
+
+          <span className="editor-header-sep" aria-hidden />
+
           <button
             type="button"
+            className="editor-header-btn"
+            onClick={undo}
+            disabled={past.length <= 1}
+            title="تراجع (⌘Z)"
+            aria-label="تراجع"
+          >
+            <Undo2 className="size-4" />
+          </button>
+          <button
+            type="button"
+            className="editor-header-btn"
+            onClick={redo}
+            disabled={!future.length}
+            title="إعادة (⌘⇧Z)"
+            aria-label="إعادة"
+          >
+            <Redo2 className="size-4" />
+          </button>
+
+          <span className="editor-header-sep" aria-hidden />
+
+          {/*
+           * Document/editing tools — one home each: draw a text box straight
+           * on the canvas, report tools, the library, add-a-library, the
+           * heading generator, and Home. Sidebar/layers/settings gateways
+           * live in the unified tool dock instead (no duplicates).
+           */}
+          <button
+            type="button"
+            data-tour="text-tool"
             onClick={() => {
               useEditor.setState({
                 leftTab: "elements",
@@ -1201,55 +1297,18 @@ function Studio({
               });
               window.dispatchEvent(new CustomEvent("nasaq:draw-text"));
             }}
-            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
+            className="editor-header-btn"
             title="إدراج مربع نص — اسحب على الصفحة لتحديد موضعه وحجمه"
             aria-label="إدراج مربع نص"
-            data-tour="text-tool"
           >
             <PenLine className="size-4" />
-            {/*
-             * Icon-only by design. The old inline caption read as a how-to
-             * rather than a tool name and squeezed the tool tray; the control
-             * now carries a formal Arabic tooltip and an accessible label
-             * instead, exactly like the other single-icon actions.
-             */}
-            <span className="sr-only">إدراج مربع نص</span>
           </button>
-          {/**
-           * «مشاريعي» → صفحة المشاريع. A real same-tab navigation (anchor) so it
-           * works from any editor state — project, page, panel, focus mode —
-           * with no dependency on editor state at all.
-           */}
-          <a
-            href="/projects"
-            onClick={leaveEditor}
-            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
-            title="الانتقال إلى مشاريعي"
-          >
-            <BookOpen className="size-4" />
-          </a>
-          {/**
-           * PINNED TOOLS — «أدوات التقرير», «المكتبة», «أضف مكتبة», «عناوين
-           * الفقرات».
-           *
-           * These four live in the toolbar itself: outside the scrollable tray
-           * and outside both side panels, because they are the controls a
-           * report author reaches for on every page. Pinning them here means
-           * they survive focus mode, a collapsed panel and a narrow tablet —
-           * nothing has to be opened first.
-           */}
-          <span
-            className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10"
-            aria-hidden
-          />
           <button
             type="button"
             data-tour="report-tools"
             onClick={() => {
-              // Report tools are docked in the RIGHT panel, so pinning the
-              // button means: leave focus mode, open that panel, switch it to
-              // «الخصائص» and expand the section. RightPanel listens for the
-              // event — the accordion state belongs to it, not to the toolbar.
+              // Report tools are docked in the RIGHT panel: leave focus mode,
+              // open «الخصائص» and expand the section via its own event.
               useEditor.setState({
                 focusMode: false,
                 rightCollapsed: false,
@@ -1258,11 +1317,11 @@ function Studio({
               });
               window.dispatchEvent(new CustomEvent(OPEN_REPORT_TOOLS_EVENT));
             }}
-            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
+            className="editor-header-btn"
             title="أدوات التقرير — بطاقات المؤشرات، الختم، الترويسة والتذييل، ومراجعة ما قبل الطباعة"
+            aria-label="أدوات التقرير"
           >
             <ClipboardList className="size-4" />
-            <span className="hidden 2xl:inline">أدوات التقرير</span>
           </button>
           <button
             type="button"
@@ -1284,256 +1343,107 @@ function Studio({
               openLibrary();
             }}
             aria-pressed={libraryVisible}
-            className={cn(
-              "inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10",
-              libraryVisible && "bg-navy/10 text-navy dark:bg-white/10 dark:text-gold-2",
-            )}
+            className={cn("editor-header-btn", libraryVisible && "is-active")}
             title={libraryVisible ? "إغلاق المكتبة" : "فتح المكتبة"}
+            aria-label={libraryVisible ? "إغلاق المكتبة" : "فتح المكتبة"}
           >
             <Library className="size-4" />
-            <span className="hidden 2xl:inline">المكتبة</span>
           </button>
           <button
             type="button"
             onClick={() => setAddLibraryOpen(true)}
-            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
+            className="editor-header-btn"
             title="أضف مكتبة — حوّل أي مجلد أو مجموعة ملفات إلى مجلدات بنمط نَسَق"
+            aria-label="أضف مكتبة"
           >
             <FolderPlus className="size-4" />
-            <span className="hidden 2xl:inline">أضف مكتبة</span>
           </button>
           <button
             type="button"
             onClick={() => setHeadingGeneratorOpen(true)}
-            className="inline-flex h-9 items-center gap-1 rounded-[8px] px-2 text-[12px] font-extrabold transition hover:bg-line-2 dark:hover:bg-white/10"
+            className="editor-header-btn"
             title="مولد عناوين الفقرات — تصاميم جاهزة وقابلة للتعديل"
+            aria-label="مولد عناوين الفقرات"
           >
             <Heading1 className="size-4" />
-            <span className="hidden 2xl:inline">عناوين الفقرات</span>
           </button>
+          <a
+            href={homeHref}
+            onClick={leaveEditor}
+            className="editor-header-btn"
+            title="العودة إلى الرئيسية"
+            aria-label="العودة إلى الرئيسية"
+          >
+            <Home className="size-4" />
+          </a>
         </div>
 
-        {/*
-         * Header layout: WRAPS, never scrolls.
-         *
-         * Every group (brand + pinned tools ▸ history/zoom ▸ tool tray ▸
-         * actions) is an unbreakable unit, and the header is `flex-wrap`, so a
-         * viewport that cannot hold them all moves whole groups onto another
-         * line instead of hiding controls behind a horizontal scroll (which
-         * always left a button cut in half at the scroller's edge). The tray is
-         * `flex-auto` from its natural width: it stays in the middle while it
-         * fits, drops to the next line when it does not, and on a line narrower
-         * than itself its own items wrap. The actions group is `ms-auto`, so it
-         * keeps its place at the far end of whichever line it lands on. The
-         * shell measures the header's real height (`--editor-header-h`), so the
-         * workspace below simply gets what is left.
-         */}
-        {/*
-         * Pinned cluster — history + zoom.
-         *
-         * These four actions are pressed constantly and in a hurry (undo the
-         * last nudge, zoom out to see the page), so they must never scroll off
-         * the row on a tablet. They therefore sit OUTSIDE the scrollable tray,
-         * `shrink-0`, next to the brand group; the tray keeps the menus, the
-         * project name and the grid toggle, which are the items that can afford
-         * to slide.
-         */}
-        <div className="flex shrink-0 items-center gap-1">
-          <IconButton
-            onClick={undo}
-            disabled={past.length <= 1}
-            title="تراجع (⌘Z)"
-          >
-            <Undo2 className="size-4" />
-          </IconButton>
-          <IconButton
-            onClick={redo}
-            disabled={!future.length}
-            title="إعادة (⌘⇧Z)"
-          >
-            <Redo2 className="size-4" />
-          </IconButton>
-          <span
-            className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10"
-            aria-hidden
+        {/* ② Document identity + the single primary workspace utility. */}
+        <div className="editor-header-zone editor-header-center">
+          <div className="editor-doc-capsule">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              aria-label="اسم المشروع"
+              className="editor-doc-name"
+              placeholder="مستند جديد"
+            />
+            <span className="editor-capsule-sep" aria-hidden />
+            <button
+              type="button"
+              onClick={() => toggle("previewAll")}
+              className={cn("editor-capsule-btn", previewAll && "is-active")}
+              title={
+                previewAll ? "معاينة كل الصفحات (مفعّل)" : "معاينة صفحة واحدة"
+              }
+              aria-label="تبديل معاينة كل الصفحات"
+              aria-pressed={previewAll}
+            >
+              <Eye className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => toggle("showGrid")}
+              className={cn("editor-capsule-btn", showGrid && "is-active")}
+              title="إظهار / إخفاء الشبكة"
+              aria-label="الشبكة"
+              aria-pressed={showGrid}
+            >
+              <Grid3x3 className="size-4" />
+            </button>
+          </div>
+          {/* Document view controls: محاذاة، ترتيب الطبقات، تحويل، عرض. */}
+          <ToolbarMenus
+            fitToScreen={fitToScreen}
+            fitToSelection={fitToSelection}
           />
-          <IconButton onClick={() => zoomCentered(zoom - 0.08)} title="تصغير">
-            <ZoomOut className="size-4" />
-          </IconButton>
-          <span className="w-10 shrink-0 text-center text-[12px] font-bold tabular-nums">
-            {Math.round(zoom * 100)}%
-          </span>
-          <IconButton onClick={() => zoomCentered(zoom + 0.08)} title="تكبير">
-            <ZoomIn className="size-4" />
-          </IconButton>
-          {/*
-           * Fit is the companion action of zooming (it used to be buried in the
-           * View menu), so it stays on the strip in one click at every size.
-           */}
-          <IconButton onClick={fitToScreen} title="ملاءمة الصفحة">
-            <Scan className="size-4" />
-          </IconButton>
           <button
             type="button"
             onClick={arrangeWorkspace}
             title="ضبط وتنسيق مساحة العمل — ملاءمة الصفحة وتوسيطها وإعادة اللوحات لأماكنها"
             aria-label="ضبط وتنسيق مساحة العمل"
-            className="ms-1 inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[9px] border border-emerald-500/40 bg-emerald-500/10 px-2.5 text-[12px] font-extrabold text-emerald-700 transition hover:bg-emerald-500/20 dark:border-emerald-400/40 dark:text-emerald-300"
+            className="editor-wand-btn"
           >
-            <span aria-hidden>🪄</span>
-            <span className="hidden xl:inline">ضبط وتنسيق مساحة العمل</span>
+            <Wand2 className="size-4" aria-hidden />
+            <span>ضبط وتنسيق مساحة العمل</span>
           </button>
         </div>
 
-        <div className="flex min-w-0 flex-auto items-center">
-          <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-1">
-            {/* Secondary tools grouped into four real, keyboard-accessible menus.
-              Fit/100% live in the View menu (قائمة «عرض»). */}
-            <span
-              className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10"
-              aria-hidden
-            />
-            <ToolbarMenus
-              fitToScreen={fitToScreen}
-              fitToSelection={fitToSelection}
-            />
-            <span
-              className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10"
-              aria-hidden
-            />
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              aria-label="اسم المشروع"
-              className="mx-0.5 block h-9 w-24 min-w-0 shrink rounded-[8px] px-2 text-center text-[12px] font-bold outline-none hover:bg-line-2 focus:bg-line-2 dark:bg-white/5 dark:text-white"
-            />
-            <IconButton
-              onClick={() => toggle("showGrid")}
-              active={showGrid}
-              title="الشبكة"
-            >
-              <Grid3x3 className="size-4" />
-            </IconButton>
-          </div>
-        </div>
-
-        <div className="ms-auto flex shrink-0 items-center justify-end gap-1.5">
+        {/* ③ Workspace/account + the export action. */}
+        <div className="editor-header-zone ms-auto">
           <SaveBadge
             state={saveState}
             label={label}
             onClick={() => void saveNow()}
           />
-          <IconButton
-            onClick={() => toggle("previewAll")}
-            active={previewAll}
-            title="كل الصفحات"
-          >
-            <GalleryHorizontalEnd className="size-4" />
-          </IconButton>
-          <IconButton
-            onClick={() => toggle("dark")}
-            title={dark ? "الوضع النهاري" : "الوضع الليلي"}
-          >
-            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          </IconButton>
-          {/* Panel toggles stay live even in focus mode: full screen must never
-              mean losing the tools — one tap exits focus and brings the panel
-              back (collapsed→open), so the exit is always one press away. */}
-          {/*
-           * Sidebar toggles (Phase 1).
-           *
-           * ONE button per sidebar that is correct in every layout: docked
-           * screens flip the collapsed flag, tablet/phone flip the floating
-           * drawer — so the control never looks dead (the old buttons toggled
-           * the desktop-only flag, which did nothing visible at <1024px).
-           * Leaving focus mode restores the docks instead of merely toggling.
-           */}
-          <IconButton
-            onClick={() => {
-              if (focusMode) {
-                useEditor.setState({
-                  focusMode: false,
-                  leftCollapsed: false,
-                  leftOpen: false,
-                });
-                return;
-              }
-              toggleSidebar("left");
-            }}
-            active={isDesktop ? !leftCollapsed && !focusMode : leftOpen}
-            title={
-              isDesktop
-                ? leftCollapsed
-                  ? "إظهار لوحة المكونات"
-                  : "طي لوحة المكونات"
-                : leftOpen
-                  ? "إغلاق لوحة المكونات"
-                  : "فتح لوحة المكونات"
-            }
-          >
-            <PanelRight className="size-4" />
-          </IconButton>
-          <IconButton
-            onClick={() => {
-              if (focusMode) {
-                useEditor.setState({
-                  focusMode: false,
-                  rightCollapsed: false,
-                  rightOpen: touchProperties,
-                });
-                return;
-              }
-              toggleSidebar("right");
-            }}
-            active={isDesktop && !touchProperties ? !rightCollapsed && !focusMode : rightOpen}
-            title={
-              isDesktop && !touchProperties
-                ? rightCollapsed
-                  ? "إظهار لوحة الخصائص"
-                  : "طي لوحة الخصائص"
-                : rightOpen
-                  ? "إغلاق لوحة الخصائص"
-                  : "فتح لوحة الخصائص"
-            }
-          >
-            <PanelLeft className="size-4" />
-          </IconButton>
-          {/*
-           * The Library toggle now sits with the other pinned tools at the
-           * START of the strip («المكتبة»), so this slot keeps the panel and
-           * focus controls the author needs while actually editing.
-           */}
-          {/*
-           * Floating bubble visibility. Tooltips and the bubble itself explain
-           * the state, so the icon never has to carry the meaning alone.
-           */}
-          <IconButton
-            onClick={() => toggleBubble()}
-            active={bubbleEnabled}
-            title={
-              bubbleEnabled
-                ? "إخفاء الشريط العائم للعنصر المحدد"
-                : "إظهار الشريط العائم للعنصر المحدد"
-            }
-          >
-            {bubbleEnabled ? (
-              <Eye className="size-4" />
-            ) : (
-              <EyeOff className="size-4" />
-            )}
-          </IconButton>
-          <IconButton
-            onClick={() => toggle("focusMode")}
-            active={focusMode}
-            title={focusMode ? "الخروج من وضع التركيز" : "وضع التركيز"}
-          >
-            <Focus className="size-4" />
-          </IconButton>
           <ProjectFileMenu onOpenFile={onOpenFile} />
+          <span className="editor-header-sep" aria-hidden />
           <button
             type="button"
             onClick={() => toggle("exportOpen")}
-            className="inline-flex h-9 items-center gap-1 rounded-[8px] bg-navy px-2 text-[12px] font-extrabold text-white"
+            className="editor-export-btn"
+            title="تصدير المشروع (⌘E)"
+            aria-label="تصدير"
           >
             <Download className="size-4" />
             تصدير
@@ -1646,6 +1556,7 @@ function Studio({
             onOpenLeft={openLeftFromDock}
             onOpenRight={openRightFromDock}
             onUploadImage={() => onUpload("image")}
+            onOpenFiles={onOpenFile}
           />
         )}
 
@@ -1672,6 +1583,7 @@ function Studio({
                 onOpenLeft={openLeftFromDock}
                 onOpenRight={openRightFromDock}
                 onUploadImage={() => onUpload("image")}
+                onOpenFiles={onOpenFile}
               />
             </div>
           )}
@@ -1841,44 +1753,6 @@ function Studio({
         <OnboardingTour onFinish={() => setTourOpen(false)} />
       )}
     </div>
-  );
-}
-
-function IconButton({
-  onClick,
-  disabled,
-  active,
-  title,
-  children,
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  active?: boolean;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      aria-pressed={active}
-      className={cn(
-        /*
-         * Frame-less, one uniform size: every toolbar control is the same 36px
-         * control with a hover wash instead of a drawn border, so the row reads
-         * as one tool strip at any zoom level. Active keeps the filled navy
-         * state — that is what makes the on/off state readable without a frame.
-         */
-        "grid size-9 shrink-0 place-items-center rounded-[8px] transition hover:bg-line-2 disabled:opacity-40 disabled:hover:bg-transparent dark:hover:bg-white/10",
-        active &&
-          "bg-navy text-white hover:bg-navy dark:bg-navy dark:text-white",
-      )}
-    >
-      {children}
-    </button>
   );
 }
 
