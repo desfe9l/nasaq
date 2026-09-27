@@ -100,15 +100,10 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
     if (!accountId) return;
     const cachedKey = getCachedLicenseKey();
     if (!cachedKey) {
-      if (accountRef.current !== accountId) return;
-      setState((s) => ({
-        ...s,
-        isLoading: false,
-        hasLicense: false,
-        isAdmin: false,
-        license: null,
-        entitlements: EMPTY_ENTITLEMENTS,
-      }));
+      // No browser-cached key: the account-linked status (`checkUserLicense`,
+      // always chained after this) is the only answer. Reporting "unlicensed"
+      // here would flash FREE — and send a licensed account through the
+      // unlicensed door — until the server replies a moment later.
       return;
     }
 
@@ -172,7 +167,9 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
           license: result.license ?? null, entitlements: EMPTY_ENTITLEMENTS, error: result.message ?? null });
       }
     } catch {
-      /* ignore — fallback to key-based validation */
+      // Status unavailable: keep whatever the key-based validation resolved,
+      // but never leave the caller waiting on a request that failed.
+      if (accountRef.current === accountId) setState((s) => ({ ...s, isLoading: false }));
     }
   }, [accountId]);
 

@@ -2244,6 +2244,36 @@ export function createProject(
   };
 }
 
+/**
+ * Blank pages at any size — the «مستند فارغ» body of the new-document flow.
+ *
+ * Same furniture as the `blank` pack (a light header band and footer rule),
+ * but laid out on the requested page so a landscape A4, an A3 poster or a
+ * 16:9 slide gets a header that spans its real width instead of an A4 band
+ * clamped onto a wider sheet.
+ */
+export function blankPages(
+  count: number,
+  themeId: ThemeId = "official",
+  orgName = "",
+  size: { w: number; h: number } = { w: 210, h: 297 },
+  title = "مستند جديد",
+): Page[] {
+  const theme = THEMES[themeId] ?? THEMES.official;
+  const total = Math.max(1, Math.floor(count) || 1);
+  return Array.from({ length: total }, (_, i) =>
+    page(
+      `صفحة ${i + 1}`,
+      theme,
+      (add) => {
+        header(add, theme, title, size.w);
+        footer(add, theme, orgName, size.w, size.h);
+      },
+      { w: size.w, h: size.h },
+    ),
+  );
+}
+
 export type TemplateCategoryId =
   | "covers"
   | "reports"
