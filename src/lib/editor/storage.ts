@@ -1,5 +1,11 @@
 import { clone, projectMeta, type Project, type ProjectMeta } from "./model";
 import { uid } from "@/lib/utils";
+import {
+  ANON_OWNER,
+  getStorageOwner,
+  hasSignedInOwner,
+  rowOwnership,
+} from "./storage-owner";
 
 /**
  * Project library persistence.
@@ -9,6 +15,14 @@ import { uid } from "@/lib/utils";
  * store; localStorage is kept as a small-metadata fallback for browsers where
  * IndexedDB is unavailable (private windows, hardened settings) so the app still
  * opens and warns instead of losing work silently.
+ *
+ * EVERY row is scoped to a storage owner (`./storage-owner`): the signed-in
+ * account id, or the anonymous visitor tag. Reads only return rows the current
+ * owner may see (`rowOwnership`), writes stamp the current owner, and a signed-in
+ * account adopts pre-isolation (unstamped) rows once so libraries saved before
+ * ownership tracking keep working. A signed-out visitor therefore can never read
+ * an account's library, and a second account on the same browser only sees its
+ * own rows — the boundary is enforced here, at the data layer, not in the UI.
  */
 
 /**
@@ -36,6 +50,53 @@ const LS_ASSETS = "nasaq-assets-v1";
 const LEGACY_LS_PROJECTS = "diwan-projects-v1";
 const LEGACY_LS_SETTINGS = "diwan-settings-v1";
 const LEGACY_LS_ASSETS = "diwan-assets-v1";
+
+// ── Owner scoping ────────────────────────────────────────────────────────────
+// Rows carry an `ownerId` stamp; reads are filtered through `rowOwnership`
+// (see ./storage-owner). Pre-isolation rows (no stamp) are adopted ONCE by the
+// first signed-in account that reads them — the stamp is written back so a
+// later account, or a signed-out visitor, can never claim or see them.
+
+/** A persisted row plus its owner stamp. */
+type OwnedRow<T> = T & { ownerId?: string | null };
+
+/** Stamp a row for writing under the CURRENT owner. */
+function own<T extends object>(row: T): OwnedRow<T> {
+  return { ...row, ownerId: getStorageOwner() };
+}
+
+/** Drop the storage stamp before a row re-enters app state or an export. */
+function strip<T extends object>(row: OwnedRow<T>): T {
+  const { ownerId: _ownerId, ...rest } = row;
+  return rest as T;
+}
+
+/**
+ * Partition stored rows for a read: what the current owner may see, and which
+ * of those are unstamped/visitor rows a signed-in owner adopts. Adoption is
+ * reported so callers can persist the stamps; foreign rows are simply absent.
+ */
+function partitionOwned<T extends object>(
+  rows: OwnedRow<T>[],
+): { visible: OwnedRow<T>[]; adopted: OwnedRow<T>[] } {
+  const visible: OwnedRow<T>[] = [];
+  const adopted: OwnedRow<T>[] = [];
+  for (const row of rows) {
+    const state = rowOwnership(row);
+    if (state === "foreign") continue;
+    if (state === "adoptable") {
+      row.ownerId = getStorageOwner();
+      adopted.push(row);
+    }
+    visible.push(row);
+  }
+  return { visible, adopted };
+}
+
+/** Whether one row (fetched by id) is readable by the current owner. */
+function canRead<T extends object>(row: OwnedRow<T> | null | undefined): boolean {
+  return rowOwnership(row) !== "foreign";
+}
 
 /**
  * A reusable uploaded image kept outside any one project.
@@ -242,7 +303,8 @@ function request<T>(req: IDBRequest<T>): Promise<T> {
 
 /** localStorage mirror used only when IndexedDB is unavailable. */
 const fallback = {
-  all(): Project[] {
+  /** Raw stored rows — may belong to ANY owner; never render directly. */
+  raw(): OwnedRow<Project>[] {
     try {
       // Read through the pre-rebrand slot until the new one has been written,
       // so a private-window session keeps the projects it saved before.
@@ -250,24 +312,34 @@ const fallback = {
         localStorage.getItem(LS_PROJECTS) ??
         localStorage.getItem(LEGACY_LS_PROJECTS);
       const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? (parsed as Project[]) : [];
+      return Array.isArray(parsed) ? (parsed as OwnedRow<Project>[]) : [];
     } catch {
       return [];
     }
   },
-  write(list: Project[]) {
+  write(list: OwnedRow<Project>[]) {
     localStorage.setItem(LS_PROJECTS, JSON.stringify(list));
+  },
+  /** The current owner's rows only, adopting unstamped rows on first read. */
+  all(): Project[] {
+    const rows = this.raw();
+    const { visible, adopted } = partitionOwned(rows);
+    // Persist adoption stamps — foreign rows stay in the blob, untouched.
+    if (adopted.length) this.write(rows);
+    return visible.map(strip);
   },
   get(id: string) {
     return this.all().find((p) => p.id === id) || null;
   },
   put(project: Project) {
-    const list = this.all().filter((p) => p.id !== project.id);
-    list.push(project);
+    const stamped = own(project);
+    const list = this.raw().filter((p) => p.id !== stamped.id);
+    list.push(stamped);
     this.write(list);
   },
   remove(id: string) {
-    this.write(this.all().filter((p) => p.id !== id));
+    // Callers guard ownership first (deleteProject); this only drops the row.
+    this.write(this.raw().filter((p) => p.id !== id));
   },
 };
 
@@ -279,10 +351,17 @@ export async function listProjects(): Promise<ProjectMeta[]> {
   const db = await openDb();
   if (!db) return fallback.all().map(projectMeta).sort(byRecency);
   try {
-    const rows = await tx(db, PROJECTS, "readonly", (t) =>
+    const rows = (await tx(db, PROJECTS, "readonly", (t) =>
       request(t.objectStore(PROJECTS).getAll()),
-    );
-    return (rows as Project[]).map(projectMeta).sort(byRecency);
+    )) as OwnedRow<Project>[];
+    const { visible, adopted } = partitionOwned(rows);
+    // Persist adoption stamps so the claim is durable and exclusive.
+    if (adopted.length) {
+      await tx(db, PROJECTS, "readwrite", (t) => {
+        for (const row of adopted) t.objectStore(PROJECTS).put(row);
+      }).catch(() => undefined);
+    }
+    return visible.map((row) => projectMeta(strip(row))).sort(byRecency);
   } catch {
     return [];
   }
@@ -296,10 +375,22 @@ export async function getProject(id: string): Promise<Project | null> {
   const db = await openDb();
   if (!db) return fallback.get(id);
   try {
-    const row = await tx(db, PROJECTS, "readonly", (t) =>
+    const row = (await tx(db, PROJECTS, "readonly", (t) =>
       request(t.objectStore(PROJECTS).get(id)),
-    );
-    return (row as Project | undefined) ?? null;
+    )) as OwnedRow<Project> | undefined;
+    if (!row) return null;
+    const state = rowOwnership(row);
+    // Another owner's document does not exist as far as this session is
+    // concerned — opening it by id must fail exactly like a missing one.
+    if (state === "foreign") return null;
+    if (state === "adoptable") {
+      // Stamp BEFORE persisting, so the claim is durable and exclusive.
+      row.ownerId = getStorageOwner();
+      await tx(db, PROJECTS, "readwrite", (t) =>
+        request(t.objectStore(PROJECTS).put(row)),
+      ).catch(() => undefined);
+    }
+    return strip(row);
   } catch {
     return null;
   }
@@ -318,7 +409,7 @@ export async function saveProject(project: Project): Promise<Project> {
     return stamped;
   }
   await tx(db, PROJECTS, "readwrite", (t) =>
-    request(t.objectStore(PROJECTS).put(clone(stamped))),
+    request(t.objectStore(PROJECTS).put(own(clone(stamped)))),
   );
   return stamped;
 }
@@ -326,9 +417,15 @@ export async function saveProject(project: Project): Promise<Project> {
 export async function deleteProject(id: string): Promise<void> {
   const db = await openDb();
   if (!db) {
-    fallback.remove(id);
+    // `get` only resolves rows the current owner may read — a foreign id
+    // silently no-ops instead of deleting another account's document.
+    if (fallback.get(id)) fallback.remove(id);
     return;
   }
+  const row = (await tx(db, PROJECTS, "readonly", (t) =>
+    request(t.objectStore(PROJECTS).get(id)),
+  )) as OwnedRow<Project> | undefined;
+  if (row && !canRead(row)) return;
   await tx(db, PROJECTS, "readwrite", (t) =>
     request(t.objectStore(PROJECTS).delete(id)),
   );
@@ -352,6 +449,42 @@ export async function duplicateProject(id: string): Promise<Project | null> {
   return saveProject(copy);
 }
 
+// ── Settings ─────────────────────────────────────────────────────────────────
+// Account-scoped settings (the open document, the asset shelves, the smart
+// library's custom vectors) are stored under a per-owner row key so one
+// account's state never loads into another's session. Device-level UI
+// preferences (zoom, panels, focus) keep their plain shared keys.
+
+const OWNER_SCOPED_SETTINGS = new Set<string>([
+  "activeProjectId",
+  "assetFolders",
+  "customLibrary",
+]);
+
+/** The row key `key` is stored under for the current owner. */
+function scopedSettingKey(key: SettingsKey): string {
+  return OWNER_SCOPED_SETTINGS.has(key) ? `${key}::${getStorageOwner()}` : key;
+}
+
+/**
+ * Where a signed-in owner may adopt an account-scoped setting FROM when its
+ * own row is missing: the pre-isolation plain key (REMOVED on adoption — the
+ * first account to read it wins it, exclusively) and the visitor-scoped row
+ * (kept — it remains the signed-out visitor's own). A signed-out visitor
+ * adopts nothing.
+ */
+function adoptableSettingKeys(
+  key: SettingsKey,
+): { from: string; remove: boolean }[] {
+  if (!OWNER_SCOPED_SETTINGS.has(key) || !hasSignedInOwner()) return [];
+  return [
+    { from: key, remove: true },
+    { from: `${key}::${ANON_OWNER}`, remove: false },
+  ];
+}
+
+type SettingRow = { key: string; value: unknown };
+
 export async function getSetting<T = unknown>(
   key: SettingsKey,
 ): Promise<T | null> {
@@ -361,18 +494,46 @@ export async function getSetting<T = unknown>(
       const raw =
         localStorage.getItem(LS_SETTINGS) ??
         localStorage.getItem(LEGACY_LS_SETTINGS);
-      const parsed = raw ? JSON.parse(raw) : {};
-      return (parsed?.[key] ?? null) as T | null;
+      const parsed: Record<string, unknown> = raw ? JSON.parse(raw) || {} : {};
+      const scoped = scopedSettingKey(key);
+      if (scoped in parsed) return (parsed[scoped] ?? null) as T | null;
+      for (const { from, remove } of adoptableSettingKeys(key)) {
+        if (!(from in parsed)) continue;
+        const value = parsed[from] ?? null;
+        parsed[scoped] = value;
+        if (remove) delete parsed[from];
+        try {
+          localStorage.setItem(LS_SETTINGS, JSON.stringify(parsed));
+        } catch {
+          /* adoption write is best-effort */
+        }
+        return value as T | null;
+      }
+      return null;
     } catch {
       return null;
     }
   }
   try {
-    const row = await tx(db, SETTINGS, "readonly", (t) =>
-      request(t.objectStore(SETTINGS).get(key)),
-    );
-    return ((row as { key: string; value: unknown } | undefined)?.value ??
-      null) as T | null;
+    const scoped = scopedSettingKey(key);
+    const read = (rowKey: string) =>
+      tx(db, SETTINGS, "readonly", (t) =>
+        request(t.objectStore(SETTINGS).get(rowKey)),
+      ) as Promise<SettingRow | undefined>;
+    let row = await read(scoped);
+    if (!row) {
+      for (const { from, remove } of adoptableSettingKeys(key)) {
+        const legacy = await read(from);
+        if (!legacy) continue;
+        row = { key: scoped, value: legacy.value };
+        await tx(db, SETTINGS, "readwrite", (t) => {
+          t.objectStore(SETTINGS).put(row as SettingRow);
+          if (remove) t.objectStore(SETTINGS).delete(from);
+        }).catch(() => undefined);
+        break;
+      }
+    }
+    return (row?.value ?? null) as T | null;
   } catch {
     return null;
   }
@@ -382,6 +543,7 @@ export async function setSetting(
   key: SettingsKey,
   value: unknown,
 ): Promise<void> {
+  const rowKey = scopedSettingKey(key);
   const db = await openDb();
   if (!db) {
     let parsed: Record<string, unknown> = {};
@@ -395,13 +557,13 @@ export async function setSetting(
     } catch {
       parsed = {};
     }
-    parsed[key] = value;
+    parsed[rowKey] = value;
     localStorage.setItem(LS_SETTINGS, JSON.stringify(parsed));
     return;
   }
   try {
     await tx(db, SETTINGS, "readwrite", (t) =>
-      request(t.objectStore(SETTINGS).put({ key, value })),
+      request(t.objectStore(SETTINGS).put({ key: rowKey, value })),
     );
   } catch {
     /* settings are best-effort; losing one must not break the editor */
@@ -432,15 +594,28 @@ export async function migrateLegacyProject(
   return saveProject(project);
 }
 
+/**
+ * Delete every project the CURRENT owner may see. Other owners' rows are left
+ * untouched — a clear inside one session can never wipe another account's
+ * library sharing this browser.
+ */
 export async function clearAllProjects(): Promise<void> {
   const db = await openDb();
   if (!db) {
-    fallback.write([]);
+    const doomed = new Set(fallback.all().map((p) => p.id));
+    fallback.write(fallback.raw().filter((row) => !doomed.has(row.id)));
     return;
   }
-  await tx(db, PROJECTS, "readwrite", (t) =>
-    request(t.objectStore(PROJECTS).clear()),
-  );
+  const rows = (await tx(db, PROJECTS, "readonly", (t) =>
+    request(t.objectStore(PROJECTS).getAll()),
+  )) as OwnedRow<Project>[];
+  const doomed = rows.filter((row) => canRead(row));
+  if (!doomed.length) return;
+  await tx(db, PROJECTS, "readwrite", (t) => {
+    for (const row of doomed) {
+      if (row.id) t.objectStore(PROJECTS).delete(row.id);
+    }
+  });
 }
 
 /**
@@ -451,19 +626,27 @@ export async function clearAllProjects(): Promise<void> {
  * it can hold a real library.
  */
 const assetFallback = {
-  all(): Asset[] {
+  /** Raw stored rows — may belong to ANY owner; never render directly. */
+  raw(): OwnedRow<Asset>[] {
     try {
       const raw =
         localStorage.getItem(LS_ASSETS) ??
         localStorage.getItem(LEGACY_LS_ASSETS);
       const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? (parsed as Asset[]) : [];
+      return Array.isArray(parsed) ? (parsed as OwnedRow<Asset>[]) : [];
     } catch {
       return [];
     }
   },
-  write(list: Asset[]) {
+  write(list: OwnedRow<Asset>[]) {
     localStorage.setItem(LS_ASSETS, JSON.stringify(list));
+  },
+  /** The current owner's rows only, adopting unstamped rows on first read. */
+  all(): Asset[] {
+    const rows = this.raw();
+    const { visible, adopted } = partitionOwned(rows);
+    if (adopted.length) this.write(rows);
+    return visible.map(strip);
   },
 };
 
@@ -471,10 +654,18 @@ export async function listAssets(): Promise<Asset[]> {
   const db = await openDb();
   if (!db) return assetFallback.all().sort((a, b) => b.addedAt - a.addedAt);
   try {
-    const rows = await tx(db, ASSETS, "readonly", (t) =>
+    const rows = (await tx(db, ASSETS, "readonly", (t) =>
       request(t.objectStore(ASSETS).getAll()),
-    );
-    return (rows as Asset[]).sort((a, b) => b.addedAt - a.addedAt);
+    )) as OwnedRow<Asset>[];
+    const { visible, adopted } = partitionOwned(rows);
+    if (adopted.length) {
+      await tx(db, ASSETS, "readwrite", (t) => {
+        for (const row of adopted) t.objectStore(ASSETS).put(row);
+      }).catch(() => undefined);
+    }
+    return visible
+      .map((row) => strip(row))
+      .sort((a, b) => b.addedAt - a.addedAt);
   } catch {
     return [];
   }
@@ -490,14 +681,15 @@ export async function saveAsset(
   };
   const db = await openDb();
   if (!db) {
+    const owned = own(stamped);
     assetFallback.write([
-      stamped,
-      ...assetFallback.all().filter((a) => a.id !== stamped.id),
+      owned,
+      ...assetFallback.raw().filter((a) => a.id !== owned.id),
     ]);
     return stamped;
   }
   await tx(db, ASSETS, "readwrite", (t) =>
-    request(t.objectStore(ASSETS).put(stamped)),
+    request(t.objectStore(ASSETS).put(own(stamped))),
   );
   return stamped;
 }
@@ -505,9 +697,15 @@ export async function saveAsset(
 export async function deleteAsset(id: string): Promise<void> {
   const db = await openDb();
   if (!db) {
-    assetFallback.write(assetFallback.all().filter((a) => a.id !== id));
+    // Only a row the current owner may read can be deleted.
+    if (!assetFallback.all().some((a) => a.id === id)) return;
+    assetFallback.write(assetFallback.raw().filter((a) => a.id !== id));
     return;
   }
+  const row = (await tx(db, ASSETS, "readonly", (t) =>
+    request(t.objectStore(ASSETS).get(id)),
+  )) as OwnedRow<Asset> | undefined;
+  if (row && !canRead(row)) return;
   await tx(db, ASSETS, "readwrite", (t) =>
     request(t.objectStore(ASSETS).delete(id)),
   );
@@ -516,15 +714,19 @@ export async function deleteAsset(id: string): Promise<void> {
 export async function renameAsset(id: string, name: string): Promise<void> {
   const db = await openDb();
   if (!db) {
+    const visible = new Set(assetFallback.all().map((a) => a.id));
+    if (!visible.has(id)) return;
     assetFallback.write(
-      assetFallback.all().map((a) => (a.id === id ? { ...a, name } : a)),
+      assetFallback
+        .raw()
+        .map((a) => (a.id === id ? { ...a, name } : a)),
     );
     return;
   }
   const row = (await tx(db, ASSETS, "readonly", (t) =>
     request(t.objectStore(ASSETS).get(id)),
-  )) as Asset | undefined;
-  if (!row) return;
+  )) as OwnedRow<Asset> | undefined;
+  if (!row || !canRead(row)) return;
   await tx(db, ASSETS, "readwrite", (t) =>
     request(t.objectStore(ASSETS).put({ ...row, name })),
   );

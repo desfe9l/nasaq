@@ -51,6 +51,7 @@ import {
   type Asset,
   type AssetFolder,
 } from "./storage";
+import { getStorageOwner, hasSignedInOwner } from "./storage-owner";
 import { createProject, createTemplatePage } from "./templates";
 import {
   FONTS,
@@ -306,6 +307,21 @@ export interface FontChoice {
 
 interface EditorStore extends Project, Ui, History {
   hydrated: boolean;
+  /**
+   * The storage owner (account id, or the anonymous tag) this store's data was
+   * hydrated for — `null` until the first session sync. `hydrate()` compares it
+   * against the live session so an identity change without a page reload (popup
+   * sign-in) drops the previous session's library instead of keeping it.
+   */
+  sessionOwner: string | null;
+  /**
+   * Drop every user-scoped slice (open document, projects list, asset shelf,
+   * custom vectors, clipboard/history) and mark the store un-hydrated. Run at
+   * auth boundaries — sign-out, identity switch — so the previous account's
+   * data leaves memory and the UI immediately; the next `hydrate()` reloads
+   * whatever the NEW owner may see.
+   */
+  resetUserScopedState: () => void;
   /** Server-derived access flags mirrored into the client editor state. */
   entitlements: Record<FeatureId, boolean>;
   setEntitlements: (entitlements: Record<FeatureId, boolean>) => void;
@@ -1016,6 +1032,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     savedAt: null,
     clockTick: 0,
     hydrated: false,
+    sessionOwner: null,
     entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
     setEntitlements: (entitlements) => set({ entitlements: { ...entitlements } }),
     clipboard: null,
@@ -1068,8 +1085,60 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
     },
 
+    resetUserScopedState: () => {
+      // Cancel any pending autosave first — it must not fire mid-reset and
+      // write the outgoing session's document under the new owner.
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      // A fresh document keeps the editor shell functional for whoever is
+      // here now (the editor is open to visitors); the previous account's
+      // pages, library list, asset shelf and custom vectors are all dropped.
+      applyProject(createProject("official"), { zoom: get().zoom });
+      set({
+        hydrated: false,
+        sessionOwner: null,
+        projects: [],
+        projectsLoading: true,
+        assets: [],
+        assetsLoading: true,
+        assetFolders: [],
+        assetFolderId: null,
+        selectedAssetIds: [],
+        customIcons: [],
+        clipboard: null,
+        past: [],
+        future: [],
+        entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
+        saveState: "idle",
+        savedAt: null,
+      });
+    },
+
     hydrate: async () => {
-      if (get().hydrated) return;
+      // Never read under the wrong identity: resolve the storage owner from
+      // the live session BEFORE any library read. (With auth disabled this
+      // pins the shared dev user, matching the server-side verifier.)
+      let owner: string;
+      try {
+        const { syncStorageOwner } = await import(
+          "@/lib/auth/storage-owner-sync"
+        );
+        owner = await syncStorageOwner();
+      } catch {
+        // Auth bridge unavailable (unit tests, exotic bundles): keep whatever
+        // owner is already pinned — storage reads stay fail-closed.
+        owner = getStorageOwner();
+      }
+      if (get().hydrated) {
+        // Same identity → already loaded, nothing to do. Identity changed
+        // without a page reload (popup sign-in on the same route) → drop the
+        // previous session's data before loading the new owner's library.
+        if (get().sessionOwner === owner) return;
+        get().resetUserScopedState();
+      }
+      set({ sessionOwner: owner });
       const mode = storageMode();
       set({ storage: { mode, persistent: mode === "indexeddb" } });
 
@@ -1077,7 +1146,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         const ui = readUi();
         const legacy = localStorage.getItem(LEGACY_STORE_KEY);
         let list = await listProjects();
-        if (!list.length && legacy) {
+        // The pre-library autosave blob predates ownership tracking — only a
+        // signed-in account may claim it, never a signed-out visitor.
+        if (!list.length && legacy && hasSignedInOwner()) {
           try {
             const migrated = await migrateLegacyProject(JSON.parse(legacy));
             if (migrated) {

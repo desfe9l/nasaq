@@ -45,6 +45,14 @@ export function signOutTimeoutMs(livePreview) {
 }
 
 /**
+ * Bound for the LOCAL identity clear (user-scoped stores/caches) inside the
+ * sign-out and pre-sign-in sequences. It is all in-memory/localStorage work —
+ * a couple of dynamic imports at most — so it gets a short, environment-
+ * independent bound: a wedged clear must never strand the redirect.
+ */
+export const CLEAR_LOCAL_STATE_TIMEOUT_MS = 2000;
+
+/**
  * Run `start()` but give up after `timeoutMs`, reporting which happened. Never
  * rejects — callers decide what a failure means, and a `try/catch` around an
  * `await` does nothing for a promise that never settles.
@@ -77,6 +85,7 @@ export function settleWithin(start, timeoutMs) {
  * @property {boolean} hasBearer Whether a preview bearer token is stored.
  * @property {() => unknown} requestSignOut Ask the server to end the session; must reject on a failed response.
  * @property {() => void} clearToken Drop the stored bearer token.
+ * @property {() => unknown} [clearLocalState] Drop the outgoing identity's client state (user-scoped stores and caches). Awaited after the token clear and BEFORE the redirect, so the signed-out page can never render — even for a frame — with the previous account's data still in memory. Only runs once the sign-out itself succeeded.
  * @property {() => void} redirect Leave the page.
  * @property {number} [timeoutMs]
  */
@@ -96,6 +105,7 @@ export async function runSignOut({
   hasBearer,
   requestSignOut,
   clearToken,
+  clearLocalState,
   redirect,
   timeoutMs,
 }) {
@@ -106,6 +116,7 @@ export async function runSignOut({
       await settleWithin(requestSignOut, timeoutMs ?? signOutTimeoutMs(livePreview));
     }
     clearToken();
+    if (clearLocalState) await settleWithin(clearLocalState, CLEAR_LOCAL_STATE_TIMEOUT_MS);
     redirect();
     return;
   }
@@ -119,6 +130,7 @@ export async function runSignOut({
     );
   }
   clearToken();
+  if (clearLocalState) await settleWithin(clearLocalState, CLEAR_LOCAL_STATE_TIMEOUT_MS);
   redirect();
 }
 
@@ -128,6 +140,7 @@ export async function runSignOut({
  * @property {boolean} hasBearer Whether a preview bearer token is stored.
  * @property {() => unknown} requestSignOut Ask the server to end any prior session.
  * @property {() => void} clearToken Drop the stored bearer token.
+ * @property {() => unknown} [clearLocalState] Drop the OUTGOING identity's client state (user-scoped stores and caches) before the new sign-in starts, so switching accounts can never carry the previous account's library into the new session. Best effort, like the rest of this sequence.
  * @property {number} [timeoutMs]
  */
 
@@ -150,6 +163,7 @@ export async function runPreSignInSignOut({
   hasBearer,
   requestSignOut,
   clearToken,
+  clearLocalState,
   timeoutMs,
 }) {
   // In the preview a missing bearer means there is nothing to clear.
@@ -157,4 +171,5 @@ export async function runPreSignInSignOut({
     await settleWithin(requestSignOut, timeoutMs ?? signOutTimeoutMs(livePreview));
   }
   clearToken();
+  if (clearLocalState) await settleWithin(clearLocalState, CLEAR_LOCAL_STATE_TIMEOUT_MS);
 }
