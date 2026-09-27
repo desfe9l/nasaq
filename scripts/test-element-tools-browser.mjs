@@ -187,6 +187,65 @@ try {
     checks.push(
       `${mode}: library remains files/folders only; light/dark; no horizontal overflow`,
     );
+    if (mode === "desktop") {
+      await tab.click();
+      await handle("shapes").focus();
+      await page.keyboard.press("Home");
+      for (const id of ids) {
+        const toggle = page.locator(
+          `[data-sortable-section="${id}"] .editor-accordion-header`,
+        );
+        if ((await toggle.getAttribute("aria-expanded")) !== "true")
+          await toggle.click();
+      }
+      await handle("shapes").scrollIntoViewIfNeeded();
+      const source = await handle("shapes").boundingBox();
+      const bounds = await page
+        .locator(".element-tools-panel")
+        .evaluate((el) => {
+          const rect = el
+            .closest(".editor-pane-scroll")
+            .getBoundingClientRect();
+          return { left: rect.left, right: rect.right, bottom: rect.bottom };
+        });
+      const before = await order();
+      const readScroll = () =>
+        page
+          .locator(".element-tools-panel")
+          .evaluate((el) => el.closest(".editor-pane-scroll").scrollTop);
+      const startScroll = await readScroll();
+      await page.mouse.move(source.x + 22, source.y + 22);
+      await page.mouse.down();
+      await page.mouse.move(source.x + 22, bounds.bottom - 8, { steps: 20 });
+      await page.waitForTimeout(1400);
+      assert.ok(
+        (await readScroll()) > startScroll + 200,
+        "edge scrolling must not stall against the panel's smooth-scroll CSS",
+      );
+      await page.mouse.move(-100, -100);
+      await page.waitForTimeout(100);
+      const ghost = await page.locator(".section-drag-ghost").boundingBox();
+      assert.ok(
+        ghost.x >= bounds.left && ghost.x + ghost.width <= bounds.right,
+      );
+      await page.keyboard.press("Escape");
+      await page.mouse.up();
+      assert.deepEqual(await order(), before);
+      await page.evaluate(() => {
+        Storage.prototype.setItem = () => {
+          throw new DOMException("Test quota", "QuotaExceededError");
+        };
+      });
+      await handle("shapes").focus();
+      await page.keyboard.press("End");
+      assert.equal((await order()).at(-1), "shapes");
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.keyboard.press("Home");
+      assert.equal((await order())[0], "shapes");
+      checks.push(
+        "desktop: edge auto-scroll with all sections open, offscreen-pointer containment, blocked storage and reduced motion",
+      );
+    }
     await ctx.close();
   }
   assert.deepEqual(errors, []);

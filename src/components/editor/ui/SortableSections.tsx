@@ -120,6 +120,12 @@ export function SortableSections({ children }: { children: ReactNode }) {
     const original = [...currentOrder.current];
     let next = original;
     host.setPointerCapture(pointerId);
+    // The panel normally uses smooth scrolling. Restarting that animation every
+    // frame stalls edge scrolling; scroll anchoring also fights DOM reordering.
+    const previousScrollBehavior = scroller.style.scrollBehavior;
+    const previousOverflowAnchor = scroller.style.overflowAnchor;
+    scroller.style.scrollBehavior = "auto";
+    scroller.style.overflowAnchor = "none";
 
     const update = () => {
       const bounds = scroller.getBoundingClientRect();
@@ -170,6 +176,8 @@ export function SortableSections({ children }: { children: ReactNode }) {
     };
     const finish = (commit: boolean) => {
       cancelAnimationFrame(frame);
+      scroller.style.scrollBehavior = previousScrollBehavior;
+      scroller.style.overflowAnchor = previousOverflowAnchor;
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", abortPointer);
