@@ -594,10 +594,11 @@ export function AssetLibrary() {
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
     >
+      <div className="asset-library-controls grid gap-2">
       <header className="flex items-center justify-between gap-2">
         <div>
           <h3 className="text-[12px] font-extrabold tracking-wide">المكتبة</h3>
-          <p className="mt-0.5 text-[10px] text-muted">3 أعمدة · بحث · تصفية · مجلدات · سحب وإفلات مباشر</p>
+          <p className="mt-0.5 text-[10px] text-muted">شبكة مرنة · بحث · تصفية · مجلدات · سحب وإفلات مباشر</p>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -756,7 +757,7 @@ export function AssetLibrary() {
       </div>
 
       {/* Add buttons */}
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="asset-library-add-actions">
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
@@ -781,6 +782,8 @@ export function AssetLibrary() {
         >
           <FolderInput className="size-3.5" /> إضافة مجلد
         </button>
+      </div>
+
       </div>
 
       <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={(e) => void handleFileInput(e, false)} />
@@ -887,7 +890,7 @@ export function AssetLibrary() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-2">
+        <div className={cn("asset-media-grid", viewMode === "compact" && "is-compact")}>
           {visibleAssets.map((asset) => (
             <div
               key={asset.id}
@@ -933,14 +936,6 @@ export function AssetLibrary() {
               >
                 {selectedAssetIds.includes(asset.id) && <Check className="size-3" />}
               </button>
-              <button
-                type="button"
-                onClick={(e) => openMenu(e, asset)}
-                aria-label={`خيارات ${asset.name}`}
-                className="absolute left-1 top-1 z-[2] grid size-5 place-items-center rounded-full border border-line bg-white/90 text-muted dark:border-white/20 dark:bg-[#161c26]/90"
-              >
-                <MoreHorizontal className="size-3" />
-              </button>
               {editingId === asset.id ? (
                 <div className="flex h-20 flex-col gap-1 rounded-[6px] border border-navy-2 p-1 dark:border-gold/60">
                   <input
@@ -976,7 +971,16 @@ export function AssetLibrary() {
                     <img src={asset.src} alt={asset.name} className={cn("max-w-full object-contain", viewMode === "grid" ? "max-h-[4.5rem]" : "max-h-[3.25rem]")} />
                   </button>
                   <span className="mt-1 block truncate text-center text-[9px] font-bold text-muted">{asset.name}</span>
-                  <div className="mt-1 flex items-center justify-center gap-1">
+                  <div className="asset-card-actions mt-1 flex items-center justify-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => openMenu(e, asset)}
+                      aria-label={`خيارات ${asset.name}`}
+                      title="خيارات العنصر"
+                      className="grid size-7 place-items-center rounded-[5px] border border-line text-muted dark:border-white/10"
+                    >
+                      <MoreHorizontal className="size-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -984,9 +988,10 @@ export function AssetLibrary() {
                         place(asset);
                       }}
                       title="إدراج في الصفحة"
-                      className="grid size-6 place-items-center rounded-[5px] bg-navy text-white"
+                      aria-label={`إدراج ${asset.name} في الصفحة`}
+                      className="grid size-7 place-items-center rounded-[5px] bg-navy text-white"
                     >
-                      <Plus className="size-3" />
+                      <Plus className="size-3.5" />
                     </button>
                   </div>
                 </>
