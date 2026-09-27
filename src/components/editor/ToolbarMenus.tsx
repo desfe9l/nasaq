@@ -27,7 +27,13 @@ export function ToolbarMenus({ fitToScreen, fitToSelection }: { fitToScreen: () 
     if (!r) return;
     setPos({
       top: r.bottom + 6,
-      right: Math.max(8, window.innerWidth - r.right),
+      // Anchored to the trigger's right edge, but clamped on BOTH sides so a
+      // trigger near the physical-left end of the header never pushes the
+      // menu off-screen (the left edge used to go negative).
+      right: Math.max(
+        8,
+        Math.min(window.innerWidth - r.right, window.innerWidth - MENU_W - 8),
+      ),
     });
   };
 
@@ -139,7 +145,7 @@ export function ToolbarMenus({ fitToScreen, fitToSelection }: { fitToScreen: () 
           aria-label={TITLE[openId]}
           onKeyDown={onPanelKeyDown}
           className="editor-dropdown-panel fixed z-[var(--z-dropdown)] rounded-[10px] border p-1.5 shadow-2xl"
-          style={{ top: pos.top, right: pos.right, width: MENU_W }}
+          style={{ top: pos.top, right: pos.right, width: MENU_W, maxWidth: "calc(100vw - 16px)" }}
         >
           {openId === "align" && <AlignMenu />}
           {openId === "arrange" && <ArrangeMenu />}
@@ -312,11 +318,17 @@ function ArrangeMenu() {
 
 function TransformMenu() {
   const count = useEditor((s) => s.selectedIds.length);
-  const selected = useEditor((s) => s.selectedElements());
+  // Primitive selectors only: `selectedElements()` builds a NEW array on every
+  // call, and returning it from a selector made React re-render forever
+  // ("getSnapshot should be cached" → max update depth) the moment this menu
+  // opened. These derived values are stable between identical states.
+  const firstId = useEditor((s) => s.selectedElements()[0]?.id);
+  const firstType = useEditor((s) => s.selectedElements()[0]?.type);
+  const anyRotated = useEditor((s) => s.selectedElements().some((el) => !!el.rotation));
   const commit = useEditor((s) => s.commit);
   const align = useEditor((s) => s.align);
   const fitTextBox = useEditor((s) => s.fitTextBox);
-  const singleText = count === 1 && selected[0] && ["text", "box", "stat", "stamp", "progress"].includes(selected[0].type);
+  const singleText = count === 1 && !!firstType && ["text", "box", "stat", "stamp", "progress"].includes(firstType);
 
   const rotate = (delta: number) => {
     const state = useEditor.getState();
@@ -334,7 +346,7 @@ function TransformMenu() {
       <MenuItem label="تدوير 90°↻" disabled={!count} onClick={() => rotate(90)} />
       <MenuItem
         label="تصفير الدوران"
-        disabled={!count || selected.every((el) => !el.rotation)}
+        disabled={!count || !anyRotated}
         onClick={() => {
           const state = useEditor.getState();
           for (const el of state.selectedElements()) {
@@ -351,7 +363,7 @@ function TransformMenu() {
       <MenuItem
         label="ملاءمة صندوق النص للنص"
         disabled={!singleText}
-        onClick={() => selected[0] && fitTextBox(selected[0].id)}
+        onClick={() => firstId && fitTextBox(firstId)}
       />
     </>
   );

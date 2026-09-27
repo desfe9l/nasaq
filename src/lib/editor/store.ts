@@ -100,6 +100,7 @@ import {
 } from "@/lib/theme";
 import { clamp, uid } from "@/lib/utils";
 import {
+  DEMO_LICENSE,
   canAddDemoPage,
   canCreateDemoProject,
   canUseDemoPack,
@@ -146,7 +147,7 @@ export type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 
 /** Export formats the studio can produce (mirrors `export.ts`). */
 export type ExportPreset =
-  "pdf" | "png" | "jpg" | "docx" | "pptx" | "html" | "json";
+  "pdf" | "png" | "jpg" | "docx" | "pptx" | "html" | "json" | "nsq";
 
 /**
  * Where a right-click menu was opened from.
@@ -376,6 +377,14 @@ interface EditorStore extends Project, Ui, History {
   hydrate: () => Promise<void>;
   refreshProjects: () => Promise<void>;
   createProject: (pack: PackId, theme?: ThemeId) => Promise<boolean>;
+  /**
+   * Persist a fully built document (new-document flow, «استخدام القالب») as a
+   * NEW project and open it. The source (template, pack) is never touched —
+   * the project gets its own id. `autoName` numbers a default title so it
+   * never collides with an existing one. Same entitlement ceilings as
+   * `createProject`; resolves `false` when refused.
+   */
+  createDocument: (project: Project, options?: { autoName?: boolean }) => Promise<boolean>;
   openProject: (id: string) => Promise<void>;
   saveNow: () => Promise<void>;
   renameProject: (id: string, name: string) => Promise<void>;
@@ -383,7 +392,15 @@ interface EditorStore extends Project, Ui, History {
   toggleProjectFavorite: (id: string) => Promise<void>;
   duplicateProject: (id: string) => Promise<void>;
   deleteProject: (id: string) => Promise<void>;
-  importProject: (data: Partial<Project>) => Promise<void>;
+  /**
+   * Add a project file's contents to the library as a NEW document and open
+   * it. Nothing existing is overwritten; a failed save applies nothing.
+   * Resolves `true` once the project is saved and open.
+   */
+  importProject: (
+    data: Partial<Project>,
+    opts?: { activePageIndex?: number; successMessage?: string | null },
+  ) => Promise<boolean>;
   setZoom: (z: number) => void;
   toggle: (
     key: keyof Pick<
@@ -882,6 +899,7 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
     pack: incoming.pack,
     favorite: incoming.favorite,
     thumbnail: incoming.thumbnail,
+    nsqOrigin: incoming.nsqOrigin,
   };
 }
 
@@ -1526,6 +1544,62 @@ export const useEditor = create<EditorStore>((set, get) => {
       return true;
     },
 
+    createDocument: async (project, options) => {
+      const s = get();
+      if (
+        project.pack &&
+        !s.entitlements.premium_templates &&
+        !canUseDemoPack(project.pack)
+      ) {
+        toast.error("هذا القالب متاح ضمن النسخة الكاملة", {
+          description:
+            "يمكنك استكشافه من صفحة القوالب وطلب النسخة المناسبة لجهتك.",
+        });
+        return false;
+      }
+      if (!s.entitlements.unlimited_projects && !canCreateDemoProject(s.projects.length)) {
+        toast.error("اكتملت مساحة تجربة المحرر", {
+          description:
+            "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
+        });
+        return false;
+      }
+      const maxPages = DEMO_LICENSE.entitlements.maxPagesPerProject ?? Infinity;
+      if (!s.entitlements.unlimited_pages && project.pages.length > maxPages) {
+        toast.error("وصلت إلى حد صفحات تجربة المحرر", {
+          description: "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
+        });
+        return false;
+      }
+      // The document being replaced keeps its last edits: flush a pending
+      // debounced save before the new project takes over the store.
+      if (s.saveState === "dirty") await get().saveNow();
+      const incoming = normalizeProject({
+        ...project,
+        version: project.version || 2,
+        name: options?.autoName
+          ? nextDefaultName(project.name, get().projects.map((p) => p.name))
+          : project.name,
+        id: uid("proj"),
+        createdAt: Date.now(),
+        favorite: false,
+        thumbnail: undefined,
+        // A brand-new document has no .nsq file lineage of its own yet.
+        nsqOrigin: undefined,
+      });
+      const saved = await saveProject(incoming);
+      applyProject(saved, { zoom: get().zoom || 0.82 });
+      set({
+        past: [JSON.stringify(projectSlice(get()))],
+        future: [],
+        saveState: "saved",
+        savedAt: Date.now(),
+      });
+      await setSetting("activeProjectId", saved.id);
+      await get().refreshProjects();
+      return true;
+    },
+
     openProject: async (id) => {
       const project = await getProject(id);
       if (!project) {
@@ -1560,6 +1634,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           pack: s.pack ?? meta?.pack,
           favorite: meta?.favorite ?? s.favorite ?? false,
           thumbnail: captured ?? s.thumbnail ?? meta?.thumbnail,
+          nsqOrigin: s.nsqOrigin,
         });
         set({
           id: saved.id,
@@ -1625,23 +1700,44 @@ export const useEditor = create<EditorStore>((set, get) => {
       await get().refreshProjects();
     },
 
-    importProject: async (data) => {
+    importProject: async (data, opts = {}) => {
       if (!data || !Array.isArray(data.pages) || !data.pages.length) {
         toast.error("ملف المشروع غير صالح — لا يحتوي على صفحات");
-        return;
+        return false;
       }
       const incoming = normalizeProject({
         version: data.version || 2,
         name: data.name || "مشروع مستورد",
         theme: (data.theme as ThemeId) || "official",
         orgName: data.orgName || "",
+        transactionNo: data.transactionNo || "",
         defaultSize: data.defaultSize,
+        pack: data.pack,
         pages: data.pages,
         id: uid("proj"),
         createdAt: Date.now(),
+        // Only an inline raster preview is accepted as the card thumbnail.
+        thumbnail:
+          typeof data.thumbnail === "string" &&
+          /^data:image\/(png|jpeg|webp);base64,/i.test(data.thumbnail)
+            ? data.thumbnail
+            : undefined,
+        nsqOrigin: data.nsqOrigin,
       });
-      const saved = await saveProject(incoming);
-      applyProject(saved);
+      let saved: Project;
+      try {
+        // Persist first: if storage refuses (quota, private mode), nothing on
+        // screen changes and the author's current document stays as it was.
+        saved = await saveProject(incoming);
+      } catch (err) {
+        console.error("[editor] import save failed", err);
+        toast.error("تعذّر حفظ المشروع المستورد — تحقق من مساحة التخزين في المتصفح");
+        return false;
+      }
+      const pageIndex = opts.activePageIndex ?? 0;
+      applyProject(saved, {
+        activePageId: saved.pages[pageIndex]?.id || saved.pages[0]?.id,
+      });
       set({
         past: [JSON.stringify(projectSlice(get()))],
         future: [],
@@ -1650,7 +1746,10 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
       await setSetting("activeProjectId", saved.id);
       await get().refreshProjects();
-      toast.success("تم استيراد المشروع");
+      if (opts.successMessage !== null) {
+        toast.success(opts.successMessage || "تم استيراد المشروع");
+      }
+      return true;
     },
 
     setZoom: (z) => {

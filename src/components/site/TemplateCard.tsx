@@ -16,6 +16,7 @@ import {
   Pencil,
   Plus,
   Settings2,
+  ShieldCheck,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -27,13 +28,18 @@ import { TemplateStackPreview } from "./TemplatePreview";
 /** Preview box height (px). Landscape pages fit by width instead. */
 const PREVIEW_BOX = 232;
 
+/**
+ * Card actions. «استخدام القالب» and «معاينة سريعة» are always offered; the
+ * management actions are optional so a surface that only starts documents
+ * (the licensed Home) shows a clean card without edit/duplicate/delete.
+ */
 export interface TemplateCardActions {
   onUse: () => void;
   onQuickView: () => void;
-  onEdit: () => void;
-  onDuplicate: () => void;
-  onEditMeta: () => void;
-  onDelete: () => void;
+  onEdit?: () => void;
+  onDuplicate?: () => void;
+  onEditMeta?: () => void;
+  onDelete?: () => void;
 }
 
 const BADGE_TONE: Record<CatalogBadge["tone"], string> = {
@@ -139,6 +145,7 @@ export function TemplateCard({
   actions,
   locked = false,
   highlight = false,
+  available = false,
 }: {
   entry: CatalogEntry;
   actions: TemplateCardActions;
@@ -146,18 +153,24 @@ export function TemplateCard({
   locked?: boolean;
   /** Marks the card just added/updated by the author. */
   highlight?: boolean;
+  /** Shows «متاح بترخيصك» — the licensed account may use this template. */
+  available?: boolean;
 }) {
   const size = pageSize(entry.pages[0]);
   const isCustom = entry.kind === "custom";
+  const managed = Boolean(actions.onEdit || actions.onDuplicate || actions.onDelete || actions.onEditMeta);
 
-  const menuItems = [
+  type MenuItem = { label: string; icon: LucideIcon; onClick: () => void; tone?: "danger" };
+  const optional = (item: Omit<MenuItem, "onClick"> & { onClick?: () => void }): MenuItem[] =>
+    item.onClick ? [{ ...item, onClick: item.onClick }] : [];
+  const menuItems: MenuItem[] = [
     { label: "معاينة سريعة", icon: Eye, onClick: actions.onQuickView },
-    { label: "تعديل القالب", icon: Pencil, onClick: actions.onEdit },
-    { label: "تكرار", icon: Copy, onClick: actions.onDuplicate },
+    ...optional({ label: "تعديل القالب", icon: Pencil, onClick: actions.onEdit }),
+    ...optional({ label: "تكرار", icon: Copy, onClick: actions.onDuplicate }),
     ...(isCustom
       ? [
-          { label: "تعديل البيانات", icon: Settings2, onClick: actions.onEditMeta },
-          { label: "حذف", icon: Trash2, onClick: actions.onDelete, tone: "danger" as const },
+          ...optional({ label: "تعديل البيانات", icon: Settings2, onClick: actions.onEditMeta }),
+          ...optional({ label: "حذف", icon: Trash2, onClick: actions.onDelete, tone: "danger" }),
         ]
       : []),
   ];
@@ -210,9 +223,11 @@ export function TemplateCard({
         {/* Management overlay — revealed on hover or keyboard focus. */}
         <div className="absolute left-3 top-3 flex gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
           <IconAction icon={Eye} label="معاينة سريعة" onClick={actions.onQuickView} />
-          <IconAction icon={Pencil} label="تعديل القالب" onClick={actions.onEdit} />
-          <IconAction icon={Copy} label="تكرار القالب" onClick={actions.onDuplicate} />
-          {isCustom && <IconAction icon={Trash2} label="حذف القالب" onClick={actions.onDelete} tone="danger" />}
+          {actions.onEdit && <IconAction icon={Pencil} label="تعديل القالب" onClick={actions.onEdit} />}
+          {actions.onDuplicate && <IconAction icon={Copy} label="تكرار القالب" onClick={actions.onDuplicate} />}
+          {isCustom && actions.onDelete && (
+            <IconAction icon={Trash2} label="حذف القالب" onClick={actions.onDelete} tone="danger" />
+          )}
         </div>
       </div>
 
@@ -239,6 +254,11 @@ export function TemplateCard({
               <Lock className="size-3" /> متاح في النسخة الكاملة
             </span>
           )}
+          {!locked && available && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-navy/10 px-2 py-0.5 text-[10px] font-extrabold text-navy dark:bg-emerald-400/10 dark:text-emerald-300">
+              <ShieldCheck className="size-3" /> متاح بترخيصك
+            </span>
+          )}
         </div>
 
         <div className="mt-4 flex items-center gap-2 border-t border-line/70 pt-4 dark:border-white/10">
@@ -258,7 +278,7 @@ export function TemplateCard({
             <Eye className="size-4" />
             معاينة سريعة
           </button>
-          <ActionMenu items={menuItems} />
+          {managed && <ActionMenu items={menuItems} />}
         </div>
       </div>
     </article>

@@ -8,7 +8,10 @@ import {
   ArrowUp,
   Baseline,
   ChevronDown,
+  ChevronsLeft,
   Copy,
+  CopyPlus,
+  ClipboardPaste,
   Download,
   Contrast,
   Eye,
@@ -80,9 +83,10 @@ function normalizeDeg(deg: number): number {
 }
 import { columnTotals, resizeMatrix, toCsv } from "@/lib/editor/tables";
 import { prepareText } from "@/lib/editor/text-render";
-import { useEditor, type RightTab } from "@/lib/editor/store";
+import { useEditor } from "@/lib/editor/store";
 import { OPEN_REPORT_TOOLS_EVENT } from "./EditorApp";
 import { cn, round } from "@/lib/utils";
+import { isOverlayViewport } from "@/lib/editor/ui-state";
 import { toast } from "sonner";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, SubGroup, useAccordionState } from "./ui/Accordion";
@@ -95,6 +99,7 @@ import {
 import { ArabicTextTools } from "./ArabicTextTools";
 import { ReportToolsPanel } from "./ReportToolsPanel";
 import { ScrubField, ScrubInput } from "./ui/ScrubInput";
+import { RIGHT_PANEL_TABS } from "./panel-tabs";
 
 const TEXT_TYPES = ["text", "box", "stat", "stamp", "table", "progress"];
 
@@ -106,6 +111,7 @@ export function RightPanel({
   const tab = useEditor((s) => s.rightTab);
   const setRightTab = useEditor((s) => s.setRightTab);
   const pages = useEditor((s) => s.pages);
+  const setActivePage = useEditor((s) => s.setActivePage);
   const activePageId = useEditor((s) => s.activePageId);
   const selectedId = useEditor((s) => s.selectedId);
   const updateElement = useEditor((s) => s.updateElement);
@@ -328,38 +334,91 @@ export function RightPanel({
 
   return (
     <aside className="editor-properties flex h-full min-h-0 flex-col border-r border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
-      <div className="grid shrink-0 grid-cols-2 gap-2 border-b border-line p-2 dark:border-white/10">
-        {(
-          [
-            ["properties", "خصائص"],
-            ["layers", "طبقات"],
-          ] as [RightTab, string][]
-        ).map(([id, label]) => (
+      <div className="editor-panel-header flex shrink-0 items-center gap-1 border-b border-line p-1.5 dark:border-white/10">
+        <div className="editor-panel-tabs grid min-w-0 flex-1 grid-cols-2 gap-1" role="tablist" aria-label="أقسام لوحة الخصائص">
+        {RIGHT_PANEL_TABS.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             type="button"
+            role="tab"
+            aria-selected={tab === id}
             onClick={() => setRightTab(id)}
             className={cn(
-              "h-9 rounded-[8px] text-[12px] font-extrabold",
+              "editor-panel-tab inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[8px] px-2 text-[12px] font-extrabold",
               tab === id
                 ? "bg-navy text-white"
                 : "text-muted hover:bg-line-2 dark:text-white/70 dark:hover:bg-white/5",
             )}
           >
-            {label}
+            <Icon className="size-4 shrink-0" strokeWidth={1.7} />
+            <span className="truncate">{label}</span>
           </button>
         ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => { const st = useEditor.getState(); if (isOverlayViewport()) st.closeFloatingPanels(); else if (!st.rightCollapsed) st.toggle("rightCollapsed"); }}
+          className="editor-panel-collapse grid size-11 shrink-0 place-items-center rounded-[8px] text-muted hover:bg-line-2 dark:hover:bg-white/10"
+          aria-label="طي لوحة الخصائص"
+          title="طي لوحة الخصائص"
+        >
+          <ChevronsLeft className="size-4" />
+        </button>
       </div>
+
+      {/*
+       * Layers-panel control row (Photoshop anatomy): a dropdown and Opacity
+       * side by side, wrapping onto two lines when the panel is narrow. The
+       * page picker and the opacity field drive the same store actions as the
+       * page rail and «الأبعاد والتحاذي».
+       */}
+      {tab === "layers" && (
+        <div className="editor-panel-controls" role="group" aria-label="تحكم الطبقات">
+          <label className="editor-panel-control">
+            <span>الصفحة</span>
+            <select
+              value={activePageId}
+              onChange={(e) => setActivePage(e.target.value)}
+              aria-label="صفحة الطبقات"
+            >
+              {pages.map((p, index) => (
+                <option key={p.id} value={p.id}>
+                  {index + 1}. {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="editor-panel-control is-opacity">
+            <ScrubField
+              label="الشفافية"
+              value={el ? round((el.opacity ?? 1) * 100) : 100}
+              min={0}
+              max={100}
+              step={1}
+              precision={0}
+              suffix="%"
+              disabled={!el}
+              onChange={(v) => {
+                if (el) updateElement(el.id, { opacity: v / 100 }, true);
+              }}
+              onCommit={(v) => {
+                if (el) updateElement(el.id, { opacity: v / 100 });
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/*
        * Phase 1 — the panel body is the ONLY scrolling region and is capped by
        * the real header height (`editor-panel-body`), so a short window scrolls
        * inside the panel instead of clipping the last controls.
        */}
-      <div className="editor-pane-scroll editor-panel-body p-3">
+      <div className="editor-pane-scroll editor-panel-body no-bottom-pad p-3">
         {tab === "layers" && (
           <div className="grid gap-2">
-            <div className="max-h-[40vh] min-h-[120px] overflow-y-auto overflow-x-hidden rounded-[8px] border border-line/50 p-1.5 editor-pane-scroll dark:border-white/10">
+            {/* The list grows with the panel; the panel body is its one scroller (no nested scrollbar). */}
+            <div className="editor-layer-list min-h-[120px] overflow-x-hidden rounded-[8px] border border-line/50 p-1.5 dark:border-white/10">
               <div className="grid gap-1.5">
                 {layers.length === 0 && (
                   <EmptyNote>لا توجد عناصر في هذه الصفحة بعد.</EmptyNote>
@@ -392,7 +451,7 @@ export function RightPanel({
               </div>
             </div>
             <p className="px-1 text-[10px] leading-4 text-muted">
-              الطبقات مستقلة عن تكبير اللوحة — استخدم السكرول الداخلي عند الحاجة. الترتيب يحدد تكديس العناصر على الصفحة.
+              الطبقات مستقلة عن تكبير اللوحة. الترتيب يحدد تكديس العناصر على الصفحة — اسحب الطبقة لتغيير موضعها.
             </p>
           </div>
         )}
@@ -2245,6 +2304,12 @@ export function RightPanel({
           </AccordionSection>
         )}
       </div>
+      <footer className="editor-panel-footer" aria-label="إجراءات سريعة على العنصر">
+        <button type="button" onClick={duplicateSelected} disabled={!selectedId} aria-label="تكرار العنصر" title="تكرار العنصر (⌘D)"><CopyPlus className="size-4" strokeWidth={1.7} /><span>تكرار</span></button>
+        <button type="button" onClick={copySelected} disabled={!selectedId} aria-label="نسخ العنصر" title="نسخ العنصر (⌘C)"><Copy className="size-4" strokeWidth={1.7} /><span>نسخ</span></button>
+        <button type="button" onClick={() => pasteClipboard()} disabled={!clipboard} aria-label="لصق العنصر" title="لصق العنصر (⌘V)"><ClipboardPaste className="size-4" strokeWidth={1.7} /><span>لصق</span></button>
+        <button type="button" onClick={deleteSelected} disabled={!selectedId} aria-label="حذف العنصر" title="حذف العنصر (Delete)" className="is-danger"><Trash2 className="size-4" strokeWidth={1.7} /><span>حذف</span></button>
+      </footer>
     </aside>
   );
 }
@@ -2512,7 +2577,7 @@ function LayerRow({
                 />
               </button>
             ) : (
-              <span className="size-7 shrink-0" aria-hidden />
+              <span className="layer-row-spacer size-7 shrink-0" aria-hidden />
             )}
             {depth === 0 && onDragStart && (
               <button
@@ -2539,7 +2604,7 @@ function LayerRow({
                 if (layer.type === "group") enterGroup(layer.id);
                 else setRenaming(true);
               }}
-              className="flex min-w-0 flex-1 items-center justify-between text-right text-[12px]"
+              className="layer-row-name flex min-w-0 flex-1 items-center justify-between text-right text-[12px]"
               title="نقرة لتحديد · Shift+نقرة لتحديد كل ما بين صفّين · ⌘/Ctrl+نقرة للإضافة · نقرة مزدوجة لإعادة التسمية · نقرة يمنى للقائمة السياقية"
             >
               <span className="truncate font-bold">
@@ -2578,7 +2643,7 @@ function LayerRow({
           title="تقديم طبقة"
           aria-label={`تقديم ${layer.name || TYPE_NAME[layer.type]}`}
           onClick={() => moveLayer(layer.id, 1)}
-          className="grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="layer-row-action is-first grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
         >
           <ArrowUp className="size-3.5" />
         </button>
@@ -2587,7 +2652,7 @@ function LayerRow({
           title="تأخير طبقة"
           aria-label={`تأخير ${layer.name || TYPE_NAME[layer.type]}`}
           onClick={() => moveLayer(layer.id, -1)}
-          className="grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="layer-row-action grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
         >
           <ArrowDown className="size-3.5" />
         </button>
@@ -2605,7 +2670,7 @@ function LayerRow({
               : `إخفاء ${layer.name || TYPE_NAME[layer.type]}`
           }
           onClick={() => setElementFlag(layer.id, "hidden")}
-          className="layer-eye-toggle shrink-0 touch-manipulation border border-line dark:border-white/10"
+          className="layer-row-action layer-eye-toggle shrink-0 touch-manipulation border border-line dark:border-white/10"
         >
           {layer.hidden || hiddenByAncestor ? (
             <Eye className="size-3.5" />
@@ -2622,7 +2687,7 @@ function LayerRow({
               : `قفل ${layer.name || TYPE_NAME[layer.type]}`
           }
           onClick={() => setElementFlag(layer.id, "locked")}
-          className="grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="layer-row-action grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
         >
           {layer.locked ? (
             <Unlock className="size-3.5" />

@@ -20,8 +20,10 @@ import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CustomDesignRouteImport } from './routes/custom-design'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as EditorRouteImport } from './routes/editor'
+import { Route as HomeRouteImport } from './routes/home'
 import { Route as LicenseRouteImport } from './routes/license'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as OpenRouteImport } from './routes/open'
 import { Route as OwnerVaultRouteImport } from './routes/owner-vault'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -94,6 +96,11 @@ const EditorRoute = EditorRouteImport.update({
   path: '/editor',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HomeRoute = HomeRouteImport.update({
+  id: '/home',
+  path: '/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LicenseRoute = LicenseRouteImport.update({
   id: '/license',
   path: '/license',
@@ -102,6 +109,11 @@ const LicenseRoute = LicenseRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OpenRoute = OpenRouteImport.update({
+  id: '/open',
+  path: '/open',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OwnerVaultRoute = OwnerVaultRouteImport.update({
@@ -198,8 +210,10 @@ export interface FileRoutesByFullPath {
   '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
+  '/home': typeof HomeRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -229,8 +243,10 @@ export interface FileRoutesByTo {
   '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
+  '/home': typeof HomeRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -261,8 +277,10 @@ export interface FileRoutesById {
   '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
+  '/home': typeof HomeRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -294,8 +312,10 @@ export interface FileRouteTypes {
     | '/custom-design'
     | '/demo'
     | '/editor'
+    | '/home'
     | '/license'
     | '/login'
+    | '/open'
     | '/owner-vault'
     | '/pricing'
     | '/privacy'
@@ -325,8 +345,10 @@ export interface FileRouteTypes {
     | '/custom-design'
     | '/demo'
     | '/editor'
+    | '/home'
     | '/license'
     | '/login'
+    | '/open'
     | '/owner-vault'
     | '/pricing'
     | '/privacy'
@@ -356,8 +378,10 @@ export interface FileRouteTypes {
     | '/custom-design'
     | '/demo'
     | '/editor'
+    | '/home'
     | '/license'
     | '/login'
+    | '/open'
     | '/owner-vault'
     | '/pricing'
     | '/privacy'
@@ -388,8 +412,10 @@ export interface RootRouteChildren {
   CustomDesignRoute: typeof CustomDesignRoute
   DemoRoute: typeof DemoRoute
   EditorRoute: typeof EditorRoute
+  HomeRoute: typeof HomeRoute
   LicenseRoute: typeof LicenseRoute
   LoginRoute: typeof LoginRoute
+  OpenRoute: typeof OpenRoute
   OwnerVaultRoute: typeof OwnerVaultRoute
   PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -487,6 +513,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EditorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/home': {
+      id: '/home'
+      path: '/home'
+      fullPath: '/home'
+      preLoaderRoute: typeof HomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/license': {
       id: '/license'
       path: '/license'
@@ -499,6 +532,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/open': {
+      id: '/open'
+      path: '/open'
+      fullPath: '/open'
+      preLoaderRoute: typeof OpenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/owner-vault': {
@@ -628,8 +668,10 @@ const rootRouteChildren: RootRouteChildren = {
   CustomDesignRoute: CustomDesignRoute,
   DemoRoute: DemoRoute,
   EditorRoute: EditorRoute,
+  HomeRoute: HomeRoute,
   LicenseRoute: LicenseRoute,
   LoginRoute: LoginRoute,
+  OpenRoute: OpenRoute,
   OwnerVaultRoute: OwnerVaultRoute,
   PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,

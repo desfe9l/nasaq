@@ -123,7 +123,16 @@ async function getFilesFromDrop(
   return out;
 }
 
-export function AssetLibrary() {
+export function AssetLibrary({
+  children,
+}: {
+  /**
+   * Content that belongs to the same Library workspace (the ready-made design
+   * assets). Rendered inside this section so the sticky Library controls stay
+   * pinned for the whole tab instead of scrolling away at the section's end.
+   */
+  children?: React.ReactNode;
+} = {}) {
   const assets = useEditor((s) => s.assets);
   const assetsLoading = useEditor((s) => s.assetsLoading);
   const addElement = useEditor((s) => s.addElement);
@@ -149,6 +158,31 @@ export function AssetLibrary() {
   const folderInputRef = useRef<HTMLInputElement>(null);
   const anyFileInputRef = useRef<HTMLInputElement>(null);
   const libraryImportRef = useRef<HTMLInputElement>(null);
+  const categoriesRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * A plain mouse wheel only scrolls vertically; over the folder row it moves
+   * the row sideways instead (smoothly), so every category is reachable on a
+   * desktop without a trackpad. Needs a non-passive listener to stop the panel
+   * from scrolling at the same time; at either end the panel scrolls as usual.
+   */
+  useEffect(() => {
+    const row = categoriesRef.current;
+    if (!row) return;
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+      const max = row.scrollWidth - row.clientWidth;
+      if (max <= 1) return;
+      // RTL rows scroll toward negative scrollLeft; "forward" is leftwards.
+      const rtl = getComputedStyle(row).direction === "rtl";
+      const progress = rtl ? -row.scrollLeft : row.scrollLeft;
+      if ((event.deltaY < 0 && progress <= 0) || (event.deltaY > 0 && progress >= max - 1)) return;
+      event.preventDefault();
+      row.scrollBy({ left: rtl ? -event.deltaY : event.deltaY, behavior: "smooth" });
+    };
+    row.addEventListener("wheel", onWheel, { passive: false });
+    return () => row.removeEventListener("wheel", onWheel);
+  }, []);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -594,18 +628,19 @@ export function AssetLibrary() {
       onDragLeave={() => setDragOver(false)}
       onDrop={onDrop}
     >
-      <header className="flex items-center justify-between gap-2">
-        <div>
+      <div className="asset-library-controls grid gap-2">
+      <header className="asset-library-header flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <h3 className="text-[12px] font-extrabold tracking-wide">المكتبة</h3>
-          <p className="mt-0.5 text-[10px] text-muted">3 أعمدة · بحث · تصفية · مجلدات · سحب وإفلات مباشر</p>
+          <p className="mt-0.5 truncate text-[10px] text-muted" title="شبكة مرنة · بحث · تصفية · مجلدات · سحب وإفلات مباشر">شبكة مرنة · بحث · تصفية · مجلدات · سحب وإفلات مباشر</p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="asset-library-tools flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={exportLibrary}
             aria-label="تصدير المكتبة"
             title="تصدير المكتبة"
-            className="grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"
+            className="asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"
           >
             <Download className="size-3.5" />
           </button>
@@ -614,7 +649,7 @@ export function AssetLibrary() {
             onClick={() => libraryImportRef.current?.click()}
             aria-label="استيراد مكتبة"
             title="استيراد مكتبة من ملف"
-            className="grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"
+            className="asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10"
           >
             <Upload className="size-3.5" />
           </button>
@@ -633,9 +668,10 @@ export function AssetLibrary() {
             type="button"
             onClick={() => setViewMode("grid")}
             aria-label="عرض شبكي"
+            title="عرض شبكي"
             aria-pressed={viewMode === "grid"}
             className={cn(
-              "grid size-7 place-items-center rounded-[6px] border",
+              "asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border",
               viewMode === "grid" ? "border-navy bg-navy/10" : "border-line dark:border-white/10",
             )}
           >
@@ -645,9 +681,10 @@ export function AssetLibrary() {
             type="button"
             onClick={() => setViewMode("compact")}
             aria-label="عرض مضغوط"
+            title="عرض مضغوط"
             aria-pressed={viewMode === "compact"}
             className={cn(
-              "grid size-7 place-items-center rounded-[6px] border",
+              "asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border",
               viewMode === "compact" ? "border-navy bg-navy/10" : "border-line dark:border-white/10",
             )}
           >
@@ -664,10 +701,11 @@ export function AssetLibrary() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="بحث في المكتبة…"
-            className="h-9 w-full rounded-[8px] border border-line bg-white pe-8 ps-3 text-[12px] font-bold outline-none focus:border-navy dark:border-white/10 dark:bg-white/5"
+            aria-label="بحث في المكتبة"
+            className="asset-library-search h-9 w-full rounded-[8px] border border-line bg-white pe-8 ps-3 text-[12px] font-bold outline-none focus:border-navy dark:border-white/10 dark:bg-white/5"
           />
         </label>
-        <div className="flex items-center gap-1">
+        <div className="asset-library-filters flex flex-wrap items-center gap-1">
           {[
             ["all", "الكل"],
             ["image", "صور"],
@@ -677,8 +715,9 @@ export function AssetLibrary() {
               key={id}
               type="button"
               onClick={() => setTypeFilter(id as TypeFilter)}
+              aria-pressed={typeFilter === id}
               className={cn(
-                "h-7 rounded-full px-3 text-[10px] font-extrabold",
+                "asset-library-chip h-7 rounded-full px-3 text-[10px] font-extrabold",
                 typeFilter === id ? "bg-navy text-white" : "border border-line text-muted dark:border-white/10",
               )}
             >
@@ -691,14 +730,19 @@ export function AssetLibrary() {
         </div>
       </div>
 
-      {/* Folders - sticky at top above shapes pattern, fixed black shading */}
-      <div className="sticky top-0 z-[5] -mx-1 border-b border-line/50 bg-white px-1 py-1.5 dark:border-white/10 dark:bg-[#161c26]">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+      {/*
+       * Folder categories (الكل، غير مصنف، شعارات الداخلية…). One row that
+       * scrolls horizontally — touch swipe, trackpad, or the mouse wheel — so
+       * any number of folders fits without growing the sticky header.
+       */}
+      <div className="asset-library-categories-wrap">
+        <div ref={categoriesRef} className="asset-library-categories" role="group" aria-label="مجلدات المكتبة">
         <button
           type="button"
           onClick={() => setAssetFolder(null)}
+          aria-pressed={!folderId}
           className={cn(
-            "inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold",
+            "asset-library-chip inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold",
             !folderId ? "border-navy bg-navy/10" : "border-line dark:border-white/10",
           )}
         >
@@ -709,8 +753,9 @@ export function AssetLibrary() {
             key={folder.id}
             type="button"
             onClick={() => setAssetFolder(folder.id)}
+            aria-pressed={folderId === folder.id}
             className={cn(
-              "inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold",
+              "asset-library-chip inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold",
               folderId === folder.id ? "border-navy bg-navy/10" : "border-line dark:border-white/10",
             )}
           >
@@ -723,7 +768,7 @@ export function AssetLibrary() {
             setFolderDraft("");
             setFolderDialog("create");
           }}
-          className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="asset-lib-icon-btn grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10"
           title="مجلد جديد"
           aria-label="مجلد جديد"
         >
@@ -737,16 +782,18 @@ export function AssetLibrary() {
                 setFolderDraft(currentFolder.name);
                 setFolderDialog("rename");
               }}
-              className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10"
+              className="asset-lib-icon-btn grid size-7 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10"
               title="إعادة تسمية المجلد"
+              aria-label="إعادة تسمية المجلد"
             >
               <Pencil className="size-3" />
             </button>
             <button
               type="button"
               onClick={() => setFolderDialog("delete")}
-              className="grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-red-600 dark:border-white/10"
+              className="asset-lib-icon-btn grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-red-600 dark:border-white/10"
               title="حذف المجلد"
+              aria-label="حذف المجلد"
             >
               <Trash2 className="size-3" />
             </button>
@@ -756,7 +803,7 @@ export function AssetLibrary() {
       </div>
 
       {/* Add buttons */}
-      <div className="grid grid-cols-3 gap-1.5">
+      <div className="asset-library-add-actions">
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
@@ -781,6 +828,8 @@ export function AssetLibrary() {
         >
           <FolderInput className="size-3.5" /> إضافة مجلد
         </button>
+      </div>
+
       </div>
 
       <input ref={fileInputRef} type="file" multiple accept="image/*" className="hidden" onChange={(e) => void handleFileInput(e, false)} />
@@ -887,7 +936,7 @@ export function AssetLibrary() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-3 gap-2">
+        <div className={cn("asset-media-grid", viewMode === "compact" && "is-compact")}>
           {visibleAssets.map((asset) => (
             <div
               key={asset.id}
@@ -910,7 +959,7 @@ export function AssetLibrary() {
                 onCardActivate(asset, event);
               }}
               className={cn(
-                "group relative rounded-[8px] border bg-white/60 p-1.5 transition dark:bg-white/5",
+                "asset-card group relative rounded-[8px] border bg-white/60 p-1.5 transition dark:bg-white/5",
                 editingId !== asset.id && "cursor-pointer",
                 selectedAssetIds.includes(asset.id)
                   ? "is-selected border-emerald-500/70 bg-emerald-500/10 ring-2 ring-emerald-500/40"
@@ -927,19 +976,11 @@ export function AssetLibrary() {
                 aria-label={`تحديد ${asset.name}`}
                 aria-pressed={selectedAssetIds.includes(asset.id)}
                 className={cn(
-                  "absolute right-1 top-1 z-[2] grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90",
+                  "asset-card-check absolute right-1 top-1 z-[2] grid size-5 place-items-center rounded-full border bg-white/90 dark:bg-[#161c26]/90",
                   selectedAssetIds.includes(asset.id) ? "border-emerald-600 bg-emerald-600 text-white" : "border-line dark:border-white/20",
                 )}
               >
                 {selectedAssetIds.includes(asset.id) && <Check className="size-3" />}
-              </button>
-              <button
-                type="button"
-                onClick={(e) => openMenu(e, asset)}
-                aria-label={`خيارات ${asset.name}`}
-                className="absolute left-1 top-1 z-[2] grid size-5 place-items-center rounded-full border border-line bg-white/90 text-muted dark:border-white/20 dark:bg-[#161c26]/90"
-              >
-                <MoreHorizontal className="size-3" />
               </button>
               {editingId === asset.id ? (
                 <div className="flex h-20 flex-col gap-1 rounded-[6px] border border-navy-2 p-1 dark:border-gold/60">
@@ -976,7 +1017,16 @@ export function AssetLibrary() {
                     <img src={asset.src} alt={asset.name} className={cn("max-w-full object-contain", viewMode === "grid" ? "max-h-[4.5rem]" : "max-h-[3.25rem]")} />
                   </button>
                   <span className="mt-1 block truncate text-center text-[9px] font-bold text-muted">{asset.name}</span>
-                  <div className="mt-1 flex items-center justify-center gap-1">
+                  <div className="asset-card-actions mt-1 flex items-center justify-center gap-1">
+                    <button
+                      type="button"
+                      onClick={(e) => openMenu(e, asset)}
+                      aria-label={`خيارات ${asset.name}`}
+                      title="خيارات العنصر"
+                      className="grid size-7 place-items-center rounded-[5px] border border-line text-muted dark:border-white/10"
+                    >
+                      <MoreHorizontal className="size-3.5" />
+                    </button>
                     <button
                       type="button"
                       onClick={(e) => {
@@ -984,9 +1034,10 @@ export function AssetLibrary() {
                         place(asset);
                       }}
                       title="إدراج في الصفحة"
-                      className="grid size-6 place-items-center rounded-[5px] bg-navy text-white"
+                      aria-label={`إدراج ${asset.name} في الصفحة`}
+                      className="grid size-7 place-items-center rounded-[5px] bg-navy text-white"
                     >
-                      <Plus className="size-3" />
+                      <Plus className="size-3.5" />
                     </button>
                   </div>
                 </>
@@ -995,6 +1046,8 @@ export function AssetLibrary() {
           ))}
         </div>
       )}
+
+      {children}
 
       {menu &&
         createPortal(

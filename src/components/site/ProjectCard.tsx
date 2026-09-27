@@ -19,7 +19,7 @@ function relativeTime(ts: number) {
   const mins = Math.round(diff / 60000);
   if (mins < 1) return "الآن";
   if (mins < 60) return `منذ ${mins} دقيقة`;
-  const hours = Math.round(diff / 60);
+  const hours = Math.round(diff / 3600000);
   if (hours < 24) return `منذ ${hours} ساعة`;
   const days = Math.round(hours / 24);
   if (days < 30) return `منذ ${days} يوم`;
