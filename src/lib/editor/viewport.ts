@@ -42,7 +42,7 @@ export function zoomAnchoredAt(
         clientY >= r.top &&
         clientY <= r.bottom
       );
-    }) || pages[0];
+    }) || pages.find((p) => p.dataset.pageId === useEditor.getState().activePageId) || pages[0];
   if (!page || !page.offsetWidth) return;
   const seq = ++zoomSeq;
   useEditor.getState().setZoom(target);

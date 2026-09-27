@@ -39,7 +39,7 @@ export function isTouchPropertiesViewport(): boolean {
  * left — hence a viewport-derived ceiling rather than a fixed pixel value that
  * would be meaningless on a short laptop screen.
  */
-export const PAGES_PANEL_DEFAULT = 152;
+export const PAGES_PANEL_DEFAULT = 112;
 export const PAGES_PANEL_MIN = 96;
 
 /** Headroom kept for the canvas + status bar above the pages panel. */
@@ -50,7 +50,7 @@ export function clampPagesHeight(height: number): number {
   const viewport = typeof window === "undefined" ? 900 : window.innerHeight;
   const max = Math.max(
     PAGES_PANEL_MIN + 24,
-    Math.min(viewport * 0.6, viewport - PAGES_PANEL_RESERVED),
+    Math.min(144, viewport * 0.25, viewport - PAGES_PANEL_RESERVED),
   );
   const value = Number.isFinite(height) ? height : PAGES_PANEL_DEFAULT;
   return Math.min(max, Math.max(PAGES_PANEL_MIN, Math.round(value)));
@@ -203,3 +203,6 @@ export function placeFloatingToolbar(
   const clamped = Math.abs(best.left - centeredLeft) > 0.5;
   return { left: best.left, top: best.top, placement: best.placement, clamped };
 }
+
+/** Open the existing settings surface from chrome, including signed-out sessions. */
+export const OPEN_EDITOR_SETTINGS_EVENT = "nasaq:open-editor-settings";

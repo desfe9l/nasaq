@@ -1,3 +1,4 @@
+import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { useEffect, useRef, useState } from "react";
 import { Check, Eye, Layers, RotateCw } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
@@ -378,7 +379,6 @@ function ViewMenu({ fitToScreen, fitToSelection, close }: { fitToScreen: () => v
   const snapElements = useEditor((s) => s.snapElements);
   const previewAll = useEditor((s) => s.previewAll);
   const focusMode = useEditor((s) => s.focusMode);
-  const dark = useEditor((s) => s.dark);
   const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
   const artboardGridCols = useEditor((s) => s.artboardGridCols);
   const setArtboardGridCols = useEditor((s) => s.setArtboardGridCols);
@@ -446,7 +446,7 @@ function ViewMenu({ fitToScreen, fitToSelection, close }: { fitToScreen: () => v
         ))}
       </div>
       <MenuSep />
-      <ToggleItem label="الوضع الداكن للاستوديو" value={dark} onClick={() => toggle("dark")} />
+      <MenuItem label="مظهر المحرر…" onClick={() => { close(); window.dispatchEvent(new CustomEvent(OPEN_EDITOR_SETTINGS_EVENT)); }} />
       <ToggleItem label="الشريط العائم للعنصر المحدد" value={bubbleEnabled} onClick={() => toggleBubble()} />
       <ToggleItem label="وضع التركيز" value={focusMode} onClick={() => toggle("focusMode")} />
     </>
