@@ -5,6 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 /** Sidebar resize bounds (px) — shared by the drag handler and the persisted default. */
 const PANEL_MIN = { left: 232, right: 264 } as const;
 const PANEL_MAX = { left: 460, right: 520 } as const;
+/** Drag distance past a tablet drawer's minimum width that collapses it. */
+const DRAWER_COLLAPSE_DRAG = 72;
 
 /**
  * «أدوات التقرير» lives inside the right panel's accordion, whose open/closed
@@ -35,7 +37,6 @@ import {
   Save,
   Sun,
   Undo2,
-  X,
   ZoomIn,
   ZoomOut,
   Scan,
@@ -46,12 +47,15 @@ import {
   saveLabel,
   PAGES_PANEL_MIN,
   type SaveState,
+  type LeftTab,
+  type RightTab,
 } from "@/lib/editor/store";
 import { elementsBounds, pageSize } from "@/lib/editor/model";
 import { fitImageBox, prepareImage } from "@/lib/editor/images";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { LeftPanel } from "./LeftPanel";
 import { RightPanel } from "./RightPanel";
+import { LEFT_PANEL_TABS, RIGHT_PANEL_TABS } from "./panel-tabs";
 import { StudioToolDock, CollapsedPanelDock } from "./StudioToolDock";
 import { CanvasStage } from "./CanvasStage";
 import { ArrangeBar } from "./ArrangeBar";
@@ -397,6 +401,7 @@ function Studio({
   const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
   const toggleBubble = useEditor((s) => s.toggleBubble);
   const leftTab = useEditor((s) => s.leftTab);
+  const rightTab = useEditor((s) => s.rightTab);
   const openLibrary = useEditor((s) => s.openLibrary);
   const openContextMenu = useEditor((s) => s.openContextMenu);
   const closeContextMenu = useEditor((s) => s.closeContextMenu);
@@ -1019,12 +1024,53 @@ function Studio({
     window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: tool }));
   };
 
+  /**
+   * Restore a collapsed desktop panel (optionally straight onto a tab) in one
+   * click. `toggle` is the same persisted path the panel's own `>>` uses, so
+   * the docked/collapsed choice survives a reload either way.
+   */
+  const expandPanel = <S extends "left" | "right">(
+    side: S,
+    tab?: S extends "left" ? LeftTab : RightTab,
+  ) => {
+    const state = useEditor.getState();
+    if (side === "left") {
+      if (tab) state.setLeftTab(tab as LeftTab);
+      if (state.leftCollapsed) state.toggle("leftCollapsed");
+      useEditor.setState({ leftOpen: true });
+    } else {
+      if (tab) state.setRightTab(tab as RightTab);
+      if (state.rightCollapsed) state.toggle("rightCollapsed");
+      useEditor.setState({ rightOpen: true });
+    }
+  };
+  /** Toolbar shortcuts to a panel tab: open (and un-collapse) that panel. */
+  const openLeftFromDock = (tab: LeftTab) => {
+    if (useEditor.getState().focusMode) toggle("focusMode");
+    expandPanel("left", tab);
+  };
+  const openRightFromDock = (tab: RightTab) => {
+    if (useEditor.getState().focusMode) toggle("focusMode");
+    expandPanel("right", tab);
+  };
+
   const resizePanel = (
     side: "left" | "right",
     startClientX: number,
     startWidth: number,
+    handle?: HTMLElement,
   ) => {
     document.body.classList.add("is-resizing-panel");
+    /*
+     * Tablet drawers float over the canvas, so dragging their edge never
+     * reflows the workspace. Dragging past the minimum width slides the
+     * drawer out under the finger; releasing beyond the threshold collapses
+     * (closes) it, otherwise it springs back.
+     */
+    const drawer = isOverlayViewport()
+      ? handle?.closest<HTMLElement>(".editor-sidebar") ?? null
+      : null;
+    let overshoot = 0;
     const move = (event: PointerEvent) => {
       // Left panel: inner edge is on its LEFT side of the grid (DOM-LTR), so
       // width grows as the pointer moves left in screen space. Right panel:
@@ -1041,12 +1087,28 @@ function Studio({
       setPanelWidths((current) =>
         current[side] === width ? current : { ...current, [side]: width },
       );
+      if (drawer) {
+        overshoot = Math.max(0, PANEL_MIN[side] - (startWidth + delta));
+        // The elements drawer sits on the physical right, the properties
+        // drawer on the physical left; each slides toward its own edge.
+        drawer.style.transition = "none";
+        drawer.style.transform = overshoot
+          ? `translateX(${side === "left" ? overshoot : -overshoot}px)`
+          : "";
+      }
     };
     const finish = () => {
       document.body.classList.remove("is-resizing-panel");
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", finish);
       window.removeEventListener("pointercancel", finish);
+      if (drawer) {
+        drawer.style.transition = "";
+        drawer.style.transform = "";
+        if (overshoot > DRAWER_COLLAPSE_DRAG) {
+          useEditor.setState(side === "left" ? { leftOpen: false } : { rightOpen: false });
+        }
+      }
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", finish);
@@ -1536,13 +1598,13 @@ function Studio({
             ? undefined
             : focusMode
               ? "minmax(0, 1fr)"
-              : `${leftCollapsed ? "42px" : `minmax(${PANEL_MIN.left}px, min(${panelWidths.left}px, 28vw))`} max-content minmax(360px, 1fr) ${rightDockCollapsed ? "42px" : `minmax(${PANEL_MIN.right}px, min(${panelWidths.right}px, 30vw))`}`,
+              : `${leftCollapsed ? "48px" : `minmax(${PANEL_MIN.left}px, min(${panelWidths.left}px, 28vw))`} max-content minmax(360px, 1fr) ${rightDockCollapsed ? "48px" : `minmax(${PANEL_MIN.right}px, min(${panelWidths.right}px, 30vw))`}`,
         }}
       >
         <div
           data-tour="left-panel"
           className={cn(
-            "editor-sidebar relative z-[var(--z-panel)] h-full min-h-0 overflow-hidden",
+            "editor-sidebar relative z-[var(--z-panel)] flex h-full min-h-0 flex-col overflow-hidden",
             /*
              * Phase 1 — below the breakpoint the panel FLOATS over the canvas
              * (a slide-over), it never squishes the artboard. In RTL the
@@ -1558,25 +1620,11 @@ function Studio({
           style={!isDesktop ? { width: `min(${panelWidths.left}px, 86vw)` } : undefined}
         >
           {/*
-           * Panel close button — inside the tab-strip row's own flow, not
-           * floating: an absolutely-positioned X previously sat ON TOP of the
-           * first tabs (and any content near the panel's top corner), covering
-           * them. Keeping it in-flow removes the overlap at every size, zoom
-           * and theme without hiding the affordance.
+           * The panel's own header carries its close/collapse control (the
+           * `>>` beside the main tabs), so no second chrome row sits above the
+           * tabs — that extra row is what pushed the panel's bottom toolbar
+           * out of the fixed-height column.
            */}
-          <div className="flex items-center justify-start border-b border-line px-1.5 py-1 dark:border-white/10">
-            <button
-              type="button"
-              onClick={() =>
-                isDesktop ? toggle("leftCollapsed") : closeFloatingPanels()
-              }
-              aria-label="إغلاق لوحة العناصر"
-              title="إغلاق لوحة العناصر"
-              className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-line px-2 text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
-            >
-              <X className="size-3.5" /> إغلاق
-            </button>
-          </div>
           <LeftPanel
             onUpload={onUpload}
             onUploadSvg={onUploadSvg}
@@ -1586,7 +1634,7 @@ function Studio({
             <PanelResizeHandle
               side="left"
               onStart={(event) =>
-                resizePanel("left", event.clientX, panelWidths.left)
+                resizePanel("left", event.clientX, panelWidths.left, event.currentTarget)
               }
             />
           )}
@@ -1594,14 +1642,16 @@ function Studio({
         {isDesktop && leftCollapsed && !focusMode && (
           <CollapsedPanelDock
             side="left"
-            onExpand={() => useEditor.setState({ leftCollapsed: false, leftOpen: true })}
-            onTab={() => useEditor.setState({ leftTab: "library", leftCollapsed: false, leftOpen: true })}
+            tabs={LEFT_PANEL_TABS}
+            activeTab={leftTab}
+            onExpand={() => expandPanel("left")}
+            onTab={(tab) => expandPanel("left", tab)}
           />
         )}
-        {!focusMode && (
+        {isDesktop && !focusMode && (
           <StudioToolDock
-            onOpenLeft={(tab) => useEditor.setState({ focusMode: false, leftTab: tab, leftCollapsed: false, leftOpen: true })}
-            onOpenRight={(tab) => useEditor.setState({ focusMode: false, rightTab: tab, rightCollapsed: false, rightOpen: true })}
+            onOpenLeft={openLeftFromDock}
+            onOpenRight={openRightFromDock}
             onUploadImage={() => onUpload("image")}
           />
         )}
@@ -1616,6 +1666,49 @@ function Studio({
             onDropImage={onDropImage}
             onCanvasTap={() => (drawerOpen ? closeFloatingPanels() : undefined)}
           />
+          {/*
+           * Tablet: the toolbar floats inside the canvas row only (an
+           * absolutely-positioned grid item placed on row 1), so it can never
+           * sit on the page rail, the arrange bar or the status bar, and the
+           * canvas keeps its full width.
+           */}
+          {!isDesktop && !focusMode && (
+            <div className="studio-tool-dock-slot">
+              <StudioToolDock
+                floating
+                onOpenLeft={openLeftFromDock}
+                onOpenRight={openRightFromDock}
+                onUploadImage={() => onUpload("image")}
+              />
+            </div>
+          )}
+          {/* Launcher chips live in the canvas row too (grid row 1 / 2), so they
+               sit above the page rail instead of guessing its height. */}
+          {!(leftOpen || rightOpen) && (
+            <div className="editor-launcher-slot flex lg2:hidden">
+              <button
+                type="button"
+                onClick={() => toggle("leftOpen")}
+                className="pointer-events-auto h-11 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
+              >
+                عناصر
+              </button>
+              <button
+                type="button"
+                onClick={() => addPage()}
+                className="pointer-events-auto h-11 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
+              >
+                صفحة
+              </button>
+              <button
+                type="button"
+                onClick={() => toggle("rightOpen")}
+                className="pointer-events-auto h-11 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
+              >
+                خصائص
+              </button>
+            </div>
+          )}
           <ArrangeBar />
           <div
             data-editor-obstacle="page-rail-resizer"
@@ -1655,8 +1748,10 @@ function Studio({
         {isDesktop && rightDockCollapsed && !focusMode && (
           <CollapsedPanelDock
             side="right"
-            onExpand={() => useEditor.setState({ rightCollapsed: false, rightOpen: true })}
-            onTab={() => useEditor.setState({ rightTab: "layers", rightCollapsed: false, rightOpen: true })}
+            tabs={RIGHT_PANEL_TABS}
+            activeTab={rightTab}
+            onExpand={() => expandPanel("right")}
+            onTab={(tab) => expandPanel("right", tab)}
           />
         )}
         {touchProperties ? (
@@ -1666,7 +1761,7 @@ function Studio({
         ) : (
           <div
             className={cn(
-              "editor-sidebar editor-properties relative z-[var(--z-panel)] h-full min-h-0 overflow-hidden",
+              "editor-sidebar editor-properties relative z-[var(--z-panel)] flex h-full min-h-0 flex-col overflow-hidden",
               /*
                * The properties panel is the visual LEFT sidebar; it slides in from
                * the physical left edge on tablet/phone, identically in landscape
@@ -1687,26 +1782,12 @@ function Studio({
             )}
             style={!isDesktop ? { width: `min(${panelWidths.right}px, 90vw)` } : undefined}
           >
-            {/* Same in-flow close row for the properties panel. */}
-            <div className="flex items-center justify-end border-b border-line px-1.5 py-1 dark:border-white/10">
-              <button
-                type="button"
-                onClick={() =>
-                  isDesktop ? toggle("rightCollapsed") : closeFloatingPanels()
-                }
-                aria-label="إغلاق لوحة الخصائص"
-                title="إغلاق لوحة الخصائص"
-                className="inline-flex h-7 items-center gap-1 rounded-[6px] border border-line px-2 text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
-              >
-                <X className="size-3.5" /> إغلاق
-              </button>
-            </div>
             <RightPanel onReplaceImage={onReplaceImage} />
             {!rightCollapsed && !focusMode && (
               <PanelResizeHandle
                 side="right"
                 onStart={(event) =>
-                  resizePanel("right", event.clientX, panelWidths.right)
+                  resizePanel("right", event.clientX, panelWidths.right, event.currentTarget)
                 }
               />
             )}
@@ -1722,34 +1803,6 @@ function Studio({
        * launcher visible over an open drawer would cover the very controls it
        * was used to reveal.
        */}
-      {!(leftOpen || rightOpen) && (
-        <div
-          className="pointer-events-none absolute left-1/2 z-[var(--z-drawer)] flex -translate-x-1/2 gap-2 lg2:hidden"
-          style={{ bottom: `calc(${pagesPanelHeight}px + 12px)` }}
-        >
-          <button
-            type="button"
-            onClick={() => toggle("leftOpen")}
-            className="pointer-events-auto h-10 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
-          >
-            عناصر
-          </button>
-          <button
-            type="button"
-            onClick={() => addPage()}
-            className="pointer-events-auto h-10 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
-          >
-            صفحة
-          </button>
-          <button
-            type="button"
-            onClick={() => toggle("rightOpen")}
-            className="pointer-events-auto h-10 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
-          >
-            خصائص
-          </button>
-        </div>
-      )}
 
       {/*
        * The old floating «إغلاق اللوحة» pill used to sit absolutely at the

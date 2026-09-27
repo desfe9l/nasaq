@@ -2,7 +2,6 @@ import { useState } from "react";
 import {
   Type,
   Image as ImageIcon,
-  Shapes,
   Minus,
   Star,
   Table2,
@@ -11,20 +10,15 @@ import {
   Stamp,
   QrCode,
   BadgePercent,
-  LayoutTemplate,
-  Palette,
-  Settings2,
-  Layers,
   Ruler,
   Gauge,
   FileCode2,
-  FileText,
-  Baseline,
   ChevronDown,
   ChevronsRight,
   Eye,
   X,
-  FolderOpen,
+  ImagePlus,
+  FilePlus2,
 } from "lucide-react";
 import {
   SIZE_PRESETS,
@@ -47,7 +41,7 @@ import {
   TEMPLATE_CATEGORIES,
   type TemplateCategoryId,
 } from "@/lib/editor/templates";
-import { useEditor, type LeftTab } from "@/lib/editor/store";
+import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { isOverlayViewport } from "@/lib/editor/ui-state";
 import { ShapePreview } from "./ShapePreview";
@@ -58,17 +52,7 @@ import { SmartLibraryPanel, TemplatePreview } from "./SmartLibrary";
 import { TablePickerOverlay } from "./TablePicker";
 import { writeLibraryDrag, type LibraryDropPayload } from "@/lib/editor/library-dnd";
 import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
-
-const TABS: { id: LeftTab; label: string; icon: typeof Type }[] = [
-  { id: "library", label: "المكتبة", icon: FolderOpen },
-  { id: "elements", label: "عناصر", icon: LayoutTemplate },
-  { id: "shapes", label: "أشكال", icon: Shapes },
-  { id: "templates", label: "قوالب", icon: FileText },
-  { id: "pages", label: "صفحات", icon: Layers },
-  { id: "theme", label: "سمة", icon: Palette },
-  { id: "fonts", label: "خطوط", icon: Baseline },
-  { id: "settings", label: "إعدادات", icon: Settings2 },
-];
+import { LEFT_PANEL_TABS } from "./panel-tabs";
 
 const TOOL_GROUPS: {
   title: string;
@@ -284,9 +268,9 @@ export function LeftPanel({
        *      clipped out of reach, which is what the old `flex-1 min-w-[52px]`
        *      row did at the narrowest widths.
        */}
-      <div className="flex shrink-0 items-center gap-1 border-b border-line p-1.5 dark:border-white/10">
-        <div className="@container flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
-        {TABS.map((t) => {
+      <div className="editor-panel-header flex shrink-0 items-center gap-1 border-b border-line p-1.5 dark:border-white/10">
+        <div className="editor-panel-tabs @container flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" role="tablist" aria-label="أقسام لوحة العناصر">
+        {LEFT_PANEL_TABS.map((t) => {
           const Icon = t.icon;
           return (
             <button
@@ -295,9 +279,11 @@ export function LeftPanel({
               onClick={() => setLeftTab(t.id)}
               title={t.label}
               aria-label={t.label}
+              role="tab"
+              aria-selected={tab === t.id}
               aria-current={tab === t.id}
               className={cn(
-                "grid h-12 min-w-[44px] flex-1 basis-0 place-items-center gap-0.5 rounded-[8px] px-0.5 text-[9px] font-extrabold",
+                "editor-panel-tab grid h-12 min-w-[44px] flex-1 basis-0 place-items-center gap-0.5 rounded-[8px] px-0.5 text-[9px] font-extrabold",
                 tab === t.id
                   ? "bg-navy text-white"
                   : "text-muted hover:bg-line-2 dark:text-white/70 dark:hover:bg-white/5",
@@ -316,8 +302,8 @@ export function LeftPanel({
         </div>
         <button
           type="button"
-          onClick={() => useEditor.setState(isOverlayViewport() ? { leftOpen: false } : { leftCollapsed: true })}
-          className="grid size-11 shrink-0 place-items-center rounded-[8px] text-muted hover:bg-line-2 dark:hover:bg-white/10"
+          onClick={() => { const st = useEditor.getState(); if (isOverlayViewport()) st.closeFloatingPanels(); else if (!st.leftCollapsed) st.toggle("leftCollapsed"); }}
+          className="editor-panel-collapse grid size-11 shrink-0 place-items-center rounded-[8px] text-muted hover:bg-line-2 dark:hover:bg-white/10"
           aria-label="طي لوحة العناصر"
           title="طي لوحة العناصر"
         >
@@ -325,7 +311,7 @@ export function LeftPanel({
         </button>
       </div>
 
-      <div className="editor-pane-scroll editor-panel-body p-3">
+      <div className={cn("editor-pane-scroll editor-panel-body p-3", tab === "library" && "is-library")}>
         {tab === "elements" && (
           <div className="grid gap-3">
             {pickerOpen && (
@@ -480,14 +466,14 @@ export function LeftPanel({
         )}
 
         {tab === "library" && (
-          <>
-            {/*
-             * Keep uploaded media first in the Library workspace; its sticky
-             * controls remain reachable while the media list scrolls. Ready-made
-             * design assets follow below in the same panel.
-             */}
-            <AssetLibrary />
-            <div className="mt-3 border-t border-line pt-3 dark:border-white/10">
+          /*
+           * The Library tab opens on the Library itself: its toolbar, search,
+           * categories and quick actions are the first thing in the panel and
+           * stay pinned (sticky) while uploaded media and the ready-made design
+           * assets below them scroll — one scroller, one scrollbar.
+           */
+          <AssetLibrary>
+            <div className="mt-1 border-t border-line pt-3 dark:border-white/10">
               <SmartLibraryPanel
                 theme={theme}
                 onAddCustomAsset={onAddCustomAsset}
@@ -496,7 +482,7 @@ export function LeftPanel({
                 onPreviewTemplate={setPreviewTemplate}
               />
             </div>
-          </>
+          </AssetLibrary>
         )}
 
         {tab === "shapes" && (
@@ -933,6 +919,33 @@ export function LeftPanel({
           </div>
         )}
       </div>
+      {/*
+       * Quick actions — the panel's bottom toolbar (Layers-panel anatomy:
+       * header tabs, content rows, action bar). Each button reuses the same
+       * upload/insert action the rest of the studio already exposes.
+       */}
+      <footer className="editor-panel-footer" aria-label="إجراءات سريعة">
+        <button type="button" onClick={() => onUpload("image")} title="إضافة صورة" aria-label="إضافة صورة">
+          <ImagePlus className="size-4" strokeWidth={1.7} />
+          <span>صورة</span>
+        </button>
+        <button type="button" onClick={() => onUpload("logo")} title="إضافة شعار" aria-label="إضافة شعار">
+          <BadgePercent className="size-4" strokeWidth={1.7} />
+          <span>شعار</span>
+        </button>
+        <button type="button" onClick={onUploadSvg} title="استيراد SVG" aria-label="استيراد SVG">
+          <FileCode2 className="size-4" strokeWidth={1.7} />
+          <span>SVG</span>
+        </button>
+        <button type="button" onClick={() => addElement("text")} title="إدراج نص" aria-label="إدراج نص">
+          <Type className="size-4" strokeWidth={1.7} />
+          <span>نص</span>
+        </button>
+        <button type="button" onClick={() => addPage()} title="إضافة صفحة" aria-label="إضافة صفحة">
+          <FilePlus2 className="size-4" strokeWidth={1.7} />
+          <span>صفحة</span>
+        </button>
+      </footer>
     </aside>
   );
 }

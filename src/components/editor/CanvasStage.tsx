@@ -1119,7 +1119,7 @@ export function CanvasStage({
                 }}
               >
                 <div
-                  className="mb-2 flex items-center justify-between gap-4 text-[12px] text-muted"
+                  className="canvas-page-meta mb-2 flex items-center justify-between gap-4 text-[12px] text-muted"
                   dir="rtl"
                 >
                   <strong className="text-ink dark:text-white">

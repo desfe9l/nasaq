@@ -255,10 +255,30 @@
   background-color: var(--editor-toolbar) !important;
 }
 
+/*
+ * The canvas (the desk the artboard sits on) is #1E252B in BOTH editor
+ * themes — a calm, neutral dark field that makes the white page read as the
+ * brightest thing on screen and keeps the eye relaxed around it.
+ */
+.editor-ui {
+  --editor-canvas: #1e252b;
+  --editor-canvas-grid: rgba(255, 255, 255, 0.035);
+  --editor-canvas-text: #cfd6db;
+  --editor-canvas-text-secondary: #9aa5ae;
+}
+
 .editor-ui .editor-canvas-workspace,
 .editor-ui .editor-canvas-stage {
-  background-color: var(--editor-bg) !important;
-  color: var(--editor-text);
+  background-color: var(--editor-canvas) !important;
+  color: var(--editor-canvas-text);
+}
+
+/* Page caption above each artboard sits on the canvas, not on the page. */
+.editor-ui .editor-canvas-stage .canvas-page-meta {
+  color: var(--editor-canvas-text-secondary);
+}
+.editor-ui .editor-canvas-stage .canvas-page-meta strong {
+  color: var(--editor-canvas-text);
 }
 
 .editor-ui .editor-canvas-stage {
@@ -307,6 +327,19 @@
 .editor-ui .editor-sidebar .bg-white,
 .editor-ui .editor-page-rail .bg-white {
   background-color: var(--editor-surface) !important;
+}
+
+/*
+ * Translucent white surfaces (`bg-white/60`, `/90`, `/95`) resolve through
+ * `--color-white`, which the chrome remaps to the TEXT colour so `text-white`
+ * stays readable on light active states. In the light theme that turned
+ * cards/chips near-black with unreadable captions — map them to the surface
+ * token like opaque `bg-white`. (Dark theme keeps each element's own
+ * `dark:` background.)
+ */
+.editor-ui.editor-light :is(.editor-toolbar, .editor-sidebar, .editor-page-rail)
+  :is(.bg-white\/60, .bg-white\/90, .bg-white\/95) {
+  background-color: color-mix(in srgb, var(--editor-surface) 92%, transparent) !important;
 }
 
 .editor-ui .editor-toolbar .text-white,
@@ -2014,11 +2047,18 @@ body.is-resizing-rail {
   color: #fff;
 }
 
-/* Active tab / toggle indicators keep a primary fill in dark mode. */
+/*
+ * Active tab / toggle indicators in dark mode: a muted steel-blue accent
+ * instead of a saturated primary — clearly "on" (≈6:1 with its text) without
+ * glowing against the dark chrome.
+ */
 .editor-ui.editor-dark .bg-navy.text-white,
 .editor-ui.editor-dark [data-active="true"] {
-  background: #2563eb !important;
-  color: #fff !important;
+  background: var(--editor-accent) !important;
+  color: var(--editor-accent-text) !important;
+}
+.editor-ui.editor-dark .bg-navy.text-white:hover:not(:disabled) {
+  background: var(--editor-accent-hover) !important;
 }
 
 /*
@@ -2390,18 +2430,30 @@ summary,
   .touch-properties-sheet { transition: none; }
 }
 
-/* NASAQ muted Photoshop-inspired workspace and responsive editor rails. */
+/* =====================================================================
+ * NASAQ muted Photoshop-inspired workspace
+ * Canvas, dark palette, main toolbar, panel anatomy (header tabs + `>>`,
+ * control rows, content rows, bottom toolbar), collapsed icon docks and the
+ * Library workspace — desktop and tablet.
+ * ===================================================================== */
+
+/* Refined muted dark palette: soft neutrals, comfortable (not glaring)
+   contrast — body text ≈ 9.5:1, secondary text ≈ 5.6:1 on the panels. */
 .editor-ui {
   --editor-bg: #1e252b;
   --editor-panel: #252d34;
   --editor-toolbar: #222a31;
-  --editor-surface: #2c353d;
-  --editor-border: #3c464f;
-  --editor-text: #d9dfe3;
-  --editor-text-secondary: #a3adb5;
-  --editor-hover: #35414a;
-  --editor-active: #40515e;
+  --editor-surface: #2b343c;
+  --editor-border: #39434c;
+  --editor-text: #cfd6db;
+  --editor-text-secondary: #9aa5ae;
+  --editor-hover: #313b44;
+  --editor-active: #3a4753;
   --editor-disabled: #20272d;
+  --editor-accent: #3b6790;
+  --editor-accent-hover: #44729c;
+  --editor-accent-text: #f1f5f8;
+  --editor-accent-soft: rgba(90, 145, 196, 0.16);
 }
 
 .editor-ui.editor-light {
@@ -2415,214 +2467,561 @@ summary,
   --editor-hover: #dedfe0;
   --editor-active: #d3d4d5;
   --editor-disabled: #bfc0c1;
+  --editor-accent: #1f4e79;
+  --editor-accent-hover: #255a8a;
+  --editor-accent-text: #ffffff;
+  --editor-accent-soft: rgba(31, 78, 121, 0.12);
 }
 
+.editor-ui.editor-light .studio-grid,
 .editor-ui.editor-dark .studio-grid {
-  background-color: #1e252b;
+  background-color: var(--editor-canvas);
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    linear-gradient(var(--editor-canvas-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--editor-canvas-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
-/* Main tool dock occupies its own desktop track; tablets retain the full canvas and float the dock at its edge. */
+/* Desktop panes: smooth wheel/trackpad scrolling. */
+@media (hover: hover) and (pointer: fine) {
+  .editor-ui .editor-panel-body { scroll-behavior: smooth; }
+}
+
+/* Panels fill their column exactly (no second chrome row), so the header,
+   the scrolling body and the bottom toolbar always fit. */
+/* (`flex flex-col` is set by utility classes on the column, so the docked
+   `lg2:hidden` state still wins and a collapsed panel really leaves the grid.) */
+.editor-ui .editor-sidebar > aside {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+/* ---------- Main toolbar (vertical, compact, Photoshop-inspired) ---------- */
 .studio-tool-dock {
+  --tool-size: 36px;
+  --tool-gap: 3px;
+  --tool-pad: 4px;
   position: relative;
   z-index: var(--z-panel);
   display: flex;
-  width: 52px;
-  min-width: 52px;
+  width: calc(var(--tool-size) + var(--tool-pad) * 2);
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
   align-items: center;
   gap: 6px;
   align-self: stretch;
-  overflow: visible;
-  padding: 8px 4px;
+  padding: 6px var(--tool-pad);
   border-inline: 1px solid var(--editor-border);
-  background: var(--editor-panel);
+  background: var(--editor-toolbar);
   color: var(--editor-text);
-  transition: width 160ms ease, min-width 160ms ease;
+  transition: width 160ms cubic-bezier(0.22, 1, 0.36, 1);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
-
 .studio-tool-dock.is-wide {
-  width: 100px;
-  min-width: 100px;
+  width: calc(var(--tool-size) * 2 + var(--tool-gap) + var(--tool-pad) * 2);
 }
 
 .tool-dock-layout,
 .tool-dock-button {
+  position: relative;
   display: grid;
-  width: 44px;
-  min-width: 44px;
-  min-height: 44px;
+  width: var(--tool-size);
+  height: var(--tool-size);
+  flex: 0 0 auto;
   place-items: center;
-  border: 0;
-  border-radius: 8px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
   background: transparent;
-  color: inherit;
+  color: var(--editor-text-secondary);
+  cursor: pointer;
   touch-action: manipulation;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
 }
-
-.tool-dock-layout:hover,
-.tool-dock-button:hover,
-.tool-dock-button:focus-visible {
-  background: var(--editor-hover);
-  outline: none;
-}
-
 .tool-dock-layout {
-  align-self: center;
-  border: 1px solid var(--editor-border);
+  height: 24px;
+  width: 100%;
+  color: var(--editor-text-secondary);
+}
+.tool-dock-icon { width: 18px; height: 18px; }
+.tool-dock-button:hover,
+.tool-dock-layout:hover {
+  background: var(--editor-hover);
+  color: var(--editor-text);
+}
+.tool-dock-button:focus-visible,
+.tool-dock-layout:focus-visible {
+  outline: 2px solid var(--editor-accent-hover);
+  outline-offset: 1px;
+}
+.tool-dock-button.is-active {
+  border-color: color-mix(in srgb, var(--editor-accent) 70%, #fff 30%);
+  background: var(--editor-accent);
+  color: var(--editor-accent-text);
+}
+.tool-dock-button.is-open {
+  background: var(--editor-active);
+  color: var(--editor-text);
 }
 
 .tool-dock-tools {
   display: grid;
-  width: 100%;
   min-height: 0;
-  grid-template-columns: 1fr;
-  justify-items: center;
-  gap: 4px;
+  grid-template-columns: var(--tool-size);
+  justify-content: center;
+  align-content: start;
+  gap: var(--tool-gap);
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: none;
 }
-
+.tool-dock-tools::-webkit-scrollbar { display: none; }
 .studio-tool-dock.is-wide .tool-dock-tools {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, var(--tool-size));
+}
+.tool-dock-sep {
+  grid-column: 1 / -1;
+  height: 1px;
+  margin: 3px 4px;
+  background: var(--editor-border);
 }
 
-.tool-dock-item { min-width: 0; }
-.tool-dock-button { position: relative; cursor: pointer; }
-.tool-dock-button.is-active {
-  background: #385f83;
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(149, 198, 239, .3);
-}
-.tool-dock-label,
-.tool-dock-shortcut { display: none; }
+/* Submenu indicator: a vector corner triangle, bottom-left in RTL reading. */
 .tool-dock-flyout-mark {
   position: absolute;
   inset-inline-end: 3px;
-  bottom: 2px;
-  font-size: 10px;
-  line-height: 1;
-  opacity: .7;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  opacity: 0.75;
+  pointer-events: none;
 }
-.tool-dock-flyout {
-  position: absolute;
-  inset-inline-start: calc(100% + 5px);
-  top: 0;
-  z-index: calc(var(--z-panel) + 4);
-  display: grid;
-  min-width: 166px;
-  gap: 3px;
-  padding: 5px;
-  border: 1px solid var(--editor-border);
-  border-radius: 9px;
-  background: var(--editor-panel);
-  box-shadow: 0 8px 24px rgba(0,0,0,.28);
-}
-.tool-dock-flyout button {
-  display: flex;
-  min-height: 42px;
-  align-items: center;
-  gap: 9px;
-  padding: 0 9px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--editor-text);
-  text-align: start;
-  white-space: nowrap;
-}
-.tool-dock-flyout button:hover { background: var(--editor-hover); }
+/* RTL: the triangle points into the bottom-left corner. */
+.editor-ui .tool-dock-flyout-mark { transform: scaleX(-1); }
+
+/* Fill (foreground) over stroke (background), overlapping. */
 .tool-dock-colors {
   position: relative;
-  width: 44px;
-  height: 54px;
-  flex: 0 0 54px;
+  width: var(--tool-size);
+  height: 42px;
+  flex: 0 0 auto;
   margin-top: auto;
   margin-bottom: 2px;
+  border-radius: 6px;
 }
+.tool-dock-colors > .tool-dock-flyout-mark { inset-inline-end: -1px; bottom: -1px; }
+.tool-dock-colors.is-open { background: var(--editor-hover); }
 .tool-color-swatch {
   position: absolute;
-  width: 30px;
-  height: 30px;
-  padding: 0;
-  overflow: hidden;
-  border: 2px solid #e5e7eb;
-  border-radius: 4px;
-  box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  width: 22px;
+  height: 22px;
+  cursor: pointer;
 }
-.tool-color-background { inset-inline-end: 0; top: 0; }
-.tool-color-foreground { inset-inline-start: 0; bottom: 0; z-index: 1; }
+.tool-color-background { inset-inline-end: 1px; top: 1px; }
+.tool-color-foreground { inset-inline-start: 1px; bottom: 1px; z-index: 1; }
+.tool-color-chip {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 3px;
+  transition: transform 120ms ease;
+}
+.tool-color-chip.is-fill {
+  border: 1.5px solid #e9edf0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.tool-color-chip.is-stroke {
+  border: 6px solid;
+  background: var(--editor-toolbar);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+}
+.tool-color-swatch:hover .tool-color-chip { transform: scale(1.06); }
+.tool-color-swatch:focus-within .tool-color-chip {
+  outline: 2px solid var(--editor-accent-hover);
+  outline-offset: 1px;
+}
 .tool-color-swatch input[type="color"] {
   position: absolute;
-  inset: -8px;
-  width: 46px;
-  height: 46px;
+  width: 1px;
+  height: 1px;
+  inset: 50% auto auto 50%;
   padding: 0;
   border: 0;
   opacity: 0;
+  pointer-events: none;
+}
+.tool-color-mini {
+  position: absolute;
+  display: grid;
+  width: 13px;
+  height: 13px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--editor-text-secondary);
   cursor: pointer;
 }
+.tool-color-mini svg { width: 11px; height: 11px; }
+.tool-color-mini:hover { color: var(--editor-text); background: var(--editor-hover); }
+.tool-color-swap { inset-inline-start: 0; top: 0; }
+.tool-color-reset { inset-inline-end: 0; bottom: 0; }
 
+/* Tooltip + shortcut hint (desktop hover / keyboard focus). */
+.tool-dock-tip {
+  position: absolute;
+  inset-inline-start: calc(100% + 8px);
+  z-index: calc(var(--z-panel) + 5);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--editor-border);
+  border-radius: 6px;
+  background: var(--editor-panel);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  color: var(--editor-text);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.tool-dock-tip kbd,
+.tool-dock-flyout kbd {
+  min-width: 18px;
+  padding: 1px 5px;
+  border: 1px solid var(--editor-border);
+  border-radius: 4px;
+  background: var(--editor-surface);
+  color: var(--editor-text-secondary);
+  font: 700 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+}
+
+/* Tool submenu (flyout), opened by long-press, right-click or ArrowDown. */
+.tool-dock-flyout {
+  position: absolute;
+  inset-inline-start: calc(100% + 6px);
+  z-index: calc(var(--z-panel) + 6);
+  display: grid;
+  min-width: 190px;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+  background: var(--editor-panel);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+  color: var(--editor-text);
+}
+.tool-dock-flyout.is-bottom { bottom: 6px; }
+.tool-dock-flyout button {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: start;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tool-dock-flyout button:hover,
+.tool-dock-flyout button:focus-visible {
+  background: var(--editor-hover);
+  outline: none;
+}
+.tool-dock-menu-icon { display: grid; width: 16px; place-items: center; color: var(--editor-text-secondary); }
+.tool-dock-menu-icon svg { width: 16px; height: 16px; }
+.tool-dock-menu-label { flex: 1 1 auto; }
+.tool-dock-menu-chip {
+  display: block;
+  width: 14px;
+  height: 14px;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  border-radius: 3px;
+}
+.tool-dock-menu-chip.is-stroke { border: 4px solid; background: transparent; }
+
+/* Tablet: the toolbar floats inside the canvas row only. */
+.studio-tool-dock-slot {
+  position: absolute;
+  /* Explicit end lines: for an absolutely positioned grid child an `auto`
+     end resolves to the container edge, which would stretch the slot over
+     the page rail and status bar. `1 / 2` pins it to the canvas row only. */
+  grid-row: 1 / 2;
+  grid-column: 1 / 2;
+  inset: 0;
+  z-index: var(--z-panel);
+  pointer-events: none;
+}
+/* Tablet launcher chips (عناصر / صفحة / خصائص): bottom-centre of the canvas
+   row, never over the page rail. `display` comes from the `flex lg2:hidden`
+   utilities so the desktop breakpoint still hides it. */
+.editor-launcher-slot {
+  position: absolute;
+  grid-row: 1 / 2;
+  grid-column: 1 / 2;
+  align-self: end;
+  justify-self: center;
+  z-index: var(--z-panel);
+  gap: 8px;
+  margin-bottom: 12px;
+  pointer-events: none;
+}
+.studio-tool-dock.is-floating {
+  position: absolute;
+  inset-inline-start: 8px;
+  top: 50%;
+  max-height: calc(100% - 16px);
+  transform: translateY(-50%);
+  border: 1px solid var(--editor-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  pointer-events: auto;
+}
+
+/* ---------- Collapsed desktop panels: narrow vertical icon dock ---------- */
 .collapsed-panel-dock {
   display: flex;
-  width: 42px;
-  min-width: 42px;
+  width: 48px;
+  min-width: 0;
   min-height: 0;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 8px 2px;
+  gap: 4px;
+  padding: 6px 4px;
   border-inline: 1px solid var(--editor-border);
   background: var(--editor-panel);
   color: var(--editor-text-secondary);
 }
+.collapsed-dock-tabs {
+  display: grid;
+  min-height: 0;
+  gap: 3px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.collapsed-dock-tabs::-webkit-scrollbar { display: none; }
+.collapsed-dock-sep { width: 24px; height: 1px; margin: 2px 0; background: var(--editor-border); }
 .collapsed-dock-expand,
 .collapsed-dock-tab {
   display: grid;
-  width: 38px;
-  min-height: 42px;
+  width: 40px;
+  height: 40px;
   place-items: center;
-  border: 0;
+  padding: 0;
+  border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
   color: inherit;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
 }
 .collapsed-dock-expand:hover,
 .collapsed-dock-tab:hover { background: var(--editor-hover); color: var(--editor-text); }
+.collapsed-dock-tab.is-active {
+  background: var(--editor-accent-soft);
+  border-color: color-mix(in srgb, var(--editor-accent) 55%, transparent);
+  color: var(--editor-text);
+}
+.collapsed-dock-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
 
-/* Library controls stay together at the top of their own scrollable panel. */
+/* ---------- Panel anatomy (follows the Layers panel) ---------- */
+.editor-panel-header { min-height: 56px; }
+.editor-panel-tabs { scrollbar-width: none; }
+.editor-panel-tabs::-webkit-scrollbar { display: none; }
+.editor-panel-tab { transition: background-color 120ms ease, color 120ms ease; }
+.editor-panel-collapse { color: var(--editor-text-secondary); }
+
+/* Control row: dropdowns + Opacity side by side, wrapping when narrow. */
+.editor-panel-controls {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--editor-border);
+}
+.editor-panel-control {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 128px;
+  gap: 4px;
+  color: var(--editor-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+.editor-panel-control select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+  background: var(--editor-surface);
+  color: var(--editor-text);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+.editor-panel-control.is-opacity { flex-basis: 150px; }
+
+/*
+ * Flexible property rows. A two-up row of fields (dropdowns, opacity, colour)
+ * stays two-up while each cell has ≥116px and stacks otherwise; full-width
+ * fields always span the whole row — no cramped or clipped selects.
+ */
+.editor-properties .editor-panel-body .grid.grid-cols-2:has(> .editor-property-field) {
+  grid-template-columns: repeat(auto-fit, minmax(max(116px, calc((100% - 0.5rem) / 2)), 1fr));
+}
+.editor-properties .editor-panel-body .grid.grid-cols-2:has(> .editor-property-field) > .col-span-2 {
+  grid-column: 1 / -1;
+}
+
+/* Content rows: safe padding for mouse and touch. */
+.layer-row { min-height: 44px; padding: 7px 9px; }
+.editor-layer-list { container: layerlist / inline-size; overscroll-behavior: contain; }
+/*
+ * Narrow list (default-width or tablet panel): each layer becomes a two-line
+ * row — handle + name on top, its actions aligned underneath — instead of
+ * pushing the lock/eye buttons out past the panel edge.
+ */
+@container layerlist (max-width: 340px) {
+  .layer-row { flex-wrap: wrap; row-gap: 6px; }
+  .layer-row > .layer-row-spacer { width: 2px; }
+  .layer-row > .layer-row-name { flex: 1 1 calc(100% - 72px); }
+  .layer-row > .layer-row-action.is-first { margin-inline-start: auto; }
+}
+
+/* Bottom toolbar: flexible quick actions; captions appear when there is room. */
+.editor-panel-footer {
+  container-type: inline-size;
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px calc(6px + var(--safe-bottom, 0px));
+  border-top: 1px solid var(--editor-border);
+  background: var(--editor-panel);
+}
+.editor-panel-footer > button {
+  display: inline-flex;
+  min-width: 40px;
+  min-height: 40px;
+  flex: 1 1 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--editor-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.editor-ui .editor-sidebar .editor-panel-footer > button:hover:not(:disabled) {
+  background: var(--editor-hover);
+  color: var(--editor-text);
+}
+.editor-panel-footer > button:disabled { opacity: 0.4; cursor: default; }
+.editor-ui .editor-sidebar .editor-panel-footer > button.is-danger { color: #e0928c; }
+.editor-ui .editor-sidebar .editor-panel-footer > button.is-danger:hover:not(:disabled) {
+  background: rgba(224, 146, 140, 0.12);
+}
+.editor-panel-footer > button > span { display: none; }
+@container (min-width: 300px) {
+  .editor-panel-footer > button > span { display: inline; }
+}
+
+/* ---------- Library workspace ---------- */
 .asset-library { min-width: 0; container: assetlibrary / inline-size; }
+
+/* The Library opens on its own controls: flush with the panel top, sticky,
+   opaque, and covering the body's side padding so nothing scrolls into view
+   beside or above them. */
+.editor-panel-body.is-library { padding-top: 0; }
+.editor-panel-body.is-library > .asset-library { padding: 0 0 4px; }
 .asset-library-controls {
   position: sticky;
   top: 0;
   z-index: 10;
   min-width: 0;
-  margin: -4px -4px 0;
-  padding: 4px;
+  margin-inline: -13px;
+  padding: 10px 13px 10px;
+  border-bottom: 1px solid var(--editor-border);
   background: var(--editor-panel);
-  box-shadow: 0 5px 10px -10px rgba(0,0,0,.65);
+  box-shadow: 0 6px 10px -10px rgba(0, 0, 0, 0.6);
 }
 .asset-library-controls > * { min-width: 0; }
-.asset-library-controls .overflow-x-auto {
+.asset-library-header .asset-library-tools { flex-wrap: wrap; justify-content: flex-end; }
+.asset-library-filters { row-gap: 6px; }
+
+/* Categories: one smooth horizontal scroller with safe spacing. */
+.asset-library-categories-wrap { min-width: 0; }
+.asset-library-categories {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* The inline-end padding reserves the fade zone: when the row does not
+     overflow (or is scrolled to its end) no chip ever sits under the fade. */
+  padding: 2px 2px 6px;
+  padding-inline-end: 22px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 22px);
+  mask-image: linear-gradient(to right, transparent 0, #000 22px);
   scroll-behavior: smooth;
-  overscroll-behavior-inline: contain;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 8px;
+  overscroll-behavior-x: contain;
   scrollbar-width: thin;
+  scrollbar-color: var(--editor-border) transparent;
+  -webkit-overflow-scrolling: touch;
 }
+.asset-library-categories > * { flex: 0 0 auto; scroll-snap-align: start; }
+.asset-library-categories::-webkit-scrollbar { height: 4px; }
+.asset-library-categories::-webkit-scrollbar-thumb { border-radius: 4px; background: var(--editor-border); }
+
+/* Quick actions (إضافة صورة / ملف / مجلد): a flexible grid, never cropped. */
 .asset-library-add-actions {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
   gap: 6px;
 }
 .asset-library-add-actions > button {
   min-width: 0;
-  min-height: 42px;
-  padding-inline: 5px;
+  min-height: 40px;
+  height: auto;
+  padding: 4px 6px;
   white-space: normal;
   line-height: 1.25;
+  text-align: center;
 }
+
+/* Media grid: 3 columns, 2 when the panel is narrow. */
 .asset-media-grid {
   display: grid;
   min-width: 0;
@@ -2631,58 +3030,65 @@ summary,
   align-items: start;
 }
 .asset-media-grid > * { min-width: 0; }
-.asset-media-grid.is-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.asset-card-actions > button { min-width: 28px; min-height: 28px; }
-.layer-row { min-height: 44px; padding: 7px 9px; }
-
-@container assetlibrary (max-width: 292px) {
+@container assetlibrary (max-width: 240px) {
   .asset-media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-
-@media (max-width: 1099px) {
-  .studio-tool-dock {
-    position: absolute;
-    inset-inline-start: 6px;
-    top: 50%;
-    max-height: calc(100% - 24px);
-    transform: translateY(-50%);
-    border: 1px solid var(--editor-border);
-    border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.22);
-  }
-  .studio-tool-dock.is-wide { width: 100px; }
-}
-
+.asset-card { display: grid; padding: 6px; }
+.asset-card-actions { flex-wrap: nowrap; }
+.asset-card-actions > button { flex: 0 0 auto; min-width: 28px; min-height: 28px; }
+.asset-card-check::after { content: ""; position: absolute; inset: -6px; }
 @media (hover: hover) and (pointer: fine) {
-  .tool-dock-button:hover .tool-dock-label,
-  .tool-dock-button:hover .tool-dock-shortcut { display: block; }
-  .tool-dock-label {
-    position: absolute;
-    inset-inline-start: calc(100% + 10px);
-    z-index: 2;
-    padding: 4px 7px;
-    border: 1px solid var(--editor-border);
-    border-radius: 5px;
-    background: var(--editor-toolbar);
-    color: var(--editor-text);
-    font-size: 11px;
-    white-space: nowrap;
-    pointer-events: none;
+  .asset-card { transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease; }
+  .asset-card:hover {
+    background: var(--editor-hover);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   }
-  .tool-dock-shortcut {
-    position: absolute;
-    inset-inline-end: 1px;
-    bottom: 1px;
-    color: var(--editor-text-secondary);
-    font: 9px ui-monospace, monospace;
-    pointer-events: none;
+  .asset-card .asset-card-actions > button:hover { background: var(--editor-hover); color: var(--editor-text); }
+  .asset-library-chip:hover { border-color: var(--editor-text-secondary); color: var(--editor-text); }
+}
+
+/* ---------- Touch devices (tablet): larger targets ---------- */
+@media (any-pointer: coarse) {
+  .studio-tool-dock { --tool-size: 44px; --tool-pad: 5px; }
+  .tool-dock-layout { height: 44px; }
+  .tool-dock-icon { width: 20px; height: 20px; }
+  .tool-dock-flyout button { min-height: 44px; font-size: 13px; }
+  .tool-dock-colors { height: 56px; }
+  .tool-color-swatch { width: 30px; height: 30px; }
+  .tool-color-background { inset-inline-end: 0; top: 0; }
+  .tool-color-foreground { inset-inline-start: 0; bottom: 0; }
+  /* 44px hit areas around each 30px swatch; the fill swatch sits on top. */
+  .tool-color-swatch::before { content: ""; position: absolute; inset: -7px; }
+  .tool-color-chip.is-stroke { border-width: 8px; }
+  /* Swap / defaults live in the long-press colour menu on touch. */
+  .tool-color-mini { display: none; }
+
+  .collapsed-dock-expand,
+  .collapsed-dock-tab { width: 44px; height: 44px; }
+  .collapsed-panel-dock { width: 52px; }
+
+  .editor-panel-control select { height: 44px; }
+  .editor-panel-footer > button { min-width: 44px; min-height: 44px; }
+  .editor-properties .layer-row button { min-height: 42px; }
+
+  .asset-library-controls .asset-lib-icon-btn,
+  .asset-library-categories .asset-lib-icon-btn { width: 42px; height: 42px; }
+  .asset-library-controls .asset-library-chip { min-height: 42px; padding-inline: 12px; }
+  .asset-library-controls .asset-library-search { height: 42px; }
+  .asset-library-add-actions > button { min-height: 42px; }
+  .asset-card-actions > button { width: 42px; min-width: 42px; height: 42px; min-height: 42px; }
+  .asset-card-check { width: 26px !important; height: 26px !important; }
+  .asset-card-check::after { inset: -8px; }
+  @container assetlibrary (max-width: 330px) {
+    .asset-media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 }
 
-@media (any-pointer: coarse) {
-  .asset-library-controls button { min-height: 42px; }
-  .asset-library-controls button.grid { min-width: 42px; }
-  .asset-card-actions > button { width: 42px; min-width: 42px; min-height: 42px; }
-  .asset-library .absolute.right-1.top-1 { width: 34px; height: 34px; }
-  .editor-properties .layer-row button { min-height: 42px; }
+@media (prefers-reduced-motion: reduce) {
+  .studio-tool-dock,
+  .tool-dock-button,
+  .tool-color-chip,
+  .asset-card { transition: none; }
+  .asset-library-categories,
+  .editor-ui .editor-panel-body { scroll-behavior: auto; }
 }
