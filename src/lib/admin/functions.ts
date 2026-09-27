@@ -76,6 +76,7 @@ async function readSettings(): Promise<PublicSiteSettings> {
 function rowToSummary(row: Record<string, unknown>): AdminTemplateSummary {
   return {
     id: String(row.id),
+    slug: (row.slug as string) ?? null,
     title: String(row.title),
     description: String(row.description ?? ""),
     category: String(row.category ?? "general"),
@@ -87,6 +88,53 @@ function rowToSummary(row: Record<string, unknown>): AdminTemplateSummary {
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
+}
+
+function slugifyTitle(title: string): string {
+  const raw = String(title || "").trim();
+  if (!raw) return "";
+  let s = raw.toLowerCase();
+  s = s.replace(/[^0-9a-z\u0600-\u06FF]+/g, "-");
+  s = s.replace(/-+/g, "-");
+  s = s.replace(/^-+|-+$/g, "");
+  if (s.length > 80) s = s.slice(0, 80).replace(/-+$/g, "");
+  return s;
+}
+
+function sanitizeSlug(input: string): string {
+  let s = String(input || "").trim().toLowerCase();
+  s = s.replace(/[^0-9a-z\u0600-\u06FF\-]+/g, "-");
+  s = s.replace(/-+/g, "-");
+  s = s.replace(/^-+|-+$/g, "");
+  if (s.length > 80) s = s.slice(0, 80).replace(/-+$/g, "");
+  if (!s) return "";
+  if (/^\d+$/.test(s)) return `tpl-${s}`;
+  const reserved = new Set(["new", "edit", "admin", "api", "auth", "login", "templates"]);
+  if (reserved.has(s)) return `${s}-tpl`;
+  return s;
+}
+
+async function ensureUniqueSlug(
+  db: Awaited<ReturnType<typeof sql>>,
+  base: string,
+  excludeId?: string,
+): Promise<string> {
+  let slug = base;
+  if (!slug) {
+    const { randomUUID } = await import("node:crypto");
+    slug = `tpl-${randomUUID().slice(0, 8)}`;
+  }
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const candidate = attempt === 0 ? slug : `${slug}-${attempt + 1}`;
+    const rows = await db.query<{ id: string }>(
+      `SELECT id FROM admin_templates WHERE slug = $1 LIMIT 1`,
+      [candidate],
+    );
+    if (!rows.length) return candidate;
+    if (excludeId && rows[0].id === excludeId) return candidate;
+  }
+  const { randomUUID } = await import("node:crypto");
+  return `${slug}-${randomUUID().slice(0, 6)}`;
 }
 
 function validThumbnail(value: unknown): string | null {
@@ -125,14 +173,6 @@ export const adminVerifyFn = createServerFn({ method: "POST" })
 
 /**
  * Licence-administration probe for the owner.
- *
- * `adminVerifyFn` answers one yes/no question, which is not enough when the
- * person reading it is the owner and the answer is wrong. This returns the
- * *diagnosis*: which of the three signals recognised them, and — when none
- * did — which one is missing, so the fix is a single environment variable
- * rather than a support ticket.
- *
- * It never returns the configured ids or emails, only booleans.
  */
 export const adminLicenseAccessFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -145,24 +185,12 @@ export const adminLicenseAccessFn = createServerFn({ method: "POST" })
     const diagnostics = await superAdminDiagnostics(db, identity);
     return {
       ...diagnostics,
-      /**
-       * Whether this identity may repair its own access. True only when the
-       * deployment has already declared them (owner record or super-admin
-       * allowlist) — the button is hidden otherwise, because the endpoint
-       * would refuse anyway.
-       */
       canBootstrap: isConfiguredSuperAdminIdentity(identity),
     };
   });
 
 /**
  * Owner self-heal: promote the configured owner to SUPER_ADMIN.
- *
- * Guarded twice — the caller must be signed in AND match the deployment's own
- * owner declaration — so this can never be a way to acquire access. It exists
- * because a fresh database has no `admin_users` row, which previously left the
- * owner staring at «هذا الحساب لا يملك صلاحية إدارة التراخيص» on their own
- * product with no way forward short of hand-editing SQL.
  */
 export const adminBootstrapOwnerFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -211,7 +239,7 @@ export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handle
   try {
     const db = await sql();
     const rows = await db.query(
-      `SELECT id, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
+      `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
        FROM admin_templates WHERE status = 'published' ORDER BY sort_order ASC, updated_at DESC LIMIT 200`,
     );
     return rows.map(rowToSummary);
@@ -220,22 +248,42 @@ export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handle
   }
 });
 
+/** Public metadata for a single published template by slug or id. No license check - preview is public. */
+export const getPublishedTemplateMetaFn = createServerFn({ method: "GET" })
+  .validator((data: { idOrSlug: string }) => data)
+  .handler(async ({ data }): Promise<{ ok: boolean; template?: AdminTemplateSummary; error?: string }> => {
+    try {
+      const db = await sql();
+      const key = String(data.idOrSlug || "").trim().slice(0, 200);
+      if (!key) return { ok: false, error: "معرّف غير صالح" };
+      const rows = await db.query(
+        `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
+         FROM admin_templates WHERE (slug = $1 OR id = $1) AND status = 'published' LIMIT 1`,
+        [key],
+      );
+      if (!rows.length) return { ok: false, error: "القالب غير موجود" };
+      return { ok: true, template: rowToSummary(rows[0]) };
+    } catch {
+      return { ok: false, error: "تعذر تحميل القالب" };
+    }
+  });
+
 /**
  * Public payload fetch for a published template. Licensed templates require a
  * licence key whose server-side entitlements include premium templates.
+ * Supports lookup by slug OR id for stable share links.
  */
 export const getPublishedTemplateFn = createServerFn({ method: "POST" })
   .middleware([optionalAuthMiddleware])
   .validator((data: { id: string }) => data)
   .handler(async ({ data, context }) => {
     const db = await sql();
-    const rows = await db.query(`SELECT * FROM admin_templates WHERE id = $1 AND status = 'published' LIMIT 1`, [String(data.id)]);
+    const key = String(data.id || "").trim().slice(0, 200);
+    if (!key) return { ok: false as const, error: "معرّف غير صالح" };
+    const rows = await db.query(`SELECT * FROM admin_templates WHERE (slug = $1 OR id = $1) AND status = 'published' LIMIT 1`, [key]);
     if (!rows.length) return { ok: false as const, error: "القالب غير موجود" };
     const row = rows[0];
     if (row.tier === "licensed") {
-      // A plaintext key from the browser is NOT a credential for templates.
-      // Only the verified account's server-side entitlement may unlock them:
-      // this also covers manual subscriptions and checks Keygen's user scope.
       let allowed = false;
       if (context.userId) {
         const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
@@ -244,9 +292,6 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
       }
       if (!allowed) return { ok: false as const, error: "هذا القالب متاح في النسخة الكاملة", locked: true };
     }
-    // A published project may have been uploaded with private metadata (owner,
-    // project id, settings, etc.). The public payload contains ONLY the pages
-    // intentionally published; the editor creates a new project identity.
     const content = String(row.content);
     const publicContent = row.kind === "json"
       ? JSON.stringify({ pages: (parseJson(content) as { pages?: unknown } | null)?.pages })
@@ -260,7 +305,7 @@ export const adminListTemplatesFn = createServerFn({ method: "POST" })
     if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح", templates: [] };
     const db = await sql();
     const rows = await db.query(
-      `SELECT id, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
+      `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
        FROM admin_templates ORDER BY sort_order ASC, updated_at DESC LIMIT 500`,
     );
     return { ok: true as const, templates: rows.map(rowToSummary) };
@@ -279,22 +324,45 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
     if (!title) return { ok: false as const, error: "العنوان مطلوب" };
     const db = await sql();
     const existing = t.id
-      ? await db.query<{ content: string; kind: string }>(`SELECT content, kind FROM admin_templates WHERE id = $1`, [t.id])
+      ? await db.query<{ content: string; kind: string; slug: string | null }>(`SELECT content, kind, slug FROM admin_templates WHERE id = $1`, [t.id])
       : [];
-    // Editing metadata only keeps the stored payload.
     const content = t.content ? String(t.content) : existing[0]?.content ?? "";
     const contentError = validateContent(kind, content);
     if (contentError) return { ok: false as const, error: contentError };
     const { randomUUID } = await import("node:crypto");
     const id = existing.length ? String(t.id) : `tpl_${randomUUID()}`;
+    // Slug handling: keep existing if present, else generate from title or explicit input
+    let slug: string | null = null;
+    if (existing.length) {
+      const existingSlug = existing[0]?.slug || null;
+      if (t.slug !== undefined) {
+        const cleaned = t.slug ? sanitizeSlug(String(t.slug)) : null;
+        if (cleaned) {
+          slug = await ensureUniqueSlug(db, cleaned, id);
+        } else if (existingSlug) {
+          slug = existingSlug;
+        } else {
+          slug = await ensureUniqueSlug(db, slugifyTitle(title) || id, id);
+        }
+      } else {
+        // No slug input: keep existing or generate if missing
+        if (existingSlug) slug = existingSlug;
+        else slug = await ensureUniqueSlug(db, slugifyTitle(title) || id, id);
+      }
+    } else {
+      const baseInput = t.slug ? sanitizeSlug(String(t.slug)) : slugifyTitle(title);
+      slug = await ensureUniqueSlug(db, baseInput || id);
+    }
+
     await db.query(
-      `INSERT INTO admin_templates (id, title, description, category, tier, status, kind, content, thumbnail, sort_order, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now(), now())
-       ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description,
+      `INSERT INTO admin_templates (id, slug, title, description, category, tier, status, kind, content, thumbnail, sort_order, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now(), now())
+       ON CONFLICT (id) DO UPDATE SET slug = EXCLUDED.slug, title = EXCLUDED.title, description = EXCLUDED.description,
          category = EXCLUDED.category, tier = EXCLUDED.tier, status = EXCLUDED.status, kind = EXCLUDED.kind,
          content = EXCLUDED.content, thumbnail = EXCLUDED.thumbnail, sort_order = EXCLUDED.sort_order, updated_at = now()`,
       [
         id,
+        slug,
         title,
         String(t.description ?? "").slice(0, 500),
         String(t.category ?? "general").slice(0, 60) || "general",
@@ -306,7 +374,7 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
         Number.isFinite(Number(t.sortOrder)) ? Math.trunc(Number(t.sortOrder)) : 0,
       ],
     );
-    return { ok: true as const, id };
+    return { ok: true as const, id, slug };
   });
 
 export const adminSetTemplateStatusFn = createServerFn({ method: "POST" })
@@ -332,4 +400,19 @@ export const adminDeleteTemplateFn = createServerFn({ method: "POST" })
     const db = await sql();
     await db.query(`DELETE FROM admin_templates WHERE id = $1`, [data.id]);
     return { ok: true as const };
+  });
+
+export const adminRegenerateSlugFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: { id: string; slug?: string }) => data)
+  .handler(async ({ data, context }) => {
+    if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح" };
+    const db = await sql();
+    const rows = await db.query<{ title: string }>(`SELECT title FROM admin_templates WHERE id = $1 LIMIT 1`, [data.id]);
+    if (!rows.length) return { ok: false as const, error: "القالب غير موجود" };
+    const base = data.slug ? sanitizeSlug(data.slug) : slugifyTitle(rows[0].title);
+    if (!base) return { ok: false as const, error: "تعذر توليد الرابط" };
+    const slug = await ensureUniqueSlug(db, base, data.id);
+    await db.query(`UPDATE admin_templates SET slug = $2, updated_at = now() WHERE id = $1`, [data.id, slug]);
+    return { ok: true as const, slug };
   });

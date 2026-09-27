@@ -1,21 +1,6 @@
 /**
  * «إدارة القوالب» — the admin CRUD surface for the platform template catalog.
- *
- * It is a real, end-to-end CRUD panel over the EXISTING persistence layer: the
- * `admin_templates` table (migrations/0002_admin_content.sql) through the
- * `@/lib/admin/functions` server functions. Nothing here keeps its own copy of
- * the data, invents a second catalog, or decides authorization: every call is
- * re-verified server-side against the owner/admin identity.
- *
- *   • عرض     — list with search + status/tier filters, payload summary, preview
- *   • إضافة   — upload a نَسَق project JSON or a sanitised SVG, or take a project
- *                straight from the browser's local project library
- *   • تعديل   — metadata, payload replacement, thumbnail, sort order, publish
- *   • حذف     — delete behind an inline confirmation
- *
- * The licensing tie-in is the `tier` column: `licensed` templates are unlocked
- * only through the existing server-side licence check when they are opened from
- * the public catalog (`getPublishedTemplateFn`).
+ * Extended for marketing share links: slug, public URL copy, publish/unpublish, disable URL via draft.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -36,6 +21,8 @@ import {
   Upload,
   Share2,
   X,
+  Link2,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -43,6 +30,7 @@ import {
   adminListTemplatesFn,
   adminSetTemplateStatusFn,
   adminUpsertTemplateFn,
+  adminRegenerateSlugFn,
 } from "@/lib/admin/functions";
 import type {
   AdminTemplateSummary,
@@ -54,7 +42,7 @@ import { getProject, listProjects } from "@/lib/editor/storage";
 import { syncStorageOwner } from "@/lib/auth/storage-owner-sync";
 import type { ProjectMeta } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
-import { publishedTemplatePath } from "@/lib/templates/published";
+import { publishedTemplatePath, templateDisplaySlug, publishedTemplateAbsoluteUrl } from "@/lib/templates/published";
 
 interface Draft {
   id?: string;
@@ -68,6 +56,7 @@ interface Draft {
   fileName: string;
   thumbnail: string | null;
   sortOrder: number;
+  slug?: string | null;
 }
 
 const EMPTY_DRAFT: Draft = {
@@ -81,6 +70,7 @@ const EMPTY_DRAFT: Draft = {
   fileName: "",
   thumbnail: null,
   sortOrder: 0,
+  slug: "",
 };
 
 const input =
@@ -107,7 +97,6 @@ function readFile(file: File, as: "text" | "dataUrl"): Promise<string> {
   });
 }
 
-/** Payload summary shown in the preview without loading the whole catalog. */
 function payloadSummary(template: AdminTemplateSummary, content?: string) {
   const bytes = content ? content.length : null;
   const size =
@@ -164,12 +153,7 @@ export function AdminTemplatesPanel() {
     void load();
   }, [load]);
 
-  /** Local projects are only offered when the editor library actually has some. */
   useEffect(() => {
-    // This panel reads the local library directly (the admin route never runs
-    // the editor's hydrate), so pin the storage owner to the live session
-    // FIRST: only the signed-in admin's own projects may be offered, never
-    // rows left in this browser by another account.
     void syncStorageOwner()
       .catch(() => undefined)
       .then(() => listProjects())
@@ -217,7 +201,6 @@ export function AdminTemplatesPanel() {
     }));
   };
 
-  /** إضافة من مكتبة المشاريع المحلية: build the payload from a stored project. */
   const fromLocalProject = async (projectId: string) => {
     if (!projectId) return;
     const project = await getProject(projectId);
@@ -244,6 +227,7 @@ export function AdminTemplatesPanel() {
       data: {
         template: {
           id: draft.id,
+          slug: draft.slug?.trim() ? draft.slug.trim() : undefined,
           title: draft.title,
           description: draft.description,
           category: draft.category,
@@ -271,6 +255,15 @@ export function AdminTemplatesPanel() {
     setItems((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   };
 
+  const regenSlug = async (id: string) => {
+    setBusyId(id);
+    const res = await adminRegenerateSlugFn({ data: { id } });
+    setBusyId(null);
+    if (!res.ok) return toast.error(res.error);
+    toast.success(`تم تحديث الرابط: ${res.slug}`);
+    setItems((list) => list.map((t) => (t.id === id ? { ...t, slug: res.slug } : t)));
+  };
+
   const remove = async (t: AdminTemplateSummary) => {
     setBusyId(t.id);
     const res = await adminDeleteTemplateFn({ data: { id: t.id } });
@@ -287,7 +280,7 @@ export function AdminTemplatesPanel() {
       if (statusFilter !== "all" && t.status !== statusFilter) return false;
       if (tierFilter !== "all" && t.tier !== tierFilter) return false;
       if (!q) return true;
-      return [t.title, t.description, t.category, t.id].join(" ").toLowerCase().includes(q);
+      return [t.title, t.description, t.category, t.id, t.slug || ""].join(" ").toLowerCase().includes(q);
     });
   }, [items, query, statusFilter, tierFilter]);
 
@@ -300,15 +293,13 @@ export function AdminTemplatesPanel() {
     [items],
   );
 
-
   return (
     <div className="grid gap-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-[18px] font-black">إدارة القوالب</h2>
           <p className="text-[12px] text-muted">
-            {counts.all} قالب · {counts.published} منشور · {counts.licensed} مرخّص. المنشور يظهر في
-            صفحة القوالب، و«مرخّص» يُفتح عبر تحقق الترخيص على الخادم فقط.
+            {counts.all} قالب · {counts.published} منشور · {counts.licensed} مرخّص. المنشور يظهر في صفحة القوالب، و«مرخّص» يُفتح عبر تحقق الترخيص على الخادم فقط. كل قالب منشور له رابط تسويقي ثابت <span className="font-mono" dir="ltr">/templates/:slug</span>.
           </p>
         </div>
         <button type="button" className={primaryBtn} onClick={() => setDraft({ ...EMPTY_DRAFT })}>
@@ -339,6 +330,16 @@ export function AdminTemplatesPanel() {
                 className={input}
                 value={draft.title}
                 onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              />
+            </label>
+            <label className={label}>
+              الرابط التسويقي (slug)
+              <input
+                className={input}
+                dir="ltr"
+                placeholder="مثال: annual-report-2025"
+                value={draft.slug || ""}
+                onChange={(e) => setDraft({ ...draft, slug: e.target.value })}
               />
             </label>
             <label className={label}>
@@ -474,7 +475,6 @@ export function AdminTemplatesPanel() {
         </section>
       )}
 
-
       <div className="flex flex-wrap items-center gap-2">
         <label className="relative min-w-[200px] flex-1">
           <Search
@@ -484,7 +484,7 @@ export function AdminTemplatesPanel() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="ابحث بعنوان القالب أو تصنيفه"
+            placeholder="ابحث بعنوان القالب أو تصنيفه أو slug"
             className={cn(input, "pe-9")}
           />
         </label>
@@ -519,134 +519,178 @@ export function AdminTemplatesPanel() {
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((t) => (
-            <article
-              key={t.id}
-              className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3"
-            >
-              <div className="flex gap-3">
-                <div className="grid aspect-[210/297] w-16 shrink-0 place-items-center overflow-hidden rounded border border-line bg-surface">
-                  {t.thumbnail ? (
-                    <img src={t.thumbnail} alt="" className="h-full w-full object-contain" />
-                  ) : (
-                    <LayoutTemplate className="size-5 text-muted" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <strong className="block truncate text-[13px]">{t.title}</strong>
-                  {t.description && (
-                    <span className="mt-0.5 line-clamp-2 block text-[11px] text-muted">
-                      {t.description}
-                    </span>
-                  )}
-                  <div className="mt-1.5 flex flex-wrap gap-1 text-[10px] font-extrabold">
-                    <span className="rounded bg-line-2 px-1.5 py-0.5">
-                      {t.kind.toUpperCase()}
-                    </span>
-                    <span
-                      className={cn(
- "rounded px-1.5 py-0.5",
-                        t.tier === "licensed"
-                          ? "bg-gold/15 text-warning"
-                          : "bg-ok/10 text-success",
+          {filtered.map((t) => {
+            const displaySlug = templateDisplaySlug(t);
+            const publicUrl = publishedTemplateAbsoluteUrl(displaySlug);
+            return (
+              <article
+                key={t.id}
+                className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3"
+              >
+                <div className="flex gap-3">
+                  <div className="grid aspect-[210/297] w-16 shrink-0 place-items-center overflow-hidden rounded border border-line bg-surface">
+                    {t.thumbnail ? (
+                      <img src={t.thumbnail} alt="" className="h-full w-full object-contain" />
+                    ) : (
+                      <LayoutTemplate className="size-5 text-muted" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <strong className="block truncate text-[13px]">{t.title}</strong>
+                    {t.description && (
+                      <span className="mt-0.5 line-clamp-2 block text-[11px] text-muted">
+                        {t.description}
+                      </span>
+                    )}
+                    <div className="mt-1.5 flex flex-wrap gap-1 text-[10px] font-extrabold">
+                      <span className="rounded bg-line-2 px-1.5 py-0.5">
+                        {t.kind.toUpperCase()}
+                      </span>
+                      <span
+                        className={cn(
+                          "rounded px-1.5 py-0.5",
+                          t.tier === "licensed"
+                            ? "bg-gold/15 text-warning"
+                            : "bg-ok/10 text-success",
+                        )}
+                      >
+                        {t.tier === "licensed" ? "مرخّص" : "مجاني"}
+                      </span>
+                      <span className="rounded bg-line-2 px-1.5 py-0.5">
+                        {STATUS_LABEL[t.status]}
+                      </span>
+                      {t.slug && (
+                        <span className="rounded bg-brand/10 px-1.5 py-0.5 font-mono text-[9px]" dir="ltr">
+                          /{t.slug}
+                        </span>
                       )}
-                    >
-                      {t.tier === "licensed" ? "مرخّص" : "مجاني"}
-                    </span>
-                    <span className="rounded bg-line-2 px-1.5 py-0.5">
-                      {STATUS_LABEL[t.status]}
-                    </span>
+                    </div>
+                    {t.status === "published" && (
+                      <div className="mt-1 flex items-center gap-1 text-[10px] text-muted">
+                        <Link2 className="size-3" />
+                        <span className="truncate font-mono" dir="ltr">{publicUrl.replace("https://", "")}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-              {confirmId === t.id ? (
-                <div className="rounded-lg border border-danger/30 bg-danger/5 p-2.5 text-[11px]">
-                  <p className="font-bold text-error">حذف «{t.title}» نهائيًا؟</p>
-                  <div className="mt-2 flex gap-2">
+                {confirmId === t.id ? (
+                  <div className="rounded-lg border border-danger/30 bg-danger/5 p-2.5 text-[11px]">
+                    <p className="font-bold text-error">حذف «{t.title}» نهائيًا؟</p>
+                    <div className="mt-2 flex gap-2">
+                      <button
+                        type="button"
+                        disabled={busyId === t.id}
+                        onClick={() => void remove(t)}
+                        className="inline-flex h-8 items-center gap-1 rounded-lg bg-danger px-3 font-extrabold text-on-brand disabled:opacity-60"
+                      >
+                        {busyId === t.id ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="size-3.5" />
+                        )}
+                        تأكيد الحذف
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmId(null)}
+                        className="h-8 rounded-lg border border-line px-3 font-bold"
+                      >
+                        إلغاء
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    <button
+                      type="button"
+                      className={ghostBtn}
+                      title="معاينة القالب"
+                      onClick={() => setPreview({ item: t, content: "" })}
+                    >
+                      <Eye className="size-3.5" /> معاينة
+                    </button>
+                    {t.status === "published" && (
+                      <>
+                        <button
+                          type="button"
+                          className={ghostBtn}
+                          onClick={() => {
+                            const url = new URL(publishedTemplatePath(displaySlug), window.location.origin).href;
+                            void navigator.clipboard.writeText(url)
+                              .then(() => toast.success("تم نسخ رابط القالب"))
+                              .catch(() => toast.error("تعذر نسخ الرابط"));
+                          }}
+                          title="نسخ الرابط العام"
+                        >
+                          <Share2 className="size-3.5" /> نسخ الرابط
+                        </button>
+                        <a
+                          href={publishedTemplatePath(displaySlug)}
+                          target="_blank"
+                          rel="noopener"
+                          className={cn(ghostBtn, "inline-flex")}
+                          title="فتح صفحة القالب العامة"
+                        >
+                          <Link2 className="size-3.5" /> فتح
+                        </a>
+                      </>
+                    )}
                     <button
                       type="button"
                       disabled={busyId === t.id}
-                      onClick={() => void remove(t)}
-                      className="inline-flex h-8 items-center gap-1 rounded-lg bg-danger px-3 font-extrabold text-on-brand disabled:opacity-60"
+                      className={ghostBtn}
+                      title={t.status === "published" ? "إلغاء النشر" : "نشر"}
+                      onClick={() =>
+                        void setStatus(t.id, { status: t.status === "published" ? "draft" : "published" })
+                      }
                     >
-                      {busyId === t.id ? (
-                        <Loader2 className="size-3.5 animate-spin" />
-                      ) : (
-                        <Trash2 className="size-3.5" />
-                      )}
-                      تأكيد الحذف
+                      {t.status === "published" ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                      {t.status === "published" ? "إلغاء النشر" : "نشر"}
                     </button>
                     <button
                       type="button"
-                      onClick={() => setConfirmId(null)}
-                      className="h-8 rounded-lg border border-line px-3 font-bold"
+                      disabled={busyId === t.id}
+                      className={ghostBtn}
+                      title="إعادة توليد الرابط"
+                      onClick={() => void regenSlug(t.id)}
                     >
-                      إلغاء
+                      <RefreshCw className="size-3.5" /> slug
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busyId === t.id}
+                      className={ghostBtn}
+                      title={t.tier === "licensed" ? "جعله مجانيًا" : "جعله مرخّصًا"}
+                      onClick={() => void setStatus(t.id, { tier: t.tier === "licensed" ? "free" : "licensed" })}
+                    >
+                      {t.tier === "licensed" ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />}
+                      {t.tier === "licensed" ? "إتاحة للجميع" : "جعله مرخّصًا"}
+                    </button>
+                    <button
+                      type="button"
+                      className={ghostBtn}
+                      title="تعديل البيانات"
+                      onClick={() =>
+                        setDraft({ ...EMPTY_DRAFT, ...t, content: "", fileName: "", thumbnail: t.thumbnail, slug: t.slug || "" })
+                      }
+                    >
+                      <Pencil className="size-3.5" /> تعديل
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(ghostBtn, "text-error")}
+                      title="حذف"
+                      onClick={() => setConfirmId(t.id)}
+                    >
+                      <Trash2 className="size-3.5" />
                     </button>
                   </div>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    className={ghostBtn}
-                    title="معاينة القالب"
-                    onClick={() => setPreview({ item: t, content: "" })}
-                  >
-                    <Eye className="size-3.5" /> معاينة
-                  </button>
-                  {t.status === "published" && <button type="button" className={ghostBtn} onClick={() => {
-                    void navigator.clipboard.writeText(new URL(publishedTemplatePath(t.id), window.location.origin).href)
-                      .then(() => toast.success("تم نسخ رابط القالب"))
-                      .catch(() => toast.error("تعذر نسخ الرابط"));
-                  }} title="نسخ الرابط العام"><Share2 className="size-3.5" /> نسخ الرابط</button>}
-                  <button
-                    type="button"
-                    disabled={busyId === t.id}
-                    className={ghostBtn}
-                    title={t.status === "published" ? "إلغاء النشر" : "نشر"}
-                    onClick={() =>
-                      void setStatus(t.id, { status: t.status === "published" ? "draft" : "published" })
-                    }
-                  >
-                    {t.status === "published" ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                    {t.status === "published" ? "إلغاء النشر" : "نشر"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busyId === t.id}
-                    className={ghostBtn}
-                    title={t.tier === "licensed" ? "جعله مجانيًا" : "جعله مرخّصًا"}
-                    onClick={() => void setStatus(t.id, { tier: t.tier === "licensed" ? "free" : "licensed" })}
-                  >
-                    {t.tier === "licensed" ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />}
-                    {t.tier === "licensed" ? "إتاحة للجميع" : "جعله مرخّصًا"}
-                  </button>
-                  <button
-                    type="button"
-                    className={ghostBtn}
-                    title="تعديل البيانات"
-                    onClick={() =>
-                      setDraft({ ...EMPTY_DRAFT, ...t, content: "", fileName: "", thumbnail: t.thumbnail })
-                    }
-                  >
-                    <Pencil className="size-3.5" /> تعديل
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(ghostBtn, "text-error")}
-                    title="حذف"
-                    onClick={() => setConfirmId(t.id)}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
-                </div>
-              )}
-            </article>
-          ))}
+                )}
+              </article>
+            );
+          })}
         </div>
       )}
-
 
       {preview && (
         <div
@@ -664,10 +708,16 @@ export function AdminTemplatesPanel() {
               <div>
                 <h3 className="text-[16px] font-extrabold">{preview.item.title}</h3>
                 <p className="mt-0.5 text-[11px] text-muted">
-                  {preview.item.category} · {preview.item.kind.toUpperCase()} ·{" "}
-                  {STATUS_LABEL[preview.item.status]} ·{" "}
-                  {preview.item.tier === "licensed" ? "مرخّص" : "مجاني"}
+                  {preview.item.category} · {preview.item.kind.toUpperCase()} · {STATUS_LABEL[preview.item.status]} ·{" "}
+                  {preview.item.tier === "licensed" ? "مرخّص" : "مجاني"} · <span dir="ltr" className="font-mono">/{templateDisplaySlug(preview.item)}</span>
                 </p>
+                {preview.item.status === "published" && (
+                  <p className="mt-1 text-[11px]">
+                    <a href={publishedTemplatePath(templateDisplaySlug(preview.item))} target="_blank" rel="noopener" className="text-brand underline">
+                      {publishedTemplateAbsoluteUrl(templateDisplaySlug(preview.item))}
+                    </a>
+                  </p>
+                )}
               </div>
               <button
                 type="button"
@@ -698,8 +748,7 @@ export function AdminTemplatesPanel() {
             )}
 
             <p className="mt-3 text-[11px] leading-5 text-muted">
-              المعاينة تعتمد على الصورة المصغرة المحفوظة مع القالب. لفتح القالب فعليًا استخدمه من
-              صفحة «القوالب» بعد نشره.
+              المعاينة تعتمد على الصورة المصغرة المحفوظة مع القالب. الرابط التسويقي ثابت ومقاوم للتصادم ويمكن تعطيله بإلغاء النشر.
             </p>
           </div>
         </div>
@@ -709,4 +758,3 @@ export function AdminTemplatesPanel() {
 }
 
 export default AdminTemplatesPanel;
-

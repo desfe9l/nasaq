@@ -1,13 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { publishedTemplatePath, publishedTemplateSeed } from "./published.ts";
+import { publishedTemplatePath, publishedTemplateSeed, slugifyTitle, templateDisplaySlug, publishedTemplateAbsoluteUrl } from "./published.ts";
 import type { AdminTemplate } from "@/lib/admin/types";
 
-const base = { id: "tpl_1", title: "نموذج", description: "", category: "general", tier: "free", status: "published", kind: "json", thumbnail: null, sortOrder: 0, createdAt: "", updatedAt: "" } as AdminTemplate;
+const base = { id: "tpl_1", slug: "nasaq-model", title: "نموذج", description: "", category: "general", tier: "free", status: "published", kind: "json", thumbnail: null, sortOrder: 0, createdAt: "", updatedAt: "" } as AdminTemplate;
 
 test("published links identify a template without leaking content", () => {
   assert.equal(publishedTemplatePath("tpl_1"), "/templates/tpl_1");
   assert.equal(publishedTemplatePath("a/b"), "/templates/a%2Fb");
+  assert.equal(templateDisplaySlug({ id: "tpl_1", slug: "my-template" }), "my-template");
+  assert.equal(templateDisplaySlug({ id: "tpl_1", slug: null }), "tpl_1");
+  assert.equal(slugifyTitle("تقرير سنوي 2025"), "تقرير-سنوي-2025");
+  assert.equal(slugifyTitle("Annual Report 2025"), "annual-report-2025");
+  assert.equal(publishedTemplateAbsoluteUrl("my-template"), "https://nasaq-sa.vercel.app/templates/my-template");
 });
 
 test("published JSON opens as an independent copy, without original project identity", () => {

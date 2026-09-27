@@ -75,6 +75,7 @@ export type TemplateKind = "json" | "svg";
 
 export interface AdminTemplateSummary {
   id: string;
+  slug: string | null;
   title: string;
   description: string;
   category: string;
@@ -93,6 +94,7 @@ export interface AdminTemplate extends AdminTemplateSummary {
 
 export interface AdminTemplateInput {
   id?: string;
+  slug?: string | null;
   title: string;
   description?: string;
   category?: string;
