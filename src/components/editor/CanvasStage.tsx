@@ -1,3 +1,4 @@
+import { likelyNsqDrag } from "@/lib/nsq/format";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   findElement,
@@ -993,6 +994,9 @@ export function CanvasStage({
         const isLibrary = e.dataTransfer.types.includes(LIBRARY_DND_MIME);
         const isGraphic = e.dataTransfer.types.includes(GRAPHIC_HEADING_MIME);
         if ((!onDropImage || !isFile) && !isLibrary && !isGraphic) return;
+        // An `.nsq` project is opened by the editor-wide intake (NsqIntake),
+        // which shows its own drop overlay — not the image hint.
+        if (isFile && !isLibrary && !isGraphic && likelyNsqDrag(e.dataTransfer)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
         setDropping(isLibrary || isGraphic ? "library" : "file");

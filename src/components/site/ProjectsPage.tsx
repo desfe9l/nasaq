@@ -8,6 +8,7 @@ import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 import { ProjectCard } from "@/components/site/ProjectCard";
 import { cn } from "@/lib/utils";
+import { NSQ_ACCEPT, isNsqFileName } from "@/lib/nsq/format";
 
 type FilterId = "all" | "reports" | "letters" | "favorites";
 type ViewId = "grid" | "list";
@@ -191,7 +192,7 @@ export function ProjectsPage() {
               className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-line px-4 text-[13px] font-bold dark:border-white/10"
             >
               <FolderOpen className="size-4" />
-              استيراد JSON
+              فتح ملف نَسَق
             </button>
           </div>
         </div>
@@ -199,11 +200,18 @@ export function ProjectsPage() {
         <input
           ref={fileInput}
           type="file"
-          accept="application/json,.json"
+          accept={NSQ_ACCEPT}
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (!file) return;
+            if (isNsqFileName(file.name)) {
+              // Validated and preserved first, then opened by the editor
+              // (which asks a visitor to sign in without losing the file).
+              e.target.value = "";
+              void import("@/lib/nsq/intake").then((m) => m.receiveAndContinueInEditor(file));
+              return;
+            }
             const reader = new FileReader();
             reader.onload = () => {
               try {

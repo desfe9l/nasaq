@@ -362,6 +362,12 @@ export interface Project {
    * never carry multi-KB data URLs.
    */
   thumbnail?: string;
+  /**
+   * Provenance carried by `.nsq` files (see `src/lib/nsq/format.ts`): which
+   * platform the design was first saved with, and when. Metadata only — it
+   * never touches the artwork, and re-saving keeps the original record.
+   */
+  nsqOrigin?: { createdWith: string; firstSavedAt: number; site?: string };
 }
 
 /**

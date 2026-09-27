@@ -22,6 +22,7 @@ import { Route as DemoRouteImport } from './routes/demo'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as LicenseRouteImport } from './routes/license'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as OpenRouteImport } from './routes/open'
 import { Route as OwnerVaultRouteImport } from './routes/owner-vault'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -102,6 +103,11 @@ const LicenseRoute = LicenseRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OpenRoute = OpenRouteImport.update({
+  id: '/open',
+  path: '/open',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OwnerVaultRoute = OwnerVaultRouteImport.update({
@@ -200,6 +206,7 @@ export interface FileRoutesByFullPath {
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -231,6 +238,7 @@ export interface FileRoutesByTo {
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -263,6 +271,7 @@ export interface FileRoutesById {
   '/editor': typeof EditorRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -296,6 +305,7 @@ export interface FileRouteTypes {
     | '/editor'
     | '/license'
     | '/login'
+    | '/open'
     | '/owner-vault'
     | '/pricing'
     | '/privacy'
@@ -327,6 +337,7 @@ export interface FileRouteTypes {
     | '/editor'
     | '/license'
     | '/login'
+    | '/open'
     | '/owner-vault'
     | '/pricing'
     | '/privacy'
@@ -358,6 +369,7 @@ export interface FileRouteTypes {
     | '/editor'
     | '/license'
     | '/login'
+    | '/open'
     | '/owner-vault'
     | '/pricing'
     | '/privacy'
@@ -390,6 +402,7 @@ export interface RootRouteChildren {
   EditorRoute: typeof EditorRoute
   LicenseRoute: typeof LicenseRoute
   LoginRoute: typeof LoginRoute
+  OpenRoute: typeof OpenRoute
   OwnerVaultRoute: typeof OwnerVaultRoute
   PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -499,6 +512,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/open': {
+      id: '/open'
+      path: '/open'
+      fullPath: '/open'
+      preLoaderRoute: typeof OpenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/owner-vault': {
@@ -630,6 +650,7 @@ const rootRouteChildren: RootRouteChildren = {
   EditorRoute: EditorRoute,
   LicenseRoute: LicenseRoute,
   LoginRoute: LoginRoute,
+  OpenRoute: OpenRoute,
   OwnerVaultRoute: OwnerVaultRoute,
   PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,

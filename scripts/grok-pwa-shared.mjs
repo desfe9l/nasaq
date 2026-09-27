@@ -209,6 +209,16 @@ export function renderWebManifest(hostHeader) {
           type: "image/png",
         },
       ],
+      // Installed app: the OS opens NASAQ project files (.nsq) straight into
+      // `/open`, which validates, preserves and continues into the editor.
+      file_handlers: [
+        {
+          action: "/open",
+          accept: { "application/vnd.nasaq.project+zip": [".nsq"] },
+          icons: [{ src: "/__grok/icon-180.png", sizes: "180x180", type: "image/png" }],
+          launch_type: "single-client",
+        },
+      ],
     },
     null,
     2,
