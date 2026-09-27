@@ -103,7 +103,7 @@ function slugifyTitle(title: string): string {
 
 function sanitizeSlug(input: string): string {
   let s = String(input || "").trim().toLowerCase();
-  s = s.replace(/[^0-9a-z\u0600-\u06FF\-]+/g, "-");
+  s = s.replace(/[^0-9a-z\u0600-\u06FF-]+/g, "-");
   s = s.replace(/-+/g, "-");
   s = s.replace(/^-+|-+$/g, "");
   if (s.length > 80) s = s.slice(0, 80).replace(/-+$/g, "");
