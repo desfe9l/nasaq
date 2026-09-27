@@ -68,7 +68,7 @@ const BLEND_LABEL: Record<string, string> = {
   multiply: "تراكب ضربي (Multiply)",
   screen: "إضاءة (Screen)",
   overlay: "تغطية (Overlay)",
-  "soft-light": "ضوء ناعم (Soft Light)",
+ "soft-light": "ضوء ناعم (Soft Light)",
   darken: "تغميق (Darken)",
   lighten: "تفتيح (Lighten)",
   luminosity: "إضاءة لونية (Luminosity)",
@@ -150,7 +150,7 @@ export function RightPanel({
    * report/fade/export start closed. The choice persists per device.
    */
   const accordions = useAccordionState<
-    "dimensions" | "text" | "background" | "fade" | "report" | "export"
+ "dimensions" | "text" | "background" | "fade" | "report" | "export"
   >("properties", {
     dimensions: true,
     text: true,
@@ -333,8 +333,8 @@ export function RightPanel({
   };
 
   return (
-    <aside className="editor-properties flex h-full min-h-0 flex-col border-r border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
-      <div className="editor-panel-header flex shrink-0 items-center gap-1 border-b border-line p-1.5 dark:border-white/10">
+    <aside className="editor-properties flex h-full min-h-0 flex-col border-r border-line bg-surface">
+      <div className="editor-panel-header flex shrink-0 items-center gap-1 border-b border-line p-1.5">
         <div className="editor-panel-tabs grid min-w-0 flex-1 grid-cols-2 gap-1" role="tablist" aria-label="أقسام لوحة الخصائص">
         {RIGHT_PANEL_TABS.map(({ id, label, icon: Icon }) => (
           <button
@@ -344,10 +344,10 @@ export function RightPanel({
             aria-selected={tab === id}
             onClick={() => setRightTab(id)}
             className={cn(
-              "editor-panel-tab inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[8px] px-2 text-[12px] font-extrabold",
+ "editor-panel-tab inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[8px] px-2 text-[12px] font-extrabold",
               tab === id
                 ? "bg-navy text-white"
-                : "text-muted hover:bg-line-2 dark:text-white/70 dark:hover:bg-white/5",
+                : "text-muted hover:bg-line-2",
             )}
           >
             <Icon className="size-4 shrink-0" strokeWidth={1.7} />
@@ -358,7 +358,7 @@ export function RightPanel({
         <button
           type="button"
           onClick={() => { const st = useEditor.getState(); if (isOverlayViewport()) st.closeFloatingPanels(); else if (!st.rightCollapsed) st.toggle("rightCollapsed"); }}
-          className="editor-panel-collapse grid size-11 shrink-0 place-items-center rounded-[8px] text-muted hover:bg-line-2 dark:hover:bg-white/10"
+          className="editor-panel-collapse grid size-11 shrink-0 place-items-center rounded-[8px] text-muted hover:bg-line-2"
           aria-label="طي لوحة الخصائص"
           title="طي لوحة الخصائص"
         >
@@ -418,7 +418,7 @@ export function RightPanel({
         {tab === "layers" && (
           <div className="grid gap-2">
             {/* The list grows with the panel; the panel body is its one scroller (no nested scrollbar). */}
-            <div className="editor-layer-list min-h-[120px] overflow-x-hidden rounded-[8px] border border-line/50 p-1.5 dark:border-white/10">
+            <div className="editor-layer-list min-h-[120px] overflow-x-hidden rounded-[8px] border border-line/50 p-1.5">
               <div className="grid gap-1.5">
                 {layers.length === 0 && (
                   <EmptyNote>لا توجد عناصر في هذه الصفحة بعد.</EmptyNote>
@@ -467,7 +467,7 @@ export function RightPanel({
               type="button"
               disabled={!clipboard}
               onClick={() => pasteClipboard()}
-              className="h-9 rounded-[8px] border border-line text-[12px] font-extrabold disabled:opacity-40 dark:border-white/10"
+              className="h-9 rounded-[8px] border border-line text-[12px] font-extrabold disabled:opacity-40"
             >
               لصق العنصر المنسوخ
             </button>
@@ -477,7 +477,7 @@ export function RightPanel({
         {tab === "properties" && el && (
           <div className="grid gap-3">
             {selectedCount > 1 && (
-              <div className="rounded-[8px] border border-blue-300 bg-blue-50 px-2.5 py-2 text-[11px] font-bold text-blue-900 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100">
+              <div className="rounded-[8px] border border-brand/40 bg-surface-2 px-2.5 py-2 text-[11px] font-bold text-brand">
                 {selectedCount} عناصر محددة — تُطبَّق التعديلات على العنصر
                 الأساسي «{el.name || TYPE_NAME[el.type]}» فقط. استخدم شريط
                 الترتيب للمحاذاة والتجميع.
@@ -577,7 +577,7 @@ export function RightPanel({
                   <button
                     type="button"
                     className={cn(
-                      "editor-mini-btn",
+ "editor-mini-btn",
                       el.style?.flipX && "is-active",
                     )}
                     aria-pressed={el.style?.flipX === true}
@@ -590,7 +590,7 @@ export function RightPanel({
                   <button
                     type="button"
                     className={cn(
-                      "editor-mini-btn",
+ "editor-mini-btn",
                       el.style?.flipY && "is-active",
                     )}
                     aria-pressed={el.style?.flipY === true}
@@ -646,7 +646,7 @@ export function RightPanel({
                       key={k}
                       type="button"
                       onClick={() => alignPage(k)}
-                      className="h-8 rounded-[8px] border border-line text-[11px] font-bold dark:border-white/10"
+                      className="h-8 rounded-[8px] border border-line text-[11px] font-bold"
                     >
                       {l}
                     </button>
@@ -695,7 +695,7 @@ export function RightPanel({
                   <button
                     type="button"
                     onClick={() => setLeftTab("fonts")}
-                    className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[10px] font-extrabold dark:border-white/10"
+                    className="inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[10px] font-extrabold"
                   >
                     <Baseline className="size-3.5" /> مكتبة الخطوط (
                     {fontChoices.length})
@@ -747,10 +747,10 @@ export function RightPanel({
                           onClick={() => updateStyle(el.id, { textAlign: v })}
                           aria-pressed={el.style.textAlign === v}
                           className={cn(
-                            "grid h-9 flex-1 place-items-center rounded-[8px] border",
+ "grid h-9 flex-1 place-items-center rounded-[8px] border",
                             el.style.textAlign === v
                               ? "border-navy bg-navy text-white"
-                              : "border-line dark:border-white/10",
+                              : "border-line",
                           )}
                         >
                           <Icon className="size-4" />
@@ -813,12 +813,12 @@ export function RightPanel({
                               updateStyle(el.id, { lineHeight: l.value })
                             }
                             className={cn(
-                              "h-7 flex-1 rounded-[6px] border text-[10px] font-extrabold",
+ "h-7 flex-1 rounded-[6px] border text-[10px] font-extrabold",
                               Math.abs(
                                 (el.style.lineHeight || 1.45) - l.value,
                               ) < 0.01
                                 ? "border-navy-2 bg-navy-2/5"
-                                : "border-line dark:border-white/10",
+                                : "border-line",
                             )}
                           >
                             {l.label}
@@ -838,12 +838,12 @@ export function RightPanel({
                               updateStyle(el.id, { letterSpacing: l.value })
                             }
                             className={cn(
-                              "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
+ "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
                               Math.abs(
                                 (el.style.letterSpacing || 0) - l.value,
                               ) < 0.01
                                 ? "border-navy-2 bg-navy-2/5"
-                                : "border-line dark:border-white/10",
+                                : "border-line",
                             )}
                           >
                             {l.label}
@@ -866,10 +866,10 @@ export function RightPanel({
                               updateStyle(el.id, { numerals: n.id })
                             }
                             className={cn(
-                              "h-9 rounded-[8px] border text-[11px] font-extrabold",
+ "h-9 rounded-[8px] border text-[11px] font-extrabold",
                               (el.style.numerals || "western") === n.id
                                 ? "border-navy-2 bg-navy-2/5"
-                                : "border-line dark:border-white/10",
+                                : "border-line",
                             )}
                           >
                             {n.label}{" "}
@@ -892,10 +892,10 @@ export function RightPanel({
                               (el.style.paragraphSpacing || 0) === p.value
                             }
                             className={cn(
-                              "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
+ "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
                               (el.style.paragraphSpacing || 0) === p.value
                                 ? "border-navy-2 bg-navy-2/5"
-                                : "border-line dark:border-white/10",
+                                : "border-line",
                             )}
                           >
                             {p.label}
@@ -910,7 +910,7 @@ export function RightPanel({
                         onChange={(e) =>
                           updateStyle(el.id, {
                             textFit: e.target.value as
-                              "clip" | "shrink" | "grow",
+ "clip" | "shrink" | "grow",
                           })
                         }
                       >
@@ -950,10 +950,10 @@ export function RightPanel({
                                 (el.style.justifyLastLine || "start") === v
                               }
                               className={cn(
-                                "h-8 rounded-[6px] border text-[10px] font-extrabold",
+ "h-8 rounded-[6px] border text-[10px] font-extrabold",
                                 (el.style.justifyLastLine || "start") === v
                                   ? "border-navy-2 bg-navy-2/5"
-                                  : "border-line dark:border-white/10",
+                                  : "border-line",
                               )}
                             >
                               {l}
@@ -963,7 +963,7 @@ export function RightPanel({
                       </Field>
                     )}
 
-                    <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                    <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
                       إظهار النص الزائد
                       <input
                         type="checkbox"
@@ -978,7 +978,7 @@ export function RightPanel({
                     </label>
 
                     <div className="grid grid-cols-2 gap-1.5">
-                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
                         الاتجاه عمودي
                         <input
                           type="checkbox"
@@ -993,7 +993,7 @@ export function RightPanel({
                           className="accent-navy"
                         />
                       </label>
-                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
                         إزالة التشكيل
                         <input
                           type="checkbox"
@@ -1006,7 +1006,7 @@ export function RightPanel({
                           className="accent-navy"
                         />
                       </label>
-                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
                         احترام أسطر النص
                         <input
                           type="checkbox"
@@ -1019,7 +1019,7 @@ export function RightPanel({
                           className="accent-navy"
                         />
                       </label>
-                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
                         ربط الوحدات
                         <input
                           type="checkbox"
@@ -1030,7 +1030,7 @@ export function RightPanel({
                           className="accent-navy"
                         />
                       </label>
-                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                      <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
                         ترقيم عربي
                         <input
                           type="checkbox"
@@ -1162,10 +1162,10 @@ export function RightPanel({
                           type="button"
                           onClick={() => updateStyle(el.id, { variant: v })}
                           className={cn(
-                            "h-9 rounded-[8px] border text-[11px] font-extrabold",
+ "h-9 rounded-[8px] border text-[11px] font-extrabold",
                             (el.style.variant || "bar") === v
                               ? "border-navy-2 bg-navy-2/5"
-                              : "border-line dark:border-white/10",
+                              : "border-line",
                           )}
                         >
                           {v === "bar"
@@ -1279,7 +1279,7 @@ export function RightPanel({
                         key={v}
                         type="button"
                         onClick={() => updateStyle(el.id, { value: v })}
-                        className="h-8 rounded-[8px] border border-line text-[11px] font-extrabold tabular-nums dark:border-white/10"
+                        className="h-8 rounded-[8px] border border-line text-[11px] font-extrabold tabular-nums"
                       >
                         {v}%
                       </button>
@@ -1305,10 +1305,10 @@ export function RightPanel({
                             }
                             title={s.label}
                             className={cn(
-                              "library-hit grid aspect-square place-items-center rounded-[6px] border p-1",
+ "library-hit grid aspect-square place-items-center rounded-[6px] border p-1",
                               active
-                                ? "border-navy-2 bg-navy-2/10 text-navy-2 dark:text-gold-2"
-                                : "border-line text-muted dark:border-white/10",
+                                ? "border-navy-2 bg-navy-2/10 text-brand-hover"
+                                : "border-line text-muted",
                             )}
                             aria-pressed={active}
                           >
@@ -1387,7 +1387,7 @@ export function RightPanel({
                       <button
                         type="button"
                         onClick={() => updateStyle(el.id, { borderWidth: 0 })}
-                        className="h-9 w-full rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+                        className="h-9 w-full rounded-[8px] border border-line text-[11px] font-extrabold"
                       >
                         إزالة
                       </button>
@@ -1415,7 +1415,7 @@ export function RightPanel({
                     />
                   </Field>
 
-                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
                     قفل النسبة أثناء التحجيم
                     <input
                       type="checkbox"
@@ -1568,7 +1568,7 @@ export function RightPanel({
                             updateElement,
                           )
                         }
-                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
+                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40"
                       >
                         + صف
                       </button>
@@ -1582,7 +1582,7 @@ export function RightPanel({
                             updateElement,
                           )
                         }
-                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
+                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40"
                       >
                         − صف
                       </button>
@@ -1596,7 +1596,7 @@ export function RightPanel({
                             updateElement,
                           )
                         }
-                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
+                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40"
                       >
                         + عمود
                       </button>
@@ -1610,7 +1610,7 @@ export function RightPanel({
                             updateElement,
                           )
                         }
-                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40 dark:border-white/10"
+                        className="h-8 rounded-[6px] border border-line text-[10px] font-extrabold disabled:opacity-40"
                       >
                         − عمود
                       </button>
@@ -1623,7 +1623,7 @@ export function RightPanel({
                       onChange={(e) =>
                         updateStyle(el.id, {
                           cellAlign: e.target.value as
-                            "right" | "center" | "left",
+ "right" | "center" | "left",
                         })
                       }
                     >
@@ -1727,7 +1727,7 @@ export function RightPanel({
                       type="button"
                       onClick={() => setCellEditor((v) => !v)}
                       aria-expanded={cellEditor}
-                      className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-line text-[12px] font-extrabold dark:border-white/10"
+                      className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-line text-[12px] font-extrabold"
                     >
                       <Grid2x2 className="size-3.5" />
                       {cellEditor
@@ -1735,7 +1735,7 @@ export function RightPanel({
                         : "تحرير الخلايا كشبكة"}
                     </button>
                     {cellEditor && (
-                      <div className="mt-2 overflow-auto rounded-[8px] border border-line p-1 dark:border-white/10">
+                      <div className="mt-2 overflow-auto rounded-[8px] border border-line p-1">
                         <table className="border-collapse">
                           <tbody>
                             {parseTable(
@@ -1758,7 +1758,7 @@ export function RightPanel({
                                           updateElement,
                                         )
                                       }
-                                      className="h-7 w-[74px] rounded-[4px] border border-line px-1 text-[11px] dark:border-white/10 dark:bg-white/5"
+                                      className="h-7 w-[74px] rounded-[4px] border border-line px-1 text-[11px] bg-surface-2"
                                     />
                                   </td>
                                 ))}
@@ -1806,7 +1806,7 @@ export function RightPanel({
                       );
                       void copyTableCsv(data);
                     }}
-                    className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+                    className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-line text-[11px] font-extrabold"
                   >
                     <Copy className="size-3.5" /> نسخ الجدول كـ CSV
                   </button>
@@ -1815,7 +1815,7 @@ export function RightPanel({
 
               {["image", "logo"].includes(el.type) && (
                 <>
-                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+                  <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
                     قفل النسبة أثناء التحجيم
                     <input
                       type="checkbox"
@@ -1832,7 +1832,7 @@ export function RightPanel({
                       onChange={(e) =>
                         updateStyle(el.id, {
                           objectFit: e.target.value as
-                            "cover" | "contain" | "fill",
+ "cover" | "contain" | "fill",
                         })
                       }
                     >
@@ -1947,7 +1947,7 @@ export function RightPanel({
                           onClick={() =>
                             updateStyle(el.id, { svgStrokeWidth: undefined })
                           }
-                          className="h-7 rounded-[6px] border border-line text-[10px] font-extrabold text-muted hover:text-ink dark:border-white/10"
+                          className="h-7 rounded-[6px] border border-line text-[10px] font-extrabold text-muted hover:text-ink"
                         >
                           كما في الملف (بدون تثبيت)
                         </button>
@@ -1960,7 +1960,7 @@ export function RightPanel({
                       onChange={(e) =>
                         updateStyle(el.id, {
                           objectFit: e.target.value as
-                            "cover" | "contain" | "fill",
+ "cover" | "contain" | "fill",
                         })
                       }
                     >
@@ -2009,7 +2009,7 @@ export function RightPanel({
                   const set = (patch: Partial<typeof sh>, live = true) =>
                     updateStyle(el.id, { shadow: buildShadow({ ...sh, ...patch }) }, live);
                   return (
-                    <div className="grid grid-cols-2 gap-2 rounded-[8px] border border-line p-2 dark:border-white/10">
+                    <div className="grid grid-cols-2 gap-2 rounded-[8px] border border-line p-2">
                       <Field label={`الإزاحة الأفقية X (${sh.x} مم)`}>
                         <input
                           type="range"
@@ -2096,9 +2096,9 @@ export function RightPanel({
                             aria-pressed={fade.direction === direction}
                             onClick={() => updateFade({ direction })}
                             className={cn(
-                              "h-8 rounded-[8px] border border-line text-[10px] font-bold dark:border-white/10",
+ "h-8 rounded-[8px] border border-line text-[10px] font-bold",
                               fade.direction === direction &&
-                                "border-[var(--primary-accent)] bg-[var(--library-active-bg)] text-[var(--primary-accent)]",
+ "border-[var(--primary-accent)] bg-[var(--library-active-bg)] text-[var(--primary-accent)]",
                             )}
                           >
                             {fadeDirectionLabel(direction)}
@@ -2165,7 +2165,7 @@ export function RightPanel({
 
                     <button
                       type="button"
-                      className="editor-mini-btn w-full justify-center text-[#b42318]"
+                      className="editor-mini-btn w-full justify-center text-error"
                       onClick={toggleFadeOverlay}
                     >
                       <Trash2 className="size-3.5" />
@@ -2367,7 +2367,7 @@ function TextFitStatus({ el }: { el: CanvasEl }) {
   const base = Number(el.style.fontSize) || 14;
   if (prepared.overflow) {
     return (
-      <p className="rounded-[6px] border border-gold/50 bg-gold/10 px-2 py-1.5 text-[10px] leading-4 font-bold text-navy dark:text-gold-2">
+      <p className="rounded-[6px] border border-gold/50 bg-gold/10 px-2 py-1.5 text-[10px] leading-4 font-bold text-brand">
         تم تصغير الخط تلقائياً من {round2(base)}pt إلى{" "}
         {round2(prepared.fontSize)}pt ليتّسع النص.
       </p>
@@ -2414,7 +2414,7 @@ function TableTotals({ el }: { el: CanvasEl }) {
   ).filter((t) => t.numeric);
   if (!totals.length) return null;
   return (
-    <div className="rounded-[8px] border border-line p-2 dark:border-white/10">
+    <div className="rounded-[8px] border border-line p-2">
       <h4 className="mb-1.5 text-[10px] font-extrabold text-muted">
         مجموع الأعمدة الرقمية
       </h4>
@@ -2525,12 +2525,12 @@ function LayerRow({
           });
         }}
         className={cn(
-          "layer-row relative flex items-center gap-1.5 rounded-[8px] border px-2 py-1.5",
+ "layer-row relative flex items-center gap-1.5 rounded-[8px] border px-2 py-1.5",
           // Selected layer: a firm ring + tinted row, clearly stronger than the
           // idle border — it must read at a glance against the layers list.
           selected
-            ? "border-navy-2 bg-navy-2/10 ring-2 ring-navy-2/40 dark:bg-navy-2/15"
-            : "border-line dark:border-white/10",
+            ? "border-navy-2 bg-navy-2/10 ring-2 ring-navy-2/40"
+            : "border-line",
           dragging && "is-dragging",
           dropBefore && "is-drop-before",
           dropAfter && "is-drop-after",
@@ -2551,7 +2551,7 @@ function LayerRow({
                 setRenaming(false);
               }
             }}
-            className="min-w-0 flex-1 rounded-[6px] border border-line px-1.5 py-0.5 text-[12px] font-bold dark:border-white/15"
+            className="min-w-0 flex-1 rounded-[6px] border border-line px-1.5 py-0.5 text-[12px] font-bold"
           />
         ) : (
           <>
@@ -2567,11 +2567,11 @@ function LayerRow({
                     : `توسيع ${layer.name || TYPE_NAME[layer.type]}`
                 }
                 title={expanded ? "طي المجموعة" : "توسيع المجموعة"}
-                className="grid size-7 shrink-0 place-items-center rounded-[6px] text-muted transition hover:bg-line-2 dark:hover:bg-white/5"
+                className="grid size-7 shrink-0 place-items-center rounded-[6px] text-muted transition hover:bg-line-2"
               >
                 <ChevronDown
                   className={cn(
-                    "size-3.5 transition-transform",
+ "size-3.5 transition-transform",
                     !expanded && "-rotate-90",
                   )}
                 />
@@ -2585,7 +2585,7 @@ function LayerRow({
                 onPointerDown={onDragStart}
                 title="اسحب لإعادة ترتيب الطبقة"
                 aria-label={`إعادة ترتيب ${layer.name || TYPE_NAME[layer.type]}`}
-                className="drag-handle grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-muted dark:border-white/10"
+                className="drag-handle grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-muted"
               >
                 <GripVertical className="size-4" />
               </button>
@@ -2617,7 +2617,7 @@ function LayerRow({
                 {layer.locked && <Lock className="size-3.5" />}
                 {layer.resizeLocked && (
                   <Scaling
-                    className="size-3.5 text-[#8b5cf6]"
+                    className="size-3.5 text-warning"
                     aria-label="التحجيم مقفل"
                   />
                 )}
@@ -2643,7 +2643,7 @@ function LayerRow({
           title="تقديم طبقة"
           aria-label={`تقديم ${layer.name || TYPE_NAME[layer.type]}`}
           onClick={() => moveLayer(layer.id, 1)}
-          className="layer-row-action is-first grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="layer-row-action is-first grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line"
         >
           <ArrowUp className="size-3.5" />
         </button>
@@ -2652,7 +2652,7 @@ function LayerRow({
           title="تأخير طبقة"
           aria-label={`تأخير ${layer.name || TYPE_NAME[layer.type]}`}
           onClick={() => moveLayer(layer.id, -1)}
-          className="layer-row-action grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="layer-row-action grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line"
         >
           <ArrowDown className="size-3.5" />
         </button>
@@ -2670,7 +2670,7 @@ function LayerRow({
               : `إخفاء ${layer.name || TYPE_NAME[layer.type]}`
           }
           onClick={() => setElementFlag(layer.id, "hidden")}
-          className="layer-row-action layer-eye-toggle shrink-0 touch-manipulation border border-line dark:border-white/10"
+          className="layer-row-action layer-eye-toggle shrink-0 touch-manipulation border border-line"
         >
           {layer.hidden || hiddenByAncestor ? (
             <Eye className="size-3.5" />
@@ -2687,7 +2687,7 @@ function LayerRow({
               : `قفل ${layer.name || TYPE_NAME[layer.type]}`
           }
           onClick={() => setElementFlag(layer.id, "locked")}
-          className="layer-row-action grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className="layer-row-action grid size-8 shrink-0 touch-manipulation place-items-center rounded-[6px] border border-line"
         >
           {layer.locked ? (
             <Unlock className="size-3.5" />
@@ -2714,7 +2714,7 @@ function LayerRow({
 
 function EmptyNote({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-[8px] border border-dashed border-line p-4 text-[12px] leading-6 text-muted dark:border-white/15">
+    <p className="rounded-[8px] border border-dashed border-line p-4 text-[12px] leading-6 text-muted">
       {children}
     </p>
   );
@@ -2805,10 +2805,10 @@ function StrokeStyleField({
             aria-pressed={(dash ? "dashed" : "solid") === kind}
             onClick={() => onPick(kind === "dashed")}
             className={cn(
-              "h-9 rounded-[8px] border text-[11px] font-extrabold",
+ "h-9 rounded-[8px] border text-[11px] font-extrabold",
               (dash ? "dashed" : "solid") === kind
-                ? "border-navy-2 bg-navy-2/5 text-navy-2 dark:text-gold-2"
-                : "border-line dark:border-white/10",
+                ? "border-navy-2 bg-navy-2/5 text-brand-hover"
+                : "border-line",
             )}
           >
             {label}
@@ -2854,10 +2854,10 @@ function ColorRow({
     theme.primary,
     theme.accent,
     theme.ink,
-    "#ffffff",
-    "#111722",
-    "#e11d48",
-    "#2563eb",
+ "#ffffff",
+ "#111722",
+ "#e11d48",
+ "#2563eb",
   ];
   return (
     <div className="grid gap-1">
@@ -2879,7 +2879,7 @@ function ColorRow({
             if (/^#[0-9a-fA-F]{0,8}$/.test(v)) onChange(v);
           }}
           onBlur={() => commit()}
-          className="h-9 min-w-0 flex-1 rounded-[8px] border border-line px-2 text-[12px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+          className="h-9 min-w-0 flex-1 rounded-[8px] border border-line px-2 text-[12px] font-semibold text-ink bg-surface-2"
         />
         <button
           type="button"
@@ -2889,7 +2889,7 @@ function ColorRow({
             onChange("");
             commit("");
           }}
-          className="grid size-9 shrink-0 place-items-center rounded-[8px] border border-line text-muted hover:text-ink dark:border-white/10"
+          className="grid size-9 shrink-0 place-items-center rounded-[8px] border border-line text-muted hover:text-ink"
         >
           <X className="size-3.5" />
         </button>
@@ -2907,10 +2907,10 @@ function ColorRow({
             }}
             style={{ background: c }}
             className={cn(
-              "size-5 rounded-[5px] border",
+ "size-5 rounded-[5px] border",
               value.toLowerCase() === c.toLowerCase()
                 ? "border-navy ring-2 ring-navy/40"
-                : "border-line dark:border-white/20",
+                : "border-line",
             )}
           />
         ))}
@@ -2929,10 +2929,10 @@ function ColorRow({
               }}
               style={{ background: c }}
               className={cn(
-                "size-5 rounded-[5px] border",
+ "size-5 rounded-[5px] border",
                 value.toLowerCase() === c.toLowerCase()
                   ? "border-navy ring-2 ring-navy/40"
-                  : "border-line dark:border-white/20",
+                  : "border-line",
               )}
             />
           ))}
@@ -2954,12 +2954,12 @@ function Field({
   return (
     <label
       className={cn(
-        "editor-property-field grid gap-1 text-[11px] font-extrabold text-muted",
+ "editor-property-field grid gap-1 text-[11px] font-extrabold text-muted",
         full && "col-span-2",
       )}
     >
       {label}
-      <div className="field-control [&_input]:h-9 [&_input]:w-full [&_input]:rounded-[8px] [&_input]:border [&_input]:border-line [&_input]:bg-white [&_input]:px-2.5 [&_input]:text-[13px] [&_input]:font-semibold [&_input]:text-ink dark:[&_input]:border-white/10 dark:[&_input]:bg-white/5 dark:[&_input]:text-white [&_input[type=color]]:p-1 [&_input[type=range]]:h-9 [&_select]:h-9 [&_select]:w-full [&_select]:rounded-[8px] [&_select]:border [&_select]:border-line [&_select]:bg-white [&_select]:px-2.5 [&_select]:text-[13px] dark:[&_select]:border-white/10 dark:[&_select]:bg-white/5 dark:[&_select]:text-white [&_textarea]:min-h-[80px] [&_textarea]:w-full [&_textarea]:rounded-[8px] [&_textarea]:border [&_textarea]:border-line [&_textarea]:bg-white [&_textarea]:p-2.5 [&_textarea]:text-[13px] [&_textarea]:leading-6 dark:[&_textarea]:border-white/10 dark:[&_textarea]:bg-white/5 dark:[&_textarea]:text-white">
+      <div className="field-control [&_input]:h-9 [&_input]:w-full [&_input]:rounded-[8px] [&_input]:border [&_input]:border-line [&_input]:bg-surface [&_input]:px-2.5 [&_input]:text-[13px] [&_input]:font-semibold [&_input]:text-ink [&_input[type=color]]:p-1 [&_input[type=range]]:h-9 [&_select]:h-9 [&_select]:w-full [&_select]:rounded-[8px] [&_select]:border [&_select]:border-line [&_select]:bg-surface [&_select]:px-2.5 [&_select]:text-[13px] [&_textarea]:min-h-[80px] [&_textarea]:w-full [&_textarea]:rounded-[8px] [&_textarea]:border [&_textarea]:border-line [&_textarea]:bg-surface [&_textarea]:p-2.5 [&_textarea]:text-[13px] [&_textarea]:leading-6">
         {children}
       </div>
     </label>
@@ -2982,10 +2982,10 @@ function Action({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border text-[11px] font-extrabold",
+ "inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border text-[11px] font-extrabold",
         danger
-          ? "border-red-200 bg-red-50 text-danger dark:border-red-500/30 dark:bg-red-500/10"
-          : "border-line dark:border-white/10",
+          ? "border-danger/30 bg-danger/10 text-error"
+          : "border-line",
       )}
     >
       <Icon className="size-3.5" />

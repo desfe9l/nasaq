@@ -103,9 +103,9 @@ export function ProjectsPage() {
     <button
       type="button"
       onClick={() => void startNew()}
-      className="group flex min-h-[172px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-line bg-white/50 p-6 text-center transition-all duration-200 hover:-translate-y-1 hover:border-navy-2 hover:bg-white hover:shadow-card-hover dark:border-white/15 dark:bg-white/5 dark:hover:border-gold-2/60 dark:hover:shadow-card-dark-hover"
+      className="group flex min-h-[172px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-line bg-surface/50 p-6 text-center transition-all duration-200 hover:-translate-y-1 hover:border-brand hover:bg-surface hover:shadow-card-hover"
     >
-      <span className="grid size-12 place-items-center rounded-full bg-navy/10 text-navy transition group-hover:bg-navy group-hover:text-white dark:bg-white/10 dark:text-gold-2 dark:group-hover:bg-gold-2 dark:group-hover:text-navy">
+      <span className="grid size-12 place-items-center rounded-full bg-navy/10 text-brand transition group-hover:bg-navy-2 group-hover:text-on-brand">
         <Plus className="size-6" />
       </span>
       <span className="text-[14px] font-extrabold">إنشاء مستند جديد</span>
@@ -116,7 +116,7 @@ export function ProjectsPage() {
   );
 
   const emptyState = (
-    <div className="mt-6 rounded-xl border border-dashed border-line p-10 text-center dark:border-white/15">
+    <div className="mt-6 rounded-xl border border-dashed border-line p-10 text-center">
       <p className="text-[14px] font-bold">
         {projects.length ? "لا نتائج مطابقة للتصفية" : "لا توجد مشاريع بعد"}
       </p>
@@ -141,7 +141,7 @@ export function ProjectsPage() {
                 if (entry.ready && entry.direct) void startNew();
                 else window.location.assign("/demo");
               }}
-              className="rounded-[8px] border border-line px-3 py-2 text-[12px] font-bold dark:border-white/10"
+              className="rounded-[8px] border border-line px-3 py-2 text-[12px] font-bold"
             >
               {pack.title}
             </button>
@@ -152,7 +152,7 @@ export function ProjectsPage() {
   );
 
   return (
-    <div className="min-h-full bg-paper dark:bg-[#111722]">
+    <div className="min-h-full bg-paper">
       <SiteHeader current="/projects" />
 
       <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
@@ -169,16 +169,16 @@ export function ProjectsPage() {
             {usedBytes !== null && (
               <span
                 title="حجم البيانات المحفوظة محليًا في متصفحك"
-                className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-line bg-white px-3 text-[12px] font-bold tabular-nums text-muted dark:border-white/10 dark:bg-white/5"
+                className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-line bg-surface px-3 text-[12px] font-bold tabular-nums text-muted"
               >
                 <Database className="size-3.5" aria-hidden />
                 {formatMB(usedBytes)}
                 {quotaBytes !== null && (
                   <>
                     <span className="text-muted/70">من {formatMB(quotaBytes)}</span>
-                    <span className="ms-1 inline-block h-1.5 w-16 overflow-hidden rounded-full bg-line-2 dark:bg-white/10" aria-hidden>
+                    <span className="ms-1 inline-block h-1.5 w-16 overflow-hidden rounded-full bg-line-2" aria-hidden>
                       <span
-                        className="block h-full rounded-full bg-emerald-500"
+                        className="block h-full rounded-full bg-ok"
                         style={{ width: `${Math.min(100, Math.max(2, (usedBytes / quotaBytes) * 100))}%` }}
                       />
                     </span>
@@ -189,7 +189,7 @@ export function ProjectsPage() {
             <button
               type="button"
               onClick={() => fileInput.current?.click()}
-              className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-line px-4 text-[13px] font-bold dark:border-white/10"
+              className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-line px-4 text-[13px] font-bold"
             >
               <FolderOpen className="size-4" />
               فتح ملف نَسَق
@@ -238,14 +238,14 @@ export function ProjectsPage() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="ابحث باسم المشروع أو الجهة"
               aria-label="بحث في المشاريع"
-              className="h-11 w-full rounded-[10px] border border-line bg-white pr-9 pl-3 text-[13px] font-semibold dark:border-white/10 dark:bg-white/5 dark:text-white"
+              className="h-11 w-full rounded-[10px] border border-line bg-surface pr-9 pl-3 text-[13px] font-semibold"
             />
           </label>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as "recent" | "name" | "pages")}
             aria-label="ترتيب المشاريع"
-            className="h-11 rounded-[10px] border border-line bg-white px-3 text-[13px] font-semibold dark:border-white/10 dark:bg-white/5 dark:text-white"
+            className="h-11 rounded-[10px] border border-line bg-surface px-3 text-[13px] font-semibold"
           >
             <option value="recent">الأحدث تعديلاً</option>
             <option value="name">الاسم أبجدياً</option>
@@ -254,7 +254,7 @@ export function ProjectsPage() {
           <div
             role="group"
             aria-label="طريقة العرض"
-            className="flex h-11 items-center rounded-[10px] border border-line bg-white p-1 dark:border-white/10 dark:bg-white/5"
+            className="flex h-11 items-center rounded-[10px] border border-line bg-surface p-1"
           >
             <button
               type="button"
@@ -265,8 +265,8 @@ export function ProjectsPage() {
               className={cn(
                 "grid size-9 place-items-center rounded-[7px] transition",
                 view === "grid"
-                  ? "bg-navy text-white"
-                  : "text-muted hover:bg-line-2 dark:hover:bg-white/10",
+                  ? "bg-navy text-on-brand"
+                  : "text-muted hover:bg-line-2",
               )}
             >
               <Grid2X2 className="size-4" />
@@ -280,8 +280,8 @@ export function ProjectsPage() {
               className={cn(
                 "grid size-9 place-items-center rounded-[7px] transition",
                 view === "list"
-                  ? "bg-navy text-white"
-                  : "text-muted hover:bg-line-2 dark:hover:bg-white/10",
+                  ? "bg-navy text-on-brand"
+                  : "text-muted hover:bg-line-2",
               )}
             >
               <List className="size-4" />
@@ -299,8 +299,8 @@ export function ProjectsPage() {
               className={cn(
                 "rounded-full border px-4 py-1.5 text-[12px] font-bold transition",
                 filter === chip.id
-                  ? "border-navy bg-navy text-white"
-                  : "border-line bg-white text-muted hover:border-navy-2 hover:text-ink dark:border-white/10 dark:bg-white/5 dark:hover:text-white",
+                  ? "border-brand bg-navy text-on-brand"
+                  : "border-line bg-surface text-muted hover:border-brand hover:text-ink",
               )}
             >
               {chip.label}
@@ -316,7 +316,7 @@ export function ProjectsPage() {
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
-                className="shadow-card dark:shadow-card-dark h-[240px] animate-pulse rounded-xl border border-line bg-white dark:border-white/10 dark:bg-white/5"
+                className="shadow-card h-[240px] animate-pulse rounded-xl border border-line bg-surface"
               />
             ))}
           </div>

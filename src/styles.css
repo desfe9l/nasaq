@@ -29,11 +29,40 @@
 }
 
 /*
- * Design tokens.
+ * Design tokens — the single source of truth for BOTH themes.
  *
  * Palette is deliberately restrained: white paper, neutral greys, and
  * institutional emerald as the brand anchor, with muted gold used only as a
  * thin accent. No gradient-led surfaces, no decorative elements without a function.
+ *
+ * ── How theming works here (and why nothing else needs a `dark:` patch) ──
+ * Every colour below is a *role*, not a colour value: a surface, an ink, a
+ * hairline, a brand fill, a label that sits on that fill. `html.dark` (the one
+ * class `lib/theme.ts` toggles for the whole site) re-points every role — see
+ * the dark palette right after this block. Tailwind v4 compiles `bg-surface`,
+ * `text-ink`, `border-line`… to `var(--color-*)`, so a component that speaks in
+ * roles adapts automatically in both modes, on hover/focus/active, and in every
+ * portal. That is the whole contract:
+ *
+ *   • surfaces   → `page` (a marketing page), `paper` (section band),
+ *                  `surface` (card/panel), `surface-2` (inset strip)
+ *   • text       → `ink` (primary), `muted` (secondary), `on-brand`/`on-inverse`
+ *                  (labels that live on a solid fill)
+ *   • brand      → `navy*` for FILLS and tints, `brand`/`brand-hover` for the
+ *                  same hue as TEXT, ICONS and hairlines on a surface
+ *   • meaning    → `danger`/`ok`/`gold` as fills and tints, `error`/`success`/
+ *                  `warning` as text on a surface
+ *   • structure  → `line`, `line-2`, `inverse` (solid ink chip), `scrim`
+ *
+ * What must NEVER be themed is document artwork — the report page, a template
+ * preview, an exported PNG. Those surfaces are pinned back to their light
+ * values by `.report-page` / `.tpl-paper` below, so a white sheet of paper stays
+ * white in Dark mode while the chrome around it flips.
+ *
+ * Raw `#hex` values and Tailwind palette steps (`text-slate-500`, `bg-emerald-50`)
+ * are therefore bugs in chrome code: they cannot adapt, and each one is a second
+ * opinion about what the theme looks like. `scripts/theme-check.mjs` fails the
+ * build on them.
  */
 @theme {
   --font-sans:
@@ -54,9 +83,13 @@
   --breakpoint-lg2: 1100px;
 
   /*
+   * Brand — FILLS and tints.
+   *
    * `navy` keeps its name because it is the historical token for the primary
    * surface colour and is referenced across the whole editor; it now carries the
-   * institutional emerald that NASAQ brands with.
+   * institutional emerald that NASAQ brands with. Every value in this family is
+   * a *fill*: a light `on-brand` label always sits on it with AA contrast, in
+   * both themes. Brand colour as text/icon is `--color-brand` below.
    */
   --color-navy: #006c35;
   --color-navy-2: #00874a;
@@ -65,19 +98,62 @@
   --color-green-2: #145c42;
   --color-gold: #c9a86a;
   --color-gold-2: #e0c894;
-  --color-ink: #172033;
+
+  /* Surfaces. `page` is a marketing page's canvas, `paper` the alternating
+   * section band, `surface` the card/panel on it, `surface-2` a recessed strip
+   * inside a card (toolbars, chips, inset wells). */
   --color-paper: #f2f4f8;
+  --color-page: #ffffff;
   --color-surface: #ffffff;
+  --color-surface-2: #f8faf9;
+
+  /* Ink. Primary and secondary text; both are re-pointed for Dark below. */
+  --color-ink: #172033;
   /*
    * Secondary text. Kept just dark enough to clear WCAG AA for the 11–13px
    * subtext used across the site and the editor (≈5.8:1 on white); the pale
    * grey it replaced measured ≈4.7:1 and read as washed out on card surfaces.
    */
   --color-muted: #5d6575;
+
+  /* Hairlines: `line` frames, `line-2` separates and fills chips/hover rows. */
   --color-line: #dde2ea;
   --color-line-2: #edf0f5;
+
+  /* Semantic fills + their matching text role. */
   --color-danger: #b42318;
   --color-ok: #087f5b;
+  --color-error: #b42318;
+  --color-success: #076f50;
+  --color-warning: #8a6520;
+
+  /*
+   * Brand colour as a *role on a surface*: eyebrow labels, links, icons,
+   * focus rings and brand-tinted borders. It shares the brand hue in Light and
+   * becomes the theme's pale gold in Dark, which is the accent the dark chrome
+   * already uses — one token instead of the `text-navy dark:text-gold-2` pair
+   * that had to be repeated on hundreds of elements (and was forgotten on more).
+   */
+  --color-brand: #006c35;
+  /* Text roles get *deeper* on hover in light mode, so contrast only rises. */
+  --color-brand-hover: #00542a;
+
+  /* Label on a solid brand / green / gold / danger / ok fill. */
+  --color-on-brand: #ffffff;
+  /* Gold is a light decorative fill in both palettes, so its label is always ink. */
+  --color-on-gold: #172033;
+
+  /*
+   * The solid ink chip: near-black in Light, a light plate with dark type in
+   * Dark (the inversion the dark theme already used for `bg-[#0F1E33]`
+   * `dark:bg-white` buttons, now expressed as one token pair).
+   */
+  --color-inverse: #0f1e33;
+  --color-inverse-hover: #060e1c;
+  --color-on-inverse: #f8fafc;
+
+  /* Overlay behind a dialog. Always dark in both themes: it dims the page. */
+  --color-scrim: rgba(9, 13, 20, 0.62);
 
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -92,10 +168,11 @@
    *
    * One soft, low-opacity lift used by every card in the product, so a grid of
    * cards reads as one surface family instead of a pile of different shadows.
-   * The dark variants add a 1px translucent glow ring on top of the drop
-   * shadow: on a dark page a black shadow alone is nearly invisible, so the
-   * elevation has to come from light as well.
-   * Both are exposed as `shadow-card` / `dark:shadow-card-dark` utilities.
+   * In Dark a black shadow alone is nearly invisible, so the elevation has to
+   * come from light as well: the dark palette below re-points `--shadow-card*`
+   * to the glow-ring variants. Components just write `shadow-card` and both
+   * themes are correct — the `-dark` pair stays defined for the editor chrome
+   * that still references it explicitly.
    */
   --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
   --shadow-card-hover: 0 12px 28px -6px rgba(0, 0, 0, 0.12);
@@ -104,6 +181,80 @@
   --shadow-card-dark-hover:
     0 12px 28px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.09);
 }
+
+/* =====================================================================
+ * DARK PALETTE — the one place the dark theme is defined.
+ *
+ * `html.dark` is toggled by `src/lib/theme.ts` (site header, editor toolbar,
+ * `?embed` host and cross-tab storage events all share it), so re-pointing the
+ * roles here is what fixes Light/Dark contrast *globally*: every `bg-surface`,
+ * `text-ink`, `border-line`, `bg-navy/10`, `shadow-card`… in the product follows,
+ * including their `hover:`/`focus:`/`active:`/`group-hover:` forms.
+ *
+ * Surface values are the ones the dark theme already painted (page #0f141c,
+ * card #161c26, inset #1e2633, ink #e9eef5, secondary #9aa5b4), so nothing here
+ * is a redesign — it is the existing dark look, promoted from a thousand
+ * copy-pasted `dark:` patches to a token set components can rely on.
+ *
+ * Contrast targets met (measured, see `scripts/theme-check.mjs`):
+ *   ink on paper/surface ≥ 13:1     muted on surface ≥ 6:1
+ *   on-brand white label on `navy` ≥ 4.5:1   inverse plate label ≥ 15:1
+ *   brand text on surface ≥ 8:1      error/success/warning on surface ≥ 7:1
+ * ===================================================================== */
+html.dark {
+  color-scheme: dark;
+
+  --color-paper: #0f141c;
+  --color-page: #111722;
+  --color-surface: #161c26;
+  --color-surface-2: #1a212b;
+
+  --color-ink: #e9eef5;
+  --color-muted: #9aa5b4;
+
+  --color-line: #2f3a49;
+  --color-line-2: #232d3c;
+
+  /* Brand fills stay saturated enough to hold a white label, but are lifted a
+     step so they separate from a near-black page; the hover direction is
+     inverted (deeper, not brighter) so the label never loses contrast. */
+  --color-navy: #0d8446;
+  --color-navy-2: #0a6b39;
+  --color-navy-3: #12a15c;
+  --color-green: #12593f;
+  --color-green-2: #1a6b4a;
+  --color-gold: #d8bd85;
+  --color-gold-2: #ecd8ab;
+
+  /* Brand *as text/icons/hairlines* on a dark surface: the dark theme's gold. */
+  --color-brand: #e0c894;
+  --color-brand-hover: #f0dfb8;
+  --color-on-brand: #ffffff;
+  /* Gold is a light decorative fill in both palettes, so its label is always ink. */
+  --color-on-gold: #172033;
+
+  /* The ink chip inverts: a light plate with dark type. */
+  --color-inverse: #e9eef5;
+  --color-inverse-hover: #ffffff;
+  --color-on-inverse: #0f141c;
+
+  --color-danger: #b23a2c;
+  --color-ok: #0d7d5b;
+  --color-error: #ff9a90;
+  --color-success: #5ad3a5;
+  --color-warning: #eec87e;
+
+  --color-scrim: rgba(4, 7, 12, 0.72);
+
+  --shadow-panel:
+    0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-page: 0 24px 64px rgba(0, 0, 0, 0.6);
+  --shadow-card:
+    0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-card-hover:
+    0 12px 28px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.09);
+}
+
 
 @layer base {
   button:not(:disabled),
@@ -119,10 +270,6 @@
   html {
     height: 100%;
     color-scheme: light;
-  }
-
-  html.dark {
-    color-scheme: dark;
   }
 
   /*
@@ -151,27 +298,53 @@
     overscroll-behavior: none;
   }
 
+  /*
+   * Theme-wide base colours.
+   *
+   * These used to be the ONLY dark-mode rules in the whole stylesheet — `body`
+   * got a dark page and `--color-muted` got a lighter grey, while `ink`,
+   * `surface`, `paper`, `line` and the brand family kept their light values.
+   * Every element that painted itself with a token therefore looked correct in
+   * Light and wrong in Dark, and each one needed its own `dark:` patch; the
+   * ones that never got one are the "text disappears in dark mode" bug.
+   * The palette now lives in one `html.dark` block above, so nothing is
+   * re-pointed per element here.
+   */
   html.dark body {
-    background: #0f141c;
-    color: #e9eef5;
+    background: var(--color-paper);
+    color: var(--color-ink);
   }
 
   /*
-   * Dark-mode secondary text.
-   *
-   * The light-mode grey is far too dark against a #0f141c page (≈3.7:1, below
-   * AA); the dark theme gets its own, lighter secondary so subtext stays
-   * legible instead of dissolving into the background. Only the muted tone is
-   * re-pointed — every ink/surface token keeps its own light value, and the
-   * editor chrome overrides its tokens separately (.editor-ui … below).
+   * Chrome that browsers paint outside our stylesheet: form widgets, scrollbars,
+   * selected text and the focus ring. `color-scheme` (set with the dark palette)
+   * already flips native controls; these keep the parts we control on-theme.
    */
-  html.dark {
-    --color-muted: #9aa5b4;
+  ::selection {
+    background: color-mix(in srgb, var(--color-brand) 30%, transparent);
+    color: var(--color-ink);
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-navy-2);
+    outline: 2px solid var(--color-brand);
     outline-offset: 2px;
+  }
+
+  /* Placeholders are the most common "invisible input" complaint: a literal
+     grey on a themed input has no business being one. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-muted);
+    opacity: 0.85;
+  }
+
+  /* Autofill keeps the field's own themed colours instead of the UA yellow. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--color-ink);
+    -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
+    caret-color: var(--color-ink);
   }
 
   /* Numbers in Arabic UI read better with tabular figures in forms. */
@@ -212,10 +385,12 @@
   --editor-disabled: #1b232a;
   --editor-accent: #477a9f;
   --editor-accent-hover: #568caf;
+  --editor-accent-ink: #8ec6ea;
   --editor-accent-text: #ffffff;
   --editor-accent-soft: #293e4d;
   --editor-danger: #e4a29d;
   --editor-danger-soft: #422d30;
+  --editor-success: #63c29a;
 }
 .editor-ui { background: var(--editor-bg); color: var(--editor-text); }
 
@@ -231,11 +406,13 @@
   --editor-active: #d7e3ec;
   --editor-disabled: #e3e6e8;
   --editor-accent: #365f7d;
-  --editor-accent-hover: #2c506b;
+  --editor-accent-hover: #23425a;
+  --editor-accent-ink: #2a5878;
   --editor-accent-text: #ffffff;
   --editor-accent-soft: #e0eaf1;
   --editor-danger: #9b4541;
   --editor-danger-soft: #f2e4e2;
+  --editor-success: #0b7a52;
 }
 
 .editor-ui .editor-toolbar,
@@ -244,6 +421,7 @@
 .editor-ui .editor-arrange-bar {
   --color-paper: var(--editor-panel);
   --color-surface: var(--editor-surface);
+  --color-surface-2: var(--editor-hover);
   --color-ink: var(--editor-text);
   --color-muted: var(--editor-text-secondary);
   --color-line: var(--editor-border);
@@ -251,7 +429,20 @@
   --color-navy: var(--editor-active);
   --color-navy-2: var(--editor-accent);
   --color-navy-3: var(--editor-accent-hover);
+  /* The role tokens follow the same re-point so chrome written with a role —
+     `text-brand`, `text-error`, `bg-surface-2` — resolves to the workspace
+     palette instead of the site's marketing colours. */
+  --color-brand: var(--editor-accent-ink);
+  --color-brand-hover: var(--editor-accent-hover);
+  --color-on-brand: var(--editor-accent-text);
+  --color-error: var(--editor-danger);
+  --color-success: var(--editor-success);
+  --color-warning: var(--color-gold);
+  --color-inverse: var(--editor-surface);
+  --color-inverse-hover: var(--editor-active);
+  --color-on-inverse: var(--editor-text);
   --color-white: var(--editor-text);
+
   background-color: var(--editor-panel) !important;
   border-color: var(--editor-border) !important;
   color: var(--editor-text);
@@ -389,14 +580,45 @@
   opacity: 1;
 }
 
-/* Reset inherited UI tokens at the document boundary. No design color is themed. */
-.editor-ui .report-page {
+/*
+ * Document artwork is not chrome.
+ *
+ * The report page and every real template preview render a sheet of white paper
+ * with its own design colours — those must stay exactly as designed when the
+ * visitor switches themes, otherwise "dark mode" would repaint (and export) a
+ * dark sheet. Pinning the roles back at the document boundary is what lets the
+ * rest of the UI flip freely, so it is done once here instead of per component.
+ */
+.editor-ui .report-page,
+.tpl-paper,
+[data-doc] {
   --color-ink: #172033;
   --color-muted: #6b7383;
   --color-line: #dde2ea;
   --color-line-2: #edf0f5;
-  --color-surface: #ffffff;
   --color-paper: #f2f4f8;
+  --color-page: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #f8faf9;
+  --color-navy: #006c35;
+  --color-navy-2: #00874a;
+  --color-navy-3: #0a9c59;
+  --color-brand: #006c35;
+  /* Text roles get *deeper* on hover in light mode, so contrast only rises. */
+  --color-brand-hover: #00542a;
+  --color-on-brand: #ffffff;
+  /* Gold is a light decorative fill in both palettes, so its label is always ink. */
+  --color-on-gold: #172033;
+  --color-green: #0c3d2c;
+  --color-gold: #c9a86a;
+  --color-gold-2: #e0c894;
+  --color-danger: #b42318;
+  --color-ok: #087f5b;
+  --color-error: #b42318;
+  --color-success: #076f50;
+  --color-warning: #8a6520;
+  --color-inverse: #0f1e33;
+  --color-on-inverse: #f8fafc;
 }
 
 .editor-ui.editor-focus .editor-sidebar,

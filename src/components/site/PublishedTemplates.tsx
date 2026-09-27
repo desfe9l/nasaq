@@ -93,16 +93,16 @@ export function PublishedTemplates({
               type="button"
               onClick={() => void open(t.id, t.title, t.tier)}
               disabled={busy !== null}
-              className="group flex flex-col rounded-xl border border-line bg-white p-3 text-right transition hover:-translate-y-0.5 hover:border-emerald-500/50 disabled:opacity-60 dark:border-white/10 dark:bg-white/5"
+              className="group flex flex-col rounded-xl border border-line bg-surface p-3 text-right transition hover:-translate-y-0.5 hover:border-brand disabled:opacity-60"
             >
-              <span className="relative grid aspect-[210/297] w-full place-items-center overflow-hidden rounded-lg border border-line bg-white dark:border-white/10">
-                {t.thumbnail ? <img src={t.thumbnail} alt="" className="h-full w-full object-contain" /> : <LayoutTemplate className="size-8 text-slate-300" />}
+              <span className="relative grid aspect-[210/297] w-full place-items-center overflow-hidden rounded-lg border border-line bg-surface">
+                {t.thumbnail ? <img src={t.thumbnail} alt="" className="h-full w-full object-contain" /> : <LayoutTemplate className="size-8 text-muted" />}
                 {locked && (
-                  <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-extrabold text-white">
+                  <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-inverse/70 px-2 py-0.5 text-[10px] font-extrabold text-on-inverse">
                     <Lock className="size-3" /> النسخة الكاملة
                   </span>
                 )}
-                {busy === t.id && <Loader2 className="absolute size-6 animate-spin text-emerald-600" />}
+                {busy === t.id && <Loader2 className="absolute size-6 animate-spin text-brand" />}
               </span>
               <strong className="mt-2 block truncate text-[13px]">{t.title}</strong>
               {t.description && <span className="line-clamp-2 text-[11px] text-muted">{t.description}</span>}

@@ -40,7 +40,8 @@ import {
   Undo2,
   Wand2,
 } from "lucide-react";
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner";
+import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   useEditor,
   saveLabel,
@@ -217,7 +218,7 @@ export function EditorApp() {
 
   return (
     <div className="h-full min-h-0">
-      <Toaster position="top-center" richColors dir="rtl" />
+      <ThemedToaster position="top-center" richColors dir="rtl" />
 
       {/*
        * Project files: native `.nsq` packages plus legacy JSON backups. Both go
@@ -1789,10 +1790,10 @@ function SaveBadge({
 }) {
   const tone =
     state === "error"
-      ? "bg-red-500/10 text-danger"
+      ? "bg-danger/10 text-error"
       : state === "dirty" || state === "saving"
         ? "text-muted"
-        : "text-ok";
+        : "text-success";
   return (
     <button
       type="button"
@@ -1801,7 +1802,7 @@ function SaveBadge({
       className={cn(
         // Same 36px control as the rest of the strip; the state lives in the
         // icon and colour, the full label in the tooltip.
-        "grid size-9 shrink-0 place-items-center rounded-[8px] transition hover:bg-line-2 dark:hover:bg-white/10",
+        "grid size-9 shrink-0 place-items-center rounded-[8px] transition hover:bg-line-2",
         tone,
       )}
     >

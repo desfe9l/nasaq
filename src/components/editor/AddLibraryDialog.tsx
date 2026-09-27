@@ -253,7 +253,7 @@ export function AddLibraryDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-scrim p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="أضف مكتبة"
@@ -261,10 +261,10 @@ export function AddLibraryDialog({ onClose }: { onClose: () => void }) {
         if (e.target === e.currentTarget && !busy) onClose();
       }}
     >
-      <div className="flex max-h-[86vh] w-full max-w-xl flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-2xl dark:border-white/10 dark:bg-[#161c26]">
-        <header className="flex items-center justify-between border-b border-line px-4 py-3 dark:border-white/10">
+      <div className="flex max-h-[86vh] w-full max-w-xl flex-col overflow-hidden rounded-[14px] border border-line/60 bg-surface shadow-2xl">
+        <header className="flex items-center justify-between border-b border-line/60 px-4 py-3">
           <div className="flex items-center gap-2">
-            <FolderPlus className="size-4 text-navy dark:text-gold-2" aria-hidden />
+            <FolderPlus className="size-4 text-brand" aria-hidden />
             <div>
               <h2 className="text-[13px] font-extrabold">أضف مكتبة</h2>
               <p className="text-[10px] text-muted">
@@ -277,7 +277,7 @@ export function AddLibraryDialog({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             disabled={busy}
             aria-label="إغلاق"
-            className="grid size-8 place-items-center rounded-[8px] hover:bg-line-2 dark:hover:bg-white/5"
+            className="grid size-8 place-items-center rounded-[8px] hover:bg-line-2"
           >
             <X className="size-4" />
           </button>
@@ -289,13 +289,13 @@ export function AddLibraryDialog({ onClose }: { onClose: () => void }) {
               type="button"
               onClick={() => dirInput.current?.click()}
               className={cn(
-                "flex flex-col items-start gap-1 rounded-[10px] border p-3 text-start transition",
+ "flex flex-col items-start gap-1 rounded-[10px] border p-3 text-start transition",
                 mode === "folder"
                   ? "border-navy bg-navy/5"
-                  : "border-line hover:border-navy/60 dark:border-white/10",
+                  : "border-line/60 hover:border-navy/60",
               )}
             >
-              <FolderTree className="size-5 text-navy dark:text-gold-2" aria-hidden />
+              <FolderTree className="size-5 text-brand" aria-hidden />
               <span className="text-[12px] font-extrabold">اختيار مجلد كامل</span>
               <span className="text-[10px] leading-4 text-muted">
                 يُبنى شجرته كما هي: كل مجلد فرعي يصبح رفًّا داخل المكتبة
@@ -305,13 +305,13 @@ export function AddLibraryDialog({ onClose }: { onClose: () => void }) {
               type="button"
               onClick={() => filesInput.current?.click()}
               className={cn(
-                "flex flex-col items-start gap-1 rounded-[10px] border p-3 text-start transition",
+ "flex flex-col items-start gap-1 rounded-[10px] border p-3 text-start transition",
                 mode === "files"
                   ? "border-navy bg-navy/5"
-                  : "border-line hover:border-navy/60 dark:border-white/10",
+                  : "border-line/60 hover:border-navy/60",
               )}
             >
-              <ImageIcon className="size-5 text-navy dark:text-gold-2" aria-hidden />
+              <ImageIcon className="size-5 text-brand" aria-hidden />
               <span className="text-[12px] font-extrabold">اختيار ملفات</span>
               <span className="text-[10px] leading-4 text-muted">
                 أي صيغة مدعومة: PNG · JPG · WebP · SVG · ملف مكتبة JSON
@@ -356,7 +356,7 @@ export function AddLibraryDialog({ onClose }: { onClose: () => void }) {
               <input
                 value={shelfName}
                 onChange={(e) => setShelfName(e.target.value)}
-                className="h-9 w-full rounded-[8px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-navy dark:border-white/10"
+                className="h-9 w-full rounded-[8px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-navy"
                 placeholder="مكتبة مستوردة"
               />
             </label>
@@ -372,43 +372,43 @@ export function AddLibraryDialog({ onClose }: { onClose: () => void }) {
                   type="button"
                   onClick={() => setPicked([])}
                   disabled={busy}
-                  className="text-[10px] font-bold text-muted hover:text-danger"
+                  className="text-[10px] font-bold text-muted hover:text-error"
                 >
                   تفريغ القائمة
                 </button>
               </div>
-              <p className="mb-2 rounded-[8px] bg-line-2 px-2.5 py-1.5 text-[10px] leading-5 text-muted dark:bg-white/5">
+              <p className="mb-2 rounded-[8px] bg-line-2 px-2.5 py-1.5 text-[10px] leading-5 text-muted">
                 {summary.folders > 0 && `${summary.folders} مجلد · `}
                 {summary.images > 0 && `${summary.images} صورة · `}
                 {summary.svg > 0 && `${summary.svg} متجه SVG · `}
                 {summary.libraries > 0 && `${summary.libraries} ملف مكتبة`}
                 {summary.unsupported > 0 && (
-                  <span className="text-danger">
+                  <span className="text-error">
                     {" "}
                     · {summary.unsupported} ملف غير مدعوم
                   </span>
                 )}
                 {summary.oversized > 0 && (
-                  <span className="text-danger">
+                  <span className="text-error">
                     {" "}
                     · {summary.oversized} ملف يتجاوز{" "}
                     {Math.round(MAX_IMPORT_BYTES / (1024 * 1024))} ميغابايت
                   </span>
                 )}
               </p>
-              <ul className="editor-pane-scroll max-h-52 overflow-y-auto rounded-[8px] border border-line dark:border-white/10">
+              <ul className="editor-pane-scroll max-h-52 overflow-y-auto rounded-[8px] border border-line">
                 {picked.slice(0, 200).map((item) => {
                   const kind = importKindFor({ path: item.path, mime: item.file.type });
                   const ok = kind !== "unsupported" && item.file.size <= MAX_IMPORT_BYTES;
                   return (
                     <li
                       key={`${item.path}-${item.file.size}`}
-                      className="flex items-center gap-2 border-b border-line px-2.5 py-1.5 last:border-0 dark:border-white/10"
+                      className="flex items-center gap-2 border-b border-line px-2.5 py-1.5 last:border-0"
                     >
                       <span
                         className={cn(
-                          "size-1.5 shrink-0 rounded-full",
-                          ok ? "bg-emerald-500" : "bg-red-500",
+ "size-1.5 shrink-0 rounded-full",
+                          ok ? "bg-ok" : "bg-danger",
                         )}
                         aria-hidden
                       />
@@ -431,7 +431,7 @@ export function AddLibraryDialog({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        <footer className="flex items-center justify-between gap-2 border-t border-line px-4 py-3 dark:border-white/10">
+        <footer className="flex items-center justify-between gap-2 border-t border-line px-4 py-3">
           <p className="min-w-0 flex-1 truncate text-[10px] text-muted">
             {busy ? progress : "تُحفظ العناصر في متصفحك عبر قاعدة المكتبة المحلية"}
           </p>
@@ -440,7 +440,7 @@ export function AddLibraryDialog({ onClose }: { onClose: () => void }) {
               type="button"
               onClick={onClose}
               disabled={busy}
-              className="h-9 rounded-[8px] border border-line px-3 text-[12px] font-bold dark:border-white/10"
+              className="h-9 rounded-[8px] border border-line px-3 text-[12px] font-bold"
             >
               إلغاء
             </button>

@@ -100,7 +100,7 @@ export default function AdminLicensePanel() {
   const [search, setSearch] = useState(query);
   const [page, setPage] = useState(0);
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "EXPIRED" | "REVOKED">(
-    "ALL",
+ "ALL",
   );
 
   const [extendState, setExtendState] = useState<Record<string, { open: boolean; days: number }>>({});
@@ -255,7 +255,7 @@ export default function AdminLicensePanel() {
 
   const handleExtend = (id: string, days: number) =>
     withBusy(id, () => extendLicenseFn({ data: { licenseId: id, daysToAdd: days } }),
-      "تم تمديد الترخيص ومزامنة Keygen.",
+ "تم تمديد الترخيص ومزامنة Keygen.",
       () => setExtendState((prev) => ({ ...prev, [id]: { open: false, days: 30 } })));
 
   const handleSetExpiry = (id: string, value: string) =>
@@ -273,13 +273,13 @@ export default function AdminLicensePanel() {
   const statusBadgeClass = (status: string): string => {
     switch (status) {
       case "ACTIVE":
-        return "text-emerald-700 bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-400";
+        return "text-success bg-ok/10";
       case "EXPIRED":
-        return "text-amber-700 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400";
+        return "text-warning bg-gold/15";
       case "REVOKED":
-        return "text-red-700 bg-red-100 dark:bg-red-900/30 dark:text-red-400";
+        return "text-error bg-danger/10";
       default:
-        return "text-gray-600 bg-gray-100 dark:bg-gray-800 dark:text-gray-400";
+        return "text-muted bg-line-2";
     }
   };
 
@@ -296,14 +296,14 @@ export default function AdminLicensePanel() {
   if (!access?.isAdmin) {
     return (
       <div className="mx-auto max-w-2xl p-6" dir="rtl">
-        <div className="rounded-[14px] border border-red-200 bg-red-50 p-6 dark:border-red-900/40 dark:bg-red-950/20">
+        <div className="rounded-[14px] border border-danger/30 bg-danger/10 p-6">
           <div className="flex items-center gap-2.5">
-            <ShieldAlert className="size-5 text-red-700 dark:text-red-300" aria-hidden />
-            <h1 className="text-[15px] font-extrabold text-red-800 dark:text-red-200">
+            <ShieldAlert className="size-5 text-error" aria-hidden />
+            <h1 className="text-[15px] font-extrabold text-error">
               هذا الحساب لا يملك صلاحية إدارة التراخيص
             </h1>
           </div>
-          <ul className="mt-4 grid gap-1.5 text-[12px] leading-6 text-red-800/90 dark:text-red-200/90">
+          <ul className="mt-4 grid gap-1.5 text-[12px] leading-6 text-error/90">
             <li>
               • المالك مُعرَّف في إعدادات النشر:{" "}
               <strong>{access?.ownerConfigured ? "نعم" : "لا"}</strong>
@@ -321,7 +321,7 @@ export default function AdminLicensePanel() {
               <strong>{access?.hasRow ? `نعم (${access.role ?? "ADMIN"})` : "لا"}</strong>
             </li>
           </ul>
-          <p className="mt-4 text-[12px] leading-6 text-red-800/80 dark:text-red-200/80">
+          <p className="mt-4 text-[12px] leading-6 text-error/80">
             أضف <code dir="ltr">NASAQ_OWNER_EMAIL</code> أو{" "}
             <code dir="ltr">NASAQ_SUPER_ADMIN_IDS</code> إلى متغيرات البيئة ثم أعد نشر
             المشروع، أو استخدم الزر أدناه إذا كان هذا الحساب هو المالك المُعلن بالفعل.
@@ -331,7 +331,7 @@ export default function AdminLicensePanel() {
               type="button"
               onClick={() => void bootstrap()}
               disabled={busyId === "bootstrap"}
-              className="mt-4 inline-flex h-10 items-center gap-2 rounded-[9px] bg-red-700 px-4 text-[13px] font-extrabold text-white hover:bg-red-800 disabled:opacity-60"
+              className="mt-4 inline-flex h-10 items-center gap-2 rounded-[9px] bg-danger px-4 text-[13px] font-extrabold text-on-brand hover:bg-danger/90 disabled:opacity-60"
             >
               {busyId === "bootstrap" ? (
                 <Loader2 className="size-4 animate-spin" aria-hidden />
@@ -351,7 +351,7 @@ export default function AdminLicensePanel() {
     const d = new Date(lic.expiresAt);
     const expired = d.getTime() < Date.now();
     return (
-      <span className={expired ? "font-bold text-red-700 dark:text-red-400" : "text-muted"}>
+      <span className={expired ? "font-bold text-error" : "text-muted"}>
         {d.toLocaleDateString("ar")}
         {expired ? " (منتهي)" : ""}
       </span>
@@ -359,13 +359,13 @@ export default function AdminLicensePanel() {
   };
 
   return (
-    <div className="min-h-screen bg-paper px-4 py-6 dark:bg-[#111722] sm:px-6" dir="rtl">
+    <div className="min-h-screen bg-paper px-4 py-6 sm:px-6" dir="rtl">
       <div className="mx-auto max-w-6xl space-y-4">
         {/* Institutional header */}
-        <header className="rounded-[14px] border border-line bg-white p-4 dark:border-white/10 dark:bg-[#161c26]">
+        <header className="rounded-[14px] border border-line bg-surface p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-              <span className="grid size-11 place-items-center rounded-[10px] bg-emerald-600/10 text-emerald-700 dark:text-emerald-300">
+              <span className="grid size-11 place-items-center rounded-[10px] bg-navy/10 text-success">
                 <ShieldCheck className="size-5" aria-hidden />
               </span>
               <div>
@@ -378,10 +378,10 @@ export default function AdminLicensePanel() {
             <div className="flex flex-wrap items-center gap-2">
               <span
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold",
+ "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-extrabold",
                   access.isSuperAdmin
-                    ? "border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                    : "border-line bg-surface text-muted dark:border-white/10",
+                    ? "border-gold/40 bg-gold/10 text-warning"
+                    : "border-line bg-surface text-muted",
                 )}
                 title={
                   access.isSuperAdmin
@@ -396,12 +396,12 @@ export default function AdminLicensePanel() {
                 )}
                 {access.isSuperAdmin ? "مالك (SUPER_ADMIN)" : "مدير — عرض فقط"}
               </span>
-              <a href="/admin" className="inline-flex h-9 items-center rounded-[9px] border border-line px-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10 dark:hover:bg-white/5">لوحة الإدارة</a>
+              <a href="/admin" className="inline-flex h-9 items-center rounded-[9px] border border-line px-3 text-[12px] font-bold hover:bg-line-2">لوحة الإدارة</a>
               <button
                 type="button"
                 onClick={() => void loadLicenses()}
                 disabled={loading}
-                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-line px-3 text-[12px] font-bold hover:bg-line-2 disabled:opacity-60 dark:border-white/10 dark:hover:bg-white/5"
+                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-line px-3 text-[12px] font-bold hover:bg-line-2 disabled:opacity-60"
               >
                 <RefreshCw className={cn("size-3.5", loading && "animate-spin")} aria-hidden />
                 تحديث
@@ -410,7 +410,7 @@ export default function AdminLicensePanel() {
                 <button
                   type="button"
                   onClick={() => { setError(null); setShowCreate(true); }}
-                  className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-emerald-600 px-3 text-[12px] font-extrabold text-white hover:bg-emerald-700"
+                  className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-navy px-3 text-[12px] font-extrabold text-on-brand hover:bg-navy-2"
                 >
                   <Plus className="size-4" aria-hidden />
                   إصدار ترخيص
@@ -420,31 +420,31 @@ export default function AdminLicensePanel() {
           </div>
         </header>
 
-        <section className="rounded-[14px] border border-line bg-white p-4 dark:border-white/10 dark:bg-[#161c26]" aria-label="جاهزية تكامل التراخيص">
+        <section className="rounded-[14px] border border-line bg-surface p-4" aria-label="جاهزية تكامل التراخيص">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Link2 className="size-4 text-emerald-700" aria-hidden />
+              <Link2 className="size-4 text-success" aria-hidden />
               <h2 className="text-[13px] font-extrabold">جاهزية التفعيل والربط</h2>
             </div>
             <button type="button" onClick={() => void checkConnections()} disabled={checkingConnections}
-              className="inline-flex h-9 items-center gap-2 rounded-[9px] border border-line px-3 text-[12px] font-bold hover:bg-line-2 disabled:opacity-50 dark:border-white/10">
+              className="inline-flex h-9 items-center gap-2 rounded-[9px] border border-line px-3 text-[12px] font-bold hover:bg-line-2 disabled:opacity-50">
               <RefreshCw className={cn("size-3.5", checkingConnections && "animate-spin")} aria-hidden />
               {checkingConnections ? "جارٍ اختبار الاتصال…" : "اختبار الاتصال دون إصدار أو دفع"}
             </button>
           </div>
           {readiness ? (
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[10px] border border-line bg-paper/50 p-3 text-[12px] dark:border-white/10 dark:bg-white/[0.03]">
+              <div className="rounded-[10px] border border-line bg-paper/50 p-3 text-[12px]">
                 <p className="font-extrabold">Keygen · جهة التفعيل</p>
                 <p className="mt-2 text-muted">رمز API: {readiness.keygen.token ? "مضبوط" : "ناقص (KEYGEN_API_TOKEN)"} · توقيع Webhook: {readiness.keygen.webhookSignature ? "مضبوط" : "ناقص (KEYGEN_PUBLIC_KEY)"}</p>
                 <p className="mt-1 text-muted">سياسات الباقات: {readiness.keygen.missingPolicies.length ? `تنقص ${readiness.keygen.missingPolicies.map((key) => getCatalogPlan(key)?.arabicName || key).join("، ")}` : "مهيأة"}</p>
-                {connections && <p className={cn("mt-2 font-extrabold", connections.keygen ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300")}>اتصال API: {connections.keygen ? "تم التحقق" : "فشل أو لم يُضبط"}</p>}
+                {connections && <p className={cn("mt-2 font-extrabold", connections.keygen ? "text-success" : "text-warning")}>اتصال API: {connections.keygen ? "تم التحقق" : "فشل أو لم يُضبط"}</p>}
               </div>
-              <div className="rounded-[10px] border border-line bg-paper/50 p-3 text-[12px] dark:border-white/10 dark:bg-white/[0.03]">
+              <div className="rounded-[10px] border border-line bg-paper/50 p-3 text-[12px]">
                 <p className="font-extrabold">Gumroad · بوابة الدفع</p>
                 <p className="mt-2 text-muted">مفتاح API: {readiness.gumroad.accessToken ? "مضبوط" : "ناقص (GUMROAD_ACCESS_TOKEN)"} · معرّف المنتج: {readiness.gumroad.productId ? "مضبوط" : "ناقص (GUMROAD_PRODUCT_ID)"}</p>
                 <p className="mt-1 text-muted">نقطة استقبال الإشعارات: <code dir="ltr">{readiness.gumroad.pingEndpoint}</code> — تُسجَّل في Gumroad → Settings → Advanced.</p>
-                <p className="mt-2 text-muted">الحالة التفصيلية (Product/API/Ping/الربط) في بطاقة «Gumroad · بوابة الدفع» داخل <a href="/owner-vault" className="font-bold text-emerald-700 underline dark:text-emerald-300">خزنة المالك</a>.</p>
+                <p className="mt-2 text-muted">الحالة التفصيلية (Product/API/Ping/الربط) في بطاقة «Gumroad · بوابة الدفع» داخل <a href="/owner-vault" className="font-bold text-success underline">خزنة المالك</a>.</p>
               </div>
             </div>
           ) : <p className="mt-3 text-[12px] text-muted">جارٍ قراءة إعدادات التكامل…</p>}
@@ -452,17 +452,17 @@ export default function AdminLicensePanel() {
             {readiness?.checkoutConfigured ? "متغيرات الدفع والإصدار مكتملة." : "بعض متغيرات الدفع أو التفعيل ناقصة؛ تظل التراخيص اليدوية المحلية قابلة للإدارة."}
             {" "}اختبار الاتصال لا يثبت تسجيل Webhook لدى المزوّدين؛ سجّل
             <code dir="ltr"> /api/webhooks/gumroad </code> و<code dir="ltr"> /api/webhooks/keygen </code>
-            في لوحتي Gumroad وKeygen. <a href="/owner-vault" className="font-bold text-emerald-700 underline dark:text-emerald-300">دليل إعدادات المالك</a>
+            في لوحتي Gumroad وKeygen. <a href="/owner-vault" className="font-bold text-success underline">دليل إعدادات المالك</a>
           </p>
         </section>
 
-        {error && <p role="alert" className="rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700 dark:border-red-900/40 dark:bg-red-950/20 dark:text-red-300">{error}</p>}
-        {notice && <p role="status" className="rounded-[10px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">{notice}</p>}
+        {error && <p role="alert" className="rounded-[10px] border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] text-error">{error}</p>}
+        {notice && <p role="status" className="rounded-[10px] border border-brand bg-ok/10 px-3 py-2 text-[12px] text-success">{notice}</p>}
 
         {newKey && (
-          <div className="rounded-[12px] border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-800 dark:bg-emerald-900/20">
+          <div className="rounded-[12px] border border-brand bg-ok/10 p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-1.5 text-[13px] font-bold text-emerald-700 dark:text-emerald-400">
+              <p className="flex items-center gap-1.5 text-[13px] font-bold text-success">
                 <Check className="size-4" aria-hidden />
                 تم إنشاء الترخيص — انسخ المفتاح الآن (لن يظهر مرة أخرى)
               </p>
@@ -470,14 +470,14 @@ export default function AdminLicensePanel() {
                 type="button"
                 onClick={() => setNewKey(null)}
                 aria-label="إغلاق"
-                className="text-emerald-600 hover:text-emerald-800"
+                className="text-brand hover:text-success"
               >
                 <X className="size-4" aria-hidden />
               </button>
             </div>
             <div className="flex items-center gap-2">
               <code
-                className="flex-1 overflow-x-auto rounded-[8px] bg-white px-3 py-2 font-mono text-[13px] font-bold tracking-wider dark:bg-emerald-950"
+                className="flex-1 overflow-x-auto rounded-[8px] bg-surface px-3 py-2 font-mono text-[13px] font-bold tracking-wider"
                 dir="ltr"
               >
                 {newKey}
@@ -485,7 +485,7 @@ export default function AdminLicensePanel() {
               <button
                 type="button"
                 onClick={handleCopyKey}
-                className="grid size-9 shrink-0 place-items-center rounded-[8px] bg-emerald-600 text-white hover:bg-emerald-700"
+                className="grid size-9 shrink-0 place-items-center rounded-[8px] bg-navy text-on-brand hover:bg-navy-2"
                 aria-label="نسخ المفتاح"
               >
                 {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
@@ -506,10 +506,10 @@ export default function AdminLicensePanel() {
               onChange={(e) => { setQuery(e.target.value); setPage(0); }}
               placeholder="ابحث بالمفتاح أو البريد أو رقم العملية…"
               aria-label="بحث في كل التراخيص"
-              className="h-9 w-full rounded-[9px] border border-line bg-white pe-9 ps-3 text-[12px] font-bold outline-none focus:border-emerald-600 dark:border-white/10 dark:bg-[#161c26]"
+              className="h-9 w-full rounded-[9px] border border-line bg-surface pe-9 ps-3 text-[12px] font-bold outline-none focus:border-brand"
             />
           </label>
-          <div className="flex items-center gap-1 rounded-[9px] border border-line p-1 dark:border-white/10">
+          <div className="flex items-center gap-1 rounded-[9px] border border-line p-1">
             {(
               [
                 ["ALL", "الكل"],
@@ -523,10 +523,10 @@ export default function AdminLicensePanel() {
                 type="button"
                 onClick={() => { setStatusFilter(value); setPage(0); }}
                 className={cn(
-                  "h-7 rounded-[7px] px-2.5 text-[11px] font-extrabold transition",
+ "h-7 rounded-[7px] px-2.5 text-[11px] font-extrabold transition",
                   statusFilter === value
-                    ? "bg-emerald-600 text-white"
-                    : "text-muted hover:bg-line-2 dark:hover:bg-white/5",
+                    ? "bg-navy text-on-brand"
+                    : "text-muted hover:bg-line-2",
                 )}
               >
                 {label}
@@ -536,9 +536,9 @@ export default function AdminLicensePanel() {
         </div>
 
         {/* Licences */}
-        <div className="overflow-x-auto rounded-[14px] border border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
+        <div className="overflow-x-auto rounded-[14px] border border-line bg-surface">
           <table className="w-full min-w-[980px] text-right text-[12px]">
-            <thead className="border-b border-line bg-paper/60 text-[11px] text-muted dark:border-white/10">
+            <thead className="border-b border-line bg-paper/60 text-[11px] text-muted">
               <tr>
                 <th className="p-3">المفتاح</th>
                 <th className="p-3">النوع</th>
@@ -568,7 +568,7 @@ export default function AdminLicensePanel() {
                 licenses.map((lic) => (
                   <tr
                     key={lic.id}
-                    className="border-b border-line last:border-0 hover:bg-black/[0.02] dark:border-white/10 dark:hover:bg-white/[0.02]"
+                    className="border-b border-line last:border-0 hover:bg-line-2"
                   >
                     <td className="p-3 font-mono text-[11px] font-bold" dir="ltr">
                       {lic.keyPrefix}-****
@@ -587,7 +587,7 @@ export default function AdminLicensePanel() {
                             : "موقوف"}
                       </span>
                       {lic.metadata?.source === "keygen" && lic.userId && !lic.metadata.userScopeVerified && (
-                        <span className="mt-1 block text-[10px] font-bold text-amber-700 dark:text-amber-300">بانتظار ربط Keygen</span>
+                        <span className="mt-1 block text-[10px] font-bold text-warning">بانتظار ربط Keygen</span>
                       )}
                     </td>
                     <td className="p-3 text-[11px] text-muted">
@@ -610,13 +610,13 @@ export default function AdminLicensePanel() {
                               }))
                             }
                             placeholder="البريد أو معرّف المستخدم"
-                            className="h-8 min-w-[150px] rounded-[7px] border border-line bg-transparent px-2 text-[11px] outline-none focus:border-emerald-600 dark:border-white/10"
+                            className="h-8 min-w-[150px] rounded-[7px] border border-line bg-transparent px-2 text-[11px] outline-none focus:border-brand"
                           />
                           <button
                             type="button"
                             disabled={!assignState[lic.id]!.user.trim() || busyId === lic.id}
                             onClick={() => void handleAssign(lic.id, assignState[lic.id]!.user)}
-                            className="inline-flex h-8 items-center gap-1 rounded-[7px] bg-emerald-600 px-2 text-[11px] font-extrabold text-white disabled:opacity-50"
+                            className="inline-flex h-8 items-center gap-1 rounded-[7px] bg-navy px-2 text-[11px] font-extrabold text-on-brand disabled:opacity-50"
                           >
                             <UserPlus className="size-3" aria-hidden />
                             تعيين
@@ -643,7 +643,7 @@ export default function AdminLicensePanel() {
                               [lic.id]: { open: true, user: lic.userEmail ?? lic.userId ?? "" },
                             }))
                           }
-                          className="max-w-[190px] truncate text-[11px] text-muted hover:text-emerald-700 hover:underline"
+                          className="max-w-[190px] truncate text-[11px] text-muted hover:text-success hover:underline"
                           title="تعيين الترخيص لمستخدم (بالبريد أو المعرّف)"
                         >
                           {lic.userEmail || lic.userId || "— غير معيّن —"}
@@ -662,13 +662,13 @@ export default function AdminLicensePanel() {
                                 [lic.id]: { open: true, value: e.target.value },
                               }))
                             }
-                            className="h-8 rounded-[7px] border border-line bg-transparent px-2 text-[11px] outline-none focus:border-emerald-600 dark:border-white/10"
+                            className="h-8 rounded-[7px] border border-line bg-transparent px-2 text-[11px] outline-none focus:border-brand"
                           />
                           <button
                             type="button"
                             disabled={busyId === lic.id}
                             onClick={() => void handleSetExpiry(lic.id, expiryState[lic.id]!.value)}
-                            className="inline-flex h-8 items-center gap-1 rounded-[7px] bg-emerald-600 px-2 text-[11px] font-extrabold text-white disabled:opacity-50"
+                            className="inline-flex h-8 items-center gap-1 rounded-[7px] bg-navy px-2 text-[11px] font-extrabold text-on-brand disabled:opacity-50"
                           >
                             <CalendarClock className="size-3" aria-hidden />
                             حفظ
@@ -718,7 +718,7 @@ export default function AdminLicensePanel() {
                                   },
                                 }))
                               }
-                              className="h-8 rounded-[7px] border border-line bg-transparent px-2 text-[11px] font-bold outline-none dark:border-white/10"
+                              className="h-8 rounded-[7px] border border-line bg-transparent px-2 text-[11px] font-bold outline-none"
                             >
                               {DURATIONS.map((d) => (
                                 <option key={d.days} value={d.days}>
@@ -730,7 +730,7 @@ export default function AdminLicensePanel() {
                               type="button"
                               disabled={busyId === lic.id}
                               onClick={() => void handleExtend(lic.id, extendState[lic.id]!.days)}
-                              className="h-8 rounded-[7px] bg-emerald-600 px-2 text-[11px] font-extrabold text-white disabled:opacity-50"
+                              className="h-8 rounded-[7px] bg-navy px-2 text-[11px] font-extrabold text-on-brand disabled:opacity-50"
                             >
                               تمديد
                             </button>
@@ -756,7 +756,7 @@ export default function AdminLicensePanel() {
                                 [lic.id]: { open: true, days: 30 },
                               }))
                             }
-                            className="text-[11px] text-muted hover:text-emerald-700 hover:underline"
+                            className="text-[11px] text-muted hover:text-success hover:underline"
                           >
                             تمديد
                           </button>
@@ -766,7 +766,7 @@ export default function AdminLicensePanel() {
                             type="button"
                             disabled={busyId === lic.id}
                             onClick={() => void handleRevoke(lic.id)}
-                            className="inline-flex items-center gap-1 text-[11px] text-red-700 hover:underline disabled:opacity-50 dark:text-red-400"
+                            className="inline-flex items-center gap-1 text-[11px] text-error hover:underline disabled:opacity-50"
                           >
                             <Ban className="size-3" aria-hidden />
                             إيقاف
@@ -777,7 +777,7 @@ export default function AdminLicensePanel() {
                             type="button"
                             disabled={busyId === lic.id}
                             onClick={() => void handleReactivate(lic.id)}
-                            className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:underline disabled:opacity-50 dark:text-emerald-400"
+                            className="inline-flex items-center gap-1 text-[11px] text-success hover:underline disabled:opacity-50"
                           >
                             <RotateCcw className="size-3" aria-hidden />
                             إعادة تفعيل
@@ -795,16 +795,16 @@ export default function AdminLicensePanel() {
           <span>عرض {total ? page * PAGE_SIZE + 1 : 0}–{Math.min((page + 1) * PAGE_SIZE, total)} من {total} ترخيص مطابق</span>
           <div className="flex gap-2">
             <button type="button" disabled={loading || page === 0} onClick={() => setPage((p) => p - 1)}
-              className="h-9 rounded-[8px] border border-line px-3 font-bold disabled:opacity-40 dark:border-white/10">السابق</button>
+              className="h-9 rounded-[8px] border border-line px-3 font-bold disabled:opacity-40">السابق</button>
             <button type="button" disabled={loading || (page + 1) * PAGE_SIZE >= total} onClick={() => setPage((p) => p + 1)}
-              className="h-9 rounded-[8px] border border-line px-3 font-bold disabled:opacity-40 dark:border-white/10">التالي</button>
+              className="h-9 rounded-[8px] border border-line px-3 font-bold disabled:opacity-40">التالي</button>
           </div>
         </div>
       </div>
 
       {showCreate && access.isSuperAdmin && (
         <div
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-inverse/55 p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-label="إنشاء ترخيص جديد"
@@ -812,13 +812,13 @@ export default function AdminLicensePanel() {
             if (e.target === e.currentTarget) setShowCreate(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-[14px] border border-line bg-white p-5 shadow-2xl dark:border-white/10 dark:bg-[#1a2332]">
+          <div className="w-full max-w-sm rounded-[14px] border border-line bg-surface p-5 shadow-2xl">
             <h3 className="mb-4 text-[14px] font-extrabold">إنشاء ترخيص جديد</h3>
             <label className="mb-2 block text-[12px] font-extrabold">نوع الترخيص</label>
             <select
               value={createType}
               onChange={(e) => setCreateType(e.target.value as LicenseType)}
-              className="mb-4 h-10 w-full rounded-[9px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-emerald-600 dark:border-white/10"
+              className="mb-4 h-10 w-full rounded-[9px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-brand"
             >
               {(Object.keys(LICENSE_TYPE_LABELS) as LicenseType[]).map((t) => (
                 <option key={t} value={t}>
@@ -833,7 +833,7 @@ export default function AdminLicensePanel() {
                 <select
                   value={trialDays}
                   onChange={(e) => setTrialDays(Number(e.target.value))}
-                  className="mb-4 h-10 w-full rounded-[9px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-emerald-600 dark:border-white/10"
+                  className="mb-4 h-10 w-full rounded-[9px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-brand"
                 >
                   {DURATIONS.map((d) => (
                     <option key={d.days} value={d.days}>
@@ -848,27 +848,27 @@ export default function AdminLicensePanel() {
               <>
                 <label htmlFor="license-plan" className="mb-2 block text-[12px] font-extrabold">سياسة الترخيص وفترته</label>
                 <select id="license-plan" value={createPlan} onChange={(e) => setCreatePlan(e.target.value as LicensePlan)}
-                  className="mb-2 h-10 w-full rounded-[9px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-emerald-600 dark:border-white/10">
+                  className="mb-2 h-10 w-full rounded-[9px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-brand">
                   {listCatalogPlans().map((plan) => <option key={plan.key} value={plan.key}>{plan.arabicName} — {plan.durationDays} يومًا</option>)}
                 </select>
                 {readiness?.keygen.missingPolicies.includes(createPlan) &&
-                  <p className="mb-3 text-[11px] font-bold text-amber-700">معرّف سياسة Keygen لهذه الباقة ناقص؛ أضفه لإصدار الترخيص.</p>}
+                  <p className="mb-3 text-[11px] font-bold text-warning">معرّف سياسة Keygen لهذه الباقة ناقص؛ أضفه لإصدار الترخيص.</p>}
               </>
             )}
             <label htmlFor="license-target" className="mb-2 block text-[12px] font-extrabold">حساب المستخدم (اختياري)</label>
             <input id="license-target" type="text" value={createUser} onChange={(e) => setCreateUser(e.target.value)}
               placeholder="البريد الإلكتروني أو معرّف الحساب" dir="auto" autoComplete="off"
-              className="mb-2 h-10 w-full rounded-[9px] border border-line bg-transparent px-3 text-[12px] outline-none focus:border-emerald-600 dark:border-white/10" />
+              className="mb-2 h-10 w-full rounded-[9px] border border-line bg-transparent px-3 text-[12px] outline-none focus:border-brand" />
             <p className="mb-3 text-[11px] leading-5 text-muted">{createType === "FREE"
               ? "يربط الترخيص المجاني بالحساب محليًا، ولا يتطلب Keygen."
               : "تحديد حساب يربط الترخيص به لدى Keygen ويفعّله بعد التحقق. بدونه يُصدر مفتاح غير مخصص ويُفعّله صاحبه من صفحة الترخيص."}</p>
-            {error && <p role="alert" className="mb-3 rounded-[8px] bg-red-50 p-2 text-[11px] font-bold text-red-700 dark:bg-red-900/20 dark:text-red-300">{error}</p>}
+            {error && <p role="alert" className="mb-3 rounded-[8px] bg-danger/10 p-2 text-[11px] font-bold text-error">{error}</p>}
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => void handleCreate()}
                 disabled={creating || (createType === "PRO" && readiness?.keygen.missingPolicies.includes(createPlan))}
-                className="h-10 flex-1 rounded-[9px] bg-emerald-600 text-[13px] font-extrabold text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="h-10 flex-1 rounded-[9px] bg-navy text-[13px] font-extrabold text-on-brand hover:bg-navy-2 disabled:opacity-50"
               >
                 {creating ? "جارٍ الإصدار…" : createUser.trim() ? "إصدار وربط الترخيص" : "إصدار مفتاح"}
               </button>
@@ -876,7 +876,7 @@ export default function AdminLicensePanel() {
                 type="button"
                 disabled={creating}
                 onClick={() => setShowCreate(false)}
-                className="h-10 rounded-[9px] border border-line px-4 text-[13px] font-bold hover:bg-line-2 dark:border-white/10"
+                className="h-10 rounded-[9px] border border-line px-4 text-[13px] font-bold hover:bg-line-2"
               >
                 إلغاء
               </button>

@@ -115,12 +115,12 @@ function SectionHeading({
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <p className="text-[11px] font-bold tracking-[0.14em] text-navy dark:text-gold-2">
+        <p className="text-[11px] font-bold tracking-[0.14em] text-brand">
           {eyebrow}
         </p>
         <h2
           id={id}
-          className="mt-1.5 text-[20px] font-extrabold text-ink dark:text-white"
+          className="mt-1.5 text-[20px] font-extrabold text-ink"
         >
           {title}
         </h2>
@@ -145,14 +145,14 @@ function ContinueCard({
 }) {
   const theme = THEMES[project.theme] || THEMES.official;
   return (
-    <div className="shadow-card dark:shadow-card-dark group grid overflow-hidden rounded-2xl border border-line bg-white transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover sm:grid-cols-[180px_minmax(0,1fr)] dark:border-white/10 dark:bg-white/5 dark:hover:shadow-card-dark-hover">
+    <div className="shadow-card group grid overflow-hidden rounded-2xl border border-line bg-surface transition-all duration-200 hover:-translate-y-0.5 hover:shadow-card-hover sm:grid-cols-[180px_minmax(0,1fr)]">
       <button
         type="button"
         onClick={() => onOpen(project.id)}
         aria-label={`متابعة ${project.name}`}
-        className="grid place-items-center border-b border-line/70 bg-paper/70 p-4 sm:border-b-0 sm:border-l dark:border-white/10 dark:bg-white/[0.03]"
+        className="grid place-items-center border-b border-line/70 bg-paper/70 p-4 sm:border-b-0 sm:border-l"
       >
-        <span className="block aspect-[210/297] h-[150px] overflow-hidden rounded-[5px] border border-line bg-white shadow-md transition group-hover:scale-[1.02] dark:border-white/15">
+        <span className="block aspect-[210/297] h-[150px] overflow-hidden rounded-[5px] border border-line bg-surface shadow-md transition group-hover:scale-[1.02]">
           {project.thumbnail ? (
             <img
               src={project.thumbnail}
@@ -178,10 +178,10 @@ function ContinueCard({
       </button>
       <div className="flex min-w-0 flex-col justify-between gap-4 p-5 sm:p-6">
         <div className="min-w-0">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-navy/10 px-2.5 py-1 text-[10px] font-extrabold text-navy dark:bg-white/10 dark:text-gold-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-navy/10 px-2.5 py-1 text-[10px] font-extrabold text-brand">
             <Clock3 className="size-3" /> آخر ما عملت عليه
           </span>
-          <h3 className="mt-3 line-clamp-2 break-words text-[18px] font-extrabold leading-7 text-ink dark:text-white">
+          <h3 className="mt-3 line-clamp-2 break-words text-[18px] font-extrabold leading-7 text-ink">
             {project.name}
           </h3>
           <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-semibold text-muted">
@@ -200,7 +200,7 @@ function ContinueCard({
           <button
             type="button"
             onClick={() => onOpen(project.id)}
-            className="inline-flex h-10 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-navy-2"
+            className="inline-flex h-10 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
           >
             <FolderOpen className="size-4" />
             متابعة التحرير
@@ -351,19 +351,19 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
   const templateCount = entries.length;
 
   return (
-    <div className="min-h-full bg-paper dark:bg-[#111722]">
+    <div className="min-h-full bg-paper">
       <SiteHeader current="/home" />
 
       <main className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-8 sm:px-6 md:gap-12 md:py-12">
         {/* ── 1. NASAQ introduction ─────────────────────────────────────── */}
         <section
           aria-labelledby="home-intro"
-          className="shadow-card dark:shadow-card-dark relative overflow-hidden rounded-3xl border border-line bg-white dark:border-white/10 dark:bg-[#151b27]"
+          className="shadow-card relative overflow-hidden rounded-3xl border border-line bg-surface"
         >
           {/* Institutional pattern: a quiet grid of rules, not an illustration. */}
           <svg
             aria-hidden
-            className="pointer-events-none absolute inset-y-0 left-0 hidden h-full w-[46%] text-navy/[0.07] md:block dark:text-white/[0.05]"
+            className="pointer-events-none absolute inset-y-0 left-0 hidden h-full w-[46%] text-brand/[0.07] md:block"
             viewBox="0 0 400 300"
             preserveAspectRatio="xMinYMid slice"
           >
@@ -414,10 +414,10 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
           <div className="relative grid gap-6 p-6 sm:p-8 md:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] md:items-center md:p-10">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-navy/15 bg-navy/5 px-3 py-1 text-[11px] font-bold text-navy dark:border-white/10 dark:bg-white/5 dark:text-gold-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/15 bg-navy/5 px-3 py-1 text-[11px] font-bold text-brand">
                   <Sparkles className="size-3.5" /> مساحة عمل نَسَق
                 </span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[11px] font-extrabold text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-300">
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-brand bg-ok/10 px-3 py-1 text-[11px] font-extrabold text-success">
                   <ShieldCheck className="size-3.5" /> {summary.label}
                   {summary.detail && (
                     <span className="font-bold opacity-80">
@@ -428,10 +428,10 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
               </div>
               <h1
                 id="home-intro"
-                className="mt-4 text-[26px] font-extrabold leading-[1.3] text-ink sm:text-[32px] dark:text-white"
+                className="mt-4 text-[26px] font-extrabold leading-[1.3] text-ink sm:text-[32px]"
               >
                 {greetingName ? `مرحبًا ${greetingName}، ` : "مرحبًا بك، "}
-                <span className="text-navy dark:text-gold-2">
+                <span className="text-brand">
                   لنُنجز مستندك التالي
                 </span>
               </h1>
@@ -466,13 +466,13 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
               ].map((stat) => (
                 <div
                   key={stat.label}
-                  className="rounded-2xl border border-line/80 bg-white/80 p-3.5 backdrop-blur-[2px] dark:border-white/10 dark:bg-white/[0.04]"
+                  className="rounded-2xl border border-line/80 bg-surface/80 p-3.5 backdrop-blur-[2px]"
                 >
                   <dt className="flex items-center gap-1.5 text-[11px] font-bold text-muted">
                     <stat.icon className="size-3.5" aria-hidden />
                     {stat.label}
                   </dt>
-                  <dd className="mt-1.5 truncate text-[18px] font-extrabold tabular-nums text-ink dark:text-white">
+                  <dd className="mt-1.5 truncate text-[18px] font-extrabold tabular-nums text-ink">
                     {stat.value}
                   </dd>
                 </div>
@@ -494,13 +494,13 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
               type="button"
               onClick={() => setNewDoc({})}
               data-testid="home-new-document"
-              className="group relative flex min-h-[168px] flex-col justify-between overflow-hidden rounded-2xl bg-navy p-5 text-right text-white shadow-lg shadow-navy/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-navy-2 hover:shadow-xl dark:shadow-black/30"
+              className="group relative flex min-h-[168px] flex-col justify-between overflow-hidden rounded-2xl bg-navy p-5 text-right text-on-brand shadow-lg shadow-navy/20 transition-all duration-200 hover:-translate-y-0.5 hover:bg-navy-2 hover:shadow-xl dark:shadow-black/30"
             >
               <span
                 aria-hidden
                 className="absolute -bottom-10 -left-10 size-40 rounded-full border-[18px] border-white/[0.06]"
               />
-              <span className="grid size-11 place-items-center rounded-xl bg-white/15 transition group-hover:bg-white/25">
+              <span className="grid size-11 place-items-center rounded-xl bg-surface/15 transition group-hover:bg-surface/25">
                 <FilePlus2 className="size-5" />
               </span>
               <span className="relative">
@@ -529,12 +529,12 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
                       orientation: kind.orientation,
                     });
                   }}
-                  className="shadow-card dark:shadow-card-dark group flex flex-col items-start gap-2 rounded-2xl border border-line bg-white p-4 text-right transition-all duration-200 hover:-translate-y-0.5 hover:border-navy-2 hover:shadow-card-hover dark:border-white/10 dark:bg-white/5 dark:hover:border-white/25 dark:hover:shadow-card-dark-hover"
+                  className="shadow-card group flex flex-col items-start gap-2 rounded-2xl border border-line bg-surface p-4 text-right transition-all duration-200 hover:-translate-y-0.5 hover:border-brand hover:shadow-card-hover"
                 >
-                  <span className="grid size-9 place-items-center rounded-lg bg-navy/10 text-navy transition group-hover:bg-navy group-hover:text-white dark:bg-white/10 dark:text-gold-2 dark:group-hover:bg-gold-2 dark:group-hover:text-navy">
+                  <span className="grid size-9 place-items-center rounded-lg bg-navy/10 text-brand transition group-hover:bg-navy-2 group-hover:text-on-brand">
                     <q.icon className="size-4" />
                   </span>
-                  <span className="text-[13px] font-extrabold text-ink dark:text-white">
+                  <span className="text-[13px] font-extrabold text-ink">
                     {q.title}
                   </span>
                   <span className="text-[11px] font-bold text-muted">
@@ -545,12 +545,12 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
               <button
                 type="button"
                 onClick={() => setNewDoc({ start: "template" })}
-                className="shadow-card dark:shadow-card-dark group flex flex-col items-start gap-2 rounded-2xl border border-dashed border-gold/60 bg-gold/[0.07] p-4 text-right transition-all duration-200 hover:-translate-y-0.5 hover:border-gold hover:shadow-card-hover dark:border-gold/40 dark:bg-gold/[0.06]"
+                className="shadow-card group flex flex-col items-start gap-2 rounded-2xl border border-dashed border-gold/60 bg-gold/[0.07] p-4 text-right transition-all duration-200 hover:-translate-y-0.5 hover:border-gold/60 hover:shadow-card-hover"
               >
-                <span className="grid size-9 place-items-center rounded-lg bg-gold/25 text-green dark:bg-gold/20 dark:text-gold-2">
+                <span className="grid size-9 place-items-center rounded-lg bg-gold/25 text-ink">
                   <RectangleHorizontal className="size-4" />
                 </span>
-                <span className="text-[13px] font-extrabold text-ink dark:text-white">
+                <span className="text-[13px] font-extrabold text-ink">
                   من حزمة جاهزة
                 </span>
                 <span className="text-[11px] font-bold text-muted">
@@ -570,7 +570,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
             action={
               <a
                 href="/projects"
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-4 text-[12px] font-extrabold text-ink transition hover:bg-line-2 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-[12px] font-extrabold text-ink transition hover:bg-line-2"
               >
                 <FolderOpen className="size-4" />
                 كل المستندات{projects.length ? ` (${projects.length})` : ""}
@@ -580,15 +580,15 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
 
           {!hydrated || projectsLoading ? (
             <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-              <div className="shadow-card dark:shadow-card-dark h-[200px] animate-pulse rounded-2xl border border-line bg-white dark:border-white/10 dark:bg-white/5" />
-              <div className="shadow-card dark:shadow-card-dark h-[200px] animate-pulse rounded-2xl border border-line bg-white dark:border-white/10 dark:bg-white/5" />
+              <div className="shadow-card h-[200px] animate-pulse rounded-2xl border border-line bg-surface" />
+              <div className="shadow-card h-[200px] animate-pulse rounded-2xl border border-line bg-surface" />
             </div>
           ) : !latest ? (
-            <div className="grid place-items-center rounded-2xl border border-dashed border-line bg-white/60 px-6 py-12 text-center dark:border-white/15 dark:bg-white/[0.03]">
-              <span className="grid size-12 place-items-center rounded-full bg-navy/10 text-navy dark:bg-white/10 dark:text-gold-2">
+            <div className="grid place-items-center rounded-2xl border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
+              <span className="grid size-12 place-items-center rounded-full bg-navy/10 text-brand">
                 <Files className="size-5" />
               </span>
-              <p className="mt-3 text-[15px] font-extrabold text-ink dark:text-white">
+              <p className="mt-3 text-[15px] font-extrabold text-ink">
                 لا توجد مستندات بعد
               </p>
               <p className="mt-1 max-w-md text-[13px] leading-6 text-muted">
@@ -599,13 +599,13 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
                 <button
                   type="button"
                   onClick={() => setNewDoc({})}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-navy px-4 text-[12px] font-extrabold text-white transition hover:bg-navy-2"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl bg-navy px-4 text-[12px] font-extrabold text-on-brand transition hover:bg-navy-2"
                 >
                   <FilePlus2 className="size-4" /> إنشاء مستند جديد
                 </button>
                 <a
                   href="#home-templates"
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-line px-4 text-[12px] font-bold text-ink transition hover:bg-line-2 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-line px-4 text-[12px] font-bold text-ink transition hover:bg-line-2"
                 >
                   <LayoutTemplate className="size-4" /> تصفح القوالب
                 </a>
@@ -639,7 +639,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
             action={
               <a
                 href="/templates"
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-4 text-[12px] font-extrabold text-ink transition hover:bg-line-2 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-[12px] font-extrabold text-ink transition hover:bg-line-2"
               >
                 <LayoutTemplate className="size-4" />
                 مكتبة القوالب الكاملة
@@ -670,8 +670,8 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12px] font-extrabold transition",
                     active
-                      ? "border-navy bg-navy text-white shadow-sm"
-                      : "border-line bg-white text-muted hover:border-navy-2 hover:text-ink dark:border-white/10 dark:bg-white/5 dark:hover:text-white",
+                      ? "border-brand bg-navy text-on-brand shadow-sm"
+                      : "border-line bg-surface text-muted hover:border-brand hover:text-ink",
                   )}
                 >
                   {option.id === "featured" && (
@@ -683,7 +683,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
                       "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
                       active
                         ? "bg-white/20 text-white"
-                        : "bg-line-2 text-muted dark:bg-white/10 dark:text-white/70",
+                        : "bg-line-2 text-muted",
                     )}
                   >
                     {option.count}
@@ -694,11 +694,11 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
           </div>
 
           {shown.length === 0 ? (
-            <div className="grid place-items-center rounded-2xl border border-dashed border-line bg-white/60 px-6 py-12 text-center dark:border-white/15 dark:bg-white/[0.03]">
-              <span className="grid size-12 place-items-center rounded-full bg-gold/20 text-green dark:bg-gold/15 dark:text-gold-2">
+            <div className="grid place-items-center rounded-2xl border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
+              <span className="grid size-12 place-items-center rounded-full bg-gold/20 text-ink">
                 <LayoutTemplate className="size-5" />
               </span>
-              <p className="mt-3 text-[15px] font-extrabold text-ink dark:text-white">
+              <p className="mt-3 text-[15px] font-extrabold text-ink">
                 لا توجد قوالب متاحة هنا بعد
               </p>
               <p className="mt-1 max-w-md text-[13px] leading-6 text-muted">
@@ -707,7 +707,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
               </p>
               <a
                 href="/templates"
-                className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl border border-line px-4 text-[12px] font-bold text-ink transition hover:bg-line-2 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
+                className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl border border-line px-4 text-[12px] font-bold text-ink transition hover:bg-line-2"
               >
                 مكتبة القوالب
               </a>
@@ -733,7 +733,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
                 <div className="flex justify-center">
                   <a
                     href="/templates"
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-4 text-[12px] font-extrabold text-ink transition hover:bg-line-2 dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:bg-white/10"
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-[12px] font-extrabold text-ink transition hover:bg-line-2"
                   >
                     عرض كل القوالب ({shown.length})
                     <ArrowLeft className="size-4" />
@@ -803,7 +803,7 @@ export function LicensedWorkspaceHome() {
   const license = useLicense(user?.id, user?.primaryEmail ?? null);
   if (license.isLoading) {
     return (
-      <div className="grid min-h-screen place-items-center bg-paper text-[13px] font-bold text-muted dark:bg-[#111722]">
+      <div className="grid min-h-screen place-items-center bg-paper text-[13px] font-bold text-muted">
         جارٍ تجهيز مساحة العمل…
       </div>
     );

@@ -230,20 +230,20 @@ export function BrandKitPage() {
   const kitDate = formatKitDate(kit);
 
   return (
-    <div className="min-h-full bg-paper dark:bg-[#111722]">
+    <div className="min-h-full bg-paper">
       <SiteHeader current="/الهوية" />
       <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
-        <section className="border-b border-line pb-10 dark:border-white/10"><div className="flex items-center gap-4"><span className="scale-125 origin-right"><BrandLogo /></span><div><p className="text-[11px] font-bold tracking-[0.18em] text-green">هوية المنتج</p><p className="mt-3 max-w-2xl text-[14px] leading-7 text-muted">منصة عربية تساعدك على إنشاء التقارير والمستندات والعروض وتنظيمها في مساحة عمل واحدة.</p></div></div></section>
+        <section className="border-b border-line pb-10"><div className="flex items-center gap-4"><span className="scale-125 origin-right"><BrandLogo /></span><div><p className="text-[11px] font-bold tracking-[0.18em] text-ink">هوية المنتج</p><p className="mt-3 max-w-2xl text-[14px] leading-7 text-muted">منصة عربية تساعدك على إنشاء التقارير والمستندات والعروض وتنظيمها في مساحة عمل واحدة.</p></div></div></section>
 
-        <section className="grid gap-6 border-b border-line py-12 lg:grid-cols-[1.15fr_.85fr] dark:border-white/10"><div><h2 className="text-[20px] font-extrabold">صُممت وطُوّرت بعناية مؤسسية</h2><p className="mt-3 text-[14px] leading-7 text-muted">{BRAND.team} يقف خلف {BRAND.name}. يركز العمل على أدوات عملية وواضحة تساعد الفرق والأفراد على تجهيز مخرجاتهم الرسمية بطريقة منظمة.</p></div><div className="flex items-center gap-4 border-r-2 border-gold pr-4"><img src="/nasaq-mark.svg" alt="" aria-hidden className="size-12" /><div><strong className="block text-[16px] font-extrabold">{BRAND.team}</strong><span className="mt-1 block text-[12px] text-muted">فريق التطوير والتشغيل</span></div></div></section>
+        <section className="grid gap-6 border-b border-line py-12 lg:grid-cols-[1.15fr_.85fr]"><div><h2 className="text-[20px] font-extrabold">صُممت وطُوّرت بعناية مؤسسية</h2><p className="mt-3 text-[14px] leading-7 text-muted">{BRAND.team} يقف خلف {BRAND.name}. يركز العمل على أدوات عملية وواضحة تساعد الفرق والأفراد على تجهيز مخرجاتهم الرسمية بطريقة منظمة.</p></div><div className="flex items-center gap-4 border-r-2 border-gold pr-4"><img src="/nasaq-mark.svg" alt="" aria-hidden className="size-12" /><div><strong className="block text-[16px] font-extrabold">{BRAND.team}</strong><span className="mt-1 block text-[12px] text-muted">فريق التطوير والتشغيل</span></div></div></section>
 
         <section className="py-12"><h2 className="text-[20px] font-extrabold">ماذا تقدم {BRAND.name}؟</h2><div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Service icon={FilePenLine} title="تحرير التصاميم والمستندات" body="نصوص وصور وأشكال وجداول وعناصر قابلة للتحريك والتعديل." /><Service icon={LayoutTemplate} title="قوالب وصفحات جاهزة" body="ابدأ بتكوين منظم ثم عدّل المحتوى والهوية بما يناسب عملك." /><Service icon={FolderKanban} title="إدارة المشاريع" body="احفظ مشاريعك محلياً، وافتحها ونظم صفحاتها قبل التصدير." /><Service icon={Type} title="تجربة عربية" body="دعم RTL، النص العربي، المحاذاة، الخطوط، والأرقام في مساحة عمل واحدة." /><Service icon={Palette} title="هوية مرنة" body="اضبط ألوان الجهة وخطوطها ورؤوس الصفحات وتذييلها للمستند." /><Service icon={CheckCircle2} title="معاينة وتصدير" body="راجع التصميم ثم صدّره بالصيغة المتاحة وفق نوع الترخيص." /></div></section>
 
-        <section className="grid gap-5 border-y border-line py-12 lg:grid-cols-2 dark:border-white/10"><div><div className="flex items-center gap-2"><ShieldCheck className="size-5 text-navy-2 dark:text-gold-2" /><h2 className="text-[20px] font-extrabold">لماذا {BRAND.name}؟</h2></div><p className="mt-3 text-[14px] leading-7 text-muted">تجمع المنصة القوالب والمشاريع والصفحات والعناصر وأدوات التحرير في واجهة عربية واحدة، لتصل إلى أدوات العمل بسرعة وتحافظ على تنظيم الملف من البداية إلى التصدير.</p></div><div><div className="flex items-center gap-2"><LockKeyhole className="size-5 text-navy-2 dark:text-gold-2" /><h2 className="text-[20px] font-extrabold">الأمان والخصوصية</h2></div><p className="mt-3 text-[14px] leading-7 text-muted">يحفظ الإصدار الحالي المشاريع داخل متصفحك ولا يرفعها تلقائياً إلى خادم. لا تُضمَّن مفاتيح API أو بيانات اعتماد في الواجهة أو المستودع. أما التراخيص المدفوعة فتحتاج تحققاً خادمياً عند نشر النسخة التجارية، ولا يمكن اعتبار كود الواجهة المتاح للمتصفح محمياً من النسخ.</p></div></section>
+        <section className="grid gap-5 border-y border-line py-12 lg:grid-cols-2"><div><div className="flex items-center gap-2"><ShieldCheck className="size-5 text-brand-hover" /><h2 className="text-[20px] font-extrabold">لماذا {BRAND.name}؟</h2></div><p className="mt-3 text-[14px] leading-7 text-muted">تجمع المنصة القوالب والمشاريع والصفحات والعناصر وأدوات التحرير في واجهة عربية واحدة، لتصل إلى أدوات العمل بسرعة وتحافظ على تنظيم الملف من البداية إلى التصدير.</p></div><div><div className="flex items-center gap-2"><LockKeyhole className="size-5 text-brand-hover" /><h2 className="text-[20px] font-extrabold">الأمان والخصوصية</h2></div><p className="mt-3 text-[14px] leading-7 text-muted">يحفظ الإصدار الحالي المشاريع داخل متصفحك ولا يرفعها تلقائياً إلى خادم. لا تُضمَّن مفاتيح API أو بيانات اعتماد في الواجهة أو المستودع. أما التراخيص المدفوعة فتحتاج تحققاً خادمياً عند نشر النسخة التجارية، ولا يمكن اعتبار كود الواجهة المتاح للمتصفح محمياً من النسخ.</p></div></section>
 
         <section className="py-12"><h2 className="text-[20px] font-extrabold">معلومات المنتج</h2><dl className="mt-5 grid gap-3 sm:grid-cols-3"><Fact label="اسم المنتج" value="نَسَق | NASAQ" /><Fact label="المطوّر" value={BRAND.team} /><Fact label="نوع المنتج" value="منصة تصميم وتحرير عربية" /></dl></section>
 
-        <section className="border-t border-line pt-10 dark:border-white/10">
+        <section className="border-t border-line pt-10">
           <div className="max-w-2xl">
             <h2 className="text-[20px] font-extrabold">هوية مستندك</h2>
             <p className="mt-2 text-[14px] leading-7 text-muted">
@@ -253,7 +253,7 @@ export function BrandKitPage() {
           </div>
 
           {/* Multi-profile bar: create / switch / rename / export / import. */}
-          <div className="mt-6 flex flex-wrap items-center gap-2 rounded-[10px] border border-line bg-white p-2 dark:border-white/10 dark:bg-white/5">
+          <div className="mt-6 flex flex-wrap items-center gap-2 rounded-[10px] border border-line bg-surface p-2">
             {renamingProfile ? (
               <>
                 <input
@@ -265,9 +265,9 @@ export function BrandKitPage() {
                     if (e.key === "Escape") setRenamingProfile(false);
                   }}
                   aria-label="اسم الهوية"
-                  className="h-9 w-44 rounded-[7px] border border-line px-2 text-[12px] font-bold dark:border-white/10 dark:bg-white/5"
+                  className="h-9 w-44 rounded-[7px] border border-line px-2 text-[12px] font-bold bg-surface-2"
                 />
-                <button type="button" onClick={commitRenameProfile} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-navy px-3 text-[11px] font-extrabold text-white">
+                <button type="button" onClick={commitRenameProfile} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-navy px-3 text-[11px] font-extrabold text-on-brand">
                   <CheckCircle2 className="size-3.5" /> حفظ الاسم
                 </button>
               </>
@@ -276,26 +276,26 @@ export function BrandKitPage() {
                 value={activeId}
                 onChange={(e) => switchTo(e.target.value)}
                 aria-label="الهوية النشطة"
-                className="h-9 min-w-[170px] rounded-[7px] border border-line bg-transparent px-2 text-[12px] font-extrabold dark:border-white/10"
+                className="h-9 min-w-[170px] rounded-[7px] border border-line bg-transparent px-2 text-[12px] font-extrabold"
               >
                 {profiles.map((p) => (
                   <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
             )}
-            <button type="button" onClick={createProfile} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold dark:border-white/10" title="هوية جديدة">
+            <button type="button" onClick={createProfile} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold" title="هوية جديدة">
               <Plus className="size-3.5" /> جديدة
             </button>
-            <button type="button" onClick={() => { const cur = profiles.find((p) => p.id === activeId); setProfileNameDraft(cur?.name || ""); setRenamingProfile(true); }} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold dark:border-white/10" title="إعادة تسمية الهوية">
+            <button type="button" onClick={() => { const cur = profiles.find((p) => p.id === activeId); setProfileNameDraft(cur?.name || ""); setRenamingProfile(true); }} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold" title="إعادة تسمية الهوية">
               <Pencil className="size-3.5" /> تسمية
             </button>
-            <button type="button" onClick={doExport} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold dark:border-white/10" title="تصدير كل الهويات كملف .json">
+            <button type="button" onClick={doExport} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold" title="تصدير كل الهويات كملف .json">
               <Download className="size-3.5" /> تصدير .json
             </button>
-            <button type="button" onClick={() => importInput.current?.click()} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold dark:border-white/10" title="استيراد هويات من ملف .json">
+            <button type="button" onClick={() => importInput.current?.click()} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold" title="استيراد هويات من ملف .json">
               <Upload className="size-3.5" /> استيراد
             </button>
-            <button type="button" onClick={removeProfile} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-red-200 px-3 text-[11px] font-bold text-red-600 dark:border-red-500/30" title="حذف الهوية الحالية">
+            <button type="button" onClick={removeProfile} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-danger/30 px-3 text-[11px] font-bold text-error" title="حذف الهوية الحالية">
               <Trash2 className="size-3.5" /> حذف
             </button>
             <input ref={importInput} type="file" accept="application/json,.json" className="hidden" onChange={(e) => void doImport(e)} />
@@ -303,7 +303,7 @@ export function BrandKitPage() {
           </div>
 
           <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_340px]">
-            <section className="grid gap-5 shadow-card dark:shadow-card-dark rounded-xl border border-line bg-white p-5 dark:border-white/10 dark:bg-white/5">
+            <section className="grid gap-5 shadow-card rounded-xl border border-line bg-surface p-5">
               {/* 3 logo/stamp drop zones. */}
               <div>
                 <p className="text-[11px] font-extrabold text-muted">الصور الرسمية</p>
@@ -326,7 +326,7 @@ export function BrandKitPage() {
                       key={`${preset.name}-${index}`}
                       type="button"
                       onClick={() => applyPreset(preset)}
-                      className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[11px] font-bold transition hover:border-navy-2 dark:border-white/10"
+                      className="inline-flex items-center gap-2 rounded-full border border-line px-3 py-1.5 text-[11px] font-bold transition hover:border-brand"
                     >
                       <span className="flex -space-x-1 rtl:space-x-reverse">
                         {[preset.primaryColor, preset.secondaryColor, preset.accentColor, preset.paperColor, preset.textColor].map((c, i) => (
@@ -358,7 +358,7 @@ export function BrandKitPage() {
                         key={key}
                         type="button"
                         onClick={() => saveColor(kit[key])}
-                        className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-1 text-[10px] font-bold hover:border-emerald-500/50 dark:border-white/10"
+                        className="inline-flex items-center gap-1 rounded-full border border-line px-2 py-1 text-[10px] font-bold hover:border-brand"
                         title="حفظ هذا اللون"
                       >
                         <span className="size-3 rounded-full border border-white shadow-sm" style={{ background: kit[key] }} />
@@ -377,14 +377,14 @@ export function BrandKitPage() {
                           type="button"
                           onClick={() => update("accentColor", c)}
                           title={`تطبيق ${c} كلون لمسة`}
-                          className="block size-7 rounded-full border-2 border-white shadow ring-1 ring-line dark:ring-white/15"
+                          className="block size-7 rounded-full border-2 border-white shadow ring-1 ring-line"
                           style={{ background: c }}
                         />
                         <button
                           type="button"
                           onClick={() => removeColor(c)}
                           aria-label={`إزالة ${c}`}
-                          className="absolute -top-1 -left-1 hidden size-4 place-items-center rounded-full bg-white text-[10px] font-black text-danger shadow group-hover:grid"
+                          className="absolute -top-1 -left-1 hidden size-4 place-items-center rounded-full bg-surface text-[10px] font-black text-error shadow group-hover:grid"
                         >
                           ×
                         </button>
@@ -410,22 +410,22 @@ export function BrandKitPage() {
                 <Field label="أسلوب الترويسة"><select value={kit.headerStyle} onChange={(e) => update("headerStyle", e.target.value as BrandKit["headerStyle"])}><option value="official">رسمي</option><option value="minimal">مختصر</option><option value="band">شريط هوية</option></select></Field>
                 <Field label="أسلوب التذييل"><select value={kit.footerStyle} onChange={(e) => update("footerStyle", e.target.value as BrandKit["footerStyle"])}><option value="official">رسمي</option><option value="simple">بسيط</option><option value="none">بدون تذييل</option></select></Field>
               </div>
-              <div className="flex flex-wrap gap-2 border-t border-line pt-4 dark:border-white/10">
-                <button type="button" onClick={save} className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-navy px-4 text-[12px] font-extrabold text-white"><Save className="size-4" />{saved ? "تم الحفظ" : "حفظ الهوية محليًا"}</button>
-                <button type="button" onClick={() => setKit(resetBrandKit())} className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-line px-4 text-[12px] font-bold dark:border-white/10"><RotateCcw className="size-4" />إعادة الضبط</button>
+              <div className="flex flex-wrap gap-2 border-t border-line pt-4">
+                <button type="button" onClick={save} className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-navy px-4 text-[12px] font-extrabold text-on-brand"><Save className="size-4" />{saved ? "تم الحفظ" : "حفظ الهوية محليًا"}</button>
+                <button type="button" onClick={() => setKit(resetBrandKit())} className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-line px-4 text-[12px] font-bold"><RotateCcw className="size-4" />إعادة الضبط</button>
               </div>
             </section>
 
             {/* Reactive A4 live preview with mode toggles. */}
-            <aside className="shadow-card dark:shadow-card-dark h-fit rounded-xl border border-line bg-white p-4 dark:border-white/10 dark:bg-white/5">
+            <aside className="shadow-card h-fit rounded-xl border border-line bg-surface p-4">
               <div className="flex items-start gap-2">
-                <ShieldCheck className="size-5 shrink-0 text-green" />
+                <ShieldCheck className="size-5 shrink-0 text-ink" />
                 <div>
                   <h2 className="text-[14px] font-extrabold">معاينة حية A4</h2>
                   <p className="mt-1 text-[12px] leading-5 text-muted">تتحدّث فور تعديل أي لون أو حقل.</p>
                 </div>
               </div>
-              <div role="tablist" aria-label="نوع المعاينة" className="mt-3 grid grid-cols-3 gap-1 rounded-[8px] bg-line-2 p-1 dark:bg-white/10">
+              <div role="tablist" aria-label="نوع المعاينة" className="mt-3 grid grid-cols-3 gap-1 rounded-[8px] bg-line-2 p-1">
                 {PREVIEW_MODES.map((mode) => (
                   <button
                     key={mode.id}
@@ -436,7 +436,7 @@ export function BrandKitPage() {
                     className={cn(
                       "rounded-[6px] px-1 py-1.5 text-[10px] font-extrabold transition",
                       previewMode === mode.id
-                        ? "bg-white text-navy shadow-sm dark:bg-[#1b2431] dark:text-gold-2"
+                        ? "bg-surface text-brand shadow-sm"
                         : "text-muted",
                     )}
                   >
@@ -446,7 +446,7 @@ export function BrandKitPage() {
               </div>
 
               <div
-                className="mt-3 overflow-hidden rounded-[6px] border border-line shadow-sm dark:border-white/10"
+                className="mt-3 overflow-hidden rounded-[6px] border border-line shadow-sm"
                 style={{ background: kit.paperColor || "#fbfaf6", aspectRatio: "1 / 1.414" }}
                 dir="rtl"
               >
@@ -543,7 +543,7 @@ export function BrandKitPage() {
 
               <div className="mt-3 flex items-center gap-2">
                 {[kit.primaryColor, kit.secondaryColor, kit.accentColor, kit.paperColor || "#fbfaf6", kit.textColor || "#1f2937"].map((c, i) => (
-                  <span key={i} className="size-6 rounded-full border border-line shadow-sm dark:border-white/10" style={{ background: c }} title={c} />
+                  <span key={i} className="size-6 rounded-full border border-line shadow-sm" style={{ background: c }} title={c} />
                 ))}
                 <span className="mr-auto text-[10px] text-muted">{PREVIEW_MODES.find((m) => m.id === previewMode)?.label}</span>
               </div>
@@ -595,8 +595,8 @@ function LogoZone({
         className={cn(
           "grid h-24 w-full place-items-center overflow-hidden rounded-[8px] border-2 border-dashed p-2 transition",
           over
-            ? "border-navy-2 bg-navy/10 dark:border-gold-2/70 dark:bg-gold-2/10"
-            : "border-line bg-line-2/40 hover:border-navy-2 dark:border-white/15 dark:bg-white/5",
+            ? "border-brand bg-navy/10"
+            : "border-line bg-line-2/40 hover:border-brand",
         )}
         title={hint}
       >
@@ -616,7 +616,7 @@ function LogoZone({
           type="button"
           onClick={onClear}
           aria-label={`إزالة ${label}`}
-          className="absolute top-1 left-1 grid size-5 place-items-center rounded-full border border-line bg-white/90 text-red-600 dark:border-white/20 dark:bg-[#161c26]/90"
+          className="absolute top-1 left-1 grid size-5 place-items-center rounded-full border border-line bg-surface-2 text-error"
         >
           <Trash2 className="size-3" />
         </button>
@@ -626,6 +626,6 @@ function LogoZone({
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="grid gap-1 text-[11px] font-extrabold text-muted">{label}{children}</label>; }
-function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <Field label={label}><div className="flex h-10 w-full min-w-0 items-center gap-2 overflow-hidden rounded-[8px] border border-line px-2 dark:border-white/10"><input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="size-6 shrink-0 border-0 bg-transparent p-0" /><input value={value} onChange={(e) => onChange(e.target.value)} size={9} className="min-w-0 w-0 flex-1 border-0 bg-transparent text-[12px] uppercase outline-none" dir="ltr" /></div></Field>; }
-function Service({ icon: Icon, title, body }: { icon: typeof FilePenLine; title: string; body: string }) { return <div className="border border-line bg-white p-4 dark:border-white/10 dark:bg-white/5"><Icon className="size-5 text-navy-2 dark:text-gold-2" /><h3 className="mt-3 text-[14px] font-extrabold">{title}</h3><p className="mt-1 text-[12px] leading-6 text-muted">{body}</p></div>; }
-function Fact({ label, value }: { label: string; value: string }) { return <div className="border border-line bg-white p-4 dark:border-white/10 dark:bg-white/5"><dt className="text-[11px] font-extrabold text-muted">{label}</dt><dd className="mt-2 text-[14px] font-extrabold">{value}</dd></div>; }
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) { return <Field label={label}><div className="flex h-10 w-full min-w-0 items-center gap-2 overflow-hidden rounded-[8px] border border-line px-2"><input type="color" value={value} onChange={(e) => onChange(e.target.value)} className="size-6 shrink-0 border-0 bg-transparent p-0" /><input value={value} onChange={(e) => onChange(e.target.value)} size={9} className="min-w-0 w-0 flex-1 border-0 bg-transparent text-[12px] uppercase outline-none" dir="ltr" /></div></Field>; }
+function Service({ icon: Icon, title, body }: { icon: typeof FilePenLine; title: string; body: string }) { return <div className="border border-line bg-surface p-4"><Icon className="size-5 text-brand-hover" /><h3 className="mt-3 text-[14px] font-extrabold">{title}</h3><p className="mt-1 text-[12px] leading-6 text-muted">{body}</p></div>; }
+function Fact({ label, value }: { label: string; value: string }) { return <div className="border border-line bg-surface p-4"><dt className="text-[11px] font-extrabold text-muted">{label}</dt><dd className="mt-2 text-[14px] font-extrabold">{value}</dd></div>; }

@@ -67,7 +67,7 @@ export function AiReportPanel() {
     <div className="editor-subgroup ai-report-panel">
       <h4 className="editor-subgroup-title">
         <span className="inline-flex items-center gap-1.5">
-          <Sparkles className="size-3.5 text-navy-2 dark:text-gold-2" />
+          <Sparkles className="size-3.5 text-brand-hover" />
           مسودة تقرير بالذكاء الاصطناعي
         </span>
       </h4>
@@ -82,7 +82,7 @@ export function AiReportPanel() {
           maxLength={8000}
           rows={4}
           placeholder="مثال: تقرير أداء الربع الثاني، مؤشرات الإنجاز، التحديات، والقرارات المطلوبة…"
-          className="w-full resize-y rounded-[8px] border border-line bg-white px-2.5 py-2 text-[12px] font-semibold leading-5 text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+          className="w-full resize-y rounded-[8px] border border-line bg-surface px-2.5 py-2 text-[12px] font-semibold leading-5 text-ink"
         />
       </label>
       <div className="grid grid-cols-2 gap-2">
@@ -91,7 +91,7 @@ export function AiReportPanel() {
           <input
             value={audience}
             onChange={(event) => setAudience(event.target.value)}
-            className="h-9 w-full rounded-[8px] border border-line bg-white px-2.5 text-[12px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+            className="h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-semibold text-ink"
           />
         </label>
         <label className="grid gap-1 text-[11px] font-extrabold text-muted">
@@ -99,7 +99,7 @@ export function AiReportPanel() {
           <select
             value={maxSections}
             onChange={(event) => setMaxSections(Number(event.target.value))}
-            className="h-9 w-full rounded-[8px] border border-line bg-white px-2.5 text-[12px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+            className="h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-semibold text-ink"
           >
             {[3, 4, 5, 6].map((value) => (
               <option key={value} value={value}>{value}</option>
@@ -113,7 +113,7 @@ export function AiReportPanel() {
           <select
             value={reportType}
             onChange={(event) => setReportType(event.target.value as ReportType)}
-            className="h-9 w-full rounded-[8px] border border-line bg-white px-2.5 text-[12px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+            className="h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-semibold text-ink"
           >
             <option value="executive">ملخص تنفيذي</option>
             <option value="performance">أداء ومؤشرات</option>
@@ -127,7 +127,7 @@ export function AiReportPanel() {
           <select
             value={detailLevel}
             onChange={(event) => setDetailLevel(event.target.value as ReportDetail)}
-            className="h-9 w-full rounded-[8px] border border-line bg-white px-2.5 text-[12px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+            className="h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-semibold text-ink"
           >
             <option value="concise">موجز</option>
             <option value="standard">قياسي</option>
@@ -141,7 +141,7 @@ export function AiReportPanel() {
           <select
             value={pageTarget}
             onChange={(event) => setPageTarget(Number(event.target.value))}
-            className="h-9 w-full rounded-[8px] border border-line bg-white px-2.5 text-[12px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+            className="h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-semibold text-ink"
           >
             <option value={1}>صفحة واحدة</option>
             <option value={2}>صفحتان</option>
@@ -159,7 +159,7 @@ export function AiReportPanel() {
           <select
             value={language}
             onChange={(event) => setLanguage(event.target.value as AiLanguage)}
-            className="h-9 w-full rounded-[8px] border border-line bg-white px-2.5 text-[12px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+            className="h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-semibold text-ink"
           >
             <option value="ar">العربية</option>
             <option value="en">English</option>
@@ -170,7 +170,7 @@ export function AiReportPanel() {
           <select
             value={tone}
             onChange={(event) => setTone(event.target.value as AiTone)}
-            className="h-9 w-full rounded-[8px] border border-line bg-white px-2.5 text-[12px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+            className="h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-semibold text-ink"
           >
             <option value="official">رسمية</option>
             <option value="executive">تنفيذية</option>
@@ -188,9 +188,9 @@ export function AiReportPanel() {
         {busy ? "جارٍ إعداد المسودة…" : draft ? "توليد نسخة جديدة" : "توليد مسودة"}
       </button>
       {draft && (
-        <div className="grid gap-2 rounded-[8px] border border-line bg-white/60 p-2 dark:border-white/10 dark:bg-white/5">
+        <div className="grid gap-2 rounded-[8px] border border-line bg-surface-2 p-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex min-w-0 items-center gap-1 text-[11px] font-extrabold text-ink dark:text-white">
+            <span className="inline-flex min-w-0 items-center gap-1 text-[11px] font-extrabold text-ink">
               <FileText className="size-3.5 shrink-0" />
               <span className="truncate">{draft.title}</span>
             </span>
@@ -210,7 +210,7 @@ export function AiReportPanel() {
               type="button"
               onClick={() => void generate()}
               disabled={busy}
-              className="inline-flex h-8 items-center justify-center gap-1 rounded-[7px] border border-line text-[10px] font-extrabold dark:border-white/10"
+              className="inline-flex h-8 items-center justify-center gap-1 rounded-[7px] border border-line text-[10px] font-extrabold"
             >
               <RefreshCw className="size-3" />
               إعادة التوليد

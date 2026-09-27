@@ -14,7 +14,7 @@ export function Skeleton({ className, rounded = "rounded-[8px]" }: { className?:
   return (
     <span
       aria-hidden
-      className={cn("block animate-pulse bg-line-2 dark:bg-white/10", rounded, className)}
+      className={cn("block animate-pulse bg-line-2", rounded, className)}
     />
   );
 }
@@ -23,12 +23,12 @@ export function Skeleton({ className, rounded = "rounded-[8px]" }: { className?:
 export function EditorWorkspaceSkeleton() {
   return (
     <div
-      className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-paper dark:bg-[#111722]"
+      className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)] bg-paper"
       role="status"
       aria-live="polite"
       aria-label="جارٍ تحضير مساحة العمل"
     >
-      <div className="flex h-14 items-center justify-between gap-3 border-b border-line px-4 dark:border-white/10">
+      <div className="flex h-14 items-center justify-between gap-3 border-b border-line px-4">
         <div className="flex items-center gap-2">
           <Skeleton className="h-8 w-8" rounded="rounded-[8px]" />
           <Skeleton className="h-4 w-28" />
@@ -47,7 +47,7 @@ export function EditorWorkspaceSkeleton() {
           <Skeleton className="h-28 w-full" rounded="rounded-[10px]" />
         </div>
         <div className="grid place-items-center">
-          <div className="aspect-[210/297] w-full max-w-[420px] rounded-[4px] border border-line bg-white p-6 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+          <div className="aspect-[210/297] w-full max-w-[420px] rounded-[4px] border border-line bg-surface p-6 shadow-sm">
             <div className="grid gap-3">
               <Skeleton className="h-6 w-2/3" />
               <Skeleton className="h-3 w-full" />

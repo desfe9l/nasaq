@@ -550,7 +550,7 @@ export function StudioToolDock({
       )}
       {customizing && (
         <div
-          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-scrim p-4 backdrop-blur-sm"
           dir="rtl"
           onClick={() => setCustomizing(false)}
         >
@@ -562,7 +562,7 @@ export function StudioToolDock({
               <h3 className="text-sm font-bold">تخصيص شريط الأدوات (Photoshop-style)</h3>
               <button
                 type="button"
-                className="rounded p-1 text-white/60 hover:bg-white/10 hover:text-white"
+                className="rounded p-1 text-white/60 hover:bg-line-2 hover:text-white"
                 onClick={() => setCustomizing(false)}
               >
                 ✕
@@ -587,7 +587,7 @@ export function StudioToolDock({
                 return (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-[12px]"
+                    className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-surface/5 px-2.5 py-1.5 text-[12px]"
                   >
                     <span className={cn("font-medium", !item.visible && "text-white/40 line-through")}>
                       {labels[item.id] || item.id}
@@ -595,7 +595,7 @@ export function StudioToolDock({
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        className="rounded p-1 hover:bg-white/10 disabled:opacity-30"
+                        className="rounded p-1 hover:bg-line-2 disabled:opacity-30"
                         disabled={index === 0}
                         onClick={() => {
                           const next = [...dockConfig];
@@ -611,7 +611,7 @@ export function StudioToolDock({
                       </button>
                       <button
                         type="button"
-                        className="rounded p-1 hover:bg-white/10 disabled:opacity-30"
+                        className="rounded p-1 hover:bg-line-2 disabled:opacity-30"
                         disabled={index === dockConfig.length - 1}
                         onClick={() => {
                           const next = [...dockConfig];
@@ -627,7 +627,7 @@ export function StudioToolDock({
                       </button>
                       <button
                         type="button"
-                        className={cn("rounded p-1 hover:bg-white/10", item.category === "extra" ? "text-accent" : "text-white/60")}
+                        className={cn("rounded p-1 hover:bg-line-2", item.category === "extra" ? "text-accent" : "text-white/60")}
                         onClick={() => {
                           const next: ToolDockItemConfig[] = dockConfig.map((x) =>
                             x.id === item.id
@@ -643,7 +643,7 @@ export function StudioToolDock({
                       </button>
                       <button
                         type="button"
-                        className={cn("rounded p-1 hover:bg-white/10", item.visible ? "text-emerald-400" : "text-white/40")}
+                        className={cn("rounded p-1 hover:bg-line-2", item.visible ? "text-success" : "text-white/40")}
                         onClick={() => {
                           const next = dockConfig.map((x) =>
                             x.id === item.id ? { ...x, visible: !x.visible } : x,
@@ -663,7 +663,7 @@ export function StudioToolDock({
             <div className="mt-4 flex items-center justify-between border-t border-white/10 pt-3">
               <button
                 type="button"
-                className="flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white/80 hover:bg-white/10 hover:text-white"
+                className="flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-1.5 text-[11px] font-semibold text-white/80 hover:bg-line-2 hover:text-white"
                 onClick={() => {
                   const restored = resetToolDockConfig();
                   setDockConfig(restored);

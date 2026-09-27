@@ -178,7 +178,7 @@ export function TemplatePreview({
   const width = large ? "w-full" : "w-[72px]";
   const height = large ? "h-64" : "h-[64px]";
   const base =
-    "relative overflow-hidden rounded-[5px] border border-line bg-white dark:border-white/10 dark:bg-white";
+    "relative overflow-hidden rounded-[5px] border border-line bg-surface";
   const block = "absolute block";
   const green = "#0c3d2c";
   const gold = "#c6a05a";
@@ -750,7 +750,7 @@ function ProgressPreview({
   }
   return (
     <span className="flex size-6 shrink-0 items-center" aria-hidden>
-      <span className="block h-1.5 w-full overflow-hidden rounded-full bg-line-2 dark:bg-white/15">
+      <span className="block h-1.5 w-full overflow-hidden rounded-full bg-line-2">
         <span
           className="block h-full"
           style={{ width: `${value}%`, background: color }}
@@ -878,7 +878,7 @@ export function SmartLibraryPanel({
                 })
               }
               title={s.label}
-              className="library-hit grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-navy-2 transition dark:border-white/10 dark:text-gold-2"
+              className="library-hit grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-brand-hover transition"
             >
               <ShapePreview shapeId={s.shapeId} className="size-full max-h-7" />
             </button>
@@ -887,7 +887,7 @@ export function SmartLibraryPanel({
         <button
           type="button"
           onClick={onOpenShapes}
-          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
         >
           <Shapes className="size-3.5" /> كل الأشكال ({SHAPES.length})
         </button>
@@ -971,7 +971,7 @@ export function SmartLibraryPanel({
         <button
           type="button"
           onClick={() => onAddCustomAsset("icon")}
-          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[8px] border border-dashed border-line text-[11px] font-extrabold dark:border-white/15"
+          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[8px] border border-dashed border-line text-[11px] font-extrabold"
         >
           <Plus className="size-3.5" /> إضافة رمز جديد (SVG)
         </button>
@@ -997,7 +997,7 @@ export function SmartLibraryPanel({
                 style: { color: THEMES[theme].accent, stroke: 0.4 },
               })
             }
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
           >
             <Minus className="size-3.5" /> خط رقيق
           </button>
@@ -1010,14 +1010,14 @@ export function SmartLibraryPanel({
                 style: { color: THEMES[theme].accent, stroke: 1.2 },
               })
             }
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
           >
             <Minus className="size-4" /> خط عريض
           </button>
           <button
             type="button"
             onClick={() => addElement("divider")}
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
           >
             <SeparatorHorizontal className="size-3.5" /> فاصل مزخرف
           </button>
@@ -1033,7 +1033,7 @@ export function SmartLibraryPanel({
                   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 4" preserveAspectRatio="none"><line x1="0" y1="2" x2="120" y2="2" stroke="currentColor" stroke-width="0.8" stroke-dasharray="3 3" /></svg>',
               })
             }
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
           >
             <Minus className="size-3.5 opacity-60" /> خط متقطع
           </button>
@@ -1050,7 +1050,7 @@ export function SmartLibraryPanel({
                   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 10" preserveAspectRatio="none"><path d="M0 5h50l5-4 5 4h40l5-4 5 4h40" fill="none" stroke="currentColor" stroke-width="0.7"/></svg>',
               })
             }
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
           >
             زخرفة عربية
           </button>
@@ -1065,7 +1065,7 @@ export function SmartLibraryPanel({
                   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 8" preserveAspectRatio="none"><path d="M0 4h64" stroke="currentColor" stroke-width="0.6"/><circle cx="75" cy="4" r="2.4" fill="currentColor"/><path d="M86 4h64" stroke="currentColor" stroke-width="0.6"/></svg>',
               })
             }
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
           >
             فاصل منقّط
           </button>
@@ -1110,7 +1110,7 @@ export function SmartLibraryPanel({
         <button
           type="button"
           onClick={() => onAddCustomAsset("divider")}
-          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[8px] border border-dashed border-line text-[11px] font-extrabold dark:border-white/15"
+          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[8px] border border-dashed border-line text-[11px] font-extrabold"
         >
           <Plus className="size-3.5" /> إضافة فاصل جديد (SVG)
         </button>
@@ -1148,7 +1148,7 @@ export function SmartLibraryPanel({
                     },
                   } as Partial<CanvasEl>)
                 }
-                className="flex items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-right transition hover:bg-line-2 dark:hover:bg-white/5"
+                className="flex items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-right transition hover:bg-line-2"
               >
                 <ProgressPreview preset={p} color={THEMES[theme].primary} />
                 <span className="min-w-0 flex-1">
@@ -1208,7 +1208,7 @@ export function SmartLibraryPanel({
                 }
               }}
               onClick={() => insertDrop(tableDrop(t.cols, t.rows, t.label))}
-              className="library-drag-card flex min-h-[46px] flex-col items-start justify-center gap-0.5 rounded-[8px] border border-line px-2.5 py-1.5 text-start transition hover:border-navy-2 hover:bg-navy-2/5 dark:border-white/10"
+              className="library-drag-card flex min-h-[46px] flex-col items-start justify-center gap-0.5 rounded-[8px] border border-line px-2.5 py-1.5 text-start transition hover:border-navy-2 hover:bg-navy-2/5"
             >
               <strong className="text-[11px]">{t.label}</strong>
               <span className="text-[10px] text-muted">{t.hint}</span>
@@ -1230,13 +1230,13 @@ export function SmartLibraryPanel({
                 }
               }}
               onClick={() => insertDrop({ items: chartItems(chart) })}
-              className="library-drag-card flex min-h-[44px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold transition hover:border-navy-2 hover:bg-navy-2/5 dark:border-white/10 dark:hover:border-gold/60"
+              className="library-drag-card flex min-h-[44px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold transition hover:border-navy-2 hover:bg-navy-2/5"
             >
               <span className="min-w-0">
                 <strong className="block text-[12px]">{chart.label}</strong>
                 <span className="text-[10px] text-muted">{chart.hint}</span>
               </span>
-              <Gauge className="size-4 shrink-0 text-navy-2 dark:text-gold-2" />
+              <Gauge className="size-4 shrink-0 text-brand-hover" />
             </button>
           ))}
         </div>
@@ -1255,7 +1255,7 @@ export function SmartLibraryPanel({
               key={t.id}
               type="button"
               onClick={() => onPreviewTemplate(t)}
-              className="library-hit grid min-h-[52px] grid-cols-[64px_1fr] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition dark:border-white/10"
+              className="library-hit grid min-h-[52px] grid-cols-[64px_1fr] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition"
             >
               <TemplatePreview variant={t.preview} />
               <span className="min-w-0">
@@ -1270,7 +1270,7 @@ export function SmartLibraryPanel({
         <button
           type="button"
           onClick={onOpenTemplates}
-          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
         >
           <LayoutTemplate className="size-3.5" /> كل النماذج (
           {PAGE_TEMPLATES.length})

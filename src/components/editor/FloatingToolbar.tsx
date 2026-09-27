@@ -506,7 +506,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
         </button>
         <button
           type="button"
-          className={cn("floating-toolbar-btn", "text-[#b42318]")}
+          className={cn("floating-toolbar-btn", "text-error")}
           title="حذف"
           aria-label="حذف"
           onClick={deleteSelected}

@@ -58,7 +58,7 @@ export function EditorSettingsDialog({ onClose, initialTab = "account" }: { onCl
 
   return (
     <div
-      className="fixed inset-0 z-[var(--z-dialog)] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[var(--z-dialog)] flex items-center justify-center bg-scrim p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="الإعدادات"
@@ -67,10 +67,10 @@ export function EditorSettingsDialog({ onClose, initialTab = "account" }: { onCl
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="editor-settings-surface flex max-h-[86dvh] w-full max-w-lg flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-2xl dark:border-white/10 dark:bg-[#161c26]">
-        <header className="flex items-center justify-between border-b border-line px-4 py-3 dark:border-white/10">
+      <div className="editor-settings-surface flex max-h-[86dvh] w-full max-w-lg flex-col overflow-hidden rounded-[14px] border border-line bg-surface shadow-2xl">
+        <header className="flex items-center justify-between border-b border-line px-4 py-3">
           <div className="flex items-center gap-2">
-            <Settings2 className="size-4 text-navy dark:text-gold-2" aria-hidden />
+            <Settings2 className="size-4 text-brand" aria-hidden />
             <div>
               <h2 className="text-[13px] font-extrabold">الإعدادات</h2>
               <p className="text-[10px] text-muted">
@@ -82,7 +82,7 @@ export function EditorSettingsDialog({ onClose, initialTab = "account" }: { onCl
             type="button"
             onClick={onClose}
             aria-label="إغلاق الإعدادات"
-            className="grid size-8 place-items-center rounded-[8px] hover:bg-line-2 dark:hover:bg-white/5"
+            className="grid size-8 place-items-center rounded-[8px] hover:bg-line-2"
           >
             <X className="size-4" />
           </button>
@@ -91,7 +91,7 @@ export function EditorSettingsDialog({ onClose, initialTab = "account" }: { onCl
         <div
           role="tablist"
           aria-label="أقسام الإعدادات"
-          className="flex gap-1 border-b border-line px-3 py-2 dark:border-white/10"
+          className="flex gap-1 border-b border-line px-3 py-2"
         >
           {TABS.map((item) => (
             <button
@@ -101,10 +101,10 @@ export function EditorSettingsDialog({ onClose, initialTab = "account" }: { onCl
               aria-selected={tab === item.id}
               onClick={() => setTab(item.id)}
               className={cn(
-                "rounded-[8px] px-3 py-1.5 text-[12px] font-extrabold transition",
+ "rounded-[8px] px-3 py-1.5 text-[12px] font-extrabold transition",
                 tab === item.id
-                  ? "bg-navy text-white dark:bg-white/10 dark:text-gold-2"
-                  : "text-muted hover:bg-line-2 dark:hover:bg-white/5",
+                  ? "bg-navy text-white"
+                  : "text-muted hover:bg-line-2",
               )}
             >
               {item.label}
@@ -168,7 +168,7 @@ function AccountSection() {
 
   return (
     <div className="grid gap-4">
-      <section className="rounded-[12px] border border-line p-4 dark:border-white/10">
+      <section className="rounded-[12px] border border-line p-4">
         <div className="flex items-center gap-3">
           <AccountAvatar user={user} size={40} />
           <div className="min-w-0">
@@ -191,19 +191,19 @@ function AccountSection() {
         )}
       </section>
 
-      <section className="rounded-[12px] border border-line p-4 dark:border-white/10">
+      <section className="rounded-[12px] border border-line p-4">
         <h3 className="text-[11px] font-extrabold text-muted">الترخيص والاشتراك</h3>
-        <dl className="mt-1 divide-y divide-line dark:divide-white/5">
+        <dl className="mt-1 divide-y divide-line">
           <Row label="الحالة">
             <span
               className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-extrabold",
+ "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-extrabold",
                 summary.tone === "licensed" &&
-                  "bg-emerald-500/12 text-emerald-700 dark:text-emerald-300",
+ "bg-ok/12 text-success",
                 summary.tone === "suspended" &&
-                  "bg-red-500/12 text-red-700 dark:text-red-300",
+ "bg-danger/12 text-error",
                 (summary.tone === "free" || summary.tone === "loading") &&
-                  "bg-line-2 text-muted dark:bg-white/10",
+ "bg-line-2 text-muted",
               )}
             >
               {summary.tone === "loading" && (
@@ -234,7 +234,7 @@ function AccountSection() {
             placeholder="مفتاح الترخيص"
             aria-label="مفتاح الترخيص"
             dir="ltr"
-            className="h-9 min-w-0 flex-1 rounded-[8px] border border-line bg-transparent px-2 text-[12px] font-bold outline-none focus:border-navy dark:border-white/15 dark:text-white"
+            className="h-9 min-w-0 flex-1 rounded-[8px] border border-line bg-transparent px-2 text-[12px] font-bold outline-none focus:border-navy"
           />
           <button
             type="button"
@@ -254,14 +254,14 @@ function AccountSection() {
         <div className="mt-3 flex flex-wrap gap-2">
           <a
             href="/license"
-            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-3 text-[12px] font-bold dark:border-white/10"
+            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-3 text-[12px] font-bold"
           >
             <KeyRound className="size-3.5 opacity-70" aria-hidden />
             إدارة الترخيص
           </a>
           <a
             href="/account"
-            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-3 text-[12px] font-bold dark:border-white/10"
+            className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line px-3 text-[12px] font-bold"
           >
             <UserRound className="size-3.5 opacity-70" aria-hidden />
             الحساب والاشتراك
@@ -297,16 +297,16 @@ function PrefSwitch({
         aria-label={label}
         onClick={() => onChange(!checked)}
         className={cn(
-          "relative h-5 w-9 shrink-0 rounded-full border transition",
+ "relative h-5 w-9 shrink-0 rounded-full border transition",
           checked
-            ? "border-emerald-500/50 bg-emerald-500/80 dark:border-emerald-400/50"
-            : "border-line bg-line-2 dark:border-white/15 dark:bg-white/10",
+            ? "border-brand bg-ok/80"
+            : "border-line bg-line-2",
         )}
       >
         <span
           aria-hidden
           className={cn(
-            "absolute top-0.5 size-3.5 rounded-full bg-white shadow transition-all",
+ "absolute top-0.5 size-3.5 rounded-full bg-surface shadow transition-all",
             // RTL: "on" slides toward the start of the track.
             checked ? "start-0.5" : "start-[18px]",
           )}
@@ -332,12 +332,12 @@ function EditorSection() {
 
   return (
     <div className="grid gap-4">
-      <section className="rounded-[12px] border border-line p-4 dark:border-white/10">
+      <section className="rounded-[12px] border border-line p-4">
         <h3 className="text-[11px] font-extrabold text-muted">المظهر</h3>
         <div
           role="radiogroup"
           aria-label="سمة المحرر"
-          className="mt-2 flex gap-1 rounded-[10px] border border-line p-1 dark:border-white/10"
+          className="mt-2 flex gap-1 rounded-[10px] border border-line p-1"
         >
           {(
             [
@@ -352,10 +352,10 @@ function EditorSection() {
               aria-checked={dark === value}
               onClick={() => setDark(value)}
               className={cn(
-                "inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[8px] text-[12px] font-extrabold transition",
+ "inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[8px] text-[12px] font-extrabold transition",
                 dark === value
-                  ? "bg-navy text-white dark:bg-white/10 dark:text-gold-2"
-                  : "text-muted hover:bg-line-2 dark:hover:bg-white/5",
+                  ? "bg-navy text-white"
+                  : "text-muted hover:bg-line-2",
               )}
             >
               <Icon className="size-3.5" aria-hidden />
@@ -368,9 +368,9 @@ function EditorSection() {
         </p>
       </section>
 
-      <section className="rounded-[12px] border border-line p-4 dark:border-white/10">
+      <section className="rounded-[12px] border border-line p-4">
         <h3 className="text-[11px] font-extrabold text-muted">مساحة العمل</h3>
-        <div className="mt-1 divide-y divide-line dark:divide-white/5">
+        <div className="mt-1 divide-y divide-line">
           <PrefSwitch
             label="الشبكة"
             hint="إظهار شبكة المحاذاة على الصفحة"
@@ -396,7 +396,7 @@ function EditorSection() {
             onChange={() => toggleBubble()}
           />
         </div>
-        <div className="mt-3 border-t border-line pt-3 dark:border-white/5">
+        <div className="mt-3 border-t border-line pt-3">
           <div className="flex items-center justify-between gap-2">
             <div>
               <span className="block text-[12px] font-bold">تخطيط شبكة اللوحات (أعمدة)</span>
@@ -409,10 +409,10 @@ function EditorSection() {
                   type="button"
                   onClick={() => setArtboardGridCols(c)}
                   className={cn(
-                    "grid size-7 place-items-center rounded-[6px] text-[11px] font-extrabold transition",
+ "grid size-7 place-items-center rounded-[6px] text-[11px] font-extrabold transition",
                     artboardGridCols === c
                       ? "bg-navy text-white shadow-xs"
-                      : "border border-line/60 hover:bg-line-2 dark:border-white/10 dark:hover:bg-white/5",
+                      : "border border-line/60 hover:bg-line-2",
                   )}
                 >
                   {c}
@@ -423,9 +423,9 @@ function EditorSection() {
         </div>
       </section>
 
-      <section className="rounded-[12px] border border-line p-4 dark:border-white/10">
+      <section className="rounded-[12px] border border-line p-4">
         <h3 className="text-[11px] font-extrabold text-muted">أدلة الطباعة</h3>
-        <div className="mt-1 divide-y divide-line dark:divide-white/5">
+        <div className="mt-1 divide-y divide-line">
           <PrefSwitch
             label="منطقة النص الآمنة"
             checked={printGuides.safe}

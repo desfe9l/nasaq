@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
  * Hover raises the card by 4px with a larger shadow.
  */
 export const SITE_CARD =
-  "shadow-card dark:shadow-card-dark border border-line transition-all duration-200 hover:-translate-y-1 hover:shadow-card-hover dark:border-white/10 dark:hover:shadow-card-dark-hover";
+  "shadow-card border border-line transition-all duration-200 hover:-translate-y-1 hover:shadow-card-hover";
 
 /**
  * Wrapping card row with a centered LAST row.
@@ -44,10 +44,10 @@ export const CARD_W =
  * read first. Presentation only: no behaviour is attached to a tint.
  */
 export const ICON_TINTS = [
-  "bg-navy text-white shadow-sm",
-  "bg-navy/10 text-navy dark:bg-navy-2/20 dark:text-gold-2",
-  "bg-gold/25 text-green dark:bg-gold/20 dark:text-gold-2",
-  "bg-green/10 text-green dark:bg-white/10 dark:text-white",
+  "bg-navy text-on-brand shadow-sm",
+  "bg-navy/10 text-brand",
+  "bg-gold/25 text-ink",
+  "bg-green/10 text-ink",
 ];
 
 /** The tint for pillar `i`, cycling if there are more cards than tints. */
@@ -56,7 +56,7 @@ export function iconTint(i: number): string {
 }
 
 /** Card surface: white in light mode, translucent ink in dark mode. */
-export const CARD_SURFACE = "bg-white dark:bg-white/5";
+export const CARD_SURFACE = "bg-surface";
 
 /**
  * Convenience: the full class list for a clickable card.

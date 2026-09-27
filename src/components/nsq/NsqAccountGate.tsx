@@ -80,12 +80,12 @@ export function NsqAccountGate({
       onClick={onLater}
     >
       <div
-        className="grid max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-[16px] border border-line bg-white shadow-2xl sm:grid-cols-[minmax(0,5fr)_minmax(0,6fr)] dark:border-white/10 dark:bg-[#161c26]"
+        className="grid max-h-[92vh] w-full max-w-[720px] overflow-y-auto rounded-[16px] border border-line bg-surface shadow-2xl sm:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* The project itself — what the visitor is about to get. */}
-        <div className="flex flex-col items-center justify-center gap-3 border-b border-line bg-line-2/50 p-5 sm:border-b-0 sm:border-l dark:border-white/10 dark:bg-white/[0.03]">
-          <div className="grid w-full max-w-[240px] place-items-center overflow-hidden rounded-[10px] border border-line bg-white shadow-sm dark:border-white/10">
+        <div className="flex flex-col items-center justify-center gap-3 border-b border-line bg-line-2/50 p-5 sm:border-b-0 sm:border-l">
+          <div className="grid w-full max-w-[240px] place-items-center overflow-hidden rounded-[10px] border border-line bg-surface shadow-sm">
             {summary.thumbnail ? (
               <img
                 src={summary.thumbnail}
@@ -99,7 +99,7 @@ export function NsqAccountGate({
             )}
           </div>
           <div className="w-full max-w-[240px] text-center">
-            <strong className="block truncate text-[14px] font-extrabold text-navy dark:text-white">
+            <strong className="block truncate text-[14px] font-extrabold text-brand">
               {summary.title}
             </strong>
             <span className="mt-0.5 block text-[11.5px] text-muted">
@@ -109,7 +109,7 @@ export function NsqAccountGate({
         </div>
 
         <div className="p-6">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-extrabold text-emerald-700 dark:text-emerald-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-ok/10 px-2.5 py-1 text-[11px] font-extrabold text-success">
             <FileCheck2 className="size-3.5" aria-hidden />
             تم التعرّف على الملف وحفظه بأمان
           </span>
@@ -127,14 +127,14 @@ export function NsqAccountGate({
           <ul className="mt-4 grid gap-2 text-[12px] text-muted">
             <li className="flex items-center gap-2">
               <ShieldCheck
-                className="size-4 shrink-0 text-navy-2 dark:text-gold-2"
+                className="size-4 shrink-0 text-brand-hover"
                 aria-hidden
               />
               الملف محفوظ في متصفحك ولن يضيع أثناء تسجيل الدخول.
             </li>
             <li className="flex items-center gap-2">
               <PenLine
-                className="size-4 shrink-0 text-navy-2 dark:text-gold-2"
+                className="size-4 shrink-0 text-brand-hover"
                 aria-hidden
               />
               يُفتح تلقائيًا بعد الدخول كمشروع جديد في مكتبتك.
@@ -149,7 +149,7 @@ export function NsqAccountGate({
                 disabled={busy !== null}
                 onClick={() => start(provider.providerId)}
                 className={cn(
-                  "inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-navy text-[13px] font-extrabold text-white transition hover:bg-navy-2",
+                  "inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-navy text-[13px] font-extrabold text-on-brand transition hover:bg-navy-2",
                   "disabled:cursor-wait disabled:opacity-60",
                 )}
               >
@@ -166,24 +166,24 @@ export function NsqAccountGate({
           {error && (
             <p
               role="alert"
-              className="mt-3 rounded-[10px] border border-danger/30 bg-danger/5 p-3 text-[12px] leading-6 text-danger"
+              className="mt-3 rounded-[10px] border border-danger/30 bg-danger/5 p-3 text-[12px] leading-6 text-error"
             >
               {error}
             </p>
           )}
 
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 dark:border-white/10">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
             <button
               type="button"
               onClick={onLater}
-              className="h-9 rounded-[9px] px-3 text-[12px] font-bold text-muted hover:bg-line-2 dark:hover:bg-white/5"
+              className="h-9 rounded-[9px] px-3 text-[12px] font-bold text-muted hover:bg-line-2"
             >
               لاحقًا
             </button>
             <button
               type="button"
               onClick={onDiscard}
-              className="h-9 rounded-[9px] px-3 text-[11.5px] font-bold text-muted underline-offset-4 hover:text-danger hover:underline"
+              className="h-9 rounded-[9px] px-3 text-[11.5px] font-bold text-muted underline-offset-4 hover:text-error hover:underline"
             >
               إزالة الملف
             </button>

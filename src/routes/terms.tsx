@@ -8,8 +8,8 @@ export const Route = createFileRoute("/terms")({
 function TermsPage() {
   return (
     <main dir="rtl" className="min-h-screen bg-paper px-6 py-16 text-ink">
-      <article className="mx-auto max-w-3xl rounded-2xl border border-line bg-white p-8 shadow-xl dark:bg-neutral-950">
-        <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-emerald-700">{BRAND.platformEn}</p>
+      <article className="mx-auto max-w-3xl rounded-2xl border border-line bg-surface p-8 shadow-xl">
+        <p className="text-xs font-extrabold uppercase tracking-[0.2em] text-success">{BRAND.platformEn}</p>
         <h1 className="mt-3 text-3xl font-black">شروط الاستخدام</h1>
         <p className="mt-3 text-sm text-muted">آخر تحديث: 23 سبتمبر 2026</p>
         <div className="mt-8 space-y-6 text-sm leading-8 text-muted">

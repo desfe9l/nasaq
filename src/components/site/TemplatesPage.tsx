@@ -349,16 +349,16 @@ export function TemplatesPage() {
   /* ── render ──────────────────────────────────────────────────────────── */
 
   const field =
-    "h-11 w-full rounded-xl border border-line bg-paper/60 pr-10 pl-10 text-[13px] font-semibold text-ink outline-none transition focus:border-navy dark:border-white/10 dark:bg-white/5 dark:text-white";
+    "h-11 w-full rounded-xl border border-line bg-paper/60 pr-10 pl-10 text-[13px] font-semibold text-ink outline-none transition focus:border-brand";
 
   return (
-    <div className="min-h-full bg-paper dark:bg-[#111722]">
+    <div className="min-h-full bg-paper">
       <SiteHeader current="/templates" />
 
       <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-[26px] font-extrabold text-ink dark:text-white">القوالب</h1>
+            <h1 className="text-[26px] font-extrabold text-ink">القوالب</h1>
             <p className="mt-2 max-w-2xl text-[14px] leading-7 text-muted">
               كل قالب هنا معاينة حقيقية لصفحاته: استخدمه لإنشاء مشروع، أو عاينه سريعًا، أو عدّله وكرّره
               واحفظه في «قوالبي الخاصة» — والتغييرات تظهر في الكتالوج مباشرة.
@@ -367,7 +367,7 @@ export function TemplatesPage() {
           <button
             type="button"
             onClick={() => setForm({ mode: "create" })}
-            className="inline-flex h-11 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-navy-2"
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
           >
             <Plus className="size-4" />
             إضافة قالب جديد
@@ -375,7 +375,7 @@ export function TemplatesPage() {
         </div>
 
         {/* Search + filters */}
-        <div className="shadow-card dark:shadow-card-dark mt-6 grid gap-4 rounded-2xl border border-line bg-white p-4 dark:border-white/10 dark:bg-white/5 md:p-5">
+        <div className="shadow-card mt-6 grid gap-4 rounded-2xl border border-line bg-surface p-4 md:p-5">
           <div className="relative">
             <Search className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
             <input
@@ -390,7 +390,7 @@ export function TemplatesPage() {
                 type="button"
                 onClick={() => setQuery("")}
                 aria-label="مسح البحث"
-                className="absolute left-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-muted transition hover:bg-line-2 hover:text-ink dark:hover:bg-white/10 dark:hover:text-white"
+                className="absolute left-2 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-lg text-muted transition hover:bg-line-2 hover:text-ink"
               >
                 <X className="size-3.5" />
               </button>
@@ -410,8 +410,8 @@ export function TemplatesPage() {
                   className={cn(
                     "inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12px] font-extrabold transition-all duration-200",
                     active
-                      ? "scale-[1.03] border-navy bg-navy text-white shadow-sm"
-                      : "border-line text-muted hover:-translate-y-0.5 hover:border-navy-2 hover:text-ink dark:border-white/10 dark:hover:text-white",
+                      ? "scale-[1.03] border-brand bg-navy text-on-brand shadow-sm"
+                      : "border-line text-muted hover:-translate-y-0.5 hover:border-brand hover:text-ink",
                   )}
                 >
                   {option.label}
@@ -420,7 +420,7 @@ export function TemplatesPage() {
                       "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
                       active
                         ? "bg-white/20 text-white"
-                        : "bg-line-2 text-muted dark:bg-white/10 dark:text-white/70",
+                        : "bg-line-2 text-muted",
                     )}
                   >
                     {count}
@@ -430,7 +430,7 @@ export function TemplatesPage() {
             })}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-line/70 pt-4 dark:border-white/10">
+          <div className="flex flex-wrap items-center gap-2 border-t border-line/70 pt-4">
             <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-muted">
               <SlidersHorizontal className="size-3.5" /> سمة العرض
             </span>
@@ -443,8 +443,8 @@ export function TemplatesPage() {
                 className={cn(
                   "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-bold transition",
                   theme === id
-                    ? "border-navy bg-navy text-white"
-                    : "border-line text-muted hover:border-navy-2 dark:border-white/10",
+                    ? "border-brand bg-navy text-on-brand"
+                    : "border-line text-muted hover:border-brand",
                 )}
               >
                 <span className="size-3 rounded-full" style={{ background: THEMES[id].primary }} />
@@ -458,7 +458,7 @@ export function TemplatesPage() {
             {SIZE_OPTIONS.map((s) => (
               <span
                 key={s.id}
-                className="rounded-full border border-line px-3 py-1.5 text-[11px] font-bold text-muted dark:border-white/10"
+                className="rounded-full border border-line px-3 py-1.5 text-[11px] font-bold text-muted"
               >
                 {s.name} — {s.w} × {s.h} مم
               </span>
@@ -468,11 +468,11 @@ export function TemplatesPage() {
 
         {/* In-progress edit draft */}
         {draft && (
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/10 p-4 dark:border-gold/30">
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-gold/40 bg-gold/10 p-4">
             <div className="flex items-start gap-3">
-              <Database className="mt-0.5 size-4 shrink-0 text-green dark:text-gold-2" />
+              <Database className="mt-0.5 size-4 shrink-0 text-ink" />
               <div>
-                <p className="text-[13px] font-extrabold text-ink dark:text-white">
+                <p className="text-[13px] font-extrabold text-ink">
                   قيد التعديل: «{draft.title}»
                 </p>
                 <p className="mt-1 text-[12px] leading-6 text-muted">
@@ -486,21 +486,21 @@ export function TemplatesPage() {
               <button
                 type="button"
                 onClick={() => void resumeDraft()}
-                className="inline-flex h-9 items-center rounded-xl border border-line bg-white px-3 text-[12px] font-bold text-ink transition hover:bg-line-2 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                className="inline-flex h-9 items-center rounded-xl border border-line bg-surface px-3 text-[12px] font-bold text-ink transition hover:bg-line-2"
               >
                 متابعة التعديل
               </button>
               <button
                 type="button"
                 onClick={() => void commitDraft()}
-                className="inline-flex h-9 items-center rounded-xl bg-navy px-3 text-[12px] font-extrabold text-white transition hover:bg-navy-2"
+                className="inline-flex h-9 items-center rounded-xl bg-navy px-3 text-[12px] font-extrabold text-on-brand transition hover:bg-navy-2"
               >
                 {draft.kind === "custom" ? "تحديث القالب" : "حفظ كقالب جديد"}
               </button>
               <button
                 type="button"
                 onClick={() => clearDraft()}
-                className="inline-flex h-9 items-center rounded-xl border border-line px-3 text-[12px] font-bold text-muted transition hover:bg-line-2 dark:border-white/10 dark:hover:bg-white/5"
+                className="inline-flex h-9 items-center rounded-xl border border-line px-3 text-[12px] font-bold text-muted transition hover:bg-line-2"
               >
                 تجاهل
               </button>
@@ -510,7 +510,7 @@ export function TemplatesPage() {
 
         <div className="mt-8 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-[17px] font-extrabold text-ink dark:text-white">
+            <h2 className="text-[17px] font-extrabold text-ink">
               {CATALOG_PILLS.find((p) => p.id === pill)?.label}
             </h2>
             <p className="mt-1 text-[12px] text-muted">
@@ -522,7 +522,7 @@ export function TemplatesPage() {
             <button
               type="button"
               onClick={() => setPill("custom")}
-              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
+              className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2"
             >
               <Database className="size-3.5" />
               قوالبي الخاصة ({customCount})
@@ -531,8 +531,8 @@ export function TemplatesPage() {
         </div>
 
         {filtered.length === 0 ? (
-          <div className="mt-6 rounded-2xl border border-dashed border-line p-10 text-center dark:border-white/15">
-            <p className="text-[14px] font-bold text-ink dark:text-white">
+          <div className="mt-6 rounded-2xl border border-dashed border-line p-10 text-center">
+            <p className="text-[14px] font-bold text-ink">
               {pill === "custom" && customCount === 0 ? "لا توجد قوالب مخصصة بعد" : "لا توجد قوالب مطابقة"}
             </p>
             <p className="mt-1 text-[13px] text-muted">
@@ -547,14 +547,14 @@ export function TemplatesPage() {
                   setQuery("");
                   setPill("all");
                 }}
-                className="inline-flex h-10 items-center rounded-xl border border-line px-4 text-[12px] font-bold text-ink transition hover:bg-line-2 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
+                className="inline-flex h-10 items-center rounded-xl border border-line px-4 text-[12px] font-bold text-ink transition hover:bg-line-2"
               >
                 إزالة الفلاتر
               </button>
               <button
                 type="button"
                 onClick={() => setForm({ mode: "create" })}
-                className="inline-flex h-10 items-center gap-2 rounded-xl bg-navy px-4 text-[12px] font-extrabold text-white transition hover:bg-navy-2"
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-navy px-4 text-[12px] font-extrabold text-on-brand transition hover:bg-navy-2"
               >
                 <Plus className="size-4" /> إضافة قالب جديد
               </button>
@@ -583,7 +583,7 @@ export function TemplatesPage() {
         )}
 
         <p className="mt-10 flex items-start gap-2 text-[12px] leading-6 text-muted">
-          <Database className="mt-0.5 size-4 shrink-0 text-ok" />
+          <Database className="mt-0.5 size-4 shrink-0 text-success" />
           القوالب المخصصة تُحفظ في متصفحك (localStorage) وتظهر مباشرةً في الكتالوج بلا إعادة بناء، ويفتح أي
           منها في المحرر بزر «استخدام القالب». القوالب الجاهزة تبقى كما هي، وأي تعديل عليها يُحفظ كنسخة خاصة بك.
         </p>
@@ -599,7 +599,7 @@ export function TemplatesPage() {
 
         <a
           href="/editor"
-          className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-white shadow-sm transition hover:bg-navy-2"
+          className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
         >
           اذهب إلى المحرر لإدراج القوالب
         </a>
@@ -613,7 +613,7 @@ export function TemplatesPage() {
         onClick={() => setForm({ mode: "create" })}
         title="إضافة قالب جديد"
         aria-label="إضافة قالب جديد"
-        className="fixed bottom-5 left-5 z-[var(--z-bubble)] inline-flex h-12 items-center gap-2 rounded-full bg-navy px-5 text-[13px] font-extrabold text-white shadow-xl shadow-navy/30 transition hover:bg-navy-2"
+        className="fixed bottom-5 left-5 z-[var(--z-bubble)] inline-flex h-12 items-center gap-2 rounded-full bg-navy px-5 text-[13px] font-extrabold text-on-brand shadow-xl shadow-navy/30 transition hover:bg-navy-2"
       >
         <Plus className="size-4" />
         قالب جديد

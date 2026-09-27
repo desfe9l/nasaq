@@ -24,10 +24,10 @@ const FAQS: { q: string; a: string }[] = [
 ];
 
 const TONE_STYLES: Record<PurchaseStateTone, string> = {
-  ok: "bg-ok/15 text-ok",
+  ok: "bg-ok/15 text-success",
   muted: "bg-line-2 text-muted",
   warn: "bg-gold/20 text-ink",
-  danger: "bg-danger/10 text-danger",
+  danger: "bg-danger/10 text-error",
 };
 
 export function PurchasePage() {
@@ -106,47 +106,47 @@ export function PurchasePage() {
   const purchasablePeriods = BILLING_PERIODS.filter((option) => option.id !== "annual");
 
   return (
-    <div className="min-h-full bg-white dark:bg-[#111722]">
+    <div className="min-h-full bg-page ">
       <SiteHeader current="/purchase" />
       <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:py-12">
         {/* Header */}
         <div className="max-w-3xl">
-          <p className="text-[11px] font-bold tracking-[0.14em] text-[#006C35]">الاشتراكات والتراخيص</p>
-          <h1 className="mt-2 text-[28px] font-extrabold leading-tight text-[#0F1E33] dark:text-white sm:text-[32px]">اختر الترخيص المناسب لاحتياج مؤسستك</h1>
-          <p className="mt-3 text-[14px] leading-7 text-[#475467] dark:text-white/60">قارن الخطط أولًا، ثم اختر فترة الاشتراك وأكمل الدفع بأمان عبر Gumroad. جميع التراخيص رقمية وتُفعَّل فور التحقق من السداد خادميًا.</p>
+          <p className="text-[11px] font-bold tracking-[0.14em] text-brand">الاشتراكات والتراخيص</p>
+          <h1 className="mt-2 text-[28px] font-extrabold leading-tight text-ink sm:text-[32px]">اختر الترخيص المناسب لاحتياج مؤسستك</h1>
+          <p className="mt-3 text-[14px] leading-7 text-muted ">قارن الخطط أولًا، ثم اختر فترة الاشتراك وأكمل الدفع بأمان عبر Gumroad. جميع التراخيص رقمية وتُفعَّل فور التحقق من السداد خادميًا.</p>
         </div>
 
         {/* Current state — Free / Trial / Pro / Lifetime × Active / Expired / Revoked */}
-        <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[12px] border border-line/70 bg-[#fcfdfc] px-4 py-3 dark:border-white/10 dark:bg-white/[0.02]">
-          <span className="text-[11px] font-bold text-[#667085] dark:text-white/50">حالتك الحالية</span>
+        <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[12px] border border-line/70 bg-surface-2 px-4 py-3 ">
+          <span className="text-[11px] font-bold text-muted ">حالتك الحالية</span>
           <span className={`rounded-full px-3 py-1 text-[11px] font-extrabold ${TONE_STYLES[stateView.tone]}`}>{stateView.label}</span>
-          <span className="text-[12px] leading-6 text-[#475467] dark:text-white/60">{stateView.detail}</span>
-          <a href="/license" className="ms-auto text-[12px] font-bold text-[#006C35] underline dark:text-emerald-300">تفاصيل الترخيص</a>
+          <span className="text-[12px] leading-6 text-muted ">{stateView.detail}</span>
+          <a href="/license" className="ms-auto text-[12px] font-bold text-brand underline ">تفاصيل الترخيص</a>
         </div>
 
         {/* كيف تعمل التراخيص */}
-        <div className="mt-6 rounded-[12px] border border-line/70 bg-[#fcfdfc] p-5 dark:border-white/10 dark:bg-white/[0.02]">
-          <h2 className="text-[13px] font-bold text-[#0F1E33] dark:text-white">كيف تعمل تراخيص نَسَق</h2>
+        <div className="mt-6 rounded-[12px] border border-line/70 bg-surface-2 p-5 ">
+          <h2 className="text-[13px] font-bold text-ink ">كيف تعمل تراخيص نَسَق</h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-3">
             <div className="flex gap-3">
-              <span className="grid size-7 place-items-center rounded-full bg-[#0F1E33] text-[11px] font-bold text-white dark:bg-white dark:text-[#0F1E33]">1</span>
+              <span className="grid size-7 place-items-center rounded-full bg-inverse text-[11px] font-bold text-on-inverse ">1</span>
               <div>
-                <p className="text-[13px] font-bold text-[#0F1E33] dark:text-white">اختيار الباقة</p>
-                <p className="mt-1 text-[12px] leading-6 text-[#667085] dark:text-white/50">حدد نوع الترخيص: فردي للمصممين المستقلين، أو فريق لفرق العمل، أو عرض سعر مخصص للمؤسسات.</p>
+                <p className="text-[13px] font-bold text-ink ">اختيار الباقة</p>
+                <p className="mt-1 text-[12px] leading-6 text-muted ">حدد نوع الترخيص: فردي للمصممين المستقلين، أو فريق لفرق العمل، أو عرض سعر مخصص للمؤسسات.</p>
               </div>
             </div>
             <div className="flex gap-3">
-              <span className="grid size-7 place-items-center rounded-full bg-[#0F1E33] text-[11px] font-bold text-white dark:bg-white dark:text-[#0F1E33]">2</span>
+              <span className="grid size-7 place-items-center rounded-full bg-inverse text-[11px] font-bold text-on-inverse ">2</span>
               <div>
-                <p className="text-[13px] font-bold text-[#0F1E33] dark:text-white">تحديد المدة والسداد</p>
-                <p className="mt-1 text-[12px] leading-6 text-[#667085] dark:text-white/50">اختر الدفع شهريًا أو كل 3 أشهر، ثم أكمل السداد مباشرة في Gumroad Checkout.</p>
+                <p className="text-[13px] font-bold text-ink ">تحديد المدة والسداد</p>
+                <p className="mt-1 text-[12px] leading-6 text-muted ">اختر الدفع شهريًا أو كل 3 أشهر، ثم أكمل السداد مباشرة في Gumroad Checkout.</p>
               </div>
             </div>
             <div className="flex gap-3">
-              <span className="grid size-7 place-items-center rounded-full bg-[#006C35] text-[11px] font-bold text-white">3</span>
+              <span className="grid size-7 place-items-center rounded-full bg-navy text-[11px] font-bold text-on-brand">3</span>
               <div>
-                <p className="text-[13px] font-bold text-[#0F1E33] dark:text-white">التفعيل الفوري</p>
-                <p className="mt-1 text-[12px] leading-6 text-[#667085] dark:text-white/50">يُصدر النظام ترخيصًا رقميًا عبر Keygen ويربطه بحسابك، وتُفتح المزايا فورًا.</p>
+                <p className="text-[13px] font-bold text-ink ">التفعيل الفوري</p>
+                <p className="mt-1 text-[12px] leading-6 text-muted ">يُصدر النظام ترخيصًا رقميًا عبر Keygen ويربطه بحسابك، وتُفتح المزايا فورًا.</p>
               </div>
             </div>
           </div>
@@ -160,8 +160,8 @@ export function PurchasePage() {
             [Key, "ترخيص رقمي وتفعيل فوري"],
             [ShieldCheck, "تخزين محلي أولًا"],
           ].map(([Icon, label]) => (
-            <span key={String(label)} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-[#f8faf9] px-3 py-1 text-[11px] font-semibold text-[#344054] dark:border-white/10 dark:bg-white/5 dark:text-white/60">
-              <Icon className="size-3.5 text-[#0F1E33]/60 dark:text-white/40" />
+            <span key={String(label)} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted ">
+              <Icon className="size-3.5 text-ink/60 " />
               {String(label)}
             </span>
           ))}
@@ -170,16 +170,16 @@ export function PurchasePage() {
         {/* Billing selector — شهري افتراضيًا */}
         <div className="mt-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="mb-2 text-[12px] font-bold text-[#0F1E33] dark:text-white">فترة الاشتراك — الافتراضي شهري</p>
-            <div role="group" aria-label="فترة الاشتراك" className="inline-flex rounded-[10px] border border-line bg-white p-1 dark:border-white/10 dark:bg-white/5">
+            <p className="mb-2 text-[12px] font-bold text-ink ">فترة الاشتراك — الافتراضي شهري</p>
+            <div role="group" aria-label="فترة الاشتراك" className="inline-flex rounded-[10px] border border-line bg-surface p-1 ">
               {purchasablePeriods.map((option) => (
-                <button key={option.id} type="button" onClick={() => setBilling(option.id)} aria-pressed={billing === option.id} className={`rounded-[8px] px-4 py-2 text-[13px] font-bold transition ${billing === option.id ? "bg-[#0F1E33] text-white shadow-sm ring-1 ring-[#0F1E33] dark:bg-white dark:text-[#0F1E33] dark:ring-white/60" : "text-[#667085] hover:bg-[#f8faf9] hover:text-[#0F1E33] dark:text-white/50 dark:hover:bg-white/5"}`}>
+                <button key={option.id} type="button" onClick={() => setBilling(option.id)} aria-pressed={billing === option.id} className={`rounded-[8px] px-4 py-2 text-[13px] font-bold transition ${billing === option.id ? "bg-inverse text-on-inverse shadow-sm ring-1 ring-inverse " : "text-muted hover:bg-surface-2 hover:text-ink "}`}>
                   {option.label}
                 </button>
               ))}
             </div>
           </div>
-          <div className="max-w-md text-[12px] leading-6 text-[#475467] dark:text-white/60">
+          <div className="max-w-md text-[12px] leading-6 text-muted ">
             {buyerEmail ? (
               <p>سيُستخدم بريد حسابك الحالي في NASAQ تلقائيًا عند الدفع عبر Gumroad، ويكون مُعبّأ مسبقًا في نموذج الدفع. بعد إتمام الشراء، يُفعّل الاشتراك للحساب المرتبط بهذا البريد. إذا كنت تريد الشراء لحساب NASAQ آخر، استخدم بريد ذلك الحساب عند الدفع.</p>
             ) : (
@@ -192,26 +192,26 @@ export function PurchasePage() {
         <div className="mt-6 grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {/* Free — deliberately quieter than the paid cards: muted tinted
               surface, no lift, small badge; reads free at a glance. */}
-          <div className="flex flex-col rounded-xl border border-line/70 bg-[#f8faf9] p-5 dark:border-white/10 dark:bg-white/[0.03]">
+          <div className="flex flex-col rounded-xl border border-line/70 bg-surface-2 p-5 ">
             <div className="flex-1">
               <div className="flex items-start justify-between gap-2">
-                <h2 className="text-[15px] font-bold text-[#0F1E33] dark:text-white">مجاني</h2>
-                <span className="shrink-0 rounded-full border border-line/70 bg-white px-2.5 py-1 text-[10px] font-bold text-[#667085] dark:border-white/15 dark:bg-white/5 dark:text-white/60">مجانية دائمًا</span>
+                <h2 className="text-[15px] font-bold text-ink ">مجاني</h2>
+                <span className="shrink-0 rounded-full border border-line/70 bg-surface px-2.5 py-1 text-[10px] font-bold text-muted ">مجانية دائمًا</span>
               </div>
-              <p className="mt-2 text-[12px] leading-6 text-[#667085] dark:text-white/50">خطة مجانية دائمة للتقييم والبدء، دون دفع أو تاريخ انتهاء.</p>
-              <p className="mt-4 text-[24px] font-extrabold text-[#0F1E33] dark:text-white">0 <span className="text-[13px] font-bold text-[#667085]">ر.س</span></p>
-              <p className="text-[11px] text-[#98a2b3]">المدة: دائمة</p>
-              <div className="mt-4 border-t border-line/60 pt-3.5 dark:border-white/10">
+              <p className="mt-2 text-[12px] leading-6 text-muted ">خطة مجانية دائمة للتقييم والبدء، دون دفع أو تاريخ انتهاء.</p>
+              <p className="mt-4 text-[24px] font-extrabold text-ink ">0 <span className="text-[13px] font-bold text-muted">ر.س</span></p>
+              <p className="text-[11px] text-muted">المدة: دائمة</p>
+              <div className="mt-4 border-t border-line/60 pt-3.5 ">
                 <ul className="grid gap-1.5">
                   {FREE_PLAN.features.map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-[12px] leading-5 text-[#344054] dark:text-white/60">
-                      <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[#98a2b3]" /> {f}
+                    <li key={f} className="flex items-start gap-2 text-[12px] leading-5 text-muted ">
+                      <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-muted" /> {f}
                     </li>
                   ))}
                 </ul>
               </div>
             </div>
-            <a href="/editor" className="mt-5 inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-line bg-white text-[13px] font-bold text-[#0F1E33] hover:bg-[#f8faf9] dark:border-white/15 dark:bg-white/5 dark:text-white">ابدأ مجانًا</a>
+            <a href="/editor" className="mt-5 inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-line bg-surface text-[13px] font-bold text-ink hover:bg-surface-2 ">ابدأ مجانًا</a>
           </div>
 
           {families.map((family) => {
@@ -223,28 +223,28 @@ export function PurchasePage() {
             // membership the buyer already holds, so that button would dead-end.
             const isCurrentPlan = currentPlanKey === planKey;
             return (
-              <div key={planKey} className={cardClass(`flex flex-col p-5 ${isTeam ? "border-[#006C35]/30 shadow-sm" : ""}`)}>
+              <div key={planKey} className={cardClass(`flex flex-col p-5 ${isTeam ? "border-brand/30 shadow-sm" : ""}`)}>
                 <div className="flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h2 className="text-[15px] font-bold text-[#0F1E33] dark:text-white">{isTeam ? "نَسَق | فريق" : "نَسَق | فردي"}</h2>
-                      <p className="mt-1 text-[12px] leading-5 text-[#667085] dark:text-white/50">{plan.description}</p>
+                      <h2 className="text-[15px] font-bold text-ink ">{isTeam ? "نَسَق | فريق" : "نَسَق | فردي"}</h2>
+                      <p className="mt-1 text-[12px] leading-5 text-muted ">{plan.description}</p>
                     </div>
                     {isCurrentPlan ? (
-                      <span className="shrink-0 rounded-full bg-[#006C35] px-2.5 py-1 text-[10px] font-bold text-white">خطتك الحالية</span>
+                      <span className="shrink-0 rounded-full bg-navy px-2.5 py-1 text-[10px] font-bold text-on-brand">خطتك الحالية</span>
                     ) : plan.popular ? (
-                      <span className="shrink-0 rounded-full bg-[#0F1E33] px-2.5 py-1 text-[10px] font-bold text-white dark:bg-white dark:text-[#0F1E33]">الأكثر طلبًا</span>
+                      <span className="shrink-0 rounded-full bg-inverse px-2.5 py-1 text-[10px] font-bold text-on-inverse ">الأكثر طلبًا</span>
                     ) : null}
                   </div>
-                  <p className="mt-4 text-[24px] font-extrabold text-[#0F1E33] dark:text-white">{plan.amount.toLocaleString("en-US")} <span className="text-[13px] font-bold text-[#667085]">ر.س</span> <span className="text-[12px] font-bold text-[#667085]">/ {billing === "quarterly" ? "كل 3 أشهر" : billing === "annual" ? "سنوي" : "شهري"}</span></p>
-                  <p className="text-[11px] text-[#98a2b3]">مدة الترخيص {plan.durationDays} يومًا · {billing === "monthly" ? "تجديد شهري" : billing === "quarterly" ? "تجديد كل 3 أشهر" : "تجديد سنوي"}</p>
-                  {billing !== "monthly" && <p className="mt-1 text-[11px] font-semibold text-[#006C35]">وفّر {planSavings(plan)} ر.س مقارنة بالشهري</p>}
-                  <div className="mt-4 border-t border-line/60 pt-3.5 dark:border-white/10">
-                    <p className="text-[11px] font-bold text-[#0F1E33] dark:text-white/70">المزايا المشمولة:</p>
+                  <p className="mt-4 text-[24px] font-extrabold text-ink ">{plan.amount.toLocaleString("en-US")} <span className="text-[13px] font-bold text-muted">ر.س</span> <span className="text-[12px] font-bold text-muted">/ {billing === "quarterly" ? "كل 3 أشهر" : billing === "annual" ? "سنوي" : "شهري"}</span></p>
+                  <p className="text-[11px] text-muted">مدة الترخيص {plan.durationDays} يومًا · {billing === "monthly" ? "تجديد شهري" : billing === "quarterly" ? "تجديد كل 3 أشهر" : "تجديد سنوي"}</p>
+                  {billing !== "monthly" && <p className="mt-1 text-[11px] font-semibold text-brand">وفّر {planSavings(plan)} ر.س مقارنة بالشهري</p>}
+                  <div className="mt-4 border-t border-line/60 pt-3.5 ">
+                    <p className="text-[11px] font-bold text-ink ">المزايا المشمولة:</p>
                     <ul className="mt-2.5 grid gap-1.5">
                       {plan.features.map((f) => (
-                        <li key={f} className="flex items-start gap-2 text-[12px] leading-5 text-[#344054] dark:text-white/70">
-                          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[#006C35]" /> {f}
+                        <li key={f} className="flex items-start gap-2 text-[12px] leading-5 text-muted ">
+                          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-brand" /> {f}
                         </li>
                       ))}
                     </ul>
@@ -252,7 +252,7 @@ export function PurchasePage() {
                 </div>
                 <div className="mt-5">
                   {isCurrentPlan ? (
-                    <a href="/account" className="inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-[#006C35]/40 bg-[#006C35]/10 text-[13px] font-bold text-[#006C35] hover:bg-[#006C35]/15 dark:border-emerald-300/30 dark:text-emerald-200">
+                    <a href="/account" className="inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-brand/40 bg-navy/10 text-[13px] font-bold text-brand hover:bg-navy-2/15 ">
                       إدارة الاشتراك
                     </a>
                   ) : gumroadUrlFor(planKey) ? (
@@ -261,16 +261,16 @@ export function PurchasePage() {
                       target="_blank"
                       rel="noreferrer noopener"
                       aria-label={`اشترك الآن — ${plan.arabicName} عبر Gumroad`}
-                      className={`inline-flex h-9 w-full items-center justify-center rounded-[10px] text-[13px] font-bold text-white transition ${isTeam ? "bg-[#006C35] hover:bg-[#00542a]" : "bg-[#0F1E33] hover:bg-black dark:bg-white dark:text-[#0F1E33]"}`}
+                      className={`inline-flex h-9 w-full items-center justify-center rounded-[10px] text-[13px] font-bold transition ${isTeam ? "bg-navy text-on-brand hover:bg-navy-2" : "bg-inverse text-on-inverse hover:bg-inverse-hover"}`}
                     >
                       اشترك الآن
                     </a>
                   ) : (
-                    <span aria-disabled="true" className="inline-flex h-9 w-full cursor-not-allowed items-center justify-center rounded-[10px] bg-[#0F1E33]/40 text-[13px] font-bold text-white/70 dark:bg-white/20">
+                    <span aria-disabled="true" className="inline-flex h-9 w-full cursor-not-allowed items-center justify-center rounded-[10px] bg-inverse/40 text-[13px] font-bold text-white/70 ">
                       جارٍ تجهيز بوابة الدفع…
                     </span>
                   )}
-                  <p className="mt-2 text-center text-[11px] text-[#98a2b3]">
+                  <p className="mt-2 text-center text-[11px] text-muted">
                     {isCurrentPlan ? "تفاصيل التجديد والترخيص في حسابك" : "ترخيص رقمي فوري · دفع آمن عبر Gumroad"}
                   </p>
                 </div>
@@ -279,71 +279,71 @@ export function PurchasePage() {
           })}
 
           {/* مؤسسات — لا منتج Gumroad لها: عرض سعر مخصص عبر التواصل المباشر. */}
-          <div className="flex flex-col rounded-xl border border-line/70 bg-[#f8faf9] p-5 dark:border-white/10 dark:bg-white/[0.03]">
+          <div className="flex flex-col rounded-xl border border-line/70 bg-surface-2 p-5 ">
             <div className="flex-1">
               <div className="flex items-start justify-between gap-2">
-                <h2 className="text-[15px] font-bold text-[#0F1E33] dark:text-white">مؤسسات</h2>
-                <span className="shrink-0 rounded-full border border-line/70 bg-white px-2.5 py-1 text-[10px] font-bold text-[#667085] dark:border-white/15 dark:bg-white/5 dark:text-white/60">
+                <h2 className="text-[15px] font-bold text-ink ">مؤسسات</h2>
+                <span className="shrink-0 rounded-full border border-line/70 bg-surface px-2.5 py-1 text-[10px] font-bold text-muted ">
                   <Building2 className="me-1 inline size-3" /> عرض سعر
                 </span>
               </div>
-              <p className="mt-2 text-[12px] leading-6 text-[#667085] dark:text-white/50">
+              <p className="mt-2 text-[12px] leading-6 text-muted ">
                 للجهات والفرق الكبيرة: مقاعد متعددة، تعاقد وفاتورة رسمية، وتهيئة حسب احتياج الجهة.
               </p>
-              <p className="mt-4 text-[24px] font-extrabold text-[#0F1E33] dark:text-white">
-                تواصل معنا <span className="text-[12px] font-bold text-[#667085]">لعرض سعر مخصص</span>
+              <p className="mt-4 text-[24px] font-extrabold text-ink ">
+                تواصل معنا <span className="text-[12px] font-bold text-muted">لعرض سعر مخصص</span>
               </p>
-              <p className="text-[11px] text-[#98a2b3]">المدة: حسب العقد</p>
-              <div className="mt-4 border-t border-line/60 pt-3.5 dark:border-white/10">
+              <p className="text-[11px] text-muted">المدة: حسب العقد</p>
+              <div className="mt-4 border-t border-line/60 pt-3.5 ">
                 <ul className="grid gap-1.5">
                   {[
                     "عدد مقاعد مخصص حسب حجم الجهة",
                     "فاتورة رسمية وتعاقد مباشر",
                     "تهيئة أولية ودعم بأولوية",
                   ].map((f) => (
-                    <li key={f} className="flex items-start gap-2 text-[12px] leading-5 text-[#344054] dark:text-white/60">
-                      <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-[#98a2b3]" /> {f}
+                    <li key={f} className="flex items-start gap-2 text-[12px] leading-5 text-muted ">
+                      <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-muted" /> {f}
                     </li>
                   ))}
                 </ul>
               </div>
             </div>
             <div className="mt-5">
-              <a href="/contact" className="inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-line bg-white text-[13px] font-bold text-[#0F1E33] hover:bg-[#f8faf9] dark:border-white/15 dark:bg-white/5 dark:text-white">
+              <a href="/contact" className="inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-line bg-surface text-[13px] font-bold text-ink hover:bg-surface-2 ">
                 تواصل معنا
               </a>
-              <p className="mt-2 text-center text-[11px] text-[#98a2b3]">عرض سعر مخصص — دون دفع فوري</p>
+              <p className="mt-2 text-center text-[11px] text-muted">عرض سعر مخصص — دون دفع فوري</p>
             </div>
           </div>
         </div>
 
         {/* FAQ */}
-        <section className="mt-10 border-t border-line/60 pt-8 dark:border-white/10">
-          <h2 className="text-[18px] font-bold text-[#0F1E33] dark:text-white">الأسئلة الشائعة</h2>
+        <section className="mt-10 border-t border-line/60 pt-8 ">
+          <h2 className="text-[18px] font-bold text-ink ">الأسئلة الشائعة</h2>
           <div className="mt-5 grid gap-2">
             {FAQS.map((faq, i) => {
               const open = openFaq === i;
               return (
-                <div key={faq.q} className="overflow-hidden rounded-[10px] border border-line/70 bg-white dark:border-white/10 dark:bg-white/[0.03]">
-                  <button type="button" onClick={() => setOpenFaq(open ? null : i)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right text-[13px] font-bold text-[#0F1E33] dark:text-white">
+                <div key={faq.q} className="overflow-hidden rounded-[10px] border border-line/70 bg-surface ">
+                  <button type="button" onClick={() => setOpenFaq(open ? null : i)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right text-[13px] font-bold text-ink ">
                     {faq.q}
-                    <ChevronDown className={`size-4 text-[#98a2b3] transition ${open ? "rotate-180" : ""}`} />
+                    <ChevronDown className={`size-4 text-muted transition ${open ? "rotate-180" : ""}`} />
                   </button>
-                  {open && <p className="border-t border-line/60 px-4 py-3 text-[13px] leading-7 text-[#475467] dark:border-white/10 dark:text-white/60">{faq.a}</p>}
+                  {open && <p className="border-t border-line/60 px-4 py-3 text-[13px] leading-7 text-muted ">{faq.a}</p>}
                 </div>
               );
             })}
           </div>
         </section>
 
-        <section className="mt-10 flex flex-wrap items-center justify-between gap-4 rounded-[12px] border border-line/60 bg-[#f8faf9] p-4 dark:border-white/10 dark:bg-white/[0.02]">
+        <section className="mt-10 flex flex-wrap items-center justify-between gap-4 rounded-[12px] border border-line/60 bg-surface-2 p-4 ">
           <div>
-            <h3 className="text-[13px] font-bold text-[#0F1E33] dark:text-white">لا تحتاج إدخال أي مفتاح ترخيص أثناء الدفع</h3>
-            <p className="mt-1 text-[12px] text-[#667085] dark:text-white/50">
+            <h3 className="text-[13px] font-bold text-ink ">لا تحتاج إدخال أي مفتاح ترخيص أثناء الدفع</h3>
+            <p className="mt-1 text-[12px] text-muted ">
               يُنشأ الترخيص ويُربط بحسابك تلقائيًا بعد التحقق من الدفع. وإن كان لديك مفتاح ترخيص سابق، فأدره من صفحة التراخيص.
             </p>
           </div>
-          <a href="/license" className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-line bg-white px-4 text-[12px] font-bold text-[#0F1E33] hover:bg-white dark:border-white/15 dark:bg-white/5 dark:text-white">
+          <a href="/license" className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-line bg-surface px-4 text-[12px] font-bold text-ink hover:bg-surface ">
             <Key className="size-3.5" /> إدارة الترخيص
           </a>
         </section>

@@ -151,7 +151,7 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/55 p-2 sm:p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-scrim p-2 sm:p-4 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-label="مولد عناوين الفقرات"
@@ -159,10 +159,10 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
         if (e.target === e.currentTarget && !busy) onClose();
       }}
     >
-      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-2xl dark:border-white/10 dark:bg-[#161c26]">
-        <header className="flex shrink-0 items-center justify-between border-b border-line px-4 py-3 dark:border-white/10">
+      <div className="flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-[14px] border border-line/50 bg-surface shadow-2xl">
+        <header className="flex shrink-0 items-center justify-between border-b border-line/50 px-4 py-3">
           <div className="flex items-center gap-2">
-            <Heading1 className="size-4 text-navy dark:text-gold-2" aria-hidden />
+            <Heading1 className="size-4 text-brand" aria-hidden />
             <div>
               <h2 className="text-[13px] font-extrabold">مولد عناوين الفقرات</h2>
               <p className="text-[10px] text-muted">
@@ -175,7 +175,7 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
             onClick={onClose}
             disabled={busy}
             aria-label="إغلاق"
-            className="grid size-8 place-items-center rounded-[8px] hover:bg-line-2 dark:hover:bg-white/5"
+            className="grid size-8 place-items-center rounded-[8px] hover:bg-line-2"
           >
             <X className="size-4" />
           </button>
@@ -188,7 +188,7 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
               <input
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="h-9 w-full rounded-[8px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-navy dark:border-white/10"
+                className="h-9 w-full rounded-[8px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-navy"
                 placeholder="الملخص التنفيذي"
               />
             </label>
@@ -201,7 +201,7 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
                   <input
                     value={subtitle}
                     onChange={(e) => setSubtitle(e.target.value)}
-                    className="h-9 w-full rounded-[8px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-navy dark:border-white/10"
+                    className="h-9 w-full rounded-[8px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-navy"
                     placeholder="وصف مختصر للقسم"
                   />
                 </label>
@@ -212,7 +212,7 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
                   <input
                     value={index}
                     onChange={(e) => setIndex(e.target.value)}
-                    className="h-9 w-full rounded-[8px] border border-line bg-transparent px-3 text-center text-[12px] font-bold outline-none focus:border-navy dark:border-white/10"
+                    className="h-9 w-full rounded-[8px] border border-line bg-transparent px-3 text-center text-[12px] font-bold outline-none focus:border-navy"
                     placeholder="01"
                     dir="ltr"
                   />
@@ -226,7 +226,7 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
               <input
                 value={eyebrow}
                 onChange={(e) => setEyebrow(e.target.value)}
-                className="h-9 w-full rounded-[8px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-navy dark:border-white/10"
+                className="h-9 w-full rounded-[8px] border border-line bg-transparent px-3 text-[12px] font-bold outline-none focus:border-navy"
                 placeholder="محور الأداء"
               />
             </label>
@@ -243,18 +243,18 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
                     className={cn(
                       "relative flex min-h-[46px] items-center justify-center rounded-[8px] border px-2 py-2.5 text-[11px] font-extrabold transition",
                       preset === item.id
-                        ? "border-navy bg-navy/5 text-navy dark:text-gold-2"
-                        : "border-line bg-white text-muted hover:border-navy/50 dark:border-white/10 dark:bg-white/[0.03]",
+                        ? "border-navy bg-navy/5 text-brand"
+                        : "border-line bg-surface text-muted hover:border-navy/50",
                     )}
                   >
                     {preset === item.id && (
-                      <Check className="absolute end-1.5 top-1.5 size-3 text-navy dark:text-gold-2" aria-hidden />
+                      <Check className="absolute end-1.5 top-1.5 size-3 text-brand" aria-hidden />
                     )}
                     <span className="line-clamp-2 text-center leading-4">{item.label}</span>
                   </button>
                 ))}
               </div>
-              <p className="mt-2 rounded-[6px] bg-paper px-2 py-1.5 text-[10px] leading-5 text-muted dark:bg-white/5">
+              <p className="mt-2 rounded-[6px] bg-paper px-2 py-1.5 text-[10px] leading-5 text-muted">
                 {HEADING_PRESETS.find((p) => p.id === preset)?.hint}
               </p>
             </div>
@@ -262,9 +262,9 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
 
           <div className="grid gap-2 content-start">
             <h3 className="text-[11px] font-extrabold">معاينة</h3>
-            <div className="rounded-[8px] border border-line bg-paper p-3 dark:border-white/10 dark:bg-white/5">
+            <div className="rounded-[8px] border border-line bg-paper p-3">
               <div
-                className="relative mx-auto overflow-hidden rounded-[4px] bg-white shadow-sm dark:bg-[#101722]"
+                className="relative mx-auto overflow-hidden rounded-[4px] bg-surface shadow-sm"
                 style={{
                   width: "100%",
                   aspectRatio: `${columnWidth} / ${height}`,
@@ -320,19 +320,19 @@ export function HeadingGeneratorDialog({ onClose }: { onClose: () => void }) {
                 })}
               </div>
             </div>
-            <p className="rounded-[6px] bg-line-2/40 px-2 py-1.5 text-[10px] leading-5 text-muted dark:bg-white/5">
+            <p className="rounded-[6px] bg-line-2/40 px-2 py-1.5 text-[10px] leading-5 text-muted">
               بعرض عمود النص ({columnWidth} مم) وارتفاع {Math.round(height)} مم. بعد الإدراج
               تحتفظ كل قطعة بحرية التعديل. يُضاف ككتلة منظمة بمحاذاة صحيحة ومسافات مضبوطة، جاهز للتصميم فوراً.
             </p>
           </div>
         </div>
 
-        <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-line px-4 py-3 dark:border-white/10 bg-white dark:bg-[#161c26]">
+        <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-line px-4 py-3 bg-surface">
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="h-9 rounded-[8px] border border-line px-3 text-[12px] font-bold dark:border-white/10"
+            className="h-9 rounded-[8px] border border-line px-3 text-[12px] font-bold"
           >
             إلغاء
           </button>
