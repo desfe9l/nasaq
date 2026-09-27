@@ -1,16 +1,9 @@
-import { mmToPx, PX_PER_MM } from "@/lib/editor/render-units";
+import { mmToPx } from "@/lib/editor/render-units";
 import { likelyNsqDrag } from "@/lib/nsq/format";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Copy,
-  Columns2,
-  Download,
-  Eye,
   EyeOff,
-  Lock,
   LockKeyholeOpen,
-  Plus,
-  Rows2,
   Trash2,
 } from "lucide-react";
 import {
@@ -76,7 +69,6 @@ type LayerPickerState = {
   elements: CanvasEl[];
 } | null;
 
-const ARTBOARD_GAP_MM = 18;
 const SELECTION_LAYER_Z = 5000;
 const GUIDE_LAYER_Z = SELECTION_LAYER_Z - 1;
 const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
@@ -191,16 +183,8 @@ export function CanvasStage({
   const editingId = useEditor((s) => s.editingId);
   const artboardGridCols = useEditor((s) => s.artboardGridCols);
   const renamePage = useEditor((s) => s.renamePage);
-  const duplicatePage = useEditor((s) => s.duplicatePage);
-  const deletePage = useEditor((s) => s.deletePage);
-  const toggleArtboardLock = useEditor((s) => s.toggleArtboardLock);
-  const toggleArtboardHidden = useEditor((s) => s.toggleArtboardHidden);
-  const splitArtboardPage = useEditor((s) => s.splitArtboardPage);
-  const addArtboardAdjacent = useEditor((s) => s.addArtboardAdjacent);
-  const openExport = useEditor((s) => s.openExport);
 
   const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
-  const [splitMenuOpenFor, setSplitMenuOpenFor] = useState<string | null>(null);
 
   const opRef = useRef<Op>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -1102,11 +1086,11 @@ export function CanvasStage({
       >
         <div
           className="artboard-grid"
-          dir="ltr"
+          dir="rtl"
           style={{
             display: "grid",
-            gridTemplateColumns: `repeat(${Math.max(1, artboardGridCols)}, auto)`,
-            gap: `${ARTBOARD_GUTTER_MM * zoom}mm`,
+            gridTemplateColumns: `repeat(${Math.max(1, Math.min(visible.length, artboardGridCols))}, max-content)`,
+            gap: `max(32px, ${ARTBOARD_GUTTER_MM * zoom}mm)`,
             alignItems: "start",
             justifyContent: "center",
           }}
@@ -1114,9 +1098,9 @@ export function CanvasStage({
           {visible.map((page) => {
             const size = pageSize(page);
             const isActive = page.id === activePageId;
+            const pageNo = pages.findIndex((p) => p.id === page.id) + 1;
             const isLocked = Boolean(page.locked);
             const isHidden = Boolean(page.hidden);
-            const pageNo = pages.findIndex((p) => p.id === page.id) + 1;
             const entered = enteredGroupId
               ? findElement(page.elements, enteredGroupId)?.el || null
               : null;
@@ -1155,210 +1139,57 @@ export function CanvasStage({
                 dir="ltr"
                 style={{
                   width: `${size.w * zoom}mm`,
-                  paddingTop: "24px",
+                  height: `calc(${size.h * zoom}mm + 36px)`,
                 }}
               >
-                {/* Artboard Header */}
-                <div
-                  className="artboard-header mb-1.5 flex items-center justify-between gap-2 px-1 text-[11px] select-none"
-                  dir="rtl"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActivePage(page.id);
-                  }}
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {renamingPageId === page.id ? (
-                      <input
-                        type="text"
-                        autoFocus
-                        defaultValue={page.name}
-                        className="h-5 rounded border border-accent bg-[#1e252b] px-1.5 text-[11px] font-bold text-white outline-none ring-1 ring-accent"
-                        onBlur={(e) => {
-                          const val = e.currentTarget.value.trim();
-                          if (val) renamePage(page.id, val);
-                          setRenamingPageId(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            const val = e.currentTarget.value.trim();
-                            if (val) renamePage(page.id, val);
-                            setRenamingPageId(null);
-                          } else if (e.key === "Escape") {
-                            setRenamingPageId(null);
-                          }
-                          e.stopPropagation();
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    ) : (
-                      <span
-                        className={`truncate font-semibold cursor-pointer transition-colors ${
-                          isActive
-                            ? "text-accent font-bold"
-                            : "text-[#9aa0a6] hover:text-white"
-                        }`}
-                        title="انقر مرتين لإعادة التسمية"
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
+                {/* The name is UI, never a document element or a transform child. */}
+                <div className="artboard-header" dir="rtl" onPointerDown={(e) => e.stopPropagation()}>
+                  {renamingPageId === page.id ? (
+                    <input
+                      autoFocus
+                      aria-label="اسم لوحة الرسم"
+                      defaultValue={page.name}
+                      className="artboard-title-input"
+                      onBlur={(e) => {
+                        const value = e.currentTarget.value.trim();
+                        if (value) renamePage(page.id, value);
+                        setRenamingPageId(null);
+                      }}
+                      onKeyDown={(e) => {
+                        e.stopPropagation();
+                        if (e.key === "Enter") e.currentTarget.blur();
+                        if (e.key === "Escape") setRenamingPageId(null);
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className="artboard-name"
+                      aria-pressed={isActive && selectedIds.length === 0}
+                      title={page.name + " — انقر مرتين أو اضغط Enter لإعادة التسمية"}
+                      onClick={() => { setActivePage(page.id); select(null); }}
+                      onDoubleClick={() => setRenamingPageId(page.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === "F2") {
+                          e.preventDefault();
                           setRenamingPageId(page.id);
-                        }}
-                      >
-                        {page.name}
-                      </span>
-                    )}
-
-                    {isLocked && (
-                      <span title="لوحة الرسم مقفلة" className="inline-flex items-center">
-                        <Lock className="h-3 w-3 text-amber-400 shrink-0" />
-                      </span>
-                    )}
-                    {isHidden && (
-                      <span title="محتوى لوحة الرسم مخفي" className="inline-flex items-center">
-                        <EyeOff className="h-3 w-3 text-[#707880] shrink-0" />
-                      </span>
-                    )}
-
-                    {entered && (
-                      <span className="ms-1 text-[10px] text-gold-2">
-                        · داخل «{entered.name}»
-                      </span>
-                    )}
-                  </div>
-
-                  <span className="tabular-nums text-[10px] text-[#6d757d] shrink-0" dir="ltr">
-                    {Math.round(size.w)} × {Math.round(size.h)} mm
-                  </span>
-                </div>
-
-                {/* Floating Top Control Overlay for Active Artboard */}
-                {isActive && (
-                  <div
-                    className="artboard-toolbar-overlay"
-                    dir="rtl"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      className={`artboard-overlay-btn ${isLocked ? "active" : ""}`}
-                      onClick={() => toggleArtboardLock(page.id)}
-                      title={isLocked ? "إلغاء قفل لوحة الرسم" : "قفل لوحة الرسم"}
-                    >
-                      {isLocked ? (
-                        <Lock className="h-3.5 w-3.5 text-amber-400" />
-                      ) : (
-                        <LockKeyholeOpen className="h-3.5 w-3.5" />
-                      )}
-                      <span>{isLocked ? "مقفلة" : "قفل"}</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`artboard-overlay-btn ${isHidden ? "active" : ""}`}
-                      onClick={() => toggleArtboardHidden(page.id)}
-                      title={isHidden ? "إظهار محتوى لوحة الرسم" : "إخفاء محتوى لوحة الرسم"}
-                    >
-                      {isHidden ? (
-                        <EyeOff className="h-3.5 w-3.5 text-amber-400" />
-                      ) : (
-                        <Eye className="h-3.5 w-3.5" />
-                      )}
-                      <span>{isHidden ? "إظهار" : "إخفاء"}</span>
-                    </button>
-
-                    <div className="h-3.5 w-[1px] bg-white/20 mx-0.5" />
-
-                    {/* Split Artboard Menu */}
-                    <div className="relative">
-                      <button
-                        type="button"
-                        className="artboard-overlay-btn"
-                        onClick={() =>
-                          setSplitMenuOpenFor(
-                            splitMenuOpenFor === page.id ? null : page.id,
-                          )
                         }
-                        title="تقسيم لوحة الرسم إلى لوحتين متساويتين"
-                      >
-                        <Columns2 className="h-3.5 w-3.5" />
-                        <span>تقسيم</span>
-                      </button>
-
-                      {splitMenuOpenFor === page.id && (
-                        <div
-                          className="absolute top-full mt-1.5 start-0 z-50 flex flex-col min-w-[170px] rounded-lg border border-white/15 bg-[#181d21]/95 p-1 text-[11px] text-white shadow-xl backdrop-blur-md"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            className="flex items-center gap-2 rounded px-2.5 py-1.5 text-start hover:bg-white/10"
-                            onClick={() => {
-                              splitArtboardPage(page.id, "horizontal");
-                              setSplitMenuOpenFor(null);
-                            }}
-                          >
-                            <Rows2 className="h-3.5 w-3.5 text-accent" />
-                            <span>تقسيم أفقياً (أعلى / أسفل)</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="flex items-center gap-2 rounded px-2.5 py-1.5 text-start hover:bg-white/10"
-                            onClick={() => {
-                              splitArtboardPage(page.id, "vertical");
-                              setSplitMenuOpenFor(null);
-                            }}
-                          >
-                            <Columns2 className="h-3.5 w-3.5 text-accent" />
-                            <span>تقسيم رأسياً (يمين / يسار)</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="h-3.5 w-[1px] bg-white/20 mx-0.5" />
-
-                    <button
-                      type="button"
-                      className="artboard-overlay-btn"
-                      onClick={() => openExport("png")}
-                      title="تصدير لوحة الرسم المحددة (PNG/PDF)"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      <span>تصدير</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      className="artboard-overlay-btn"
-                      onClick={() => duplicatePage(page.id)}
-                      title="مضاعفة لوحة الرسم"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      <span>نسخ</span>
-                    </button>
-
-                    {pages.length > 1 && (
-                      <button
-                        type="button"
-                        className="artboard-overlay-btn text-rose-300 hover:text-rose-200"
-                        onClick={() => deletePage(page.id)}
-                        title="حذف لوحة الرسم"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                )}
+                      }}
+                    >{page.name}</button>
+                  )}
+                </div>
 
                 {/* Scaled Page Container */}
                 <div
-                  className="page-frame-content relative"
+                  className="page-frame-content absolute"
                   dir="ltr"
                   style={{
                     width: `${mmToPx(size.w)}px`,
                     height: `${size.h}mm`,
                     transform: `scale(${zoom})`,
                     transformOrigin: "top left",
+                    top: "36px",
+                    left: 0,
                   }}
                 >
                   <div
@@ -1367,7 +1198,7 @@ export function CanvasStage({
                     }}
                     data-page-id={page.id}
                     className={`report-page ${showGrid ? "show-grid" : ""} ${
-                      isActive ? "artboard-active-outline ring-2 ring-accent ring-offset-4 ring-offset-[#181d21]" : ""
+                      isActive ? "artboard-active-outline" : ""
                     } ${isLocked ? "artboard-locked" : ""} ${isHidden ? "artboard-hidden-content" : ""}`}
                     style={{
                       width: `${mmToPx(size.w)}px`,
@@ -1539,7 +1370,7 @@ export function CanvasStage({
                           <SelectionFrame
                             key={frame.el.id}
                             frame={frame}
-                            primary={selectedIds.length === 1}
+                            primary={frame.el.id === selectedId}
                             editing={editingId === frame.el.id}
                             zoom={zoom}
                             onGesture={(ev, kind, handle) =>
@@ -1562,55 +1393,7 @@ export function CanvasStage({
                   </div>
                 </div>
 
-                {/* Contextual '+' edge buttons for active artboard to insert adjacent artboards */}
-                {isActive && (
-                  <>
-                    <button
-                      type="button"
-                      className="artboard-edge-adder adder-top"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addArtboardAdjacent(page.id, "top");
-                      }}
-                      title="إضافة لوحة رسم أعلى هذه اللوحة"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      className="artboard-edge-adder adder-bottom"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addArtboardAdjacent(page.id, "bottom");
-                      }}
-                      title="إضافة لوحة رسم أسفل هذه اللوحة"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      className="artboard-edge-adder adder-left"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addArtboardAdjacent(page.id, "left");
-                      }}
-                      title="إضافة لوحة رسم على يسار هذه اللوحة"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      className="artboard-edge-adder adder-right"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        addArtboardAdjacent(page.id, "right");
-                      }}
-                      title="إضافة لوحة رسم على يمين هذه اللوحة"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
-                  </>
-                )}
+
               </div>
             );
           })}
@@ -1690,26 +1473,8 @@ function SelectionFrame({
   const select = useEditor((s) => s.select);
   const el = frame.el;
 
-  // حتى لا يصبح العنصر غير قابل للتحكم بسبب صغر حجمه — حد أدنى بصري للإطار
-  // نحافظ على موضع ونسبة العنصر أثناء Resize عبر توسيط الإطار المصغر على مركز العنصر
-  const MIN_SCREEN_PX = 32;
-  const pxPerMm = PX_PER_MM;
-  const screenW = el.w * zoom * pxPerMm;
-  const screenH = el.h * zoom * pxPerMm;
-  let visualW = el.w;
-  let visualH = el.h;
-  let visualX = el.x;
-  let visualY = el.y;
-  if (screenW < MIN_SCREEN_PX) {
-    const minWmm = MIN_SCREEN_PX / (zoom * pxPerMm);
-    visualX = el.x - (minWmm - el.w) / 2;
-    visualW = minWmm;
-  }
-  if (screenH < MIN_SCREEN_PX) {
-    const minHmm = MIN_SCREEN_PX / (zoom * pxPerMm);
-    visualY = el.y - (minHmm - el.h) / 2;
-    visualH = minHmm;
-  }
+  // Paint the exact geometry; only handle hit targets have a screen-space minimum.
+  // Inflating small frames made separate objects appear attached at low zoom.
 
   return (
     <div
@@ -1723,10 +1488,10 @@ function SelectionFrame({
       )}
       data-el-id={el.id}
       style={{
-        left: `${visualX}mm`,
-        top: `${visualY}mm`,
-        width: `${visualW}mm`,
-        height: `${visualH}mm`,
+        left: `${el.x}mm`,
+        top: `${el.y}mm`,
+        width: `${el.w}mm`,
+        height: `${el.h}mm`,
         transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
       } as React.CSSProperties}
       onPointerDown={(e) => {

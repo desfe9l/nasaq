@@ -1,3 +1,5 @@
+import { shortcutHint, shortcutKey } from "@/lib/editor/keyboard";
+import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlignCenter,
@@ -57,6 +59,8 @@ type ContextAction = {
 };
 
 const ACTIONS = [
+  { id: "select-all", label: "تحديد الكل", hint: "⌘ A", icon: Focus },
+  { id: "appearance", label: "تبديل المظهر الفاتح / الداكن", hint: "", icon: Contrast },
   { id: "undo", label: "تراجع", hint: "⌘ Z", icon: Undo2 },
   { id: "redo", label: "إعادة", hint: "⌘ ⇧ Z", icon: Redo2 },
   { id: "duplicate", label: "تكرار العنصر", hint: "⌘ D / ⌘ J", icon: Copy },
@@ -106,7 +110,12 @@ export function WorkspaceOverlays({
   const setLeftTab = useEditor((s) => s.setLeftTab);
   const toggleHidden = useEditor((s) => s.toggleHidden);
   const toggle = useEditor((s) => s.toggle);
-  const setZoom = useEditor((s) => s.setZoom);
+  const setZoom = (next: number) => {
+    const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    zoomAnchoredAt(stage, useEditor.getState().zoom, next, rect.left + rect.width / 2, rect.top + rect.height / 2);
+  };
   const zoom = useEditor((s) => s.zoom);
   const selectAll = useEditor((s) => s.selectAll);
   const invertSelection = useEditor((s) => s.invertSelection);
@@ -134,7 +143,7 @@ export function WorkspaceOverlays({
           ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
       if (typing) return;
       const meta = event.metaKey || event.ctrlKey;
-      if (meta && event.key.toLowerCase() === "k") {
+      if (meta && shortcutKey(event) === "k") {
         event.preventDefault();
         setCommandOpen(true);
         setQuery("");
@@ -151,6 +160,12 @@ export function WorkspaceOverlays({
 
   const run = (id: string) => {
     switch (id) {
+      case "select-all":
+        selectAll();
+        break;
+      case "appearance":
+        toggle("dark");
+        break;
       case "undo":
         undo();
         break;
@@ -673,7 +688,7 @@ export function WorkspaceOverlays({
                     <Icon className="size-3.5 shrink-0" />
                     <span className="flex-1">{action.label}</span>
                     {action.hint && (
-                      <span className="text-[9px] text-muted">{action.hint}</span>
+                      <span dir="ltr" className="text-[9px] text-muted">{shortcutHint(action.hint)}</span>
                     )}
                   </button>
                 </div>
@@ -796,7 +811,7 @@ export function WorkspaceOverlays({
                   >
                     <Icon className="size-4" />
                     <span className="flex-1">{action.label}</span>
-                    <kbd>{action.hint || ""}</kbd>
+                    <kbd dir="ltr">{shortcutHint(action.hint || "")}</kbd>
                   </button>
                 );
               })}

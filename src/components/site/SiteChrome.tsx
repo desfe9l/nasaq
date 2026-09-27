@@ -10,7 +10,7 @@ import {
   telHref,
 } from "@/lib/brand";
 import { SocialLinks } from "@/components/site/SocialLinks";
-import { readStoredTheme, writeStoredTheme } from "@/lib/theme";
+import { readStoredTheme, writeStoredTheme, subscribeTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import { authEnabled, signOut } from "@/lib/auth/client";
@@ -291,6 +291,7 @@ export function SiteHeader({ current }: { current: string }) {
   // already applied the class before any route renders, so this never
   // disagrees with what is on screen.
   const [dark, setDark] = useState(() => readStoredTheme() ?? false);
+  useEffect(() => subscribeTheme(setDark), []);
 
   useEffect(() => {
     setOpen(false);

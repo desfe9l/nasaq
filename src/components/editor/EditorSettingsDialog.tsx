@@ -42,8 +42,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "editor", label: "المحرر" },
 ];
 
-export function EditorSettingsDialog({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>("account");
+export function EditorSettingsDialog({ onClose, initialTab = "account" }: { onClose: () => void; initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -62,11 +62,12 @@ export function EditorSettingsDialog({ onClose }: { onClose: () => void }) {
       role="dialog"
       aria-modal="true"
       aria-label="الإعدادات"
+      dir="rtl"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-2xl dark:border-white/10 dark:bg-[#161c26]">
+      <div className="editor-settings-surface flex max-h-[86dvh] w-full max-w-lg flex-col overflow-hidden rounded-[14px] border border-line bg-white shadow-2xl dark:border-white/10 dark:bg-[#161c26]">
         <header className="flex items-center justify-between border-b border-line px-4 py-3 dark:border-white/10">
           <div className="flex items-center gap-2">
             <Settings2 className="size-4 text-navy dark:text-gold-2" aria-hidden />
@@ -351,7 +352,7 @@ function EditorSection() {
               aria-checked={dark === value}
               onClick={() => setDark(value)}
               className={cn(
-                "inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-[8px] text-[12px] font-extrabold transition",
+                "inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[8px] text-[12px] font-extrabold transition",
                 dark === value
                   ? "bg-navy text-white dark:bg-white/10 dark:text-gold-2"
                   : "text-muted hover:bg-line-2 dark:hover:bg-white/5",
@@ -363,7 +364,7 @@ function EditorSection() {
           ))}
         </div>
         <p className="mt-2 text-[10px] leading-5 text-muted">
-          السمة واحدة لكل المنصة: المحرر وصفحات الموقع.
+          مظهر الواجهة فقط؛ لا يغيّر خلفية الصفحة أو ألوان التصميم.
         </p>
       </section>
 

@@ -15,7 +15,7 @@ import { accountIdentity } from "@/lib/auth/identity";
 import { AccountAvatar } from "@/components/site/AccountAvatar";
 import { AccountBadge, useAccountTier } from "@/components/site/AccountBadge";
 import { cn } from "@/lib/utils";
-import { EditorSettingsDialog } from "./EditorSettingsDialog";
+import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { NewDocumentDialog } from "@/components/site/NewDocumentDialog";
 
 /**
@@ -80,7 +80,6 @@ export function EditorAccountMenu() {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [at, setAt] = useState<{ left: number; top: number } | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [newDocOpen, setNewDocOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -239,7 +238,7 @@ export function EditorAccountMenu() {
                 className={menuItem}
                 onClick={() => {
                   setOpen(false);
-                  setSettingsOpen(true);
+                  window.dispatchEvent(new CustomEvent(OPEN_EDITOR_SETTINGS_EVENT, { detail: "account" }));
                 }}
               >
                 <Settings2 className="size-4 opacity-70" aria-hidden />
@@ -274,7 +273,6 @@ export function EditorAccountMenu() {
           document.body,
         )}
 
-      {settingsOpen && <EditorSettingsDialog onClose={() => setSettingsOpen(false)} />}
       {/*
        * The store applies the new project in place — no navigation, no reload.
        * Portaled to <body>: the toolbar is its own stacking context, so a

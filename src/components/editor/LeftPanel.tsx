@@ -1,3 +1,4 @@
+import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { useState } from "react";
 import {
   Type,
@@ -127,7 +128,6 @@ export function LeftPanel({
   const showGrid = useEditor((s) => s.showGrid);
   const snapGrid = useEditor((s) => s.snapGrid);
   const snapElements = useEditor((s) => s.snapElements);
-  const dark = useEditor((s) => s.dark);
   const storage = useEditor((s) => s.storage);
 
   const [category, setCategory] = useState<TemplateCategoryId | "all">("all");
@@ -725,6 +725,21 @@ export function LeftPanel({
                       حذف
                     </MiniButton>
                   </div>
+                  <details className="artboard-page-options mt-2">
+                    <summary>خيارات لوحة الرسم</summary>
+                    <div className="grid grid-cols-2 gap-1 mt-2">
+                      <MiniButton label="قفل لوحة الرسم" onClick={() => useEditor.getState().toggleArtboardLock(p.id)}>{p.locked ? "إلغاء القفل" : "قفل اللوحة"}</MiniButton>
+                      <MiniButton label="إظهار / إخفاء لوحة الرسم" onClick={() => useEditor.getState().toggleArtboardHidden(p.id)}>{p.hidden ? "إظهار المحتوى" : "إخفاء المحتوى"}</MiniButton>
+                      <MiniButton label="تقسيم أفقياً" onClick={() => useEditor.getState().splitArtboardPage(p.id, "horizontal")}>تقسيم أفقياً</MiniButton>
+                      <MiniButton label="تقسيم رأسياً" onClick={() => useEditor.getState().splitArtboardPage(p.id, "vertical")}>تقسيم رأسياً</MiniButton>
+                      {(["top", "bottom", "right", "left"] as const).map((side, index) => (
+                        <MiniButton key={side} label={`إضافة لوحة ${["أعلى", "أسفل", "يمين", "يسار"][index]}`} onClick={() => useEditor.getState().addArtboardAdjacent(p.id, side)}>
+                          إضافة { ["أعلى", "أسفل", "يمين", "يسار"][index] }
+                        </MiniButton>
+                      ))}
+                      <MiniButton label="تصدير لوحة الرسم" onClick={() => { setActivePage(p.id); useEditor.getState().openExport("png"); }}>تصدير</MiniButton>
+                    </div>
+                  </details>
                 </div>
               ))}
             </div>
@@ -876,6 +891,9 @@ export function LeftPanel({
                 الدقة والمحاذاة
               </h2>
               <div className="grid gap-1.5">
+                <button type="button" className="h-11 rounded-lg border border-line text-[12px] font-bold" onClick={() => window.dispatchEvent(new CustomEvent(OPEN_EDITOR_SETTINGS_EVENT))}>
+                  مظهر المحرر — فاتح / داكن
+                </button>
                 <ToggleRow
                   label="إظهار الشبكة"
                   value={showGrid}
@@ -890,11 +908,6 @@ export function LeftPanel({
                   label="محاذاة العناصر"
                   value={snapElements}
                   onChange={() => toggle("snapElements")}
-                />
-                <ToggleRow
-                  label="الوضع الليلي"
-                  value={dark}
-                  onChange={() => toggle("dark")}
                 />
               </div>
             </section>

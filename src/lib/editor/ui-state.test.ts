@@ -46,13 +46,13 @@ describe("clampPagesHeight", () => {
   });
 
   it("leaves a sane height untouched, rounded to whole pixels", () => {
-    assert.equal(clampPagesHeight(210), 210);
-    assert.equal(clampPagesHeight(210.6), 211);
+    assert.equal(clampPagesHeight(110), 110);
+    assert.equal(clampPagesHeight(110.6), 111);
   });
 
   it("caps the panel so the artboard keeps usable room (headless viewport 900)", () => {
-    // 900 - 220 = 680 reserved-space bound vs 60% of 900 = 540 → 540 wins.
-    assert.equal(clampPagesHeight(5000), 540);
+    // Even a very tall workspace keeps a single compact row.
+    assert.equal(clampPagesHeight(5000), 144);
     assert.ok(clampPagesHeight(5000) < 900);
   });
 

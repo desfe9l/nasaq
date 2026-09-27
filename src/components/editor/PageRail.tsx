@@ -1,10 +1,10 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Copy, GripVertical, Plus, Trash2 } from "lucide-react";
 import { pageSize, type CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { clamp, cn } from "@/lib/utils";
 
-export function PageRail({ height = 152, minHeight = 96 }: { height?: number; minHeight?: number }) {
+export function PageRail({ height = 112, minHeight = 96 }: { height?: number; minHeight?: number }) {
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
   const setActivePage = useEditor((s) => s.setActivePage);
@@ -15,10 +15,10 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
   const renamePage = useEditor((s) => s.renamePage);
 
   const thumbBox = (ratio: number) => {
-    const chrome = 60;
+    const chrome = 44;
     const available = Math.max(48, height - chrome);
     const floor = Math.max(40, minHeight - chrome);
-    const h = clamp(Math.round(available), floor, 220);
+    const h = clamp(Math.round(available), floor, 100);
     const w = clamp(Math.round(h * ratio), 34, 240);
     return { w, h };
   };
@@ -28,7 +28,13 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
   const [renaming, setRenaming] = useState<string | null>(null);
   const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
 
+  useEffect(() => {
+    itemRefs.current[activePageId]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [activePageId]);
+
   const startDrag = (index: number) => (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
     e.preventDefault();
     e.stopPropagation();
     setDragIndex(index);
@@ -51,6 +57,7 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
     const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
       let target = index;
       for (const [id, node] of Object.entries(itemRefs.current)) {
         if (!node) continue;
@@ -63,15 +70,16 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
       }
       setDragIndex(null);
       setOverIndex(null);
-      if (target !== index) reorderPages(index, target);
+      if (ev.type !== "pointercancel" && target !== index) reorderPages(index, target);
     };
 
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up);
   };
 
   return (
-    <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-4 border-t px-4 py-2 bg-white dark:bg-[#161c26] overflow-hidden">
+    <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-2 border-t px-2 py-1 bg-white dark:bg-[#161c26] overflow-hidden">
       <div className="flex shrink-0 flex-col justify-center gap-1">
         <button
           type="button"
@@ -92,7 +100,7 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
         </button>
       </div>
 
-      <ul className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto overflow-y-visible px-3 py-3 editor-pane-scroll" dir="rtl" style={{ scrollbarGutter: "stable" as any }}>
+      <ul className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto overflow-y-hidden px-1 py-1 editor-pane-scroll" dir="rtl" >
         {pages.map((p, i) => {
           const size = pageSize(p);
           const ratio = size.w / size.h;
@@ -105,18 +113,25 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
                 itemRefs.current[p.id] = n;
               }}
               className={cn(
-                "group relative shrink-0 rounded-xl border-2 p-2 transition-all",
+                "page-rail-item group relative flex items-center gap-1 shrink-0 rounded-lg border p-1",
                 active
-                  ? "border-emerald-500 bg-emerald-500/10 shadow-[0_0_0_3px_rgba(16,185,129,0.18)] ring-2 ring-emerald-500/20 ring-offset-2 ring-offset-white dark:ring-offset-[#161c26]"
-                  : "border-line hover:border-emerald-500/40 dark:border-white/10",
+                  ? "is-active"
+                  : "border-line",
                 dragIndex === i && "opacity-50",
                 overIndex === i && dragIndex !== null && dragIndex !== i && "drop-target",
               )}
               style={{ outlineOffset: "2px" }}
             >
+              <div>
               <button
                 type="button"
-                onClick={() => setActivePage(p.id)}
+                aria-label={`${p.name} ${i + 1}`}
+                onClick={() => {
+                  setActivePage(p.id);
+                  requestAnimationFrame(() => {
+                    document.querySelector(`[data-page-id="${CSS.escape(p.id)}"]`)?.closest(".artboard-cell")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+                  });
+                }}
                 onDoubleClick={() => {
                   setActivePage(p.id);
                   requestAnimationFrame(() => {
@@ -130,8 +145,8 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
                 title="نقرة لاختيار الصفحة — نقرة مزدوجة لفتحها بوضوح في اللوحة"
               >
                 <span
-                  className="relative mb-1.5 block overflow-hidden rounded-md border border-line bg-white shadow-sm"
-                  style={{ width: `${thumbW}px`, height: `${thumbH}px` }}
+                  className="page-thumbnail relative mb-1 block overflow-hidden rounded-md border border-line shadow-sm"
+                  style={{ width: `${thumbW}px`, height: `${thumbH}px`, background: p.bg || "#fff" }}
                 >
                   {p.elements
                     .slice()
@@ -153,6 +168,7 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
                       />
                     ))}
                 </span>
+              </button>
                 <span className="flex items-center justify-between gap-1 text-[10px] leading-tight">
                   {renaming === p.id ? (
                     <input
@@ -183,15 +199,15 @@ export function PageRail({ height = 152, minHeight = 96 }: { height?: number; mi
                   <span
                     className={cn(
                       "grid h-4 min-w-4 shrink-0 place-items-center rounded-full px-1 text-[9px] font-extrabold tabular-nums",
-                      active ? "bg-emerald-500 text-white" : "bg-line-2 text-muted dark:bg-white/10",
+                      active ? "page-rail-number-active" : "bg-line-2 text-muted",
                     )}
                   >
                     {i + 1}
                   </span>
                 </span>
-              </button>
+              </div>
 
-              <span className="absolute top-1 left-1 flex gap-0.5 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+              <span className="page-rail-actions flex flex-col gap-0.5">
                 <button
                   type="button"
                   onPointerDown={startDrag(i)}

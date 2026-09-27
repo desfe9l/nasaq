@@ -1080,7 +1080,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     snapElements: true,
     previewAll: true,
     focusMode: false,
-    dark: true,
+    dark: readStoredTheme() === true,
     leftTab: "library",
     rightTab: "properties",
     leftOpen: false,
@@ -1232,18 +1232,10 @@ export const useEditor = create<EditorStore>((set, get) => {
         const activeId =
           (await getSetting<string>("activeProjectId")) || ui.activeProjectId;
         const active = activeId ? await getProject(activeId) : null;
-        // One shared site-wide preference (lib/theme.ts): the visitor's
-        // explicit choice always wins. With no stored choice the studio opens
-        // on its signature dark-slate chrome — the designed default for a
-        // design workspace. The html class is applied too (Tailwind's `dark:`
-        // variant keys off it) but NOT persisted, so the visitor has not been
-        // opted into anything: their first explicit toggle writes the slot.
-        const storedTheme = readStoredTheme();
-        const dark = storedTheme ?? true;
+        // The shared preference is the only authority, including the default.
+        const dark = readStoredTheme() === true;
         applyStoredTheme();
-        if (storedTheme === null && typeof document !== "undefined") {
-          document.documentElement.classList.toggle("dark", dark);
-        }
+
         set({
           projects: list,
           projectsLoading: false,
@@ -2146,25 +2138,24 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
     },
 
-    selectAll: () =>
-      get().selectMany(
-        (activePageOf(get())?.elements ?? [])
-          .filter((el) => !el.locked && !el.hidden)
-          .map((el) => el.id),
-      ),
+    selectAll: () => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page || page.locked || page.hidden) return;
+      const elements = s.enteredGroupId
+        ? findElement(page.elements, s.enteredGroupId)?.el.children ?? []
+        : page.elements;
+      s.selectMany(elements.filter((el) => !el.locked && !el.hidden).map((el) => el.id));
+    },
 
     invertSelection: () => {
       const s = get();
       const page = activePageOf(s);
-      if (!page) return;
-      const selected = new Set(s.selectedIds);
-      // Same universe as selectAll — the invert of "everything" is well-defined
-      // only against the same set of elements the author can actually pick.
-      get().selectMany(
-        page.elements
-          .filter((el) => !el.locked && !el.hidden && !selected.has(el.id))
-          .map((el) => el.id),
-      );
+      if (!page || page.locked || page.hidden) return;
+      const elements = s.enteredGroupId
+        ? findElement(page.elements, s.enteredGroupId)?.el.children ?? []
+        : page.elements;
+      s.selectMany(elements.filter((el) => !el.locked && !el.hidden && !s.selectedIds.includes(el.id)).map((el) => el.id));
     },
 
     linkSelected: () => {
@@ -3681,9 +3672,9 @@ export const useEditor = create<EditorStore>((set, get) => {
 
       const idx = s.pages.findIndex((p) => p.id === targetId);
       const pages = [...s.pages];
-      // Insert before for 'top'/'left', after for 'bottom'/'right'/'row'/'col'
+      // UI grid is RTL: right precedes, left follows; document coordinates stay LTR.
       const insertAt =
-        direction === "top" || direction === "left"
+        direction === "top" || direction === "right"
           ? Math.max(0, idx)
           : idx >= 0
             ? idx + 1

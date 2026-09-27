@@ -10,6 +10,7 @@
  */
 
 const THEME_KEY = "nasaq-theme";
+const THEME_EVENT = "nasaq:appearance-change";
 
 /** Legacy slots that used to hold a `dark` flag, honoured once for migration. */
 const LEGACY_THEME_KEYS = ["nasaq-report-ui-v2", "diwan-report-ui-v2"];
@@ -38,7 +39,7 @@ export function readStoredTheme(): boolean | null {
 /** Applies the stored choice to `<html>`; `null` (no choice) leaves light. */
 export function applyStoredTheme(): void {
   if (typeof document === "undefined") return;
-  document.documentElement.classList.toggle("dark", readStoredTheme() === true);
+  applyTheme(readStoredTheme() === true);
 }
 
 /** Persist the visitor's choice and apply it immediately. */
@@ -48,10 +49,31 @@ export function writeStoredTheme(dark: boolean): void {
   } catch {
     /* a blocked store still flips the live page */
   }
-  applyStoredTheme();
+  // Apply the requested choice even when private-mode storage is blocked.
+  applyTheme(dark);
 }
 
 // Applied once at module load — the root route imports this module, so every
 // page (and a fresh load of any page) starts on the visitor's stored theme
 // before its route component renders.
 applyStoredTheme();
+
+function applyTheme(dark: boolean): void {
+  document.documentElement.classList.toggle("dark", dark);
+  window.dispatchEvent(new CustomEvent<boolean>(THEME_EVENT, { detail: dark }));
+}
+
+/** Same-tab settings and cross-tab preference changes share one notification. */
+export function subscribeTheme(onChange: (dark: boolean) => void): () => void {
+  const onTheme = (event: Event) =>
+    onChange((event as CustomEvent<boolean>).detail);
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === THEME_KEY || event.key === null) applyStoredTheme();
+  };
+  window.addEventListener(THEME_EVENT, onTheme);
+  window.addEventListener("storage", onStorage);
+  return () => {
+    window.removeEventListener(THEME_EVENT, onTheme);
+    window.removeEventListener("storage", onStorage);
+  };
+}

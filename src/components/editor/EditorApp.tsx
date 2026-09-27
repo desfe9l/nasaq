@@ -1,3 +1,7 @@
+import { subscribeTheme } from "@/lib/theme";
+import { shortcutKey } from "@/lib/editor/keyboard";
+import { EditorSettingsDialog } from "./EditorSettingsDialog";
+import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { TouchPropertiesSheet } from "./TouchPropertiesSheet";
 import { isTouchPropertiesViewport } from "@/lib/editor/ui-state";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -373,7 +377,14 @@ function Studio({
   const redo = useEditor((s) => s.redo);
   const past = useEditor((s) => s.past);
   const future = useEditor((s) => s.future);
+  const [settingsTab, setSettingsTab] = useState<"editor" | "account" | null>(null);
+  useEffect(() => {
+    const openSettings = (event: Event) => setSettingsTab((event as CustomEvent).detail === "account" ? "account" : "editor");
+    window.addEventListener(OPEN_EDITOR_SETTINGS_EVENT, openSettings);
+    return () => window.removeEventListener(OPEN_EDITOR_SETTINGS_EVENT, openSettings);
+  }, []);
   const dark = useEditor((s) => s.dark);
+  useEffect(() => subscribeTheme((value) => useEditor.setState({ dark: value })), []);
   const toggle = useEditor((s) => s.toggle);
   const showGrid = useEditor((s) => s.showGrid);
   const previewAll = useEditor((s) => s.previewAll);
@@ -480,7 +491,12 @@ function Studio({
 
   useEffect(() => {
     const media = window.matchMedia(`(min-width: ${OVERLAY_BREAKPOINT}px)`);
-    const update = () => setIsDesktop(media.matches);
+    const update = () => {
+      setIsDesktop(media.matches);
+      // Dock visibility is not an explicit request to open a tablet drawer.
+      // Rotating an iPad across the breakpoint must leave the canvas usable.
+      if (!media.matches) useEditor.getState().closeFloatingPanels();
+    };
     update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
@@ -626,11 +642,11 @@ function Studio({
         ? pageEl.clientWidth / activeSize.w
         : 96 / 25.4;
     const pagePxW = activeSize.w * pxPerMm;
-    const pagePxH = (activeSize.h + 12) * pxPerMm;
+    const pagePxH = activeSize.h * pxPerMm;
     const padding = 28; // pixels of breathing room on every edge
     const next = Math.min(
       Math.max(0, rect.width - padding * 2) / pagePxW,
-      Math.max(0, rect.height - padding * 2) / pagePxH,
+      Math.max(0, rect.height - padding * 2 - 36) / pagePxH,
     );
     setZoom(Math.max(0.2, Math.min(2, next)));
     requestAnimationFrame(() => {
@@ -640,7 +656,7 @@ function Studio({
       );
       if (!stage || !pageEl2) return;
       const sr = stage.getBoundingClientRect();
-      const pr = pageEl2.getBoundingClientRect();
+      const pr = (pageEl2.closest(".artboard-cell") ?? pageEl2).getBoundingClientRect();
       stage.scrollLeft += pr.left + pr.width / 2 - (sr.left + sr.width / 2);
       stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
     });
@@ -774,13 +790,14 @@ function Studio({
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
+      const t = e.target instanceof HTMLElement ? e.target : null;
       const typing =
         !!t &&
         (t.isContentEditable ||
           ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
       const meta = e.metaKey || e.ctrlKey;
-      const key = e.key.toLowerCase();
+      if (e.defaultPrevented || e.isComposing || t?.closest('[role="dialog"], [role="menu"]')) return;
+      const key = shortcutKey(e);
 
       if (meta && key === "z") {
         // While the caret is in a field or the in-place text editor, the browser's
@@ -816,6 +833,7 @@ function Studio({
         return;
       }
       if (meta && key === "d") {
+        if (typing) return;
         e.preventDefault();
         duplicateSelected();
         return;
@@ -866,12 +884,12 @@ function Studio({
        * so there is one implementation of "arm the tool" and it is never
        * duplicated in the shell.
        */
-      if (!meta && !e.altKey && key === "v") {
+      if (!typing && !meta && !e.altKey && key === "v") {
         e.preventDefault();
         armTool(null);
         return;
       }
-      if (!meta && !e.altKey && key === "t") {
+      if (!typing && !meta && !e.altKey && key === "t") {
         e.preventDefault();
         // Both halves of "text tool": show the text tab and arm the drag-to-draw
         // gesture, so a press on the artboard starts typing.
@@ -879,7 +897,7 @@ function Studio({
         armTool("text");
         return;
       }
-      if (!meta && !e.altKey && key === "r") {
+      if (!typing && !meta && !e.altKey && key === "r") {
         e.preventDefault();
         useEditor.getState().setLeftTab("shapes");
         armTool("rect");
@@ -909,7 +927,7 @@ function Studio({
         bring(e.shiftKey ? "front" : "forward");
         return;
       }
-      if (!meta && e.shiftKey && (key === "1" || e.code === "Digit1")) {
+      if (!typing && !meta && e.shiftKey && (key === "1" || e.code === "Digit1")) {
         e.preventDefault();
         fitToScreen();
         return;
@@ -920,12 +938,12 @@ function Studio({
        * buttons stay hittable and no panel can leave the screen. Browser zoom
        * is never touched.
        */
-      if (meta && (key === "+" || key === "=")) {
+      if (meta && (key === "+" || key === "=" || e.code === "Equal" || e.code === "NumpadAdd")) {
         e.preventDefault();
         zoomCentered(useEditor.getState().zoom + 0.08);
         return;
       }
-      if (meta && key === "-") {
+      if (meta && (key === "-" || e.code === "Minus" || e.code === "NumpadSubtract")) {
         e.preventDefault();
         zoomCentered(useEditor.getState().zoom - 0.08);
         return;
@@ -1165,6 +1183,7 @@ function Studio({
      * wrap on a narrow tablet without stealing height from the canvas.
      */
     <div
+      dir="rtl"
       className={cn(
         "editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]",
         dark ? "editor-dark" : "editor-light",
@@ -1191,6 +1210,7 @@ function Studio({
        * ≥42px hit target on coarse pointers — the strip auto-adjusts its
        * footprint instead of cramping or half-clipping a button.
        */}
+      {settingsTab && <EditorSettingsDialog initialTab={settingsTab} onClose={() => setSettingsTab(null)} />}
       <header
         ref={headerRef}
         data-editor-obstacle="header"
@@ -1505,6 +1525,7 @@ function Studio({
         }}
       >
         <div
+          inert={!isDesktop && !leftOpen}
           data-tour="left-panel"
           className={cn(
             "editor-sidebar relative z-[var(--z-panel)] flex h-full min-h-0 flex-col overflow-hidden",
@@ -1560,7 +1581,7 @@ function Studio({
           />
         )}
 
-        <div className="editor-canvas-workspace relative grid min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden">
+        <div className="editor-canvas-workspace relative grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden">
           {/*
            * Tapping the canvas dismisses the floating drawers: on a tablet the
            * artwork is what the author wants to see, and reaching for a close
@@ -1665,6 +1686,7 @@ function Studio({
           </TouchPropertiesSheet>
         ) : (
           <div
+            inert={!isDesktop && !rightOpen}
             className={cn(
               "editor-sidebar editor-properties relative z-[var(--z-panel)] flex h-full min-h-0 flex-col overflow-hidden",
               /*
