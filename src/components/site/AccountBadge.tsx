@@ -37,31 +37,31 @@ const BADGE_META: Record<
   LOADING: {
     label: "جارٍ التحقق",
     className:
-      "border-line bg-surface text-muted dark:border-white/15 dark:bg-white/5 dark:text-white/70",
+ "border-line bg-surface text-muted",
     Icon: Loader2,
   },
   LICENSED: {
     label: "مرخص",
     className:
-      "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/40 dark:bg-emerald-400/10 dark:text-emerald-300",
+      "border-brand bg-ok/10 text-success",
     Icon: NasaqPremiumMark,
   },
   ADMIN: {
     label: "مرخص",
     className:
-      "border-amber-500/50 bg-amber-500/12 text-amber-700 dark:border-amber-400/40 dark:bg-amber-400/10 dark:text-amber-300",
+      "border-gold/40 bg-gold/15 text-warning",
     Icon: NasaqPremiumMark,
   },
   SUSPENDED: {
     label: "موقوف",
     className:
-      "border-red-500/40 bg-red-500/10 text-red-700 dark:border-red-400/40 dark:bg-red-400/10 dark:text-red-300",
+ "border-danger/30 bg-danger/10 text-error ",
     Icon: ShieldAlert,
   },
   FREE: {
     label: "مجاني",
     className:
-      "border-line bg-surface text-muted dark:border-white/15 dark:bg-white/5 dark:text-white/70",
+ "border-line bg-surface text-muted",
     Icon: Sparkles,
   },
 };
@@ -87,7 +87,7 @@ export function AccountBadge({
   return (
     <span
       className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-extrabold leading-none",
+ "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-extrabold leading-none",
         meta.className,
         className,
       )}

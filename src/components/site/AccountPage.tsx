@@ -85,7 +85,7 @@ export function AccountPage() {
           {isAdmin && (
             <a
               href="/admin"
-              className="inline-flex h-10 items-center rounded-[10px] border border-line bg-surface px-4 text-[12px] font-extrabold dark:border-white/10"
+              className="inline-flex h-10 items-center rounded-[10px] border border-line bg-surface px-4 text-[12px] font-extrabold"
             >
               لوحة الإدارة
             </a>
@@ -97,7 +97,7 @@ export function AccountPage() {
         {error && (
           <p
             role="alert"
-            className="rounded-[10px] border border-danger/30 bg-danger/5 p-3 text-[12px] text-danger"
+            className="rounded-[10px] border border-danger/30 bg-danger/5 p-3 text-[12px] text-error"
           >
             {error}
           </p>
@@ -152,8 +152,8 @@ function AccountShell() {
 
 function AdminAccessCard() {
   return (
-    <section className="rounded-[14px] border border-emerald-600/25 bg-emerald-600/[0.06] p-5">
-      <h2 className="text-[13px] font-extrabold text-emerald-800 dark:text-emerald-300">
+    <section className="rounded-[14px] border border-brand/25 bg-navy/[0.06] p-5">
+      <h2 className="text-[13px] font-extrabold text-success">
         وصول إداري كامل
       </h2>
       <p className="mt-2 text-[12px] leading-6 text-muted">
@@ -162,25 +162,25 @@ function AdminAccessCard() {
       <div className="mt-4 flex flex-wrap gap-2">
         <a
           href="/admin"
-          className="inline-flex h-9 items-center rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-white"
+          className="inline-flex h-9 items-center rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-on-brand"
         >
           لوحة الإدارة
         </a>
         <a
           href="/admin-dashboard"
-          className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
+          className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold"
         >
           القوالب ومحتوى الموقع
         </a>
         <a
           href="/admin-licenses"
-          className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
+          className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold"
         >
           إدارة التراخيص
         </a>
         <a
           href="/owner-vault"
-          className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
+          className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold"
         >
           إعدادات المالك
         </a>
@@ -192,7 +192,7 @@ function AdminAccessCard() {
 function StatusCard({ account }: { account: CustomerAccount }) {
   const meta = ACCOUNT_STATUS_META[account.status] ?? ACCOUNT_STATUS_META.FREE;
   return (
-    <section className="rounded-[14px] border border-line bg-surface p-5 dark:border-white/10">
+    <section className="rounded-[14px] border border-line bg-surface p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h2 className="text-[13px] font-extrabold text-muted">حالة الحساب</h2>
@@ -200,7 +200,7 @@ function StatusCard({ account }: { account: CustomerAccount }) {
             className={cn(
               "mt-2 inline-block rounded-full px-3 py-1 text-[12px] font-extrabold",
               account.isAdmin
-                ? "bg-ok/15 text-ok"
+                ? "bg-ok/15 text-success"
                 : meta.className,
             )}
           >
@@ -211,7 +211,7 @@ function StatusCard({ account }: { account: CustomerAccount }) {
               ? "هذا الحساب معتمد كمدير، لذلك يتجاوز فحص الاشتراك ويحصل على كامل الصلاحيات."
               : ACCOUNT_STATUS_MESSAGE[account.status]}
           </p>
-          <a href="/license" className="mt-3 inline-flex text-[12px] font-bold text-emerald-700 underline dark:text-emerald-300">
+          <a href="/license" className="mt-3 inline-flex text-[12px] font-bold text-success underline">
             عرض حالة الترخيص والتحقق من التفعيل
           </a>
         </div>
@@ -298,7 +298,7 @@ function PlanSection({
   }
 
   return (
-    <section className="rounded-[14px] border border-line bg-surface p-5 dark:border-white/10">
+    <section className="rounded-[14px] border border-line bg-surface p-5">
       <h2 className="text-[13px] font-extrabold text-muted">
         {isRenewal ? "تجديد الباقة" : "اختر باقة"}
       </h2>
@@ -320,8 +320,8 @@ function PlanSection({
               className={cn(
                 "cursor-pointer rounded-[12px] border p-4 text-right transition",
                 active
-                  ? "border-navy bg-navy/5 ring-2 ring-navy/30"
-                  : "border-line hover:border-navy/40 dark:border-white/10",
+                  ? "border-brand bg-navy/5 ring-2 ring-navy/30"
+                  : "border-line hover:border-brand/40",
               )}
             >
               <div className="flex items-baseline justify-between gap-2">
@@ -332,7 +332,7 @@ function PlanSection({
               <div className="mt-2 text-[17px] font-extrabold tabular-nums">
                 {formatPrice(p.price, p.currency)}
               </div>
-              {getCatalogPlan(p.id)?.period === "quarterly" && <p className="mt-2 text-[12px] font-bold text-ok">3 أشهر — أفضل قيمة · وفّر {planSavings(getCatalogPlan(p.id)!)} ر.س مقارنة بالدفع الشهري</p>}
+              {getCatalogPlan(p.id)?.period === "quarterly" && <p className="mt-2 text-[12px] font-bold text-success">3 أشهر — أفضل قيمة · وفّر {planSavings(getCatalogPlan(p.id)!)} ر.س مقارنة بالدفع الشهري</p>}
               {p.description && (
                 <p className="mt-2 text-[12px] leading-6 text-muted">{p.description}</p>
               )}
@@ -340,7 +340,7 @@ function PlanSection({
                 <ul className="mt-3 grid gap-1.5">
                   {p.features.map((feature) => (
                     <li key={feature} className="flex gap-2 text-[12px] leading-6">
-                      <span aria-hidden className="text-ok">
+                      <span aria-hidden className="text-success">
                         ✓
                       </span>
                       <span>{feature}</span>
@@ -355,7 +355,7 @@ function PlanSection({
 
       {plan && (!instructions.iban || !instructions.bankName || !instructions.accountName) && <p className="mt-5 text-[13px] text-muted">الدفع قريبًا — تعليمات التحويل غير مكتملة.</p>}
       {plan && instructions.iban && instructions.bankName && instructions.accountName && (
-        <div className="mt-5 grid gap-4 rounded-[12px] border border-line-2 bg-paper/60 p-4 dark:border-white/10">
+        <div className="mt-5 grid gap-4 rounded-[12px] border border-line-2 bg-paper/60 p-4">
           <div>
             <h3 className="text-[13px] font-extrabold">تعليمات الدفع</h3>
             <p className="mt-1 text-[12px] leading-6 text-muted">
@@ -380,7 +380,7 @@ function PlanSection({
           <div className="grid gap-3">
             <label className="grid gap-1.5">
               <span className="text-[12px] font-extrabold">
-                رقم مرجع الحوالة <span className="text-danger">*</span>
+                رقم مرجع الحوالة <span className="text-error">*</span>
               </span>
               <input
                 value={reference}
@@ -388,7 +388,7 @@ function PlanSection({
                 maxLength={120}
                 dir="ltr"
                 placeholder="مثال: 2026-000123"
-                className="h-10 rounded-[10px] border border-line bg-surface px-3 text-[13px] dark:border-white/10"
+                className="h-10 rounded-[10px] border border-line bg-surface px-3 text-[13px]"
               />
             </label>
             <label className="grid gap-1.5">
@@ -398,7 +398,7 @@ function PlanSection({
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={500}
                 rows={2}
-                className="rounded-[10px] border border-line bg-surface p-3 text-[13px] dark:border-white/10"
+                className="rounded-[10px] border border-line bg-surface p-3 text-[13px]"
               />
             </label>
             <p className="text-[11px] leading-5 text-muted">
@@ -408,7 +408,7 @@ function PlanSection({
               type="button"
               disabled={submitting || !reference.trim()}
               onClick={() => void handleSubmit()}
-              className="h-11 cursor-pointer rounded-[10px] bg-navy text-[13px] font-extrabold text-white transition hover:bg-navy-2 disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-11 cursor-pointer rounded-[10px] bg-navy text-[13px] font-extrabold text-on-brand transition hover:bg-navy-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting ? "جارٍ الإرسال…" : "إرسال طلب الدفع"}
             </button>
@@ -419,7 +419,7 @@ function PlanSection({
       {message && (
         <p
           role="status"
-          className="mt-4 rounded-[10px] border border-ok/30 bg-ok/5 p-3 text-[12px] leading-6 text-ok"
+          className="mt-4 rounded-[10px] border border-ok/30 bg-ok/5 p-3 text-[12px] leading-6 text-success"
         >
           {message}
         </p>
@@ -427,7 +427,7 @@ function PlanSection({
       {error && (
         <p
           role="alert"
-          className="mt-4 rounded-[10px] border border-danger/30 bg-danger/5 p-3 text-[12px] leading-6 text-danger"
+          className="mt-4 rounded-[10px] border border-danger/30 bg-danger/5 p-3 text-[12px] leading-6 text-error"
         >
           {error}
         </p>
@@ -477,7 +477,7 @@ function RequestsSection({
   }
 
   return (
-    <section className="rounded-[14px] border border-line bg-surface p-5 dark:border-white/10">
+    <section className="rounded-[14px] border border-line bg-surface p-5">
       <h2 className="text-[13px] font-extrabold text-muted">طلبات الدفع</h2>
       <ul className="mt-3 grid gap-2">
         {requests.map((request) => {
@@ -486,7 +486,7 @@ function RequestsSection({
           return (
             <li
               key={request.id}
-              className="rounded-[10px] border border-line-2 p-3 dark:border-white/10"
+              className="rounded-[10px] border border-line-2 p-3"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-[12px] font-extrabold">{request.planId}</span>
@@ -531,7 +531,7 @@ function RequestsSection({
                   type="button"
                   disabled={busy === request.id}
                   onClick={() => void cancel(request.id)}
-                  className="mt-2 cursor-pointer text-[11px] font-bold text-danger underline-offset-4 hover:underline disabled:cursor-wait"
+                  className="mt-2 cursor-pointer text-[11px] font-bold text-error underline-offset-4 hover:underline disabled:cursor-wait"
                 >
                   {busy === request.id ? "جارٍ الإلغاء…" : "إلغاء الطلب"}
                 </button>
@@ -556,7 +556,7 @@ function AccountSettingsCard({
   return (
     <section
       id="settings"
-      className="scroll-mt-24 rounded-[14px] border border-line bg-surface p-5 dark:border-white/10"
+      className="scroll-mt-24 rounded-[14px] border border-line bg-surface p-5"
     >
       <h2 className="text-[13px] font-extrabold text-muted">إعدادات الحساب</h2>
       <dl className="mt-3 grid gap-2 text-[12px]">
@@ -578,7 +578,7 @@ function AccountSettingsCard({
       </p>
       <a
         href="/projects"
-        className="mt-3 inline-flex h-9 items-center rounded-[8px] border border-line px-3 text-[12px] font-bold dark:border-white/10"
+        className="mt-3 inline-flex h-9 items-center rounded-[8px] border border-line px-3 text-[12px] font-bold"
       >
         مشاريعي
       </a>

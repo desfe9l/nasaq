@@ -35,7 +35,7 @@ export function SignInPage() {
     <div className="min-h-screen bg-paper">
       <SiteHeader current="/login" />
       <main className="mx-auto w-full max-w-md px-4 py-16">
-        <div className="rounded-[14px] border border-line bg-surface p-6 shadow-sm dark:border-white/10">
+        <div className="rounded-[14px] border border-line bg-surface p-6 shadow-sm">
           <h1 className="text-xl font-extrabold">تسجيل الدخول</h1>
           <p className="mt-2 text-[13px] leading-6 text-muted">
             سجّل الدخول للوصول إلى حسابك، واختيار الباقة، ومتابعة طلبات الدفع.
@@ -64,7 +64,7 @@ export function SignInPage() {
                       },
                     );
                   }}
-                  className="h-11 w-full cursor-pointer rounded-[10px] bg-navy text-[13px] font-extrabold text-white transition hover:bg-navy-2 disabled:cursor-wait disabled:opacity-60"
+                  className="h-11 w-full cursor-pointer rounded-[10px] bg-navy text-[13px] font-extrabold text-on-brand transition hover:bg-navy-2 disabled:cursor-wait disabled:opacity-60"
                 >
                   {busy === provider.providerId
                     ? "جارٍ التحويل…"
@@ -77,13 +77,13 @@ export function SignInPage() {
           {error && (
             <p
               role="alert"
-              className="mt-4 rounded-[10px] border border-danger/30 bg-danger/5 p-3 text-[12px] leading-6 text-danger"
+              className="mt-4 rounded-[10px] border border-danger/30 bg-danger/5 p-3 text-[12px] leading-6 text-error"
             >
               {error}
             </p>
           )}
 
-          <p className="mt-5 border-t border-line pt-4 text-[11px] leading-5 text-muted dark:border-white/10">
+          <p className="mt-5 border-t border-line pt-4 text-[11px] leading-5 text-muted">
             بياناتك ومشاريعك محفوظة في حسابك ومتصفحك. {BRAND.lockup} —{" "}
             {BRAND.platform}
           </p>

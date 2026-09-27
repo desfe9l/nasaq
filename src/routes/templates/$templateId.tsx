@@ -67,16 +67,16 @@ function PublishedTemplateEntry() {
 
   if (state === "ready") return <EditorApp />;
   return (
-    <main dir="rtl" className="flex min-h-screen items-center justify-center bg-paper p-6 text-center text-ink dark:bg-[#111722] dark:text-white">
-      <div className="max-w-md rounded-2xl border border-line bg-white p-8 shadow-card dark:border-white/10 dark:bg-white/5">
+    <main dir="rtl" className="flex min-h-screen items-center justify-center bg-paper p-6 text-center text-ink ">
+      <div className="max-w-md rounded-2xl border border-line bg-surface p-8 shadow-card ">
         <h1 className="text-xl font-extrabold">
           {state === "loading" ? "جارٍ فتح القالب…" : state === "missing" ? "القالب غير متاح" : state === "limit" ? "اكتملت مساحة تجربة المحرر" : "هذا القالب متاح في النسخة الكاملة"}
         </h1>
         {state === "limit" && <p className="mt-3 text-sm text-muted">تسري حدود المشاريع والصفحات الحالية على نسختك من القالب.</p>}
         {state !== "loading" && (
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            {(state === "locked" || state === "limit") && <a href="/license" className="rounded-xl bg-navy px-5 py-2 font-bold text-white">النسخة الكاملة</a>}
-            <a href="/templates" className="rounded-xl border border-line px-5 py-2 font-bold dark:border-white/20">تصفح القوالب</a>
+            {(state === "locked" || state === "limit") && <a href="/license" className="rounded-xl bg-navy px-5 py-2 font-bold text-on-brand">النسخة الكاملة</a>}
+            <a href="/templates" className="rounded-xl border border-line px-5 py-2 font-bold ">تصفح القوالب</a>
           </div>
         )}
       </div>

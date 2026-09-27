@@ -57,7 +57,7 @@ export function ArabicTextTools({ el }: { el: CanvasEl }) {
               type="button"
               onClick={() => applyPreset(preset.id)}
               title={preset.hint}
-              className="rounded-[8px] border border-line px-2 py-1.5 text-right text-[11px] font-extrabold hover:border-navy-2 dark:border-white/10"
+              className="rounded-[8px] border border-line px-2 py-1.5 text-right text-[11px] font-extrabold hover:border-navy-2"
             >
               <span className="block truncate">{preset.label}</span>
               <span
@@ -79,9 +79,9 @@ export function ArabicTextTools({ el }: { el: CanvasEl }) {
 
       <div className="editor-subgroup">
         <h4 className="editor-subgroup-title">الكشيدة (تمديد الأسطر)</h4>
-        <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10">
+        <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
           <span className="inline-flex items-center gap-1.5">
-            <StretchHorizontal className="size-3.5 text-navy-2 dark:text-gold-2" />
+            <StretchHorizontal className="size-3.5 text-brand-hover" />
             تمديد الأسطر بالكشيدة
           </span>
           <input
@@ -113,7 +113,7 @@ export function ArabicTextTools({ el }: { el: CanvasEl }) {
                   "h-8 rounded-[6px] border text-[10px] font-extrabold",
                   (el.style?.justifyLastLine || "start") === value
                     ? "border-navy-2 bg-navy-2/5"
-                    : "border-line dark:border-white/10",
+                    : "border-line",
                 )}
               >
                 {label}
@@ -144,7 +144,7 @@ export function ArabicTextTools({ el }: { el: CanvasEl }) {
                   "flex items-center justify-between gap-2 rounded-[8px] border px-2 py-1.5 text-right text-[11px] font-extrabold",
                   active
                     ? "border-navy-2 bg-navy-2/5"
-                    : "border-line hover:border-navy-2 dark:border-white/10",
+                    : "border-line hover:border-navy-2",
                 )}
               >
                 <span className="min-w-0 flex-1 truncate">{macro.label}</span>

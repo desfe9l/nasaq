@@ -133,9 +133,9 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
         aria-haspopup="menu"
         aria-expanded={open}
         className={cn(
-          "grid size-9 shrink-0 place-items-center rounded-[8px] transition hover:bg-line-2 dark:hover:bg-white/10",
+          "grid size-9 shrink-0 place-items-center rounded-[8px] transition hover:bg-line-2",
           open &&
-            "bg-navy text-white hover:bg-navy dark:bg-navy dark:text-white",
+            "bg-navy text-white hover:bg-navy-2",
         )}
       >
         <FolderOpen className="size-4" />

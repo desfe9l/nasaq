@@ -57,7 +57,7 @@ export function SocialLinks({
             aria-label={`${account.label} — ${account.handle}`}
             title={`${account.label} ${account.handle}`}
             className={cn(
-              "inline-flex items-center rounded-[8px] border border-line text-muted transition hover:border-navy-2 hover:text-navy-2 dark:border-white/10 dark:hover:border-gold-2 dark:hover:text-gold-2",
+              "inline-flex items-center rounded-[8px] border border-line text-muted transition hover:border-brand hover:text-brand-hover",
               variant === "full"
                 ? "h-9 gap-2 px-3 text-[12px] font-extrabold"
                 : "size-9 justify-center",

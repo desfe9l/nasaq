@@ -60,7 +60,23 @@ applyStoredTheme();
 
 function applyTheme(dark: boolean): void {
   document.documentElement.classList.toggle("dark", dark);
+  syncThemeColor(dark);
   window.dispatchEvent(new CustomEvent<boolean>(THEME_EVENT, { detail: dark }));
+}
+
+/**
+ * The browser's own chrome (URL bar, Android status bar) is painted outside our
+ * stylesheet, so it cannot follow a CSS variable: it reads `<meta name="theme-
+ * color">`. Left fixed, a Dark-mode visitor got a light green bar above a dark
+ * page — the same class of bug as a hard-coded text colour, in the one place
+ * that is not a Tailwind class. Kept here, next to the class toggle, so the two
+ * can never disagree, whatever page applies the stored choice.
+ */
+function syncThemeColor(dark: boolean): void {
+  // Tolerate a document that has no such tag (or no querySelector at all): the
+  // tag is set in the route head, and a missing one must never break a toggle.
+  const meta = document?.querySelector?.('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", dark ? "#0f141c" : "#006c35");
 }
 
 /** Same-tab settings and cross-tab preference changes share one notification. */

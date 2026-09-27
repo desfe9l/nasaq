@@ -90,16 +90,16 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
   if (!user) return <RedirectToSignIn />;
   if (!allowed) {
     return (
-      <div className="min-h-screen bg-paper dark:bg-[#111722]">
+      <div className="min-h-screen bg-paper">
         <div className="mx-auto w-full max-w-2xl px-4 py-24">
           <div className="rounded-[14px] border border-danger/30 bg-danger/5 p-6">
-            <h1 className="text-lg font-extrabold text-danger">لا تملك صلاحية الوصول</h1>
+            <h1 className="text-lg font-extrabold text-error">لا تملك صلاحية الوصول</h1>
             <p className="mt-2 text-[13px] leading-6">
               هذه الصفحة مخصصة لإدارة المنصة فقط. إذا كنت تعتقد أن هذا خطأ، تواصل مع الإدارة.
             </p>
             <a
               href="/account"
-              className="mt-4 inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
+              className="mt-4 inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold"
             >
               العودة إلى حسابي
             </a>
@@ -149,7 +149,7 @@ export function SignInButtons({ callbackURL = "/" }: { callbackURL?: string } = 
         type="button"
         onClick={() => void startGoogleSignIn()}
         disabled={state === "loading" || state === "success"}
-        className="flex h-11 w-full cursor-pointer items-center justify-center gap-3 rounded-lg border border-neutral-300 bg-white px-4 text-sm font-bold text-neutral-800 shadow-sm transition hover:border-neutral-400 hover:bg-neutral-50 disabled:cursor-wait disabled:opacity-70 dark:border-neutral-700 dark:bg-neutral-950 dark:text-white dark:hover:bg-neutral-900"
+        className="flex h-11 w-full cursor-pointer items-center justify-center gap-3 rounded-lg border border-line bg-surface px-4 text-sm font-bold text-ink shadow-sm transition hover:border-line hover:bg-surface-2 disabled:cursor-wait disabled:opacity-70"
         aria-label="متابعة باستخدام Google"
       >
         <GoogleMark />
@@ -162,12 +162,12 @@ export function SignInButtons({ callbackURL = "/" }: { callbackURL?: string } = 
         </span>
       </button>
       {state === "error" && (
-        <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-center text-xs font-semibold text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+        <p role="alert" className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-center text-xs font-semibold text-error">
           أُلغي تسجيل الدخول أو تعذر إكماله. حاول مرة أخرى.
         </p>
       )}
       {state === "success" && (
-        <p role="status" className="text-center text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+        <p role="status" className="text-center text-xs font-semibold text-success">
           جارٍ إعادتك إلى NASAQ…
         </p>
       )}
@@ -214,7 +214,7 @@ export function UserButton() {
           className="h-8 w-8 rounded-full object-cover"
         />
       ) : (
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-black/10 text-sm font-medium dark:bg-white/20">
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-inverse/10 text-sm font-medium">
           {label.charAt(0).toUpperCase()}
         </span>
       )}

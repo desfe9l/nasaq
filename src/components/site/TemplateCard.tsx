@@ -43,9 +43,9 @@ export interface TemplateCardActions {
 }
 
 const BADGE_TONE: Record<CatalogBadge["tone"], string> = {
-  custom: "bg-navy text-white",
-  new: "bg-gold text-green",
-  official: "bg-white/90 text-green dark:bg-[#111722]/85 dark:text-gold-2",
+  custom: "bg-navy text-on-brand",
+  new: "bg-gold text-on-gold",
+  official: "bg-surface-2 text-ink",
   pack: "bg-navy-2 text-white",
 };
 
@@ -69,8 +69,8 @@ function IconAction({
       className={cn(
         "grid size-8 place-items-center rounded-lg border backdrop-blur-[6px] transition",
         tone === "danger"
-          ? "border-danger/40 bg-white/90 text-danger hover:bg-danger hover:text-white dark:bg-[#111722]/85"
-          : "border-line/70 bg-white/90 text-ink hover:bg-navy hover:text-white dark:border-white/15 dark:bg-[#111722]/85 dark:text-white",
+          ? "border-danger/40 bg-surface-2 text-error hover:bg-danger hover:text-white"
+          : "border-line/70 bg-surface-2 text-ink hover:bg-navy hover:text-white",
       )}
     >
       <Icon className="size-4" />
@@ -107,14 +107,14 @@ function ActionMenu({ items }: { items: { label: string; icon: LucideIcon; onCli
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="خيارات القالب"
-        className="grid size-10 place-items-center rounded-xl border border-line text-muted transition hover:bg-line-2 hover:text-ink dark:border-white/10 dark:hover:bg-white/5 dark:hover:text-white"
+        className="grid size-10 place-items-center rounded-xl border border-line text-muted transition hover:bg-line-2 hover:text-ink"
       >
         <MoreVertical className="size-4" />
       </button>
       {open && (
         <div
           role="menu"
-          className="shadow-card dark:shadow-card-dark absolute bottom-12 left-0 z-[var(--z-dropdown)] w-48 overflow-hidden rounded-xl border border-line bg-white py-1 dark:border-white/10 dark:bg-[#161c26]"
+          className="shadow-card absolute bottom-12 left-0 z-[var(--z-dropdown)] w-48 overflow-hidden rounded-xl border border-line bg-surface py-1"
         >
           {items.map((item) => (
             <button
@@ -126,8 +126,8 @@ function ActionMenu({ items }: { items: { label: string; icon: LucideIcon; onCli
                 item.onClick();
               }}
               className={cn(
-                "flex w-full items-center gap-2 px-3 py-2 text-right text-[12px] font-bold transition hover:bg-line-2 dark:hover:bg-white/5",
-                item.tone === "danger" ? "text-danger" : "text-ink dark:text-white",
+                "flex w-full items-center gap-2 px-3 py-2 text-right text-[12px] font-bold transition hover:bg-line-2",
+                item.tone === "danger" ? "text-error" : "text-ink",
               )}
             >
               <item.icon className="size-3.5" />
@@ -178,14 +178,14 @@ export function TemplateCard({
   return (
     <article
       className={cn(
-        "group shadow-card dark:shadow-card-dark flex flex-col overflow-hidden rounded-2xl border bg-white transition-all duration-200 hover:-translate-y-1 hover:shadow-card-hover dark:bg-white/5 dark:hover:shadow-card-dark-hover",
+        "group shadow-card flex flex-col overflow-hidden rounded-2xl border bg-surface transition-all duration-200 hover:-translate-y-1 hover:shadow-card-hover",
         highlight
-          ? "border-navy ring-2 ring-navy/25 dark:border-gold-2"
-          : "border-line dark:border-white/10",
+          ? "border-brand ring-2 ring-navy/25"
+          : "border-line",
       )}
     >
       {/* ── preview ─────────────────────────────────────────────────────── */}
-      <div className="relative shrink-0 overflow-hidden border-b border-line/70 bg-paper/70 dark:border-white/10 dark:bg-white/[0.03]">
+      <div className="relative shrink-0 overflow-hidden border-b border-line/70 bg-paper/70">
         {/*
          * The preview box is its own query container, so the sheet can be sized
          * as "contain" in pure CSS: as wide as the box OR as tall as the box —
@@ -202,7 +202,7 @@ export function TemplateCard({
               aspectRatio: `${size.w} / ${size.h}`,
               width: `min(100cqw, ${(size.w / size.h).toFixed(4)} * 100cqh)`,
             }}
-            className="rounded-[3px] border border-line shadow-md transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-xl dark:border-white/15"
+            className="rounded-[3px] border border-line shadow-md transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-xl"
           />
         </div>
 
@@ -234,8 +234,8 @@ export function TemplateCard({
       {/* ── body ────────────────────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col p-5 text-right">
         <div className="flex items-start justify-between gap-3">
-          <h3 className="text-[15px] font-extrabold leading-6 text-ink dark:text-white">{entry.title}</h3>
-          <span className="shrink-0 rounded-full bg-line-2 px-2 py-0.5 text-[10px] font-bold text-muted dark:bg-white/10 dark:text-white/80">
+          <h3 className="text-[15px] font-extrabold leading-6 text-ink">{entry.title}</h3>
+          <span className="shrink-0 rounded-full bg-line-2 px-2 py-0.5 text-[10px] font-bold text-muted">
             {entry.kindLabel}
           </span>
         </div>
@@ -250,22 +250,22 @@ export function TemplateCard({
             {Math.round(size.w)} × {Math.round(size.h)} مم
           </span>
           {locked && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-extrabold text-green dark:bg-gold/15 dark:text-gold-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-extrabold text-ink">
               <Lock className="size-3" /> متاح في النسخة الكاملة
             </span>
           )}
           {!locked && available && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-navy/10 px-2 py-0.5 text-[10px] font-extrabold text-navy dark:bg-emerald-400/10 dark:text-emerald-300">
+            <span className="inline-flex items-center gap-1 rounded-full bg-navy/10 px-2 py-0.5 text-[10px] font-extrabold text-brand">
               <ShieldCheck className="size-3" /> متاح بترخيصك
             </span>
           )}
         </div>
 
-        <div className="mt-4 flex items-center gap-2 border-t border-line/70 pt-4 dark:border-white/10">
+        <div className="mt-4 flex items-center gap-2 border-t border-line/70 pt-4">
           <button
             type="button"
             onClick={actions.onUse}
-            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-navy px-3 text-[12px] font-extrabold text-white shadow-sm transition hover:bg-navy-2"
+            className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl bg-navy px-3 text-[12px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
           >
             <Plus className="size-4" />
             استخدام القالب
@@ -273,7 +273,7 @@ export function TemplateCard({
           <button
             type="button"
             onClick={actions.onQuickView}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2 dark:border-white/10 dark:text-white dark:hover:bg-white/5"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2"
           >
             <Eye className="size-4" />
             معاينة سريعة

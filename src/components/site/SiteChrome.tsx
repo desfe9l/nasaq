@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, FilePlus2, KeyRound, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
-import { Toaster } from "sonner";
+import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   BRAND,
   CONTACT_PHONE_DISPLAY,
@@ -51,7 +51,7 @@ function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile"
       href={href}
       className={cn(
         variant === "header"
-          ? "hidden h-9 items-center whitespace-nowrap rounded-[8px] border border-navy px-3 text-[12px] font-extrabold text-navy lg:inline-flex dark:text-white"
+          ? "hidden h-9 items-center whitespace-nowrap rounded-[8px] border border-brand px-3 text-[12px] font-extrabold text-brand lg:inline-flex"
           : "block rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted lg:hidden",
       )}
     >
@@ -98,7 +98,7 @@ function NewDocumentForUser({
       title="مستند جديد"
       className={cn(
         variant === "header"
-          ? "hidden h-9 items-center gap-1.5 whitespace-nowrap rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-white transition hover:bg-navy-2 lg:inline-flex"
+          ? "hidden h-9 items-center gap-1.5 whitespace-nowrap rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-on-brand transition hover:bg-navy-2 lg:inline-flex"
           : "mt-1 flex w-full items-center gap-2 rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted lg:hidden",
       )}
     >
@@ -147,7 +147,7 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
       <a
         href="/login"
         className={cn(
-          "items-center gap-1.5 rounded-[8px] border border-line px-3 font-bold text-ink transition hover:border-navy-2 hover:text-navy-2 dark:border-white/15 dark:text-white dark:hover:border-gold-2 dark:hover:text-gold-2",
+ "items-center gap-1.5 rounded-[8px] border border-line px-3 font-bold text-ink transition hover:border-brand hover:text-brand-hover",
           variant === "header"
             ? "inline-flex h-9 max-w-[150px] items-center px-2 text-[11px] sm:px-3 sm:text-[12px] lg:max-w-none"
             : "mt-1 flex w-full px-3 py-2.5 text-[13px]",
@@ -177,7 +177,7 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
           setOpen((v) => !v);
         }}
         className={cn(
-          "flex items-center gap-2 rounded-[8px] border border-line bg-surface/60 font-bold transition hover:border-navy-2 dark:border-white/15 dark:bg-white/5",
+ "flex items-center gap-2 rounded-[8px] border border-line bg-surface/60 font-bold transition hover:border-brand",
           variant === "header" ? "h-9 px-2 text-[12px]" : "w-full px-3 py-2 text-[13px]",
         )}
       >
@@ -190,7 +190,7 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
         <span className="flex min-w-0 flex-col items-start leading-tight">
           <span
             className={cn(
-              "max-w-[180px] truncate text-[12px] font-extrabold",
+ "max-w-[180px] truncate text-[12px] font-extrabold",
               variant === "header" && "hidden lg:inline",
             )}
             title={label}
@@ -206,7 +206,7 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
         <div
           role="menu"
           className={cn(
-            "z-50 grid w-52 gap-1 rounded-[10px] border border-line bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#161c26]",
+ "z-50 grid w-52 gap-1 rounded-[10px] border border-line bg-surface p-1.5 shadow-xl",
             variant === "header" ? "absolute end-0 mt-1.5" : "mt-1.5",
           )}
         >
@@ -215,7 +215,7 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
            * user goes to confirm WHICH account is signed in, so it prints in
            * full here even when the collapsed chip hid it.
            */}
-          <div className="border-b border-line px-3 pb-2 pt-1 dark:border-white/10">
+          <div className="border-b border-line px-3 pb-2 pt-1">
             <p className="truncate text-[12px] font-extrabold" title={label}>
               {label}
             </p>
@@ -231,13 +231,13 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
           <a
             href="/account#settings"
             role="menuitem"
-            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12px] font-bold hover:bg-line-2 dark:hover:bg-white/5"
+            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12px] font-bold hover:bg-line-2"
           >
             <UserRound className="size-4 opacity-70" aria-hidden />
             الحساب والإعدادات
           </a>
           <a href="/license" role="menuitem"
-            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12px] font-bold hover:bg-line-2 dark:hover:bg-white/5">
+            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12px] font-bold hover:bg-line-2">
             <KeyRound className="size-4 opacity-70" aria-hidden />
             ترخيصي وتفعيله
           </a>
@@ -249,7 +249,7 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
               setSigningOut(true);
               void signOut("/").catch(() => setSigningOut(false));
             }}
-            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-right text-[12px] font-bold text-muted hover:bg-line-2 disabled:cursor-wait disabled:opacity-60 dark:hover:bg-white/5"
+            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-right text-[12px] font-bold text-muted hover:bg-line-2 disabled:cursor-wait disabled:opacity-60"
           >
             <LogOut className="size-4 opacity-70" aria-hidden />
             {signingOut ? "جارٍ الخروج…" : "تسجيل الخروج"}
@@ -266,10 +266,10 @@ function AnnouncementBar() {
   if (!announcement.enabled || !announcement.text.trim()) return null;
   const tone =
     announcement.tone === "warning"
-      ? "bg-amber-500/15 text-amber-900 dark:text-amber-200"
+      ? "bg-gold/15 text-warning"
       : announcement.tone === "success"
-        ? "bg-emerald-600 text-white"
-        : "bg-navy text-white";
+        ? "bg-navy text-on-brand"
+        : "bg-navy text-on-brand";
   const body = <span className="font-bold">{announcement.text}</span>;
   return (
     <div className={cn("px-4 py-2 text-center text-[12px]", tone)} role="region" aria-label="إعلان">
@@ -319,7 +319,7 @@ export function SiteHeader({ current }: { current: string }) {
      * doubling up on /editor.
      */
     <>
-    <Toaster position="top-center" richColors dir="rtl" />
+    <ThemedToaster position="top-center" richColors dir="rtl" />
     <AnnouncementBar />
     {/*
      * Glassmorphic sticky nav.
@@ -329,7 +329,7 @@ export function SiteHeader({ current }: { current: string }) {
      * `shadow-sm` keep a crisp edge against the content underneath (without them
      * a blurred bar smears into the page it is floating over).
      */}
-    <header className="sticky top-0 z-40 border-b border-line bg-white dark:border-white/10 dark:bg-[#111722]">
+    <header className="sticky top-0 z-40 border-b border-line bg-page">
       <div className="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_1fr] items-center gap-x-3 px-4 sm:gap-x-4 sm:px-6 lg:flex">
         <a href="/" className="flex shrink-0 items-center gap-2.5">
           <BrandLogo />
@@ -341,10 +341,10 @@ export function SiteHeader({ current }: { current: string }) {
               key={item.to}
               href={item.to}
               className={cn(
-                "whitespace-nowrap rounded-[8px] px-2.5 py-2 text-[12px] font-bold transition xl:text-[13px]",
+ "whitespace-nowrap rounded-[8px] px-2.5 py-2 text-[12px] font-bold transition xl:text-[13px]",
                 current === item.to
-                  ? "bg-navy text-white"
-                  : "text-muted hover:bg-line-2 hover:text-ink dark:hover:bg-white/5 dark:hover:text-white",
+                  ? "bg-navy text-on-brand"
+                  : "text-muted hover:bg-line-2 hover:text-ink",
               )}
             >
               {item.label}
@@ -359,7 +359,7 @@ export function SiteHeader({ current }: { current: string }) {
               }}
               aria-expanded={moreOpen}
               aria-haspopup="menu"
-              className="flex h-9 items-center gap-1 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] font-bold text-muted transition hover:bg-line-2 hover:text-ink dark:hover:bg-white/5 dark:hover:text-white xl:text-[13px]"
+              className="flex h-9 items-center gap-1 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] font-bold text-muted transition hover:bg-line-2 hover:text-ink xl:text-[13px]"
             >
               المزيد
               <ChevronDown className={cn("size-3.5 transition", moreOpen && "rotate-180")} aria-hidden />
@@ -367,7 +367,7 @@ export function SiteHeader({ current }: { current: string }) {
             {moreOpen && (
               <div
                 role="menu"
-                className="absolute end-0 top-11 z-50 grid w-52 gap-1 rounded-[10px] border border-line bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#161c26]"
+                className="absolute end-0 top-11 z-50 grid w-52 gap-1 rounded-[10px] border border-line bg-surface p-1.5 shadow-xl"
               >
                 {SECONDARY_NAV_ITEMS.map((item) => (
                   <a
@@ -375,10 +375,10 @@ export function SiteHeader({ current }: { current: string }) {
                     href={item.to}
                     role="menuitem"
                     className={cn(
-                      "whitespace-nowrap rounded-[8px] px-3 py-2.5 text-[12px] font-bold transition",
+ "whitespace-nowrap rounded-[8px] px-3 py-2.5 text-[12px] font-bold transition",
                       current === item.to
-                        ? "bg-navy text-white"
-                        : "text-muted hover:bg-line-2 hover:text-ink dark:hover:bg-white/5 dark:hover:text-white",
+                        ? "bg-navy text-on-brand"
+                        : "text-muted hover:bg-line-2 hover:text-ink",
                     )}
                   >
                     {item.label}
@@ -399,13 +399,13 @@ export function SiteHeader({ current }: { current: string }) {
             aria-pressed={dark}
             aria-label={dark ? "التبديل إلى الوضع الفاتح" : "التبديل إلى الوضع الداكن"}
             title={dark ? "الوضع الفاتح" : "الوضع الداكن"}
-            className="grid size-9 place-items-center rounded-[8px] border border-line dark:border-white/10"
+            className="grid size-9 place-items-center rounded-[8px] border border-line"
           >
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
           <a
             href={telHref()}
-            className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-[8px] border border-line px-3 text-[12px] font-bold xl:inline-flex dark:border-white/10"
+            className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-[8px] border border-line px-3 text-[12px] font-bold xl:inline-flex"
           >
             <span className="tabular-nums" dir="ltr">
               {CONTACT_PHONE_DISPLAY}
@@ -419,7 +419,7 @@ export function SiteHeader({ current }: { current: string }) {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label="القائمة"
-            className="grid size-9 place-items-center rounded-[8px] border border-line lg:hidden dark:border-white/10"
+            className="grid size-9 place-items-center rounded-[8px] border border-line lg:hidden"
           >
             {open ? <X className="size-4" /> : <Menu className="size-4" />}
           </button>
@@ -427,14 +427,14 @@ export function SiteHeader({ current }: { current: string }) {
       </div>
 
       {open && (
-        <nav className="border-t border-line px-4 pb-3 lg:hidden dark:border-white/10">
+        <nav className="border-t border-line px-4 pb-3 lg:hidden">
           {NAV_ITEMS.map((item) => (
             <a
               key={item.to}
               href={item.to}
               className={cn(
-                "block rounded-[8px] px-3 py-2.5 text-[13px] font-bold",
-                current === item.to ? "bg-navy text-white" : "text-muted",
+ "block rounded-[8px] px-3 py-2.5 text-[13px] font-bold",
+                current === item.to ? "bg-navy text-on-brand" : "text-muted",
               )}
             >
               {item.label}
@@ -462,7 +462,7 @@ export function SiteHeader({ current }: { current: string }) {
 export function SiteFooter() {
   const { texts } = useSiteSettings();
   return (
-    <footer className="border-t border-line/60 bg-white dark:border-white/10 dark:bg-[#111722]">
+    <footer className="border-t border-line/60 bg-page">
       <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-12 sm:grid-cols-2 sm:px-6 md:grid-cols-3">
         <div>
           <div className="flex items-center gap-2.5">
@@ -481,7 +481,7 @@ export function SiteFooter() {
           <ul className="grid gap-1.5">
             {NAV_ITEMS.map((item) => (
               <li key={item.to}>
-                <a href={item.to} className="text-[13px] font-bold hover:text-navy-2">
+                <a href={item.to} className="text-[13px] font-bold hover:text-brand-hover">
                   {item.label}
                 </a>
               </li>
@@ -492,7 +492,7 @@ export function SiteFooter() {
           <h3 className="mb-2 text-[12px] font-extrabold text-muted">التواصل</h3>
           <a
             href={telHref()}
-            className="inline-flex h-9 items-center rounded-[8px] border border-line px-3 text-[13px] font-bold tabular-nums dark:border-white/10"
+            className="inline-flex h-9 items-center rounded-[8px] border border-line px-3 text-[13px] font-bold tabular-nums"
             dir="ltr"
           >
             {CONTACT_PHONE_DISPLAY}
@@ -506,7 +506,7 @@ export function SiteFooter() {
        * Legal line. The lockup prints once — `نَسَق` carries `NASAQ` inside
        * `BrandLockup`, so printing `BRAND.platform` again would duplicate it.
        */}
-      <div className="border-t border-line/60 px-4 py-4 dark:border-white/10">
+      <div className="border-t border-line/60 px-4 py-4">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-[11px] text-muted sm:justify-between">
           <span>
             © {new Date().getFullYear()} <BrandLockup />
@@ -514,8 +514,8 @@ export function SiteFooter() {
           {/* Designer signature: small, elegant, part of the footer identity —
               never competing with the platform name. */}
           <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden className="h-3 w-px bg-line dark:bg-white/15" />
-            بواسطة <strong className="font-extrabold text-ink dark:text-white">{BRAND.team}</strong>
+            <span aria-hidden className="h-3 w-px bg-line" />
+            بواسطة <strong className="font-extrabold text-ink">{BRAND.team}</strong>
           </span>
         </div>
       </div>
@@ -559,7 +559,7 @@ export function BrandLogo({ compact = false }: { compact?: boolean }) {
  */
 export function BrandLockup() {
   return (
-    <span className="inline-flex items-baseline gap-1.5 font-extrabold text-ink dark:text-white">
+    <span className="inline-flex items-baseline gap-1.5 font-extrabold text-ink">
       <span>نَسَق</span>
       <span aria-hidden className="text-muted">|</span>
       <span className="text-[10px] tracking-[0.16em] text-muted" dir="ltr">NASAQ</span>

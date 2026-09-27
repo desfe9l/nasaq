@@ -24,10 +24,10 @@ export function DemoPage() {
   };
 
   return (
-    <div className="min-h-full bg-paper dark:bg-[#111722]">
+    <div className="min-h-full bg-paper">
       <SiteHeader current="/demo" />
       <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6">
-        <p className="text-[12px] font-extrabold tracking-[0.16em] text-green dark:text-gold-2">
+        <p className="text-[12px] font-extrabold tracking-[0.16em] text-ink">
           {direct ? "أهلًا بك في المحرر" : "عرض تجريبي محدود"}
         </p>
         <h1 className="mt-3 max-w-3xl text-[30px] font-extrabold leading-[1.35] sm:text-[42px]">
@@ -41,13 +41,13 @@ export function DemoPage() {
             : "تجربة عملية قصيرة تريك التحرير العربي والعناصر والصفحات والتصدير الأساسي، من دون منح نسخة المنتج الكاملة."}
         </p>
         <div className="mt-9 grid gap-5 lg:grid-cols-2">
-          <section className="border border-line bg-white p-6 dark:border-white/10 dark:bg-white/5">
-            <div className="flex items-center gap-3"><Play className="size-5 text-navy-2 dark:text-gold-2" /><h2 className="text-[18px] font-extrabold">{direct ? "الدخول إلى المحرر" : "ما يتاح في العرض"}</h2></div>
-            <ul className="mt-5 grid gap-3">{DEMO_ITEMS.map((item) => <li key={item} className="flex items-center gap-2 text-[14px]"><CheckCircle2 className="size-4 text-ok" />{item}</li>)}</ul>
+          <section className="border border-line bg-surface p-6">
+            <div className="flex items-center gap-3"><Play className="size-5 text-brand-hover" /><h2 className="text-[18px] font-extrabold">{direct ? "الدخول إلى المحرر" : "ما يتاح في العرض"}</h2></div>
+            <ul className="mt-5 grid gap-3">{DEMO_ITEMS.map((item) => <li key={item} className="flex items-center gap-2 text-[14px]"><CheckCircle2 className="size-4 text-success" />{item}</li>)}</ul>
             {direct ? (
-              <button type="button" onClick={() => void openNewDocument()} className="mt-7 inline-flex h-11 items-center gap-2 rounded-[8px] bg-navy px-4 text-[13px] font-extrabold text-white"><Play className="size-4" />افتح المحرر</button>
+              <button type="button" onClick={() => void openNewDocument()} className="mt-7 inline-flex h-11 items-center gap-2 rounded-[8px] bg-navy px-4 text-[13px] font-extrabold text-on-brand"><Play className="size-4" />افتح المحرر</button>
             ) : (
-              <button type="button" onClick={() => void startDemo()} className="mt-7 inline-flex h-11 items-center gap-2 rounded-[8px] bg-navy px-4 text-[13px] font-extrabold text-white"><Play className="size-4" />بدء تجربة المحرر</button>
+              <button type="button" onClick={() => void startDemo()} className="mt-7 inline-flex h-11 items-center gap-2 rounded-[8px] bg-navy px-4 text-[13px] font-extrabold text-on-brand"><Play className="size-4" />بدء تجربة المحرر</button>
             )}
             {direct && !isPending && (
               <p className="mt-3 text-[11px] leading-5 text-muted">
@@ -55,10 +55,10 @@ export function DemoPage() {
               </p>
             )}
           </section>
-          <section className="border border-navy/25 bg-[#f6f8f5] p-6 dark:border-gold/30 dark:bg-[#1c2021]">
-            <div className="flex items-center gap-3"><LockKeyhole className="size-5 text-navy-2 dark:text-gold-2" /><h2 className="text-[18px] font-extrabold">ما يفتح بعد الشراء</h2></div>
+          <section className="border border-brand/25 bg-surface-2 p-6">
+            <div className="flex items-center gap-3"><LockKeyhole className="size-5 text-brand-hover" /><h2 className="text-[18px] font-extrabold">ما يفتح بعد الشراء</h2></div>
             <ul className="mt-5 grid gap-3">{FULL_ITEMS.map((item) => <li key={item} className="flex items-center gap-2 text-[14px]"><Sparkles className="size-4 text-gold" />{item}</li>)}</ul>
-            <a href="/purchase" className="mt-7 inline-flex h-11 items-center gap-2 rounded-[8px] border border-navy px-4 text-[13px] font-extrabold text-navy dark:border-gold dark:text-gold-2">عرض النسخ وخطوات التسليم</a>
+            <a href="/purchase" className="mt-7 inline-flex h-11 items-center gap-2 rounded-[8px] border border-brand px-4 text-[13px] font-extrabold text-brand">عرض النسخ وخطوات التسليم</a>
           </section>
         </div>
       </main>

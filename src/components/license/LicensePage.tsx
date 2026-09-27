@@ -26,10 +26,10 @@ import { FEATURE_LABELS, LICENSE_TYPE_LABELS } from "@/lib/license/types";
 // ── Plan Display Config ────────────────────────────────────────────────────
 
 const PLAN_CONFIG: Record<LicenseType, { icon: typeof Shield; color: string; bg: string }> = {
-  FREE: { icon: Lock, color: "text-gray-600", bg: "bg-gray-100 dark:bg-gray-800" },
-  TRIAL: { icon: Zap, color: "text-blue-600", bg: "bg-blue-50 dark:bg-blue-900/30" },
-  PRO: { icon: Crown, color: "text-emerald-600", bg: "bg-emerald-50 dark:bg-emerald-900/30" },
-  LIFETIME: { icon: Crown, color: "text-amber-600", bg: "bg-amber-50 dark:bg-amber-900/30" },
+  FREE: { icon: Lock, color: "text-muted", bg: "bg-line-2" },
+  TRIAL: { icon: Zap, color: "text-brand", bg: "bg-surface-2" },
+  PRO: { icon: Crown, color: "text-brand", bg: "bg-ok/10" },
+  LIFETIME: { icon: Crown, color: "text-warning", bg: "bg-gold/15" },
 };
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ export default function LicensePage() {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-2 border-brand border-t-transparent" />
           <p className="text-sm text-muted">جارٍ تحميل بيانات الترخيص...</p>
         </div>
       </div>
@@ -75,7 +75,7 @@ export default function LicensePage() {
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <a href="/" className="rounded-lg border border-line p-2 hover:bg-accent dark:border-white/10">
+        <a href="/" className="rounded-lg border border-line p-2 hover:bg-accent">
           <ArrowLeft className="size-4" />
         </a>
         <div>
@@ -85,7 +85,7 @@ export default function LicensePage() {
       </div>
 
       {/* Current Plan Card */}
-      <div className={`rounded-xl border border-line p-6 dark:border-white/10 ${config.bg}`}>
+      <div className={`rounded-xl border border-line p-6 ${config.bg}`}>
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className={`rounded-lg p-2 ${config.color}`}>
@@ -98,14 +98,14 @@ export default function LicensePage() {
           </div>
           <div className="flex items-center gap-2">
             {isAdmin || (hasLicense && license?.status === "ACTIVE") ? (
-              <span className="flex items-center gap-1 rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+              <span className="flex items-center gap-1 rounded-full bg-ok/10 px-3 py-1 text-xs font-bold text-success">
                 <CheckCircle2 className="size-3" />
                 {isAdmin ? "وصول إداري" : "نشط"}
               </span>
             ) : (
               <span className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${isSuspended
-                ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-                : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"}`}>
+                ? "bg-danger/10 text-error"
+                : "bg-line-2 text-muted"}`}>
                 {isSuspended ? "موقوف بقرار الإدارة" : license?.status === "REVOKED" ? "ملغى" : license?.status === "EXPIRED" ? "منتهي" : "مجاني"}
               </span>
             )}
@@ -147,7 +147,7 @@ export default function LicensePage() {
         )}
         {/* Server verification, not the local Keygen row, decides access. */}
         {!hasLicense && error && (
-          <p role="status" className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm leading-6 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">{error}</p>
+          <p role="status" className="mt-4 rounded-lg border border-gold/40 bg-gold/15 p-3 text-sm leading-6 text-warning">{error}</p>
         )}
         {/* Actions */}
         <div className="mt-4 flex flex-wrap gap-2">
@@ -155,20 +155,20 @@ export default function LicensePage() {
             <button
               type="button"
               onClick={() => setShowActivate(true)}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
+              className="rounded-lg bg-navy px-4 py-2 text-sm font-bold text-on-brand hover:bg-navy-2"
             >
               <Key className="mr-2 inline size-4" />
               تفعيل ترخيص
             </button>
           )}
           {!hasLicense && license?.status === "ACTIVE" && (
-            <button type="button" onClick={() => void revalidate()} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10">إعادة التحقق من الدفع والترخيص</button>
+            <button type="button" onClick={() => void revalidate()} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent">إعادة التحقق من الدفع والترخيص</button>
           )}
           {hasLicense && !isAdmin && (
             <>
-              <button type="button" onClick={() => void revalidate()} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10">تحقق الآن</button>
+              <button type="button" onClick={() => void revalidate()} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent">تحقق الآن</button>
               {getCachedLicenseKey() && (
-                <button type="button" onClick={deactivate} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent dark:border-white/10">مسح المفتاح من هذا المتصفح</button>
+                <button type="button" onClick={deactivate} className="rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent">مسح المفتاح من هذا المتصفح</button>
               )}
             </>
           )}
@@ -176,7 +176,7 @@ export default function LicensePage() {
       </div>
 
       {/* Features Grid */}
-      <div className="rounded-xl border border-line p-6 dark:border-white/10">
+      <div className="rounded-xl border border-line p-6">
         <h2 className="mb-4 text-lg font-bold">الميزات</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           {(Object.keys(FEATURE_LABELS) as FeatureId[]).map((featureId) => {
@@ -192,28 +192,28 @@ export default function LicensePage() {
                 key={featureId}
                 className={`flex items-start gap-3 rounded-lg border p-3 ${
                   enabled
-                    ? "border-emerald-200 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-900/10"
+                    ? "border-brand bg-ok/10"
                     : comingSoon
-                      ? "border-amber-300/60 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10"
-                      : "border-line bg-gray-50/50 opacity-60 dark:border-white/10 dark:bg-white/5"
+                      ? "border-gold/40 bg-gold/15"
+                      : "border-line bg-surface-2/50 opacity-60"
                 }`}
               >
                 {enabled ? (
-                  <Unlock className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                  <Unlock className="mt-0.5 size-4 shrink-0 text-brand" />
                 ) : comingSoon ? (
-                  <Clock3 className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                  <Clock3 className="mt-0.5 size-4 shrink-0 text-warning" />
                 ) : (
-                  <Lock className="mt-0.5 size-4 shrink-0 text-gray-400" />
+                  <Lock className="mt-0.5 size-4 shrink-0 text-muted" />
                 )}
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-bold">{feature.name}</p>
                     {enabled ? (
-                      <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-extrabold text-emerald-700 dark:text-emerald-300">
+                      <span className="rounded-full bg-ok/15 px-2 py-0.5 text-[10px] font-extrabold text-success">
                         مفعّلة
                       </span>
                     ) : comingSoon ? (
-                      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-extrabold text-amber-700 dark:text-amber-300">
+                      <span className="rounded-full bg-gold/15 px-2 py-0.5 text-[10px] font-extrabold text-warning">
                         قريبًا
                       </span>
                     ) : null}
@@ -228,18 +228,18 @@ export default function LicensePage() {
 
       {/* Action errors when an active plan still exists (unverified status is above). */}
       {error && hasLicense && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400">
+        <div className="rounded-lg border border-danger/30 bg-danger/10 p-3 text-sm text-error">
           {error}
         </div>
       )}
 
       {/* Activation Dialog */}
       {showActivate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-md rounded-xl border border-line bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-[#1a2332]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-inverse/50 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-md rounded-xl border border-line bg-surface p-6 shadow-2xl">
             <div className="mb-4 flex items-center gap-3">
-              <div className="rounded-lg bg-emerald-100 p-2 dark:bg-emerald-900/30">
-                <Key className="size-5 text-emerald-600" />
+              <div className="rounded-lg bg-ok/10 p-2">
+                <Key className="size-5 text-brand" />
               </div>
               <div>
                 <h3 className="text-lg font-bold">تفعيل الترخيص</h3>
@@ -252,7 +252,7 @@ export default function LicensePage() {
               value={activateKey}
               onChange={(e) => setActivateKey(e.target.value)}
               placeholder="XXXXXX-XXXXXX-XXXXXX-XXXXXX-XXXXXX-V3"
-              className="mb-2 w-full rounded-lg border border-line bg-transparent px-4 py-3 text-center font-mono text-sm font-bold tracking-wider outline-none focus:border-emerald-500 dark:border-white/10"
+              className="mb-2 w-full rounded-lg border border-line bg-transparent px-4 py-3 text-center font-mono text-sm font-bold tracking-wider outline-none focus:border-brand"
               dir="ltr"
               onKeyDown={(e) => e.key === "Enter" && handleActivate()}
               autoFocus
@@ -265,8 +265,8 @@ export default function LicensePage() {
               <div
                 className={`mb-4 rounded-lg p-3 text-sm font-bold ${
                   activateMessage.type === "success"
-                    ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400"
-                    : "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
+                    ? "bg-ok/10 text-success"
+                    : "bg-danger/10 text-error"
                 }`}
               >
                 {activateMessage.text}
@@ -278,7 +278,7 @@ export default function LicensePage() {
                 type="button"
                 onClick={handleActivate}
                 disabled={!activateKey.trim() || activating}
-                className="flex-1 rounded-lg bg-emerald-600 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="flex-1 rounded-lg bg-navy py-2.5 text-sm font-bold text-on-brand hover:bg-navy-2 disabled:opacity-50"
               >
                 {activating ? "جارٍ التفعيل..." : "تفعيل الترخيص"}
               </button>
@@ -289,7 +289,7 @@ export default function LicensePage() {
                   setActivateKey("");
                   setActivateMessage(null);
                 }}
-                className="rounded-lg border border-line px-4 py-2.5 text-sm font-bold hover:bg-accent dark:border-white/10"
+                className="rounded-lg border border-line px-4 py-2.5 text-sm font-bold hover:bg-accent"
               >
                 إلغاء
               </button>

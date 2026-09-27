@@ -192,8 +192,8 @@ function MenuTrigger({
       className={cn(
         // Same frame-less 36px control as the rest of the toolbar strip; the
         // open state is the filled navy pill, which reads without any border.
-        "inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] transition hover:bg-line-2 dark:hover:bg-white/10",
-        open ? "bg-navy text-white hover:bg-navy dark:bg-navy dark:text-white" : "",
+        "inline-flex size-9 shrink-0 items-center justify-center rounded-[8px] transition hover:bg-line-2",
+        open ? "bg-navy text-white hover:bg-navy-2" : "",
       )}
     >
       {children}
@@ -235,7 +235,7 @@ function AlignMenu() {
             onClick={() => setOverride(id)}
             className={cn(
               "h-7 rounded-[6px] border text-[10px] font-extrabold",
-              frame === id ? "border-navy bg-navy text-white" : "border-line dark:border-white/10",
+              frame === id ? "border-navy bg-navy text-white" : "border-line",
             )}
           >
             {label}
@@ -252,7 +252,7 @@ function AlignMenu() {
             aria-label={b.label}
             disabled={!count}
             onClick={() => align(b.edge, frame)}
-            className="grid h-9 place-items-center rounded-[6px] border border-line disabled:opacity-35 dark:border-white/10"
+            className="grid h-9 place-items-center rounded-[6px] border border-line disabled:opacity-35"
           >
             <AlignIcon kind={b.icon} />
           </button>
@@ -437,7 +437,7 @@ function ViewMenu({ fitToScreen, fitToSelection, close }: { fitToScreen: () => v
               "flex-1 rounded-[5px] py-1 text-center text-[11px] font-extrabold transition",
               artboardGridCols === cols
                 ? "bg-[var(--editor-accent)] text-white shadow-xs"
-                : "border border-line/40 hover:bg-[var(--editor-hover)] text-muted hover:text-[var(--editor-text)]",
+                : "border border-line hover:bg-[var(--editor-hover)] text-muted hover:text-[var(--editor-text)]",
             )}
             title={`${cols} أعمدة للوحات`}
           >
@@ -480,7 +480,7 @@ function MenuItem({
     >
       {icon ? <span className="grid size-4 shrink-0 place-items-center">{icon}</span> : <span className="size-4 shrink-0" />}
       <span className="flex-1">{label}</span>
-      {checked && <Check className="size-3.5 shrink-0 text-ok" aria-hidden />}
+      {checked && <Check className="size-3.5 shrink-0 text-success" aria-hidden />}
     </button>
   );
 }

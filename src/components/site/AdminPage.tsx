@@ -61,13 +61,13 @@ function StatCard({
   tone?: "neutral" | "ok" | "warn";
 }) {
   return (
-    <div className="rounded-[12px] border border-line bg-surface p-3 dark:border-white/10">
+    <div className="rounded-[12px] border border-line bg-surface p-3">
       <p className="text-[10px] font-bold text-muted">{label}</p>
       <p
         className={cn(
           "mt-1 text-[18px] font-extrabold tabular-nums",
-          tone === "ok" && "text-emerald-700 dark:text-emerald-400",
-          tone === "warn" && "text-amber-700 dark:text-amber-400",
+          tone === "ok" && "text-success",
+          tone === "warn" && "text-warning",
         )}
       >
         {value}
@@ -153,14 +153,14 @@ function DashboardTab() {
             type="button"
             onClick={() => void load()}
             disabled={loading}
-            className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-line px-3 text-[11px] font-bold hover:bg-line-2 disabled:opacity-60 dark:border-white/10"
+            className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-line px-3 text-[11px] font-bold hover:bg-line-2 disabled:opacity-60"
           >
             <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
             تحديث
           </button>
         }
       >
-        {error && <p className="text-[12px] text-danger">{error}</p>}
+        {error && <p className="text-[12px] text-error">{error}</p>}
         {loading ? (
           <p className="text-[12px] text-muted">جارٍ التحميل…</p>
         ) : (
@@ -177,7 +177,7 @@ function DashboardTab() {
               <StatCard label="مدفوعات معتمدة" value={String(stats.approvedReq)} />
             </div>
             <div className="mt-5 grid gap-4 lg:grid-cols-2">
-              <div className="rounded-[12px] border border-line p-4 dark:border-white/10">
+              <div className="rounded-[12px] border border-line p-4">
                 <h3 className="text-[12px] font-extrabold">توزيع الباقات</h3>
                 <ul className="mt-3 grid gap-2">
                   {stats.planDist.map(({ plan, count }) => (
@@ -188,12 +188,12 @@ function DashboardTab() {
                   ))}
                 </ul>
               </div>
-              <div className="rounded-[12px] border border-line p-4 dark:border-white/10">
+              <div className="rounded-[12px] border border-line p-4">
                 <h3 className="text-[12px] font-extrabold">آخر الإجراءات</h3>
                 <ul className="mt-3 grid gap-1.5">
                   {audit.slice(0, 6).map((a) => (
                     <li key={a.id} className="flex justify-between gap-2 text-[10px] text-muted">
-                      <span className="font-bold text-ink dark:text-white">{a.action}</span>
+                      <span className="font-bold text-ink">{a.action}</span>
                       <span>{formatDate(a.createdAt)}</span>
                     </li>
                   ))}
@@ -201,7 +201,7 @@ function DashboardTab() {
                 </ul>
               </div>
             </div>
-            <div className="mt-4 rounded-[12px] border border-line p-4 dark:border-white/10">
+            <div className="mt-4 rounded-[12px] border border-line p-4">
               <h3 className="text-[12px] font-extrabold">المشاريع والحسابات</h3>
               <p className="mt-2 text-[11px] leading-5 text-muted">
                 المشاريع محفوظة محليًا في متصفح كل مستخدم (IndexedDB) ولا تُزامَن مع الخادم. عدد الحسابات المسجلة هو {stats.totalUsers}. الاشتراكات تُدار عبر Gumroad، والتراخيص عبر Keygen.
@@ -245,7 +245,7 @@ export function AdminPage() {
         <SiteHeader current="/admin" />
         <main className="mx-auto w-full max-w-2xl px-4 py-24">
           <div className="rounded-[14px] border border-danger/30 bg-danger/5 p-6">
-            <h1 className="text-lg font-extrabold text-danger">لا تملك صلاحية الوصول</h1>
+            <h1 className="text-lg font-extrabold text-error">لا تملك صلاحية الوصول</h1>
             <p className="mt-2 text-[13px] leading-6">
               هذه الصفحة مخصّصة لإدارة المنصة فقط. إذا كنت تعتقد أن هذا خطأ، تواصل مع
               الإدارة. إذا كانت قاعدة البيانات جديدة ولا يوجد مسؤول بعد، يمكنك تفعيل حسابك كأول مسؤول.
@@ -253,7 +253,7 @@ export function AdminPage() {
             <div className="mt-4 flex flex-wrap gap-2">
               <a
                 href="/account"
-                className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold dark:border-white/10"
+                className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold"
               >
                 العودة إلى حسابي
               </a>
@@ -273,7 +273,7 @@ export function AdminPage() {
                     toast.error(e instanceof Error ? e.message : "تعذر التفعيل");
                   }
                 }}
-                className="inline-flex h-9 items-center rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-white"
+                className="inline-flex h-9 items-center rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-on-brand"
               >
                 تفعيل كأول مسؤول
               </button>
@@ -286,7 +286,7 @@ export function AdminPage() {
   }
 
   return (
-    <div className="min-h-screen bg-paper dark:bg-[#111722]">
+    <div className="min-h-screen bg-paper">
       <SiteHeader current="/admin" />
       <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
         {/*
@@ -299,10 +299,10 @@ export function AdminPage() {
          * approving a payment, and the two must never share a tab bar by
          * accident.
          */}
-        <header className="overflow-hidden rounded-[14px] border border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
+        <header className="overflow-hidden rounded-[14px] border border-line bg-surface">
           <div className="flex flex-wrap items-center justify-between gap-4 p-5">
             <div className="flex items-center gap-3">
-              <span className="grid size-11 place-items-center rounded-[10px] bg-navy/10 text-navy dark:bg-white/10 dark:text-gold-2">
+              <span className="grid size-11 place-items-center rounded-[10px] bg-navy/10 text-brand">
                 <LayoutDashboard className="size-5" aria-hidden />
               </span>
               <div>
@@ -316,24 +316,24 @@ export function AdminPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex max-w-[240px] items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[10px] font-bold text-muted dark:border-white/10">
-                <ShieldCheck className="size-3 text-emerald-600" aria-hidden />
+              <span className="inline-flex max-w-[240px] items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[10px] font-bold text-muted">
+                <ShieldCheck className="size-3 text-brand" aria-hidden />
                 <span className="truncate" dir="ltr">
                   {user.primaryEmail || user.displayName || user.id}
                 </span>
               </span>
               <a
                 href="/admin-licenses"
-                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-navy px-3 text-[12px] font-extrabold text-white"
+                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-navy px-3 text-[12px] font-extrabold text-on-brand"
               >
                 <KeyRound className="size-3.5" aria-hidden />
                 إدارة التراخيص
               </a>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-line bg-paper/60 px-5 py-2 text-[10px] text-muted dark:border-white/10">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-line bg-paper/60 px-5 py-2 text-[10px] text-muted">
             <span>
-              مزوّد الدفع: <strong className="font-extrabold text-ink dark:text-white">Gumroad</strong>
+              مزوّد الدفع: <strong className="font-extrabold text-ink">Gumroad</strong>
             </span>
             <span>
               Webhook:{" "}
@@ -343,12 +343,12 @@ export function AdminPage() {
             </span>
             <span>
               جهة إصدار التراخيص:{" "}
-              <strong className="font-extrabold text-ink dark:text-white">Keygen</strong>
+              <strong className="font-extrabold text-ink">Keygen</strong>
             </span>
           </div>
         </header>
 
-        <nav className="mt-5 flex flex-wrap gap-2 border-b border-line pb-3 dark:border-white/10">
+        <nav className="mt-5 flex flex-wrap gap-2 border-b border-line pb-3">
           {TABS.map((item) => {
             const Icon = item.icon;
             return (
@@ -360,8 +360,8 @@ export function AdminPage() {
                 className={cn(
                   "inline-flex h-9 items-center gap-1.5 rounded-[8px] px-3 text-[12px] font-extrabold transition",
                   tab === item.id
-                    ? "bg-navy text-white"
-                    : "text-muted hover:bg-line-2 dark:hover:bg-white/5",
+                    ? "bg-navy text-on-brand"
+                    : "text-muted hover:bg-line-2",
                 )}
               >
                 <Icon className="size-3.5" aria-hidden />
@@ -395,7 +395,7 @@ function Panel({
   actions?: ReactNode;
 }) {
   return (
-    <section className="rounded-[14px] border border-line bg-surface p-5 dark:border-white/10">
+    <section className="rounded-[14px] border border-line bg-surface p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-[13px] font-extrabold text-muted">{title}</h2>
         {actions}
@@ -417,8 +417,8 @@ function Notice({ error, ok }: { error?: string | null; ok?: string | null }) {
       className={cn(
         "mt-3 rounded-[10px] p-3 text-[12px] leading-6",
         error
-          ? "border border-danger/30 bg-danger/5 text-danger"
-          : "border border-ok/30 bg-ok/5 text-ok",
+          ? "border border-danger/30 bg-danger/5 text-error"
+          : "border border-ok/30 bg-ok/5 text-success",
       )}
     >
       {error ?? ok}
@@ -493,8 +493,8 @@ function RequestsTab() {
               className={cn(
                 "cursor-pointer rounded-[8px] border px-2.5 py-1 text-[11px] font-bold",
                 status === s
-                  ? "border-navy bg-navy text-white"
-                  : "border-line text-muted dark:border-white/10",
+                  ? "border-brand bg-navy text-on-brand"
+                  : "border-line text-muted",
               )}
             >
               {s === "ALL" ? "الكل" : (PAYMENT_STATUS_META[s]?.label ?? s)}
@@ -513,7 +513,7 @@ function RequestsTab() {
           return (
             <li
               key={row.id}
-              className="rounded-[12px] border border-line-2 p-4 dark:border-white/10"
+              className="rounded-[12px] border border-line-2 p-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
@@ -552,7 +552,7 @@ function RequestsTab() {
                   </span>
                 </div>
                 {row.customerNote && (
-                  <p className="mt-1.5 border-t border-line-2 pt-1.5 dark:border-white/10">
+                  <p className="mt-1.5 border-t border-line-2 pt-1.5">
                     ملاحظة العميل: {row.customerNote}
                   </p>
                 )}
@@ -567,14 +567,14 @@ function RequestsTab() {
                     }
                     maxLength={500}
                     placeholder="ملاحظة داخلية للعميل (اختياري)"
-                    className="h-9 rounded-[8px] border border-line bg-surface px-3 text-[12px] dark:border-white/10"
+                    className="h-9 rounded-[8px] border border-line bg-surface px-3 text-[12px]"
                   />
                   <div className="flex gap-2">
                     <button
                       type="button"
                       disabled={busy === row.id}
                       onClick={() => void act(row.id, "approve")}
-                      className="h-9 cursor-pointer rounded-[8px] bg-ok px-4 text-[12px] font-extrabold text-white disabled:cursor-wait disabled:opacity-60"
+                      className="h-9 cursor-pointer rounded-[8px] bg-ok px-4 text-[12px] font-extrabold text-on-brand disabled:cursor-wait disabled:opacity-60"
                     >
                       {busy === row.id ? "…" : "اعتماد وتفعيل"}
                     </button>
@@ -582,7 +582,7 @@ function RequestsTab() {
                       type="button"
                       disabled={busy === row.id}
                       onClick={() => void act(row.id, "reject")}
-                      className="h-9 cursor-pointer rounded-[8px] border border-danger px-4 text-[12px] font-extrabold text-danger disabled:cursor-wait disabled:opacity-60"
+                      className="h-9 cursor-pointer rounded-[8px] border border-danger px-4 text-[12px] font-extrabold text-error disabled:cursor-wait disabled:opacity-60"
                     >
                       رفض
                     </button>
@@ -675,7 +675,7 @@ function CustomersTab() {
           return (
             <li
               key={row.userId}
-              className="rounded-[12px] border border-line-2 p-4 dark:border-white/10"
+              className="rounded-[12px] border border-line-2 p-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <strong className="text-[13px] font-extrabold">
@@ -716,7 +716,7 @@ function CustomersTab() {
                       "تم تفعيل الباقة.",
                     );
                   }}
-                  className="h-9 cursor-pointer rounded-[8px] border border-line bg-surface px-2 text-[12px] dark:border-white/10"
+                  className="h-9 cursor-pointer rounded-[8px] border border-line bg-surface px-2 text-[12px]"
                 >
                   <option value="">تفعيل / منح باقة…</option>
                   {plans.map((plan) => (
@@ -738,7 +738,7 @@ function CustomersTab() {
                         "تم تمديد الاشتراك ٣٠ يوماً.",
                       )
                     }
-                    className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold dark:border-white/10 disabled:cursor-wait"
+                    className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold disabled:cursor-wait"
                   >
                     تمديد ٣٠ يوم
                   </button>
@@ -755,7 +755,7 @@ function CustomersTab() {
                         "تمت استعادة الوصول.",
                       )
                     }
-                    className="h-9 cursor-pointer rounded-[8px] border border-ok px-3 text-[12px] font-bold text-ok disabled:cursor-wait"
+                    className="h-9 cursor-pointer rounded-[8px] border border-ok px-3 text-[12px] font-bold text-success disabled:cursor-wait"
                   >
                     استعادة
                   </button>
@@ -771,7 +771,7 @@ function CustomersTab() {
                           "تم إيقاف الوصول.",
                         )
                       }
-                      className="h-9 cursor-pointer rounded-[8px] border border-danger px-3 text-[12px] font-bold text-danger disabled:cursor-wait"
+                      className="h-9 cursor-pointer rounded-[8px] border border-danger px-3 text-[12px] font-bold text-error disabled:cursor-wait"
                     >
                       إيقاف
                     </button>
@@ -795,7 +795,7 @@ function CustomersTab() {
                       "تم التمديد.",
                     );
                   }}
-                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold dark:border-white/10 disabled:cursor-wait"
+                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold disabled:cursor-wait"
                 >
                   تمديد مخصص
                 </button>
@@ -815,7 +815,7 @@ function CustomersTab() {
                       "تم تحديث تاريخ الانتهاء.",
                     );
                   }}
-                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold dark:border-white/10 disabled:cursor-wait"
+                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold disabled:cursor-wait"
                 >
                   تحديد تاريخ الانتهاء
                 </button>
@@ -834,7 +834,7 @@ function CustomersTab() {
                         "تم تغيير الباقة.",
                       );
                     }}
-                    className="h-9 cursor-pointer rounded-[8px] border border-line bg-surface px-2 text-[12px] dark:border-white/10"
+                    className="h-9 cursor-pointer rounded-[8px] border border-line bg-surface px-2 text-[12px]"
                   >
                     <option value="">تغيير الباقة…</option>
                     {plans.map((plan) => (
@@ -858,7 +858,7 @@ function CustomersTab() {
                       "تم منح صلاحية الإدارة.",
                     )
                   }
-                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold text-muted dark:border-white/10 disabled:cursor-wait"
+                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold text-muted disabled:cursor-wait"
                 >
                   منح صلاحية إدارة
                 </button>
@@ -948,7 +948,7 @@ function PlansTab() {
           return (
             <li
               key={plan.id}
-              className="rounded-[12px] border border-line-2 p-4 dark:border-white/10"
+              className="rounded-[12px] border border-line-2 p-4"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <strong className="text-[13px] font-extrabold">
@@ -958,7 +958,7 @@ function PlansTab() {
                 <span
                   className={cn(
                     "rounded-full px-2.5 py-0.5 text-[11px] font-extrabold",
-                    plan.enabled ? "bg-ok/15 text-ok" : "bg-line-2 text-muted",
+                    plan.enabled ? "bg-ok/15 text-success" : "bg-line-2 text-muted",
                   )}
                 >
                   {plan.enabled ? "متاحة" : "معطّلة"}
@@ -979,7 +979,7 @@ function PlansTab() {
                         [plan.id]: { durationDays: d?.durationDays ?? String(plan.durationDays), price: e.target.value },
                       }))
                     }
-                    className="h-9 w-28 rounded-[8px] border border-line bg-surface px-2 text-[12px] tabular-nums dark:border-white/10"
+                    className="h-9 w-28 rounded-[8px] border border-line bg-surface px-2 text-[12px] tabular-nums"
                   />
                 </label>
                 <label className="grid gap-1">
@@ -994,14 +994,14 @@ function PlansTab() {
                         [plan.id]: { price: d?.price ?? plan.price, durationDays: e.target.value },
                       }))
                     }
-                    className="h-9 w-24 rounded-[8px] border border-line bg-surface px-2 text-[12px] tabular-nums dark:border-white/10"
+                    className="h-9 w-24 rounded-[8px] border border-line bg-surface px-2 text-[12px] tabular-nums"
                   />
                 </label>
                 <button
                   type="button"
                   disabled={busy === plan.id}
                   onClick={() => void save(plan)}
-                  className="h-9 cursor-pointer rounded-[8px] bg-navy px-4 text-[12px] font-extrabold text-white disabled:cursor-wait disabled:opacity-60"
+                  className="h-9 cursor-pointer rounded-[8px] bg-navy px-4 text-[12px] font-extrabold text-on-brand disabled:cursor-wait disabled:opacity-60"
                 >
                   {busy === plan.id ? "…" : "حفظ"}
                 </button>
@@ -1009,7 +1009,7 @@ function PlansTab() {
                   type="button"
                   disabled={busy === plan.id}
                   onClick={() => void toggleEnabled(plan)}
-                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold dark:border-white/10 disabled:cursor-wait"
+                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold disabled:cursor-wait"
                 >
                   {plan.enabled ? "تعطيل" : "تفعيل"}
                 </button>
@@ -1065,7 +1065,7 @@ function SettingsTab() {
         dir={dir}
         value={form[key]}
         onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-        className="h-10 rounded-[10px] border border-line bg-surface px-3 text-[13px] dark:border-white/10"
+        className="h-10 rounded-[10px] border border-line bg-surface px-3 text-[13px]"
       />
     </label>
   );
@@ -1089,7 +1089,7 @@ function SettingsTab() {
               rows={3}
               value={form.instructionsAr}
               onChange={(e) => setForm({ ...form, instructionsAr: e.target.value })}
-              className="rounded-[10px] border border-line bg-surface p-3 text-[13px] dark:border-white/10"
+              className="rounded-[10px] border border-line bg-surface p-3 text-[13px]"
             />
           </label>
           <label className="grid gap-1.5">
@@ -1099,7 +1099,7 @@ function SettingsTab() {
               dir="ltr"
               value={form.instructionsEn}
               onChange={(e) => setForm({ ...form, instructionsEn: e.target.value })}
-              className="rounded-[10px] border border-line bg-surface p-3 text-[13px] dark:border-white/10"
+              className="rounded-[10px] border border-line bg-surface p-3 text-[13px]"
             />
           </label>
         </div>
@@ -1123,7 +1123,7 @@ function SettingsTab() {
               }
             })()
           }
-          className="mt-4 h-10 cursor-pointer rounded-[10px] bg-navy px-5 text-[12px] font-extrabold text-white disabled:cursor-wait disabled:opacity-60"
+          className="mt-4 h-10 cursor-pointer rounded-[10px] bg-navy px-5 text-[12px] font-extrabold text-on-brand disabled:cursor-wait disabled:opacity-60"
         >
           {busy ? "جارٍ الحفظ…" : "حفظ الإعدادات"}
         </button>
@@ -1132,17 +1132,17 @@ function SettingsTab() {
 
       <Panel title="إعدادات النظام">
         <div className="grid gap-3 sm:grid-cols-2">
-          <a href="/admin-licenses" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10">
+          <a href="/admin-licenses" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
             إدارة التراخيص — Gumroad وKeygen
           </a>
-          <a href="/owner-vault" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10">
+          <a href="/owner-vault" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
             خزنة المالك — مفاتيح API
           </a>
-          <a href="/admin-dashboard" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2 dark:border-white/10">
+          <a href="/admin-dashboard" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
             محتوى الموقع والقوالب — عبر لوحة الإدارة
           </a>
-          <div className="rounded-[10px] border border-line p-3 text-[11px] leading-5 text-muted dark:border-white/10">
-            <strong className="block text-[12px] text-ink dark:text-white">الحماية</strong>
+          <div className="rounded-[10px] border border-line p-3 text-[11px] leading-5 text-muted">
+            <strong className="block text-[12px] text-ink">الحماية</strong>
             جميع مسارات /admin و /admin-licenses محمية خادمياً عبر requireAdmin — العميل العادي يحصل على 403 حتى لو استدعى الـAPI مباشرة.
           </div>
         </div>
@@ -1173,7 +1173,7 @@ function AuditTab() {
         {rows.map((row) => (
           <li
             key={row.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-line-2 p-3 text-[11px] dark:border-white/10"
+            className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-line-2 p-3 text-[11px]"
           >
             <span className="font-extrabold">{row.action}</span>
             <span className="text-muted">

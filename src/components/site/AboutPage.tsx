@@ -43,12 +43,12 @@ export function AboutPage() {
   }, [hydrate]);
 
   return (
-    <div className="min-h-full bg-paper dark:bg-[#111722]">
+    <div className="min-h-full bg-paper">
       <SiteHeader current="/about" />
 
       <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
         <h1 className="text-[26px] font-extrabold">عن {BRAND.lockup}</h1>
-        <p className="mt-3 text-[14px] font-bold text-navy-2 dark:text-gold-2">
+        <p className="mt-3 text-[14px] font-bold text-brand-hover">
           {BRAND.platformEn}
         </p>
         <p className="mt-4 text-[15px] leading-8 text-muted">
@@ -67,9 +67,9 @@ export function AboutPage() {
               return (
                 <span
                   key={pill.label}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1.5 text-[12px] font-bold shadow-sm dark:border-white/10 dark:bg-white/5"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-[12px] font-bold shadow-sm"
                 >
-                  <Icon className="size-3.5 text-navy-2 dark:text-gold-2" aria-hidden />
+                  <Icon className="size-3.5 text-brand-hover" aria-hidden />
                   {pill.label}
                 </span>
               );
@@ -82,9 +82,9 @@ export function AboutPage() {
           {SPECS.map((spec) => (
             <div
               key={spec.title}
-              className="shadow-card dark:shadow-card-dark rounded-xl border border-line bg-white p-4 dark:border-white/10 dark:bg-white/5"
+              className="shadow-card rounded-xl border border-line bg-surface p-4"
             >
-              <h3 className="text-[13px] font-extrabold text-navy-2 dark:text-gold-2">
+              <h3 className="text-[13px] font-extrabold text-brand-hover">
                 {spec.title}
               </h3>
               <p className="mt-1.5 text-[13px] leading-6 text-muted">{spec.body}</p>
@@ -93,13 +93,13 @@ export function AboutPage() {
         </section>
 
         {/* Verified institutional card with direct tel: and WhatsApp actions. */}
-        <section className="shadow-card dark:shadow-card-dark mt-8 rounded-xl border border-line bg-white p-6 dark:border-white/10 dark:bg-white/5">
+        <section className="shadow-card mt-8 rounded-xl border border-line bg-surface p-6">
           <div className="flex items-start gap-4">
             <img src="/nasaq-mark.svg" alt="" aria-hidden className="size-14 shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-[16px] font-extrabold">{BRAND.team}</h2>
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-extrabold text-emerald-700 dark:text-emerald-300">
+                <span className="inline-flex items-center gap-1 rounded-full bg-ok/10 px-2 py-0.5 text-[11px] font-extrabold text-success">
                   <BadgeCheck className="size-3.5" /> الفريق المعتمد للمنصة
                 </span>
               </div>
@@ -119,7 +119,7 @@ export function AboutPage() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <a
                   href={telHref()}
-                  className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-navy px-4 text-[13px] font-extrabold text-white"
+                  className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-navy px-4 text-[13px] font-extrabold text-on-brand"
                 >
                   <Phone className="size-4" />
                   اتصال مباشر
@@ -128,7 +128,7 @@ export function AboutPage() {
                   href={whatsappHref()}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-green px-4 text-[13px] font-extrabold text-white"
+                  className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-green px-4 text-[13px] font-extrabold text-on-brand"
                 >
                   <MessageCircle className="size-4" />
                   واتساب
@@ -136,14 +136,14 @@ export function AboutPage() {
               </div>
             </div>
           </div>
-          <p className="mt-4 border-t border-line pt-3 text-[12px] leading-6 text-muted dark:border-white/10">
+          <p className="mt-4 border-t border-line pt-3 text-[12px] leading-6 text-muted">
             {BRAND.name} هو اسم المنصة. جميع الحقوق محفوظة لـ {BRAND.platform}.
           </p>
         </section>
 
         {/* Warning banner for the demo-data disclaimer. */}
-        <section className="mt-8 rounded-xl border border-amber-500/30 bg-amber-500/10 p-5">
-          <h2 className="flex items-center gap-2 text-[15px] font-extrabold text-amber-700 dark:text-amber-400">
+        <section className="mt-8 rounded-xl border border-gold/40 bg-gold/10 p-5">
+          <h2 className="flex items-center gap-2 text-[15px] font-extrabold text-warning">
             <AlertTriangle className="size-4" aria-hidden />
             ملاحظة عن البيانات التجريبية
           </h2>

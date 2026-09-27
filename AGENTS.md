@@ -337,6 +337,14 @@ in-browser say so and ship the best web-only build.
   cannot resolve their inputs. They are unrelated to the editor. Verify editor
   work instead with:
   `node --experimental-strip-types --test src/lib/editor/*.test.ts`
+- **Theme roles, not colours.** Light/Dark is one token system: chrome surfaces,
+  text, borders and states are written with role utilities (`bg-surface`,
+  `text-ink`, `text-muted`, `border-line`, `bg-navy` + `text-on-brand`,
+  `bg-inverse` + `text-on-inverse`, `bg-scrim`). A `dark:` variant or a literal
+  `bg-[#…]` / `text-slate-500` in chrome is how a label disappears on theme
+  switch, so `npm run theme:check` fails on it (document artwork — `tpl-paper`,
+  `.report-page`, `[data-doc]`, canvas stages, colour swatches — is exempt by
+  allowlist, because a printed page must stay paper in both themes).
 - Cohesive UI per **`design-ui`** (tokens, no-slop rules); no broken imports.
 - Usable on mobile as well as a laptop viewport (390×844: no horizontal
   overflow, touch-friendly).

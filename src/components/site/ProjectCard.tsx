@@ -125,7 +125,7 @@ export function ProjectCard({
   const preview = (
     <div
       className={cn(
-        "relative overflow-hidden rounded-[7px] border border-line bg-white shadow-sm dark:border-white/10 dark:bg-white/5",
+ "relative overflow-hidden rounded-[7px] border border-line bg-surface shadow-sm",
         // Real A4 proportions (210 × 297): the page-1 snapshot sits inside a
         // paper frame instead of being cropped into a banner strip.
         isList ? "aspect-[210/297] w-[56px] shrink-0" : compact ? "mx-auto aspect-[210/297] h-[150px]" : "mx-auto aspect-[210/297] h-[200px]",
@@ -137,7 +137,7 @@ export function ProjectCard({
           alt=""
           aria-hidden
           loading="lazy"
-          className="h-full w-full bg-white object-contain object-top"
+          className="h-full w-full bg-surface object-contain object-top"
         />
       ) : (
         <span className="flex h-full w-full flex-col">
@@ -153,9 +153,9 @@ export function ProjectCard({
         type="button"
         onClick={() => void onOpen(project.id)}
         aria-label={`فتح ${project.name}`}
-        className="group/overlay absolute inset-0 grid place-items-center bg-navy/0 backdrop-blur-0 transition-all duration-200 hover:bg-navy/45 hover:backdrop-blur-[2px] focus-visible:bg-navy/45 focus-visible:backdrop-blur-[2px] focus:outline-none"
+        className="group/overlay absolute inset-0 grid place-items-center bg-navy/0 backdrop-blur-0 transition-all duration-200 hover:bg-navy-2/45 hover:backdrop-blur-[2px] focus-visible:bg-navy/45 focus-visible:backdrop-blur-[2px] focus:outline-none"
       >
-        <span className="inline-flex translate-y-1 items-center gap-1.5 rounded-full border border-white/40 bg-white/85 px-3 py-1.5 text-[11px] font-extrabold text-navy opacity-0 shadow-sm transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-hover/overlay:translate-y-0 group-hover/overlay:opacity-100 group-focus-visible/overlay:translate-y-0 group-focus-visible/overlay:opacity-100 dark:border-white/20 dark:bg-[#161c26]/90 dark:text-gold-2">
+        <span className="inline-flex translate-y-1 items-center gap-1.5 rounded-full border border-white/40 bg-surface/85 px-3 py-1.5 text-[11px] font-extrabold text-brand opacity-0 shadow-sm transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-hover/overlay:translate-y-0 group-hover/overlay:opacity-100 group-focus-visible/overlay:translate-y-0 group-focus-visible/overlay:opacity-100">
           <FolderOpen className="size-3.5" />
           فتح المستند
         </span>
@@ -163,7 +163,7 @@ export function ProjectCard({
       {project.favorite && (
         <span
           title="في المفضلة"
-          className="absolute top-1.5 left-1.5 grid size-5 place-items-center rounded-full bg-amber-400 text-[11px] shadow-sm"
+          className="absolute top-1.5 left-1.5 grid size-5 place-items-center rounded-full bg-gold text-on-gold text-[11px] shadow-sm"
         >
           ⭐
         </span>
@@ -174,7 +174,7 @@ export function ProjectCard({
   return (
     <div
       className={cn(
-        "shadow-card dark:shadow-card-dark group relative rounded-xl border border-line bg-white p-4 transition-all duration-200 hover:-translate-y-1 hover:border-navy-2 hover:shadow-card-hover dark:border-white/10 dark:bg-white/5 dark:hover:shadow-card-dark-hover",
+ "shadow-card group relative rounded-xl border border-line bg-surface p-4 transition-all duration-200 hover:-translate-y-1 hover:border-brand hover:shadow-card-hover",
         isList && "flex items-center gap-4 p-3",
         busy && "opacity-60",
       )}
@@ -194,12 +194,12 @@ export function ProjectCard({
                   if (e.key === "Enter") void commitRename();
                   if (e.key === "Escape") setRenaming(false);
                 }}
-                className="h-8 min-w-0 flex-1 rounded-[6px] border border-line px-2 text-[13px] font-bold dark:border-white/10 dark:bg-white/5"
+                className="h-8 min-w-0 flex-1 rounded-[6px] border border-line px-2 text-[13px] font-bold bg-surface-2"
               />
               <button
                 type="button"
                 onClick={() => void commitRename()}
-                className="h-8 rounded-[6px] bg-navy px-2.5 text-[11px] font-extrabold text-white"
+                className="h-8 rounded-[6px] bg-navy px-2.5 text-[11px] font-extrabold text-on-brand"
               >
                 حفظ
               </button>
@@ -207,7 +207,7 @@ export function ProjectCard({
                 type="button"
                 onClick={() => setRenaming(false)}
                 aria-label="إلغاء"
-                className="grid size-8 place-items-center rounded-[6px] border border-line dark:border-white/10"
+                className="grid size-8 place-items-center rounded-[6px] border border-line"
               >
                 <X className="size-3.5" />
               </button>
@@ -222,7 +222,7 @@ export function ProjectCard({
               <strong className="line-clamp-2 break-words text-[14px] font-extrabold leading-6">
                 {project.name}
                 {project.favorite && (
-                  <span className="mr-1 text-amber-500" title="في المفضلة">
+                  <span className="mr-1 text-warning" title="في المفضلة">
                     ★
                   </span>
                 )}
@@ -244,7 +244,7 @@ export function ProjectCard({
           aria-label={`خيارات ${project.name}`}
           aria-expanded={menu}
           className={cn(
-            "grid size-8 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10",
+ "grid size-8 shrink-0 place-items-center rounded-[6px] border border-line",
             isList && "absolute top-3 left-3",
           )}
         >
@@ -253,7 +253,7 @@ export function ProjectCard({
       </div>
 
       {menu && (
-        <div className="absolute top-12 left-3 z-20 w-48 rounded-[10px] border border-line bg-white p-1 shadow-xl dark:border-white/10 dark:bg-[#1b2433]">
+        <div className="absolute top-12 left-3 z-20 w-48 rounded-[10px] border border-line bg-surface p-1 shadow-xl">
           <MenuItem
             onClick={() => {
               setRenaming(true);
@@ -280,7 +280,7 @@ export function ProjectCard({
       )}
 
       {confirming && (
-        <div className="absolute inset-0 z-30 grid place-items-center rounded-xl bg-white/95 p-4 text-center dark:bg-[#1b2433]/95">
+        <div className="absolute inset-0 z-30 grid place-items-center rounded-xl bg-surface/95 p-4 text-center">
           <div>
             <p className="text-[13px] font-extrabold">حذف «{project.name}»؟</p>
             <p className="mt-1 text-[11px] text-muted">لا يمكن التراجع عن هذه العملية.</p>
@@ -288,14 +288,14 @@ export function ProjectCard({
               <button
                 type="button"
                 onClick={() => void remove()}
-                className="h-9 rounded-[8px] bg-danger px-3 text-[12px] font-extrabold text-white"
+                className="h-9 rounded-[8px] bg-danger px-3 text-[12px] font-extrabold text-on-brand"
               >
                 حذف نهائي
               </button>
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                className="h-9 rounded-[8px] border border-line px-3 text-[12px] font-bold dark:border-white/10"
+                className="h-9 rounded-[8px] border border-line px-3 text-[12px] font-bold"
               >
                 إلغاء
               </button>
@@ -323,8 +323,8 @@ function MenuItem({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2 rounded-[7px] px-2.5 py-2 text-right text-[12px] font-bold hover:bg-line-2 dark:hover:bg-white/5",
-        danger && "text-danger",
+ "flex w-full items-center gap-2 rounded-[7px] px-2.5 py-2 text-right text-[12px] font-bold hover:bg-line-2",
+        danger && "text-error",
       )}
     >
       <Icon className="size-3.5" />

@@ -111,7 +111,7 @@ export function EditorAccountMenu() {
    */
   const divider = (
     <span
-      className="mx-0.5 h-6 w-px shrink-0 bg-line dark:bg-white/10"
+      className="mx-0.5 h-6 w-px shrink-0 bg-line"
       aria-hidden
     />
   );
@@ -124,7 +124,7 @@ export function EditorAccountMenu() {
           href="/login"
           title="تسجيل الدخول / إنشاء حساب"
           aria-label="تسجيل الدخول / إنشاء حساب"
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border border-line px-2 text-[12px] font-extrabold transition hover:border-navy-2 hover:text-navy-2 dark:border-white/15 dark:hover:border-gold-2 dark:hover:text-gold-2"
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border border-line px-2 text-[12px] font-extrabold transition hover:border-navy-2 hover:text-navy-2"
         >
           <LogIn className="size-4" aria-hidden />
         </a>
@@ -148,7 +148,7 @@ export function EditorAccountMenu() {
   };
 
   const menuItem =
-    "flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-start text-[12px] font-bold hover:bg-line-2 dark:hover:bg-white/5";
+    "flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-start text-[12px] font-bold hover:bg-line-2";
 
   return (
     <>
@@ -169,8 +169,8 @@ export function EditorAccountMenu() {
         className={cn(
           "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border px-1.5 text-[12px] font-extrabold transition",
           open
-            ? "border-navy-2 text-navy-2 dark:border-gold-2 dark:text-gold-2"
-            : "border-line hover:border-navy-2 dark:border-white/15 dark:hover:border-gold-2",
+            ? "border-navy-2 text-brand-hover"
+            : "border-line hover:border-navy-2",
         )}
       >
         <AccountAvatar user={user} size={22} />
@@ -191,14 +191,14 @@ export function EditorAccountMenu() {
               aria-label="قائمة الحساب"
               onPointerDown={(e) => e.stopPropagation()}
               style={{ left: at.left, top: at.top, width: MENU_WIDTH }}
-              className="absolute grid gap-1 rounded-[10px] border border-line bg-white p-1.5 shadow-xl dark:border-white/10 dark:bg-[#161c26]"
+              className="absolute grid gap-1 rounded-[10px] border border-line bg-surface p-1.5 shadow-xl"
             >
               {/*
                * The identity block: the full name in the one place an author
                * goes to confirm WHICH account is editing, plus the licence
                * state the server resolved for it.
                */}
-              <div className="border-b border-line px-3 pb-2.5 pt-1.5 dark:border-white/10">
+              <div className="border-b border-line px-3 pb-2.5 pt-1.5">
                 <div className="flex items-center gap-2">
                   <AccountAvatar user={user} size={28} />
                   <div className="min-w-0">

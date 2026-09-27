@@ -39,7 +39,7 @@ export function AccountAvatar({
       aria-hidden
       style={style}
       className={cn(
-        "grid shrink-0 place-items-center rounded-full bg-navy leading-none font-extrabold text-white dark:bg-white/15 dark:text-gold-2",
+        "grid shrink-0 place-items-center rounded-full bg-navy leading-none font-extrabold text-on-brand",
         className,
       )}
     >

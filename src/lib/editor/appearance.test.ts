@@ -12,6 +12,7 @@ test("one preference drives live appearance, legacy migration and blocked-storag
   const events = new EventTarget();
   let dark = false;
   let blocked = false;
+  const meta: { content: string | null } = { content: null };
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   const originalDocument = Object.getOwnPropertyDescriptor(
     globalThis,
@@ -45,6 +46,11 @@ test("one preference drives live appearance, legacy migration and blocked-storag
           },
         },
       },
+      // The theme also repaints the browser chrome; stub the tag it writes to.
+      querySelector: (selector: string) =>
+        selector === 'meta[name="theme-color"]'
+          ? { setAttribute: (_: string, value: string) => (meta.content = value) }
+          : null,
     },
   });
   const seen: boolean[] = [];
@@ -63,11 +69,13 @@ test("one preference drives live appearance, legacy migration and blocked-storag
     );
     writeStoredTheme(true);
     assert.equal(dark, true);
+    assert.equal(meta.content, "#0f141c", "browser chrome follows the dark palette");
     const storage = new Event("storage");
     Object.defineProperty(storage, "key", { value: "nasaq-theme" });
     values.set("nasaq-theme", "light");
     events.dispatchEvent(storage);
     assert.equal(dark, false, "other tabs synchronize");
+    assert.equal(meta.content, "#006c35", "browser chrome follows the light palette");
     blocked = true;
     writeStoredTheme(true);
     assert.equal(

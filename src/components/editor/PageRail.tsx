@@ -79,7 +79,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
   };
 
   return (
-    <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-2 border-t px-2 py-1 bg-white dark:bg-[#161c26] overflow-hidden">
+    <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-2 border-t px-2 py-1 bg-surface overflow-hidden">
       <div className="flex shrink-0 flex-col justify-center gap-1">
         <button
           type="button"
@@ -93,7 +93,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
           type="button"
           onClick={() => duplicatePage()}
           title="نسخ الصفحة الحالية"
-          className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-line px-2.5 text-[11px] font-extrabold dark:border-white/10"
+          className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-line px-2.5 text-[11px] font-extrabold"
         >
           <Copy className="size-3.5" />
           نسخ
@@ -184,7 +184,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
                         if (e.key === "Escape") setRenaming(null);
                       }}
                       onClick={(e) => e.stopPropagation()}
-                      className="w-[86px] rounded border border-navy-2 px-1 text-[10px] font-bold dark:bg-white/5"
+                      className="w-[86px] rounded border border-navy-2 px-1 text-[10px] font-bold bg-surface-2"
                     />
                   ) : (
                     <span
@@ -213,7 +213,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
                   onPointerDown={startDrag(i)}
                   title="اسحب لإعادة الترتيب"
                   aria-label={`إعادة ترتيب ${p.name}`}
-                  className="drag-handle grid size-5 place-items-center rounded bg-white/90 text-muted shadow"
+                  className="drag-handle grid size-5 place-items-center rounded bg-surface-2 text-muted shadow"
                 >
                   <GripVertical className="size-3" />
                 </button>
@@ -223,7 +223,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
                     onClick={() => deletePage(p.id)}
                     title="حذف الصفحة"
                     aria-label={`حذف ${p.name}`}
-                    className="grid size-5 place-items-center rounded bg-white/90 text-danger shadow"
+                    className="grid size-5 place-items-center rounded bg-surface-2 text-error shadow"
                   >
                     <Trash2 className="size-3" />
                   </button>
