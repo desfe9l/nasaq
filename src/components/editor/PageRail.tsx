@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Copy, GripVertical, Plus, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, GripVertical, Plus, Trash2 } from "lucide-react";
 import { pageSize, type CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { clamp, cn } from "@/lib/utils";
@@ -13,6 +13,24 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
   const deletePage = useEditor((s) => s.deletePage);
   const reorderPages = useEditor((s) => s.reorderPages);
   const renamePage = useEditor((s) => s.renamePage);
+
+  const activeIndex = pages.findIndex((p) => p.id === activePageId);
+  const activatePage = (index: number) => {
+    const page = pages[index];
+    if (!page) return;
+    setActivePage(page.id);
+    requestAnimationFrame(() => {
+      document
+        .querySelector(`[data-page-id="${CSS.escape(page.id)}"]`)
+        ?.closest(".artboard-cell")
+        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+      itemRefs.current[page.id]?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+    });
+  };
 
   const thumbBox = (ratio: number) => {
     const chrome = 44;
@@ -100,6 +118,17 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
         </button>
       </div>
 
+      <button
+        type="button"
+        className="page-rail-nav grid size-9 shrink-0 place-items-center rounded-[8px] border border-line text-muted disabled:cursor-not-allowed disabled:opacity-35"
+        onClick={() => activatePage(activeIndex - 1)}
+        disabled={activeIndex <= 0}
+        aria-label="الصفحة السابقة"
+        title="الصفحة السابقة"
+      >
+        <ChevronRight className="size-4" aria-hidden />
+      </button>
+
       <ul className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto overflow-y-hidden px-1 py-1 editor-pane-scroll" dir="rtl" >
         {pages.map((p, i) => {
           const size = pageSize(p);
@@ -127,10 +156,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
                 type="button"
                 aria-label={`${p.name} ${i + 1}`}
                 onClick={() => {
-                  setActivePage(p.id);
-                  requestAnimationFrame(() => {
-                    document.querySelector(`[data-page-id="${CSS.escape(p.id)}"]`)?.closest(".artboard-cell")?.scrollIntoView({ block: "nearest", inline: "nearest" });
-                  });
+                  activatePage(i);
                 }}
                 onDoubleClick={() => {
                   setActivePage(p.id);
@@ -233,6 +259,17 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
           );
         })}
       </ul>
+
+      <button
+        type="button"
+        className="page-rail-nav grid size-9 shrink-0 place-items-center rounded-[8px] border border-line text-muted disabled:cursor-not-allowed disabled:opacity-35"
+        onClick={() => activatePage(activeIndex + 1)}
+        disabled={activeIndex < 0 || activeIndex >= pages.length - 1}
+        aria-label="الصفحة التالية"
+        title="الصفحة التالية"
+      >
+        <ChevronLeft className="size-4" aria-hidden />
+      </button>
     </div>
   );
 }

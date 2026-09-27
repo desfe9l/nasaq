@@ -939,13 +939,23 @@ export function CanvasStage({
 
   // Geometry is relative to each artboard, NOT bounded by it. Rendering and
   // export clipping stay unchanged; visible workspace overflow remains usable.
-  const workspaceHit = (x: number, y: number) => {
+  /**
+   * Resolve the topmost editable object at a screen point. Alt/Option-click
+   * deliberately advances through the hit stack, which gives desktop users a
+   * direct path to artwork behind another object without opening a context menu
+   * or temporarily changing layer order.
+   */
+  const workspaceHit = (x: number, y: number, cycle = false) => {
     for (const page of [...visible].reverse()) {
       const node = pageRefs.current[page.id];
       if (!node) continue;
       const point = pagePoint(node.getBoundingClientRect(), pageSize(page), x, y);
       const hits = elementsAtPoint(page, enteredGroupId, point.x, point.y).filter(el => !el.locked);
-      const el = hits.find(el => selectedSet.has(el.id)) || hits[0];
+      let el = hits.find(el => selectedSet.has(el.id)) || hits[0];
+      if (cycle && hits.length > 1) {
+        const selectedIndex = hits.findIndex((item) => selectedSet.has(item.id));
+        el = hits[(selectedIndex + 1 + hits.length) % hits.length] || hits[0];
+      }
       if (el) {
         const group = enteredGroupId ? findElement(page.elements, enteredGroupId)?.el : null;
         return { page, el, parent: group ? { x: group.x, y: group.y } : undefined };
@@ -989,7 +999,8 @@ export function CanvasStage({
         // Handles keep first refusal. Geometry then resolves selected artwork
         // ahead of other elements, including overflow outside the page DOM box.
         if (e.button === 0 && !target.closest(".handle, .rotate-handle")) {
-          const hit = workspaceHit(e.clientX, e.clientY);
+          if (e.altKey) e.preventDefault();
+          const hit = workspaceHit(e.clientX, e.clientY, e.altKey);
           if (hit) startOp(e, hit.page, hit.el, "move", undefined, hit.parent);
         }
       }}

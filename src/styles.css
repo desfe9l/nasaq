@@ -3751,6 +3751,7 @@ summary,
 }
 @media (any-pointer: coarse) {
   .editor-page-rail > div > button { min-height: 44px; }
+  .editor-page-rail .page-rail-nav { width: 44px; height: 44px; }
   .page-rail-actions button { width: 44px; height: 44px; }
   .editor-panel-tab { min-width: 44px; min-height: 44px; flex-shrink: 0; }
   .editor-panel-tabs { scrollbar-width: thin; }
