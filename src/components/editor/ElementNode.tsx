@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useId } from "react";
 import { ICONS, cssFont, parseTable, type CanvasEl } from "@/lib/editor/model";
 import {
   prepareText,
@@ -44,6 +44,8 @@ interface Props {
    * context, which is correct for single-page consumers.
    */
   pageNo?: number;
+  /** Siblings in this page/group, never the active page of another canvas. */
+  siblings?: CanvasEl[];
 }
 
 /** Types whose text can be edited in place with a double click. */
@@ -62,6 +64,7 @@ export function ElementNode({
   onPointerDown,
   onEnterGroup,
   pageNo,
+  siblings,
 }: Props & { onEnterGroup?: () => void }) {
   const updateElement = useEditor((s) => s.updateElement);
   const fitTextBox = useEditor((s) => s.fitTextBox);
@@ -76,7 +79,7 @@ export function ElementNode({
    */
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
-  const activeElements = pages.find((p) => p.id === activePageId)?.elements ?? [];
+  const activeElements = siblings ?? (pageNo ? pages[pageNo - 1] : pages.find((p) => p.id === activePageId))?.elements ?? [];
   const maskShape = el.clippedBy
     ? activeElements.find((m) => m.id === el.clippedBy && (m.type === "shape" || m.type === "svg"))
     : null;
@@ -90,7 +93,8 @@ export function ElementNode({
    * contents the moment they carry an SVG `transform`; the placement therefore
    * happens in the coordinates themselves (shape-affine.ts).
    */
-  const clipId = `nasaq-clip-${el.id}`;
+  const instanceId = useId().replace(/:/g, "");
+  const clipId = `nasaq-clip-${instanceId}`;
   const clipPath = maskShape ? `url(#${clipId})` : undefined;
   const maskDef = maskShape && maskShape.type === "shape" ? shapeDef(shapeIdOf(maskShape.style)) : undefined;
   /** Fractions of the masked element's own box (objectBoundingBox units). */
@@ -183,7 +187,7 @@ export function ElementNode({
   return (
     <div
       data-el-id={el.id}
-      className={cn("canvas-el", el.locked && "locked")}
+      className={cn("canvas-el", interactive && el.locked && "locked")}
       style={{
         left: `${el.x}mm`,
         top: `${el.y}mm`,
@@ -236,6 +240,8 @@ export function ElementNode({
         textRef={textRef}
         onBlur={finishEdit}
         onKeyDown={handleEditKey}
+        siblings={activeElements}
+        interactive={interactive}
         pageRef={pageNo ? { number: pageNo, count: pages.length } : undefined}
       />
     </div>
@@ -248,12 +254,16 @@ function ElementContent({
   onBlur,
   onKeyDown,
   pageRef,
+  siblings,
+  interactive,
 }: {
   el: CanvasEl;
   textRef: React.RefObject<HTMLDivElement | null>;
   onBlur: () => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLElement>) => void;
   pageRef?: PageContext;
+  siblings: CanvasEl[];
+  interactive: boolean;
 }) {
   const s = el.style || {};
   /*
@@ -262,9 +272,7 @@ function ElementContent({
    * hide the very picture it cuts. The author's own border is kept; when there
    * is none, a dashed hairline marks the mask so it stays findable on canvas.
    */
-  const masking = useEditor((st) =>
-    (st.pages.find((p) => p.id === st.activePageId)?.elements ?? []).some((m) => m.clippedBy === el.id),
-  );
+  const masking = siblings.some((m) => m.clippedBy === el.id);
   const maskOutline = masking && !(Number(s.borderWidth) > 0);
   const prepared = prepareText(el, pageRef);
   const vertical = s.writingMode === "vertical";
@@ -530,6 +538,8 @@ function ElementContent({
               key={child.id}
               el={{ ...child, hidden: child.hidden }}
               interactive={false}
+              pageNo={pageRef?.number}
+              siblings={el.children || []}
               onPointerDown={() => {}}
             />
           ))}
@@ -542,7 +552,7 @@ function ElementContent({
       <ShapeGlyph
         style={s}
         fill={masking ? "none" : s.fill || "#006c35"}
-        stroke={maskOutline ? "var(--color-gold)" : s.borderColor || "transparent"}
+        stroke={maskOutline ? (interactive ? "var(--color-gold)" : "transparent") : s.borderColor || "transparent"}
         borderWidthMm={maskOutline ? 0.25 : Number(s.borderWidth) || 0}
         strokeDasharray={maskOutline ? "2 2" : undefined}
         dash={!maskOutline && s.borderDash === true}

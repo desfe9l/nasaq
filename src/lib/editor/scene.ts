@@ -108,6 +108,8 @@ export interface SceneLine {
 }
 
 export interface SceneImage {
+  /** Selection-pane name for materialized fidelity layers. */
+  name?: string;
   kind: "image";
   x: number;
   y: number;
@@ -569,10 +571,14 @@ export function buildScenePage(page: Page, pageRef?: PageContext): ScenePage {
  * Each page is rendered with its own page number so a Word/PowerPoint export
  * carries the same «صفحة n من m» the canvas shows.
  */
-export function buildScene(pages: Page[]): ScenePage[] {
-  return pages.map((page, index) =>
-    buildScenePage(page, { number: index + 1, count: pages.length }),
-  );
+export function buildScene(pages: Page[], documentPages: Page[] = pages): ScenePage[] {
+  return pages.map((page, index) => {
+    const documentIndex = documentPages.findIndex((candidate) => candidate.id === page.id);
+    return buildScenePage(page, {
+      number: (documentIndex < 0 ? index : documentIndex) + 1,
+      count: documentPages.length,
+    });
+  });
 }
 
 /** Every distinct font family in a scene, so a writer can declare them up front. */

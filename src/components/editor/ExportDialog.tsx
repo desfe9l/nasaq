@@ -1,4 +1,4 @@
-import { useMemo, useState, lazy, Suspense } from "react";
+import { useEffect, useMemo, useState, lazy, Suspense } from "react";
 import {
   FileDown,
   FileText,
@@ -48,8 +48,9 @@ const FORMATS: { id: ExportFormat; title: string; desc: string; icon: typeof Fil
   { id: "pdf", title: "PDF", desc: "طباعة وأرشفة رسمية · 300 DPI", icon: FileDown },
   { id: "png", title: "PNG", desc: "دقة عالية بلا فقدان", icon: ImageIcon },
   { id: "jpg", title: "JPG", desc: "حجم أصغر للصور", icon: ImageIcon },
-  { id: "pptx", title: "PowerPoint", desc: "شرائح قابلة للتعديل", icon: Presentation },
-  { id: "docx", title: "Word", desc: "نصوص وجداول قابلة للتعديل", icon: FileText },
+  { id: "pptx", title: "PowerPoint", desc: "طبقات مطابقة أو عناصر قابلة للتحرير", icon: Presentation },
+  { id: "docx", title: "Word", desc: "طبقات مطابقة أو نصوص قابلة للتحرير", icon: FileText },
+  { id: "svg", title: "SVG للويب", desc: "خطوط وصور مضمنة · محرك المتصفح", icon: FileCode2 },
   { id: "html", title: "HTML مستقل", desc: "ملف واحد قابل للطباعة", icon: FileCode2 },
   { id: "nsq", title: "ملف نَسَق (.nsq)", desc: "مشروع قابل للتحرير على أي جهاز", icon: FileArchive },
   { id: "json", title: "JSON احتياطي", desc: "نسخة احتياطية بالصيغة القديمة", icon: FileJson },
@@ -95,7 +96,7 @@ export function ExportDialog() {
   const [quality, setQuality] = useState<number>(2);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [scope, setScope] = useState<"all" | "current">("all");
-  const [editableOffice, setEditableOffice] = useState(true);
+  const [editableOffice, setEditableOffice] = useState(false);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +118,9 @@ export function ExportDialog() {
   const { user, isPending } = useCurrentUserState();
   const [signInOpen, setSignInOpen] = useState(false);
   const guestNeedsSignIn = authEnabled && !isPending && !user;
+
+  // Never show a cached preview after page edits, range or render-mode changes.
+  useEffect(() => { setPreviewPages([]); }, [pages, scope, activePageId, format, quality, editableOffice, open]);
 
   if (!open) return null;
 
@@ -205,6 +209,7 @@ export function ExportDialog() {
         { version, name, theme, orgName, pages, defaultSize: undefined },
         selected,
         editableOffice,
+        captureScale,
       );
       toggle("exportOpen");
     } catch (err) {
@@ -227,7 +232,7 @@ export function ExportDialog() {
         return [{ node, w: size.w, h: size.h }];
       });
       if (targets.length !== selected.length) throw new Error("تعذر تجهيز معاينة التصدير");
-      setPreviewPages(await capturePages(targets, Math.min(2, captureScale), undefined, 0));
+      setPreviewPages(await capturePages(targets, captureScale, undefined, 0));
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تجهيز المعاينة");
     } finally {
@@ -258,7 +263,7 @@ export function ExportDialog() {
           </div>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || previewBusy}
             className="grid size-9 place-items-center rounded-[8px] border border-line disabled:opacity-40 dark:border-white/10"
             onClick={() => toggle("exportOpen")}
             aria-label="إغلاق"
@@ -341,7 +346,7 @@ export function ExportDialog() {
                   </strong>
                   <span className="text-[11px] leading-4 text-muted">
                     النصوص والجداول والأشكال تُصدَّر كعناصر حقيقية يمكن تعديلها داخل البرنامج.
-                    ألغِ التحديد لتصدير صورة مطابقة تمامًا للتصميم.
+                    قد تختلف الخطوط وتوزيع النص داخل Office. ألغِ التحديد للمطابقة البصرية: طبقات PNG شفافة مستقلة، والنصوص غير قابلة لتحرير الحروف.
                   </span>
                 </span>
               </label>
@@ -521,7 +526,7 @@ export function ExportDialog() {
             </button>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || previewBusy}
               onClick={() => void run()}
               className="h-11 flex-1 rounded-[10px] bg-navy text-[14px] font-extrabold text-white disabled:opacity-50"
             >
@@ -529,7 +534,7 @@ export function ExportDialog() {
             </button>
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || previewBusy}
               onClick={() => toggle("exportOpen")}
               className="h-11 rounded-[10px] border border-line px-4 text-[13px] font-bold disabled:opacity-40 dark:border-white/10"
             >
@@ -555,7 +560,7 @@ export function ExportDialog() {
           <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-label="معاينة التصدير">
             <div className="flex max-h-[92vh] w-full max-w-4xl flex-col rounded-[12px] border border-line bg-white p-4 dark:border-white/10 dark:bg-[#303132]">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div><h3 className="text-[15px] font-extrabold">معاينة التصدير</h3><p className="text-[11px] text-muted">{previewPages.length} صفحة · مطابقة لمقاس المستند</p></div>
+                <div><h3 className="text-[15px] font-extrabold">معاينة التصدير</h3><p className="text-[11px] text-muted">{previewPages.length} صفحة · {OFFICE_FORMATS.has(format) && editableOffice ? "معاينة التصميم؛ قد يختلف توزيع النص في وضع التحرير داخل Office" : "محرك الرسم نفسه · 96 DPI للأبعاد"}</p></div>
                 <button type="button" onClick={() => setPreviewPages([])} className="grid size-8 place-items-center rounded-[7px] border border-line dark:border-white/10" title="إغلاق المعاينة" aria-label="إغلاق المعاينة"><X className="size-4" /></button>
               </div>
               <div className="editor-pane-scroll min-h-0 flex-1 overflow-auto rounded-[8px] bg-[#252627] p-4">

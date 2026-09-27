@@ -147,7 +147,7 @@ export type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 
 /** Export formats the studio can produce (mirrors `export.ts`). */
 export type ExportPreset =
-  "pdf" | "png" | "jpg" | "docx" | "pptx" | "html" | "json" | "nsq";
+  "pdf" | "png" | "jpg" | "docx" | "pptx" | "html" | "svg" | "json" | "nsq";
 
 /**
  * Where a right-click menu was opened from.
