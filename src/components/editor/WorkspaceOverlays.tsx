@@ -43,7 +43,7 @@ import {
 } from "lucide-react";
 import { useEditor, type ContextMenuPoint } from "@/lib/editor/store";
 import { normalizeFade } from "@/lib/editor/fade";
-import { findElement } from "@/lib/editor/model";
+import { elementsBounds, findElement } from "@/lib/editor/model";
 import type { PrintGuideSettings } from "@/lib/editor/print-guides";
 import { cn } from "@/lib/utils";
 
@@ -837,21 +837,34 @@ export function WorkspaceStatusBar() {
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
   const selectedIds = useEditor((s) => s.selectedIds);
+  const selectedElements = useEditor((s) => s.selectedElements);
   const page = pages.find((item) => item.id === activePageId);
+  const pageIndex = pages.findIndex((item) => item.id === activePageId);
+  const selectionBounds = elementsBounds(selectedElements());
+  const selectionLabel = selectionBounds
+    ? `${Math.round(selectionBounds.w * 10) / 10} × ${Math.round(selectionBounds.h * 10) / 10} مم`
+    : null;
   return (
     <div
       data-editor-obstacle="status-bar"
       className="editor-status-bar flex h-7 shrink-0 items-center justify-between gap-3 border-t px-3 text-[10px] tabular-nums"
     >
-      <span className="selectable-value min-w-0 truncate">
+      <span className="selectable-value min-w-0 truncate" aria-label="معلومات الصفحة">
         {page?.name || "صفحة"}
+        {pageIndex >= 0 ? ` · ${pageIndex + 1}/${pages.length}` : ""}
         {page
           ? ` · ${Math.round(page.w || 210)} × ${Math.round(page.h || 297)} مم`
           : ""}
         {page ? ` · ${page.elements.length} عنصر` : ""}
       </span>
-      <span className="selectable-value">
-        {selectedIds.length ? `${selectedIds.length} محدد` : "لا يوجد تحديد"}
+      <span
+        className="selectable-value min-w-0 truncate"
+        aria-live="polite"
+        aria-label="معلومات التحديد"
+      >
+        {selectedIds.length
+          ? `${selectedIds.length} محدد${selectionLabel ? ` · ${selectionLabel}` : ""}`
+          : "لا يوجد تحديد"}
       </span>
       <span className="flex items-center gap-1">
         {GUIDE_TOGGLES.map((guide) => (
