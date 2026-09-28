@@ -12,6 +12,7 @@ import {
   LayoutTemplate,
   Loader2,
   Lock,
+  BadgeCheck,
   Pencil,
   Plus,
   Save,
@@ -548,12 +549,13 @@ export function AdminTemplatesPanel() {
                       </span>
                       <span
                         className={cn(
-                          "rounded px-1.5 py-0.5",
+                          "inline-flex items-center gap-1 rounded px-1.5 py-0.5",
                           t.tier === "licensed"
-                            ? "bg-gold/15 text-warning"
-                            : "bg-ok/10 text-success",
+                            ? "border border-gold/30 border-dashed bg-gold/15 text-ink"
+                            : "border border-brand/25 bg-navy/10 text-brand",
                         )}
                       >
+                        {t.tier === "licensed" ? <Lock className="size-2.5" /> : <BadgeCheck className="size-2.5" />}
                         {t.tier === "licensed" ? "مرخّص" : "مجاني"}
                       </span>
                       <span className="rounded bg-line-2 px-1.5 py-0.5">

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { LayoutTemplate, Share2, Lock, Crown, FileText, ArrowLeft, Copy, Check, Sparkles, Eye } from "lucide-react";
+import { LayoutTemplate, Share2, Lock, FileText, ArrowLeft, Copy, Check, Sparkles, Eye } from "lucide-react";
+import { LicenseBadge, LicenseBadgeIcon } from "./LicenseBadge";
 import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { getPublishedTemplateFn, getPublishedTemplateMetaFn } from "@/lib/admin/functions";
-import { publishedTemplatePath, templateDisplaySlug, publishedTemplateAbsoluteUrl } from "@/lib/templates/published";
+import { templateDisplaySlug, publishedTemplateAbsoluteUrl } from "@/lib/templates/published";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useLicense } from "@/lib/license/client";
 import { useEditor } from "@/lib/editor/store";
@@ -213,10 +214,7 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
                   {categoryLabel(template.category)}
                 </span>
                 {isLicensed && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-gold/15 px-3 py-1 text-[11px] font-extrabold text-warning shadow-sm">
-                    <Crown className="size-3.5" />
-                    النسخة الكاملة
-                  </span>
+                  <LicenseBadgeIcon state="locked" title="هذا القالب متاح في النسخة الكاملة" />
                 )}
               </div>
 
@@ -272,9 +270,7 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
                 <span className="rounded-full border border-line px-3 py-1 text-[11px] font-bold text-muted">
                   {categoryLabel(template.category)}
                 </span>
-                <span className="rounded-full border border-line px-3 py-1 text-[11px] font-bold text-muted">
-                  {isLicensed ? "مرخص" : "مجاني"}
-                </span>
+                <LicenseBadge state={isLicensed ? "locked" : "licensed"} size="sm" title={isLicensed ? "هذا القالب متاح في النسخة الكاملة" : "هذا القالب متاح لجميع المستخدمين"} />
               </div>
             </div>
           </div>
@@ -317,7 +313,7 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
                 {needsLicense ? (
                   <div className="rounded-xl border border-gold/30 bg-gold/10 p-4">
                     <div className="flex items-start gap-3">
-                      <Lock className="mt-0.5 size-4 text-warning" />
+                      <Lock className="mt-0.5 size-4 shrink-0 text-warning" strokeWidth={2.25} />
                       <div>
                         <p className="text-[13px] font-bold text-ink">هذا القالب ضمن النسخة الكاملة</p>
                         <p className="mt-1 text-[12px] leading-6 text-muted">

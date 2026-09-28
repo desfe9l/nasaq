@@ -15,6 +15,7 @@ import {
   Lock,
   LogIn,
 } from "lucide-react";
+import { LicenseBadgeIcon } from "@/components/site/LicenseBadge";
 import { capturePages, runExport, safeFileName, type CapturedPage, type ExportFormat } from "@/lib/editor/export";
 import { pageSize } from "@/lib/editor/model";
 import {
@@ -322,8 +323,8 @@ export function ExportDialog() {
                     {f.desc}
                   </span>
                   {locked && (
-                    <span className="mt-1.5 inline-flex items-center gap-1 rounded-full border border-brand bg-ok/10 px-1.5 py-0.5 text-[10px] font-extrabold text-success">
-                      🔒 النسخة الكاملة
+                    <span className="mt-1.5">
+                      <LicenseBadgeIcon state="locked" title="متاح في النسخة الكاملة — اضغط للترقية" />
                     </span>
                   )}
                 </button>
@@ -373,9 +374,9 @@ export function ExportDialog() {
                     <button
                       type="button"
                       onClick={() => setUpgradeOpen(true)}
-                      className="inline-flex items-center gap-1 text-[11px] font-extrabold text-success hover:underline"
+                      className="inline-flex items-center gap-1 text-[11px] font-extrabold text-brand hover:underline"
                     >
-                      <Lock className="size-3" />
+                      <Lock className="size-3" strokeWidth={2.25} />
                       300 DPI للطباعة — النسخة الكاملة
                     </button>
                   </div>

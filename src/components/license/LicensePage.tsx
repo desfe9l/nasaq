@@ -11,14 +11,12 @@ import { useCurrentUser } from "@/lib/auth/use-current-user";
 import { BRAND } from "@/lib/brand";
 import {
   Shield,
-  CheckCircle2,
   Key,
   ArrowLeft,
   Clock3,
-  Crown,
   Zap,
   Lock,
-  Unlock,
+  BadgeCheck,
 } from "lucide-react";
 import type { LicenseType, FeatureId } from "@/lib/license/types";
 import { FEATURE_LABELS, LICENSE_TYPE_LABELS } from "@/lib/license/types";
@@ -26,10 +24,10 @@ import { FEATURE_LABELS, LICENSE_TYPE_LABELS } from "@/lib/license/types";
 // ── Plan Display Config ────────────────────────────────────────────────────
 
 const PLAN_CONFIG: Record<LicenseType, { icon: typeof Shield; color: string; bg: string }> = {
-  FREE: { icon: Lock, color: "text-muted", bg: "bg-line-2" },
+  FREE: { icon: Lock, color: "text-ink", bg: "bg-gold/10" },
   TRIAL: { icon: Zap, color: "text-brand", bg: "bg-surface-2" },
-  PRO: { icon: Crown, color: "text-brand", bg: "bg-ok/10" },
-  LIFETIME: { icon: Crown, color: "text-warning", bg: "bg-gold/15" },
+  PRO: { icon: BadgeCheck, color: "text-brand", bg: "bg-navy/10" },
+  LIFETIME: { icon: BadgeCheck, color: "text-warning", bg: "bg-gold/15" },
 };
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -98,8 +96,8 @@ export default function LicensePage() {
           </div>
           <div className="flex items-center gap-2">
             {isAdmin || (hasLicense && license?.status === "ACTIVE") ? (
-              <span className="flex items-center gap-1 rounded-full bg-ok/10 px-3 py-1 text-xs font-bold text-success">
-                <CheckCircle2 className="size-3" />
+              <span className="flex items-center gap-1 rounded-full border border-brand/25 bg-navy/10 px-3 py-1 text-xs font-bold text-brand">
+                <BadgeCheck className="size-3" strokeWidth={2.25} />
                 {isAdmin ? "وصول إداري" : "نشط"}
               </span>
             ) : (
@@ -199,11 +197,11 @@ export default function LicensePage() {
                 }`}
               >
                 {enabled ? (
-                  <Unlock className="mt-0.5 size-4 shrink-0 text-brand" />
+                  <BadgeCheck className="mt-0.5 size-4 shrink-0 text-brand" strokeWidth={2.25} />
                 ) : comingSoon ? (
                   <Clock3 className="mt-0.5 size-4 shrink-0 text-warning" />
                 ) : (
-                  <Lock className="mt-0.5 size-4 shrink-0 text-muted" />
+                  <Lock className="mt-0.5 size-4 shrink-0 text-ink" strokeWidth={2.25} />
                 )}
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
