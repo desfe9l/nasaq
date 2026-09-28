@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Briefcase, FileText, LayoutTemplate, Table2, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Briefcase, FileText, LayoutTemplate, Table2, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool } from "lucide-react";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
@@ -13,6 +13,7 @@ import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 import { WORKSPACE_HOME_PATH, openNewDocumentFlow, useWorkspaceEntry } from "@/lib/auth/use-workspace-entry";
 import { ProjectFileButton } from "@/components/site/ProjectFileButton";
 import { LicenseBadge } from "@/components/site/LicenseBadge";
+import { PricingSection } from "@/components/site/PricingSection";
 
 const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
   { icon: LayoutTemplate, title: PRODUCT_COPY.capabilities[0][0], desc: PRODUCT_COPY.capabilities[0][1] },
@@ -45,6 +46,16 @@ export function HomePage() {
     if (workspace.licensed) openNewDocumentFlow();
     else if (entry.direct) void openNewDocument();
     else window.location.assign("/demo");
+  };
+  /**
+   * «ابدأ مجانًا» — the free plan's action button in the pricing section.
+   * Same door as the hero call-to-action: a licensed account lands on its Home,
+   * anyone else enters the editor (`/demo` for a visitor with no session).
+   */
+  const startFree = () => {
+    if (!workspace.ready || !entry.ready) return;
+    if (workspace.licensed) window.location.assign(WORKSPACE_HOME_PATH);
+    else window.location.assign(entry.href);
   };
   const { texts } = useSiteSettings();
 
@@ -252,38 +263,8 @@ export function HomePage() {
           </div>
         </section>
 
-        {/* الخطط باختصار */}
-        <section className="bg-page py-12 sm:py-14">
-          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-            <div className="flex flex-wrap items-end justify-between gap-4">
-              <div>
-                <p className="text-[11px] font-bold tracking-[0.14em] text-brand">الخطط والتراخيص</p>
-                <h2 className="mt-2 text-[20px] font-bold text-ink">اختر الخطة المناسبة</h2>
-              </div>
-              <a href="/purchase" className="text-[13px] font-bold text-brand transition hover:text-brand-hover hover:underline">عرض جميع الباقات</a>
-            </div>
-            <div className="mt-6 grid gap-4 md:grid-cols-3">
-              {[
-                { name: "مجاني", price: "0 ر.س", desc: "للتقييم والبدء", features: ["أدوات أساسية", "حفظ محلي", "تصدير 72 DPI"] },
-                { name: "فردي — Pro", price: "199 ر.س / 3 أشهر", desc: "للمصممين والأفراد", features: ["تصدير حتى 384 DPI", "كل الصيغ", "قوالب وهوية كاملة"] },
-                { name: "فريق — Team", price: "499 ر.س / 3 أشهر", desc: "للفرق", features: ["كل مزايا Pro", "مساحة عمل مشتركة", "دعم بأولوية"] },
-              ].map((p, i) => (
-                <div key={p.name} className={`rounded-[14px] border p-5 transition-all duration-200 hover:shadow-card ${i === 2 ? "border-brand/20 bg-ok/10" : "border-line/70 bg-surface-2"}`}>
-                  <h3 className="text-[14px] font-bold text-ink">{p.name}</h3>
-                  <p className="mt-1 text-[11px] text-muted">{p.desc}</p>
-                  <p className="mt-3 text-[20px] font-extrabold text-ink">{p.price}</p>
-                  <ul className="mt-3 grid gap-1.5">
-                    {p.features.map((f) => (
-                      <li key={f} className="flex items-center gap-2 text-[12px] text-muted">
-                        <CheckCircle2 className="size-3.5 text-brand" /> {f}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+        {/* الخطط والأسعار — مفتاح الفوترة وبطاقات قابلة للشراء */}
+        <PricingSection onStartFree={startFree} />
       </main>
       <SiteFooter />
       <FullVersionModal open={modalOpen} onClose={() => setModalOpen(false)} />
