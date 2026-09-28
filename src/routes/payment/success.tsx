@@ -67,7 +67,7 @@ export default function PaymentSuccessPage() {
               <CheckCircle2 className="mx-auto size-10 text-brand" aria-hidden />
               <h1 className="mt-4 text-2xl font-extrabold text-success">تم تفعيل اشتراكك</h1>
               <p className="mt-3 text-sm leading-7 text-muted">
-                تحقّق النظام من عملية الدفع في Gumroad خادميًا، وأصدر ترخيص Keygen وربطه بحسابك.
+                تم التحقق من عملية الدفع وإصدار الترخيص الرقمي وربطه بحسابك.
                 {planName ? <> الباقة المفعّلة: <span className="font-extrabold text-ink">{planName}</span>.</> : null}
                 {expiresAt ? <> سارية حتى <span className="font-extrabold" dir="ltr">{new Date(expiresAt).toLocaleDateString("ar-SA")}</span>.</> : null}
               </p>
@@ -95,7 +95,7 @@ export default function PaymentSuccessPage() {
               <Loader2 className="mx-auto size-10 animate-spin text-brand" aria-hidden />
               <h1 className="mt-4 text-2xl font-extrabold">جارٍ تأكيد الاشتراك…</h1>
               <p className="mt-3 text-sm leading-7 text-muted">
-                وصلتنا عودتك من Gumroad. يجري التحقق من العملية وإصدار ترخيص Keygen على الخادم،
+                وصلتنا عودتك من صفحة الدفع. يجري التحقق من العملية وإصدار الترخيص على الخادم،
                 وقد يستغرق ذلك لحظات. لا تعتمد هذه الصفحة على معاملات الرابط؛ ستظهر حالة التفعيل هنا فور اكتمالها.
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
