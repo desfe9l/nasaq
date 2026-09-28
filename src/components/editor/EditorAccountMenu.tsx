@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronDown,
@@ -13,7 +13,13 @@ import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
 import { AccountAvatar } from "@/components/site/AccountAvatar";
-import { AccountBadge, useAccountTier } from "@/components/site/AccountBadge";
+import { useAccountTier } from "@/components/site/AccountBadge";
+import {
+  AccountMenuPanel,
+  accountMenuItemClass,
+  accountMenuItemMutedClass,
+  useAccountMenuPlacement,
+} from "@/components/site/AccountMenuPanel";
 import { cn } from "@/lib/utils";
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { NewDocumentDialog } from "@/components/site/NewDocumentDialog";
@@ -29,22 +35,11 @@ import { NewDocumentDialog } from "@/components/site/NewDocumentDialog";
  *
  * Deliberately compact: an avatar plus the account name. The toolbar is one
  * line at every width, so the licence badge and the full identity live in the
- * menu that opens from it rather than in the strip itself.
+ * card that opens from it rather than in the strip itself. The card itself is
+ * shared with the site chrome (`AccountMenuPanel`) — geometry included — and is
+ * portalled to `<body>` and measured from the TOOLBAR's bottom edge, so a
+ * wrapped toolbar row can never end up under the card.
  */
-
-const MENU_WIDTH = 252;
-
-/**
- * The licence badge for a signed-in account.
- *
- * Its own component so `useAccountTier` (→ `useLicense`) only mounts while the
- * menu is open: the hook has to be called unconditionally, and the collapsed
- * chip does not need a status round trip on every editor load.
- */
-function MenuBadge({ user }: { user: AppUser }) {
-  const tier = useAccountTier(user);
-  return <AccountBadge tier={tier} />;
-}
 
 /**
  * «مستند جديد» — opens the new-document configuration without leaving the
@@ -54,21 +49,13 @@ function MenuBadge({ user }: { user: AppUser }) {
  * (`useAccountTier` → `getLicenseStatusFn`), and the store's own entitlement
  * ceiling still applies underneath (`createDocument`), so the item can never
  * widen free-tier access. Its own component so `useAccountTier` mounts only
- * while the menu is open for a real session, exactly like `MenuBadge`.
+ * while the card is open for a real session.
  */
-function NewDocumentMenuItem({
-  user,
-  className,
-  onRequest,
-}: {
-  user: AppUser;
-  className: string;
-  onRequest: () => void;
-}) {
+function NewDocumentMenuItem({ user, onRequest }: { user: AppUser; onRequest: () => void }) {
   const tier = useAccountTier(user);
   if (tier !== "LICENSED" && tier !== "ADMIN") return null;
   return (
-    <button type="button" role="menuitem" onClick={onRequest} className={className}>
+    <button type="button" role="menuitem" onClick={onRequest} className={accountMenuItemClass}>
       <FilePlus2 className="size-4 opacity-70" aria-hidden />
       مستند جديد
     </button>
@@ -79,27 +66,32 @@ export function EditorAccountMenu() {
   const { user, isPending } = useCurrentUserState();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
   const [newDocOpen, setNewDocOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const { placement, place, reset } = useAccountMenuPlacement({ triggerRef: buttonRef });
+
+  /** Closing forgets the measurement too, so a stale card can never reopen. */
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    reset();
+  }, [reset]);
 
   useEffect(() => {
     if (!open) return;
-    const close = () => setOpen(false);
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") closeMenu();
     };
     window.addEventListener("keydown", onKey);
-    window.addEventListener("resize", close);
+    window.addEventListener("resize", closeMenu);
     // The toolbar strip scrolls horizontally, which would strand a menu that
     // stays anchored to where the chip used to be.
-    window.addEventListener("scroll", close, true);
+    window.addEventListener("scroll", closeMenu, true);
     return () => {
       window.removeEventListener("keydown", onKey);
-      window.removeEventListener("resize", close);
-      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", closeMenu);
+      window.removeEventListener("scroll", closeMenu, true);
     };
-  }, [open]);
+  }, [open, closeMenu]);
 
   // Same rule as the site chrome: nothing renders until the session resolves,
   // so a signed-in author never sees a sign-in prompt flash on reload.
@@ -109,12 +101,7 @@ export function EditorAccountMenu() {
    * The divider travels with the control (rather than sitting in the toolbar)
    * so a header without an account area has no orphan separator in it.
    */
-  const divider = (
-    <span
-      className="mx-0.5 h-6 w-px shrink-0 bg-line"
-      aria-hidden
-    />
-  );
+  const divider = <span className="mx-0.5 h-6 w-px shrink-0 bg-line" aria-hidden />;
 
   if (!user) {
     return (
@@ -134,21 +121,11 @@ export function EditorAccountMenu() {
 
   const identity = accountIdentity(user);
 
+  /** Measure first, then open: the card's first paint is already placed. */
   const openMenu = () => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (!rect) {
-      setOpen(true);
-      return;
-    }
-    setAt({
-      left: Math.max(8, Math.min(rect.left, window.innerWidth - MENU_WIDTH - 8)),
-      top: rect.bottom + 6,
-    });
+    if (!place()) return;
     setOpen(true);
   };
-
-  const menuItem =
-    "flex w-full items-center gap-2 rounded-[8px] px-3 py-2 text-start text-[12px] font-bold hover:bg-line-2";
 
   return (
     <>
@@ -164,13 +141,11 @@ export function EditorAccountMenu() {
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={`حساب ${identity.label}`}
-        onClick={openMenu}
+        onClick={() => (open ? closeMenu() : openMenu())}
         title={identity.label}
         className={cn(
           "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border px-1.5 text-[12px] font-extrabold transition",
-          open
-            ? "border-navy-2 text-brand-hover"
-            : "border-line hover:border-navy-2",
+          open ? "border-navy-2 text-brand-hover" : "border-line hover:border-navy-2",
         )}
       >
         <AccountAvatar user={user} size={22} />
@@ -179,76 +154,53 @@ export function EditorAccountMenu() {
       </button>
 
       {open &&
-        at &&
+        placement &&
         createPortal(
+          /*
+           * The scrim-less layer: full-viewport, above the toolbar's own layer,
+           * so the card floats free of the strip it came from. Pointer-down
+           * outside the card closes it; the card swallows its own.
+           */
           <div
             className="fixed inset-0 z-[var(--z-dropdown)]"
-            onPointerDown={() => setOpen(false)}
+            onPointerDown={closeMenu}
             tabIndex={-1}
           >
-            <div
-              role="menu"
-              aria-label="قائمة الحساب"
-              onPointerDown={(e) => e.stopPropagation()}
-              style={{ left: at.left, top: at.top, width: MENU_WIDTH }}
-              className="absolute grid gap-1 rounded-[10px] border border-line bg-surface p-1.5 shadow-xl"
+            <AccountMenuPanel
+              user={user}
+              label="قائمة الحساب"
+              className="account-menu-panel-floating"
+              style={{
+                insetInlineEnd: placement.insetInlineEnd,
+                top: placement.top,
+                maxWidth: placement.maxWidth,
+                maxHeight: placement.maxHeight,
+              }}
             >
-              {/*
-               * The identity block: the full name in the one place an author
-               * goes to confirm WHICH account is editing, plus the licence
-               * state the server resolved for it.
-               */}
-              <div className="border-b border-line px-3 pb-2.5 pt-1.5">
-                <div className="flex items-center gap-2">
-                  <AccountAvatar user={user} size={28} />
-                  <div className="min-w-0">
-                    <p
-                      className="truncate text-[12px] font-extrabold"
-                      title={identity.label}
-                    >
-                      {identity.label}
-                    </p>
-                    {identity.email && (
-                      <p
-                        className="truncate text-[10px] font-medium text-muted"
-                        dir="ltr"
-                        title={identity.email}
-                      >
-                        {identity.email}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <div className="mt-2">
-                  <MenuBadge user={user} />
-                </div>
-              </div>
-
               <NewDocumentMenuItem
                 user={user}
-                className={menuItem}
                 onRequest={() => {
-                  setOpen(false);
+                  closeMenu();
                   setNewDocOpen(true);
                 }}
               />
               <button
                 type="button"
                 role="menuitem"
-                className={menuItem}
+                className={accountMenuItemClass}
                 onClick={() => {
-                  setOpen(false);
+                  closeMenu();
                   window.dispatchEvent(new CustomEvent(OPEN_EDITOR_SETTINGS_EVENT, { detail: "account" }));
                 }}
               >
                 <Settings2 className="size-4 opacity-70" aria-hidden />
                 الإعدادات
               </button>
-              <a href="/account" role="menuitem" className={menuItem}>
+              <a href="/account" role="menuitem" className={accountMenuItemClass}>
                 <UserRound className="size-4 opacity-70" aria-hidden />
                 حسابي والاشتراك
               </a>
-              <a href="/license" role="menuitem" className={menuItem}>
+              <a href="/license" role="menuitem" className={accountMenuItemClass}>
                 <KeyRound className="size-4 opacity-70" aria-hidden />
                 ترخيصي وتفعيله
               </a>
@@ -260,15 +212,12 @@ export function EditorAccountMenu() {
                   setSigningOut(true);
                   void signOut("/").catch(() => setSigningOut(false));
                 }}
-                className={cn(
-                  menuItem,
-                  "text-muted disabled:cursor-wait disabled:opacity-60",
-                )}
+                className={accountMenuItemMutedClass}
               >
                 <LogOut className="size-4 opacity-70" aria-hidden />
                 {signingOut ? "جارٍ الخروج…" : "تسجيل الخروج"}
               </button>
-            </div>
+            </AccountMenuPanel>
           </div>,
           document.body,
         )}
