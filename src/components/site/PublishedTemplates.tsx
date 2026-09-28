@@ -25,7 +25,7 @@ export function PublishedTemplates() {
 
   return (
     <section className="mt-10">
-      <h2 className="text-[18px] font-extrabold">قوالب منشورة من إدارة المنصة</h2>
+      <h2 className="text-[18px] font-extrabold">قوالب مدفوعة</h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {items.map((t) => {
           const slug = templateDisplaySlug(t);

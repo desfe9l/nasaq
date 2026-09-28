@@ -151,14 +151,14 @@ export function PurchasePage() {
               <span className="grid size-7 place-items-center rounded-full bg-inverse text-[11px] font-bold text-on-inverse ">2</span>
               <div>
                 <p className="text-[13px] font-bold text-ink ">تحديد المدة والسداد</p>
-                <p className="mt-1 text-[12px] leading-6 text-muted ">اختر الدفع شهريًا أو كل 3 أشهر، ثم أكمل السداد مباشرة في Gumroad Checkout.</p>
+                <p className="mt-1 text-[12px] leading-6 text-muted ">اختر الدفع شهريًا أو كل 3 أشهر، ثم أكمل السداد بأمان عبر صفحة الدفع.</p>
               </div>
             </div>
             <div className="flex gap-3">
               <span className="grid size-7 place-items-center rounded-full bg-navy text-[11px] font-bold text-on-brand">3</span>
               <div>
                 <p className="text-[13px] font-bold text-ink ">التفعيل الفوري</p>
-                <p className="mt-1 text-[12px] leading-6 text-muted ">يُصدر النظام ترخيصًا رقميًا عبر Keygen ويربطه بحسابك، وتُفتح المزايا فورًا.</p>
+                <p className="mt-1 text-[12px] leading-6 text-muted ">يُصدر النظام ترخيصك الرقمي ويربطه بحسابك، وتُفتح المزايا فورًا.</p>
               </div>
             </div>
           </div>
@@ -273,7 +273,7 @@ export function PurchasePage() {
                       target="_blank"
                       rel="noreferrer noopener"
                       aria-label={`اشترك الآن — ${plan.arabicName} عبر Gumroad`}
-                      className={`inline-flex h-9 w-full items-center justify-center rounded-[10px] text-[13px] font-bold transition ${isTeam ? "bg-navy text-on-brand hover:bg-navy-2" : "bg-inverse text-on-inverse hover:bg-inverse-hover"}`}
+                      className={`inline-flex h-9 w-full items-center justify-center rounded-[10px] text-[13px] font-bold transition ${isTeam ? "bg-[#0C3D2C] text-white hover:bg-[#092f22]" : "bg-[#0C3D2C] text-white hover:bg-[#092f22]"}`}
                     >
                       اشترك الآن
                     </a>
