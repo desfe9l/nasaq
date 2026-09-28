@@ -330,11 +330,11 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
             <ColorField
               className="floating-toolbar-swatch"
               label="لون التعبئة"
-              value={style.fill}
+              value={el.type === "svg" ? style.svgFill : style.fill}
               fallback={style.background || "#006c35"}
               allowNone
-              onChange={(v) => updateStyle(el.id, { fill: v }, true)}
-              onCommit={(v) => updateStyle(el.id, { fill: v })}
+              onChange={(v) => updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v }, true)}
+              onCommit={(v) => updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v })}
             />
           </div>
           <span className="floating-toolbar-sep" aria-hidden />
@@ -345,10 +345,10 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
             <ColorField
               className="floating-toolbar-swatch"
               label="لون الإطار"
-              value={style.borderColor}
+              value={el.type === "svg" || el.type === "icon" ? style.svgStroke : style.borderColor}
               fallback={style.color || "#c9a86a"}
-              onChange={(v) => updateStyle(el.id, { borderColor: v }, true)}
-              onCommit={(v) => updateStyle(el.id, { borderColor: v })}
+              onChange={(v) => updateStyle(el.id, el.type === "svg" || el.type === "icon" ? { svgStroke: v } : { borderColor: v }, true)}
+              onCommit={(v) => updateStyle(el.id, el.type === "svg" || el.type === "icon" ? { svgStroke: v } : { borderColor: v })}
             />
           </div>
           <span className="floating-toolbar-sep" aria-hidden />

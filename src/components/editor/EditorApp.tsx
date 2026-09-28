@@ -3,7 +3,7 @@ import { shortcutKey } from "@/lib/editor/keyboard";
 import { EditorSettingsDialog } from "./EditorSettingsDialog";
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { TouchPropertiesSheet } from "./TouchPropertiesSheet";
-import { isTouchPropertiesViewport } from "@/lib/editor/ui-state";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Sidebar resize bounds (px) — shared by the drag handler and the persisted default. */
@@ -38,7 +38,6 @@ import {
   Save,
   Scan,
   Undo2,
-  Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
@@ -55,8 +54,7 @@ import { fitImageBox, prepareImage } from "@/lib/editor/images";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { LeftPanel } from "./LeftPanel";
 import { RightPanel } from "./RightPanel";
-import { LEFT_PANEL_TABS, RIGHT_PANEL_TABS } from "./panel-tabs";
-import { StudioToolDock, CollapsedPanelDock } from "./StudioToolDock";
+import { StudioToolDock } from "./StudioToolDock";
 import { CanvasStage } from "./CanvasStage";
 import { ArrangeBar } from "./ArrangeBar";
 import { PageRail } from "./PageRail";
@@ -399,14 +397,12 @@ function Studio({
   const leftOpen = useEditor((s) => s.leftOpen);
   const rightOpen = useEditor((s) => s.rightOpen);
   const leftCollapsed = useEditor((s) => s.leftCollapsed);
-  const rightCollapsed = useEditor((s) => s.rightCollapsed);
   const toggleSidebar = useEditor((s) => s.toggleSidebar);
   const closeFloatingPanels = useEditor((s) => s.closeFloatingPanels);
   const pagesPanelHeight = useEditor((s) => s.pagesPanelHeight);
   const setPagesPanelHeight = useEditor((s) => s.setPagesPanelHeight);
   const contextMenu = useEditor((s) => s.contextMenu);
   const leftTab = useEditor((s) => s.leftTab);
-  const rightTab = useEditor((s) => s.rightTab);
   const openLibrary = useEditor((s) => s.openLibrary);
   const openContextMenu = useEditor((s) => s.openContextMenu);
   const closeContextMenu = useEditor((s) => s.closeContextMenu);
@@ -457,15 +453,6 @@ function Studio({
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window === "undefined" || !isOverlayViewport(),
   );
-  const [touchProperties, setTouchProperties] = useState(isTouchPropertiesViewport);
-  const rightDockCollapsed = rightCollapsed || touchProperties;
-  useEffect(() => {
-    const media = window.matchMedia("(any-pointer: coarse)");
-    const update = () => setTouchProperties(media.matches);
-    update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
-  }, []);
   /** First load is what arms the auto-fit below. */
   const hydrated = useEditor((s) => s.hydrated);
   /** «أضف مكتبة» and «مولد عناوين الفقرات» are modal, so they own no store state. */
@@ -581,7 +568,7 @@ function Studio({
   }, []);
 
   /** True while a floating drawer is open (tablet/phone only). */
-  const drawerOpen = !isDesktop && (leftOpen || (!touchProperties && rightOpen));
+  const drawerOpen = !isDesktop && leftOpen;
 
   /*
    * Pages panel height — drag handle on its top border.
@@ -665,17 +652,6 @@ function Studio({
     });
   }, [activePage?.id, activeSize.h, activeSize.w, setZoom]);
   fitRef.current = fitToScreen;
-
-  /**
-   * 🪄 ضبط وتنسيق مساحة العمل: dock every panel back to its default place,
-   * then — once the columns have re-laid out — fit and centre the artboard.
-   * Zoom only ever changes the canvas viewport; the chrome never scales.
-   */
-  const resetWorkspaceLayout = useEditor((s) => s.resetWorkspaceLayout);
-  const arrangeWorkspace = useCallback(() => {
-    resetWorkspaceLayout();
-    setTimeout(() => fitRef.current(), 80);
-  }, [resetWorkspaceLayout]);
 
   /*
    * ملء الشاشة — part of the unified canvas-scaling cluster: the whole
@@ -1087,11 +1063,11 @@ function Studio({
     if (side === "left") {
       if (tab) state.setLeftTab(tab as LeftTab);
       if (state.leftCollapsed) state.toggle("leftCollapsed");
-      useEditor.setState({ leftOpen: true });
+      useEditor.setState({ leftOpen: true, rightOpen: false });
     } else {
       if (tab) state.setRightTab(tab as RightTab);
       if (state.rightCollapsed) state.toggle("rightCollapsed");
-      useEditor.setState({ rightOpen: true });
+      useEditor.setState({ rightOpen: true, leftOpen: false });
     }
   };
   /** Toolbar shortcuts to a panel tab: open (and un-collapse) that panel. */
@@ -1223,8 +1199,7 @@ function Studio({
        *     home, separated by dividers so nothing cramps.
        *   ② المركز: the document itself — its name in one perfectly centered
        *     capsule with the document view controls (معاينة الصفحات، الشبكة،
-       *     ثم قوائم المحاذاة/الترتيب/التحويل/العرض), plus the one primary
-       *     utility «ضبط وتنسيق مساحة العمل».
+       *     ثم قوائم المحاذاة/الترتيب/التحويل/العرض).
        *   ③ مساحة العمل والحساب: save state, the project-file menu, the
        *     «تصدير» primary action and the account menu.
        *
@@ -1336,6 +1311,7 @@ function Studio({
               useEditor.setState({
                 leftTab: "elements",
                 leftOpen: true,
+                rightOpen: false,
                 leftCollapsed: false,
               });
               window.dispatchEvent(new CustomEvent("nasaq:draw-text"));
@@ -1356,6 +1332,7 @@ function Studio({
                 focusMode: false,
                 rightCollapsed: false,
                 rightOpen: true,
+                leftOpen: false,
                 rightTab: "properties",
               });
               window.dispatchEvent(new CustomEvent(OPEN_REPORT_TOOLS_EVENT));
@@ -1461,16 +1438,6 @@ function Studio({
             fitToScreen={fitToScreen}
             fitToSelection={fitToSelection}
           />
-          <button
-            type="button"
-            onClick={arrangeWorkspace}
-            title="ضبط وتنسيق مساحة العمل — ملاءمة الصفحة وتوسيطها وإعادة اللوحات لأماكنها"
-            aria-label="ضبط وتنسيق مساحة العمل"
-            className="editor-wand-btn"
-          >
-            <Wand2 className="size-4" aria-hidden />
-            <span>ضبط وتنسيق مساحة العمل</span>
-          </button>
         </div>
 
         {/* ③ Workspace/account + the export action. */}
@@ -1523,13 +1490,6 @@ function Studio({
         }}
         className={cn(
           "editor-focus-workspace editor-workspace-row relative grid min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden",
-          focusMode || (leftCollapsed && rightDockCollapsed)
-            ? "lg2:grid-cols-[minmax(0,1fr)]"
-            : leftCollapsed
-              ? "lg2:grid-cols-[minmax(360px,1fr)_320px] xl:grid-cols-[minmax(420px,1fr)_336px]"
-              : rightDockCollapsed
-                ? "lg2:grid-cols-[280px_minmax(360px,1fr)] xl:grid-cols-[292px_minmax(420px,1fr)]"
-                : "lg2:grid-cols-[280px_minmax(360px,1fr)_320px] xl:grid-cols-[292px_minmax(420px,1fr)_336px]",
         )}
         style={{
           /*
@@ -1545,7 +1505,7 @@ function Studio({
             ? undefined
             : focusMode
               ? "minmax(0, 1fr)"
-              : `${leftCollapsed ? "48px" : `minmax(${PANEL_MIN.left}px, min(${panelWidths.left}px, 28vw))`} max-content minmax(360px, 1fr) ${rightDockCollapsed ? "48px" : `minmax(${PANEL_MIN.right}px, min(${panelWidths.right}px, 30vw))`}`,
+              : `${leftCollapsed ? "" : `minmax(${PANEL_MIN.left}px, min(${panelWidths.left}px, 28vw)) `}max-content minmax(0, 1fr)`,
         }}
       >
         <div
@@ -1587,15 +1547,6 @@ function Studio({
             />
           )}
         </div>
-        {isDesktop && leftCollapsed && !focusMode && (
-          <CollapsedPanelDock
-            side="left"
-            tabs={LEFT_PANEL_TABS}
-            activeTab={leftTab}
-            onExpand={() => expandPanel("left")}
-            onTab={(tab) => expandPanel("left", tab)}
-          />
-        )}
         {isDesktop && !focusMode && (
           <StudioToolDock
             onOpenLeft={openLeftFromDock}
@@ -1605,7 +1556,7 @@ function Studio({
           />
         )}
 
-        <div className="editor-canvas-workspace relative grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden">
+        <div className="editor-canvas-workspace relative grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto_auto] overflow-hidden">
           {/*
            * Tapping the canvas dismisses the floating drawers: on a tablet the
            * artwork is what the author wants to see, and reaching for a close
@@ -1695,55 +1646,9 @@ function Studio({
           <WorkspaceStatusBar />
         </div>
 
-        {isDesktop && rightDockCollapsed && !focusMode && (
-          <CollapsedPanelDock
-            side="right"
-            tabs={RIGHT_PANEL_TABS}
-            activeTab={rightTab}
-            onExpand={() => expandPanel("right")}
-            onTab={(tab) => expandPanel("right", tab)}
-          />
-        )}
-        {touchProperties ? (
-          <TouchPropertiesSheet open={rightOpen && !focusMode} onClose={() => useEditor.setState({ rightOpen: false })}>
-            <RightPanel onReplaceImage={onReplaceImage} />
-          </TouchPropertiesSheet>
-        ) : (
-          <div
-            inert={!isDesktop && !rightOpen}
-            className={cn(
-              "editor-sidebar editor-properties relative z-[var(--z-panel)] flex h-full min-h-0 flex-col overflow-hidden",
-              /*
-               * The properties panel is the visual LEFT sidebar; it slides in from
-               * the physical left edge on tablet/phone, identically in landscape
-               * and portrait so muscle memory carries across orientations.
-               */
-              /*
-               * Tablet width: the Properties/Layers drawer is compact by default
-               * (288px ≈ `w-72`) between 768 and 1024px, so it covers noticeably
-               * less of the artboard it floats over; phones keep the roomier
-               * `min(340px, 90vw)` slide-over, where the canvas is stacked behind
-               * the drawer anyway.
-               */
-              "max-lg2:fixed max-lg2:inset-y-0 max-lg2:left-0 max-lg2:z-[var(--z-drawer)] max-lg2:w-[min(340px,90vw)] max-lg2:shadow-2xl md:max-lg2:w-72",
-              "max-lg2:transition-transform max-lg2:duration-200 max-lg2:ease-out",
-              !rightOpen && "max-lg2:-translate-x-full",
-              !rightOpen && "max-lg2:pointer-events-none",
-              rightCollapsed && "lg2:hidden",
-            )}
-            style={!isDesktop ? { width: `min(${panelWidths.right}px, 90vw)` } : undefined}
-          >
-            <RightPanel onReplaceImage={onReplaceImage} />
-            {!rightCollapsed && !focusMode && (
-              <PanelResizeHandle
-                side="right"
-                onStart={(event) =>
-                  resizePanel("right", event.clientX, panelWidths.right, event.currentTarget)
-                }
-              />
-            )}
-          </div>
-        )}
+        <TouchPropertiesSheet open={rightOpen && !focusMode} onClose={() => useEditor.setState({ rightOpen: false })}>
+          <RightPanel onReplaceImage={onReplaceImage} />
+        </TouchPropertiesSheet>
       </div>
 
       {/*

@@ -195,7 +195,7 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
     const local = await findLicenseByKeyHash(keyHash);
     if (keygenKey || local?.metadata?.source === "keygen") {
       if (!isKeygenConfigured()) {
-        return { success: false, message: "تحقق Keygen غير مهيأ على الخادم." };
+        return { success: false, message: "خدمة التحقق من الترخيص غير متاحة حاليًا. حاول لاحقًا." };
       }
       try {
         // Session id/email come from authMiddleware, never from the form body.
@@ -208,7 +208,7 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
           return { success: false, message: "مفتاح الترخيص لا يخص هذا المستخدم." };
         }
         console.error("[license] Keygen activation failed", error);
-        return { success: false, message: "تعذر التحقق من حالة ترخيص Keygen." };
+        return { success: false, message: "تعذر التحقق من حالة الترخيص. حاول مجددًا." };
       }
     }
     const result = local ? await dbActivate(keyHash, context.userId) : null;

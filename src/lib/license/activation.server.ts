@@ -85,7 +85,7 @@ export async function activateKeygenForSession(key: string, session: LicenseSess
       return { success: false, message: INVALID };
     }
     if (remote.ownerId === undefined || remote.usersCount === null) {
-      return { success: false, message: "تعذر تحديد صاحب الترخيص لدى Keygen." };
+      return { success: false, message: "تعذر التحقق من صاحب الترخيص. تأكد من استخدام حساب الشراء." };
     }
     const unassigned = remote.ownerId === null && remote.usersCount === 0;
     // Some Keygen policies require an attached user even when the licence has

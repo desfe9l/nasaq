@@ -84,7 +84,7 @@ export function purchaseStateView(input: PurchaseStateInput): PurchaseStateView 
     return {
       label: `${LICENSE_TYPE_LABELS[license.type]} · ${statusLabel}`,
       tone: license.status === "ACTIVE" ? "ok" : "warn",
-      detail: parts.length ? parts.join(" · ") : "أكمل الدفع عبر Gumroad لتفعيل الترخيص.",
+      detail: parts.length ? parts.join(" · ") : "أكمل الدفع عبر بوابة الدفع الآمنة لتفعيل الترخيص.",
     };
   }
 

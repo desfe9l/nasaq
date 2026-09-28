@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BadgeCheck, CalendarDays, Check, Clock3, Copy, MessageCircle, Phone } from "lucide-react";
 import { toast } from "sonner";
-import { BRAND, CONTACT_PHONE_DISPLAY, CONTACT_PHONE_INTL, telHref, whatsappHref } from "@/lib/brand";
+import { BRAND, CONTACT_PHONE_INTL, telHref, whatsappHref } from "@/lib/brand";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { SocialLinks } from "@/components/site/SocialLinks";
@@ -86,8 +86,8 @@ export function ContactPage() {
               </span>
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3">
-              <a href={telHref()} className="block whitespace-nowrap text-[28px] font-extrabold tabular-nums text-ink" dir="ltr">
-                {CONTACT_PHONE_DISPLAY}
+              <a href={whatsappHref()} className="subscription-cta inline-flex rounded-lg px-4 py-3 text-[16px] font-bold">
+                تواصل عبر واتساب
               </a>
               <button
                 type="button"

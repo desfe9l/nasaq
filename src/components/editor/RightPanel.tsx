@@ -8,7 +8,6 @@ import {
   ArrowUp,
   Baseline,
   ChevronDown,
-  ChevronsLeft,
   Copy,
   CopyPlus,
   ClipboardPaste,
@@ -88,7 +87,6 @@ import { prepareText } from "@/lib/editor/text-render";
 import { useEditor } from "@/lib/editor/store";
 import { OPEN_REPORT_TOOLS_EVENT } from "./EditorApp";
 import { cn, round } from "@/lib/utils";
-import { isOverlayViewport } from "@/lib/editor/ui-state";
 import { toast } from "sonner";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, SubGroup, useAccordionState } from "./ui/Accordion";
@@ -371,15 +369,7 @@ export function RightPanel({
           </button>
         ))}
         </div>
-        <button
-          type="button"
-          onClick={() => { const st = useEditor.getState(); if (isOverlayViewport()) st.closeFloatingPanels(); else if (!st.rightCollapsed) st.toggle("rightCollapsed"); }}
-          className="editor-panel-collapse grid size-11 shrink-0 place-items-center rounded-[8px] text-muted hover:bg-line-2"
-          aria-label="طي لوحة الخصائص"
-          title="طي لوحة الخصائص"
-        >
-          <ChevronsLeft className="size-4" />
-        </button>
+
       </div>
 
       {/*

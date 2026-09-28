@@ -446,8 +446,9 @@ export function BrandKitPage() {
               </div>
 
               <div
-                className="mt-3 overflow-hidden rounded-[6px] border border-line shadow-sm"
-                style={{ background: kit.paperColor || "#fbfaf6", aspectRatio: "1 / 1.414" }}
+                data-brand-a4-preview
+                className="mt-3 w-full overflow-hidden rounded-[6px] border border-line shadow-sm"
+                style={{ background: kit.paperColor || "#fbfaf6", aspectRatio: "210 / 297" }}
                 dir="rtl"
               >
                 {previewMode === "cover" && (

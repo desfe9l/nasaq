@@ -42,8 +42,7 @@ export function telHref() {
 }
 
 export function whatsappHref(message?: string) {
-  const text = message ?? `السلام عليكم، أرغب بالاستفسار عن تصميم تقرير عبر ${BRAND.platform}.`;
-  return `https://wa.me/${CONTACT_PHONE_INTL}?text=${encodeURIComponent(text)}`;
+  return `https://wa.me/${CONTACT_PHONE_INTL}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
 }
 
 /**

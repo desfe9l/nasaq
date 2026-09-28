@@ -215,28 +215,30 @@ export function applySvgColors(
     // must become explicit `fill="none"` before an override can be applied.
     const drawables = [
       ...doc.querySelectorAll(
-        "path, rect, circle, ellipse, line, polyline, polygon, text, tspan",
+        "path, rect, circle, ellipse, line, polyline, polygon, text, tspan, use",
       ),
     ];
     for (const node of drawables) {
       const el = node as SVGElement;
       const owner = el.closest(
-        "linearGradient, radialGradient, pattern, marker, clipPath, mask, defs",
+        "linearGradient, radialGradient, pattern, marker, clipPath, mask",
       );
-      if (owner) continue; // never repaint defs/gradient machinery
-      // Channels are independent:
-      //  · fill override: every drawable gets the fill (a bare shape defaults
-      //    to black, so "unset" counts as painted), except ones explicitly
-      //    marked fill="none".
-      //  · stroke override: only shapes that actually stroke today change —
-      //    adding outlines to outline-less artwork is not implied.
-      const paintsFill = (el.getAttribute("fill") ?? "") !== "none";
-      const paintsStroke =
-        el.hasAttribute("stroke") && el.getAttribute("stroke") !== "none";
-      if (fill != null && paintsFill) el.setAttribute("fill", fill);
-      if (stroke != null && paintsStroke) el.setAttribute("stroke", stroke);
-      if (strokeWidth != null && paintsStroke)
-        el.setAttribute("stroke-width", String(strokeWidth));
+      if (owner) continue; // Never repaint clip/mask/gradient machinery; symbols may paint.
+      // Resolve inherited presentation values (most outline icons put stroke
+      // on <svg> or <g>, not on individual paths).
+      const inherited = (name: string, fallback: string): string => {
+        let node: Element | null = el;
+        while (node) {
+          if (node.hasAttribute(name)) return node.getAttribute(name)!;
+          node = node.parentElement;
+        }
+        return fallback;
+      };
+      if (fill != null && inherited("fill", "black") !== "none")
+        el.setAttribute("fill", fill);
+      // An explicit stroke override may also add an outline to filled artwork.
+      if (stroke != null) el.setAttribute("stroke", stroke);
+      if (strokeWidth != null) el.setAttribute("stroke-width", String(strokeWidth));
     }
     return new XMLSerializer().serializeToString(doc);
   } catch {

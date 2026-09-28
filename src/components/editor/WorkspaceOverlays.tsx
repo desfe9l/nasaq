@@ -832,6 +832,12 @@ export type { MenuPoint };
 
 export function WorkspaceStatusBar() {
   const zoom = useEditor((s) => s.zoom);
+  const changeZoom = (next: number) => {
+    const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+    if (!stage) return;
+    const rect = stage.getBoundingClientRect();
+    zoomAnchoredAt(stage, useEditor.getState().zoom, next, rect.left + rect.width / 2, rect.top + rect.height / 2);
+  };
   const printGuides = useEditor((s) => s.printGuides);
   const togglePrintGuide = useEditor((s) => s.togglePrintGuide);
   const pages = useEditor((s) => s.pages);
@@ -884,7 +890,9 @@ export function WorkspaceStatusBar() {
             {guide.label}
           </button>
         ))}
-        <span className="selectable-value">{Math.round(zoom * 100)}%</span>
+        <button type="button" aria-label="تصغير اللوحة" onClick={() => changeZoom(zoom - 0.08)}><ZoomOut className="size-4" /></button>
+        <button type="button" aria-label="مقياس اللوحة 100%" onClick={() => changeZoom(1)}>{Math.round(zoom * 100)}%</button>
+        <button type="button" aria-label="تكبير اللوحة" onClick={() => changeZoom(zoom + 0.08)}><ZoomIn className="size-4" /></button>
       </span>
     </div>
   );

@@ -82,7 +82,7 @@ export default function PaymentSuccessPage() {
               <h1 className="mt-4 text-2xl font-extrabold">سجّل الدخول لمتابعة التفعيل</h1>
               <p className="mt-3 text-sm leading-7 text-muted">
                 {authFailed
-                  ? "لم نتعرّف على حسابك بعد. سجّل الدخول بنفس البريد الذي استخدمته في Gumroad، وسيُربط الاشتراك بحسابك تلقائيًا بعد التحقق الخادمي."
+                  ? "لم نتعرّف على حسابك بعد. سجّل الدخول بنفس البريد الذي استخدمته عند الدفع، وسيُربط الاشتراك بحسابك تلقائيًا بعد التحقق الخادمي."
                   : "لم نتمكن من قراءة حالة الحساب حاليًا."}
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
