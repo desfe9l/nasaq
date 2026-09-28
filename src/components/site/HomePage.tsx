@@ -12,6 +12,7 @@ import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 import { WORKSPACE_HOME_PATH, openNewDocumentFlow, useWorkspaceEntry } from "@/lib/auth/use-workspace-entry";
 import { ProjectFileButton } from "@/components/site/ProjectFileButton";
+import { LicenseBadge } from "@/components/site/LicenseBadge";
 
 const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
   { icon: LayoutTemplate, title: PRODUCT_COPY.capabilities[0][0], desc: PRODUCT_COPY.capabilities[0][1] },
@@ -204,20 +205,19 @@ export function HomePage() {
             {PACKS.map((pack) => (
               <button key={pack.id} type="button" onClick={() => pack.id === "blank" ? startBlank() : setModalOpen(true)} className={`flex flex-col rounded-[12px] border border-line/70 bg-surface p-5 text-right hover:border-inverse/20 ${CARD_W} ${SITE_CARD}`}>
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="grid size-8 place-items-center rounded-[8px] bg-surface-2 text-ink ">
+                  <span className="grid size-8 place-items-center rounded-[8px] bg-surface-2 text-ink">
                     <FileText className="size-4" />
                   </span>
                   <span className="text-[11px] text-muted">{pack.pages}</span>
                 </div>
-                <strong className="block text-[14px] font-bold text-ink ">{pack.title}</strong>
-                <span className="mt-1 block text-[12px] leading-5 text-muted ">{pack.desc}</span>
-                  <span className="mt-auto pt-4 text-[11px] font-bold text-brand">{pack.id === "blank"
-                    ? workspace.licensed
-                      ? "مساحة العمل"
-                      : entry.ready && entry.direct
-                        ? "فتح المحرر"
-                        : "فتح العرض"
-                    : "متاح في النسخة الكاملة"}</span>
+                <strong className="block text-[14px] font-bold text-ink">{pack.title}</strong>
+                <span className="mt-1 block text-[12px] leading-5 text-muted">{pack.desc}</span>
+                  <span className="mt-auto pt-4">
+                    {pack.id === "blank"
+                      ? <LicenseBadge state="licensed" size="sm" label={workspace.licensed ? "مساحة العمل" : entry.ready && entry.direct ? "فتح المحرر" : "فتح العرض"} title={workspace.licensed ? "الدخول إلى مساحة العمل" : "فتح المحرر"} />
+                      : <LicenseBadge state="locked" size="sm" href="/purchase" title="هذا القالب متاح في النسخة الكاملة" />
+                    }
+                  </span>
               </button>
             ))}
           </div>

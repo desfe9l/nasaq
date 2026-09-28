@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { LayoutTemplate, Lock, Share2 } from "lucide-react";
+import { LayoutTemplate, Share2 } from "lucide-react";
 import { toast } from "sonner";
 import { usePublishedTemplates } from "@/lib/admin/use-site-settings";
 import { publishedTemplatePath, templateDisplaySlug } from "@/lib/templates/published";
+import { LicenseBadgeIcon } from "./LicenseBadge";
 
 /** Published templates have stable, public links. The destination rechecks
  * publication and entitlement before importing a private working copy. */
@@ -34,8 +35,8 @@ export function PublishedTemplates() {
                 <span className="relative grid aspect-[210/297] w-full place-items-center overflow-hidden rounded-lg border border-line bg-surface ">
                   {t.thumbnail ? <img src={t.thumbnail} alt="" className="h-full w-full object-contain" /> : <LayoutTemplate className="size-8 text-muted" />}
                   {t.tier === "licensed" && (
-                    <span className="absolute top-2 left-2 inline-flex items-center gap-1 rounded-full bg-inverse/70 px-2 py-0.5 text-[10px] font-extrabold text-white">
-                      <Lock className="size-3" /> النسخة الكاملة
+                    <span className="absolute top-2 left-2">
+                      <LicenseBadgeIcon state="locked" title="النسخة الكاملة — يتطلب ترخيصًا" />
                     </span>
                   )}
                 </span>

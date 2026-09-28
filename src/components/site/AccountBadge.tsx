@@ -1,6 +1,5 @@
 import type { ComponentType, SVGProps } from "react";
-import { NasaqPremiumMark } from "./NasaqPremiumMark";
-import { Loader2, ShieldAlert, Sparkles } from "lucide-react";
+import { Loader2, ShieldAlert, BadgeCheck, Lock } from "lucide-react";
 import { useLicense } from "@/lib/license/client";
 import type { AppUser } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
@@ -43,14 +42,14 @@ const BADGE_META: Record<
   LICENSED: {
     label: "مرخص",
     className:
-      "border-brand bg-ok/10 text-success",
-    Icon: NasaqPremiumMark,
+      "border-brand/25 bg-navy/10 text-brand",
+    Icon: BadgeCheck,
   },
   ADMIN: {
     label: "مرخص",
     className:
       "border-gold/40 bg-gold/15 text-warning",
-    Icon: NasaqPremiumMark,
+    Icon: BadgeCheck,
   },
   SUSPENDED: {
     label: "موقوف",
@@ -61,8 +60,8 @@ const BADGE_META: Record<
   FREE: {
     label: "مجاني",
     className:
- "border-line bg-surface text-muted",
-    Icon: Sparkles,
+      "border-gold/25 border-dashed bg-gold/10 text-ink",
+    Icon: Lock,
   },
 };
 

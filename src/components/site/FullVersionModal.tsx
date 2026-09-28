@@ -137,8 +137,8 @@ export function FullVersionModal({ open, onClose, defaultTab = "features" }: Ful
                       </div>
                       <div className="text-center text-[12px] text-muted">{row.demo === false ? <Minus className="mx-auto size-4 text-muted" /> : row.demo}</div>
                       <div className="text-center">
-                        <span className="inline-flex items-center gap-1 rounded-full border border-brand bg-navy/5 px-2.5 py-1 text-[11px] font-bold text-ink">
-                          <Check className="size-3" /> {row.full}
+                        <span className="inline-flex items-center gap-1 rounded-full border border-brand/25 bg-navy/10 px-2.5 py-1 text-[11px] font-bold text-brand">
+                          <Check className="size-3" strokeWidth={2.5} /> {row.full}
                         </span>
                       </div>
                     </div>

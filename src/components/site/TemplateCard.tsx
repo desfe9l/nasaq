@@ -11,12 +11,10 @@ import { useEffect, useRef, useState } from "react";
 import {
   Copy,
   Eye,
-  Lock,
   MoreVertical,
   Pencil,
   Plus,
   Settings2,
-  ShieldCheck,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -24,6 +22,7 @@ import { pageSize } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
 import { pagesLabel, type CatalogBadge, type CatalogEntry } from "@/lib/templates/catalog";
 import { TemplateStackPreview } from "./TemplatePreview";
+import { LicenseBadge } from "./LicenseBadge";
 
 /** Preview box height (px). Landscape pages fit by width instead. */
 const PREVIEW_BOX = 232;
@@ -250,14 +249,17 @@ export function TemplateCard({
             {Math.round(size.w)} × {Math.round(size.h)} مم
           </span>
           {locked && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-gold/20 px-2 py-0.5 text-[10px] font-extrabold text-ink">
-              <Lock className="size-3" /> متاح في النسخة الكاملة
-            </span>
+            <LicenseBadge
+              state="locked"
+              size="sm"
+              href="/license"
+            />
           )}
           {!locked && available && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-navy/10 px-2 py-0.5 text-[10px] font-extrabold text-brand">
-              <ShieldCheck className="size-3" /> متاح بترخيصك
-            </span>
+            <LicenseBadge
+              state="licensed"
+              size="sm"
+            />
           )}
         </div>
 
