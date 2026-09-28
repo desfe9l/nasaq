@@ -40,8 +40,9 @@ export function HomePage() {
   // A licensed account starts from its Home and configures new documents there.
   const workspace = useWorkspaceEntry();
   const startBlank = () => {
+    if (!workspace.ready || !entry.ready) return;
     if (workspace.licensed) openNewDocumentFlow();
-    else if (entry.ready && entry.direct) void openNewDocument();
+    else if (entry.direct) void openNewDocument();
     else window.location.assign("/demo");
   };
   const { texts } = useSiteSettings();
@@ -79,8 +80,15 @@ export function HomePage() {
               </p>
 
               <div className="mt-6 flex flex-wrap items-center gap-3">
-                <a href={workspace.licensed ? WORKSPACE_HOME_PATH : "/editor"} className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-navy px-6 text-[14px] font-bold text-on-brand shadow-sm transition hover:bg-navy-2">
-                  <span>{workspace.licensed ? "مساحة العمل" : "فتح المحرر"}</span>
+                <a
+                  href={workspace.ready ? (workspace.licensed ? WORKSPACE_HOME_PATH : "/editor") : undefined}
+                  onClick={(event) => {
+                    if (!workspace.ready) event.preventDefault();
+                  }}
+                  aria-disabled={!workspace.ready}
+                  className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-navy px-6 text-[14px] font-bold text-on-brand shadow-sm transition hover:bg-navy-2 aria-disabled:pointer-events-none aria-disabled:opacity-60"
+                >
+                  <span>{workspace.ready ? (workspace.licensed ? "مساحة العمل" : "فتح المحرر") : "جارٍ تجهيز المساحة…"}</span>
                   <ArrowLeft className="size-4" />
                 </a>
                 <a href="/purchase" className="inline-flex h-11 items-center rounded-[10px] border border-line bg-surface px-5 text-[13px] font-bold text-ink hover:bg-surface-2 ">
@@ -203,10 +211,12 @@ export function HomePage() {
                 </div>
                 <strong className="block text-[14px] font-bold text-ink ">{pack.title}</strong>
                 <span className="mt-1 block text-[12px] leading-5 text-muted ">{pack.desc}</span>
-                <span className="mt-auto pt-4 text-[11px] font-bold text-brand">{pack.id === "blank"
-                    ? entry.ready && entry.direct
-                      ? "فتح المحرر"
-                      : "فتح العرض"
+                  <span className="mt-auto pt-4 text-[11px] font-bold text-brand">{pack.id === "blank"
+                    ? workspace.licensed
+                      ? "مساحة العمل"
+                      : entry.ready && entry.direct
+                        ? "فتح المحرر"
+                        : "فتح العرض"
                     : "متاح في النسخة الكاملة"}</span>
               </button>
             ))}

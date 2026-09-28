@@ -1310,13 +1310,23 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     refreshProjects: async () => {
+      const owner = getStorageOwner();
+      const sessionOwner = get().sessionOwner;
       set({ projectsLoading: true });
       const list = await listProjects();
+      // An auth transition can finish while IndexedDB is resolving. Never let
+      // the previous owner's response repopulate the newly active session.
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
       set({ projects: list, projectsLoading: false });
     },
 
     refreshAssets: async () => {
+      const owner = getStorageOwner();
+      const sessionOwner = get().sessionOwner;
       const assets = await listAssets();
+      // Asset shelves are owner-scoped just like projects; discard stale reads
+      // after a popup login/logout or an in-tab account switch.
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
       set({ assets, assetsLoading: false });
     },
 
@@ -1766,24 +1776,34 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     renameProject: async (id, name) => {
+      const owner = getStorageOwner();
+      const sessionOwner = get().sessionOwner;
       const project = await getProject(id);
       if (!project) return;
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
       await saveProject({ ...project, name, id });
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
       if (get().id === id) set({ name });
       await get().refreshProjects();
     },
 
     toggleProjectFavorite: async (id) => {
+      const owner = getStorageOwner();
+      const sessionOwner = get().sessionOwner;
       const project = await getProject(id);
       if (!project) return;
       const favorite = !project.favorite;
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
       await saveProject({ ...project, favorite, id });
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
       if (get().id === id) set({ favorite });
       await get().refreshProjects();
     },
 
     duplicateProject: async (id) => {
       const s = get();
+      const owner = getStorageOwner();
+      const sessionOwner = s.sessionOwner;
       if (
         !s.entitlements.unlimited_projects &&
         !canCreateDemoProject(s.projects.length)
@@ -1799,14 +1819,20 @@ export const useEditor = create<EditorStore>((set, get) => {
         toast.error("تعذر تكرار المستند");
         return;
       }
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
       // Fresh identity: a copy never inherits the original's star (and its
       // thumbnail is re-captured on the next auto-save anyway).
       await saveProject({ ...project, favorite: false, thumbnail: undefined });
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
       await get().refreshProjects();
     },
 
     deleteProject: async (id) => {
+      const owner = getStorageOwner();
+      const sessionOwner = get().sessionOwner;
+      if (!get().projects.some((project) => project.id === id)) return;
       await removeProject(id);
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
       const s = get();
       if (s.id === id) {
         applyProject(createProject("blank", s.theme), { selectedId: null });

@@ -50,7 +50,7 @@ import {
   type LeftTab,
   type RightTab,
 } from "@/lib/editor/store";
-import { elementsBounds, pageSize } from "@/lib/editor/model";
+import { absoluteBounds, elementsBounds, pageSize } from "@/lib/editor/model";
 import { fitImageBox, prepareImage } from "@/lib/editor/images";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { LeftPanel } from "./LeftPanel";
@@ -1150,14 +1150,20 @@ function Studio({
   };
 
   const fitToSelection = () => {
-    const bounds = elementsBounds(selectedElements());
+    const selected = selectedElements();
+    const bounds =
+      absoluteBounds(
+        activePage.elements,
+        selected.map((element) => element.id),
+      ) || elementsBounds(selected);
     if (!bounds) return fitToScreen();
     const el = document.querySelector(".editor-canvas-stage");
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const pageContent = document.querySelector<HTMLElement>(
-      ".editor-canvas-stage .page-frame-content",
+    const activePageEl = document.querySelector<HTMLElement>(
+      `.editor-canvas-stage [data-page-id="${CSS.escape(activePage.id)}"]`,
     );
+    const pageContent = activePageEl?.closest<HTMLElement>(".page-frame-content");
     const activePageScale =
       pageContent && activeSize.w > 0
         ? pageContent.clientWidth / activeSize.w
@@ -1169,8 +1175,8 @@ function Studio({
     );
     setZoom(Math.max(0.2, Math.min(2, next)));
     requestAnimationFrame(() => {
-      const target = document.querySelector(
-        `[data-el-id="${CSS.escape(selectedElements()[0]?.id || "")}"]`,
+      const target = activePageEl?.querySelector<HTMLElement>(
+        `[data-el-id="${CSS.escape(selected[0]?.id || "")}"]`,
       );
       target?.scrollIntoView({ block: "center", inline: "center" });
     });
