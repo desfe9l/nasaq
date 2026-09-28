@@ -23,6 +23,7 @@ import {
   LayoutTemplate,
   Presentation,
   RectangleHorizontal,
+  Search,
   ShieldCheck,
   Sparkles,
   Table2,
@@ -234,6 +235,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
   const [newDoc, setNewDoc] = useState<Partial<NewDocumentConfig> | null>(null);
   const [pill, setPill] = useState<FeaturedPill>("featured");
   const [quickViewId, setQuickViewId] = useState<string | null>(null);
+  const [projectQuery, setProjectQuery] = useState("");
   const busy = useRef(false);
 
   // The store enforces the same server-derived ceilings the editor applies.
@@ -264,8 +266,18 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
   }, []);
 
   const recent = useMemo(
-    () => [...projects].sort((a, b) => b.updatedAt - a.updatedAt),
-    [projects],
+    () => {
+      const query = projectQuery.trim().toLocaleLowerCase("ar");
+      return [...projects]
+        .filter((project) =>
+          !query ||
+          `${project.name} ${project.orgName || ""}`
+            .toLocaleLowerCase("ar")
+            .includes(query),
+        )
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+    },
+    [projects, projectQuery],
   );
   const [latest, ...others] = recent;
 
@@ -574,13 +586,27 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
             eyebrow="متابعة العمل"
             title="المستندات والمشاريع الأخيرة"
             action={
-              <a
-                href="/projects"
-                className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-[12px] font-extrabold text-ink transition hover:bg-line-2"
-              >
-                <FolderOpen className="size-4" />
-                كل المستندات{projects.length ? ` (${projects.length})` : ""}
-              </a>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {projects.length > 2 && (
+                  <label className="relative">
+                    <Search className="pointer-events-none absolute end-2 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
+                    <input
+                      value={projectQuery}
+                      onChange={(event) => setProjectQuery(event.target.value)}
+                      placeholder="ابحث في مشاريعك…"
+                      aria-label="البحث في المشاريع"
+                      className="h-10 w-[min(220px,70vw)] rounded-xl border border-line bg-surface pe-8 ps-3 text-[12px] font-bold outline-none transition focus:border-navy"
+                    />
+                  </label>
+                )}
+                <a
+                  href="/projects"
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-[12px] font-extrabold text-ink transition hover:bg-line-2"
+                >
+                  <FolderOpen className="size-4" />
+                  كل المستندات{projects.length ? ` (${projects.length})` : ""}
+                </a>
+              </div>
             }
           />
 
@@ -588,6 +614,25 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
             <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
               <div className="shadow-card h-[200px] animate-pulse rounded-2xl border border-line bg-surface" />
               <div className="shadow-card h-[200px] animate-pulse rounded-2xl border border-line bg-surface" />
+            </div>
+          ) : !latest && projectQuery ? (
+            <div className="grid place-items-center rounded-2xl border border-dashed border-line bg-surface-2 px-6 py-12 text-center">
+              <span className="grid size-12 place-items-center rounded-full bg-navy/10 text-brand">
+                <Search className="size-5" />
+              </span>
+              <p className="mt-3 text-[15px] font-extrabold text-ink">
+                لا توجد نتائج مطابقة
+              </p>
+              <p className="mt-1 max-w-md text-[13px] leading-6 text-muted">
+                جرّب البحث باسم المشروع أو الجهة، أو امسح البحث لعرض أحدث أعمالك.
+              </p>
+              <button
+                type="button"
+                onClick={() => setProjectQuery("")}
+                className="mt-5 inline-flex h-10 items-center rounded-xl border border-line px-4 text-[12px] font-bold text-ink transition hover:bg-line-2"
+              >
+                عرض كل المشاريع
+              </button>
             </div>
           ) : !latest ? (
             <div className="grid place-items-center rounded-2xl border border-dashed border-line bg-surface-2 px-6 py-12 text-center">

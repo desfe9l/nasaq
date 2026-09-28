@@ -26,6 +26,7 @@ import {
   Paintbrush,
   RotateCcw,
   RotateCw,
+  Search,
   Scaling,
   Scissors,
   Trash2,
@@ -134,6 +135,9 @@ export function RightPanel({
   const toggleHeightLock = useEditor((s) => s.toggleHeightLock);
   const toggleAspectLock = useEditor((s) => s.toggleAspectLock);
   const toggleHidden = useEditor((s) => s.toggleHidden);
+  const align = useEditor((s) => s.align);
+  const distribute = useEditor((s) => s.distribute);
+  const group = useEditor((s) => s.group);
   const alignPage = useEditor((s) => s.alignPage);
   const fontChoices = useEditor((s) => s.fontChoices);
   const probeFonts = useEditor((s) => s.probeFonts);
@@ -189,6 +193,7 @@ export function RightPanel({
     id: string;
     side: "before" | "after";
   } | null>(null);
+  const [layerQuery, setLayerQuery] = useState("");
   const reorderLayers = useEditor((s) => s.reorderLayers);
 
   /**
@@ -263,6 +268,13 @@ export function RightPanel({
   };
 
   const layers = [...(page?.elements || [])].sort((a, b) => b.z - a.z);
+  const visibleLayers = layerQuery.trim()
+    ? layers.filter((layer) =>
+        `${layer.name} ${TYPE_NAME[layer.type]}`
+          .toLocaleLowerCase("ar")
+          .includes(layerQuery.trim().toLocaleLowerCase("ar")),
+      )
+    : layers;
   const selectedCount = useEditor((s) => s.selectedIds.length);
   const selectMany = useEditor((s) => s.selectMany);
   const select = useEditor((s) => s.select);
@@ -422,12 +434,25 @@ export function RightPanel({
         {tab === "layers" && (
           <div className="grid gap-2">
             {/* The list grows with the panel; the panel body is its one scroller (no nested scrollbar). */}
-            <div className="editor-layer-list min-h-[120px] overflow-x-hidden rounded-[8px] border border-line/50 p-1.5">
+          <div className="editor-layer-list min-h-[120px] overflow-x-hidden rounded-[8px] border border-line/50 p-1.5">
+              <label className="relative mb-1.5 block">
+                <Search className="pointer-events-none absolute end-2 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
+                <input
+                  value={layerQuery}
+                  onChange={(event) => setLayerQuery(event.target.value)}
+                  placeholder="ابحث في الطبقات…"
+                  aria-label="البحث في الطبقات"
+                  className="h-9 w-full rounded-md border border-line bg-surface-2 pe-8 ps-2 text-[11px] font-bold outline-none focus:border-navy"
+                />
+              </label>
               <div className="grid gap-1.5">
                 {layers.length === 0 && (
                   <EmptyNote>لا توجد عناصر في هذه الصفحة بعد.</EmptyNote>
                 )}
-                {layers.map((layer) => (
+                {layers.length > 0 && visibleLayers.length === 0 && (
+                  <EmptyNote>لا توجد طبقة تطابق «{layerQuery}».</EmptyNote>
+                )}
+                {visibleLayers.map((layer) => (
                   <LayerRow
                     key={layer.id}
                     layer={layer}
@@ -478,15 +503,93 @@ export function RightPanel({
           </div>
         )}
 
-        {tab === "properties" && el && (
-          <div className="grid gap-3">
-            {selectedCount > 1 && (
-              <div className="rounded-[8px] border border-brand/40 bg-surface-2 px-2.5 py-2 text-[11px] font-bold text-brand">
-                {selectedCount} عناصر محددة — تُطبَّق التعديلات على العنصر
-                الأساسي «{el.name || TYPE_NAME[el.type]}» فقط. استخدم شريط
-                الترتيب للمحاذاة والتجميع.
+        {tab === "properties" && selectedCount > 1 && (
+          <div className="grid gap-3" data-selection-inspector="multiple">
+            <div className="rounded-xl border border-brand/25 bg-navy/5 p-3">
+              <p className="text-[11px] font-bold tracking-wide text-brand">تحديد متعدد</p>
+              <h3 className="mt-1 text-[16px] font-extrabold text-ink">
+                {selectedCount} عناصر جاهزة للتحرير الجماعي
+              </h3>
+              <p className="mt-1.5 text-[11px] leading-5 text-muted">
+                طبّق المحاذاة والتوزيع والتنظيم على المجموعة كلها دون مغادرة لوحة الخصائص.
+              </p>
+            </div>
+
+            <section className="grid gap-2 rounded-lg border border-line p-2.5">
+              <h4 className="text-[11px] font-extrabold text-muted">محاذاة التحديد</h4>
+              <div className="grid grid-cols-3 gap-1.5">
+                {(
+                  [
+                    ["right", "يمين", AlignRight],
+                    ["center", "وسط أفقي", AlignCenter],
+                    ["left", "يسار", AlignLeft],
+                    ["top", "أعلى", AlignJustify],
+                    ["middle", "وسط رأسي", AlignCenter],
+                    ["bottom", "أسفل", AlignJustify],
+                  ] as const
+                ).map(([edge, label, Icon]) => (
+                  <button
+                    key={edge}
+                    type="button"
+                    className="editor-mini-btn justify-center"
+                    title={`محاذاة ${label}`}
+                    aria-label={`محاذاة ${label}`}
+                    onClick={() => align(edge, "selection")}
+                  >
+                    <Icon className="size-3.5" />
+                    <span>{label}</span>
+                  </button>
+                ))}
               </div>
-            )}
+              <div className="grid grid-cols-2 gap-1.5 border-t border-line pt-2">
+                <button
+                  type="button"
+                  className="editor-mini-btn justify-center"
+                  disabled={selectedCount < 3}
+                  onClick={() => distribute("h")}
+                >
+                  توزيع أفقي
+                </button>
+                <button
+                  type="button"
+                  className="editor-mini-btn justify-center"
+                  disabled={selectedCount < 3}
+                  onClick={() => distribute("v")}
+                >
+                  توزيع رأسي
+                </button>
+              </div>
+            </section>
+
+            <section className="grid grid-cols-2 gap-1.5 rounded-lg border border-line p-2.5">
+              <h4 className="col-span-2 text-[11px] font-extrabold text-muted">تنظيم سريع</h4>
+              <button type="button" className="editor-mini-btn justify-center" onClick={group}>
+                تجميع العناصر
+              </button>
+              <button type="button" className="editor-mini-btn justify-center" onClick={copyStyle}>
+                <Paintbrush className="size-3.5" /> نسخ التنسيق
+              </button>
+              <button type="button" className="editor-mini-btn justify-center" disabled={!styleClipboard} onClick={pasteStyle}>
+                <Paintbrush className="size-3.5" /> لصق التنسيق
+              </button>
+              <button type="button" className="editor-mini-btn justify-center" onClick={toggleLock}>
+                <Lock className="size-3.5" /> قفل التحديد
+              </button>
+              <button type="button" className="editor-mini-btn justify-center" onClick={toggleHidden}>
+                <EyeOff className="size-3.5" /> إخفاء التحديد
+              </button>
+              <button type="button" className="editor-mini-btn justify-center" onClick={() => bring("front")}>
+                إلى المقدمة
+              </button>
+              <button type="button" className="editor-mini-btn justify-center" onClick={() => bring("bottom")}>
+                إلى الخلف
+              </button>
+            </section>
+          </div>
+        )}
+
+        {tab === "properties" && el && selectedCount === 1 && (
+          <div className="grid gap-3">
             <div className="flex items-center justify-between">
               <h3 className="text-[13px] font-extrabold">
                 {el.name || TYPE_NAME[el.type]}
