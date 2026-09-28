@@ -41,13 +41,13 @@ export function DemoPage() {
             : "تجربة عملية قصيرة تريك التحرير العربي والعناصر والصفحات والتصدير الأساسي، من دون منح نسخة المنتج الكاملة."}
         </p>
         <div className="mt-9 grid gap-5 lg:grid-cols-2">
-          <section className="border border-line bg-surface p-6">
+          <section className="rounded-[14px] border border-line bg-surface p-6 transition-all duration-200 hover:border-line/80 hover:shadow-card">
             <div className="flex items-center gap-3"><Play className="size-5 text-brand-hover" /><h2 className="text-[18px] font-extrabold">{direct ? "الدخول إلى المحرر" : "ما يتاح في العرض"}</h2></div>
-            <ul className="mt-5 grid gap-3">{DEMO_ITEMS.map((item) => <li key={item} className="flex items-center gap-2 text-[14px]"><CheckCircle2 className="size-4 text-success" />{item}</li>)}</ul>
+            <ul className="mt-5 grid gap-3">{DEMO_ITEMS.map((item) => <li key={item} className="flex items-center gap-2 text-[14px]"><CheckCircle2 className="size-4 shrink-0 text-success" /><span>{item}</span></li>)}</ul>
             {direct ? (
-              <button type="button" onClick={() => void openNewDocument()} className="mt-7 inline-flex h-11 items-center gap-2 rounded-[8px] bg-navy px-4 text-[13px] font-extrabold text-on-brand"><Play className="size-4" />افتح المحرر</button>
+              <button type="button" onClick={() => void openNewDocument()} className="mt-7 inline-flex h-11 items-center gap-2 rounded-[10px] bg-navy px-4 text-[13px] font-extrabold text-on-brand transition hover:bg-navy-2"><Play className="size-4" />افتح المحرر</button>
             ) : (
-              <button type="button" onClick={() => void startDemo()} className="mt-7 inline-flex h-11 items-center gap-2 rounded-[8px] bg-navy px-4 text-[13px] font-extrabold text-on-brand"><Play className="size-4" />بدء تجربة المحرر</button>
+              <button type="button" onClick={() => void startDemo()} className="mt-7 inline-flex h-11 items-center gap-2 rounded-[10px] bg-navy px-4 text-[13px] font-extrabold text-on-brand transition hover:bg-navy-2"><Play className="size-4" />بدء تجربة المحرر</button>
             )}
             {direct && !isPending && (
               <p className="mt-3 text-[11px] leading-5 text-muted">
@@ -55,10 +55,10 @@ export function DemoPage() {
               </p>
             )}
           </section>
-          <section className="border border-brand/25 bg-surface-2 p-6">
+          <section className="rounded-[14px] border border-brand/25 bg-surface-2 p-6 transition-all duration-200 hover:border-brand/35 hover:shadow-card">
             <div className="flex items-center gap-3"><LockKeyhole className="size-5 text-brand-hover" /><h2 className="text-[18px] font-extrabold">ما يفتح بعد الشراء</h2></div>
-            <ul className="mt-5 grid gap-3">{FULL_ITEMS.map((item) => <li key={item} className="flex items-center gap-2 text-[14px]"><Sparkles className="size-4 text-gold" />{item}</li>)}</ul>
-            <a href="/purchase" className="mt-7 inline-flex h-11 items-center gap-2 rounded-[8px] border border-brand px-4 text-[13px] font-extrabold text-brand">عرض النسخ وخطوات التسليم</a>
+            <ul className="mt-5 grid gap-3">{FULL_ITEMS.map((item) => <li key={item} className="flex items-center gap-2 text-[14px]"><Sparkles className="size-4 shrink-0 text-gold" /><span>{item}</span></li>)}</ul>
+            <a href="/purchase" className="mt-7 inline-flex h-11 items-center gap-2 rounded-[10px] border border-brand px-4 text-[13px] font-extrabold text-brand transition hover:bg-brand/5">عرض النسخ وخطوات التسليم</a>
           </section>
         </div>
       </main>

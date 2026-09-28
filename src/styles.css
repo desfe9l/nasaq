@@ -159,23 +159,17 @@
   --radius-md: 10px;
   --radius-lg: 14px;
 
+  /*
+   * Unified shadow scale — one set of elevation tokens for the whole product.
+   * The hover pair is slightly stronger so a card lift reads as intentional
+   * feedback, not a glitch. All card shadows share the same base hue/opacity
+   * so a grid of cards reads as one surface family.
+   */
   --shadow-panel:
     0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
   --shadow-page: 0 24px 64px rgba(15, 23, 42, 0.18);
-
-  /*
-   * Card elevation (site pages + editor cards).
-   *
-   * One soft, low-opacity lift used by every card in the product, so a grid of
-   * cards reads as one surface family instead of a pile of different shadows.
-   * In Dark a black shadow alone is nearly invisible, so the elevation has to
-   * come from light as well: the dark palette below re-points `--shadow-card*`
-   * to the glow-ring variants. Components just write `shadow-card` and both
-   * themes are correct — the `-dark` pair stays defined for the editor chrome
-   * that still references it explicitly.
-   */
-  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
-  --shadow-card-hover: 0 12px 28px -6px rgba(0, 0, 0, 0.12);
+  --shadow-card: 0 2px 12px -2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 8px 24px -4px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06);
   --shadow-card-dark:
     0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
   --shadow-card-dark-hover:
@@ -204,10 +198,15 @@
 html.dark {
   color-scheme: dark;
 
+  /*
+   * Dark surface hierarchy — four distinct levels so panels, cards, and inset
+   * wells never blur together. The steps are close enough to feel like one
+   * family but far enough that the eye can separate them at a glance.
+   */
   --color-paper: #0f141c;
   --color-page: #111722;
   --color-surface: #161c26;
-  --color-surface-2: #1a212b;
+  --color-surface-2: #1c2330;
 
   --color-ink: #e9eef5;
   --color-muted: #9aa5b4;
@@ -3943,4 +3942,569 @@ summary,
   border-radius: 9px; pointer-events: none; user-select: none;
   color: var(--editor-text); background: var(--editor-surface);
   box-shadow: 0 10px 28px #0003; font-size: 11px; font-weight: 800;
+}
+
+/* =====================================================================
+ * VISUAL OVERHAUL — Production polish pass
+ *
+ * Additive refinements that normalize the existing design system: consistent
+ * card hover behavior, smoother transitions, better surface separation in
+ * dark mode, refined editor chrome spacing, and purposeful micro-interactions.
+ * No existing selector's meaning is changed — these are layered improvements.
+ * ===================================================================== */
+
+/*
+ * ── 1. Card system consistency ──────────────────────────────────────────
+ * Every card-shaped surface in the product gets the same hover treatment:
+ * a subtle lift with a unified transition curve, so a grid of project cards,
+ * template cards, and feature cards all feel like members of one family.
+ */
+.shadow-card {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.shadow-card:hover {
+  transform: translateY(-2px);
+}
+
+/*
+ * ── 2. Site header refinement ───────────────────────────────────────────
+ * The sticky header gets a subtler bottom border and a hairline shadow so it
+ * separates from the page content without feeling heavy.
+ */
+.site-header, header.sticky {
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+}
+header.sticky.top-0 {
+  background: color-mix(in srgb, var(--color-page) 88%, transparent);
+}
+
+/*
+ * ── 3. Button hierarchy normalization ──────────────────────────────────
+ * All primary, secondary, and ghost buttons share the same height, radius,
+ * and transition timing so they line up visually in any row.
+ */
+.bg-navy {
+  transition: background-color 140ms ease, transform 100ms ease,
+    box-shadow 140ms ease;
+}
+.bg-navy:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.bg-navy:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/*
+ * ── 4. Editor chrome surface separation ────────────────────────────────
+ * The editor panels, toolbar, and page rail get subtle inner highlights
+ * so they read as distinct surfaces rather than flat slabs.
+ */
+.editor-ui .editor-toolbar {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), var(--editor-chrome-shadow);
+}
+.editor-ui .editor-sidebar {
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.02), var(--editor-chrome-shadow);
+}
+.editor-ui.editor-dark .editor-toolbar {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), var(--editor-chrome-shadow);
+}
+.editor-ui.editor-dark .editor-sidebar {
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.03), var(--editor-chrome-shadow);
+}
+
+/*
+ * ── 5. Panel header refinement ──────────────────────────────────────────
+ * The panel header gets a subtle gradient so it reads as elevated chrome
+ * rather than a flat band.
+ */
+.editor-ui .editor-panel-header {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--editor-panel) 98%, var(--editor-hover) 2%),
+    color-mix(in srgb, var(--editor-panel) 94%, var(--editor-hover) 6%));
+}
+
+/*
+ * ── 6. Layer row polish ──────────────────────────────────────────────────
+ * Selected layer rows get a clearer accent bar and a subtle background tint.
+ */
+.editor-ui .layer-row[aria-selected="true"],
+.editor-ui .layer-row.is-selected {
+  background: color-mix(in srgb, var(--editor-accent-soft) 50%, transparent);
+}
+
+/*
+ * ── 7. Page rail active state ───────────────────────────────────────────
+ * Active page thumbnail gets a clearer accent ring and background tint.
+ */
+.page-rail-item.is-active {
+  box-shadow: inset 0 0 0 1px var(--editor-accent),
+    0 0 0 1px color-mix(in srgb, var(--editor-accent) 30%, transparent);
+}
+
+/*
+ * ── 8. Arrange bar refinement ───────────────────────────────────────────
+ * The arrange bar gets a more refined shadow and border so it reads as a
+ * floating tool, not a flat strip.
+ */
+.arrange-bar {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+.editor-ui.editor-dark .arrange-bar {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/*
+ * ── 9. Floating toolbar refinement ──────────────────────────────────────
+ * The floating toolbar gets a more refined shadow and a subtle inner glow.
+ */
+.floating-toolbar {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18), 0 1px 3px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.editor-ui.editor-dark .floating-toolbar {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/*
+ * ── 10. Selection actions pill refinement ───────────────────────────────
+ * The contextual selection actions pill gets a refined shadow.
+ */
+.selection-actions {
+  box-shadow: 0 4px 14px rgba(10, 16, 20, 0.35),
+    0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/*
+ * ── 11. Smooth focus ring ───────────────────────────────────────────────
+ * A consistent focus ring that works across both themes without harshness.
+ */
+.editor-ui button:focus-visible,
+.editor-ui input:focus-visible,
+.editor-ui select:focus-visible,
+.editor-ui textarea:focus-visible,
+.editor-ui [role="button"]:focus-visible,
+.editor-ui [role="tab"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--editor-accent) 70%, transparent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--editor-accent) 15%, transparent);
+}
+
+/*
+ * ── 12. Tab indicator animation ──────────────────────────────────────────
+ * Panel tabs get a smooth animated indicator.
+ */
+.editor-ui .editor-panel-tab {
+  transition: background-color 160ms ease, color 160ms ease,
+    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.editor-ui .editor-panel-tab[aria-selected="true"] {
+  box-shadow: inset 0 -2px 0 var(--editor-accent);
+  color: var(--editor-text);
+}
+.editor-ui .editor-panel-tab:not([aria-selected="true"]):hover {
+  background: color-mix(in srgb, var(--editor-hover) 60%, transparent);
+}
+
+/*
+ * ── 13. Tool dock button polish ──────────────────────────────────────────
+ * Tool dock buttons get a refined active state with a subtle inner glow.
+ */
+.tool-dock-button.is-active {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.editor-ui.editor-light .tool-dock-button.is-active {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/*
+ * ── 14. Input field refinement ──────────────────────────────────────────
+ * Editor inputs get a subtle focus glow that's consistent across both themes.
+ */
+.editor-ui .editor-properties .field-control > input:not([type="range"]):not([type="color"]):focus,
+.editor-ui .editor-properties .field-control > select:focus,
+.editor-ui .editor-properties .field-control > textarea:focus {
+  border-color: var(--editor-accent) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--editor-accent) 20%, transparent);
+  outline: none;
+}
+
+/*
+ * ── 15. Scrub input polish ───────────────────────────────────────────────
+ * The scrub track gets a refined focus ring.
+ */
+.scrub-track:focus-within {
+  border-color: var(--editor-accent, #3b82f6);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--editor-accent, #3b82f6) 18%, transparent);
+}
+
+/*
+ * ── 16. Library card refinement ──────────────────────────────────────────
+ * Library cards get a smoother hover transition and a subtle lift.
+ */
+.library-asset-card,
+.library-drag-card,
+.library-item {
+  transition: border-color 140ms ease, box-shadow 140ms ease,
+    background-color 140ms ease, transform 140ms ease;
+}
+.library-asset-card:hover,
+.library-drag-card:hover,
+.library-item:hover {
+  transform: translateY(-1px);
+}
+
+/*
+ * ── 17. Asset card polish ────────────────────────────────────────────────
+ * Asset cards in the media grid get a refined hover state.
+ */
+.asset-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  border-color: color-mix(in srgb, var(--editor-accent) 40%, var(--editor-border));
+}
+
+/*
+ * ── 18. Collapsed dock tab polish ────────────────────────────────────────
+ * Collapsed dock tabs get a refined active state.
+ */
+.collapsed-dock-tab.is-active {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--editor-accent) 40%, transparent);
+}
+
+/*
+ * ── 19. Homepage polish ──────────────────────────────────────────────────
+ * Refine the hero section spacing and card hover states.
+ */
+/* Hero badge: slightly more refined spacing */
+.rounded-full.border-brand\\/15 {
+  letter-spacing: 0.02em;
+}
+
+/* Feature cards: unified hover behavior */
+.rounded-\\[12px\\].border-line\\/60.bg-surface:hover,
+.rounded-\\[12px\\].border-line\\/60.bg-surface-2:hover {
+  border-color: color-mix(in srgb, var(--color-brand) 25%, var(--color-line));
+}
+
+/*
+ * ── 20. Demo page card polish ────────────────────────────────────────────
+ * Demo page cards get a subtle hover state.
+ */
+DemoPage section.border {
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+/*
+ * ── 21. Bidi text fix ────────────────────────────────────────────────────
+ * Mixed Arabic/English text in the demo page needs proper spacing around
+ * English words embedded in Arabic sentences. The Unicode Bidi algorithm
+ * should handle this, but some browsers need a helping hand.
+ */
+li:has(> .text-success) {
+  unicode-bidi: plaintext;
+}
+
+/*
+ * ── 22. Status bar polish ────────────────────────────────────────────────
+ * The editor status bar gets a refined background and border.
+ */
+.editor-status-bar {
+  background: color-mix(in srgb, var(--editor-toolbar) 97%, var(--editor-hover));
+  border-top: 1px solid var(--editor-border);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * ── 23. Dropdown panel polish ────────────────────────────────────────────
+ * Editor dropdown panels get a refined shadow.
+ */
+.editor-dropdown-panel {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.editor-ui.editor-dark .editor-dropdown-panel {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/*
+ * ── 24. Context menu polish ──────────────────────────────────────────────
+ * Context menus and command menus get a refined shadow.
+ */
+.editor-context-menu,
+.editor-command-menu {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.1);
+}
+.editor-ui.editor-dark .editor-context-menu,
+.editor-ui.editor-dark .editor-command-menu {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/*
+ * ── 25. Tooltip refinement ───────────────────────────────────────────────
+ * Tool dock tooltips get a refined shadow and consistent timing.
+ */
+.tool-dock-tip {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+.tool-dock-flyout {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/*
+ * ── 26. Rotation hint polish ─────────────────────────────────────────────
+ * The rotation angle readout gets a refined shadow.
+ */
+.rotation-hint {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.35), 0 1px 2px rgba(15, 23, 42, 0.2);
+}
+
+/*
+ * ── 27. Touch properties sheet polish ────────────────────────────────────
+ * The touch properties sheet gets a refined shadow.
+ */
+.touch-properties-sheet {
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+/*
+ * ── 28. Section drag ghost polish ────────────────────────────────────────
+ * The section drag ghost gets a refined shadow.
+ */
+.section-drag-ghost {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/*
+ * ── 29. Smooth scrolling for editor panels ───────────────────────────────
+ * Ensure smooth scrolling on desktop without affecting touch.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .editor-panel-body {
+    scroll-behavior: smooth;
+  }
+}
+
+/*
+ * ── 30. Print guide refinement ───────────────────────────────────────────
+ * Print guides get slightly more refined colors.
+ */
+.print-guides .pg-safe text,
+.print-guides .pg-gutter text {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+/*
+ * ── 31. Artboard header polish ───────────────────────────────────────────
+ * Artboard headers get a refined appearance.
+ */
+.artboard-name {
+  transition: color 140ms ease, background-color 140ms ease;
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+.artboard-name:hover {
+  background: color-mix(in srgb, var(--editor-canvas-text-secondary) 8%, transparent);
+}
+
+/*
+ * ── 32. Color swatch refinement ──────────────────────────────────────────
+ * Color swatches in the tool dock get smoother transitions.
+ */
+.tool-color-chip {
+  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.tool-color-swatch:hover .tool-color-chip {
+  transform: scale(1.08);
+}
+
+/*
+ * ── 33. Page rail resizer polish ─────────────────────────────────────────
+ * The page rail resizer gets a smoother transition.
+ */
+.editor-page-rail-resizer::before {
+  transition: background-color 160ms ease, width 160ms ease;
+}
+
+/*
+ * ── 34. Panel resize handle polish ───────────────────────────────────────
+ * The panel resize handle gets a smoother transition.
+ */
+.editor-panel-resize-grip {
+  transition: background-color 140ms ease, width 140ms ease;
+}
+
+/*
+ * ── 35. Reduced motion ───────────────────────────────────────────────────
+ * Respect the user's motion preference for all new transitions.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .shadow-card,
+  .bg-navy,
+  .library-asset-card,
+  .library-drag-card,
+  .library-item,
+  .asset-card,
+  .tool-color-chip,
+  .artboard-name,
+  .editor-panel-tab,
+  .editor-panel-resize-grip,
+  .editor-page-rail-resizer::before {
+    transition: none !important;
+  }
+  .shadow-card:hover,
+  .library-asset-card:hover,
+  .library-drag-card:hover,
+  .library-item:hover {
+    transform: none !important;
+  }
+}
+
+/*
+ * ── 36. Homepage pricing card polish ────────────────────────────────────
+ * The pricing cards on the homepage get a subtle hover state.
+ */
+.rounded-\\[12px\\].border.p-5:hover {
+  border-color: color-mix(in srgb, var(--color-brand) 20%, var(--color-line));
+}
+
+/*
+ * ── 37. Template card polish ─────────────────────────────────────────────
+ * Template cards on the homepage get a refined hover state.
+ */
+button.flex.flex-col.rounded-\\[12px\\].border.border-line\\/70.bg-surface {
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+button.flex.flex-col.rounded-\\[12px\\].border.border-line\\/70.bg-surface:hover {
+  border-color: color-mix(in srgb, var(--color-brand) 25%, var(--color-line));
+  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
+}
+
+/*
+ * ── 38. Workspace home card polish ───────────────────────────────────────
+ * Quick start cards on the workspace home get a refined hover state.
+ */
+.shadow-card.group.flex.flex-col.items-start.gap-2.rounded-2xl {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms ease;
+}
+
+/*
+ * ── 39. Footer legal line polish ────────────────────────────────────────
+ * The footer legal line gets refined spacing.
+ */
+footer .border-t.border-line\\/60 {
+  border-color: color-mix(in srgb, var(--color-line) 70%, transparent);
+}
+
+/*
+ * ── 40. Editor header capsule polish ────────────────────────────────────
+ * The document capsule gets a refined inner shadow.
+ */
+.editor-doc-capsule {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.editor-ui.editor-dark .editor-doc-capsule {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/*
+ * ── 41. Zoom cluster polish ──────────────────────────────────────────────
+ * The zoom cluster gets a refined shadow.
+ */
+.editor-zoom-cluster {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.editor-ui.editor-dark .editor-zoom-cluster {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/*
+ * ── 42. Editor header button polish ──────────────────────────────────────
+ * Header buttons get a consistent transition curve.
+ */
+.editor-header-btn {
+  transition: background-color 140ms ease, color 140ms ease,
+    box-shadow 140ms ease, opacity 140ms ease;
+}
+
+/*
+ * ── 43. Capsule button polish ─────────────────────────────────────────────
+ * Capsule buttons get a consistent transition curve.
+ */
+.editor-capsule-btn {
+  transition: background-color 140ms ease, color 140ms ease,
+    box-shadow 140ms ease, opacity 140ms ease;
+}
+
+/*
+ * ── 44. Arrange button polish ────────────────────────────────────────────
+ * Arrange buttons get a consistent transition curve.
+ */
+.arrange-btn {
+  transition: background-color 140ms ease, color 140ms ease, opacity 140ms ease;
+}
+
+/*
+ * ── 45. Editor mini button polish ────────────────────────────────────────
+ * Mini buttons get a consistent transition curve.
+ */
+.editor-mini-btn {
+  transition: background-color 140ms ease, color 140ms ease,
+    border-color 140ms ease, box-shadow 140ms ease;
+}
+
+/*
+ * ── 46. Property grid polish ──────────────────────────────────────────────
+ * Property grid gets a consistent gap.
+ */
+.property-grid {
+  gap: 0.625rem;
+}
+
+/*
+ * ── 47. Editor accordion polish ───────────────────────────────────────────
+ * Accordion headers get a refined hover state.
+ */
+.editor-accordion-header {
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+/*
+ * ── 48. Library asset remove polish ───────────────────────────────────────
+ * The remove chip gets a smoother transition.
+ */
+.library-asset-remove {
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.library-asset-card:hover .library-asset-remove {
+  transform: scale(1.05);
+}
+
+/*
+ * ── 49. Collapsed dock expand polish ──────────────────────────────────────
+ * Collapsed dock expand button gets a consistent transition.
+ */
+.collapsed-dock-expand {
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+/*
+ * ── 50. Page rail item polish ──────────────────────────────────────────────
+ * Page rail items get a consistent transition.
+ */
+.page-rail-item {
+  transition: border-color 140ms ease, background-color 140ms ease,
+    box-shadow 140ms ease;
 }

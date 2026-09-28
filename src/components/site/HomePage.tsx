@@ -63,23 +63,23 @@ export function HomePage() {
       <SiteHeader current="/" />
       <main>
         {/* Hero — مؤسسي رسمي هادئ */}
-        <section className="border-b border-line/70 bg-page ">
-          <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-12 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-16">
+        <section className="border-b border-line/70 bg-page">
+          <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-20">
             <div>
-              <div className="mb-4 inline-flex items-center rounded-full border border-brand/15 bg-navy/5 px-3 py-1 text-[11px] font-bold tracking-wide text-ink ">
+              <div className="mb-5 inline-flex items-center rounded-full border border-brand/15 bg-navy/5 px-3.5 py-1.5 text-[11px] font-bold tracking-wide text-ink">
                 {texts.heroEyebrow.trim() || PRODUCT_COPY.hero.eyebrow}
               </div>
-              <h1 className="max-w-2xl text-[28px] font-extrabold leading-[1.25] text-ink sm:text-[38px]">
+              <h1 className="max-w-2xl text-[30px] font-extrabold leading-[1.25] text-ink sm:text-[40px]">
                 {texts.heroTitle.trim() || PRODUCT_COPY.hero.title}
               </h1>
-              <p className="mt-4 max-w-xl text-[15px] leading-8 text-muted ">
+              <p className="mt-5 max-w-xl text-[15px] leading-8 text-muted">
                 {texts.heroDescription.trim() || PRODUCT_COPY.hero.description}
               </p>
-              <p className="mt-3 max-w-xl text-[13px] leading-6 text-muted ">
+              <p className="mt-3 max-w-xl text-[13px] leading-6 text-muted">
                 منصة واحدة لإعداد التقارير السنوية ولوحات المؤشرات والخطابات الرسمية والعروض التنفيذية، مع التزام كامل بالهوية المؤسسية وجودة طباعة 300 DPI.
               </p>
 
-              <div className="mt-6 flex flex-wrap items-center gap-3">
+              <div className="mt-7 flex flex-wrap items-center gap-3">
                 <a
                   href={workspace.ready ? (workspace.licensed ? WORKSPACE_HOME_PATH : "/editor") : undefined}
                   onClick={(event) => {
@@ -91,21 +91,21 @@ export function HomePage() {
                   <span>{workspace.ready ? (workspace.licensed ? "مساحة العمل" : "فتح المحرر") : "جارٍ تجهيز المساحة…"}</span>
                   <ArrowLeft className="size-4" />
                 </a>
-                <a href="/purchase" className="inline-flex h-11 items-center rounded-[10px] border border-line bg-surface px-5 text-[13px] font-bold text-ink hover:bg-surface-2 ">
+                <a href="/purchase" className="inline-flex h-11 items-center rounded-[10px] border border-line bg-surface px-5 text-[13px] font-bold text-ink transition hover:bg-surface-2 hover:border-line/80">
                   استعراض الخطط والأسعار
                 </a>
-                <a href="/projects" className="inline-flex h-11 items-center rounded-[10px] px-3 text-[13px] font-bold text-muted underline-offset-4 hover:text-ink hover:underline ">
+                <a href="/projects" className="inline-flex h-11 items-center rounded-[10px] px-3 text-[13px] font-bold text-muted underline-offset-4 transition hover:text-ink hover:underline">
                   كل مشاريعي
                 </a>
               </div>
 
               <div className="mt-6 flex flex-wrap gap-2">
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted ">تخزين محلي أولًا</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted ">جاهز للطباعة 300 DPI</span>
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted ">دعم الخطوط العربية الرسمية</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted">تخزين محلي أولًا</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted">جاهز للطباعة 300 DPI</span>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted">دعم الخطوط العربية الرسمية</span>
               </div>
 
-              <p className="mt-4 text-[11px] leading-6 text-muted ">{PRODUCT_COPY.demoNote}</p>
+              <p className="mt-5 text-[11px] leading-6 text-muted">{PRODUCT_COPY.demoNote}</p>
 
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <ProjectFileButton />
@@ -115,19 +115,19 @@ export function HomePage() {
 
             <div>
               <HeroShowcase />
-              <p className="mt-3 text-[11px] text-muted ">معاينة حقيقية من المحرر — تقارير، مؤشرات، خطابات رسمية بجودة مؤسسية</p>
+              <p className="mt-3 text-[11px] text-muted">معاينة حقيقية من المحرر — تقارير، مؤشرات، خطابات رسمية بجودة مؤسسية</p>
             </div>
           </div>
         </section>
 
         {/* لمن تناسب — مؤسسي */}
-        <section className="border-b border-line/60 bg-surface-2 py-10 sm:py-12">
+        <section className="border-b border-line/60 bg-surface-2 py-12 sm:py-14">
           <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
             <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
               <div>
                 <p className="text-[11px] font-bold tracking-[0.14em] text-brand">لمن تناسب</p>
-                <h2 className="mt-2 text-[20px] font-extrabold text-ink ">مصممة للجهات والمؤسسات والفرق المحترفة</h2>
-                <p className="mt-2 text-[13px] leading-7 text-muted ">توفر نَسَق بيئة عمل تناسب المتطلبات الرسمية، مع التزام بالهوية البصرية والجودة الطباعية وسهولة إعادة الاستخدام عبر القوالب.</p>
+                <h2 className="mt-2 text-[22px] font-extrabold text-ink">مصممة للجهات والمؤسسات والفرق المحترفة</h2>
+                <p className="mt-2 text-[13px] leading-7 text-muted">توفر نَسَق بيئة عمل تناسب المتطلبات الرسمية، مع التزام بالهوية البصرية والجودة الطباعية وسهولة إعادة الاستخدام عبر القوالب.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
@@ -136,11 +136,11 @@ export function HomePage() {
                   { icon: Megaphone, title: "إدارات الإعلام والاتصال", desc: "إنتاج يومي منظم للمخرجات الإعلامية والمؤسسية." },
                   { icon: PenTool, title: "المصممون وصناع التقارير", desc: "تحكم دقيق بالعناصر والخطوط والتصدير دون تعقيد." },
                 ].map((c) => (
-                  <div key={c.title} className="flex gap-3 rounded-[12px] border border-line/60 bg-surface p-4 ">
-                    <c.icon className="mt-0.5 size-4 shrink-0 text-ink " />
+                  <div key={c.title} className="flex gap-3 rounded-[12px] border border-line/60 bg-surface p-4 transition-all duration-200 hover:border-line/80 hover:shadow-card">
+                    <c.icon className="mt-0.5 size-4 shrink-0 text-ink" />
                     <div>
-                      <h3 className="text-[13px] font-bold text-ink ">{c.title}</h3>
-                      <p className="mt-1 text-[12px] leading-6 text-muted ">{c.desc}</p>
+                      <h3 className="text-[13px] font-bold text-ink">{c.title}</h3>
+                      <p className="mt-1 text-[12px] leading-6 text-muted">{c.desc}</p>
                     </div>
                   </div>
                 ))}
@@ -150,11 +150,11 @@ export function HomePage() {
         </section>
 
         {/* ماذا تقدم */}
-        <section className="border-b border-line/60 bg-page py-10 sm:py-12">
+        <section className="border-b border-line/60 bg-page py-12 sm:py-14">
           <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
             <div className="max-w-2xl">
               <p className="text-[11px] font-bold tracking-[0.14em] text-brand">ماذا تقدم نَسَق</p>
-              <h2 className="mt-2 text-[20px] font-extrabold text-ink ">إنتاج بصري منظم للمخرجات المتكررة</h2>
+              <h2 className="mt-2 text-[22px] font-extrabold text-ink">إنتاج بصري منظم للمخرجات المتكررة</h2>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-3">
               {[
@@ -162,13 +162,13 @@ export function HomePage() {
                 [Workflow, "لسير العمل الحقيقي", "من البيانات والهيكل إلى ملف جاهز للعرض والطباعة."],
                 [ShieldCheck, "لعمل آمن ومنظم", "تخزين محلي أولًا ومسار واضح للترخيص والتصدير."],
               ].map(([Icon, title, desc]) => (
-                <div key={String(title)} className="flex gap-3 rounded-[12px] border border-line/60 bg-surface-2 p-4 ">
-                  <span className="grid size-9 place-items-center rounded-[9px] border border-brand/10 bg-navy/5 text-brand ">
+                <div key={String(title)} className="flex gap-3 rounded-[12px] border border-line/60 bg-surface-2 p-4 transition-all duration-200 hover:border-line/80 hover:shadow-card">
+                  <span className="grid size-9 place-items-center rounded-[9px] border border-brand/10 bg-navy/5 text-brand">
                     <Icon className="size-4" />
                   </span>
                   <div>
-                    <strong className="block text-[13px] font-bold text-ink ">{String(title)}</strong>
-                    <span className="mt-1 block text-[12px] leading-6 text-muted ">{String(desc)}</span>
+                    <strong className="block text-[13px] font-bold text-ink">{String(title)}</strong>
+                    <span className="mt-1 block text-[12px] leading-6 text-muted">{String(desc)}</span>
                   </div>
                 </div>
               ))}
@@ -224,21 +224,21 @@ export function HomePage() {
         </section>
 
         {/* ماذا تتضمن المنصة */}
-        <section className="border-t border-line/60 bg-surface-2 py-10 sm:py-12">
+        <section className="border-t border-line/60 bg-surface-2 py-12 sm:py-14">
           <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-            <h2 className="text-[18px] font-bold text-ink ">ماذا تتضمن المنصة</h2>
+            <h2 className="text-[20px] font-bold text-ink">ماذا تتضمن المنصة</h2>
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {HIGHLIGHTS.map((h) => {
                 const Icon = h.icon;
                 return (
-                  <div key={h.title} className="rounded-[12px] border border-line/60 bg-surface p-5 ">
+                  <div key={h.title} className="rounded-[14px] border border-line/60 bg-surface p-5 transition-all duration-200 hover:border-line/80 hover:shadow-card">
                     <div className="flex items-start gap-3">
-                      <span className="grid size-8 place-items-center rounded-[8px] border border-brand/10 bg-navy/5 text-brand ">
+                      <span className="grid size-8 place-items-center rounded-[8px] border border-brand/10 bg-navy/5 text-brand">
                         <Icon className="size-4" />
                       </span>
                       <div>
-                        <strong className="block text-[13px] font-bold text-ink ">{h.title}</strong>
-                        <p className="mt-1 text-[12px] leading-6 text-muted ">{h.desc}</p>
+                        <strong className="block text-[13px] font-bold text-ink">{h.title}</strong>
+                        <p className="mt-1 text-[12px] leading-6 text-muted">{h.desc}</p>
                       </div>
                     </div>
                   </div>
@@ -246,21 +246,21 @@ export function HomePage() {
               })}
             </div>
             <div className="mt-6 flex flex-wrap gap-3">
-              <a href="/templates" className="inline-flex h-10 items-center rounded-[10px] bg-inverse px-5 text-[13px] font-bold text-on-inverse hover:bg-inverse-hover ">استعراض القوالب</a>
-              <a href="/purchase" className="inline-flex h-10 items-center rounded-[10px] border border-line bg-surface px-5 text-[13px] font-bold text-ink hover:bg-surface-2 ">الخطط والأسعار</a>
+              <a href="/templates" className="inline-flex h-10 items-center rounded-[10px] bg-inverse px-5 text-[13px] font-bold text-on-inverse transition hover:bg-inverse-hover">استعراض القوالب</a>
+              <a href="/purchase" className="inline-flex h-10 items-center rounded-[10px] border border-line bg-surface px-5 text-[13px] font-bold text-ink transition hover:bg-surface-2">الخطط والأسعار</a>
             </div>
           </div>
         </section>
 
         {/* الخطط باختصار */}
-        <section className="bg-page py-10 sm:py-12">
+        <section className="bg-page py-12 sm:py-14">
           <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
             <div className="flex flex-wrap items-end justify-between gap-4">
               <div>
                 <p className="text-[11px] font-bold tracking-[0.14em] text-brand">الخطط والتراخيص</p>
-                <h2 className="mt-2 text-[18px] font-bold text-ink ">اختر الخطة المناسبة</h2>
+                <h2 className="mt-2 text-[20px] font-bold text-ink">اختر الخطة المناسبة</h2>
               </div>
-              <a href="/purchase" className="text-[13px] font-bold text-brand hover:underline">عرض جميع الباقات</a>
+              <a href="/purchase" className="text-[13px] font-bold text-brand transition hover:text-brand-hover hover:underline">عرض جميع الباقات</a>
             </div>
             <div className="mt-6 grid gap-4 md:grid-cols-3">
               {[
@@ -268,13 +268,13 @@ export function HomePage() {
                 { name: "فردي — Pro", price: "199 ر.س / 3 أشهر", desc: "للمصممين والأفراد", features: ["تصدير حتى 384 DPI", "كل الصيغ", "قوالب وهوية كاملة"] },
                 { name: "فريق — Team", price: "499 ر.س / 3 أشهر", desc: "للفرق", features: ["كل مزايا Pro", "مساحة عمل مشتركة", "دعم بأولوية"] },
               ].map((p, i) => (
-                <div key={p.name} className={`rounded-[12px] border p-5 ${i === 2 ? "border-brand/20 bg-ok/10 " : "border-line/70 bg-surface-2 "}`}>
-                  <h3 className="text-[14px] font-bold text-ink ">{p.name}</h3>
-                  <p className="mt-1 text-[11px] text-muted ">{p.desc}</p>
-                  <p className="mt-3 text-[18px] font-extrabold text-ink ">{p.price}</p>
+                <div key={p.name} className={`rounded-[14px] border p-5 transition-all duration-200 hover:shadow-card ${i === 2 ? "border-brand/20 bg-ok/10" : "border-line/70 bg-surface-2"}`}>
+                  <h3 className="text-[14px] font-bold text-ink">{p.name}</h3>
+                  <p className="mt-1 text-[11px] text-muted">{p.desc}</p>
+                  <p className="mt-3 text-[20px] font-extrabold text-ink">{p.price}</p>
                   <ul className="mt-3 grid gap-1.5">
                     {p.features.map((f) => (
-                      <li key={f} className="flex items-center gap-2 text-[12px] text-muted ">
+                      <li key={f} className="flex items-center gap-2 text-[12px] text-muted">
                         <CheckCircle2 className="size-3.5 text-brand" /> {f}
                       </li>
                     ))}
