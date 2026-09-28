@@ -16,6 +16,7 @@ import {
   Lock,
   MoveDown,
   MoveUp,
+  Paintbrush,
   Scaling,
   Trash2,
   Underline,
@@ -66,6 +67,9 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const updateElement = useEditor((s) => s.updateElement);
   const commit = useEditor((s) => s.commit);
   const duplicateSelected = useEditor((s) => s.duplicateSelected);
+  const copyStyle = useEditor((s) => s.copyStyle);
+  const pasteStyle = useEditor((s) => s.pasteStyle);
+  const styleClipboard = useEditor((s) => s.styleClipboard);
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const bring = useEditor((s) => s.bring);
   const toggleBubble = useEditor((s) => s.toggleBubble);
@@ -465,6 +469,25 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
           onClick={duplicateSelected}
         >
           <Copy className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          className="floating-toolbar-btn"
+          title="نسخ التنسيق"
+          aria-label="نسخ التنسيق"
+          onClick={copyStyle}
+        >
+          <Paintbrush className="size-3.5" />
+        </button>
+        <button
+          type="button"
+          className="floating-toolbar-btn"
+          title="لصق التنسيق"
+          aria-label="لصق التنسيق"
+          onClick={pasteStyle}
+          disabled={!styleClipboard}
+        >
+          <Paintbrush className="size-3.5" />
         </button>
         <button
           type="button"

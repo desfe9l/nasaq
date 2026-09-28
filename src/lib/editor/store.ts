@@ -326,6 +326,8 @@ interface EditorStore extends Project, Ui, History {
   entitlements: Record<FeatureId, boolean>;
   setEntitlements: (entitlements: Record<FeatureId, boolean>) => void;
   clipboard: CanvasEl | null;
+  /** Session-local formatting clipboard, separate from whole-element copy/paste. */
+  styleClipboard: ElStyle | null;
   projects: ProjectMeta[];
   projectsLoading: boolean;
   storage: StorageInfo;
@@ -597,6 +599,8 @@ interface EditorStore extends Project, Ui, History {
   fitTextBox: (id: string) => void;
   duplicateSelected: () => void;
   copySelected: () => void;
+  copyStyle: () => void;
+  pasteStyle: () => void;
   /**
    * اللصق — `inPlace` pastes exactly on top of the original (Paste in Place),
    * the default keeps the +8mm nudge so a plain ⌘V never hides the copy.
@@ -1105,6 +1109,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     setEntitlements: (entitlements) =>
       set({ entitlements: { ...entitlements } }),
     clipboard: null,
+    styleClipboard: null,
     past: [],
     future: [],
     projects: [],
@@ -1180,6 +1185,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedAssetIds: [],
         customIcons: [],
         clipboard: null,
+        styleClipboard: null,
         past: [],
         future: [],
         entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
@@ -3163,6 +3169,41 @@ export const useEditor = create<EditorStore>((set, get) => {
             ? picked[0]
             : createGroupFrom(picked) || picked[0],
         ),
+      });
+    },
+
+    copyStyle: () => {
+      const s = get();
+      const source = s.selectedElements()[0];
+      if (!source) return;
+      set({ styleClipboard: clone(source.style || {}) });
+      toast.success("تم نسخ التنسيق", {
+        description: "حدد عنصرًا آخر ثم اختر «لصق التنسيق» لتطبيقه.",
+      });
+    },
+
+    pasteStyle: () => {
+      const s = get();
+      if (!s.styleClipboard || !s.selectedIds.length) return;
+      const page = activePageOf(s);
+      if (!page) return;
+      const style = clone(s.styleClipboard);
+      let changed = false;
+      const next = page.elements.map((root) => {
+        const walk = (el: CanvasEl): CanvasEl => {
+          if (!s.selectedIds.includes(el.id)) {
+            return el.children?.length ? { ...el, children: el.children.map(walk) } : el;
+          }
+          changed = true;
+          return { ...el, style: { ...style } };
+        };
+        return walk(root);
+      });
+      if (!changed) return;
+      set({ pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: next } : p)) });
+      pushHistory();
+      toast.success("تم لصق التنسيق", {
+        description: `${s.selectedIds.length} عنصر محدث بالتنسيق الجديد.`,
       });
     },
 

@@ -23,6 +23,7 @@ import {
   ImagePlus,
   Link,
   Lock,
+  Paintbrush,
   RotateCcw,
   RotateCw,
   Scaling,
@@ -121,6 +122,9 @@ export function RightPanel({
   const duplicateSelected = useEditor((s) => s.duplicateSelected);
   const copySelected = useEditor((s) => s.copySelected);
   const pasteClipboard = useEditor((s) => s.pasteClipboard);
+  const copyStyle = useEditor((s) => s.copyStyle);
+  const pasteStyle = useEditor((s) => s.pasteStyle);
+  const styleClipboard = useEditor((s) => s.styleClipboard);
   const clipboard = useEditor((s) => s.clipboard);
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const bring = useEditor((s) => s.bring);
@@ -2308,6 +2312,8 @@ export function RightPanel({
         <button type="button" onClick={duplicateSelected} disabled={!selectedId} aria-label="تكرار العنصر" title="تكرار العنصر (⌘D)"><CopyPlus className="size-4" strokeWidth={1.7} /><span>تكرار</span></button>
         <button type="button" onClick={copySelected} disabled={!selectedId} aria-label="نسخ العنصر" title="نسخ العنصر (⌘C)"><Copy className="size-4" strokeWidth={1.7} /><span>نسخ</span></button>
         <button type="button" onClick={() => pasteClipboard()} disabled={!clipboard} aria-label="لصق العنصر" title="لصق العنصر (⌘V)"><ClipboardPaste className="size-4" strokeWidth={1.7} /><span>لصق</span></button>
+        <button type="button" onClick={copyStyle} disabled={!selectedId} aria-label="نسخ التنسيق" title="نسخ التنسيق"><Paintbrush className="size-4" strokeWidth={1.7} /><span>نسخ التنسيق</span></button>
+        <button type="button" onClick={pasteStyle} disabled={!selectedId || !styleClipboard} aria-label="لصق التنسيق" title="لصق التنسيق"><Paintbrush className="size-4" strokeWidth={1.7} /><span>لصق التنسيق</span></button>
         <button type="button" onClick={deleteSelected} disabled={!selectedId} aria-label="حذف العنصر" title="حذف العنصر (Delete)" className="is-danger"><Trash2 className="size-4" strokeWidth={1.7} /><span>حذف</span></button>
       </footer>
     </aside>

@@ -415,6 +415,8 @@ function Studio({
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const copySelected = useEditor((s) => s.copySelected);
   const pasteClipboard = useEditor((s) => s.pasteClipboard);
+  const copyStyle = useEditor((s) => s.copyStyle);
+  const pasteStyle = useEditor((s) => s.pasteStyle);
   const select = useEditor((s) => s.select);
   const updateElement = useEditor((s) => s.updateElement);
   const commit = useEditor((s) => s.commit);
@@ -839,6 +841,18 @@ function Studio({
         duplicateSelected();
         return;
       }
+      if (meta && e.altKey && key === "c") {
+        if (typing) return;
+        e.preventDefault();
+        copyStyle();
+        return;
+      }
+      if (meta && e.altKey && key === "v") {
+        if (typing) return;
+        e.preventDefault();
+        pasteStyle();
+        return;
+      }
       if (meta && key === "c") {
         if (typing) return;
         e.preventDefault();
@@ -1016,6 +1030,8 @@ function Studio({
     deleteSelected,
     copySelected,
     pasteClipboard,
+    copyStyle,
+    pasteStyle,
     select,
     selectedId,
     selectedIds,
