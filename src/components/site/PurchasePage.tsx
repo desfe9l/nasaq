@@ -31,7 +31,19 @@ const TONE_STYLES: Record<PurchaseStateTone, string> = {
 };
 
 export function PurchasePage() {
-  const [billing, setBilling] = useState<PlanPeriod>("monthly");
+  /**
+   * The period a deep link may preselect (`/purchase?period=quarterly`): the
+   * homepage switcher sends a buyer here when a tier's checkout link is
+   * unavailable, and it should land on the period they were already looking at.
+   * Anything else — including no parameter at all — stays on the default.
+   */
+  const [billing, setBilling] = useState<PlanPeriod>(() => {
+    if (typeof window === "undefined") return "monthly";
+    const requested = new URLSearchParams(window.location.search).get("period");
+    return requested === "monthly" || requested === "quarterly" || requested === "annual"
+      ? requested
+      : "monthly";
+  });
   const [openFaq, setOpenFaq] = useState<number | null>(0);
   const [checkoutLinks, setCheckoutLinks] = useState<Record<string, string>>({});
   const [account, setAccount] = useState<CustomerAccount | null>(null);
