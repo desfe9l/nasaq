@@ -1406,6 +1406,7 @@ function Studio({
               value={name}
               onChange={(e) => setName(e.target.value)}
               aria-label="اسم المشروع"
+              title={name || "مستند جديد"}
               className="editor-doc-name"
               placeholder="مستند جديد"
             />

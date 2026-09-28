@@ -3329,8 +3329,10 @@ summary,
 }
 
 .editor-ui .editor-doc-name {
-  width: 11ch;
-  min-width: 6ch;
+  /* The document identity is chrome, not a tiny fixed label. Let Arabic names
+     breathe on desktop/tablet while keeping the capsule usable on phones. */
+  width: clamp(12ch, 16vw, 22ch);
+  min-width: 9ch;
   max-width: 22ch;
   height: 28px;
   flex: 0 1 auto;
