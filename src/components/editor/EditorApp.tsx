@@ -1240,7 +1240,7 @@ function Studio({
         className="editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]"
       >
         {/* ① Canvas scaling, history, and the document tools. */}
-        <div className="editor-header-zone">
+        <div className="editor-header-zone editor-header-primary">
           <div
             className="editor-zoom-cluster"
             role="group"
@@ -1474,7 +1474,7 @@ function Studio({
         </div>
 
         {/* ③ Workspace/account + the export action. */}
-        <div className="editor-header-zone ms-auto">
+        <div className="editor-header-zone editor-header-actions ms-auto">
           <SaveBadge
             state={saveState}
             label={label}
