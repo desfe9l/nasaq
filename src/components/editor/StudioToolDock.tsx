@@ -118,13 +118,17 @@ export function StudioToolDock({
   const heldFlyout = useRef(false);
   const foregroundInput = useRef<HTMLInputElement>(null);
   const backgroundInput = useRef<HTMLInputElement>(null);
+  const rightOpen = useEditor((s) => s.rightOpen);
+  const rightTab = useEditor((s) => s.rightTab);
   const selected = useEditor((s) => s.selectedElements()[0]);
   const selectedId = selected?.id;
   const selectedType = selected?.type;
-  const selectedFill = selected?.style?.fill;
+  const selectedFill = selected?.type === "svg" ? selected.style.svgFill : selected?.style?.fill;
   const selectedColor = selected?.style?.color;
   const selectedBackground = selected?.style?.background;
-  const selectedBorder = selected?.style?.borderColor;
+  const selectedBorder = selectedType === "svg" || selectedType === "icon"
+    ? selected?.style?.svgStroke
+    : selected?.style?.borderColor;
   const selectedStroke = selected?.style?.svgStroke;
   const [colors, setColors] = useState<{ foreground: string; background: string }>({ ...DEFAULT_COLORS });
   const foreground = selectedFill || selectedColor || selectedBackground || colors.foreground;
@@ -238,7 +242,7 @@ export function StudioToolDock({
   const patchFor = (key: "foreground" | "background", color: string) => {
     const isText = ["text", "box", "stat", "stamp", "table", "progress"].includes(selectedType || "");
     return key === "foreground"
-      ? (isText ? { color } : { fill: color })
+      ? (selectedType === "svg" ? { svgFill: color } : selectedType === "icon" ? { fill: color, color } : isText ? { color } : { fill: color })
       : { borderColor: color, svgStroke: color };
   };
   const colorChange = (key: "foreground" | "background", color: string) => {
@@ -401,9 +405,9 @@ export function StudioToolDock({
               case "files":
                 return toolButton("files", FolderOpen, "ملفات المشروع — فتح ملف .nsq", "⌘O", onOpenFiles);
               case "layers":
-                return toolButton("layers", Layers, "الطبقات", "", () => onOpenRight("layers"));
+                return toolButton("layers", Layers, "الطبقات", "", () => onOpenRight("layers"), rightOpen && rightTab === "layers");
               case "properties":
-                return toolButton("properties", SlidersHorizontal, "الخصائص والإعدادات", "", () => onOpenRight("properties"));
+                return toolButton("properties", SlidersHorizontal, "الخصائص والإعدادات", "", () => onOpenRight("properties"), rightOpen && rightTab === "properties");
               case "colors":
                 return toolButton("colors", Palette, "لوحة الألوان — تعبئة وإطار", "", () => openPicker(foregroundInput.current));
               default:

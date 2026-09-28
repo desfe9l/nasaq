@@ -661,7 +661,7 @@ function ElementContent({
     }
     return (
       <div
-        className="grid h-full w-full place-items-center"
+        className="canvas-svg-content h-full w-full"
         style={{
           color: s.color || "#172033",
           opacity: el.opacity ?? 1,
@@ -681,8 +681,8 @@ function ElementContent({
       <div className="grid h-full w-full place-items-center" style={{ color: s.color || "#c9a86a" }}>
         <svg
           viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
+          fill={s.fill || "none"}
+          stroke={s.svgStroke || s.borderColor || "currentColor"}
           strokeWidth={s.stroke || 1.8}
           strokeLinecap="round"
           strokeLinejoin="round"

@@ -13,7 +13,7 @@ import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
 import { AccountAvatar } from "@/components/site/AccountAvatar";
-import { useAccountTier } from "@/components/site/AccountBadge";
+import { AccountBadge, useAccountTier } from "@/components/site/AccountBadge";
 import {
   AccountMenuPanel,
   accountMenuItemClass,
@@ -64,6 +64,7 @@ function NewDocumentMenuItem({ user, onRequest }: { user: AppUser; onRequest: ()
 
 export function EditorAccountMenu() {
   const { user, isPending } = useCurrentUserState();
+  const tier = useAccountTier(user);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [newDocOpen, setNewDocOpen] = useState(false);
@@ -149,6 +150,7 @@ export function EditorAccountMenu() {
         )}
       >
         <AccountAvatar user={user} size={22} />
+        <AccountBadge tier={tier} />
         <span className="hidden max-w-[128px] truncate md:inline">{identity.label}</span>
         <ChevronDown className="size-3.5 opacity-70" aria-hidden />
       </button>

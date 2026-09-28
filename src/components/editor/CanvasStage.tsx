@@ -2,15 +2,9 @@ import { mmToPx } from "@/lib/editor/render-units";
 import { likelyNsqDrag } from "@/lib/nsq/format";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  EyeOff,
-  LockKeyholeOpen,
-  Trash2,
-} from "lucide-react";
-import {
   findElement,
   MIN_SIZE,
   pageSize,
-  TYPE_NAME,
   WORKSPACE_MARGIN_MM,
   type Box,
   type CanvasEl,
@@ -72,7 +66,7 @@ type LayerPickerState = {
 const SELECTION_LAYER_Z = 5000;
 const GUIDE_LAYER_Z = SELECTION_LAYER_Z - 1;
 const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
-const ROTATE_HANDLES = ["nw", "ne", "se", "sw"] as const;
+const ROTATE_HANDLES = ["n"] as const;
 
 function snapRotation(raw: number, shift: boolean): number {
   if (!shift) {
@@ -1383,7 +1377,6 @@ export function CanvasStage({
                             frame={frame}
                             primary={frame.el.id === selectedId}
                             editing={editingId === frame.el.id}
-                            zoom={zoom}
                             onGesture={(ev, kind, handle) =>
                               startOp(
                                 ev,
@@ -1466,14 +1459,12 @@ function SelectionFrame({
   frame,
   primary,
   editing,
-  zoom,
   onGesture,
   onEditRequest,
 }: {
   frame: SelectionBox;
   primary: boolean;
   editing: boolean;
-  zoom: number;
   onGesture: (
     e: React.PointerEvent,
     kind: "move" | "resize" | "rotate",
@@ -1575,89 +1566,9 @@ function SelectionFrame({
               🔒
             </span>
           )}
-          {/*
-           * Unified scale/hide/lock overlay (redesign): explicit resize
-           * handles above, and this pill — visible the moment anything is
-           * selected — carries Hide (visibility toggle), Lock and Delete so
-           * none of them requires opening a menu or a sidebar first.
-           */}
-          <SelectionActions el={el} zoom={zoom} />
+
         </>
       )}
-    </div>
-  );
-}
-
-/**
- * The floating contextual pill for the selected element.
- *
- * Lives INSIDE the selection frame (the layer that mirrors the element's mm
- * box and rotation), so it can never drift off its artwork; it is
- * counter-rotated and inverse-zoomed so it always reads level and stays a
- * constant thumb-friendly size on screen at any zoom or rotation.
- */
-function SelectionActions({ el, zoom }: { el: CanvasEl; zoom: number }) {
-  const toggleHidden = useEditor((s) => s.toggleHidden);
-  const toggleLock = useEditor((s) => s.toggleLock);
-  const deleteSelected = useEditor((s) => s.deleteSelected);
-  const flipX = el.style?.flipX ? -1 : 1;
-  const flipY = el.style?.flipY ? -1 : 1;
-  return (
-    <div
-      className="selection-actions"
-      role="toolbar"
-      aria-label="إجراءات العنصر المحدد"
-      style={{
-        marginBottom: `${2.4 / zoom}mm`,
-        transform: `translateX(-50%) rotate(${-(el.rotation || 0)}deg) scale(${(flipX / zoom).toFixed(4)}, ${(flipY / zoom).toFixed(4)})`,
-        transformOrigin: "bottom center",
-        // The pill is chrome over the artwork: its buttons must never arm an
-        // element drag or a marquee — every press stops here.
-      }}
-      onPointerDown={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-      }}
-      onDoubleClick={(e) => e.stopPropagation()}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-    >
-      <span className="selection-actions-label" aria-hidden>
-        {TYPE_NAME[el.type]}
-      </span>
-      <button
-        type="button"
-        className="selection-actions-btn"
-        title="إخفاء العنصر (تبديل الظهور)"
-        aria-label="إخفاء العنصر"
-        onClick={toggleHidden}
-      >
-        <EyeOff className="size-[15px]" strokeWidth={1.8} />
-      </button>
-      {/*
-       * يظهر الشريط فقط والعنصر غير مقفل — الإطار المقفل نفّاذ للنقر (يصل
-       * إلى ما تحته)، وفتح القفل يتم من الشريط العائم أو شجرة الطبقات.
-       */}
-      <button
-        type="button"
-        className="selection-actions-btn"
-        title="قفل العنصر (منع التحرير)"
-        aria-label="قفل العنصر"
-        onClick={toggleLock}
-      >
-        <LockKeyholeOpen className="size-[15px]" strokeWidth={1.8} />
-      </button>
-      <button
-        type="button"
-        className="selection-actions-btn is-danger"
-        title="حذف العنصر (Delete)"
-        aria-label="حذف العنصر"
-        onClick={deleteSelected}
-      >
-        <Trash2 className="size-[15px]" strokeWidth={1.8} />
-      </button>
     </div>
   );
 }

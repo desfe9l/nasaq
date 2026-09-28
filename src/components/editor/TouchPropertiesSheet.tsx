@@ -34,10 +34,22 @@ export function TouchPropertiesSheet({
     typeof window === "undefined" ? 600 : Math.round(window.innerHeight * 0.72),
   );
   useEffect(() => {
-    const onResize = () =>
-      setMaxHeight(Math.round(window.innerHeight * 0.72));
+    const stage = document.querySelector(".editor-canvas-stage");
+    const onResize = () => {
+      const header = document.querySelector(".editor-toolbar")?.getBoundingClientRect().bottom ?? 80;
+      const bottom = stage?.getBoundingClientRect().bottom ?? window.innerHeight;
+      setMaxHeight(Math.max(MIN_HEIGHT, Math.floor(Math.min(window.innerHeight * 0.72, bottom - header - 24))));
+    };
+    onResize();
+    const observer = new ResizeObserver(onResize);
+    if (stage) observer.observe(stage);
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    window.visualViewport?.addEventListener("resize", onResize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", onResize);
+      window.visualViewport?.removeEventListener("resize", onResize);
+    };
   }, []);
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ id: number; y: number; height: number } | null>(null);
@@ -45,7 +57,7 @@ export function TouchPropertiesSheet({
   const folded = effective <= 64;
 
   const applyHeight = (next: number, persist = true) => {
-    const clamped = Math.max(MIN_HEIGHT, Math.round(next));
+    const clamped = Math.min(maxHeight, Math.max(MIN_HEIGHT, Math.round(next)));
     setHeight(clamped);
     if (persist) {
       try {
@@ -71,6 +83,7 @@ export function TouchPropertiesSheet({
           role="slider"
           tabIndex={open ? 0 : -1}
           aria-label="اسحب لتغيير ارتفاع لوحة الخصائص"
+          aria-orientation="vertical"
           aria-valuemin={MIN_HEIGHT}
           aria-valuemax={maxHeight}
           aria-valuenow={effective}
@@ -101,8 +114,8 @@ export function TouchPropertiesSheet({
               Math.max(
                 MIN_HEIGHT,
                 Math.min(
-                  window.innerHeight * 0.72,
-                  start.height + start.y - e.clientY,
+                  maxHeight,
+                  start.height + e.clientY - start.y,
                 ),
               ),
               false,
@@ -124,7 +137,7 @@ export function TouchPropertiesSheet({
             setDragging(false);
           }}
         >
-          <span /> <span>الخصائص</span>
+          <span /> <span>الخصائص والطبقات</span>
         </div>
         <button
           type="button"

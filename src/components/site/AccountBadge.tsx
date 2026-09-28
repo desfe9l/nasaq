@@ -42,13 +42,13 @@ const BADGE_META: Record<
   LICENSED: {
     label: "مرخص",
     className:
-      "border-brand/25 bg-navy/10 text-brand",
+      "border-brand/20 bg-brand/10 text-brand",
     Icon: BadgeCheck,
   },
   ADMIN: {
     label: "مرخص",
     className:
-      "border-gold/40 bg-gold/15 text-warning",
+      "border-brand/20 bg-brand/10 text-brand",
     Icon: BadgeCheck,
   },
   SUSPENDED: {
@@ -68,9 +68,8 @@ const BADGE_META: Record<
 /**
  * The badge itself.
  *
- * Rendered as `[ مرخص ]` / `[ مجاني ]` exactly as specified — the brackets are
- * part of the design language, not decoration around it — with an icon that
- * carries the same meaning when the label is hidden on the narrowest chrome.
+ * Compact RTL status pill; the icon reinforces the label without ornamental
+ * brackets, glow or a second status treatment.
  */
 export function AccountBadge({
   tier,
@@ -86,7 +85,8 @@ export function AccountBadge({
   return (
     <span
       className={cn(
- "inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-extrabold leading-none",
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border py-1 text-[11px] font-bold leading-4",
+        compact ? "px-2" : "px-2.5",
         meta.className,
         className,
       )}
@@ -103,17 +103,9 @@ export function AccountBadge({
       }
     >
       <Icon className={cn("size-3", tier === "LOADING" && "animate-spin")} aria-hidden />
-      {!compact && (
-        <span aria-hidden className="opacity-60">
-          [
-        </span>
-      )}
+
       <span>{meta.label}</span>
-      {!compact && (
-        <span aria-hidden className="opacity-60">
-          ]
-        </span>
-      )}
+
     </span>
   );
 }

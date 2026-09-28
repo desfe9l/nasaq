@@ -316,9 +316,7 @@ function PlanCard({
           className={`inline-flex h-10 w-full items-center justify-center gap-2 rounded-[10px] text-[13px] font-bold transition ${
             free
               ? "border border-line bg-surface text-ink hover:bg-surface-2"
-              : card.featured
-                ? "bg-navy text-on-brand hover:bg-navy-2"
-                : "bg-inverse text-on-inverse hover:bg-inverse-hover"
+              : "subscription-cta"
           } disabled:cursor-wait disabled:opacity-70`}
         >
           {busy ? "جارٍ فتح بوابة الدفع…" : card.ctaLabel}

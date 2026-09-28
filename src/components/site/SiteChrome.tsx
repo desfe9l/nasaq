@@ -4,11 +4,10 @@ import { ChevronDown, FilePlus2, KeyRound, LogIn, LogOut, Menu, Moon, Sun, UserR
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   BRAND,
-  CONTACT_PHONE_DISPLAY,
   NAV_ITEMS,
   PRIMARY_NAV_ITEMS,
   SECONDARY_NAV_ITEMS,
-  telHref,
+  whatsappHref,
 } from "@/lib/brand";
 import { SocialLinks } from "@/components/site/SocialLinks";
 import { readStoredTheme, writeStoredTheme, subscribeTheme } from "@/lib/theme";
@@ -455,11 +454,11 @@ export function SiteHeader({ current }: { current: string }) {
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
           <a
-            href={telHref()}
+            href={whatsappHref()}
             className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-[8px] border border-line px-3 text-[12px] font-bold xl:inline-flex"
           >
-            <span className="tabular-nums" dir="ltr">
-              {CONTACT_PHONE_DISPLAY}
+            <span className="tabular-nums" dir="rtl">
+              تواصل عبر واتساب
             </span>
           </a>
           <NewDocumentButton />
@@ -514,7 +513,7 @@ export function SiteFooter() {
   const { texts } = useSiteSettings();
   return (
     <footer className="border-t border-line/60 bg-page">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-12 sm:grid-cols-2 sm:px-6 md:grid-cols-3">
+      <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-8 sm:grid-cols-2 sm:px-6 md:grid-cols-3">
         <div>
           <div className="flex items-center gap-2.5">
             <BrandLogo compact />
@@ -525,7 +524,7 @@ export function SiteFooter() {
           </p>
           {/* Official accounts, next to the NASAQ badge — icon-only so the
               column keeps its weight on every breakpoint. */}
-          <SocialLinks className="mt-3" />
+          <SocialLinks className="mt-2" />
         </div>
         <div>
           <h3 className="mb-2 text-[12px] font-extrabold text-muted">روابط</h3>
@@ -542,11 +541,11 @@ export function SiteFooter() {
         <div>
           <h3 className="mb-2 text-[12px] font-extrabold text-muted">التواصل</h3>
           <a
-            href={telHref()}
+            href={whatsappHref()}
             className="inline-flex h-9 items-center rounded-[8px] border border-line px-3 text-[13px] font-bold tabular-nums"
-            dir="ltr"
+            dir="rtl"
           >
-            {CONTACT_PHONE_DISPLAY}
+            تواصل عبر واتساب
           </a>
           <p className="mt-3 text-[11px] leading-5 text-muted">
             {texts.footerNote.trim() || "تُحفظ المشاريع في متصفحك وتُصدَّر محليًا، مع اتصال عند الحاجة للترخيص أو الذكاء الاصطناعي."}

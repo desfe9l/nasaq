@@ -938,8 +938,9 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   transform-origin: center center;
   overflow: visible;
   touch-action: none;
-  min-width: 3mm;
-  min-height: 3mm;
+  /* Model geometry is authoritative, including thin and scaled elements. */
+  min-width: 0;
+  min-height: 0;
 }
 
 /*
@@ -967,6 +968,10 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   height: 100%;
   object-fit: contain;
 }
+
+/* Sanitised roots have no intrinsic width/height: size the actual SVG viewport
+   from the model box instead of the browser's default 300 × 150 viewport. */
+.canvas-svg-content > svg { display: block; width: 100%; height: 100%; }
 
 /*
  * Selection & manipulation overlay.
@@ -1022,12 +1027,12 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   --handle-hit-size: calc(32px / var(--editor-zoom, 1));
   --handle-inset: calc(var(--handle-size) / 2);
   --rotate-hit-size: calc(32px / var(--editor-zoom, 1));
-  /* Diagonal reach of the corner rotation grips: close enough to grab without a
-     hunt, far enough to clear the corner resize dot underneath. */
-  --rotate-gap: calc(52px / var(--editor-zoom, 1));
+  /* Single rotation grip, separated from the top resize hit target. */
+  --rotate-gap: calc(54px / var(--editor-zoom, 1));
   /*
    * Tight bounding box (borderScaleFactor: 1): the frame mirrors the element's
-   * exact box, and a single 1px border is drawn INSIDE it (border-box), so the
+   * exact box, and a single inset 1px outline is drawn without changing the
+   * containing block for its handles, so the
    * line touches the artwork's true outer edge with zero artificial padding.
    * Counter-scaling by --editor-zoom keeps it a crisp 1 screen pixel at every
    * zoom. No outline, halo, inset ring or tinted fill — one border only.
@@ -1035,8 +1040,10 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   position: absolute;
   z-index: 2;
   box-sizing: border-box;
-  border: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
-  outline: none;
+  border: 0;
+  outline: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
+  outline-offset: calc(-1px / var(--editor-zoom, 1));
+  transform-origin: center center;
   box-shadow: none;
   background: transparent;
   pointer-events: auto;
@@ -1051,8 +1058,8 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  */
 .selection-frame.is-secondary {
   z-index: 1;
-  border-style: dashed;
-  border-color: color-mix(in srgb, var(--sel-color, #10b981) 85%, transparent);
+  outline-style: dashed;
+  outline-color: color-mix(in srgb, var(--sel-color, #10b981) 85%, transparent);
 }
 
 /*
@@ -1068,16 +1075,16 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * layer tree, the marquee and the menus, never by clicking the artwork.
  */
 .selection-frame.is-locked {
-  border-style: dashed;
-  border-color: #8b5cf6;
+  outline-style: dashed;
+  outline-color: #8b5cf6;
   cursor: not-allowed;
   pointer-events: none;
 }
 
 .selection-frame.is-resize-locked,
 .selection-frame.is-dimension-locked {
-  border-color: #f59e0b;
-  border-style: dashed;
+  outline-color: #f59e0b;
+  outline-style: dashed;
 }
 
 /*
@@ -1411,40 +1418,12 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   pointer-events: none;
 }
 
-.rotate-handle.nw::before {
-  transform: translate(-50%, 0) rotate(-45deg);
+.rotate-handle.n {
+  top: calc(-1 * var(--rotate-gap) - var(--rotate-hit-size) / 2);
+  left: 50%;
+  transform: translateX(-50%);
 }
-.rotate-handle.ne::before {
-  transform: translate(-50%, 0) rotate(45deg);
-}
-.rotate-handle.se::before {
-  transform: translate(-50%, 0) rotate(135deg);
-}
-.rotate-handle.sw::before {
-  transform: translate(-50%, 0) rotate(-135deg);
-}
-
-/*
- * Step 7 — a grip on every corner. Each sits on the diagonal OUTSIDE the corner
- * it controls, so it is reachable no matter how small the element is and it
- * never covers the resize dots.
- */
-.rotate-handle.nw {
-  top: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
-  left: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
-}
-.rotate-handle.ne {
-  top: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
-  right: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
-}
-.rotate-handle.se {
-  bottom: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
-  right: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
-}
-.rotate-handle.sw {
-  bottom: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
-  left: calc(var(--rotate-gap) * -1 - var(--rotate-hit-size) / 2);
-}
+.rotate-handle.n::before { transform: translateX(-50%); }
 
 .rotate-handle:active {
   cursor: grabbing;
@@ -1480,7 +1459,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
     --handle-size: calc(11px / var(--editor-zoom, 1));
     --handle-hit-size: calc(48px / var(--editor-zoom, 1));
     --rotate-hit-size: calc(48px / var(--editor-zoom, 1));
-    --rotate-gap: calc(52px / var(--editor-zoom, 1));
+    --rotate-gap: calc(54px / var(--editor-zoom, 1));
   }
 }
 
@@ -1565,7 +1544,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * panels can size themselves with `calc(100vh - header)` instead of a magic
  * number that drifts the moment the toolbar wraps to a second row.
  */
-.editor-shell {
+:root {
   --editor-header-h: 52px;
 }
 
@@ -2640,8 +2619,8 @@ summary,
 .touch-properties-sheet {
   position: fixed;
   z-index: var(--z-drawer);
-  bottom: max(12px, env(safe-area-inset-bottom));
-  left: max(12px, env(safe-area-inset-left));
+  top: calc(var(--editor-header-h, 80px) + 12px);
+  inset-inline-end: max(12px, env(safe-area-inset-left));
   width: min(380px, calc(100vw - 24px));
   max-height: min(72dvh, calc(100dvh - var(--editor-header-h) - 24px));
   min-height: 56px;
@@ -2662,8 +2641,8 @@ summary,
 .touch-properties-header button { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; }
 .touch-properties-grip { flex: 1; align-self: stretch; display: flex; align-items: center; gap: 10px; touch-action: none; cursor: ns-resize; font-size: 12px; font-weight: 700; user-select: none; }
 .touch-properties-grip > span:first-child { width: 32px; height: 4px; background: var(--editor-border); border-radius: 4px; }
-.touch-properties-content { flex: 1; min-height: 0; overflow: hidden; }
-.touch-properties-content > * { height: 100%; min-height: 0; }
+.touch-properties-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.touch-properties-content > * { height: 100%; min-height: 230px; }
 @media (orientation: landscape) {
   .touch-properties-sheet { width: min(340px, 42vw); }
 }
@@ -3119,12 +3098,11 @@ summary,
   .layer-row > .layer-row-action.is-first { margin-inline-start: auto; }
 }
 
-/* Bottom toolbar: flexible quick actions; captions appear when there is room. */
+/* Quick actions wrap by their content width, not by the viewport width. */
 .editor-panel-footer {
-  container-type: inline-size;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   flex: 0 0 auto;
-  flex-wrap: wrap;
   gap: 4px;
   padding: 6px 8px calc(6px + var(--safe-bottom, 0px));
   border-top: 1px solid var(--editor-border);
@@ -3134,7 +3112,6 @@ summary,
   display: inline-flex;
   min-width: 40px;
   min-height: 40px;
-  flex: 1 1 40px;
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -3158,10 +3135,8 @@ summary,
 .editor-ui .editor-sidebar .editor-panel-footer > button.is-danger:hover:not(:disabled) {
   background: rgba(224, 146, 140, 0.12);
 }
-.editor-panel-footer > button > span { display: none; }
-@container (min-width: 300px) {
-  .editor-panel-footer > button > span { display: inline; }
-}
+.editor-panel-footer > button > span { white-space: normal; line-height: 1.4; }
+.editor-panel-footer > button > svg { flex-shrink: 0; }
 
 /* ---------- Library workspace ---------- */
 .asset-library { min-width: 0; container: assetlibrary / inline-size; }
@@ -3486,72 +3461,6 @@ summary,
   .editor-ui .editor-export-btn { height: 42px; padding-inline: 18px; }
 }
 
-/* ---------- Selection: unified scale / hide / lock overlay ---------- */
-
-/*
- * The contextual overlay pinned above the selected element: explicit corner
- * and side handles scale/resize, and this pill carries Hide (eye), Lock and
- * Delete so none of them needs a menu. Inverse-scaled by the live zoom so it
- * stays a constant, thumb-sized target at any magnification, and
- * counter-rotated so it always sits level above rotated artwork.
- */
-.selection-actions {
-  position: absolute;
-  bottom: 100%;
-  left: 50%;
-  z-index: 6;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border: 1px solid var(--editor-border, rgba(148, 163, 180, 0.35));
-  border-radius: 999px;
-  background: var(--editor-panel, #1e252b);
-  box-shadow:
-    0 6px 18px rgba(10, 16, 20, 0.45),
-    0 0 0 1px rgba(255, 255, 255, 0.04);
-  pointer-events: auto;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
-
-.selection-actions-btn {
-  display: grid;
-  width: 30px;
-  height: 30px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--editor-text, #e9eef3);
-  cursor: pointer;
-  transition: background-color 110ms ease, color 110ms ease;
-}
-@media (pointer: coarse) {
-  .selection-actions-btn { width: 42px; height: 42px; }
-}
-.selection-actions-btn:hover {
-  background: var(--editor-hover, rgba(255, 255, 255, 0.1));
-}
-.selection-actions-btn.is-danger:hover {
-  background: rgba(220, 38, 38, 0.18);
-  color: #f87171;
-}
-.selection-actions-btn.is-active {
-  background: var(--editor-accent, #3b6e9c);
-  color: var(--editor-accent-text, #fff);
-}
-.selection-actions-label {
-  padding: 0 8px 0 4px;
-  color: var(--editor-text-secondary, #9fb0bd);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.2px;
-  white-space: nowrap;
-}
-
 /* ---------- Tool dock: primary draw tools with explicit dropdowns ---------- */
 
 /* A two-part tool: the main hit area arms direct drawing; the chevron opens
@@ -3609,7 +3518,6 @@ summary,
 .editor-ui .editor-zoom-readout:focus-visible,
 .editor-wand-btn:focus-visible,
 .editor-ui .editor-export-btn:focus-visible,
-.selection-actions-btn:focus-visible,
 .tool-dock-chevron:focus-visible {
   outline: 2px solid var(--editor-accent-hover);
   outline-offset: 1px;
@@ -3917,13 +3825,11 @@ summary,
 }
 .editor-ui .editor-toolbar .editor-wand-btn:hover { background: var(--editor-hover); filter: none; }
 
-/* Tablet chrome remains one touch-scrollable row, never three stacked toolbars. */
+/* Tablet actions wrap as intact groups; export never falls off-screen. */
 @media (max-width: 1099px) {
   .editor-toolbar {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-    scrollbar-width: thin;
+    flex-wrap: wrap;
+    overflow: visible;
   }
   .editor-header-center { flex: 0 0 auto; }
 }
@@ -4079,16 +3985,6 @@ header.sticky.top-0 {
 .editor-ui.editor-dark .floating-toolbar {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-/*
- * ── 10. Selection actions pill refinement ───────────────────────────────
- * The contextual selection actions pill gets a refined shadow.
- */
-.selection-actions {
-  box-shadow: 0 4px 14px rgba(10, 16, 20, 0.35),
-    0 0 0 1px rgba(255, 255, 255, 0.04),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 /*
@@ -4756,4 +4652,21 @@ button.license-badge-locked:focus-visible {
   .account-menu-item {
     transition: none;
   }
+}
+
+/* Shared subscription action: fixed NASAQ green across plan variants/themes. */
+.subscription-cta { background: #0C3D2C; color: #fff; }
+.subscription-cta:hover { background: #092f22; }
+.subscription-cta:active { background: #062419; }
+.subscription-cta:focus-visible { outline: 2px solid #0C3D2C; outline-offset: 3px; }
+
+/* All five workspace rows participate in layout; no implicit, clipped status row.
+   The page commands scroll independently of thumbnails at narrow widths. */
+.editor-status-bar { height: auto; min-height: 44px; flex-wrap: wrap; padding-block: 4px; padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+.editor-status-bar > span:last-child { flex-wrap: wrap; }
+.editor-status-bar button { min-height: 32px; }
+.editor-header-zone { flex-wrap: wrap; max-width: 100%; }
+.editor-page-rail > div:first-child { overflow-y: auto; }
+@media (any-pointer: coarse) {
+  .editor-status-bar button { min-height: 44px; min-width: 44px; }
 }

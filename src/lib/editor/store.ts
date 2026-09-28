@@ -110,7 +110,6 @@ import {
   clampPagesHeight,
   extractSvgMarkup,
   isOverlayViewport,
-  isTouchPropertiesViewport,
 } from "./ui-state";
 
 /*
@@ -1248,7 +1247,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           projectsLoading: false,
           dark,
           focusMode: Boolean(ui.focusMode),
-          leftOpen: Boolean(ui.leftOpen),
+          leftOpen: Boolean(ui.leftOpen) && !ui.rightOpen,
           rightOpen: Boolean(ui.rightOpen),
           leftCollapsed: Boolean(ui.leftCollapsed),
           rightCollapsed: Boolean(ui.rightCollapsed),
@@ -1944,7 +1943,11 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
     toggle: (key) => {
       const next = !get()[key];
-      set({ [key]: next } as Partial<EditorStore>);
+      set({
+        [key]: next,
+        ...(next && key === "leftOpen" ? { rightOpen: false }
+          : next && key === "rightOpen" ? { leftOpen: false } : {}),
+      } as Partial<EditorStore>);
       // The `dark:` Tailwind variant keys off `html.dark` — the shared theme
       // module both persists the choice and keeps the class in sync, so the
       // editor toolbar, the site header and every page agree on one mode.
@@ -1980,16 +1983,15 @@ export const useEditor = create<EditorStore>((set, get) => {
       writeStoredTheme(dark);
     },
     setLeftTab: (leftTab) => {
-      set({ leftTab, leftOpen: true });
+      set({ leftTab, leftOpen: true, rightOpen: false });
       // Probing is deferred to the moment the font list is actually needed.
       if (leftTab === "fonts") get().probeFonts();
     },
-    setRightTab: (rightTab) => set({ rightTab, rightOpen: true }),
+    setRightTab: (rightTab) => set({ rightTab, rightOpen: true, leftOpen: false }),
 
     toggleSidebar: (side) => {
       const overlay =
-        isOverlayViewport() ||
-        (side === "right" && isTouchPropertiesViewport());
+        isOverlayViewport() || side === "right";
       // Docked panels persist as `*Collapsed`; floating ones as `*Open`.
       const key =
         side === "left"
@@ -2000,7 +2002,11 @@ export const useEditor = create<EditorStore>((set, get) => {
             ? "rightOpen"
             : "rightCollapsed";
       const next = !get()[key];
-      set({ [key]: next } as Partial<EditorStore>);
+      set({
+        [key]: next,
+        ...(next && key === "leftOpen" ? { rightOpen: false }
+          : next && key === "rightOpen" ? { leftOpen: false } : {}),
+      } as Partial<EditorStore>);
       void setSetting(key, next);
     },
     closeFloatingPanels: () => {
@@ -2018,6 +2024,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         leftTab: "library",
         leftCollapsed: false,
         leftOpen: overlay ? true : get().leftOpen,
+        rightOpen: false,
       });
     },
     toggleBubble: (enabled) => {
@@ -2114,6 +2121,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         tablePickerOpen: true,
         leftTab: hosting ? get().leftTab : "elements",
         leftOpen: true,
+        rightOpen: false,
       });
     },
     closeTablePicker: () => set({ tablePickerOpen: false }),
@@ -2135,16 +2143,8 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedId: id,
         selectedIds: id ? [id] : [],
         enteredGroupId: id ? s.enteredGroupId : null,
-        /*
-         * Selecting opens the properties panel — but only where the panel is
-         * DOCKED. On tablet/phone the panel is a slide-over, and auto-opening it
-         * on every canvas tap would fight the "tap the canvas to dismiss the
-         * drawer" rule (the tap would close it and instantly reopen it).
-         */
-        rightOpen:
-          id && !isOverlayViewport() && !isTouchPropertiesViewport()
-            ? true
-            : s.rightOpen,
+        // Floating properties never auto-open over newly selected artwork.
+        rightOpen: s.rightOpen,
       })),
 
     setEditing: (id) => set({ editingId: id }),

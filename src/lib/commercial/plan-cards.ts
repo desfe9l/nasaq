@@ -163,7 +163,7 @@ function paidCard(
     featured: family === FEATURED_FAMILY,
     kind: "paid",
     ctaLabel: "اشترك الآن",
-    ctaHint: "ترخيص رقمي فوري · دفع آمن عبر Gumroad",
+    ctaHint: "ترخيص رقمي فوري · دفع آمن عبر بوابة الدفع الآمنة",
   };
 }
 
