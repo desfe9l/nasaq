@@ -174,6 +174,15 @@
     0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
   --shadow-card-dark-hover:
     0 12px 28px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.09);
+  /*
+   * Floating chrome — cards that leave the page's plane (the account menu, and
+   * any dropdown that opens over artwork). A soft, wide drop shadow separates
+   * the card from whatever it covers, which matters most when the layer beneath
+   * is dense text: without it an opaque card floating mid-page reads as part of
+   * the background.
+   */
+  --shadow-dropdown:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
 }
 
 /* =====================================================================
@@ -252,6 +261,9 @@ html.dark {
     0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
   --shadow-card-hover:
     0 12px 28px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.09);
+  /* A floating card on a dark page needs more separation, not less. */
+  --shadow-dropdown:
+    0 10px 15px -3px rgba(0, 0, 0, 0.55), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
 }
 
 
@@ -4576,5 +4588,172 @@ button.license-badge-locked:focus-visible {
   .license-badge-licensed,
   .license-badge-locked {
     transition: none !important;
+  }
+}
+
+/* =====================================================================
+ * ACCOUNT MENU — the identity card behind the account chip.
+ *
+ * Opened from the far edge of a bar (the site header, the editor toolbar), the
+ * card has to do three things the chip-anchored versions did not:
+ *
+ *   1. open BELOW the bar it came from — the vertical offset is measured from
+ *      the bar's bottom edge (`src/lib/account-menu.ts`), never from the chip,
+ *      because the chip sits inside the bar and its own bottom edge still
+ *      belongs to the toolbar;
+ *   2. stay inside the viewport on a phone: `max-content` growth between a
+ *      280px floor and a `100vw - 32px` ceiling, with long studio names and
+ *      email addresses wrapping inside that box instead of pushing its edge;
+ *   3. sit on a fully opaque surface above every background layer, so the
+ *      page's own typography can never read through the card.
+ * ===================================================================== */
+
+.account-menu-panel {
+  /*
+   * The card's own layer: above the sticky header (z-40) and above the editor's
+   * panel layer (`--z-panel` = 30). `--z-dropdown` (70) is the ordered scale's
+   * dropdown slot; the 50 fallback keeps the card above the header even if the
+   * scale is ever trimmed.
+   */
+  z-index: var(--z-dropdown, 50);
+  display: grid;
+  gap: 0.5rem;
+  /*
+   * Sizing: grow to the content, floor at 280px, and never wider than the screen
+   * minus a 16px gutter on each side. `min()` keeps the floor and the ceiling
+   * from fighting on a narrow phone, where a bare 280px minimum would itself
+   * overflow the viewport.
+   */
+  width: max-content;
+  min-width: min(280px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: 1rem;
+  /*
+   * Long identity, contained: a studio name or an address breaks inside the card
+   * instead of widening it, and a long action list scrolls inside the card
+   * instead of running off the screen (the height ceiling is measured per open,
+   * see `placeAccountMenu`).
+   */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /*
+   * Fully opaque in BOTH themes — `--color-surface` is #ffffff in Light and
+   * #161c26 in Dark. A translucent background here is what let the page's
+   * headings bleed through the card and read as broken layering.
+   */
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-dropdown);
+  text-align: start;
+}
+
+/*
+ * Floating placement: `absolute` inside a positioned ancestor — the fixed
+ * portal layer both surfaces render into, so no ancestor's overflow, transform
+ * or stacking context can clip or bury the card. `pointer-events: auto` lets the
+ * site chrome's layer stay click-through (outside clicks must reach the page
+ * beneath it) while the card itself stays fully interactive.
+ */
+.account-menu-panel-floating {
+  position: absolute;
+  pointer-events: auto;
+}
+
+/*
+ * In-flow copy for the collapsed mobile nav: full width inside the sheet, no
+ * overlay and no measured geometry.
+ */
+.account-menu-panel-inline {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  max-height: none;
+}
+
+/* Profile header: avatar, name, address — the identity the card confirms. */
+.account-menu-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+/* The wrap box for the two text lines; `min-width: 0` lets them wrap. */
+.account-menu-fields {
+  min-width: 0;
+}
+
+.account-menu-name {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+  color: var(--color-ink);
+}
+
+.account-menu-email {
+  margin-top: 0.125rem;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+/* Licence state: its own row, start-aligned with the identity block. */
+.account-menu-badge {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 0.75rem;
+}
+
+/* Actions: one bordered list, separated from the identity block. */
+.account-menu-items {
+  display: grid;
+  gap: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-line);
+}
+
+.account-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--color-ink);
+  text-align: start;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.account-menu-item:hover:not(:disabled) {
+  background-color: var(--color-line-2);
+}
+
+.account-menu-item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-brand) 70%, transparent);
+  outline-offset: 1px;
+}
+
+.account-menu-item:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+/* «تسجيل الخروج» and other secondary rows. */
+.account-menu-item-muted {
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-menu-item {
+    transition: none;
   }
 }

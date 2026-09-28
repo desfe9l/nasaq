@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, FilePlus2, KeyRound, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
@@ -24,6 +25,12 @@ import {
 } from "@/lib/auth/use-workspace-entry";
 import { AccountAvatar } from "./AccountAvatar";
 import { AccountBadge, useAccountTier } from "./AccountBadge";
+import {
+  AccountMenuPanel,
+  accountMenuItemClass,
+  accountMenuItemMutedClass,
+  useAccountMenuPlacement,
+} from "./AccountMenuPanel";
 
 /**
  * The editor call-to-action in the site chrome.
@@ -132,13 +139,32 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
   const { user, isPending } = useCurrentUserState();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const { placement, place, reset } = useAccountMenuPlacement({ triggerRef: buttonRef });
+
+  /** Closing forgets the measurement too, so a stale card can never reopen. */
+  const closeMenu = useCallback(() => {
+    setOpen(false);
+    reset();
+  }, [reset]);
 
   useEffect(() => {
     if (!open) return;
-    const close = () => setOpen(false);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [open]);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMenu();
+    };
+    /*
+     * Outside clicks fall THROUGH to whatever they landed on — no scrim stands
+     * between the visitor and the page — which is why this is a window listener
+     * rather than a full-screen layer.
+     */
+    window.addEventListener("click", closeMenu);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("click", closeMenu);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, closeMenu]);
 
   if (!authEnabled || isPending) return null;
 
@@ -147,7 +173,7 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
       <a
         href="/login"
         className={cn(
- "items-center gap-1.5 rounded-[8px] border border-line px-3 font-bold text-ink transition hover:border-brand hover:text-brand-hover",
+          "items-center gap-1.5 rounded-[8px] border border-line px-3 font-bold text-ink transition hover:border-brand hover:text-brand-hover",
           variant === "header"
             ? "inline-flex h-9 max-w-[150px] items-center px-2 text-[11px] sm:px-3 sm:text-[12px] lg:max-w-none"
             : "mt-1 flex w-full px-3 py-2.5 text-[13px]",
@@ -163,21 +189,60 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
 
   // Resolved by the shared identity helper, so this chip and the editor's
   // account area always print the same name for the same session.
-  const { label, email } = accountIdentity(user);
+  const { label } = accountIdentity(user);
   const avatar = <AccountAvatar user={user} size={24} />;
+
+  /** Measure first, then open: the card's first paint is already placed. */
+  const openMenu = () => {
+    if (!place()) return;
+    setOpen(true);
+  };
+
+  /*
+   * The card's actions. They are the same rows on both layouts; only the way the
+   * card is placed differs (floating portal in the header, in the flow inside
+   * the collapsed nav).
+   */
+  const items = (
+    <>
+      <a href="/account#settings" role="menuitem" className={accountMenuItemClass}>
+        <UserRound className="size-4 opacity-70" aria-hidden />
+        الحساب والإعدادات
+      </a>
+      <a href="/license" role="menuitem" className={accountMenuItemClass}>
+        <KeyRound className="size-4 opacity-70" aria-hidden />
+        ترخيصي وتفعيله
+      </a>
+      <button
+        type="button"
+        role="menuitem"
+        disabled={signingOut}
+        onClick={() => {
+          setSigningOut(true);
+          void signOut("/").catch(() => setSigningOut(false));
+        }}
+        className={accountMenuItemMutedClass}
+      >
+        <LogOut className="size-4 opacity-70" aria-hidden />
+        {signingOut ? "جارٍ الخروج…" : "تسجيل الخروج"}
+      </button>
+    </>
+  );
 
   return (
     <div className={cn("relative", variant === "mobile" && "mt-1 w-full")}>
       <button
+        ref={buttonRef}
         type="button"
         aria-expanded={open}
         aria-haspopup="menu"
         onClick={(e) => {
           e.stopPropagation();
-          setOpen((v) => !v);
+          if (open) closeMenu();
+          else openMenu();
         }}
         className={cn(
- "flex items-center gap-2 rounded-[8px] border border-line bg-surface/60 font-bold transition hover:border-brand",
+          "flex items-center gap-2 rounded-[8px] border border-line bg-surface/60 font-bold transition hover:border-brand",
           variant === "header" ? "h-9 px-2 text-[12px]" : "w-full px-3 py-2 text-[13px]",
         )}
       >
@@ -190,7 +255,7 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
         <span className="flex min-w-0 flex-col items-start leading-tight">
           <span
             className={cn(
- "max-w-[180px] truncate text-[12px] font-extrabold",
+              "max-w-[180px] truncate text-[12px] font-extrabold",
               variant === "header" && "hidden lg:inline",
             )}
             title={label}
@@ -202,59 +267,45 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
         <ChevronDown className="size-3.5 opacity-70" aria-hidden />
       </button>
 
-      {open && (
-        <div
-          role="menu"
-          className={cn(
- "z-50 grid w-52 gap-1 rounded-[10px] border border-line bg-surface p-1.5 shadow-xl",
-            variant === "header" ? "absolute end-0 mt-1.5" : "mt-1.5",
-          )}
-        >
-          {/*
-           * Identity header inside the menu: the full name is the one place a
-           * user goes to confirm WHICH account is signed in, so it prints in
-           * full here even when the collapsed chip hid it.
-           */}
-          <div className="border-b border-line px-3 pb-2 pt-1">
-            <p className="truncate text-[12px] font-extrabold" title={label}>
-              {label}
-            </p>
-            {email && (
-              <p className="truncate text-[10px] font-medium text-muted" dir="ltr" title={email}>
-                {email}
-              </p>
-            )}
-            <div className="mt-1.5">
-              <SignedInBadge user={user} />
-            </div>
-          </div>
-          <a
-            href="/account#settings"
-            role="menuitem"
-            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12px] font-bold hover:bg-line-2"
-          >
-            <UserRound className="size-4 opacity-70" aria-hidden />
-            الحساب والإعدادات
-          </a>
-          <a href="/license" role="menuitem"
-            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-[12px] font-bold hover:bg-line-2">
-            <KeyRound className="size-4 opacity-70" aria-hidden />
-            ترخيصي وتفعيله
-          </a>
-          <button
-            type="button"
-            role="menuitem"
-            disabled={signingOut}
-            onClick={() => {
-              setSigningOut(true);
-              void signOut("/").catch(() => setSigningOut(false));
-            }}
-            className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-right text-[12px] font-bold text-muted hover:bg-line-2 disabled:cursor-wait disabled:opacity-60"
-          >
-            <LogOut className="size-4 opacity-70" aria-hidden />
-            {signingOut ? "جارٍ الخروج…" : "تسجيل الخروج"}
-          </button>
-        </div>
+      {open &&
+        variant === "header" &&
+        placement &&
+        createPortal(
+          /*
+           * The floating card: `absolute` inside a full-viewport fixed layer, so
+           * the header's stacking context or a scroll container can never clip
+           * it. The placement is measured from the HEADER's bottom edge (not the
+           * chip's), which is what keeps the card clear of the toolbar and its
+           * buttons instead of starting inside the bar. `pointer-events-none`
+           * lets an outside click fall through to the page beneath (the window
+           * listener above closes the card).
+           */
+          <div className="pointer-events-none fixed inset-0 z-[var(--z-dropdown)]">
+            <AccountMenuPanel
+              user={user}
+              label="قائمة الحساب"
+              className="account-menu-panel-floating"
+              style={{
+                insetInlineEnd: placement.insetInlineEnd,
+                top: placement.top,
+                maxWidth: placement.maxWidth,
+                maxHeight: placement.maxHeight,
+              }}
+            >
+              {items}
+            </AccountMenuPanel>
+          </div>,
+          document.body,
+        )}
+
+      {/*
+       * The collapsed nav's copy stays in the flow: there the card is part of
+       * the opened sheet, so it has nothing to float above.
+       */}
+      {open && variant === "mobile" && (
+        <AccountMenuPanel user={user} label="قائمة الحساب" className="account-menu-panel-inline">
+          {items}
+        </AccountMenuPanel>
       )}
     </div>
   );
