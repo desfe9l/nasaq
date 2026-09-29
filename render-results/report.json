@@ -1,0 +1,1137 @@
+{
+  "base": "https://nasaq-sa.vercel.app",
+  "at": "2026-09-29T22:36:06.709Z",
+  "docs": [
+    {
+      "note": "plain-1",
+      "status": 200,
+      "htmlSha": "b6a737eb8807420a",
+      "bytes": 9144,
+      "cacheControl": "no-cache",
+      "age": "0",
+      "etag": null,
+      "lastModified": null,
+      "xVercelCache": "MISS",
+      "xVercelId": "iad1::iad1::7qjjf-1790721366776-f2175e9de606",
+      "assetCount": 61,
+      "editorChunk": "/assets/editor-R2KQMktz.js",
+      "assets": [
+        "/assets/styles-Bup19Xnb.css",
+        "/assets/index-XPwDjZdY.js",
+        "/assets/rolldown-runtime-Dd_uD5pT.js",
+        "/assets/react-CQOZoUwg.js",
+        "/assets/dist-BIhSDwz7.js",
+        "/assets/middleware-DzLi1bm9.js",
+        "/assets/not-found-DIgawKw1.js",
+        "/assets/jsx-runtime-DREnUpxT.js",
+        "/assets/createLucideIcon-CMCRMc0P.js",
+        "/assets/x-zJtLjgYV.js",
+        "/assets/utils-CQ68anUM.js",
+        "/assets/preload-helper-BZ1Pz5am.js",
+        "/assets/catalog-BDW2uXeu.js",
+        "/assets/client-DgPIIAGh.js",
+        "/assets/use-current-user-DDw5-t3h.js",
+        "/assets/client-BXc3LWik.js",
+        "/assets/model-BSoOeKn3.js",
+        "/assets/editor-R2KQMktz.js",
+        "/assets/arrow-left-fX8I4dpY.js",
+        "/assets/badge-check-PNANfRd9.js",
+        "/assets/copy-BZnzH5Zf.js",
+        "/assets/download-BPwuL2dN.js",
+        "/assets/star-DS8RdW40.js",
+        "/assets/eye-off-gRfdproX.js",
+        "/assets/eye-jS4ZTKCs.js",
+        "/assets/pen-line-JfriKYaj.js",
+        "/assets/lock-open-HkuoZ2O0.js",
+        "/assets/file-down-D2Hh5Vuc.js",
+        "/assets/file-json-CzEqdY6f.js",
+        "/assets/file-text-DCmwkK6G.js",
+        "/assets/folder-open-hvkvGzwo.js",
+        "/assets/library-export-BVhFjMat.js",
+        "/assets/FullVersionModal-7kPuBomp.js",
+        "/assets/image-plus-iOJjpRir.js",
+        "/assets/layers-B205H3gA.js",
+        "/assets/layout-template-CNgVwl3v.js",
+        "/assets/TemplateDialogs-VY7BLOyf.js",
+        "/assets/table-2-BDn-h8Ye.js",
+        "/assets/palette-Ci2OYWCm.js",
+        "/assets/trash-2-B5GK9XwN.js",
+        "/assets/plus-h6JVZkle.js",
+        "/assets/presentation-BJWXBLZH.js",
+        "/assets/printer-DOVSzzab.js",
+        "/assets/NewDocumentDialog-CntUoNbJ.js",
+        "/assets/rotate-ccw-Dp-7-v1I.js",
+        "/assets/upload-AGGoikeN.js",
+        "/assets/search-D8sbfxlA.js",
+        "/assets/sliders-horizontal-Cksi4qWM.js",
+        "/assets/sparkles-C1UqOGh6.js",
+        "/assets/type-DOVajJiU.js",
+        "/assets/providers-CNDpnKIH.js",
+        "/assets/jszip.min-CMUAYIqb.js",
+        "/assets/storage-owner-AKHPDxso.js",
+        "/assets/store-CWvNmdsu.js",
+        "/assets/export-BmuPPsBS.js",
+        "/assets/svg-B-y3b5kG.js",
+        "/assets/shape-render-CPNZ_4iq.js",
+        "/assets/format--e6uwjJp.js",
+        "/assets/editor-io-CYP_2Cww.js",
+        "/assets/intake-Cyc27wWL.js",
+        "/assets/LicenseBadge-C7Z_ysvb.js"
+      ]
+    },
+    {
+      "note": "plain-2",
+      "status": 200,
+      "htmlSha": "250908f6e4cfde6f",
+      "bytes": 9144,
+      "cacheControl": "no-cache",
+      "age": "0",
+      "etag": null,
+      "lastModified": null,
+      "xVercelCache": "MISS",
+      "xVercelId": "iad1::iad1::8dvwv-1790721367235-ad3ec0cfa306",
+      "assetCount": 61,
+      "editorChunk": "/assets/editor-R2KQMktz.js",
+      "assets": [
+        "/assets/styles-Bup19Xnb.css",
+        "/assets/index-XPwDjZdY.js",
+        "/assets/rolldown-runtime-Dd_uD5pT.js",
+        "/assets/react-CQOZoUwg.js",
+        "/assets/dist-BIhSDwz7.js",
+        "/assets/middleware-DzLi1bm9.js",
+        "/assets/not-found-DIgawKw1.js",
+        "/assets/jsx-runtime-DREnUpxT.js",
+        "/assets/createLucideIcon-CMCRMc0P.js",
+        "/assets/x-zJtLjgYV.js",
+        "/assets/utils-CQ68anUM.js",
+        "/assets/preload-helper-BZ1Pz5am.js",
+        "/assets/catalog-BDW2uXeu.js",
+        "/assets/client-DgPIIAGh.js",
+        "/assets/use-current-user-DDw5-t3h.js",
+        "/assets/client-BXc3LWik.js",
+        "/assets/model-BSoOeKn3.js",
+        "/assets/editor-R2KQMktz.js",
+        "/assets/arrow-left-fX8I4dpY.js",
+        "/assets/badge-check-PNANfRd9.js",
+        "/assets/copy-BZnzH5Zf.js",
+        "/assets/download-BPwuL2dN.js",
+        "/assets/star-DS8RdW40.js",
+        "/assets/eye-off-gRfdproX.js",
+        "/assets/eye-jS4ZTKCs.js",
+        "/assets/pen-line-JfriKYaj.js",
+        "/assets/lock-open-HkuoZ2O0.js",
+        "/assets/file-down-D2Hh5Vuc.js",
+        "/assets/file-json-CzEqdY6f.js",
+        "/assets/file-text-DCmwkK6G.js",
+        "/assets/folder-open-hvkvGzwo.js",
+        "/assets/library-export-BVhFjMat.js",
+        "/assets/FullVersionModal-7kPuBomp.js",
+        "/assets/image-plus-iOJjpRir.js",
+        "/assets/layers-B205H3gA.js",
+        "/assets/layout-template-CNgVwl3v.js",
+        "/assets/TemplateDialogs-VY7BLOyf.js",
+        "/assets/table-2-BDn-h8Ye.js",
+        "/assets/palette-Ci2OYWCm.js",
+        "/assets/trash-2-B5GK9XwN.js",
+        "/assets/plus-h6JVZkle.js",
+        "/assets/presentation-BJWXBLZH.js",
+        "/assets/printer-DOVSzzab.js",
+        "/assets/NewDocumentDialog-CntUoNbJ.js",
+        "/assets/rotate-ccw-Dp-7-v1I.js",
+        "/assets/upload-AGGoikeN.js",
+        "/assets/search-D8sbfxlA.js",
+        "/assets/sliders-horizontal-Cksi4qWM.js",
+        "/assets/sparkles-C1UqOGh6.js",
+        "/assets/type-DOVajJiU.js",
+        "/assets/providers-CNDpnKIH.js",
+        "/assets/jszip.min-CMUAYIqb.js",
+        "/assets/storage-owner-AKHPDxso.js",
+        "/assets/store-CWvNmdsu.js",
+        "/assets/export-BmuPPsBS.js",
+        "/assets/svg-B-y3b5kG.js",
+        "/assets/shape-render-CPNZ_4iq.js",
+        "/assets/format--e6uwjJp.js",
+        "/assets/editor-io-CYP_2Cww.js",
+        "/assets/intake-Cyc27wWL.js",
+        "/assets/LicenseBadge-C7Z_ysvb.js"
+      ]
+    },
+    {
+      "note": "no-cache-request",
+      "status": 200,
+      "htmlSha": "2b5e1c5025dc6fc1",
+      "bytes": 9144,
+      "cacheControl": "no-cache",
+      "age": "0",
+      "etag": null,
+      "lastModified": null,
+      "xVercelCache": "MISS",
+      "xVercelId": "iad1::iad1::8dvwv-1790721367324-c00392ab60ea",
+      "assetCount": 61,
+      "editorChunk": "/assets/editor-R2KQMktz.js",
+      "assets": [
+        "/assets/styles-Bup19Xnb.css",
+        "/assets/index-XPwDjZdY.js",
+        "/assets/rolldown-runtime-Dd_uD5pT.js",
+        "/assets/react-CQOZoUwg.js",
+        "/assets/dist-BIhSDwz7.js",
+        "/assets/middleware-DzLi1bm9.js",
+        "/assets/not-found-DIgawKw1.js",
+        "/assets/jsx-runtime-DREnUpxT.js",
+        "/assets/createLucideIcon-CMCRMc0P.js",
+        "/assets/x-zJtLjgYV.js",
+        "/assets/utils-CQ68anUM.js",
+        "/assets/preload-helper-BZ1Pz5am.js",
+        "/assets/catalog-BDW2uXeu.js",
+        "/assets/client-DgPIIAGh.js",
+        "/assets/use-current-user-DDw5-t3h.js",
+        "/assets/client-BXc3LWik.js",
+        "/assets/model-BSoOeKn3.js",
+        "/assets/editor-R2KQMktz.js",
+        "/assets/arrow-left-fX8I4dpY.js",
+        "/assets/badge-check-PNANfRd9.js",
+        "/assets/copy-BZnzH5Zf.js",
+        "/assets/download-BPwuL2dN.js",
+        "/assets/star-DS8RdW40.js",
+        "/assets/eye-off-gRfdproX.js",
+        "/assets/eye-jS4ZTKCs.js",
+        "/assets/pen-line-JfriKYaj.js",
+        "/assets/lock-open-HkuoZ2O0.js",
+        "/assets/file-down-D2Hh5Vuc.js",
+        "/assets/file-json-CzEqdY6f.js",
+        "/assets/file-text-DCmwkK6G.js",
+        "/assets/folder-open-hvkvGzwo.js",
+        "/assets/library-export-BVhFjMat.js",
+        "/assets/FullVersionModal-7kPuBomp.js",
+        "/assets/image-plus-iOJjpRir.js",
+        "/assets/layers-B205H3gA.js",
+        "/assets/layout-template-CNgVwl3v.js",
+        "/assets/TemplateDialogs-VY7BLOyf.js",
+        "/assets/table-2-BDn-h8Ye.js",
+        "/assets/palette-Ci2OYWCm.js",
+        "/assets/trash-2-B5GK9XwN.js",
+        "/assets/plus-h6JVZkle.js",
+        "/assets/presentation-BJWXBLZH.js",
+        "/assets/printer-DOVSzzab.js",
+        "/assets/NewDocumentDialog-CntUoNbJ.js",
+        "/assets/rotate-ccw-Dp-7-v1I.js",
+        "/assets/upload-AGGoikeN.js",
+        "/assets/search-D8sbfxlA.js",
+        "/assets/sliders-horizontal-Cksi4qWM.js",
+        "/assets/sparkles-C1UqOGh6.js",
+        "/assets/type-DOVajJiU.js",
+        "/assets/providers-CNDpnKIH.js",
+        "/assets/jszip.min-CMUAYIqb.js",
+        "/assets/storage-owner-AKHPDxso.js",
+        "/assets/store-CWvNmdsu.js",
+        "/assets/export-BmuPPsBS.js",
+        "/assets/svg-B-y3b5kG.js",
+        "/assets/shape-render-CPNZ_4iq.js",
+        "/assets/format--e6uwjJp.js",
+        "/assets/editor-io-CYP_2Cww.js",
+        "/assets/intake-Cyc27wWL.js",
+        "/assets/LicenseBadge-C7Z_ysvb.js"
+      ]
+    },
+    {
+      "note": "flagged-query-1",
+      "status": 200,
+      "htmlSha": "a6ae64bb4928f715",
+      "bytes": 9144,
+      "cacheControl": "no-cache",
+      "age": "0",
+      "etag": null,
+      "lastModified": null,
+      "xVercelCache": "MISS",
+      "xVercelId": "iad1::iad1::8dvwv-1790721367357-b24fca60b611",
+      "assetCount": 61,
+      "editorChunk": "/assets/editor-R2KQMktz.js",
+      "assets": [
+        "/assets/styles-Bup19Xnb.css",
+        "/assets/index-XPwDjZdY.js",
+        "/assets/rolldown-runtime-Dd_uD5pT.js",
+        "/assets/react-CQOZoUwg.js",
+        "/assets/dist-BIhSDwz7.js",
+        "/assets/middleware-DzLi1bm9.js",
+        "/assets/not-found-DIgawKw1.js",
+        "/assets/jsx-runtime-DREnUpxT.js",
+        "/assets/createLucideIcon-CMCRMc0P.js",
+        "/assets/x-zJtLjgYV.js",
+        "/assets/utils-CQ68anUM.js",
+        "/assets/preload-helper-BZ1Pz5am.js",
+        "/assets/catalog-BDW2uXeu.js",
+        "/assets/client-DgPIIAGh.js",
+        "/assets/use-current-user-DDw5-t3h.js",
+        "/assets/client-BXc3LWik.js",
+        "/assets/model-BSoOeKn3.js",
+        "/assets/editor-R2KQMktz.js",
+        "/assets/arrow-left-fX8I4dpY.js",
+        "/assets/badge-check-PNANfRd9.js",
+        "/assets/copy-BZnzH5Zf.js",
+        "/assets/download-BPwuL2dN.js",
+        "/assets/star-DS8RdW40.js",
+        "/assets/eye-off-gRfdproX.js",
+        "/assets/eye-jS4ZTKCs.js",
+        "/assets/pen-line-JfriKYaj.js",
+        "/assets/lock-open-HkuoZ2O0.js",
+        "/assets/file-down-D2Hh5Vuc.js",
+        "/assets/file-json-CzEqdY6f.js",
+        "/assets/file-text-DCmwkK6G.js",
+        "/assets/folder-open-hvkvGzwo.js",
+        "/assets/library-export-BVhFjMat.js",
+        "/assets/FullVersionModal-7kPuBomp.js",
+        "/assets/image-plus-iOJjpRir.js",
+        "/assets/layers-B205H3gA.js",
+        "/assets/layout-template-CNgVwl3v.js",
+        "/assets/TemplateDialogs-VY7BLOyf.js",
+        "/assets/table-2-BDn-h8Ye.js",
+        "/assets/palette-Ci2OYWCm.js",
+        "/assets/trash-2-B5GK9XwN.js",
+        "/assets/plus-h6JVZkle.js",
+        "/assets/presentation-BJWXBLZH.js",
+        "/assets/printer-DOVSzzab.js",
+        "/assets/NewDocumentDialog-CntUoNbJ.js",
+        "/assets/rotate-ccw-Dp-7-v1I.js",
+        "/assets/upload-AGGoikeN.js",
+        "/assets/search-D8sbfxlA.js",
+        "/assets/sliders-horizontal-Cksi4qWM.js",
+        "/assets/sparkles-C1UqOGh6.js",
+        "/assets/type-DOVajJiU.js",
+        "/assets/providers-CNDpnKIH.js",
+        "/assets/jszip.min-CMUAYIqb.js",
+        "/assets/storage-owner-AKHPDxso.js",
+        "/assets/store-CWvNmdsu.js",
+        "/assets/export-BmuPPsBS.js",
+        "/assets/svg-B-y3b5kG.js",
+        "/assets/shape-render-CPNZ_4iq.js",
+        "/assets/format--e6uwjJp.js",
+        "/assets/editor-io-CYP_2Cww.js",
+        "/assets/intake-Cyc27wWL.js",
+        "/assets/LicenseBadge-C7Z_ysvb.js"
+      ]
+    }
+  ],
+  "docVerdict": {
+    "allSameHtml": false,
+    "shas": [
+      "b6a737eb8807420a",
+      "250908f6e4cfde6f",
+      "2b5e1c5025dc6fc1",
+      "a6ae64bb4928f715"
+    ],
+    "editorChunks": [
+      "/assets/editor-R2KQMktz.js"
+    ],
+    "cacheControls": [
+      "no-cache"
+    ]
+  },
+  "bundles": {
+    "/assets/editor-R2KQMktz.js": {
+      "status": 200,
+      "bytes": 421446,
+      "sha": "3fad96d09328222c",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": true,
+        "editor-dock-grip": true,
+        "editor-dock-color-btn": true,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": true,
+        "format drawer «تنسيق»": true,
+        "panel dock toggle «إرساء»": true,
+        "editor-header-zone": true,
+        "studio-tool-dock": true,
+        "stale-build guard (update pill)": false,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": false
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": true,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    },
+    "/assets/index-XPwDjZdY.js": {
+      "status": 200,
+      "bytes": 437892,
+      "sha": "99e23eba2ad72a7d",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": false,
+        "editor-dock-grip": false,
+        "editor-dock-color-btn": false,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": false,
+        "format drawer «تنسيق»": false,
+        "panel dock toggle «إرساء»": false,
+        "editor-header-zone": false,
+        "studio-tool-dock": false,
+        "stale-build guard (update pill)": true,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": true
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": false,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    },
+    "/assets/rolldown-runtime-Dd_uD5pT.js": {
+      "status": 200,
+      "bytes": 1106,
+      "sha": "c5f0356f5d0918a3",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": false,
+        "editor-dock-grip": false,
+        "editor-dock-color-btn": false,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": false,
+        "format drawer «تنسيق»": false,
+        "panel dock toggle «إرساء»": false,
+        "editor-header-zone": false,
+        "studio-tool-dock": false,
+        "stale-build guard (update pill)": false,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": false
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": false,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    },
+    "/assets/react-CQOZoUwg.js": {
+      "status": 200,
+      "bytes": 7876,
+      "sha": "54295d34ec628fd3",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": false,
+        "editor-dock-grip": false,
+        "editor-dock-color-btn": false,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": false,
+        "format drawer «تنسيق»": false,
+        "panel dock toggle «إرساء»": false,
+        "editor-header-zone": false,
+        "studio-tool-dock": false,
+        "stale-build guard (update pill)": false,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": false
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": false,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    },
+    "/assets/dist-BIhSDwz7.js": {
+      "status": 200,
+      "bytes": 37403,
+      "sha": "ff0ee32f435cdc32",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": false,
+        "editor-dock-grip": false,
+        "editor-dock-color-btn": false,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": false,
+        "format drawer «تنسيق»": false,
+        "panel dock toggle «إرساء»": false,
+        "editor-header-zone": false,
+        "studio-tool-dock": false,
+        "stale-build guard (update pill)": false,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": false
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": false,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    },
+    "/assets/middleware-DzLi1bm9.js": {
+      "status": 200,
+      "bytes": 37906,
+      "sha": "3108ac364a1a2550",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": false,
+        "editor-dock-grip": false,
+        "editor-dock-color-btn": false,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": false,
+        "format drawer «تنسيق»": false,
+        "panel dock toggle «إرساء»": false,
+        "editor-header-zone": false,
+        "studio-tool-dock": false,
+        "stale-build guard (update pill)": false,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": false
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": false,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    },
+    "/assets/not-found-DIgawKw1.js": {
+      "status": 200,
+      "bytes": 55,
+      "sha": "ac8e8967ff892a5b",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": false,
+        "editor-dock-grip": false,
+        "editor-dock-color-btn": false,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": false,
+        "format drawer «تنسيق»": false,
+        "panel dock toggle «إرساء»": false,
+        "editor-header-zone": false,
+        "studio-tool-dock": false,
+        "stale-build guard (update pill)": false,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": false
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": false,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    },
+    "/assets/jsx-runtime-DREnUpxT.js": {
+      "status": 200,
+      "bytes": 435,
+      "sha": "6bf5fc5976a047d9",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": false,
+        "editor-dock-grip": false,
+        "editor-dock-color-btn": false,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": false,
+        "format drawer «تنسيق»": false,
+        "panel dock toggle «إرساء»": false,
+        "editor-header-zone": false,
+        "studio-tool-dock": false,
+        "stale-build guard (update pill)": false,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": false
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": false,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    },
+    "/assets/createLucideIcon-CMCRMc0P.js": {
+      "status": 200,
+      "bytes": 1219,
+      "sha": "b1c4d82dfedd85bf",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": false,
+        "editor-dock-grip": false,
+        "editor-dock-color-btn": false,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": false,
+        "format drawer «تنسيق»": false,
+        "panel dock toggle «إرساء»": false,
+        "editor-header-zone": false,
+        "studio-tool-dock": false,
+        "stale-build guard (update pill)": false,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": false
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": false,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    },
+    "/assets/x-zJtLjgYV.js": {
+      "status": 200,
+      "bytes": 515,
+      "sha": "6d9fc6d203439a94",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": false,
+        "editor-dock-grip": false,
+        "editor-dock-color-btn": false,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": false,
+        "format drawer «تنسيق»": false,
+        "panel dock toggle «إرساء»": false,
+        "editor-header-zone": false,
+        "studio-tool-dock": false,
+        "stale-build guard (update pill)": false,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": false
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": false,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    },
+    "/assets/utils-CQ68anUM.js": {
+      "status": 200,
+      "bytes": 28156,
+      "sha": "f724cc002171f11e",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": false,
+        "editor-dock-grip": false,
+        "editor-dock-color-btn": false,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": false,
+        "format drawer «تنسيق»": false,
+        "panel dock toggle «إرساء»": false,
+        "editor-header-zone": false,
+        "studio-tool-dock": false,
+        "stale-build guard (update pill)": false,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": false
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": false,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    },
+    "/assets/preload-helper-BZ1Pz5am.js": {
+      "status": 200,
+      "bytes": 1218,
+      "sha": "8820987e6a8afb54",
+      "newMarkers": {
+        "data-density (narrow-lane folding)": false,
+        "editor-dock-grip": false,
+        "editor-dock-color-btn": false,
+        "bubbleLayout": false,
+        "dockLayout": false,
+        "AnchorMenu drawer title «أدوات الرسم»": false,
+        "format drawer «تنسيق»": false,
+        "panel dock toggle «إرساء»": false,
+        "editor-header-zone": false,
+        "studio-tool-dock": false,
+        "stale-build guard (update pill)": false,
+        "stale-build guard (cache-busted reload)": false,
+        "stale-build guard (app-version probe)": false
+      },
+      "legacyMarkers": {
+        "StudioToolDock class": false,
+        "TouchPropertiesSheet": false,
+        "editor-top-tabs": false,
+        "ArrangeBar": false,
+        "ToolbarMenus": false,
+        "studio-tool-dock-wide": false
+      }
+    }
+  },
+  "stylesheet": {
+    "url": "/assets/styles-Bup19Xnb.css",
+    "bytes": 194012,
+    "sha": "b2c201e1883b46fe",
+    "hasStudioToolDock": true,
+    "hasEditorTopTabs": false,
+    "hasTouchProperties": true,
+    "hasEditorToolbar": true
+  },
+  "build": {
+    "documentStamped": "09eb6bb-mun980tq",
+    "api": {
+      "status": 200,
+      "cacheControl": "no-store",
+      "body": {
+        "buildId": "09eb6bb-mun980tq"
+      }
+    },
+    "apiId": "09eb6bb-mun980tq",
+    "consistent": true
+  },
+  "renders": {
+    "desktop": {
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "facts": {
+        "headerPresent": true,
+        "headerButtons": [
+          "تراجع",
+          "إعادة",
+          "تصغير المقياس",
+          "إعادة المقياس إلى مئة بالمئة",
+          "تكبير المقياس",
+          "ملاءمة الصفحة",
+          "عرض",
+          "تم الحفظ",
+          "ملف المشروع",
+          "تصدير المشروع"
+        ],
+        "dockOuterHtml": "<aside class=\"studio-tool-dock editor-dock\" data-editor-obstacle=\"tool-dock\" data-tour=\"canvas-dock\" data-density=\"full\" aria-label=\"أدوات مساحة العمل\"><button type=\"button\" class=\"editor-dock-grip\" aria-label=\"نقل شريط الأدوات\" title=\"اسحب لنقل الشريط — نقرتان لإعادته إلى الزاوية\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-grip-horizontal\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"9\" r=\"1\"></circle><circle cx=\"19\" cy=\"9\" r=\"1\"></circle><circle cx=\"5\" cy=\"9\" r=\"1\"></circle><circle cx=\"12\" cy=\"15\" r=\"1\"></circle><circle cx=\"19\" cy=\"15\" r=\"1\"></circle><circle cx=\"5\" cy=\"15\" r=\"1\"></circle></svg></button><button type=\"button\" class=\"editor-icon-btn is-active\" aria-label=\"تحديد وتحريك\" aria-keyshortcuts=\"V\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-mouse-pointer2 lucide-mouse-pointer-2 size-4\" aria-hidden=\"true\"><path d=\"M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z\"></path></svg></span></button><button type=\"button\" class=\"editor-icon-btn\" aria-label=\"نص\" aria-keyshortcuts=\"T\" aria-expanded=\"false\" aria-haspopup=\"dialog\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-type size-4\" aria-hidden=\"true\"><polyline points=\"4 7 4 4 2",
+        "dockDensity": "full",
+        "dockButtons": [
+          "نقل شريط الأدوات",
+          "تحديد وتحريك",
+          "نص",
+          "أشكال",
+          "العناصر والمكتبة",
+          "الخصائص والإعدادات",
+          "الطبقات",
+          "لون التعبئة والإطار",
+          "إضافة",
+          "تصغير شريط الأدوات"
+        ],
+        "runningBuild": "09eb6bb-mun980tq",
+        "drawerNodes": 0,
+        "legacyClasses": {
+          "studioToolDockWide": 0,
+          "touchPropertiesSheet": 2,
+          "editorTopTabs": 0
+        }
+      },
+      "interactions": [
+        {
+          "label": "نص",
+          "opened": {
+            "cls": "editor-anchor-menu is-drawer",
+            "role": "dialog",
+            "label": "أدوات النص",
+            "rect": {
+              "x": 1192,
+              "y": 562,
+              "w": 240,
+              "h": 122
+            },
+            "grip": true,
+            "close": true,
+            "controls": 4
+          },
+          "moved": {
+            "before": {
+              "x": 1192,
+              "y": 562
+            },
+            "after": {
+              "x": 1012,
+              "y": 702
+            }
+          },
+          "closedFromOwnControl": true,
+          "stillOpenAfterClose": false
+        },
+        {
+          "label": "أشكال",
+          "opened": {
+            "cls": "editor-anchor-menu is-drawer",
+            "role": "dialog",
+            "label": "أدوات الأشكال",
+            "rect": {
+              "x": 1192,
+              "y": 562,
+              "w": 240,
+              "h": 122
+            },
+            "grip": true,
+            "close": true,
+            "controls": 4
+          },
+          "moved": {
+            "before": {
+              "x": 1192,
+              "y": 562
+            },
+            "after": {
+              "x": 1012,
+              "y": 702
+            }
+          },
+          "closedFromOwnControl": true,
+          "stillOpenAfterClose": false
+        },
+        {
+          "label": "لون التعبئة والإطار",
+          "opened": {
+            "cls": "editor-anchor-menu is-drawer",
+            "role": "dialog",
+            "label": "الألوان",
+            "rect": {
+              "x": 1135,
+              "y": 490,
+              "w": 240,
+              "h": 194
+            },
+            "grip": true,
+            "close": true,
+            "controls": 6
+          },
+          "moved": {
+            "before": {
+              "x": 1135,
+              "y": 490
+            },
+            "after": {
+              "x": 955,
+              "y": 630
+            }
+          },
+          "closedFromOwnControl": true,
+          "stillOpenAfterClose": false
+        }
+      ],
+      "bubble": {
+        "rect": {
+          "x": 326,
+          "y": 380,
+          "w": 385,
+          "h": 42
+        },
+        "controls": [
+          "نقل الشريط العائم",
+          "لون التعبئة",
+          "لون الإطار",
+          "إنقاص سماكة الحد بالبكسل",
+          "سماكة الحد بالبكسل",
+          "زيادة سماكة الحد بالبكسل",
+          "تكرار",
+          "حذف",
+          "المزيد من أدوات العنصر",
+          "إخفاء الشريط العائم"
+        ]
+      },
+      "errors": []
+    },
+    "tablet": {
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "facts": {
+        "headerPresent": true,
+        "headerButtons": [
+          "تراجع",
+          "إعادة",
+          "تصغير المقياس",
+          "إعادة المقياس إلى مئة بالمئة",
+          "تكبير المقياس",
+          "ملاءمة الصفحة",
+          "عرض",
+          "تم الحفظ",
+          "ملف المشروع",
+          "تصدير المشروع"
+        ],
+        "dockOuterHtml": "<aside class=\"studio-tool-dock editor-dock\" data-editor-obstacle=\"tool-dock\" data-tour=\"canvas-dock\" data-density=\"full\" aria-label=\"أدوات مساحة العمل\"><button type=\"button\" class=\"editor-dock-grip\" aria-label=\"نقل شريط الأدوات\" title=\"اسحب لنقل الشريط — نقرتان لإعادته إلى الزاوية\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-grip-horizontal\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"9\" r=\"1\"></circle><circle cx=\"19\" cy=\"9\" r=\"1\"></circle><circle cx=\"5\" cy=\"9\" r=\"1\"></circle><circle cx=\"12\" cy=\"15\" r=\"1\"></circle><circle cx=\"19\" cy=\"15\" r=\"1\"></circle><circle cx=\"5\" cy=\"15\" r=\"1\"></circle></svg></button><button type=\"button\" class=\"editor-icon-btn is-active\" aria-label=\"تحديد وتحريك\" aria-keyshortcuts=\"V\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-mouse-pointer2 lucide-mouse-pointer-2 size-4\" aria-hidden=\"true\"><path d=\"M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z\"></path></svg></span></button><button type=\"button\" class=\"editor-icon-btn\" aria-label=\"نص\" aria-keyshortcuts=\"T\" aria-expanded=\"false\" aria-haspopup=\"dialog\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-type size-4\" aria-hidden=\"true\"><polyline points=\"4 7 4 4 2",
+        "dockDensity": "full",
+        "dockButtons": [
+          "نقل شريط الأدوات",
+          "تحديد وتحريك",
+          "نص",
+          "أشكال",
+          "العناصر والمكتبة",
+          "الخصائص والإعدادات",
+          "الطبقات",
+          "لون التعبئة والإطار",
+          "إضافة",
+          "تصغير شريط الأدوات"
+        ],
+        "runningBuild": "09eb6bb-mun980tq",
+        "drawerNodes": 0,
+        "legacyClasses": {
+          "studioToolDockWide": 0,
+          "touchPropertiesSheet": 2,
+          "editorTopTabs": 0
+        }
+      },
+      "interactions": [
+        {
+          "label": "نص",
+          "opened": {
+            "cls": "editor-anchor-menu is-drawer",
+            "role": "dialog",
+            "label": "أدوات النص",
+            "rect": {
+              "x": 776,
+              "y": 395,
+              "w": 240,
+              "h": 146
+            },
+            "grip": true,
+            "close": true,
+            "controls": 4
+          },
+          "moved": {
+            "before": {
+              "x": 776,
+              "y": 395
+            },
+            "after": {
+              "x": 596,
+              "y": 535
+            }
+          },
+          "closedFromOwnControl": true,
+          "stillOpenAfterClose": false
+        },
+        {
+          "label": "أشكال",
+          "opened": {
+            "cls": "editor-anchor-menu is-drawer",
+            "role": "dialog",
+            "label": "أدوات الأشكال",
+            "rect": {
+              "x": 776,
+              "y": 395,
+              "w": 240,
+              "h": 146
+            },
+            "grip": true,
+            "close": true,
+            "controls": 4
+          },
+          "moved": {
+            "before": {
+              "x": 776,
+              "y": 395
+            },
+            "after": {
+              "x": 596,
+              "y": 535
+            }
+          },
+          "closedFromOwnControl": true,
+          "stillOpenAfterClose": false
+        },
+        {
+          "label": "لون التعبئة والإطار",
+          "opened": {
+            "cls": "editor-anchor-menu is-drawer",
+            "role": "dialog",
+            "label": "الألوان",
+            "rect": {
+              "x": 642,
+              "y": 295,
+              "w": 240,
+              "h": 246
+            },
+            "grip": true,
+            "close": true,
+            "controls": 6
+          },
+          "moved": {
+            "before": {
+              "x": 642,
+              "y": 295
+            },
+            "after": {
+              "x": 462,
+              "y": 435
+            }
+          },
+          "closedFromOwnControl": true,
+          "stillOpenAfterClose": false
+        }
+      ],
+      "bubble": {
+        "rect": {
+          "x": 68,
+          "y": 313,
+          "w": 385,
+          "h": 42
+        },
+        "controls": [
+          "نقل الشريط العائم",
+          "لون التعبئة",
+          "لون الإطار",
+          "إنقاص سماكة الحد بالبكسل",
+          "سماكة الحد بالبكسل",
+          "زيادة سماكة الحد بالبكسل",
+          "تكرار",
+          "حذف",
+          "المزيد من أدوات العنصر",
+          "إخفاء الشريط العائم"
+        ]
+      },
+      "errors": []
+    },
+    "mobile": {
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "facts": {
+        "headerPresent": true,
+        "headerButtons": [
+          "تراجع",
+          "إعادة",
+          "عرض",
+          "تم الحفظ",
+          "ملف المشروع",
+          "تصدير المشروع"
+        ],
+        "dockOuterHtml": "<aside class=\"studio-tool-dock editor-dock\" data-editor-obstacle=\"tool-dock\" data-tour=\"canvas-dock\" data-density=\"folded\" aria-label=\"أدوات مساحة العمل\"><button type=\"button\" class=\"editor-dock-grip\" aria-label=\"نقل شريط الأدوات\" title=\"اسحب لنقل الشريط — نقرتان لإعادته إلى الزاوية\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-grip-horizontal\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"9\" r=\"1\"></circle><circle cx=\"19\" cy=\"9\" r=\"1\"></circle><circle cx=\"5\" cy=\"9\" r=\"1\"></circle><circle cx=\"12\" cy=\"15\" r=\"1\"></circle><circle cx=\"19\" cy=\"15\" r=\"1\"></circle><circle cx=\"5\" cy=\"15\" r=\"1\"></circle></svg></button><button type=\"button\" class=\"editor-icon-btn is-active\" aria-label=\"تحديد وتحريك\" aria-keyshortcuts=\"V\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-mouse-pointer2 lucide-mouse-pointer-2 size-4\" aria-hidden=\"true\"><path d=\"M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z\"></path></svg></span></button><button type=\"button\" class=\"editor-icon-btn\" aria-label=\"أدوات الرسم\" aria-expanded=\"false\" aria-haspopup=\"dialog\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-pen-tool size-4\" aria-hidden=\"true\"><path d=\"M15.707 21.293a1 1 0 0 1-",
+        "dockDensity": "folded",
+        "dockButtons": [
+          "نقل شريط الأدوات",
+          "تحديد وتحريك",
+          "أدوات الرسم",
+          "اللوحات",
+          "لون التعبئة والإطار",
+          "إضافة",
+          "تصغير شريط الأدوات"
+        ],
+        "runningBuild": "09eb6bb-mun980tq",
+        "drawerNodes": 0,
+        "legacyClasses": {
+          "studioToolDockWide": 0,
+          "touchPropertiesSheet": 2,
+          "editorTopTabs": 0
+        }
+      },
+      "interactions": [
+        {
+          "label": "أدوات الرسم",
+          "opened": {
+            "cls": "editor-anchor-menu is-drawer",
+            "role": "dialog",
+            "label": "أدوات الرسم",
+            "rect": {
+              "x": 142,
+              "y": 381,
+              "w": 240,
+              "h": 236
+            },
+            "grip": true,
+            "close": true,
+            "controls": 6
+          },
+          "moved": {
+            "before": {
+              "x": 142,
+              "y": 381
+            },
+            "after": {
+              "x": 8,
+              "y": 521
+            }
+          },
+          "closedFromOwnControl": true,
+          "stillOpenAfterClose": false
+        },
+        {
+          "label": "اللوحات",
+          "opened": {
+            "cls": "editor-anchor-menu is-drawer",
+            "role": "dialog",
+            "label": "اللوحات",
+            "rect": {
+              "x": 142,
+              "y": 414,
+              "w": 240,
+              "h": 203
+            },
+            "grip": true,
+            "close": true,
+            "controls": 5
+          },
+          "moved": {
+            "before": {
+              "x": 142,
+              "y": 414
+            },
+            "after": {
+              "x": 8,
+              "y": 554
+            }
+          },
+          "closedFromOwnControl": true,
+          "stillOpenAfterClose": false
+        },
+        {
+          "label": "لون التعبئة والإطار",
+          "opened": {
+            "cls": "editor-anchor-menu is-drawer",
+            "role": "dialog",
+            "label": "الألوان",
+            "rect": {
+              "x": 142,
+              "y": 371,
+              "w": 240,
+              "h": 246
+            },
+            "grip": true,
+            "close": true,
+            "controls": 6
+          },
+          "moved": {
+            "before": {
+              "x": 142,
+              "y": 371
+            },
+            "after": {
+              "x": 8,
+              "y": 511
+            }
+          },
+          "closedFromOwnControl": true,
+          "stillOpenAfterClose": false
+        }
+      ],
+      "bubble": {
+        "rect": {
+          "x": 72,
+          "y": 337,
+          "w": 310,
+          "h": 42
+        },
+        "controls": [
+          "نقل الشريط العائم",
+          "لون التعبئة",
+          "لون الإطار",
+          "إنقاص سماكة الحد بالبكسل",
+          "سماكة الحد بالبكسل",
+          "زيادة سماكة الحد بالبكسل",
+          "المزيد من أدوات العنصر",
+          "إخفاء الشريط العائم"
+        ]
+      },
+      "errors": []
+    }
+  }
+}

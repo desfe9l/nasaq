@@ -1,0 +1,182 @@
+=== VERDICT ===
+{
+  "build": {
+    "documentStamped": "09eb6bb-mun980tq",
+    "api": {
+      "status": 200,
+      "cacheControl": "no-store",
+      "body": {
+        "buildId": "09eb6bb-mun980tq"
+      }
+    },
+    "apiId": "09eb6bb-mun980tq",
+    "consistent": true,
+    "runningInBrowser": "09eb6bb-mun980tq"
+  },
+  "docVerdict": {
+    "allSameHtml": false,
+    "shas": [
+      "b6a737eb8807420a",
+      "250908f6e4cfde6f",
+      "2b5e1c5025dc6fc1",
+      "a6ae64bb4928f715"
+    ],
+    "editorChunks": [
+      "/assets/editor-R2KQMktz.js"
+    ],
+    "cacheControls": [
+      "no-cache"
+    ]
+  },
+  "cacheControl": "no-cache",
+  "xVercelCache": "MISS",
+  "editorChunkMarkers": {
+    "data-density (narrow-lane folding)": true,
+    "editor-dock-grip": true,
+    "editor-dock-color-btn": true,
+    "bubbleLayout": false,
+    "dockLayout": false,
+    "AnchorMenu drawer title «أدوات الرسم»": true,
+    "format drawer «تنسيق»": true,
+    "panel dock toggle «إرساء»": true,
+    "editor-header-zone": true,
+    "studio-tool-dock": true,
+    "stale-build guard (update pill)": false,
+    "stale-build guard (cache-busted reload)": false,
+    "stale-build guard (app-version probe)": false
+  },
+  "guardMarkersAnyBundle": {
+    "stale-build guard (update pill)": true,
+    "stale-build guard (cache-busted reload)": false,
+    "stale-build guard (app-version probe)": true
+  },
+  "editorChunkLegacy": {
+    "StudioToolDock class": false,
+    "TouchPropertiesSheet": true,
+    "editor-top-tabs": false,
+    "ArrangeBar": false,
+    "ToolbarMenus": false,
+    "studio-tool-dock-wide": false
+  },
+  "stylesheet": {
+    "url": "/assets/styles-Bup19Xnb.css",
+    "bytes": 194012,
+    "sha": "b2c201e1883b46fe",
+    "hasStudioToolDock": true,
+    "hasEditorTopTabs": false,
+    "hasTouchProperties": true,
+    "hasEditorToolbar": true
+  },
+  "desktopHeaderButtons": [
+    "تراجع",
+    "إعادة",
+    "تصغير المقياس",
+    "إعادة المقياس إلى مئة بالمئة",
+    "تكبير المقياس",
+    "ملاءمة الصفحة",
+    "عرض",
+    "تم الحفظ",
+    "ملف المشروع",
+    "تصدير المشروع"
+  ],
+  "desktopDockDensity": "full",
+  "desktopLegacyClasses": {
+    "studioToolDockWide": 0,
+    "touchPropertiesSheet": 2,
+    "editorTopTabs": 0
+  },
+  "desktopInteractions": [
+    {
+      "label": "نص",
+      "opened": {
+        "w": 240,
+        "h": 122
+      },
+      "moved": {
+        "before": {
+          "x": 1192,
+          "y": 562
+        },
+        "after": {
+          "x": 1012,
+          "y": 702
+        }
+      },
+      "closedFromOwnControl": true,
+      "stillOpenAfterClose": false
+    },
+    {
+      "label": "أشكال",
+      "opened": {
+        "w": 240,
+        "h": 122
+      },
+      "moved": {
+        "before": {
+          "x": 1192,
+          "y": 562
+        },
+        "after": {
+          "x": 1012,
+          "y": 702
+        }
+      },
+      "closedFromOwnControl": true,
+      "stillOpenAfterClose": false
+    },
+    {
+      "label": "لون التعبئة والإطار",
+      "opened": {
+        "w": 240,
+        "h": 194
+      },
+      "moved": {
+        "before": {
+          "x": 1135,
+          "y": 490
+        },
+        "after": {
+          "x": 955,
+          "y": 630
+        }
+      },
+      "closedFromOwnControl": true,
+      "stillOpenAfterClose": false
+    }
+  ],
+  "desktopBubble": {
+    "rect": {
+      "x": 326,
+      "y": 380,
+      "w": 385,
+      "h": 42
+    },
+    "controls": [
+      "نقل الشريط العائم",
+      "لون التعبئة",
+      "لون الإطار",
+      "إنقاص سماكة الحد بالبكسل",
+      "سماكة الحد بالبكسل",
+      "زيادة سماكة الحد بالبكسل",
+      "تكرار",
+      "حذف",
+      "المزيد من أدوات العنصر",
+      "إخفاء الشريط العائم"
+    ]
+  },
+  "mobileDockButtons": [
+    "نقل شريط الأدوات",
+    "تحديد وتحريك",
+    "أدوات الرسم",
+    "اللوحات",
+    "لون التعبئة والإطار",
+    "إضافة",
+    "تصغير شريط الأدوات"
+  ],
+  "mobileDockDensity": "folded",
+  "errors": {
+    "desktop": [],
+    "tablet": [],
+    "mobile": []
+  }
+}
