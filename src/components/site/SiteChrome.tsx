@@ -24,8 +24,8 @@ import {
   openNewDocumentFlow,
   useWorkspaceEntry,
 } from "@/lib/auth/use-workspace-entry";
-import { AccountAvatar } from "./AccountAvatar";
-import { AccountBadge, useAccountTier } from "./AccountBadge";
+import { AccountControlContent } from "./AccountControlContent";
+import { useAccountTier } from "./AccountBadge";
 import {
   AccountMenuPanel,
   accountMenuItemClass,
@@ -119,18 +119,6 @@ function NewDocumentForUser({
 }
 
 /**
- * «مرخص» / «مجاني» badge for the signed-in account.
- *
- * Its own component so `useAccountTier` (→ `useLicense`) mounts only once a real
- * user is on screen: the hook must be called unconditionally, and the signed-out
- * branch of `HeaderAccount` returns before that point.
- */
-function SignedInBadge({ user }: { user: AppUser }) {
-  const tier = useAccountTier(user);
-  return <AccountBadge tier={tier} />;
-}
-
-/**
  * «تسجيل الدخول / إنشاء حساب» and the signed-in identity chip.
  *
  * One entry point for the whole site chrome, driven by the existing Better Auth
@@ -138,7 +126,7 @@ function SignedInBadge({ user }: { user: AppUser }) {
  * so a signed-in visitor never sees a sign-in flash on reload. Editing does not
  * require an account — only exporting does (see `SignInRequiredModal`).
  */
-function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }) {
+function HeaderAccount() {
   const { user, isPending } = useCurrentUserState();
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -177,9 +165,7 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
         href="/login"
         className={cn(
           "items-center gap-1.5 rounded-[8px] border border-line px-3 font-bold text-ink transition hover:border-brand hover:text-brand-hover",
-          variant === "header"
-            ? "inline-flex h-9 max-w-[150px] items-center px-2 text-[11px] sm:px-3 sm:text-[12px] lg:max-w-none"
-            : "mt-1 flex w-full px-3 py-2.5 text-[13px]",
+          "inline-flex h-9 max-w-[150px] px-2 text-[11px] sm:px-3 sm:text-[12px]",
         )}
       >
         <LogIn className="size-4" aria-hidden />
@@ -193,7 +179,7 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
   // Resolved by the shared identity helper, so this chip and the editor's
   // account area always print the same name for the same session.
   const { label } = accountIdentity(user);
-  const avatar = <AccountAvatar user={user} size={24} />;
+
 
   /** Measure first, then open: the card's first paint is already placed. */
   const openMenu = () => {
@@ -202,9 +188,8 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
   };
 
   /*
-   * The card's actions. They are the same rows on both layouts; only the way the
-   * card is placed differs (floating portal in the header, in the flow inside
-   * the collapsed nav).
+   * One account menu for all viewport sizes; mobile navigation does not mount
+   * another identity/status control.
    */
   const items = (
     <>
@@ -233,7 +218,7 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
   );
 
   return (
-    <div className={cn("relative", variant === "mobile" && "mt-1 w-full")}>
+    <div className="relative min-w-0">
       <button
         ref={buttonRef}
         type="button"
@@ -244,34 +229,14 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
           if (open) closeMenu();
           else openMenu();
         }}
-        className={cn(
-          "flex items-center gap-2 rounded-[8px] border border-line bg-surface/60 font-bold transition hover:border-brand",
-          variant === "header" ? "h-9 px-2 text-[12px]" : "w-full px-3 py-2 text-[13px]",
-        )}
+        aria-label={`حساب ${label}`}
+        className="account-control"
       >
-        {avatar}
-        {/*
-         * The account identity block: the FULL name (never truncated mid-word
-         * by a 140px cap — it collapses with `truncate` only when the chrome
-         * genuinely runs out of room) plus the licence-state badge.
-         */}
-        <span className="flex min-w-0 flex-col items-start leading-tight">
-          <span
-            className={cn(
-              "max-w-[180px] truncate text-[12px] font-extrabold",
-              variant === "header" && "hidden lg:inline",
-            )}
-            title={label}
-          >
-            {label}
-          </span>
-          <SignedInBadge user={user} />
-        </span>
-        <ChevronDown className="size-3.5 opacity-70" aria-hidden />
+        <AccountControlContent user={user} />
+        <ChevronDown className="size-3 shrink-0 opacity-70" aria-hidden />
       </button>
 
       {open &&
-        variant === "header" &&
         placement &&
         createPortal(
           /*
@@ -301,15 +266,6 @@ function HeaderAccount({ variant = "header" }: { variant?: "header" | "mobile" }
           document.body,
         )}
 
-      {/*
-       * The collapsed nav's copy stays in the flow: there the card is part of
-       * the opened sheet, so it has nothing to float above.
-       */}
-      {open && variant === "mobile" && (
-        <AccountMenuPanel user={user} label="قائمة الحساب" className="account-menu-panel-inline">
-          {items}
-        </AccountMenuPanel>
-      )}
     </div>
   );
 }
@@ -384,7 +340,7 @@ export function SiteHeader({ current }: { current: string }) {
      * a blurred bar smears into the page it is floating over).
      */}
     <header className="sticky top-0 z-40 border-b border-line bg-page">
-      <div className="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_1fr] items-center gap-x-3 px-4 sm:gap-x-4 sm:px-6 lg:flex">
+      <div className="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 px-4 sm:gap-x-4 sm:px-6 lg:flex">
         <a href="/" className="flex shrink-0 items-center gap-2.5">
           <BrandLogo />
         </a>
@@ -443,7 +399,7 @@ export function SiteHeader({ current }: { current: string }) {
           </div>
         </nav>
 
-        <div className="flex items-center justify-end gap-1.5 sm:gap-2">
+        <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
           {/* Light/Dark is the visitor's choice: one toggle, applied site-wide
               and persisted (lib/theme.ts), so every page loads on the same
               mode instead of each page forcing its own. */}
@@ -453,7 +409,7 @@ export function SiteHeader({ current }: { current: string }) {
             aria-pressed={dark}
             aria-label={dark ? "التبديل إلى الوضع الفاتح" : "التبديل إلى الوضع الداكن"}
             title={dark ? "الوضع الفاتح" : "الوضع الداكن"}
-            className="grid size-9 place-items-center rounded-[8px] border border-line"
+            className="grid size-9 shrink-0 place-items-center rounded-[8px] border border-line"
           >
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
@@ -473,7 +429,7 @@ export function SiteHeader({ current }: { current: string }) {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label="القائمة"
-            className="grid size-9 place-items-center rounded-[8px] border border-line lg:hidden"
+            className="grid size-9 shrink-0 place-items-center rounded-[8px] border border-line lg:hidden"
           >
             {open ? <X className="size-4" /> : <Menu className="size-4" />}
           </button>
@@ -505,7 +461,7 @@ export function SiteHeader({ current }: { current: string }) {
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
             {dark ? "الوضع الفاتح" : "الوضع الداكن"}
           </button>
-          <HeaderAccount variant="mobile" />
+          {/* The account trigger above is shared across all breakpoints. */}
         </nav>
       )}
     </header>

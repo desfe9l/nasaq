@@ -1,11 +1,11 @@
 import type { ComponentType, SVGProps } from "react";
-import { Loader2, ShieldAlert, BadgeCheck, Lock } from "lucide-react";
+import { Loader2, ShieldAlert, Check, Lock } from "lucide-react";
 import { useLicense } from "@/lib/license/client";
 import type { AppUser } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
 
 /**
- * Account state badge — «مرخص» / «موقوف» / «مجاني».
+ * Account state badge — «الحساب مفعل» / «موقوف» / «مجاني».
  *
  * Mounted as its own component (rather than called as a hook inside
  * `HeaderAccount`) for two reasons: `useLicense` must run unconditionally, and
@@ -40,16 +40,16 @@ const BADGE_META: Record<
     Icon: Loader2,
   },
   LICENSED: {
-    label: "مرخص",
+    label: "الحساب مفعل",
     className:
       "border-brand/20 bg-brand/10 text-brand",
-    Icon: BadgeCheck,
+    Icon: Check,
   },
   ADMIN: {
-    label: "مرخص",
+    label: "الحساب مفعل",
     className:
       "border-brand/20 bg-brand/10 text-brand",
-    Icon: BadgeCheck,
+    Icon: Check,
   },
   SUSPENDED: {
     label: "موقوف",
@@ -84,17 +84,18 @@ export function AccountBadge({
   const Icon = meta.Icon;
   return (
     <span
+      data-account-status={tier}
       className={cn(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full border py-1 text-[11px] font-bold leading-4",
+        "inline-flex shrink-0 items-center whitespace-nowrap gap-1 rounded-full border py-0.5 text-[11px] font-bold leading-4",
         compact ? "px-2" : "px-2.5",
         meta.className,
         className,
       )}
       title={
         tier === "ADMIN"
-          ? "حساب مرخص — صلاحيات إدارية كاملة"
+          ? "الحساب مفعل — صلاحيات إدارية كاملة"
           : tier === "LICENSED"
-            ? "حساب مرخص"
+            ? "الحساب مفعل"
             : tier === "SUSPENDED"
               ? "الحساب موقوف مؤقتًا بقرار الإدارة"
             : tier === "LOADING"
@@ -102,7 +103,7 @@ export function AccountBadge({
               : "حساب مجاني — الترخيص يفتح المزايا المتقدمة"
       }
     >
-      <Icon className={cn("size-3", tier === "LOADING" && "animate-spin")} aria-hidden />
+      <Icon className={cn("size-3 shrink-0", tier === "LOADING" && "animate-spin")} aria-hidden />
 
       <span>{meta.label}</span>
 

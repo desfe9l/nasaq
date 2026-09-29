@@ -16,14 +16,13 @@ import { accountIdentity } from "@/lib/auth/identity";
 import type { AppUser } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
 import { AccountAvatar } from "./AccountAvatar";
-import { AccountBadge, useAccountTier } from "./AccountBadge";
 
 /**
  * The identity card behind the account chip — one card for every surface.
  *
  * The site chrome and the editor toolbar both open "who is signed in, and where
  * does it lead": the same avatar, the same resolved name (`accountIdentity`),
- * the same server-resolved licence badge and the same action rows. Two copies of
+ * the same action rows. Status belongs only to the owning account trigger. Two copies of
  * that card drifted the moment one of them was restyled, so it lives here once,
  * with its geometry in `src/lib/account-menu.ts` and its surface in the
  * `.account-menu-panel` block of `src/styles.css`.
@@ -41,18 +40,6 @@ export const accountMenuItemClass = "account-menu-item";
 
 /** A secondary row — «تسجيل الخروج» and other quiet actions. */
 export const accountMenuItemMutedClass = "account-menu-item account-menu-item-muted";
-
-/**
- * The licence badge for a signed-in account.
- *
- * Its own component so `useAccountTier` (→ `useLicense`) mounts only while the
- * card is open: the hook has to be called unconditionally, and a collapsed chip
- * does not need a status round trip on every page load.
- */
-function MenuTierBadge({ user }: { user: AppUser }) {
-  const tier = useAccountTier(user);
-  return <AccountBadge tier={tier} />;
-}
 
 /**
  * Measures where the card goes, from the trigger and the BAR it sits in.
@@ -99,8 +86,7 @@ export function useAccountMenuPlacement({
 }
 
 /**
- * The card itself: profile header (avatar, full name, address), the licence
- * badge, then the action rows passed as children.
+ * The card itself: full identity and actions, never a second status badge.
  */
 export function AccountMenuPanel({
   user,
@@ -153,11 +139,6 @@ export function AccountMenuPanel({
             </p>
           )}
         </div>
-      </div>
-
-      {/* The licence state the server resolved for this account («مرخص» / «مجاني»). */}
-      <div className="account-menu-badge">
-        <MenuTierBadge user={user} />
       </div>
 
       <div className="account-menu-items">{children}</div>
