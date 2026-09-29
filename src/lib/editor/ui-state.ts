@@ -25,12 +25,6 @@ export function isOverlayViewport(): boolean {
   return !window.matchMedia(`(min-width: ${OVERLAY_BREAKPOINT}px)`).matches;
 }
 
-/** Includes iPad Pro landscape and touch devices with a paired mouse. */
-export function isTouchPropertiesViewport(): boolean {
-  return typeof window !== "undefined" && typeof window.matchMedia === "function" &&
-    window.matchMedia("(any-pointer: coarse)").matches;
-}
-
 /**
  * Bottom pages panel (الصفحات) height bounds.
  *
@@ -218,6 +212,146 @@ export function placeFloatingToolbar(
 
   const clamped = Math.abs(best.left - centeredLeft) > 0.5;
   return { left: best.left, top: best.top, placement: best.placement, clamped };
+}
+
+/* -------------------------------------------------------------------------- */
+/* Anchored popovers (menus, tooltips, quick pickers)                         */
+/* -------------------------------------------------------------------------- */
+
+export interface PopoverPlacement {
+  left: number;
+  top: number;
+  side: "top" | "bottom";
+}
+
+/**
+ * Where a menu/tooltip panel goes for an anchor box of a known panel size.
+ *
+ * One rule for every anchored surface in the editor, so a control near an edge
+ * can never push its menu off-screen, and a menu that does not fit below simply
+ * opens above instead of being cut off. Pure and RTL-agnostic: the alignment is
+ * expressed in physical pixels, and the caller picks the edge that matches the
+ * reading direction (`end` for an RTL menu that grows leftwards).
+ */
+export function anchorMenuPlacement(
+  anchor: ScreenBox,
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+  options: {
+    side?: "top" | "bottom";
+    align?: "start" | "end" | "center";
+    gap?: number;
+    margin?: number;
+  } = {},
+): PopoverPlacement {
+  const { side = "bottom", align = "end", gap = 6, margin = 8 } = options;
+  const rawLeft =
+    align === "start"
+      ? anchor.left
+      : align === "center"
+        ? anchor.left + anchor.width / 2 - size.width / 2
+        : anchor.right - size.width;
+  const left = Math.max(
+    margin,
+    Math.min(rawLeft, Math.max(margin, viewport.width - size.width - margin)),
+  );
+  const below = anchor.bottom + gap;
+  const above = anchor.top - gap - size.height;
+  const resolved = (
+    side === "bottom"
+      ? below + size.height <= viewport.height - margin
+        ? "bottom"
+        : "above"
+      : above >= margin
+        ? "top"
+        : "bottom"
+  ) as "top" | "bottom";
+  const top = Math.max(
+    margin,
+    Math.min(
+      resolved === "bottom" ? below : above,
+      Math.max(margin, viewport.height - size.height - margin),
+    ),
+  );
+  return { left, top, side: resolved };
+}
+
+export interface TooltipState {
+  left: number;
+  top: number;
+  side: "top" | "bottom";
+}
+
+/**
+ * Where a tooltip goes for an anchor box and a bubble of a known size.
+ *
+ * Pure so the geometry is unit-testable (`ui-state.test.ts`) and so the same
+ * rule can back every anchored popover: centre on the anchor, clamp inside the
+ * viewport, and fall to the other side rather than overflow.
+ */
+export function tipPlacement(
+  anchor: { left: number; top: number; width: number; height: number },
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+  preferred: "top" | "bottom" = "bottom",
+  gap = 8,
+  edge = 8,
+): TooltipState {
+  const centered = anchor.left + anchor.width / 2 - size.width / 2;
+  const left = Math.max(
+    edge,
+    Math.min(centered, Math.max(edge, viewport.width - size.width - edge)),
+  );
+  const below = anchor.top + anchor.height + gap;
+  const above = anchor.top - gap - size.height;
+  const side = (
+    preferred === "bottom"
+      ? below + size.height <= viewport.height - edge
+        ? "bottom"
+        : "above"
+      : above >= edge
+        ? "top"
+        : "bottom"
+  ) as "top" | "bottom";
+  const top = Math.max(
+    edge,
+    Math.min(
+      side === "bottom" ? below : above,
+      Math.max(edge, viewport.height - size.height - edge),
+    ),
+  );
+  return { left, top, side };
+}
+
+/**
+ * Default opening rectangle for a floating panel.
+ *
+ * Panels must not cover the controls the author needs while they work, so a
+ * fresh panel is placed in the free band beside the canvas margins instead of
+ * snapping over the artboard's centre. `anchor` is the corner region the panel
+ * should hug (e.g. the canvas stage rect), and the result is always clamped
+ * back inside the viewport by `clampPanel`.
+ */
+export function panelSpawnRect(
+  stage: ScreenBox,
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+  inset = 12,
+): { left: number; top: number; width: number; height: number } {
+  const width = Math.min(size.width, Math.max(200, viewport.width - inset * 2));
+  const height = Math.min(size.height, Math.max(160, viewport.height - inset * 2));
+  return {
+    width,
+    height,
+    left: Math.max(inset, stage.left + stage.width - width - inset),
+    // The vertical clamp matters as much as the horizontal one: a stage that
+    // starts high on a short screen must not spawn a panel that runs off the
+    // bottom edge. The panel still re-clamps while it is dragged.
+    top: Math.min(
+      Math.max(inset, stage.top + inset),
+      Math.max(inset, viewport.height - height - inset),
+    ),
+  };
 }
 
 /* -------------------------------------------------------------------------- */

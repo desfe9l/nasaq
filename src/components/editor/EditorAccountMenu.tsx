@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import {
   ChevronDown,
   FilePlus2,
+  House,
   KeyRound,
   LogIn,
   LogOut,
@@ -61,7 +62,15 @@ function NewDocumentMenuItem({ user, onRequest }: { user: AppUser; onRequest: ()
   );
 }
 
-export function EditorAccountMenu() {
+export function EditorAccountMenu({
+  homeHref,
+  onNavigateHome,
+}: {
+  /** Where «العودة إلى الرئيسية» goes (NASAQ Home for a licensed account). */
+  homeHref: string;
+  /** Lets the shell finish a pending save before the page unloads. */
+  onNavigateHome: (event: React.MouseEvent<HTMLAnchorElement>) => void;
+}) {
   const { user, isPending } = useCurrentUserState();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -194,6 +203,17 @@ export function EditorAccountMenu() {
                 <Settings2 className="size-4 opacity-70" aria-hidden />
                 الإعدادات
               </button>
+              {/* Leaving the workspace is navigation, not a document action, so
+                  it lives with the account rather than on the toolbar itself. */}
+              <a
+                href={homeHref}
+                role="menuitem"
+                className={accountMenuItemClass}
+                onClick={onNavigateHome}
+              >
+                <House className="size-4 opacity-70" aria-hidden />
+                العودة إلى الرئيسية
+              </a>
               <a href="/account" role="menuitem" className={accountMenuItemClass}>
                 <UserRound className="size-4 opacity-70" aria-hidden />
                 حسابي والاشتراك
