@@ -75,11 +75,12 @@ export function AddMenu({
       )}
     >
       <MenuGroup title="نصوص وأشكال" />
+      {/* No key cap here: «T» is already printed on the dock's text tool, and
+          the same shortcut in two places competes with the tool itself. */}
       <MenuRow
         icon={<Type className="size-4" />}
         label="نص بالرسم"
         hint="اسحب على الصفحة لتحديد موضعه وحجمه"
-        shortcut="T"
         onSelect={onDrawText}
       />
       <MenuRow

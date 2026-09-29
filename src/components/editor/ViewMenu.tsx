@@ -64,20 +64,21 @@ export function ViewMenu({
         />
       )}
     >
+      {/* The zoom keys are printed once, on the header's zoom cluster — the
+          control an author actually presses. Repeating ⌘+/⌘−/⌘0 here put the
+          same three badges in two places for no gain. */}
       <MenuGroup title="المقياس" />
       <MenuRow
         icon={<ZoomIn className="size-4" />}
         label="تكبير"
-        shortcut="⌘+"
         onSelect={() => zoomBy(0.08)}
       />
       <MenuRow
         icon={<ZoomOut className="size-4" />}
         label="تصغير"
-        shortcut="⌘−"
         onSelect={() => zoomBy(-0.08)}
       />
-      <MenuRow label="ملاءمة لوحة الصفحة" shortcut="⌘0" onSelect={fitToScreen} />
+      <MenuRow label="ملاءمة لوحة الصفحة" onSelect={fitToScreen} />
       <MenuRow label="ملاءمة التحديد" onSelect={fitToSelection} />
       <MenuRow label="مقياس 100%" onSelect={() => setZoom(1)} />
       <MenuRow

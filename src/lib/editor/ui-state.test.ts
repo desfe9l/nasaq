@@ -1,20 +1,44 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  BUBBLE_FOLDS,
+  BUBBLE_PARTS,
+  DOCK_FOLDS,
+  DOCK_METRICS_FALLBACK,
   MEASURE_TOLERANCE_MM,
   OVERLAY_BREAKPOINT,
   PAGES_PANEL_DEFAULT,
   PAGES_PANEL_MIN,
   anchorMenuPlacement,
+  bubbleBarWidth,
+  bubbleLayout,
   clampPagesHeight,
+  clampParkedPoint,
+  dockBarWidth,
+  dockCellCount,
+  dockLayout,
   extractSvgMarkup,
   isOverlayViewport,
   measuredSelectionBox,
   panelSpawnRect,
+  parseStoredPoint,
   placeFloatingToolbar,
   tipPlacement,
+  type DockMetrics,
   type ScreenBox,
 } from "./ui-state.ts";
+
+/** The 44px cell geometry an iPad/Pencil session gets from `@media`. */
+const COARSE_DOCK: DockMetrics = { cell: 44, grip: 26, gap: 3, pad: 6, sep: 5 };
+
+/** Width the dock would actually paint for a fold level. */
+const dockWidthAt = (level: number, metrics: DockMetrics) => {
+  const folded = DOCK_FOLDS[level] ?? [];
+  return dockBarWidth(dockCellCount(folded), {
+    divider: !folded.includes("colors"),
+    metrics,
+  });
+};
 
 /** Overlap area of two boxes, used to assert "never covers X". */
 function overlap(
@@ -500,5 +524,183 @@ describe("floating panel spawn", () => {
     assert.ok(at.height <= 844 - 24, `panel height ${at.height}`);
     assert.ok(at.left >= 0 && at.left + at.width <= 390, "panel stays on screen");
     assert.ok(at.top + at.height <= 844, "panel stays on screen vertically");
+  });
+});
+
+describe("selection bubble density", () => {
+  const LANES = [1920, 1440, 1194, 1024, 834, 768, 700, 620, 480, 390, 320];
+
+  it("keeps every control in the bar on a desktop or tablet lane", () => {
+    for (const lane of [1920, 1194, 1024, 834, 768]) {
+      const text = bubbleLayout("text", lane);
+      assert.deepEqual(text.bar, [...BUBBLE_PARTS.text]);
+      assert.deepEqual(text.drawer, []);
+      const object = bubbleLayout("object", lane);
+      assert.deepEqual(object.bar, [...BUBBLE_PARTS.object]);
+    }
+  });
+
+  it("is decided by the lane alone, so switching tools cannot resize the bar", () => {
+    // Same kind + same lane ⇒ byte-identical layout, whatever the element is.
+    const a = bubbleLayout("text", 834);
+    const b = bubbleLayout("text", 834);
+    assert.deepEqual(a, b);
+    assert.equal(bubbleBarWidth(a.bar), bubbleBarWidth(b.bar));
+    // Two different lanes inside the same band agree too.
+    assert.deepEqual(bubbleLayout("text", 800).bar, bubbleLayout("text", 1200).bar);
+  });
+
+  it("folds controls into a drawer instead of shrinking them on a phone lane", () => {
+    const narrow = bubbleLayout("text", 390);
+    assert.ok(narrow.drawer.length > 0, "something moved to the group drawer");
+    assert.ok(narrow.bar.includes("drawer"), "the bar shows one drawer trigger");
+    // Folding loses slots, never tools: everything is still reachable.
+    const accounted = new Set([...narrow.bar, ...narrow.drawer, ...narrow.more]);
+    for (const part of BUBBLE_PARTS.text)
+      assert.ok(accounted.has(part), `${part} is still reachable`);
+    // The structural controls never fold away.
+    for (const part of ["grip", "more", "close"] as const)
+      assert.ok(narrow.bar.includes(part), `${part} stays in the bar`);
+  });
+
+  it("drops the border control entirely when the element cannot carry one", () => {
+    const plain = bubbleLayout("text", 1920, { stroke: false });
+    assert.ok(!plain.bar.includes("stroke"));
+    assert.ok(!plain.drawer.includes("stroke"));
+    assert.ok(
+      bubbleBarWidth(plain.bar) < bubbleBarWidth(bubbleLayout("text", 1920).bar),
+      "no empty slot is left behind",
+    );
+  });
+
+  it("never paints a bar wider than the lane it was given", () => {
+    for (const kind of ["text", "object"] as const) {
+      for (const stroke of [true, false]) {
+        for (const lane of LANES) {
+          const { bar } = bubbleLayout(kind, lane, { stroke });
+          assert.ok(
+            bubbleBarWidth(bar) <= lane,
+            `${kind} (stroke=${stroke}) at ${lane}px paints ${bubbleBarWidth(bar)}px`,
+          );
+        }
+      }
+    }
+  });
+
+  it("folds in a fixed order, so the bar shrinks predictably", () => {
+    let previous = Number.POSITIVE_INFINITY;
+    for (const folded of BUBBLE_FOLDS.text) {
+      const bar = BUBBLE_PARTS.text.filter((part) => !folded.includes(part));
+      const width = bubbleBarWidth(bar);
+      assert.ok(width < previous, `folding ${folded.join("+") || "nothing"} narrows the bar`);
+      previous = width;
+    }
+  });
+});
+
+describe("canvas dock density", () => {
+  it("keeps every tool on desktop and tablet lanes", () => {
+    for (const [lane, metrics] of [
+      [1920, DOCK_METRICS_FALLBACK],
+      [1194, COARSE_DOCK],
+      [834, COARSE_DOCK],
+    ] as const) {
+      const layout = dockLayout(lane, metrics);
+      assert.deepEqual(layout.drawer, []);
+      assert.deepEqual(layout.triggers, []);
+      assert.equal(layout.bar.length, 10);
+    }
+  });
+
+  it("folds panel gateways into one drawer on a phone lane", () => {
+    const layout = dockLayout(390, COARSE_DOCK);
+    assert.deepEqual(layout.drawer, ["library", "properties", "layers"]);
+    assert.deepEqual(layout.triggers, ["panels"]);
+    // Three tools became one trigger: the bar loses two cells, not three tools.
+    assert.equal(dockCellCount(layout.drawer), 7);
+    assert.ok(dockWidthAt(1, COARSE_DOCK) <= 390);
+  });
+
+  it("gives up the drawing tools only after the panels, and colours never", () => {
+    assert.deepEqual(dockLayout(366, COARSE_DOCK).triggers, ["draw", "panels"]);
+    assert.deepEqual(dockLayout(296, COARSE_DOCK).drawer, [
+      "library",
+      "properties",
+      "layers",
+      "text",
+      "shape",
+      "select",
+    ]);
+    // Folding a one-cell group would buy nothing, so the swatches always stay.
+    for (const lane of [1920, 834, 390, 320, 296, 200])
+      assert.ok(!dockLayout(lane, COARSE_DOCK).drawer.includes("colors"));
+    // Even the most folded bar can still insert, and every tool stays reachable.
+    const tightest = dockLayout(200, COARSE_DOCK);
+    assert.ok(tightest.bar.includes("add"));
+    assert.ok(tightest.triggers.includes("draw"));
+    assert.ok(tightest.drawer.includes("select"));
+  });
+
+  it("folds earlier with touch-sized cells, and never overflows the lane", () => {
+    assert.deepEqual(dockLayout(420, DOCK_METRICS_FALLBACK).drawer, []);
+    assert.deepEqual(dockLayout(420, COARSE_DOCK).drawer, [
+      "library",
+      "properties",
+      "layers",
+    ]);
+    // 296px is the lane of a 320px viewport (the narrowest phone NASAQ
+    // supports) minus the dock's own 24px of canvas edge.
+    for (const metrics of [DOCK_METRICS_FALLBACK, COARSE_DOCK]) {
+      for (const lane of [1920, 1194, 834, 768, 600, 480, 390, 366, 320, 296]) {
+        const layout = dockLayout(lane, metrics);
+        const width = dockBarWidth(dockCellCount(layout.drawer), {
+          divider: !layout.drawer.includes("colors"),
+          metrics,
+        });
+        assert.ok(width <= lane, `${width}px dock in a ${lane}px lane`);
+      }
+    }
+  });
+});
+
+describe("parked floating drawers", () => {
+  it("reads back a stored park and rejects anything unusable", () => {
+    assert.deepEqual(parseStoredPoint('{"x":120,"y":80}'), { x: 120, y: 80 });
+    assert.equal(parseStoredPoint(null), null);
+    assert.equal(parseStoredPoint(""), null);
+    assert.equal(parseStoredPoint("not json"), null);
+    assert.equal(parseStoredPoint('{"x":12}'), null);
+    assert.equal(parseStoredPoint('{"x":"12","y":8}'), null);
+    assert.equal(parseStoredPoint('{"x":NaN,"y":8}'), null);
+    assert.equal(parseStoredPoint("[1,2]"), null);
+  });
+
+  it("brings a park back on screen when the viewport shrank", () => {
+    const at = clampParkedPoint(
+      { x: 1200, y: 900 },
+      { width: 240, height: 320 },
+      { width: 834, height: 1194 },
+    );
+    assert.ok(at.x + 240 <= 834 - 8, `x ${at.x}`);
+    assert.ok(at.y + 320 <= 1194 - 8, `y ${at.y}`);
+  });
+
+  it("leaves a park that already fits untouched", () => {
+    const at = clampParkedPoint(
+      { x: 120, y: 80 },
+      { width: 240, height: 320 },
+      { width: 1440, height: 900 },
+    );
+    assert.deepEqual(at, { x: 120, y: 80 });
+  });
+
+  it("keeps a drawer larger than the viewport pinned to the margin", () => {
+    const at = clampParkedPoint(
+      { x: 40, y: 40 },
+      { width: 900, height: 400 },
+      { width: 390, height: 844 },
+    );
+    // Horizontally pinned to the margin; vertically it still fits, so it stays.
+    assert.deepEqual(at, { x: 8, y: 40 });
   });
 });
