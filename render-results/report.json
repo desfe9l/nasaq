@@ -1,0 +1,537 @@
+{
+  "base": "https://nasaq-sa.vercel.app",
+  "deploy": "https://nasaq-62hjhupkf-ararcomksa-2423s-projects.vercel.app",
+  "startedAt": "2026-09-29T22:10:12.089Z",
+  "http": {
+    "alias": {
+      "url": "https://nasaq-sa.vercel.app/editor",
+      "status": 200,
+      "bytes": 9212,
+      "sha256": "3048c9a5a7fbbb93",
+      "cacheControl": "no-cache",
+      "age": "0",
+      "xVercelId": "iad1::iad1::mkw4z-1790719812198-fee2304a004c",
+      "xVercelCache": "MISS",
+      "assets": [
+        "/assets/styles-DvLsu_Mh.css",
+        "/assets/index-DVsgPtIa.js",
+        "/assets/rolldown-runtime-Dd_uD5pT.js",
+        "/assets/react-CQOZoUwg.js",
+        "/assets/dist-BIhSDwz7.js",
+        "/assets/middleware-CVBGAN39.js",
+        "/assets/not-found-DIgawKw1.js",
+        "/assets/jsx-runtime-DREnUpxT.js",
+        "/assets/createLucideIcon-CMCRMc0P.js",
+        "/assets/x-zJtLjgYV.js",
+        "/assets/utils-CQ68anUM.js",
+        "/assets/preload-helper-BZ1Pz5am.js",
+        "/assets/catalog-0I63vvBd.js",
+        "/assets/client-wSCtlcOv.js",
+        "/assets/use-current-user-WISTYaID.js",
+        "/assets/client-DQlW6aJp.js",
+        "/assets/model-BSoOeKn3.js",
+        "/assets/editor-_BUyduvD.js",
+        "/assets/arrow-left-fX8I4dpY.js",
+        "/assets/badge-check-PNANfRd9.js",
+        "/assets/copy-BZnzH5Zf.js",
+        "/assets/download-BPwuL2dN.js",
+        "/assets/star-DS8RdW40.js",
+        "/assets/eye-off-gRfdproX.js",
+        "/assets/eye-jS4ZTKCs.js",
+        "/assets/pen-line-JfriKYaj.js",
+        "/assets/lock-open-HkuoZ2O0.js",
+        "/assets/file-down-D2Hh5Vuc.js",
+        "/assets/file-json-CzEqdY6f.js",
+        "/assets/file-text-DCmwkK6G.js",
+        "/assets/folder-open-hvkvGzwo.js",
+        "/assets/library-export-DiU3Rlq7.js",
+        "/assets/FullVersionModal-DVmTto9d.js",
+        "/assets/image-plus-iOJjpRir.js",
+        "/assets/layers-B205H3gA.js",
+        "/assets/layout-template-CNgVwl3v.js",
+        "/assets/TemplateDialogs-BLPFJFuu.js",
+        "/assets/table-2-BDn-h8Ye.js",
+        "/assets/palette-Ci2OYWCm.js",
+        "/assets/trash-2-B5GK9XwN.js"
+      ],
+      "headerSnippet": "",
+      "hasOldToolbarMarkers": false,
+      "hasNewMarkers": false
+    },
+    "deployment": {
+      "url": "https://nasaq-62hjhupkf-ararcomksa-2423s-projects.vercel.app/editor",
+      "status": 200,
+      "bytes": 340616,
+      "sha256": "583548ee08b38edf",
+      "cacheControl": "public, max-age=0, must-revalidate",
+      "age": "7940",
+      "xVercelId": "iad1::d87dr-1790719812588-db82dcf7a0ff",
+      "xVercelCache": "HIT",
+      "assets": [],
+      "headerSnippet": "<header class=\"flex h-header min-h-(--header-height) items-center px-4 md:px-6 [&amp;&gt;*:not(a)]:h-header [&amp;_ul]:m-0 [&amp;_ul]:list-none [&amp;_ul]:p-0 [&amp;_a]:ease-[ease] [&amp;_a]:no-underline [&amp;_a]:transition-colors [&amp;_a]:duration-200 [&amp;_button]:ease-[ease] [&amp;_button]:transition-colors [&amp;_button]:duration-200 bg-background-200\" data-navigation-header=\"\"><a href=\"/home\" aria-label=\"Vercel logo\" data-testid=\"header/navbar/logo\" id=\"\" data-zone=\"6a379c\" class=\"cursor-pointer focus-visible:outline-2 outline-[var(--ds-focus-color)] outline-offset-4 pointer-events-non",
+      "hasOldToolbarMarkers": false,
+      "hasNewMarkers": false
+    }
+  },
+  "desktop": {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "status": 200,
+    "errors": [],
+    "facts": {
+      "url": "https://nasaq-sa.vercel.app/editor",
+      "title": "نَسَق | NASAQ — محرر التقارير والمخرجات المؤسسية",
+      "editorUi": true,
+      "headerFound": true,
+      "headerClass": "editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]",
+      "headerBox": {
+        "x": 0,
+        "y": 0,
+        "w": 1440,
+        "h": 49
+      },
+      "headerBg": "rgb(235, 237, 237)",
+      "headerZoneCount": 3,
+      "headerButtonCount": 10,
+      "headerButtons": [
+        {
+          "label": "تراجع",
+          "icon": true,
+          "box": {
+            "x": 1394,
+            "y": 7,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "label": "إعادة",
+          "icon": true,
+          "box": {
+            "x": 1356,
+            "y": 7,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "label": "تصغير المقياس",
+          "icon": true,
+          "box": {
+            "x": 1304,
+            "y": 10,
+            "w": 30,
+            "h": 28
+          }
+        },
+        {
+          "label": "إعادة المقياس إلى مئة بالمئة",
+          "icon": false,
+          "box": {
+            "x": 1258,
+            "y": 10,
+            "w": 46,
+            "h": 28
+          }
+        },
+        {
+          "label": "تكبير المقياس",
+          "icon": true,
+          "box": {
+            "x": 1228,
+            "y": 10,
+            "w": 30,
+            "h": 28
+          }
+        },
+        {
+          "label": "ملاءمة الصفحة",
+          "icon": true,
+          "box": {
+            "x": 1198,
+            "y": 10,
+            "w": 30,
+            "h": 28
+          }
+        },
+        {
+          "label": "عرض",
+          "icon": true,
+          "box": {
+            "x": 175,
+            "y": 7,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "label": "تم الحفظ",
+          "icon": true,
+          "box": {
+            "x": 137,
+            "y": 7,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "label": "ملف المشروع",
+          "icon": true,
+          "box": {
+            "x": 97,
+            "y": 6,
+            "w": 36,
+            "h": 36
+          }
+        },
+        {
+          "label": "تصدير المشروع",
+          "icon": true,
+          "box": {
+            "x": 59,
+            "y": 7,
+            "w": 34,
+            "h": 34
+          }
+        }
+      ],
+      "headerHtml": "<header data-editor-obstacle=\"header\" class=\"editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]\"><div class=\"editor-header-zone editor-header-primary\"><button type=\"button\" class=\"editor-icon-btn\" aria-label=\"تراجع\" aria-keyshortcuts=\"⌘Z\" disabled=\"\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-undo2 lucide-undo-2 size-4\" aria-hidden=\"true\"><path d=\"M9 14 4 9l5-5\"></path><path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\"></path></svg></span></button><button type=\"button\" class=\"editor-icon-btn\" aria-label=\"إعادة\" aria-keyshortcuts=\"⌘⇧Z\" disabled=\"\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-redo2 lucide-redo-2 size-4\" aria-hidden=\"true\"><path d=\"m15 14 5-5-5-5\"></path><path d=\"M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13\"></path></svg></span></button><span class=\"editor-header-sep\" aria-hidden=\"true\"></span><div class=\"editor-zoom-cluster\" role=\"group\" aria-label=\"مقياس مساحة العمل\"><button type=\"button\" class=\"editor-icon-btn editor-zoom-btn\" aria-label=\"تصغير المقياس\" aria-keyshortcuts=\"⌘−\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-minus size-4\" aria-hidden=\"true\"><path d=\"M5 12h14\"></path></svg></span></button><button type=\"button\" class=\"editor-zoom-readout\" title=\"المقياس الحالي — انقر للعودة إلى 100%\" aria-label=\"إعادة المقياس إلى مئة بالمئة\">54%</button><button type=\"button\" class=\"editor-icon-btn editor-zoom-btn\" aria-label=\"تكبير المقياس\" aria-keyshortcuts=\"⌘+\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-plus size-4\" aria-hidden=\"true\"><pa",
+      "dock": {
+        "x": 1055,
+        "y": 684,
+        "w": 373,
+        "h": 46
+      },
+      "dockCount": 1,
+      "floatingPanels": [],
+      "legacyMarkers": {
+        "studioToolDock": 1,
+        "editorSidebar": 2,
+        "editorTopTabs": 0
+      },
+      "pageRail": {
+        "x": 0,
+        "y": 752,
+        "w": 1440,
+        "h": 112
+      },
+      "statusBar": "الغلاف · 1/6 · 210 × 297 مم · 9 عنصرلا يوجد تحديد",
+      "canvasStage": {
+        "x": 0,
+        "y": 49,
+        "w": 1440,
+        "h": 693
+      },
+      "visibleTextSample": [
+        "54%",
+        "الغلاف",
+        "تقرير رسمي  ·  سري للاستخدام الداخلي",
+        "تقرير الأداء السنوي للجهة التنفيذية",
+        "ملخص تنفيذي موجز يعرض نطاق التقرير، أبرز النتائج، والمؤشرات الرئيسية، مع توصيات قابلة للتنفيذ خلال الدورة القادمة.",
+        "سبتمبر 2026  ·  محرم 1448 هـ",
+        "رسمي",
+        "المحتويات",
+        "المحتويات",
+        "المقدمة والنطاق  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  03",
+        "الأهداف الاستراتيجية  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  04",
+        "الإنجازات الرئيسية  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  05",
+        "المؤشرات والإحصائيات  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  06",
+        "التوصيات  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  07",
+        "الخاتمة  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  08",
+        "·  وثيقة رسمية",
+        "ملخص تنفيذي",
+        "ملخص تنفيذي",
+        "نظرة عامة",
+        "يستعرض هذا القسم المعلومات الأساسية للتقرير بلغة واضحة ومنظمة. يمكن تعديل النص، الخط، اللون، التباعد، والمحاذاة من لوحة الخصائص بدقة كاملة. يُبرز الملخص أهم النتائج والتوصيات ليكون قابلاً للعرض أمام القيادة دون الحاجة إلى قراءة الوثيقة كاملة.",
+        "المحور",
+        "المستهدف",
+        "المتحقق",
+        "التشغيل",
+        "100%",
+        "94%",
+        "الرضا",
+        "4.5",
+        "4.7",
+        "المبادرات",
+        "20",
+        "18",
+        "·  وثيقة رسمية",
+        "الإنجازات",
+        "الإنجازات",
+        "إنجاز رقم 1 وصف مختصر للأثر والنتيجة المتحققة خلال الفترة، مع الإشارة إلى الجهة المنفذة والمؤشر المرتبط.",
+        "إنجاز رقم 2 وصف مختصر للأثر والنتيجة المتحققة خلال الفترة، مع الإشارة إلى الجهة المنفذة والمؤشر المرتبط.",
+        "إنجاز رقم 3 وصف مختصر للأثر والنتيجة المتحققة خلال الفترة، مع الإشارة إلى الجهة المنفذة والمؤشر المرتبط.",
+        "إنجاز رقم 4 وصف مختصر للأثر والنتيجة المتحققة خلال الفترة، مع الإشارة إلى الجهة المنفذة والمؤشر المرتبط.",
+        "·  وثيقة رسمية",
+        "المؤشرات",
+        "المؤشرات والإحصائيات",
+        "94% نسبة الإنجاز",
+        "18 مبادرة مكتملة",
+        "4.7 متوسط الرضا",
+        "12 شراكة فاعلة",
+        "·  وثيقة رسمية",
+        "الخاتمة",
+        "الخاتمة والتوصيات",
+        "تؤكد نتائج التقرير أهمية الاستمرار في تنفيذ المبادرات وفق منهجية واضحة، مع قياس مستمر للأثر وتحسين دوري للعمليات. نوصي بتعزيز التكامل بين الوحدات وتوثيق الدروس المستفادة للعام القادم.",
+        "خُتم",
+        "اسم المسؤول المنصب",
+        "·  وثيقة رسمية",
+        "الغلاف",
+        "1",
+        "المحتويات",
+        "2",
+        "ملخص تنفيذي",
+        "3",
+        "الإنجازات",
+        "4",
+        "المؤشرات",
+        "5",
+        "الخاتمة",
+        "6",
+        "الغلاف · 1/6 · 210 × 297 مم · 9 عنصر",
+        "لا يوجد تحديد"
+      ],
+      "tourVisible": false
+    },
+    "interaction": {
+      "steps": [],
+      "openedElements": false,
+      "panelsAfterOpen": [],
+      "closed": false,
+      "panelsAfterClose": 0
+    }
+  },
+  "tablet": {
+    "viewport": {
+      "width": 834,
+      "height": 1112
+    },
+    "status": 200,
+    "errors": [],
+    "facts": {
+      "url": "https://nasaq-sa.vercel.app/editor",
+      "title": "نَسَق | NASAQ — محرر التقارير والمخرجات المؤسسية",
+      "editorUi": true,
+      "headerFound": true,
+      "headerClass": "editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]",
+      "headerBox": {
+        "x": 0,
+        "y": 0,
+        "w": 834,
+        "h": 53
+      },
+      "headerBg": "rgb(235, 237, 237)",
+      "headerZoneCount": 3,
+      "headerButtonCount": 10,
+      "headerButtons": [
+        {
+          "label": "تراجع",
+          "icon": true,
+          "box": {
+            "x": 782,
+            "y": 4,
+            "w": 44,
+            "h": 44
+          }
+        },
+        {
+          "label": "إعادة",
+          "icon": true,
+          "box": {
+            "x": 735,
+            "y": 4,
+            "w": 44,
+            "h": 44
+          }
+        },
+        {
+          "label": "تصغير المقياس",
+          "icon": true,
+          "box": {
+            "x": 681,
+            "y": 9,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "label": "إعادة المقياس إلى مئة بالمئة",
+          "icon": false,
+          "box": {
+            "x": 635,
+            "y": 12,
+            "w": 46,
+            "h": 28
+          }
+        },
+        {
+          "label": "تكبير المقياس",
+          "icon": true,
+          "box": {
+            "x": 601,
+            "y": 9,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "label": "ملاءمة الصفحة",
+          "icon": true,
+          "box": {
+            "x": 567,
+            "y": 9,
+            "w": 34,
+            "h": 34
+          }
+        },
+        {
+          "label": "عرض",
+          "icon": true,
+          "box": {
+            "x": 186,
+            "y": 4,
+            "w": 44,
+            "h": 44
+          }
+        },
+        {
+          "label": "تم الحفظ",
+          "icon": true,
+          "box": {
+            "x": 139,
+            "y": 4,
+            "w": 44,
+            "h": 44
+          }
+        },
+        {
+          "label": "ملف المشروع",
+          "icon": true,
+          "box": {
+            "x": 100,
+            "y": 8,
+            "w": 36,
+            "h": 36
+          }
+        },
+        {
+          "label": "تصدير المشروع",
+          "icon": true,
+          "box": {
+            "x": 53,
+            "y": 4,
+            "w": 44,
+            "h": 44
+          }
+        }
+      ],
+      "headerHtml": "<header data-editor-obstacle=\"header\" class=\"editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]\"><div class=\"editor-header-zone editor-header-primary\"><button type=\"button\" class=\"editor-icon-btn\" aria-label=\"تراجع\" aria-keyshortcuts=\"⌘Z\" disabled=\"\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-undo2 lucide-undo-2 size-4\" aria-hidden=\"true\"><path d=\"M9 14 4 9l5-5\"></path><path d=\"M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11\"></path></svg></span></button><button type=\"button\" class=\"editor-icon-btn\" aria-label=\"إعادة\" aria-keyshortcuts=\"⌘⇧Z\" disabled=\"\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-redo2 lucide-redo-2 size-4\" aria-hidden=\"true\"><path d=\"m15 14 5-5-5-5\"></path><path d=\"M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13\"></path></svg></span></button><span class=\"editor-header-sep\" aria-hidden=\"true\"></span><div class=\"editor-zoom-cluster\" role=\"group\" aria-label=\"مقياس مساحة العمل\"><button type=\"button\" class=\"editor-icon-btn editor-zoom-btn\" aria-label=\"تصغير المقياس\" aria-keyshortcuts=\"⌘−\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-minus size-4\" aria-hidden=\"true\"><path d=\"M5 12h14\"></path></svg></span></button><button type=\"button\" class=\"editor-zoom-readout\" title=\"المقياس الحالي — انقر للعودة إلى 100%\" aria-label=\"إعادة المقياس إلى مئة بالمئة\">72%</button><button type=\"button\" class=\"editor-icon-btn editor-zoom-btn\" aria-label=\"تكبير المقياس\" aria-keyshortcuts=\"⌘+\"><span class=\"editor-icon-glyph\" aria-hidden=\"true\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\" stroke-linecap=\"round\" stroke-linejoin=\"round\" class=\"lucide lucide-plus size-4\" aria-hidden=\"true\"><pa",
+      "dock": {
+        "x": 351,
+        "y": 884,
+        "w": 471,
+        "h": 58
+      },
+      "dockCount": 1,
+      "floatingPanels": [],
+      "legacyMarkers": {
+        "studioToolDock": 1,
+        "editorSidebar": 2,
+        "editorTopTabs": 0
+      },
+      "pageRail": {
+        "x": 0,
+        "y": 964,
+        "w": 834,
+        "h": 112
+      },
+      "statusBar": "الغلاف · 1/6 · 210 × 297 مم · 9 عنصرلا يوجد تحديد",
+      "canvasStage": {
+        "x": 0,
+        "y": 53,
+        "w": 834,
+        "h": 901
+      },
+      "visibleTextSample": [
+        "72%",
+        "الغلاف",
+        "تقرير رسمي  ·  سري للاستخدام الداخلي",
+        "تقرير الأداء السنوي للجهة التنفيذية",
+        "ملخص تنفيذي موجز يعرض نطاق التقرير، أبرز النتائج، والمؤشرات الرئيسية، مع توصيات قابلة للتنفيذ خلال الدورة القادمة.",
+        "سبتمبر 2026  ·  محرم 1448 هـ",
+        "رسمي",
+        "المحتويات",
+        "المحتويات",
+        "المقدمة والنطاق  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  03",
+        "الأهداف الاستراتيجية  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  04",
+        "الإنجازات الرئيسية  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  05",
+        "المؤشرات والإحصائيات  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  06",
+        "التوصيات  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  07",
+        "الخاتمة  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  08",
+        "·  وثيقة رسمية",
+        "ملخص تنفيذي",
+        "ملخص تنفيذي",
+        "نظرة عامة",
+        "يستعرض هذا القسم المعلومات الأساسية للتقرير بلغة واضحة ومنظمة. يمكن تعديل النص، الخط، اللون، التباعد، والمحاذاة من لوحة الخصائص بدقة كاملة. يُبرز الملخص أهم النتائج والتوصيات ليكون قابلاً للعرض أمام القيادة دون الحاجة إلى قراءة الوثيقة كاملة.",
+        "المحور",
+        "المستهدف",
+        "المتحقق",
+        "التشغيل",
+        "100%",
+        "94%",
+        "الرضا",
+        "4.5",
+        "4.7",
+        "المبادرات",
+        "20",
+        "18",
+        "·  وثيقة رسمية",
+        "الإنجازات",
+        "الإنجازات",
+        "إنجاز رقم 1 وصف مختصر للأثر والنتيجة المتحققة خلال الفترة، مع الإشارة إلى الجهة المنفذة والمؤشر المرتبط.",
+        "إنجاز رقم 2 وصف مختصر للأثر والنتيجة المتحققة خلال الفترة، مع الإشارة إلى الجهة المنفذة والمؤشر المرتبط.",
+        "إنجاز رقم 3 وصف مختصر للأثر والنتيجة المتحققة خلال الفترة، مع الإشارة إلى الجهة المنفذة والمؤشر المرتبط.",
+        "إنجاز رقم 4 وصف مختصر للأثر والنتيجة المتحققة خلال الفترة، مع الإشارة إلى الجهة المنفذة والمؤشر المرتبط.",
+        "·  وثيقة رسمية",
+        "المؤشرات",
+        "المؤشرات والإحصائيات",
+        "94% نسبة الإنجاز",
+        "18 مبادرة مكتملة",
+        "4.7 متوسط الرضا",
+        "12 شراكة فاعلة",
+        "·  وثيقة رسمية",
+        "الخاتمة",
+        "الخاتمة والتوصيات",
+        "تؤكد نتائج التقرير أهمية الاستمرار في تنفيذ المبادرات وفق منهجية واضحة، مع قياس مستمر للأثر وتحسين دوري للعمليات. نوصي بتعزيز التكامل بين الوحدات وتوثيق الدروس المستفادة للعام القادم.",
+        "خُتم",
+        "اسم المسؤول المنصب",
+        "·  وثيقة رسمية",
+        "الغلاف",
+        "1",
+        "المحتويات",
+        "2",
+        "ملخص تنفيذي",
+        "3",
+        "الإنجازات",
+        "4",
+        "المؤشرات",
+        "5",
+        "الخاتمة",
+        "6",
+        "الغلاف · 1/6 · 210 × 297 مم · 9 عنصر",
+        "لا يوجد تحديد"
+      ],
+      "tourVisible": false
+    },
+    "interaction": {
+      "steps": [],
+      "openedElements": false,
+      "panelsAfterOpen": [],
+      "closed": false,
+      "panelsAfterClose": 0
+    }
+  },
+  "finishedAt": "2026-09-29T22:10:22.608Z"
+}
