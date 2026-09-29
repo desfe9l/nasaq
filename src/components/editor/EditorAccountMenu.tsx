@@ -12,8 +12,8 @@ import {
 import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
-import { AccountAvatar } from "@/components/site/AccountAvatar";
-import { AccountBadge, useAccountTier } from "@/components/site/AccountBadge";
+import { AccountControlContent } from "@/components/site/AccountControlContent";
+import { useAccountTier } from "@/components/site/AccountBadge";
 import {
   AccountMenuPanel,
   accountMenuItemClass,
@@ -34,8 +34,7 @@ import { NewDocumentDialog } from "@/components/site/NewDocumentDialog";
  * and is displayed, never decided, here.
  *
  * Deliberately compact: an avatar plus the account name. The toolbar is one
- * line at every width, so the licence badge and the full identity live in the
- * card that opens from it rather than in the strip itself. The card itself is
+ * compact control owns its status; the expanded card adds full identity and actions. The card itself is
  * shared with the site chrome (`AccountMenuPanel`) — geometry included — and is
  * portalled to `<body>` and measured from the TOOLBAR's bottom edge, so a
  * wrapped toolbar row can never end up under the card.
@@ -64,7 +63,6 @@ function NewDocumentMenuItem({ user, onRequest }: { user: AppUser; onRequest: ()
 
 export function EditorAccountMenu() {
   const { user, isPending } = useCurrentUserState();
-  const tier = useAccountTier(user);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [newDocOpen, setNewDocOpen] = useState(false);
@@ -145,14 +143,12 @@ export function EditorAccountMenu() {
         onClick={() => (open ? closeMenu() : openMenu())}
         title={identity.label}
         className={cn(
-          "inline-flex h-9 shrink-0 items-center gap-1.5 rounded-[8px] border px-1.5 text-[12px] font-extrabold transition",
+          "account-control shrink-0",
           open ? "border-navy-2 text-brand-hover" : "border-line hover:border-navy-2",
         )}
       >
-        <AccountAvatar user={user} size={22} />
-        <AccountBadge tier={tier} />
-        <span className="hidden max-w-[128px] truncate md:inline">{identity.label}</span>
-        <ChevronDown className="size-3.5 opacity-70" aria-hidden />
+        <AccountControlContent user={user} />
+        <ChevronDown className="size-3 shrink-0 opacity-70" aria-hidden />
       </button>
 
       {open &&

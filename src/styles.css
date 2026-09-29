@@ -4708,13 +4708,6 @@ button.license-badge-locked:focus-visible {
   color: var(--color-muted);
 }
 
-/* Licence state: its own row, start-aligned with the identity block. */
-.account-menu-badge {
-  display: flex;
-  justify-content: flex-start;
-  margin-top: 0.75rem;
-}
-
 /* Actions: one bordered list, separated from the identity block. */
 .account-menu-items {
   display: grid;
@@ -4776,3 +4769,30 @@ button.license-badge-locked:focus-visible {
 .editor-status-bar button { min-height: 32px; }
 
 .editor-page-rail > div:first-child { overflow-y: auto; }
+
+/* The trigger owns its status: a compact two-row layout on narrow headers,
+   one row when space permits. No absolute badge or fixed-height clipping. */
+.account-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-control:hover { border-color: var(--color-brand); }
+.account-control:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+.account-control-content { display: flex; flex-direction: column; align-items: start; gap: 1px; min-width: 0; }
+.account-control-identity { display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 108px; }
+.account-control-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 1280px) {
+  .account-control { min-height: 36px; gap: 6px; }
+  .account-control-content { flex-direction: row; align-items: center; gap: 6px; }
+  .account-control-identity { max-width: 120px; }
+}
