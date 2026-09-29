@@ -17,6 +17,7 @@ import { licenseSummary } from "@/lib/license/summary";
 import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { AccountAvatar } from "@/components/site/AccountAvatar";
+import { documentBuildId } from "@/lib/app-update";
 
 /**
  * «الإعدادات» — the account and the workspace, without leaving the editor.
@@ -42,7 +43,13 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "editor", label: "المحرر" },
 ];
 
-export function EditorSettingsDialog({ onClose, initialTab = "account" }: { onClose: () => void; initialTab?: Tab }) {
+export function EditorSettingsDialog({
+  onClose,
+  initialTab = "account",
+}: {
+  onClose: () => void;
+  initialTab?: Tab;
+}) {
   const [tab, setTab] = useState<Tab>(initialTab);
 
   useEffect(() => {
@@ -101,7 +108,7 @@ export function EditorSettingsDialog({ onClose, initialTab = "account" }: { onCl
               aria-selected={tab === item.id}
               onClick={() => setTab(item.id)}
               className={cn(
- "rounded-[8px] px-3 py-1.5 text-[12px] font-extrabold transition",
+                "rounded-[8px] px-3 py-1.5 text-[12px] font-extrabold transition",
                 tab === item.id
                   ? "bg-navy text-white"
                   : "text-muted hover:bg-line-2",
@@ -130,8 +137,12 @@ function Row({
 }) {
   return (
     <div className="flex items-start justify-between gap-4 py-2">
-      <dt className="shrink-0 pt-0.5 text-[11px] font-bold text-muted">{label}</dt>
-      <dd className="min-w-0 text-end text-[12px] font-extrabold">{children}</dd>
+      <dt className="shrink-0 pt-0.5 text-[11px] font-bold text-muted">
+        {label}
+      </dt>
+      <dd className="min-w-0 text-end text-[12px] font-extrabold">
+        {children}
+      </dd>
     </div>
   );
 }
@@ -139,15 +150,15 @@ function Row({
 function AccountSection() {
   const { user } = useCurrentUserState();
   const identity = accountIdentity(user);
-  const {
+  const { isLoading, hasLicense, isAdmin, isSuspended, license, activate } =
+    useLicense(user?.id, user?.primaryEmail);
+  const summary = licenseSummary({
     isLoading,
-    hasLicense,
     isAdmin,
     isSuspended,
+    hasLicense,
     license,
-    activate,
-  } = useLicense(user?.id, user?.primaryEmail);
-  const summary = licenseSummary({ isLoading, isAdmin, isSuspended, hasLicense, license });
+  });
 
   const [key, setKey] = useState("");
   const [activating, setActivating] = useState(false);
@@ -172,7 +183,10 @@ function AccountSection() {
         <div className="flex items-center gap-3">
           <AccountAvatar user={user} size={40} />
           <div className="min-w-0">
-            <p className="truncate text-[13px] font-extrabold" title={identity.label}>
+            <p
+              className="truncate text-[13px] font-extrabold"
+              title={identity.label}
+            >
               {identity.label}
             </p>
             <p
@@ -192,18 +206,18 @@ function AccountSection() {
       </section>
 
       <section className="rounded-[12px] border border-line p-4">
-        <h3 className="text-[11px] font-extrabold text-muted">الترخيص والاشتراك</h3>
+        <h3 className="text-[11px] font-extrabold text-muted">
+          الترخيص والاشتراك
+        </h3>
         <dl className="mt-1 divide-y divide-line">
           <Row label="الحالة">
             <span
               className={cn(
- "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-extrabold",
-                summary.tone === "licensed" &&
- "bg-ok/12 text-success",
-                summary.tone === "suspended" &&
- "bg-danger/12 text-error",
+                "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-extrabold",
+                summary.tone === "licensed" && "bg-ok/12 text-success",
+                summary.tone === "suspended" && "bg-danger/12 text-error",
                 (summary.tone === "free" || summary.tone === "loading") &&
- "bg-line-2 text-muted",
+                  "bg-line-2 text-muted",
               )}
             >
               {summary.tone === "loading" && (
@@ -288,7 +302,9 @@ function PrefSwitch({
     <div className="flex items-center justify-between gap-4 py-2">
       <div className="min-w-0">
         <p className="truncate text-[12px] font-extrabold">{label}</p>
-        {hint && <p className="mt-0.5 text-[10px] leading-4 text-muted">{hint}</p>}
+        {hint && (
+          <p className="mt-0.5 text-[10px] leading-4 text-muted">{hint}</p>
+        )}
       </div>
       <button
         type="button"
@@ -297,16 +313,14 @@ function PrefSwitch({
         aria-label={label}
         onClick={() => onChange(!checked)}
         className={cn(
- "relative h-5 w-9 shrink-0 rounded-full border transition",
-          checked
-            ? "border-brand bg-ok/80"
-            : "border-line bg-line-2",
+          "relative h-5 w-9 shrink-0 rounded-full border transition",
+          checked ? "border-brand bg-ok/80" : "border-line bg-line-2",
         )}
       >
         <span
           aria-hidden
           className={cn(
- "absolute top-0.5 size-3.5 rounded-full bg-surface shadow transition-all",
+            "absolute top-0.5 size-3.5 rounded-full bg-surface shadow transition-all",
             // RTL: "on" slides toward the start of the track.
             checked ? "start-0.5" : "start-[18px]",
           )}
@@ -317,6 +331,8 @@ function PrefSwitch({
 }
 
 function EditorSection() {
+  /** Build this open document was served by — support's first question. */
+  const buildId = documentBuildId();
   const dark = useEditor((s) => s.dark);
   const setDark = useEditor((s) => s.setDark);
   const showGrid = useEditor((s) => s.showGrid);
@@ -352,7 +368,7 @@ function EditorSection() {
               aria-checked={dark === value}
               onClick={() => setDark(value)}
               className={cn(
- "inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[8px] text-[12px] font-extrabold transition",
+                "inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[8px] text-[12px] font-extrabold transition",
                 dark === value
                   ? "bg-navy text-white"
                   : "text-muted hover:bg-line-2",
@@ -389,6 +405,15 @@ function EditorSection() {
             checked={snapElements}
             onChange={() => toggle("snapElements")}
           />
+          <div className="flex items-center justify-between gap-2 py-2.5">
+            <span className="text-[11px] font-bold text-ink">إصدار المحرر</span>
+            <span
+              className="selectable-value truncate text-[11px] font-bold text-muted"
+              title={buildId}
+            >
+              {buildId}
+            </span>
+          </div>
           <PrefSwitch
             label="الشريط العائم"
             hint="شريط الأدوات الذي يتبع العنصر المحدد"
@@ -399,8 +424,12 @@ function EditorSection() {
         <div className="mt-3 border-t border-line pt-3">
           <div className="flex items-center justify-between gap-2">
             <div>
-              <span className="block text-[12px] font-bold">تخطيط شبكة اللوحات (أعمدة)</span>
-              <span className="block text-[10px] text-muted">تنظيم لوحات التصميم في أعمدة وصفوف متقاربة</span>
+              <span className="block text-[12px] font-bold">
+                تخطيط شبكة اللوحات (أعمدة)
+              </span>
+              <span className="block text-[10px] text-muted">
+                تنظيم لوحات التصميم في أعمدة وصفوف متقاربة
+              </span>
             </div>
             <div className="flex gap-1" dir="ltr">
               {[1, 2, 3, 4, 6].map((c) => (
@@ -409,7 +438,7 @@ function EditorSection() {
                   type="button"
                   onClick={() => setArtboardGridCols(c)}
                   className={cn(
- "grid size-7 place-items-center rounded-[6px] text-[11px] font-extrabold transition",
+                    "grid size-7 place-items-center rounded-[6px] text-[11px] font-extrabold transition",
                     artboardGridCols === c
                       ? "bg-navy text-white shadow-xs"
                       : "border border-line/60 hover:bg-line-2",
