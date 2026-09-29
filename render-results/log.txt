@@ -1,14 +1,52 @@
 === VERDICT ===
 {
-  "aliasStatus": 200,
-  "aliasSha": "3048c9a5a7fbbb93",
-  "aliasAssets": 40,
-  "deployStatus": 200,
-  "deploySha": "583548ee08b38edf",
-  "aliasOldMarkers": false,
-  "headerClass": "editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]",
-  "headerZones": 3,
-  "headerButtons": [
+  "docVerdict": {
+    "allSameHtml": false,
+    "shas": [
+      "d4c171f2c0a3cb7e",
+      "92580e8cfac8c614",
+      "7ef8122b534f4d51",
+      "f27b26ac16bb2a16"
+    ],
+    "editorChunks": [
+      "/assets/editor-_BUyduvD.js"
+    ],
+    "cacheControls": [
+      "no-cache"
+    ]
+  },
+  "cacheControl": "no-cache",
+  "xVercelCache": "MISS",
+  "editorChunkMarkers": {
+    "data-density (narrow-lane folding)": true,
+    "editor-dock-grip": true,
+    "editor-dock-color-btn": true,
+    "bubbleLayout": false,
+    "dockLayout": false,
+    "AnchorMenu drawer title «أدوات الرسم»": true,
+    "format drawer «تنسيق»": true,
+    "panel dock toggle «إرساء»": true,
+    "editor-header-zone": true,
+    "studio-tool-dock": true
+  },
+  "editorChunkLegacy": {
+    "StudioToolDock class": false,
+    "TouchPropertiesSheet": true,
+    "editor-top-tabs": false,
+    "ArrangeBar": false,
+    "ToolbarMenus": false,
+    "studio-tool-dock-wide": false
+  },
+  "stylesheet": {
+    "url": "/assets/styles-DvLsu_Mh.css",
+    "bytes": 193718,
+    "sha": "a4237fa2065ec257",
+    "hasStudioToolDock": true,
+    "hasEditorTopTabs": false,
+    "hasTouchProperties": true,
+    "hasEditorToolbar": true
+  },
+  "desktopHeaderButtons": [
     "تراجع",
     "إعادة",
     "تصغير المقياس",
@@ -20,18 +58,46 @@
     "ملف المشروع",
     "تصدير المشروع"
   ],
-  "dock": {
-    "x": 1055,
-    "y": 684,
-    "w": 373,
-    "h": 46
-  },
-  "legacy": {
-    "studioToolDock": 1,
-    "editorSidebar": 2,
+  "desktopDockDensity": "full",
+  "desktopLegacyClasses": {
+    "studioToolDockWide": 0,
+    "touchPropertiesSheet": 2,
     "editorTopTabs": 0
   },
-  "panelsOpen": [],
-  "panelsAfterClose": 0,
-  "errors": []
+  "desktopInteractions": [],
+  "desktopBubble": {
+    "rect": {
+      "x": 326,
+      "y": 380,
+      "w": 385,
+      "h": 42
+    },
+    "controls": [
+      "نقل الشريط العائم",
+      "لون التعبئة",
+      "لون الإطار",
+      "إنقاص سماكة الحد بالبكسل",
+      "سماكة الحد بالبكسل",
+      "زيادة سماكة الحد بالبكسل",
+      "تكرار",
+      "حذف",
+      "المزيد من أدوات العنصر",
+      "إخفاء الشريط العائم"
+    ]
+  },
+  "mobileDockButtons": [
+    "نقل شريط الأدوات",
+    "تحديد وتحريك",
+    "أدوات الرسم",
+    "اللوحات",
+    "لون التعبئة والإطار",
+    "إضافة",
+    "تصغير شريط الأدوات"
+  ],
+  "mobileDockDensity": "folded",
+  "errors": {
+    "desktop": [],
+    "tablet": [],
+    "mobile": []
+  }
 }
