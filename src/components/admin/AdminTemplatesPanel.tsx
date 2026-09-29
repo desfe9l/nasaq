@@ -137,6 +137,9 @@ export function AdminTemplatesPanel() {
   const [tierFilter, setTierFilter] = useState<TemplateTier | "all">("all");
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  /** Bulk selection — publishing or retiring many templates one by one is not a workflow. */
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [preview, setPreview] = useState<{ item: AdminTemplateSummary; content: string } | null>(null);
   const [localProjects, setLocalProjects] = useState<ProjectMeta[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -248,6 +251,57 @@ export function AdminTemplatesPanel() {
     void load();
   };
 
+  const toggleSelected = (id: string) =>
+    setSelectedIds((list) =>
+      list.includes(id) ? list.filter((x) => x !== id) : [...list, id],
+    );
+
+  /**
+   * Apply the same change to every selected template.
+   *
+   * Failures are reported per template and never abort the run: a single
+   * rejected item must not leave the batch half-applied with no explanation.
+   */
+  const runBulk = async (
+    action: "publish" | "unpublish" | "delete",
+    ids: string[],
+  ) => {
+    if (!ids.length || bulkBusy) return;
+    setBulkBusy(true);
+    const failed: string[] = [];
+    for (const id of ids) {
+      if (action === "delete") {
+        const res = await adminDeleteTemplateFn({ data: { id } });
+        if (res.ok) setItems((list) => list.filter((x) => x.id !== id));
+        else failed.push(id);
+      } else {
+        const res = await adminSetTemplateStatusFn({
+          data: { id, status: action === "publish" ? "published" : "draft" },
+        });
+        if (res.ok)
+          setItems((list) =>
+            list.map((t) =>
+              t.id === id
+                ? { ...t, status: action === "publish" ? "published" : "draft" }
+                : t,
+            ),
+          );
+        else failed.push(id);
+      }
+    }
+    setBulkBusy(false);
+    setSelectedIds(failed);
+    if (failed.length) toast.error(`تعذر تنفيذ الإجراء على ${failed.length} قالب`);
+    else
+      toast.success(
+        action === "delete"
+          ? `تم حذف ${ids.length} قالب`
+          : action === "publish"
+            ? `تم نشر ${ids.length} قالب`
+            : `تم إلغاء نشر ${ids.length} قالب`,
+      );
+  };
+
   const setStatus = async (id: string, patch: { status?: TemplateStatus; tier?: TemplateTier }) => {
     setBusyId(id);
     const res = await adminSetTemplateStatusFn({ data: { id, ...patch } });
@@ -300,7 +354,7 @@ export function AdminTemplatesPanel() {
         <div>
           <h2 className="text-[18px] font-black">إدارة القوالب</h2>
           <p className="text-[12px] text-muted">
-            {counts.all} قالب · {counts.published} منشور · {counts.licensed} مرخّص. المنشور يظهر في صفحة القوالب، و«مرخّص» يُفتح عبر تحقق الترخيص على الخادم فقط. كل قالب منشور له رابط تسويقي ثابت <span className="font-mono" dir="ltr">/templates/:slug</span>.
+            {counts.all} قالب · {counts.published} منشور · {counts.licensed} مرخّص. المنشور يظهر في صفحة القوالب، و«مرخّص» يُفتح عبر تحقق الترخيص على الخادم فقط. كل قالب منشور له رابط عام ثابت <span className="font-mono" dir="ltr">/templates/:slug</span>.
           </p>
         </div>
         <button type="button" className={primaryBtn} onClick={() => setDraft({ ...EMPTY_DRAFT })}>
@@ -519,6 +573,63 @@ export function AdminTemplatesPanel() {
           {items.length === 0 ? "لا توجد قوالب مُدارة بعد." : "لا نتائج مطابقة للتصفية."}
         </p>
       ) : (
+        <>
+          {/*
+           * Administrative bulk controls: select-all scoped to what the filters
+           * currently show, then one action for the whole selection.
+           */}
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-2 p-2 text-[11px]">
+            <button
+              type="button"
+              className={ghostBtn}
+              onClick={() =>
+                setSelectedIds((list) =>
+                  list.length === filtered.length ? [] : filtered.map((t) => t.id),
+                )
+              }
+            >
+              {selectedIds.length === filtered.length && filtered.length > 0
+                ? "إلغاء تحديد الكل"
+                : "تحديد كل النتائج"}
+            </button>
+            <span className="font-bold text-muted">
+              المحدد: {selectedIds.length} من {filtered.length}
+            </span>
+            <div className="ms-auto flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={ghostBtn}
+                disabled={!selectedIds.length || bulkBusy}
+                onClick={() => void runBulk("publish", selectedIds)}
+              >
+                نشر المحدد
+              </button>
+              <button
+                type="button"
+                className={ghostBtn}
+                disabled={!selectedIds.length || bulkBusy}
+                onClick={() => void runBulk("unpublish", selectedIds)}
+              >
+                إلغاء نشر المحدد
+              </button>
+              <button
+                type="button"
+                className={cn(ghostBtn, "text-error")}
+                disabled={!selectedIds.length || bulkBusy}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `حذف ${selectedIds.length} قالب نهائيًا؟ لا يمكن التراجع.`,
+                    )
+                  )
+                    void runBulk("delete", selectedIds);
+                }}
+              >
+                حذف المحدد
+              </button>
+            </div>
+          </div>
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((t) => {
             const displaySlug = templateDisplaySlug(t);
@@ -529,6 +640,13 @@ export function AdminTemplatesPanel() {
                 className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3"
               >
                 <div className="flex gap-3">
+                  <input
+                    type="checkbox"
+                    className="mt-1 size-4 shrink-0"
+                    checked={selectedIds.includes(t.id)}
+                    onChange={() => toggleSelected(t.id)}
+                    aria-label={`تحديد القالب ${t.title}`}
+                  />
                   <div className="grid aspect-[210/297] w-16 shrink-0 place-items-center overflow-hidden rounded border border-line bg-surface">
                     {t.thumbnail ? (
                       <img src={t.thumbnail} alt="" className="h-full w-full object-contain" />
@@ -692,6 +810,7 @@ export function AdminTemplatesPanel() {
             );
           })}
         </div>
+        </>
       )}
 
       {preview && (

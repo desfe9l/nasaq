@@ -198,6 +198,8 @@ export function AssetLibrary({
   const [pickFolder, setPickFolder] = useState(false);
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  /** Ordering of the shelf: newest first is the default an author expects. */
+  const [sortBy, setSortBy] = useState<"recent" | "oldest" | "name">("recent");
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
 
@@ -235,10 +237,10 @@ export function AssetLibrary({
     a.remove();
   };
 
-  // Filtered assets
+  // Filtered + ordered assets
   const filteredAssets = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return assets.filter((asset) => {
+    const matched = assets.filter((asset) => {
       // folder filter
       if (folderId !== null && (asset.folderId ?? null) !== folderId) return false;
       // type filter
@@ -254,7 +256,17 @@ export function AssetLibrary({
       }
       return true;
     });
-  }, [assets, folderId, query, typeFilter]);
+    const ordered = matched.slice();
+    if (sortBy === "name")
+      ordered.sort((a, b) => (a.name || "").localeCompare(b.name || "", "ar"));
+    else if (sortBy === "oldest")
+      ordered.sort((a, b) => (a.addedAt || 0) - (b.addedAt || 0));
+    else ordered.sort((a, b) => (b.addedAt || 0) - (a.addedAt || 0));
+    return ordered;
+  }, [assets, folderId, query, typeFilter, sortBy]);
+
+  /** True when anything is narrowing the shelf (drives the count + reset chip). */
+  const isFiltered = Boolean(query.trim()) || typeFilter !== "all" || folderId !== null;
 
   const visibleAssets = filteredAssets;
 
@@ -727,6 +739,47 @@ export function AssetLibrary({
           <span className="ms-auto rounded-full bg-line-2 px-2 py-1 text-[10px] font-bold tabular-nums text-muted">
             {visibleAssets.length} / {assets.length}
           </span>
+        </div>
+        {/*
+         * Ordering + reset. A shelf of a hundred logos is unusable without
+         * knowing what "first" means, and a filtered view needs one control
+         * that puts everything back.
+         */}
+        <div className="flex flex-wrap items-center gap-1">
+          {(
+            [
+              ["recent", "الأحدث"],
+              ["oldest", "الأقدم"],
+              ["name", "الاسم"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setSortBy(id)}
+              aria-pressed={sortBy === id}
+              className={cn(
+                "asset-library-chip inline-flex h-7 shrink-0 items-center rounded-[6px] border px-2 text-[10px] font-bold",
+                sortBy === id ? "border-navy bg-navy/10" : "border-line",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+          {isFiltered && (
+            <button
+              type="button"
+              onClick={() => {
+                setQuery("");
+                setTypeFilter("all");
+                setAssetFolder(null);
+              }}
+              className="asset-library-chip inline-flex h-7 shrink-0 items-center rounded-[6px] border border-line px-2 text-[10px] font-bold"
+              title="إزالة كل عوامل التصفية"
+            >
+              مسح التصفية
+            </button>
+          )}
         </div>
       </div>
 

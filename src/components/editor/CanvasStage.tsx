@@ -21,6 +21,10 @@ import { FloatingToolbar } from "./FloatingToolbar";
 import { toast } from "sonner";
 import { beginCanvasNavigation, zoomAnchoredAt } from "@/lib/editor/viewport";
 import {
+  measuredSelectionBox,
+  type PageBoxMm,
+} from "@/lib/editor/ui-state";
+import {
   LIBRARY_DND_MIME,
   insertLibraryDrop,
   parseLibraryDrop,
@@ -1473,13 +1477,88 @@ function SelectionFrame({
   onEditRequest: () => void;
 }) {
   const select = useEditor((s) => s.select);
+  const updateElement = useEditor((s) => s.updateElement);
+  const commit = useEditor((s) => s.commit);
+  const zoom = useEditor((s) => s.zoom);
   const el = frame.el;
+  const frameRef = useRef<HTMLDivElement>(null);
+  /**
+   * The measured artwork box (page mm) — see `measuredSelectionBox`.
+   *
+   * A DOM node's `getBoundingClientRect` reports what is actually painted:
+   * padding, border, a shadowed/oversized SVG viewport. Painting the frame at
+   * that box is what makes the selection hug the artwork at every zoom, and
+   * because all edit mathematics run on `el.x/el.w` (never on handle
+   * positions), a measured frame is purely presentational — resizing, rotating
+   * and snapping behave exactly as before.
+   */
+  const [measured, setMeasured] = useState<PageBoxMm | null>(null);
+
+  useEffect(() => {
+    if (!primary || editing) {
+      setMeasured(null);
+      return;
+    }
+    let cancelled = false;
+    const read = () => {
+      if (cancelled) return;
+      const node = frameRef.current?.closest<HTMLElement>("[data-page-id]");
+      const artwork = node?.querySelector<HTMLElement>(
+        `.canvas-el[data-el-id="${CSS.escape(el.id)}"]`,
+      );
+      const page = node?.querySelector<HTMLElement>(".report-page") || node;
+      if (!artwork || !page) {
+        setMeasured(null);
+        return;
+      }
+      const artworkRect = artwork.getBoundingClientRect();
+      const pageRect = page.getBoundingClientRect();
+      // The page element is authored in CSS pixels for its millimetre size and
+      // then scaled by the zoom, so its layout width is the millimetre truth.
+      const pageWidthMm = page.clientWidth / mmToPx(1);
+      setMeasured(
+        measuredSelectionBox({
+          node: artworkRect,
+          page: pageRect,
+          pageWidthMm,
+          model: { x: el.x, y: el.y, w: el.w, h: el.h },
+          rotation: el.rotation || 0,
+        }),
+      );
+    };
+    const id = requestAnimationFrame(read);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+    };
+  }, [
+    primary,
+    editing,
+    zoom,
+    el.id,
+    el.x,
+    el.y,
+    el.w,
+    el.h,
+    el.rotation,
+  ]);
+
+  const box = measured ?? { x: el.x, y: el.y, w: el.w, h: el.h };
+  const angle = ((Math.round((el.rotation || 0) * 10) / 10) % 360 + 360) % 360;
+
+  /** One keyboard rotation step: 1°, or 15° with Shift (the pointer ladder). */
+  const rotateBy = (delta: number) => {
+    const next = ((angle + delta) % 360 + 360) % 360;
+    updateElement(el.id, { rotation: Number(next.toFixed(1)) });
+    commit();
+  };
 
   // Paint the exact geometry; only handle hit targets have a screen-space minimum.
   // Inflating small frames made separate objects appear attached at low zoom.
 
   return (
     <div
+      ref={frameRef}
       className={cn(
         "selection-frame",
         !primary && "is-secondary",
@@ -1490,10 +1569,10 @@ function SelectionFrame({
       )}
       data-el-id={el.id}
       style={{
-        left: `${el.x}mm`,
-        top: `${el.y}mm`,
-        width: `${el.w}mm`,
-        height: `${el.h}mm`,
+        left: `${box.x}mm`,
+        top: `${box.y}mm`,
+        width: `${box.w}mm`,
+        height: `${box.h}mm`,
         transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
       } as React.CSSProperties}
       onPointerDown={(e) => {
@@ -1547,16 +1626,67 @@ function SelectionFrame({
                 />
               );
             })}
+          {/*
+           * Rotation grip: one distinct control, not a recoloured resize dot.
+           *
+           * The 44px hit area keeps it reachable with a finger or a Pencil
+           * while the visible grip stays small; the glyph marks it as
+           * "rotate" at a glance, the hairline ties it to the frame, the ready
+           * angle readout appears while dragging, and the whole control is a
+           * keyboard slider (←/→ = 1°, Shift = 15°) so rotation is not a
+           * pointer-only gesture.
+           */}
           {ROTATE_HANDLES.map((corner) => (
             <div
               key={`rot-${corner}`}
               className={cn("rotate-handle", corner)}
-              title="اسحب للتدوير — Shift للالتقاط بزوايا 15° / 45° / 90°"
+              role="slider"
+              tabIndex={0}
+              aria-label={`تدوير العنصر — الزاوية الحالية ${Math.round(angle)} درجة`}
+              aria-valuemin={0}
+              aria-valuemax={359}
+              aria-valuenow={Math.round(angle)}
+              title="اسحب للتدوير — ← / → للتغيير الدقيق، مع Shift خطوات 15°، وShift أثناء السحب للالتقاط"
+              onKeyDown={(event) => {
+                const step = event.shiftKey ? 15 : 1;
+                if (event.key === "ArrowLeft") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  rotateBy(-step);
+                } else if (event.key === "ArrowRight") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  rotateBy(step);
+                } else if (event.key === "Home") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  updateElement(el.id, { rotation: 0 });
+                  commit();
+                }
+              }}
               onPointerDown={(e) => {
                 e.stopPropagation();
                 onGesture(e, "rotate");
               }}
-            />
+            >
+              <span className="rotate-handle-grip" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M20 12a8 8 0 1 1-2.4-5.7"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M20 4.5V9h-4.5"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </div>
           ))}
           {(el.resizeLocked || el.widthLocked || el.heightLocked) && (
             <span

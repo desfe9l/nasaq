@@ -1,12 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  MEASURE_TOLERANCE_MM,
   OVERLAY_BREAKPOINT,
   PAGES_PANEL_DEFAULT,
   PAGES_PANEL_MIN,
   clampPagesHeight,
   extractSvgMarkup,
   isOverlayViewport,
+  measuredSelectionBox,
   placeFloatingToolbar,
   type ScreenBox,
 } from "./ui-state.ts";
@@ -270,5 +272,139 @@ describe("placeFloatingToolbar obstacle avoidance", () => {
     // Sides win: they have no vertical overlap with the walls at all.
     assert.ok(out.placement === "left" || out.placement === "right");
     assert.equal(overlap(out, box$, anchor), 0);
+  });
+});
+
+
+describe("measuredSelectionBox", () => {
+  /*
+   * A 210mm page rendered 1px per mm at 1 zoom: scale = 1 mm/px, which makes
+   * every expectation readable as millimetres.
+   */
+  const page = { left: 100, top: 50, width: 210 };
+  const model = { x: 20, y: 30, w: 60, h: 40 };
+
+  it("returns the artwork's own box when it matches the model", () => {
+    const out = measuredSelectionBox({
+      node: {
+        left: page.left + model.x,
+        top: page.top + model.y,
+        right: page.left + model.x + model.w,
+        bottom: page.top + model.y + model.h,
+      },
+      page,
+      pageWidthMm: 210,
+      model,
+      rotation: 0,
+    });
+    assert.ok(out);
+    assert.equal(out.x, model.x);
+    assert.equal(out.y, model.y);
+    assert.equal(out.w, model.w);
+    assert.equal(out.h, model.h);
+  });
+
+  it("follows a node whose painted box carries padding", () => {
+    const out = measuredSelectionBox({
+      node: {
+        left: page.left + model.x + 1,
+        top: page.top + model.y + 1,
+        right: page.left + model.x + model.w - 1,
+        bottom: page.top + model.y + model.h - 1,
+      },
+      page,
+      pageWidthMm: 210,
+      model,
+      rotation: 0,
+    });
+    assert.ok(out);
+    assert.equal(out.w, model.w - 2);
+    assert.equal(out.h, model.h - 2);
+    // Shrinking is centred, so the frame keeps hugging the artwork.
+    assert.equal(out.x, model.x + 1);
+    assert.equal(out.y, model.y + 1);
+  });
+
+  it("un-rotates a quarter-turn box back to the model rectangle", () => {
+    /*
+     * Rotated 90°, a 60×40 element paints a 40×60 screen rect. Un-rotating its
+     * corners about the model centre must return 60×40 — this is the case that
+     * makes the frame land on the artwork instead of on its bounding square.
+     */
+    const cx = page.left + model.x + model.w / 2;
+    const cy = page.top + model.y + model.h / 2;
+    const out = measuredSelectionBox({
+      node: { left: cx - 20, top: cy - 30, right: cx + 20, bottom: cy + 30 },
+      page,
+      pageWidthMm: 210,
+      model,
+      rotation: 90,
+    });
+    assert.ok(out);
+    assert.equal(out.w, model.w);
+    assert.equal(out.h, model.h);
+    assert.equal(out.x, model.x);
+    assert.equal(out.y, model.y);
+  });
+
+  it("refuses a measurement that contradicts the model", () => {
+    const out = measuredSelectionBox({
+      node: {
+        left: page.left + model.x,
+        top: page.top + model.y,
+        // 20mm too wide: this is not the element's own rectangle.
+        right: page.left + model.x + model.w + 20,
+        bottom: page.top + model.y + model.h,
+      },
+      page,
+      pageWidthMm: 210,
+      model,
+      rotation: 0,
+    });
+    assert.equal(out, null);
+    assert.ok(MEASURE_TOLERANCE_MM < 20);
+  });
+
+  it("refuses unusable input instead of guessing", () => {
+    const base = {
+      page,
+      pageWidthMm: 210,
+      model,
+      rotation: 0,
+    };
+    assert.equal(
+      measuredSelectionBox({
+        ...base,
+        node: { left: 0, top: 0, right: 0, bottom: 0 },
+      }),
+      null,
+    );
+    assert.equal(
+      measuredSelectionBox({
+        ...base,
+        pageWidthMm: 0,
+        node: {
+          left: page.left,
+          top: page.top,
+          right: page.left + 60,
+          bottom: page.top + 40,
+        },
+      }),
+      null,
+    );
+    // A slanted rotation makes the axis-aligned rect a poor proxy.
+    assert.equal(
+      measuredSelectionBox({
+        ...base,
+        rotation: 60,
+        node: {
+          left: page.left,
+          top: page.top,
+          right: page.left + 60,
+          bottom: page.top + 40,
+        },
+      }),
+      null,
+    );
   });
 });

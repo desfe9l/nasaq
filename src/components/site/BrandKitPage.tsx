@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, FilePenLine, FolderKanban, LayoutTemplate, LockKeyhole, Palette, Plus, RotateCcw, Save, ShieldCheck, Type, Download, Upload, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FilePenLine, FolderKanban, LayoutTemplate, LockKeyhole, Palette, Plus, RotateCcw, Save, ShieldCheck, Sparkles, Type, Download, Upload, Pencil, Trash2 } from "lucide-react";
 import { BrandLogo, SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { DEFAULT_BRAND_KIT, type BrandKit } from "@/lib/product/product";
 import {
+  contrastRatio,
+  readableOn,
   createBrandProfile,
   deleteBrandProfile,
   exportBrandProfiles,
@@ -112,6 +114,39 @@ export function BrandKitPage() {
 
   const update = <K extends keyof BrandKit>(key: K, value: BrandKit[K]) =>
     setKit((current) => ({ ...current, [key]: value }));
+
+  /**
+   * Readability audit of the ACTIVE identity — the three pairings that decide
+   * whether a generated document is legible: body text on paper, the header
+   * band's text on the primary colour, and the accent on paper (rules, marks).
+   */
+  const audit = [
+    {
+      id: "body",
+      label: "نص المستند على الورق",
+      ratio: contrastRatio(kit.textColor || DEFAULT_BRAND_KIT.textColor!, kit.paperColor || DEFAULT_BRAND_KIT.paperColor!),
+      fix: () =>
+        update("textColor", readableOn(kit.textColor || "#1f2937", kit.paperColor || "#fbfaf6")),
+    },
+    {
+      id: "header",
+      label: "نص الترويسة على اللون الأساسي",
+      ratio: contrastRatio("#ffffff", kit.primaryColor),
+      fix: () => update("primaryColor", readableOn(kit.primaryColor, "#ffffff")),
+    },
+    {
+      id: "accent",
+      label: "اللون المميز على الورق",
+      ratio: contrastRatio(kit.accentColor, kit.paperColor || "#fbfaf6"),
+      fix: () => update("accentColor", readableOn(kit.accentColor, kit.paperColor || "#fbfaf6")),
+    },
+  ];
+
+  /** Restore the active profile to the shipped defaults (one undo-free action). */
+  const restoreDefaults = () => {
+    setKit({ ...DEFAULT_BRAND_KIT, organizationName: kit.organizationName });
+    toast.success("أُعيدت الهوية إلى الإعدادات الافتراضية — اضغط حفظ لتثبيتها");
+  };
 
   const save = () => {
     saveBrandKit(kit);
@@ -250,6 +285,49 @@ export function BrandKitPage() {
               ارفع الشعار والختم، اضبط لوحة الألوان الرسمية والبيانات الوصفية، ثم راجع المعاينة
               الحية لغلاف التقرير أو الخطاب الرسمي أو شهادة التقدير — ويُحفظ كل شيء محليًا.
             </p>
+          </div>
+
+          {/*
+           * Document Identity audit — three real pairings, measured, with the
+           * smallest fix offered inline. Colours are a design choice; being
+           * able to read the document is not.
+           */}
+          <div className="mt-6 grid gap-3 rounded-2xl border border-line bg-surface p-4 sm:grid-cols-3">
+            {audit.map((row) => {
+              const pass = row.ratio >= 4.5;
+              const strong = row.ratio >= 7;
+              return (
+                <div key={row.id} className="flex flex-col gap-2 rounded-xl border border-line/70 bg-surface-2 p-3">
+                  <span className="text-[12px] font-extrabold text-ink">{row.label}</span>
+                  <span className="flex items-center gap-2 text-[12px] font-bold">
+                    {pass ? (
+                      <CheckCircle2 className={cn("size-4", strong ? "text-brand-hover" : "text-gold")} aria-hidden />
+                    ) : (
+                      <AlertTriangle className="size-4 text-error" aria-hidden />
+                    )}
+                    <span className={cn(pass ? "text-muted" : "text-error")} dir="ltr">
+                      {row.ratio.toFixed(2)}:1
+                    </span>
+                    <span className="text-[11px] text-muted">
+                      {strong ? "AAA" : pass ? "AA" : "أقل من AA"}
+                    </span>
+                  </span>
+                  {!pass && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        row.fix();
+                        toast.success("تم تصحيح هذا التباين");
+                      }}
+                      className="inline-flex h-8 items-center justify-center gap-1.5 self-start rounded-lg border border-line px-3 text-[11px] font-extrabold text-ink transition hover:border-brand/40"
+                    >
+                      <Sparkles className="size-3.5" aria-hidden />
+                      تصحيح تلقائي
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           {/* Multi-profile bar: create / switch / rename / export / import. */}
@@ -412,6 +490,7 @@ export function BrandKitPage() {
               </div>
               <div className="flex flex-wrap gap-2 border-t border-line pt-4">
                 <button type="button" onClick={save} className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-navy px-4 text-[12px] font-extrabold text-on-brand"><Save className="size-4" />{saved ? "تم الحفظ" : "حفظ الهوية محليًا"}</button>
+                <button type="button" onClick={restoreDefaults} className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-line px-4 text-[12px] font-extrabold text-ink" title="إعادة ألوان وخطوط الهوية إلى الافتراضي"><RotateCcw className="size-4" />استعادة الافتراضي</button>
                 <button type="button" onClick={() => setKit(resetBrandKit())} className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-line px-4 text-[12px] font-bold"><RotateCcw className="size-4" />إعادة الضبط</button>
               </div>
             </section>

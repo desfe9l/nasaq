@@ -14,6 +14,7 @@ import { WORKSPACE_HOME_PATH, openNewDocumentFlow, useWorkspaceEntry } from "@/l
 import { ProjectFileButton } from "@/components/site/ProjectFileButton";
 import { LicenseBadge } from "@/components/site/LicenseBadge";
 import { PricingSection } from "@/components/site/PricingSection";
+import { PremiumTemplates } from "@/components/site/PremiumTemplates";
 
 const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
   { icon: LayoutTemplate, title: PRODUCT_COPY.capabilities[0][0], desc: PRODUCT_COPY.capabilities[0][1] },
@@ -233,6 +234,9 @@ export function HomePage() {
             ))}
           </div>
         </section>
+
+        {/* قوالب مميزة — the paid shelf, always populated (see PremiumTemplates). */}
+        <PremiumTemplates />
 
         {/* ماذا تتضمن المنصة */}
         <section className="border-t border-line/60 bg-surface-2 py-12 sm:py-14">

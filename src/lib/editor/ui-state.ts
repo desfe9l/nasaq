@@ -204,5 +204,114 @@ export function placeFloatingToolbar(
   return { left: best.left, top: best.top, placement: best.placement, clamped };
 }
 
+/* -------------------------------------------------------------------------- */
+/* Selection bounding box                                                     */
+/* -------------------------------------------------------------------------- */
+
+/** A rectangle in the page's own millimetre space. */
+export interface PageBoxMm {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * How far the *measured* artwork box may differ from the model box before the
+ * measurement is treated as unreliable and the model box wins.
+ *
+ * A rotated element's axis-aligned screen rect is the box OF its rotated box,
+ * so a measurement on an irregular glyph is a conservative superset — fine for
+ * a border or a shadow (sub-millimetre), wrong for a 30 mm overhang. Anything
+ * beyond a couple of millimetres means "this is not the same rectangle", and
+ * the authoritative model geometry is the honest answer.
+ */
+export const MEASURE_TOLERANCE_MM = 2;
+
+/**
+ * Turn a rendered node's screen rect into the tight page-space box the
+ * selection frame should paint.
+ *
+ * The element node carries `transform: rotate(θ)` about its own centre, so the
+ * inverse mapping from screen pixels to the element's local axes is a rotation
+ * about that same centre. Un-rotating the four corners of the measured screen
+ * rect therefore yields the artwork's local footprint, which is exactly what a
+ * precise selection frame must show (Figma/Illustrator "bounding box"), while
+ * the resize/rotate mathematics keeps running on the model geometry.
+ *
+ * Returns `null` when the measurement cannot be trusted: no size, a rotation
+ * large enough to make the axis-aligned rect a poor proxy, a scale we cannot
+ * read, or a deviation beyond `MEASURE_TOLERANCE_MM`.
+ */
+export function measuredSelectionBox(args: {
+  /** The rendered node's rect (screen pixels). */
+  node: { left: number; top: number; right: number; bottom: number };
+  /** The page node's rect (screen pixels). */
+  page: { left: number; top: number; width: number };
+  /** Page width in millimetres — converts screen pixels back to the model. */
+  pageWidthMm: number;
+  /** The element's model box in millimetres. */
+  model: PageBoxMm;
+  /** The element's rotation in degrees, as stored on the model. */
+  rotation?: number;
+}): PageBoxMm | null {
+  const { node, page, pageWidthMm, model } = args;
+  const rotation = Number(args.rotation) || 0;
+  const width = node.right - node.left;
+  const height = node.bottom - node.top;
+  /** Millimetres per screen pixel (the page's zoom is baked into this). */
+  const scale = page.width > 0 ? pageWidthMm / page.width : 0;
+  if (!(width > 0) || !(height > 0) || !(scale > 0) || !(model.w > 0)) return null;
+  // A slanted, irregular glyph's axis-aligned rect is no longer a good proxy
+  // for its own box, so the model geometry is trusted instead.
+  if (Math.abs(rotation % 90) > 45) return null;
+
+  const rad = (rotation * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  // The rotation centre is the element's MODEL centre, in screen pixels.
+  const cx = page.left + (model.x + model.w / 2) / scale;
+  const cy = page.top + (model.y + model.h / 2) / scale;
+
+  let minX = Number.POSITIVE_INFINITY;
+  let minY = Number.POSITIVE_INFINITY;
+  let maxX = Number.NEGATIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+  for (const [px, py] of [
+    [node.left, node.top],
+    [node.right, node.top],
+    [node.right, node.bottom],
+    [node.left, node.bottom],
+  ] as const) {
+    const dx = px - cx;
+    const dy = py - cy;
+    // Rotate by -θ to land in the element's local (un-rotated) axes.
+    const lx = dx * cos + dy * sin;
+    const ly = -dx * sin + dy * cos;
+    minX = Math.min(minX, lx);
+    maxX = Math.max(maxX, lx);
+    minY = Math.min(minY, ly);
+    maxY = Math.max(maxY, ly);
+  }
+
+  const measuredW = (maxX - minX) * scale;
+  const measuredH = (maxY - minY) * scale;
+  const measured: PageBoxMm = {
+    // `minX`/`minY` are the local offsets from the centre, so shifting the
+    // model centre by them names the measured box in page millimetres.
+    x: Number((model.x + model.w / 2 + minX * scale).toFixed(3)),
+    y: Number((model.y + model.h / 2 + minY * scale).toFixed(3)),
+    w: Number(measuredW.toFixed(3)),
+    h: Number(measuredH.toFixed(3)),
+  };
+
+  const drift = Math.max(
+    Math.abs(measured.w - model.w),
+    Math.abs(measured.h - model.h),
+  );
+  if (drift > MEASURE_TOLERANCE_MM) return null;
+  return measured;
+}
+
 /** Open the existing settings surface from chrome, including signed-out sessions. */
 export const OPEN_EDITOR_SETTINGS_EVENT = "nasaq:open-editor-settings";

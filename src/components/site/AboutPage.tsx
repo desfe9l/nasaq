@@ -10,7 +10,7 @@ import {
   Phone,
   Presentation,
 } from "lucide-react";
-import { BRAND, CONTACT_PHONE_DISPLAY, telHref, whatsappHref } from "@/lib/brand";
+import { BRAND, CONTACT_PHONE_DISPLAY, WHATSAPP_MESSAGES, telHref, whatsappHref } from "@/lib/brand";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 
@@ -125,7 +125,7 @@ export function AboutPage() {
                   اتصال مباشر
                 </a>
                 <a
-                  href={whatsappHref()}
+                  href={whatsappHref(WHATSAPP_MESSAGES.support)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-green px-4 text-[13px] font-extrabold text-on-brand"

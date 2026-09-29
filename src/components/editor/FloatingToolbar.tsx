@@ -14,6 +14,7 @@ import {
   Italic,
   Layers,
   Lock,
+  Move,
   MoveDown,
   MoveUp,
   Paintbrush,
@@ -73,6 +74,9 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const bring = useEditor((s) => s.bring);
   const toggleBubble = useEditor((s) => s.toggleBubble);
+  const bubbleOffset = useEditor((s) => s.bubbleOffset);
+  const setBubbleOffset = useEditor((s) => s.setBubbleOffset);
+  const [dragging, setDragging] = useState(false);
   const flipSelected = useEditor((s) => s.flipSelected);
   const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
   const toggleLock = useEditor((s) => s.toggleLock);
@@ -99,6 +103,15 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     const grips = [...document.querySelectorAll<HTMLElement>(
       `.selection-frame[data-el-id="${CSS.escape(el.id)}"] .handle, .selection-frame[data-el-id="${CSS.escape(el.id)}"] .rotate-handle`,
     )].map(node => node.getBoundingClientRect());
+    /*
+     * The selection frame can be the MEASURED artwork box, so it is part of
+     * the anchor: the bubble must clear what the author sees as "the
+     * selection", not just the element's layout box.
+     */
+    const frameNode = document.querySelector<HTMLElement>(
+      `.selection-frame[data-el-id="${CSS.escape(el.id)}"]`,
+    );
+    if (frameNode) grips.push(frameNode.getBoundingClientRect());
     const leftEdge = Math.min(rect.left, ...grips.map(r => r.left));
     const rightEdge = Math.max(rect.right, ...grips.map(r => r.right));
     const topEdge = Math.min(rect.top, ...grips.map(r => r.top));
@@ -127,7 +140,24 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       MARGIN,
       [...avoid, ...grips],
     );
-    setPos({ left, top });
+    /*
+     * A manual park wins over the automatic placement, still clamped into the
+     * viewport so a resized window can never strand the bubble off screen.
+     */
+    const offset = useEditor.getState().bubbleOffset;
+    const parked = offset
+      ? {
+          left: Math.min(
+            Math.max(left + offset.dx, MARGIN),
+            Math.max(MARGIN, window.innerWidth - size.width - MARGIN),
+          ),
+          top: Math.min(
+            Math.max(top + offset.dy, MARGIN),
+            Math.max(MARGIN, window.innerHeight - size.height - MARGIN),
+          ),
+        }
+      : { left, top };
+    setPos(parked);
     setSide(placement);
   }, [el.id]);
 
@@ -152,7 +182,51 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       window.removeEventListener("scroll", schedule, true);
       window.removeEventListener("resize", schedule);
     };
-  }, [place, el.x, el.y, el.w, el.h, el.rotation, zoom, scrollIntoView]);
+  }, [place, el.x, el.y, el.w, el.h, el.rotation, zoom, scrollIntoView, bubbleOffset]);
+
+  /**
+   * Drag the bubble by its grip and remember where it lands.
+   *
+   * Deltas are accumulated against the bubble's live rect (never the model),
+   * and each move writes the offset through the store so the placement effect
+   * keeps honouring the park without fighting the pointer.
+   */
+  const startDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    const toolbar = boxRef.current;
+    if (!toolbar) return;
+    const origin = toolbar.getBoundingClientRect();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const base = useEditor.getState().bubbleOffset ?? { dx: 0, dy: 0 };
+    setDragging(true);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+
+    const move = (moveEvent: PointerEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      const next = { dx: base.dx + dx, dy: base.dy + dy };
+      /* Clamp the travel so the parked bubble can never leave the viewport. */
+      next.dx = Math.min(
+        Math.max(next.dx, MARGIN - origin.left),
+        Math.max(window.innerWidth - origin.width - MARGIN - origin.left, MARGIN - origin.left),
+      );
+      next.dy = Math.min(
+        Math.max(next.dy, MARGIN - origin.top),
+        Math.max(window.innerHeight - origin.height - MARGIN - origin.top, MARGIN - origin.top),
+      );
+      useEditor.getState().setBubbleOffset(next);
+    };
+    const end = () => {
+      setDragging(false);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
 
   const style = el.style || {};
   const isText = TEXT_TYPES.has(el.type);
@@ -175,7 +249,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   return createPortal(
     <div
       ref={boxRef}
-      className="floating-toolbar"
+      className={cn("floating-toolbar", dragging && "is-dragging")}
       data-floating-toolbar={el.id}
       data-placement={side}
       style={{
@@ -195,6 +269,22 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       role="toolbar"
       aria-label={`أدوات ${el.name || TYPE_NAME[el.type]}`}
     >
+      {/*
+       * Drag grip — the bubble can be parked anywhere on screen, and
+       * double-clicking the grip hands placement back to the automatic
+       * scoring (above → below → sides, never over the artwork).
+       */}
+      <button
+        type="button"
+        className="floating-toolbar-btn floating-toolbar-grip"
+        title="اسحب لنقل الشريط — نقرتان لإعادته إلى الموضع التلقائي"
+        aria-label="نقل الشريط العائم"
+        onPointerDown={startDrag}
+        onDoubleClick={() => setBubbleOffset(null)}
+      >
+        <Move className="size-3.5" />
+      </button>
+      <span className="floating-toolbar-sep" aria-hidden />
       {isText && (
         <>
           <div className="floating-toolbar-section">
@@ -349,6 +439,57 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
               fallback={style.color || "#c9a86a"}
               onChange={(v) => updateStyle(el.id, el.type === "svg" || el.type === "icon" ? { svgStroke: v } : { borderColor: v }, true)}
               onCommit={(v) => updateStyle(el.id, el.type === "svg" || el.type === "icon" ? { svgStroke: v } : { borderColor: v })}
+            />
+          </div>
+          <span className="floating-toolbar-sep" aria-hidden />
+          {/*
+           * سماكة الحد — the stroke-width control, bound to whichever field
+           * that element family actually paints with: the artwork's own
+           * stroke for icons/lines/dividers/SVG, the border width for boxes,
+           * shapes and tables. One control, no second formatting model.
+           */}
+          <div className="floating-toolbar-section">
+            <span className="px-1 text-[10px] font-extrabold text-muted">
+              سماكة
+            </span>
+            <ScrubInput
+              className="floating-toolbar-scrub"
+              label="سماكة الحد"
+              value={
+                el.type === "svg"
+                  ? Math.round(Number(style.svgStrokeWidth ?? 1.8) * 10) / 10
+                  : el.type === "icon" ||
+                      el.type === "line" ||
+                      el.type === "divider"
+                    ? Math.round(Number(style.stroke ?? 1.8) * 10) / 10
+                    : Math.round(Number(style.borderWidth ?? 0.35) * 10) / 10
+              }
+              min={0}
+              max={24}
+              step={0.05}
+              precision={2}
+              suffix="mm"
+              onChange={(v) => {
+                if (el.type === "svg") updateStyle(el.id, { svgStrokeWidth: v }, true);
+                else if (
+                  el.type === "icon" ||
+                  el.type === "line" ||
+                  el.type === "divider"
+                )
+                  updateStyle(el.id, { stroke: v }, true);
+                else updateStyle(el.id, { borderWidth: v }, true);
+              }}
+              onCommit={(v) => {
+                if (el.type === "svg") updateStyle(el.id, { svgStrokeWidth: v });
+                else if (
+                  el.type === "icon" ||
+                  el.type === "line" ||
+                  el.type === "divider"
+                )
+                  updateStyle(el.id, { stroke: v });
+                else updateStyle(el.id, { borderWidth: v });
+                commit();
+              }}
             />
           </div>
           <span className="floating-toolbar-sep" aria-hidden />

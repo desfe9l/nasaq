@@ -30,9 +30,18 @@ function XIcon({ className }: { className?: string }) {
   );
 }
 
+function PinterestIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
+      <path d="M12.02 2C6.9 2 4 5.2 4 9.02c0 1.7.9 3.8 2.36 4.47.22.1.34.06.39-.16.04-.16.24-.96.33-1.33a.35.35 0 0 0-.08-.34 3.9 3.9 0 0 1-.75-2.3c0-2.62 1.98-4.96 5.16-4.96 2.8 0 4.76 1.9 4.76 4.63 0 3.08-1.55 5.22-3.58 5.22-1.12 0-1.96-.93-1.69-2.06.32-1.35.95-2.8.95-3.77 0-.87-.47-1.6-1.44-1.6-1.14 0-2.05 1.18-2.05 2.75 0 1 .34 1.68.34 1.68s-1.13 4.78-1.34 5.66c-.23.96-.04 2.15-.02 2.27.01.07.1.09.15.03.06-.08.86-1.07 1.13-2.06.08-.27.44-1.7.44-1.7.22.42.86.78 1.55.78 2.04 0 3.5-1.86 3.5-4.35 0-2.32-1.9-4.5-4.79-4.5Z" />
+    </svg>
+  );
+}
+
 function SocialIcon({ id, className }: { id: SocialAccount["id"]; className?: string }) {
   if (id === "instagram") return <Instagram className={className} />;
   if (id === "tiktok") return <TikTokIcon className={className} />;
+  if (id === "pinterest") return <PinterestIcon className={className} />;
   return <XIcon className={className} />;
 }
 

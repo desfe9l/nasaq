@@ -1,5 +1,5 @@
 import { ImagePlus, Layers, Megaphone, MessageCircle, Palette, Phone, Brush } from "lucide-react";
-import { BRAND,  CUSTOM_DESIGN, whatsappHref } from "@/lib/brand";
+import { BRAND,  CUSTOM_DESIGN, WHATSAPP_MESSAGES, whatsappHref } from "@/lib/brand";
 import { BrandLogo } from "./SiteChrome";
 
 const SCOPE_ICONS = [Layers, Palette, Megaphone, Brush] as const;
@@ -66,7 +66,7 @@ export function CustomDesignActions() {
         إرسال الطلب عبر التواصل
       </a>
       <a
-        href={whatsappHref()}
+        href={whatsappHref(WHATSAPP_MESSAGES.customDesign)}
         className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-line px-5 text-[13px] font-bold transition hover:bg-line-2"
       >
         <Phone className="size-4" aria-hidden />

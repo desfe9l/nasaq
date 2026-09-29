@@ -700,6 +700,66 @@ html.dark {
   text-align: left;
 }
 
+/*
+ * «المزيد» — the narrow-screen tool overflow in the header.
+ *
+ * Rendered only below the docked breakpoint (the shell adds `lg2:hidden`), the
+ * summary reuses the header button's box so the strip keeps one rhythm, and the
+ * menu opens BELOW the control without being clipped by the header's overflow.
+ */
+.editor-header-more {
+  position: relative;
+  display: inline-flex;
+}
+
+.editor-header-more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.editor-header-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.editor-header-more[open] > summary {
+  background: var(--editor-active-bg, rgba(12, 61, 44, 0.12));
+}
+
+.editor-header-more-menu {
+  position: absolute;
+  z-index: var(--z-menu, calc(var(--z-panel) + 1));
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  min-width: 220px;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--editor-border, #c9cacc);
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #172033);
+  box-shadow: 0 16px 36px -12px rgba(15, 23, 42, 0.45);
+}
+
+.editor-header-more-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  padding-inline: 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: start;
+  color: inherit;
+}
+
+.editor-header-more-menu button:hover,
+.editor-header-more-menu button:focus-visible {
+  background: var(--editor-hover, rgba(15, 23, 42, 0.06));
+}
+
 .editor-panel-resize-handle {
   position: absolute;
   top: 0;
@@ -1340,9 +1400,23 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   touch-action: none;
 }
 
+/*
+ * Small selections must stay selectable.
+ *
+ * A 32px hit target is right on a large element, but on a 6mm stamp it would
+ * overlap the neighbours on every side and swallow the click meant for the
+ * next element. Every target is therefore clamped to just under half its
+ * frame, and every anchor is expressed with the SAME clamp, so the visible dot
+ * stays exactly on the artwork's corner instead of drifting inward.
+ */
+.selection-frame {
+  --handle-hit: min(var(--handle-hit-size), 46%);
+  --rotate-hit: min(var(--rotate-hit-size), 46%);
+}
+
 .handle {
-  width: var(--handle-hit-size);
-  height: var(--handle-hit-size);
+  width: var(--handle-hit);
+  height: var(--handle-hit);
   border-radius: 0;
 }
 
@@ -1367,50 +1441,84 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
    Only the visible dot reaches into the body. Side targets occupy the gap
    between corners; even a 32px frame has distinct move/resize/rotate regions. */
 .handle::after { position: absolute; }
-.handle.nw { top: calc(var(--handle-inset) - var(--handle-hit-size)); left: calc(var(--handle-inset) - var(--handle-hit-size)); cursor: nwse-resize; }
-.handle.ne { top: calc(var(--handle-inset) - var(--handle-hit-size)); right: calc(var(--handle-inset) - var(--handle-hit-size)); cursor: nesw-resize; }
-.handle.se { bottom: calc(var(--handle-inset) - var(--handle-hit-size)); right: calc(var(--handle-inset) - var(--handle-hit-size)); cursor: nwse-resize; }
-.handle.sw { bottom: calc(var(--handle-inset) - var(--handle-hit-size)); left: calc(var(--handle-inset) - var(--handle-hit-size)); cursor: nesw-resize; }
+.handle.nw { top: calc(var(--handle-inset) - var(--handle-hit)); left: calc(var(--handle-inset) - var(--handle-hit)); cursor: nwse-resize; }
+.handle.ne { top: calc(var(--handle-inset) - var(--handle-hit)); right: calc(var(--handle-inset) - var(--handle-hit)); cursor: nesw-resize; }
+.handle.se { bottom: calc(var(--handle-inset) - var(--handle-hit)); right: calc(var(--handle-inset) - var(--handle-hit)); cursor: nwse-resize; }
+.handle.sw { bottom: calc(var(--handle-inset) - var(--handle-hit)); left: calc(var(--handle-inset) - var(--handle-hit)); cursor: nesw-resize; }
 .handle.nw::after { right: 0; bottom: 0; }
 .handle.ne::after { left: 0; bottom: 0; }
 .handle.se::after { left: 0; top: 0; }
 .handle.sw::after { right: 0; top: 0; }
-.handle.n, .handle.s { width: min(var(--handle-hit-size), calc(100% - var(--handle-size))); left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.handle.n, .handle.s { width: min(var(--handle-hit), calc(100% - var(--handle-size))); left: 50%; transform: translateX(-50%); cursor: ns-resize; }
 .handle.n { top: calc(var(--handle-inset) - var(--handle-hit-size)); }
 .handle.s { bottom: calc(var(--handle-inset) - var(--handle-hit-size)); }
 .handle.n::after, .handle.s::after { left: 50%; transform: translateX(-50%); }
 .handle.n::after { bottom: 0; }
 .handle.s::after { top: 0; }
-.handle.e, .handle.w { height: min(var(--handle-hit-size), calc(100% - var(--handle-size))); top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+.handle.e, .handle.w { height: min(var(--handle-hit), calc(100% - var(--handle-size))); top: 50%; transform: translateY(-50%); cursor: ew-resize; }
 .handle.e { right: calc(var(--handle-inset) - var(--handle-hit-size)); }
 .handle.w { left: calc(var(--handle-inset) - var(--handle-hit-size)); }
 .handle.e::after, .handle.w::after { top: 50%; transform: translateY(-50%); }
 .handle.e::after { left: 0; }
 .handle.w::after { right: 0; }
 
+/*
+ * Rotation grip — its own control, not a recoloured resize dot.
+ *
+ * The element itself is the invisible 44px hit area (constant on-screen size at
+ * any zoom); the visible part is `.rotate-handle-grip`, a brand-filled disc
+ * carrying a rotate glyph, tied to the frame by the hairline below. Focus is
+ * a visible ring so the grip reads as the keyboard slider it now is.
+ */
 .rotate-handle {
-  width: var(--rotate-hit-size);
-  height: var(--rotate-hit-size);
+  width: var(--rotate-hit);
+  height: var(--rotate-hit);
   border-radius: 50%;
   cursor: grab;
+  display: grid;
+  place-items: center;
 }
 
-.rotate-handle::after {
-  content: "";
-  width: var(--handle-size);
-  height: var(--handle-size);
-  border-radius: 50%;
+.rotate-handle-grip {
+  width: calc(18px / var(--editor-zoom, 1));
+  height: calc(18px / var(--editor-zoom, 1));
+  border-radius: 999px;
   background: var(--sel-color, #10b981);
-  border: 1px solid #ffffff;
+  border: calc(1.5px / var(--editor-zoom, 1)) solid #ffffff;
   box-sizing: border-box;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7);
+  box-shadow:
+    0 calc(2px / var(--editor-zoom, 1)) calc(6px / var(--editor-zoom, 1))
+      rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.55);
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  transition: transform 120ms ease;
 }
+
+.rotate-handle-grip svg {
+  width: calc(11px / var(--editor-zoom, 1));
+  height: calc(11px / var(--editor-zoom, 1));
+  display: block;
+}
+
+.rotate-handle:hover .rotate-handle-grip,
+.rotate-handle:focus-visible .rotate-handle-grip {
+  transform: scale(1.12);
+}
+
+.rotate-handle:focus-visible {
+  outline: calc(2px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
+  outline-offset: calc(3px / var(--editor-zoom, 1));
+  border-radius: 999px;
+}
+
 
 .rotate-handle::before {
   content: "";
   position: absolute;
   width: 1px;
-  height: calc(var(--rotate-gap) - var(--rotate-hit-size) / 2);
+  height: calc(var(--rotate-gap) - var(--rotate-hit) / 2);
   background: color-mix(in srgb, var(--sel-color, #10b981) 60%, transparent);
   top: 50%;
   left: 50%;
@@ -1866,6 +1974,39 @@ body.is-scrubbing-value {
   animation: drawer-backdrop-in 160ms ease;
 }
 
+/*
+ * Curtain drawers (tablet / phone).
+ *
+ * The slide-over reads as a curtain being drawn across the artwork: a soft
+ * edge shadow on the canvas-facing side, a hairline highlight on the leading
+ * edge (so the panel's boundary is unmistakable over a busy page), and the
+ * same 200ms ease the shell already animates with — no new timing language.
+ */
+@media (max-width: 1099.98px) {
+  .editor-ui .editor-sidebar:not(.touch-properties-sheet) {
+    box-shadow:
+      -22px 0 46px -26px rgba(15, 23, 42, 0.55),
+      0 0 0 1px var(--editor-border, #c9cacc);
+    will-change: transform;
+  }
+
+  .editor-ui .editor-sidebar:not(.touch-properties-sheet)::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    width: 1px;
+    background: color-mix(in srgb, var(--editor-active, #0c3d2c) 45%, transparent);
+    pointer-events: none;
+  }
+
+  /* While an asset is dragged bare over the canvas, the artboard says so. */
+  .editor-ui .studio-grid.is-dropping .report-page {
+    outline: 2px dashed var(--sel-color, #2f6fb0);
+    outline-offset: calc(4px / var(--editor-zoom, 1));
+  }
+}
+
 @keyframes drawer-backdrop-in {
   from {
     opacity: 0;
@@ -1955,6 +2096,37 @@ body.is-resizing-rail {
 
 .floating-toolbar::-webkit-scrollbar {
   display: none;
+}
+
+/*
+ * Drag grip — six dots, a grab cursor and a live "picked up" state, so the
+ * bubble reads as movable chrome instead of a static strip.
+ */
+.floating-toolbar-grip {
+  position: relative;
+  cursor: grab;
+  color: var(--editor-text-secondary, #5d6575);
+  touch-action: none;
+}
+
+.floating-toolbar-grip::after {
+  content: "";
+  position: absolute;
+  inset: -6px -2px;
+}
+
+.floating-toolbar-grip:active {
+  cursor: grabbing;
+}
+
+.floating-toolbar.is-dragging {
+  animation: none;
+  box-shadow: 0 22px 48px -14px rgba(15, 23, 42, 0.5);
+  opacity: 0.96;
+}
+
+.floating-toolbar.is-dragging .floating-toolbar-btn:not(.floating-toolbar-grip) {
+  pointer-events: none;
 }
 
 /*
