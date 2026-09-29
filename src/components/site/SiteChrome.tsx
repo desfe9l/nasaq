@@ -7,6 +7,7 @@ import {
   NAV_ITEMS,
   PRIMARY_NAV_ITEMS,
   SECONDARY_NAV_ITEMS,
+  WHATSAPP_MESSAGES,
   whatsappHref,
 } from "@/lib/brand";
 import { SocialLinks } from "@/components/site/SocialLinks";
@@ -454,7 +455,7 @@ export function SiteHeader({ current }: { current: string }) {
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </button>
           <a
-            href={whatsappHref()}
+            href={whatsappHref(WHATSAPP_MESSAGES.support)}
             className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-[8px] border border-line px-3 text-[12px] font-bold xl:inline-flex"
           >
             <span className="tabular-nums" dir="rtl">
@@ -541,7 +542,7 @@ export function SiteFooter() {
         <div>
           <h3 className="mb-2 text-[12px] font-extrabold text-muted">التواصل</h3>
           <a
-            href={whatsappHref()}
+            href={whatsappHref(WHATSAPP_MESSAGES.footer)}
             className="inline-flex h-9 items-center rounded-[8px] border border-line px-3 text-[13px] font-bold tabular-nums"
             dir="rtl"
           >

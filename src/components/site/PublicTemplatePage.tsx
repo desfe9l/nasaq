@@ -341,7 +341,7 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
                     className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-line bg-surface text-[13px] font-bold transition hover:bg-line-2"
                   >
                     <Share2 className="size-4" />
-                    مشاركة القالب
+                    نسخ رابط القالب
                   </button>
                   <a
                     href="/templates"
@@ -372,12 +372,12 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
 
               <div className="mt-5 flex items-center gap-2 rounded-xl bg-paper p-3 text-[11px] text-muted">
                 <div className="size-2 rounded-full bg-success animate-pulse" />
-                <span>رابط عام مستقر — صالح للمشاركة على واتساب، تيليجرام، X، وكل أنظمة معاينة الروابط</span>
+                <span>رابط عام مستقر — صالح للمشاركة على واتساب وتيليجرام وX وكل أنظمة معاينة الروابط</span>
               </div>
             </div>
 
             <div className="rounded-2xl border border-line bg-surface p-5">
-              <h3 className="text-[13px] font-bold text-ink">رابط المشاركة التسويقي</h3>
+              <h3 className="text-[13px] font-bold text-ink">رابط القالب العام</h3>
               <div className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-paper px-3 py-2">
                 <span className="min-w-0 flex-1 truncate text-[12px] font-mono text-muted" dir="ltr">
                   {canonical}

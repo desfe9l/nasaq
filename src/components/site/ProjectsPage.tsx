@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Database, FolderOpen, Grid2X2, List, Plus, Search } from "lucide-react";
+import { Database, Download, FolderOpen, Grid2X2, HardDriveDownload, List, Plus, Search, ShieldCheck } from "lucide-react";
 import { BRAND } from "@/lib/brand";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
@@ -9,6 +9,10 @@ import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 import { ProjectCard } from "@/components/site/ProjectCard";
 import { cn } from "@/lib/utils";
 import { NSQ_ACCEPT, isNsqFileName } from "@/lib/nsq/format";
+import { downloadLibraryFile } from "@/lib/editor/library-export";
+import { hasSignedInOwner } from "@/lib/editor/storage-owner";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { accountIdentity } from "@/lib/auth/identity";
 
 type FilterId = "all" | "reports" | "letters" | "favorites";
 type ViewId = "grid" | "list";
@@ -46,6 +50,9 @@ export function ProjectsPage() {
   const createProject = useEditor((s) => s.createProject);
   const importProject = useEditor((s) => s.importProject);
   const storage = useEditor((s) => s.storage);
+  const assets = useEditor((s) => s.assets);
+  const assetFolders = useEditor((s) => s.assetFolders);
+  const { user } = useCurrentUserState();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"recent" | "name" | "pages">("recent");
   const [filter, setFilter] = useState<FilterId>("all");
@@ -196,6 +203,71 @@ export function ProjectsPage() {
             </button>
           </div>
         </div>
+
+        {/*
+         * «مساحتي» — the personal library, stated plainly.
+         *
+         * Projects and assets in this browser are scoped to the current owner
+         * (`storage-owner.ts`): a visitor sees the visitor shelf, an account
+         * sees its own. The card says which one is open, how much is in it, and
+         * offers the one operation that makes a local-only library safe — a
+         * backup file the author keeps.
+         */}
+        <section
+          aria-label="مساحتي — المكتبة الشخصية"
+          className="mt-6 flex flex-wrap items-center gap-4 rounded-2xl border border-line bg-surface p-4"
+        >
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand-hover">
+            {hasSignedInOwner() ? (
+              <ShieldCheck className="size-5" aria-hidden />
+            ) : (
+              <HardDriveDownload className="size-5" aria-hidden />
+            )}
+          </span>
+          <div className="min-w-[220px] flex-1">
+            <strong className="block text-[14px] font-extrabold text-ink">
+              {hasSignedInOwner()
+                ? "مكتبتك الشخصية مرتبطة بحسابك"
+                : "مكتبة الزائر — داخل هذا المتصفح فقط"}
+            </strong>
+            <p className="mt-1 text-[12px] leading-6 text-muted">
+              {hasSignedInOwner()
+                ? `${accountIdentity(user).label} — تُعرض مشاريعك ومكتبتك فقط، ولا تظهر مشاريع حساب آخر على هذا المتصفح.`
+                : "أنشئ حسابًا لتُربط المشاريع والمكتبة بحسابك؛ قبل ذلك تبقى هذه المكتبة المحلية للزائر على هذا المتصفح."}
+            </p>
+          </div>
+          <dl className="flex flex-wrap items-center gap-4 text-[12px]">
+            <div className="text-center">
+              <dt className="text-muted">مشاريع</dt>
+              <dd className="text-[16px] font-extrabold tabular-nums text-ink">{projects.length}</dd>
+            </div>
+            <div className="text-center">
+              <dt className="text-muted">صفحات</dt>
+              <dd className="text-[16px] font-extrabold tabular-nums text-ink">
+                {projects.reduce((sum, project) => sum + (project.pages || 0), 0)}
+              </dd>
+            </div>
+            <div className="text-center">
+              <dt className="text-muted">عناصر محفوظة</dt>
+              <dd className="text-[16px] font-extrabold tabular-nums text-ink">{assets.length}</dd>
+            </div>
+          </dl>
+          <button
+            type="button"
+            onClick={() => {
+              const name = downloadLibraryFile({ folders: assetFolders, assets });
+              void import("sonner").then(({ toast }) =>
+                toast.success(`تم تنزيل نسخة من مكتبتك — ${name}`),
+              );
+            }}
+            disabled={!assets.length && !assetFolders.length}
+            className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-line px-4 text-[13px] font-bold disabled:opacity-50"
+            title="نسخة احتياطية من مكتبة العناصر والمجلدات كملف JSON"
+          >
+            <Download className="size-4" aria-hidden />
+            نسخة احتياطية للمكتبة
+          </button>
+        </section>
 
         <input
           ref={fileInput}

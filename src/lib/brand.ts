@@ -55,7 +55,7 @@ export function whatsappHref(message?: string) {
  */
 export interface SocialAccount {
   /** Stable key, also used as the lucide/inline icon selector. */
-  id: "instagram" | "tiktok" | "x";
+  id: "instagram" | "tiktok" | "x" | "pinterest";
   label: string;
   handle: string;
   href: string;
@@ -80,7 +80,31 @@ export const SOCIAL_ACCOUNTS: readonly SocialAccount[] = [
     handle: "@nasaq_ar",
     href: "https://x.com/nasaq_ar",
   },
+  {
+    id: "pinterest",
+    label: "بينتريست",
+    handle: "@nasaqdocs",
+    href: "https://www.pinterest.com/nasaqdocs",
+  },
 ] as const;
+
+/**
+ * Prefilled WhatsApp openers, one per surface that starts a conversation.
+ *
+ * A visitor who taps a CTA should not have to explain which page they came
+ * from: the message carries the context, so the reply is useful on the first
+ * line. Every entry is editable here — the CTAs themselves stay dumb.
+ */
+export const WHATSAPP_MESSAGES = {
+  support: "السلام عليكم، أرغب في الاستفسار عن منصة نَسَق.",
+  pricing: "السلام عليكم، أرغب في معرفة تفاصيل خطط نَسَق وأسعارها.",
+  enterprise: "السلام عليكم، أرغب في طلب ترخيص مؤسسي لمنصة نَسَق.",
+  customDesign: "السلام عليكم، أرغب في طلب تصميم خاص من نَسَق.",
+  demo: "السلام عليكم، أرغب في حجز عرض تعريفي لمنصة نَسَق.",
+  templates: "السلام عليكم، لدي استفسار عن قوالب نَسَق.",
+  footer: "السلام عليكم، تواصلت معكم من موقع منصة نَسَق.",
+  account: "السلام عليكم، أحتاج مساعدة بخصوص حسابي في منصة نَسَق.",
+} as const;
 
 export interface NavItem {
   to: string;
@@ -120,11 +144,13 @@ export const NAV_ITEMS: NavItem[] = [
     to: "/contact",
     label: "التواصل",
   },
-  {
-    to: "/account",
-    label: "حسابي",
-  },
 ];
+/*
+ * «حسابي» is deliberately NOT in the main navigation: the header's account
+ * menu already owns that destination (settings, licence, sign-out), and two
+ * entries pointing at /account made the nav row ambiguous. The mobile drawer
+ * keeps the single account entry it renders beside the avatar.
+ */
 
 /** Core navigation stays on one line; supporting links move into More. */
 export const PRIMARY_NAV_ITEMS: NavItem[] = NAV_ITEMS.slice(0, 4);

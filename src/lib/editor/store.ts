@@ -255,6 +255,16 @@ interface Ui {
    * the choice is remembered.
    */
   bubbleEnabled: boolean;
+  /**
+   * Manual placement offset for the floating bubble, in screen pixels.
+   *
+   * The bubble positions itself (above, then below/sideways, never over the
+   * artwork), but an author working on a crowded page often wants it parked
+   * somewhere of their own choosing. Dragging its grip stores the offset here
+   * (persisted); double-clicking the grip — or «ضبط وتنسيق مساحة العمل» —
+   * returns it to automatic placement.
+   */
+  bubbleOffset: { dx: number; dy: number } | null;
   exportOpen: boolean;
   /**
    * Format the export dialog should open on.
@@ -462,6 +472,8 @@ interface EditorStore extends Project, Ui, History {
   closeContextMenu: () => void;
   /** Show/hide the floating contextual bubble (persisted). */
   toggleBubble: (enabled?: boolean) => void;
+  /** Park the floating bubble at a manual offset, or `null` for automatic. */
+  setBubbleOffset: (offset: { dx: number; dy: number } | null) => void;
   /**
    * 🪄 ضبط وتنسيق مساحة العمل — restore the side panels, the pages tray and
    * the floating bubble to their default dock positions (persisted). The
@@ -1095,6 +1107,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     pagesPanelHeight: PAGES_PANEL_DEFAULT,
     contextMenu: null,
     bubbleEnabled: true,
+    bubbleOffset: null,
     exportOpen: false,
     exportPreset: null,
     pageManagerOpen: false,
@@ -1260,6 +1273,12 @@ export const useEditor = create<EditorStore>((set, get) => {
               : PAGES_PANEL_DEFAULT,
           ),
           bubbleEnabled: ui.bubble !== false,
+          bubbleOffset:
+            ui.bubbleOffset &&
+            typeof ui.bubbleOffset.dx === "number" &&
+            typeof ui.bubbleOffset.dy === "number"
+              ? { dx: ui.bubbleOffset.dx, dy: ui.bubbleOffset.dy }
+              : null,
           showGrid: ui.showGrid ?? WORKSPACE_TOGGLE_DEFAULTS.showGrid,
           snapGrid: ui.snapGrid ?? WORKSPACE_TOGGLE_DEFAULTS.snapGrid,
           snapElements:
@@ -2032,6 +2051,18 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({ bubbleEnabled });
       writeUi({ bubble: bubbleEnabled });
     },
+    setBubbleOffset: (offset) => {
+      // Keep a manual park sane: a few hundred pixels of travel is a
+      // deliberate placement, thousands would strand the bubble off screen.
+      const bubbleOffset = offset
+        ? {
+            dx: clamp(Math.round(offset.dx), -2000, 2000),
+            dy: clamp(Math.round(offset.dy), -2000, 2000),
+          }
+        : null;
+      set({ bubbleOffset });
+      writeUi({ bubbleOffset });
+    },
     resetWorkspaceLayout: () => {
       const overlay = isOverlayViewport();
       const pagesPanelHeight = clampPagesHeight(PAGES_PANEL_DEFAULT);
@@ -2044,6 +2075,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         rightOpen: overlay ? false : get().rightOpen,
         pagesPanelHeight,
         bubbleEnabled: true,
+        bubbleOffset: null,
         contextMenu: null,
       });
       void setSetting("focusMode", false);
@@ -2053,7 +2085,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         void setSetting("leftOpen", false);
         void setSetting("rightOpen", false);
       }
-      writeUi({ pagesPanelHeight, bubble: true });
+      writeUi({ pagesPanelHeight, bubble: true, bubbleOffset: null });
     },
     setPagesPanelHeight: (height) => {
       const next = clampPagesHeight(height);
@@ -3924,6 +3956,8 @@ interface PersistedUi {
   pagesPanelHeight?: number;
   /** Floating bubble visibility (absent = shown). */
   bubble?: boolean;
+  /** Manual floating-bubble offset (absent = automatic placement). */
+  bubbleOffset?: { dx: number; dy: number } | null;
   /** Print-guide visibility (absent = all off). */
   printGuides?: PrintGuideSettings;
   /** Canvas grid (absent = off). */

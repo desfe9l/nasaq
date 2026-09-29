@@ -52,7 +52,7 @@ test("Template Hub keeps the paid catalog title and neutral share header", () =>
   const share = read("src/components/site/PublicTemplatePage.tsx");
   assert.match(
     share,
-    /<h3 className="text-\[13px\] font-bold text-ink">رابط المشاركة التسويقي<\/h3>/,
+    /<h3 className="text-\[13px\] font-bold text-ink">رابط القالب العام<\/h3>/,
   );
 });
 

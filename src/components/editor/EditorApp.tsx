@@ -23,6 +23,7 @@ import {
   Check,
   ClipboardList,
   Download,
+  Ellipsis,
   Eye,
   FolderPlus,
   Grid3x3,
@@ -1080,6 +1081,20 @@ function Studio({
     expandPanel("right", tab);
   };
 
+  /**
+   * Keyboard/absolute variant of the panel drag.
+   *
+   * The pointer gesture is unchanged; this exists so the separator is a real
+   * control for keyboard and assistive-technology users (arrow keys nudge,
+   * Home restores the default width) instead of a drag-only affordance.
+   */
+  const setPanelWidth = (side: "left" | "right", width: number) => {
+    const next = Math.min(PANEL_MAX[side], Math.max(PANEL_MIN[side], Math.round(width)));
+    setPanelWidths((current) =>
+      current[side] === next ? current : { ...current, [side]: next },
+    );
+  };
+
   const resizePanel = (
     side: "left" | "right",
     startClientX: number,
@@ -1372,7 +1387,7 @@ function Studio({
           <button
             type="button"
             onClick={() => setAddLibraryOpen(true)}
-            className="editor-header-btn"
+            className="editor-header-btn hidden lg2:inline-flex"
             title="أضف مكتبة — حوّل أي مجلد أو مجموعة ملفات إلى مجلدات بنمط نَسَق"
             aria-label="أضف مكتبة"
           >
@@ -1381,12 +1396,55 @@ function Studio({
           <button
             type="button"
             onClick={() => setHeadingGeneratorOpen(true)}
-            className="editor-header-btn"
+            className="editor-header-btn hidden lg2:inline-flex"
             title="مولد عناوين الفقرات — تصاميم جاهزة وقابلة للتعديل"
             aria-label="مولد عناوين الفقرات"
           >
             <Heading1 className="size-4" />
           </button>
+          {/*
+           * «المزيد» — narrow-screen tool overflow.
+           *
+           * Below the docked breakpoint the header must stay ONE row: the
+           * controls an author uses constantly (zoom, history, text, report
+           * tools, library, home) keep their buttons, while the two occasional
+           * workbenches move into this menu instead of wrapping the strip onto
+           * a second line and eating canvas height. Native <details> owns the
+           * open/close state, so it is keyboard-accessible with no extra code.
+           */}
+          <details className="editor-header-more lg2:hidden">
+            <summary
+              className="editor-header-btn"
+              title="أدوات إضافية"
+              aria-label="أدوات إضافية"
+            >
+              <Ellipsis className="size-4" />
+            </summary>
+            <div className="editor-header-more-menu" role="menu">
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(event) => {
+                  setAddLibraryOpen(true);
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                }}
+              >
+                <FolderPlus className="size-4" aria-hidden />
+                أضف مكتبة
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={(event) => {
+                  setHeadingGeneratorOpen(true);
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                }}
+              >
+                <Heading1 className="size-4" aria-hidden />
+                مولد عناوين الفقرات
+              </button>
+            </div>
+          </details>
           <a
             href={homeHref}
             onClick={leaveEditor}
@@ -1541,6 +1599,10 @@ function Studio({
           {!leftCollapsed && !focusMode && (
             <PanelResizeHandle
               side="left"
+              width={panelWidths.left}
+              min={PANEL_MIN.left}
+              max={PANEL_MAX.left}
+              onResize={(width) => setPanelWidth("left", width)}
               onStart={(event) =>
                 resizePanel("left", event.clientX, panelWidths.left, event.currentTarget)
               }
@@ -1745,10 +1807,18 @@ function SaveBadge({
 
 function PanelResizeHandle({
   side,
+  width,
+  min,
+  max,
   onStart,
+  onResize,
 }: {
   side: "left" | "right";
+  width: number;
+  min: number;
+  max: number;
   onStart: (event: React.PointerEvent<HTMLDivElement>) => void;
+  onResize: (width: number) => void;
 }) {
   /*
    * A 16px-wide hit strip with a visible 4px grip pill at the canvas edge.
@@ -1774,9 +1844,29 @@ function PanelResizeHandle({
         onStart(event);
       }}
       role="separator"
+      tabIndex={0}
       aria-orientation="vertical"
-      aria-label={`تغيير عرض اللوحة ${side === "left" ? "اليسرى" : "اليمنى"} — اسحب المقبض`}
-      title="اسحب لتغيير عرض اللوحة"
+      aria-label={`تغيير عرض اللوحة ${side === "left" ? "اليسرى" : "اليمنى"} — اسحب المقبض أو استخدم أسهم لوحة المفاتيح`}
+      aria-valuenow={Math.round(width)}
+      aria-valuemin={min}
+      aria-valuemax={max}
+      title="اسحب لتغيير عرض اللوحة — انقر نقرتين لإعادة العرض الافتراضي"
+      onDoubleClick={() => onResize(side === "left" ? 280 : 320)}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? 32 : 8;
+        // In RTL the visual direction of "wider" is mirrored, so the arrows
+        // follow the panel's own growing edge (the canvas-facing edge).
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          onResize(width + (side === "left" ? step : -step));
+        } else if (event.key === "ArrowRight") {
+          event.preventDefault();
+          onResize(width + (side === "left" ? -step : step));
+        } else if (event.key === "Home") {
+          event.preventDefault();
+          onResize(side === "left" ? 280 : 320);
+        }
+      }}
     >
       <span className="editor-panel-resize-grip" aria-hidden />
     </div>

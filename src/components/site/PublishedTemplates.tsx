@@ -44,7 +44,7 @@ export function PublishedTemplates() {
                 {t.description && <span className="line-clamp-2 text-[11px] text-muted">{t.description}</span>}
               </a>
               <button type="button" onClick={() => void share(t)} className="mt-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line text-xs font-bold " aria-label={`نسخ رابط ${t.title}`}>
-                <Share2 className="size-4" /> {copied === t.id ? "تم نسخ الرابط" : "نسخ الرابط"}
+                <Share2 className="size-4" /> {copied === t.id ? "تم نسخ الرابط" : "نسخ رابط القالب"}
               </button>
             </div>
           );

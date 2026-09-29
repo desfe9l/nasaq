@@ -22,7 +22,12 @@ import { blankPages, createProject } from "./templates";
 export type PageSizeId = "a4" | "a3" | "slide" | "custom";
 export type Orientation = "portrait" | "landscape";
 export type DocKindId =
-  "report" | "letter" | "presentation" | "poster" | "sheet";
+  | "report"
+  | "letter"
+  | "certificate"
+  | "presentation"
+  | "poster"
+  | "sheet";
 
 /** Base page sizes, stored portrait-first (the slide is inherently wide). */
 export const PAGE_SIZES: {
@@ -68,6 +73,20 @@ export const DOC_KINDS: {
     size: "a4",
     orientation: "portrait",
     name: "خطاب رسمي",
+  },
+  {
+    /*
+     * A certificate is A4 PORTRAIT by definition here: awards and appreciation
+     * certificates are printed and framed, so the default (and every reset that
+     * follows from it) must never hand the author a landscape sheet. Landscape
+     * stays one click away through «مقاس الصفحة / الاتجاه».
+     */
+    id: "certificate",
+    title: "شهادة تقدير",
+    desc: "A4 رأسي",
+    size: "a4",
+    orientation: "portrait",
+    name: "شهادة تقدير",
   },
   {
     id: "presentation",
