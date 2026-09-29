@@ -34,6 +34,21 @@ export const IDLE_RELOAD_MS = 30_000;
 export const DEV_BUILD_ID = "dev";
 
 /**
+ * Which build the document in front of us was served by.
+ *
+ * The document carries it (`<body data-build="…">`, written by the SSR root
+ * from the build-time constant), and reading it there is deliberate: the value
+ * belongs to the DOCUMENT, not to whatever script happens to be running, so a
+ * page whose chunks were replayed from an old deployment is exactly the case
+ * this reports. Falls back to "dev" for tests and any document without it.
+ */
+export function documentBuildId(): string {
+  const stamped =
+    typeof document !== "undefined" ? (document.body?.dataset.build ?? "") : "";
+  return stamped || DEV_BUILD_ID;
+}
+
+/**
  * A build id is useful only when it is a non-empty, non-dev token. Anything
  * else means "no information", which must never trigger a reload.
  */

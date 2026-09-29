@@ -1,8 +1,14 @@
-import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  HeadContent,
+  Outlet,
+  Scripts,
+} from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { NsqFileLaunch } from "@/components/nsq/NsqFileLaunch";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { AppUpdateNotice } from "@/components/AppUpdateNotice";
+// `__APP_BUILD_ID__` is a build-time literal (src/env.d.ts), never a binding.
 // Side-effect import: applies the visitor's stored light/dark choice to
 // <html> before any route renders, so every page starts on the same mode.
 import "@/lib/theme";
@@ -29,7 +35,11 @@ export const Route = createRootRoute({
       { rel: "manifest", href: "/__grok/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
+      },
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Cairo:wght@400;600;700;800;900&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Noto+Kufi+Arabic:wght@400;600;700&family=Noto+Naskh+Arabic:wght@400;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@400;600;700&family=Tajawal:wght@400;500;700;800;900&display=swap",
@@ -41,7 +51,9 @@ export const Route = createRootRoute({
       <head>
         <HeadContent />
       </head>
-      <body>
+      {/* data-build: which build this document was served by — the QA/ops
+          hook, and the value the stale-build guard (AppUpdateNotice) reads. */}
+      <body data-build={__APP_BUILD_ID__}>
         <PreviewHostBridge />
         <NsqFileLaunch />
         <AuthProvider>

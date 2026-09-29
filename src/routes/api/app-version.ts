@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { APP_BUILD_ID } from "@/lib/app-build";
 
 /**
  * Which build this deployment serves.
@@ -17,7 +16,8 @@ export const Route = createFileRoute("/api/app-version")({
   server: {
     handlers: {
       GET: () =>
-        new Response(JSON.stringify({ buildId: APP_BUILD_ID }), {
+        // Inlined as a string literal at build time (see src/env.d.ts).
+        new Response(JSON.stringify({ buildId: __APP_BUILD_ID__ }), {
           status: 200,
           headers: {
             "content-type": "application/json; charset=utf-8",

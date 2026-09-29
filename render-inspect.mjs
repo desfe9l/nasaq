@@ -150,7 +150,7 @@ async function render(viewport, tag) {
       dockButtons: [...(dock?.querySelectorAll("button") || [])].map((b) =>
         (b.getAttribute("aria-label") || "").trim(),
       ),
-      drawerNodes: document.querySelectorAll("[data-anchor-menu-panel]").length,
+      drawerNodes: document.querySelectorAll(".editor-anchor-menu.is-drawer").length,
       legacyClasses: {
         studioToolDockWide: document.querySelectorAll(".studio-tool-dock-wide").length,
         touchPropertiesSheet: document.querySelectorAll(".touch-properties-sheet").length,
@@ -168,51 +168,53 @@ async function render(viewport, tag) {
     if (!(await btn.count())) continue;
     await btn.click({ timeout: 5000 }).catch(() => {});
     await page.waitForTimeout(700);
-    const opened = await page.evaluate(() => {
-      const p = document.querySelector("[data-anchor-menu-panel]");
+    const drawerSel = ".editor-anchor-menu.is-drawer";
+    const opened = await page.evaluate((sel) => {
+      const p = document.querySelector(sel);
       if (!p) return null;
       const r = p.getBoundingClientRect();
       return {
         cls: p.className.slice(0, 70),
+        role: p.getAttribute("role"),
+        label: p.getAttribute("aria-label"),
         rect: { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) },
-        title: (p.querySelector("[class*=title],[class*=header]")?.textContent || "").trim().slice(0, 40),
-        hasGrip: /نقل|grip/i.test(p.innerHTML),
-        hasClose: /إغلاق/.test(p.innerHTML),
+        grip: !!p.querySelector('[aria-label^="نقل"]'),
+        close: !!p.querySelector('[aria-label^="إغلاق"]'),
         controls: p.querySelectorAll("button").length,
       };
-    });
+    }, drawerSel);
     if (opened) {
       const safe = label.replace(/[^\p{L}\p{N}]+/gu, "_").slice(0, 20);
       await page.screenshot({ path: `${OUT}/${tag}-drawer-${safe}-open.png` });
       // Drag the drawer by its grip; then close it from its own control.
-      const grip = page.locator("[data-anchor-menu-panel] [aria-label*='نقل']").first();
+      const grip = page.locator(`${drawerSel} [aria-label^="نقل"]`).first();
       let moved = null;
       if (await grip.count()) {
         const gb = await grip.boundingBox();
         if (gb) {
-          const before = await page.evaluate(() => {
-            const r = document.querySelector("[data-anchor-menu-panel]").getBoundingClientRect();
+          const before = await page.evaluate((sel) => {
+            const r = document.querySelector(sel).getBoundingClientRect();
             return { x: Math.round(r.x), y: Math.round(r.y) };
-          });
+          }, drawerSel);
           await page.mouse.move(gb.x + gb.width / 2, gb.y + gb.height / 2);
           await page.mouse.down();
           await page.mouse.move(gb.x + gb.width / 2 - 180, gb.y + gb.height / 2 + 140, { steps: 12 });
           await page.mouse.up();
           await page.waitForTimeout(500);
-          const after = await page.evaluate(() => {
-            const p = document.querySelector("[data-anchor-menu-panel]");
+          const after = await page.evaluate((sel) => {
+            const p = document.querySelector(sel);
             if (!p) return null;
             const r = p.getBoundingClientRect();
             return { x: Math.round(r.x), y: Math.round(r.y) };
-          });
+          }, drawerSel);
           moved = { before, after };
           await page.screenshot({ path: `${OUT}/${tag}-drawer-${safe}-moved.png` });
         }
       }
-      const closeBtn = page.locator("[data-anchor-menu-panel] [aria-label='إغلاق']").first();
+      const closeBtn = page.locator(`${drawerSel} [aria-label^="إغلاق"]`).first();
       const closed = (await closeBtn.count()) ? (await closeBtn.click({ timeout: 4000 }).then(() => true).catch(() => false)) : false;
       await page.waitForTimeout(500);
-      const stillOpen = await page.evaluate(() => !!document.querySelector("[data-anchor-menu-panel]"));
+      const stillOpen = await page.evaluate((sel) => !!document.querySelector(sel), drawerSel);
       interactions.push({ label, opened, moved, closedFromOwnControl: closed, stillOpenAfterClose: stillOpen });
       if (stillOpen) {
         await page.keyboard.press("Escape");

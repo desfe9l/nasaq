@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { APP_BUILD_ID } from "@/lib/app-build";
 import {
   IDLE_RELOAD_MS,
   IDLE_RESET_EVENTS,
   UPDATE_POLL_MS,
+  documentBuildId,
   isStaleBuild,
   withCacheBuster,
 } from "@/lib/app-update";
@@ -43,7 +43,7 @@ export function AppUpdateNotice() {
     let timer: number | undefined;
 
     const apply = (served: unknown) => {
-      if (cancelled || !isStaleBuild(APP_BUILD_ID, served)) return;
+      if (cancelled || !isStaleBuild(documentBuildId(), served)) return;
       const next = String(served);
       pendingRef.current = next;
       setPending(next);
@@ -120,7 +120,11 @@ export function AppUpdateNotice() {
       <button
         type="button"
         className="shrink-0 rounded-[8px] bg-navy px-2.5 py-1 text-[12px] font-extrabold text-on-brand"
-        onClick={() => window.location.replace(withCacheBuster(window.location.href, pending))}
+        onClick={() =>
+          window.location.replace(
+            withCacheBuster(window.location.href, pending),
+          )
+        }
       >
         تحديث الآن
       </button>
