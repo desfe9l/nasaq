@@ -16,20 +16,18 @@ const browser = await chromium.launch({
 const errors = [];
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
 page.on("pageerror", (e) => errors.push(e.message));
-await page.addInitScript(() =>
-  localStorage.setItem("nasaq.onboarding.v1", "done"),
-);
+await page.addInitScript(() => {
+  localStorage.setItem("nasaq.onboarding.v1", "done");
+  performance.setResourceTimingBufferSize(5000);
+});
 mkdirSync(".cache/editor-acceptance", { recursive: true });
 try {
   await page.goto(base + "/editor");
-  await page.waitForFunction(
-    async () =>
-      (await import("/src/lib/editor/store.ts")).useEditor.getState().hydrated,
-  );
   await page.locator(".editor-canvas-stage").waitFor();
-  await page.waitForTimeout(800);
   await page.evaluate(async () => {
-    window.store = (await import("/src/lib/editor/store.ts")).useEditor;
+    const source = performance.getEntriesByType("resource").find(e => /\/editor\/store\.ts(?:\?|$)/.test(e.name));
+    window.store = (await import(source.name)).useEditor;
+    await window.store.getState().hydrate();
     const s = window.store.getState();
     window.store.setState({
       pages: [{ ...s.pages[0], elements: [] }],
@@ -264,8 +262,8 @@ try {
     await page
       .getByRole("button", { name: "الخصائص والإعدادات", exact: true })
       .click();
-    assert.equal(await page.locator(".touch-properties-sheet").count(), 1);
-    await page.locator(".touch-properties-sheet").waitFor({ state: "visible" });
+    assert.equal(await page.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').count(), 1);
+    await page.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').waitFor({ state: "visible" });
     await page.getByRole("button", { name: "الطبقات", exact: true }).click();
     assert.equal(
       await page.evaluate(() => window.store.getState().rightTab),
@@ -277,14 +275,13 @@ try {
         .count(),
       1,
     );
-    const slider = page.getByRole("slider", {
-      name: "اسحب لتغيير ارتفاع لوحة الخصائص",
-    });
-    const h = Number(await slider.getAttribute("aria-valuenow"));
-    await slider.press("ArrowDown");
-    assert.ok(Number(await slider.getAttribute("aria-valuenow")) <= h);
+    const slider = page.getByRole("button", { name: "تغيير حجم الخصائص والطبقات" });
+    const sheetNode = page.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]');
+    const h = (await sheetNode.boundingBox()).height;
+    await slider.press("ArrowUp");
+    assert.ok((await sheetNode.boundingBox()).height < h);
     await page.waitForTimeout(220);
-    const sheet = await page.locator(".touch-properties-sheet").boundingBox();
+    const sheet = await page.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').boundingBox();
     const rail = await page.locator(".editor-page-rail").boundingBox();
     const header = await page.locator(".editor-toolbar").boundingBox();
     assert.ok(
@@ -296,9 +293,9 @@ try {
       "drawer must not cover page commands",
     );
     await page
-      .getByRole("button", { name: "إغلاق لوحة الخصائص", exact: true })
+      .getByRole("button", { name: "إغلاق الخصائص والطبقات", exact: true })
       .click();
-    await page.locator(".touch-properties-sheet").waitFor({ state: "hidden" });
+    await page.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').waitFor({ state: "hidden" });
     const exportBox = await page.locator(".editor-export-btn").boundingBox();
     assert.ok(
       exportBox.x >= 0 && exportBox.x + exportBox.width <= viewport.width,
@@ -348,7 +345,7 @@ try {
   assert.equal(await page.locator(".collapsed-panel-dock").count(), 0);
   assert.equal(await page.locator(".studio-tool-dock").count(), 1);
   await page.goto(base + "/purchase");
-  await page.locator("footer a[href='https://wa.me/966552017111']").waitFor();
+  await page.locator("footer a[href^='https://wa.me/966552017111?text=']").waitFor();
   assert.doesNotMatch(
     await page.locator("body").innerText(),
     /Gumroad|Keygen|الجهات الحكومية/,
@@ -359,7 +356,7 @@ try {
       "rgb(12, 61, 44)",
     );
   assert.equal(
-    await page.locator('footer a[href="https://wa.me/966552017111"]').count(),
+    await page.locator('footer a[href^="https://wa.me/966552017111?text="]').count(),
     1,
   );
   const social = await page
@@ -372,7 +369,7 @@ try {
         rect: n.getBoundingClientRect().toJSON(),
       })),
     );
-  assert.equal(social.length, 3); // official repository set; no invented Pinterest account
+  assert.equal(social.length, 4); // all configured accounts, including explicit Pinterest
   assert.ok(social.every((a) => Math.abs(a.rect.y - social[0].rect.y) < 1));
   assert.deepEqual(
     social.map((a) => a.url),
@@ -380,6 +377,7 @@ try {
       "https://www.instagram.com/nasaqdocs",
       "https://www.tiktok.com/@nasaqdocs",
       "https://x.com/nasaq_ar",
+      "https://www.pinterest.com/nasaqdocs",
     ],
   );
   await page.goto(base + "/");
@@ -416,12 +414,12 @@ try {
   await touch
     .getByRole("button", { name: "الخصائص والإعدادات", exact: true })
     .tap();
-  const grip = touch.getByRole("slider", {
-    name: "اسحب لتغيير ارتفاع لوحة الخصائص",
+  const grip = touch.getByRole("button", {
+    name: "تغيير حجم الخصائص والطبقات",
   });
   await grip.waitFor();
   await touch.waitForTimeout(250);
-  const startHeight = Number(await grip.getAttribute("aria-valuenow"));
+  const startHeight = (await touch.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').boundingBox()).height;
   const gripBox = await grip.boundingBox();
   const cdp = await touchContext.newCDPSession(touch);
   const x = gripBox.x + gripBox.width / 2,
@@ -440,11 +438,11 @@ try {
   });
   await touch.waitForTimeout(220);
   assert.ok(
-    Number(await grip.getAttribute("aria-valuenow")) < startHeight,
+    (await touch.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').boundingBox()).height < startHeight,
     "touch grip resizes sheet",
   );
   const touchSheet = await touch
-    .locator(".touch-properties-sheet")
+    .locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]')
     .boundingBox();
   const touchHeader = await touch.locator(".editor-toolbar").boundingBox();
   assert.ok(touchSheet.y >= touchHeader.y + touchHeader.height);
@@ -453,10 +451,10 @@ try {
     assert.ok(b.y + b.height <= 768);
   }
   await touch
-    .locator(".touch-properties-content")
+    .locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"] .touch-properties-content')
     .evaluate((n) => (n.scrollTop = n.scrollHeight));
   const lastAction = await touch
-    .locator(".touch-properties-sheet .editor-panel-footer button")
+    .locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"] .editor-panel-footer button')
     .last()
     .boundingBox();
   assert.ok(

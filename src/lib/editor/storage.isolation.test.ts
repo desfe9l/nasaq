@@ -2,11 +2,9 @@ import test, { beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { setStorageOwner } from "./storage-owner";
 import {
-  deleteAsset,
   deleteProject,
   getProject,
   getSetting,
-  listAssets,
   listProjects,
   saveAsset,
   saveProject,
@@ -173,30 +171,9 @@ test("account-scoped settings are per-owner; device-level settings stay shared",
   );
 });
 
-test("assets follow the same boundary", async () => {
-  setStorageOwner("user-a");
-  await saveAsset({ name: "شعار", src: "data:image/png;base64,AA", w: 10, h: 10 });
-
-  setStorageOwner(null);
-  assert.deepEqual(await listAssets(), []);
-  setStorageOwner("user-b");
-  assert.deepEqual(await listAssets(), []);
-
-  setStorageOwner("user-a");
-  const assets = await listAssets();
-  const asset = assets[0];
-  assert.ok(asset);
-  assert.equal(asset.name, "شعار");
-  assert.equal(
-    "ownerId" in asset,
-    false,
-    "rows re-enter app state without the storage stamp",
-  );
-
-  setStorageOwner("user-b");
-  await deleteAsset(asset.id); // foreign — must no-op
-  setStorageOwner("user-a");
-  assert.equal((await listAssets()).length, 1);
+test("binary assets fail explicitly when IndexedDB is unavailable", async () => {
+  await assert.rejects(saveAsset({ name: "شعار", src: "data:image/png;base64,AA", w: 10, h: 10 }), /IndexedDB/);
+  assert.equal(memory.getItem("nasaq-assets-v1"), null);
 });
 
 test("getProject returns rows without the owner stamp (exports stay clean)", async () => {

@@ -1587,8 +1587,8 @@ export function RightPanel({
                     </Field>
                     <ScrubField
                       label="سماكة الخط"
-                      value={round(Number(el.style.stroke || 1.8) || 0)}
-                      min={0.5}
+                      value={round(Number(el.style.stroke ?? 1.8) || 0)}
+                      min={0}
                       step={0.1}
                       onChange={(v) => updateStyle(el.id, { stroke: v }, true)}
                       onCommit={(v) => updateStyle(el.id, { stroke: v })}
@@ -1613,8 +1613,8 @@ export function RightPanel({
                   </Field>
                   <ScrubField
                     label="السماكة مم"
-                    value={round(Number(el.style.stroke || 0.8) || 0)}
-                    min={0.1}
+                    value={round(Number(el.style.stroke ?? (el.type === "divider" ? 0.5 : 0.8)) || 0)}
+                    min={0}
                     step={0.1}
                     onChange={(v) => updateStyle(el.id, { stroke: v }, true)}
                     onCommit={(v) => updateStyle(el.id, { stroke: v })}
@@ -2024,7 +2024,7 @@ export function RightPanel({
                         max={24}
                         step={0.1}
                         precision={2}
-                        suffix="مم"
+                        suffix="وحدة"
                         placeholder="كما في الملف"
                         onChange={(v) =>
                           updateStyle(el.id, { svgStrokeWidth: v }, true)

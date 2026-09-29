@@ -135,7 +135,8 @@ export type SettingsKey =
   | "rightCollapsed"
   | "assetFolders"
   /** SVG icons/dividers the author added to the smart library. */
-  | "customLibrary";
+  | "customLibrary"
+  | "brandProfiles";
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
@@ -224,6 +225,25 @@ async function migrateLegacyDb(db: IDBDatabase): Promise<void> {
   ).catch(() => undefined);
 }
 
+/** Recover old fallback libraries into the existing database, preserving ownership.
+ * Remove a legacy binary blob only after its IDB transaction has committed. */
+async function migrateWebStorage(db: IDBDatabase): Promise<void> {
+  if (typeof localStorage === "undefined") return;
+  for (const [storeName, key] of [[PROJECTS, LS_PROJECTS], [PROJECTS, LEGACY_LS_PROJECTS], [ASSETS, LS_ASSETS], [ASSETS, LEGACY_LS_ASSETS]] as const) {
+    const raw = localStorage.getItem(key);
+    if (!raw) continue;
+    let rows: unknown;
+    try { rows = JSON.parse(raw); } catch { continue; }
+    if (!Array.isArray(rows) || rows.some(row => !row || typeof row.id !== "string")) continue;
+    await tx(db, storeName, "readwrite", async t => {
+      const store = t.objectStore(storeName);
+      const ids = new Set(await request(store.getAllKeys()));
+      for (const row of rows) if (!ids.has(row.id)) await request(store.put(row));
+    });
+    localStorage.removeItem(key);
+  }
+}
+
 function openDb(): Promise<IDBDatabase | null> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve) => {
@@ -258,6 +278,7 @@ function openDb(): Promise<IDBDatabase | null> {
       // Resolve only after the copy settles, so the first read already sees the
       // migrated library rather than racing it.
       void migrateLegacyDb(db)
+        .then(() => migrateWebStorage(db))
         .catch(() => undefined)
         .then(() => resolve(db));
     };
@@ -287,9 +308,11 @@ function tx<T>(
       reject(t.error ?? new Error("IndexedDB transaction aborted"));
     t.oncomplete = () => resolve(result as T);
     let result: T;
-    Promise.resolve(run(t)).then((value) => {
-      result = value;
-    }, reject);
+    try {
+      Promise.resolve(run(t)).then((value) => { result = value; }, error => {
+        t.abort(); reject(error);
+      });
+    } catch (error) { t.abort(); reject(error); }
   });
 }
 
@@ -318,7 +341,9 @@ const fallback = {
     }
   },
   write(list: OwnedRow<Project>[]) {
-    localStorage.setItem(LS_PROJECTS, JSON.stringify(list));
+    const serialized = JSON.stringify(list);
+    if (/data:|blob:/i.test(serialized)) throw new Error("يتطلب حفظ الصور والملفات تفعيل تخزين المتصفح IndexedDB");
+    localStorage.setItem(LS_PROJECTS, serialized);
   },
   /** The current owner's rows only, adopting unstamped rows on first read. */
   all(): Project[] {
@@ -408,12 +433,18 @@ export async function saveProject(project: Project): Promise<Project> {
   if (ownerId !== getStorageOwner())
     throw new Error("Storage owner changed during save");
   if (!db) {
+    const existing = fallback.raw().find(row => row.id === stamped.id);
+    if (existing && !canRead(existing)) throw new Error("لا يمكن استبدال مشروع تابع لحساب آخر");
     fallback.put(stamped);
     return stamped;
   }
-  await tx(db, PROJECTS, "readwrite", (t) =>
-    request(t.objectStore(PROJECTS).put({ ...clone(stamped), ownerId })),
-  );
+  await tx(db, PROJECTS, "readwrite", async (t) => {
+    const store = t.objectStore(PROJECTS);
+    const existing = await request(store.get(stamped.id!)) as OwnedRow<Project> | undefined;
+    if (existing && !canRead(existing)) throw new Error("لا يمكن استبدال مشروع تابع لحساب آخر");
+    if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during save");
+    await request(store.put({ ...clone(stamped), ownerId }));
+  });
   return stamped;
 }
 
@@ -459,6 +490,7 @@ export async function duplicateProject(id: string): Promise<Project | null> {
 // preferences (zoom, panels, focus) keep their plain shared keys.
 
 const OWNER_SCOPED_SETTINGS = new Set<string>([
+  "brandProfiles",
   "activeProjectId",
   "assetFolders",
   "customLibrary",
@@ -480,6 +512,8 @@ function adoptableSettingKeys(
   key: SettingsKey,
 ): { from: string; remove: boolean }[] {
   if (!OWNER_SCOPED_SETTINGS.has(key) || !hasSignedInOwner()) return [];
+  // Identity images are personal, not a shared signed-out template library.
+  if (key === "brandProfiles") return [];
   return [
     { from: key, remove: true },
     { from: `${key}::${ANON_OWNER}`, remove: false },
@@ -548,6 +582,8 @@ export async function setSetting(
 ): Promise<void> {
   const rowKey = scopedSettingKey(key);
   const db = await openDb();
+  if (rowKey !== scopedSettingKey(key)) throw new Error("Storage owner changed during save");
+  if (!db && key === "brandProfiles") throw new Error("يتطلب حفظ الهوية تفعيل تخزين المتصفح IndexedDB");
   if (!db) {
     let parsed: Record<string, unknown> = {};
     try {
@@ -642,14 +678,15 @@ const assetFallback = {
     }
   },
   write(list: OwnedRow<Asset>[]) {
-    localStorage.setItem(LS_ASSETS, JSON.stringify(list));
+    // Legacy rows can be read for recovery, but no binary writes go to Web Storage.
+    if (list.length) throw new Error("يتطلب حفظ الوسائط تفعيل تخزين المتصفح IndexedDB");
+    localStorage.removeItem(LS_ASSETS);
   },
   /** The current owner's rows only, adopting unstamped rows on first read. */
   all(): Asset[] {
     const rows = this.raw();
-    const { visible, adopted } = partitionOwned(rows);
-    if (adopted.length) this.write(rows);
-    return visible.map(strip);
+    // Unclaimed legacy binaries require IDB before ownership can be persisted.
+    return rows.filter(row => rowOwnership(row) === "own").map(strip);
   },
 };
 
@@ -677,23 +714,22 @@ export async function listAssets(): Promise<Asset[]> {
 export async function saveAsset(
   asset: Omit<Asset, "id" | "addedAt"> & Partial<Asset>,
 ): Promise<Asset> {
+  const ownerId = getStorageOwner();
   const stamped: Asset = {
     ...asset,
     id: asset.id || uid("asset"),
     addedAt: asset.addedAt || Date.now(),
   };
   const db = await openDb();
-  if (!db) {
-    const owned = own(stamped);
-    assetFallback.write([
-      owned,
-      ...assetFallback.raw().filter((a) => a.id !== owned.id),
-    ]);
-    return stamped;
-  }
-  await tx(db, ASSETS, "readwrite", (t) =>
-    request(t.objectStore(ASSETS).put(own(stamped))),
-  );
+  if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during save");
+  if (!db) throw new Error("يتطلب حفظ الوسائط تفعيل تخزين المتصفح IndexedDB");
+  await tx(db, ASSETS, "readwrite", async (t) => {
+    const store = t.objectStore(ASSETS);
+    const existing = await request(store.get(stamped.id)) as OwnedRow<Asset> | undefined;
+    if (existing && !canRead(existing)) throw new Error("لا يمكن استبدال ملف تابع لحساب آخر");
+    if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during save");
+    await request(store.put({ ...stamped, ownerId }));
+  });
   return stamped;
 }
 

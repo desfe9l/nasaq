@@ -77,7 +77,7 @@ export function HomePage() {
       <main>
         {/* Hero — مؤسسي رسمي هادئ */}
         <section className="border-b border-line/70 bg-page">
-          <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-20">
+          <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-20">
             <div>
               <div className="mb-5 inline-flex items-center rounded-full border border-brand/15 bg-navy/5 px-3.5 py-1.5 text-[11px] font-bold tracking-wide text-ink">
                 {texts.heroEyebrow.trim() || PRODUCT_COPY.hero.eyebrow}

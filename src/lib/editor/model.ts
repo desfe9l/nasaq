@@ -164,7 +164,7 @@ export interface ElStyle {
    */
   svgFill?: string;
   svgStroke?: string;
-  /** `svg` elements: stroke width override in mm; unset keeps the markup's. */
+  /** `svg` elements: stroke width override in native viewBox units; unset keeps the markup's. */
   svgStrokeWidth?: number;
   /** `shape` elements: id from `shapes.ts`. Absent means a plain rectangle. */
   shapeId?: string;

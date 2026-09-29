@@ -371,3 +371,22 @@ describe("writePptx", () => {
     assert.doesNotMatch(slide, /r:embed="[^"]*image\/svg/);
   });
 });
+
+
+describe("zero-width table borders", () => {
+  const table = PAGE.items.find(item => item.kind === "table")!;
+  const scene = { ...PAGE, items: [{ ...table, border: { color: "#d9dee8", width: 0 } }] };
+  it("keeps zero borders absent from editable Word tables", async () => {
+    const { writeDocx } = await import("./docx-writer.ts");
+    const zip = await JSZip.loadAsync(await (await writeDocx({ scenes: [scene], title: "بدون حدود" })).arrayBuffer());
+    const xml = await zip.file("word/document.xml")!.async("string");
+    assert.match(xml, /w:val="nil"/);
+    assert.doesNotMatch(xml, /w:val="single"/);
+  });
+  it("keeps zero borders absent from editable PowerPoint tables", async () => {
+    const { writePptx } = await import("./pptx-writer.ts");
+    const zip = await JSZip.loadAsync(await (await writePptx([scene], "بدون حدود")).arrayBuffer());
+    const xml = await zip.file("ppt/slides/slide1.xml")!.async("string");
+    assert.match(xml, /<a:lnL[^>]*><a:noFill\/>/);
+  });
+});

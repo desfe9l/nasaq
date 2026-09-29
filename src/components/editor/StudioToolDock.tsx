@@ -367,7 +367,7 @@ export function StudioToolDock({
   }, []);
 
   return (
-    <aside
+    <aside data-editor-obstacle="tool-dock"
       ref={dockRef}
       className={cn("studio-tool-dock", wide && "is-wide", floating && "is-floating")}
       aria-label="شريط الأدوات"

@@ -29,6 +29,7 @@ import { TYPE_NAME, type CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { placeFloatingToolbar } from "@/lib/editor/ui-state";
 import { cn } from "@/lib/utils";
+import { StrokeControls } from "./StrokeControls";
 import { ScrubInput } from "./ui/ScrubInput";
 import { ColorField } from "./ui/ColorField";
 
@@ -96,6 +97,16 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     const toolbar = boxRef.current;
     if (!target || !toolbar) return;
     const rect = target.getBoundingClientRect();
+    // A narrow tool rail must not force a phone toolbar down to the page rail.
+    // Fit its scrollable row into the lane beside the tools before placing it.
+    let laneLeft = MARGIN, laneRight = window.innerWidth - MARGIN;
+    document.querySelectorAll<HTMLElement>('[data-editor-obstacle="tool-dock"]').forEach(dock => {
+      const r = dock.getBoundingClientRect();
+      if (!r.width || r.height < r.width || getComputedStyle(dock).visibility === "hidden") return;
+      if (r.left > rect.left + rect.width / 2) laneRight = Math.min(laneRight, r.left - MARGIN);
+      else if (r.right < rect.left + rect.width / 2) laneLeft = Math.max(laneLeft, r.right + MARGIN);
+    });
+    toolbar.style.maxWidth = `${Math.min(640, window.innerWidth - MARGIN * 2, Math.max(240, laneRight - laneLeft))}px`;
     const size = toolbar.getBoundingClientRect();
     if (!rect.width && !rect.height) return;
     // Keep the bubble clear of the real, outward-expanded grip hit regions,
@@ -128,7 +139,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     const avoid = [
       ...document.querySelectorAll<HTMLElement>("[data-editor-obstacle]"),
     ]
-      .filter((node) => node.offsetParent !== null)
+      .filter((node) => node.getClientRects().length > 0 && getComputedStyle(node).visibility !== "hidden")
       .map((node) => node.getBoundingClientRect());
     // The arithmetic is pure and unit-tested (`placeFloatingToolbar`); this
     // callback only feeds it live screen measurements.
@@ -174,9 +185,12 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     window.addEventListener("resize", schedule);
     window.addEventListener("transitionend", schedule, true);
     const observer = new ResizeObserver(schedule);
-    document.querySelectorAll(".touch-properties-sheet").forEach(node => observer.observe(node));
+    document.querySelectorAll("[data-editor-obstacle]").forEach(node => observer.observe(node));
+    if (boxRef.current) observer.observe(boxRef.current);
+    window.addEventListener("nasaq:panel-layout", schedule);
     return () => {
       observer.disconnect();
+      window.removeEventListener("nasaq:panel-layout", schedule);
       window.removeEventListener("transitionend", schedule, true);
       cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule, true);
@@ -208,12 +222,12 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       const next = { dx: base.dx + dx, dy: base.dy + dy };
       /* Clamp the travel so the parked bubble can never leave the viewport. */
       next.dx = Math.min(
-        Math.max(next.dx, MARGIN - origin.left),
-        Math.max(window.innerWidth - origin.width - MARGIN - origin.left, MARGIN - origin.left),
+        Math.max(next.dx, base.dx + MARGIN - origin.left),
+        Math.max(base.dx + window.innerWidth - origin.width - MARGIN - origin.left, base.dx + MARGIN - origin.left),
       );
       next.dy = Math.min(
-        Math.max(next.dy, MARGIN - origin.top),
-        Math.max(window.innerHeight - origin.height - MARGIN - origin.top, MARGIN - origin.top),
+        Math.max(next.dy, base.dy + MARGIN - origin.top),
+        Math.max(base.dy + window.innerHeight - origin.height - MARGIN - origin.top, base.dy + MARGIN - origin.top),
       );
       useEditor.getState().setBubbleOffset(next);
     };
@@ -266,6 +280,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
         event.preventDefault();
         event.stopPropagation();
       }}
+      dir="rtl"
       role="toolbar"
       aria-label={`أدوات ${el.name || TYPE_NAME[el.type]}`}
     >
@@ -411,6 +426,8 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
         </>
       )}
 
+      <StrokeControls />
+
       {isObject && (
         <>
           <div className="floating-toolbar-section">
@@ -435,61 +452,10 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
             <ColorField
               className="floating-toolbar-swatch"
               label="لون الإطار"
-              value={el.type === "svg" || el.type === "icon" ? style.svgStroke : style.borderColor}
+              value={el.type === "line" || el.type === "divider" ? style.color : el.type === "svg" || el.type === "icon" ? style.svgStroke : style.borderColor}
               fallback={style.color || "#c9a86a"}
-              onChange={(v) => updateStyle(el.id, el.type === "svg" || el.type === "icon" ? { svgStroke: v } : { borderColor: v }, true)}
-              onCommit={(v) => updateStyle(el.id, el.type === "svg" || el.type === "icon" ? { svgStroke: v } : { borderColor: v })}
-            />
-          </div>
-          <span className="floating-toolbar-sep" aria-hidden />
-          {/*
-           * سماكة الحد — the stroke-width control, bound to whichever field
-           * that element family actually paints with: the artwork's own
-           * stroke for icons/lines/dividers/SVG, the border width for boxes,
-           * shapes and tables. One control, no second formatting model.
-           */}
-          <div className="floating-toolbar-section">
-            <span className="px-1 text-[10px] font-extrabold text-muted">
-              سماكة
-            </span>
-            <ScrubInput
-              className="floating-toolbar-scrub"
-              label="سماكة الحد"
-              value={
-                el.type === "svg"
-                  ? Math.round(Number(style.svgStrokeWidth ?? 1.8) * 10) / 10
-                  : el.type === "icon" ||
-                      el.type === "line" ||
-                      el.type === "divider"
-                    ? Math.round(Number(style.stroke ?? 1.8) * 10) / 10
-                    : Math.round(Number(style.borderWidth ?? 0.35) * 10) / 10
-              }
-              min={0}
-              max={24}
-              step={0.05}
-              precision={2}
-              suffix="mm"
-              onChange={(v) => {
-                if (el.type === "svg") updateStyle(el.id, { svgStrokeWidth: v }, true);
-                else if (
-                  el.type === "icon" ||
-                  el.type === "line" ||
-                  el.type === "divider"
-                )
-                  updateStyle(el.id, { stroke: v }, true);
-                else updateStyle(el.id, { borderWidth: v }, true);
-              }}
-              onCommit={(v) => {
-                if (el.type === "svg") updateStyle(el.id, { svgStrokeWidth: v });
-                else if (
-                  el.type === "icon" ||
-                  el.type === "line" ||
-                  el.type === "divider"
-                )
-                  updateStyle(el.id, { stroke: v });
-                else updateStyle(el.id, { borderWidth: v });
-                commit();
-              }}
+              onChange={(v) => updateStyle(el.id, el.type === "line" || el.type === "divider" ? { color: v } : el.type === "svg" || el.type === "icon" ? { svgStroke: v } : { borderColor: v }, true)}
+              onCommit={(v) => updateStyle(el.id, el.type === "line" || el.type === "divider" ? { color: v } : el.type === "svg" || el.type === "icon" ? { svgStroke: v } : { borderColor: v })}
             />
           </div>
           <span className="floating-toolbar-sep" aria-hidden />

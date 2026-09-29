@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, FilePenLine, FolderKanban, LayoutTemplate, LockKeyhole, Palette, Plus, RotateCcw, Save, ShieldCheck, Sparkles, Type, Download, Upload, Pencil, Trash2 } from "lucide-react";
 import { BrandLogo, SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { DEFAULT_BRAND_KIT, type BrandKit } from "@/lib/product/product";
@@ -12,12 +12,15 @@ import {
   listBrandProfiles,
   readBrandKit,
   renameBrandProfile,
-  resetBrandKit,
   saveBrandKit,
   switchBrandProfile,
 } from "@/lib/product/brand-kit";
 import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
+import { TemplatePreview } from "./TemplatePreview";
+import { buildIdentityDocument } from "@/lib/editor/identity-document";
+import { useEditor } from "@/lib/editor/store";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { toast } from "sonner";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 
@@ -89,28 +92,44 @@ function readFileDataUrl(file: File): Promise<string | null> {
 }
 
 export function BrandKitPage() {
+  const { user, isPending } = useCurrentUserState();
+  const [identityReady, setIdentityReady] = useState(false);
   const [kit, setKit] = useState<BrandKit>(DEFAULT_BRAND_KIT);
   const [saved, setSaved] = useState(false);
   const [profiles, setProfiles] = useState<Array<{ id: string; name: string }>>([]);
   const [activeId, setActiveId] = useState("");
   const [profileNameDraft, setProfileNameDraft] = useState("");
   const [renamingProfile, setRenamingProfile] = useState(false);
+  const [recipient, setRecipient] = useState("اسم المستلم");
+  const [headerHeight, setHeaderHeight] = useState(64);
+  const [creating, setCreating] = useState(false);
   const [previewMode, setPreviewMode] = useState<PreviewMode>("cover");
   const logoInput = useRef<HTMLInputElement>(null);
   const darkLogoInput = useRef<HTMLInputElement>(null);
   const stampInput = useRef<HTMLInputElement>(null);
   const importInput = useRef<HTMLInputElement>(null);
 
-  const refreshProfiles = () => {
-    const { profiles: list, activeId: active } = listBrandProfiles();
+  const refreshProfiles = async () => {
+    const { profiles: list, activeId: active } = await listBrandProfiles();
     setProfiles(list);
     setActiveId(active);
   };
 
   useEffect(() => {
-    setKit(readBrandKit());
-    refreshProfiles();
-  }, []);
+    let cancelled = false;
+    setKit(DEFAULT_BRAND_KIT); setIdentityReady(false);
+    if (!isPending) void (async () => {
+      await useEditor.getState().hydrate();
+      const nextKit = await readBrandKit();
+      const nextProfiles = await listBrandProfiles();
+      if (cancelled) return;
+      setKit(nextKit); setProfiles(nextProfiles.profiles); setActiveId(nextProfiles.activeId); setIdentityReady(true);
+    })().catch(() => { if (!cancelled) toast.error("تعذر تحميل الهوية من تخزين المتصفح"); });
+    const header = document.querySelector("header");
+    const observer = new ResizeObserver(() => setHeaderHeight(header?.getBoundingClientRect().height ?? 64));
+    if (header) observer.observe(header);
+    return () => { cancelled = true; observer.disconnect(); };
+  }, [user?.id, isPending]);
 
   const update = <K extends keyof BrandKit>(key: K, value: BrandKit[K]) =>
     setKit((current) => ({ ...current, [key]: value }));
@@ -148,8 +167,8 @@ export function BrandKitPage() {
     toast.success("أُعيدت الهوية إلى الإعدادات الافتراضية — اضغط حفظ لتثبيتها");
   };
 
-  const save = () => {
-    saveBrandKit(kit);
+  const save = async () => {
+    await saveBrandKit(kit);
     setSaved(true);
     window.setTimeout(() => setSaved(false), 1800);
   };
@@ -202,50 +221,50 @@ export function BrandKitPage() {
     toast.success(`طُبّق لوحة «${preset.name}»`);
   };
 
-  const createProfile = () => {
+  const createProfile = async () => {
     const name = window.prompt("اسم الهوية الجديدة؟", `هوية ${profiles.length + 1}`);
     if (name === null) return;
-    const id = createBrandProfile(name);
+    const id = await createBrandProfile(name);
     setActiveId(id);
-    setKit(readBrandKit());
-    refreshProfiles();
+    setKit(await readBrandKit());
+    await refreshProfiles();
     toast.success("أُنشئت هوية جديدة");
   };
 
-  const switchTo = (id: string) => {
-    saveBrandKit(kit); // keep unsaved edits of the outgoing profile
-    setKit(switchBrandProfile(id));
+  const switchTo = async (id: string) => {
+    await saveBrandKit(kit); // keep unsaved edits of the outgoing profile
+    setKit(await switchBrandProfile(id));
     setActiveId(id);
   };
 
-  const commitRenameProfile = () => {
+  const commitRenameProfile = async () => {
     if (activeId && profileNameDraft.trim()) {
-      renameBrandProfile(activeId, profileNameDraft);
-      refreshProfiles();
+      await renameBrandProfile(activeId, profileNameDraft);
+      await refreshProfiles();
       toast.success("تم تحديث اسم الهوية");
     }
     setRenamingProfile(false);
   };
 
-  const removeProfile = () => {
+  const removeProfile = async () => {
     if (profiles.length <= 1) {
       toast.error("يجب الإبقاء على هوية واحدة على الأقل");
       return;
     }
     const current = profiles.find((p) => p.id === activeId);
     if (!window.confirm(`حذف هوية «${current?.name}» نهائيًا؟`)) return;
-    if (deleteBrandProfile(activeId)) {
-      const next = listBrandProfiles();
+    if (await deleteBrandProfile(activeId)) {
+      const next = await listBrandProfiles();
       setActiveId(next.activeId);
-      setKit(readBrandKit());
-      refreshProfiles();
+      setKit(await readBrandKit());
+      await refreshProfiles();
       toast.success("حُذفت الهوية");
     }
   };
 
-  const doExport = () => {
-    saveBrandKit(kit);
-    const name = exportBrandProfiles();
+  const doExport = async () => {
+    await saveBrandKit(kit);
+    const name = await exportBrandProfiles();
     toast.success(`تم تنزيل الهوية — ${name}`);
   };
 
@@ -254,15 +273,26 @@ export function BrandKitPage() {
     e.target.value = "";
     if (!file) return;
     try {
-      const added = importBrandProfiles(JSON.parse(await file.text()));
-      refreshProfiles();
+      const added = await importBrandProfiles(JSON.parse(await file.text()));
+      await refreshProfiles();
       toast.success(added ? `أُضيف ${added} هوية من الملف` : "لا هويات جديدة في الملف");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "تعذر قراءة ملف الهوية");
     }
   };
 
+  const runIdentityAction = (action: () => Promise<unknown>) => { void action().catch(error => toast.error(error instanceof Error ? error.message : "تعذر حفظ الهوية")); };
+
   const kitDate = formatKitDate(kit);
+  const identityDocument = useMemo(() => buildIdentityDocument(kit, previewMode, kitDate, recipient), [kit, previewMode, kitDate, recipient]);
+  const createDocument = async () => {
+    setCreating(true);
+    try {
+      await useEditor.getState().hydrate();
+      if (await useEditor.getState().createDocument(identityDocument)) window.location.assign("/editor");
+    } catch { toast.error("تعذر إنشاء المستند — تحقق من مساحة تخزين المتصفح"); }
+    finally { setCreating(false); }
+  };
 
   return (
     <div className="min-h-full bg-paper">
@@ -278,7 +308,7 @@ export function BrandKitPage() {
 
         <section className="py-12"><h2 className="text-[20px] font-extrabold">معلومات المنتج</h2><dl className="mt-5 grid gap-3 sm:grid-cols-3"><Fact label="اسم المنتج" value="نَسَق | NASAQ" /><Fact label="المطوّر" value={BRAND.team} /><Fact label="نوع المنتج" value="منصة تصميم وتحرير عربية" /></dl></section>
 
-        <section className="border-t border-line pt-10">
+        <section aria-busy={!identityReady} inert={!identityReady} className="border-t border-line pt-6">
           <div className="max-w-2xl">
             <h2 className="text-[20px] font-extrabold">هوية مستندك</h2>
             <p className="mt-2 text-[14px] leading-7 text-muted">
@@ -287,12 +317,40 @@ export function BrandKitPage() {
             </p>
           </div>
 
+          <div className="sticky z-10 mt-4 flex flex-wrap items-center gap-2 border-y border-line bg-page py-2" style={{ top: headerHeight }}>
+              <div role="tablist" aria-label="نوع المعاينة" className="flex min-w-0 flex-1 basis-full items-center gap-1 overflow-x-auto sm:basis-auto">
+                {PREVIEW_MODES.map((mode) => (
+                  <button
+                    key={mode.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={previewMode === mode.id}
+                    onClick={() => setPreviewMode(mode.id)}
+                    className={cn(
+                      "rounded-[6px] px-1 py-1.5 text-[10px] font-extrabold transition",
+                      previewMode === mode.id
+                        ? "bg-surface text-brand shadow-sm"
+                        : "text-muted",
+                    )}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+            <label className="flex items-center gap-2 text-[11px] font-bold">الاتجاه
+              <select aria-label="اتجاه المستند" className="h-8 rounded-md border border-line bg-surface px-2" value={kit.pageSize === "a4-landscape" ? "a4-landscape" : "a4-portrait"} onChange={e => update("pageSize", e.target.value as BrandKit["pageSize"])}>
+                <option value="a4-portrait">A4 رأسي · 210 × 297</option><option value="a4-landscape">A4 أفقي · 297 × 210</option>
+              </select>
+            </label>
+          </div>
+          {previewMode === "certificate" && <div className="mt-3 max-w-sm"><Field label="اسم المستلم"><input value={recipient} onChange={e => setRecipient(e.target.value)} /></Field></div>}
+
           {/*
            * Document Identity audit — three real pairings, measured, with the
            * smallest fix offered inline. Colours are a design choice; being
            * able to read the document is not.
            */}
-          <div className="mt-6 grid gap-3 rounded-2xl border border-line bg-surface p-4 sm:grid-cols-3">
+          <div className="mt-4 grid gap-2 rounded-xl border border-line bg-surface p-3 sm:grid-cols-3">
             {audit.map((row) => {
               const pass = row.ratio >= 4.5;
               const strong = row.ratio >= 7;
@@ -339,20 +397,20 @@ export function BrandKitPage() {
                   value={profileNameDraft}
                   onChange={(e) => setProfileNameDraft(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") commitRenameProfile();
+                    if (e.key === "Enter") runIdentityAction(commitRenameProfile);
                     if (e.key === "Escape") setRenamingProfile(false);
                   }}
                   aria-label="اسم الهوية"
                   className="h-9 w-44 rounded-[7px] border border-line px-2 text-[12px] font-bold bg-surface-2"
                 />
-                <button type="button" onClick={commitRenameProfile} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-navy px-3 text-[11px] font-extrabold text-on-brand">
+                <button type="button" onClick={() => runIdentityAction(commitRenameProfile)} className="inline-flex h-9 items-center gap-1 rounded-[7px] bg-navy px-3 text-[11px] font-extrabold text-on-brand">
                   <CheckCircle2 className="size-3.5" /> حفظ الاسم
                 </button>
               </>
             ) : (
               <select
                 value={activeId}
-                onChange={(e) => switchTo(e.target.value)}
+                onChange={(e) => runIdentityAction(() => switchTo(e.target.value))}
                 aria-label="الهوية النشطة"
                 className="h-9 min-w-[170px] rounded-[7px] border border-line bg-transparent px-2 text-[12px] font-extrabold"
               >
@@ -361,19 +419,19 @@ export function BrandKitPage() {
                 ))}
               </select>
             )}
-            <button type="button" onClick={createProfile} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold" title="هوية جديدة">
+            <button type="button" onClick={() => runIdentityAction(createProfile)} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold" title="هوية جديدة">
               <Plus className="size-3.5" /> جديدة
             </button>
             <button type="button" onClick={() => { const cur = profiles.find((p) => p.id === activeId); setProfileNameDraft(cur?.name || ""); setRenamingProfile(true); }} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold" title="إعادة تسمية الهوية">
               <Pencil className="size-3.5" /> تسمية
             </button>
-            <button type="button" onClick={doExport} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold" title="تصدير كل الهويات كملف .json">
+            <button type="button" onClick={() => runIdentityAction(doExport)} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold" title="تصدير كل الهويات كملف .json">
               <Download className="size-3.5" /> تصدير .json
             </button>
             <button type="button" onClick={() => importInput.current?.click()} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-line px-3 text-[11px] font-bold" title="استيراد هويات من ملف .json">
               <Upload className="size-3.5" /> استيراد
             </button>
-            <button type="button" onClick={removeProfile} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-danger/30 px-3 text-[11px] font-bold text-error" title="حذف الهوية الحالية">
+            <button type="button" onClick={() => runIdentityAction(removeProfile)} className="inline-flex h-9 items-center gap-1.5 rounded-[7px] border border-danger/30 px-3 text-[11px] font-bold text-error" title="حذف الهوية الحالية">
               <Trash2 className="size-3.5" /> حذف
             </button>
             <input ref={importInput} type="file" accept="application/json,.json" className="hidden" onChange={(e) => void doImport(e)} />
@@ -489,9 +547,8 @@ export function BrandKitPage() {
                 <Field label="أسلوب التذييل"><select value={kit.footerStyle} onChange={(e) => update("footerStyle", e.target.value as BrandKit["footerStyle"])}><option value="official">رسمي</option><option value="simple">بسيط</option><option value="none">بدون تذييل</option></select></Field>
               </div>
               <div className="flex flex-wrap gap-2 border-t border-line pt-4">
-                <button type="button" onClick={save} className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-navy px-4 text-[12px] font-extrabold text-on-brand"><Save className="size-4" />{saved ? "تم الحفظ" : "حفظ الهوية محليًا"}</button>
+                <button type="button" onClick={() => runIdentityAction(save)} className="inline-flex h-10 items-center gap-2 rounded-[8px] bg-navy px-4 text-[12px] font-extrabold text-on-brand"><Save className="size-4" />{saved ? "تم الحفظ" : "حفظ الهوية محليًا"}</button>
                 <button type="button" onClick={restoreDefaults} className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-line px-4 text-[12px] font-extrabold text-ink" title="إعادة ألوان وخطوط الهوية إلى الافتراضي"><RotateCcw className="size-4" />استعادة الافتراضي</button>
-                <button type="button" onClick={() => setKit(resetBrandKit())} className="inline-flex h-10 items-center gap-2 rounded-[8px] border border-line px-4 text-[12px] font-bold"><RotateCcw className="size-4" />إعادة الضبط</button>
               </div>
             </section>
 
@@ -504,122 +561,13 @@ export function BrandKitPage() {
                   <p className="mt-1 text-[12px] leading-5 text-muted">تتحدّث فور تعديل أي لون أو حقل.</p>
                 </div>
               </div>
-              <div role="tablist" aria-label="نوع المعاينة" className="mt-3 grid grid-cols-3 gap-1 rounded-[8px] bg-line-2 p-1">
-                {PREVIEW_MODES.map((mode) => (
-                  <button
-                    key={mode.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={previewMode === mode.id}
-                    onClick={() => setPreviewMode(mode.id)}
-                    className={cn(
-                      "rounded-[6px] px-1 py-1.5 text-[10px] font-extrabold transition",
-                      previewMode === mode.id
-                        ? "bg-surface text-brand shadow-sm"
-                        : "text-muted",
-                    )}
-                  >
-                    {mode.label}
-                  </button>
-                ))}
+
+              <div data-brand-a4-preview className="mt-3">
+                <TemplatePreview page={identityDocument.pages[0]} className="rounded-md border border-line" />
               </div>
-
-              <div
-                data-brand-a4-preview
-                className="mt-3 w-full overflow-hidden rounded-[6px] border border-line shadow-sm"
-                style={{ background: kit.paperColor || "#fbfaf6", aspectRatio: "210 / 297" }}
-                dir="rtl"
-              >
-                {previewMode === "cover" && (
-                  <div className="flex h-full flex-col" style={{ fontFamily: kit.arabicFont, color: kit.textColor || "#1f2937" }}>
-                    <div className="flex items-center justify-between gap-2 px-4 py-3" style={{ background: kit.primaryColor }}>
-                      <div className="min-w-0">
-                        <p className="truncate text-[11px] font-extrabold text-white">{kit.organizationName || "اسم الجهة"}</p>
-                        {kit.subDepartment && <p className="truncate text-[8px] text-white/80">{kit.subDepartment}</p>}
-                      </div>
-                      {kit.logoSrc && <img src={kit.logoSrc} alt="" className="max-h-8 max-w-[64px] object-contain" />}
-                    </div>
-                    <span className="h-1" style={{ background: kit.accentColor }} />
-                    <div className="flex flex-1 flex-col items-center justify-center px-5 text-center">
-                      <p className="text-[9px] tracking-widest" style={{ color: kit.secondaryColor }}>تقرير رسمي</p>
-                      <h3 className="mt-2 text-[17px] font-extrabold leading-tight">عنوان التقرير</h3>
-                      <span className="mt-3 block h-0.5 w-20" style={{ background: kit.accentColor }} />
-                      <p className="mt-4 text-[9px] tabular-nums" style={{ color: kit.textColor || "#1f2937", opacity: 0.75 }}>{kitDate}</p>
-                      {kit.logoSrc && <img src={kit.logoSrc} alt="" className="mt-5 max-h-10 object-contain" />}
-                    </div>
-                    <div className="px-4 pb-3 text-center">
-                      <p className="text-[7.5px] text-muted">{kit.contactLine || "بيانات التواصل تظهر هنا"}</p>
-                      {kit.footerStyle !== "none" && <span className="mt-2 block h-1 w-full rounded" style={{ background: kit.primaryColor, opacity: 0.85 }} />}
-                    </div>
-                  </div>
-                )}
-
-                {previewMode === "letter" && (
-                  <div className="flex h-full flex-col px-4 py-4" style={{ fontFamily: kit.arabicFont, color: kit.textColor || "#1f2937" }}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="text-left text-[8px] leading-4" style={{ color: kit.secondaryColor }}>
-                        <p className="tabular-nums">{kitDate}</p>
-                        <p className="tabular-nums opacity-70">الرقم: 1447هـ/أ</p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {kit.logoSrc && <img src={kit.logoSrc} alt="" className="max-h-9 object-contain" />}
-                        <div className="text-right">
-                          <p className="text-[10px] font-extrabold">{kit.organizationName || "اسم الجهة"}</p>
-                          {kit.subDepartment && <p className="text-[7.5px] opacity-70">{kit.subDepartment}</p>}
-                        </div>
-                      </div>
-                    </div>
-                    <span className="mt-2 block h-[2px] w-full" style={{ background: kit.accentColor }} />
-                    <p className="mt-3 text-[9px] font-extrabold">خطاب رسمي</p>
-                    <div className="mt-2 space-y-1.5 opacity-70">
-                      {[100, 96, 99, 92, 97, 60].map((w, i) => (
-                        <span key={i} className="block h-[5px] rounded-sm" style={{ width: `${w}%`, background: kit.textColor || "#1f2937", opacity: 0.16 }} />
-                      ))}
-                    </div>
-                    <div className="mt-auto flex items-end justify-between gap-2">
-                      <div className="grid gap-1 text-center">
-                        <span className="block h-[2px] w-20" style={{ background: kit.textColor || "#1f2937", opacity: 0.4 }} />
-                        <span className="text-[7px] opacity-60">التوقيع</span>
-                      </div>
-                      {kit.stampSrc ? (
-                        <img src={kit.stampSrc} alt="" className="size-14 object-contain opacity-90" />
-                      ) : (
-                        <span className="grid size-14 place-items-center rounded-full border-2 border-dashed text-[7px]" style={{ borderColor: kit.secondaryColor, color: kit.secondaryColor }}>
-                          ختم الجهة
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {previewMode === "certificate" && (
-                  <div className="flex h-full flex-col items-center justify-center p-3" style={{ fontFamily: kit.arabicFont, color: kit.textColor || "#1f2937" }}>
-                    <div className="flex h-full w-full flex-col items-center justify-center border-2 px-3 py-4 text-center" style={{ borderColor: kit.primaryColor }}>
-                      <div className="flex h-full w-full flex-col items-center justify-center border px-3 py-4" style={{ borderColor: kit.accentColor }}>
-                        {kit.logoSrc && <img src={kit.logoSrc} alt="" className="max-h-10 object-contain" />}
-                        <p className="mt-2 text-[8px] tracking-widest" style={{ color: kit.secondaryColor }}>{kit.organizationName || "اسم الجهة"}</p>
-                        <h3 className="mt-2 text-[16px] font-extrabold">شهادة تقدير</h3>
-                        <span className="mt-2 block h-0.5 w-16" style={{ background: kit.accentColor }} />
-                        <p className="mt-3 text-[9px] opacity-70">تُمنح هذه الشهادة إلى</p>
-                        <p className="mt-1 border-b border-dashed pb-0.5 text-[11px] font-extrabold" style={{ borderColor: kit.secondaryColor }}>اسم المستلم</p>
-                        <p className="mt-2 text-[8px] leading-4 opacity-75">تقديرًا لجهوده المتميّزة ومساهمته المعنوية</p>
-                        <div className="mt-auto flex w-full items-end justify-between gap-2 pt-3">
-                          <div className="grid gap-1 text-center">
-                            <span className="block h-[2px] w-16" style={{ background: kit.textColor || "#1f2937", opacity: 0.4 }} />
-                            <span className="text-[6.5px] opacity-60">التوقيع</span>
-                          </div>
-                          <p className="text-[7px] tabular-nums opacity-70">{kitDate}</p>
-                          {kit.stampSrc ? (
-                            <img src={kit.stampSrc} alt="" className="size-11 object-contain" />
-                          ) : (
-                            <span className="grid size-11 place-items-center rounded-full border-2 border-dashed text-[6px]" style={{ borderColor: kit.secondaryColor, color: kit.secondaryColor }}>الختم</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <button type="button" disabled={creating} onClick={() => void createDocument()} className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 text-[12px] font-bold text-on-brand disabled:opacity-50">
+                <FilePenLine className="size-4" />{creating ? "جارٍ الإنشاء…" : "إنشاء مستند بهذه الهوية"}
+              </button>
 
               <div className="mt-3 flex items-center gap-2">
                 {[kit.primaryColor, kit.secondaryColor, kit.accentColor, kit.paperColor || "#fbfaf6", kit.textColor || "#1f2937"].map((c, i) => (

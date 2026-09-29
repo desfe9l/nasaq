@@ -1515,7 +1515,8 @@ function SelectionFrame({
       const pageRect = page.getBoundingClientRect();
       // The page element is authored in CSS pixels for its millimetre size and
       // then scaled by the zoom, so its layout width is the millimetre truth.
-      const pageWidthMm = page.clientWidth / mmToPx(1);
+      const modelPage = useEditor.getState().pages.find(p => p.id === node?.dataset.pageId);
+      const pageWidthMm = modelPage ? pageSize(modelPage).w : page.clientWidth / mmToPx(1);
       setMeasured(
         measuredSelectionBox({
           node: artworkRect,
@@ -1543,7 +1544,11 @@ function SelectionFrame({
     el.rotation,
   ]);
 
-  const box = measured ?? { x: el.x, y: el.y, w: el.w, h: el.h };
+  const box = el.type === "line"
+    ? el.h > el.w
+      ? { x: el.x + (el.w - (el.style.stroke ?? 0.8)) / 2, y: el.y, w: el.style.stroke ?? 0.8, h: el.h }
+      : { x: el.x, y: el.y + (el.h - (el.style.stroke ?? 0.8)) / 2, w: el.w, h: el.style.stroke ?? 0.8 }
+    : measured ?? { x: el.x, y: el.y, w: el.w, h: el.h };
   const angle = ((Math.round((el.rotation || 0) * 10) / 10) % 360 + 360) % 360;
 
   /** One keyboard rotation step: 1°, or 15° with Shift (the pointer ladder). */

@@ -388,7 +388,7 @@ export function AdminTemplatesPanel() {
               />
             </label>
             <label className={label}>
-              الرابط التسويقي (slug)
+              رابط المشاركة (slug)
               <input
                 className={input}
                 dir="ltr"
@@ -869,7 +869,7 @@ export function AdminTemplatesPanel() {
             )}
 
             <p className="mt-3 text-[11px] leading-5 text-muted">
-              المعاينة تعتمد على الصورة المصغرة المحفوظة مع القالب. الرابط التسويقي ثابت ومقاوم للتصادم ويمكن تعطيله بإلغاء النشر.
+              المعاينة تعتمد على الصورة المصغرة المحفوظة مع القالب. رابط المشاركة ثابت ومقاوم للتصادم ويمكن تعطيله بإلغاء النشر.
             </p>
           </div>
         </div>
