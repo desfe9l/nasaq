@@ -17,8 +17,6 @@ import {
   ChevronDown,
   Eye,
   X,
-  ImagePlus,
-  FilePlus2,
 } from "lucide-react";
 import {
   SIZE_PRESETS,
@@ -381,26 +379,36 @@ export function LeftPanel({
                       })}
                     </div>
                   )}
-                  {/* Upload lives inside its own category — the trailing duplicate
-                    section (and the scroll it cost) is gone; the hint stays as a
-                    muted caption under the merged buttons. */}
+                  {/*
+                    * One home for every media import: the panel used to repeat
+                    * these in a permanent footer bar as well. The footer is
+                    * gone; the same actions live here, next to the media they
+                    * produce, and in the canvas dock's «إضافة» menu.
+                    */}
                   {group.title === "صور وشعارات" &&
                     (openGroups[group.title] ?? false) && (
                       <>
-                        <div className="mt-2 grid grid-cols-2 gap-1.5">
+                        <div className="mt-2 grid grid-cols-3 gap-1.5">
                           <button
                             type="button"
                             onClick={() => onUpload("image")}
                             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[11px] font-extrabold text-white"
                           >
-                            <ImageIcon className="size-3.5" /> رفع صورة
+                            <ImageIcon className="size-3.5" /> صورة
                           </button>
                           <button
                             type="button"
                             onClick={() => onUpload("logo")}
                             className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold "
                           >
-                            <BadgePercent className="size-3.5" /> رفع شعار
+                            <BadgePercent className="size-3.5" /> شعار
+                          </button>
+                          <button
+                            type="button"
+                            onClick={onUploadSvg}
+                            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold "
+                          >
+                            <FileCode2 className="size-3.5" /> SVG
                           </button>
                         </div>
                         <p className="mt-1.5 text-[10px] leading-5 text-muted">
@@ -866,33 +874,6 @@ export function LeftPanel({
           </div>
         </div>
       )}
-      {/*
-       * Quick actions — the panel's bottom toolbar (Layers-panel anatomy:
-       * header tabs, content rows, action bar). Each button reuses the same
-       * upload/insert action the rest of the studio already exposes.
-       */}
-      <footer className="editor-panel-footer" aria-label="إجراءات سريعة">
-        <button type="button" onClick={() => onUpload("image")} title="إضافة صورة" aria-label="إضافة صورة">
-          <ImagePlus className="size-4" strokeWidth={1.7} />
-          <span>صورة</span>
-        </button>
-        <button type="button" onClick={() => onUpload("logo")} title="إضافة شعار" aria-label="إضافة شعار">
-          <BadgePercent className="size-4" strokeWidth={1.7} />
-          <span>شعار</span>
-        </button>
-        <button type="button" onClick={onUploadSvg} title="استيراد SVG" aria-label="استيراد SVG">
-          <FileCode2 className="size-4" strokeWidth={1.7} />
-          <span>SVG</span>
-        </button>
-        <button type="button" onClick={() => addElement("text")} title="إدراج نص" aria-label="إدراج نص">
-          <Type className="size-4" strokeWidth={1.7} />
-          <span>نص</span>
-        </button>
-        <button type="button" onClick={() => addPage()} title="إضافة صفحة" aria-label="إضافة صفحة">
-          <FilePlus2 className="size-4" strokeWidth={1.7} />
-          <span>صفحة</span>
-        </button>
-      </footer>
     </aside>
   );
 }

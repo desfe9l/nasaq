@@ -10,20 +10,19 @@ import {
   EyeOff,
   FlipHorizontal2,
   FlipVertical2,
-  Group,
   Italic,
-  Layers,
   Lock,
+  MoreHorizontal,
   Move,
-  MoveDown,
-  MoveUp,
   Paintbrush,
+  RotateCcw,
+  RotateCw,
   Scaling,
   Trash2,
   Underline,
-  Ungroup,
   Unlock,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { TYPE_NAME, type CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
@@ -33,6 +32,10 @@ import { cn } from "@/lib/utils";
 import { StrokeControls } from "./StrokeControls";
 import { ScrubInput } from "./ui/ScrubInput";
 import { ColorField } from "./ui/ColorField";
+import { Tip } from "./ui/Tip";
+import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
+import { AlignIcon } from "./ui/AlignIcon";
+import type { AlignEdge } from "@/lib/editor/model";
 
 /** Elements that render an editable text body. */
 const TEXT_TYPES = new Set(["text", "box", "stat", "stamp", "progress"]);
@@ -43,7 +46,15 @@ const GAP = 16;
 const MARGIN = 8;
 
 /**
- * Floating contextual toolbar.
+ * The contextual selection toolbar.
+ *
+ * It appears only while something is selected, and it shows only what that
+ * selection can use: typography for text, fill/stroke for artwork, the border
+ * width every drawable shares, then lock, hide, duplicate and delete. The
+ * rest — opacity, alignment, distribution, rotation, flips, resize lock, the
+ * style clipboard and equal sizing — sits behind one «المزيد» control, so the
+ * bubble adapts to the selection instead of becoming a permanent strip of
+ * every action the editor owns.
  *
  * Anchor maths are done in SCREEN space (a `getBoundingClientRect` of the live
  * element), never from the element's mm geometry — that is what keeps the
@@ -52,12 +63,27 @@ const MARGIN = 8;
  * only RTL-sensitive part is the toolbar's own content, which stays `dir="rtl"`
  * so Arabic labels read correctly.
  *
- * The same option sets the top toolbar uses are reused here (`fontChoices`,
- * `updateStyle`, `updateElement`), so there is no second formatting model.
+ * The same option sets the properties panel uses are reused here
+ * (`fontChoices`, `updateStyle`, `updateElement`), so there is no second
+ * formatting model.
  */
 export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  /**
+   * Narrow lane (phone, or a small stage with a wide element): the bubble
+   * drops its secondary element buttons and «المزيد» carries them instead, so
+   * the bar never becomes a strip the author has to scroll to find «حذف».
+   */
+  const [compact, setCompact] = useState(false);
+  /**
+   * A floating panel is a surface the author placed deliberately; on a phone
+   * there is not enough room for the bubble AND the panel. While the pointer is
+   * inside a panel the bubble steps aside and returns the moment the author
+   * moves back to the canvas, so a panel's own controls are never behind a
+   * floating strip.
+   */
+  const [yielding, setYielding] = useState(false);
   /** Which side the bubble settled on — drives its entrance animation. */
   const [side, setSide] = useState<"above" | "below" | "left" | "right">(
     "above",
@@ -82,7 +108,6 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const pasteStyle = useEditor((s) => s.pasteStyle);
   const styleClipboard = useEditor((s) => s.styleClipboard);
   const deleteSelected = useEditor((s) => s.deleteSelected);
-  const bring = useEditor((s) => s.bring);
   const toggleBubble = useEditor((s) => s.toggleBubble);
   const bubbleOffset = useEditor((s) => s.bubbleOffset);
   const setBubbleOffset = useEditor((s) => s.setBubbleOffset);
@@ -91,8 +116,10 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
   const toggleLock = useEditor((s) => s.toggleLock);
   const toggleHidden = useEditor((s) => s.toggleHidden);
-  const group = useEditor((s) => s.group);
-  const ungroup = useEditor((s) => s.ungroup);
+  const align = useEditor((s) => s.align);
+  const distribute = useEditor((s) => s.distribute);
+  const matchSize = useEditor((s) => s.matchSize);
+  const fitTextBox = useEditor((s) => s.fitTextBox);
   const selectedIds = useEditor((s) => s.selectedIds);
 
   /**
@@ -115,7 +142,9 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       if (r.left > rect.left + rect.width / 2) laneRight = Math.min(laneRight, r.left - MARGIN);
       else if (r.right < rect.left + rect.width / 2) laneLeft = Math.max(laneLeft, r.right + MARGIN);
     });
-    toolbar.style.maxWidth = `${Math.min(640, window.innerWidth - MARGIN * 2, Math.max(240, laneRight - laneLeft))}px`;
+    const lane = Math.min(760, window.innerWidth - MARGIN * 2, Math.max(240, laneRight - laneLeft));
+    setCompact(lane < 440);
+    toolbar.style.maxWidth = `${lane}px`;
     const size = toolbar.getBoundingClientRect();
     if (!rect.width && !rect.height) return;
     // Keep the bubble clear of the real, outward-expanded grip hit regions,
@@ -207,6 +236,29 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     };
   }, [place, el.x, el.y, el.w, el.h, el.rotation, zoom, dragVersion, bubbleOffset]);
 
+  useEffect(() => {
+    const inside = (event: Event) => {
+      const target = event.target;
+      setYielding(
+        target instanceof Element && !!target.closest(".editor-floating-panel"),
+      );
+    };
+    // Capture phase on move and press: both fire before the panel acts on the
+    // gesture, so the bubble is already gone when the hit test resolves.
+    const onMove = (event: Event) => {
+      if (event instanceof PointerEvent && event.pointerType === "mouse") inside(event);
+    };
+    document.addEventListener("pointermove", onMove, true);
+    document.addEventListener("pointerdown", inside, true);
+    const onLeave = () => setYielding(false);
+    window.addEventListener("blur", onLeave);
+    return () => {
+      document.removeEventListener("pointermove", onMove, true);
+      document.removeEventListener("pointerdown", inside, true);
+      window.removeEventListener("blur", onLeave);
+    };
+  }, []);
+
   /**
    * Drag the bubble by its grip and remember where it lands.
    *
@@ -255,30 +307,43 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const isText = TEXT_TYPES.has(el.type);
   /** Shapes / images / icons / lines / tables: the "object" tool set. */
   const isObject = !isText;
+  const count = selectedIds.length;
 
-  const align: Array<{ id: string; label: string; icon: typeof AlignRight }> = [
+  const paragraphAlign: Array<{ id: string; label: string; icon: LucideIcon }> = [
     { id: "right", label: "محاذاة لليمين", icon: AlignRight },
     { id: "center", label: "توسيط", icon: AlignCenter },
     { id: "left", label: "محاذاة لليسار", icon: AlignLeft },
     { id: "justify", label: "ضبط", icon: AlignJustify },
   ];
+  /** Align/distribute the selection (or the page when a single object is picked). */
+  const alignEdge = (edge: string) =>
+    align(edge as AlignEdge, count >= 2 ? "selection" : "page");
+  const rotate = (delta: number) => {
+    const state = useEditor.getState();
+    for (const item of state.selectedElements()) {
+      if (item.locked) continue;
+      const next = ((((item.rotation || 0) + delta) % 360) + 360) % 360;
+      state.updateElement(item.id, { rotation: next }, true);
+    }
+    commit();
+  };
 
   /*
    * Portalled to `document.body` on purpose: the bubble is `position: fixed`
-   * and must sit above the docked panel layer (`--z-bubble` > `--z-panel`),
-   * while the canvas stage itself is deliberately isolated so artboard layers
-   * can never escape it. Rendering here keeps both invariants true.
+   * and must sit above the panel layer (`--z-bubble` > `--z-panel`), while the
+   * canvas stage itself is deliberately isolated so artboard layers can never
+   * escape it. Rendering here keeps both invariants true.
    */
   return createPortal(
     <div
       ref={boxRef}
-      className={cn("floating-toolbar", dragging && "is-dragging")}
+      className={cn("floating-toolbar", compact && "is-compact", dragging && "is-dragging")}
       data-floating-toolbar={el.id}
       data-placement={side}
       style={{
         left: pos?.left ?? -9999,
         top: pos?.top ?? -9999,
-        visibility: pos ? "visible" : "hidden",
+        visibility: pos && !yielding ? "visible" : "hidden",
       }}
       // The toolbar is chrome over the document: pointer events must never
       // reach the canvas beneath it. Right-click is stopped here too — the
@@ -308,7 +373,14 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       >
         <Move className="size-3.5" />
       </button>
-      <span className="floating-toolbar-sep" aria-hidden />
+
+      {/*
+       * What stays in the bar is what an author reaches for in the first
+       * second of a selection: type-specific controls, then the two
+       * object-wide essentials. Everything else lives in «المزيد» below, so
+       * the bubble adapts to the selection instead of listing every action the
+       * editor can perform.
+       */}
       {isText && (
         <>
           <div className="floating-toolbar-section">
@@ -352,12 +424,10 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
           </div>
           <span className="floating-toolbar-sep" aria-hidden />
           <div className="floating-toolbar-section">
-            <button
-              type="button"
-              className="floating-toolbar-btn"
-              aria-pressed={Number(style.fontWeight || 0) >= 700}
-              title="عريض (Bold)"
-              aria-label="عريض"
+            <TipButton
+              label="عريض"
+              shortcut="Bold"
+              pressed={Number(style.fontWeight || 0) >= 700}
               onClick={() => {
                 updateStyle(el.id, {
                   fontWeight: Number(style.fontWeight) >= 700 ? 500 : 800,
@@ -366,13 +436,11 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
               }}
             >
               <Bold className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              className="floating-toolbar-btn"
-              aria-pressed={style.fontStyle === "italic"}
-              title="مائل (Italic)"
-              aria-label="مائل"
+            </TipButton>
+            <TipButton
+              label="مائل"
+              shortcut="Italic"
+              pressed={style.fontStyle === "italic"}
               onClick={() => {
                 updateStyle(el.id, {
                   fontStyle: style.fontStyle === "italic" ? "normal" : "italic",
@@ -381,23 +449,18 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
               }}
             >
               <Italic className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              className="floating-toolbar-btn"
-              aria-pressed={style.underline === true}
-              title="تحته خط (Underline)"
-              aria-label="تحته خط"
+            </TipButton>
+            <TipButton
+              label="تحته خط"
+              shortcut="Underline"
+              pressed={style.underline === true}
               onClick={() => {
                 updateStyle(el.id, { underline: style.underline !== true });
                 commit();
               }}
             >
               <Underline className="size-3.5" />
-            </button>
-          </div>
-          <span className="floating-toolbar-sep" aria-hidden />
-          <div className="floating-toolbar-section">
+            </TipButton>
             <ColorField
               className="floating-toolbar-swatch"
               label="لون النص"
@@ -406,271 +469,342 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
               onChange={(v) => updateStyle(el.id, { color: v }, true)}
               onCommit={(v) => updateStyle(el.id, { color: v })}
             />
-          </div>
-          <span className="floating-toolbar-sep" aria-hidden />
-          <div className="floating-toolbar-section">
-            {align.map((item) => {
-              const Icon = item.icon;
-              return (
+            {/* Paragraph alignment is four choices for one job — a popover, not
+                four permanent slots competing with the font controls. */}
+            <AnchorMenu
+              label="محاذاة الفقرة"
+              width={168}
+              trigger={({ ref, ...props }) => (
                 <button
-                  key={item.id}
+                  {...props}
+                  ref={ref}
                   type="button"
                   className="floating-toolbar-btn"
-                  aria-pressed={(style.textAlign || "right") === item.id}
-                  title={item.label}
-                  aria-label={item.label}
-                  onClick={() => {
-                    updateStyle(el.id, {
-                      textAlign: item.id as
-                        "right" | "center" | "left" | "justify",
-                    });
-                    commit();
-                  }}
+                  aria-label="محاذاة الفقرة"
                 >
-                  <Icon className="size-3.5" />
+                  {(() => {
+                    const Icon =
+                      paragraphAlign.find(
+                        (item) => item.id === (style.textAlign || "right"),
+                      )?.icon ?? AlignRight;
+                    return <Icon className="size-3.5" />;
+                  })()}
                 </button>
-              );
-            })}
+              )}
+            >
+              {paragraphAlign.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <MenuRow
+                    key={item.id}
+                    icon={<Icon className="size-4" />}
+                    label={item.label}
+                    checked={(style.textAlign || "right") === item.id}
+                    onSelect={() => {
+                      updateStyle(el.id, {
+                        textAlign: item.id as
+                          | "right"
+                          | "center"
+                          | "left"
+                          | "justify",
+                      });
+                      commit();
+                    }}
+                  />
+                );
+              })}
+            </AnchorMenu>
           </div>
+          <span className="floating-toolbar-sep" aria-hidden />
         </>
       )}
-
-      <StrokeControls />
 
       {isObject && (
         <>
           <div className="floating-toolbar-section">
-            <span className="px-1 text-[10px] font-extrabold text-muted">
-              تعبئة
-            </span>
             <ColorField
               className="floating-toolbar-swatch"
               label="لون التعبئة"
               value={el.type === "svg" ? style.svgFill : style.fill}
               fallback={style.background || "#006c35"}
               allowNone
-              onChange={(v) => updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v }, true)}
-              onCommit={(v) => updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v })}
+              onChange={(v) =>
+                updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v }, true)
+              }
+              onCommit={(v) =>
+                updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v })
+              }
             />
-          </div>
-          <span className="floating-toolbar-sep" aria-hidden />
-          <div className="floating-toolbar-section">
-            <span className="px-1 text-[10px] font-extrabold text-muted">
-              إطار
-            </span>
             <ColorField
               className="floating-toolbar-swatch"
               label="لون الإطار"
-              value={el.type === "line" || el.type === "divider" ? style.color : el.type === "svg" || el.type === "icon" ? style.svgStroke : style.borderColor}
+              value={
+                el.type === "line" || el.type === "divider"
+                  ? style.color
+                  : el.type === "svg" || el.type === "icon"
+                    ? style.svgStroke
+                    : style.borderColor
+              }
               fallback={style.color || "#c9a86a"}
-              onChange={(v) => updateStyle(el.id, el.type === "line" || el.type === "divider" ? { color: v } : el.type === "svg" || el.type === "icon" ? { svgStroke: v } : { borderColor: v }, true)}
-              onCommit={(v) => updateStyle(el.id, el.type === "line" || el.type === "divider" ? { color: v } : el.type === "svg" || el.type === "icon" ? { svgStroke: v } : { borderColor: v })}
-            />
-          </div>
-          <span className="floating-toolbar-sep" aria-hidden />
-          <div className="floating-toolbar-section">
-            <span className="px-1 text-[10px] font-extrabold text-muted">
-              شفافية
-            </span>
-            <input
-              className="floating-toolbar-range"
-              type="range"
-              min={0}
-              max={100}
-              step={1}
-              aria-label="الشفافية"
-              title="الشفافية"
-              value={Math.round((el.opacity ?? 1) * 100)}
-              onChange={(event) =>
-                updateElement(
+              onChange={(v) =>
+                updateStyle(
                   el.id,
-                  { opacity: Number(event.target.value) / 100 },
+                  el.type === "line" || el.type === "divider"
+                    ? { color: v }
+                    : el.type === "svg" || el.type === "icon"
+                      ? { svgStroke: v }
+                      : { borderColor: v },
                   true,
                 )
               }
-              onPointerUp={() => commit()}
-              onBlur={() => commit()}
+              onCommit={(v) =>
+                updateStyle(
+                  el.id,
+                  el.type === "line" || el.type === "divider"
+                    ? { color: v }
+                    : el.type === "svg" || el.type === "icon"
+                      ? { svgStroke: v }
+                      : { borderColor: v },
+                )
+              }
             />
           </div>
         </>
       )}
 
-      <span className="floating-toolbar-sep" aria-hidden />
+      {/* Owns its leading separator, so a selection without stroke support
+          never leaves a stray divider in the bar. */}
+      <StrokeControls />
+
+      {!compact && (
+        <>
       <div className="floating-toolbar-section">
-        {/*
-         * الظهور أولًا: تبديل إخفاء/إظهار العنصر بعين واحدة — أحد أزرار
-         * «التحكم والإخفاء» الموحدة حول العنصر المحدد.
-         */}
-        <button
-          type="button"
-          className="floating-toolbar-btn"
-          title="إخفاء العنصر (يظهر مرة أخرى من شجرة الطبقات)"
-          aria-label="إخفاء العنصر"
-          onClick={() => toggleHidden()}
-        >
-          <EyeOff className="size-3.5" />
-        </button>
-        {/*
-         * القفل: الحالة أحادية اللمس (بنفس بنفس same purple as the
-         * locked frame) والعنصر يبقى محددًا — الفتح من هنا أو من Properties.
-         */}
-        <button
-          type="button"
-          className={cn(
-            "floating-toolbar-btn",
-            el.locked && "is-locked-active",
-          )}
-          aria-pressed={el.locked === true}
-          title={el.locked ? "فتح القفل" : "قفل العنصر (منع التحرير)"}
-          aria-label={el.locked ? "فتح القفل" : "قفل العنصر"}
+        <TipButton
+          label={el.locked ? "فتح القفل" : "قفل العنصر"}
+          hint="منع التحرير"
+          pressed={el.locked === true}
           onClick={() => toggleLock()}
         >
           {el.locked ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />}
-        </button>
-        {/* التجميع السريع — فقط عند تحديد عنصرين فأكثر / فك تجميع مجموعة. */}
-        {selectedIds.length >= 2 && (
-          <button
-            type="button"
-            className="floating-toolbar-btn"
-            title="تجميع (⌘G)"
-            aria-label="تجميع"
-            onClick={() => group()}
-          >
-            <Group className="size-3.5" />
-          </button>
-        )}
-        {el.type === "group" && (
-          <button
-            type="button"
-            className="floating-toolbar-btn"
-            title="فك التجميع (⇧⌘G)"
-            aria-label="فك التجميع"
-            onClick={() => ungroup()}
-          >
-            <Ungroup className="size-3.5" />
-          </button>
-        )}
-        <button
-          type="button"
-          className="floating-toolbar-btn"
-          title="إحضار للأمام"
-          aria-label="إحضار للأمام"
-          onClick={() => bring("forward")}
+        </TipButton>
+        <TipButton
+          label="إخفاء العنصر"
+          hint="يظهر مرة أخرى من شجرة الطبقات"
+          onClick={() => toggleHidden()}
         >
-          <MoveUp className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className="floating-toolbar-btn"
-          title="إرسال للخلف"
-          aria-label="إرسال للخلف"
-          onClick={() => bring("back")}
-        >
-          <MoveDown className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className="floating-toolbar-btn"
-          title="إلى المقدمة تمامًا"
-          aria-label="إلى المقدمة"
-          onClick={() => bring("front")}
-        >
-          <Layers className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className="floating-toolbar-btn"
-          title="تكرار (⌘D)"
-          aria-label="تكرار"
-          onClick={duplicateSelected}
-        >
-          <Copy className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className="floating-toolbar-btn"
-          title="نسخ التنسيق"
-          aria-label="نسخ التنسيق"
-          onClick={copyStyle}
-        >
-          <Paintbrush className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className="floating-toolbar-btn"
-          title="لصق التنسيق"
-          aria-label="لصق التنسيق"
-          onClick={pasteStyle}
-          disabled={!styleClipboard}
-        >
-          <Paintbrush className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className={cn("floating-toolbar-btn", el.style?.flipX && "is-active")}
-          aria-pressed={el.style?.flipX === true}
-          title="قلب أفقي"
-          aria-label="قلب أفقي"
-          onClick={() => flipSelected("x")}
-        >
-          <FlipHorizontal2 className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className={cn("floating-toolbar-btn", el.style?.flipY && "is-active")}
-          aria-pressed={el.style?.flipY === true}
-          title="قلب رأسي"
-          aria-label="قلب رأسي"
-          onClick={() => flipSelected("y")}
-        >
-          <FlipVertical2 className="size-3.5" />
-        </button>
-        {/*
-         * قفل التحجيم — independent of the element lock: freezes width/height
-         * (handles + size fields) while move, rotate and edit stay free.
-         */}
-        <button
-          type="button"
-          className={cn("floating-toolbar-btn", el.resizeLocked && "is-active")}
-          aria-pressed={el.resizeLocked === true}
-          title={
-            el.resizeLocked
-              ? "فتح قفل التحجيم"
-              : "قفل التحجيم (منع تغيير العرض/الارتفاع)"
-          }
-          aria-label="قفل التحجيم"
-          onClick={() => toggleResizeLock()}
-        >
-          <Scaling className="size-3.5" />
-        </button>
-        <button
-          type="button"
-          className={cn("floating-toolbar-btn", "text-error")}
-          title="حذف"
-          aria-label="حذف"
-          onClick={deleteSelected}
-        >
-          <Trash2 className="size-3.5" />
-        </button>
+          <EyeOff className="size-3.5" />
+        </TipButton>
       </div>
+      <span className="floating-toolbar-sep" aria-hidden />
+      <div className="floating-toolbar-section">
+        <TipButton label="تكرار" shortcut="⌘D" onClick={duplicateSelected}>
+          <Copy className="size-3.5" />
+        </TipButton>
+        <TipButton label="حذف" shortcut="Delete" danger onClick={deleteSelected}>
+          <Trash2 className="size-3.5" />
+        </TipButton>
+      </div>
+        </>
+      )}
+      <span className="floating-toolbar-sep" aria-hidden />
+
+      {/*
+       * «المزيد» — everything that is real but not immediate: opacity,
+       * alignment/distribution, rotation, flips, resize lock, style
+       * clipboard and equal sizing. One compact popover instead of a dozen
+       * permanent buttons, and the same actions the header used to carry.
+       */}
+      <AnchorMenu
+        label="المزيد"
+        width={232}
+        align="end"
+        trigger={({ ref, ...props }) => (
+          <button
+            {...props}
+            ref={ref}
+            type="button"
+            className="floating-toolbar-btn"
+            aria-label="المزيد من أدوات العنصر"
+          >
+            <MoreHorizontal className="size-3.5" />
+          </button>
+        )}
+      >
+        <MenuGroup title="الشفافية" />
+        <div className="editor-menu-field">
+          <ScrubInput
+            label="الشفافية"
+            value={Math.round((el.opacity ?? 1) * 100)}
+            min={0}
+            max={100}
+            step={1}
+            precision={0}
+            suffix="%"
+            onChange={(v) => updateElement(el.id, { opacity: v / 100 }, true)}
+            onCommit={(v) => {
+              updateElement(el.id, { opacity: v / 100 });
+              commit();
+            }}
+          />
+        </div>
+        <MenuGroup title="المحاذاة والتوزيع" />
+        <div className="editor-menu-grid is-3" dir="ltr">
+          {(
+            [
+              ["right", "محاذاة لليمين"],
+              ["center-h", "توسيط أفقي"],
+              ["left", "محاذاة لليسار"],
+              ["top", "محاذاة للأعلى"],
+              ["center-v", "توسيط رأسي"],
+              ["bottom", "محاذاة للأسفل"],
+            ] as const
+          ).map(([kind, title]) => (
+            <button key={kind} type="button" title={title} aria-label={title} onClick={() => alignEdge(kind)}>
+              <AlignIcon kind={kind} />
+            </button>
+          ))}
+        </div>
+        <div className="editor-menu-grid is-2" dir="ltr">
+          <button
+            type="button"
+            title="توزيع أفقي متساوٍ"
+            aria-label="توزيع أفقي متساوٍ"
+            disabled={count < 3}
+            onClick={() => distribute("h")}
+          >
+            <AlignIcon kind="dist-h" />
+          </button>
+          <button
+            type="button"
+            title="توزيع رأسي متساوٍ"
+            aria-label="توزيع رأسي متساوٍ"
+            disabled={count < 3}
+            onClick={() => distribute("v")}
+          >
+            <AlignIcon kind="dist-v" />
+          </button>
+        </div>
+        <MenuGroup title="التحويل" />
+        <MenuRow icon={<RotateCcw className="size-4" />} label="تدوير 90° لليسار" onSelect={() => rotate(-90)} />
+        <MenuRow icon={<RotateCw className="size-4" />} label="تدوير 90° لليمين" onSelect={() => rotate(90)} />
+        <MenuRow
+          icon={<Scaling className="size-4" />}
+          label="ملاءمة صندوق النص"
+          disabled={!isText}
+          onSelect={() => fitTextBox(el.id)}
+        />
+        <MenuGroup title="العنصر" />
+        {compact && (
+          <>
+            <MenuRow
+              icon={<Lock className="size-4" />}
+              label={el.locked ? "فتح القفل" : "قفل العنصر"}
+              checked={el.locked === true}
+              onSelect={() => toggleLock()}
+            />
+            <MenuRow icon={<EyeOff className="size-4" />} label="إخفاء العنصر" onSelect={() => toggleHidden()} />
+            <MenuRow icon={<Copy className="size-4" />} label="تكرار" shortcut="⌘D" onSelect={duplicateSelected} />
+            <MenuRow
+              icon={<Trash2 className="size-4" />}
+              label="حذف العنصر"
+              shortcut="Delete"
+              danger
+              onSelect={deleteSelected}
+            />
+          </>
+        )}
+        <MenuRow
+          icon={<FlipHorizontal2 className="size-4" />}
+          label="قلب أفقي"
+          checked={style.flipX === true}
+          onSelect={() => flipSelected("x")}
+        />
+        <MenuRow
+          icon={<FlipVertical2 className="size-4" />}
+          label="قلب رأسي"
+          checked={style.flipY === true}
+          onSelect={() => flipSelected("y")}
+        />
+        <MenuRow
+          icon={<Scaling className="size-4" />}
+          label="قفل التحجيم"
+          hint="تجميد العرض والارتفاع"
+          checked={el.resizeLocked === true}
+          onSelect={() => toggleResizeLock()}
+        />
+        <MenuGroup title="التنسيق" />
+        <MenuRow icon={<Paintbrush className="size-4" />} label="نسخ التنسيق" onSelect={copyStyle} />
+        <MenuRow
+          icon={<Paintbrush className="size-4" />}
+          label="لصق التنسيق"
+          disabled={!styleClipboard}
+          onSelect={pasteStyle}
+        />
+        <MenuRow label="نفس العرض" disabled={count < 2} onSelect={() => matchSize("width")} />
+        <MenuRow label="نفس الارتفاع" disabled={count < 2} onSelect={() => matchSize("height")} />
+        <MenuRow label="نفس الحجم" disabled={count < 2} onSelect={() => matchSize("both")} />
+      </AnchorMenu>
 
       <span className="floating-toolbar-sep" aria-hidden />
       {/*
        * Quick dismiss. The author can silence the bubble from the bubble
-       * itself (it follows every selection, so it is the thing that is in the
-       * way right now); the header eye toggles it back on. The choice is
-       * persisted with the rest of the UI state.
+       * itself (it follows every selection, so it is the thing that is in
+       * the way right now); «عرض» turns it back on. The choice is persisted
+       * with the rest of the UI state.
        */}
       <button
         type="button"
         className="floating-toolbar-btn"
-        title="إخفاء الشريط العائم (يمكن إرجاعه من الترويسة)"
+        title="إخفاء الشريط العائم (يمكن إرجاعه من «عرض»)"
         aria-label="إخفاء الشريط العائم"
         onClick={() => toggleBubble(false)}
       >
         <X className="size-3.5" />
       </button>
+
     </div>,
     document.body,
+  );
+}
+
+/**
+ * One bubble button. Same tooltip contract as the rest of the studio
+ * (hover on pointer devices, long-press on touch) so no icon in the bar is a
+ * mystery, and the same pressed/active affordance the panel buttons use.
+ */
+function TipButton({
+  label,
+  hint,
+  shortcut,
+  pressed,
+  danger,
+  onClick,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  shortcut?: string;
+  pressed?: boolean;
+  danger?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tip label={label} hint={hint} shortcut={shortcut}>
+      <button
+        type="button"
+        className={cn(
+          "floating-toolbar-btn",
+          pressed && "is-active",
+          danger && "text-error",
+        )}
+        aria-label={label}
+        aria-pressed={pressed}
+        aria-keyshortcuts={shortcut || undefined}
+        onClick={onClick}
+      >
+        {children}
+      </button>
+    </Tip>
   );
 }

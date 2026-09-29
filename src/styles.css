@@ -428,8 +428,7 @@ html.dark {
 
 .editor-ui .editor-toolbar,
 .editor-ui .editor-sidebar,
-.editor-ui .editor-page-rail,
-.editor-ui .editor-arrange-bar {
+.editor-ui .editor-page-rail {
   --color-paper: var(--editor-panel);
   --color-surface: var(--editor-surface);
   --color-surface-2: var(--editor-hover);
@@ -515,7 +514,7 @@ html.dark {
 .editor-ui .editor-sidebar select,
 .editor-ui .editor-sidebar textarea,
 .editor-ui .editor-page-rail button,
-.editor-ui .editor-arrange-bar button {
+.editor-ui .studio-tool-dock button {
   border-color: var(--editor-border);
   color: var(--editor-text);
 }
@@ -523,7 +522,7 @@ html.dark {
 .editor-ui .editor-toolbar button:hover:not(:disabled),
 .editor-ui .editor-sidebar button:hover:not(:disabled),
 .editor-ui .editor-page-rail button:hover:not(:disabled),
-.editor-ui .editor-arrange-bar button:hover:not(:disabled) {
+.editor-ui .studio-tool-dock button:hover:not(:disabled) {
   background-color: var(--editor-hover);
 }
 
@@ -639,15 +638,6 @@ html.dark {
 
 .editor-ui.editor-focus .editor-focus-workspace {
   grid-template-columns: minmax(0, 1fr) !important;
-}
-
-.editor-ui .editor-arrange-bar .arrange-count,
-.editor-ui .editor-arrange-bar .arrange-btn {
-  color: var(--editor-text);
-}
-
-.editor-ui .editor-arrange-bar .arrange-sep {
-  background: var(--editor-border);
 }
 
 .editor-ui .editor-status-bar {
@@ -1273,113 +1263,6 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 /*
  * Arrangement bar.
  */
-/*
- * Arrangement bar sits in the workspace row BELOW the canvas (between canvas
- * and page rail), never floating over it — a top-centred overlay covered
- * element labels and titles. `position: static` + centring here keeps it in
- * normal flow so it can never overlap artwork, and it scrolls horizontally on
- * narrow screens instead of clipping.
- */
-.arrange-bar {
-  position: static;
-  z-index: var(--z-canvas-overlay);
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 6px;
-  margin-inline: auto;
-  border-radius: 10px;
-  border: 1px solid #d8dee9;
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.14);
-  max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.arrange-bar::-webkit-scrollbar {
-  display: none;
-}
-
-@media (pointer: coarse) {
-  /* Touch targets grow on tablets; the row wraps rather than overflowing. */
-  .arrange-bar {
-    flex-wrap: wrap;
-    justify-content: center;
-    row-gap: 4px;
-  }
-
-  .arrange-btn {
-    width: 34px;
-    height: 34px;
-  }
-}
-
-.editor-ui.editor-dark .arrange-bar {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: #161c26;
-}
-
-.arrange-count {
-  padding-inline: 4px;
-  font-size: 11px;
-  font-weight: 800;
-  color: #475569;
-  white-space: nowrap;
-}
-
-.editor-ui.editor-dark .arrange-count {
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.arrange-sep {
-  width: 1px;
-  height: 18px;
-  margin-inline: 3px;
-  background: #e2e8f0;
-}
-
-.editor-ui.editor-dark .arrange-sep {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.arrange-btn {
-  display: grid;
-  flex-shrink: 0;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  border: 0;
-  background: transparent;
-  color: #1e293b;
-  cursor: pointer;
-}
-
-.editor-ui.editor-dark .arrange-btn {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.arrange-btn:hover:not(:disabled) {
-  background: #eef2f8;
-}
-
-.editor-ui.editor-dark .arrange-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.arrange-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.arrange-btn.wide {
-  width: auto;
-  padding-inline: 8px;
-  font-size: 11px;
-  font-weight: 800;
-}
-
 /*
  * Handles — تحسين لـ Apple Pencil واللمس:
  * - الحجم المرئي ثابت بغض النظر عن الزوم (7px/zoom)
@@ -2082,6 +1965,26 @@ body.is-resizing-rail {
 }
 
 .floating-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * Narrow lane: the bubble wraps onto a second row instead of scrolling. A
+ * control the author cannot see is a control that does not exist, so the bar
+ * grows and lets the placer pick a side with room for the taller box.
+ */
+.floating-toolbar.is-compact {
+  height: auto;
+  min-height: 42px;
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 4px;
+  overflow: visible;
+  padding-block: 6px;
+}
+
+/* On a wrapped row a divider between two groups reads as a stray line. */
+.floating-toolbar.is-compact .floating-toolbar-sep {
   display: none;
 }
 
@@ -2821,352 +2724,282 @@ summary,
   height: auto;
 }
 
-/* ---------- Main toolbar (vertical, compact, Photoshop-inspired) ---------- */
-.studio-tool-dock {
-  --tool-size: 36px;
-  --tool-gap: 3px;
-  --tool-pad: 4px;
-  position: relative;
-  z-index: var(--z-panel);
-  display: flex;
-  width: calc(var(--tool-size) + var(--tool-pad) * 2);
-  min-width: 0;
-  min-height: 0;
-  flex-direction: column;
+/* =====================================================================
+ * Floating surfaces: the tooltip and the anchored menu.
+ *
+ * Both are portals with no layout footprint, both sit on the dropdown layer so
+ * they are never clipped by a toolbar, a panel or the canvas, and both share
+ * one surface treatment (radius, border, shadow) with the floating panels.
+ * ===================================================================== */
+
+.editor-tip {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 6px;
-  align-self: stretch;
-  padding: 6px var(--tool-pad);
-  border-inline: 1px solid var(--editor-border);
-  background: var(--editor-toolbar);
-  color: var(--editor-text);
-  transition: width 160ms cubic-bezier(0.22, 1, 0.36, 1);
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
-.studio-tool-dock.is-wide {
-  width: calc(var(--tool-size) * 2 + var(--tool-gap) + var(--tool-pad) * 2);
-}
-
-.tool-dock-layout,
-.tool-dock-button {
-  position: relative;
-  display: grid;
-  width: var(--tool-size);
-  height: var(--tool-size);
-  flex: 0 0 auto;
-  place-items: center;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--editor-text-secondary);
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
-}
-.tool-dock-layout {
-  height: 24px;
-  width: 100%;
-  color: var(--editor-text-secondary);
-}
-.tool-dock-icon { width: 18px; height: 18px; }
-.tool-dock-button:hover,
-.tool-dock-layout:hover {
-  background: var(--editor-hover);
-  color: var(--editor-text);
-}
-.tool-dock-button:focus-visible,
-.tool-dock-layout:focus-visible {
-  outline: 2px solid var(--editor-accent-hover);
-  outline-offset: 1px;
-}
-.tool-dock-button.is-active {
-  border-color: color-mix(in srgb, var(--editor-accent) 70%, #fff 30%);
-  background: var(--editor-accent);
-  color: var(--editor-accent-text);
-}
-.tool-dock-button.is-open {
-  background: var(--editor-active);
-  color: var(--editor-text);
-}
-
-.tool-dock-tools {
-  display: grid;
-  min-height: 0;
-  grid-template-columns: var(--tool-size);
-  justify-content: center;
-  align-content: start;
-  gap: var(--tool-gap);
-  overflow-x: hidden;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-}
-.tool-dock-tools::-webkit-scrollbar { display: none; }
-.studio-tool-dock.is-wide .tool-dock-tools {
-  grid-template-columns: repeat(2, var(--tool-size));
-}
-.tool-dock-sep {
-  grid-column: 1 / -1;
-  height: 1px;
-  margin: 3px 4px;
-  background: var(--editor-border);
-}
-
-/* Submenu indicator: a vector corner triangle, bottom-left in RTL reading. */
-.tool-dock-flyout-mark {
-  position: absolute;
-  inset-inline-end: 3px;
-  bottom: 3px;
-  width: 5px;
-  height: 5px;
-  opacity: 0.75;
-  pointer-events: none;
-}
-/* RTL: the triangle points into the bottom-left corner. */
-.editor-ui .tool-dock-flyout-mark { transform: scaleX(-1); }
-
-/* Fill (foreground) over stroke (background), overlapping. */
-.tool-dock-colors {
-  position: relative;
-  width: var(--tool-size);
-  height: 42px;
-  flex: 0 0 auto;
-  margin-top: auto;
-  margin-bottom: 2px;
-  border-radius: 6px;
-}
-.tool-dock-colors > .tool-dock-flyout-mark { inset-inline-end: -1px; bottom: -1px; }
-.tool-dock-colors.is-open { background: var(--editor-hover); }
-.tool-color-swatch {
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  cursor: pointer;
-}
-.tool-color-background { inset-inline-end: 1px; top: 1px; }
-.tool-color-foreground { inset-inline-start: 1px; bottom: 1px; z-index: 1; }
-.tool-color-chip {
-  display: block;
-  width: 100%;
-  height: 100%;
-  border-radius: 3px;
-  transition: transform 120ms ease;
-}
-.tool-color-chip.is-fill {
-  border: 1.5px solid #e9edf0;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.35);
-}
-.tool-color-chip.is-stroke {
-  border: 6px solid;
-  background: var(--editor-toolbar);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), inset 0 0 0 1px rgba(0, 0, 0, 0.35);
-}
-.tool-color-swatch:hover .tool-color-chip { transform: scale(1.06); }
-.tool-color-swatch:focus-within .tool-color-chip {
-  outline: 2px solid var(--editor-accent-hover);
-  outline-offset: 1px;
-}
-.tool-color-swatch input[type="color"] {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  inset: 50% auto auto 50%;
-  padding: 0;
-  border: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-.tool-color-mini {
-  position: absolute;
-  display: grid;
-  width: 13px;
-  height: 13px;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 3px;
-  background: transparent;
-  color: var(--editor-text-secondary);
-  cursor: pointer;
-}
-.tool-color-mini svg { width: 11px; height: 11px; }
-.tool-color-mini:hover { color: var(--editor-text); background: var(--editor-hover); }
-.tool-color-swap { inset-inline-start: 0; top: 0; }
-.tool-color-reset { inset-inline-end: 0; bottom: 0; }
-
-/* Tooltip + shortcut hint (desktop hover / keyboard focus). */
-.tool-dock-tip {
-  position: absolute;
-  inset-inline-start: calc(100% + 8px);
-  z-index: calc(var(--z-panel) + 5);
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 8px;
+  gap: 2px 8px;
+  max-width: 260px;
+  padding: 6px 9px;
   border: 1px solid var(--editor-border);
-  border-radius: 6px;
+  border-radius: 9px;
   background: var(--editor-panel);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
   color: var(--editor-text);
   font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
+  line-height: 1.45;
   pointer-events: none;
+  animation: editor-tip-in 110ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.tool-dock-tip kbd,
-.tool-dock-flyout kbd {
+.editor-tip.is-top { transform: translateY(-2px); }
+@keyframes editor-tip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.editor-tip-label {
+  font-weight: 800;
+  white-space: nowrap;
+}
+.editor-tip-hint {
+  grid-column: 1 / -1;
+  color: var(--editor-text-secondary);
+  font-weight: 600;
+  font-size: 10.5px;
+}
+.editor-tip-kbd {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  align-self: center;
   min-width: 18px;
-  padding: 1px 5px;
+  padding: 2px 6px;
   border: 1px solid var(--editor-border);
-  border-radius: 4px;
+  border-radius: 5px;
   background: var(--editor-surface);
   color: var(--editor-text-secondary);
-  font: 700 10px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 700 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
   text-align: center;
+  white-space: nowrap;
 }
 
-/* Tool submenu (flyout), opened by long-press, right-click or ArrowDown. */
-.tool-dock-flyout {
-  position: absolute;
-  inset-inline-start: calc(100% + 6px);
-  z-index: calc(var(--z-panel) + 6);
+.editor-anchor-menu {
+  position: fixed;
+  z-index: var(--z-dropdown);
   display: grid;
-  min-width: 190px;
-  gap: 2px;
-  padding: 4px;
+  gap: 1px;
+  max-height: min(70vh, 520px);
+  padding: 5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--editor-border);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--editor-panel);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
   color: var(--editor-text);
+  direction: rtl;
+  scrollbar-width: thin;
 }
-.tool-dock-flyout.is-bottom { bottom: 6px; }
-.tool-dock-flyout button {
+.editor-menu-row {
   display: flex;
-  min-height: 36px;
+  width: 100%;
+  min-height: 34px;
   align-items: center;
-  gap: 10px;
-  padding: 0 10px;
+  gap: 9px;
+  padding: 5px 8px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 8px;
   background: transparent;
   color: inherit;
   font-size: 12px;
   font-weight: 700;
   text-align: start;
-  white-space: nowrap;
   cursor: pointer;
+  transition: background-color 110ms ease;
 }
-.tool-dock-flyout button:hover,
-.tool-dock-flyout button:focus-visible {
+.editor-menu-row:hover:not(:disabled),
+.editor-menu-row:focus-visible {
   background: var(--editor-hover);
   outline: none;
 }
-.tool-dock-menu-icon { display: grid; width: 16px; place-items: center; color: var(--editor-text-secondary); }
-.tool-dock-menu-icon svg { width: 16px; height: 16px; }
-.tool-dock-menu-label { flex: 1 1 auto; }
-.tool-dock-menu-chip {
+.editor-menu-row:disabled { opacity: 0.38; cursor: default; }
+.editor-menu-row.is-danger { color: var(--editor-danger, #d98c86); }
+.editor-menu-icon {
+  display: grid;
+  width: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--editor-text-secondary);
+}
+.editor-menu-icon svg { width: 16px; height: 16px; }
+.editor-menu-text { display: grid; flex: 1 1 auto; min-width: 0; }
+.editor-menu-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.editor-menu-hint {
+  color: var(--editor-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.editor-menu-check { color: var(--editor-success); font-size: 12px; }
+.editor-menu-kbd {
+  min-width: 18px;
+  padding: 2px 5px;
+  border: 1px solid var(--editor-border);
+  border-radius: 5px;
+  background: var(--editor-surface);
+  color: var(--editor-text-secondary);
+  font: 700 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+  white-space: nowrap;
+}
+.editor-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--editor-border);
+}
+.editor-menu-group {
+  padding: 7px 8px 3px;
+  color: var(--editor-text-secondary);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+.editor-menu-field { padding: 2px 8px 6px; }
+.editor-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  padding: 2px 8px 6px;
+}
+.editor-menu-grid.is-3 { grid-template-columns: repeat(3, 1fr); }
+.editor-menu-grid.is-2 { grid-template-columns: repeat(2, 1fr); }
+.editor-menu-grid button {
+  display: grid;
+  min-height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+  background: var(--editor-surface);
+  color: var(--editor-text);
+  cursor: pointer;
+  transition: background-color 110ms ease;
+}
+.editor-menu-grid button:hover:not(:disabled) { background: var(--editor-hover); }
+.editor-menu-grid button:disabled { opacity: 0.38; cursor: default; }
+.editor-menu-grid button.is-active {
+  border-color: var(--editor-accent);
+  background: var(--editor-accent-soft);
+}
+
+/* =====================================================================
+ * The canvas dock — a compact floating cluster over the workspace.
+ *
+ * Content-driven width (`width: max-content` with a ceiling), one row, one
+ * radius, one icon size. It floats inside the canvas row, so it never claims
+ * layout space, never stretches across the editor and never sits on the page
+ * rail or the status bar below it.
+ * ===================================================================== */
+
+.studio-tool-dock {
+  --dock-size: 34px;
+  --dock-gap: 3px;
+  --dock-pad: 5px;
+  position: absolute;
+  inset-inline-start: 12px;
+  bottom: 12px;
+  z-index: var(--z-panel);
+  display: flex;
+  align-items: center;
+  gap: var(--dock-gap);
+  width: max-content;
+  max-width: min(520px, calc(100% - 24px));
+  padding: var(--dock-pad);
+  border: 1px solid var(--editor-border);
+  border-radius: 12px;
+  background: var(--editor-panel);
+  box-shadow: 0 10px 26px -8px rgba(15, 23, 42, 0.45),
+    0 2px 6px rgba(15, 23, 42, 0.18);
+  color: var(--editor-text);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  transition: opacity 140ms ease;
+}
+
+/* Collapsed: the whole bar folds to its insert button plus the chevron. */
+.studio-tool-dock.is-collapsed {
+  gap: 2px;
+  padding: 3px;
+}
+
+.editor-dock-grip {
+  display: grid;
+  width: 20px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--editor-text-secondary);
+  cursor: grab;
+  touch-action: none;
+}
+.editor-dock-grip:hover { background: var(--editor-hover); color: var(--editor-text); }
+.editor-dock-grip:focus-visible { outline: 2px solid var(--editor-accent-hover); outline-offset: 1px; }
+.editor-dock-grip:active { cursor: grabbing; }
+
+.editor-dock-sep {
+  width: 1px;
+  height: 20px;
+  flex: 0 0 auto;
+  margin: 0 2px;
+  background: var(--editor-border);
+}
+
+.editor-dock-collapse { opacity: 0.75; }
+.editor-dock-collapse:hover { opacity: 1; }
+
+/* Fill over stroke, overlapping exactly like Photoshop's default swatch. */
+.editor-dock-color-btn { width: var(--dock-size); }
+.editor-dock-color-chips {
+  position: relative;
   display: block;
-  width: 14px;
-  height: 14px;
-  border: 1px solid rgba(0, 0, 0, 0.4);
+  width: 20px;
+  height: 20px;
+}
+.editor-dock-color-chips .is-fill,
+.editor-dock-color-chips .is-stroke {
+  position: absolute;
+  display: block;
+  width: 13px;
+  height: 13px;
   border-radius: 3px;
 }
-.tool-dock-menu-chip.is-stroke { border: 4px solid; background: transparent; }
+.editor-dock-color-chips .is-fill {
+  inset-inline-start: 0;
+  top: 0;
+  z-index: 1;
+  border: 1.5px solid var(--editor-border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+.editor-dock-color-chips .is-stroke {
+  inset-inline-end: 0;
+  bottom: 0;
+  border: 3px solid;
+  background: var(--editor-panel);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
 
-/* Tablet: the toolbar floats inside the canvas row only. */
+/* The slot: an absolutely positioned grid child pinned to the canvas row, so
+   the dock can never stretch over the page rail or the status bar. */
 .studio-tool-dock-slot {
   position: absolute;
-  /* Explicit end lines: for an absolutely positioned grid child an `auto`
-     end resolves to the container edge, which would stretch the slot over
-     the page rail and status bar. `1 / 2` pins it to the canvas row only. */
   grid-row: 1 / 2;
   grid-column: 1 / 2;
   inset: 0;
   z-index: var(--z-panel);
   pointer-events: none;
 }
-/* Tablet launcher chips (عناصر / صفحة / خصائص): bottom-centre of the canvas
-   row, never over the page rail. `display` comes from the `flex lg2:hidden`
-   utilities so the desktop breakpoint still hides it. */
-.editor-launcher-slot {
-  position: absolute;
-  grid-row: 1 / 2;
-  grid-column: 1 / 2;
-  align-self: end;
-  justify-self: center;
-  z-index: var(--z-panel);
-  gap: 8px;
-  margin-bottom: 12px;
-  pointer-events: none;
-}
-.studio-tool-dock.is-floating {
-  position: absolute;
-  inset-inline-start: 8px;
-  top: 50%;
-  max-height: calc(100% - 16px);
-  transform: translateY(-50%);
-  border: 1px solid var(--editor-border);
-  border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
-  pointer-events: auto;
-}
-
-/* ---------- Collapsed desktop panels: narrow vertical icon dock ---------- */
-.collapsed-panel-dock {
-  display: flex;
-  width: 48px;
-  min-width: 0;
-  min-height: 0;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 4px;
-  border-inline: 1px solid var(--editor-border);
-  background: var(--editor-panel);
-  color: var(--editor-text-secondary);
-}
-.collapsed-dock-tabs {
-  display: grid;
-  min-height: 0;
-  gap: 3px;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-.collapsed-dock-tabs::-webkit-scrollbar { display: none; }
-.collapsed-dock-sep { width: 24px; height: 1px; margin: 2px 0; background: var(--editor-border); }
-.collapsed-dock-expand,
-.collapsed-dock-tab {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
-}
-.collapsed-dock-expand:hover,
-.collapsed-dock-tab:hover { background: var(--editor-hover); color: var(--editor-text); }
-.collapsed-dock-tab.is-active {
-  background: var(--editor-accent-soft);
-  border-color: color-mix(in srgb, var(--editor-accent) 55%, transparent);
-  color: var(--editor-text);
-}
-.collapsed-dock-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
+.studio-tool-dock-slot > * { pointer-events: auto; }
 
 /* ---------- Panel anatomy (follows the Layers panel) ---------- */
 .editor-panel-header { min-height: 56px; }
@@ -3369,23 +3202,14 @@ summary,
 
 /* ---------- Touch devices (tablet): larger targets ---------- */
 @media (any-pointer: coarse) {
-  .studio-tool-dock { --tool-size: 44px; --tool-pad: 5px; }
-  .tool-dock-layout { height: 44px; }
-  .tool-dock-icon { width: 20px; height: 20px; }
-  .tool-dock-flyout button { min-height: 44px; font-size: 13px; }
-  .tool-dock-colors { height: 56px; }
-  .tool-color-swatch { width: 30px; height: 30px; }
-  .tool-color-background { inset-inline-end: 0; top: 0; }
-  .tool-color-foreground { inset-inline-start: 0; bottom: 0; }
-  /* 44px hit areas around each 30px swatch; the fill swatch sits on top. */
-  .tool-color-swatch::before { content: ""; position: absolute; inset: -7px; }
-  .tool-color-chip.is-stroke { border-width: 8px; }
-  /* Swap / defaults live in the long-press colour menu on touch. */
-  .tool-color-mini { display: none; }
+  /* One touch-sized rhythm for every floating control (dock, panels, menus). */
+  .studio-tool-dock { --dock-size: 44px; --dock-pad: 6px; }
+  .editor-dock-grip { width: 26px; height: 34px; }
+  .editor-dock-sep { height: 24px; }
+  .editor-dock-color-chips { width: 24px; height: 24px; }
+  .editor-dock-color-chips .is-fill,
+  .editor-dock-color-chips .is-stroke { width: 16px; height: 16px; }
 
-  .collapsed-dock-expand,
-  .collapsed-dock-tab { width: 44px; height: 44px; }
-  .collapsed-panel-dock { width: 52px; }
 
   .editor-panel-control select { height: 44px; }
   .editor-panel-footer > button { min-width: 44px; min-height: 44px; }
@@ -3406,8 +3230,8 @@ summary,
 
 @media (prefers-reduced-motion: reduce) {
   .studio-tool-dock,
-  .tool-dock-button,
-  .tool-color-chip,
+  .editor-icon-btn,
+  .editor-anchor-menu,
   .asset-card { transition: none; }
   .asset-library-categories,
   .editor-ui .editor-panel-body { scroll-behavior: auto; }
@@ -3540,119 +3364,31 @@ summary,
 }
 .editor-ui .editor-zoom-readout:hover { background: var(--editor-hover) !important; }
 
-/*
- * «ضبط وتنسيق مساحة العمل» — the one primary utility on the bar.
- * Accent-blue, clearly labelled, always fully visible (never icon-only).
- * Scoped under .editor-ui so the chrome's global button colour remap can
- * never wash the accent text out.
- */
-.editor-ui .editor-wand-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 32px;
-  flex: 0 0 auto;
-  padding: 0 13px;
-  border: 1px solid color-mix(in srgb, var(--editor-accent) 65%, #ffffff 10%);
-  border-radius: 9px;
-  background:
-    linear-gradient(180deg, var(--editor-accent-hover), var(--editor-accent));
-  color: var(--editor-accent-text);
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(15, 30, 45, 0.35);
-  transition: filter 120ms ease, transform 120ms ease;
-}
-.editor-ui .editor-wand-btn:hover { filter: brightness(1.08); }
-.editor-ui .editor-wand-btn:active { transform: translateY(0.5px); }
-.editor-ui.editor-light .editor-wand-btn { box-shadow: 0 2px 8px rgba(23, 43, 66, 0.25); }
-
-/* Gradient-free primary red-button counterpart (export) — same accent. */
+/* The export action keeps the brand accent, but as an icon-first control: the
+   label moved into its tooltip so the bar reads as one rhythm of icons. */
 .editor-ui .editor-export-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  height: 34px;
-  flex: 0 0 auto;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 9px;
   background: var(--editor-accent);
   color: var(--editor-accent-text);
-  font-size: 12.5px;
-  font-weight: 800;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 120ms ease;
 }
 .editor-ui .editor-export-btn:hover { background: var(--editor-accent-hover) !important; }
-
-/* ---------- Tool dock: primary draw tools with explicit dropdowns ---------- */
-
-/* A two-part tool: the main hit area arms direct drawing; the chevron opens
- * the flyout on a plain tap (long-press still works, the chevron just makes
- * the submenu discoverable). */
-.tool-dock-split {
-  position: relative;
-  display: grid;
-  width: var(--tool-size);
-  height: var(--tool-size);
-  flex: 0 0 auto;
-  place-items: center;
-}
-.tool-dock-split .tool-dock-button { width: 100%; height: 100%; }
-.tool-dock-chevron {
-  position: absolute;
-  inset-inline-end: 1px;
-  bottom: 1px;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 13px;
-  height: 13px;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  opacity: 0.75;
-  cursor: pointer;
-}
-.tool-dock-chevron:hover { opacity: 1; background: var(--editor-hover); }
-@media (pointer: coarse) {
-  .tool-dock-chevron { width: 20px; height: 20px; }
-}
-/* When the split carries a submenu, it owns the whole control — retire the
-   corner triangle marker the plain buttons draw for the same job. */
-.tool-dock-split .tool-dock-flyout-mark { display: none; }
-
-/* Section captions inside the dock rail (قراءة مائلة للمجموعات). */
-.tool-dock-caption {
-  grid-column: 1 / -1;
-  margin-top: 2px;
-  color: var(--editor-text-secondary);
-  font-size: 8.5px;
-  font-weight: 800;
-  letter-spacing: 0.4px;
-  text-align: center;
-  opacity: 0.85;
-}
-.studio-tool-dock.is-wide .tool-dock-caption { display: none; }
 
 /* ---------- Focus-visible ring shared by the new chrome ---------- */
 .editor-capsule-btn:focus-visible,
 .editor-ui .editor-zoom-readout:focus-visible,
-.editor-wand-btn:focus-visible,
-.editor-ui .editor-export-btn:focus-visible,
-.tool-dock-chevron:focus-visible {
+.editor-ui .editor-export-btn:focus-visible {
   outline: 2px solid var(--editor-accent-hover);
   outline-offset: 1px;
 }
 
-/* Uniform 34px icon control for the header's tool clusters. */
-.editor-header-btn {
+/* =====================================================================
+ * The shared icon control — every chrome button in the studio.
+ *
+ * One box (34px), one radius, one icon size, one hover, one active state and
+ * one tooltip. The header, the canvas dock, the floating panels and the menus
+ * all draw from this class, which is what makes the interface look designed
+ * rather than assembled control by control.
+ * ===================================================================== */
+.editor-icon-btn {
   display: grid;
   width: 34px;
   height: 34px;
@@ -3660,27 +3396,60 @@ summary,
   place-items: center;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 9px;
   background: transparent;
   color: var(--editor-text);
   cursor: pointer;
   transition: background-color 120ms ease, color 120ms ease;
 }
-.editor-header-btn:hover:not(:disabled) {
-  background: var(--editor-hover) !important;
+.editor-icon-glyph {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
 }
-.editor-header-btn:disabled {
+.editor-icon-glyph svg { width: 18px; height: 18px; }
+.editor-icon-btn:hover:not(:disabled) {
+  background: var(--editor-hover);
+  color: var(--editor-text);
+}
+.editor-icon-btn:disabled {
   opacity: 0.38;
   cursor: default;
 }
-.editor-header-btn.is-active {
-  background: var(--editor-accent) !important;
-  color: var(--editor-accent-text) !important;
+/* Toggle state (an open panel, an armed tool) — filled, never a thin border. */
+.editor-icon-btn.is-active,
+.editor-icon-btn[aria-expanded="true"] {
+  background: var(--editor-accent);
+  color: var(--editor-accent-text);
 }
-.editor-header-btn:focus-visible {
+.editor-icon-btn.is-primary {
+  background: var(--editor-accent);
+  color: var(--editor-accent-text);
+}
+.editor-icon-btn.is-primary:hover:not(:disabled) {
+  background: var(--editor-accent-hover);
+  color: var(--editor-accent-text);
+}
+.editor-icon-btn.is-danger { color: var(--editor-danger, #d98c86); }
+.editor-icon-btn.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--editor-danger, #d98c86) 14%, transparent);
+  color: var(--editor-danger, #d98c86);
+}
+.editor-icon-btn:focus-visible {
   outline: 2px solid var(--editor-accent-hover);
   outline-offset: 1px;
 }
+/* Save-state tones: one colour, three meanings, always explained by tooltip. */
+.editor-icon-btn.is-saved { color: var(--editor-success); }
+.editor-icon-btn.is-pending { color: var(--editor-text-secondary); }
+.editor-icon-btn.is-danger.is-error { color: var(--editor-danger, #d98c86); }
+
+/* The zoom cluster's buttons share the capsule, so they drop the margin. */
+.editor-zoom-btn { width: 30px; height: 28px; border-radius: 7px; }
+.editor-zoom-btn .editor-icon-glyph,
+.editor-zoom-btn .editor-icon-glyph svg { width: 16px; height: 16px; }
+
 /* =========================================================================
    Advanced Multi-Artboard Canvas System (Photoshop / Figma inspired)
    ========================================================================= */
@@ -3737,7 +3506,7 @@ summary,
 .editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .editor-settings-surface) .bg-navy:hover:not(:disabled) {
   background: var(--editor-accent-hover) !important;
 }
-.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .editor-arrange-bar) :is([aria-pressed="true"], [aria-selected="true"]) {
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .studio-tool-dock) :is([aria-pressed="true"], [aria-selected="true"]) {
   background: var(--editor-accent-soft) !important;
   color: var(--editor-text) !important;
   border-color: var(--editor-accent);
@@ -3748,7 +3517,7 @@ summary,
 .editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .editor-settings-surface) :is(.text-danger, .is-danger, .editor-menu-danger):hover:not(:disabled) {
   background: var(--editor-danger-soft) !important;
 }
-.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .editor-arrange-bar, .studio-tool-dock) button:disabled {
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .studio-tool-dock) button:disabled {
   opacity: .4;
   cursor: not-allowed;
   box-shadow: none;
@@ -3777,15 +3546,15 @@ summary,
   box-shadow: var(--editor-chrome-shadow);
 }
 
-.editor-ui :is(.editor-header-btn, .editor-capsule-btn, .editor-panel-collapse,
-  .editor-panel-tab, .arrange-btn, .editor-mini-btn) {
+.editor-ui :is(.editor-icon-btn, .editor-capsule-btn, .editor-panel-collapse,
+  .editor-panel-tab, .editor-mini-btn) {
   border-radius: var(--editor-control-radius);
   transition: background-color 120ms ease, border-color 120ms ease,
     color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
 }
 
-.editor-ui :is(.editor-header-btn, .editor-capsule-btn, .editor-panel-collapse,
-  .editor-panel-tab, .arrange-btn, .editor-mini-btn):focus-visible {
+.editor-ui :is(.editor-icon-btn, .editor-capsule-btn, .editor-panel-collapse,
+  .editor-panel-tab, .editor-mini-btn):focus-visible {
   outline: 2px solid color-mix(in srgb, var(--editor-accent) 72%, transparent);
   outline-offset: 1px;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--editor-accent) 18%, transparent);
@@ -3828,34 +3597,49 @@ summary,
   background: color-mix(in srgb, var(--editor-panel) 97%, var(--editor-hover));
 }
 
-/* Tablet: identity/actions remain visible, secondary tools scroll as a group.
-   Phone: one additional compact row, never arbitrary flex wrapping. */
+/*
+ * Responsive rule, stated once: the bar is ONE row at every width that can
+ * afford it, including a tablet in either orientation. The old tablet layout
+ * forced a second row for the tool cluster, which stole canvas height exactly
+ * where the canvas is smallest — the single biggest source of the "the UI
+ * grew and the page shrank" feeling.
+ */
 @media (max-width: 1099px) {
+  .editor-ui .editor-toolbar {
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 4px 8px;
+  }
+  .editor-ui .editor-header-zone { flex-wrap: nowrap; min-width: 0; gap: 3px; }
+  .editor-header-primary > *,
+  .editor-header-actions > * { flex-shrink: 0; }
+  .editor-ui .editor-header-center { flex: 1 1 auto; justify-content: center; }
+  .editor-ui .editor-header-actions { margin-inline-start: 0; }
+  .editor-ui .editor-doc-name { width: clamp(8ch, 22vw, 14ch); min-width: 6ch; }
+}
+
+/*
+ * Phone: two deliberate rows — the document identity, then the controls. The
+ * history cluster scrolls inside its own row rather than pushing the export
+ * and account controls off screen.
+ */
+@media (max-width: 600px) {
   .editor-ui .editor-toolbar {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 4px 8px;
-    padding: 4px 8px;
   }
-  .editor-ui .editor-header-zone { flex-wrap: nowrap; min-width: 0; gap: 3px; }
+  .editor-ui .editor-header-center { grid-row: 1; grid-column: 1 / -1; }
   .editor-ui .editor-header-primary {
-    grid-column: 1 / -1;
     grid-row: 2;
+    grid-column: 1;
     overflow-x: auto;
     scrollbar-width: thin;
     overscroll-behavior-inline: contain;
   }
-  .editor-header-primary > * { flex-shrink: 0; }
-  .editor-ui .editor-header-center { justify-content: start; overflow-x: auto; scrollbar-width: thin; }
-  .editor-header-center > * { flex-shrink: 0; }
-  .editor-ui .editor-header-actions { margin-inline-start: 0; justify-content: end; }
-  .editor-ui .editor-header-more-menu { position: fixed; top: var(--editor-header-h); right: 8px; }
-}
-@media (max-width: 600px) {
-  .editor-ui .editor-toolbar { grid-template-columns: minmax(0, 1fr); }
-  .editor-ui .editor-header-center { grid-row: 1; }
-  .editor-ui .editor-header-actions { grid-row: 3; }
-  .editor-ui .editor-doc-name { width: 12ch; }
+  .editor-ui .editor-header-actions { grid-row: 2; grid-column: 2; }
+  .editor-ui .editor-doc-capsule { width: 100%; }
+  .editor-ui .editor-doc-name { width: 100%; max-width: 100%; }
 }
 
 @media (max-width: 600px) {
@@ -3866,20 +3650,7 @@ summary,
   }
 
   .editor-ui .editor-doc-name {
-    width: clamp(9ch, 34vw, 14ch);
-    min-width: 8ch;
-    max-width: 14ch;
     font-size: 11px;
-  }
-
-  .editor-ui .editor-wand-btn {
-    max-width: 44px;
-    overflow: hidden;
-    padding-inline: 12px;
-  }
-
-  .editor-ui .editor-wand-btn span {
-    display: none;
   }
 
   .editor-ui .editor-header-sep {
@@ -3892,8 +3663,8 @@ summary,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .editor-ui :is(.editor-header-btn, .editor-capsule-btn, .editor-panel-collapse,
-    .editor-panel-tab, .arrange-btn, .editor-mini-btn, .layer-row) {
+  .editor-ui :is(.editor-icon-btn, .editor-capsule-btn, .editor-panel-collapse,
+    .editor-panel-tab, .editor-mini-btn, .layer-row) {
     transition: none;
   }
 }
@@ -3929,7 +3700,6 @@ summary,
     max-height: calc(100% - 72px);
     transform: none;
   }
-  .studio-tool-dock .tool-dock-tools { flex: 1 1 auto; scrollbar-width: thin; }
 }
 @media (any-pointer: coarse) {
   .editor-page-rail > div > button { min-height: 44px; }
@@ -3937,22 +3707,17 @@ summary,
   .page-rail-actions button { width: 44px; height: 44px; }
   .editor-panel-tab { min-width: 44px; min-height: 44px; flex-shrink: 0; }
   .editor-panel-tabs { scrollbar-width: thin; }
+  /* Comfortable touch targets for every shared control. */
+  .editor-icon-btn { width: 44px; height: 44px; border-radius: 10px; }
+  .editor-icon-glyph { width: 20px; height: 20px; }
+  .editor-icon-glyph svg { width: 20px; height: 20px; }
+  .editor-zoom-btn { width: 34px; height: 34px; }
+  .editor-menu-row { min-height: 44px; }
+  .editor-menu-grid button { min-height: 44px; }
+  .editor-dock-color-chips { width: 24px; height: 24px; }
   .artboard-page-options :is(button, summary) { min-height: 44px; }
 }
 
-.editor-ui .editor-toolbar .editor-export-btn {
-  color: var(--editor-accent-text);
-  background: var(--editor-accent);
-}
-.editor-ui .editor-toolbar .editor-export-btn:hover { background: var(--editor-accent-hover); }
-/* Workspace arrangement is a secondary utility, not a competing primary. */
-.editor-ui .editor-toolbar .editor-wand-btn {
-  color: var(--editor-text);
-  background: var(--editor-surface);
-  border-color: var(--editor-border);
-  box-shadow: none;
-}
-.editor-ui .editor-toolbar .editor-wand-btn:hover { background: var(--editor-hover); filter: none; }
 
 /* Element-tool sorting uses the existing panel scroller, never a nested one. */
 .sortable-sections { position: relative; display: grid; gap: 10px; min-width: 0; }
@@ -4080,18 +3845,6 @@ header.sticky.top-0 {
 }
 
 /*
- * ── 8. Arrange bar refinement ───────────────────────────────────────────
- * The arrange bar gets a more refined shadow and border so it reads as a
- * floating tool, not a flat strip.
- */
-.arrange-bar {
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.06);
-}
-.editor-ui.editor-dark .arrange-bar {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-
-/*
  * ── 9. Floating toolbar refinement ──────────────────────────────────────
  * The floating toolbar gets a more refined shadow and a subtle inner glow.
  */
@@ -4136,14 +3889,14 @@ header.sticky.top-0 {
 }
 
 /*
- * ── 13. Tool dock button polish ──────────────────────────────────────────
- * Tool dock buttons get a refined active state with a subtle inner glow.
+ * ── 13. Active-state polish for the shared icon control ───────────────────
+ * One inner highlight for every pressed/active button, both themes.
  */
-.tool-dock-button.is-active {
+.editor-icon-btn.is-active {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12),
     0 1px 3px rgba(0, 0, 0, 0.2);
 }
-.editor-ui.editor-light .tool-dock-button.is-active {
+.editor-ui.editor-light .editor-icon-btn.is-active {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3),
     0 1px 2px rgba(0, 0, 0, 0.1);
 }
@@ -4192,14 +3945,6 @@ header.sticky.top-0 {
 .asset-card:hover {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   border-color: color-mix(in srgb, var(--editor-accent) 40%, var(--editor-border));
-}
-
-/*
- * ── 18. Collapsed dock tab polish ────────────────────────────────────────
- * Collapsed dock tabs get a refined active state.
- */
-.collapsed-dock-tab.is-active {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--editor-accent) 40%, transparent);
 }
 
 /*
@@ -4270,14 +4015,15 @@ li:has(> .text-success) {
 }
 
 /*
- * ── 25. Tooltip refinement ───────────────────────────────────────────────
- * Tool dock tooltips get a refined shadow and consistent timing.
+ * ── 25. Tooltip + menu refinement ────────────────────────────────────────
+ * The shared tooltip and the shared anchored menu carry one shadow, so every
+ * floating surface in the editor separates from the artwork the same way.
  */
-.tool-dock-tip {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
+.editor-tip {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
 }
-.tool-dock-flyout {
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+.editor-anchor-menu {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34), 0 2px 6px rgba(0, 0, 0, 0.18);
 }
 
 /*
@@ -4330,13 +4076,17 @@ li:has(> .text-success) {
 }
 
 /*
- * ── 32. Color swatch refinement ──────────────────────────────────────────
- * Color swatches in the tool dock get smoother transitions.
+ * ── 32. Colour swatch refinement ─────────────────────────────────────────
+ * The dock's fill/stroke pair eases on hover, like every other control.
  */
-.tool-color-chip {
+.editor-dock-color-chips .is-fill,
+.editor-dock-color-chips .is-stroke {
   transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
 }
-.tool-color-swatch:hover .tool-color-chip {
+.editor-dock-color-btn:hover .editor-dock-color-chips .is-fill {
+  transform: scale(1.08);
+}
+.editor-dock-color-btn:hover .editor-dock-color-chips .is-stroke {
   transform: scale(1.08);
 }
 
@@ -4367,7 +4117,8 @@ li:has(> .text-success) {
   .library-drag-card,
   .library-item,
   .asset-card,
-  .tool-color-chip,
+  .editor-dock-color-chips .is-fill,
+  .editor-dock-color-chips .is-stroke,
   .artboard-name,
   .editor-panel-tab,
   .editor-panel-resize-grip,
@@ -4448,10 +4199,10 @@ footer .border-t.border-line\\/60 {
 }
 
 /*
- * ── 42. Editor header button polish ──────────────────────────────────────
- * Header buttons get a consistent transition curve.
+ * ── 42. Icon button polish ───────────────────────────────────────────────
+ * Every chrome icon control shares one easing curve.
  */
-.editor-header-btn {
+.editor-icon-btn {
   transition: background-color 140ms ease, color 140ms ease,
     box-shadow 140ms ease, opacity 140ms ease;
 }
@@ -4463,14 +4214,6 @@ footer .border-t.border-line\\/60 {
 .editor-capsule-btn {
   transition: background-color 140ms ease, color 140ms ease,
     box-shadow 140ms ease, opacity 140ms ease;
-}
-
-/*
- * ── 44. Arrange button polish ────────────────────────────────────────────
- * Arrange buttons get a consistent transition curve.
- */
-.arrange-btn {
-  transition: background-color 140ms ease, color 140ms ease, opacity 140ms ease;
 }
 
 /*
@@ -4507,14 +4250,6 @@ footer .border-t.border-line\\/60 {
 }
 .library-asset-card:hover .library-asset-remove {
   transform: scale(1.05);
-}
-
-/*
- * ── 49. Collapsed dock expand polish ──────────────────────────────────────
- * Collapsed dock expand button gets a consistent transition.
- */
-.collapsed-dock-expand {
-  transition: background-color 140ms ease, color 140ms ease;
 }
 
 /*

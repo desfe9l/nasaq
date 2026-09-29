@@ -2,7 +2,9 @@ import { subscribeTheme } from "@/lib/theme";
 import { shortcutKey } from "@/lib/editor/keyboard";
 import { EditorSettingsDialog } from "./EditorSettingsDialog";
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
-import { TouchPropertiesSheet } from "./TouchPropertiesSheet";
+import { FloatingPanel } from "./ui/FloatingPanel";
+import { IconButton } from "./ui/IconButton";
+import { ViewMenu } from "./ViewMenu";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -21,19 +23,8 @@ const DRAWER_COLLAPSE_DRAG = 72;
 export const OPEN_REPORT_TOOLS_EVENT = "nasaq:open-report-tools";
 import {
   Check,
-  ClipboardList,
   Download,
-  Ellipsis,
-  Eye,
-  FolderPlus,
-  Grid3x3,
-  Heading1,
-  Home,
-  Library,
-  Maximize,
-  Minimize,
   Minus,
-  PenLine,
   Plus,
   Redo2,
   Save,
@@ -55,15 +46,13 @@ import { fitImageBox, prepareImage } from "@/lib/editor/images";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { LeftPanel } from "./LeftPanel";
 import { RightPanel } from "./RightPanel";
-import { StudioToolDock } from "./StudioToolDock";
+import { CanvasDock } from "./CanvasDock";
 import { CanvasStage } from "./CanvasStage";
-import { ArrangeBar } from "./ArrangeBar";
 import { PageRail } from "./PageRail";
 import { ExportDialog } from "./ExportDialog";
 import { cn } from "@/lib/utils";
 import { EditorWorkspaceSkeleton } from "@/components/ui/Skeleton";
 import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
-import { ToolbarMenus } from "./ToolbarMenus";
 import { EditorAccountMenu } from "./EditorAccountMenu";
 import { OVERLAY_BREAKPOINT, isOverlayViewport } from "@/lib/editor/ui-state";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -381,30 +370,33 @@ function Studio({
    */
   const pastDepth = useEditor((s) => s.past.length);
   const futureDepth = useEditor((s) => s.future.length);
-  const [settingsTab, setSettingsTab] = useState<"editor" | "account" | null>(null);
+  const [settingsTab, setSettingsTab] = useState<"editor" | "account" | null>(
+    null,
+  );
   useEffect(() => {
-    const openSettings = (event: Event) => setSettingsTab((event as CustomEvent).detail === "account" ? "account" : "editor");
+    const openSettings = (event: Event) =>
+      setSettingsTab(
+        (event as CustomEvent).detail === "account" ? "account" : "editor",
+      );
     window.addEventListener(OPEN_EDITOR_SETTINGS_EVENT, openSettings);
-    return () => window.removeEventListener(OPEN_EDITOR_SETTINGS_EVENT, openSettings);
+    return () =>
+      window.removeEventListener(OPEN_EDITOR_SETTINGS_EVENT, openSettings);
   }, []);
   const dark = useEditor((s) => s.dark);
-  useEffect(() => subscribeTheme((value) => useEditor.setState({ dark: value })), []);
+  useEffect(
+    () => subscribeTheme((value) => useEditor.setState({ dark: value })),
+    [],
+  );
   const toggle = useEditor((s) => s.toggle);
-  const showGrid = useEditor((s) => s.showGrid);
-  const previewAll = useEditor((s) => s.previewAll);
   const focusMode = useEditor((s) => s.focusMode);
-  const addPage = useEditor((s) => s.addPage);
   const leftOpen = useEditor((s) => s.leftOpen);
   const rightOpen = useEditor((s) => s.rightOpen);
   const leftCollapsed = useEditor((s) => s.leftCollapsed);
-  const toggleSidebar = useEditor((s) => s.toggleSidebar);
   const closeFloatingPanels = useEditor((s) => s.closeFloatingPanels);
   const pagesPanelHeight = useEditor((s) => s.pagesPanelHeight);
   const pagesRailCollapsed = useEditor((s) => s.pagesRailCollapsed);
   const setPagesPanelHeight = useEditor((s) => s.setPagesPanelHeight);
   const contextMenu = useEditor((s) => s.contextMenu);
-  const leftTab = useEditor((s) => s.leftTab);
-  const openLibrary = useEditor((s) => s.openLibrary);
   const openContextMenu = useEditor((s) => s.openContextMenu);
   const closeContextMenu = useEditor((s) => s.closeContextMenu);
   const bring = useEditor((s) => s.bring);
@@ -450,6 +442,16 @@ function Studio({
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window === "undefined" || !isOverlayViewport(),
   );
+  /**
+   * Phone width. The bar drops to two deliberate rows there and the scaling
+   * cluster moves into «عرض», so history, export and the account control can
+   * never be pushed off screen by a zoom stepper.
+   */
+  const [isCompact, setIsCompact] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 600px)").matches,
+  );
   /** First load is what arms the auto-fit below. */
   const hydrated = useEditor((s) => s.hydrated);
   /** «أضف مكتبة» and «مولد عناوين الفقرات» are modal, so they own no store state. */
@@ -465,10 +467,6 @@ function Studio({
   /** Only the very first fit may be skipped when the saved zoom already fits. */
   const firstFitRef = useRef(true);
 
-  /** True when the library tab is the visible one in the components panel. */
-  const libraryVisible = isDesktop
-    ? leftTab === "library" && !leftCollapsed && !focusMode
-    : leftOpen && leftTab === "library";
   // One trailing write per drag burst — the old effect hit localStorage on
   // every pointermove of a sidebar resize.
   useEffect(() => {
@@ -484,6 +482,14 @@ function Studio({
     }, 250);
     return () => clearTimeout(timer);
   }, [panelWidths]);
+
+  useEffect(() => {
+    const compact = window.matchMedia("(max-width: 600px)");
+    const onCompact = () => setIsCompact(compact.matches);
+    onCompact();
+    compact.addEventListener("change", onCompact);
+    return () => compact.removeEventListener("change", onCompact);
+  }, []);
 
   useEffect(() => {
     const media = window.matchMedia(`(min-width: ${OVERLAY_BREAKPOINT}px)`);
@@ -653,34 +659,14 @@ function Studio({
       );
       if (!stage || !pageEl2) return;
       const sr = stage.getBoundingClientRect();
-      const pr = (pageEl2.closest(".artboard-cell") ?? pageEl2).getBoundingClientRect();
+      const pr = (
+        pageEl2.closest(".artboard-cell") ?? pageEl2
+      ).getBoundingClientRect();
       stage.scrollLeft += pr.left + pr.width / 2 - (sr.left + sr.width / 2);
       stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
     });
   }, [setZoom]);
   fitRef.current = fitToScreen;
-
-  /*
-   * ملء الشاشة — part of the unified canvas-scaling cluster: the whole
-   * studio (chrome + artboard) fills the device, so a tablet becomes a
-   * true drafting surface. Tracked live so the glyph reflects an Escape
-   * exit as faithfully as the button itself.
-   */
-  const [isFullscreen, setIsFullscreen] = useState(
-    () => typeof document !== "undefined" && !!document.fullscreenElement,
-  );
-  useEffect(() => {
-    const onChange = () => setIsFullscreen(!!document.fullscreenElement);
-    document.addEventListener("fullscreenchange", onChange);
-    return () => document.removeEventListener("fullscreenchange", onChange);
-  }, []);
-  const toggleFullscreen = useCallback(() => {
-    if (document.fullscreenElement) {
-      void document.exitFullscreen?.().catch(() => {});
-    } else {
-      void document.documentElement.requestFullscreen?.().catch(() => {});
-    }
-  }, []);
 
   /*
    * Safe auto-fit whenever a DIFFERENT document is loaded (opening a project,
@@ -702,7 +688,9 @@ function Studio({
     if (lastFitProjectRef.current === (projectId ?? "")) return;
     // First autosave assigns an id to the SAME document. Do not interpret a
     // drag's save as opening a project and reset the author's current zoom.
-    const assignedId = lastFitProjectRef.current === "" && lastFitFirstPageRef.current === firstPageId;
+    const assignedId =
+      lastFitProjectRef.current === "" &&
+      lastFitFirstPageRef.current === firstPageId;
     lastFitProjectRef.current = projectId ?? "";
     lastFitFirstPageRef.current = firstPageId;
     if (assignedId) return;
@@ -750,7 +738,14 @@ function Studio({
    * tab/window) is left to the browser — this tab keeps editing.
    */
   const leaveEditor = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.shiftKey ||
+      event.altKey ||
+      event.button !== 0
+    )
+      return;
     const state = useEditor.getState();
     if (state.saveState !== "dirty" && state.saveState !== "saving") return;
     event.preventDefault();
@@ -801,7 +796,12 @@ function Studio({
         (t.isContentEditable ||
           ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
       const meta = e.metaKey || e.ctrlKey;
-      if (e.defaultPrevented || e.isComposing || t?.closest('[role="dialog"], [role="menu"]')) return;
+      if (
+        e.defaultPrevented ||
+        e.isComposing ||
+        t?.closest('[role="dialog"], [role="menu"]')
+      )
+        return;
       const key = shortcutKey(e);
 
       if (meta && key === "z") {
@@ -823,7 +823,8 @@ function Studio({
       if (meta && key === "s") {
         e.preventDefault();
         // ⇧⌘S — «حفظ باسم» a native `.nsq` file; ⌘S keeps saving to the library.
-        if (e.shiftKey) window.dispatchEvent(new CustomEvent(NSQ_SAVE_AS_EVENT));
+        if (e.shiftKey)
+          window.dispatchEvent(new CustomEvent(NSQ_SAVE_AS_EVENT));
         else void saveNow();
         return;
       }
@@ -944,7 +945,12 @@ function Studio({
         bring(e.shiftKey ? "front" : "forward");
         return;
       }
-      if (!typing && !meta && e.shiftKey && (key === "1" || e.code === "Digit1")) {
+      if (
+        !typing &&
+        !meta &&
+        e.shiftKey &&
+        (key === "1" || e.code === "Digit1")
+      ) {
         e.preventDefault();
         fitToScreen();
         return;
@@ -955,12 +961,21 @@ function Studio({
        * buttons stay hittable and no panel can leave the screen. Browser zoom
        * is never touched.
        */
-      if (meta && (key === "+" || key === "=" || e.code === "Equal" || e.code === "NumpadAdd")) {
+      if (
+        meta &&
+        (key === "+" ||
+          key === "=" ||
+          e.code === "Equal" ||
+          e.code === "NumpadAdd")
+      ) {
         e.preventDefault();
         zoomCentered(useEditor.getState().zoom + 0.08);
         return;
       }
-      if (meta && (key === "-" || e.code === "Minus" || e.code === "NumpadSubtract")) {
+      if (
+        meta &&
+        (key === "-" || e.code === "Minus" || e.code === "NumpadSubtract")
+      ) {
         e.preventDefault();
         zoomCentered(useEditor.getState().zoom - 0.08);
         return;
@@ -1093,6 +1108,23 @@ function Studio({
   };
 
   /**
+   * «أدوات التقرير» is a section INSIDE the properties panel, so opening it is
+   * two steps: show the panel, then ask the panel to expand its own accordion.
+   * Announcing it as an event (rather than reaching into the panel's state)
+   * keeps the two in agreement by construction.
+   */
+  const openReportTools = () => {
+    useEditor.setState({
+      focusMode: false,
+      rightCollapsed: false,
+      rightOpen: true,
+      leftOpen: false,
+      rightTab: "properties",
+    });
+    window.dispatchEvent(new CustomEvent(OPEN_REPORT_TOOLS_EVENT));
+  };
+
+  /**
    * Keyboard/absolute variant of the panel drag.
    *
    * The pointer gesture is unchanged; this exists so the separator is a real
@@ -1100,18 +1132,34 @@ function Studio({
    * Home restores the default width) instead of a drag-only affordance.
    */
   const setPanelWidth = (side: "left" | "right", width: number) => {
-    const next = Math.min(PANEL_MAX[side], Math.max(PANEL_MIN[side], Math.round(width)));
+    const next = Math.min(
+      PANEL_MAX[side],
+      Math.max(PANEL_MIN[side], Math.round(width)),
+    );
     setPanelWidths((current) =>
       current[side] === next ? current : { ...current, [side]: next },
     );
   };
 
-  const [leftDetached, setLeftDetached] = useState(() => {
-    try { return localStorage.getItem("nasaq.panel.left.detached") === "true"; } catch { return false; }
+  /*
+   * Docking the element panel is now an OPT-IN layout choice, remembered like
+   * the rest of the workspace. The default is floating: a panel that is never
+   * asked for must not take canvas width away from the page.
+   */
+  const [leftDocked, setLeftDocked] = useState(() => {
+    try {
+      return localStorage.getItem("nasaq.panel.left.docked") === "true";
+    } catch {
+      return false;
+    }
   });
   useEffect(() => {
-    try { localStorage.setItem("nasaq.panel.left.detached", String(leftDetached)); } catch { /* session layout remains available */ }
-  }, [leftDetached]);
+    try {
+      localStorage.setItem("nasaq.panel.left.docked", String(leftDocked));
+    } catch {
+      /* the layout stays available for this session */
+    }
+  }, [leftDocked]);
 
   const resizePanel = (
     side: "left" | "right",
@@ -1127,7 +1175,7 @@ function Studio({
      * (closes) it, otherwise it springs back.
      */
     const drawer = isOverlayViewport()
-      ? handle?.closest<HTMLElement>(".editor-sidebar") ?? null
+      ? (handle?.closest<HTMLElement>(".editor-sidebar") ?? null)
       : null;
     let overshoot = 0;
     const move = (event: PointerEvent) => {
@@ -1165,7 +1213,9 @@ function Studio({
         drawer.style.transition = "";
         drawer.style.transform = "";
         if (overshoot > DRAWER_COLLAPSE_DRAG) {
-          useEditor.setState(side === "left" ? { leftOpen: false } : { rightOpen: false });
+          useEditor.setState(
+            side === "left" ? { leftOpen: false } : { rightOpen: false },
+          );
         }
       }
     };
@@ -1193,7 +1243,9 @@ function Studio({
     const activePageEl = document.querySelector<HTMLElement>(
       `.editor-canvas-stage [data-page-id="${CSS.escape(activePage.id)}"]`,
     );
-    const pageContent = activePageEl?.closest<HTMLElement>(".page-frame-content");
+    const pageContent = activePageEl?.closest<HTMLElement>(
+      ".page-frame-content",
+    );
     const activePageScale =
       pageContent && activeSize.w > 0
         ? pageContent.clientWidth / activeSize.w
@@ -1216,8 +1268,9 @@ function Studio({
     /*
      * Editor shell.
      *
-     * Rows are `auto` (header) + `minmax(0,1fr)` (workspace), so the header may
-     * wrap on a narrow tablet without stealing height from the canvas.
+     * Rows are `auto` (header) + `minmax(0,1fr)` (workspace), so the single
+     * header line never steals height from the canvas — not even on a phone,
+     * where it folds to two deliberate rows of its own.
      */
     <div
       dir="rtl"
@@ -1228,258 +1281,100 @@ function Studio({
       )}
     >
       {/*
-       * Toolbar — three zones in one logical order at every width.
+       * Toolbar — three zones, icon-first, one line at every width.
        *
-       *   ① اللوحة: a single scaling cluster (− / % / + / fit / fullscreen),
-       *     then history (تراجع/إعادة), then the document tools the author
-       *     reaches for every page (نص بالرسم، أدوات التقرير، المكتبة، أضف
-       *     مكتبة، عناوين الفقرات، الرئيسية) — each with a single, distinct
-       *     home, separated by dividers so nothing cramps.
-       *   ② المركز: the document itself — its name in one perfectly centered
-       *     capsule with the document view controls (معاينة الصفحات، الشبكة،
-       *     ثم قوائم المحاذاة/الترتيب/التحويل/العرض).
-       *   ③ مساحة العمل والحساب: save state, the project-file menu, the
-       *     «تصدير» primary action and the account menu.
+       * The canvas is the product, so the bar keeps only what belongs to the
+       * DOCUMENT: history, the scaling cluster, the document name, and the
+       * document actions (view options, save, project file, export, account).
        *
-       * The bar wraps by whole zones on narrow tablets (clusters are
-       * `shrink-0`, never split mid-group), and every control grows to a
-       * ≥42px hit target on coarse pointers — the strip auto-adjusts its
-       * footprint instead of cramping or half-clipping a button.
+       * Everything canvas-shaped moved out of here and stayed reachable: insert
+       * (image, logo, upload, library, headings, report tools, pages) lives in
+       * one «إضافة» menu on the canvas dock, and the panel gateways (elements,
+       * properties, layers) are the dock's own toggles. Alignment, arrange and
+       * transform are selection-scoped, so they live in the selection toolbar
+       * and the context menu. One home per action, and nothing that only makes
+       * sense while something is selected occupies a permanent slot.
+       *
+       * Every control is an `IconButton`: same box, same icon size, same
+       * tooltip (hover on pointer devices, long-press on touch), no labels to
+       * re-read on every visit.
        */}
-      {settingsTab && <EditorSettingsDialog initialTab={settingsTab} onClose={() => setSettingsTab(null)} />}
+      {settingsTab && (
+        <EditorSettingsDialog
+          initialTab={settingsTab}
+          onClose={() => setSettingsTab(null)}
+        />
+      )}
       <header
         ref={headerRef}
         data-editor-obstacle="header"
         className="editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]"
       >
-        {/* ① Canvas scaling, history, and the document tools. */}
+        {/* ① History and the single scaling cluster. */}
         <div className="editor-header-zone editor-header-primary">
-          <div
-            className="editor-zoom-cluster"
-            role="group"
-            aria-label="مقياس مساحة العمل"
-          >
-            <button
-              type="button"
-              className="editor-capsule-btn"
-              onClick={() => zoomCentered(zoom - 0.08)}
-              title="تصغير المقياس (⌘−)"
-              aria-label="تصغير المقياس"
-            >
-              <Minus className="size-4" />
-            </button>
-            <button
-              type="button"
-              className="editor-zoom-readout"
-              onClick={() => zoomCentered(1)}
-              title="المقياس الحالي — انقر للعودة إلى 100%"
-              aria-label="إعادة المقياس إلى مئة بالمئة"
-            >
-              {Math.round(zoom * 100)}%
-            </button>
-            <button
-              type="button"
-              className="editor-capsule-btn"
-              onClick={() => zoomCentered(zoom + 0.08)}
-              title="تكبير المقياس (⌘+)"
-              aria-label="تكبير المقياس"
-            >
-              <Plus className="size-4" />
-            </button>
-            <button
-              type="button"
-              className="editor-capsule-btn"
-              onClick={fitToScreen}
-              title="ملاءمة الصفحة (⌘0)"
-              aria-label="ملاءمة الصفحة"
-            >
-              <Scan className="size-4" />
-            </button>
-            <button
-              type="button"
-              className={cn("editor-capsule-btn", isFullscreen && "is-active")}
-              onClick={toggleFullscreen}
-              title={isFullscreen ? "الخروج من ملء الشاشة" : "ملء الشاشة"}
-              aria-label={isFullscreen ? "الخروج من ملء الشاشة" : "ملء الشاشة"}
-              aria-pressed={isFullscreen}
-            >
-              {isFullscreen ? (
-                <Minimize className="size-4" />
-              ) : (
-                <Maximize className="size-4" />
-              )}
-            </button>
-          </div>
-
-          <span className="editor-header-sep" aria-hidden />
-
-          <button
-            type="button"
-            className="editor-header-btn"
+          <IconButton
+            label="تراجع"
+            hint="العودة إلى التغيير السابق"
+            shortcut="⌘Z"
+            icon={<Undo2 className="size-4" strokeWidth={1.7} />}
             onClick={undo}
             disabled={pastDepth <= 1}
-            title="تراجع (⌘Z)"
-            aria-label="تراجع"
-          >
-            <Undo2 className="size-4" />
-          </button>
-          <button
-            type="button"
-            className="editor-header-btn"
+          />
+          <IconButton
+            label="إعادة"
+            hint="تطبيق التغيير التالي"
+            shortcut="⌘⇧Z"
+            icon={<Redo2 className="size-4" strokeWidth={1.7} />}
             onClick={redo}
             disabled={!futureDepth}
-            title="إعادة (⌘⇧Z)"
-            aria-label="إعادة"
-          >
-            <Redo2 className="size-4" />
-          </button>
-
-          <span className="editor-header-sep" aria-hidden />
-
-          {/*
-           * Document/editing tools — one home each: draw a text box straight
-           * on the canvas, report tools, the library, add-a-library, the
-           * heading generator, and Home. Sidebar/layers/settings gateways
-           * live in the unified tool dock instead (no duplicates).
-           */}
-          <button
-            type="button"
-            data-tour="text-tool"
-            onClick={() => {
-              useEditor.setState({
-                leftTab: "elements",
-                leftOpen: true,
-                rightOpen: false,
-                leftCollapsed: false,
-              });
-              window.dispatchEvent(new CustomEvent("nasaq:draw-text"));
-            }}
-            className="editor-header-btn"
-            title="إدراج مربع نص — اسحب على الصفحة لتحديد موضعه وحجمه"
-            aria-label="إدراج مربع نص"
-          >
-            <PenLine className="size-4" />
-          </button>
-          <button
-            type="button"
-            data-tour="report-tools"
-            onClick={() => {
-              // Report tools are docked in the RIGHT panel: leave focus mode,
-              // open «الخصائص» and expand the section via its own event.
-              useEditor.setState({
-                focusMode: false,
-                rightCollapsed: false,
-                rightOpen: true,
-                leftOpen: false,
-                rightTab: "properties",
-              });
-              window.dispatchEvent(new CustomEvent(OPEN_REPORT_TOOLS_EVENT));
-            }}
-            className="editor-header-btn"
-            title="أدوات التقرير — بطاقات المؤشرات، الختم، الترويسة والتذييل، ومراجعة ما قبل الطباعة"
-            aria-label="أدوات التقرير"
-          >
-            <ClipboardList className="size-4" />
-          </button>
-          <button
-            type="button"
-            data-tour="library-toggle"
-            onClick={() => {
-              // One button, two directions: a second press retracts the dock
-              // (or closes the drawer), so the Library is a toggle, not a
-              // one-way door.
-              if (libraryVisible) {
-                if (focusMode)
-                  useEditor.setState({
-                    focusMode: false,
-                    leftCollapsed: false,
-                    leftOpen: false,
-                  });
-                else toggleSidebar("left");
-                return;
-              }
-              openLibrary();
-            }}
-            aria-pressed={libraryVisible}
-            className={cn("editor-header-btn", libraryVisible && "is-active")}
-            title={libraryVisible ? "إغلاق المكتبة" : "فتح المكتبة"}
-            aria-label={libraryVisible ? "إغلاق المكتبة" : "فتح المكتبة"}
-          >
-            <Library className="size-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setAddLibraryOpen(true)}
-            className="editor-header-btn hidden lg2:inline-flex"
-            title="أضف مكتبة — حوّل أي مجلد أو مجموعة ملفات إلى مجلدات بنمط نَسَق"
-            aria-label="أضف مكتبة"
-          >
-            <FolderPlus className="size-4" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setHeadingGeneratorOpen(true)}
-            className="editor-header-btn hidden lg2:inline-flex"
-            title="مولد عناوين الفقرات — تصاميم جاهزة وقابلة للتعديل"
-            aria-label="مولد عناوين الفقرات"
-          >
-            <Heading1 className="size-4" />
-          </button>
-          {/*
-           * «المزيد» — narrow-screen tool overflow.
-           *
-           * Below the docked breakpoint the header must stay ONE row: the
-           * controls an author uses constantly (zoom, history, text, report
-           * tools, library, home) keep their buttons, while the two occasional
-           * workbenches move into this menu instead of wrapping the strip onto
-           * a second line and eating canvas height. Native <details> owns the
-           * open/close state, so it is keyboard-accessible with no extra code.
-           */}
-          <details className="editor-header-more lg2:hidden">
-            <summary
-              className="editor-header-btn"
-              title="أدوات إضافية"
-              aria-label="أدوات إضافية"
-            >
-              <Ellipsis className="size-4" />
-            </summary>
-            <div className="editor-header-more-menu" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                onClick={(event) => {
-                  setAddLibraryOpen(true);
-                  event.currentTarget.closest("details")?.removeAttribute("open");
-                }}
+          />
+          {/* On a phone the stepper gives way to «عرض», which carries the same
+              commands, so history and export are never pushed off screen. */}
+          {!isCompact && (
+            <>
+              <span className="editor-header-sep" aria-hidden />
+              <div
+                className="editor-zoom-cluster"
+                role="group"
+                aria-label="مقياس مساحة العمل"
               >
-                <FolderPlus className="size-4" aria-hidden />
-                أضف مكتبة
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                onClick={(event) => {
-                  setHeadingGeneratorOpen(true);
-                  event.currentTarget.closest("details")?.removeAttribute("open");
-                }}
-              >
-                <Heading1 className="size-4" aria-hidden />
-                مولد عناوين الفقرات
-              </button>
-            </div>
-          </details>
-          <a
-            href={homeHref}
-            onClick={leaveEditor}
-            className="editor-header-btn"
-            title="العودة إلى الرئيسية"
-            aria-label="العودة إلى الرئيسية"
-          >
-            <Home className="size-4" />
-          </a>
+                <IconButton
+                  label="تصغير المقياس"
+                  shortcut="⌘−"
+                  className="editor-zoom-btn"
+                  icon={<Minus className="size-4" strokeWidth={1.8} />}
+                  onClick={() => zoomCentered(zoom - 0.08)}
+                />
+                <button
+                  type="button"
+                  className="editor-zoom-readout"
+                  onClick={() => zoomCentered(1)}
+                  title="المقياس الحالي — انقر للعودة إلى 100%"
+                  aria-label="إعادة المقياس إلى مئة بالمئة"
+                >
+                  {Math.round(zoom * 100)}%
+                </button>
+                <IconButton
+                  label="تكبير المقياس"
+                  shortcut="⌘+"
+                  className="editor-zoom-btn"
+                  icon={<Plus className="size-4" strokeWidth={1.8} />}
+                  onClick={() => zoomCentered(zoom + 0.08)}
+                />
+                <IconButton
+                  label="ملاءمة الصفحة"
+                  hint="إظهار الصفحة كاملة داخل مساحة العمل"
+                  shortcut="⌘0"
+                  className="editor-zoom-btn"
+                  icon={<Scan className="size-4" strokeWidth={1.7} />}
+                  onClick={fitToScreen}
+                />
+              </div>
+            </>
+          )}
         </div>
 
-        {/* ② Document identity + the single primary workspace utility. */}
+        {/* ② The document itself — its name, centred, editable in place. */}
         <div className="editor-header-zone editor-header-center">
           <div className="editor-doc-capsule">
             <input
@@ -1490,65 +1385,36 @@ function Studio({
               className="editor-doc-name"
               placeholder="مستند جديد"
             />
-            <span className="editor-capsule-sep" aria-hidden />
-            <button
-              type="button"
-              onClick={() => toggle("previewAll")}
-              className={cn("editor-capsule-btn", previewAll && "is-active")}
-              title={
-                previewAll ? "معاينة كل الصفحات (مفعّل)" : "معاينة صفحة واحدة"
-              }
-              aria-label="تبديل معاينة كل الصفحات"
-              aria-pressed={previewAll}
-            >
-              <Eye className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => toggle("showGrid")}
-              className={cn("editor-capsule-btn", showGrid && "is-active")}
-              title="إظهار / إخفاء الشبكة"
-              aria-label="الشبكة"
-              aria-pressed={showGrid}
-            >
-              <Grid3x3 className="size-4" />
-            </button>
           </div>
-          {/* Document view controls: محاذاة، ترتيب الطبقات، تحويل، عرض. */}
-          <ToolbarMenus
-            fitToScreen={fitToScreen}
-            fitToSelection={fitToSelection}
-          />
         </div>
 
-        {/* ③ Workspace/account + the export action. */}
+        {/* ③ Document actions and the account. */}
         <div className="editor-header-zone editor-header-actions ms-auto">
+          <ViewMenu fitToScreen={fitToScreen} fitToSelection={fitToSelection} />
           <SaveBadge onClick={() => void saveNow()} />
           <ProjectFileMenu onOpenFile={onOpenFile} />
-          <span className="editor-header-sep" aria-hidden />
-          <button
-            type="button"
-            onClick={() => toggle("exportOpen")}
+          <IconButton
+            label="تصدير المشروع"
+            hint="PDF أو Word أو PowerPoint أو صورة"
+            shortcut="⌘E"
+            primary
             className="editor-export-btn"
-            title="تصدير المشروع (⌘E)"
-            aria-label="تصدير"
-          >
-            <Download className="size-4" />
-            تصدير
-          </button>
-          <EditorAccountMenu />
+            icon={<Download className="size-4" strokeWidth={1.8} />}
+            onClick={() => toggle("exportOpen")}
+          />
+          <EditorAccountMenu homeHref={homeHref} onNavigateHome={leaveEditor} />
         </div>
       </header>
 
       {/*
-       * Workspace.
+       * Workspace — canvas first, always.
        *
-       * `lg2:grid-rows-[minmax(0,1fr)]` is what keeps the panes on screen: without
-       * a bounded row the implicit row sizes to the tallest panel's content, and
-       * the overflow is then clipped by `lg2:overflow-hidden` — which is exactly
-       * how the lower properties controls became unreachable. The wrappers are
-       * `h-full min-h-0 overflow-hidden` so each panel's inner `flex-1
-       * overflow-auto` region is the thing that scrolls.
+       * There is no column for a panel and no column for a tool rail any more:
+       * the row is a single track, and Properties, Layers, Tools and the element
+       * library are floating cards positioned over it (or docked beside it only
+       * when the author explicitly asks for that). Opening, closing or moving a
+       * panel therefore cannot reflow the document, and the artboard keeps the
+       * full width in every mode.
        */}
       <div
         onContextMenu={(event) => {
@@ -1566,36 +1432,47 @@ function Studio({
             source: "canvas",
           });
         }}
-        className={cn(
-          "editor-focus-workspace editor-workspace-row relative grid min-h-0 grid-rows-[minmax(0,1fr)] overflow-hidden",
-        )}
+        className="editor-focus-workspace editor-workspace-row relative min-h-0 overflow-hidden"
         style={{
           /*
-           * Docking transition (fix #5): the Library button and the sidebar
-           * toggles animate the column change so the dock slides instead of
-           * snapping. `is-resizing-panel` (set while a resizer is dragged)
-           * switches the transition off, so manual resizing stays 1:1 with the
-           * pointer and never feels laggy.
+           * A docked panel is a grid column the author opted into; every other
+           * mode is a single full-width track, so nothing reserves space for a
+           * panel the author is not currently using.
            */
           transition:
             "grid-template-columns 180ms cubic-bezier(0.22, 1, 0.36, 1)",
-          gridTemplateColumns: !isDesktop
-            ? undefined
-            : focusMode
-              ? "minmax(0, 1fr)"
-              : `${leftCollapsed || leftDetached ? "" : `minmax(${PANEL_MIN.left}px, min(${panelWidths.left}px, 28vw)) `}max-content minmax(0, 1fr)`,
+          display: "grid",
+          gridTemplateColumns:
+            leftDocked && isDesktop && !focusMode
+              ? `minmax(${PANEL_MIN.left}px, min(${panelWidths.left}px, 28vw)) minmax(0, 1fr)`
+              : "minmax(0, 1fr)",
         }}
       >
-        <TouchPropertiesSheet side="left" open={!focusMode && (isDesktop ? !leftCollapsed : leftOpen)}
-          docked={isDesktop && !leftDetached}
-          onDockChange={docked => setLeftDetached(!docked)}
-          onClose={() => isDesktop ? toggle("leftCollapsed") : useEditor.setState({ leftOpen: false })}>
+        <FloatingPanel
+          storageKey="nasaq.panel.elements"
+          title="لوحة العناصر"
+          side="left"
+          open={
+            !focusMode && (leftDocked && isDesktop ? !leftCollapsed : leftOpen)
+          }
+          docked={leftDocked && isDesktop}
+          onDockChange={(docked) => {
+            setLeftDocked(docked);
+            if (!docked)
+              useEditor.setState({ leftOpen: true, leftCollapsed: false });
+          }}
+          onClose={() =>
+            leftDocked && isDesktop
+              ? toggle("leftCollapsed")
+              : useEditor.setState({ leftOpen: false })
+          }
+        >
           <LeftPanel
             onUpload={onUpload}
             onUploadSvg={onUploadSvg}
             onAddCustomAsset={onAddCustomAsset}
           />
-          {isDesktop && !leftDetached && !leftCollapsed && !focusMode && (
+          {leftDocked && isDesktop && !leftCollapsed && !focusMode && (
             <PanelResizeHandle
               side="left"
               width={panelWidths.left}
@@ -1603,70 +1480,36 @@ function Studio({
               max={PANEL_MAX.left}
               onResize={(width) => setPanelWidth("left", width)}
               onStart={(event) =>
-                resizePanel("left", event.clientX, panelWidths.left, event.currentTarget)
+                resizePanel(
+                  "left",
+                  event.clientX,
+                  panelWidths.left,
+                  event.currentTarget,
+                )
               }
             />
           )}
-        </TouchPropertiesSheet>
-        {isDesktop && !focusMode && (
-          <StudioToolDock
-            onOpenLeft={openLeftFromDock}
-            onOpenRight={openRightFromDock}
-            onUploadImage={() => onUpload("image")}
-            onOpenFiles={onOpenFile}
-          />
-        )}
+        </FloatingPanel>
 
-        <div className="editor-canvas-workspace relative grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto_auto] overflow-hidden">
+        <div className="editor-canvas-workspace relative grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden">
           {/* Non-modal drawers leave direct canvas manipulation available. */}
-          <CanvasStage
-            onDropImage={onDropImage}
-          />
+          <CanvasStage onDropImage={onDropImage} />
           {/*
-           * Tablet: the toolbar floats inside the canvas row only (an
-           * absolutely-positioned grid item placed on row 1), so it can never
-           * sit on the page rail, the arrange bar or the status bar, and the
-           * canvas keeps its full width.
+           * The dock lives INSIDE the canvas row, so it floats over the
+           * workspace instead of occupying a column, and it can never sit on
+           * the page rail or the status bar below it.
            */}
-          {!isDesktop && !focusMode && (
-            <div className="studio-tool-dock-slot">
-              <StudioToolDock
-                floating
-                onOpenLeft={openLeftFromDock}
-                onOpenRight={openRightFromDock}
-                onUploadImage={() => onUpload("image")}
-                onOpenFiles={onOpenFile}
-              />
-            </div>
+          {!focusMode && (
+            <CanvasDock
+              onOpenLeft={openLeftFromDock}
+              onOpenRight={openRightFromDock}
+              onUpload={(kind) => onUpload(kind)}
+              onUploadSvg={onUploadSvg}
+              onAddLibrary={() => setAddLibraryOpen(true)}
+              onHeadingGenerator={() => setHeadingGeneratorOpen(true)}
+              onReportTools={openReportTools}
+            />
           )}
-          {/* Launcher chips live in the canvas row too (grid row 1 / 2), so they
-               sit above the page rail instead of guessing its height. */}
-          {!(leftOpen || rightOpen) && (
-            <div className="editor-launcher-slot flex lg2:hidden">
-              <button
-                type="button"
-                onClick={() => toggle("leftOpen")}
-                className="pointer-events-auto h-11 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
-              >
-                عناصر
-              </button>
-              <button
-                type="button"
-                onClick={() => addPage()}
-                className="pointer-events-auto h-11 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
-              >
-                صفحة
-              </button>
-              <button
-                type="button"
-                onClick={() => toggle("rightOpen")}
-                className="pointer-events-auto h-11 rounded-full bg-navy px-4 text-[12px] font-extrabold text-white shadow-lg shadow-navy/25"
-              >
-                خصائص
-              </button>
-            </div>
-          )}
-          <ArrangeBar />
           <div
             data-editor-obstacle="page-rail-resizer"
             className="editor-page-rail-resizer"
@@ -1709,9 +1552,15 @@ function Studio({
           <WorkspaceStatusBar />
         </div>
 
-        <TouchPropertiesSheet open={rightOpen && !focusMode} onClose={() => useEditor.setState({ rightOpen: false })}>
+        <FloatingPanel
+          storageKey="nasaq.panel.properties"
+          title="الخصائص والطبقات"
+          side="right"
+          open={rightOpen && !focusMode}
+          onClose={() => useEditor.setState({ rightOpen: false })}
+        >
           <RightPanel onReplaceImage={onReplaceImage} />
-        </TouchPropertiesSheet>
+        </FloatingPanel>
       </div>
 
       <WorkspaceOverlays
@@ -1725,9 +1574,13 @@ function Studio({
        * Modal workbenches, mounted at the shell level so they survive a panel
        * collapse, a focus-mode toggle or a page switch while open.
        */}
-      {addLibraryOpen && <AddLibraryDialog onClose={() => setAddLibraryOpen(false)} />}
+      {addLibraryOpen && (
+        <AddLibraryDialog onClose={() => setAddLibraryOpen(false)} />
+      )}
       {headingGeneratorOpen && (
-        <HeadingGeneratorDialog onClose={() => setHeadingGeneratorOpen(false)} />
+        <HeadingGeneratorDialog
+          onClose={() => setHeadingGeneratorOpen(false)}
+        />
       )}
       {/*
        * First-visit walkthrough. Mounted only after hydration: the tour
@@ -1753,28 +1606,27 @@ function SaveBadge({ onClick }: { onClick: () => void }) {
   const label = saveLabel(state, savedAt, Date.now());
   const tone =
     state === "error"
-      ? "bg-danger/10 text-error"
+      ? "is-danger"
       : state === "dirty" || state === "saving"
-        ? "text-muted"
-        : "text-success";
+        ? "is-pending"
+        : "is-saved";
   return (
-    <button
-      type="button"
+    /* Same 34px control as the rest of the strip: the state lives in the icon
+       and its colour, the full sentence in the tooltip. */
+    <IconButton
+      label={label}
+      hint="حفظ المستند الآن"
+      shortcut="⌘S"
       onClick={onClick}
-      title={`${label} (⌘S)`}
-      className={cn(
-        // Same 36px control as the rest of the strip; the state lives in the
-        // icon and colour, the full label in the tooltip.
-        "grid size-9 shrink-0 place-items-center rounded-[8px] transition hover:bg-line-2",
-        tone,
-      )}
-    >
-      {state === "saved" ? (
-        <Check className="size-4" />
-      ) : (
-        <Save className="size-4" />
-      )}
-    </button>
+      className={tone}
+      icon={
+        state === "saved" ? (
+          <Check className="size-4" strokeWidth={1.9} />
+        ) : (
+          <Save className="size-4" strokeWidth={1.7} />
+        )
+      }
+    />
   );
 }
 

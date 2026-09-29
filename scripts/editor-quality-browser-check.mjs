@@ -78,7 +78,9 @@ try {
     await page.waitForTimeout(400);
     const bar = page.locator(".floating-toolbar");
     assert.ok(inside(await bar.boundingBox(), width, height));
-    assert.ok((await bar.boundingBox()).height <= 44);
+    // One row on a desktop/tablet lane; on a phone the bar wraps rather than
+    // hiding a control behind a scroll, so the ceiling is two compact rows.
+    assert.ok((await bar.boundingBox()).height <= (width < 600 ? 96 : 44));
     assert.ok(
       (await page.locator(".editor-toolbar").boundingBox()).height <=
         (width < 600 ? 140 : 96),
@@ -258,10 +260,14 @@ try {
       window.store.setState({ leftOpen: true, leftCollapsed: false }),
     );
     await page.waitForTimeout(200);
-    if (width >= 1100)
-      await page
-        .getByRole("button", { name: "فصل لوحة العناصر", exact: true })
-        .click();
+    // Every panel floats: opening one must never take width from the canvas,
+    // so there is no docked variant left to detach here.
+    assert.equal(
+      await page.evaluate(
+        () => document.querySelector(".editor-canvas-stage").getBoundingClientRect().width > 0,
+      ),
+      true,
+    );
     const library = page.getByRole("region", {
       name: "لوحة العناصر",
       exact: true,

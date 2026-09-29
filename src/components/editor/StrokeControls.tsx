@@ -24,6 +24,10 @@ export function StrokeControls() {
   };
   const commit = () => useEditor.getState().commit();
   return (
+    <>
+    {/* The separator belongs to the control: a selection with no stroke
+        support must not leave a stray divider behind. */}
+    <span className="floating-toolbar-sep" aria-hidden />
     <div
       className="floating-toolbar-section"
       role="group"
@@ -59,5 +63,6 @@ export function StrokeControls() {
         onBlur={commit}
       />
     </div>
+    </>
   );
 }

@@ -229,6 +229,9 @@ export const ElementNode = memo(function ElementNode({
   return (
     <div
       data-el-id={el.id}
+      /* Stable hook for tests and for the contextual tooling: the DOM says
+         what it is, so a check never has to guess from a class name. */
+      data-el-type={el.type}
       className={cn("canvas-el", interactive && view.locked && "locked")}
       style={{
         left: `${view.x}mm`,

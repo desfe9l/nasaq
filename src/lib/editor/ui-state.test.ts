@@ -5,11 +5,14 @@ import {
   OVERLAY_BREAKPOINT,
   PAGES_PANEL_DEFAULT,
   PAGES_PANEL_MIN,
+  anchorMenuPlacement,
   clampPagesHeight,
   extractSvgMarkup,
   isOverlayViewport,
   measuredSelectionBox,
+  panelSpawnRect,
   placeFloatingToolbar,
+  tipPlacement,
   type ScreenBox,
 } from "./ui-state.ts";
 
@@ -406,5 +409,96 @@ describe("measuredSelectionBox", () => {
       }),
       null,
     );
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Anchored menus, tooltips and floating panels                               */
+/* -------------------------------------------------------------------------- */
+
+describe("anchored menu placement", () => {
+  const viewport = { width: 390, height: 844 };
+  const size = { width: 232, height: 300 };
+
+  it("aligns to the anchor's end edge — the RTL reading direction", () => {
+    const at = anchorMenuPlacement(
+      box(300, 200, 40, 40),
+      size,
+      viewport,
+      { align: "end" },
+    );
+    assert.equal(at.left, 300 + 40 - 232);
+    assert.equal(at.side, "bottom");
+  });
+
+  it("opens above when there is no room below", () => {
+    const at = anchorMenuPlacement(box(40, 700, 40, 40), size, viewport);
+    assert.equal(at.side, "above");
+    assert.ok(at.top + size.height <= 700, "menu must end above the anchor");
+  });
+
+  it("never hangs off either edge of a phone", () => {
+    const start = anchorMenuPlacement(box(2, 300, 30, 30), size, viewport, {
+      align: "start",
+    });
+    const end = anchorMenuPlacement(box(360, 300, 30, 30), size, viewport);
+    for (const at of [start, end]) {
+      assert.ok(at.left >= 0, `left ${at.left} inside the viewport`);
+      assert.ok(at.left + size.width <= viewport.width, "menu fits the width");
+      assert.ok(at.top >= 0, "menu fits above the top edge");
+      assert.ok(at.top + size.height <= viewport.height, "menu fits below the bottom edge");
+    }
+  });
+
+  it("keeps a menu narrower than the viewport intact", () => {
+    const at = anchorMenuPlacement(
+      box(10, 10, 20, 20),
+      { width: viewport.width - 16, height: 120 },
+      viewport,
+      { align: "start" },
+    );
+    assert.equal(at.left, 8);
+  });
+});
+
+describe("tooltip placement", () => {
+  const viewport = { width: 390, height: 844 };
+  const size = { width: 180, height: 48 };
+
+  it("prefers the requested side and stays centred on the control", () => {
+    const at = tipPlacement({ left: 100, top: 400, width: 40, height: 40 }, size, viewport, "bottom");
+    assert.equal(at.side, "bottom");
+    assert.equal(at.left, 100 + 20 - 90);
+  });
+
+  it("flips rather than leaving the screen", () => {
+    const at = tipPlacement({ left: 100, top: 810, width: 40, height: 40 }, size, viewport, "bottom");
+    assert.equal(at.side, "above");
+    assert.ok(at.top + size.height <= 810);
+  });
+
+  it("clamps a control that sits in the very corner", () => {
+    const at = tipPlacement({ left: 370, top: 830, width: 20, height: 14 }, size, viewport, "bottom");
+    assert.ok(at.left + size.width <= viewport.width, "tooltip fits the right edge");
+    assert.ok(at.top + size.height <= viewport.height, "tooltip fits the bottom edge");
+  });
+});
+
+describe("floating panel spawn", () => {
+  it("hugs the stage corner without covering the artboard centre", () => {
+    const stage = box(0, 52, 1440, 700);
+    const at = panelSpawnRect(stage, { width: 320, height: 520 }, { width: 1440, height: 900 });
+    assert.equal(at.width, 320);
+    assert.equal(at.left, 1440 - 320 - 12);
+    assert.equal(at.top, 52 + 12);
+  });
+
+  it("fits a phone instead of asking for desktop width", () => {
+    const stage = box(0, 96, 390, 600);
+    const at = panelSpawnRect(stage, { width: 320, height: 900 }, { width: 390, height: 844 });
+    assert.ok(at.width <= 390 - 24, `panel width ${at.width}`);
+    assert.ok(at.height <= 844 - 24, `panel height ${at.height}`);
+    assert.ok(at.left >= 0 && at.left + at.width <= 390, "panel stays on screen");
+    assert.ok(at.top + at.height <= 844, "panel stays on screen vertically");
   });
 });

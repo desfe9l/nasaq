@@ -44,7 +44,6 @@ import {
 import { useEditor, type ContextMenuPoint } from "@/lib/editor/store";
 import { normalizeFade } from "@/lib/editor/fade";
 import { elementsBounds, findElement } from "@/lib/editor/model";
-import type { PrintGuideSettings } from "@/lib/editor/print-guides";
 import { cn } from "@/lib/utils";
 
 type MenuPoint = ContextMenuPoint;
@@ -830,16 +829,16 @@ export function WorkspaceOverlays({
 
 export type { MenuPoint };
 
+/**
+ * Status strip — read-only information about the document and the selection.
+ *
+ * It used to carry the zoom cluster and three print-guide switches, which were
+ * duplicates of the header's zoom cluster and are now options in «عرض». What is
+ * left is what an author actually reads while working: which page, how big it
+ * is, how many objects it holds, and what is currently selected. It occupies a
+ * fixed 28px and never grows with the viewport.
+ */
 export function WorkspaceStatusBar() {
-  const zoom = useEditor((s) => s.zoom);
-  const changeZoom = (next: number) => {
-    const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
-    if (!stage) return;
-    const rect = stage.getBoundingClientRect();
-    zoomAnchoredAt(stage, useEditor.getState().zoom, next, rect.left + rect.width / 2, rect.top + rect.height / 2);
-  };
-  const printGuides = useEditor((s) => s.printGuides);
-  const togglePrintGuide = useEditor((s) => s.togglePrintGuide);
   /*
    * Narrow selectors only. This bar is always mounted, so a whole-document
    * (`pages`) subscription re-rendered it on every element write. The page
@@ -890,50 +889,6 @@ export function WorkspaceStatusBar() {
           ? `${selectedIds.length} محدد${selectionLabel ? ` · ${selectionLabel}` : ""}`
           : "لا يوجد تحديد"}
       </span>
-      <span className="flex items-center gap-1">
-        {GUIDE_TOGGLES.map((guide) => (
-          <button
-            key={guide.key}
-            type="button"
-            onClick={() => togglePrintGuide(guide.key)}
-            aria-pressed={Boolean(printGuides?.[guide.key])}
-            title={guide.hint}
-            className={cn(
-              "rounded-[5px] border px-1.5 py-0.5 text-[10px] font-extrabold",
-              printGuides?.[guide.key]
-                ? "border-navy-2 bg-navy-2/10 text-brand-hover"
-                : "border-transparent text-muted",
-            )}
-          >
-            {guide.label}
-          </button>
-        ))}
-        <button type="button" aria-label="تصغير اللوحة" onClick={() => changeZoom(zoom - 0.08)}><ZoomOut className="size-4" /></button>
-        <button type="button" aria-label="مقياس اللوحة 100%" onClick={() => changeZoom(1)}>{Math.round(zoom * 100)}%</button>
-        <button type="button" aria-label="تكبير اللوحة" onClick={() => changeZoom(zoom + 0.08)}><ZoomIn className="size-4" /></button>
-      </span>
     </div>
   );
 }
-
-const GUIDE_TOGGLES: {
-  key: keyof PrintGuideSettings;
-  label: string;
-  hint: string;
-}[] = [
-  {
-    key: "safe",
-    label: "المنطقة الآمنة",
-    hint: "إظهار المنطقة الآمنة للنص (١٠ مم من حدّ القطع).",
-  },
-  {
-    key: "gutter",
-    label: "هامش التجليد",
-    hint: "إظهار هامش التجليد ١٥ مم عند الحافة اليمنى.",
-  },
-  {
-    key: "bleed",
-    label: "القص الزائد",
-    hint: "إظهار منطقة القص الزائد ٣ مم وعلامات القص.",
-  },
-];
