@@ -1,26 +1,20 @@
-import { ArrowLeft, Crown, LayoutTemplate, Sparkles } from "lucide-react";
-import { PACKS } from "@/lib/editor/templates";
-import { CARD_W, CARD_WRAP, SITE_CARD } from "@/components/site/cards";
-import { LicenseBadge } from "@/components/site/LicenseBadge";
+import { ChevronDown, Crown } from "lucide-react";
+import { PACKS, createProject } from "@/lib/editor/templates";
+import { LicenseBadge } from "./LicenseBadge";
+import { TemplatePreview } from "./TemplatePreview";
 import { usePublishedTemplates } from "@/lib/admin/use-site-settings";
-import { publishedTemplatePath, templateDisplaySlug } from "@/lib/templates/published";
+import {
+  publishedTemplatePath,
+  templateDisplaySlug,
+} from "@/lib/templates/published";
 import { cn } from "@/lib/utils";
 
-/**
- * Premium Templates — the paid shelf, in one component.
- *
- * Two real sources, one visual treatment:
- *
- *   1. The licensed starter packs (`PACKS` minus the blank page) — always
- *      present, so the section never collapses to nothing on a fresh install.
- *   2. The published licensed templates from the admin dashboard, shown with
- *      their real thumbnails and stable public links when the catalogue has
- *      any. They come first because they are the newest paid work.
- *
- * Nothing here claims an entitlement: every card links to the catalogue
- * (`/templates`) where the licence check already lives, and the badge only
- * states whether the item is inside the current licence.
- */
+const packs = PACKS.filter((pack) => pack.id !== "blank").map((pack) => ({
+  ...pack,
+  page: createProject(pack.id).pages[0],
+}));
+
+/** Real catalogue data only; native disclosure keeps all content reachable by keyboard. */
 export function PremiumTemplates({
   className,
   showHeading = true,
@@ -31,118 +25,87 @@ export function PremiumTemplates({
   const published = usePublishedTemplates().filter(
     (item) => item.tier === "licensed",
   );
-
-  const packs = PACKS.filter((pack) => pack.id !== "blank");
-
+  const card =
+    "flex min-w-0 flex-col gap-2 rounded-lg border border-line bg-surface p-3 text-right transition-colors hover:border-brand/50";
   return (
-    <section className={cn("mx-auto w-full max-w-6xl px-4 py-12 sm:px-6", className)}>
-      {showHeading && (
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/12 px-2.5 py-1 text-[11px] font-extrabold text-ink">
-              <Crown className="size-3.5" aria-hidden />
-              Premium Templates
-            </span>
-            <h2 className="mt-3 text-[20px] font-extrabold text-ink">
-              قوالب مميزة — تُفتح كاملة مع الترخيص
-            </h2>
-            <p className="mt-1 text-[13px] leading-6 text-muted">
-              حزم جاهزة بأغلفة وفصول وجداول ومؤشرات، تُنسخ إلى مشروعك لتعدّلها
-              بحرية. القوالب المميزة تُفعّل تلقائيًا وفق ترخيصك الحالي.
+    <section
+      className={cn("mx-auto w-full max-w-6xl px-4 py-6 sm:px-6", className)}
+      aria-label="قوالب Premium"
+    >
+      <details
+        open
+        className="group/premium rounded-xl border border-line bg-surface"
+      >
+        <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 py-2 text-[13px] font-bold text-ink">
+          <Crown className="size-4 text-muted" aria-hidden />
+          <span>قوالب Premium</span>
+          <span className="text-[11px] font-normal text-muted">
+            {published.length + packs.length}
+          </span>
+          <ChevronDown
+            className="ms-auto size-4 transition-transform group-open/premium:rotate-180"
+            aria-hidden
+          />
+        </summary>
+        <div className="border-t border-line p-3">
+          {showHeading && (
+            <p className="mb-3 text-[12px] leading-6 text-muted">
+              قوالب مؤسسية قابلة للتحرير — تُفتح وفق ترخيصك الحالي.
             </p>
-          </div>
-          <a
-            href="/templates"
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-[12px] font-extrabold text-ink transition hover:border-brand/40"
-          >
-            تصفح الكتالوج كاملًا
-            <ArrowLeft className="size-4" aria-hidden />
-          </a>
-        </div>
-      )}
-
-      <div className={cn("mt-6", CARD_WRAP)}>
-        {published.map((template) => {
-          const slug = templateDisplaySlug(template);
-          return (
-            <a
-              key={template.id}
-              href={publishedTemplatePath(slug)}
-              className={cn(
-                "group flex flex-col overflow-hidden rounded-2xl border border-line bg-surface p-4 text-right transition hover:-translate-y-1 hover:border-brand/40",
-                CARD_W,
-                SITE_CARD,
-              )}
-              aria-label={`معاينة القالب المميز ${template.title}`}
-            >
-              <span className="relative grid aspect-[210/297] w-full place-items-center overflow-hidden rounded-xl border border-line bg-surface-2">
-                {template.thumbnail ? (
+          )}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {published.map((template) => (
+              <a
+                key={template.id}
+                href={publishedTemplatePath(templateDisplaySlug(template))}
+                className={card}
+              >
+                {template.thumbnail && (
                   <img
                     src={template.thumbnail}
                     alt=""
-                    className="h-full w-full object-contain"
                     loading="lazy"
+                    className="h-36 w-full rounded border border-line object-contain"
                   />
-                ) : (
-                  <LayoutTemplate className="size-8 text-muted" aria-hidden />
                 )}
-                <span className="absolute top-2 left-2">
-                  <LicenseBadge
-                    state="locked"
-                    size="sm"
-                    label="ترخيص"
-                    title="قالب مميز — يُفتح ضمن النسخة الكاملة"
-                  />
+                <strong className="line-clamp-2 text-[13px]">
+                  {template.title}
+                </strong>
+                {template.description && (
+                  <p className="line-clamp-2 text-[11px] leading-5 text-muted">
+                    {template.description}
+                  </p>
+                )}
+                <span className="mt-auto">
+                  <LicenseBadge state="locked" label="قالب مرخص" />
                 </span>
-              </span>
-              <strong className="mt-3 line-clamp-2 text-[14px] font-extrabold text-ink">
-                {template.title}
-              </strong>
-              {template.description ? (
-                <span className="mt-1 line-clamp-2 text-[12px] leading-5 text-muted">
-                  {template.description}
-                </span>
-              ) : null}
-            </a>
-          );
-        })}
-
-        {packs.map((pack) => (
-          <a
-            key={pack.id}
-            href="/templates"
-            className={cn(
-              "group flex flex-col rounded-2xl border border-line bg-surface p-5 text-right transition hover:-translate-y-1 hover:border-brand/40",
-              CARD_W,
-              SITE_CARD,
-            )}
-            aria-label={`قوالب ${pack.title} المميزة`}
-          >
-            <div className="mb-3 flex items-center justify-between">
-              <span className="grid size-9 place-items-center rounded-xl bg-gold/15 text-ink">
-                <Sparkles className="size-4" aria-hidden />
-              </span>
-              <span className="text-[11px] font-bold text-muted">
-                {pack.pages} صفحة
-              </span>
-            </div>
-            <strong className="block text-[15px] font-extrabold text-ink">
-              {pack.title}
-            </strong>
-            <span className="mt-1 block text-[12px] leading-6 text-muted">
-              {pack.desc}
-            </span>
-            <span className="mt-auto pt-4">
-              <LicenseBadge
-                state="locked"
-                size="sm"
-                label="نسخة كاملة"
-                title="يُفتح هذا القالب كاملًا مع الترخيص"
-              />
-            </span>
-          </a>
-        ))}
-      </div>
+              </a>
+            ))}
+            {packs.map((pack) => (
+              <a
+                key={pack.id}
+                href="/templates"
+                className={card}
+                aria-label={`قوالب ${pack.title} المميزة`}
+              >
+                <div className="flex h-36 justify-center overflow-hidden rounded border border-line bg-surface-2 p-2">
+                  <TemplatePreview page={pack.page} className="h-full" />
+                </div>
+                <strong className="text-[13px]">{pack.title}</strong>
+                <p className="line-clamp-2 text-[11px] leading-5 text-muted">
+                  {pack.desc}
+                </p>
+                <div className="mt-auto flex items-center justify-between gap-2">
+                  <LicenseBadge state="locked" label="قالب مرخص" />
+                  <span className="text-[10px] text-muted">
+                    {pack.pages} صفحة
+                  </span>
+                </div>
+              </a>
+            ))}
+          </div>
+        </div>
+      </details>
     </section>
   );
 }

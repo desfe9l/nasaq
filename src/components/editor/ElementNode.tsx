@@ -569,8 +569,8 @@ function ElementContent({
         <div
           style={{
             background: s.color || "#c9a86a",
-            width: vertical ? `${s.stroke || 0.8}mm` : "100%",
-            height: vertical ? "100%" : `${s.stroke || 0.8}mm`,
+            width: vertical ? `${s.stroke ?? 0.8}mm` : "100%",
+            height: vertical ? "100%" : `${s.stroke ?? 0.8}mm`,
           }}
         />
       </div>
@@ -581,17 +581,17 @@ function ElementContent({
     const c = s.color || "#c9a86a";
     return (
       <div className="flex h-full w-full items-center gap-1.5 px-1">
-        <span className="h-px flex-1" style={{ background: c, height: `${s.stroke || 0.5}mm` }} />
+        <span className="h-px flex-1" style={{ background: c, height: `${s.stroke ?? 0.5}mm` }} />
         <span
           className="shrink-0"
           style={{
             width: "3.6mm",
             height: "3.6mm",
-            border: `0.4mm solid ${c}`,
+            border: `${s.stroke ?? 0.5}mm solid ${c}`,
             transform: "rotate(45deg)",
           }}
         />
-        <span className="h-px flex-1" style={{ background: c, height: `${s.stroke || 0.5}mm` }} />
+        <span className="h-px flex-1" style={{ background: c, height: `${s.stroke ?? 0.5}mm` }} />
       </div>
     );
   }
@@ -683,7 +683,7 @@ function ElementContent({
           viewBox="0 0 24 24"
           fill={s.fill || "none"}
           stroke={s.svgStroke || s.borderColor || "currentColor"}
-          strokeWidth={s.stroke || 1.8}
+          strokeWidth={s.stroke ?? 1.8}
           strokeLinecap="round"
           strokeLinejoin="round"
           className="h-full w-full"

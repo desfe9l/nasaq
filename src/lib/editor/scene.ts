@@ -436,7 +436,7 @@ function toItem(
         stripeFill: s.stripeBg ? cleanColor(s.stripeBg, "#f4f6fa") : null,
         border: strokeOf(s.borderColor, s.borderWidth ?? 0.3, DEFAULT_LINE) || {
           color: DEFAULT_LINE,
-          width: 0.3,
+          width: s.borderWidth === 0 ? 0 : 0.3,
         },
         padding: 1.6,
       };
@@ -453,21 +453,23 @@ function toItem(
       };
 
     case "line": {
+      if (s.stroke === 0) return null;
       const vertical = base.h > base.w;
       return {
         kind: "line",
         ...base,
         color: cleanColor(s.color, DEFAULT_ACCENT),
-        width: Number(s.stroke) || 0.8,
+        width: Number(s.stroke ?? 0.8),
         vertical,
       };
     }
 
     case "divider": {
+      if (s.stroke === 0) return null;
       // The canvas draws rule–diamond–rule. Emitting all three keeps the motif
       // in the export instead of collapsing it to a plain bar.
       const color = cleanColor(s.color, DEFAULT_ACCENT);
-      const thickness = Math.max(0.2, Number(s.stroke) || 0.6);
+      const thickness = Math.max(0, Number(s.stroke ?? 0.5));
       const diamond = Math.min(base.h, 3.6);
       const side = Math.max(0, (base.w - diamond) / 2);
       const midY = base.y + (base.h - thickness) / 2;
@@ -519,7 +521,7 @@ function toItem(
         ...base,
         path: ICONS[el.icon || "star"] || ICONS.star,
         color: cleanColor(s.color, DEFAULT_ACCENT),
-        stroke: Number(s.stroke) || 1.8,
+        stroke: Number(s.stroke ?? 1.8),
       };
 
     case "progress":

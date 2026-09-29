@@ -1088,7 +1088,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   --handle-inset: calc(var(--handle-size) / 2);
   --rotate-hit-size: calc(32px / var(--editor-zoom, 1));
   /* Single rotation grip, separated from the top resize hit target. */
-  --rotate-gap: calc(54px / var(--editor-zoom, 1));
+  --rotate-gap: calc(36px / var(--editor-zoom, 1));
   /*
    * Tight bounding box (borderScaleFactor: 1): the frame mirrors the element's
    * exact box, and a single inset 1px outline is drawn without changing the
@@ -1411,7 +1411,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  */
 .selection-frame {
   --handle-hit: min(var(--handle-hit-size), 46%);
-  --rotate-hit: min(var(--rotate-hit-size), 46%);
+  --rotate-hit: var(--rotate-hit-size);
 }
 
 .handle {
@@ -1437,9 +1437,9 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   opacity: 0.5;
 }
 
-/* Grow targets OUTWARD, keeping the same 7px dots at the frame boundary.
-   Only the visible dot reaches into the body. Side targets occupy the gap
-   between corners; even a 32px frame has distinct move/resize/rotate regions. */
+/* Corners grow outward; top/bottom targets straddle the true edge so the
+   rotation connector can stay compact without overlapping the resize target.
+   Visible dots remain anchored to the artwork boundary. */
 .handle::after { position: absolute; }
 .handle.nw { top: calc(var(--handle-inset) - var(--handle-hit)); left: calc(var(--handle-inset) - var(--handle-hit)); cursor: nwse-resize; }
 .handle.ne { top: calc(var(--handle-inset) - var(--handle-hit)); right: calc(var(--handle-inset) - var(--handle-hit)); cursor: nesw-resize; }
@@ -1450,14 +1450,12 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .handle.se::after { left: 0; top: 0; }
 .handle.sw::after { right: 0; top: 0; }
 .handle.n, .handle.s { width: min(var(--handle-hit), calc(100% - var(--handle-size))); left: 50%; transform: translateX(-50%); cursor: ns-resize; }
-.handle.n { top: calc(var(--handle-inset) - var(--handle-hit-size)); }
-.handle.s { bottom: calc(var(--handle-inset) - var(--handle-hit-size)); }
-.handle.n::after, .handle.s::after { left: 50%; transform: translateX(-50%); }
-.handle.n::after { bottom: 0; }
-.handle.s::after { top: 0; }
+.handle.n { top: calc(-1 * var(--handle-hit) / 2); }
+.handle.s { bottom: calc(-1 * var(--handle-hit) / 2); }
+.handle.n::after, .handle.s::after { left: 50%; top: 50%; transform: translate(-50%, -50%); }
 .handle.e, .handle.w { height: min(var(--handle-hit), calc(100% - var(--handle-size))); top: 50%; transform: translateY(-50%); cursor: ew-resize; }
-.handle.e { right: calc(var(--handle-inset) - var(--handle-hit-size)); }
-.handle.w { left: calc(var(--handle-inset) - var(--handle-hit-size)); }
+.handle.e { right: calc(var(--handle-inset) - var(--handle-hit)); }
+.handle.w { left: calc(var(--handle-inset) - var(--handle-hit)); }
 .handle.e::after, .handle.w::after { top: 50%; transform: translateY(-50%); }
 .handle.e::after { left: 0; }
 .handle.w::after { right: 0; }
@@ -1518,7 +1516,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   content: "";
   position: absolute;
   width: 1px;
-  height: calc(var(--rotate-gap) - var(--rotate-hit) / 2);
+  height: var(--rotate-gap);
   background: color-mix(in srgb, var(--sel-color, #10b981) 60%, transparent);
   top: 50%;
   left: 50%;
@@ -1556,20 +1554,6 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   translate: 14px 14px;
 }
 
-@media (pointer: coarse) {
-  /*
-   * Touch/Pencil targets grow on tablets: bigger visible dots, same anchors
-   * on the element's true edges, and the 48px hit circle always out-reaches
-   * the dot. Both values divide by --editor-zoom, so the handles stay a
-   * constant, grabbable on-screen size at any canvas zoom and any element size.
-   */
-  .selection-frame {
-    --handle-size: calc(11px / var(--editor-zoom, 1));
-    --handle-hit-size: calc(48px / var(--editor-zoom, 1));
-    --rotate-hit-size: calc(48px / var(--editor-zoom, 1));
-    --rotate-gap: calc(54px / var(--editor-zoom, 1));
-  }
-}
 
 .guide-v {
   position: absolute;
@@ -2082,14 +2066,17 @@ body.is-resizing-rail {
   display: flex;
   align-items: center;
   gap: 3px;
-  padding: 4px;
-  border-radius: 10px;
+  height: 42px;
+  padding: 4px 8px;
+  border-radius: 8px;
   border: 1px solid var(--editor-border, #c9cacc);
   background: var(--editor-panel, #fff);
   color: var(--editor-text, #172033);
   box-shadow: 0 10px 30px -8px rgba(15, 23, 42, 0.35);
   animation: floating-toolbar-in 140ms cubic-bezier(0.22, 1, 0.36, 1);
-  max-width: min(92vw, 640px);
+  max-width: min(calc(100vw - 16px), 640px);
+  white-space: nowrap;
+  flex-wrap: nowrap;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -2176,6 +2163,7 @@ body.is-resizing-rail {
 }
 
 .floating-toolbar-section {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 2px;
@@ -2183,6 +2171,7 @@ body.is-resizing-rail {
 }
 
 .floating-toolbar-sep {
+  flex: 0 0 1px;
   width: 1px;
   align-self: stretch;
   margin-inline: 3px;
@@ -2249,13 +2238,7 @@ body.is-resizing-rail {
   padding: 0 4px;
 }
 
-/*
- * Font size inside the toolbar is the shared scrubber, scaled down to toolbar
- * proportions on a mouse. Coarse pointers keep the 42px steppers from the base
- * rule (that media query is width-agnostic), so a thumb still gets a real
- * target — only the desktop chrome is compact.
- */
-@media (pointer: fine) {
+/* Shared compact scrubber sizing keeps the toolbar one row on every viewport. */
   .floating-toolbar .scrub-input {
     width: 92px;
     flex: 0 0 auto;
@@ -2282,7 +2265,9 @@ body.is-resizing-rail {
     padding-inline-end: 4px;
     font-size: 9px;
   }
-}
+
+.floating-toolbar .floating-toolbar-stroke { width: 76px; }
+.floating-toolbar-stroke .scrub-stepper { display: none; }
 
 .floating-toolbar-swatch {
   width: 32px;
@@ -2294,23 +2279,6 @@ body.is-resizing-rail {
   cursor: pointer;
 }
 
-/* Touch: every floating control grows to the 44px guideline. */
-@media (pointer: coarse) {
-  .floating-toolbar-btn {
-    min-width: 44px;
-    height: 44px;
-  }
-
-  .floating-toolbar-select,
-  .floating-toolbar-swatch {
-    height: 44px;
-  }
-
-  .floating-toolbar-range {
-    width: 132px;
-    height: 44px;
-  }
-}
 
 /*
  * Unified colour picker (ColorField): the swatch button that opens the popup.
@@ -2782,7 +2750,7 @@ summary,
   .selection-frame {
     --handle-hit-size: calc(44px / var(--editor-zoom, 1));
     --rotate-hit-size: calc(44px / var(--editor-zoom, 1));
-    --rotate-gap: calc(68px / var(--editor-zoom, 1));
+    --rotate-gap: calc(48px / var(--editor-zoom, 1));
   }
 }
 
@@ -2791,33 +2759,31 @@ summary,
 .touch-properties-sheet {
   position: fixed;
   z-index: var(--z-drawer);
-  top: calc(var(--editor-header-h, 80px) + 12px);
-  inset-inline-end: max(12px, env(safe-area-inset-left));
-  width: min(380px, calc(100vw - 24px));
-  max-height: min(72dvh, calc(100dvh - var(--editor-header-h) - 24px));
-  min-height: 56px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  background: var(--editor-panel);
   border: 1px solid var(--editor-border);
-  border-radius: 16px;
-  box-shadow: 0 8px 32px #0003;
-  transform: translateY(calc(100% + 32px));
+  border-radius: 10px;
+  box-shadow: 0 8px 24px #0002;
   visibility: hidden;
   pointer-events: none;
-  transition: transform 200ms ease, height 180ms ease, visibility 200ms;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
 }
-.touch-properties-sheet.is-open { transform: none; visibility: visible; pointer-events: auto; }
+.touch-properties-sheet.is-open { transform: none; visibility: visible; pointer-events: auto; opacity: 1; }
+.touch-properties-sheet.is-docked:not(.is-open) { display: none; }
+.editor-ui [draggable="true"] { touch-action: none; }
 .touch-properties-sheet.is-dragging { transition: none; }
-.touch-properties-header { display: flex; align-items: center; flex: 0 0 54px; border-bottom: 1px solid var(--editor-border); padding-inline: 8px; }
-.touch-properties-header button { display: grid; place-items: center; width: 44px; height: 44px; flex-shrink: 0; }
-.touch-properties-grip { flex: 1; align-self: stretch; display: flex; align-items: center; gap: 10px; touch-action: none; cursor: ns-resize; font-size: 12px; font-weight: 700; user-select: none; }
-.touch-properties-grip > span:first-child { width: 32px; height: 4px; background: var(--editor-border); border-radius: 4px; }
-.touch-properties-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
-.touch-properties-content > * { height: 100%; min-height: 230px; }
-@media (orientation: landscape) {
-  .touch-properties-sheet { width: min(340px, 42vw); }
-}
+.touch-properties-sheet.is-docked { position: relative; z-index: var(--z-panel); height: 100%; min-height: 0; border-radius: 0; box-shadow: none; }
+.touch-properties-header { display: flex; align-items: center; flex: 0 0 36px; border-bottom: 1px solid var(--editor-border); padding-inline: 4px; }
+.touch-properties-header button { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border-radius: 6px; }
+.touch-properties-header button:hover { background: var(--editor-hover); }
+.touch-properties-header .touch-properties-grip { flex: 1; display: flex; align-items: center; gap: 6px; touch-action: none; cursor: grab; font-size: 11px; font-weight: 700; user-select: none; }
+.touch-properties-content { flex: 1; min-height: 0; overflow: hidden; }
+.touch-properties-content > aside { height: 100%; min-height: 0; }
+.floating-panel-resize { position: absolute; bottom: 0; right: 0; width: 28px; height: 28px; display: grid; place-items: center; touch-action: none; cursor: nwse-resize; background: var(--editor-panel); border-start-start-radius: 6px; color: var(--editor-text-secondary); }
 @media (prefers-reduced-motion: reduce) {
   .touch-properties-sheet { transition: none; }
 }
@@ -3623,16 +3589,6 @@ summary,
 }
 .editor-ui .editor-export-btn:hover { background: var(--editor-accent-hover) !important; }
 
-/* Touch: every header control grows to a 44px-friendly hit target. */
-@media (pointer: coarse) {
-  .editor-capsule-btn { width: 42px; height: 40px; }
-  .editor-ui .editor-zoom-readout { height: 40px; min-width: 54px; }
-  .editor-doc-capsule { padding: 4px; border-radius: 13px; }
-  .editor-ui .editor-doc-name { height: 36px; }
-  .editor-wand-btn { height: 42px; padding-inline: 16px; }
-  .editor-ui .editor-export-btn { height: 42px; padding-inline: 18px; }
-}
-
 /* ---------- Tool dock: primary draw tools with explicit dropdowns ---------- */
 
 /* A two-part tool: the main hit area arms direct drawing; the chevron opens
@@ -3720,9 +3676,6 @@ summary,
 .editor-header-btn.is-active {
   background: var(--editor-accent) !important;
   color: var(--editor-accent-text) !important;
-}
-@media (pointer: coarse) {
-  .editor-header-btn { width: 44px; height: 44px; }
 }
 .editor-header-btn:focus-visible {
   outline: 2px solid var(--editor-accent-hover);
@@ -3875,30 +3828,34 @@ summary,
   background: color-mix(in srgb, var(--editor-panel) 97%, var(--editor-hover));
 }
 
+/* Tablet: identity/actions remain visible, secondary tools scroll as a group.
+   Phone: one additional compact row, never arbitrary flex wrapping. */
 @media (max-width: 1099px) {
   .editor-ui .editor-toolbar {
-    gap: 6px;
-    padding-inline: max(8px, var(--safe-right)) max(8px, var(--safe-left));
-    scrollbar-color: var(--editor-border) transparent;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+    padding: 4px 8px;
   }
-
-  .editor-ui .editor-toolbar > .editor-header-zone {
-    gap: 5px;
-    flex: 0 0 auto;
-  }
-
-  .editor-ui .editor-header-center {
-    order: 2;
-  }
-
+  .editor-ui .editor-header-zone { flex-wrap: nowrap; min-width: 0; gap: 3px; }
   .editor-ui .editor-header-primary {
-    order: 1;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    overscroll-behavior-inline: contain;
   }
-
-  .editor-ui .editor-header-actions {
-    order: 3;
-    margin-inline-start: 0;
-  }
+  .editor-header-primary > * { flex-shrink: 0; }
+  .editor-ui .editor-header-center { justify-content: start; overflow-x: auto; scrollbar-width: thin; }
+  .editor-header-center > * { flex-shrink: 0; }
+  .editor-ui .editor-header-actions { margin-inline-start: 0; justify-content: end; }
+  .editor-ui .editor-header-more-menu { position: fixed; top: var(--editor-header-h); right: 8px; }
+}
+@media (max-width: 600px) {
+  .editor-ui .editor-toolbar { grid-template-columns: minmax(0, 1fr); }
+  .editor-ui .editor-header-center { grid-row: 1; }
+  .editor-ui .editor-header-actions { grid-row: 3; }
+  .editor-ui .editor-doc-name { width: 12ch; }
 }
 
 @media (max-width: 600px) {
@@ -3996,18 +3953,6 @@ summary,
   box-shadow: none;
 }
 .editor-ui .editor-toolbar .editor-wand-btn:hover { background: var(--editor-hover); filter: none; }
-
-/* Tablet actions wrap as intact groups; export never falls off-screen. */
-@media (max-width: 1099px) {
-  .editor-toolbar {
-    flex-wrap: wrap;
-    overflow: visible;
-  }
-  .editor-header-center { flex: 0 0 auto; }
-}
-@media (any-pointer: coarse) {
-  .editor-toolbar button { min-width: 44px; min-height: 44px; }
-}
 
 /* Element-tool sorting uses the existing panel scroller, never a nested one. */
 .sortable-sections { position: relative; display: grid; gap: 10px; min-width: 0; }
@@ -4341,14 +4286,6 @@ li:has(> .text-success) {
  */
 .rotation-hint {
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.35), 0 1px 2px rgba(15, 23, 42, 0.2);
-}
-
-/*
- * ── 27. Touch properties sheet polish ────────────────────────────────────
- * The touch properties sheet gets a refined shadow.
- */
-.touch-properties-sheet {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 /*
@@ -4834,11 +4771,8 @@ button.license-badge-locked:focus-visible {
 
 /* All five workspace rows participate in layout; no implicit, clipped status row.
    The page commands scroll independently of thumbnails at narrow widths. */
-.editor-status-bar { height: auto; min-height: 44px; flex-wrap: wrap; padding-block: 4px; padding-bottom: max(4px, env(safe-area-inset-bottom)); }
-.editor-status-bar > span:last-child { flex-wrap: wrap; }
+.editor-status-bar { height: 36px; min-height: 36px; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 12px; padding-block: 2px; }
+.editor-status-bar > span { flex-shrink: 0; }
 .editor-status-bar button { min-height: 32px; }
-.editor-header-zone { flex-wrap: wrap; max-width: 100%; }
+
 .editor-page-rail > div:first-child { overflow-y: auto; }
-@media (any-pointer: coarse) {
-  .editor-status-bar button { min-height: 44px; min-width: 44px; }
-}

@@ -15,7 +15,6 @@ import {
   Gauge,
   FileCode2,
   ChevronDown,
-  ChevronsRight,
   Eye,
   X,
   ImagePlus,
@@ -44,7 +43,6 @@ import {
 } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
-import { isOverlayViewport } from "@/lib/editor/ui-state";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, useAccordionState } from "./ui/Accordion";
 import { ScrubField } from "./ui/ScrubInput";
@@ -300,15 +298,7 @@ export function LeftPanel({
           );
         })}
         </div>
-        <button
-          type="button"
-          onClick={() => { const st = useEditor.getState(); if (isOverlayViewport()) st.closeFloatingPanels(); else if (!st.leftCollapsed) st.toggle("leftCollapsed"); }}
-          className="editor-panel-collapse grid size-11 shrink-0 place-items-center rounded-[8px] text-muted hover:bg-line-2 "
-          aria-label="طي لوحة العناصر"
-          title="طي لوحة العناصر"
-        >
-          <ChevronsRight className="size-4" />
-        </button>
+
       </div>
 
       <div className={cn("editor-pane-scroll editor-panel-body p-3", tab === "library" && "is-library")}>

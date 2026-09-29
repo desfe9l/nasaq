@@ -323,8 +323,8 @@ function shapeDrawing(item: SceneShape): string {
 
 function borderOpt(stroke: SceneStroke) {
   return {
-    style: BorderStyle.SINGLE,
-    size: strokeEighths(stroke.width),
+    style: stroke.width > 0 ? BorderStyle.SINGLE : BorderStyle.NIL,
+    size: stroke.width > 0 ? strokeEighths(stroke.width) : 0,
     color: hex(stroke.color),
   };
 }
@@ -461,11 +461,7 @@ function floatingTable(item: Extract<SceneItem, { kind: "table" }>): Table {
     });
   });
 
-  const borderSet = {
-    style: BorderStyle.SINGLE,
-    size: strokeEighths(item.border.width),
-    color: hex(item.border.color),
-  };
+  const borderSet = borderOpt(item.border);
 
   return new Table({
     rows,

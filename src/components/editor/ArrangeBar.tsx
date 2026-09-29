@@ -30,7 +30,8 @@ export function ArrangeBar() {
     return el?.type === "group";
   });
 
-  if (count < 1) return null;
+  // Single-object alignment already lives in the header menu.
+  if (count < 2) return null;
 
   return (
     <div className="editor-arrange-bar arrange-bar" dir="rtl">

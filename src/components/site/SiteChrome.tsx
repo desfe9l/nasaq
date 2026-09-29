@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation } from "@tanstack/react-router";
 import { createPortal } from "react-dom";
 import { ChevronDown, FilePlus2, KeyRound, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
@@ -45,6 +46,8 @@ import {
 function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile" }) {
   const { entry } = useEditorEntry();
   const workspace = useWorkspaceEntry();
+  const pathname = useLocation({ select: location => location.pathname });
+  if (["/editor", "/workspace", WORKSPACE_HOME_PATH].includes(pathname)) return null;
   // Nothing until the session resolves, exactly like `HeaderAccount`: a
   // signed-in author must never see the demo wording flash first.
   if (!entry.ready) return null;
@@ -543,6 +546,7 @@ export function SiteFooter() {
           <h3 className="mb-2 text-[12px] font-extrabold text-muted">التواصل</h3>
           <a
             href={whatsappHref(WHATSAPP_MESSAGES.footer)}
+            target="_blank" rel="noopener noreferrer"
             className="inline-flex h-9 items-center rounded-[8px] border border-line px-3 text-[13px] font-bold tabular-nums"
             dir="rtl"
           >

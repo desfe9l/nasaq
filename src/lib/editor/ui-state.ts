@@ -179,6 +179,22 @@ export function placeFloatingToolbar(
     },
   ];
 
+  // Four anchor positions are insufficient when a detached panel crosses them.
+  // Also consider the free bands around measured obstacles; choose the closest
+  // viable band, not a permanent bottom-of-screen parking spot.
+  const xs = new Set([clampLeft(centeredLeft), margin, clampLeft(viewport.width - size.width - margin)]);
+  const ys = new Set([clampTop(anchor.top - gap - size.height), clampTop(anchor.bottom + gap), margin, clampTop(viewport.height - size.height - margin)]);
+  for (const obstacle of avoid) {
+    xs.add(clampLeft(obstacle.left - margin - size.width));
+    xs.add(clampLeft(obstacle.right + margin));
+    ys.add(clampTop(obstacle.top - margin - size.height));
+    ys.add(clampTop(obstacle.bottom + margin));
+  }
+  const alternatives = [...xs].flatMap(left => [...ys].map(top => ({
+    left, top, placement: (top + size.height <= anchor.top ? "above" : "below") as ToolbarPlacement["placement"],
+  }))).sort((a, b) => Math.hypot(a.left - centeredLeft, a.top - centeredTop) - Math.hypot(b.left - centeredLeft, b.top - centeredTop));
+  candidates.push(...alternatives);
+
   let best = candidates[0];
   let bestScore = Number.POSITIVE_INFINITY;
   for (const candidate of candidates) {
@@ -264,7 +280,7 @@ export function measuredSelectionBox(args: {
   if (!(width > 0) || !(height > 0) || !(scale > 0) || !(model.w > 0)) return null;
   // A slanted, irregular glyph's axis-aligned rect is no longer a good proxy
   // for its own box, so the model geometry is trusted instead.
-  if (Math.abs(rotation % 90) > 45) return null;
+  if (Math.abs(Math.sin(rotation * Math.PI / 90)) > 1e-8) return null;
 
   const rad = (rotation * Math.PI) / 180;
   const cos = Math.cos(rad);

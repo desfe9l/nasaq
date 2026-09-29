@@ -8,6 +8,7 @@
  */
 
 import { insertLibraryDrop, type LibraryDropPayload } from "./library-dnd";
+import { isOverlayViewport } from "./ui-state";
 import { pageSize } from "./model";
 import type { ElType, CanvasEl } from "./model";
 import { useEditor } from "./store";
@@ -20,7 +21,7 @@ type DropResolver = (
 
 function findPageElementAt(clientX: number, clientY: number): HTMLElement | null {
   const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-  return el?.closest<HTMLElement>("[data-page-id]") || null;
+  return el?.closest(".editor-canvas-stage") ? el.closest<HTMLElement>("[data-page-id]") : null;
 }
 
 function computeDropPoint(
@@ -28,7 +29,7 @@ function computeDropPoint(
   clientY: number,
 ): { x: number; y: number; pageId: string } | null {
   const pages = useEditor.getState().pages;
-  const activePageId = useEditor.getState().activePageId;
+
   // أولاً: هل نحن فوق صفحة مباشرة؟
   const direct = findPageElementAt(clientX, clientY);
   if (direct) {
@@ -41,42 +42,7 @@ function computeDropPoint(
     const y = ((clientY - rect.top) / rect.height) * size.h;
     return { pageId, x, y };
   }
-  // ثانياً: أقرب صفحة — لا نلغي السحب بسبب حدود الـArtboard
-  let closest: { page: typeof pages[0]; rect: DOMRect; dist: number } | null = null;
-  for (const page of pages) {
-    const el = document.querySelector<HTMLElement>(`[data-page-id="${CSS.escape(page.id)}"]`);
-    if (!el) continue;
-    const rect = el.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const dist = Math.hypot(clientX - cx, clientY - cy);
-    if (!closest || dist < closest.dist) {
-      closest = { page, rect, dist };
-    }
-  }
-  if (closest) {
-    const size = pageSize(closest.page);
-    const clampedX = Math.max(
-      closest.rect.left,
-      Math.min(clientX, closest.rect.right),
-    );
-    const clampedY = Math.max(
-      closest.rect.top,
-      Math.min(clientY, closest.rect.bottom),
-    );
-    const x = ((clampedX - closest.rect.left) / closest.rect.width) * size.w;
-    const y = ((clampedY - closest.rect.top) / closest.rect.height) * size.h;
-    return { pageId: closest.page.id, x, y };
-  }
-  const active = pages.find((p) => p.id === activePageId) || pages[0];
-  if (!active) return null;
-  const ref = document.querySelector<HTMLElement>(`[data-page-id="${CSS.escape(active.id)}"]`);
-  if (!ref) return null;
-  const size = pageSize(active);
-  const rect = ref.getBoundingClientRect();
-  const x = ((clientX - rect.left) / rect.width) * size.w;
-  const y = ((clientY - rect.top) / rect.height) * size.h;
-  return { pageId: active.id, x, y };
+  return null; // Releasing over chrome is cancellation, never placeholder insertion.
 }
 
 export function startPointerLibraryDrag(
@@ -94,7 +60,6 @@ export function startPointerLibraryDrag(
 
   let ghost: HTMLDivElement | null = null;
   let moved = false;
-  let longPressTimer: ReturnType<typeof setTimeout> | undefined;
 
   const createGhost = () => {
     ghost = document.createElement("div");
@@ -102,7 +67,7 @@ export function startPointerLibraryDrag(
     ghost.style.position = "fixed";
     ghost.style.left = `${startX + 12}px`;
     ghost.style.top = `${startY + 12}px`;
-    ghost.style.zIndex = "9999";
+    ghost.style.zIndex = "var(--z-bubble)";
     ghost.style.pointerEvents = "none";
     ghost.style.padding = "6px 10px";
     ghost.style.borderRadius = "8px";
@@ -127,10 +92,6 @@ export function startPointerLibraryDrag(
       ghost.remove();
       ghost = null;
     }
-    if (longPressTimer) {
-      clearTimeout(longPressTimer);
-      longPressTimer = undefined;
-    }
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onCancel);
@@ -147,13 +108,12 @@ export function startPointerLibraryDrag(
     const dy = ev.clientY - startY;
     const dist = Math.hypot(dx, dy);
     if (dist > 8) {
+      // A phone drawer covers most of the page. Once the drag owns the pointer,
+      // reveal the canvas without unmounting the captured source element.
+      if (!moved && isOverlayViewport()) useEditor.getState().closeFloatingPanels();
       moved = true;
       if (!ghost) createGhost();
       moveGhost(ev.clientX, ev.clientY);
-      if (longPressTimer) {
-        clearTimeout(longPressTimer);
-        longPressTimer = undefined;
-      }
       // منع التمرير الافتراضي أثناء السحب
       ev.preventDefault();
     }
@@ -163,9 +123,13 @@ export function startPointerLibraryDrag(
     if (ev.pointerId !== pointerId) return;
     cleanup();
     if (!moved) return;
+    const stopClick = (click: MouseEvent) => { click.preventDefault(); click.stopImmediatePropagation(); };
+    target.addEventListener("click", stopClick, { capture: true, once: true });
+    window.setTimeout(() => target.removeEventListener("click", stopClick, true), 500);
     const drop = computeDropPoint(ev.clientX, ev.clientY);
+    if (!drop) return;
     const store = useEditor.getState();
-    if (drop) store.setActivePage(drop.pageId);
+    store.setActivePage(drop.pageId);
     const resolver: DropResolver = (type, over, center) => {
       const el = store.addElementAt(
         type as ElType,
@@ -186,11 +150,6 @@ export function startPointerLibraryDrag(
   } catch {
     /* pointer already gone (detached target) — drag still works via window listeners */
   }
-  // تأخير بسيط لتجنب التعارض مع tap
-  longPressTimer = setTimeout(() => {
-    // إذا لم يتحرك بعد 500ms، لا نبدأ سحب — قد يكون ضغط مطوّل للقائمة
-  }, 500);
-
   window.addEventListener("pointermove", onMove, { passive: false });
   window.addEventListener("pointerup", onUp);
   window.addEventListener("pointercancel", onCancel);

@@ -75,18 +75,6 @@ const STATE_CLASSES: Record<LicenseState, string> = {
     "border-gold/40 border-dashed bg-gold/12 text-ink hover:border-gold/60 hover:bg-gold/18 dark:border-gold/55 dark:bg-gold/15 dark:text-white",
 };
 
-/**
- * Leading status dot — the second, colour-independent cue.
- *
- * Solid for a licensed item, hollow for a locked one: the pair stays readable
- * in monochrome, on a busy thumbnail and for colour-blind users, which is what
- * lets the badge sit on top of artwork without relying on its tint.
- */
-const DOT_CLASSES: Record<LicenseState, string> = {
-  licensed: "bg-brand-hover",
-  locked: "border border-gold bg-transparent",
-};
-
 const SIZE_CLASSES = {
   sm: "h-5 px-2 text-[10px] gap-1",
   md: "h-6 px-2.5 text-[11px] gap-1.5",
@@ -112,7 +100,7 @@ export function LicenseBadge({
   const Icon = defaults.Icon;
 
   const classes = cn(
-    "inline-flex shrink-0 items-center gap-1.5 rounded-full border font-extrabold leading-none backdrop-blur-[2px] transition-colors duration-140",
+    "inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full border font-extrabold leading-none backdrop-blur-[2px] transition-colors duration-140",
     STATE_CLASSES[state],
     SIZE_CLASSES[size],
     className,
@@ -120,13 +108,6 @@ export function LicenseBadge({
 
   const icon = (
     <>
-      <span
-        className={cn(
-          "size-1.5 shrink-0 rounded-full",
-          DOT_CLASSES[state],
-        )}
-        aria-hidden
-      />
       <Icon
         className={cn(ICON_SIZE[size], "shrink-0")}
         aria-hidden
@@ -138,7 +119,7 @@ export function LicenseBadge({
   const content = (
     <>
       {icon}
-      <span>{text}</span>
+      <span className="truncate">{text}</span>
     </>
   );
 

@@ -314,7 +314,7 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
 
   if (el.type === "line") {
     const vertical = el.h > el.w;
-    const thickness = mm(s.stroke || 0.8, scale);
+    const thickness = mm(s.stroke ?? 0.8, scale);
     return (
       <div style={{ ...box, display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div
@@ -330,7 +330,7 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
 
   if (el.type === "divider") {
     const c = s.color || "#c9a86a";
-    const thickness = mm(s.stroke || 0.5, scale);
+    const thickness = mm(s.stroke ?? 0.5, scale);
     const diamond = mm(3.6, scale);
     return (
       <div style={{ ...box, display: "flex", alignItems: "center", gap: mm(1.5, scale), padding: `0 ${mm(1, scale)}` }}>
@@ -395,7 +395,7 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
     const d = ICONS[el.icon || "star"] || ICONS.star;
     return (
       <div style={{ ...box, color: s.color || "#c9a86a", display: "grid", placeItems: "center" }}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={s.stroke || 1.8} strokeLinecap="round" strokeLinejoin="round" width="100%" height="100%">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={s.stroke ?? 1.8} strokeLinecap="round" strokeLinejoin="round" width="100%" height="100%">
           <path d={d} />
         </svg>
       </div>

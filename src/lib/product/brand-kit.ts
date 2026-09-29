@@ -1,3 +1,5 @@
+import { getSetting, setSetting } from "../editor/storage";
+import { getStorageOwner, hasSignedInOwner } from "../editor/storage-owner";
 import { DEFAULT_BRAND_KIT, type BrandKit } from "./product";
 
 /**
@@ -5,8 +7,8 @@ import { DEFAULT_BRAND_KIT, type BrandKit } from "./product";
  *
  * v2 storage document holds several named profiles plus the active id:
  *   { version: 2, activeId, profiles: [{ id, name, updatedAt, kit }] }
- * A legacy flat kit (the original single-identity format) is migrated into
- * one profile on first read, so old local data keeps working untouched.
+ * Stored in owner-scoped IndexedDB settings, including logo/stamp binaries.
+ * An unscoped legacy kit is migrated once on a signed-in owner’s first read.
  *
  * Export/import move the whole profile list as one JSON file
  * (`kind: nasaq-brand-kit`), merging on import under fresh ids.
@@ -138,48 +140,63 @@ function parseDoc(raw: string | null): BrandProfilesDoc {
   }
 }
 
-function readDoc(): BrandProfilesDoc {
-  if (typeof localStorage === "undefined") return parseDoc(null);
-  return parseDoc(localStorage.getItem(STORAGE_KEY));
+const documentOwners = new WeakMap<BrandProfilesDoc, string>();
+async function readDoc(): Promise<BrandProfilesDoc> {
+  const owner = getStorageOwner();
+  const stored = await getSetting<BrandProfilesDoc>("brandProfiles");
+  if (owner !== getStorageOwner()) throw new Error("تغير الحساب أثناء تحميل الهوية");
+  let doc = parseDoc(stored ? JSON.stringify(stored) : null);
+  documentOwners.set(doc, owner);
+  // Only a signed-in account may claim an old, unscoped identity. Remove the
+  // legacy binary blob after durable migration; a later user cannot adopt it.
+  if (!stored && hasSignedInOwner() && typeof localStorage !== "undefined") {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      doc = parseDoc(raw); documentOwners.set(doc, owner);
+      await writeDoc(doc);
+      localStorage.removeItem(STORAGE_KEY);
+    }
+  }
+  return doc;
 }
 
-function writeDoc(doc: BrandProfilesDoc): void {
-  if (typeof localStorage === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+async function writeDoc(doc: BrandProfilesDoc): Promise<void> {
+  if (documentOwners.get(doc) !== getStorageOwner()) throw new Error("تغير الحساب أثناء حفظ الهوية");
+  await setSetting("brandProfiles", doc);
 }
 
 /** The active profile's kit (legacy single-kit callers keep working). */
-export function readBrandKit(): BrandKit {
-  const doc = readDoc();
+export async function readBrandKit(): Promise<BrandKit> {
+  const doc = await readDoc();
   return (
     doc.profiles.find((p) => p.id === doc.activeId)?.kit || doc.profiles[0].kit
   );
 }
 
 /** Persist the given kit into the active profile. */
-export function saveBrandKit(kit: BrandKit): void {
-  const doc = readDoc();
+export async function saveBrandKit(kit: BrandKit): Promise<void> {
+  const doc = await readDoc();
   const profile = doc.profiles.find((p) => p.id === doc.activeId);
   if (profile) {
     profile.kit = { ...kit };
     profile.updatedAt = Date.now();
   }
-  writeDoc(doc);
+  await writeDoc(doc);
 }
 
 /** Reset the active profile's kit back to defaults (profiles kept). */
-export function resetBrandKit(): BrandKit {
-  saveBrandKit({ ...DEFAULT_BRAND_KIT });
+export async function resetBrandKit(): Promise<BrandKit> {
+  await saveBrandKit({ ...DEFAULT_BRAND_KIT });
   return { ...DEFAULT_BRAND_KIT };
 }
 
 // ── Multi-profile API ────────────────────────────────────────────────────────
 
-export function listBrandProfiles(): {
+export async function listBrandProfiles(): Promise<{
   profiles: Array<Pick<BrandProfile, "id" | "name" | "updatedAt">>;
   activeId: string;
-} {
-  const doc = readDoc();
+}> {
+  const doc = await readDoc();
   return {
     profiles: doc.profiles.map(({ id, name, updatedAt }) => ({
       id,
@@ -191,8 +208,8 @@ export function listBrandProfiles(): {
 }
 
 /** Create a fresh profile (defaults kit) and make it active. Returns its id. */
-export function createBrandProfile(name: string): string {
-  const doc = readDoc();
+export async function createBrandProfile(name: string): Promise<string> {
+  const doc = await readDoc();
   const trimmed = name.trim() || `هوية ${doc.profiles.length + 1}`;
   const profile: BrandProfile = {
     id: uid("brand"),
@@ -202,48 +219,48 @@ export function createBrandProfile(name: string): string {
   };
   doc.profiles.push(profile);
   doc.activeId = profile.id;
-  writeDoc(doc);
+  await writeDoc(doc);
   return profile.id;
 }
 
 /** Switch the active profile and return its kit. */
-export function switchBrandProfile(id: string): BrandKit {
-  const doc = readDoc();
+export async function switchBrandProfile(id: string): Promise<BrandKit> {
+  const doc = await readDoc();
   const profile = doc.profiles.find((p) => p.id === id);
   if (profile) {
     doc.activeId = profile.id;
-    writeDoc(doc);
+    await writeDoc(doc);
     return profile.kit;
   }
   return readBrandKit();
 }
 
-export function renameBrandProfile(id: string, name: string): void {
-  const doc = readDoc();
+export async function renameBrandProfile(id: string, name: string): Promise<void> {
+  const doc = await readDoc();
   const profile = doc.profiles.find((p) => p.id === id);
   const trimmed = name.trim();
   if (profile && trimmed) {
     profile.name = trimmed.slice(0, 60);
     profile.updatedAt = Date.now();
-    writeDoc(doc);
+    await writeDoc(doc);
   }
 }
 
 /** Delete a profile (never the last one — the kit needs a home). */
-export function deleteBrandProfile(id: string): boolean {
-  const doc = readDoc();
+export async function deleteBrandProfile(id: string): Promise<boolean> {
+  const doc = await readDoc();
   if (doc.profiles.length <= 1) return false;
   const next = doc.profiles.filter((p) => p.id !== id);
   if (next.length === doc.profiles.length) return false;
   doc.profiles = next;
   if (doc.activeId === id) doc.activeId = next[0].id;
-  writeDoc(doc);
+  await writeDoc(doc);
   return true;
 }
 
 /** Serialise every profile into a downloadable .json file. Returns filename. */
-export function exportBrandProfiles(): string {
-  const doc = readDoc();
+export async function exportBrandProfiles(): Promise<string> {
+  const doc = await readDoc();
   const file = {
     kind: BRAND_KIT_FILE_KIND,
     version: 1,
@@ -270,19 +287,21 @@ export function exportBrandProfiles(): string {
  * profiles get a « (مستورد)» suffix) so nothing local is overwritten.
  * Returns how many profiles were added.
  */
-export function importBrandProfiles(raw: unknown): number {
+export async function importBrandProfiles(raw: unknown): Promise<number> {
   const file = raw as { kind?: string; profiles?: Array<{ name?: string; kit?: Partial<BrandKit> }> } | null;
   if (!file || file.kind !== BRAND_KIT_FILE_KIND || !Array.isArray(file.profiles)) {
     throw new Error("الملف ليس ملف هوية صالح — اصدّره من صفحة «هوية مستندك».");
   }
-  const doc = readDoc();
+  const doc = await readDoc();
   const existingNames = new Set(doc.profiles.map((p) => p.name));
   let added = 0;
   for (const entry of file.profiles) {
     if (!entry || typeof entry !== "object") continue;
     let name = (typeof entry.name === "string" && entry.name.trim()) || "هوية مستوردة";
     name = name.slice(0, 55);
-    while (existingNames.has(name)) name = `${name} (مستورد)`.slice(0, 60);
+    const baseName = name.slice(0, 40);
+    let suffix = 1;
+    while (existingNames.has(name)) name = `${baseName} (مستورد ${suffix++})`;
     existingNames.add(name);
     doc.profiles.push({
       id: uid("brand"),
@@ -292,6 +311,6 @@ export function importBrandProfiles(raw: unknown): number {
     });
     added += 1;
   }
-  if (added) writeDoc(doc);
+  if (added) await writeDoc(doc);
   return added;
 }

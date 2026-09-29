@@ -464,9 +464,9 @@ function addTableItem(
     // list and fall back to evenly distributed columns.
     colW: Array.from({ length: cols }, () => mm2in(colW)),
     border: {
-      type: "solid",
+      type: item.border.width > 0 ? "solid" : "none",
       color: hex(item.border.color),
-      pt: Math.max(0.25, Number(mm2pt(item.border.width).toFixed(2))),
+      pt: item.border.width > 0 ? Math.max(0.25, Number(mm2pt(item.border.width).toFixed(2))) : 0,
     },
     autoPage: false,
     margin: 0,

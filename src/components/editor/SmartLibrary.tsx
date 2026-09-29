@@ -63,6 +63,19 @@ const TABLE_TEMPLATES = [
  * serves a click (first bar centred, siblings follow) and a drop (first bar
  * under the cursor, siblings follow) — one source of truth, identical layout.
  */
+const INSTITUTIONAL_COMPONENTS = [
+  { id: "approval", label: "اعتماد وتوقيع", hint: "حقل اعتماد رسمي قابل للتحرير", items: [
+    { type: "line", over: { w: 65, h: 1, name: "خط التوقيع" } },
+    { type: "text", dy: 8, over: { w: 65, h: 10, content: "الاسم والتوقيع", style: { textAlign: "center", fontSize: 11 } } },
+  ] },
+  { id: "record", label: "سجل المتابعة", hint: "إجراء · مسؤول · تاريخ · حالة", items: [
+    { type: "table", over: { w: 160, h: 42, name: "سجل المتابعة", content: JSON.stringify([["الإجراء", "المسؤول", "التاريخ", "الحالة"], ["", "", "", ""], ["", "", "", ""]]), style: { cols: 4, rows: 3, fontSize: 10 } } },
+  ] },
+  { id: "confidential", label: "وسم سري", hint: "وسم استخدام داخلي", items: [
+    { type: "box", over: { w: 42, h: 12, name: "وسم السرية", content: "سري — للاستخدام الداخلي", style: { textAlign: "center", fontSize: 9, borderWidth: 0.3 } } },
+  ] },
+] satisfies { id: string; label: string; hint: string; items: LibraryDropItem[] }[];
+
 const CHART_TEMPLATES = [
   { id: "bars", label: "مخطط أعمدة", hint: "4 أعمدة مقارنة" },
   { id: "rings", label: "حلقات الإنجاز", hint: "3 حلقات دائرية" },
@@ -794,7 +807,7 @@ export function SmartLibraryPanel({
       ? useEditor.getState().openTablePicker()
       : useEditor.getState().closeTablePicker();
   const library = useAccordionState<
-    "shapes" | "icons" | "dividers" | "indicators" | "tables" | "templates"
+    "shapes" | "icons" | "dividers" | "indicators" | "tables" | "templates" | "institutional"
   >("library", { shapes: true, icons: true });
   const addElement = useEditor((s) => s.addElement);
   const addElementAt = useEditor((s) => s.addElementAt);
@@ -1241,6 +1254,18 @@ export function SmartLibraryPanel({
               <Gauge className="size-4 shrink-0 text-brand-hover" />
             </button>
           ))}
+        </div>
+      </AccordionSection>
+
+      <AccordionSection title="مكونات مؤسسية" id="institutional" open={library.isOpen("institutional", false)} onToggle={() => library.toggle("institutional")}>
+        <div className="grid gap-1.5">
+          {INSTITUTIONAL_COMPONENTS.map(component => <button key={component.id} type="button" draggable
+            onDragStart={event => startLibraryDrag(event, { items: component.items })}
+            onPointerDown={event => startPointerLibraryDrag(event, { items: component.items }, component.label)}
+            onClick={() => insertDrop({ items: component.items })}
+            className="library-drag-card rounded-lg border border-line px-2.5 py-2 text-start hover:bg-surface-2">
+            <strong className="block text-[12px]">{component.label}</strong><span className="text-[10px] text-muted">{component.hint}</span>
+          </button>)}
         </div>
       </AccordionSection>
 

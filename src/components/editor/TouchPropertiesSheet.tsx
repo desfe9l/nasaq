@@ -1,159 +1,251 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, X } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type PointerEvent,
+} from "react";
+import { GripHorizontal, Maximize2, PanelRightClose, X } from "lucide-react";
+import { clampPanel, type PanelRect } from "@/lib/editor/panel-geometry";
 
-/** Remembered height (px) — the sheet keeps its last position across sessions. */
-const HEIGHT_KEY = "nasaq.touchPropsHeight.v1";
-const DEFAULT_HEIGHT = 320;
-const MIN_HEIGHT = 56;
-
-function readStoredHeight(): number {
-  try {
-    const v = Number(localStorage.getItem(HEIGHT_KEY));
-    if (Number.isFinite(v) && v >= MIN_HEIGHT && v <= 4000) return v;
-  } catch {
-    /* private mode: default height */
-  }
-  return DEFAULT_HEIGHT;
-}
-
-/** Non-modal: the workspace remains usable and its measured size never changes.
- * Only the grip claims touch; all existing property controls scroll normally. */
+/** Shared floating drawer for properties/layers and detachable library. No duplicate
+ * content, backdrop, or separate panel system. Only layout metadata is localStorage. */
 export function TouchPropertiesSheet({
   open,
   onClose,
   children,
+  side = "right",
+  docked = false,
+  onDockChange,
 }: {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
+  side?: "left" | "right";
+  docked?: boolean;
+  onDockChange?: (docked: boolean) => void;
 }) {
-  const [height, setHeight] = useState(readStoredHeight);
-  /** Live viewport ceiling (0.72dvh) — recomputed on rotate/resize so the
-   * sheet always stays on screen while the STORED height survives rotation. */
-  const [maxHeight, setMaxHeight] = useState(() =>
-    typeof window === "undefined" ? 600 : Math.round(window.innerHeight * 0.72),
-  );
-  useEffect(() => {
-    const stage = document.querySelector(".editor-canvas-stage");
-    const onResize = () => {
-      const header = document.querySelector(".editor-toolbar")?.getBoundingClientRect().bottom ?? 80;
-      const bottom = stage?.getBoundingClientRect().bottom ?? window.innerHeight;
-      setMaxHeight(Math.max(MIN_HEIGHT, Math.floor(Math.min(window.innerHeight * 0.72, bottom - header - 24))));
-    };
-    onResize();
-    const observer = new ResizeObserver(onResize);
-    if (stage) observer.observe(stage);
-    window.addEventListener("resize", onResize);
-    window.visualViewport?.addEventListener("resize", onResize);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", onResize);
-      window.visualViewport?.removeEventListener("resize", onResize);
-    };
-  }, []);
+  const key = `nasaq.panel.${side}.v2`;
+  const title = side === "left" ? "لوحة العناصر" : "الخصائص والطبقات";
+  const [rect, setRect] = useState<PanelRect>({
+    left: 12,
+    top: 100,
+    width: 320,
+    height: 420,
+  });
   const [dragging, setDragging] = useState(false);
-  const drag = useRef<{ id: number; y: number; height: number } | null>(null);
-  const effective = Math.min(height, maxHeight);
-  const folded = effective <= 64;
-
-  const applyHeight = (next: number, persist = true) => {
-    const clamped = Math.min(maxHeight, Math.max(MIN_HEIGHT, Math.round(next)));
-    setHeight(clamped);
-    if (persist) {
-      try {
-        localStorage.setItem(HEIGHT_KEY, String(clamped));
-      } catch {
-        /* private mode: height lives for this session */
-      }
+  const latest = useRef(rect);
+  const gesture = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    rect: PanelRect;
+    mode: "move" | "resize";
+  } | null>(null);
+  const bounds = useCallback(
+    (next: PanelRect) =>
+      clampPanel(
+        next,
+        {
+          width: window.innerWidth,
+          height: Math.min(
+            window.innerHeight,
+            document
+              .querySelector(".editor-canvas-stage")
+              ?.getBoundingClientRect().bottom ?? window.innerHeight,
+          ),
+        },
+        (document.querySelector(".editor-toolbar")?.getBoundingClientRect()
+          .bottom ?? 72) + 8,
+      ),
+    [],
+  );
+  const apply = useCallback(
+    (next: PanelRect) => {
+      const safe = bounds(next);
+      latest.current = safe;
+      setRect(safe);
+      window.dispatchEvent(new Event("nasaq:panel-layout"));
+    },
+    [bounds],
+  );
+  const persist = () => {
+    try {
+      localStorage.setItem(key, JSON.stringify(latest.current));
+    } catch {
+      /* session layout remains usable */
     }
   };
+  useEffect(() => {
+    let initial: PanelRect = {
+      left: side === "left" ? window.innerWidth - 332 : 12,
+      top: 100,
+      width: 320,
+      height: 420,
+    };
+    try {
+      const stored = JSON.parse(localStorage.getItem(key) || "null");
+      if (
+        stored &&
+        ["left", "top", "width", "height"].every((k) =>
+          Number.isFinite(stored[k]),
+        )
+      )
+        initial = stored;
+    } catch {
+      /* default position */
+    }
+    apply(initial);
+    const resize = () => apply(latest.current);
+    const observer = new ResizeObserver(resize);
+    document
+      .querySelectorAll(".editor-toolbar, .editor-canvas-stage")
+      .forEach((node) => observer.observe(node));
+    window.addEventListener("resize", resize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", resize);
+    };
+  }, [key, side, apply]);
 
+  const start = (e: PointerEvent<HTMLElement>, mode: "move" | "resize") => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const current = docked
+      ? bounds(
+          e.currentTarget
+            .closest(".touch-properties-sheet")!
+            .getBoundingClientRect(),
+        )
+      : latest.current;
+    if (docked) {
+      apply(current);
+      onDockChange?.(false);
+    }
+    gesture.current = {
+      id: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+      rect: current,
+      mode,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragging(true);
+  };
+  const move = (e: PointerEvent<HTMLElement>) => {
+    const g = gesture.current;
+    if (!g || g.id !== e.pointerId) return;
+    const dx = e.clientX - g.x,
+      dy = e.clientY - g.y;
+    apply(
+      g.mode === "move"
+        ? { ...g.rect, left: g.rect.left + dx, top: g.rect.top + dy }
+        : { ...g.rect, width: g.rect.width + dx, height: g.rect.height + dy },
+    );
+  };
+  const finish = () => {
+    if (!gesture.current) return;
+    gesture.current = null;
+    setDragging(false);
+    persist();
+  };
+  const events = {
+    onPointerMove: move,
+    onPointerUp: finish,
+    onPointerCancel: finish,
+    onLostPointerCapture: finish,
+  };
   return (
     <section
-      className={`editor-sidebar editor-properties touch-properties-sheet ${open ? "is-open" : ""} ${dragging ? "is-dragging" : ""}`}
-      data-editor-obstacle={open ? "" : undefined}
-      aria-label="لوحة الخصائص"
+      className={`editor-sidebar touch-properties-sheet ${docked ? "is-docked" : "is-floating"} ${open ? "is-open" : ""} ${dragging ? "is-dragging" : ""}`}
+      data-editor-obstacle={open ? side : undefined}
+      aria-label={title}
       aria-hidden={!open}
       inert={!open}
-      style={{ height: effective }}
+      style={
+        docked
+          ? undefined
+          : {
+              left: rect.left,
+              top: rect.top,
+              width: rect.width,
+              height: rect.height,
+            }
+      }
     >
       <div className="touch-properties-header">
-        <div
-          className="touch-properties-grip"
-          role="slider"
-          tabIndex={open ? 0 : -1}
-          aria-label="اسحب لتغيير ارتفاع لوحة الخصائص"
-          aria-orientation="vertical"
-          aria-valuemin={MIN_HEIGHT}
-          aria-valuemax={maxHeight}
-          aria-valuenow={effective}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-              e.preventDefault();
-              applyHeight(effective + (e.key === "ArrowUp" ? 40 : -40));
-            }
-          }}
-          onPointerDown={(e) => {
-            if (e.button !== 0 || drag.current) return;
-            e.currentTarget.setPointerCapture(e.pointerId);
-            drag.current = {
-              id: e.pointerId,
-              y: e.clientY,
-              height:
-                e.currentTarget.parentElement!.parentElement!.getBoundingClientRect()
-                  .height,
-            };
-            setDragging(true);
-          }}
-          onPointerMove={(e) => {
-            const start = drag.current;
-            if (!start || start.id !== e.pointerId) return;
-            // Live sizing during the drag; persisted once on release, so a
-            // rotation-triggered clamp never overwrites the stored height.
-            applyHeight(
-              Math.max(
-                MIN_HEIGHT,
-                Math.min(
-                  maxHeight,
-                  start.height + e.clientY - start.y,
-                ),
-              ),
-              false,
-            );
-          }}
-          onPointerUp={(e) => {
-            if (drag.current?.id !== e.pointerId) return;
-            drag.current = null;
-            setDragging(false);
-            e.currentTarget.releasePointerCapture(e.pointerId);
-            applyHeight(height < 100 ? MIN_HEIGHT : height);
-          }}
-          onPointerCancel={() => {
-            drag.current = null;
-            setDragging(false);
-          }}
-          onLostPointerCapture={() => {
-            drag.current = null;
-            setDragging(false);
-          }}
-        >
-          <span /> <span>الخصائص والطبقات</span>
-        </div>
         <button
           type="button"
-          aria-label={folded ? "توسيع الخصائص" : "طي الخصائص"}
-          aria-expanded={!folded}
-          onClick={() => applyHeight(folded ? DEFAULT_HEIGHT : MIN_HEIGHT)}
+          className="touch-properties-grip"
+          aria-label={`تحريك ${title}`}
+          title="اسحب لتحريك اللوحة — الأسهم للتحريك الدقيق"
+          onPointerDown={(e) => start(e, "move")}
+          {...events}
+          onKeyDown={(e) => {
+            const direction = {
+              ArrowLeft: [-16, 0],
+              ArrowRight: [16, 0],
+              ArrowUp: [0, -16],
+              ArrowDown: [0, 16],
+            }[e.key];
+            if (!direction) return;
+            e.preventDefault();
+            onDockChange?.(false);
+            apply({
+              ...latest.current,
+              left: latest.current.left + direction[0],
+              top: latest.current.top + direction[1],
+            });
+            persist();
+          }}
         >
-          {folded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          <GripHorizontal size={16} />
+          <span>{title}</span>
         </button>
-        <button type="button" aria-label="إغلاق لوحة الخصائص" onClick={onClose}>
-          <X size={18} />
+        {onDockChange && (
+          <button
+            type="button"
+            onClick={() => onDockChange(!docked)}
+            aria-label={docked ? "فصل لوحة العناصر" : "إرساء لوحة العناصر"}
+            title={docked ? "فصل اللوحة" : "إرساء اللوحة"}
+          >
+            <PanelRightClose size={16} />
+          </button>
+        )}
+        <button type="button" aria-label={`إغلاق ${title}`} onClick={onClose}>
+          <X size={16} />
         </button>
       </div>
-      <div className="touch-properties-content" inert={folded}>
-        {children}
-      </div>
+      <div className="touch-properties-content">{children}</div>
+      {!docked && (
+        <button
+          type="button"
+          className="floating-panel-resize"
+          aria-label={`تغيير حجم ${title}`}
+          title="اسحب لتغيير العرض والارتفاع — أو استخدم الأسهم"
+          onPointerDown={(e) => start(e, "resize")}
+          {...events}
+          onKeyDown={(e) => {
+            const direction = {
+              ArrowLeft: [-16, 0],
+              ArrowRight: [16, 0],
+              ArrowUp: [0, -16],
+              ArrowDown: [0, 16],
+            }[e.key];
+            if (!direction) return;
+            e.preventDefault();
+            apply({
+              ...latest.current,
+              width: latest.current.width + direction[0],
+              height: latest.current.height + direction[1],
+            });
+            persist();
+          }}
+        >
+          <Maximize2 size={14} />
+        </button>
+      )}
     </section>
   );
 }

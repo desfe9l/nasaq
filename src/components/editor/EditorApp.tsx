@@ -568,9 +568,6 @@ function Studio({
     };
   }, []);
 
-  /** True while a floating drawer is open (tablet/phone only). */
-  const drawerOpen = !isDesktop && leftOpen;
-
   /*
    * Pages panel height — drag handle on its top border.
    *
@@ -1095,6 +1092,13 @@ function Studio({
     );
   };
 
+  const [leftDetached, setLeftDetached] = useState(() => {
+    try { return localStorage.getItem("nasaq.panel.left.detached") === "true"; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem("nasaq.panel.left.detached", String(leftDetached)); } catch { /* session layout remains available */ }
+  }, [leftDetached]);
+
   const resizePanel = (
     side: "left" | "right",
     startClientX: number,
@@ -1563,40 +1567,19 @@ function Studio({
             ? undefined
             : focusMode
               ? "minmax(0, 1fr)"
-              : `${leftCollapsed ? "" : `minmax(${PANEL_MIN.left}px, min(${panelWidths.left}px, 28vw)) `}max-content minmax(0, 1fr)`,
+              : `${leftCollapsed || leftDetached ? "" : `minmax(${PANEL_MIN.left}px, min(${panelWidths.left}px, 28vw)) `}max-content minmax(0, 1fr)`,
         }}
       >
-        <div
-          inert={!isDesktop && !leftOpen}
-          data-tour="left-panel"
-          className={cn(
-            "editor-sidebar relative z-[var(--z-panel)] flex h-full min-h-0 flex-col overflow-hidden",
-            /*
-             * Phase 1 — below the breakpoint the panel FLOATS over the canvas
-             * (a slide-over), it never squishes the artboard. In RTL the
-             * components panel belongs to the visual right edge, which is the
-             * physical `right` side here.
-             */
-            "max-lg2:fixed max-lg2:inset-y-0 max-lg2:right-0 max-lg2:z-[var(--z-drawer)] max-lg2:w-[min(320px,86vw)] max-lg2:shadow-2xl",
-            "max-lg2:transition-transform max-lg2:duration-200 max-lg2:ease-out",
-            !leftOpen && "max-lg2:translate-x-full",
-            !leftOpen && "max-lg2:pointer-events-none",
-            leftCollapsed && "lg2:hidden",
-          )}
-          style={!isDesktop ? { width: `min(${panelWidths.left}px, 86vw)` } : undefined}
-        >
-          {/*
-           * The panel's own header carries its close/collapse control (the
-           * `>>` beside the main tabs), so no second chrome row sits above the
-           * tabs — that extra row is what pushed the panel's bottom toolbar
-           * out of the fixed-height column.
-           */}
+        <TouchPropertiesSheet side="left" open={!focusMode && (isDesktop ? !leftCollapsed : leftOpen)}
+          docked={isDesktop && !leftDetached}
+          onDockChange={docked => setLeftDetached(!docked)}
+          onClose={() => isDesktop ? toggle("leftCollapsed") : useEditor.setState({ leftOpen: false })}>
           <LeftPanel
             onUpload={onUpload}
             onUploadSvg={onUploadSvg}
             onAddCustomAsset={onAddCustomAsset}
           />
-          {!leftCollapsed && !focusMode && (
+          {isDesktop && !leftDetached && !leftCollapsed && !focusMode && (
             <PanelResizeHandle
               side="left"
               width={panelWidths.left}
@@ -1608,7 +1591,7 @@ function Studio({
               }
             />
           )}
-        </div>
+        </TouchPropertiesSheet>
         {isDesktop && !focusMode && (
           <StudioToolDock
             onOpenLeft={openLeftFromDock}
@@ -1619,14 +1602,9 @@ function Studio({
         )}
 
         <div className="editor-canvas-workspace relative grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto_auto] overflow-hidden">
-          {/*
-           * Tapping the canvas dismisses the floating drawers: on a tablet the
-           * artwork is what the author wants to see, and reaching for a close
-           * chip to do it would be a second, avoidable gesture.
-           */}
+          {/* Non-modal drawers leave direct canvas manipulation available. */}
           <CanvasStage
             onDropImage={onDropImage}
-            onCanvasTap={() => (drawerOpen ? closeFloatingPanels() : undefined)}
           />
           {/*
            * Tablet: the toolbar floats inside the canvas row only (an
@@ -1712,35 +1690,6 @@ function Studio({
           <RightPanel onReplaceImage={onReplaceImage} />
         </TouchPropertiesSheet>
       </div>
-
-      {/*
-       * Small-screen chrome.
-       *
-       * One control at a time: the launcher only shows while both drawers are
-       * shut, and a single close chip takes over once one is open. Keeping the
-       * launcher visible over an open drawer would cover the very controls it
-       * was used to reveal.
-       */}
-
-      {/*
-       * The old floating «إغلاق اللوحة» pill used to sit absolutely at the
-       * top centre of the shell — right on top of the toolbar controls and
-       * the artboard beneath them. Each drawer now carries its own in-flow
-       * «إغلاق» chip in its header (and the launcher chips reappear once
-       * both are shut), so nothing needs to float above the workspace.
-       */}
-
-      {/*
-       * Shared backdrop for the floating drawers. Tapping it (or the canvas)
-       * closes them; it is rendered behind the drawers but above the canvas.
-       */}
-      {drawerOpen && (
-        <div
-          className="editor-drawer-backdrop"
-          onClick={closeFloatingPanels}
-          aria-hidden
-        />
-      )}
 
       <WorkspaceOverlays
         menu={contextMenu}

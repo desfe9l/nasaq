@@ -83,7 +83,8 @@ export const SOCIAL_ACCOUNTS: readonly SocialAccount[] = [
   {
     id: "pinterest",
     label: "بينتريست",
-    handle: "@nasaqdocs",
+    handle: "@nasaq_ar",
+    // Keep the repository-configured destination until the account URL is confirmed.
     href: "https://www.pinterest.com/nasaqdocs",
   },
 ] as const;
