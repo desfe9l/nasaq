@@ -32,6 +32,7 @@ import { Route as PurchaseRouteImport } from './routes/purchase'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as Char1575Char1604Char1607Char1608Char1610Char1577RouteImport } from './routes/الهوية'
+import { Route as ApiAppVersionRouteImport } from './routes/api/app-version'
 import { Route as PaymentCancelRouteImport } from './routes/payment/cancel'
 import { Route as PaymentSuccessRouteImport } from './routes/payment/success'
 import { Route as TemplatesIndexRouteImport } from './routes/templates/index'
@@ -159,6 +160,11 @@ const Char1575Char1604Char1607Char1608Char1610Char1577Route =
     path: '/الهوية',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiAppVersionRoute = ApiAppVersionRouteImport.update({
+  id: '/api/app-version',
+  path: '/api/app-version',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PaymentCancelRoute = PaymentCancelRouteImport.update({
   id: '/payment/cancel',
   path: '/payment/cancel',
@@ -234,6 +240,7 @@ export interface FileRoutesByFullPath {
   '/templates': typeof TemplatesRouteWithChildren
   '/terms': typeof TermsRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/api/app-version': typeof ApiAppVersionRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
@@ -268,6 +275,7 @@ export interface FileRoutesByTo {
   '/purchase': typeof PurchaseRoute
   '/terms': typeof TermsRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/api/app-version': typeof ApiAppVersionRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
@@ -304,6 +312,7 @@ export interface FileRoutesById {
   '/templates': typeof TemplatesRouteWithChildren
   '/terms': typeof TermsRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/api/app-version': typeof ApiAppVersionRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRoute
@@ -341,6 +350,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/terms'
     | '/الهوية'
+    | '/api/app-version'
     | '/payment/cancel'
     | '/payment/success'
     | '/templates/$templateId'
@@ -375,6 +385,7 @@ export interface FileRouteTypes {
     | '/purchase'
     | '/terms'
     | '/الهوية'
+    | '/api/app-version'
     | '/payment/cancel'
     | '/payment/success'
     | '/templates/$templateId'
@@ -410,6 +421,7 @@ export interface FileRouteTypes {
     | '/templates'
     | '/terms'
     | '/الهوية'
+    | '/api/app-version'
     | '/payment/cancel'
     | '/payment/success'
     | '/templates/$templateId'
@@ -446,6 +458,7 @@ export interface RootRouteChildren {
   TemplatesRoute: typeof TemplatesRouteWithChildren
   TermsRoute: typeof TermsRoute
   Char1575Char1604Char1607Char1608Char1610Char1577Route: typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  ApiAppVersionRoute: typeof ApiAppVersionRoute
   PaymentCancelRoute: typeof PaymentCancelRoute
   PaymentSuccessRoute: typeof PaymentSuccessRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -619,6 +632,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char1575Char1604Char1607Char1608Char1610Char1577RouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/app-version': {
+      id: '/api/app-version'
+      path: '/api/app-version'
+      fullPath: '/api/app-version'
+      preLoaderRoute: typeof ApiAppVersionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/payment/cancel': {
       id: '/payment/cancel'
       path: '/payment/cancel'
@@ -731,6 +751,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   Char1575Char1604Char1607Char1608Char1610Char1577Route:
     Char1575Char1604Char1607Char1608Char1610Char1577Route,
+  ApiAppVersionRoute: ApiAppVersionRoute,
   PaymentCancelRoute: PaymentCancelRoute,
   PaymentSuccessRoute: PaymentSuccessRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

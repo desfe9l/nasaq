@@ -2,6 +2,7 @@ import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-r
 import { AuthProvider } from "@/lib/auth/provider";
 import { NsqFileLaunch } from "@/components/nsq/NsqFileLaunch";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { AppUpdateNotice } from "@/components/AppUpdateNotice";
 // Side-effect import: applies the visitor's stored light/dark choice to
 // <html> before any route renders, so every page starts on the same mode.
 import "@/lib/theme";
@@ -46,6 +47,7 @@ export const Route = createRootRoute({
         <AuthProvider>
           <Outlet />
         </AuthProvider>
+        <AppUpdateNotice />
         <Scripts />
       </body>
     </html>
