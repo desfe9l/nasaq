@@ -23,6 +23,7 @@ import {
   FolderInput,
 } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
+import { useIncrementalList } from "@/lib/editor/use-incremental-list";
 import type { Asset, AssetFolder } from "@/lib/editor/storage";
 import { writeLibraryDrag } from "@/lib/editor/library-dnd";
 import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
@@ -268,7 +269,17 @@ export function AssetLibrary({
   /** True when anything is narrowing the shelf (drives the count + reset chip). */
   const isFiltered = Boolean(query.trim()) || typeFilter !== "all" || folderId !== null;
 
-  const visibleAssets = filteredAssets;
+  /*
+   * Incremental rendering: a shelf of hundreds of assets used to mount every
+   * card (and decode every image) the moment the library opened. The grid now
+   * renders a growing window and pulls more rows in as the sentinel approaches
+   * the viewport, so opening the library never blocks the canvas.
+   */
+  const {
+    slice: visibleAssets,
+    sentinelRef: assetSentinelRef,
+    remaining: assetsRemaining,
+  } = useIncrementalList(filteredAssets, 48);
 
   const currentFolder = folders.find((folder) => folder.id === folderId);
 
@@ -1097,6 +1108,14 @@ export function AssetLibrary({
               )}
             </div>
           ))}
+          {assetsRemaining > 0 && (
+            <div
+              ref={assetSentinelRef}
+              className="col-span-full grid h-10 place-items-center text-[10px] font-bold text-muted"
+            >
+              جارٍ تحميل {assetsRemaining} عنصر إضافي…
+            </div>
+          )}
         </div>
       )}
 

@@ -840,13 +840,31 @@ export function WorkspaceStatusBar() {
   };
   const printGuides = useEditor((s) => s.printGuides);
   const togglePrintGuide = useEditor((s) => s.togglePrintGuide);
-  const pages = useEditor((s) => s.pages);
-  const activePageId = useEditor((s) => s.activePageId);
+  /*
+   * Narrow selectors only. This bar is always mounted, so a whole-document
+   * (`pages`) subscription re-rendered it on every element write. The page
+   * OBJECT keeps its identity unless the active page itself changed, and the
+   * element count comes from that page — the bar never needs another page.
+   */
+  const page = useEditor((s) =>
+    s.pages.find((item) => item.id === s.activePageId),
+  );
+  const pageCount = useEditor((s) => s.pages.length);
+  const pageIndex = useEditor((s) => {
+    const idx = s.pages.findIndex((item) => item.id === s.activePageId);
+    return idx === -1 ? null : idx;
+  });
   const selectedIds = useEditor((s) => s.selectedIds);
-  const selectedElements = useEditor((s) => s.selectedElements);
-  const page = pages.find((item) => item.id === activePageId);
-  const pageIndex = pages.findIndex((item) => item.id === activePageId);
-  const selectionBounds = elementsBounds(selectedElements());
+  const selectedEls = useMemo(() => {
+    if (!selectedIds.length || !page) return [];
+    const out: NonNullable<ReturnType<typeof findElement>>["el"][] = [];
+    for (const id of selectedIds) {
+      const found = findElement(page.elements, id);
+      if (found) out.push(found.el);
+    }
+    return out;
+  }, [selectedIds, page]);
+  const selectionBounds = elementsBounds(selectedEls);
   const selectionLabel = selectionBounds
     ? `${Math.round(selectionBounds.w * 10) / 10} × ${Math.round(selectionBounds.h * 10) / 10} مم`
     : null;
@@ -857,7 +875,7 @@ export function WorkspaceStatusBar() {
     >
       <span className="selectable-value min-w-0 truncate" aria-label="معلومات الصفحة">
         {page?.name || "صفحة"}
-        {pageIndex >= 0 ? ` · ${pageIndex + 1}/${pages.length}` : ""}
+        {pageIndex !== null ? ` · ${pageIndex + 1}/${pageCount}` : ""}
         {page
           ? ` · ${Math.round(page.w || 210)} × ${Math.round(page.h || 297)} مم`
           : ""}

@@ -19,7 +19,7 @@ import {
 } from "./format";
 import { writeNsq, type NsqWriteResult } from "./package";
 import { uploadedFontSources } from "./fonts";
-import { pageSize, clone } from "../editor/model";
+import { pageSize, clone, type Page } from "../editor/model";
 import { writeAtomically, type NsqSaveHandle } from "./atomic-file";
 
 /** Longest edge of the embedded preview, in px. */
@@ -56,6 +56,36 @@ export async function captureFirstPagePreview(
   try {
     const first = useEditor.getState().pages[0];
     if (!first || (expectedPageId && expectedPageId !== first.id)) return null;
+    /*
+     * The capture DOM is mounted on demand (see ExportCaptureLayer): when the
+     * export dialog is closed nothing renders into `#export-root`, so arm it,
+     * wait two frames for React to paint it, and disarm after the capture.
+     */
+    let armed = false;
+    if (!document.querySelector("#export-root")) {
+      useEditor.setState({ captureArmed: true });
+      armed = true;
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+    }
+    try {
+      return await capturePreviewFromDom(first);
+    } finally {
+      if (armed) useEditor.setState({ captureArmed: false });
+    }
+  } catch (error) {
+    console.warn(
+      "[nsq] thumbnail unavailable; editable document is unaffected",
+      error,
+    );
+    return null;
+  }
+}
+
+/** The DOM capture half of `captureFirstPagePreview`. */
+async function capturePreviewFromDom(first: Page) {
+  try {
     const node = document.querySelector<HTMLElement>(
       `#export-root [data-export-page="${CSS.escape(first.id)}"]`,
     );

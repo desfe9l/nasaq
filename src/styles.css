@@ -4796,3 +4796,81 @@ button.license-badge-locked:focus-visible {
   .account-control-content { flex-direction: row; align-items: center; gap: 6px; }
   .account-control-identity { max-width: 120px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   WORKSPACE DENSITY LAYER (fine pointers / desktop)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   The 44px accordion headers and tall field rows were sized for iPad/Pencil
+   touch targets. On a mouse/trackpad machine they cost the artboard real
+   estate without buying accuracy, so the desktop density layer compresses the
+   INSPECTOR specifically: tighter section headers, tighter field rhythm.
+
+   Coarse-pointer devices (iPad + Pencil) keep every original touch target —
+   the whole block is scoped to `@media (hover: hover) and (pointer: fine)`.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@media (hover: hover) and (pointer: fine) {
+  /* Section headers: 44 → 34px. Still a comfortable click, half the height. */
+  .editor-accordion-header {
+    min-height: 34px;
+    padding-inline: 0.5rem;
+  }
+
+  .editor-accordion-body {
+    gap: 0.5rem;
+    padding: 0 0.5rem 0.625rem;
+  }
+
+  /* Inspector fields: one compact rhythm for inputs, selects and swatches. */
+  .editor-property-field .field-control input,
+  .editor-property-field .field-control select,
+  .editor-property-field .field-control textarea {
+    height: 32px;
+    font-size: 12.5px;
+  }
+  .editor-property-field .field-control textarea {
+    min-height: 64px;
+  }
+  .editor-property-field .field-control input[type="range"] {
+    height: 32px;
+  }
+
+  .property-grid {
+    gap: 0.4rem;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .editor-property-field {
+    gap: 0.25rem;
+  }
+
+  /* Panel bodies breathe a little less on tall lists. */
+  .editor-panel-body {
+    gap: 0.625rem;
+  }
+
+  /* Layer rows: compact height on desktop. iPad keeps the 44px-class rows. */
+  .layer-row {
+    padding-block: 0.25rem;
+  }
+  .layer-row .layer-row-action {
+    width: 28px;
+    height: 28px;
+  }
+  .layer-row .layer-row-spacer {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* The collapsed pages rail is exactly one control row. */
+  .editor-page-rail-collapsed {
+    height: 36px;
+  }
+}
+
+/* Collapsed pages rail — shared (both pointer classes): chips + controls on a
+   single 36px line, no thumbnails. */
+.editor-page-rail-collapsed .editor-pane-scroll {
+  scrollbar-width: thin;
+}

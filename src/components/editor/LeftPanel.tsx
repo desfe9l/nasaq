@@ -112,7 +112,13 @@ export function LeftPanel({
   const setOrg = useEditor((s) => s.setOrg);
   const name = useEditor((s) => s.name);
   const setName = useEditor((s) => s.setName);
-  const pages = useEditor((s) => s.pages);
+  /*
+   * PERF: the palette subscribes to the ACTIVE PAGE OBJECT, not the whole
+   * `pages` array — an edit to any element on the active page used to
+   * re-render this entire panel (every template card, every shape grid).
+   * The pages tab reads the full list through its own <PagesTabList/>.
+   */
+  const page = useEditor((s) => s.pages.find((p) => p.id === s.activePageId));
   const activePageId = useEditor((s) => s.activePageId);
   const setActivePage = useEditor((s) => s.setActivePage);
   const setPageSize = useEditor((s) => s.setPageSize);
@@ -162,7 +168,6 @@ export function LeftPanel({
     (typeof PAGE_TEMPLATES)[number] | null
   >(null);
 
-  const page = pages.find((p) => p.id === activePageId);
   const activeSizeId = sizeIdOf(page);
 
   const add = async (type: ElType) => {
@@ -608,82 +613,16 @@ export function LeftPanel({
 
         {tab === "pages" && (
           <div className="grid gap-3">
-            <header className="flex items-center justify-between">
-              <h2 className="text-[13px] font-extrabold">الصفحات</h2>
-              <span className="text-[11px] text-muted tabular-nums">
-                {pages.length}
-              </span>
-            </header>
+            <PagesTabHeader />
             <div className="grid gap-2">
-              {pages.map((p, i) => (
-                <div
-                  key={p.id}
-                  className={cn(
-                    "rounded-[8px] border p-2",
-                    p.id === activePageId
-                      ? "border-navy-2 bg-navy-2/5"
-                      : "border-line ",
-                  )}
-                >
-                  <div className="mb-1.5 flex items-center gap-1.5">
-                    <span className="grid size-5 shrink-0 place-items-center rounded bg-line-2 text-[10px] font-extrabold text-muted ">
-                      {i + 1}
-                    </span>
-                    <input
-                      value={p.name}
-                      onChange={(e) => renamePage(p.id, e.target.value)}
-                      onFocus={() => setActivePage(p.id)}
-                      aria-label={`اسم الصفحة ${i + 1}`}
-                      className="h-7 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-[12px] font-bold hover:border-line focus:border-navy-2 focus:bg-surface "
-                    />
-                  </div>
-                  <p className="mb-2 text-[10px] text-muted tabular-nums">
-                    {Math.round(pageSize(p).w)} × {Math.round(pageSize(p).h)} مم
-                    · {p.elements.length} عنصر
-                  </p>
-                  <div className="grid grid-cols-4 gap-1">
-                    <MiniButton onClick={() => duplicatePage(p.id)} label="نسخ">
-                      نسخ
-                    </MiniButton>
-                    <MiniButton
-                      onClick={() => movePageById(p.id, -1)}
-                      label="تحريك لأعلى"
-                      disabled={i === 0}
-                    >
-                      ↑
-                    </MiniButton>
-                    <MiniButton
-                      onClick={() => movePageById(p.id, 1)}
-                      label="تحريك لأسفل"
-                      disabled={i === pages.length - 1}
-                    >
-                      ↓
-                    </MiniButton>
-                    <MiniButton
-                      onClick={() => deletePage(p.id)}
-                      label="حذف الصفحة"
-                      danger
-                    >
-                      حذف
-                    </MiniButton>
-                  </div>
-                  <details className="artboard-page-options mt-2">
-                    <summary>خيارات لوحة الرسم</summary>
-                    <div className="grid grid-cols-2 gap-1 mt-2">
-                      <MiniButton label="قفل لوحة الرسم" onClick={() => useEditor.getState().toggleArtboardLock(p.id)}>{p.locked ? "إلغاء القفل" : "قفل اللوحة"}</MiniButton>
-                      <MiniButton label="إظهار / إخفاء لوحة الرسم" onClick={() => useEditor.getState().toggleArtboardHidden(p.id)}>{p.hidden ? "إظهار المحتوى" : "إخفاء المحتوى"}</MiniButton>
-                      <MiniButton label="تقسيم أفقياً" onClick={() => useEditor.getState().splitArtboardPage(p.id, "horizontal")}>تقسيم أفقياً</MiniButton>
-                      <MiniButton label="تقسيم رأسياً" onClick={() => useEditor.getState().splitArtboardPage(p.id, "vertical")}>تقسيم رأسياً</MiniButton>
-                      {(["top", "bottom", "right", "left"] as const).map((side, index) => (
-                        <MiniButton key={side} label={`إضافة لوحة ${["أعلى", "أسفل", "يمين", "يسار"][index]}`} onClick={() => useEditor.getState().addArtboardAdjacent(p.id, side)}>
-                          إضافة { ["أعلى", "أسفل", "يمين", "يسار"][index] }
-                        </MiniButton>
-                      ))}
-                      <MiniButton label="تصدير لوحة الرسم" onClick={() => { setActivePage(p.id); useEditor.getState().openExport("png"); }}>تصدير</MiniButton>
-                    </div>
-                  </details>
-                </div>
-              ))}
+              <PagesTabList
+                activePageId={activePageId}
+                renamePage={renamePage}
+                setActivePage={setActivePage}
+                duplicatePage={duplicatePage}
+                movePageById={movePageById}
+                deletePage={deletePage}
+              />
             </div>
             <button
               type="button"
@@ -966,9 +905,6 @@ export function LeftPanel({
 function FontsTab() {
   const choices = useEditor((s) => s.fontChoices);
   const probed = useEditor((s) => s.fontsProbed);
-  const selectedId = useEditor((s) => s.selectedId);
-  const pages = useEditor((s) => s.pages);
-  const activePageId = useEditor((s) => s.activePageId);
   const updateStyle = useEditor((s) => s.updateStyle);
   const [query, setQuery] = useState("");
   /*
@@ -1001,8 +937,21 @@ function FontsTab() {
     });
   };
 
-  const page = pages.find((p) => p.id === activePageId);
-  const selected = page?.elements.find((e) => e.id === selectedId);
+  // Selected element by IDENTITY: re-renders only when that element (or the
+  // selection) changes, not on every element write of the active page.
+  const selected = useEditor((s) => {
+    const page = s.pages.find((p) => p.id === s.activePageId);
+    if (!page || !s.selectedId) return undefined;
+    let found: CanvasEl | undefined;
+    const walk = (list: CanvasEl[]) => {
+      for (const e of list) {
+        if (e.id === s.selectedId) { found = e; return; }
+        if (e.children?.length) walk(e.children);
+      }
+    };
+    walk(page.elements);
+    return found;
+  });
   const current = selected?.style.fontFamily;
   const matching = choices.filter((f) =>
     f.family.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
@@ -1242,5 +1191,118 @@ function ToggleRow({
         />
       </span>
     </button>
+  );
+}
+
+/**
+ * Pages tab — header row. Own component so the page COUNT updates without
+ * re-rendering the palette around it.
+ */
+function PagesTabHeader() {
+  const count = useEditor((s) => s.pages.length);
+  return (
+    <header className="flex items-center justify-between">
+      <h2 className="text-[13px] font-extrabold">الصفحات</h2>
+      <span className="text-[11px] text-muted tabular-nums">{count}</span>
+    </header>
+  );
+}
+
+/**
+ * Pages tab — the page management list.
+ *
+ * Extracted from the palette body on purpose: THIS is the only part of the
+ * left panel that needs the whole page list, so a rename, reorder or element
+ * edit on another page no longer re-renders every template card and shape
+ * grid above it.
+ */
+function PagesTabList({
+  activePageId,
+  renamePage,
+  setActivePage,
+  duplicatePage,
+  movePageById,
+  deletePage,
+}: {
+  activePageId: string;
+  renamePage: (id: string, name: string) => void;
+  setActivePage: (id: string) => void;
+  duplicatePage: (id?: string) => void;
+  movePageById: (id: string, dir: -1 | 1) => void;
+  deletePage: (id?: string) => void;
+}) {
+  const pages = useEditor((s) => s.pages);
+  return (
+    <>
+      {pages.map((p, i) => (
+        <div
+          key={p.id}
+          className={cn(
+            "rounded-[8px] border p-2",
+            p.id === activePageId
+              ? "border-navy-2 bg-navy-2/5"
+              : "border-line ",
+          )}
+        >
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <span className="grid size-5 shrink-0 place-items-center rounded bg-line-2 text-[10px] font-extrabold text-muted ">
+              {i + 1}
+            </span>
+            <input
+              value={p.name}
+              onChange={(e) => renamePage(p.id, e.target.value)}
+              onFocus={() => setActivePage(p.id)}
+              aria-label={`اسم الصفحة ${i + 1}`}
+              className="h-7 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-[12px] font-bold hover:border-line focus:border-navy-2 focus:bg-surface "
+            />
+          </div>
+          <p className="mb-2 text-[10px] text-muted tabular-nums">
+            {Math.round(pageSize(p).w)} × {Math.round(pageSize(p).h)} مم
+            · {p.elements.length} عنصر
+          </p>
+          <div className="grid grid-cols-4 gap-1">
+            <MiniButton onClick={() => duplicatePage(p.id)} label="نسخ">
+              نسخ
+            </MiniButton>
+            <MiniButton
+              onClick={() => movePageById(p.id, -1)}
+              label="تحريك لأعلى"
+              disabled={i === 0}
+            >
+              ↑
+            </MiniButton>
+            <MiniButton
+              onClick={() => movePageById(p.id, 1)}
+              label="تحريك لأسفل"
+              disabled={i === pages.length - 1}
+            >
+              ↓
+            </MiniButton>
+            <MiniButton
+              onClick={() => deletePage(p.id)}
+              label="حذف الصفحة"
+              danger
+            >
+              حذف
+            </MiniButton>
+          </div>
+          <details className="artboard-page-options mt-2">
+            <summary>خيارات لوحة الرسم</summary>
+            <div className="grid grid-cols-2 gap-1 mt-2">
+              <MiniButton label="قفل لوحة الرسم" onClick={() => useEditor.getState().toggleArtboardLock(p.id)}>{p.locked ? "إلغاء القفل" : "قفل اللوحة"}</MiniButton>
+              <MiniButton label="إظهار / إخفاء لوحة الرسم" onClick={() => useEditor.getState().toggleArtboardHidden(p.id)}>{p.hidden ? "إظهار المحتوى" : "إخفاء المحتوى"}</MiniButton>
+              <MiniButton label="تقسيم أفقياً" onClick={() => useEditor.getState().splitArtboardPage(p.id, "horizontal")}>تقسيم أفقياً</MiniButton>
+              <MiniButton label="تقسيم رأسياً" onClick={() => useEditor.getState().splitArtboardPage(p.id, "vertical")}>تقسيم رأسياً</MiniButton>
+              {(["top", "bottom", "right", "left"] as const).map((side, index) => (
+                <MiniButton key={side} label={`إضافة لوحة ${["أعلى", "أسفل", "يمين", "يسار"][index]}`} onClick={() => useEditor.getState().addArtboardAdjacent(p.id, side)}>
+                  إضافة { ["أعلى", "أسفل", "يمين", "يسار"][index] }
+                </MiniButton>
+              ))}
+              <MiniButton label="تصدير لوحة الرسم" onClick={() => { setActivePage(p.id); useEditor.getState().openExport("png"); }}>تصدير</MiniButton>
+            </div>
+          </details>
+        </div>
+      ))}
+    </>
   );
 }

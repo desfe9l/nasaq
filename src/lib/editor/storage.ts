@@ -126,6 +126,7 @@ export interface AssetFolder {
 
 export type SettingsKey =
   | "activeProjectId"
+  | "activePageId"
   | "dark"
   | "zoom"
   | "focusMode"

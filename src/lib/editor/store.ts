@@ -20,6 +20,7 @@ import {
   nextZ,
   normalizeZ,
   pageSize,
+  projectMeta,
   scaleChildren,
   sizePreset,
   type AlignEdge,
@@ -51,6 +52,7 @@ import {
   storageMode,
   type Asset,
   type AssetFolder,
+  type SettingsKey,
 } from "./storage";
 import { getStorageOwner, hasSignedInOwner } from "./storage-owner";
 import { createProject, createTemplatePage } from "./templates";
@@ -89,7 +91,7 @@ import {
 import { buildGraphicHeading, type GraphicHeadingId } from "./graphic-headings";
 import type { ReportDraft } from "../ai/contract";
 import { safeImageSrc } from "./images";
-import { captureThumbnail } from "./thumbnail";
+import { captureThumbnail, thumbnailCaptureDue } from "./thumbnail";
 import type { LibraryImportPlan } from "./library-export";
 import { DEFAULT_FOLDER_ID, DEFAULT_FOLDER_NAME } from "./library-manager";
 import {
@@ -244,6 +246,14 @@ interface Ui {
   artboardGridCols: number;
   /** Height (px) of the bottom pages panel — drag-resizable, persisted. */
   pagesPanelHeight: number;
+  /**
+   * Collapsed pages rail: the bottom tray shrinks to a thin strip of page
+   * chips so the artboard keeps the height. Persisted with the rest of the
+   * workspace layout.
+   */
+  pagesRailCollapsed: boolean;
+  /** Toggle the pages rail between the thumbnail tray and the thin strip. */
+  togglePagesRail: () => void;
   /** Right-click menu shared by the canvas and the layers panel. */
   contextMenu: ContextMenuPoint | null;
   /**
@@ -295,6 +305,13 @@ interface Ui {
   savedAt: number | null;
   /** Re-renders the "saved N minutes ago" label without polling the store. */
   clockTick: number;
+  /**
+   * The offscreen capture DOM (`#export-root`) is needed only while a
+   * thumbnail is actually being rasterised (or an export is running) — it
+   * renders the whole document a second time, so it must not exist during
+   * ordinary editing. `saveNow` raises this flag for the capture window.
+   */
+  captureArmed: boolean;
 }
 
 interface History {
@@ -607,6 +624,27 @@ interface EditorStore extends Project, Ui, History {
   updateElement: (id: string, patch: Partial<CanvasEl>, live?: boolean) => void;
   updateStyle: (id: string, patch: CanvasEl["style"], live?: boolean) => void;
   replaceElement: (el: CanvasEl, live?: boolean) => void;
+  /**
+   * Commit a finished gesture: apply several COMPLETE elements of one page in a
+   * single store write with ONE history entry.
+   *
+   * Live pointer feedback no longer writes the document per frame (see
+   * `interaction-store.ts`); when the gesture ends the canvas calls this with
+   * the final geometry of every element it moved. Writing each through
+   * `replaceElement` would fire N store notifications and N history pushes for
+   * what is one author action.
+   */
+  applyElements: (
+    pageId: string,
+    els: CanvasEl[],
+    opts?: { live?: boolean },
+  ) => void;
+  /**
+   * Keyboard nudge as one undoable step. The old path called `updateElement`
+   * per selected element (one store write each); a multi-selection arrow press
+   * now produces exactly one write and one history entry.
+   */
+  nudgeSelection: (dx: number, dy: number) => void;
   fitTextBox: (id: string) => void;
   duplicateSelected: () => void;
   copySelected: () => void;
@@ -993,6 +1031,10 @@ export const useEditor = create<EditorStore>((set, get) => {
       (wanted && project.pages.some((p) => p.id === wanted)
         ? wanted
         : undefined) || project.pages[0]?.id;
+    // Keep the persisted "current page" in step with every resolution path
+    // (load, undo/redo, reset) so a reload reopens exactly where the author
+    // stood — not merely where the last auto-save happened to land.
+    if (activePageId) debounceSetting("activePageId", activePageId, 350);
     set({
       ...project,
       ...project.editorSettings,
@@ -1105,6 +1147,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     rightCollapsed: false,
     artboardGridCols: 4,
     pagesPanelHeight: PAGES_PANEL_DEFAULT,
+    pagesRailCollapsed: false,
     contextMenu: null,
     bubbleEnabled: true,
     bubbleOffset: null,
@@ -1115,6 +1158,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     saveState: "idle",
     savedAt: null,
     clockTick: 0,
+    captureArmed: false,
     hydrated: false,
     sessionOwner: null,
     entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
@@ -1250,7 +1294,31 @@ export const useEditor = create<EditorStore>((set, get) => {
         }
         const activeId =
           (await getSetting<string>("activeProjectId")) || ui.activeProjectId;
-        const active = activeId ? await getProject(activeId) : null;
+        // Freshest page the author was on — `setActivePage` records it even
+        // when no edit has triggered a save since the switch.
+        const activePageSetting = await getSetting<string>("activePageId");
+        let active = activeId ? await getProject(activeId) : null;
+        /*
+         * Reload safety: a synchronous draft written while the page was being
+         * torn down (beforeunload/pagehide) can be newer than the last
+         * IndexedDB save. It wins only for the SAME owner and the SAME
+         * project, and only when it really is newer — otherwise it is stale
+         * noise from a session that saved fine.
+         */
+        const draft = readDraftSnapshot(owner);
+        let restoredFromDraft = false;
+        if (
+          draft &&
+          active &&
+          draft.projectId === active.id &&
+          draft.savedAt > (active.updatedAt ?? 0)
+        ) {
+          const merged: ProjectSnapshot = { ...active, ...draft.project };
+          merged.activePageId =
+            draft.activePageId || draft.project.activePageId;
+          active = merged;
+          restoredFromDraft = true;
+        }
         // The shared preference is the only authority, including the default.
         const dark = readStoredTheme() === true;
         applyStoredTheme();
@@ -1272,6 +1340,7 @@ export const useEditor = create<EditorStore>((set, get) => {
               ? ui.pagesPanelHeight
               : PAGES_PANEL_DEFAULT,
           ),
+          pagesRailCollapsed: Boolean(ui.pagesRailCollapsed),
           bubbleEnabled: ui.bubble !== false,
           bubbleOffset:
             ui.bubbleOffset &&
@@ -1291,7 +1360,18 @@ export const useEditor = create<EditorStore>((set, get) => {
         if (active) {
           await restoreFonts(active);
           if (getStorageOwner() === owner && get().sessionOwner === owner)
-            applyProject(active, { zoom: get().zoom });
+            applyProject(active, {
+              zoom: get().zoom,
+              ...(activePageSetting && !restoredFromDraft
+                ? { activePageId: activePageSetting }
+                : {}),
+            });
+          if (restoredFromDraft) {
+            toast.success("تمت استعادة آخر تعديلات غير محفوظة بعد إعادة التحميل");
+            // The restored draft IS the current document — mark it dirty so
+            // the next auto-save makes the recovery durable in IndexedDB.
+            set({ saveState: "dirty" });
+          }
         }
       } catch {
         set({ projectsLoading: false });
@@ -1742,8 +1822,22 @@ export const useEditor = create<EditorStore>((set, get) => {
           // and merged from the projects meta so an in-flight favorite flip or a
           // previous capture is never wiped by a later auto-save.
           const meta = s.projects.find((p) => p.id === s.id);
-          const captured = await captureThumbnail();
-          if (getStorageOwner() !== owner || get().id !== s.id) return;
+          let captured: string | null = null;
+          if (thumbnailCaptureDue()) {
+            // The capture DOM (`#export-root`) is mounted on demand — arming
+            // the flag lets CanvasStage render it, then we yield two frames so
+            // React has painted it before html2canvas reads it.
+            set({ captureArmed: true });
+            await nextPaint();
+            try {
+              captured = await captureThumbnail();
+            } finally {
+              // Always disarm, including the owner-changed bail-outs below —
+              // a stuck flag would keep the capture DOM mounted forever.
+              set({ captureArmed: false });
+            }
+            if (getStorageOwner() !== owner || get().id !== s.id) return;
+          }
           const { uploadedFontSources } = await import("../nsq/fonts");
           const { collectFontFamilies } = await import("../nsq/format");
           const families = new Set(collectFontFamilies(s.pages));
@@ -1786,8 +1880,27 @@ export const useEditor = create<EditorStore>((set, get) => {
             saveState: changed ? "dirty" : "saved",
             savedAt: Date.now(),
           });
+          // The edits this save carried are now durable in IndexedDB — the
+          // reload safety draft has done its job.
+          clearDraftSnapshot();
           await setSetting("activeProjectId", saved.id);
-          await get().refreshProjects();
+          /*
+           * Refresh the projects list WITHOUT re-reading every project from
+           * IndexedDB. `refreshProjects()` deserialises the whole library on
+           * every auto-save — with a shelf of multi-megabyte reports that was
+           * the single most expensive thing the old save path did. The saved
+           * row's meta is merged in place; a full refresh still happens on
+           * real library events (create, delete, import, open).
+           */
+          set((state) => {
+            const nextMeta = projectMeta(saved);
+            const exists = state.projects.some((p) => p.id === saved.id);
+            return {
+              projects: exists
+                ? state.projects.map((p) => (p.id === saved.id ? nextMeta : p))
+                : [nextMeta, ...state.projects],
+            };
+          });
         } catch (err) {
           console.error("[editor] autosave failed", err);
           if (getStorageOwner() === owner && get().id === s.id)
@@ -1958,7 +2071,9 @@ export const useEditor = create<EditorStore>((set, get) => {
     setZoom: (z) => {
       const zoom = clamp(z, 0.2, 2);
       set({ zoom });
-      void setSetting("zoom", zoom);
+      // A ctrl+wheel zoom fires dozens of steps a second; persisting each one
+      // was an IndexedDB transaction per tick. One trailing write is enough.
+      debounceSetting("zoom", zoom);
     },
     toggle: (key) => {
       const next = !get()[key];
@@ -2087,12 +2202,22 @@ export const useEditor = create<EditorStore>((set, get) => {
       }
       writeUi({ pagesPanelHeight, bubble: true, bubbleOffset: null });
     },
+    togglePagesRail: () => {
+      const pagesRailCollapsed = !get().pagesRailCollapsed;
+      set({ pagesRailCollapsed });
+      writeUi({ pagesRailCollapsed });
+    },
     setPagesPanelHeight: (height) => {
       const next = clampPagesHeight(height);
       if (get().pagesPanelHeight === next) return;
       set({ pagesPanelHeight: next });
-      // Persisted through the UI slot so the panel reopens at the author's size.
-      writeUi({ pagesPanelHeight: next });
+      // Dragging the handle fires per pointermove; the store write drives the
+      // layout, the localStorage flush is coalesced into one trailing write.
+      if (pagesUiWriteTimer) clearTimeout(pagesUiWriteTimer);
+      pagesUiWriteTimer = setTimeout(() => {
+        pagesUiWriteTimer = null;
+        writeUi({ pagesPanelHeight: useEditor.getState().pagesPanelHeight });
+      }, 300);
     },
 
     addCustomIcon: async (input) => {
@@ -2169,6 +2294,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedIds: [],
         enteredGroupId: null,
       });
+      // Remember the page the author is ON (debounced) so a reload reopens
+      // the same page even when no edit has triggered an auto-save since.
+      debounceSetting("activePageId", id, 350);
     },
     select: (id) =>
       set((s) => ({
@@ -3129,6 +3257,44 @@ export const useEditor = create<EditorStore>((set, get) => {
       else pushHistory();
     },
 
+    applyElements: (pageId, els, opts) => {
+      const s = get();
+      if (!els.length) return;
+      const page = s.pages.find((p) => p.id === pageId);
+      if (!page) return;
+      const size = pageSize(page);
+      const byId = new Map(els.map((el) => [el.id, el]));
+      const next = mapElements(page, new Set(byId.keys()), (el) => {
+        const copy = clone(byId.get(el.id)!);
+        // Same group-rescale contract as `replaceElement`: a resized group
+        // rescales its members, a moved one keeps their relative boxes.
+        if (copy.children?.length && (copy.w !== el.w || copy.h !== el.h))
+          scaleChildren(copy, el.w, el.h);
+        constrainElement(copy, size);
+        return copy;
+      });
+      set({ pages: s.pages.map((p) => (p.id === pageId ? next : p)) });
+      if (opts?.live) scheduleSave(400);
+      else pushHistory();
+    },
+
+    nudgeSelection: (dx, dy) => {
+      const s = get();
+      if (!s.selectedIds.length || !dx || !dy) return;
+      const page = activePageOf(s);
+      if (!page) return;
+      const size = pageSize(page);
+      const ids = new Set(s.selectedIds);
+      const next = mapElements(page, ids, (el) => {
+        if (el.locked) return el;
+        const moved = { ...el, x: el.x + dx, y: el.y + dy };
+        constrainElement(moved, size);
+        return moved;
+      });
+      set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
+      pushHistory();
+    },
+
     /**
      * Grow or shrink an element's box to match its text.
      *
@@ -3954,6 +4120,8 @@ interface PersistedUi {
   rightCollapsed?: boolean;
   artboardGridCols?: number;
   pagesPanelHeight?: number;
+  /** Collapsed pages rail (absent = expanded thumbnail tray). */
+  pagesRailCollapsed?: boolean;
   /** Floating bubble visibility (absent = shown). */
   bubble?: boolean;
   /** Manual floating-bubble offset (absent = automatic placement). */
@@ -3993,6 +4161,95 @@ function writeUi(patch: PersistedUi): void {
   }
 }
 
+/* ── Crash/reload draft safety net ──────────────────────────────────────────
+ *
+ * Auto-save is debounced (≈0.4–0.9 s) and writes IndexedDB, which a hard
+ * reload does not reliably wait for. When the page is being torn down with
+ * unsaved work we therefore ALSO write a compact draft envelope
+ * synchronously to localStorage. On the next hydrate, a draft that is newer
+ * than the stored project row wins, so an accidental ⌘R never destroys the
+ * author's last edits. The draft is deleted the moment a real save lands.
+ */
+
+const DRAFT_KEY = "nasaq-draft-v1";
+/** localStorage ceiling for the draft blob — bigger documents stay on the
+ * (already scheduled) IndexedDB path only. */
+const DRAFT_MAX_CHARS = 4_500_000;
+
+interface DraftEnvelope {
+  ownerId: string;
+  projectId: string | undefined;
+  savedAt: number;
+  activePageId: string;
+  project: ProjectSnapshot;
+}
+
+/** Synchronous — safe to call from `beforeunload`/`pagehide`. */
+export function writeDraftSnapshot(): void {
+  try {
+    const s = useEditor.getState();
+    if (!s.pages?.length) return;
+    const owner = getStorageOwner();
+    const envelope: DraftEnvelope = {
+      ownerId: owner,
+      projectId: s.id,
+      savedAt: Date.now(),
+      activePageId: s.activePageId,
+      project: projectSlice(s),
+    };
+    const raw = JSON.stringify(envelope);
+    if (raw.length > DRAFT_MAX_CHARS) return; // image-heavy: IDB flush instead
+    localStorage.setItem(DRAFT_KEY, raw);
+  } catch {
+    /* quota/blocked storage: the IndexedDB flush is the remaining net */
+  }
+}
+
+function readDraftSnapshot(owner: string): DraftEnvelope | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DraftEnvelope;
+    if (!parsed || parsed.ownerId !== owner || !parsed.project?.pages?.length)
+      return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraftSnapshot(): void {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    /* nothing to clean up */
+  }
+}
+
+/**
+ * Coalesce rapid saves of one-shot UI values (zoom, active page) into one
+ * IndexedDB write. Zoom gestures and page switches used to fire a `setSetting`
+ * per tick — each one an async transaction for a value that changes again
+ * milliseconds later.
+ */
+const settingWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+function debounceSetting(
+  key: SettingsKey,
+  value: unknown,
+  delay = 500,
+): void {
+  const existing = settingWriteTimers.get(key);
+  if (existing) clearTimeout(existing);
+  settingWriteTimers.set(
+    key,
+    setTimeout(() => {
+      settingWriteTimers.delete(key);
+      void setSetting(key, value);
+    }, delay),
+  );
+}
+
 function readUi(): PersistedUi {
   try {
     // Falls back to the pre-rebrand slot so dark mode, zoom and the active
@@ -4004,6 +4261,16 @@ function readUi(): PersistedUi {
   } catch {
     return {};
   }
+}
+
+/** Coalesces the pages-rail height localStorage writes of one drag. */
+let pagesUiWriteTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Resolve after the next two animation frames — enough for React to paint. */
+function nextPaint(): Promise<void> {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
 }
 
 export function getActivePage(): Page {

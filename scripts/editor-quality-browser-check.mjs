@@ -436,9 +436,22 @@ try {
               .getEntriesByType("resource")
               .find((e) => /\/editor\/store\.ts(?:\?|$)/.test(e.name)).name
           );
+          /*
+           * The capture DOM mounts on demand (ExportCaptureLayer): real
+           * consumers reach it through the open export dialog, so follow the
+           * same contract here — open the export surface, yield two frames so
+           * React paints it, then capture from the live DOM.
+           */
+          if (!document.querySelector("#export-root")) {
+            useEditor.setState({ exportOpen: true });
+            await new Promise((resolve) =>
+              requestAnimationFrame(() => requestAnimationFrame(resolve)),
+            );
+          }
           const s = useEditor.getState(),
             pages = s.pages;
           const target = document.querySelector("#export-root .report-page");
+          if (!target) throw new Error("export DOM not mounted");
           const captures = await capturePages(
             [{ node: target, w: 210, h: 297 }],
             1,
@@ -455,6 +468,7 @@ try {
             },
             pages,
           );
+          useEditor.setState({ exportOpen: false });
         }, format);
         const download = await downloadPromise;
         const path = `.cache/editor-quality/export.${format}`;

@@ -45,8 +45,8 @@ import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   useEditor,
   saveLabel,
+  writeDraftSnapshot,
   PAGES_PANEL_MIN,
-  type SaveState,
   type LeftTab,
   type RightTab,
 } from "@/lib/editor/store";
@@ -375,8 +375,12 @@ function Studio({
   const setZoom = useEditor((s) => s.setZoom);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
-  const past = useEditor((s) => s.past);
-  const future = useEditor((s) => s.future);
+  /*
+   * Primitive lengths, never the arrays: `past` re-renders the whole shell on
+   * every history push, `past.length` only when the depth actually changes.
+   */
+  const pastDepth = useEditor((s) => s.past.length);
+  const futureDepth = useEditor((s) => s.future.length);
   const [settingsTab, setSettingsTab] = useState<"editor" | "account" | null>(null);
   useEffect(() => {
     const openSettings = (event: Event) => setSettingsTab((event as CustomEvent).detail === "account" ? "account" : "editor");
@@ -389,11 +393,6 @@ function Studio({
   const showGrid = useEditor((s) => s.showGrid);
   const previewAll = useEditor((s) => s.previewAll);
   const focusMode = useEditor((s) => s.focusMode);
-  const selectedElements = useEditor((s) => s.selectedElements);
-  const saveState = useEditor((s) => s.saveState);
-  const savedAt = useEditor((s) => s.savedAt);
-  const pages = useEditor((s) => s.pages);
-  const activePageId = useEditor((s) => s.activePageId);
   const addPage = useEditor((s) => s.addPage);
   const leftOpen = useEditor((s) => s.leftOpen);
   const rightOpen = useEditor((s) => s.rightOpen);
@@ -401,6 +400,7 @@ function Studio({
   const toggleSidebar = useEditor((s) => s.toggleSidebar);
   const closeFloatingPanels = useEditor((s) => s.closeFloatingPanels);
   const pagesPanelHeight = useEditor((s) => s.pagesPanelHeight);
+  const pagesRailCollapsed = useEditor((s) => s.pagesRailCollapsed);
   const setPagesPanelHeight = useEditor((s) => s.setPagesPanelHeight);
   const contextMenu = useEditor((s) => s.contextMenu);
   const leftTab = useEditor((s) => s.leftTab);
@@ -415,16 +415,12 @@ function Studio({
   const copyStyle = useEditor((s) => s.copyStyle);
   const pasteStyle = useEditor((s) => s.pasteStyle);
   const select = useEditor((s) => s.select);
-  const updateElement = useEditor((s) => s.updateElement);
-  const commit = useEditor((s) => s.commit);
-  const selectedId = useEditor((s) => s.selectedId);
-  const selectedIds = useEditor((s) => s.selectedIds);
+  const nudgeSelection = useEditor((s) => s.nudgeSelection);
   const saveNow = useEditor((s) => s.saveNow);
   const group = useEditor((s) => s.group);
   const ungroup = useEditor((s) => s.ungroup);
   const selectAll = useEditor((s) => s.selectAll);
   const enterGroup = useEditor((s) => s.enterGroup);
-  const enteredGroupId = useEditor((s) => s.enteredGroupId);
   const [panelWidths, setPanelWidths] = useState(() => {
     try {
       const raw = JSON.parse(
@@ -473,11 +469,20 @@ function Studio({
   const libraryVisible = isDesktop
     ? leftTab === "library" && !leftCollapsed && !focusMode
     : leftOpen && leftTab === "library";
+  // One trailing write per drag burst — the old effect hit localStorage on
+  // every pointermove of a sidebar resize.
   useEffect(() => {
-    localStorage.setItem(
-      "diwan-editor-panel-widths",
-      JSON.stringify(panelWidths),
-    );
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          "diwan-editor-panel-widths",
+          JSON.stringify(panelWidths),
+        );
+      } catch {
+        /* session layout remains available */
+      }
+    }, 250);
+    return () => clearTimeout(timer);
   }, [panelWidths]);
 
   useEffect(() => {
@@ -604,9 +609,6 @@ function Studio({
   const nudgePagesHeight = (delta: number) =>
     setPagesPanelHeight(pagesPanelHeight + delta);
 
-  const activePage = pages.find((p) => p.id === activePageId) || pages[0];
-  const activeSize = pageSize(activePage);
-
   /** Latest `fitToScreen`, for the layout effect that must not re-subscribe. */
   const fitRef = useRef<() => void>(() => {});
 
@@ -616,6 +618,13 @@ function Studio({
    * never lands on a smaller view of wherever the author had scrolled to.
    */
   const fitToScreen = useCallback(() => {
+    // Read the LIVE document, never a render-time snapshot: fits can be
+    // triggered by effects and events that outlive the last render.
+    const state = useEditor.getState();
+    const activePage =
+      state.pages.find((p) => p.id === state.activePageId) || state.pages[0];
+    if (!activePage) return setZoom(0.82);
+    const activeSize = pageSize(activePage);
     const el = document.querySelector<HTMLElement>(".editor-canvas-stage");
     if (!el) return setZoom(0.82);
     const rect = el.getBoundingClientRect();
@@ -648,7 +657,7 @@ function Studio({
       stage.scrollLeft += pr.left + pr.width / 2 - (sr.left + sr.width / 2);
       stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
     });
-  }, [activePage?.id, activeSize.h, activeSize.w, setZoom]);
+  }, [setZoom]);
   fitRef.current = fitToScreen;
 
   /*
@@ -749,18 +758,37 @@ function Studio({
     void state.saveNow().finally(() => window.location.assign(href));
   };
 
-  // Flush pending work when the tab is hidden or closed mid-edit.
+  /*
+   * Flush pending work when the tab is hidden, closed or reloaded mid-edit.
+   *
+   * `beforeunload`/`pagehide` handlers cannot wait for promises: the async
+   * IndexedDB save may lose the race with the teardown. So the unload path
+   * ALSO writes a synchronous, owner-stamped draft of the open document; the
+   * next hydrate recovers it when it is newer than the stored row. That is
+   * what makes an accidental ⌘R non-destructive even inside the debounce
+   * window. `visibilitychange` (tab switch, iPad app switch) keeps the
+   * ordinary async flush for the common cases.
+   */
   useEffect(() => {
     const flush = () => {
-      if (useEditor.getState().saveState === "dirty") void saveNow();
+      const state = useEditor.getState();
+      if (state.saveState === "dirty") void saveNow();
+    };
+    const flushSync = () => {
+      const state = useEditor.getState();
+      if (state.saveState === "dirty" || state.saveState === "saving")
+        writeDraftSnapshot();
+      flush();
     };
     const onVisibility = () => {
       if (document.visibilityState === "hidden") flush();
     };
-    window.addEventListener("beforeunload", flush);
+    window.addEventListener("beforeunload", flushSync);
+    window.addEventListener("pagehide", flushSync);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      window.removeEventListener("beforeunload", flush);
+      window.removeEventListener("beforeunload", flushSync);
+      window.removeEventListener("pagehide", flushSync);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [saveNow]);
@@ -966,30 +994,23 @@ function Studio({
         // Escape steps out of a group first, then clears the selection — so it
         // backs out of the nesting one level at a time instead of jumping to
         // nothing and losing the author's place.
-        if (enteredGroupId) enterGroup(null);
+        if (useEditor.getState().enteredGroupId) enterGroup(null);
         else select(null);
         return;
       }
       if (
         ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key) &&
-        selectedIds.length
+        useEditor.getState().selectedIds.length
       ) {
         e.preventDefault();
-        const state = useEditor.getState();
-        const selected = state.selectedElements();
         const step = e.shiftKey ? 5 : e.altKey ? 0.5 : 1;
         const dx =
           e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0;
         const dy =
           e.key === "ArrowDown" ? step : e.key === "ArrowUp" ? -step : 0;
-        // Move the whole selection, not just the primary element, so a nudge
-        // after a marquee behaves the way the author expects.
-        for (const id of selectedIds) {
-          const el = selected.find((x) => x.id === id);
-          if (!el || el.locked) continue;
-          updateElement(id, { x: el.x + dx, y: el.y + dy }, true);
-        }
-        commit();
+        // The whole selection moves as ONE undoable store write (the old path
+        // wrote per element and re-rendered the editor N times per keypress).
+        nudgeSelection(dx, dy);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -1007,11 +1028,7 @@ function Studio({
     copyStyle,
     pasteStyle,
     select,
-    selectedId,
-    selectedIds,
-    updateElement,
-    commit,
-    activePage,
+    nudgeSelection,
     fitToScreen,
     zoomCentered,
     setZoom,
@@ -1020,12 +1037,9 @@ function Studio({
     bring,
     selectAll,
     enterGroup,
-    enteredGroupId,
     isDesktop,
     closeFloatingPanels,
   ]);
-
-  const label = saveLabel(saveState, savedAt, Date.now());
 
   /*
    * Live sidebar resizing.
@@ -1161,7 +1175,12 @@ function Studio({
   };
 
   const fitToSelection = () => {
-    const selected = selectedElements();
+    const state = useEditor.getState();
+    const activePage =
+      state.pages.find((p) => p.id === state.activePageId) || state.pages[0];
+    if (!activePage) return;
+    const activeSize = pageSize(activePage);
+    const selected = state.selectedElements();
     const bounds =
       absoluteBounds(
         activePage.elements,
@@ -1298,7 +1317,7 @@ function Studio({
             type="button"
             className="editor-header-btn"
             onClick={undo}
-            disabled={past.length <= 1}
+            disabled={pastDepth <= 1}
             title="تراجع (⌘Z)"
             aria-label="تراجع"
           >
@@ -1308,7 +1327,7 @@ function Studio({
             type="button"
             className="editor-header-btn"
             onClick={redo}
-            disabled={!future.length}
+            disabled={!futureDepth}
             title="إعادة (⌘⇧Z)"
             aria-label="إعادة"
           >
@@ -1504,11 +1523,7 @@ function Studio({
 
         {/* ③ Workspace/account + the export action. */}
         <div className="editor-header-zone editor-header-actions ms-auto">
-          <SaveBadge
-            state={saveState}
-            label={label}
-            onClick={() => void saveNow()}
-          />
+          <SaveBadge onClick={() => void saveNow()} />
           <ProjectFileMenu onOpenFile={onOpenFile} />
           <span className="editor-header-sep" aria-hidden />
           <button
@@ -1542,7 +1557,8 @@ function Studio({
             "[data-el-id]",
           );
           const targetId = target?.dataset.elId || null;
-          if (targetId && !selectedIds.includes(targetId)) select(targetId);
+          if (targetId && !useEditor.getState().selectedIds.includes(targetId))
+            select(targetId);
           openContextMenu({
             x: event.clientX,
             y: event.clientY,
@@ -1676,12 +1692,19 @@ function Studio({
            * scale through `--rail-height`), so growing the panel reveals more
            * page rows instead of distorting the thumbnails' aspect ratio.
            */}
+          {/*
+           * Collapsed rail = one thin strip (36px) instead of the thumbnail
+           * tray: the artboard reclaims the difference immediately.
+           */}
           <div
             data-editor-obstacle="page-rail"
             className="min-h-0 min-w-0"
-            style={{ height: pagesPanelHeight }}
+            style={{ height: pagesRailCollapsed ? 36 : pagesPanelHeight }}
           >
-            <PageRail height={pagesPanelHeight} minHeight={PAGES_PANEL_MIN} />
+            <PageRail
+              height={pagesRailCollapsed ? 36 : pagesPanelHeight}
+              minHeight={PAGES_PANEL_MIN}
+            />
           </div>
           <WorkspaceStatusBar />
         </div>
@@ -1718,15 +1741,16 @@ function Studio({
   );
 }
 
-function SaveBadge({
-  state,
-  label,
-  onClick,
-}: {
-  state: SaveState;
-  label: string;
-  onClick: () => void;
-}) {
+/**
+ * Save-state indicator. Self-subscribed (including the 20 s `clockTick`
+ * heartbeat the shell no longer re-renders for) so a save state change
+ * repaints this button alone.
+ */
+function SaveBadge({ onClick }: { onClick: () => void }) {
+  const state = useEditor((s) => s.saveState);
+  const savedAt = useEditor((s) => s.savedAt);
+  useEditor((s) => s.clockTick);
+  const label = saveLabel(state, savedAt, Date.now());
   const tone =
     state === "error"
       ? "bg-danger/10 text-error"

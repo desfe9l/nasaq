@@ -1,6 +1,6 @@
 import { mmToPx } from "@/lib/editor/render-units";
 import { likelyNsqDrag } from "@/lib/nsq/format";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   findElement,
   MIN_SIZE,
@@ -13,6 +13,7 @@ import {
 } from "@/lib/editor/model";
 import { applyResizeSnap, applySnap, mirrorHandle, resizeByHandle } from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
+import { useInteraction } from "@/lib/editor/interaction-store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
@@ -55,7 +56,14 @@ type Op = {
   parent?: { x: number; y: number };
 } | null;
 
-type Marquee = { x0: number; y0: number; x1: number; y1: number } | null;
+/** The stable gesture sink every element node receives (see ElementNode). */
+type ElementGestureHandler = (
+  e: React.PointerEvent,
+  el: CanvasEl,
+  kind: "move" | "resize" | "rotate",
+  handle?: string,
+  ctx?: { pageId?: string; parent?: { x: number; y: number } },
+) => void;
 
 type LayerPickerState = {
   x: number;
@@ -174,9 +182,8 @@ export function CanvasStage({
   const selectMany = useEditor((s) => s.selectMany);
   const addTextAt = useEditor((s) => s.addTextAt);
   const enterGroup = useEditor((s) => s.enterGroup);
-  const replaceElement = useEditor((s) => s.replaceElement);
+  const applyElements = useEditor((s) => s.applyElements);
   const fitTextBox = useEditor((s) => s.fitTextBox);
-  const commit = useEditor((s) => s.commit);
   const setActivePage = useEditor((s) => s.setActivePage);
   const editingId = useEditor((s) => s.editingId);
   const artboardGridCols = useEditor((s) => s.artboardGridCols);
@@ -195,17 +202,16 @@ export function CanvasStage({
     redo: () => useEditor.getState().redo(),
   });
 
-  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({
-    v: [],
-    h: [],
-  });
-  const [rotationHint, setRotationHint] = useState<{
-    angle: number;
-    shift: boolean;
-    x: number;
-    y: number;
-  } | null>(null);
-  const [marquee, setMarquee] = useState<Marquee>(null);
+  /*
+   * Guides, the rotation readout and the marquee are TRANSIENT interaction
+   * overlays: they live in the interaction store, and only the small overlay
+   * components that paint them subscribe. Keeping them as local state here
+   * re-rendered the ENTIRE stage (every artboard, every element) on each
+   * pointer frame of a drag.
+   */
+  const setGuides = useInteraction((s) => s.setGuides);
+  const setRotationHint = useInteraction((s) => s.setRotationHint);
+  const setMarquee = useInteraction((s) => s.setMarquee);
   const [dropping, setDropping] = useState<"file" | "library" | null>(null);
   const [drawTool, setDrawTool] = useState<"text" | "rect" | null>(null);
   const drawArmed = drawTool !== null;
@@ -562,6 +568,7 @@ export function CanvasStage({
         pageId: page.id,
         parent,
       };
+      useInteraction.getState().beginInteraction();
     };
 
     if (decided) beginGesture();
@@ -582,24 +589,32 @@ export function CanvasStage({
 
     const others = page.elements.filter((x) => x.id !== el.id && !x.hidden);
 
-    const move = (ev: PointerEvent) => {
-      if (longPressFired) return;
-      if (!decided) {
-        const cur = toMm(ev);
-        const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
-        if (dist < slopMm) return;
-        decided = true;
-        if (longPressTimer !== undefined) {
-          clearTimeout(longPressTimer);
-          longPressTimer = undefined;
-        }
-        input.current!.lock(e.pointerId);
-        beginGesture();
-        maxDist = dist;
-      }
-      if (heldLong) return;
+    /*
+     * ── Transient gesture loop ────────────────────────────────────────────
+     *
+     * Pointer frames NEVER write the document store. Each frame:
+     *   1. computes the final geometry exactly as before (snap, clamp,
+     *      shift/alt semantics unchanged),
+     *   2. publishes it to the interaction store, which re-renders only the
+     *      dragged element nodes and the guide overlay at display rate,
+     *   3. records the STORE-space result for the commit.
+     * The document is written once, on release, through `applyElements` —
+     * one store notification, one undo entry, one autosave scheduling.
+     *
+     * Frames are coalesced with requestAnimationFrame: on 120 Hz pointers the
+     * old path recomputed snapping and re-rendered the app twice per displayed
+     * frame.
+     */
+    const interaction = useInteraction.getState();
+    /** Store-space geometry of every gesture element at the last frame. */
+    let finals: CanvasEl[] = [];
+    let framePending = false;
+    let lastMoveEv: PointerEvent | null = null;
+
+    const paintFrame = (ev: PointerEvent) => {
+      framePending = false;
       const op = opRef.current;
-      if (!op) return;
+      if (!op || heldLong) return;
       const cur = toMm(ev);
       const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
       if (dist > maxDist) maxDist = dist;
@@ -657,19 +672,6 @@ export function CanvasStage({
           op.origins,
         );
         setGuides(snapped);
-        const appliedDx = next.x - op.orig.x;
-        const appliedDy = next.y - op.orig.y;
-        const siblingList =
-          op.parent && enteredGroup ? enteredChildren : page.elements;
-        for (const [id, origin] of Object.entries(op.origins)) {
-          if (id === op.id) continue;
-          const sibling = siblingList.find((x) => x.id === id);
-          if (!sibling) continue;
-          replaceElement(
-            { ...sibling, x: origin.x + appliedDx, y: origin.y + appliedDy },
-            true,
-          );
-        }
       } else if (op.kind === "resize") {
         const mirrored = mirrorHandle(
           op.handle || "se",
@@ -738,12 +740,70 @@ export function CanvasStage({
         -WORKSPACE_MARGIN_MM,
         Math.min(next.y, size.h + WORKSPACE_MARGIN_MM - next.h),
       );
-      replaceElement(
+
+      /*
+       * Publish the frame. `next` (and the sibling maths below) are in
+       * ABSOLUTE page mm — the coordinate space the element nodes render in.
+       * The store, however, keeps entered-group children in parent-relative
+       * mm, so the commit stash carries the shifted copy.
+       */
+      const batch: CanvasEl[] = [
         op.parent
           ? { ...next, x: next.x - op.parent.x, y: next.y - op.parent.y }
           : next,
-        true,
-      );
+      ];
+      interaction.setOverride(op.id, {
+        x: next.x,
+        y: next.y,
+        w: next.w,
+        h: next.h,
+        rotation: next.rotation,
+      });
+      if (op.kind === "move") {
+        const appliedDx = next.x - op.orig.x;
+        const appliedDy = next.y - op.orig.y;
+        // Group members live in their own (parent-relative) list.
+        const siblingList =
+          op.parent && enteredGroup ? enteredChildren : page.elements;
+        for (const [id, origin] of Object.entries(op.origins)) {
+          if (id === op.id) continue;
+          const sibling = siblingList.find((x) => x.id === id);
+          if (!sibling) continue;
+          const storeX = origin.x + appliedDx;
+          const storeY = origin.y + appliedDy;
+          batch.push({ ...sibling, x: storeX, y: storeY });
+          interaction.setOverride(id, {
+            x: storeX + (op.parent?.x ?? 0),
+            y: storeY + (op.parent?.y ?? 0),
+          });
+        }
+      }
+      finals = batch;
+    };
+
+    const move = (ev: PointerEvent) => {
+      if (longPressFired) return;
+      if (!decided) {
+        const cur = toMm(ev);
+        const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
+        if (dist < slopMm) return;
+        decided = true;
+        if (longPressTimer !== undefined) {
+          clearTimeout(longPressTimer);
+          longPressTimer = undefined;
+        }
+        input.current!.lock(e.pointerId);
+        beginGesture();
+        maxDist = dist;
+      }
+      if (heldLong) return;
+      lastMoveEv = ev;
+      if (!framePending) {
+        framePending = true;
+        requestAnimationFrame(() => {
+          if (framePending && lastMoveEv) paintFrame(lastMoveEv);
+        });
+      }
     };
 
     const detach = () => {
@@ -760,8 +820,7 @@ export function CanvasStage({
       if (longPressFired) {
         detach();
         opRef.current = null;
-        setRotationHint(null);
-        setGuides({ v: [], h: [] });
+        interaction.endInteraction();
         return;
       }
       if (!decided) {
@@ -809,22 +868,61 @@ export function CanvasStage({
         }
       }
       opRef.current = null;
-      setRotationHint(null);
-      setGuides({ v: [], h: [] });
-      if (hadGesture) commit();
+      /*
+       * Commit: flush any frame the rAF gate had not painted, drop the
+       * transient overrides, then write the final geometry to the document in
+       * ONE batched store update (single history entry, single autosave).
+       */
+      if (hadGesture) {
+        if (framePending && lastMoveEv) paintFrame(lastMoveEv);
+        framePending = false;
+        const committed = finals;
+        finals = [];
+        interaction.endInteraction();
+        if (committed.length) applyElements(page.id, committed);
+      } else {
+        interaction.endInteraction();
+      }
     };
 
     const cancel = () => {
       const hadGesture = opRef.current !== null;
       detach();
       opRef.current = null;
-      setRotationHint(null);
-      setGuides({ v: [], h: [] });
-      if (hadGesture) commit();
+      const committed = hadGesture ? finals : [];
+      finals = [];
+      interaction.endInteraction();
+      if (committed.length) applyElements(page.id, committed);
     };
 
     input.current!.claim(e, { move, end: up, cancel, yieldable: defer });
   };
+
+  /*
+   * Stable gesture sink for every element node. A fresh closure per stage
+   * render would defeat ElementNode's memo — the whole point is that a
+   * re-render of the stage (a zoom tick, a selection change, a page switch)
+   * reconciles hundreds of element wrappers without re-running their paint.
+   *
+   * The page and element are resolved from the LIVE store at call time, so a
+   * gesture that starts after an undo still acts on current geometry. The
+   * element passed by the node wins when it is already the stored one; the
+   * entered-group case passes absolute coordinates plus the parent offset,
+   * exactly like the old inline closures did.
+   */
+  const startOpRef = useRef(startOp);
+  startOpRef.current = startOp;
+  const onElementGesture = useCallback<ElementGestureHandler>(
+    (e, el, kind, handle, ctx) => {
+      const state = useEditor.getState();
+      const page = ctx?.pageId
+        ? state.pages.find((p) => p.id === ctx.pageId)
+        : state.pages.find((p) => p.id === state.activePageId);
+      if (!page) return;
+      startOpRef.current(e, page, el, kind, handle, ctx?.parent);
+    },
+    [],
+  );
 
   const pickables = (page: Page): { id: string; box: Box }[] => {
     const entered = enteredGroupId
@@ -870,6 +968,10 @@ export function CanvasStage({
     const candidates = pickables(page);
     let moved = false;
     let held = false;
+    /** Last selection written by the marquee — a set-difference guard so a
+     * pointer sweep does not write the store (and re-render the editor) on
+     * every frame when the hit set has not actually changed. */
+    let lastHitKey = "";
     const timer = !drawTool && e.pointerType !== "mouse" ? setTimeout(() => {
       held = true;
       input.current!.lock(e.pointerId);
@@ -903,7 +1005,12 @@ export function CanvasStage({
         if (!drawTool) {
           const hits = candidates.filter(p => p.box.x < box.x + box.w && p.box.x + p.box.w > box.x &&
             p.box.y < box.y + box.h && p.box.y + p.box.h > box.y).map(p => p.id);
-          selectMany([...new Set([...before, ...hits])]);
+          const merged = [...new Set([...before, ...hits])];
+          const key = merged.join("\\u0000");
+          if (key !== lastHitKey) {
+            lastHitKey = key;
+            selectMany(merged);
+          }
         }
       },
       end: (ev) => {
@@ -1268,27 +1375,20 @@ export function CanvasStage({
                               {enteredKids
                                 .slice()
                                 .sort((a, b) => a.z - b.z)
-                                .map((child) => {
-                                  const abs = {
-                                    ...child,
-                                    x: entered.x + child.x,
-                                    y: entered.y + child.y,
-                                  };
-                                  return (
-                                    <ElementNode
-                                      key={child.id}
-                                      el={abs}
-                                      pageNo={pageNo}
-                                      interactive={!isLocked && !isHidden}
-                                      onPointerDown={(ev, kind, handle) =>
-                                        startOp(ev, page, abs, kind, handle, {
-                                          x: entered.x,
-                                          y: entered.y,
-                                        })
-                                      }
-                                    />
-                                  );
-                                })}
+                                .map((child) => (
+                                  <EnteredChildNode
+                                    key={child.id}
+                                    child={child}
+                                    pageNo={pageNo}
+                                    pageCount={pages.length}
+                                    siblings={enteredKids}
+                                    interactive={!isLocked && !isHidden}
+                                    onGesture={onElementGesture}
+                                    pageId={page.id}
+                                    offX={entered.x}
+                                    offY={entered.y}
+                                  />
+                                ))}
                             </div>
                           );
                         }
@@ -1298,15 +1398,14 @@ export function CanvasStage({
                             key={el.id}
                             el={el}
                             pageNo={pageNo}
+                            pageCount={pages.length}
+                            siblings={page.elements}
                             interactive={!isLocked && !isHidden}
                             onEnterGroup={
-                              el.type === "group"
-                                ? () => enterGroup(el.id)
-                                : undefined
+                              el.type === "group" ? enterGroup : undefined
                             }
-                            onPointerDown={(ev, kind, handle) =>
-                              startOp(ev, page, el, kind, handle)
-                            }
+                            pageId={page.id}
+                            onGesture={onElementGesture}
                           />
                         );
                       })}
@@ -1315,61 +1414,15 @@ export function CanvasStage({
                       settings={printGuides}
                       zIndex={GUIDE_LAYER_Z}
                     />
-                    {marquee && (
-                      <div
-                        className="marquee"
-                        style={{
-                          left: `${marquee.x0}mm`,
-                          top: `${marquee.y0}mm`,
-                          width: `${Math.abs(marquee.x1 - marquee.x0)}mm`,
-                          height: `${Math.abs(marquee.y1 - marquee.y0)}mm`,
-                        }}
+                    <MarqueeLayer />
+                    {isActive && !isLocked && !isHidden && (
+                      <OverflowFlagLayer
+                        elements={page.elements}
+                        onFit={fitTextBox}
                       />
                     )}
-                    {isActive &&
-                      !isLocked &&
-                      !isHidden &&
-                      page.elements.map((el) => (
-                        <OverflowFlag
-                          key={el.id}
-                          el={el}
-                          onFit={() => fitTextBox(el.id)}
-                        />
-                      ))}
-                    {rotationHint && isActive && (
-                      <div
-                        className="rotation-hint"
-                        dir="ltr"
-                        style={{ left: rotationHint.x, top: rotationHint.y }}
-                      >
-                        <strong className="tabular-nums">
-                          {Math.round(rotationHint.angle)}°
-                        </strong>
-                        <span>
-                          {rotationHint.shift
-                            ? "التقاط 15°/45°/90°"
-                            : "Shift للالتقاط"}
-                        </span>
-                      </div>
-                    )}
-                    {isActive &&
-                      !isLocked &&
-                      guides.v.map((x) => (
-                        <div
-                          key={`v${x}`}
-                          className="guide-v"
-                          style={{ left: `${x}mm` }}
-                        />
-                      ))}
-                    {isActive &&
-                      !isLocked &&
-                      guides.h.map((y) => (
-                        <div
-                          key={`h${y}`}
-                          className="guide-h"
-                          style={{ top: `${y}mm` }}
-                        />
-                      ))}
+                    {isActive && !isLocked && <GuideLines />}
+                    {isActive && <RotationHintLayer />}
                     {isActive && !isLocked && !isHidden && selectionFrames.length > 0 && (
                       <div
                         className="selection-layer"
@@ -1428,12 +1481,18 @@ export function CanvasStage({
         />
       )}
 
-      <ExportCapture pages={pages} />
+      <ExportCaptureLayer />
     </div>
   );
 }
 
-function OverflowFlag({ el, onFit }: { el: CanvasEl; onFit: () => void }) {
+const OverflowFlag = memo(function OverflowFlag({
+  el,
+  onFit,
+}: {
+  el: CanvasEl;
+  onFit: (id: string) => void;
+}) {
   if (el.hidden || el.type === "group") return null;
   const prepared = prepareText(el);
   if (!prepared.clipped) return null;
@@ -1445,12 +1504,129 @@ function OverflowFlag({ el, onFit }: { el: CanvasEl; onFit: () => void }) {
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation();
-        onFit();
+        onFit(el.id);
       }}
       title="النص أطول من الصندوق — اضغط لملاءمة الصندوق مع النص"
     >
       النص أطول من الصندوق
     </button>
+  );
+});
+
+/**
+ * The clipped-text badges for the active page. `prepareText` runs per element;
+ * rendering them through a memoized child means an edit to ONE element
+ * re-measures ONE badge, not the whole page's.
+ */
+const OverflowFlagLayer = memo(function OverflowFlagLayer({
+  elements,
+  onFit,
+}: {
+  elements: CanvasEl[];
+  onFit: (id: string) => void;
+}) {
+  return (
+    <>
+      {elements.map((el) => (
+        <OverflowFlag key={el.id} el={el} onFit={onFit} />
+      ))}
+    </>
+  );
+});
+
+/**
+ * Absolute-space node for an element of an ENTERED group (double-clicked
+ * into). Exists so the per-child `{...child, x: offX + child.x}` spread is
+ * computed inside a component memoized on the CHILD's identity — the spread
+ * object stays referentially stable across stage re-renders, which is what
+ * keeps the memoized ElementNode beneath it from re-rendering.
+ */
+const EnteredChildNode = memo(function EnteredChildNode({
+  child,
+  pageNo,
+  pageCount,
+  siblings,
+  interactive,
+  onGesture,
+  pageId,
+  offX,
+  offY,
+}: {
+  child: CanvasEl;
+  pageNo: number;
+  pageCount: number;
+  siblings: CanvasEl[];
+  interactive: boolean;
+  onGesture: ElementGestureHandler;
+  pageId: string;
+  offX: number;
+  offY: number;
+}) {
+  const abs = { ...child, x: child.x + offX, y: child.y + offY };
+  return (
+    <ElementNode
+      el={abs}
+      pageNo={pageNo}
+      pageCount={pageCount}
+      siblings={siblings}
+      interactive={interactive}
+      pageId={pageId}
+      parent={{ x: offX, y: offY }}
+      onGesture={onGesture}
+    />
+  );
+});
+
+/** Marquee rectangle, driven by the transient interaction store. */
+function MarqueeLayer() {
+  const marquee = useInteraction((s) => s.marquee);
+  if (!marquee) return null;
+  return (
+    <div
+      className="marquee"
+      style={{
+        left: `${marquee.x0}mm`,
+        top: `${marquee.y0}mm`,
+        width: `${Math.abs(marquee.x1 - marquee.x0)}mm`,
+        height: `${Math.abs(marquee.y1 - marquee.y0)}mm`,
+      }}
+    />
+  );
+}
+
+/** Alignment guides, driven by the transient interaction store. */
+const GuideLines = memo(function GuideLines() {
+  const guides = useInteraction((s) => s.guides);
+  if (!guides.v.length && !guides.h.length) return null;
+  return (
+    <>
+      {guides.v.map((x) => (
+        <div key={`v${x}`} className="guide-v" style={{ left: `${x}mm` }} />
+      ))}
+      {guides.h.map((y) => (
+        <div key={`h${y}`} className="guide-h" style={{ top: `${y}mm` }} />
+      ))}
+    </>
+  );
+});
+
+/** Rotation readout, driven by the transient interaction store. */
+function RotationHintLayer() {
+  const rotationHint = useInteraction((s) => s.rotationHint);
+  if (!rotationHint) return null;
+  return (
+    <div
+      className="rotation-hint"
+      dir="ltr"
+      style={{ left: rotationHint.x, top: rotationHint.y }}
+    >
+      <strong className="tabular-nums">
+        {Math.round(rotationHint.angle)}°
+      </strong>
+      <span>
+        {rotationHint.shift ? "التقاط 15°/45°/90°" : "Shift للالتقاط"}
+      </span>
+    </div>
   );
 }
 
@@ -1480,7 +1656,12 @@ function SelectionFrame({
   const updateElement = useEditor((s) => s.updateElement);
   const commit = useEditor((s) => s.commit);
   const zoom = useEditor((s) => s.zoom);
-  const el = frame.el;
+  /*
+   * Live drag geometry for THIS element: the frame follows the pointer at
+   * display rate without the document (or the stage) re-rendering.
+   */
+  const transient = useInteraction((s) => s.overrides[frame.el.id]);
+  const el = transient ? { ...frame.el, ...transient } : frame.el;
   const frameRef = useRef<HTMLDivElement>(null);
   /**
    * The measured artwork box (page mm) — see `measuredSelectionBox`.
@@ -1805,7 +1986,17 @@ function requestEdit(pageId: string, elId: string) {
   );
 }
 
-function ExportCapture({ pages }: { pages: Page[] }) {
+/**
+ * The offscreen capture DOM. It paints the ENTIRE document a second time, so
+ * it is mounted only while something actually reads it: an open export
+ * dialog, or an armed thumbnail capture during a save. The old always-on
+ * mount doubled the render cost of every document edit for nothing.
+ */
+function ExportCaptureLayer() {
+  const pages = useEditor((s) => s.pages);
+  const exportOpen = useEditor((s) => s.exportOpen);
+  const captureArmed = useEditor((s) => s.captureArmed);
+  if (!exportOpen && !captureArmed) return null;
   return (
     <div
       id="export-root"
@@ -1834,8 +2025,9 @@ function ExportCapture({ pages }: { pages: Page[] }) {
                   el={el}
                   interactive={false}
                   pageNo={pageIndex + 1}
+                  pageCount={pages.length}
                   siblings={page.elements}
-                  onPointerDown={() => {}}
+                  onGesture={() => {}}
                 />
               ))}
           </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useId } from "react";
+import { memo, useCallback, useEffect, useRef, useId } from "react";
 import { ICONS, cssFont, parseTable, type CanvasEl } from "@/lib/editor/model";
 import {
   prepareText,
@@ -6,6 +6,7 @@ import {
   type PageContext,
 } from "@/lib/editor/text-render";
 import { useEditor } from "@/lib/editor/store";
+import { useInteraction } from "@/lib/editor/interaction-store";
 import { cn, round as round2 } from "@/lib/utils";
 import { applyNumerals } from "@/lib/editor/arabic";
 import { fadeStyle, normalizeFade } from "@/lib/editor/fade";
@@ -37,15 +38,39 @@ const textPointerDown = (e: React.PointerEvent<HTMLElement>) => {
 interface Props {
   el: CanvasEl;
   interactive: boolean;
-  onPointerDown: (e: React.PointerEvent, kind: "move" | "resize" | "rotate", handle?: string) => void;
+  /**
+   * Stable gesture sink (never an inline closure): `(event, element, kind,
+   * handle, context)`. Keeping the handler identity stable is what lets this
+   * node be memoized — a fresh arrow per parent render would defeat the memo
+   * for every element on the page.
+   */
+  onGesture: (
+    e: React.PointerEvent,
+    el: CanvasEl,
+    kind: "move" | "resize" | "rotate",
+    handle?: string,
+    ctx?: GestureContext,
+  ) => void;
   /**
    * 1-based page the element sits on, so `{رقم_الصفحة_من_الكل}` resolves per
    * page. The total comes from the store; omitting it falls back to the ambient
    * context, which is correct for single-page consumers.
    */
   pageNo?: number;
+  /** Page count for macro resolution (replaces a whole-document subscription). */
+  pageCount?: number;
   /** Siblings in this page/group, never the active page of another canvas. */
   siblings?: CanvasEl[];
+  /** Id of the page hosting this element (gesture resolution + hit tests). */
+  pageId?: string;
+  /** Offset when the element renders inside an entered group (absolute mode). */
+  parent?: { x: number; y: number };
+}
+
+/** Everything a gesture needs about where an element lives. */
+export interface GestureContext {
+  pageId: string;
+  parent?: { x: number; y: number };
 }
 
 /** Types whose text can be edited in place with a double click. */
@@ -57,19 +82,38 @@ const EDITABLE = new Set(["text", "box", "stat", "stamp", "progress"]);
  * Selection chrome (outline, resize/rotate handles, the drag-capture frame)
  * lives in CanvasStage's selection overlay layer, so overlapping elements can
  * never cover the controls of a selected element beneath them.
+ *
+ * PERF CONTRACT — this is the most-rendered component in the app:
+ *  · It subscribes to NO document state. Siblings and page count arrive as
+ *    props (stable identities from the owning page), so an edit to one
+ *    element never re-renders its neighbours through this component.
+ *  · It is memoized; the parent must pass a stable `onGesture` callback.
+ *  · While a gesture is live it renders the TRANSIENT geometry from the
+ *    interaction store (page-mm), which is how a drag moves one node without
+ *    writing the document per frame.
  */
-export function ElementNode({
+export const ElementNode = memo(function ElementNode({
   el,
   interactive,
-  onPointerDown,
+  onGesture,
   onEnterGroup,
   pageNo,
+  pageCount,
   siblings,
-}: Props & { onEnterGroup?: () => void }) {
+  pageId,
+  parent,
+}: Props & { onEnterGroup?: (id: string) => void }) {
   const updateElement = useEditor((s) => s.updateElement);
   const fitTextBox = useEditor((s) => s.fitTextBox);
   const setEditing = useEditor((s) => s.setEditing);
   const commit = useEditor((s) => s.commit);
+  /**
+   * Live gesture geometry for THIS element only. The selector allocates
+   * nothing, so every other element's drag costs this node a comparator run,
+   * never a re-render.
+   */
+  const transient = useInteraction((s) => s.overrides[el.id]);
+  const view = transient ? { ...el, ...transient } : el;
   /**
    * قناع القص (Clipping Mask): the shape element masking this one, looked up
    * from the live page. Real clipping = `clip-path` matching the mask's own
@@ -77,11 +121,9 @@ export function ElementNode({
    * page space (clip-path supports `clipPathUnits`-style math via calc since
    * both are mm boxes on the same page). The mask shape itself stays visible.
    */
-  const pages = useEditor((s) => s.pages);
-  const activePageId = useEditor((s) => s.activePageId);
-  const activeElements = siblings ?? (pageNo ? pages[pageNo - 1] : pages.find((p) => p.id === activePageId))?.elements ?? [];
-  const maskShape = el.clippedBy
-    ? activeElements.find((m) => m.id === el.clippedBy && (m.type === "shape" || m.type === "svg"))
+  const activeElements = siblings ?? [];
+  const maskShape = view.clippedBy
+    ? activeElements.find((m) => m.id === view.clippedBy && (m.type === "shape" || m.type === "svg"))
     : null;
   /*
    * قناع القص (Clipping Mask) — real clipping of the picture by the mask.
@@ -100,10 +142,10 @@ export function ElementNode({
   /** Fractions of the masked element's own box (objectBoundingBox units). */
   const clipMap = maskShape
     ? {
-        sx: Math.max(1, maskShape.w) / Math.max(0.1, el.w) / 100,
-        sy: Math.max(1, maskShape.h) / Math.max(0.1, el.h) / 100,
-        tx: (maskShape.x - el.x) / Math.max(0.1, el.w),
-        ty: (maskShape.y - el.y) / Math.max(0.1, el.h),
+        sx: Math.max(1, maskShape.w) / Math.max(0.1, view.w) / 100,
+        sy: Math.max(1, maskShape.h) / Math.max(0.1, view.h) / 100,
+        tx: (maskShape.x - view.x) / Math.max(0.1, view.w),
+        ty: (maskShape.y - view.y) / Math.max(0.1, view.h),
       }
     : null;
   const clipParts = maskDef && clipMap ? maskDef.parts.map((part) => mapShapePart(part, clipMap)) : null;
@@ -135,7 +177,7 @@ export function ElementNode({
     if (el.type === "group") {
       if (onEnterGroup) {
         e.stopPropagation();
-        onEnterGroup();
+        onEnterGroup(el.id);
       }
       return;
     }
@@ -187,28 +229,34 @@ export function ElementNode({
   return (
     <div
       data-el-id={el.id}
-      className={cn("canvas-el", interactive && el.locked && "locked")}
+      className={cn("canvas-el", interactive && view.locked && "locked")}
       style={{
-        left: `${el.x}mm`,
-        top: `${el.y}mm`,
-        width: `${el.w}mm`,
-        height: `${el.h}mm`,
+        left: `${view.x}mm`,
+        top: `${view.y}mm`,
+        width: `${view.w}mm`,
+        height: `${view.h}mm`,
         /*
          * One transform string carries the whole orientation: rotation first,
          * then the mirrors (step 7). Order matters — mirroring after rotating
          * flips the artwork around its own centre, which is what "قلب أفقي"
          * means to an author looking at a rotated element.
          */
-        transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
-        opacity: el.opacity ?? 1,
-        zIndex: el.z,
-        boxShadow: el.style?.shadow || undefined,
-        cursor: el.locked ? "not-allowed" : interactive ? "move" : "default",
+        transform: `rotate(${view.rotation || 0}deg)${view.style?.flipX ? " scaleX(-1)" : ""}${view.style?.flipY ? " scaleY(-1)" : ""}`,
+        opacity: view.opacity ?? 1,
+        zIndex: view.z,
+        boxShadow: view.style?.shadow || undefined,
+        cursor: view.locked ? "not-allowed" : interactive ? "move" : "default",
         clipPath,
       }}
       onPointerDown={(e) => {
         if (!interactive) return;
-        onPointerDown(e, "move");
+        onGesture(
+          e,
+          view,
+          "move",
+          undefined,
+          pageId ? { pageId, parent } : undefined,
+        );
       }}
       onDoubleClick={startEdit}
     >
@@ -236,17 +284,19 @@ export function ElementNode({
         </svg>
       )}
       <ElementContent
-        el={el}
+        el={view}
         textRef={textRef}
         onBlur={finishEdit}
         onKeyDown={handleEditKey}
         siblings={activeElements}
         interactive={interactive}
-        pageRef={pageNo ? { number: pageNo, count: pages.length } : undefined}
+        pageRef={
+          pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
+        }
       />
     </div>
   );
-}
+});
 
 function ElementContent({
   el,
@@ -536,11 +586,12 @@ function ElementContent({
           .map((child) => (
             <ElementNode
               key={child.id}
-              el={{ ...child, hidden: child.hidden }}
+              el={child}
               interactive={false}
               pageNo={pageRef?.number}
+              pageCount={pageRef?.count}
               siblings={el.children || []}
-              onPointerDown={() => {}}
+              onGesture={() => {}}
             />
           ))}
       </div>

@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Copy, GripVertical, Plus, Trash2 } from "lucide-react";
-import { pageSize, type CanvasEl } from "@/lib/editor/model";
+import { memo, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Copy, GripVertical, Plus, Trash2 } from "lucide-react";
+import { pageSize, type CanvasEl, type Page } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { clamp, cn } from "@/lib/utils";
 
@@ -13,6 +13,8 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
   const deletePage = useEditor((s) => s.deletePage);
   const reorderPages = useEditor((s) => s.reorderPages);
   const renamePage = useEditor((s) => s.renamePage);
+  const collapsed = useEditor((s) => s.pagesRailCollapsed);
+  const togglePagesRail = useEditor((s) => s.togglePagesRail);
 
   const activeIndex = pages.findIndex((p) => p.id === activePageId);
   const activatePage = (index: number) => {
@@ -96,9 +98,75 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
     window.addEventListener("pointercancel", up);
   };
 
+  /*
+   * Collapsed strip — a 1-line page rail. Every management action stays one
+   * click away (the expand chevron), but the artboard keeps the height the
+   * thumbnail tray was using. Chips show live page numbers; the active page
+   * is highlighted.
+   */
+  if (collapsed) {
+    return (
+      <div className="editor-page-rail editor-page-rail-collapsed flex h-full min-h-0 items-center gap-1.5 border-t bg-surface px-2 overflow-hidden">
+        <button
+          type="button"
+          onClick={() => togglePagesRail()}
+          title="توسيع شريط الصفحات"
+          aria-label="توسيع شريط الصفحات"
+          aria-expanded={false}
+          className="page-rail-nav grid size-7 shrink-0 place-items-center rounded-[7px] border border-line text-muted"
+        >
+          <ChevronDown className="size-3.5" aria-hidden />
+        </button>
+        <button
+          type="button"
+          onClick={() => addPage()}
+          title="إضافة صفحة"
+          aria-label="إضافة صفحة"
+          className="grid size-7 shrink-0 place-items-center rounded-[7px] bg-navy text-white"
+        >
+          <Plus className="size-3.5" aria-hidden />
+        </button>
+        <ul className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto editor-pane-scroll" dir="rtl">
+          {pages.map((p, i) => (
+            <li key={p.id} className="shrink-0">
+              <button
+                type="button"
+                onClick={() => activatePage(i)}
+                onDoubleClick={() => togglePagesRail()}
+                aria-current={p.id === activePageId}
+                title={`${p.name} — ${p.elements.length} عنصر`}
+                className={cn(
+                  "grid h-7 min-w-7 shrink-0 place-items-center rounded-[7px] border px-1.5 text-[11px] font-extrabold tabular-nums",
+                  p.id === activePageId
+                    ? "border-navy-2 bg-navy-2/10 text-brand"
+                    : "border-transparent text-muted hover:border-line",
+                )}
+              >
+                {i + 1}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <span className="shrink-0 text-[10px] font-bold text-muted tabular-nums">
+          {pages.length}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-2 border-t px-2 py-1 bg-surface overflow-hidden">
       <div className="flex shrink-0 flex-col justify-center gap-1">
+        <button
+          type="button"
+          onClick={() => togglePagesRail()}
+          title="تصغير شريط الصفحات — صف واحد من الأرقام"
+          aria-label="تصغير شريط الصفحات"
+          aria-expanded
+          className="grid size-6 place-items-center rounded-[7px] border border-line text-muted"
+        >
+          <ChevronUp className="size-3.5" aria-hidden />
+        </button>
         <button
           type="button"
           onClick={() => addPage()}
@@ -134,6 +202,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
           const size = pageSize(p);
           const ratio = size.w / size.h;
           const { w: thumbW, h: thumbH } = thumbBox(ratio);
+          void size;
           const active = p.id === activePageId;
           return (
             <li
@@ -170,30 +239,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
                 aria-current={active}
                 title="نقرة لاختيار الصفحة — نقرة مزدوجة لفتحها بوضوح في اللوحة"
               >
-                <span
-                  className="page-thumbnail relative mb-1 block overflow-hidden rounded-md border border-line shadow-sm"
-                  style={{ width: `${thumbW}px`, height: `${thumbH}px`, background: p.bg || "#fff" }}
-                >
-                  {p.elements
-                    .slice()
-                    .sort((a, b) => a.z - b.z)
-                    .filter((el) => !el.hidden)
-                    .slice(0, 14)
-                    .map((el) => (
-                      <span
-                        key={el.id}
-                        className="absolute block"
-                        style={{
-                          left: `${(el.x / size.w) * 100}%`,
-                          top: `${(el.y / size.h) * 100}%`,
-                          width: `${(el.w / size.w) * 100}%`,
-                          height: `${(el.h / size.h) * 100}%`,
-                          background: thumbnailColor(el),
-                          borderRadius: isRound(el) ? "999px" : "1px",
-                        }}
-                      />
-                    ))}
-                </span>
+                <PageThumb page={p} w={thumbW} h={thumbH} />
               </button>
                 <span className="flex items-center justify-between gap-1 text-[10px] leading-tight">
                   {renaming === p.id ? (
@@ -290,3 +336,46 @@ function isRound(el: CanvasEl) {
   const id = el.style?.shapeId || el.style?.shape || "";
   return id === "circle" || id === "ellipse" || id === "seal";
 }
+
+/**
+ * A page's miniature. Memoized on the PAGE OBJECT's identity: an element edit
+ * on page 3 rebuilds only page 3's miniature — the old render rebuilt every
+ * page's colored boxes (up to 14 DOM nodes each) on every document write.
+ */
+const PageThumb = memo(function PageThumb({
+  page,
+  w,
+  h,
+}: {
+  page: Page;
+  w: number;
+  h: number;
+}) {
+  const size = pageSize(page);
+  return (
+    <span
+      className="page-thumbnail relative mb-1 block overflow-hidden rounded-md border border-line shadow-sm"
+      style={{ width: `${w}px`, height: `${h}px`, background: page.bg || "#fff" }}
+    >
+      {page.elements
+        .slice()
+        .sort((a, b) => a.z - b.z)
+        .filter((el) => !el.hidden)
+        .slice(0, 14)
+        .map((el) => (
+          <span
+            key={el.id}
+            className="absolute block"
+            style={{
+              left: `${(el.x / size.w) * 100}%`,
+              top: `${(el.y / size.h) * 100}%`,
+              width: `${(el.w / size.w) * 100}%`,
+              height: `${(el.h / size.h) * 100}%`,
+              background: thumbnailColor(el),
+              borderRadius: isRound(el) ? "999px" : "1px",
+            }}
+          />
+        ))}
+    </span>
+  );
+});

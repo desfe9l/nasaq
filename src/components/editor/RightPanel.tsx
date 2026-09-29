@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlignCenter,
   AlignJustify,
@@ -110,7 +110,17 @@ export function RightPanel({
 }) {
   const tab = useEditor((s) => s.rightTab);
   const setRightTab = useEditor((s) => s.setRightTab);
-  const pages = useEditor((s) => s.pages);
+  /*
+   * PERF: the inspector subscribes to the ACTIVE PAGE OBJECT, never the
+   * whole `pages` array. A page object keeps its identity until that page
+   * itself is edited, so a write to any OTHER page (page furniture, numbering,
+   * undo/redo of another page) no longer re-renders the properties panel —
+   * and with drags living in the transient interaction layer, even an active
+   * page edit re-renders the panel exactly once per committed gesture.
+   */
+  const page = useEditor((s) =>
+    s.pages.find((p) => p.id === s.activePageId),
+  );
   const setActivePage = useEditor((s) => s.setActivePage);
   const activePageId = useEditor((s) => s.activePageId);
   const selectedId = useEditor((s) => s.selectedId);
@@ -238,7 +248,6 @@ export function RightPanel({
     probeFonts();
   }, [probeFonts]);
 
-  const page = pages.find((p) => p.id === activePageId);
   // Resolves through groups, so a member picked inside a group shows its own
   // properties rather than nothing.
   const el =
@@ -265,14 +274,24 @@ export function RightPanel({
     );
   };
 
-  const layers = [...(page?.elements || [])].sort((a, b) => b.z - a.z);
-  const visibleLayers = layerQuery.trim()
-    ? layers.filter((layer) =>
-        `${layer.name} ${TYPE_NAME[layer.type]}`
-          .toLocaleLowerCase("ar")
-          .includes(layerQuery.trim().toLocaleLowerCase("ar")),
-      )
-    : layers;
+  // Memoized: sorting the page tree on every render (each keystroke in the
+  // search box, each selection change) was pure waste — the source array's
+  // identity only changes when the page actually changes.
+  const layers = useMemo(
+    () => [...(page?.elements || [])].sort((a, b) => b.z - a.z),
+    [page],
+  );
+  const visibleLayers = useMemo(
+    () =>
+      layerQuery.trim()
+        ? layers.filter((layer) =>
+            `${layer.name} ${TYPE_NAME[layer.type]}`
+              .toLocaleLowerCase("ar")
+              .includes(layerQuery.trim().toLocaleLowerCase("ar")),
+          )
+        : layers,
+    [layers, layerQuery],
+  );
   const selectedCount = useEditor((s) => s.selectedIds.length);
   const selectMany = useEditor((s) => s.selectMany);
   const select = useEditor((s) => s.select);
@@ -380,20 +399,10 @@ export function RightPanel({
        */}
       {tab === "layers" && (
         <div className="editor-panel-controls" role="group" aria-label="تحكم الطبقات">
-          <label className="editor-panel-control">
-            <span>الصفحة</span>
-            <select
-              value={activePageId}
-              onChange={(e) => setActivePage(e.target.value)}
-              aria-label="صفحة الطبقات"
-            >
-              {pages.map((p, index) => (
-                <option key={p.id} value={p.id}>
-                  {index + 1}. {p.name}
-                </option>
-              ))}
-            </select>
-          </label>
+          <PageSelect
+            activePageId={activePageId}
+            onChange={setActivePage}
+          />
           <div className="editor-panel-control is-opacity">
             <ScrubField
               label="الشفافية"
@@ -470,7 +479,7 @@ export function RightPanel({
               </div>
             </div>
             <p className="px-1 text-[10px] leading-4 text-muted">
-              الطبقات مستقلة عن تكبير اللوحة. الترتيب يحدد تكديس العناصر على الصفحة — اسحب الطبقة لتغيير موضعها.
+              الترتيب يحدد التكديس — اسحب الطبقة لتغيير موضعها.
             </p>
           </div>
         )}
@@ -500,8 +509,8 @@ export function RightPanel({
               <h3 className="mt-1 text-[16px] font-extrabold text-ink">
                 {selectedCount} عناصر جاهزة للتحرير الجماعي
               </h3>
-              <p className="mt-1.5 text-[11px] leading-5 text-muted">
-                طبّق المحاذاة والتوزيع والتنظيم على المجموعة كلها دون مغادرة لوحة الخصائص.
+              <p className="mt-1 text-[10px] leading-4 text-muted">
+                المحاذاة والتوزيع تُطبَّق على المجموعة كاملة.
               </p>
             </div>
 
@@ -2315,9 +2324,8 @@ export function RightPanel({
                 icon={ImagePlus}
                 label="حفظ العنصر في المكتبة"
               />
-              <p className="text-[10px] leading-5 text-muted">
-                يُصدَّر المشروع كاملاً بالصيغة المختارة؛ الصفحة الحالية متاحة
-                داخل نافذة التصدير عبر خيار «الصفحة الحالية».
+              <p className="text-[10px] leading-4 text-muted">
+                الصفحة الحالية متاحة داخل نافذة التصدير.
               </p>
             </AccordionSection>
 
@@ -2559,7 +2567,44 @@ function shadowId(value: string | undefined) {
  * can be picked without stepping into it on the canvas. Renaming happens inline
  * so the author stays in the list while organising a busy page.
  */
-function LayerRow({
+/**
+ * The layers tab's page dropdown. Kept in its own component so only IT
+ * re-renders when the page LIST changes (renames, reorders) — the inspector
+ * around it subscribes to nothing but the active page object.
+ */
+function PageSelect({
+  activePageId,
+  onChange,
+}: {
+  activePageId: string;
+  onChange: (id: string) => void;
+}) {
+  const pages = useEditor((s) => s.pages);
+  return (
+    <label className="editor-panel-control">
+      <span>الصفحة</span>
+      <select
+        value={activePageId}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="صفحة الطبقات"
+      >
+        {pages.map((p, index) => (
+          <option key={p.id} value={p.id}>
+            {index + 1}. {p.name}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/**
+ * One layer row (recursively renders a folder's children). Memoized: the
+ * layer's element object keeps its identity unless THAT element changed, so
+ * an edit or drag-commit elsewhere on the page does not re-run the whole
+ * tree — which used to be the single biggest layers-panel cost.
+ */
+const LayerRow = memo(function LayerRow({
   layer,
   depth = 0,
   dragging = false,
@@ -2809,11 +2854,11 @@ function LayerRow({
       )}
     </div>
   );
-}
+});
 
 function EmptyNote({ children }: { children: React.ReactNode }) {
   return (
-    <p className="rounded-[8px] border border-dashed border-line p-4 text-[12px] leading-6 text-muted">
+    <p className="rounded-[8px] border border-dashed border-line p-2.5 text-[11px] leading-5 text-muted">
       {children}
     </p>
   );

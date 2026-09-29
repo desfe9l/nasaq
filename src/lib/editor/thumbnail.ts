@@ -20,6 +20,16 @@ let inflight: Promise<string | null> | null = null;
 /** Max pixel width of the generated thumbnail (A4 scales from here). */
 const THUMB_WIDTH = 360;
 
+/**
+ * Whether a capture is due right now (the same throttle window
+ * `captureThumbnail` enforces). Callers use this to decide whether the
+ * offscreen capture DOM needs mounting at all — the export root is rendered
+ * lazily, so a capture that would be skipped must not pay for the DOM.
+ */
+export function thumbnailCaptureDue(): boolean {
+  return Date.now() - lastCaptureAt >= MIN_INTERVAL_MS;
+}
+
 export async function captureThumbnail(): Promise<string | null> {
   // Never stack captures: a save that lands mid-raster re-uses its result.
   if (inflight) return inflight;

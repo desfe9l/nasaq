@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { TYPE_NAME, type CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
+import { useInteraction } from "@/lib/editor/interaction-store";
 import { placeFloatingToolbar } from "@/lib/editor/ui-state";
 import { cn } from "@/lib/utils";
 import { StrokeControls } from "./StrokeControls";
@@ -64,7 +65,15 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
 
   const fontChoices = useEditor((s) => s.fontChoices);
   const zoom = useEditor((s) => s.zoom);
-  const scrollIntoView = useEditor((s) => s.pages);
+  /*
+   * Follow the element while it is being dragged/rotated WITHOUT subscribing
+   * to the document: the transient interaction store bumps `version` for this
+   * element only. (The old `pages` subscription re-rendered the bubble on
+   * every document write, and a drag wrote per frame.)
+   */
+  const dragVersion = useInteraction(
+    (s) => (s.overrides[el.id] ? s.version : 0),
+  );
   const updateStyle = useEditor((s) => s.updateStyle);
   const updateElement = useEditor((s) => s.updateElement);
   const commit = useEditor((s) => s.commit);
@@ -196,7 +205,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       window.removeEventListener("scroll", schedule, true);
       window.removeEventListener("resize", schedule);
     };
-  }, [place, el.x, el.y, el.w, el.h, el.rotation, zoom, scrollIntoView, bubbleOffset]);
+  }, [place, el.x, el.y, el.w, el.h, el.rotation, zoom, dragVersion, bubbleOffset]);
 
   /**
    * Drag the bubble by its grip and remember where it lands.

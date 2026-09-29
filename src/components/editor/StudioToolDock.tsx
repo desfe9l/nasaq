@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { loadToolDockConfig, saveToolDockConfig, resetToolDockConfig, type ToolDockItemConfig } from "@/lib/editor/tool-dock-config";
 import { useEditor, type LeftTab, type RightTab } from "@/lib/editor/store";
+import { useSelectedElement } from "@/lib/editor/selectors";
 
 type DrawTool = "text" | "rect" | null;
 type FlyoutName = "text" | "shapes" | "colors" | "connectors";
@@ -120,7 +121,10 @@ export function StudioToolDock({
   const backgroundInput = useRef<HTMLInputElement>(null);
   const rightOpen = useEditor((s) => s.rightOpen);
   const rightTab = useEditor((s) => s.rightTab);
-  const selected = useEditor((s) => s.selectedElements()[0]);
+  // Identity-stable selection (see selectors.ts): the old
+  // `selectedElements()[0]` selector allocated on every store notification and
+  // re-rendered the dock for every document write.
+  const selected = useSelectedElement();
   const selectedId = selected?.id;
   const selectedType = selected?.type;
   const selectedFill = selected?.type === "svg" ? selected.style.svgFill : selected?.style?.fill;
