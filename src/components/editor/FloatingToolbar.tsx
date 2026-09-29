@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   AlignCenter,
   AlignJustify,
   AlignLeft,
   AlignRight,
+  ArrowLeftRight,
+  ArrowUpDown,
   Bold,
   Copy,
   EyeOff,
@@ -12,9 +14,11 @@ import {
   FlipVertical2,
   Italic,
   Lock,
+  Maximize2,
   MoreHorizontal,
   Move,
   Paintbrush,
+  Palette,
   RotateCcw,
   RotateCw,
   Scaling,
@@ -27,13 +31,20 @@ import {
 import { TYPE_NAME, type CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { useInteraction } from "@/lib/editor/interaction-store";
-import { placeFloatingToolbar } from "@/lib/editor/ui-state";
+import { strokeBinding } from "@/lib/editor/stroke";
+import { bubbleLayout, placeFloatingToolbar } from "@/lib/editor/ui-state";
 import { cn } from "@/lib/utils";
-import { StrokeControls } from "./StrokeControls";
+import { StrokeControls, StrokeField } from "./StrokeControls";
 import { ScrubInput } from "./ui/ScrubInput";
 import { ColorField } from "./ui/ColorField";
 import { Tip } from "./ui/Tip";
-import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
+import {
+  AnchorMenu,
+  MenuCell,
+  MenuGrid,
+  MenuGroup,
+  MenuRow,
+} from "./ui/AnchorMenu";
 import { AlignIcon } from "./ui/AlignIcon";
 import type { AlignEdge } from "@/lib/editor/model";
 
@@ -44,17 +55,26 @@ const TEXT_TYPES = new Set(["text", "box", "stat", "stamp", "progress"]);
 const GAP = 16;
 /** Minimum distance from the viewport edges. */
 const MARGIN = 8;
+/** Widest lane the bubble is ever asked to fill (`ui-state` folds beyond it). */
+const MAX_LANE = 760;
 
 /**
  * The contextual selection toolbar.
  *
  * It appears only while something is selected, and it shows only what that
- * selection can use: typography for text, fill/stroke for artwork, the border
- * width every drawable shares, then lock, hide, duplicate and delete. The
- * rest — opacity, alignment, distribution, rotation, flips, resize lock, the
- * style clipboard and equal sizing — sits behind one «المزيد» control, so the
- * bubble adapts to the selection instead of becoming a permanent strip of
- * every action the editor owns.
+ * selection can use. The bar itself is ONE row of fixed 32px cells whose
+ * contents are chosen by `bubbleLayout()` from the free lane beside the
+ * artwork — so its rectangle is a function of the viewport and the selection
+ * KIND, never of a font name, a tooltip or the drawer that happens to be open.
+ * Everything that does not fit leaves the bar for one of two drawers:
+ *
+ *   • the group drawer (the palette icon) — the complete set of formatting
+ *     controls for this kind of element, live and movable;
+ *   • «المزيد» — arrange, transform, opacity, the style clipboard and equal
+ *     sizing, which no selection needs in the first second.
+ *
+ * Nothing is dropped: every control that used to sit in the bar is still one
+ * press away, and both drawers can be moved, closed and reopened.
  *
  * Anchor maths are done in SCREEN space (a `getBoundingClientRect` of the live
  * element), never from the element's mm geometry — that is what keeps the
@@ -71,11 +91,11 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   /**
-   * Narrow lane (phone, or a small stage with a wide element): the bubble
-   * drops its secondary element buttons and «المزيد» carries them instead, so
-   * the bar never becomes a strip the author has to scroll to find «حذف».
+   * The free lane beside the artwork, measured in screen pixels. It — and only
+   * it — decides which controls stay in the bar, so the bar's size can change
+   * with the viewport but never with the document or an open drawer.
    */
-  const [compact, setCompact] = useState(false);
+  const [lane, setLane] = useState(MAX_LANE);
   /**
    * A floating panel is a surface the author placed deliberately; on a phone
    * there is not enough room for the bubble AND the panel. While the pointer is
@@ -134,7 +154,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     if (!target || !toolbar) return;
     const rect = target.getBoundingClientRect();
     // A narrow tool rail must not force a phone toolbar down to the page rail.
-    // Fit its scrollable row into the lane beside the tools before placing it.
+    // Fit the bar into the lane beside the tools before placing it.
     let laneLeft = MARGIN, laneRight = window.innerWidth - MARGIN;
     document.querySelectorAll<HTMLElement>('[data-editor-obstacle="tool-dock"]').forEach(dock => {
       const r = dock.getBoundingClientRect();
@@ -142,9 +162,18 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       if (r.left > rect.left + rect.width / 2) laneRight = Math.min(laneRight, r.left - MARGIN);
       else if (r.right < rect.left + rect.width / 2) laneLeft = Math.max(laneLeft, r.right + MARGIN);
     });
-    const lane = Math.min(760, window.innerWidth - MARGIN * 2, Math.max(240, laneRight - laneLeft));
-    setCompact(lane < 440);
-    toolbar.style.maxWidth = `${lane}px`;
+    const nextLane = Math.min(
+      MAX_LANE,
+      window.innerWidth - MARGIN * 2,
+      Math.max(240, laneRight - laneLeft),
+    );
+    /*
+     * Publish the lane instead of measuring the bar: `bubbleLayout` turns this
+     * one number into the bar's contents, so a re-render (not a resize of the
+     * bar) is what answers a smaller viewport. Measuring the bar here and
+     * resizing it there would be a loop.
+     */
+    setLane((current) => (current === nextLane ? current : nextLane));
     const size = toolbar.getBoundingClientRect();
     if (!rect.width && !rect.height) return;
     // Keep the bubble clear of the real, outward-expanded grip hit regions,
@@ -212,6 +241,8 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
 
   // Re-place on every input that can move the element on screen: its own
   // geometry, the zoom, a page re-render, a scroll inside the stage, a resize.
+  // `lane` is in the list because a new lane means a new bar, and the bar has
+  // to be measured AFTER it re-rendered, not before.
   useEffect(() => {
     let frame = 0;
     const schedule = () => {
@@ -224,7 +255,6 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     window.addEventListener("transitionend", schedule, true);
     const observer = new ResizeObserver(schedule);
     document.querySelectorAll("[data-editor-obstacle]").forEach(node => observer.observe(node));
-    if (boxRef.current) observer.observe(boxRef.current);
     window.addEventListener("nasaq:panel-layout", schedule);
     return () => {
       observer.disconnect();
@@ -234,7 +264,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       window.removeEventListener("scroll", schedule, true);
       window.removeEventListener("resize", schedule);
     };
-  }, [place, el.x, el.y, el.w, el.h, el.rotation, zoom, dragVersion, bubbleOffset]);
+  }, [place, lane, el.x, el.y, el.w, el.h, el.rotation, zoom, dragVersion, bubbleOffset]);
 
   useEffect(() => {
     const inside = (event: Event) => {
@@ -305,9 +335,29 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
 
   const style = el.style || {};
   const isText = TEXT_TYPES.has(el.type);
-  /** Shapes / images / icons / lines / tables: the "object" tool set. */
-  const isObject = !isText;
   const count = selectedIds.length;
+  /*
+   * Border support is a property of the element's TYPE (and, for an imported
+   * SVG, of its viewBox), so it is read here without subscribing to the
+   * document: a selection that cannot carry a border simply has no border
+   * control, in the bar or in a drawer, instead of an empty 76px slot.
+   */
+  const supportsStroke = useMemo(() => {
+    if (strokeBinding(el) !== null) return true;
+    // A mixed selection can hold a shape even when the primary element is a
+    // plain text frame. `selectedIds` is subscribed above, so this re-runs with
+    // every selection — and only a multi-selection needs the extra walk.
+    if (selectedIds.length < 2) return false;
+    return useEditor
+      .getState()
+      .selectedElements()
+      .some((item) => strokeBinding(item) !== null);
+  }, [el, selectedIds]);
+  const layout = bubbleLayout(isText ? "text" : "object", lane, {
+    stroke: supportsStroke,
+  });
+  const inBar = new Set(layout.bar);
+  const inDrawer = new Set(layout.drawer);
 
   const paragraphAlign: Array<{ id: string; label: string; icon: LucideIcon }> = [
     { id: "right", label: "محاذاة لليمين", icon: AlignRight },
@@ -315,9 +365,18 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     { id: "left", label: "محاذاة لليسار", icon: AlignLeft },
     { id: "justify", label: "ضبط", icon: AlignJustify },
   ];
+  const AlignCurrent =
+    paragraphAlign.find((item) => item.id === (style.textAlign || "right"))
+      ?.icon ?? AlignRight;
   /** Align/distribute the selection (or the page when a single object is picked). */
   const alignEdge = (edge: string) =>
     align(edge as AlignEdge, count >= 2 ? "selection" : "page");
+  const setParagraphAlign = (id: string) => {
+    updateStyle(el.id, {
+      textAlign: id as "right" | "center" | "left" | "justify",
+    });
+    commit();
+  };
   const rotate = (delta: number) => {
     const state = useEditor.getState();
     for (const item of state.selectedElements()) {
@@ -327,6 +386,85 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     }
     commit();
   };
+  /** The two colour bindings of an object, shared by the bar and the drawer. */
+  const objectColors = {
+    fill: {
+      value: el.type === "svg" ? style.svgFill : style.fill,
+      fallback: style.background || "#006c35",
+      onChange: (v: string) =>
+        updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v }, true),
+      onCommit: (v: string) =>
+        updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v }),
+    },
+    border: {
+      value:
+        el.type === "line" || el.type === "divider"
+          ? style.color
+          : el.type === "svg" || el.type === "icon"
+            ? style.svgStroke
+            : style.borderColor,
+      fallback: style.color || "#c9a86a",
+      onChange: (v: string) =>
+        updateStyle(
+          el.id,
+          el.type === "line" || el.type === "divider"
+            ? { color: v }
+            : el.type === "svg" || el.type === "icon"
+              ? { svgStroke: v }
+              : { borderColor: v },
+          true,
+        ),
+      onCommit: (v: string) =>
+        updateStyle(
+          el.id,
+          el.type === "line" || el.type === "divider"
+            ? { color: v }
+            : el.type === "svg" || el.type === "icon"
+              ? { svgStroke: v }
+              : { borderColor: v },
+        ),
+    },
+  };
+
+  /** Typography, in the bar or in the drawer — the same controls either way. */
+  const typographyControls = (
+    <>
+      <div className="editor-menu-field">
+        <select
+          className="editor-drawer-select"
+          aria-label="نوع الخط"
+          title={`نوع الخط — ${style.fontFamily || "Tajawal"}`}
+          value={style.fontFamily || "Tajawal"}
+          onChange={(event) => {
+            updateStyle(el.id, { fontFamily: event.target.value });
+            commit();
+          }}
+        >
+          {fontChoices.map((font) => (
+            <option key={font.family} value={font.family}>
+              {font.family}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="editor-menu-field">
+        <ScrubInput
+          label="حجم الخط"
+          value={Math.round(Number(style.fontSize || 12) * 10) / 10}
+          min={5}
+          max={200}
+          step={0.5}
+          precision={1}
+          suffix="pt"
+          onChange={(v) => updateStyle(el.id, { fontSize: v }, true)}
+          onCommit={(v) => {
+            updateStyle(el.id, { fontSize: v });
+            commit();
+          }}
+        />
+      </div>
+    </>
+  );
 
   /*
    * Portalled to `document.body` on purpose: the bubble is `position: fixed`
@@ -337,9 +475,10 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   return createPortal(
     <div
       ref={boxRef}
-      className={cn("floating-toolbar", compact && "is-compact", dragging && "is-dragging")}
+      className={cn("floating-toolbar", dragging && "is-dragging")}
       data-floating-toolbar={el.id}
       data-placement={side}
+      data-density={layout.drawer.length || layout.more.length ? "folded" : "full"}
       style={{
         left: pos?.left ?? -9999,
         top: pos?.top ?? -9999,
@@ -371,252 +510,295 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
         onPointerDown={startDrag}
         onDoubleClick={() => setBubbleOffset(null)}
       >
-        <Move className="size-3.5" />
+        <Move />
       </button>
 
       {/*
-       * What stays in the bar is what an author reaches for in the first
-       * second of a selection: type-specific controls, then the two
-       * object-wide essentials. Everything else lives in «المزيد» below, so
-       * the bubble adapts to the selection instead of listing every action the
-       * editor can perform.
+       * The group drawer: the whole formatting set for this kind of element,
+       * opened only when the lane is too narrow to hold it in the bar. It is a
+       * real drawer — titled, movable, closable — not a second toolbar.
        */}
-      {isText && (
-        <>
-          <div className="floating-toolbar-section">
-            <select
-              className="floating-toolbar-select"
-              aria-label="نوع الخط"
-              value={style.fontFamily || "Tajawal"}
-              onChange={(event) => {
-                updateStyle(el.id, { fontFamily: event.target.value });
-                commit();
-              }}
-              title="نوع الخط"
+      {inBar.has("drawer") && (
+        <AnchorMenu
+          label={isText ? "تنسيق النص" : "تنسيق العنصر"}
+          drawer={{
+            id: "selection-format",
+            title: isText ? "تنسيق النص" : "تنسيق العنصر",
+          }}
+          width={248}
+          side="top"
+          align="start"
+          trigger={({ ref, ...props }) => (
+            <button
+              {...props}
+              ref={ref}
+              type="button"
+              className="floating-toolbar-btn"
+              aria-label={isText ? "تنسيق النص" : "تنسيق العنصر"}
             >
-              {fontChoices.map((font) => (
-                <option key={font.family} value={font.family}>
-                  {font.family}
-                </option>
-              ))}
-            </select>
-            {/*
-             * Font size uses the shared scrubber: drag the value (or its
-             * label) horizontally, Shift for ×10, and ± steppers that stay
-             * thumb-sized on touch — the same gesture as the properties panel,
-             * so the author does not relearn it mid-canvas.
-             */}
-            <ScrubInput
-              className="floating-toolbar-scrub"
-              label="حجم الخط"
-              value={Math.round(Number(style.fontSize || 12) * 10) / 10}
-              min={5}
-              max={200}
-              step={0.5}
-              precision={1}
-              suffix="pt"
-              onChange={(v) => updateStyle(el.id, { fontSize: v }, true)}
-              onCommit={(v) => {
-                updateStyle(el.id, { fontSize: v });
-                commit();
-              }}
-            />
-          </div>
-          <span className="floating-toolbar-sep" aria-hidden />
-          <div className="floating-toolbar-section">
-            <TipButton
-              label="عريض"
-              shortcut="Bold"
-              pressed={Number(style.fontWeight || 0) >= 700}
-              onClick={() => {
-                updateStyle(el.id, {
-                  fontWeight: Number(style.fontWeight) >= 700 ? 500 : 800,
-                });
-                commit();
-              }}
-            >
-              <Bold className="size-3.5" />
-            </TipButton>
-            <TipButton
-              label="مائل"
-              shortcut="Italic"
-              pressed={style.fontStyle === "italic"}
-              onClick={() => {
-                updateStyle(el.id, {
-                  fontStyle: style.fontStyle === "italic" ? "normal" : "italic",
-                });
-                commit();
-              }}
-            >
-              <Italic className="size-3.5" />
-            </TipButton>
-            <TipButton
-              label="تحته خط"
-              shortcut="Underline"
-              pressed={style.underline === true}
-              onClick={() => {
-                updateStyle(el.id, { underline: style.underline !== true });
-                commit();
-              }}
-            >
-              <Underline className="size-3.5" />
-            </TipButton>
-            <ColorField
-              className="floating-toolbar-swatch"
-              label="لون النص"
-              value={style.color}
-              fallback="#172033"
-              onChange={(v) => updateStyle(el.id, { color: v }, true)}
-              onCommit={(v) => updateStyle(el.id, { color: v })}
-            />
-            {/* Paragraph alignment is four choices for one job — a popover, not
-                four permanent slots competing with the font controls. */}
-            <AnchorMenu
-              label="محاذاة الفقرة"
-              width={168}
-              trigger={({ ref, ...props }) => (
-                <button
-                  {...props}
-                  ref={ref}
-                  type="button"
-                  className="floating-toolbar-btn"
-                  aria-label="محاذاة الفقرة"
-                >
-                  {(() => {
-                    const Icon =
-                      paragraphAlign.find(
-                        (item) => item.id === (style.textAlign || "right"),
-                      )?.icon ?? AlignRight;
-                    return <Icon className="size-3.5" />;
-                  })()}
-                </button>
-              )}
-            >
-              {paragraphAlign.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <MenuRow
-                    key={item.id}
-                    icon={<Icon className="size-4" />}
-                    label={item.label}
-                    checked={(style.textAlign || "right") === item.id}
-                    onSelect={() => {
-                      updateStyle(el.id, {
-                        textAlign: item.id as
-                          | "right"
-                          | "center"
-                          | "left"
-                          | "justify",
-                      });
-                      commit();
-                    }}
-                  />
-                );
-              })}
-            </AnchorMenu>
-          </div>
-          <span className="floating-toolbar-sep" aria-hidden />
-        </>
+              <Palette />
+            </button>
+          )}
+        >
+          {inDrawer.has("typography") && typographyControls}
+          {inDrawer.has("format") && (
+            <>
+              <MenuGrid columns={4} label="تنسيق الأحرف">
+                <MenuCell
+                  icon={<Bold />}
+                  label="عريض"
+                  active={Number(style.fontWeight || 0) >= 700}
+                  onSelect={() => {
+                    updateStyle(el.id, {
+                      fontWeight: Number(style.fontWeight) >= 700 ? 500 : 800,
+                    });
+                    commit();
+                  }}
+                />
+                <MenuCell
+                  icon={<Italic />}
+                  label="مائل"
+                  active={style.fontStyle === "italic"}
+                  onSelect={() => {
+                    updateStyle(el.id, {
+                      fontStyle: style.fontStyle === "italic" ? "normal" : "italic",
+                    });
+                    commit();
+                  }}
+                />
+                <MenuCell
+                  icon={<Underline />}
+                  label="تحته خط"
+                  active={style.underline === true}
+                  onSelect={() => {
+                    updateStyle(el.id, { underline: style.underline !== true });
+                    commit();
+                  }}
+                />
+                <ColorField
+                  className="editor-menu-swatch"
+                  label="لون النص"
+                  value={style.color}
+                  fallback="#172033"
+                  onChange={(v) => updateStyle(el.id, { color: v }, true)}
+                  onCommit={(v) => updateStyle(el.id, { color: v })}
+                />
+              </MenuGrid>
+              <MenuGrid columns={4} label="محاذاة الفقرة">
+                {paragraphAlign.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <MenuCell
+                      key={item.id}
+                      icon={<Icon />}
+                      label={item.label}
+                      active={(style.textAlign || "right") === item.id}
+                      onSelect={() => setParagraphAlign(item.id)}
+                    />
+                  );
+                })}
+              </MenuGrid>
+            </>
+          )}
+          {inDrawer.has("ink") && (
+            <MenuGrid columns={2} label="ألوان العنصر">
+              <ColorField
+                className="editor-menu-swatch"
+                label="لون التعبئة"
+                value={objectColors.fill.value}
+                fallback={objectColors.fill.fallback}
+                allowNone
+                onChange={objectColors.fill.onChange}
+                onCommit={objectColors.fill.onCommit}
+              />
+              <ColorField
+                className="editor-menu-swatch"
+                label="لون الإطار"
+                value={objectColors.border.value}
+                fallback={objectColors.border.fallback}
+                onChange={objectColors.border.onChange}
+                onCommit={objectColors.border.onCommit}
+              />
+            </MenuGrid>
+          )}
+          {inDrawer.has("stroke") && (
+            <div className="editor-menu-field">
+              <StrokeField />
+            </div>
+          )}
+        </AnchorMenu>
       )}
 
-      {isObject && (
-        <>
-          <div className="floating-toolbar-section">
-            <ColorField
-              className="floating-toolbar-swatch"
-              label="لون التعبئة"
-              value={el.type === "svg" ? style.svgFill : style.fill}
-              fallback={style.background || "#006c35"}
-              allowNone
-              onChange={(v) =>
-                updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v }, true)
-              }
-              onCommit={(v) =>
-                updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v })
-              }
-            />
-            <ColorField
-              className="floating-toolbar-swatch"
-              label="لون الإطار"
-              value={
-                el.type === "line" || el.type === "divider"
-                  ? style.color
-                  : el.type === "svg" || el.type === "icon"
-                    ? style.svgStroke
-                    : style.borderColor
-              }
-              fallback={style.color || "#c9a86a"}
-              onChange={(v) =>
-                updateStyle(
-                  el.id,
-                  el.type === "line" || el.type === "divider"
-                    ? { color: v }
-                    : el.type === "svg" || el.type === "icon"
-                      ? { svgStroke: v }
-                      : { borderColor: v },
-                  true,
-                )
-              }
-              onCommit={(v) =>
-                updateStyle(
-                  el.id,
-                  el.type === "line" || el.type === "divider"
-                    ? { color: v }
-                    : el.type === "svg" || el.type === "icon"
-                      ? { svgStroke: v }
-                      : { borderColor: v },
-                )
-              }
-            />
-          </div>
-        </>
+      {inBar.has("typography") && (
+        <div className="floating-toolbar-section">
+          <select
+            className="floating-toolbar-select"
+            aria-label="نوع الخط"
+            title={`نوع الخط — ${style.fontFamily || "Tajawal"}`}
+            value={style.fontFamily || "Tajawal"}
+            onChange={(event) => {
+              updateStyle(el.id, { fontFamily: event.target.value });
+              commit();
+            }}
+          >
+            {fontChoices.map((font) => (
+              <option key={font.family} value={font.family}>
+                {font.family}
+              </option>
+            ))}
+          </select>
+          {/*
+           * Font size uses the shared scrubber: drag the value horizontally,
+           * Shift for ×10, and ± steppers that stay thumb-sized on touch — the
+           * same gesture as the properties panel, so the author does not
+           * relearn it mid-canvas.
+           */}
+          <ScrubInput
+            className="floating-toolbar-scrub"
+            label="حجم الخط"
+            value={Math.round(Number(style.fontSize || 12) * 10) / 10}
+            min={5}
+            max={200}
+            step={0.5}
+            precision={1}
+            suffix="pt"
+            onChange={(v) => updateStyle(el.id, { fontSize: v }, true)}
+            onCommit={(v) => {
+              updateStyle(el.id, { fontSize: v });
+              commit();
+            }}
+          />
+        </div>
+      )}
+
+      {inBar.has("format") && (
+        <div className="floating-toolbar-section">
+          <TipButton
+            label="عريض"
+            pressed={Number(style.fontWeight || 0) >= 700}
+            onClick={() => {
+              updateStyle(el.id, {
+                fontWeight: Number(style.fontWeight) >= 700 ? 500 : 800,
+              });
+              commit();
+            }}
+          >
+            <Bold />
+          </TipButton>
+          <TipButton
+            label="مائل"
+            pressed={style.fontStyle === "italic"}
+            onClick={() => {
+              updateStyle(el.id, {
+                fontStyle: style.fontStyle === "italic" ? "normal" : "italic",
+              });
+              commit();
+            }}
+          >
+            <Italic />
+          </TipButton>
+          <TipButton
+            label="تحته خط"
+            pressed={style.underline === true}
+            onClick={() => {
+              updateStyle(el.id, { underline: style.underline !== true });
+              commit();
+            }}
+          >
+            <Underline />
+          </TipButton>
+          <ColorField
+            className="floating-toolbar-swatch"
+            label="لون النص"
+            value={style.color}
+            fallback="#172033"
+            onChange={(v) => updateStyle(el.id, { color: v }, true)}
+            onCommit={(v) => updateStyle(el.id, { color: v })}
+          />
+          {/* Paragraph alignment is four choices for one job — a popover, not
+              four permanent slots competing with the font controls. */}
+          <AnchorMenu
+            label="محاذاة الفقرة"
+            width={168}
+            trigger={({ ref, ...props }) => (
+              <button
+                {...props}
+                ref={ref}
+                type="button"
+                className="floating-toolbar-btn"
+                aria-label="محاذاة الفقرة"
+              >
+                <AlignCurrent />
+              </button>
+            )}
+          >
+            {paragraphAlign.map((item) => {
+              const Icon = item.icon;
+              return (
+                <MenuRow
+                  key={item.id}
+                  icon={<Icon className="size-4" />}
+                  label={item.label}
+                  checked={(style.textAlign || "right") === item.id}
+                  onSelect={() => setParagraphAlign(item.id)}
+                />
+              );
+            })}
+          </AnchorMenu>
+        </div>
+      )}
+
+      {inBar.has("ink") && (
+        <div className="floating-toolbar-section">
+          <ColorField
+            className="floating-toolbar-swatch"
+            label="لون التعبئة"
+            value={objectColors.fill.value}
+            fallback={objectColors.fill.fallback}
+            allowNone
+            onChange={objectColors.fill.onChange}
+            onCommit={objectColors.fill.onCommit}
+          />
+          <ColorField
+            className="floating-toolbar-swatch"
+            label="لون الإطار"
+            value={objectColors.border.value}
+            fallback={objectColors.border.fallback}
+            onChange={objectColors.border.onChange}
+            onCommit={objectColors.border.onCommit}
+          />
+        </div>
       )}
 
       {/* Owns its leading separator, so a selection without stroke support
           never leaves a stray divider in the bar. */}
-      <StrokeControls />
+      {inBar.has("stroke") && <StrokeControls />}
 
-      {!compact && (
-        <>
-      <div className="floating-toolbar-section">
-        <TipButton
-          label={el.locked ? "فتح القفل" : "قفل العنصر"}
-          hint="منع التحرير"
-          pressed={el.locked === true}
-          onClick={() => toggleLock()}
-        >
-          {el.locked ? <Unlock className="size-3.5" /> : <Lock className="size-3.5" />}
-        </TipButton>
-        <TipButton
-          label="إخفاء العنصر"
-          hint="يظهر مرة أخرى من شجرة الطبقات"
-          onClick={() => toggleHidden()}
-        >
-          <EyeOff className="size-3.5" />
-        </TipButton>
-      </div>
-      <span className="floating-toolbar-sep" aria-hidden />
-      <div className="floating-toolbar-section">
-        <TipButton label="تكرار" shortcut="⌘D" onClick={duplicateSelected}>
-          <Copy className="size-3.5" />
-        </TipButton>
-        <TipButton label="حذف" shortcut="Delete" danger onClick={deleteSelected}>
-          <Trash2 className="size-3.5" />
-        </TipButton>
-      </div>
-        </>
+      {inBar.has("element") && (
+        <div className="floating-toolbar-section">
+          <TipButton label="تكرار" shortcut="⌘D" onClick={duplicateSelected}>
+            <Copy />
+          </TipButton>
+          <TipButton label="حذف" shortcut="Delete" danger onClick={deleteSelected}>
+            <Trash2 />
+          </TipButton>
+        </div>
       )}
+
       <span className="floating-toolbar-sep" aria-hidden />
 
       {/*
-       * «المزيد» — everything that is real but not immediate: opacity,
-       * alignment/distribution, rotation, flips, resize lock, style
-       * clipboard and equal sizing. One compact popover instead of a dozen
-       * permanent buttons, and the same actions the header used to carry.
+       * «المزيد» — everything that is real but not immediate: alignment and
+       * distribution, rotation and flips, lock/hide/duplicate/delete, opacity,
+       * the style clipboard and equal sizing. A movable drawer of icon
+       * controls, so the bar adapts to the selection instead of listing every
+       * action the editor can perform.
        */}
       <AnchorMenu
         label="المزيد"
-        width={232}
+        drawer={{ id: "selection-more", title: "أدوات العنصر" }}
+        width={240}
+        side="top"
         align="end"
         trigger={({ ref, ...props }) => (
           <button
@@ -626,10 +808,99 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
             className="floating-toolbar-btn"
             aria-label="المزيد من أدوات العنصر"
           >
-            <MoreHorizontal className="size-3.5" />
+            <MoreHorizontal />
           </button>
         )}
       >
+        <MenuGrid columns={3} label="المحاذاة">
+          {(
+            [
+              ["right", "محاذاة لليمين"],
+              ["center-h", "توسيط أفقي"],
+              ["left", "محاذاة لليسار"],
+              ["top", "محاذاة للأعلى"],
+              ["center-v", "توسيط رأسي"],
+              ["bottom", "محاذاة للأسفل"],
+            ] as const
+          ).map(([kind, title]) => (
+            <MenuCell
+              key={kind}
+              icon={<AlignIcon kind={kind} />}
+              label={title}
+              onSelect={() => alignEdge(kind)}
+            />
+          ))}
+        </MenuGrid>
+        <MenuGrid columns={4} label="التوزيع والتحويل">
+          <MenuCell
+            icon={<AlignIcon kind="dist-h" />}
+            label="توزيع أفقي متساوٍ"
+            disabled={count < 3}
+            onSelect={() => distribute("h")}
+          />
+          <MenuCell
+            icon={<AlignIcon kind="dist-v" />}
+            label="توزيع رأسي متساوٍ"
+            disabled={count < 3}
+            onSelect={() => distribute("v")}
+          />
+          <MenuCell
+            icon={<RotateCcw />}
+            label="تدوير 90° لليسار"
+            onSelect={() => rotate(-90)}
+          />
+          <MenuCell
+            icon={<RotateCw />}
+            label="تدوير 90° لليمين"
+            onSelect={() => rotate(90)}
+          />
+        </MenuGrid>
+        <MenuGrid columns={4} label="القلب والتحجيم">
+          <MenuCell
+            icon={<FlipHorizontal2 />}
+            label="قلب أفقي"
+            active={style.flipX === true}
+            onSelect={() => flipSelected("x")}
+          />
+          <MenuCell
+            icon={<FlipVertical2 />}
+            label="قلب رأسي"
+            active={style.flipY === true}
+            onSelect={() => flipSelected("y")}
+          />
+          <MenuCell
+            icon={<Scaling />}
+            label="قفل التحجيم — تجميد العرض والارتفاع"
+            active={el.resizeLocked === true}
+            onSelect={() => toggleResizeLock()}
+          />
+          <MenuCell
+            icon={<Maximize2 />}
+            label="ملاءمة صندوق النص"
+            disabled={!isText}
+            onSelect={() => fitTextBox(el.id)}
+          />
+        </MenuGrid>
+        <MenuGrid columns={4} label="العنصر">
+          <MenuCell
+            icon={el.locked ? <Unlock /> : <Lock />}
+            label={el.locked ? "فتح القفل" : "قفل العنصر — منع التحرير"}
+            active={el.locked === true}
+            onSelect={() => toggleLock()}
+          />
+          <MenuCell
+            icon={<EyeOff />}
+            label="إخفاء العنصر — يظهر مرة أخرى من شجرة الطبقات"
+            onSelect={() => toggleHidden()}
+          />
+          <MenuCell icon={<Copy />} label="تكرار" onSelect={duplicateSelected} />
+          <MenuCell
+            icon={<Trash2 />}
+            label="حذف العنصر"
+            danger
+            onSelect={deleteSelected}
+          />
+        </MenuGrid>
         <MenuGroup title="الشفافية" />
         <div className="editor-menu-field">
           <ScrubInput
@@ -647,110 +918,48 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
             }}
           />
         </div>
-        <MenuGroup title="المحاذاة والتوزيع" />
-        <div className="editor-menu-grid is-3" dir="ltr">
-          {(
-            [
-              ["right", "محاذاة لليمين"],
-              ["center-h", "توسيط أفقي"],
-              ["left", "محاذاة لليسار"],
-              ["top", "محاذاة للأعلى"],
-              ["center-v", "توسيط رأسي"],
-              ["bottom", "محاذاة للأسفل"],
-            ] as const
-          ).map(([kind, title]) => (
-            <button key={kind} type="button" title={title} aria-label={title} onClick={() => alignEdge(kind)}>
-              <AlignIcon kind={kind} />
-            </button>
-          ))}
-        </div>
-        <div className="editor-menu-grid is-2" dir="ltr">
-          <button
-            type="button"
-            title="توزيع أفقي متساوٍ"
-            aria-label="توزيع أفقي متساوٍ"
-            disabled={count < 3}
-            onClick={() => distribute("h")}
-          >
-            <AlignIcon kind="dist-h" />
-          </button>
-          <button
-            type="button"
-            title="توزيع رأسي متساوٍ"
-            aria-label="توزيع رأسي متساوٍ"
-            disabled={count < 3}
-            onClick={() => distribute("v")}
-          >
-            <AlignIcon kind="dist-v" />
-          </button>
-        </div>
-        <MenuGroup title="التحويل" />
-        <MenuRow icon={<RotateCcw className="size-4" />} label="تدوير 90° لليسار" onSelect={() => rotate(-90)} />
-        <MenuRow icon={<RotateCw className="size-4" />} label="تدوير 90° لليمين" onSelect={() => rotate(90)} />
-        <MenuRow
-          icon={<Scaling className="size-4" />}
-          label="ملاءمة صندوق النص"
-          disabled={!isText}
-          onSelect={() => fitTextBox(el.id)}
-        />
-        <MenuGroup title="العنصر" />
-        {compact && (
-          <>
-            <MenuRow
-              icon={<Lock className="size-4" />}
-              label={el.locked ? "فتح القفل" : "قفل العنصر"}
-              checked={el.locked === true}
-              onSelect={() => toggleLock()}
-            />
-            <MenuRow icon={<EyeOff className="size-4" />} label="إخفاء العنصر" onSelect={() => toggleHidden()} />
-            <MenuRow icon={<Copy className="size-4" />} label="تكرار" shortcut="⌘D" onSelect={duplicateSelected} />
-            <MenuRow
-              icon={<Trash2 className="size-4" />}
-              label="حذف العنصر"
-              shortcut="Delete"
-              danger
-              onSelect={deleteSelected}
-            />
-          </>
-        )}
-        <MenuRow
-          icon={<FlipHorizontal2 className="size-4" />}
-          label="قلب أفقي"
-          checked={style.flipX === true}
-          onSelect={() => flipSelected("x")}
-        />
-        <MenuRow
-          icon={<FlipVertical2 className="size-4" />}
-          label="قلب رأسي"
-          checked={style.flipY === true}
-          onSelect={() => flipSelected("y")}
-        />
-        <MenuRow
-          icon={<Scaling className="size-4" />}
-          label="قفل التحجيم"
-          hint="تجميد العرض والارتفاع"
-          checked={el.resizeLocked === true}
-          onSelect={() => toggleResizeLock()}
-        />
-        <MenuGroup title="التنسيق" />
-        <MenuRow icon={<Paintbrush className="size-4" />} label="نسخ التنسيق" onSelect={copyStyle} />
-        <MenuRow
-          icon={<Paintbrush className="size-4" />}
-          label="لصق التنسيق"
-          disabled={!styleClipboard}
-          onSelect={pasteStyle}
-        />
-        <MenuRow label="نفس العرض" disabled={count < 2} onSelect={() => matchSize("width")} />
-        <MenuRow label="نفس الارتفاع" disabled={count < 2} onSelect={() => matchSize("height")} />
-        <MenuRow label="نفس الحجم" disabled={count < 2} onSelect={() => matchSize("both")} />
+        <MenuGroup title="التنسيق والحجم" />
+        <MenuGrid columns={2} label="نسخ التنسيق">
+          <MenuCell
+            icon={<Paintbrush />}
+            label="نسخ التنسيق"
+            onSelect={copyStyle}
+          />
+          <MenuCell
+            icon={<Paintbrush />}
+            label="لصق التنسيق"
+            disabled={!styleClipboard}
+            onSelect={pasteStyle}
+          />
+        </MenuGrid>
+        <MenuGrid columns={3} label="توحيد المقاس">
+          <MenuCell
+            icon={<ArrowLeftRight />}
+            label="نفس العرض"
+            disabled={count < 2}
+            onSelect={() => matchSize("width")}
+          />
+          <MenuCell
+            icon={<ArrowUpDown />}
+            label="نفس الارتفاع"
+            disabled={count < 2}
+            onSelect={() => matchSize("height")}
+          />
+          <MenuCell
+            icon={<Maximize2 />}
+            label="نفس الحجم"
+            disabled={count < 2}
+            onSelect={() => matchSize("both")}
+          />
+        </MenuGrid>
       </AnchorMenu>
 
       <span className="floating-toolbar-sep" aria-hidden />
       {/*
        * Quick dismiss. The author can silence the bubble from the bubble
-       * itself (it follows every selection, so it is the thing that is in
-       * the way right now); «عرض» turns it back on. The choice is persisted
-       * with the rest of the UI state.
+       * itself (it follows every selection, so it is the thing that is in the
+       * way right now); «عرض» turns it back on. The choice is persisted with
+       * the rest of the UI state.
        */}
       <button
         type="button"
@@ -759,7 +968,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
         aria-label="إخفاء الشريط العائم"
         onClick={() => toggleBubble(false)}
       >
-        <X className="size-3.5" />
+        <X />
       </button>
 
     </div>,
@@ -771,6 +980,9 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
  * One bubble button. Same tooltip contract as the rest of the studio
  * (hover on pointer devices, long-press on touch) so no icon in the bar is a
  * mystery, and the same pressed/active affordance the panel buttons use.
+ *
+ * `shortcut` is for a key the editor actually binds, shown in ONE place: a
+ * decorative key cap that does nothing on press is worse than none.
  */
 function TipButton({
   label,

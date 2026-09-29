@@ -355,6 +355,403 @@ export function panelSpawnRect(
 }
 
 /* -------------------------------------------------------------------------- */
+/* Chrome density (selection bubble + canvas dock)                            */
+/* -------------------------------------------------------------------------- */
+
+/*
+ * The two toolbars of the editor (the selection bubble and the canvas dock)
+ * used to size themselves from their own CONTENT: a long font name widened the
+ * bubble, a narrow lane made it wrap onto a second row, and a phone viewport
+ * compressed the dock's icons instead of giving anything up. The result was a
+ * toolbar whose width and height moved while the author worked.
+ *
+ * Both bars now have a FIXED cell geometry, and what is inside them is decided
+ * by these pure functions from one number — the free lane beside the artwork —
+ * so a bar's size is a deterministic function of the viewport, never of the
+ * document, the selection's contents or the drawer that happens to be open.
+ * Anything that does not fit leaves the bar for a drawer; nothing is shrunk,
+ * clipped or wrapped.
+ *
+ * Every constant below mirrors one rule in `src/styles.css`; the comment names
+ * it so the two files cannot drift apart silently.
+ */
+
+/** `.floating-toolbar-btn` — one icon cell of the selection bubble. */
+export const BUBBLE_CELL = 32;
+/** `.floating-toolbar` `padding: 4px 8px` — the bar's own inline padding. */
+export const BUBBLE_PAD = 16;
+/** `.floating-toolbar` `gap: 3px` — gutter between two direct children. */
+export const BUBBLE_GUTTER = 3;
+/** `.floating-toolbar-section` `padding-inline: 3px` (both sides). */
+export const BUBBLE_SECTION_PAD = 6;
+/** `.floating-toolbar-section` `gap: 2px`. */
+export const BUBBLE_SECTION_GAP = 2;
+/** `.floating-toolbar-sep` — a 1px rule plus its 3px inline margins. */
+export const BUBBLE_SEP = 7;
+/** Fixed field widths: a field never sizes itself from its own text. */
+export const BUBBLE_FIELD_FONT = 96;
+export const BUBBLE_FIELD_SIZE = 92;
+export const BUBBLE_FIELD_STROKE = 76;
+/** Headroom kept between the measured bar and the lane before it must fold. */
+export const BUBBLE_SAFETY = 12;
+
+/** Which kind of element is selected — it decides the bubble's parts. */
+export type BubbleKind = "text" | "object";
+
+/**
+ * The pieces of the selection bubble, in render order. `grip`, `more` and
+ * `close` are structural and never fold; `drawer` is the trigger the bar shows
+ * for the group that has folded out of it.
+ */
+export type BubblePart =
+  | "grip"
+  /** Font family + font size (text only). */
+  | "typography"
+  /** Bold / italic / underline + text colour + paragraph align. */
+  | "format"
+  /** Fill + border swatches (object only). */
+  | "ink"
+  /** Border/stroke width. */
+  | "stroke"
+  /** Duplicate + delete. */
+  | "element"
+  /** The trigger of the group drawer. */
+  | "drawer"
+  | "more"
+  | "close";
+
+/** Everything the bubble renders, per selection kind. */
+export const BUBBLE_PARTS: Record<BubbleKind, readonly BubblePart[]> = {
+  text: ["grip", "typography", "format", "stroke", "element", "more", "close"],
+  object: ["grip", "ink", "stroke", "element", "more", "close"],
+};
+
+/** Parts that leave the bar for the group drawer (rather than for «المزيد»). */
+export const BUBBLE_DRAWER_PARTS: readonly BubblePart[] = [
+  "typography",
+  "format",
+  "ink",
+  "stroke",
+];
+
+/**
+ * Fold order: the first list that fits wins, so a wide lane keeps every control
+ * in the bar and a phone lane keeps the icons and hands the fields to a drawer.
+ * Nothing here depends on the selection's contents.
+ */
+export const BUBBLE_FOLDS: Record<
+  BubbleKind,
+  readonly (readonly BubblePart[])[]
+> = {
+  text: [
+    [],
+    ["element"],
+    ["element", "typography"],
+    ["element", "typography", "format"],
+  ],
+  object: [[], ["element"], ["element", "ink"], ["element", "ink", "stroke"]],
+};
+
+/** Rendered width of one bubble part, excluding the gutters around it. */
+export function bubblePartWidth(part: BubblePart): number {
+  const cells = (n: number) =>
+    BUBBLE_SECTION_PAD + n * BUBBLE_CELL + (n - 1) * BUBBLE_SECTION_GAP;
+  switch (part) {
+    case "typography":
+      return (
+        BUBBLE_SECTION_PAD +
+        BUBBLE_FIELD_FONT +
+        BUBBLE_FIELD_SIZE +
+        BUBBLE_SECTION_GAP
+      );
+    // Bold / italic / underline / colour / paragraph align, one section.
+    case "format":
+      return cells(5);
+    // Fill + border. Two cells, so one selection kind never makes the bar
+    // wider than the other.
+    case "ink":
+    case "element":
+      return cells(2);
+    case "stroke":
+      // Owns its leading separator, so a selection without stroke support
+      // never leaves a stray divider behind.
+      return BUBBLE_SEP + BUBBLE_SECTION_PAD + BUBBLE_FIELD_STROKE;
+    case "grip":
+    case "drawer":
+    case "more":
+    case "close":
+      return BUBBLE_CELL;
+  }
+}
+
+/**
+ * Measured width of a bubble that renders exactly `parts`.
+ *
+ * The two separators the bar draws itself (before «المزيد» and before the
+ * dismiss control) are part of the geometry, so the number this returns is the
+ * bar's real offsetWidth — that is what makes the fold decision trustworthy
+ * without measuring the bar (which would be a feedback loop).
+ */
+export function bubbleBarWidth(parts: readonly BubblePart[]): number {
+  const separators = parts.includes("more") ? 2 : 0;
+  const width =
+    parts.reduce((total, part) => total + bubblePartWidth(part), 0) +
+    separators * BUBBLE_SEP;
+  const children = parts.length + separators;
+  return BUBBLE_PAD + width + Math.max(0, children - 1) * BUBBLE_GUTTER;
+}
+
+export interface BubbleLayout {
+  /** Parts that stay in the bar, in render order. */
+  bar: BubblePart[];
+  /** Parts that moved into the selection's tool drawer. */
+  drawer: BubblePart[];
+  /** Parts that moved into «المزيد» (the always-present overflow drawer). */
+  more: BubblePart[];
+}
+
+/**
+ * Decide what the selection bubble shows for a measured free lane.
+ *
+ * Pure and deterministic: the bar is a function of the selection KIND, whether
+ * that kind can carry a border, and the free lane — never of the element's
+ * contents, the font name in the picker or the drawer that happens to be open.
+ * Two elements of the same kind therefore always produce the same bar, and
+ * opening or closing a drawer never resizes it.
+ *
+ * `stroke: false` drops the border control from the bar AND from the drawers: a
+ * plain text frame has no border, and an empty 76px slot would be a control
+ * that does nothing.
+ */
+export function bubbleLayout(
+  kind: BubbleKind,
+  lane: number,
+  options: { stroke?: boolean } = {},
+): BubbleLayout {
+  const { stroke = true } = options;
+  const supported = (part: BubblePart) => stroke || part !== "stroke";
+  const parts = BUBBLE_PARTS[kind].filter(supported);
+  const available = Number.isFinite(lane) ? lane : Number.POSITIVE_INFINITY;
+  const layoutFor = (folded: readonly BubblePart[]): BubbleLayout => {
+    const inDrawer = folded.filter(
+      (part) => supported(part) && BUBBLE_DRAWER_PARTS.includes(part),
+    );
+    const bar = parts.filter((part) => !folded.includes(part));
+    // One trigger for the whole folded group, never one per control.
+    if (inDrawer.length) bar.splice(1, 0, "drawer");
+    return {
+      bar,
+      drawer: inDrawer,
+      more: folded.filter((part) => supported(part) && !inDrawer.includes(part)),
+    };
+  };
+  for (const folded of BUBBLE_FOLDS[kind]) {
+    const candidate = layoutFor(folded);
+    if (bubbleBarWidth(candidate.bar) + BUBBLE_SAFETY <= available)
+      return candidate;
+  }
+  return layoutFor(BUBBLE_FOLDS[kind][BUBBLE_FOLDS[kind].length - 1] ?? []);
+}
+
+/** Canvas-dock cell geometry, read from the dock's own computed style. */
+export interface DockMetrics {
+  /** `--dock-size` — one tool cell (34px desktop, 44px coarse pointer). */
+  cell: number;
+  /** Drag grip width. */
+  grip: number;
+  /** `gap` between two direct children. */
+  gap: number;
+  /** `padding` of the dock box (one side). */
+  pad: number;
+  /** `.editor-dock-sep` footprint, inline margins included. */
+  sep: number;
+}
+
+/** The desktop values `styles.css` declares outside the coarse-pointer media. */
+export const DOCK_METRICS_FALLBACK: DockMetrics = {
+  cell: 34,
+  grip: 20,
+  gap: 3,
+  pad: 5,
+  sep: 5,
+};
+
+/** Dock tools, in render order. */
+export type DockPart =
+  | "grip"
+  | "select"
+  | "text"
+  | "shape"
+  | "library"
+  | "properties"
+  | "layers"
+  | "colors"
+  | "add"
+  | "collapse";
+
+export const DOCK_PARTS: readonly DockPart[] = [
+  "grip",
+  "select",
+  "text",
+  "shape",
+  "library",
+  "properties",
+  "layers",
+  "colors",
+  "add",
+  "collapse",
+];
+
+/**
+ * The dock's tool groups. A folded group is replaced by ONE drawer trigger, so
+ * the bar loses (group size − 1) cells instead of the group's whole contents —
+ * which is exactly why folding beats shrinking.
+ */
+export const DOCK_DRAWER_GROUPS: readonly {
+  id: "draw" | "panels" | "colors";
+  parts: readonly DockPart[];
+}[] = [
+  { id: "draw", parts: ["text", "shape", "select"] },
+  { id: "panels", parts: ["library", "properties", "layers"] },
+  { id: "colors", parts: ["colors"] },
+];
+
+/**
+ * Fold order for the dock. Panel gateways go first (each panel is one click
+ * away from its own contents), then the drawing tools merge into a single
+ * «أدوات الرسم» drawer, and only on the narrowest phones does the pointer tool
+ * join them.
+ *
+ * Folding the colour pair is deliberately NOT a level: a single-cell group
+ * folds into a single-cell trigger, which buys no width and costs the author
+ * the one control they read at a glance.
+ */
+export const DOCK_FOLDS: readonly (readonly DockPart[])[] = [
+  [],
+  ["library", "properties", "layers"],
+  ["library", "properties", "layers", "text", "shape"],
+  ["library", "properties", "layers", "text", "shape", "select"],
+];
+
+/**
+ * Rendered width of the dock for a given number of tool cells.
+ *
+ * `cells` counts every 34/44px box the bar draws — tools AND drawer triggers —
+ * so this is the dock's real offsetWidth, and the fold decision below can be
+ * trusted without measuring the bar itself (which would be a feedback loop).
+ */
+export function dockBarWidth(
+  cells: number,
+  options: {
+    grip?: boolean;
+    divider?: boolean;
+    metrics?: DockMetrics;
+  } = {},
+): number {
+  const { grip = true, divider = false, metrics = DOCK_METRICS_FALLBACK } = options;
+  const children = cells + (grip ? 1 : 0) + (divider ? 1 : 0);
+  return (
+    metrics.pad * 2 +
+    (grip ? metrics.grip : 0) +
+    cells * metrics.cell +
+    (divider ? metrics.sep : 0) +
+    Math.max(0, children - 1) * metrics.gap
+  );
+}
+
+/** How many cells the bar draws when `folded` has left for the drawers. */
+export function dockCellCount(folded: readonly DockPart[]): number {
+  const triggers = DOCK_DRAWER_GROUPS.filter((group) =>
+    group.parts.some((part) => folded.includes(part)),
+  ).length;
+  return (
+    DOCK_PARTS.filter((part) => part !== "grip" && !folded.includes(part))
+      .length + triggers
+  );
+}
+
+export interface DockLayout {
+  /** Tools that stay in the bar. */
+  bar: DockPart[];
+  /** Tools that moved into a drawer. */
+  drawer: DockPart[];
+  /** Drawer groups the bar shows a trigger for. */
+  triggers: Array<"draw" | "panels" | "colors">;
+}
+
+/**
+ * Decide what the canvas dock shows for a measured lane.
+ *
+ * The lane is the canvas workspace the dock floats in, so a narrower window,
+ * an opened drawer or a taller pages rail all re-run this with a smaller
+ * number and the dock answers by folding a tool into its drawer — never by
+ * shrinking an icon or wrapping onto a second row.
+ */
+export function dockLayout(
+  lane: number,
+  metrics: DockMetrics = DOCK_METRICS_FALLBACK,
+): DockLayout {
+  const available = Number.isFinite(lane) ? lane : Number.POSITIVE_INFINITY;
+  const layoutFor = (folded: readonly DockPart[]): DockLayout => ({
+    bar: DOCK_PARTS.filter((part) => !folded.includes(part)),
+    drawer: [...folded],
+    triggers: DOCK_DRAWER_GROUPS.filter((group) =>
+      group.parts.some((part) => folded.includes(part)),
+    ).map((group) => group.id),
+  });
+  for (const folded of DOCK_FOLDS) {
+    const width = dockBarWidth(dockCellCount(folded), {
+      divider: !folded.includes("colors"),
+      metrics,
+    });
+    if (width <= available) return layoutFor(folded);
+  }
+  return layoutFor(DOCK_FOLDS[DOCK_FOLDS.length - 1] ?? []);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Parked floating drawers                                                    */
+/* -------------------------------------------------------------------------- */
+
+/** Parse a stored `{ x, y }` drawer park. `null` when it is unusable. */
+export function parseStoredPoint(
+  raw: string | null | undefined,
+): { x: number; y: number } | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object") return null;
+    const { x, y } = parsed as { x?: unknown; y?: unknown };
+    if (typeof x !== "number" || typeof y !== "number") return null;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+    return { x, y };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Keep a parked drawer inside the viewport.
+ *
+ * A park is remembered across sessions and viewports, so it has to survive a
+ * window that is now smaller than the one it was made in: the drawer slides
+ * back on screen instead of stranding its controls off the edge.
+ */
+export function clampParkedPoint(
+  point: { x: number; y: number },
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+  margin = 8,
+): { x: number; y: number } {
+  const maxX = Math.max(margin, viewport.width - size.width - margin);
+  const maxY = Math.max(margin, viewport.height - size.height - margin);
+  return {
+    x: Math.min(Math.max(point.x, margin), maxX),
+    y: Math.min(Math.max(point.y, margin), maxY),
+  };
+}
+
+/* -------------------------------------------------------------------------- */
 /* Selection bounding box                                                     */
 /* -------------------------------------------------------------------------- */
 

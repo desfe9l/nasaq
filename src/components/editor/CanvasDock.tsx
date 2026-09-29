@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Blocks,
+  ChevronDown,
+  ChevronUp,
   FolderOpen,
   GripHorizontal,
   Layers,
+  LayoutGrid,
   MousePointer2,
+  PenTool,
   Shapes,
   SlidersHorizontal,
   Square,
@@ -14,7 +18,12 @@ import {
 import { cn } from "@/lib/utils";
 import { useEditor, type LeftTab, type RightTab } from "@/lib/editor/store";
 import { useSelectedElement } from "@/lib/editor/selectors";
-import { AnchorMenu, MenuRow } from "./ui/AnchorMenu";
+import {
+  DOCK_METRICS_FALLBACK,
+  dockLayout,
+  type DockMetrics,
+} from "@/lib/editor/ui-state";
+import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
 import { IconButton } from "./ui/IconButton";
 import { AddMenu } from "./AddMenu";
 
@@ -28,14 +37,19 @@ import { AddMenu } from "./AddMenu";
  *   • floating — it lives INSIDE the canvas row, anchored to the bottom-start
  *     corner, so it can never cover the page rail, the status bar or a docked
  *     panel, and the workspace has no column reserved for it;
- *   • content-sized — `width: max-content` with a ceiling, so it is exactly as
- *     wide as its tools and never stretches across the editor;
+ *   • icon-first — one fixed cell per tool, one icon size, one stroke, and no
+ *     permanent labels: the tooltip names the tool on hover and on long-press,
+ *     so a name never costs the canvas a pixel;
+ *   • stable — `dockLayout()` (ui-state.ts) decides which tools fit the
+ *     measured lane and folds the rest into a drawer, so the bar's rectangle
+ *     never depends on an open menu and an icon is never squeezed;
  *   • movable — the grip drags it anywhere inside the canvas and the position
  *     is remembered, which is what keeps it off the artwork on a small screen;
  *   • collapsible — one chevron folds it to a single control, so a docked
  *     panel or a crowded page gets the space back;
  *   • single-purpose — one home per action: draw tools, insert (Add), panel
- *     gateways and the colour pair. Nothing here duplicates the header.
+ *     gateways and the colour pair. Nothing here duplicates the header, and a
+ *     keyboard shortcut is printed in exactly one place.
  */
 type DrawTool = "text" | "rect" | null;
 
@@ -44,6 +58,8 @@ const HEX = /^#[\da-f]{6}$/i;
 /** Session memory for the drag position. */
 const POS_KEY = "nasaq.canvas-dock.pos";
 const COLLAPSE_KEY = "nasaq.canvas-dock.collapsed";
+/** Canvas edge the dock keeps clear of (`inset-inline-start: 12px` + 12px). */
+const DOCK_LANE_INSET = 24;
 
 export interface CanvasDockProps {
   onOpenLeft: (tab: LeftTab) => void;
@@ -77,6 +93,9 @@ export function CanvasDock({
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
   const foregroundInput = useRef<HTMLInputElement>(null);
   const backgroundInput = useRef<HTMLInputElement>(null);
+  /** Free width the dock may occupy — the canvas row it floats in. */
+  const [lane, setLane] = useState(Number.POSITIVE_INFINITY);
+  const [metrics, setMetrics] = useState<DockMetrics>(DOCK_METRICS_FALLBACK);
 
   const rightOpen = useEditor((s) => s.rightOpen);
   const rightTab = useEditor((s) => s.rightTab);
@@ -142,6 +161,45 @@ export function CanvasDock({
       /* default corner */
     }
   }, []);
+
+  /**
+   * Measure the lane and the cell geometry.
+   *
+   * Both are read from the SLOT and from CSS custom properties, never from the
+   * dock's own box: the dock's width is an OUTPUT of `dockLayout`, so measuring
+   * it here would make the decision depend on its own result and oscillate.
+   */
+  const measure = useCallback(() => {
+    const dock = dockRef.current;
+    const slot = dock?.parentElement;
+    if (!dock || !slot) return;
+    const style = getComputedStyle(dock);
+    const cell =
+      parseFloat(style.getPropertyValue("--dock-size")) ||
+      DOCK_METRICS_FALLBACK.cell;
+    const gap = parseFloat(style.gap) || DOCK_METRICS_FALLBACK.gap;
+    const pad = parseFloat(style.paddingInlineStart) || DOCK_METRICS_FALLBACK.pad;
+    const grip =
+      dock.querySelector<HTMLElement>(".editor-dock-grip")?.getBoundingClientRect()
+        .width || DOCK_METRICS_FALLBACK.grip;
+    setMetrics({ cell, gap, pad, grip, sep: DOCK_METRICS_FALLBACK.sep });
+    setLane(Math.max(0, slot.getBoundingClientRect().width - DOCK_LANE_INSET));
+  }, []);
+
+  useEffect(() => {
+    measure();
+    const slot = dockRef.current?.parentElement;
+    if (!slot || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(slot);
+    window.addEventListener("resize", measure);
+    window.addEventListener("nasaq:panel-layout", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("nasaq:panel-layout", measure);
+    };
+  }, [measure, collapsed]);
 
   const clampInto = useCallback((next: { x: number; y: number }) => {
     const slot = dockRef.current?.parentElement?.getBoundingClientRect();
@@ -260,6 +318,122 @@ export function CanvasDock({
     });
   };
 
+  /*
+   * What the lane affords. A collapsed dock shows two controls, so it never
+   * needs to fold; an expanded one hands the tools that do not fit to a drawer
+   * instead of squeezing them or wrapping onto a second row.
+   */
+  const layout = collapsed
+    ? { bar: [], drawer: [], triggers: [] }
+    : dockLayout(lane, metrics);
+  const inBar = new Set(layout.bar);
+  const folded = new Set(layout.triggers);
+  const foldedParts = new Set(layout.drawer);
+
+  /** The drawing actions, shared by the two group drawers. */
+  const drawRows = {
+    select: (
+      <MenuRow
+        icon={<MousePointer2 className="size-4" />}
+        label="تحديد وتحريك"
+        hint="العودة إلى أداة التحديد"
+        checked={activeTool === null}
+        onSelect={() => arm(null)}
+      />
+    ),
+    text: (
+      <MenuRow
+        icon={<Type className="size-4" />}
+        label="نص بالرسم"
+        hint="اسحب على الصفحة لتحديد موضعه وحجمه"
+        onSelect={() => {
+          onOpenLeft("elements");
+          arm("text");
+        }}
+      />
+    ),
+    box: (
+      <MenuRow
+        icon={<SquareDashedMousePointer className="size-4" />}
+        label="مربع محتوى"
+        onSelect={() => useEditor.getState().addElement("box")}
+      />
+    ),
+    rect: (
+      <MenuRow
+        icon={<Square className="size-4" />}
+        label="رسم مربع"
+        hint="انقر واسحب على اللوحة"
+        onSelect={() => {
+          onOpenLeft("shapes");
+          arm("rect");
+        }}
+      />
+    ),
+    library: (
+      <MenuRow
+        icon={<Shapes className="size-4" />}
+        label="مكتبة الأشكال"
+        onSelect={() => onOpenLeft("shapes")}
+      />
+    ),
+  };
+  const panelRows = (
+    <>
+      <MenuRow
+        icon={<FolderOpen className="size-4" />}
+        label="العناصر والمكتبة"
+        hint="عناصر، أشكال، قوالب، صفحات، سمة وخطوط"
+        checked={leftOpen}
+        onSelect={() => onOpenLeft(leftTab)}
+      />
+      <MenuRow
+        icon={<SlidersHorizontal className="size-4" />}
+        label="الخصائص والإعدادات"
+        hint="خصائص العنصر المحدد"
+        checked={rightOpen && rightTab === "properties"}
+        onSelect={() => onOpenRight("properties")}
+      />
+      <MenuRow
+        icon={<Layers className="size-4" />}
+        label="الطبقات"
+        hint="شجرة الطبقات وترتيب العناصر"
+        checked={rightOpen && rightTab === "layers"}
+        onSelect={() => onOpenRight("layers")}
+      />
+    </>
+  );
+  const colorRows = (
+    <>
+      <MenuRow
+        icon={
+          <span className="tool-dock-menu-chip" style={{ backgroundColor: foreground }} />
+        }
+        label="لون التعبئة"
+        onSelect={() => openPicker(foregroundInput.current)}
+      />
+      <MenuRow
+        icon={
+          <span
+            className="tool-dock-menu-chip is-stroke"
+            style={{ borderColor: background }}
+          />
+        }
+        label="لون الإطار"
+        onSelect={() => openPicker(backgroundInput.current)}
+      />
+      <MenuRow
+        label="تبديل التعبئة والإطار"
+        separatorBefore
+        onSelect={() => applyPair({ foreground: background, background: foreground })}
+      />
+      <MenuRow
+        label="الألوان الافتراضية"
+        onSelect={() => applyPair({ ...DEFAULT_COLORS })}
+      />
+    </>
+  );
+
   return (
     <div className="studio-tool-dock-slot">
       <aside
@@ -267,6 +441,7 @@ export function CanvasDock({
         className={cn("studio-tool-dock", "editor-dock", collapsed && "is-collapsed")}
         data-editor-obstacle="tool-dock"
         data-tour="canvas-dock"
+        data-density={layout.drawer.length ? "folded" : "full"}
         aria-label="أدوات مساحة العمل"
         style={pos ? { insetInlineStart: pos.x, top: pos.y } : undefined}
         // Chrome, not canvas: a right-click here must never open the element
@@ -299,185 +474,204 @@ export function CanvasDock({
 
         {!collapsed ? (
           <>
-            <IconButton
-              label="تحديد وتحريك"
-              hint="العودة إلى أداة التحديد"
-              shortcut="V"
-              active={activeTool === null}
-              tipSide="top"
-              onClick={() => arm(null)}
-              icon={<MousePointer2 className="size-4" strokeWidth={1.6} />}
-            />
-
-            <AnchorMenu
-              label="أدوات النص"
-              align="start"
-              side="top"
-              width={216}
-              trigger={({ ref, ...props }) => (
-                <IconButton
-                  {...props}
-                  ref={ref}
-                  label="نص"
-                  hint="مربع نص بالسحب، أو مربع محتوى جاهز"
-                  shortcut="T"
-                  active={activeTool === "text"}
-                  tipSide="top"
-                  icon={<Type className="size-4" strokeWidth={1.6} />}
-                />
-              )}
-            >
-              <MenuRow
-                icon={<Type className="size-4" />}
-                label="نص بالرسم"
-                hint="اسحب على الصفحة لتحديد موضعه وحجمه"
-                shortcut="T"
-                onSelect={() => {
-                  onOpenLeft("elements");
-                  arm("text");
-                }}
+            {inBar.has("select") && (
+              <IconButton
+                label="تحديد وتحريك"
+                hint="العودة إلى أداة التحديد"
+                shortcut="V"
+                active={activeTool === null}
+                tipSide="top"
+                onClick={() => arm(null)}
+                icon={<MousePointer2 className="size-4" />}
               />
-              <MenuRow
-                icon={<SquareDashedMousePointer className="size-4" />}
-                label="مربع محتوى"
-                onSelect={() => useEditor.getState().addElement("box")}
-              />
-            </AnchorMenu>
+            )}
 
-            <AnchorMenu
-              label="أدوات الأشكال"
-              align="start"
-              side="top"
-              width={216}
-              trigger={({ ref, ...props }) => (
-                <IconButton
-                  {...props}
-                  ref={ref}
-                  label="أشكال"
-                  hint="ارسم شكلاً أو افتح مكتبة الأشكال"
-                  shortcut="R"
-                  active={activeTool === "rect"}
-                  tipSide="top"
-                  icon={<Square className="size-4" strokeWidth={1.6} />}
-                />
-              )}
-            >
-              <MenuRow
-                icon={<Square className="size-4" />}
-                label="رسم مربع"
-                hint="انقر واسحب على اللوحة"
-                shortcut="R"
-                onSelect={() => {
-                  onOpenLeft("shapes");
-                  arm("rect");
-                }}
-              />
-              <MenuRow
-                icon={<Shapes className="size-4" />}
-                label="مكتبة الأشكال"
-                onSelect={() => onOpenLeft("shapes")}
-              />
-            </AnchorMenu>
-
-            <IconButton
-              label="العناصر والمكتبة"
-              hint="عناصر، أشكال، قوالب، صفحات، سمة وخطوط"
-              active={leftOpen}
-              tipSide="top"
-              onClick={() => onOpenLeft(leftTab)}
-              icon={
-                leftOpen && leftTab === "tools" ? (
-                  <Blocks className="size-4" strokeWidth={1.6} />
-                ) : (
-                  <FolderOpen className="size-4" strokeWidth={1.6} />
-                )
-              }
-              data-tour="library"
-            />
-            <IconButton
-              label="الخصائص والإعدادات"
-              hint="خصائص العنصر المحدد"
-              active={rightOpen && rightTab === "properties"}
-              tipSide="top"
-              onClick={() => onOpenRight("properties")}
-              icon={<SlidersHorizontal className="size-4" strokeWidth={1.6} />}
-              data-tour="properties"
-            />
-            <IconButton
-              label="الطبقات"
-              hint="شجرة الطبقات وترتيب العناصر"
-              active={rightOpen && rightTab === "layers"}
-              tipSide="top"
-              onClick={() => onOpenRight("layers")}
-              icon={<Layers className="size-4" strokeWidth={1.6} />}
-            />
-
-            <span className="editor-dock-sep" aria-hidden="true" />
-
-            <AnchorMenu
-              label="الألوان"
-              align="start"
-              side="top"
-              width={216}
-              trigger={({ ref, ...props }) => (
-                <span className="editor-dock-colors">
+            {folded.has("draw") ? (
+              /* Both drawing groups behind one cell: a narrow lane loses a
+                 slot, never a tool. */
+              <AnchorMenu
+                label="أدوات الرسم"
+                drawer={{ id: "dock-draw", title: "أدوات الرسم" }}
+                align="start"
+                side="top"
+                width={240}
+                trigger={({ ref, ...props }) => (
                   <IconButton
                     {...props}
                     ref={ref}
-                    label="لون التعبئة والإطار"
-                    hint="تعبئة وإطار العنصر المحدد"
+                    label="أدوات الرسم"
+                    hint="نص، مربع محتوى، أشكال"
+                    active={activeTool === "text" || activeTool === "rect"}
                     tipSide="top"
-                    className="editor-dock-color-btn"
-                    icon={
-                      <span className="editor-dock-color-chips" aria-hidden="true">
-                        <span
-                          className="is-fill"
-                          style={{
-                            backgroundColor: HEX.test(foreground) ? foreground : DEFAULT_COLORS.foreground,
-                          }}
-                        />
-                        <span
-                          className="is-stroke"
-                          style={{
-                            borderColor: HEX.test(background) ? background : DEFAULT_COLORS.background,
-                          }}
-                        />
-                      </span>
-                    }
+                    icon={<PenTool className="size-4" />}
                   />
-                </span>
-              )}
-            >
-              <MenuRow
-                icon={
-                  <span
-                    className="tool-dock-menu-chip"
-                    style={{ backgroundColor: foreground }}
+                )}
+              >
+                {/* On the narrowest lanes the pointer tool folds in here too,
+                    so the drawer always carries the complete tool set. */}
+                {foldedParts.has("select") && drawRows.select}
+                {drawRows.text}
+                {drawRows.box}
+                {drawRows.rect}
+                {drawRows.library}
+              </AnchorMenu>
+            ) : (
+              <>
+                <AnchorMenu
+                  label="أدوات النص"
+                  drawer={{ id: "dock-text", title: "أدوات النص" }}
+                  align="start"
+                  side="top"
+                  width={240}
+                  trigger={({ ref, ...props }) => (
+                    <IconButton
+                      {...props}
+                      ref={ref}
+                      label="نص"
+                      hint="مربع نص بالسحب، أو مربع محتوى جاهز"
+                      shortcut="T"
+                      active={activeTool === "text"}
+                      tipSide="top"
+                      icon={<Type className="size-4" />}
+                    />
+                  )}
+                >
+                  {drawRows.text}
+                  {drawRows.box}
+                </AnchorMenu>
+
+                <AnchorMenu
+                  label="أدوات الأشكال"
+                  drawer={{ id: "dock-shape", title: "أدوات الأشكال" }}
+                  align="start"
+                  side="top"
+                  width={240}
+                  trigger={({ ref, ...props }) => (
+                    <IconButton
+                      {...props}
+                      ref={ref}
+                      label="أشكال"
+                      hint="ارسم شكلاً أو افتح مكتبة الأشكال"
+                      shortcut="R"
+                      active={activeTool === "rect"}
+                      tipSide="top"
+                      icon={<Square className="size-4" />}
+                    />
+                  )}
+                >
+                  {drawRows.rect}
+                  {drawRows.library}
+                </AnchorMenu>
+              </>
+            )}
+
+            {folded.has("panels") ? (
+              <AnchorMenu
+                label="اللوحات"
+                drawer={{ id: "dock-panels", title: "اللوحات" }}
+                align="start"
+                side="top"
+                width={240}
+                trigger={({ ref, ...props }) => (
+                  <IconButton
+                    {...props}
+                    ref={ref}
+                    label="اللوحات"
+                    hint="العناصر، الخصائص والطبقات"
+                    active={leftOpen || rightOpen}
+                    tipSide="top"
+                    icon={<LayoutGrid className="size-4" />}
                   />
-                }
-                label="لون التعبئة"
-                onSelect={() => openPicker(foregroundInput.current)}
-              />
-              <MenuRow
-                icon={
-                  <span
-                    className="tool-dock-menu-chip is-stroke"
-                    style={{ borderColor: background }}
-                  />
-                }
-                label="لون الإطار"
-                onSelect={() => openPicker(backgroundInput.current)}
-              />
-              <MenuRow
-                label="تبديل التعبئة والإطار"
-                separatorBefore
-                onSelect={() => applyPair({ foreground: background, background: foreground })}
-              />
-              <MenuRow
-                label="الألوان الافتراضية"
-                onSelect={() => applyPair({ ...DEFAULT_COLORS })}
-              />
-            </AnchorMenu>
+                )}
+              >
+                {panelRows}
+                {folded.has("colors") && (
+                  <>
+                    <MenuGroup title="الألوان" />
+                    {colorRows}
+                  </>
+                )}
+              </AnchorMenu>
+            ) : (
+              <>
+                <IconButton
+                  label="العناصر والمكتبة"
+                  hint="عناصر، أشكال، قوالب، صفحات، سمة وخطوط"
+                  active={leftOpen}
+                  tipSide="top"
+                  onClick={() => onOpenLeft(leftTab)}
+                  icon={
+                    leftOpen && leftTab === "tools" ? (
+                      <Blocks className="size-4" />
+                    ) : (
+                      <FolderOpen className="size-4" />
+                    )
+                  }
+                  data-tour="library"
+                />
+                <IconButton
+                  label="الخصائص والإعدادات"
+                  hint="خصائص العنصر المحدد"
+                  active={rightOpen && rightTab === "properties"}
+                  tipSide="top"
+                  onClick={() => onOpenRight("properties")}
+                  icon={<SlidersHorizontal className="size-4" />}
+                  data-tour="properties"
+                />
+                <IconButton
+                  label="الطبقات"
+                  hint="شجرة الطبقات وترتيب العناصر"
+                  active={rightOpen && rightTab === "layers"}
+                  tipSide="top"
+                  onClick={() => onOpenRight("layers")}
+                  icon={<Layers className="size-4" />}
+                />
+              </>
+            )}
+
+            {inBar.has("colors") && (
+              <>
+                <span className="editor-dock-sep" aria-hidden="true" />
+
+                <AnchorMenu
+                  label="الألوان"
+                  drawer={{ id: "dock-colors", title: "الألوان" }}
+                  align="start"
+                  side="top"
+                  width={240}
+                  trigger={({ ref, ...props }) => (
+                    <span className="editor-dock-colors">
+                      <IconButton
+                        {...props}
+                        ref={ref}
+                        label="لون التعبئة والإطار"
+                        hint="تعبئة وإطار العنصر المحدد"
+                        tipSide="top"
+                        className="editor-dock-color-btn"
+                        icon={
+                          <span className="editor-dock-color-chips" aria-hidden="true">
+                            <span
+                              className="is-fill"
+                              style={{
+                                backgroundColor: HEX.test(foreground) ? foreground : DEFAULT_COLORS.foreground,
+                              }}
+                            />
+                            <span
+                              className="is-stroke"
+                              style={{
+                                borderColor: HEX.test(background) ? background : DEFAULT_COLORS.background,
+                              }}
+                            />
+                          </span>
+                        }
+                      />
+                    </span>
+                  )}
+                >
+                  {colorRows}
+                </AnchorMenu>
+              </>
+            )}
           </>
         ) : null}
 
@@ -501,16 +695,11 @@ export function CanvasDock({
           onClick={toggleCollapsed}
           className="editor-dock-collapse"
           icon={
-            <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
-              <path
-                d={collapsed ? "M5 10.5 8 7.5l3 3" : "M5 5.5 8 8.5l3-3"}
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
+            collapsed ? (
+              <ChevronUp className="size-4" />
+            ) : (
+              <ChevronDown className="size-4" />
+            )
           }
         />
       </aside>

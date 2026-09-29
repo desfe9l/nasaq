@@ -1943,49 +1943,50 @@ body.is-resizing-rail {
  * Rendered in a fixed overlay layer (never inside the scaled page) so its
  * buttons keep a constant screen size and its 16px gap is a real 16px.
  */
+/*
+ * The bar is ONE row of fixed cells, always 42px tall.
+ *
+ * What is inside it is decided by `bubbleLayout()` (ui-state.ts) from the free
+ * lane beside the artwork, so the box can never grow because a font name got
+ * longer, wrap onto a second row on a tablet, or scroll a control out of sight
+ * on a phone: anything that does not fit leaves the bar for a drawer instead.
+ * The numbers below are the ones `bubbleLayout` measures with.
+ */
 .floating-toolbar {
   position: fixed;
   z-index: var(--z-bubble);
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 3px; /* BUBBLE_GUTTER */
   height: 42px;
-  padding: 4px 8px;
+  min-height: 42px;
+  padding: 4px 8px; /* BUBBLE_PAD */
   border-radius: 8px;
   border: 1px solid var(--editor-border, #c9cacc);
   background: var(--editor-panel, #fff);
   color: var(--editor-text, #172033);
   box-shadow: 0 10px 30px -8px rgba(15, 23, 42, 0.35);
   animation: floating-toolbar-in 140ms cubic-bezier(0.22, 1, 0.36, 1);
-  max-width: min(calc(100vw - 16px), 640px);
+  max-width: min(calc(100vw - 16px), 760px);
   white-space: nowrap;
   flex-wrap: nowrap;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.floating-toolbar::-webkit-scrollbar {
-  display: none;
+  overflow: visible;
 }
 
 /*
- * Narrow lane: the bubble wraps onto a second row instead of scrolling. A
- * control the author cannot see is a control that does not exist, so the bar
- * grows and lets the placer pick a side with room for the taller box.
+ * Nothing inside the bar may compress: an icon that shrinks is an icon the
+ * author cannot hit. If a lane is ever too small for the chosen density the
+ * controls keep their size instead of turning into a squeeze.
  */
-.floating-toolbar.is-compact {
-  height: auto;
-  min-height: 42px;
-  flex-wrap: wrap;
-  justify-content: center;
-  row-gap: 4px;
-  overflow: visible;
-  padding-block: 6px;
+.floating-toolbar > * {
+  flex: 0 0 auto;
 }
 
-/* On a wrapped row a divider between two groups reads as a stray line. */
-.floating-toolbar.is-compact .floating-toolbar-sep {
-  display: none;
+/* One icon geometry for every control in the bar: 16px box, one stroke. */
+.floating-toolbar-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
 }
 
 /*
@@ -2125,20 +2126,15 @@ body.is-resizing-rail {
 }
 
 /*
- * Opacity is a 0–100% trim, so it stays a slider (a scrubber would hide the
- * range at a glance) — but a slider needs a real travel: 58px made every
- * adjustment a single pixel of movement.
+ * A fixed 96px field (BUBBLE_FIELD_FONT). A `<select>` sized by its own text
+ * made the whole bar change width every time the font changed; the name is
+ * truncated and the tooltip carries the full one.
  */
-.floating-toolbar-range {
-  width: 88px;
-  height: 32px;
-  accent-color: var(--editor-accent);
-  cursor: pointer;
-}
-
 .floating-toolbar-select {
-  max-width: 132px;
+  width: 96px;
+  max-width: 96px;
   padding: 0 4px;
+  text-overflow: ellipsis;
 }
 
 /* Shared compact scrubber sizing keeps the toolbar one row on every viewport. */
@@ -2861,14 +2857,106 @@ summary,
   letter-spacing: 0.2px;
 }
 .editor-menu-field { padding: 2px 8px 6px; }
+
+/*
+ * A tool DRAWER is the same popover plus the bar that owns it: the group's
+ * name, a grip that moves the panel anywhere on screen, and its own close
+ * control. It is sticky, so a long drawer keeps its title and its dismissal
+ * while the author scrolls the controls.
+ */
+.editor-anchor-menu.is-drawer {
+  gap: 0;
+  padding: 0;
+}
+.editor-drawer-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 3px 3px 4px;
+  border-bottom: 1px solid var(--editor-border);
+  border-radius: 11px 11px 0 0;
+  background: var(--editor-panel);
+}
+.editor-drawer-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--editor-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+.editor-drawer-grip,
+.editor-drawer-close {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--editor-text-secondary);
+  cursor: pointer;
+}
+.editor-drawer-grip { cursor: grab; touch-action: none; }
+.editor-drawer-grip:active { cursor: grabbing; }
+.editor-drawer-grip:hover,
+.editor-drawer-close:hover {
+  background: var(--editor-hover);
+  color: var(--editor-text);
+}
+.editor-drawer-grip:focus-visible,
+.editor-drawer-close:focus-visible {
+  outline: 2px solid var(--editor-accent-hover);
+  outline-offset: 1px;
+}
+.editor-drawer-body {
+  display: grid;
+  gap: 1px;
+  padding: 5px;
+}
+/*
+ * The drawer's own field chrome. A drawer has room for a full-width control,
+ * which is why a folded field is a loss of BAR space only, never of function.
+ */
+.editor-drawer-select {
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+  background: var(--editor-surface);
+  color: var(--editor-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.editor-drawer-select:focus-visible {
+  outline: 2px solid var(--editor-accent-hover);
+  outline-offset: 1px;
+}
+/* A colour swatch inside a control grid fills its cell like the icon cells. */
+.editor-menu-grid > .color-field-trigger {
+  width: 100%;
+  min-height: 32px;
+  border-radius: 8px;
+}
 .editor-menu-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 4px;
   padding: 2px 8px 6px;
 }
-.editor-menu-grid.is-3 { grid-template-columns: repeat(3, 1fr); }
 .editor-menu-grid.is-2 { grid-template-columns: repeat(2, 1fr); }
+.editor-menu-grid.is-3 { grid-template-columns: repeat(3, 1fr); }
+.editor-menu-grid.is-4 { grid-template-columns: repeat(4, 1fr); }
+.editor-menu-grid.is-6 { grid-template-columns: repeat(6, 1fr); }
 .editor-menu-grid button {
   display: grid;
   min-height: 32px;
@@ -2883,6 +2971,8 @@ summary,
 }
 .editor-menu-grid button:hover:not(:disabled) { background: var(--editor-hover); }
 .editor-menu-grid button:disabled { opacity: 0.38; cursor: default; }
+.editor-menu-grid button.is-danger { color: var(--editor-danger, #d98c86); }
+.editor-menu-grid button svg { width: 16px; height: 16px; stroke-width: 1.75; }
 .editor-menu-grid button.is-active {
   border-color: var(--editor-accent);
   background: var(--editor-accent-soft);
@@ -2907,8 +2997,14 @@ summary,
   z-index: var(--z-panel);
   display: flex;
   align-items: center;
+  flex-wrap: nowrap;
   gap: var(--dock-gap);
   width: max-content;
+  /*
+   * A ceiling, not a squeeze: `dockLayout()` (ui-state.ts) reads `--dock-size`
+   * and folds a tool into a drawer long before this binds, so the bar never
+   * compresses an icon or wraps onto a second row on a narrow viewport.
+   */
   max-width: min(520px, calc(100% - 24px));
   padding: var(--dock-pad);
   border: 1px solid var(--editor-border);
@@ -2921,6 +3017,11 @@ summary,
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   transition: opacity 140ms ease;
+}
+
+/* Every tool is a fixed cell; the bar gives up tools, never cell size. */
+.studio-tool-dock > * {
+  flex: 0 0 auto;
 }
 
 /* Collapsed: the whole bar folds to its insert button plus the chevron. */
@@ -3256,6 +3357,21 @@ summary,
   flex-shrink: 0;
 }
 
+/*
+ * Desktop: the header is ONE line, always.
+ *
+ * Nothing in it shrinks and the bar never wraps, so the canvas below keeps the
+ * same height at every desktop width — a toolbar that grows a row when a panel
+ * opens is a toolbar that steals the artboard. The document name is the only
+ * flexible part, and it is capped.
+ */
+@media (min-width: 1100px) {
+  .editor-ui .editor-toolbar { flex-wrap: nowrap; }
+  .editor-ui .editor-header-primary > *,
+  .editor-ui .editor-header-actions > * { flex-shrink: 0; }
+  .editor-ui .editor-doc-capsule { min-width: 0; flex: 0 1 auto; }
+}
+
 /* The centre capsule keeps the document name and its view controls in one
  * perfectly centered unit — no drifting alignment at any width. */
 .editor-header-center {
@@ -3408,7 +3524,9 @@ summary,
   width: 18px;
   height: 18px;
 }
-.editor-icon-glyph svg { width: 18px; height: 18px; }
+/* One stroke weight for every chrome icon, so the header, the dock and the
+   floating panels read as one system instead of three icon sets. */
+.editor-icon-glyph svg { width: 18px; height: 18px; stroke-width: 1.75; }
 .editor-icon-btn:hover:not(:disabled) {
   background: var(--editor-hover);
   color: var(--editor-text);
@@ -3714,6 +3832,9 @@ summary,
   .editor-zoom-btn { width: 34px; height: 34px; }
   .editor-menu-row { min-height: 44px; }
   .editor-menu-grid button { min-height: 44px; }
+  .editor-drawer-grip,
+  .editor-drawer-close { width: 36px; height: 36px; }
+  .editor-drawer-bar { padding: 4px; }
   .editor-dock-color-chips { width: 24px; height: 24px; }
   .artboard-page-options :is(button, summary) { min-height: 44px; }
 }
@@ -4521,6 +4642,21 @@ button.license-badge-locked:focus-visible {
   font-size: 12px;
   font-weight: 700;
 }
+/*
+ * Inside the editor the account chip is ONE line at every width.
+ *
+ * It is identity, not a tool, and a chip that stacks its name over its badge
+ * below 1280px made the header — and therefore the canvas — change height when
+ * the viewport crossed that line. The full identity and the tier live in the
+ * card it opens.
+ */
+.editor-toolbar .account-control { min-height: 34px; gap: 6px; }
+.editor-toolbar .account-control-content {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.editor-toolbar .account-control-identity { max-width: 108px; }
 .account-control:hover { border-color: var(--color-brand); }
 .account-control:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
 .account-control-content { display: flex; flex-direction: column; align-items: start; gap: 1px; min-width: 0; }
