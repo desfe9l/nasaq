@@ -111,12 +111,13 @@ export function LeftPanel({
   const name = useEditor((s) => s.name);
   const setName = useEditor((s) => s.setName);
   /*
-   * PERF: the palette subscribes to the ACTIVE PAGE OBJECT, not the whole
-   * `pages` array — an edit to any element on the active page used to
-   * re-render this entire panel (every template card, every shape grid).
-   * The pages tab reads the full list through its own <PagesTabList/>.
+   * PERF: subscribe to the resolved size ID (a primitive string), not the
+   * active page object — an edit to any element on the active page replaces
+   * `page` and would otherwise re-render this entire panel.
    */
-  const page = useEditor((s) => s.pages.find((p) => p.id === s.activePageId));
+  const activeSizeId = useEditor((s) =>
+    sizeIdOf(s.pages.find((p) => p.id === s.activePageId)),
+  );
   const activePageId = useEditor((s) => s.activePageId);
   const setActivePage = useEditor((s) => s.setActivePage);
   const setPageSize = useEditor((s) => s.setPageSize);
@@ -165,8 +166,6 @@ export function LeftPanel({
   const [previewTemplate, setPreviewTemplate] = useState<
     (typeof PAGE_TEMPLATES)[number] | null
   >(null);
-
-  const activeSizeId = sizeIdOf(page);
 
   const add = async (type: ElType) => {
     if (type === "image" || type === "logo") {
@@ -247,7 +246,7 @@ export function LeftPanel({
     const w = Math.max(20, Math.min(1000, customSize.w));
     const h = Math.max(20, Math.min(1000, customSize.h));
     if (scope === "all") setAllPageSizes("custom", { w, h });
-    else if (page) setPageSize(page.id, "custom", { w, h });
+    else if (activePageId) setPageSize(activePageId, "custom", { w, h });
   };
 
   const templates = PAGE_TEMPLATES.filter(
@@ -722,7 +721,7 @@ export function LeftPanel({
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => page && setPageSize(page.id, s.id)}
+                    onClick={() => activePageId && setPageSize(activePageId, s.id)}
                     className={cn(
                       "rounded-[8px] border px-2.5 py-2 text-right",
                       activeSizeId === s.id

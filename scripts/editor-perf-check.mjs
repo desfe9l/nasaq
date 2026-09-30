@@ -296,10 +296,9 @@ async function runScenarios(page) {
   if (has("libraryOpen")) {
     const t3 = Date.now();
     await installCounters(page);
-    await page
-      .getByRole("tab", { name: "المكتبة", exact: false })
-      .first()
-      .click();
+    await page.evaluate(() => {
+      window.store.getState().openLibrary();
+    });
     await page
       .locator(".asset-media-grid > *")
       .first()
@@ -310,6 +309,9 @@ async function runScenarios(page) {
       duration: Date.now() - t3,
       cards: await page.locator(".asset-media-grid > *").count(),
     };
+    await page.evaluate(() => {
+      window.store.setState({ leftOpen: false });
+    });
   }
 
   if (has("geometry")) {
@@ -318,12 +320,10 @@ async function runScenarios(page) {
     await page.evaluate(() => {
       const s = window.store.getState();
       s.setActivePage(s.pages[0].id);
+      s.updateElement("perf-box-1", { x: 68, y: 20 }, true);
+      s.select("perf-box-1");
+      s.setRightTab("properties");
     });
-    await page.waitForTimeout(250);
-    await page
-      .locator('.editor-canvas-stage [data-el-id="perf-box-1"]')
-      .first()
-      .click();
     await page.waitForTimeout(250);
     results.geometry = await page.evaluate(() => {
       const rail = document.querySelector(".editor-page-rail");
@@ -338,6 +338,9 @@ async function runScenarios(page) {
         accordionHeaderHeight: accordion?.getBoundingClientRect().height ?? 0,
         fieldInputHeight: fieldInput?.getBoundingClientRect().height ?? 0,
       };
+    });
+    await page.evaluate(() => {
+      window.store.setState({ rightOpen: false });
     });
     // Candidate only: collapse the pages rail and re-measure.
     if (
@@ -360,6 +363,13 @@ async function runScenarios(page) {
   }
 
   if (has("draft")) {
+    await page.evaluate(() => {
+      const s = window.store.getState();
+      s.setActivePage(s.pages[0].id);
+      s.updateElement("perf-box-1", { x: 68, y: 20 });
+      s.commit();
+    });
+    await page.waitForTimeout(100);
     // Self-contained: drag the element, then reload IMMEDIATELY — before the
     // debounced autosave can fire. The draft envelope must bridge the reload.
     await dragElement(page, 15, 0);

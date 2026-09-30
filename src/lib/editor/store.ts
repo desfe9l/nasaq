@@ -1297,7 +1297,12 @@ export const useEditor = create<EditorStore>((set, get) => {
         // Freshest page the author was on — `setActivePage` records it even
         // when no edit has triggered a save since the switch.
         const activePageSetting = await getSetting<string>("activePageId");
-        let active = activeId ? await getProject(activeId) : null;
+        let active: ProjectSnapshot | null = activeId
+          ? await getProject(activeId)
+          : null;
+        if (!active && list[0]?.id) {
+          active = await getProject(list[0].id);
+        }
         /*
          * Reload safety: a synchronous draft written while the page was being
          * torn down (beforeunload/pagehide) can be newer than the last
@@ -1307,6 +1312,7 @@ export const useEditor = create<EditorStore>((set, get) => {
          */
         const draft = readDraftSnapshot(owner);
         let restoredFromDraft = false;
+        let restoredUnsavedDraft = false;
         if (
           draft &&
           active &&
@@ -1318,18 +1324,32 @@ export const useEditor = create<EditorStore>((set, get) => {
             draft.activePageId || draft.project.activePageId;
           active = merged;
           restoredFromDraft = true;
+        } else if (!active && draft && !draft.projectId) {
+          active = {
+            ...draft.project,
+            activePageId: draft.activePageId || draft.project.activePageId,
+          };
+          restoredFromDraft = true;
+          restoredUnsavedDraft = true;
         }
         // The shared preference is the only authority, including the default.
         const dark = readStoredTheme() === true;
         applyStoredTheme();
+
+        const nextRightOpen =
+          ui.rightOpen !== undefined ? Boolean(ui.rightOpen) : get().rightOpen;
+        const nextLeftOpen =
+          ui.leftOpen !== undefined
+            ? Boolean(ui.leftOpen) && !nextRightOpen
+            : get().leftOpen && !nextRightOpen;
 
         set({
           projects: list,
           projectsLoading: false,
           dark,
           focusMode: Boolean(ui.focusMode),
-          leftOpen: Boolean(ui.leftOpen) && !ui.rightOpen,
-          rightOpen: Boolean(ui.rightOpen),
+          leftOpen: nextLeftOpen,
+          rightOpen: nextRightOpen,
           leftCollapsed: Boolean(ui.leftCollapsed),
           rightCollapsed: Boolean(ui.rightCollapsed),
           artboardGridCols: typeof ui.artboardGridCols === "number" ? clamp(ui.artboardGridCols, 1, 8) : 4,
@@ -1362,6 +1382,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           if (getStorageOwner() === owner && get().sessionOwner === owner)
             applyProject(active, {
               zoom: get().zoom,
+              ...(restoredUnsavedDraft ? { id: undefined } : {}),
               ...(activePageSetting && !restoredFromDraft
                 ? { activePageId: activePageSetting }
                 : {}),
@@ -1372,6 +1393,11 @@ export const useEditor = create<EditorStore>((set, get) => {
             // the next auto-save makes the recovery durable in IndexedDB.
             set({ saveState: "dirty" });
           }
+        } else if (
+          activePageSetting &&
+          get().pages.some((p) => p.id === activePageSetting)
+        ) {
+          set({ activePageId: activePageSetting });
         }
       } catch {
         set({ projectsLoading: false });
@@ -1404,13 +1430,15 @@ export const useEditor = create<EditorStore>((set, get) => {
 
       document.documentElement.lang = "ar";
       document.documentElement.dir = "rtl";
+      const recoveredDirty = get().saveState === "dirty";
       set({
         hydrated: true,
         past: [JSON.stringify(projectSlice(get()))],
         future: [],
-        saveState: "saved",
+        saveState: recoveredDirty ? "dirty" : "saved",
         savedAt: Date.now(),
       });
+      if (recoveredDirty) scheduleSave(400);
     },
 
     refreshProjects: async () => {
@@ -1432,6 +1460,70 @@ export const useEditor = create<EditorStore>((set, get) => {
       // after a popup login/logout or an in-tab account switch.
       if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
       set({ assets, assetsLoading: false });
+
+      if (hasSignedInOwner()) {
+        void import("@/lib/storage/mirror")
+          .then(async ({ pullRemoteAssets, fetchRemoteAssetDataUrl }) => {
+            const remotes = await pullRemoteAssets();
+            if (
+              !remotes.length ||
+              getStorageOwner() !== owner ||
+              get().sessionOwner !== sessionOwner
+            )
+              return;
+            const current = await listAssets();
+            const knownRemoteIds = new Set(
+              current.flatMap((a) =>
+                [a.id, a.remoteId].filter((v): v is string => Boolean(v)),
+              ),
+            );
+            let hydratedAny = false;
+            for (const remote of remotes) {
+              if (knownRemoteIds.has(remote.id)) continue;
+              if (
+                getStorageOwner() !== owner ||
+                get().sessionOwner !== sessionOwner
+              )
+                return;
+              const fetched = await fetchRemoteAssetDataUrl(remote.id);
+              if (!fetched) continue;
+              if (
+                getStorageOwner() !== owner ||
+                get().sessionOwner !== sessionOwner
+              )
+                return;
+              try {
+                await saveAsset({
+                  id: remote.id,
+                  remoteId: remote.id,
+                  name: remote.fileName || "ملف سحابي",
+                  src: fetched.dataUrl,
+                  w: remote.width || 600,
+                  h: remote.height || 600,
+                  addedAt: Date.parse(remote.createdAt) || Date.now(),
+                  folderId: null,
+                });
+                hydratedAny = true;
+              } catch {
+                /* local storage quota or race — skip */
+              }
+            }
+            if (
+              hydratedAny &&
+              getStorageOwner() === owner &&
+              get().sessionOwner === sessionOwner
+            ) {
+              const updated = await listAssets();
+              if (
+                getStorageOwner() === owner &&
+                get().sessionOwner === sessionOwner
+              ) {
+                set({ assets: updated });
+              }
+            }
+          })
+          .catch(() => undefined);
+      }
     },
 
     addAsset: async (asset) => {
@@ -1440,20 +1532,31 @@ export const useEditor = create<EditorStore>((set, get) => {
         set({
           assets: [saved, ...get().assets.filter((a) => a.id !== saved.id)],
         });
+        const owner = getStorageOwner();
         // Mirror the bytes into object storage when a bucket is configured.
         // Deliberately not awaited and self-swallowing: the library stays
         // local-first, so a storage outage must never delay or fail the save
         // the author just made.
         void import("@/lib/storage/mirror")
-          .then(({ mirrorAssetToStorage }) =>
-            mirrorAssetToStorage({
+          .then(async ({ mirrorAssetToStorage }) => {
+            const remoteId = await mirrorAssetToStorage({
               name: saved.name,
               src: saved.src,
               w: saved.w,
               h: saved.h,
               projectId: get().id ?? null,
-            }),
-          )
+            });
+            if (remoteId && getStorageOwner() === owner) {
+              const withRemote = await saveAsset({ ...saved, remoteId });
+              if (getStorageOwner() === owner) {
+                set({
+                  assets: get().assets.map((a) =>
+                    a.id === saved.id ? withRemote : a,
+                  ),
+                });
+              }
+            }
+          })
           .catch(() => null);
         return saved;
       } catch {
@@ -1468,8 +1571,15 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     removeAsset: async (id) => {
+      const target = get().assets.find((a) => a.id === id);
       await removeAsset(id);
       set({ assets: get().assets.filter((a) => a.id !== id) });
+      const remoteId = target?.remoteId || target?.id || id;
+      if (remoteId && hasSignedInOwner()) {
+        void import("@/lib/storage/mirror")
+          .then(({ removeRemoteAsset }) => removeRemoteAsset(remoteId))
+          .catch(() => false);
+      }
     },
 
     removeAssets: async (ids) => {
@@ -1482,6 +1592,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         ids.filter((id) => known.has(id) && !folderIds.has(id)),
       );
       if (!doomed.size) return;
+      const targets = get().assets.filter((a) => doomed.has(a.id));
       // One operation: every selected row is deleted, folders are never
       // touched (deleting nested items must not cascade to their folder).
       await Promise.all([...doomed].map((id) => removeAsset(id)));
@@ -1491,6 +1602,15 @@ export const useEditor = create<EditorStore>((set, get) => {
           (id) => !doomed.has(id),
         ),
       }));
+      if (hasSignedInOwner()) {
+        void import("@/lib/storage/mirror")
+          .then(({ removeRemoteAsset }) =>
+            Promise.all(
+              targets.map((t) => removeRemoteAsset(t.remoteId || t.id)),
+            ),
+          )
+          .catch(() => undefined);
+      }
     },
 
     selectAssets: (ids) => set({ selectedAssetIds: [...new Set(ids)] }),
@@ -1677,6 +1797,33 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedAssetIds: [],
       });
       await setSetting("assetFolders", folders);
+      if (savedRows.length && hasSignedInOwner()) {
+        const owner = getStorageOwner();
+        void import("@/lib/storage/mirror")
+          .then(async ({ mirrorAssetToStorage }) => {
+            for (const row of savedRows) {
+              if (getStorageOwner() !== owner) return;
+              const remoteId = await mirrorAssetToStorage({
+                name: row.name,
+                src: row.src,
+                w: row.w,
+                h: row.h,
+                projectId: get().id ?? null,
+              });
+              if (remoteId && getStorageOwner() === owner) {
+                const updated = await saveAsset({ ...row, remoteId });
+                if (getStorageOwner() === owner) {
+                  set({
+                    assets: get().assets.map((a) =>
+                      a.id === row.id ? updated : a,
+                    ),
+                  });
+                }
+              }
+            }
+          })
+          .catch(() => undefined);
+      }
       return { added, failed };
     },
 
@@ -2079,8 +2226,15 @@ export const useEditor = create<EditorStore>((set, get) => {
       const next = !get()[key];
       set({
         [key]: next,
-        ...(next && key === "leftOpen" ? { rightOpen: false }
-          : next && key === "rightOpen" ? { leftOpen: false } : {}),
+        ...(key === "leftCollapsed"
+          ? { leftOpen: !next, ...(!next ? { rightOpen: false } : {}) }
+          : key === "rightCollapsed"
+            ? { rightOpen: !next, ...(!next ? { leftOpen: false } : {}) }
+            : next && key === "leftOpen"
+              ? { rightOpen: false, leftCollapsed: false }
+              : next && key === "rightOpen"
+                ? { leftOpen: false, rightCollapsed: false }
+                : {}),
       } as Partial<EditorStore>);
       // The `dark:` Tailwind variant keys off `html.dark` — the shared theme
       // module both persists the choice and keeps the class in sync, so the
@@ -2117,11 +2271,12 @@ export const useEditor = create<EditorStore>((set, get) => {
       writeStoredTheme(dark);
     },
     setLeftTab: (leftTab) => {
-      set({ leftTab, leftOpen: true, rightOpen: false });
+      set({ leftTab, leftCollapsed: false, leftOpen: true, rightOpen: false });
       // Probing is deferred to the moment the font list is actually needed.
       if (leftTab === "fonts") get().probeFonts();
     },
-    setRightTab: (rightTab) => set({ rightTab, rightOpen: true, leftOpen: false }),
+    setRightTab: (rightTab) =>
+      set({ rightTab, rightCollapsed: false, rightOpen: true, leftOpen: false }),
 
     toggleSidebar: (side) => {
       const overlay =
@@ -2153,11 +2308,10 @@ export const useEditor = create<EditorStore>((set, get) => {
     openContextMenu: (contextMenu) => set({ contextMenu }),
     closeContextMenu: () => set({ contextMenu: null }),
     openLibrary: () => {
-      const overlay = isOverlayViewport();
       set({
         leftTab: "library",
         leftCollapsed: false,
-        leftOpen: overlay ? true : get().leftOpen,
+        leftOpen: true,
         rightOpen: false,
       });
     },

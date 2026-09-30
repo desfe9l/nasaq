@@ -378,6 +378,20 @@ export function CanvasDock({
       />
     ),
   };
+  const toggleLeftPanel = () => {
+    if (leftOpen) {
+      useEditor.setState({ leftOpen: false, leftCollapsed: true });
+    } else {
+      onOpenLeft(leftTab);
+    }
+  };
+  const toggleRightPanel = (tab: "properties" | "layers") => {
+    if (rightOpen && rightTab === tab) {
+      useEditor.setState({ rightOpen: false, rightCollapsed: true });
+    } else {
+      onOpenRight(tab);
+    }
+  };
   const panelRows = (
     <>
       <MenuRow
@@ -385,21 +399,21 @@ export function CanvasDock({
         label="العناصر والمكتبة"
         hint="عناصر، أشكال، قوالب، صفحات، سمة وخطوط"
         checked={leftOpen}
-        onSelect={() => onOpenLeft(leftTab)}
+        onSelect={toggleLeftPanel}
       />
       <MenuRow
         icon={<SlidersHorizontal className="size-4" />}
         label="الخصائص والإعدادات"
         hint="خصائص العنصر المحدد"
         checked={rightOpen && rightTab === "properties"}
-        onSelect={() => onOpenRight("properties")}
+        onSelect={() => toggleRightPanel("properties")}
       />
       <MenuRow
         icon={<Layers className="size-4" />}
         label="الطبقات"
         hint="شجرة الطبقات وترتيب العناصر"
         checked={rightOpen && rightTab === "layers"}
-        onSelect={() => onOpenRight("layers")}
+        onSelect={() => toggleRightPanel("layers")}
       />
     </>
   );
@@ -599,7 +613,7 @@ export function CanvasDock({
                   hint="عناصر، أشكال، قوالب، صفحات، سمة وخطوط"
                   active={leftOpen}
                   tipSide="top"
-                  onClick={() => onOpenLeft(leftTab)}
+                  onClick={toggleLeftPanel}
                   icon={
                     leftOpen && leftTab === "tools" ? (
                       <Blocks className="size-4" />
@@ -614,7 +628,7 @@ export function CanvasDock({
                   hint="خصائص العنصر المحدد"
                   active={rightOpen && rightTab === "properties"}
                   tipSide="top"
-                  onClick={() => onOpenRight("properties")}
+                  onClick={() => toggleRightPanel("properties")}
                   icon={<SlidersHorizontal className="size-4" />}
                   data-tour="properties"
                 />
@@ -623,7 +637,7 @@ export function CanvasDock({
                   hint="شجرة الطبقات وترتيب العناصر"
                   active={rightOpen && rightTab === "layers"}
                   tipSide="top"
-                  onClick={() => onOpenRight("layers")}
+                  onClick={() => toggleRightPanel("layers")}
                   icon={<Layers className="size-4" />}
                 />
               </>
@@ -708,8 +722,8 @@ export function CanvasDock({
       <input
         ref={backgroundInput}
         type="color"
+        aria-label="اختيار لون الإطار"
         className="sr-only"
-        aria-hidden="true"
         tabIndex={-1}
         value={HEX.test(background) ? background : DEFAULT_COLORS.background}
         onChange={(event) => colorChange("background", event.target.value)}
@@ -717,8 +731,8 @@ export function CanvasDock({
       <input
         ref={foregroundInput}
         type="color"
+        aria-label="اختيار لون التعبئة"
         className="sr-only"
-        aria-hidden="true"
         tabIndex={-1}
         value={HEX.test(foreground) ? foreground : DEFAULT_COLORS.foreground}
         onChange={(event) => colorChange("foreground", event.target.value)}

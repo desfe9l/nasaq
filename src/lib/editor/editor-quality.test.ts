@@ -162,3 +162,16 @@ test("zero table borders survive the scene boundary without a default being rein
   assert.equal(item.kind, "table");
   if (item.kind === "table") assert.equal(item.border.width, 0);
 });
+
+test("active page rail and artboard use clean green active-state tokens and license copy avoids awkward phrasing", async () => {
+  const { readFileSync } = await import("node:fs");
+  const css = readFileSync("src/styles.css", "utf8");
+  assert.match(css, /\.page-rail-item\.is-active\s*\{[^}]*--editor-success/);
+  assert.match(css, /\.page-rail-number-active\s*\{[^}]*--editor-success/);
+  assert.match(css, /\.artboard-active-outline\s*\{[^}]*--editor-success/);
+
+  const premium = readFileSync("src/components/site/PremiumTemplates.tsx", "utf8");
+  assert.doesNotMatch(premium, /قالب مرخص/);
+  assert.match(premium, /متاح في النسخة الكاملة/);
+});
+

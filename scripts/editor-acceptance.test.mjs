@@ -62,9 +62,9 @@ test("selection and panel rendering have one owner", () => {
   assert.equal((app.match(/<LeftPanel\b/g) || []).length, 1);
   // Both drawers now share the same floating mechanism; each content tree
   // must still be mounted once, never duplicated for mobile/desktop.
-  assert.equal((app.match(/<TouchPropertiesSheet\b/g) || []).length, 2);
-  assert.match(app, /<TouchPropertiesSheet side="left"/);
-  assert.match(app, /<TouchPropertiesSheet open=\{rightOpen/);
+  assert.equal((app.match(/<FloatingPanel\b/g) || []).length, 2);
+  assert.match(app, /side="left"/);
+  assert.match(app, /open=\{rightOpen && !focusMode\}/);
   assert.doesNotMatch(app, /<CollapsedPanelDock|className="editor-wand-btn"/);
   const canvas = read("src/components/editor/CanvasStage.tsx");
   assert.doesNotMatch(canvas, /<SelectionActions/);

@@ -123,19 +123,30 @@ export function Tip({ label, hint, shortcut, side = "bottom", children }: TipPro
   }, [open, show]);
 
   /**
-   * A long-press ends with a click on most browsers. Swallow exactly that one
-   * click (capture phase) so revealing a tooltip never triggers the control.
+   * A long-press ends with a click on most browsers. Swallow that click
+   * (capture phase) when a tooltip is open from a hold so revealing a tooltip
+   * never triggers the control, and dismiss the tooltip on the next tap outside.
    */
   useEffect(() => {
+    if (!open) return;
     const swallow = (event: MouseEvent) => {
       if (!held.current) return;
       held.current = false;
       event.stopPropagation();
       event.preventDefault();
     };
+    const dismissOnPointerDown = (event: PointerEvent) => {
+      if (anchorRef.current?.contains(event.target as Node)) return;
+      held.current = false;
+      hide(0);
+    };
     window.addEventListener("click", swallow, true);
-    return () => window.removeEventListener("click", swallow, true);
-  }, []);
+    window.addEventListener("pointerdown", dismissOnPointerDown, true);
+    return () => {
+      window.removeEventListener("click", swallow, true);
+      window.removeEventListener("pointerdown", dismissOnPointerDown, true);
+    };
+  }, [open, hide]);
 
   const child = children as ReactElement<Record<string, unknown>> & {
     ref?: unknown;
@@ -152,8 +163,11 @@ export function Tip({ label, hint, shortcut, side = "bottom", children }: TipPro
     onPointerDown: (event: React.PointerEvent) => {
       if (event.pointerType === "mouse") return;
       clear();
-      held.current = true;
-      timer.current = setTimeout(show, HOLD_DELAY);
+      held.current = false;
+      timer.current = setTimeout(() => {
+        held.current = true;
+        show();
+      }, HOLD_DELAY);
     },
     onPointerUp: () => clear(),
     onPointerCancel: () => {

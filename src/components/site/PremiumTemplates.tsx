@@ -77,7 +77,7 @@ export function PremiumTemplates({
                   </p>
                 )}
                 <span className="mt-auto">
-                  <LicenseBadge state="locked" label="قالب مرخص" />
+                  <LicenseBadge state="locked" label="متاح في النسخة الكاملة" />
                 </span>
               </a>
             ))}
@@ -96,7 +96,7 @@ export function PremiumTemplates({
                   {pack.desc}
                 </p>
                 <div className="mt-auto flex items-center justify-between gap-2">
-                  <LicenseBadge state="locked" label="قالب مرخص" />
+                  <LicenseBadge state="locked" label="متاح في النسخة الكاملة" />
                   <span className="text-[10px] text-muted">
                     {pack.pages} صفحة
                   </span>
