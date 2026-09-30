@@ -11,7 +11,13 @@ import {
   type ElType,
   type Page,
 } from "@/lib/editor/model";
-import { applyResizeSnap, applySnap, mirrorHandle, resizeByHandle } from "@/lib/editor/transform";
+import {
+  applyResizeSnap,
+  applySnap,
+  elementAABB,
+  mirrorHandle,
+  resizeToPointer,
+} from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
 import { useInteraction } from "@/lib/editor/interaction-store";
 import { prepareText } from "@/lib/editor/text-render";
@@ -511,6 +517,9 @@ export function CanvasStage({
     let heldLong = false;
     let longPressTimer: ReturnType<typeof setTimeout> | undefined;
     let longPressFired = false;
+    /** Last informative pointer angle for a rotation (see the dead zone in
+     * the rotate branch of `paintFrame`). */
+    let rotateHold: number | null = null;
 
     const applyPressSelection = () => {
       const fresh = useEditor.getState();
@@ -670,6 +679,7 @@ export function CanvasStage({
           !ev.altKey && (snapElements || ev.shiftKey),
           zoomNow,
           op.origins,
+          op.orig.rotation || 0,
         );
         setGuides(snapped);
       } else if (op.kind === "resize") {
@@ -680,16 +690,14 @@ export function CanvasStage({
         );
         const ratioLocked =
           ev.shiftKey || op.orig.style?.aspectLock === true;
-        resizeByHandle(
-          next,
-          op.orig,
-          mirrored,
-          dx,
-          dy,
-          ratioLocked,
-          { widthLocked: op.orig.widthLocked, heightLocked: op.orig.heightLocked },
-        );
         /*
+         * Anchor-based resize — the ONE model for every shape at every
+         * rotation (see `resizeToPointer`). The pointer's absolute page
+         * position is the input: the anchor stays put, the grabbed
+         * corner/edge lands exactly under the pointer, and x/y/w/h are
+         * back-solved. At rotation 0 this reduces to the classic
+         * `resizeByHandle` results, so axis-aligned behaviour is unchanged.
+         *
          * Alt = التحويل من المركز (center-based resize): the original centre
          * stays pinned while both sides move — the same modifier the move
          * gesture uses to suspend snapping, so holding Alt always means
@@ -697,10 +705,20 @@ export function CanvasStage({
          * and during ratio-locked resizes (the dragged edge would fight the
          * proportion constraint).
          */
-        if (ev.altKey) {
-          next.x = op.orig.x + op.orig.w / 2 - next.w / 2;
-          next.y = op.orig.y + op.orig.h / 2 - next.h / 2;
-        } else if (!ratioLocked) {
+        resizeToPointer(
+          next,
+          op.orig,
+          mirrored,
+          { x: cur.x, y: cur.y },
+          op.orig.rotation || 0,
+          ratioLocked,
+          {
+            widthLocked: op.orig.widthLocked,
+            heightLocked: op.orig.heightLocked,
+            centered: ev.altKey,
+          },
+        );
+        if (!ratioLocked) {
           const zoomNow = useEditor.getState().zoom;
           setGuides(
             applyResizeSnap(
@@ -711,6 +729,7 @@ export function CanvasStage({
               snapGrid,
               snapElements,
               zoomNow,
+              op.orig.rotation || 0,
             ),
           );
         }
@@ -718,7 +737,21 @@ export function CanvasStage({
         const cx = op.orig.x + op.orig.w / 2;
         const cy = op.orig.y + op.orig.h / 2;
         const a0 = Math.atan2(op.startY - cy, op.startX - cx);
-        const a1 = Math.atan2(cur.y - cy, cur.x - cx);
+        /*
+         * Guard against pointer noise at the centre: atan2 is undefined at
+         * zero radius, and within a couple of mm of the centre a 1px wobble
+         * swings the angle through tens of degrees, which reads as the
+         * object spinning "randomly". Inside that dead zone the pointer
+         * angle carries no information, so the angle is held from the last
+         * informative frame (the drag still rotates by whatever the pointer
+         * swept before entering the zone).
+         */
+        const distC = Math.hypot(cur.x - cx, cur.y - cy);
+        const a1 =
+          distC < 2
+            ? rotateHold ?? a0
+            : Math.atan2(cur.y - cy, cur.x - cx);
+        if (distC >= 2) rotateHold = a1;
         const raw = (op.orig.rotation || 0) + ((a1 - a0) * 180) / Math.PI;
         next.rotation = snapRotation(raw, ev.shiftKey);
         setRotationHint({
@@ -929,19 +962,30 @@ export function CanvasStage({
       ? findElement(page.elements, enteredGroupId)?.el || null
       : null;
     if (entered?.children?.length) {
+      // Entered-group children are parent-relative; the group's own rotation
+      // is part of each child's visual silhouette, so the AABB is computed
+      // in the group's local space (child rotation about the child's centre,
+      // group rotation about the GROUP's centre) and translated by the
+      // group's origin.
       return entered.children.map((child) => ({
         id: child.id,
-        box: {
-          x: entered.x + child.x,
-          y: entered.y + child.y,
-          w: child.w,
-          h: child.h,
-        },
+        box: elementAABB(
+          { x: child.x, y: child.y, w: child.w, h: child.h },
+          child.rotation || 0,
+          { x: entered.x, y: entered.y },
+          entered.rotation || 0,
+          { x: entered.w / 2, y: entered.h / 2 },
+        ),
       }));
     }
+    // Top level: the element's own box and rotation in page mm.
     return page.elements.map((el) => ({
       id: el.id,
-      box: { x: el.x, y: el.y, w: el.w, h: el.h },
+      box: elementAABB(
+        { x: el.x, y: el.y, w: el.w, h: el.h },
+        el.rotation || 0,
+        { x: 0, y: 0 },
+      ),
     }));
   };
 
