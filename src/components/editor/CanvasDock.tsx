@@ -699,6 +699,9 @@ export function CanvasDock({
           onOpenLeft={onOpenLeft}
         />
 
+        {/* Chrome, not a tool: a quiet separator keeps the collapse control
+            out of the tool group's hierarchy. */}
+        <span className="editor-dock-sep" aria-hidden="true" />
         <IconButton
           label={collapsed ? "توسيع شريط الأدوات" : "تصغير شريط الأدوات"}
           hint="يُطوى الشريط إلى زر واحد"
