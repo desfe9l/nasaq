@@ -76,6 +76,59 @@ export interface GestureContext {
 /** Types whose text can be edited in place with a double click. */
 const EDITABLE = new Set(["text", "box", "stat", "stamp", "progress"]);
 
+export const NOOP_GESTURE = () => {};
+const EMPTY_SIBLINGS: CanvasEl[] = [];
+
+type ElementNodeProps = Props & { onEnterGroup?: (id: string) => void };
+
+function resolveMaskShape(el: CanvasEl, siblings?: CanvasEl[]): CanvasEl | null {
+  if (!el.clippedBy || !siblings?.length) return null;
+  return (
+    siblings.find(
+      (m) => m.id === el.clippedBy && (m.type === "shape" || m.type === "svg"),
+    ) ?? null
+  );
+}
+
+function isMaskingSibling(el: CanvasEl, siblings?: CanvasEl[]): boolean {
+  if ((el.type !== "shape" && el.type !== "svg") || !siblings?.length)
+    return false;
+  return siblings.some((m) => m.clippedBy === el.id);
+}
+
+function areElementNodePropsEqual(
+  prev: ElementNodeProps,
+  next: ElementNodeProps,
+): boolean {
+  if (
+    prev.el !== next.el ||
+    prev.interactive !== next.interactive ||
+    prev.onGesture !== next.onGesture ||
+    prev.onEnterGroup !== next.onEnterGroup ||
+    prev.pageNo !== next.pageNo ||
+    prev.pageCount !== next.pageCount ||
+    prev.pageId !== next.pageId ||
+    prev.parent?.x !== next.parent?.x ||
+    prev.parent?.y !== next.parent?.y
+  ) {
+    return false;
+  }
+  if (prev.siblings === next.siblings) return true;
+  if (
+    resolveMaskShape(prev.el, prev.siblings) !==
+    resolveMaskShape(next.el, next.siblings)
+  ) {
+    return false;
+  }
+  if (
+    isMaskingSibling(prev.el, prev.siblings) !==
+    isMaskingSibling(next.el, next.siblings)
+  ) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * A document-layer node: it paints one element, in z-order, and nothing else.
  *
@@ -102,7 +155,7 @@ export const ElementNode = memo(function ElementNode({
   siblings,
   pageId,
   parent,
-}: Props & { onEnterGroup?: (id: string) => void }) {
+}: ElementNodeProps) {
   const updateElement = useEditor((s) => s.updateElement);
   const fitTextBox = useEditor((s) => s.fitTextBox);
   const setEditing = useEditor((s) => s.setEditing);
@@ -121,10 +174,8 @@ export const ElementNode = memo(function ElementNode({
    * page space (clip-path supports `clipPathUnits`-style math via calc since
    * both are mm boxes on the same page). The mask shape itself stays visible.
    */
-  const activeElements = siblings ?? [];
-  const maskShape = view.clippedBy
-    ? activeElements.find((m) => m.id === view.clippedBy && (m.type === "shape" || m.type === "svg"))
-    : null;
+  const activeElements = siblings ?? EMPTY_SIBLINGS;
+  const maskShape = resolveMaskShape(view, activeElements);
   /*
    * قناع القص (Clipping Mask) — real clipping of the picture by the mask.
    *
@@ -299,7 +350,7 @@ export const ElementNode = memo(function ElementNode({
       />
     </div>
   );
-});
+}, areElementNodePropsEqual);
 
 function ElementContent({
   el,
@@ -583,7 +634,7 @@ function ElementContent({
   if (el.type === "group") {
     return (
       <div className="relative h-full w-full">
-        {(el.children || [])
+        {(el.children || EMPTY_SIBLINGS)
           .slice()
           .sort((a, b) => a.z - b.z)
           .map((child) => (
@@ -593,8 +644,8 @@ function ElementContent({
               interactive={false}
               pageNo={pageRef?.number}
               pageCount={pageRef?.count}
-              siblings={el.children || []}
-              onGesture={() => {}}
+              siblings={el.children || EMPTY_SIBLINGS}
+              onGesture={NOOP_GESTURE}
             />
           ))}
       </div>

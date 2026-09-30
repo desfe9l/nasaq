@@ -17,21 +17,47 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
   const togglePagesRail = useEditor((s) => s.togglePagesRail);
 
   const activeIndex = pages.findIndex((p) => p.id === activePageId);
+  const scrollStageToPage = (pageId: string, center = false) => {
+    const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+    const pageEl = stage?.querySelector<HTMLElement>(
+      `[data-page-id="${CSS.escape(pageId)}"]`,
+    );
+    if (stage && pageEl) {
+      const cell = pageEl.closest<HTMLElement>(".artboard-cell") ?? pageEl;
+      const sr = stage.getBoundingClientRect();
+      const cr = cell.getBoundingClientRect();
+      if (
+        center ||
+        cr.left < sr.left ||
+        cr.right > sr.right ||
+        cr.top < sr.top ||
+        cr.bottom > sr.bottom
+      ) {
+        stage.scrollLeft += cr.left + cr.width / 2 - (sr.left + sr.width / 2);
+        stage.scrollTop += cr.top + cr.height / 2 - (sr.top + sr.height / 2);
+      }
+    }
+    itemRefs.current[pageId]?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  };
+
   const activatePage = (index: number) => {
     const page = pages[index];
     if (!page) return;
     setActivePage(page.id);
-    requestAnimationFrame(() => {
-      document
-        .querySelector(`[data-page-id="${CSS.escape(page.id)}"]`)
-        ?.closest(".artboard-cell")
-        ?.scrollIntoView({ block: "nearest", inline: "nearest" });
-      itemRefs.current[page.id]?.scrollIntoView({
-        behavior: "smooth",
-        block: "nearest",
-        inline: "center",
-      });
-    });
+    requestAnimationFrame(() => scrollStageToPage(page.id, false));
+  };
+
+  const focusPage = (index: number) => {
+    const page = pages[index];
+    if (!page) return;
+    setActivePage(page.id);
+    useEditor.setState({ enteredGroupId: null, editingId: null });
+    window.dispatchEvent(new CustomEvent("nasaq:fit-page", { detail: page.id }));
+    requestAnimationFrame(() => scrollStageToPage(page.id, true));
   };
 
   const thumbBox = (ratio: number) => {
@@ -132,13 +158,13 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
               <button
                 type="button"
                 onClick={() => activatePage(i)}
-                onDoubleClick={() => togglePagesRail()}
+                onDoubleClick={() => focusPage(i)}
                 aria-current={p.id === activePageId}
                 title={`${p.name} — ${p.elements.length} عنصر`}
                 className={cn(
-                  "grid h-7 min-w-7 shrink-0 place-items-center rounded-[7px] border px-1.5 text-[11px] font-extrabold tabular-nums",
+                  "page-rail-chip grid h-7 min-w-7 shrink-0 place-items-center rounded-[7px] border px-1.5 text-[11px] font-extrabold tabular-nums transition-colors",
                   p.id === activePageId
-                    ? "border-navy-2 bg-navy-2/10 text-brand"
+                    ? "is-active border-navy-2 bg-navy-2/10 text-brand"
                     : "border-transparent text-muted hover:border-line",
                 )}
               >
@@ -228,12 +254,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
                   activatePage(i);
                 }}
                 onDoubleClick={() => {
-                  setActivePage(p.id);
-                  requestAnimationFrame(() => {
-                    const art = document.querySelector(`[data-page-id="${p.id}"]`);
-                    if (art) art.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-                    itemRefs.current[p.id]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
-                  });
+                  focusPage(i);
                 }}
                 className="block rounded-lg text-right"
                 aria-current={active}

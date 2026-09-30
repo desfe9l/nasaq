@@ -3596,8 +3596,9 @@ summary,
 .artboard-name:hover { color: var(--editor-canvas-text); }
 .artboard-name[aria-pressed="true"] {
   color: var(--editor-canvas-text);
-  outline: 1px solid var(--editor-accent);
+  outline: 1.5px solid var(--editor-success);
   outline-offset: 2px;
+  background: var(--editor-success-soft);
 }
 .artboard-title-input {
   width: 100%;
@@ -3611,7 +3612,7 @@ summary,
   font-size: 11px;
 }
 .artboard-active-outline {
-  outline: calc(1px / var(--editor-zoom, 1)) solid var(--editor-accent);
+  outline: calc(1.5px / var(--editor-zoom, 1)) solid var(--editor-success);
   outline-offset: calc(4px / var(--editor-zoom, 1));
 }
 
@@ -3790,11 +3791,17 @@ summary,
 /* Always a single row, with touch actions in flow rather than over the preview. */
 .page-rail-item { border-color: var(--editor-border); }
 .page-rail-item.is-active {
-  border-color: var(--editor-accent);
-  background: var(--editor-accent-soft);
-  box-shadow: inset 0 0 0 1px var(--editor-accent);
+  border-color: var(--editor-success);
+  background: var(--editor-success-soft);
+  box-shadow: inset 0 0 0 1.5px var(--editor-success);
 }
-.page-rail-number-active { background: var(--editor-accent); color: var(--editor-accent-text); }
+.page-rail-number-active { background: var(--editor-success); color: #ffffff; }
+.editor-ui .editor-page-rail .page-rail-chip.is-active {
+  background: var(--editor-success) !important;
+  border-color: var(--editor-success) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--editor-success) 35%, transparent);
+}
 .page-rail-actions button { background: var(--editor-surface); }
 .page-rail-actions .drag-handle { touch-action: none; }
 .editor-page-rail { padding-bottom: max(4px, env(safe-area-inset-bottom)); }
@@ -3958,11 +3965,11 @@ header.sticky.top-0 {
 
 /*
  * ── 7. Page rail active state ───────────────────────────────────────────
- * Active page thumbnail gets a clearer accent ring and background tint.
+ * Active page thumbnail gets a clearer green ring and background tint.
  */
 .page-rail-item.is-active {
-  box-shadow: inset 0 0 0 1px var(--editor-accent),
-    0 0 0 1px color-mix(in srgb, var(--editor-accent) 30%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--editor-success),
+    0 0 0 1px color-mix(in srgb, var(--editor-success) 35%, transparent);
 }
 
 /*

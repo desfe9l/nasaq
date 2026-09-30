@@ -10,7 +10,8 @@
  * Client-safe: it only posts bytes to a server function. No credential, no
  * endpoint and no bucket name is referenced here.
  */
-import type { StorageAssetKind } from "./provider";
+import { hasSignedInOwner } from "@/lib/editor/storage-owner";
+import type { StorageAssetKind, StoredAsset } from "./provider";
 
 /** Split a `data:` URL into its content type and raw base64 payload. */
 export function parseDataUrl(
@@ -28,8 +29,8 @@ function kindFor(contentType: string): StorageAssetKind | null {
 }
 
 /**
- * Upload an asset's bytes to object storage, returning the stored object key
- * on success and null whenever the mirror could not (or should not) run.
+ * Upload an asset's bytes to object storage, returning the stored remote asset
+ * id on success and null whenever the mirror could not (or should not) run.
  */
 export async function mirrorAssetToStorage(asset: {
   name: string;
@@ -39,6 +40,7 @@ export async function mirrorAssetToStorage(asset: {
   projectId?: string | null;
 }): Promise<string | null> {
   try {
+    if (!hasSignedInOwner()) return null;
     const parsed = parseDataUrl(asset.src);
     if (!parsed) return null;
     const kind = kindFor(parsed.contentType);
@@ -56,8 +58,54 @@ export async function mirrorAssetToStorage(asset: {
         projectId: asset.projectId ?? null,
       },
     });
-    return result.ok ? result.asset.objectKey : null;
+    return result.ok ? result.asset.id : null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * Fetch the signed-in user's own stored assets from R2 / object storage.
+ * Never runs for guest sessions.
+ */
+export async function pullRemoteAssets(): Promise<StoredAsset[]> {
+  try {
+    if (!hasSignedInOwner()) return [];
+    const { listStoredAssets } = await import("./functions");
+    const list = await listStoredAssets();
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Download a signed-in user's stored asset as a `data:` URL so it can be
+ * hydrated into the local owner-scoped IndexedDB library.
+ */
+export async function fetchRemoteAssetDataUrl(
+  id: string,
+): Promise<{ dataUrl: string; asset: StoredAsset } | null> {
+  try {
+    if (!hasSignedInOwner() || !id) return null;
+    const { downloadStoredAsset } = await import("./functions");
+    const result = await downloadStoredAsset({ data: { id } });
+    return result.ok ? { dataUrl: result.dataUrl, asset: result.asset } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Best-effort deletion of a remote R2 asset owned by the signed-in user.
+ */
+export async function removeRemoteAsset(id: string): Promise<boolean> {
+  try {
+    if (!hasSignedInOwner() || !id) return false;
+    const { deleteStoredAsset } = await import("./functions");
+    const result = await deleteStoredAsset({ data: { id } });
+    return Boolean(result?.ok);
+  } catch {
+    return false;
   }
 }

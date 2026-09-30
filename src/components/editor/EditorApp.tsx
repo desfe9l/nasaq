@@ -668,6 +668,12 @@ function Studio({
   }, [setZoom]);
   fitRef.current = fitToScreen;
 
+  useEffect(() => {
+    const onFitPage = () => fitRef.current();
+    window.addEventListener("nasaq:fit-page", onFitPage);
+    return () => window.removeEventListener("nasaq:fit-page", onFitPage);
+  }, []);
+
   /*
    * Safe auto-fit whenever a DIFFERENT document is loaded (opening a project,
    * creating a new one, importing a file). Keyed on the project id so plain
@@ -776,12 +782,13 @@ function Studio({
       flush();
     };
     const onVisibility = () => {
-      if (document.visibilityState === "hidden") flush();
+      if (document.visibilityState === "hidden") flushSync();
     };
     window.addEventListener("beforeunload", flushSync);
     window.addEventListener("pagehide", flushSync);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
+      flushSync();
       window.removeEventListener("beforeunload", flushSync);
       window.removeEventListener("pagehide", flushSync);
       document.removeEventListener("visibilitychange", onVisibility);
@@ -1339,7 +1346,7 @@ function Studio({
                 aria-label="مقياس مساحة العمل"
               >
                 <IconButton
-                  label="تصغير المقياس"
+                  label="تصغير اللوحة"
                   shortcut="⌘−"
                   className="editor-zoom-btn"
                   icon={<Minus className="size-4" strokeWidth={1.8} />}
@@ -1355,7 +1362,7 @@ function Studio({
                   {Math.round(zoom * 100)}%
                 </button>
                 <IconButton
-                  label="تكبير المقياس"
+                  label="تكبير اللوحة"
                   shortcut="⌘+"
                   className="editor-zoom-btn"
                   icon={<Plus className="size-4" strokeWidth={1.8} />}

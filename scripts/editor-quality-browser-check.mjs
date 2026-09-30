@@ -85,10 +85,28 @@ try {
       (await page.locator(".editor-toolbar").boundingBox()).height <=
         (width < 600 ? 140 : 96),
     );
-    const stroke = page.getByRole("textbox", {
-      name: "سماكة الحد بالبكسل",
-      exact: true,
-    });
+    const ensureStrokeVisible = async () => {
+      const box = page.getByRole("textbox", {
+        name: "سماكة الحد بالبكسل",
+        exact: true,
+      });
+      if (!(await box.isVisible())) {
+        const formatBtn = bar.getByRole("button", {
+          name: "تنسيق العنصر",
+          exact: true,
+        });
+        if (await formatBtn.isVisible()) await formatBtn.click();
+      }
+      return box;
+    };
+    const closeFormatDrawer = async () => {
+      const closeBtn = page.getByRole("button", {
+        name: "إغلاق تنسيق العنصر",
+        exact: true,
+      });
+      if (await closeBtn.isVisible()) await closeBtn.click();
+    };
+    let stroke = await ensureStrokeVisible();
     await stroke.fill("8");
     await stroke.press("Enter");
     assert.ok(
@@ -101,13 +119,10 @@ try {
         )) - 8,
       ) < 0.01,
     );
-    const range = page.getByRole("slider", {
-      name: "منزلق سماكة الحد",
-      exact: true,
-    });
-    await range.focus();
-    await range.press("Home");
-    await range.press("ArrowRight");
+    await stroke.fill("0");
+    await stroke.press("Enter");
+    await stroke.focus();
+    await stroke.press("ArrowUp");
     assert.equal(
       await page.evaluate(
         () =>
@@ -120,6 +135,7 @@ try {
       ),
       0.5,
     );
+    await closeFormatDrawer();
     record(`${width}: compact visible toolbar and live numeric/slider stroke`);
     await page.evaluate(() => {
       const s = window.store.getState();
@@ -127,7 +143,9 @@ try {
       s.select(null);
       s.select(window.testId);
     });
+    stroke = await ensureStrokeVisible();
     assert.equal(await stroke.inputValue(), "0.5");
+    await closeFormatDrawer();
     const rotation = page.locator(".selection-frame.is-secondary");
     assert.equal(await rotation.count(), 0);
     const frame = page.locator(".selection-frame").first();
@@ -377,12 +395,10 @@ try {
       const s = window.store.getState();
       s.selectAll();
     });
-    await page
-      .getByRole("textbox", { name: "سماكة الحد بالبكسل", exact: true })
-      .fill("4");
-    await page
-      .getByRole("textbox", { name: "سماكة الحد بالبكسل", exact: true })
-      .press("Enter");
+    stroke = await ensureStrokeVisible();
+    await stroke.fill("4");
+    await stroke.press("Enter");
+    await closeFormatDrawer();
     assert.ok(
       await page.evaluate(() =>
         window.store

@@ -119,11 +119,17 @@ export function RightPanel({
    * page edit re-renders the panel exactly once per committed gesture.
    */
   const page = useEditor((s) =>
-    s.pages.find((p) => p.id === s.activePageId),
+    s.rightOpen && !s.focusMode
+      ? s.pages.find((p) => p.id === s.activePageId)
+      : undefined,
   );
   const setActivePage = useEditor((s) => s.setActivePage);
-  const activePageId = useEditor((s) => s.activePageId);
-  const selectedId = useEditor((s) => s.selectedId);
+  const activePageId = useEditor((s) =>
+    s.rightOpen && !s.focusMode ? s.activePageId : "",
+  );
+  const selectedId = useEditor((s) =>
+    s.rightOpen && !s.focusMode ? s.selectedId : null,
+  );
   const updateElement = useEditor((s) => s.updateElement);
   const flipSelected = useEditor((s) => s.flipSelected);
   const toggleFadeOverlay = useEditor((s) => s.toggleFadeOverlay);
@@ -292,7 +298,9 @@ export function RightPanel({
         : layers,
     [layers, layerQuery],
   );
-  const selectedCount = useEditor((s) => s.selectedIds.length);
+  const selectedCount = useEditor((s) =>
+    s.rightOpen && !s.focusMode ? s.selectedIds.length : 0,
+  );
   const selectMany = useEditor((s) => s.selectMany);
   const select = useEditor((s) => s.select);
   const toggleSelect = useEditor((s) => s.toggleSelect);
@@ -2572,6 +2580,8 @@ function shadowId(value: string | undefined) {
  * re-renders when the page LIST changes (renames, reorders) — the inspector
  * around it subscribes to nothing but the active page object.
  */
+const EMPTY_PAGES: { id: string; name: string }[] = [];
+
 function PageSelect({
   activePageId,
   onChange,
@@ -2579,7 +2589,9 @@ function PageSelect({
   activePageId: string;
   onChange: (id: string) => void;
 }) {
-  const pages = useEditor((s) => s.pages);
+  const pages = useEditor((s) =>
+    s.rightOpen && !s.focusMode ? s.pages : EMPTY_PAGES,
+  );
   return (
     <label className="editor-panel-control">
       <span>الصفحة</span>

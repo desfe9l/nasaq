@@ -28,6 +28,10 @@ export function ViewMenu({
   const snapElements = useEditor((s) => s.snapElements);
   const previewAll = useEditor((s) => s.previewAll);
   const focusMode = useEditor((s) => s.focusMode);
+  const leftOpen = useEditor((s) => s.leftOpen);
+  const rightOpen = useEditor((s) => s.rightOpen);
+  const pagesRailCollapsed = useEditor((s) => s.pagesRailCollapsed);
+  const togglePagesRail = useEditor((s) => s.togglePagesRail);
   const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
   const artboardGridCols = useEditor((s) => s.artboardGridCols);
   const setArtboardGridCols = useEditor((s) => s.setArtboardGridCols);
@@ -151,6 +155,21 @@ export function ViewMenu({
         onSelect={() =>
           window.dispatchEvent(new CustomEvent(OPEN_EDITOR_SETTINGS_EVENT))
         }
+      />
+      <MenuRow
+        label="لوحة العناصر والمكتبة"
+        checked={leftOpen}
+        onSelect={() => toggle("leftOpen")}
+      />
+      <MenuRow
+        label="الخصائص والطبقات"
+        checked={rightOpen}
+        onSelect={() => toggle("rightOpen")}
+      />
+      <MenuRow
+        label="شريط الصفحات المصغرة"
+        checked={!pagesRailCollapsed}
+        onSelect={() => togglePagesRail()}
       />
       <MenuRow
         label="الشريط العائم للعنصر المحدد"

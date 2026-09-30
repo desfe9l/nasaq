@@ -114,6 +114,8 @@ export interface Asset {
   h: number;
   addedAt: number;
   folderId?: string | null;
+  /** Cloud storage asset id when mirrored to R2. */
+  remoteId?: string;
 }
 
 export interface AssetFolder {
@@ -493,6 +495,7 @@ export async function duplicateProject(id: string): Promise<Project | null> {
 const OWNER_SCOPED_SETTINGS = new Set<string>([
   "brandProfiles",
   "activeProjectId",
+  "activePageId",
   "assetFolders",
   "customLibrary",
 ]);

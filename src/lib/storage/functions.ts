@@ -239,6 +239,64 @@ export const getStoredAssetUrl = createServerFn({ method: "POST" })
     };
   });
 
+/**
+ * Download one of the caller's own assets as a `data:` URL so the local
+ * IndexedDB library can restore cloud-backed assets across devices/sessions
+ * without weakening `safeImageSrc` (which only permits `data:` and `/`).
+ *
+ * Ownership is verified through `findOwnedAsset` by `context.userId`.
+ */
+export const downloadStoredAsset = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown): { id: string } => {
+    const id =
+      typeof (input as Record<string, unknown> | null)?.id === "string"
+        ? String((input as Record<string, unknown>).id).trim()
+        : "";
+    if (!id || id.length > 120) throw new Error("معرّف الأصل غير صالح");
+    return { id };
+  })
+  .handler(
+    async ({
+      context,
+      data,
+    }): Promise<
+      | { ok: true; dataUrl: string; asset: StoredAsset }
+      | { ok: false; reason: StorageFailureReason }
+    > => {
+      const { getObjectStorage } = await import("./r2.server");
+      const storage = getObjectStorage();
+      if (!storage) return { ok: false, reason: "not_configured" };
+
+      const sql = await getSql();
+      const { findOwnedAsset } = await import("./ownership.server");
+      const owned = await findOwnedAsset(sql, context.userId, data.id);
+      if (!owned.ok) return { ok: false, reason: "not_found" };
+
+      const rows = await sql<AssetRow>`
+        select id, kind, object_key, file_name, content_type, byte_size, width, height, project_id, created_at
+        from storage_assets
+        where id = ${owned.asset.id} and user_id = ${context.userId}
+        limit 1
+      `;
+      const row = rows[0];
+      if (!row) return { ok: false, reason: "not_found" };
+
+      try {
+        const bytes = await storage.get(owned.asset.objectKey);
+        if (!bytes || !bytes.byteLength) return { ok: false, reason: "not_found" };
+        const base64 = Buffer.from(bytes).toString("base64");
+        return {
+          ok: true,
+          dataUrl: `data:${row.content_type};base64,${base64}`,
+          asset: toStoredAsset(row),
+        };
+      } catch {
+        return { ok: false, reason: "not_found" };
+      }
+    },
+  );
+
 /** Delete one of the caller's own assets: object first, then the metadata row. */
 export const deleteStoredAsset = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
