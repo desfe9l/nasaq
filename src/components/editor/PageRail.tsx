@@ -182,6 +182,11 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
 
   return (
     <div className="editor-page-rail flex h-full min-h-0 items-stretch gap-2 border-t px-2 py-1 bg-surface overflow-hidden">
+      {/*
+       * One cell size for the whole rail control group — icon-only, named by
+       * tooltip. Text labels would cost the rail's height budget for words a
+       * hover already says.
+       */}
       <div className="flex shrink-0 flex-col justify-center gap-1">
         <button
           type="button"
@@ -189,32 +194,33 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
           title="تصغير شريط الصفحات — صف واحد من الأرقام"
           aria-label="تصغير شريط الصفحات"
           aria-expanded
-          className="grid size-6 place-items-center rounded-[7px] border border-line text-muted"
+          className="grid size-8 place-items-center rounded-[8px] border border-line text-muted"
         >
-          <ChevronUp className="size-3.5" aria-hidden />
+          <ChevronUp className="size-4" aria-hidden />
         </button>
         <button
           type="button"
           onClick={() => addPage()}
-          className="inline-flex h-8 items-center gap-1 rounded-[8px] bg-navy px-2.5 text-[11px] font-extrabold text-white"
+          title="إضافة صفحة"
+          aria-label="إضافة صفحة"
+          className="grid size-8 place-items-center rounded-[8px] bg-navy text-white"
         >
-          <Plus className="size-3.5" />
-          صفحة
+          <Plus className="size-4" aria-hidden />
         </button>
         <button
           type="button"
           onClick={() => duplicatePage()}
           title="نسخ الصفحة الحالية"
-          className="inline-flex h-8 items-center gap-1 rounded-[8px] border border-line px-2.5 text-[11px] font-extrabold"
+          aria-label="نسخ الصفحة الحالية"
+          className="grid size-8 place-items-center rounded-[8px] border border-line text-muted"
         >
-          <Copy className="size-3.5" />
-          نسخ
+          <Copy className="size-4" aria-hidden />
         </button>
       </div>
 
       <button
         type="button"
-        className="page-rail-nav grid size-9 shrink-0 place-items-center rounded-[8px] border border-line text-muted disabled:cursor-not-allowed disabled:opacity-35"
+        className="page-rail-nav grid size-8 shrink-0 place-items-center rounded-[8px] border border-line text-muted disabled:cursor-not-allowed disabled:opacity-35"
         onClick={() => activatePage(activeIndex - 1)}
         disabled={activeIndex <= 0}
         aria-label="الصفحة السابقة"
@@ -306,7 +312,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
                   onPointerDown={startDrag(i)}
                   title="اسحب لإعادة الترتيب"
                   aria-label={`إعادة ترتيب ${p.name}`}
-                  className="drag-handle grid size-5 place-items-center rounded bg-surface-2 text-muted shadow"
+                  className="drag-handle grid size-5 place-items-center rounded text-muted"
                 >
                   <GripVertical className="size-3" />
                 </button>
@@ -316,7 +322,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
                     onClick={() => deletePage(p.id)}
                     title="حذف الصفحة"
                     aria-label={`حذف ${p.name}`}
-                    className="grid size-5 place-items-center rounded bg-surface-2 text-error shadow"
+                    className="grid size-5 place-items-center rounded text-error"
                   >
                     <Trash2 className="size-3" />
                   </button>
@@ -329,7 +335,7 @@ export function PageRail({ height = 112, minHeight = 96 }: { height?: number; mi
 
       <button
         type="button"
-        className="page-rail-nav grid size-9 shrink-0 place-items-center rounded-[8px] border border-line text-muted disabled:cursor-not-allowed disabled:opacity-35"
+        className="page-rail-nav grid size-8 shrink-0 place-items-center rounded-[8px] border border-line text-muted disabled:cursor-not-allowed disabled:opacity-35"
         onClick={() => activatePage(activeIndex + 1)}
         disabled={activeIndex < 0 || activeIndex >= pages.length - 1}
         aria-label="الصفحة التالية"

@@ -78,6 +78,8 @@ import { rememberUploadedFont } from "@/lib/nsq/fonts";
 export function EditorApp() {
   const hydrate = useEditor((s) => s.hydrate);
   const hydrated = useEditor((s) => s.hydrated);
+  /** ?showcase=1 (live product preview on the site): hide the account surface. */
+  const showcase = useEditor((s) => s.showcase);
   const setEntitlements = useEditor((s) => s.setEntitlements);
   const { user } = useCurrentUserState();
   const { entitlements, hasLicense, isAdmin, isSuspended } = useLicense(
@@ -225,7 +227,7 @@ export function EditorApp() {
         }}
       />
 
-      <NsqIntake />
+      {!showcase && <NsqIntake />}
 
       <input
         ref={imageInput}
@@ -454,6 +456,8 @@ function Studio({
   );
   /** First load is what arms the auto-fit below. */
   const hydrated = useEditor((s) => s.hydrated);
+  /** ?showcase=1: no walkthrough, no account menu in the product preview. */
+  const showcase = useEditor((s) => s.showcase);
   /** «أضف مكتبة» and «مولد عناوين الفقرات» are modal, so they own no store state. */
   const [addLibraryOpen, setAddLibraryOpen] = useState(false);
   const [headingGeneratorOpen, setHeadingGeneratorOpen] = useState(false);
@@ -1409,7 +1413,9 @@ function Studio({
             icon={<Download className="size-4" strokeWidth={1.8} />}
             onClick={() => toggle("exportOpen")}
           />
-          <EditorAccountMenu homeHref={homeHref} onNavigateHome={leaveEditor} />
+          {!showcase && (
+            <EditorAccountMenu homeHref={homeHref} onNavigateHome={leaveEditor} />
+          )}
         </div>
       </header>
 
@@ -1594,7 +1600,7 @@ function Studio({
        * measures real controls, and measuring a skeleton would highlight the
        * wrong rectangle on a slow first paint.
        */}
-      {tourOpen && hydrated && (
+      {!showcase && tourOpen && hydrated && (
         <OnboardingTour onFinish={() => setTourOpen(false)} />
       )}
     </div>

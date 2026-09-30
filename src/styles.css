@@ -3802,7 +3802,28 @@ summary,
   color: #ffffff !important;
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--editor-success) 35%, transparent);
 }
-.page-rail-actions button { background: var(--editor-surface); }
+/* Page rail: the per-card actions (reorder grip, delete) sit quietly and
+   surface on hover/focus — the thumbnails stay the rail's cleanest surface.
+   Touch devices keep them visible: there is no hover to reveal them. */
+.page-rail-actions {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.page-rail-item:hover .page-rail-actions,
+.page-rail-item:focus-within .page-rail-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .page-rail-actions { opacity: 1; }
+}
+.page-rail-actions button {
+  background: transparent;
+  border: 1px solid transparent;
+}
+.page-rail-actions button:hover {
+  background: var(--editor-hover);
+  border-color: var(--editor-border);
+}
 .page-rail-actions .drag-handle { touch-action: none; }
 .editor-page-rail { padding-bottom: max(4px, env(safe-area-inset-bottom)); }
 .editor-page-rail ul { overscroll-behavior-x: contain; touch-action: pan-x; }
@@ -3829,7 +3850,8 @@ summary,
 @media (any-pointer: coarse) {
   .editor-page-rail > div > button { min-height: 44px; }
   .editor-page-rail .page-rail-nav { width: 44px; height: 44px; }
-  .page-rail-actions button { width: 44px; height: 44px; }
+  /* The per-card actions stay inside the compact card even on touch. */
+  .page-rail-actions button { width: 30px; height: 30px; }
   .editor-panel-tab { min-width: 44px; min-height: 44px; flex-shrink: 0; }
   .editor-panel-tabs { scrollbar-width: thin; }
   /* Comfortable touch targets for every shared control. */

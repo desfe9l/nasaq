@@ -7,7 +7,7 @@ import { ProjectCard } from "@/components/site/ProjectCard";
 import { PRODUCT_COPY } from "@/lib/product/copy";
 import { CARD_W, CARD_WRAP, SITE_CARD } from "@/components/site/cards";
 import { FullVersionModal } from "@/components/site/FullVersionModal";
-import { HeroShowcase } from "@/components/site/HeroShowcase";
+import { LiveEditorPreview } from "@/components/site/LiveEditorPreview";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 import { WORKSPACE_HOME_PATH, openNewDocumentFlow, useWorkspaceEntry } from "@/lib/auth/use-workspace-entry";
@@ -129,14 +129,38 @@ export function HomePage() {
               </div>
             </div>
 
-            <div>
-              <HeroShowcase />
-              <p className="mt-3 text-[11px] text-muted">معاينة حقيقية من المحرر — تقارير، مؤشرات، خطابات رسمية بجودة مؤسسية</p>
-            </div>
+            <LiveEditorPreview />
           </div>
         </section>
 
         <ProductWalkthrough />
+
+        {/* ماذا تقدم — القدرات الأساسية */}
+        <section className="border-b border-line/60 bg-page py-12 sm:py-14">
+          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
+            <div className="max-w-2xl">
+              <p className="text-[11px] font-bold tracking-[0.14em] text-brand">ماذا تقدم نَسَق</p>
+              <h2 className="mt-2 text-[22px] font-extrabold text-ink">إنتاج بصري منظم للمخرجات المتكررة</h2>
+            </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-3">
+              {[
+                [Briefcase, "للفرق المؤسسية", "إنتاج منظم للمخرجات المتكررة مع حفظ الهوية."],
+                [Workflow, "لسير العمل الحقيقي", "من البيانات والهيكل إلى ملف جاهز للعرض والطباعة."],
+                [ShieldCheck, "لعمل آمن ومنظم", "تخزين محلي أولًا ومسار واضح للترخيص والتصدير."],
+              ].map(([Icon, title, desc]) => (
+                <div key={String(title)} className="flex gap-3 rounded-[12px] border border-line/60 bg-surface-2 p-4 transition-all duration-200 hover:border-line/80 hover:shadow-card">
+                  <span className="grid size-9 place-items-center rounded-[9px] border border-brand/10 bg-navy/5 text-brand">
+                    <Icon className="size-4" />
+                  </span>
+                  <div>
+                    <strong className="block text-[13px] font-bold text-ink">{String(title)}</strong>
+                    <span className="mt-1 block text-[12px] leading-6 text-muted">{String(desc)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
 
         {/* لمن تناسب — مؤسسي */}
         <section className="border-b border-line/60 bg-surface-2 py-12 sm:py-14">
@@ -163,33 +187,6 @@ export function HomePage() {
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-        </section>
-
-        {/* ماذا تقدم */}
-        <section className="border-b border-line/60 bg-page py-12 sm:py-14">
-          <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-            <div className="max-w-2xl">
-              <p className="text-[11px] font-bold tracking-[0.14em] text-brand">ماذا تقدم نَسَق</p>
-              <h2 className="mt-2 text-[22px] font-extrabold text-ink">إنتاج بصري منظم للمخرجات المتكررة</h2>
-            </div>
-            <div className="mt-6 grid gap-4 sm:grid-cols-3">
-              {[
-                [Briefcase, "للفرق المؤسسية", "إنتاج منظم للمخرجات المتكررة مع حفظ الهوية."],
-                [Workflow, "لسير العمل الحقيقي", "من البيانات والهيكل إلى ملف جاهز للعرض والطباعة."],
-                [ShieldCheck, "لعمل آمن ومنظم", "تخزين محلي أولًا ومسار واضح للترخيص والتصدير."],
-              ].map(([Icon, title, desc]) => (
-                <div key={String(title)} className="flex gap-3 rounded-[12px] border border-line/60 bg-surface-2 p-4 transition-all duration-200 hover:border-line/80 hover:shadow-card">
-                  <span className="grid size-9 place-items-center rounded-[9px] border border-brand/10 bg-navy/5 text-brand">
-                    <Icon className="size-4" />
-                  </span>
-                  <div>
-                    <strong className="block text-[13px] font-bold text-ink">{String(title)}</strong>
-                    <span className="mt-1 block text-[12px] leading-6 text-muted">{String(desc)}</span>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </section>
@@ -273,10 +270,10 @@ export function HomePage() {
           </div>
         </section>
 
+        <ProductEcosystem />
+
         {/* الخطط والأسعار — مفتاح الفوترة وبطاقات قابلة للشراء */}
         <PricingSection onStartFree={startFree} />
-
-        <ProductEcosystem />
       </main>
       <SiteFooter />
       <FullVersionModal open={modalOpen} onClose={() => setModalOpen(false)} />
