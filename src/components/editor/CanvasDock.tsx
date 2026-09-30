@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Blocks,
   ChevronDown,
   ChevronUp,
   FolderOpen,
@@ -26,6 +25,7 @@ import {
 import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
 import { IconButton } from "./ui/IconButton";
 import { AddMenu } from "./AddMenu";
+import { LEFT_PANEL_TABS } from "./panel-tabs";
 
 /**
  * The canvas dock — a compact floating cluster, not a permanent rail.
@@ -101,6 +101,9 @@ export function CanvasDock({
   const rightTab = useEditor((s) => s.rightTab);
   const leftOpen = useEditor((s) => s.leftOpen);
   const leftTab = useEditor((s) => s.leftTab);
+  const activeLeftPanel = LEFT_PANEL_TABS.find((tab) => tab.id === leftTab);
+  const ActiveLeftIcon = activeLeftPanel?.icon ?? FolderOpen;
+  const activeLeftLabel = activeLeftPanel?.label ?? "العناصر";
   // Identity-stable selection (see selectors.ts): subscribing to a derived
   // array would re-render the dock on every document write.
   const selected = useSelectedElement();
@@ -609,18 +612,12 @@ export function CanvasDock({
             ) : (
               <>
                 <IconButton
-                  label="العناصر والمكتبة"
-                  hint="عناصر، أشكال، قوالب، صفحات، سمة وخطوط"
+                  label={`${leftOpen ? "إخفاء" : "فتح"} لوحة ${activeLeftLabel}`}
+                  hint="يتغير الرمز حسب اللوحة النشطة: المكتبة، القوالب، الصفحات، الأشكال أو الأدوات"
                   active={leftOpen}
                   tipSide="top"
                   onClick={toggleLeftPanel}
-                  icon={
-                    leftOpen && leftTab === "tools" ? (
-                      <Blocks className="size-4" />
-                    ) : (
-                      <FolderOpen className="size-4" />
-                    )
-                  }
+                  icon={<ActiveLeftIcon className="size-4" />}
                   data-tour="library"
                 />
                 <IconButton

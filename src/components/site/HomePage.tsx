@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Briefcase, FileText, LayoutTemplate, Table2, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool } from "lucide-react";
+import { ArrowLeft, Briefcase, FileText, LayoutTemplate, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, FolderOpen, Layers, Shapes } from "lucide-react";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
@@ -15,14 +15,17 @@ import { ProjectFileButton } from "@/components/site/ProjectFileButton";
 import { LicenseBadge } from "@/components/site/LicenseBadge";
 import { PricingSection } from "@/components/site/PricingSection";
 import { PremiumTemplates } from "@/components/site/PremiumTemplates";
+import { ProductEcosystem, ProductWalkthrough } from "@/components/site/ProductWalkthrough";
 
 const HIGHLIGHTS: { icon: typeof FileText; title: string; desc: string }[] = [
-  { icon: LayoutTemplate, title: PRODUCT_COPY.capabilities[0][0], desc: PRODUCT_COPY.capabilities[0][1] },
-  { icon: Table2, title: PRODUCT_COPY.capabilities[1][0], desc: PRODUCT_COPY.capabilities[1][1] },
-  { icon: Palette, title: PRODUCT_COPY.capabilities[2][0], desc: PRODUCT_COPY.capabilities[2][1] },
-  { icon: FileDown, title: PRODUCT_COPY.capabilities[3][0], desc: PRODUCT_COPY.capabilities[3][1] },
-  { icon: ShieldCheck, title: PRODUCT_COPY.capabilities[4][0], desc: PRODUCT_COPY.capabilities[4][1] },
-  { icon: Files, title: PRODUCT_COPY.capabilities[5][0], desc: PRODUCT_COPY.capabilities[5][1] },
+  { icon: FileText, title: "تصميم التقارير والوثائق المؤسسية", desc: "مستندات عربية قابلة للتحرير مع صفحات بمقاسات متعددة." },
+  { icon: LayoutTemplate, title: "قوالب جاهزة للاستخدام", desc: "ابدأ من تكوينات المستند والقوالب المتاحة داخل المحرر." },
+  { icon: FolderOpen, title: "مكتبة عناصر وملفات", desc: "احفظ الأصول المرئية وأعد استخدامها في مشاريعك." },
+  { icon: Layers, title: "إدارة الصفحات والعناصر", desc: "أضف الصفحات ونظّم العناصر والطبقات ضمن المستند." },
+  { icon: Shapes, title: "أدوات تحرير متقدمة", desc: "حرّر النصوص والصور والأشكال والجداول والمؤشرات." },
+  { icon: Palette, title: "دعم الهوية البصرية", desc: "اضبط الألوان والخطوط والشعار وعناصر المستند." },
+  { icon: FileDown, title: "تصدير الملفات بصيغ متعددة", desc: "أخرج ملفات PDF وPNG وJPG وWord وPowerPoint وغيرها حسب الصلاحية." },
+  { icon: Files, title: "مشاريع محفوظة محليًا", desc: "واصل العمل على ملفاتك ومشاريعك المحفوظة في المتصفح." },
 ];
 
 export function HomePage() {
@@ -94,15 +97,15 @@ export function HomePage() {
 
               <div className="mt-7 flex flex-wrap items-center gap-3">
                 <a
-                  href={workspace.ready ? (workspace.licensed ? WORKSPACE_HOME_PATH : "/editor") : undefined}
+                  href={entry.ready && workspace.ready ? (workspace.licensed ? WORKSPACE_HOME_PATH : entry.href) : undefined}
                   onClick={(event) => {
-                    if (!workspace.ready) event.preventDefault();
+                    if (!workspace.ready || !entry.ready) event.preventDefault();
                   }}
-                  aria-disabled={!workspace.ready}
-                  className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-navy px-6 text-[14px] font-bold text-on-brand shadow-sm transition hover:bg-navy-2 aria-disabled:pointer-events-none aria-disabled:opacity-60"
+                  aria-disabled={!workspace.ready || !entry.ready}
+                  className="inline-flex h-12 items-center gap-2.5 rounded-[10px] bg-navy px-7 text-[15px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2 aria-disabled:pointer-events-none aria-disabled:opacity-60"
                 >
-                  <span>{workspace.ready ? (workspace.licensed ? "مساحة العمل" : "فتح المحرر") : "جارٍ تجهيز المساحة…"}</span>
-                  <ArrowLeft className="size-4" />
+                  <span>ابدأ بالتصميم</span>
+                  <ArrowLeft className="size-[18px]" />
                 </a>
                 <a href="/purchase" className="inline-flex h-11 items-center rounded-[10px] border border-line bg-surface px-5 text-[13px] font-bold text-ink transition hover:bg-surface-2 hover:border-line/80">
                   استعراض الخطط والأسعار
@@ -133,6 +136,8 @@ export function HomePage() {
           </div>
         </section>
 
+        <ProductWalkthrough />
+
         {/* لمن تناسب — مؤسسي */}
         <section className="border-b border-line/60 bg-surface-2 py-12 sm:py-14">
           <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
@@ -145,7 +150,7 @@ export function HomePage() {
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
                   { icon: Building2, title: "الشركات والمؤسسات", desc: "تقارير أداء وإحصائيات وخطابات رسمية بهوية موحدة." },
-                  { icon: Briefcase, title: "الشركات والمؤسسات", desc: "عروض تنفيذية وملفات تعريفية وتقارير دورية." },
+                  { icon: Briefcase, title: "الإدارات التنفيذية", desc: "عروض تنفيذية وملفات تعريفية وتقارير دورية." },
                   { icon: Megaphone, title: "إدارات الإعلام والاتصال", desc: "إنتاج يومي منظم للمخرجات الإعلامية والمؤسسية." },
                   { icon: PenTool, title: "المصممون وصناع التقارير", desc: "تحكم دقيق بالعناصر والخطوط والتصدير دون تعقيد." },
                 ].map((c) => (
@@ -241,7 +246,8 @@ export function HomePage() {
         {/* ماذا تتضمن المنصة */}
         <section className="border-t border-line/60 bg-surface-2 py-12 sm:py-14">
           <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
-            <h2 className="text-[20px] font-bold text-ink">ماذا تتضمن المنصة</h2>
+            <p className="text-[11px] font-bold tracking-[0.14em] text-brand">الميزات والخدمات الأساسية</p>
+            <h2 className="mt-2 text-[23px] font-extrabold text-ink">أدوات متخصصة لإنتاج المستند المؤسسي</h2>
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {HIGHLIGHTS.map((h) => {
                 const Icon = h.icon;
@@ -269,6 +275,8 @@ export function HomePage() {
 
         {/* الخطط والأسعار — مفتاح الفوترة وبطاقات قابلة للشراء */}
         <PricingSection onStartFree={startFree} />
+
+        <ProductEcosystem />
       </main>
       <SiteFooter />
       <FullVersionModal open={modalOpen} onClose={() => setModalOpen(false)} />
