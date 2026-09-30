@@ -55,7 +55,11 @@ import {
   type SettingsKey,
 } from "./storage";
 import { getStorageOwner, hasSignedInOwner } from "./storage-owner";
-import { createProject, createTemplatePage } from "./templates";
+import {
+  createProject,
+  createTemplatePage,
+  PACKS,
+} from "./templates";
 import {
   FONTS,
   LEGACY_STORE_KEY,
@@ -333,6 +337,12 @@ export interface FontChoice {
 
 interface EditorStore extends Project, Ui, History {
   hydrated: boolean;
+  /**
+   * Read-only showcase boot (`?showcase=1`): fully interactive, but nothing
+   * is ever persisted — autosave and explicit saves are no-ops and the
+   * onboarding surface (tour, intake, account menu) stays out of the way.
+   */
+  showcase: boolean;
   /**
    * The storage owner (account id, or the anonymous tag) this store's data was
    * hydrated for — `null` until the first session sync. `hydrate()` compares it
@@ -759,6 +769,25 @@ function snap(v: number, enabled: boolean) {
 const blank = createProject("official");
 
 /**
+ * Boot parameters — the marketing site embeds a LIVE editor as its product
+ * preview:
+ *
+ *   /editor?template=official&showcase=1
+ *
+ * `template` selects the pack `createProject` boots with (anything unknown
+ * falls back to "official"); `showcase=1` makes the whole session
+ * non-persisting: no autosave, no explicit save, no draft, nothing written
+ * to the visitor's storage. The visitor gets a fully interactive document
+ * that vanishes with the tab — a real editor, not a screenshot.
+ */
+const BOOT_PARAMS =
+  typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search)
+    : null;
+const BOOT_SHOWCASE = BOOT_PARAMS?.get("showcase") === "1";
+const BOOT_TEMPLATE = BOOT_PARAMS?.get("template") ?? "";
+
+/**
  * The part of `page` (in document mm, page-relative) currently visible in the
  * canvas viewport. Used by centered inserts so new elements appear where the
  * author is looking. When the viewport is unknown (SSR, tests) or the page is
@@ -992,6 +1021,7 @@ export const useEditor = create<EditorStore>((set, get) => {
 
   /** Debounced autosave. Kept off the render path: no store writes until it fires. */
   const scheduleSave = (delay = 900) => {
+    if (get().showcase) return; // showcase boot: the document never persists
     if (saveTimer) clearTimeout(saveTimer);
     if (get().saveState !== "saving") set({ saveState: "dirty" });
     saveTimer = setTimeout(() => {
@@ -1160,6 +1190,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     clockTick: 0,
     captureArmed: false,
     hydrated: false,
+    showcase: BOOT_SHOWCASE,
     sessionOwner: null,
     entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
     setEntitlements: (entitlements) =>
@@ -1251,6 +1282,51 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     hydrate: async () => {
+      /*
+       * Showcase boot (?template=…&showcase=1): the marketing site embeds a
+       * live editor as its product preview. Boot straight from the requested
+       * pack — no owner, no library, no drafts, no persistence — and keep
+       * the read-only asset shelf + fonts so template artwork resolves.
+       * The regular hydration path below is left untouched.
+       */
+      if (get().showcase) {
+        try {
+          const ui = readUi();
+          const dark = readStoredTheme() === true;
+          applyStoredTheme();
+          const pack = PACKS.some((p) => p.id === BOOT_TEMPLATE)
+            ? (BOOT_TEMPLATE as PackId)
+            : "official";
+          const project = createProject(
+            pack,
+            pack === "eid" ? "eid" : "official",
+            "",
+          );
+          await restoreFonts(project);
+          applyProject(project, {
+            zoom:
+              typeof ui.zoom === "number"
+                ? clamp(ui.zoom, 0.35, 1.6)
+                : 0.82,
+          });
+        } catch {
+          /* a failed showcase boot still leaves the default blank document */
+        }
+        set({
+          hydrated: true,
+          showcase: true,
+          past: [JSON.stringify(projectSlice(get()))],
+          future: [],
+          saveState: "saved",
+          savedAt: Date.now(),
+        });
+        try {
+          await get().refreshAssets();
+        } catch {
+          set({ assetsLoading: false });
+        }
+        return;
+      }
       // Never read under the wrong identity: resolve the storage owner from
       // the live session BEFORE any library read. (With auth disabled this
       // pins the shared dev user, matching the server-side verifier.)
@@ -1857,7 +1933,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         project.name,
         s.projects.map((p) => p.name),
       );
-      const saved = await saveProject(project);
+      // Showcase boot: the document is interactive but never reaches the
+      // visitor's storage — it exists in memory until the tab closes.
+      const saved = get().showcase ? project : await saveProject(project);
       applyProject(saved, { zoom: 0.82 });
       set({
         past: [JSON.stringify(projectSlice(get()))],
@@ -1865,8 +1943,10 @@ export const useEditor = create<EditorStore>((set, get) => {
         saveState: "saved",
         savedAt: Date.now(),
       });
-      await setSetting("activeProjectId", saved.id);
-      await get().refreshProjects();
+      if (!get().showcase) {
+        await setSetting("activeProjectId", saved.id);
+        await get().refreshProjects();
+      }
       return true;
     },
 
@@ -1920,7 +2000,8 @@ export const useEditor = create<EditorStore>((set, get) => {
         // A brand-new document has no .nsq file lineage of its own yet.
         nsqOrigin: undefined,
       });
-      const saved = await saveProject(incoming);
+      // Showcase boot: keep the new document in memory only (see createProject).
+      const saved = get().showcase ? incoming : await saveProject(incoming);
       applyProject(saved, { zoom: get().zoom || 0.82 });
       set({
         past: [JSON.stringify(projectSlice(get()))],
@@ -1928,8 +2009,10 @@ export const useEditor = create<EditorStore>((set, get) => {
         saveState: "saved",
         savedAt: Date.now(),
       });
-      await setSetting("activeProjectId", saved.id);
-      await get().refreshProjects();
+      if (!get().showcase) {
+        await setSetting("activeProjectId", saved.id);
+        await get().refreshProjects();
+      }
       return true;
     },
 
@@ -1955,6 +2038,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     saveNow: async () => {
+      if (get().showcase) return; // showcase boot: the document never persists
       const requestOwner = getStorageOwner(),
         requestId = get().id;
       const save = async () => {
