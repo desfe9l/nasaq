@@ -2091,7 +2091,8 @@ body.is-resizing-rail {
 }
 
 /* Placement selectors must not restart the entrance animation during a drag. */
-.floating-toolbar.is-dragging[data-placement] {
+.floating-toolbar.is-dragging[data-placement],
+.floating-toolbar.is-parked[data-placement] {
   animation: none;
   transform: none;
 }

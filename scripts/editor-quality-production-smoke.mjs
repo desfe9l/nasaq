@@ -35,6 +35,10 @@ try {
     await page.locator(".editor-canvas-stage [data-el-id]").first().click();
     const toolbar = page.locator(".floating-toolbar");
     await toolbar.waitFor({ state: "visible" });
+    await toolbar.evaluate(async (node) => {
+      await Promise.all(node.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
     const grip = toolbar.locator(".floating-toolbar-grip");
     const initialToolbar = await toolbar.boundingBox();
     const initialGrip = await grip.boundingBox();
@@ -70,8 +74,16 @@ try {
       Math.abs(rect.height - initialToolbar.height) < 0.5 &&
       animation === "none",
     ), `toolbar changed geometry or animated while dragging: ${JSON.stringify(dragSamples)}`);
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
     const movedToolbar = await toolbar.boundingBox();
     const movedGrip = await grip.boundingBox();
+    const settledToolbar = await toolbar.evaluate((node) => ({
+      rect: node.getBoundingClientRect().toJSON(),
+      animation: getComputedStyle(node).animationName,
+    }));
+    assert.equal(settledToolbar.animation, "none");
+    assert.ok(Math.abs(settledToolbar.rect.width - initialToolbar.width) < 0.5);
+    assert.ok(Math.abs(settledToolbar.rect.height - initialToolbar.height) < 0.5);
     assert.ok(Math.abs(movedToolbar.x - initialToolbar.x) + Math.abs(movedToolbar.y - initialToolbar.y) > 1);
     assert.ok(movedToolbar.x >= 8 && movedToolbar.y >= 8);
     assert.ok(movedToolbar.x + movedToolbar.width <= viewport.width - 7);

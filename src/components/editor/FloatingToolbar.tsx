@@ -156,6 +156,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     startY: number;
     origin: { left: number; top: number; width: number; height: number };
     next: { left: number; top: number };
+    moved: boolean;
     frame: number;
   } | null>(null);
   const flipSelected = useEditor((s) => s.flipSelected);
@@ -423,6 +424,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
         height: origin.height,
       },
       next: { left: origin.left, top: origin.top },
+      moved: false,
       frame: 0,
     };
     setDragPos({ left: origin.left, top: origin.top });
@@ -447,6 +449,8 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       left: Math.min(maxLeft, Math.max(MARGIN, drag.origin.left + event.clientX - drag.startX)),
       top: Math.min(maxTop, Math.max(MARGIN, drag.origin.top + event.clientY - drag.startY)),
     };
+    drag.moved ||= Math.abs(drag.next.left - drag.origin.left) > 1 ||
+      Math.abs(drag.next.top - drag.origin.top) > 1;
     if (drag.frame) return;
     drag.frame = requestAnimationFrame(() => {
       drag.frame = 0;
@@ -472,9 +476,14 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       left: drag.origin.left - (bubbleOffset?.dx ?? 0),
       top: drag.origin.top - (bubbleOffset?.dy ?? 0),
     };
+    const moved = drag.moved ||
+      Math.abs(position.left - drag.origin.left) > 1 ||
+      Math.abs(position.top - drag.origin.top) > 1;
     dragRef.current = null;
     setPos(position);
-    setBubbleOffset({ dx: position.left - automatic.left, dy: position.top - automatic.top });
+    if (moved) {
+      setBubbleOffset({ dx: position.left - automatic.left, dy: position.top - automatic.top });
+    }
     setDragPos(null);
     setDragging(false);
   };
@@ -625,7 +634,11 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   return createPortal(
     <div
       ref={boxRef}
-      className={cn("floating-toolbar", dragging && "is-dragging")}
+      className={cn(
+        "floating-toolbar",
+        dragging && "is-dragging",
+        bubbleOffset && "is-parked",
+      )}
       data-floating-toolbar={el.id}
       data-placement={side}
       data-density={layout.drawer.length || layout.more.length ? "folded" : "full"}
