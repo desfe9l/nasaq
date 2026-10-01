@@ -8,17 +8,36 @@ import { ViewMenu } from "./ViewMenu";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-/** Sidebar resize bounds (px) — shared by the drag handler and the persisted default. */
-const PANEL_MIN = { left: 232, right: 264 } as const;
-const PANEL_MAX = { left: 460, right: 520 } as const;
-/** Drag distance past a tablet drawer's minimum width that collapses it. */
-const DRAWER_COLLAPSE_DRAG = 72;
+/* ── The six independent windows ─────────────────────────────────────────────
+ * Each editor list is its own floating window (its own open flag, rectangle and
+ * dock side). The shell renders them as high-z absolute overlays over the
+ * workspace row; when one is docked to a screen edge the row switches to a grid
+ * and RESERVES a track for it, so the canvas shrinks instead of being covered.
+ */
+type PanelId =
+  | "library"
+  | "tools"
+  | "elements"
+  | "properties"
+  | "layers"
+  | "report";
+
+const PANEL_IDS: readonly PanelId[] = [
+  "library",
+  "tools",
+  "elements",
+  "properties",
+  "layers",
+  "report",
+];
+
+/** Docked strip bounds (px) — shared by the drag handlers and the defaults. */
+const DOCK_MIN_W = 264;
+const DOCK_MIN_H = 200;
 
 /**
- * «أدوات التقرير» lives inside the right panel's accordion, whose open/closed
- * state belongs to `RightPanel`. The pinned toolbar button therefore announces
- * intent with an event rather than reaching into another component's state —
- * the panel opens itself, so the two can never disagree about what is showing.
+ * Kept for external scripts/anchors. «أدوات التقرير» is now its own window;
+ * the toolbar button opens it directly via the store.
  */
 export const OPEN_REPORT_TOOLS_EVENT = "nasaq:open-report-tools";
 import {
@@ -54,8 +73,10 @@ import {
 import { mmToPx } from "@/lib/editor/render-units";
 import { useInteraction } from "@/lib/editor/interaction-store";
 import { findElement } from "@/lib/editor/model";
-import { LeftPanel } from "./LeftPanel";
-import { RightPanel } from "./RightPanel";
+import { LeftPanel, ElementToolsWindow } from "./LeftPanel";
+import { PropertiesPanel, LayersPanel } from "./RightPanel";
+import { AssetLibrary } from "./AssetLibrary";
+import { ReportToolsPanel } from "./ReportToolsPanel";
 import { AddMenu } from "./AddMenu";
 import { CanvasStage } from "./CanvasStage";
 import { PageRail } from "./PageRail";
@@ -64,7 +85,13 @@ import { cn } from "@/lib/utils";
 import { EditorWorkspaceSkeleton } from "@/components/ui/Skeleton";
 import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
 import { EditorAccountMenu } from "./EditorAccountMenu";
-import { OVERLAY_BREAKPOINT, isOverlayViewport } from "@/lib/editor/ui-state";
+import {
+  OVERLAY_BREAKPOINT,
+  isOverlayViewport,
+  clampDockSize,
+  PAGES_RAIL_COLLAPSED,
+  type DockSide,
+} from "@/lib/editor/ui-state";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useLicense } from "@/lib/license/client";
 import { WORKSPACE_HOME_PATH } from "@/lib/auth/use-workspace-entry";
@@ -480,9 +507,15 @@ function Studio({
   const toggle = useEditor((s) => s.toggle);
   const focusMode = useEditor((s) => s.focusMode);
   const leftOpen = useEditor((s) => s.leftOpen);
-  const leftTab = useEditor((s) => s.leftTab);
   const rightOpen = useEditor((s) => s.rightOpen);
-  const leftCollapsed = useEditor((s) => s.leftCollapsed);
+  // The split windows: each list has its own open flag (persisted).
+  const layersOpenFlag = useEditor((s) => s.layersOpen);
+  const reportOpenFlag = useEditor((s) => s.reportToolsOpen);
+  const libraryOpenFlag = useEditor((s) => s.libraryOpen);
+  const toolsOpenFlag = useEditor((s) => s.toolsOpen);
+  const pagesRailHidden = useEditor((s) => s.pagesRailHidden);
+  const leftOpenFlag = leftOpen;
+  const rightOpenFlag = rightOpen;
   const closeFloatingPanels = useEditor((s) => s.closeFloatingPanels);
   const pagesPanelHeight = useEditor((s) => s.pagesPanelHeight);
   const pagesRailCollapsed = useEditor((s) => s.pagesRailCollapsed);
@@ -504,25 +537,6 @@ function Studio({
   const ungroup = useEditor((s) => s.ungroup);
   const selectAll = useEditor((s) => s.selectAll);
   const enterGroup = useEditor((s) => s.enterGroup);
-  const [panelWidths, setPanelWidths] = useState(() => {
-    try {
-      const raw = JSON.parse(
-        localStorage.getItem("diwan-editor-panel-widths") || "{}",
-      );
-      return {
-        left: Math.min(
-          PANEL_MAX.left,
-          Math.max(PANEL_MIN.left, Number(raw.left) || 280),
-        ),
-        right: Math.min(
-          PANEL_MAX.right,
-          Math.max(PANEL_MIN.right, Number(raw.right) || 320),
-        ),
-      };
-    } catch {
-      return { left: 280, right: 320 };
-    }
-  });
   /*
    * Docked panels vs. slide-overs. The width comes from `OVERLAY_BREAKPOINT`
    * (the store's single source of truth) rather than a hardcoded number here:
@@ -561,22 +575,6 @@ function Studio({
   /** Only the very first fit may be skipped when the saved zoom already fits. */
   const firstFitRef = useRef(true);
 
-  // One trailing write per drag burst — the old effect hit localStorage on
-  // every pointermove of a sidebar resize.
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        localStorage.setItem(
-          "diwan-editor-panel-widths",
-          JSON.stringify(panelWidths),
-        );
-      } catch {
-        /* session layout remains available */
-      }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [panelWidths]);
-
   useEffect(() => {
     const compact = window.matchMedia("(max-width: 600px)");
     const onCompact = () => setIsCompact(compact.matches);
@@ -598,64 +596,6 @@ function Studio({
     return () => media.removeEventListener("change", update);
   }, []);
 
-  /*
-   * Re-fit the artboard whenever the SHELL changes shape.
-   *
-   * Crossing the tablet boundary does not just move the panels — it changes how
-   * much room the canvas has (docked columns disappear, drawers float over the
-   * artwork). Keeping the old zoom would leave the A4 page wider than the stage
-   * and hand the author a horizontal scrollbar the moment they turn their iPad
-   * sideways, which is exactly what the tablet mode is supposed to prevent.
-   *
-   * The fit runs after the layout has settled (a short timeout) because the
-   * stage's measured width is what it is only once the panels have actually
-   * docked or undocked. It deliberately depends on nothing else: the author's
-   * zoom inside a given mode is theirs, and only a mode change or the first load
-   * refits. `fitRef` carries the latest callback, so the effect does not re-run
-   * (and re-fit) just because the active page changed underneath it.
-   */
-  useEffect(() => {
-    if (!hydrated) return;
-    const timer = setTimeout(() => {
-      /*
-       * First load respects a zoom the author saved — unless that zoom does not
-       * fit, which is precisely the case that produces a horizontal scrollbar on
-       * a tablet. Later runs are layout changes, where re-fitting is the point.
-       */
-      if (firstFitRef.current) {
-        firstFitRef.current = false;
-        const stage = document.querySelector<HTMLElement>(
-          ".editor-canvas-stage",
-        );
-        const activeId = useEditor.getState().activePageId;
-        const page = stage?.querySelector<HTMLElement>(
-          `[data-page-id="${CSS.escape(activeId ?? "")}"]`,
-        );
-        if (stage && page) {
-          const viewport = canvasViewport(stage);
-          const bounds = (
-            page.closest(".artboard-cell") ?? page
-          ).getBoundingClientRect();
-          if (
-            bounds.width <= viewport.width - 32 &&
-            bounds.height <= viewport.height - 32
-          ) {
-            stage.scrollLeft +=
-              bounds.left +
-              bounds.width / 2 -
-              (viewport.left + viewport.width / 2);
-            stage.scrollTop +=
-              bounds.top +
-              bounds.height / 2 -
-              (viewport.top + viewport.height / 2);
-            return;
-          }
-        }
-      }
-      fitRef.current();
-    }, 60);
-    return () => clearTimeout(timer);
-  }, [isDesktop, hydrated]);
 
   /*
    * Publish the header's REAL height as `--editor-header-h`.
@@ -1104,7 +1044,7 @@ function Studio({
       if (
         e.key === "Escape" &&
         !isDesktop &&
-        (useEditor.getState().leftOpen || useEditor.getState().rightOpen)
+        anyWindowOpen()
       ) {
         e.preventDefault();
         closeFloatingPanels();
@@ -1193,24 +1133,462 @@ function Studio({
    * click. `toggle` is the same persisted path the panel's own `>>` uses, so
    * the docked/collapsed choice survives a reload either way.
    */
-  const expandPanel = <S extends "left" | "right">(
-    side: S,
-    tab?: S extends "left" ? LeftTab : RightTab,
+  /**
+   * Window registry. The six lists are independent windows; their open flags
+   * live in the store (persisted), their rectangles in each window's own
+   * localStorage slot, and their dock sides in the shell below.
+   */
+  const PANEL_DEFS: Record<
+    PanelId,
+    {
+      title: string;
+      side: "left" | "right";
+      defaultSize: { width: number; height: number };
+      minSize: { width: number; height: number };
+      /** Stagger so several first-open windows fan out instead of stacking. */
+      spawnShift: number;
+    }
+  > = {
+    // المكتبة — the asset shelf.
+    library: {
+      title: "المكتبة",
+      side: "left",
+      defaultSize: { width: 420, height: 520 },
+      minSize: { width: 340, height: 240 },
+      spawnShift: 0,
+    },
+    // أدوات العناصر — the smart library. WIDER default on purpose: its 4-column
+    // card grids clip badly below ~420px, and the window is fully resizable.
+    tools: {
+      title: "أدوات العناصر",
+      side: "left",
+      defaultSize: { width: 480, height: 560 },
+      minSize: { width: 380, height: 260 },
+      spawnShift: 28,
+    },
+    elements: {
+      title: "لوحة العناصر",
+      side: "left",
+      defaultSize: { width: 380, height: 560 },
+      minSize: { width: 300, height: 240 },
+      spawnShift: 56,
+    },
+    properties: {
+      title: "الخصائص",
+      side: "right",
+      defaultSize: { width: 340, height: 560 },
+      minSize: { width: 280, height: 240 },
+      spawnShift: 0,
+    },
+    layers: {
+      title: "الطبقات",
+      side: "right",
+      defaultSize: { width: 320, height: 480 },
+      minSize: { width: 260, height: 200 },
+      spawnShift: 28,
+    },
+    report: {
+      title: "أدوات التقرير",
+      side: "right",
+      defaultSize: { width: 400, height: 520 },
+      minSize: { width: 320, height: 240 },
+      spawnShift: 56,
+    },
+  };
+
+  const panelOpen: Record<PanelId, boolean> = {
+    library: libraryOpenFlag,
+    tools: toolsOpenFlag,
+    elements: leftOpenFlag,
+    properties: rightOpenFlag,
+    layers: layersOpenFlag,
+    report: reportOpenFlag,
+  };
+
+  // Live read (not the render-scoped flags): the keyboard effect outlives
+  // renders, and a stale flag would keep Escape from dismissing the drawers.
+  const anyWindowOpen = () => {
+    const s = useEditor.getState();
+    return (
+      s.leftOpen ||
+      s.rightOpen ||
+      s.layersOpen ||
+      s.reportToolsOpen ||
+      s.libraryOpen ||
+      s.toolsOpen
+    );
+  };
+
+  const setPanelOpenFlag = (id: PanelId, open: boolean) => {
+    switch (id) {
+      case "library":
+        useEditor.setState({ libraryOpen: open });
+        break;
+      case "tools":
+        useEditor.setState({ toolsOpen: open });
+        break;
+      case "elements":
+        useEditor.setState({
+          leftOpen: open,
+          ...(open ? { leftCollapsed: false } : {}),
+        });
+        break;
+      case "properties":
+        useEditor.setState({
+          rightOpen: open,
+          ...(open ? { rightCollapsed: false } : {}),
+        });
+        break;
+      case "layers":
+        useEditor.setState({ layersOpen: open });
+        break;
+      case "report":
+        useEditor.setState({ reportToolsOpen: open });
+        break;
+    }
+  };
+
+  /* ── Docking (per-window, per-edge) ─────────────────────────────────────
+   * One window per screen edge. Docking reserves a grid track (the canvas
+   * shrinks, never gets covered); undocking gives the space back. The dock
+   * side and the strip size are remembered per window.
+   */
+  const [dockSides, setDockSides] = useState<Partial<Record<PanelId, DockSide>>>(
+    () => {
+      try {
+        return JSON.parse(
+          localStorage.getItem("nasaq.panel.docks.v2") || "{}",
+        ) as Partial<Record<PanelId, DockSide>>;
+      } catch {
+        return {};
+      }
+    },
+  );
+  const [dockSizes, setDockSizes] = useState<
+    Partial<Record<PanelId, { w: number; h: number }>>
+  >(() => {
+    try {
+      return JSON.parse(
+        localStorage.getItem("nasaq.panel.dock-sizes.v2") || "{}",
+      ) as Partial<Record<PanelId, { w: number; h: number }>>;
+    } catch {
+      return {};
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem("nasaq.panel.docks.v2", JSON.stringify(dockSides));
+    } catch {
+      /* the layout stays available for this session */
+    }
+  }, [dockSides]);
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "nasaq.panel.dock-sizes.v2",
+        JSON.stringify(dockSizes),
+      );
+    } catch {
+      /* the layout stays available for this session */
+    }
+  }, [dockSizes]);
+
+  const changeDockSide = (id: PanelId, side: DockSide | null) => {
+    const next: Partial<Record<PanelId, DockSide>> = { ...dockSides };
+    if (!side) {
+      delete next[id];
+    } else {
+      // One window per edge: the previous occupant returns to floating.
+      for (const other of PANEL_IDS)
+        if (other !== id && next[other] === side) delete next[other];
+      next[id] = side;
+      // Seed the strip size from the window's last floating rectangle so the
+      // docked size is the one the author was actually using.
+      setDockSizes((sizes) => {
+        if (sizes[id]) return sizes;
+        let stored: { width: number; height: number } | null = null;
+        try {
+          stored = JSON.parse(
+            localStorage.getItem(`nasaq.panel.${id}.pos.v2`) || "null",
+          );
+        } catch {
+          stored = null;
+        }
+        if (side === "left" || side === "right") {
+          return {
+            ...sizes,
+            [id]: {
+              w: clampDockSize(stored?.width ?? PANEL_DEFS[id].defaultSize.width, window.innerWidth, DOCK_MIN_W),
+              h: 0,
+            },
+          };
+        }
+        return {
+          ...sizes,
+          [id]: {
+            w: 0,
+            h: clampDockSize(stored?.height ?? PANEL_DEFS[id].defaultSize.height, window.innerHeight, DOCK_MIN_H),
+          },
+        };
+      });
+    }
+    setDockSides(next);
+  };
+
+  /** Viewport size, re-rendered on resize so dock clamps track the screen. */
+  const [vp, setVp] = useState({
+    w: typeof window === "undefined" ? 1440 : window.innerWidth,
+    h: typeof window === "undefined" ? 900 : window.innerHeight,
+  });
+  useEffect(() => {
+    const onResize = () =>
+      setVp({ w: window.innerWidth, h: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  /** Which window (if any) currently occupies each screen edge. */
+  const dockedBySide: Partial<Record<DockSide, PanelId>> = {};
+  if (isDesktop && !focusMode && !cropActive) {
+    for (const id of PANEL_IDS) {
+      const side = dockSides[id];
+      if (side && panelOpen[id]) dockedBySide[side] = id;
+    }
+  }
+  const visibleDock = (id: PanelId): boolean =>
+    isDesktop &&
+    !focusMode &&
+    !cropActive &&
+    Boolean(dockSides[id]) &&
+    panelOpen[id];
+
+  /*
+   * A fingerprint of the docked layout. When it changes (a window docks,
+   * undocks, or swaps edges) the canvas gains or loses a track, so the shell
+   * re-fits the artboard to the new space — the same refit the tablet
+   * boundary triggers.
+   */
+  const dockSignature = PANEL_IDS.map((id) =>
+    visibleDock(id) ? `${id}:${dockSides[id]}` : id,
+  ).join("|");
+
+  /** Docked strip length for a window (clamped so the canvas keeps its share). */
+  const dockW = (id: PanelId) =>
+    clampDockSize(
+      dockSizes[id]?.w || PANEL_DEFS[id].defaultSize.width,
+      vp.w,
+      DOCK_MIN_W,
+    );
+  const dockH = (id: PanelId) =>
+    clampDockSize(
+      dockSizes[id]?.h || PANEL_DEFS[id].defaultSize.height,
+      vp.h,
+      DOCK_MIN_H,
+    );
+
+  /*
+   * The workspace grid. In this RTL shell the FIRST column sits on the
+   * physical RIGHT edge, so a right-docked window is column 1 and a
+   * left-docked one the last column. Rows are physical: top dock = row 1,
+   * bottom dock = last row. With nothing docked it is a single full-width
+   * track and the canvas owns the whole workspace.
+   */
+  const workspaceCols: string[] = [];
+  if (dockedBySide.right) workspaceCols.push(`${dockW(dockedBySide.right)}px`);
+  workspaceCols.push("minmax(0, 1fr)");
+  if (dockedBySide.left) workspaceCols.push(`${dockW(dockedBySide.left)}px`);
+  const workspaceRows: string[] = [];
+  if (dockedBySide.top) workspaceRows.push(`${dockH(dockedBySide.top)}px`);
+  workspaceRows.push("minmax(0, 1fr)");
+  if (dockedBySide.bottom)
+    workspaceRows.push(`${dockH(dockedBySide.bottom)}px`);
+  const centerArea = {
+    gridRow: dockedBySide.top ? 2 : 1,
+    gridColumn: dockedBySide.right ? 2 : 1,
+  };
+
+  const dockArea = (side: DockSide): React.CSSProperties => {
+    if (side === "top")
+      return { gridRow: 1, gridColumn: "1 / -1", width: "100%", height: "100%" };
+    if (side === "bottom")
+      return {
+        gridRow: workspaceRows.length,
+        gridColumn: "1 / -1",
+        width: "100%",
+        height: "100%",
+      };
+    if (side === "left")
+      return {
+        gridRow: dockedBySide.top ? 2 : 1,
+        gridColumn: workspaceCols.length,
+        width: "100%",
+        height: "100%",
+      };
+    // Right dock: in this RTL grid the FIRST column is the physical right
+    // edge, so the right-docked window owns column 1 and the canvas sits in
+    // column 2 (see `centerArea`).
+    return {
+      gridRow: dockedBySide.top ? 2 : 1,
+      gridColumn: 1,
+      width: "100%",
+      height: "100%",
+    };
+  };
+
+  /** Drag a docked strip's inner edge to resize the docked window live. */
+  const startDockResize = (
+    id: PanelId,
+    side: DockSide,
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    document.body.classList.add("is-resizing-panel");
+    const horizontal = side === "left" || side === "right";
+    const start = horizontal ? event.clientX : event.clientY;
+    const size = horizontal
+      ? dockSizes[id]?.w || PANEL_DEFS[id].defaultSize.width
+      : dockSizes[id]?.h || PANEL_DEFS[id].defaultSize.height;
+    const axis = horizontal ? window.innerWidth : window.innerHeight;
+    const min = horizontal ? DOCK_MIN_W : DOCK_MIN_H;
+    // The strip sits on the panel's canvas-facing edge: dragging it AWAY from
+    // the screen edge (left dock → pointer right, right dock → pointer left,
+    // top → down, bottom → up) widens the panel and shrinks the canvas.
+    const grow = side === "left" || side === "top";
+    const move = (ev: PointerEvent) => {
+      const pos = horizontal ? ev.clientX : ev.clientY;
+      const delta = grow ? pos - start : start - pos;
+      setDockSizes((sizes) =>
+        horizontal
+          ? { ...sizes, [id]: { ...(sizes[id] ?? { w: 0, h: 0 }), w: clampDockSize(size + delta, axis, min) } }
+          : { ...sizes, [id]: { ...(sizes[id] ?? { w: 0, h: 0 }), h: clampDockSize(size + delta, axis, min) } },
+      );
+    };
+    const finish = () => {
+      document.body.classList.remove("is-resizing-panel");
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+  };
+
+  /** One docked window: the window fills its grid track + an inner-edge strip. */
+  const renderDockedWindow = (id: PanelId, side: DockSide) => {
+    const stripSide =
+      side === "left" ? "right" : side === "right" ? "left" : undefined;
+    return (
+      <div
+        key={id}
+        className="editor-dock-cell relative min-h-0 min-w-0"
+        style={dockArea(side)}
+      >
+        <FloatingPanel
+          storageKey={`nasaq.panel.${id}`}
+          title={PANEL_DEFS[id].title}
+          side={PANEL_DEFS[id].side}
+          open
+          onClose={() => setPanelOpenFlag(id, false)}
+          dockSide={side}
+          onDockSideChange={(next) => changeDockSide(id, next)}
+          gridAreaStyle={{ width: "100%", height: "100%" }}
+        >
+          {renderPanelBody(id)}
+        </FloatingPanel>
+        {stripSide && (
+          <div
+            className={cn(
+              "editor-dock-strip",
+              stripSide === "left"
+                ? "editor-dock-strip-left"
+                : "editor-dock-strip-right",
+            )}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={`تغيير عرض ${PANEL_DEFS[id].title} المثبتة — اسحب`}
+            title="اسحب لتغيير عرض النافذة المثبتة"
+            onPointerDown={(event) => startDockResize(id, side, event)}
+          />
+        )}
+        {stripSide === undefined && (
+          <div
+            className={cn(
+              "editor-dock-strip",
+              side === "top"
+                ? "editor-dock-strip-bottom"
+                : "editor-dock-strip-top",
+            )}
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label={`تغيير ارتفاع ${PANEL_DEFS[id].title} المثبتة — اسحب`}
+            title="اسحب لتغيير ارتفاع النافذة المثبتة"
+            onPointerDown={(event) => startDockResize(id, side, event)}
+          />
+        )}
+      </div>
+    );
+  };
+
+  const renderPanelBody = (id: PanelId) => {
+    switch (id) {
+      case "library":
+        return (
+          <div className="editor-pane-scroll editor-panel-body no-bottom-pad h-full p-3">
+            <AssetLibrary createFolderRequest={libraryFolderRequest} />
+          </div>
+        );
+      case "tools":
+        return (
+          <ElementToolsWindow
+            onAddCustomAsset={onAddCustomAsset}
+            onOpenShapes={() => useEditor.getState().setLeftTab("shapes")}
+            onOpenTemplates={() => useEditor.getState().setLeftTab("templates")}
+          />
+        );
+      case "elements":
+        return (
+          <LeftPanel onUpload={onUpload} onUploadSvg={onUploadSvg} />
+        );
+      case "properties":
+        return <PropertiesPanel onReplaceImage={onReplaceImage} />;
+      case "layers":
+        return <LayersPanel />;
+      case "report":
+        return (
+          <div className="editor-pane-scroll editor-panel-body no-bottom-pad h-full p-3">
+            <ReportToolsPanel />
+          </div>
+        );
+    }
+  };
+
+  /**
+   * Restore a collapsed desktop panel (optionally straight onto a tab) in one
+   * click. Windows are independent now: opening one never closes the others.
+   */
+  const expandPanel = (
+    side: "left" | "right",
+    tab?: LeftTab | RightTab,
   ) => {
     const state = useEditor.getState();
     if (side === "left") {
       if (tab) state.setLeftTab(tab as LeftTab);
       if (state.leftCollapsed) state.toggle("leftCollapsed");
-      useEditor.setState({ leftOpen: true, rightOpen: false });
+      useEditor.setState({ leftOpen: true });
     } else {
       if (tab) state.setRightTab(tab as RightTab);
       if (state.rightCollapsed) state.toggle("rightCollapsed");
-      useEditor.setState({ rightOpen: true, leftOpen: false });
+      useEditor.setState({ rightOpen: true });
     }
   };
   /** Toolbar shortcuts to a panel tab: open (and un-collapse) that panel. */
   const openLeftTab = (tab: LeftTab) => {
     if (useEditor.getState().focusMode) toggle("focusMode");
+    // setLeftTab routes «library»/«tools» to their own windows.
+    useEditor.getState().setLeftTab(tab);
+    if (tab === "library" || tab === "tools") return;
     expandPanel("left", tab);
   };
   const requestLibraryFolder = () => {
@@ -1218,129 +1596,11 @@ function Studio({
     setLibraryFolderRequest((request) => request + 1);
   };
   /**
-   * «أدوات التقرير» is a section INSIDE the properties panel, so opening it is
-   * two steps: show the panel, then ask the panel to expand its own accordion.
-   * Announcing it as an event (rather than reaching into the panel's state)
-   * keeps the two in agreement by construction.
+   * «أدوات التقرير» is its OWN window since the split: opening it simply
+   * raises that window, which can sit beside properties and layers.
    */
   const openReportTools = () => {
-    useEditor.setState({
-      focusMode: false,
-      rightCollapsed: false,
-      rightOpen: true,
-      leftOpen: false,
-      rightTab: "properties",
-    });
-    window.dispatchEvent(new CustomEvent(OPEN_REPORT_TOOLS_EVENT));
-  };
-
-  /**
-   * Keyboard/absolute variant of the panel drag.
-   *
-   * The pointer gesture is unchanged; this exists so the separator is a real
-   * control for keyboard and assistive-technology users (arrow keys nudge,
-   * Home restores the default width) instead of a drag-only affordance.
-   */
-  const setPanelWidth = (side: "left" | "right", width: number) => {
-    const next = Math.min(
-      PANEL_MAX[side],
-      Math.max(PANEL_MIN[side], Math.round(width)),
-    );
-    setPanelWidths((current) =>
-      current[side] === next ? current : { ...current, [side]: next },
-    );
-  };
-
-  /*
-   * Docking the element panel is now an OPT-IN layout choice, remembered like
-   * the rest of the workspace. The default is floating: a panel that is never
-   * asked for must not take canvas width away from the page.
-   */
-  const [leftDocked, setLeftDocked] = useState(() => {
-    try {
-      return localStorage.getItem("nasaq.panel.left.docked") === "true";
-    } catch {
-      return false;
-    }
-  });
-  useEffect(() => {
-    try {
-      localStorage.setItem("nasaq.panel.left.docked", String(leftDocked));
-    } catch {
-      /* the layout stays available for this session */
-    }
-  }, [leftDocked]);
-
-  const leftPanelVisible =
-    !cropActive &&
-    !focusMode &&
-    (leftDocked && isDesktop ? !leftCollapsed : leftOpen);
-  const closeLeftPanel = () => {
-    if (leftDocked && isDesktop) toggle("leftCollapsed");
-    else closeFloatingPanels();
-  };
-
-  const resizePanel = (
-    side: "left" | "right",
-    startClientX: number,
-    startWidth: number,
-    handle?: HTMLElement,
-  ) => {
-    document.body.classList.add("is-resizing-panel");
-    /*
-     * Tablet drawers float over the canvas, so dragging their edge never
-     * reflows the workspace. Dragging past the minimum width slides the
-     * drawer out under the finger; releasing beyond the threshold collapses
-     * (closes) it, otherwise it springs back.
-     */
-    const drawer = isOverlayViewport()
-      ? (handle?.closest<HTMLElement>(".editor-sidebar") ?? null)
-      : null;
-    let overshoot = 0;
-    const move = (event: PointerEvent) => {
-      // Left panel: inner edge is on its LEFT side of the grid (DOM-LTR), so
-      // width grows as the pointer moves left in screen space. Right panel:
-      // inner edge faces the other way, so width grows as the pointer moves
-      // right. Both follow the dragged edge.
-      const delta =
-        side === "left"
-          ? startClientX - event.clientX
-          : event.clientX - startClientX;
-      const width = Math.min(
-        PANEL_MAX[side],
-        Math.max(PANEL_MIN[side], startWidth + delta),
-      );
-      setPanelWidths((current) =>
-        current[side] === width ? current : { ...current, [side]: width },
-      );
-      if (drawer) {
-        overshoot = Math.max(0, PANEL_MIN[side] - (startWidth + delta));
-        // The elements drawer sits on the physical right, the properties
-        // drawer on the physical left; each slides toward its own edge.
-        drawer.style.transition = "none";
-        drawer.style.transform = overshoot
-          ? `translateX(${side === "left" ? overshoot : -overshoot}px)`
-          : "";
-      }
-    };
-    const finish = () => {
-      document.body.classList.remove("is-resizing-panel");
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", finish);
-      window.removeEventListener("pointercancel", finish);
-      if (drawer) {
-        drawer.style.transition = "";
-        drawer.style.transform = "";
-        if (overshoot > DRAWER_COLLAPSE_DRAG) {
-          useEditor.setState(
-            side === "left" ? { leftOpen: false } : { rightOpen: false },
-          );
-        }
-      }
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", finish);
-    window.addEventListener("pointercancel", finish);
+    useEditor.setState({ focusMode: false, reportToolsOpen: true });
   };
 
   const fitToSelection = () => {
@@ -1381,6 +1641,65 @@ function Studio({
         (viewport.top + viewport.height / 2);
     });
   };
+
+  /*
+   * Re-fit the artboard whenever the SHELL changes shape.
+   *
+   * Crossing the tablet boundary does not just move the panels — it changes how
+   * much room the canvas has (docked columns disappear, drawers float over the
+   * artwork). Keeping the old zoom would leave the A4 page wider than the stage
+   * and hand the author a horizontal scrollbar the moment they turn their iPad
+   * sideways, which is exactly what the tablet mode is supposed to prevent.
+   *
+   * The fit runs after the layout has settled (a short timeout) because the
+   * stage's measured width is what it is only once the panels have actually
+   * docked or undocked. It deliberately depends on nothing else: the author's
+   * zoom inside a given mode is theirs, and only a mode change or the first load
+   * refits. `fitRef` carries the latest callback, so the effect does not re-run
+   * (and re-fit) just because the active page changed underneath it.
+   */
+  useEffect(() => {
+    if (!hydrated) return;
+    const timer = setTimeout(() => {
+      /*
+       * First load respects a zoom the author saved — unless that zoom does not
+       * fit, which is precisely the case that produces a horizontal scrollbar on
+       * a tablet. Later runs are layout changes, where re-fitting is the point.
+       */
+      if (firstFitRef.current) {
+        firstFitRef.current = false;
+        const stage = document.querySelector<HTMLElement>(
+          ".editor-canvas-stage",
+        );
+        const activeId = useEditor.getState().activePageId;
+        const page = stage?.querySelector<HTMLElement>(
+          `[data-page-id="${CSS.escape(activeId ?? "")}"]`,
+        );
+        if (stage && page) {
+          const viewport = canvasViewport(stage);
+          const bounds = (
+            page.closest(".artboard-cell") ?? page
+          ).getBoundingClientRect();
+          if (
+            bounds.width <= viewport.width - 32 &&
+            bounds.height <= viewport.height - 32
+          ) {
+            stage.scrollLeft +=
+              bounds.left +
+              bounds.width / 2 -
+              (viewport.left + viewport.width / 2);
+            stage.scrollTop +=
+              bounds.top +
+              bounds.height / 2 -
+              (viewport.top + viewport.height / 2);
+            return;
+          }
+        }
+      }
+      fitRef.current();
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [isDesktop, hydrated, dockSignature]);
 
   return (
     /*
@@ -1511,12 +1830,12 @@ function Studio({
             <IconButton
               label="المكتبة"
               hint="صورك، شعاراتك وملفات SVG المحفوظة"
-              active={leftPanelVisible && leftTab === "library"}
+              active={libraryOpenFlag && !focusMode && !cropActive}
               tipSide="bottom"
               icon={<Library className="size-4" strokeWidth={1.7} />}
               onClick={() => {
-                if (leftPanelVisible && leftTab === "library") {
-                  closeLeftPanel();
+                if (libraryOpenFlag) {
+                  setPanelOpenFlag("library", false);
                   return;
                 }
                 openLeftTab("library");
@@ -1560,12 +1879,12 @@ function Studio({
       {/*
        * Workspace — canvas first, always.
        *
-       * There is no column for a panel and no column for a tool rail any more:
-       * the row is a single track, and Properties, Layers, Tools and the element
-       * library are floating cards positioned over it (or docked beside it only
-       * when the author explicitly asks for that). Opening, closing or moving a
-       * panel therefore cannot reflow the document, and the artboard keeps the
-       * full width in every mode.
+       * The six editor lists are INDEPENDENT floating windows (their own open
+       * flag, rectangle and dock side). Floating, they are high-z absolute
+       * overlays: opening, closing, moving or resizing one can never reflow
+       * the artboard. Docked to a screen edge, one becomes a grid track — the
+       * row reserves its space and the canvas shrinks instead of being
+       * covered, then reclaims it on undock.
        */}
       <div
         onContextMenu={(event) => {
@@ -1585,124 +1904,88 @@ function Studio({
         }}
         className="editor-focus-workspace editor-workspace-row relative min-h-0 overflow-hidden"
         style={{
-          /*
-           * A docked panel is a grid column the author opted into; every other
-           * mode is a single full-width track, so nothing reserves space for a
-           * panel the author is not currently using.
-           */
           transition:
-            "grid-template-columns 180ms cubic-bezier(0.22, 1, 0.36, 1)",
+            "grid-template-columns 180ms cubic-bezier(0.22, 1, 0.36, 1), grid-template-rows 180ms cubic-bezier(0.22, 1, 0.36, 1)",
           display: "grid",
-          gridTemplateColumns:
-            leftDocked && isDesktop && !focusMode
-              ? `minmax(${PANEL_MIN.left}px, min(${panelWidths.left}px, 28vw)) minmax(0, 1fr)`
-              : "minmax(0, 1fr)",
+          gridTemplateColumns: workspaceCols.join(" "),
+          gridTemplateRows: workspaceRows.join(" "),
         }}
       >
-        <FloatingPanel
-          storageKey="nasaq.panel.elements"
-          title="لوحة العناصر"
-          side="left"
-          open={
-            !cropActive &&
-            !focusMode &&
-            (leftDocked && isDesktop ? !leftCollapsed : leftOpen)
-          }
-          docked={leftDocked && isDesktop}
-          onDockChange={(docked) => {
-            setLeftDocked(docked);
-            if (!docked)
-              useEditor.setState({ leftOpen: true, leftCollapsed: false });
-          }}
-          onClose={() =>
-            leftDocked && isDesktop
-              ? toggle("leftCollapsed")
-              : useEditor.setState({ leftOpen: false })
-          }
+        {dockedBySide.top && renderDockedWindow(dockedBySide.top, "top")}
+        <div
+          className="editor-canvas-workspace relative grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden"
+          style={centerArea}
         >
-          <LeftPanel
-            onUpload={onUpload}
-            onUploadSvg={onUploadSvg}
-            onAddCustomAsset={onAddCustomAsset}
-            createLibraryFolderRequest={libraryFolderRequest}
-          />
-          {leftDocked && isDesktop && !leftCollapsed && !focusMode && (
-            <PanelResizeHandle
-              side="left"
-              width={panelWidths.left}
-              min={PANEL_MIN.left}
-              max={PANEL_MAX.left}
-              onResize={(width) => setPanelWidth("left", width)}
-              onStart={(event) =>
-                resizePanel(
-                  "left",
-                  event.clientX,
-                  panelWidths.left,
-                  event.currentTarget,
-                )
-              }
-            />
-          )}
-        </FloatingPanel>
-
-        <div className="editor-canvas-workspace relative grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden">
           {/* Non-modal drawers leave direct canvas manipulation available. */}
           <CanvasStage onDropImage={onDropImage} />
-          <div
-            data-editor-obstacle="page-rail-resizer"
-            className="editor-page-rail-resizer"
-            role="separator"
-            aria-orientation="horizontal"
-            aria-label="تغيير ارتفاع لوحة الصفحات — اسحب"
-            title="اسحب لتغيير ارتفاع لوحة الصفحات"
-            tabIndex={0}
-            onPointerDown={startPagesResize}
-            onKeyDown={(event) => {
-              if (event.key === "ArrowUp") {
-                event.preventDefault();
-                nudgePagesHeight(16);
-              }
-              if (event.key === "ArrowDown") {
-                event.preventDefault();
-                nudgePagesHeight(-16);
-              }
-            }}
-          />
+          {!pagesRailHidden && (
+            <div
+              data-editor-obstacle="page-rail-resizer"
+              className="editor-page-rail-resizer"
+              role="separator"
+              aria-orientation="horizontal"
+              aria-label="تغيير ارتفاع لوحة الصفحات — اسحب"
+              title="اسحب لتغيير ارتفاع لوحة الصفحات"
+              tabIndex={0}
+              onPointerDown={startPagesResize}
+              onKeyDown={(event) => {
+                if (event.key === "ArrowUp") {
+                  event.preventDefault();
+                  nudgePagesHeight(16);
+                }
+                if (event.key === "ArrowDown") {
+                  event.preventDefault();
+                  nudgePagesHeight(-16);
+                }
+              }}
+            />
+          )}
           {/*
-           * Pages panel height is applied to the rail itself (and its thumbs
-           * scale through `--rail-height`), so growing the panel reveals more
-           * page rows instead of distorting the thumbnails' aspect ratio.
-           */}
-          {/*
-           * Collapsed rail = one thin strip (36px) instead of the thumbnail
-           * tray: the artboard reclaims the difference immediately.
+           * Pages panel: the compact tray (96px default, 84px floor), a 36px
+           * chip strip when collapsed, and height 0 when hidden entirely —
+           * the artboard reclaims every pixel in that case.
            */}
           <div
             data-editor-obstacle="page-rail"
             className="min-h-0 min-w-0"
             style={{
-              height: pagesRailCollapsed
-                ? "var(--editor-page-rail-collapsed-height, 36px)"
-                : pagesPanelHeight,
+              height: pagesRailHidden
+                ? 0
+                : pagesRailCollapsed
+                  ? PAGES_RAIL_COLLAPSED
+                  : pagesPanelHeight,
             }}
           >
-            <PageRail
-              height={pagesRailCollapsed ? 36 : pagesPanelHeight}
-              minHeight={PAGES_PANEL_MIN}
-            />
+            {!pagesRailHidden && (
+              <PageRail
+                height={pagesRailCollapsed ? PAGES_RAIL_COLLAPSED : pagesPanelHeight}
+                minHeight={PAGES_PANEL_MIN}
+              />
+            )}
           </div>
           <WorkspaceStatusBar />
         </div>
+        {dockedBySide.left && renderDockedWindow(dockedBySide.left, "left")}
+        {dockedBySide.right && renderDockedWindow(dockedBySide.right, "right")}
+        {dockedBySide.bottom && renderDockedWindow(dockedBySide.bottom, "bottom")}
 
-        <FloatingPanel
-          storageKey="nasaq.panel.properties"
-          title="الخصائص والطبقات"
-          side="right"
-          open={!cropActive && rightOpen && !focusMode}
-          onClose={() => useEditor.setState({ rightOpen: false })}
-        >
-          <RightPanel onReplaceImage={onReplaceImage} />
-        </FloatingPanel>
+        {/* Floating (undocked) windows — absolute overlays over the workspace. */}
+        {PANEL_IDS.filter((id) => !visibleDock(id)).map((id) => (
+          <FloatingPanel
+            key={id}
+            storageKey={`nasaq.panel.${id}`}
+            title={PANEL_DEFS[id].title}
+            side={PANEL_DEFS[id].side}
+            open={panelOpen[id] && !cropActive && !focusMode}
+            onClose={() => setPanelOpenFlag(id, false)}
+            onDockSideChange={(side) => changeDockSide(id, side)}
+            defaultSize={PANEL_DEFS[id].defaultSize}
+            minSize={PANEL_DEFS[id].minSize}
+            spawnShift={PANEL_DEFS[id].spawnShift}
+          >
+            {renderPanelBody(id)}
+          </FloatingPanel>
+        ))}
       </div>
 
       <WorkspaceOverlays
@@ -1769,73 +2052,5 @@ function SaveBadge({ onClick }: { onClick: () => void }) {
         )
       }
     />
-  );
-}
-
-function PanelResizeHandle({
-  side,
-  width,
-  min,
-  max,
-  onStart,
-  onResize,
-}: {
-  side: "left" | "right";
-  width: number;
-  min: number;
-  max: number;
-  onStart: (event: React.PointerEvent<HTMLDivElement>) => void;
-  onResize: (width: number) => void;
-}) {
-  /*
-   * A 16px-wide hit strip with a visible 4px grip pill at the canvas edge.
-   * `touch-action: none` is what makes the drag work on an iPad; without it
-   * Safari turns the gesture into a panel scroll and the handle feels dead.
-   */
-  return (
-    <div
-      className={cn(
-        "editor-panel-resize-handle",
-        `editor-panel-resize-${side}`,
-      )}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        // Same guard as CanvasStage: synthetic events (no live pointer) make
-        // setPointerCapture throw NotFoundError.
-        try {
-          event.currentTarget.setPointerCapture(event.pointerId);
-        } catch {
-          /* drag still works through window-level pointermove listeners */
-        }
-        onStart(event);
-      }}
-      role="separator"
-      tabIndex={0}
-      aria-orientation="vertical"
-      aria-label={`تغيير عرض اللوحة ${side === "left" ? "اليسرى" : "اليمنى"} — اسحب المقبض أو استخدم أسهم لوحة المفاتيح`}
-      aria-valuenow={Math.round(width)}
-      aria-valuemin={min}
-      aria-valuemax={max}
-      title="اسحب لتغيير عرض اللوحة — انقر نقرتين لإعادة العرض الافتراضي"
-      onDoubleClick={() => onResize(side === "left" ? 280 : 320)}
-      onKeyDown={(event) => {
-        const step = event.shiftKey ? 32 : 8;
-        // In RTL the visual direction of "wider" is mirrored, so the arrows
-        // follow the panel's own growing edge (the canvas-facing edge).
-        if (event.key === "ArrowLeft") {
-          event.preventDefault();
-          onResize(width + (side === "left" ? step : -step));
-        } else if (event.key === "ArrowRight") {
-          event.preventDefault();
-          onResize(width + (side === "left" ? -step : step));
-        } else if (event.key === "Home") {
-          event.preventDefault();
-          onResize(side === "left" ? 280 : 320);
-        }
-      }}
-    >
-      <span className="editor-panel-resize-grip" aria-hidden />
-    </div>
   );
 }

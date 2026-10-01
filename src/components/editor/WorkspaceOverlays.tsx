@@ -4,6 +4,8 @@ import { stepZoom } from "@/lib/editor/document-space";
 import { canvasViewport } from "@/lib/editor/canvas-space";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  PanelBottom,
+  PanelBottomClose,
   AlignCenter,
   AlignEndHorizontal,
   AlignEndVertical,
@@ -986,6 +988,8 @@ export function WorkspaceStatusBar() {
     const idx = s.pages.findIndex((item) => item.id === s.activePageId);
     return idx === -1 ? null : idx;
   });
+  const pagesRailHidden = useEditor((s) => s.pagesRailHidden);
+  const togglePagesRailHidden = useEditor((s) => s.togglePagesRailHidden);
   const selectedIds = useEditor((s) => s.selectedIds);
   const selectedEls = useMemo(() => {
     if (!selectedIds.length || !page) return [];
@@ -1005,6 +1009,35 @@ export function WorkspaceStatusBar() {
       data-editor-obstacle="status-bar"
       className="editor-status-bar flex h-7 shrink-0 items-center justify-between gap-3 border-t px-3 text-[10px] tabular-nums"
     >
+      <span
+        className="shrink-0"
+      >
+        <button
+          type="button"
+          onClick={() => togglePagesRailHidden()}
+          title={
+            pagesRailHidden
+              ? "إظهار شريط الصفحات"
+              : "إخفاء شريط الصفحات بالكامل — مساحة أكبر للوحة"
+          }
+          aria-label={
+            pagesRailHidden
+              ? "إظهار شريط الصفحات"
+              : "إخفاء شريط الصفحات بالكامل"
+          }
+          aria-pressed={!pagesRailHidden}
+          className={cn(
+            "grid h-5 place-items-center rounded-[5px] px-1 text-muted transition-colors hover:bg-line-2 hover:text-ink",
+            !pagesRailHidden && "text-brand",
+          )}
+        >
+          {pagesRailHidden ? (
+            <PanelBottomClose className="size-3.5" aria-hidden />
+          ) : (
+            <PanelBottom className="size-3.5" aria-hidden />
+          )}
+        </button>
+      </span>
       <span
         className="selectable-value min-w-0 truncate"
         aria-label="معلومات الصفحة"

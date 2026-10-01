@@ -81,7 +81,6 @@ function normalizeDeg(deg: number): number {
 import { columnTotals, resizeMatrix } from "@/lib/editor/tables";
 import { prepareText } from "@/lib/editor/text-render";
 import { useEditor } from "@/lib/editor/store";
-import { OPEN_REPORT_TOOLS_EVENT } from "./EditorApp";
 import { cn, round } from "@/lib/utils";
 import { toast } from "sonner";
 import { ShapePreview } from "./ShapePreview";
@@ -96,19 +95,23 @@ import {
   subscribeRecentColors,
 } from "@/lib/editor/recent-colors";
 import { ArabicTextTools } from "./ArabicTextTools";
-import { ReportToolsPanel } from "./ReportToolsPanel";
 import { ScrubField, ScrubInput } from "./ui/ScrubInput";
-import { RIGHT_PANEL_TABS } from "./panel-tabs";
 
 const TEXT_TYPES = ["text", "box", "stat", "stamp", "table", "progress"];
 
-export function RightPanel({
+/**
+ * الخصائص — the properties inspector as a STANDALONE window.
+ *
+ * It used to share a tab strip with the layers list and hide أدوات التقرير
+ * behind an accordion; since the split it is its own floating window with its
+ * own open state, so it can sit next to the layers window and the report-tools
+ * window at the same time.
+ */
+export function PropertiesPanel({
   onReplaceImage,
 }: {
   onReplaceImage: (id: string) => void;
 }) {
-  const tab = useEditor((s) => s.rightTab);
-  const setRightTab = useEditor((s) => s.setRightTab);
   /*
    * PERF: the inspector subscribes to the ACTIVE PAGE OBJECT, never the
    * whole `pages` array. A page object keeps its identity until that page
@@ -121,10 +124,6 @@ export function RightPanel({
     s.rightOpen && !s.focusMode
       ? s.pages.find((p) => p.id === s.activePageId)
       : undefined,
-  );
-  const setActivePage = useEditor((s) => s.setActivePage);
-  const activePageId = useEditor((s) =>
-    s.rightOpen && !s.focusMode ? s.activePageId : "",
   );
   const selectedId = useEditor((s) =>
     s.rightOpen && !s.focusMode ? s.selectedId : null,
@@ -154,39 +153,13 @@ export function RightPanel({
   const [savingAsset, setSavingAsset] = useState(false);
   /* Core properties start open; infrequent tools remain collapsible. */
   const accordions = useAccordionState<
-    "dimensions" | "text" | "background" | "fade" | "report"
+    "dimensions" | "text" | "background" | "fade"
   >("properties", {
     dimensions: true,
     text: true,
     background: true,
-    report: false,
     fade: false,
   });
-  /**
-   * «أدوات التقرير» is pinned in the toolbar, but it lives here.
-   *
-   * The pinned button broadcasts an event rather than holding a reference to
-   * this panel's state; this listener is the other half of that contract. It
-   * switches to «الخصائص» and force-opens the section, so pressing the button
-   * repeatedly is idempotent (a `toggle` would hide it on the second press).
-   */
-  useEffect(() => {
-    const openReportTools = () => {
-      setRightTab("properties");
-      accordions.open("report");
-    };
-    window.addEventListener(OPEN_REPORT_TOOLS_EVENT, openReportTools);
-    return () =>
-      window.removeEventListener(OPEN_REPORT_TOOLS_EVENT, openReportTools);
-  }, [accordions, setRightTab]);
-
-  const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
-  const [drop, setDrop] = useState<{
-    id: string;
-    side: "before" | "after";
-  } | null>(null);
-  const [layerQuery, setLayerQuery] = useState("");
-  const reorderLayers = useEditor((s) => s.reorderLayers);
 
   /**
    * Turn the selected element into a reusable picture.
@@ -260,225 +233,19 @@ export function RightPanel({
     );
   };
 
-  // Memoized: sorting the page tree on every render (each keystroke in the
-  // search box, each selection change) was pure waste — the source array's
-  // identity only changes when the page actually changes.
-  const layers = useMemo(
-    () => [...(page?.elements || [])].sort((a, b) => b.z - a.z),
-    [page],
-  );
-  const visibleLayers = useMemo(
-    () =>
-      layerQuery.trim()
-        ? layers.filter((layer) =>
-            `${layer.name} ${TYPE_NAME[layer.type]}`
-              .toLocaleLowerCase("ar")
-              .includes(layerQuery.trim().toLocaleLowerCase("ar")),
-          )
-        : layers,
-    [layers, layerQuery],
-  );
   const selectedCount = useEditor((s) =>
     s.rightOpen && !s.focusMode ? s.selectedIds.length : 0,
   );
-  const selectMany = useEditor((s) => s.selectMany);
-  const select = useEditor((s) => s.select);
-  const toggleSelect = useEditor((s) => s.toggleSelect);
-  // Anchor for Shift range selection in the layers list: the row last picked
-  // with a plain click. Shift-clicking another row then selects the whole run
-  // between the two — first and last is all the author needs to grab a band.
-  const layerAnchorRef = useRef<string | null>(null);
-
-  /** Plain click = select (new anchor) · Shift = range from the anchor · Ctrl/⌘ = toggle. */
-  const clickLayerRow = (id: string, shift: boolean, meta: boolean) => {
-    if (shift && layerAnchorRef.current && layerAnchorRef.current !== id) {
-      const from = layers.findIndex((l) => l.id === layerAnchorRef.current);
-      const to = layers.findIndex((l) => l.id === id);
-      if (from !== -1 && to !== -1) {
-        const [a, b] = from < to ? [from, to] : [to, from];
-        selectMany(layers.slice(a, b + 1).map((l) => l.id));
-        return;
-      }
-    }
-    if (meta) toggleSelect(id);
-    else select(id);
-    layerAnchorRef.current = id;
-  };
-
-  /**
-   * Layer drag-reorder (Phase 5.3).
-   *
-   * The drop target AND the insertion side both come from the pointer's
-   * position over the row's own rectangle: the upper half inserts above, the
-   * lower half below. That reads identically in RTL and LTR because it is a
-   * purely vertical decision — the horizontal mirroring of the app has no say
-   * in which side of a row a layer lands on.
-   */
-  const startLayerDrag = (id: string) => (event: React.PointerEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    setDraggedLayerId(id);
-    setDrop({ id, side: "after" });
-    const resolve = (
-      pointer: PointerEvent,
-    ): { id: string; side: "before" | "after" } | null => {
-      const node = document
-        .elementFromPoint(pointer.clientX, pointer.clientY)
-        ?.closest<HTMLElement>("[data-layer-id]");
-      const target = node?.dataset.layerId;
-      if (!node || !target) return null;
-      const rect = node.getBoundingClientRect();
-      return {
-        id: target,
-        side: pointer.clientY < rect.top + rect.height / 2 ? "before" : "after",
-      };
-    };
-    const move = (pointer: PointerEvent) => {
-      const next = resolve(pointer);
-      if (next) setDrop(next);
-    };
-    const finish = (pointer: PointerEvent) => {
-      const target = resolve(pointer);
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", finish);
-      window.removeEventListener("pointercancel", finish);
-      setDraggedLayerId(null);
-      setDrop(null);
-      if (target && target.id !== id) reorderLayers(id, target.id);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", finish);
-    // A cancelled touch (notification, edge-swipe) must not leave the list
-    // stuck in a half-dragged state.
-    window.addEventListener("pointercancel", finish);
-  };
 
   return (
-    <aside className="editor-properties flex h-full min-h-0 flex-col border-r border-line bg-surface">
-      <div className="editor-panel-header flex shrink-0 items-center gap-1 border-b border-line p-1.5">
-        <div
-          className="editor-panel-tabs editor-right-tabs flex min-w-0 items-center gap-1"
-          role="tablist"
-          aria-label="أقسام لوحة المحرر"
-        >
-          {RIGHT_PANEL_TABS.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              type="button"
-              role="tab"
-              title={label}
-              aria-label={label}
-              aria-selected={tab === id}
-              onClick={() => setRightTab(id)}
-              className={cn(
-                "editor-panel-tab inline-flex items-center justify-center gap-1.5 rounded-[8px] text-[12px] font-extrabold",
-                tab === id
-                  ? "bg-navy text-white"
-                  : "text-muted hover:bg-line-2",
-              )}
-            >
-              <Icon className="size-4 shrink-0" strokeWidth={1.7} />
-              <span className="editor-right-tab-label truncate">{label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/*
-       * Layers-panel control row (Photoshop anatomy): a dropdown and Opacity
-       * side by side, wrapping onto two lines when the panel is narrow. The
-       * page picker and the opacity field drive the same store actions as the
-       * page rail and «الأبعاد والتحاذي».
-       */}
-      {tab === "layers" && (
-        <div
-          className="editor-panel-controls"
-          role="group"
-          aria-label="تحكم الطبقات"
-        >
-          <PageSelect activePageId={activePageId} onChange={setActivePage} />
-          <div className="editor-panel-control is-opacity">
-            <ScrubField
-              label="الشفافية"
-              value={el ? round((el.opacity ?? 1) * 100) : 100}
-              min={0}
-              max={100}
-              step={1}
-              precision={0}
-              suffix="%"
-              disabled={!el}
-              onChange={(v) => {
-                if (el) updateElement(el.id, { opacity: v / 100 }, true);
-              }}
-              onCommit={(v) => {
-                if (el) updateElement(el.id, { opacity: v / 100 });
-              }}
-            />
-          </div>
-        </div>
-      )}
-
+    <aside className="editor-properties flex h-full min-h-0 flex-col bg-surface">
       {/*
        * Phase 1 — the panel body is the ONLY scrolling region and is capped by
        * the real header height (`editor-panel-body`), so a short window scrolls
        * inside the panel instead of clipping the last controls.
        */}
       <div className="editor-pane-scroll editor-panel-body no-bottom-pad p-3">
-        {tab === "layers" && (
-          <div className="grid gap-2">
-            {/* The list grows with the panel; the panel body is its one scroller (no nested scrollbar). */}
-            <div className="editor-layer-list min-h-[120px] overflow-x-hidden rounded-[8px] border border-line/50 p-1.5">
-              <label className="relative mb-1.5 block">
-                <Search className="pointer-events-none absolute end-2 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
-                <input
-                  value={layerQuery}
-                  onChange={(event) => setLayerQuery(event.target.value)}
-                  placeholder="ابحث في الطبقات…"
-                  aria-label="البحث في الطبقات"
-                  className="h-9 w-full rounded-md border border-line bg-surface-2 pe-8 ps-2 text-[11px] font-bold outline-none focus:border-navy"
-                />
-              </label>
-              <div className="grid gap-1.5">
-                {layers.length === 0 && (
-                  <EmptyNote>لا توجد عناصر في هذه الصفحة بعد.</EmptyNote>
-                )}
-                {layers.length > 0 && visibleLayers.length === 0 && (
-                  <EmptyNote>لا توجد طبقة تطابق «{layerQuery}».</EmptyNote>
-                )}
-                {visibleLayers.map((layer) => (
-                  <LayerRow
-                    key={layer.id}
-                    layer={layer}
-                    dragging={draggedLayerId === layer.id}
-                    dropBefore={
-                      drop?.id === layer.id &&
-                      drop.side === "before" &&
-                      draggedLayerId !== layer.id
-                    }
-                    dropAfter={
-                      drop?.id === layer.id &&
-                      drop.side === "after" &&
-                      draggedLayerId !== layer.id
-                    }
-                    onDragStart={startLayerDrag(layer.id)}
-                    onRowClick={(event) =>
-                      clickLayerRow(
-                        layer.id,
-                        event.shiftKey,
-                        event.ctrlKey || event.metaKey,
-                      )
-                    }
-                  />
-                ))}
-              </div>
-            </div>
-            <p className="px-1 text-[10px] leading-4 text-muted">
-              الترتيب يحدد التكديس — اسحب الطبقة لتغيير موضعها.
-            </p>
-          </div>
-        )}
-
-        {tab === "properties" && !el && (
+        {!el && (
           <div className="grid gap-2">
             {page && <PageBackground key={page.id} page={page} />}
             <EmptyNote>
@@ -489,7 +256,7 @@ export function RightPanel({
           </div>
         )}
 
-        {tab === "properties" && selectedCount > 1 && (
+        {selectedCount > 1 && (
           <div className="grid gap-3" data-selection-inspector="multiple">
             <div className="rounded-xl border border-brand/25 bg-navy/5 p-3">
               <p className="text-[11px] font-bold tracking-wide text-brand">
@@ -580,7 +347,7 @@ export function RightPanel({
           </div>
         )}
 
-        {tab === "properties" && el && selectedCount === 1 && (
+        {el && selectedCount === 1 && (
           <div key={el.id} className="grid gap-3">
             <div className="flex items-center justify-between">
               <h3 className="text-[13px] font-extrabold">
@@ -2369,22 +2136,211 @@ export function RightPanel({
         )}
 
         {/*
-         * «أدوات التقرير» — document-level tools (KPI cards, the stamp and
-         * signature zone, page furniture and numbering, print guides, the
-         * pre-flight summary). Rendered outside the element blocks so it stays
-         * reachable whether or not something is selected: inserting a card is
-         * not a property of the current selection.
+         * «أدوات التقرير» moved out of this panel: it is its own floating
+         * window (ReportToolsWindow in EditorApp), so it can sit beside the
+         * properties and layers windows instead of hiding behind an accordion.
          */}
-        {tab === "properties" && (
-          <AccordionSection
-            title="أدوات التقرير"
-            id="report"
-            open={accordions.isOpen("report", false)}
-            onToggle={() => accordions.toggle("report")}
-          >
-            <ReportToolsPanel />
-          </AccordionSection>
-        )}
+      </div>
+    </aside>
+  );
+}
+
+/**
+ * الطبقات — the layers list as a STANDALONE window.
+ *
+ * Split out of the old tabbed right panel: it subscribes to the store on its
+ * own, so it can be open at the same time as الخصائص and أدوات التقرير and
+ * none of the three hides the others behind a tab.
+ */
+export function LayersPanel() {
+  const page = useEditor((s) =>
+    s.layersOpen && !s.focusMode
+      ? s.pages.find((p) => p.id === s.activePageId)
+      : undefined,
+  );
+  const activePageId = useEditor((s) =>
+    s.layersOpen && !s.focusMode ? s.activePageId : "",
+  );
+  const selectedId = useEditor((s) =>
+    s.layersOpen && !s.focusMode ? s.selectedId : null,
+  );
+  const setActivePage = useEditor((s) => s.setActivePage);
+  const updateElement = useEditor((s) => s.updateElement);
+  const reorderLayers = useEditor((s) => s.reorderLayers);
+  const selectMany = useEditor((s) => s.selectMany);
+  const select = useEditor((s) => s.select);
+  const toggleSelect = useEditor((s) => s.toggleSelect);
+
+  const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
+  const [drop, setDrop] = useState<{
+    id: string;
+    side: "before" | "after";
+  } | null>(null);
+  const [layerQuery, setLayerQuery] = useState("");
+  const layerAnchorRef = useRef<string | null>(null);
+
+  const el =
+    page && selectedId ? findElement(page.elements, selectedId)?.el : undefined;
+  const layers = useMemo(
+    () => [...(page?.elements || [])].sort((a, b) => b.z - a.z),
+    [page],
+  );
+  const visibleLayers = useMemo(
+    () =>
+      layerQuery.trim()
+        ? layers.filter((layer) =>
+            `${layer.name} ${TYPE_NAME[layer.type]}`
+              .toLocaleLowerCase("ar")
+              .includes(layerQuery.trim().toLocaleLowerCase("ar")),
+          )
+        : layers,
+    [layers, layerQuery],
+  );
+
+  /** Plain click = select (new anchor) · Shift = range from the anchor · Ctrl/⌘ = toggle. */
+  const clickLayerRow = (id: string, shift: boolean, meta: boolean) => {
+    if (shift && layerAnchorRef.current && layerAnchorRef.current !== id) {
+      const from = layers.findIndex((l) => l.id === layerAnchorRef.current);
+      const to = layers.findIndex((l) => l.id === id);
+      if (from !== -1 && to !== -1) {
+        const [a, b] = from < to ? [from, to] : [to, from];
+        selectMany(layers.slice(a, b + 1).map((l) => l.id));
+        return;
+      }
+    }
+    if (meta) toggleSelect(id);
+    else select(id);
+    layerAnchorRef.current = id;
+  };
+
+  /**
+   * Layer drag-reorder: the drop target AND the insertion side both come from
+   * the pointer's position over the row's own rectangle: the upper half inserts
+   * above, the lower half below. Purely vertical, so it reads the same in RTL.
+   */
+  const startLayerDrag = (id: string) => (event: React.PointerEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDraggedLayerId(id);
+    setDrop({ id, side: "after" });
+    const resolve = (
+      pointer: PointerEvent,
+    ): { id: string; side: "before" | "after" } | null => {
+      const node = document
+        .elementFromPoint(pointer.clientX, pointer.clientY)
+        ?.closest<HTMLElement>("[data-layer-id]");
+      const target = node?.dataset.layerId;
+      if (!node || !target) return null;
+      const rect = node.getBoundingClientRect();
+      return {
+        id: target,
+        side:
+          pointer.clientY < rect.top + rect.height / 2 ? "before" : "after",
+      };
+    };
+    const move = (pointer: PointerEvent) => {
+      const next = resolve(pointer);
+      if (next) setDrop(next);
+    };
+    const finish = (pointer: PointerEvent) => {
+      const target = resolve(pointer);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      setDraggedLayerId(null);
+      setDrop(null);
+      if (target && target.id !== id) reorderLayers(id, target.id);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", finish);
+    window.addEventListener("pointercancel", finish);
+  };
+
+  return (
+    <aside className="editor-layers flex h-full min-h-0 flex-col bg-surface">
+      {/*
+       * Layers control row (Photoshop anatomy): a dropdown and Opacity side by
+       * side, wrapping onto two lines when the window is narrow. The page
+       * picker and the opacity field drive the same store actions as the page
+       * rail and «الأبعاد والتحاذي».
+       */}
+      <div
+        className="editor-panel-controls"
+        role="group"
+        aria-label="تحكم الطبقات"
+      >
+        <PageSelect activePageId={activePageId} onChange={setActivePage} />
+        <div className="editor-panel-control is-opacity">
+          <ScrubField
+            label="الشفافية"
+            value={el ? round((el.opacity ?? 1) * 100) : 100}
+            min={0}
+            max={100}
+            step={1}
+            precision={0}
+            suffix="%"
+            disabled={!el}
+            onChange={(v) => {
+              if (el) updateElement(el.id, { opacity: v / 100 }, true);
+            }}
+            onCommit={(v) => {
+              if (el) updateElement(el.id, { opacity: v / 100 });
+            }}
+          />
+        </div>
+      </div>
+      <div className="editor-pane-scroll editor-panel-body no-bottom-pad p-3">
+        <div className="grid gap-2">
+          {/* The list grows with the panel; the panel body is its one scroller (no nested scrollbar). */}
+          <div className="editor-layer-list min-h-[120px] overflow-x-hidden rounded-[8px] border border-line/50 p-1.5">
+            <label className="relative mb-1.5 block">
+              <Search className="pointer-events-none absolute end-2 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
+              <input
+                value={layerQuery}
+                onChange={(event) => setLayerQuery(event.target.value)}
+                placeholder="ابحث في الطبقات…"
+                aria-label="البحث في الطبقات"
+                className="h-9 w-full rounded-md border border-line bg-surface-2 pe-8 ps-2 text-[11px] font-bold outline-none focus:border-navy"
+              />
+            </label>
+            <div className="grid gap-1.5">
+              {layers.length === 0 && (
+                <EmptyNote>لا توجد عناصر في هذه الصفحة بعد.</EmptyNote>
+              )}
+              {layers.length > 0 && visibleLayers.length === 0 && (
+                <EmptyNote>لا توجد طبقة تطابق «{layerQuery}».</EmptyNote>
+              )}
+              {visibleLayers.map((layer) => (
+                <LayerRow
+                  key={layer.id}
+                  layer={layer}
+                  dragging={draggedLayerId === layer.id}
+                  dropBefore={
+                    drop?.id === layer.id &&
+                    drop.side === "before" &&
+                    draggedLayerId !== layer.id
+                  }
+                  dropAfter={
+                    drop?.id === layer.id &&
+                    drop.side === "after" &&
+                    draggedLayerId !== layer.id
+                  }
+                  onDragStart={startLayerDrag(layer.id)}
+                  onRowClick={(event) =>
+                    clickLayerRow(
+                      layer.id,
+                      event.shiftKey,
+                      event.ctrlKey || event.metaKey,
+                    )
+                  }
+                />
+              ))}
+            </div>
+          </div>
+          <p className="px-1 text-[10px] leading-4 text-muted">
+            الترتيب يحدد التكديس — اسحب الطبقة لتغيير موضعها.
+          </p>
+        </div>
       </div>
     </aside>
   );

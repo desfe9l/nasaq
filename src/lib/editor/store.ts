@@ -265,6 +265,20 @@ interface Ui {
   rightOpen: boolean;
   leftCollapsed: boolean;
   rightCollapsed: boolean;
+  /**
+   * The right inspector is SPLIT into three independent windows that can all
+   * be open at once (the old tab switch hid two of them behind the third):
+   * `rightOpen` = الخصائص (properties), plus the two dedicated flags below.
+   */
+  layersOpen: boolean;
+  reportToolsOpen: boolean;
+  /**
+   * The left panel is equally split: the asset library and the element-tools
+   * palette are their own windows; `leftOpen` keeps the remaining tabs
+   * (عناصر/أشكال/قوالب/صفحات/سمة/خطوط/إعدادات) in one window.
+   */
+  libraryOpen: boolean;
+  toolsOpen: boolean;
   /** Number of artboard grid columns for multi-artboard canvas layout. */
   artboardGridCols: number;
   /** Height (px) of the bottom pages panel — drag-resizable, persisted. */
@@ -275,8 +289,16 @@ interface Ui {
    * workspace layout.
    */
   pagesRailCollapsed: boolean;
+  /**
+   * Hidden pages rail: the tray leaves the layout entirely (height 0) so the
+   * canvas reclaims every pixel of it. Distinct from `pagesRailCollapsed`,
+   * which keeps a 36px chip strip. Persisted with the workspace layout.
+   */
+  pagesRailHidden: boolean;
   /** Toggle the pages rail between the thumbnail tray and the thin strip. */
   togglePagesRail: () => void;
+  /** Show/hide the pages rail completely (compact rail + max canvas). */
+  togglePagesRailHidden: () => void;
   /** Right-click menu shared by the canvas and the layers panel. */
   contextMenu: ContextMenuPoint | null;
   /**
@@ -506,6 +528,11 @@ interface EditorStore extends Project, Ui, History {
       | "focusMode"
       | "exportOpen"
       | "pageManagerOpen"
+      | "layersOpen"
+      | "reportToolsOpen"
+      | "libraryOpen"
+      | "toolsOpen"
+      | "pagesRailHidden"
     >,
   ) => void;
   /** Set one of the three shared, persistent interface appearance modes. */
@@ -560,8 +587,12 @@ interface EditorStore extends Project, Ui, History {
   /** Official transaction / outgoing number, printed by {رقم_المعاملة}. */
   setTransactionNo: (value: string) => void;
   setActivePage: (id: string) => void;
-  /** Open the table builder (optionally from the report tools' import button). */
-  openTablePicker: () => void;
+  /**
+   * Open the table builder. `source` names the window that hosts the overlay
+   * ("elements" basics palette or "tools" smart library) so exactly one
+   * builder shows when both windows are open.
+   */
+  openTablePicker: (source?: "elements" | "tools") => void;
   closeTablePicker: () => void;
   select: (id: string | null) => void;
   /** Add or remove one element from the selection (shift-click). */
@@ -1283,9 +1314,14 @@ export const useEditor = create<EditorStore>((set, get) => {
     rightOpen: false,
     leftCollapsed: false,
     rightCollapsed: false,
+    layersOpen: false,
+    reportToolsOpen: false,
+    libraryOpen: false,
+    toolsOpen: false,
     artboardGridCols: 4,
     pagesPanelHeight: PAGES_PANEL_DEFAULT,
     pagesRailCollapsed: false,
+    pagesRailHidden: false,
     contextMenu: null,
     bubbleEnabled: true,
     bubbleOffset: null,
@@ -1640,12 +1676,16 @@ export const useEditor = create<EditorStore>((set, get) => {
         const appearance = readStoredTheme() ?? "light";
         applyStoredTheme();
 
+        /*
+         * The inspector is now INDEPENDENT windows: the old "only one side at
+         * a time" rule is gone (nextLeftOpen no longer yields to
+         * nextRightOpen), so the author's three inspector windows plus the
+         * library and element-tools panels come back exactly as they were.
+         */
         const nextRightOpen =
           ui.rightOpen !== undefined ? Boolean(ui.rightOpen) : get().rightOpen;
         const nextLeftOpen =
-          ui.leftOpen !== undefined
-            ? Boolean(ui.leftOpen) && !nextRightOpen
-            : get().leftOpen && !nextRightOpen;
+          ui.leftOpen !== undefined ? Boolean(ui.leftOpen) : get().leftOpen;
 
         set({
           projects: list,
@@ -1656,6 +1696,10 @@ export const useEditor = create<EditorStore>((set, get) => {
           rightOpen: nextRightOpen,
           leftCollapsed: Boolean(ui.leftCollapsed),
           rightCollapsed: Boolean(ui.rightCollapsed),
+          layersOpen: Boolean(ui.layersOpen),
+          reportToolsOpen: Boolean(ui.reportToolsOpen),
+          libraryOpen: Boolean(ui.libraryOpen),
+          toolsOpen: Boolean(ui.toolsOpen),
           artboardGridCols:
             typeof ui.artboardGridCols === "number"
               ? clamp(ui.artboardGridCols, 1, 8)
@@ -1668,6 +1712,7 @@ export const useEditor = create<EditorStore>((set, get) => {
               : PAGES_PANEL_DEFAULT,
           ),
           pagesRailCollapsed: Boolean(ui.pagesRailCollapsed),
+          pagesRailHidden: Boolean(ui.pagesRailHidden),
           bubbleEnabled: ui.bubble !== false,
           bubbleOffset:
             ui.bubbleOffset &&
@@ -2875,17 +2920,19 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
     toggle: (key) => {
       const next = !get()[key];
+      /*
+       * Windows are independent now — opening one never closes another, so
+       * الخصائص and الطبقات and أدوات التقرير can all be on screen at once
+       * (the whole point of the split). Collapsing still reopens its window,
+       * but without evicting the opposite side.
+       */
       set({
         [key]: next,
         ...(key === "leftCollapsed"
-          ? { leftOpen: !next, ...(!next ? { rightOpen: false } : {}) }
+          ? { leftOpen: !next }
           : key === "rightCollapsed"
-            ? { rightOpen: !next, ...(!next ? { leftOpen: false } : {}) }
-            : next && key === "leftOpen"
-              ? { rightOpen: false, leftCollapsed: false }
-              : next && key === "rightOpen"
-                ? { leftOpen: false, rightCollapsed: false }
-                : {}),
+            ? { rightOpen: !next }
+            : {}),
       } as Partial<EditorStore>);
       // Workspace switches exposed in «الإعدادات → المحرر» are remembered like
       // the rest of the shell state, so the panel and the toolbar agree after
@@ -2904,6 +2951,20 @@ export const useEditor = create<EditorStore>((set, get) => {
       ) {
         void setSetting(key, next);
       }
+      /*
+       * The split windows and the rail visibility live in the UI slot
+       * (localStorage): it is the slot hydrate() actually reads back, so this
+       * is the persistence that survives a reload.
+       */
+      if (
+        key === "layersOpen" ||
+        key === "reportToolsOpen" ||
+        key === "libraryOpen" ||
+        key === "toolsOpen" ||
+        key === "pagesRailHidden"
+      ) {
+        writeUi({ [key]: next });
+      }
     },
     setArtboardGridCols: (cols: number) => {
       const artboardGridCols = clamp(Math.round(cols), 1, 8);
@@ -2916,7 +2977,19 @@ export const useEditor = create<EditorStore>((set, get) => {
       writeStoredTheme(appearance);
     },
     setLeftTab: (leftTab) => {
-      set({ leftTab, leftCollapsed: false, leftOpen: true, rightOpen: false });
+      /*
+       * «library» and «tools» are their OWN windows since the split; asking
+       * for those tabs opens the matching window instead of a tab in the
+       * elements panel. The tab itself is remembered so the window opens on
+       * the right place next time.
+       */
+      set({
+        leftTab,
+        leftCollapsed: false,
+        leftOpen: leftTab === "library" || leftTab === "tools" ? get().leftOpen : true,
+        libraryOpen: leftTab === "library" ? true : get().libraryOpen,
+        toolsOpen: leftTab === "tools" ? true : get().toolsOpen,
+      });
       // Probing is deferred to the moment the font list is actually needed.
       if (leftTab === "fonts") get().probeFonts();
     },
@@ -2924,8 +2997,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({
         rightTab,
         rightCollapsed: false,
-        rightOpen: true,
-        leftOpen: false,
+        rightOpen: rightTab === "properties" ? true : get().rightOpen,
+        layersOpen: rightTab === "layers" ? true : get().layersOpen,
       }),
 
     toggleSidebar: (side) => {
@@ -2940,18 +3013,28 @@ export const useEditor = create<EditorStore>((set, get) => {
             ? "rightOpen"
             : "rightCollapsed";
       const next = !get()[key];
+      // Independent windows: toggling one side never closes the other's.
       set({
         [key]: next,
-        ...(next && key === "leftOpen"
-          ? { rightOpen: false }
-          : next && key === "rightOpen"
-            ? { leftOpen: false }
-            : {}),
+        ...(key === "leftCollapsed" ? { leftOpen: !next } : {}),
+        ...(key === "rightCollapsed" ? { rightOpen: !next } : {}),
       } as Partial<EditorStore>);
       void setSetting(key, next);
     },
     closeFloatingPanels: () => {
-      set({ leftOpen: false, rightOpen: false });
+      /*
+       * Every window, all six: on a tablet the drawers float over the artwork,
+       * so "put the canvas back" must dismiss all of them — the split means
+       * closing just the two old flags would leave four windows behind.
+       */
+      set({
+        leftOpen: false,
+        rightOpen: false,
+        layersOpen: false,
+        reportToolsOpen: false,
+        libraryOpen: false,
+        toolsOpen: false,
+      });
       void setSetting("leftOpen", false);
       void setSetting("rightOpen", false);
     },
@@ -2963,8 +3046,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({
         leftTab: "library",
         leftCollapsed: false,
-        leftOpen: true,
-        rightOpen: false,
+        libraryOpen: true,
       });
     },
     toggleBubble: (enabled) => {
@@ -2994,6 +3076,12 @@ export const useEditor = create<EditorStore>((set, get) => {
         // Tablet drawers float over the artwork, so "default" there is closed.
         leftOpen: overlay ? false : get().leftOpen,
         rightOpen: overlay ? false : get().rightOpen,
+        layersOpen: overlay ? false : get().layersOpen,
+        reportToolsOpen: overlay ? false : get().reportToolsOpen,
+        libraryOpen: overlay ? false : get().libraryOpen,
+        toolsOpen: overlay ? false : get().toolsOpen,
+        // A compact rail is the default now: the reset returns it, never hides it.
+        pagesRailHidden: false,
         pagesPanelHeight,
         bubbleEnabled: true,
         bubbleOffset: null,
@@ -3006,12 +3094,28 @@ export const useEditor = create<EditorStore>((set, get) => {
         void setSetting("leftOpen", false);
         void setSetting("rightOpen", false);
       }
-      writeUi({ pagesPanelHeight, bubble: true, bubbleOffset: null });
+      writeUi({
+        pagesPanelHeight,
+        pagesRailHidden: false,
+        bubble: true,
+        bubbleOffset: null,
+      });
     },
     togglePagesRail: () => {
+      // Expanding a HIDDEN rail restores the full tray, not the collapsed strip.
+      if (get().pagesRailHidden) {
+        set({ pagesRailHidden: false, pagesRailCollapsed: false });
+        writeUi({ pagesRailHidden: false, pagesRailCollapsed: false });
+        return;
+      }
       const pagesRailCollapsed = !get().pagesRailCollapsed;
       set({ pagesRailCollapsed });
       writeUi({ pagesRailCollapsed });
+    },
+    togglePagesRailHidden: () => {
+      const pagesRailHidden = !get().pagesRailHidden;
+      set({ pagesRailHidden });
+      writeUi({ pagesRailHidden });
     },
     setPagesPanelHeight: (height) => {
       const next = clampPagesHeight(height);
@@ -3072,19 +3176,23 @@ export const useEditor = create<EditorStore>((set, get) => {
      * Tabs that already host the overlay keep their place — jumping out of
      * «أدوات العناصر» mid-arrangement would lose the author's context.
      */
-    openTablePicker: () => {
+    openTablePicker: (source = "elements") => {
       if (!get().entitlements.data_import) {
         toast.error("استيراد البيانات متاح في النسخة الكاملة", {
           description: "فعّل ترخيصاً مناسباً لاستيراد Excel وCSV.",
         });
         return;
       }
-      const hosting = get().leftTab === "tools" || get().leftTab === "elements";
+      /*
+       * The builder renders inside the window that asked for it (`source`), so
+       * exactly one overlay shows even when both windows are open: the tab is
+       * pinned to that source and only the matching window renders it.
+       */
       set({
         tablePickerOpen: true,
-        leftTab: hosting ? get().leftTab : "elements",
-        leftOpen: true,
-        rightOpen: false,
+        leftTab: source,
+        leftOpen: source === "elements" ? true : get().leftOpen,
+        toolsOpen: source === "tools" ? true : get().toolsOpen,
       });
     },
     closeTablePicker: () => set({ tablePickerOpen: false }),
@@ -5099,10 +5207,17 @@ interface PersistedUi {
   rightOpen?: boolean;
   leftCollapsed?: boolean;
   rightCollapsed?: boolean;
+  /** Split inspector windows (absent = closed, the old default). */
+  layersOpen?: boolean;
+  reportToolsOpen?: boolean;
+  libraryOpen?: boolean;
+  toolsOpen?: boolean;
   artboardGridCols?: number;
   pagesPanelHeight?: number;
   /** Collapsed pages rail (absent = expanded thumbnail tray). */
   pagesRailCollapsed?: boolean;
+  /** Hidden pages rail (absent = shown). */
+  pagesRailHidden?: boolean;
   /** Floating bubble visibility (absent = shown). */
   bubble?: boolean;
   /** Manual floating-bubble offset (absent = automatic placement). */

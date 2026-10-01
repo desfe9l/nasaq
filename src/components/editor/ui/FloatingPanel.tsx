@@ -3,34 +3,47 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type PointerEvent,
   type ReactNode,
 } from "react";
-import { GripHorizontal, Maximize2, PanelRightClose, X } from "lucide-react";
-import { clampPanel, type PanelRect } from "@/lib/editor/panel-geometry";
-import { panelSpawnRect, type ScreenBox } from "@/lib/editor/ui-state";
+import {
+  GripHorizontal,
+  Move,
+  PanelBottom,
+  PanelLeft,
+  PanelRight,
+  PanelTop,
+  Pin,
+  X,
+} from "lucide-react";
+import {
+  clampPanel,
+  type PanelRect,
+} from "@/lib/editor/panel-geometry";
+import { panelSpawnRect, type DockSide, type ScreenBox } from "@/lib/editor/ui-state";
 import { cn } from "@/lib/utils";
 
 /**
- * The floating-panel system.
+ * The floating-window system.
  *
- * Properties, Layers, Tools and the element library are the SAME component: a
- * card that floats over the workspace instead of a column that owns layout
- * space. Nothing in the editor reserves a side rail for a panel any more, so
- * the canvas keeps the full width whether a panel is open or closed, and
- * opening one never reflows the document.
+ * Every editor list — properties, layers, report tools, the asset library and
+ * the element tools — is the SAME component: a card that floats over the
+ * workspace instead of a column that owns layout space. The panel is
+ * `position: absolute` inside the workspace row (a high z-index overlay), so
+ * opening, closing, moving or resizing it can never reflow the artboard — the
+ * canvas keeps the full width and height in every mode.
  *
- * What every panel can do, without a per-panel implementation:
- *   • move by its grip (pointer or touch, with arrow-key nudging),
- *   • resize from the corner grip (and shrink to a compact, scrollable height),
- *   • close from the header, reopen instantly from its compact control,
+ * What every window can do, without a per-panel implementation:
+ *   • move by its whole title bar (pointer or touch, arrow-key nudging),
+ *   • resize from ALL four corners and ALL four edges (8 grips),
+ *   • dock to any of the four screen edges (top/bottom/left/right) — a docked
+ *     window becomes a grid track, so the workspace row reserves its space and
+ *     the canvas shrinks instead of being covered; undocking gives it back,
+ *   • close from the header, reopen instantly,
  *   • stay inside the workspace on every viewport, including orientation
  *     changes, because every move/resize re-runs the same clamp,
- *   • remember its rectangle for the editing session.
- *
- * Docking is a per-panel OPTION (the header toggle), never the default: a
- * docked panel is the old fixed layout and is only useful on wide screens where
- * the author prefers a permanent column.
+ *   • remember its rectangle and its dock side for the editing session.
  */
 export interface FloatingPanelProps {
   /** Storage key + the CSS hook used by the QA scripts. */
@@ -40,14 +53,27 @@ export interface FloatingPanelProps {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
-  /** Physical side the panel prefers while floating (docking hint + obstacle). */
+  /** Physical side the panel prefers while floating (spawn + obstacle). */
   side?: "left" | "right";
-  /** Opt-in permanent column. Off by default: the canvas stays dominant. */
-  docked?: boolean;
-  onDockChange?: (docked: boolean) => void;
+  /**
+   * The physical screen edge the window is docked to. `null` = free floating.
+   * The parent owns the layout: when this is set it renders a grid track for
+   * the window and passes `gridAreaStyle` describing where it sits.
+   */
+  dockSide?: DockSide | null;
+  onDockSideChange?: (side: DockSide | null) => void;
+  /** Inline style applied only while docked (grid-area placement). */
+  gridAreaStyle?: CSSProperties;
   /** Opening size before the workspace clamp is applied. */
   defaultSize?: { width: number; height: number };
   minSize?: { width: number; height: number };
+  /**
+   * Horizontal stagger applied to the FIRST spawn only, so several windows
+   * opened together fan out beside the artboard instead of stacking exactly
+   * on top of each other. Once the author moves a window, the stored
+   * rectangle wins and this is ignored.
+   */
+  spawnShift?: number;
   className?: string;
 }
 
@@ -58,6 +84,39 @@ const DEFAULT_MIN = { width: 248, height: 180 };
  * a card that fills the whole band is docked in everything but name.
  */
 const PANEL_TRAVEL = 72;
+/** Edge grip hit thickness (px) — finger-sized without shouting. */
+const EDGE_HIT = 7;
+
+type GestureMode =
+  | "move"
+  | "n"
+  | "s"
+  | "e"
+  | "w"
+  | "ne"
+  | "nw"
+  | "se"
+  | "sw";
+
+const CURSORS: Record<GestureMode, string> = {
+  move: "grab",
+  n: "ns-resize",
+  s: "ns-resize",
+  e: "ew-resize",
+  w: "ew-resize",
+  ne: "nesw-resize",
+  nw: "nwse-resize",
+  se: "nwse-resize",
+  sw: "nesw-resize",
+};
+
+const DOCK_LABELS: Record<DockSide | "free", string> = {
+  top: "تثبيت في الأعلى",
+  bottom: "تثبيت في الأسفل",
+  left: "تثبيت على اليسار",
+  right: "تثبيت على اليمين",
+  free: "نافذة حرة (بدون تثبيت)",
+};
 
 export function FloatingPanel({
   storageKey,
@@ -66,47 +125,75 @@ export function FloatingPanel({
   onClose,
   children,
   side = "right",
-  docked = false,
-  onDockChange,
+  dockSide = null,
+  onDockSideChange,
+  gridAreaStyle,
   defaultSize = DEFAULT_SIZE,
   minSize = DEFAULT_MIN,
+  spawnShift = 0,
   className,
 }: FloatingPanelProps) {
   const [rect, setRect] = useState<PanelRect>(() => ({
     left: 12,
-    top: 100,
+    top: 12,
     ...defaultSize,
   }));
   const [dragging, setDragging] = useState(false);
+  const [dockMenuOpen, setDockMenuOpen] = useState(false);
+  const dockMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!dockMenuOpen) return;
+    const onDown = (event: globalThis.PointerEvent) => {
+      if (!dockMenuRef.current?.contains(event.target as Node))
+        setDockMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", onDown, true);
+    return () => window.removeEventListener("pointerdown", onDown, true);
+  }, [dockMenuOpen]);
   const latest = useRef(rect);
-  const gesture = useRef<{
-    id: number;
-    x: number;
-    y: number;
-    rect: PanelRect;
-    next: PanelRect;
-    frame: number;
-    mode: "move" | "resize";
-  } | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const gesture = useRef<
+    | {
+        id: number;
+        x: number;
+        y: number;
+        rect: PanelRect;
+        next: PanelRect;
+        frame: number;
+        mode: GestureMode;
+      }
+    | null
+  >(null);
+
+  const positionKey = `${storageKey}.pos.v2`;
 
   /**
-   * The workspace rectangle a panel is allowed to live in: below the header and
-   * above the page rail. Measured (never hard-coded) so a wrapped header, a
-   * collapsed rail or a resized window can never strand a panel off screen.
+   * The workspace rectangle a panel is allowed to live in, in the row's own
+   * coordinates: the panel is `absolute` inside the workspace row, so 0,0 is
+   * the row's top-left (directly below the header). The bottom stops above the
+   * page rail so a window can never swallow the page commands. Measured (never
+   * hard-coded) so a wrapped header, a collapsed rail or a resized window can
+   * never strand a panel off screen.
    */
   const bounds = useCallback(
     (next: PanelRect) => {
-      const header = document.querySelector(".editor-toolbar");
+      const row = sectionRef.current?.offsetParent as HTMLElement | null;
+      const rowRect = row?.getBoundingClientRect();
+      if (!rowRect) {
+        return clampPanel(next, { width: window.innerWidth, height: window.innerHeight }, 0);
+      }
       const rail = document.querySelector(".editor-page-rail");
-      const top = (header?.getBoundingClientRect().bottom ?? 52) + 8;
-      const bottom = (rail?.getBoundingClientRect().top ?? window.innerHeight) - 8;
+      const railTop = rail
+        ? rail.getBoundingClientRect().top - rowRect.top
+        : Infinity;
+      const bottom = Math.min(rowRect.height, railTop) - 8;
       return clampPanel(
         next,
-        { width: window.innerWidth, height: Math.max(top + 120, bottom) },
-        top,
+        { width: rowRect.width, height: Math.max(bottom + minSize.height, rowRect.height) },
+        0,
       );
     },
-    [],
+    [minSize.height],
   );
 
   const apply = useCallback(
@@ -127,6 +214,7 @@ export function FloatingPanel({
    * nothing else needs to re-place itself because nothing was dragged.
    */
   const reclamp = useCallback(() => {
+    if (dockSide) return;
     const safe = bounds(latest.current);
     if (
       safe.left === latest.current.left &&
@@ -137,11 +225,11 @@ export function FloatingPanel({
       return;
     latest.current = safe;
     setRect(safe);
-  }, [bounds]);
+  }, [bounds, dockSide]);
 
   const persist = () => {
     try {
-      localStorage.setItem(storageKey, JSON.stringify(latest.current));
+      localStorage.setItem(positionKey, JSON.stringify(latest.current));
     } catch {
       /* private mode: the panel still works, it just forgets on reload */
     }
@@ -151,6 +239,8 @@ export function FloatingPanel({
     let initial: PanelRect = latest.current;
     const stage =
       document.querySelector<HTMLElement>(".editor-canvas-stage")?.getBoundingClientRect();
+    const row = sectionRef.current?.offsetParent as HTMLElement | null;
+    const rowRect = row?.getBoundingClientRect();
     if (stage) {
       /*
        * A panel is only "floating" if it can actually float. On a short screen
@@ -158,9 +248,8 @@ export function FloatingPanel({
        * default card, so a full-height panel would be pinned in place — it
        * would open, but it would not move. Keep a strip of travel free.
        */
-      const header = document.querySelector(".editor-toolbar")?.getBoundingClientRect();
       const rail = document.querySelector(".editor-page-rail")?.getBoundingClientRect();
-      const bandTop = (header?.bottom ?? 52) + 16;
+      const bandTop = (rowRect?.top ?? 52) + 16;
       const bandBottom = (rail?.top ?? window.innerHeight) - 16;
       const height = Math.min(
         defaultSize.height,
@@ -171,15 +260,28 @@ export function FloatingPanel({
         { width: defaultSize.width, height },
         { width: window.innerWidth, height: window.innerHeight },
       );
-      initial = {
-        left: side === "left" ? spawn.left : Math.max(12, window.innerWidth - spawn.width - 12),
-        top: spawn.top,
+      // Left-side windows open at the LEFT edge of the stage, right-side
+      // windows at the right edge — each fan of three windows spawns beside
+      // the artboard it used to push, never on top of its own side's siblings.
+      const viewport: PanelRect = {
+        left:
+          side === "left"
+            ? stage.left + 12 + spawnShift
+            : Math.max(12, window.innerWidth - spawn.width - 12 - spawnShift),
+        top: spawn.top + (side === "left" ? 0 : Math.round(spawnShift / 2)),
         width: spawn.width,
         height: spawn.height,
       };
+      // Convert viewport coordinates into the row's own space (0,0 below the header).
+      initial = {
+        left: rowRect ? viewport.left - rowRect.left : viewport.left,
+        top: rowRect ? viewport.top - rowRect.top : viewport.top,
+        width: viewport.width,
+        height: viewport.height,
+      };
     }
     try {
-      const stored = JSON.parse(localStorage.getItem(storageKey) || "null");
+      const stored = JSON.parse(localStorage.getItem(positionKey) || "null");
       if (
         stored &&
         ["left", "top", "width", "height"].every((k) => Number.isFinite(stored[k]))
@@ -195,7 +297,7 @@ export function FloatingPanel({
     const resize = () => reclamp();
     const observer = new ResizeObserver(resize);
     document
-      .querySelectorAll(".editor-toolbar, .editor-canvas-stage, .editor-page-rail")
+      .querySelectorAll(".editor-toolbar, .editor-canvas-stage, .editor-page-rail, .editor-workspace-row")
       .forEach((node) => observer.observe(node));
     window.addEventListener("resize", resize);
     window.addEventListener("orientationchange", resize);
@@ -208,18 +310,68 @@ export function FloatingPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, side]);
 
-  const start = (event: PointerEvent<HTMLElement>, mode: "move" | "resize") => {
+  /**
+   * Resolve the next rectangle for a gesture: pure math, shared by the pointer
+   * move and the final commit. Physical clientX/Y deltas — direction-agnostic,
+   * so RTL never flips a resize. The opposite edges stay pinned; hitting the
+   * minimum size pins the moving edge instead (the panel stops growing the
+   * hole).
+   */
+  const step = (
+    g: NonNullable<typeof gesture.current>,
+    dx: number,
+    dy: number,
+  ): PanelRect => {
+    const r = g.rect;
+    if (g.mode === "move") return { ...r, left: r.left + dx, top: r.top + dy };
+    let left = r.left;
+    let top = r.top;
+    let width = r.width;
+    let height = r.height;
+    if (g.mode.includes("e")) width = r.width + dx;
+    if (g.mode.includes("s")) height = r.height + dy;
+    if (g.mode.includes("w")) {
+      width = r.width - dx;
+      left = r.left + dx;
+      if (width < minSize.width) {
+        left = r.left + r.width - minSize.width;
+        width = minSize.width;
+      }
+    }
+    if (g.mode.includes("n")) {
+      height = r.height - dy;
+      top = r.top + dy;
+      if (height < minSize.height) {
+        top = r.top + r.height - minSize.height;
+        height = minSize.height;
+      }
+    }
+    return { left, top, width, height };
+  };
+
+  const start = (event: PointerEvent<HTMLElement>, mode: GestureMode) => {
     if (event.button !== 0) return;
     event.preventDefault();
     let current = latest.current;
-    if (docked) {
+    if (dockSide) {
       // Dragging a docked panel detaches it: the same gesture that positions a
       // floating panel is how you leave the fixed layout.
       const node = event.currentTarget.closest<HTMLElement>(".editor-floating-panel");
       const measured = node?.getBoundingClientRect();
-      if (measured) current = bounds(measured);
+      const row = sectionRef.current?.offsetParent as HTMLElement | null;
+      const rowRect = row?.getBoundingClientRect();
+      if (measured && rowRect) {
+        current = {
+          left: measured.left - rowRect.left,
+          top: measured.top - rowRect.top,
+          width: measured.width,
+          height: measured.height,
+        };
+        latest.current = current;
+        persist();
+      }
       apply(current);
-      onDockChange?.(false);
+      onDockSideChange?.(null);
     }
     gesture.current = {
       id: event.pointerId,
@@ -230,7 +382,11 @@ export function FloatingPanel({
       frame: 0,
       mode,
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* synthetic events still drive the window-level listeners */
+    }
     setDragging(true);
   };
 
@@ -241,16 +397,7 @@ export function FloatingPanel({
     event.stopPropagation();
     const dx = event.clientX - g.x;
     const dy = event.clientY - g.y;
-    if (g.mode === "move") {
-      g.next = { ...g.rect, left: g.rect.left + dx, top: g.rect.top + dy };
-    } else {
-      /* The opposite edges stay pinned; only the resize grip changes size. */
-      g.next = {
-        ...g.rect,
-        width: Math.max(minSize.width, g.rect.width + dx),
-        height: Math.max(minSize.height, g.rect.height + dy),
-      };
-    }
+    g.next = step(g, dx, dy);
     if (g.frame) return;
     g.frame = requestAnimationFrame(() => {
       g.frame = 0;
@@ -265,15 +412,7 @@ export function FloatingPanel({
     event.stopPropagation();
     if (g.frame) cancelAnimationFrame(g.frame);
     if (event.type === "pointerup") {
-      const dx = event.clientX - g.x;
-      const dy = event.clientY - g.y;
-      g.next = g.mode === "move"
-        ? { ...g.rect, left: g.rect.left + dx, top: g.rect.top + dy }
-        : {
-            ...g.rect,
-            width: Math.max(minSize.width, g.rect.width + dx),
-            height: Math.max(minSize.height, g.rect.height + dy),
-          };
+      g.next = step(g, event.clientX - g.x, event.clientY - g.y);
     }
     apply(g.next);
     gesture.current = null;
@@ -292,7 +431,7 @@ export function FloatingPanel({
     }[event.key];
     if (!direction) return;
     event.preventDefault();
-    if (docked) onDockChange?.(false);
+    if (dockSide) onDockSideChange?.(null);
     if (mode === "move") {
       apply({
         ...latest.current,
@@ -309,61 +448,166 @@ export function FloatingPanel({
     persist();
   };
 
-  const events = {
+  const gestureEvents = {
     onPointerMove: move,
     onPointerUp: finish,
     onPointerCancel: finish,
     onLostPointerCapture: finish,
   };
 
+  /** One resize grip: a thin edge strip or a corner square. */
+  const grip = (mode: GestureMode) => {
+    const isCorner = mode.length === 2;
+    const style: CSSProperties = { cursor: CURSORS[mode] };
+    if (mode === "n") Object.assign(style, { top: 0, left: 0, right: 0, height: EDGE_HIT });
+    if (mode === "s") Object.assign(style, { bottom: 0, left: 0, right: 0, height: EDGE_HIT });
+    if (mode === "e") Object.assign(style, { right: 0, top: 0, bottom: 0, width: EDGE_HIT });
+    if (mode === "w") Object.assign(style, { left: 0, top: 0, bottom: 0, width: EDGE_HIT });
+    if (mode === "ne") Object.assign(style, { top: 0, right: 0, width: 16, height: 16 });
+    if (mode === "nw") Object.assign(style, { top: 0, left: 0, width: 16, height: 16 });
+    if (mode === "se") Object.assign(style, { bottom: 0, right: 0, width: 16, height: 16 });
+    if (mode === "sw") Object.assign(style, { bottom: 0, left: 0, width: 16, height: 16 });
+    return (
+      <button
+        key={mode}
+        type="button"
+        aria-hidden={!isCorner}
+        tabIndex={isCorner ? 0 : -1}
+        aria-label={
+          isCorner
+            ? `تغيير حجم ${title} من الركن ${mode}`
+            : undefined
+        }
+        title="اسحب لتغيير الحجم"
+        className={cn("floating-panel-resize", `fp-resize-${mode}`)}
+        style={style}
+        onPointerDown={(event) => start(event, mode)}
+        {...gestureEvents}
+        onKeyDown={
+          isCorner ? (event) => nudge(event, "resize") : undefined
+        }
+      />
+    );
+  };
+
+  const style: CSSProperties | undefined = dockSide
+    ? gridAreaStyle
+    : {
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      };
+
   return (
     <section
+      ref={sectionRef}
       className={cn(
         // `touch-properties-sheet` / `editor-sidebar` stay on the node: the
         // panel skin and the editor QA scripts address the panel by them.
         "editor-floating-panel touch-properties-sheet editor-sidebar",
-        docked && "is-docked",
+        dockSide && "is-docked",
+        dockSide && `is-docked-${dockSide}`,
         open && "is-open",
         dragging && "is-dragging",
         className,
       )}
       data-editor-obstacle={open ? side : undefined}
+      data-dock-side={dockSide ?? undefined}
       aria-label={title}
       aria-hidden={!open}
       inert={!open}
-      style={
-        docked
-          ? undefined
-          : {
-              left: rect.left,
-              top: rect.top,
-              width: rect.width,
-              height: rect.height,
-            }
-      }
+      style={style}
     >
-      <div className="touch-properties-header">
+      <div
+        className="touch-properties-header"
+        onPointerDown={(event) => {
+          // Buttons inside the title bar keep their clicks; the bar itself drags.
+          if ((event.target as HTMLElement).closest("button:not(.touch-properties-grip)"))
+            return;
+          start(event, "move");
+        }}
+        {...gestureEvents}
+      >
         <button
           type="button"
           className="touch-properties-grip"
           aria-label={`تحريك ${title}`}
           title="اسحب لتحريك اللوحة — الأسهم للتحريك الدقيق"
-          onPointerDown={(event) => start(event, "move")}
-          {...events}
+          onPointerDown={(event) => {
+            // The whole title bar drags; the grip is its a11y/keyboard face.
+            // Stop the bubble so the header handler does not restart the
+            // gesture on a different capture target.
+            event.stopPropagation();
+            start(event, "move");
+          }}
+          {...gestureEvents}
           onKeyDown={(event) => nudge(event, "move")}
         >
           <GripHorizontal size={16} aria-hidden="true" />
           <span>{title}</span>
         </button>
-        {onDockChange && (
-          <button
-            type="button"
-            onClick={() => onDockChange(!docked)}
-            aria-label={docked ? "فصل لوحة العناصر" : "إرساء لوحة العناصر"}
-            title={docked ? "فصل اللوحة" : "إرساء اللوحة"}
-          >
-            <PanelRightClose size={16} />
-          </button>
+        {onDockSideChange && (
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              onClick={() => setDockMenuOpen((v) => !v)}
+              aria-label={dockSide ? `تغيير تثبيت ${title}` : `تثبيت ${title}`}
+              aria-expanded={dockMenuOpen}
+              title={dockSide ? "تغيير حافة التثبيت" : "تثبيت اللوحة على حافة الشاشة"}
+              className={cn(dockSide && "is-docked-active")}
+            >
+              {dockSide ? <Pin size={16} /> : <PanelRight size={16} />}
+            </button>
+            {dockMenuOpen && (
+              <div
+                ref={dockMenuRef}
+                className="fp-dock-menu"
+                role="menu"
+                aria-label={`حافة تثبيت ${title}`}
+                onPointerDown={(event) => event.stopPropagation()}
+              >
+                {(
+                  [
+                    ["top", PanelTop],
+                    ["bottom", PanelBottom],
+                    ["left", PanelLeft],
+                    ["right", PanelRight],
+                  ] as const
+                ).map(([d, Icon]) => (
+                  <button
+                    key={d}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={dockSide === d}
+                    title={DOCK_LABELS[d]}
+                    className={cn(dockSide === d && "is-current")}
+                    onClick={() => {
+                      onDockSideChange(d);
+                      setDockMenuOpen(false);
+                    }}
+                  >
+                    <Icon size={15} aria-hidden="true" />
+                    <span>{DOCK_LABELS[d].replace("تثبيت في ", "").replace("تثبيت على ", "")}</span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={!dockSide}
+                  title={DOCK_LABELS.free}
+                  className={cn(!dockSide && "is-current")}
+                  onClick={() => {
+                    onDockSideChange(null);
+                    setDockMenuOpen(false);
+                  }}
+                >
+                  <Move size={15} aria-hidden="true" />
+                  <span>نافذة حرة</span>
+                </button>
+              </div>
+            )}
+          </div>
         )}
         <button
           type="button"
@@ -375,18 +619,10 @@ export function FloatingPanel({
         </button>
       </div>
       <div className="touch-properties-content">{children}</div>
-      {!docked && (
-        <button
-          type="button"
-          className="floating-panel-resize"
-          aria-label={`تغيير حجم ${title}`}
-          title="اسحب لتغيير العرض والارتفاع — أو استخدم الأسهم"
-          onPointerDown={(event) => start(event, "resize")}
-          {...events}
-          onKeyDown={(event) => nudge(event, "resize")}
-        >
-          <Maximize2 size={14} />
-        </button>
+      {!dockSide && (
+        <>
+          {(["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const).map(grip)}
+        </>
       )}
     </section>
   );

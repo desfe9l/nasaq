@@ -321,7 +321,7 @@ export function ReportToolsPanel() {
         </h4>
         <button
           type="button"
-          onClick={openTablePicker}
+          onClick={() => openTablePicker("tools")}
           className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold hover:border-navy-2"
         >
           <FileSpreadsheet className="size-3.5" />

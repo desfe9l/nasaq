@@ -259,29 +259,33 @@ try {
     await page.setViewportSize(viewport);
     await page.waitForTimeout(250);
     await geometry("svg");
-    await page
-      .getByRole("button", { name: "الخصائص والإعدادات", exact: true })
-      .click();
-    assert.equal(await page.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').count(), 1);
-    await page.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').waitFor({ state: "visible" });
-    await page.getByRole("button", { name: "الطبقات", exact: true }).click();
+    await page.evaluate(async () => {
+      if (!window.store) {
+        const source = performance.getEntriesByType("resource").find(e => /\/editor\/store\.ts(?:\?|$)/.test(e.name));
+        window.store = (await import(source.name)).useEditor;
+      }
+      window.store.getState().setRightTab("properties");
+    });
+    const sheetNode = page.locator('.touch-properties-sheet[aria-label="الخصائص"]');
+    assert.equal(await sheetNode.count(), 1);
+    await sheetNode.waitFor({ state: "visible" });
+    // الطبقات is an INDEPENDENT window: opening it leaves الخصائص open too.
+    await page.evaluate(() => window.store.getState().setRightTab("layers"));
     assert.equal(
-      await page.evaluate(() => window.store.getState().rightTab),
-      "layers",
+      await page.evaluate(() => window.store.getState().layersOpen),
+      true,
     );
-    assert.equal(
-      await page
-        .locator('.studio-tool-dock .is-active[aria-label="الطبقات"]')
-        .count(),
-      1,
+    assert.ok(
+      await page.locator('.touch-properties-sheet[aria-label="الطبقات"]').waitFor({ state: "visible" }),
+      "layers window shows alongside properties",
     );
-    const slider = page.getByRole("button", { name: "تغيير حجم الخصائص والطبقات" });
-    const sheetNode = page.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]');
+    // The se corner grip resizes the window (arrow keys included).
+    const slider = page.getByRole("button", { name: "تغيير حجم الخصائص من الركن se" });
     const h = (await sheetNode.boundingBox()).height;
     await slider.press("ArrowUp");
     assert.ok((await sheetNode.boundingBox()).height < h);
     await page.waitForTimeout(220);
-    const sheet = await page.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').boundingBox();
+    const sheet = await page.locator('.touch-properties-sheet[aria-label="الخصائص"]').boundingBox();
     const rail = await page.locator(".editor-page-rail").boundingBox();
     const header = await page.locator(".editor-toolbar").boundingBox();
     assert.ok(
@@ -293,9 +297,9 @@ try {
       "drawer must not cover page commands",
     );
     await page
-      .getByRole("button", { name: "إغلاق الخصائص والطبقات", exact: true })
+      .getByRole("button", { name: "إغلاق الخصائص", exact: true })
       .click();
-    await page.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').waitFor({ state: "hidden" });
+    await page.locator('.touch-properties-sheet[aria-label="الخصائص"]').waitFor({ state: "hidden" });
     const exportBox = await page.locator(".editor-export-btn").boundingBox();
     assert.ok(
       exportBox.x >= 0 && exportBox.x + exportBox.width <= viewport.width,
@@ -320,10 +324,121 @@ try {
       path: `.cache/editor-acceptance/editor-${viewport.width}.png`,
     });
   }
+  // ── The six independent floating windows ────────────────────────────────
+  // Open ALL of them at once: the canvas must not move or resize at all.
+  const canvasAtRest = await page.locator(".editor-canvas-stage").boundingBox();
+  await page.evaluate(() => {
+    const s = window.store.getState();
+    s.setLeftTab("elements");
+    s.setRightTab("properties");
+    s.setRightTab("layers");
+    s.toggle("libraryOpen");
+    s.toggle("toolsOpen");
+    s.toggle("reportToolsOpen");
+  });
+  await page.waitForTimeout(250);
+  const canvasWithWindows = await page.locator(".editor-canvas-stage").boundingBox();
+  assert.ok(
+    Math.abs(canvasAtRest.x - canvasWithWindows.x) < 1 &&
+      Math.abs(canvasAtRest.y - canvasWithWindows.y) < 1 &&
+      Math.abs(canvasAtRest.width - canvasWithWindows.width) < 1 &&
+      Math.abs(canvasAtRest.height - canvasWithWindows.height) < 1,
+    `floating windows must not reflow the canvas: ${JSON.stringify({ canvasAtRest, canvasWithWindows })}`,
+  );
+  for (const label of ["المكتبة", "أدوات العناصر", "لوحة العناصر", "الخصائص", "الطبقات", "أدوات التقرير"]) {
+    const win = page.locator(`.touch-properties-sheet[aria-label="${label}"]`);
+    assert.equal(await win.count(), 1, `window "${label}" exists`);
+    await win.waitFor({ state: "visible" });
+  }
+
+  // Title-bar drag moves the window.
+  const props = page.locator('.touch-properties-sheet[aria-label="الخصائص"]');
+  const propsStart = await props.boundingBox();
+  const gripBar = await page
+    .locator('.touch-properties-sheet[aria-label="الخصائص"] .touch-properties-grip')
+    .boundingBox();
+  await page.mouse.move(gripBar.x + gripBar.width / 2, gripBar.y + gripBar.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(gripBar.x + gripBar.width / 2 - 70, gripBar.y + gripBar.height / 2 + 40, { steps: 6 });
+  await page.mouse.up();
+  const propsMoved = await props.boundingBox();
+  assert.ok(
+    Math.abs(propsMoved.x - (propsStart.x - 70)) < 3 &&
+      Math.abs(propsMoved.y - (propsStart.y + 40)) < 3,
+    `header drag moves the window: ${JSON.stringify({ propsStart, propsMoved })}`,
+  );
+
+  // The west EDGE grip resizes from an edge, not just a corner.
+  const westGrip = await page
+    .locator('.touch-properties-sheet[aria-label="الخصائص"] .fp-resize-w')
+    .boundingBox();
+  await page.mouse.move(westGrip.x + westGrip.width / 2, westGrip.y + westGrip.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(westGrip.x + westGrip.width / 2 - 60, westGrip.y + westGrip.height / 2, { steps: 5 });
+  await page.mouse.up();
+  const propsWider = await props.boundingBox();
+  assert.ok(
+    propsWider.width >= propsMoved.width + 50 &&
+      Math.abs(propsWider.x - (propsMoved.x - 60)) < 3,
+    `west edge drag widens the window: ${JSON.stringify({ propsMoved, propsWider })}`,
+  );
+
+  // Dock to the right: the canvas SHRINKS (its space is reserved), it is never covered.
+  const canvasBeforeDock = await page.locator(".editor-canvas-stage").boundingBox();
+  await page.getByRole("button", { name: "تثبيت الخصائص" }).click();
+  await page.getByRole("menuitemradio", { name: "اليمين", exact: true }).click();
+  await page.waitForTimeout(450);
+  const canvasDocked = await page.locator(".editor-canvas-stage").boundingBox();
+  assert.ok(
+    canvasDocked.width < canvasBeforeDock.width - 150,
+    `docking reserves canvas space: ${canvasBeforeDock.width} -> ${canvasDocked.width}`,
+  );
+  const dockedProps = await page.locator('.touch-properties-sheet[aria-label="الخصائص"]').boundingBox();
+  assert.ok(
+    Math.abs(dockedProps.x - (canvasDocked.x + canvasDocked.width)) < 2,
+    `docked panel sits flush at the canvas edge: ${JSON.stringify({ canvasDocked, dockedProps })}`,
+  );
+  assert.ok(
+    dockedProps.y >= canvasDocked.y - 1 &&
+      dockedProps.y + dockedProps.height <= canvasDocked.y + canvasDocked.height + 1,
+    "docked panel stays within the canvas band",
+  );
+
+  // Undock: the canvas gets its space back.
+  await page.getByRole("button", { name: "تغيير تثبيت الخصائص" }).click();
+  await page.getByRole("menuitemradio", { name: "نافذة حرة", exact: true }).click();
+  await page.waitForTimeout(450);
+  const canvasUndocked = await page.locator(".editor-canvas-stage").boundingBox();
+  assert.ok(
+    Math.abs(canvasUndocked.width - canvasBeforeDock.width) < 2,
+    `undocking restores the canvas: ${canvasBeforeDock.width} -> ${canvasUndocked.width}`,
+  );
+
+  // Pages rail: hidden completely, the artboard reclaims its full height.
+  const railShown = await page.locator(".editor-page-rail").boundingBox();
+  assert.ok(railShown, "pages rail shown by default");
+  await page.getByRole("button", { name: "إخفاء شريط الصفحات بالكامل" }).click();
+  await page.waitForTimeout(250);
+  assert.equal(await page.locator(".editor-page-rail").count(), 0, "rail fully hidden");
+  const canvasRailHidden = await page.locator(".editor-canvas-stage").boundingBox();
+  assert.ok(
+    canvasRailHidden.height >= canvasAtRest.height + 80,
+    `hiding the rail gives the canvas its space back: ${canvasAtRest.height} -> ${canvasRailHidden.height}`,
+  );
+  await page.getByRole("button", { name: "إظهار شريط الصفحات" }).click();
+  await page.waitForTimeout(250);
+  assert.ok(await page.locator(".editor-page-rail").boundingBox(), "rail restored from the status bar");
+
+  // Clean slate for the remaining checks.
+  await page.evaluate(() => window.store.getState().closeFloatingPanels());
+  await page.waitForTimeout(120);
+
   const pagesBefore = await page.evaluate(
     () => window.store.getState().pages.length,
   );
-  await page.getByTitle("نسخ الصفحة الحالية", { exact: true }).click();
+  await page
+    .getByRole("button", { name: "تكرار الصفحة الحالية كنسخة مطابقة", exact: true })
+    .click();
   assert.equal(
     await page.evaluate(() => window.store.getState().pages.length),
     pagesBefore + 1,
@@ -342,8 +457,6 @@ try {
     previous,
   );
   assert.equal(await page.locator("header .editor-wand-btn").count(), 0);
-  assert.equal(await page.locator(".collapsed-panel-dock").count(), 0);
-  assert.equal(await page.locator(".studio-tool-dock").count(), 1);
   await page.goto(base + "/purchase");
   await page.locator("footer a[href^='https://wa.me/966552017111?text=']").waitFor();
   assert.doesNotMatch(
@@ -411,15 +524,17 @@ try {
   );
   await touch.goto(base + "/editor");
   await touch.locator(".editor-canvas-stage").waitFor();
-  await touch
-    .getByRole("button", { name: "الخصائص والإعدادات", exact: true })
-    .tap();
+  await touch.evaluate(async () => {
+    const source = performance.getEntriesByType("resource").find(e => /\/editor\/store\.ts(?:\?|$)/.test(e.name));
+    window.store = (await import(source.name)).useEditor;
+    window.store.getState().setRightTab("properties");
+  });
   const grip = touch.getByRole("button", {
-    name: "تغيير حجم الخصائص والطبقات",
+    name: "تغيير حجم الخصائص من الركن se",
   });
   await grip.waitFor();
   await touch.waitForTimeout(250);
-  const startHeight = (await touch.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').boundingBox()).height;
+  const startHeight = (await touch.locator('.touch-properties-sheet[aria-label="الخصائص"]').boundingBox()).height;
   const gripBox = await grip.boundingBox();
   const cdp = await touchContext.newCDPSession(touch);
   const x = gripBox.x + gripBox.width / 2,
@@ -438,11 +553,11 @@ try {
   });
   await touch.waitForTimeout(220);
   assert.ok(
-    (await touch.locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]').boundingBox()).height < startHeight,
+    (await touch.locator('.touch-properties-sheet[aria-label="الخصائص"]').boundingBox()).height < startHeight,
     "touch grip resizes sheet",
   );
   const touchSheet = await touch
-    .locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"]')
+    .locator('.touch-properties-sheet[aria-label="الخصائص"]')
     .boundingBox();
   const touchHeader = await touch.locator(".editor-toolbar").boundingBox();
   assert.ok(touchSheet.y >= touchHeader.y + touchHeader.height);
@@ -451,10 +566,13 @@ try {
     assert.ok(b.y + b.height <= 768);
   }
   await touch
-    .locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"] .touch-properties-content')
-    .evaluate((n) => (n.scrollTop = n.scrollHeight));
+    .locator('.touch-properties-sheet[aria-label="الخصائص"] .touch-properties-content')
+    .evaluate((n) => {
+      const scroller = n.querySelector(".editor-panel-body") ?? n;
+      scroller.scrollTop = scroller.scrollHeight;
+    });
   const lastAction = await touch
-    .locator('.touch-properties-sheet[aria-label="الخصائص والطبقات"] .editor-panel-footer button')
+    .locator('.touch-properties-sheet[aria-label="الخصائص"] .editor-panel-body button')
     .last()
     .boundingBox();
   assert.ok(
@@ -465,7 +583,7 @@ try {
   await touchContext.close();
   assert.deepEqual(errors, []);
   console.log(
-    "PASS: geometry, drag, resize, rotation, live SVG picker, single drawers, four responsive viewports, zoom, subscription copy/CTA, WhatsApp and portrait A4.",
+    "PASS: geometry, drag, resize, rotation, live SVG picker, six independent floating windows (no canvas reflow, drag, edge resize, dock/undock space reservation), hidden pages rail, four responsive viewports, zoom, subscription copy/CTA, WhatsApp and portrait A4.",
   );
 } catch (error) {
   console.log("Browser errors:", errors);
