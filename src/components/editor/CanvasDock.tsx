@@ -238,8 +238,8 @@ export function CanvasDock({
       id: event.pointerId,
       x: event.clientX,
       y: event.clientY,
-      ox: box.left - slot.left,
-      oy: box.top - slot.top,
+      ox: event.clientX - box.left,
+      oy: event.clientY - box.top,
     };
   };
   const moveDrag = (event: React.PointerEvent<HTMLElement>) => {

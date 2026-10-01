@@ -36,10 +36,14 @@ try {
     await dock.waitFor();
     const dragDock = async (type) => {
       const before = await dock.boundingBox();
-      const viewport = page.viewportSize();
+      const bounds = await dock.evaluate((node) => node.parentElement.getBoundingClientRect().toJSON());
       assert.ok(before.height <= 68, `main dock height is ${before.height}px at ${width}px`);
-      const dx = before.x + before.width + 16 <= viewport.width ? 16 : before.x >= 16 ? -16 : 0;
-      const dy = before.y >= 24 ? -16 : 16;
+      const leftRoom = before.x - bounds.left;
+      const rightRoom = bounds.right - before.x - before.width;
+      const topRoom = before.y - bounds.top;
+      const bottomRoom = bounds.bottom - before.y - before.height;
+      const dx = rightRoom >= leftRoom ? Math.min(16, rightRoom) : -Math.min(16, leftRoom);
+      const dy = bottomRoom >= topRoom ? Math.min(16, bottomRoom) : -Math.min(16, topRoom);
       assert.ok(dx !== 0 || dy !== 0, "main dock has no available drag lane");
       const grip = dock.locator(".editor-dock-grip");
       const gripBox = await grip.boundingBox();
@@ -88,7 +92,10 @@ try {
       ), `main dock changed size during ${type} drag: ${JSON.stringify(samples)}`);
       const after = await dock.boundingBox();
       assert.ok(Math.abs(after.x - before.x) + Math.abs(after.y - before.y) > 2);
-      assert.ok(Math.abs(after.x - before.x - dx) < 2 && Math.abs(after.y - before.y - dy) < 2);
+      assert.ok(
+        Math.abs(after.x - before.x - dx) < 2 && Math.abs(after.y - before.y - dy) < 2,
+        `dock drag mismatch: ${JSON.stringify({ before, bounds, dx, dy, after })}`,
+      );
       assert.ok(Math.abs(after.width - before.width) < 0.5 && Math.abs(after.height - before.height) < 0.5);
       const position = await dock.evaluate((node) => ({
         left: Number.parseFloat(node.style.left),
