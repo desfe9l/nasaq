@@ -90,6 +90,7 @@ const MAX_LANE = 760;
 export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const automaticPosRef = useRef<{ left: number; top: number } | null>(null);
   /**
    * The free lane beside the artwork, measured in screen pixels. It — and only
    * it — decides which controls stay in the bar, so the bar's size can change
@@ -148,6 +149,15 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const bubbleOffset = useEditor((s) => s.bubbleOffset);
   const setBubbleOffset = useEditor((s) => s.setBubbleOffset);
   const [dragging, setDragging] = useState(false);
+  const [dragPos, setDragPos] = useState<{ left: number; top: number } | null>(null);
+  const dragRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    origin: { left: number; top: number; width: number; height: number };
+    next: { left: number; top: number };
+    frame: number;
+  } | null>(null);
   const flipSelected = useEditor((s) => s.flipSelected);
   const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
   const toggleLock = useEditor((s) => s.toggleLock);
@@ -261,6 +271,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       MARGIN,
       [...avoid, ...grips],
     );
+    automaticPosRef.current = { left, top };
     /*
      * A manual park wins over the automatic placement, still clamped into the
      * viewport so a resized window can never strand the bubble off screen.
@@ -393,49 +404,84 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     };
   }, []);
 
-  /**
-   * Drag the bubble by its grip and remember where it lands.
-   *
-   * Deltas are accumulated against the bubble's live rect (never the model),
-   * and each move writes the offset through the store so the placement effect
-   * keeps honouring the park without fighting the pointer.
-   */
+  /** Drag locally at display rate; commit a single park when the gesture ends. */
   const startDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0) return;
+    if (event.button !== 0 || !event.isPrimary) return;
     const toolbar = boxRef.current;
     if (!toolbar) return;
+    event.preventDefault();
+    event.stopPropagation();
     const origin = toolbar.getBoundingClientRect();
-    const startX = event.clientX;
-    const startY = event.clientY;
-    const base = useEditor.getState().bubbleOffset ?? { dx: 0, dy: 0 };
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      origin: {
+        left: origin.left,
+        top: origin.top,
+        width: Math.max(origin.width, toolbar.scrollWidth),
+        height: origin.height,
+      },
+      next: { left: origin.left, top: origin.top },
+      frame: 0,
+    };
+    setDragPos({ left: origin.left, top: origin.top });
     setDragging(true);
-    event.currentTarget.setPointerCapture?.(event.pointerId);
-
-    const move = (moveEvent: PointerEvent) => {
-      const dx = moveEvent.clientX - startX;
-      const dy = moveEvent.clientY - startY;
-      const next = { dx: base.dx + dx, dy: base.dy + dy };
-      /* Clamp the travel so the parked bubble can never leave the viewport. */
-      next.dx = Math.min(
-        Math.max(next.dx, base.dx + MARGIN - origin.left),
-        Math.max(base.dx + window.innerWidth - origin.width - MARGIN - origin.left, base.dx + MARGIN - origin.left),
-      );
-      next.dy = Math.min(
-        Math.max(next.dy, base.dy + MARGIN - origin.top),
-        Math.max(base.dy + window.innerHeight - origin.height - MARGIN - origin.top, base.dy + MARGIN - origin.top),
-      );
-      useEditor.getState().setBubbleOffset(next);
-    };
-    const end = () => {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      dragRef.current = null;
+      setDragPos(null);
       setDragging(false);
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", end);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", end);
+    }
   };
+
+  const moveDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const maxLeft = Math.max(MARGIN, window.innerWidth - drag.origin.width - MARGIN);
+    const maxTop = Math.max(MARGIN, window.innerHeight - drag.origin.height - MARGIN);
+    drag.next = {
+      left: Math.min(maxLeft, Math.max(MARGIN, drag.origin.left + event.clientX - drag.startX)),
+      top: Math.min(maxTop, Math.max(MARGIN, drag.origin.top + event.clientY - drag.startY)),
+    };
+    if (drag.frame) return;
+    drag.frame = requestAnimationFrame(() => {
+      drag.frame = 0;
+      if (dragRef.current === drag) setDragPos(drag.next);
+    });
+  };
+
+  const finishDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (drag.frame) cancelAnimationFrame(drag.frame);
+    const maxLeft = Math.max(MARGIN, window.innerWidth - drag.origin.width - MARGIN);
+    const maxTop = Math.max(MARGIN, window.innerHeight - drag.origin.height - MARGIN);
+    const position = event.type === "pointerup"
+      ? {
+          left: Math.min(maxLeft, Math.max(MARGIN, drag.origin.left + event.clientX - drag.startX)),
+          top: Math.min(maxTop, Math.max(MARGIN, drag.origin.top + event.clientY - drag.startY)),
+        }
+      : drag.next;
+    const automatic = automaticPosRef.current ?? {
+      left: drag.origin.left - (bubbleOffset?.dx ?? 0),
+      top: drag.origin.top - (bubbleOffset?.dy ?? 0),
+    };
+    dragRef.current = null;
+    setPos(position);
+    setBubbleOffset({ dx: position.left - automatic.left, dy: position.top - automatic.top });
+    setDragPos(null);
+    setDragging(false);
+  };
+
+  useEffect(() => () => {
+    if (dragRef.current?.frame) cancelAnimationFrame(dragRef.current.frame);
+  }, []);
 
   const style = el.style || {};
   const isText = TEXT_TYPES.has(el.type);
@@ -584,8 +630,8 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       data-placement={side}
       data-density={layout.drawer.length || layout.more.length ? "folded" : "full"}
       style={{
-        left: pos?.left ?? -9999,
-        top: pos?.top ?? -9999,
+        left: dragPos?.left ?? pos?.left ?? -9999,
+        top: dragPos?.top ?? pos?.top ?? -9999,
         visibility: pos && !yielding ? "visible" : "hidden",
       }}
       // The toolbar is chrome over the document: pointer events must never
@@ -612,6 +658,10 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
         title="اسحب لنقل الشريط — نقرتان لإعادته إلى الموضع التلقائي"
         aria-label="نقل الشريط العائم"
         onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={finishDrag}
+        onPointerCancel={finishDrag}
+        onLostPointerCapture={finishDrag}
         onDoubleClick={() => setBubbleOffset(null)}
       >
         <Move />

@@ -418,6 +418,25 @@ export const adminListTemplatesFn = createServerFn({ method: "POST" })
     return { ok: true as const, templates: rows.map(rowToSummary) };
   });
 
+/** Read a complete template payload for the authorized Admin Dashboard editor. */
+export const adminGetTemplateFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: { id: string }) => data)
+  .handler(async ({ data, context }) => {
+    const gate = await verifyTemplateManagerContext(context);
+    if (!gate.ok) return { ok: false as const, error: gate.error };
+    const id = String(data.id || "").trim().slice(0, 120);
+    if (!id) return { ok: false as const, error: "معرّف القالب غير صالح" };
+    const db = await sql();
+    await ensureProductTemplates(db);
+    const rows = await db.query(`SELECT * FROM admin_templates WHERE id = $1 LIMIT 1`, [id]);
+    if (!rows.length) return { ok: false as const, error: "القالب غير موجود" };
+    return {
+      ok: true as const,
+      template: { ...rowToSummary(rows[0]), content: String(rows[0].content) } as AdminTemplate,
+    };
+  });
+
 export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { template: AdminTemplateInput }) => data)

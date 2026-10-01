@@ -35,6 +35,50 @@ try {
     await page.locator(".editor-canvas-stage [data-el-id]").first().click();
     const toolbar = page.locator(".floating-toolbar");
     await toolbar.waitFor({ state: "visible" });
+    const grip = toolbar.locator(".floating-toolbar-grip");
+    const initialToolbar = await toolbar.boundingBox();
+    const initialGrip = await grip.boundingBox();
+    const viewport = page.viewportSize();
+    const leftRoom = initialToolbar.x - 8;
+    const rightRoom = viewport.width - initialToolbar.x - initialToolbar.width - 8;
+    const topRoom = initialToolbar.y - 8;
+    const bottomRoom = viewport.height - initialToolbar.y - initialToolbar.height - 8;
+    const dx = rightRoom >= leftRoom ? Math.min(12, rightRoom) : -Math.min(12, leftRoom);
+    const dy = bottomRoom >= topRoom ? Math.min(10, bottomRoom) : -Math.min(10, topRoom);
+    assert.ok(Math.abs(dx) + Math.abs(dy) > 1, "toolbar has a drag lane");
+    const gripStart = {
+      x: initialGrip.x + initialGrip.width / 2,
+      y: initialGrip.y + initialGrip.height / 2,
+    };
+    const dragSamples = [];
+    await page.mouse.move(gripStart.x, gripStart.y);
+    await page.mouse.down();
+    for (let step = 1; step <= 4; step++) {
+      await page.mouse.move(
+        gripStart.x + dx * step / 4,
+        gripStart.y + dy * step / 4,
+      );
+      await page.waitForTimeout(16);
+      dragSamples.push(await toolbar.evaluate((node) => ({
+        rect: node.getBoundingClientRect().toJSON(),
+        animation: getComputedStyle(node).animationName,
+      })));
+    }
+    await page.mouse.up();
+    assert.ok(dragSamples.every(({ rect, animation }) =>
+      Math.abs(rect.width - initialToolbar.width) < 0.5 &&
+      Math.abs(rect.height - initialToolbar.height) < 0.5 &&
+      animation === "none",
+    ), `toolbar changed geometry or animated while dragging: ${JSON.stringify(dragSamples)}`);
+    const movedToolbar = await toolbar.boundingBox();
+    const movedGrip = await grip.boundingBox();
+    assert.ok(Math.abs(movedToolbar.x - initialToolbar.x) + Math.abs(movedToolbar.y - initialToolbar.y) > 1);
+    assert.ok(movedToolbar.x >= 8 && movedToolbar.y >= 8);
+    assert.ok(movedToolbar.x + movedToolbar.width <= viewport.width - 7);
+    assert.ok(movedToolbar.y + movedToolbar.height <= viewport.height - 7);
+    assert.ok(Math.abs(
+      (movedGrip.x - movedToolbar.x) - (initialGrip.x - initialToolbar.x),
+    ) < 0.5);
     const stroke = toolbar.getByRole("textbox", {
       name: "سماكة الحد بالبكسل",
       exact: true,

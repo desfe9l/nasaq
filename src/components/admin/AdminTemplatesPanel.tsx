@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import {
+  adminGetTemplateFn,
   adminDeleteTemplateFn,
   adminListTemplatesFn,
   adminSetTemplateStatusFn,
@@ -55,6 +56,7 @@ interface Draft {
   status: TemplateStatus;
   kind: TemplateKind;
   content: string;
+  contentChanged: boolean;
   fileName: string;
   thumbnail: string | null;
   sortOrder: number;
@@ -69,6 +71,7 @@ const EMPTY_DRAFT: Draft = {
   status: "draft",
   kind: "json",
   content: "",
+  contentChanged: false,
   fileName: "",
   thumbnail: null,
   sortOrder: 0,
@@ -154,6 +157,22 @@ export function AdminTemplatesPanel() {
     setLoading(false);
   }, []);
 
+  const editTemplate = async (item: AdminTemplateSummary) => {
+    setBusyId(item.id);
+    const result = await adminGetTemplateFn({ data: { id: item.id } });
+    setBusyId(null);
+    if (!result.ok) return toast.error(result.error);
+    setDraft({
+      ...EMPTY_DRAFT,
+      ...result.template,
+      content: result.template.content,
+      contentChanged: false,
+      fileName: "",
+      thumbnail: result.template.thumbnail,
+      slug: result.template.slug || "",
+    });
+  };
+
   useEffect(() => {
     void load();
   }, [load]);
@@ -182,6 +201,7 @@ export function AdminTemplatesPanel() {
           ...(d ?? EMPTY_DRAFT),
           kind: "json",
           content,
+          contentChanged: true,
           fileName: file.name,
           title: d?.title || parsed.name || file.name.replace(/\.json$/i, ""),
           thumbnail:
@@ -200,6 +220,7 @@ export function AdminTemplatesPanel() {
       ...(d ?? EMPTY_DRAFT),
       kind: "svg",
       content,
+      contentChanged: true,
       fileName: file.name,
       title: d?.title || file.name.replace(/\.svg$/i, ""),
       thumbnail: d?.thumbnail || (thumb.length < 600_000 ? thumb : null),
@@ -217,6 +238,7 @@ export function AdminTemplatesPanel() {
       ...(d ?? EMPTY_DRAFT),
       kind: "json",
       content: JSON.stringify({ name: project.name, pages: project.pages }),
+      contentChanged: true,
       fileName: `${project.name}.json`,
       title: d?.title || project.name,
     }));
@@ -239,7 +261,7 @@ export function AdminTemplatesPanel() {
           tier: draft.tier,
           status: draft.status,
           kind: draft.kind,
-          content: draft.content,
+          content: draft.contentChanged ? draft.content : "",
           thumbnail: draft.thumbnail,
           sortOrder: draft.sortOrder,
         },
@@ -479,7 +501,9 @@ export function AdminTemplatesPanel() {
               {draft.fileName
                 ? `${draft.fileName} · ${draft.kind.toUpperCase()}`
                 : draft.id
-                  ? "المحتوى الحالي محفوظ — ارفع ملفًا لاستبداله"
+                  ? draft.contentChanged
+                    ? "تم تعديل محتوى التصميم"
+                    : "محتوى التصميم الحالي محمّل"
                   : "لم يُحدَّد محتوى بعد"}
             </span>
             <input
@@ -527,6 +551,30 @@ export function AdminTemplatesPanel() {
               </>
             )}
           </div>
+
+          <details className="rounded-lg border border-line bg-surface">
+            <summary className="cursor-pointer px-3 py-2 text-[12px] font-extrabold">
+              تحرير محتوى التصميم الأصلي (JSON / SVG)
+            </summary>
+            <div className="grid gap-2 border-t border-line p-3">
+              <p className="text-[11px] leading-5 text-muted">
+                هذا هو المستند الذي يفتحه المحرر. اتركه كما هو لتعديل البيانات فقط، أو استبدله بمشروع من مكتبة المشاريع بعد تحريره بصريًا في NASAQ.
+              </p>
+              <textarea
+                aria-label="محتوى التصميم JSON أو SVG"
+                dir="ltr"
+                spellCheck={false}
+                rows={12}
+                value={draft.content}
+                onChange={(event) =>
+                  setDraft((current) => current
+                    ? { ...current, content: event.target.value, contentChanged: true }
+                    : current)
+                }
+                className="min-h-48 w-full resize-y rounded-lg border border-line bg-surface-2 p-3 font-mono text-[11px] leading-5 text-ink outline-none focus:border-brand"
+              />
+            </div>
+          </details>
 
           <div className="flex gap-2">
             <button type="button" className={primaryBtn} disabled={saving} onClick={() => void save()}>
@@ -797,11 +845,10 @@ export function AdminTemplatesPanel() {
                     </button>
                     <button
                       type="button"
+                      disabled={busyId === t.id}
                       className={ghostBtn}
                       title="تعديل البيانات"
-                      onClick={() =>
-                        setDraft({ ...EMPTY_DRAFT, ...t, content: "", fileName: "", thumbnail: t.thumbnail, slug: t.slug || "" })
-                      }
+                      onClick={() => void editTemplate(t)}
                     >
                       <Pencil className="size-3.5" /> تعديل
                     </button>

@@ -84,6 +84,8 @@ export function FloatingPanel({
     x: number;
     y: number;
     rect: PanelRect;
+    next: PanelRect;
+    frame: number;
     mode: "move" | "resize";
   } | null>(null);
 
@@ -224,6 +226,8 @@ export function FloatingPanel({
       x: event.clientX,
       y: event.clientY,
       rect: current,
+      next: current,
+      frame: 0,
       mode,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -233,26 +237,45 @@ export function FloatingPanel({
   const move = (event: PointerEvent<HTMLElement>) => {
     const g = gesture.current;
     if (!g || g.id !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
     const dx = event.clientX - g.x;
     const dy = event.clientY - g.y;
     if (g.mode === "move") {
-      apply({ ...g.rect, left: g.rect.left + dx, top: g.rect.top + dy });
-      return;
+      g.next = { ...g.rect, left: g.rect.left + dx, top: g.rect.top + dy };
+    } else {
+      /* The opposite edges stay pinned; only the resize grip changes size. */
+      g.next = {
+        ...g.rect,
+        width: Math.max(minSize.width, g.rect.width + dx),
+        height: Math.max(minSize.height, g.rect.height + dy),
+      };
     }
-    /*
-     * Corner resize from the bottom-right grip: the drag direction follows the
-     * corner the author grabbed (down/right grows, up/left shrinks), the
-     * opposite edges stay pinned, and the clamp keeps the whole card on screen.
-     */
-    apply({
-      ...g.rect,
-      width: Math.max(minSize.width, g.rect.width + dx),
-      height: Math.max(minSize.height, g.rect.height + dy),
+    if (g.frame) return;
+    g.frame = requestAnimationFrame(() => {
+      g.frame = 0;
+      if (gesture.current === g) apply(g.next);
     });
   };
 
-  const finish = () => {
-    if (!gesture.current) return;
+  const finish = (event: PointerEvent<HTMLElement>) => {
+    const g = gesture.current;
+    if (!g || g.id !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (g.frame) cancelAnimationFrame(g.frame);
+    if (event.type === "pointerup") {
+      const dx = event.clientX - g.x;
+      const dy = event.clientY - g.y;
+      g.next = g.mode === "move"
+        ? { ...g.rect, left: g.rect.left + dx, top: g.rect.top + dy }
+        : {
+            ...g.rect,
+            width: Math.max(minSize.width, g.rect.width + dx),
+            height: Math.max(minSize.height, g.rect.height + dy),
+          };
+    }
+    apply(g.next);
     gesture.current = null;
     setDragging(false);
     persist();

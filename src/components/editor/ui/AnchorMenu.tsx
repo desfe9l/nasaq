@@ -135,7 +135,16 @@ export function AnchorMenu({
   const bodyRef = useRef<HTMLDivElement>(null);
   /** True once the author has placed the drawer; anchoring stops fighting it. */
   const parked = useRef(false);
-  const dragState = useRef<{ id: number; x: number; y: number; left: number; top: number } | null>(null);
+  const dragState = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    left: number;
+    top: number;
+    next: { x: number; y: number };
+    moved: boolean;
+    frame: number;
+  } | null>(null);
 
   /** Where the panel goes when the author has not parked it. */
   const anchor = useCallback(() => {
@@ -266,14 +275,11 @@ export function AnchorMenu({
     return () => cancelAnimationFrame(frame);
   }, [open]);
 
-  /**
-   * Drag the drawer by its grip. Deltas are applied to the live panel rect, so
-   * the panel follows the pointer exactly and the park that is written on
-   * release is the position the author actually sees.
-   */
+  /** Drag locally at display rate and persist the drawer's park once on release. */
   const startDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0 || !panelRef.current) return;
+    if (event.button !== 0 || !event.isPrimary || !panelRef.current) return;
     event.preventDefault();
+    event.stopPropagation();
     const rect = panelRef.current.getBoundingClientRect();
     dragState.current = {
       id: event.pointerId,
@@ -281,45 +287,73 @@ export function AnchorMenu({
       y: event.clientY,
       left: rect.left,
       top: rect.top,
+      next: { x: rect.left, y: rect.top },
+      moved: false,
+      frame: 0,
     };
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch {
-      /* the window listeners below still carry the drag */
-    }
-    const move = (moveEvent: PointerEvent) => {
-      const drag = dragState.current;
-      const panel = panelRef.current;
-      if (!drag || drag.id !== moveEvent.pointerId || !panel) return;
-      parked.current = true;
-      const size = panel.getBoundingClientRect();
-      const at = clampParkedPoint(
-        {
-          x: drag.left + (moveEvent.clientX - drag.x),
-          y: drag.top + (moveEvent.clientY - drag.y),
-        },
-        { width: size.width, height: size.height },
-        { width: window.innerWidth, height: window.innerHeight },
-        MARGIN,
-      );
-      setPos((current) => ({ ...(current ?? { side }), left: at.x, top: at.y }));
-    };
-    const end = () => {
-      const drag = dragState.current;
       dragState.current = null;
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", end);
-      if (!drag || !drawerId) return;
-      setPos((current) => {
-        if (current) writePark(drawerId, { x: current.left, y: current.top });
-        return current;
-      });
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", end);
+    }
   };
+
+  const moveDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragState.current;
+    const panel = panelRef.current;
+    if (!drag || drag.id !== event.pointerId || !panel) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const size = panel.getBoundingClientRect();
+    drag.next = clampParkedPoint(
+      {
+        x: drag.left + (event.clientX - drag.x),
+        y: drag.top + (event.clientY - drag.y),
+      },
+      { width: size.width, height: size.height },
+      { width: window.innerWidth, height: window.innerHeight },
+      MARGIN,
+    );
+    drag.moved = true;
+    parked.current = true;
+    if (drag.frame) return;
+    drag.frame = requestAnimationFrame(() => {
+      drag.frame = 0;
+      if (dragState.current === drag) {
+        setPos((current) => ({ ...(current ?? { side }), left: drag.next.x, top: drag.next.y }));
+      }
+    });
+  };
+
+  const finishDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragState.current;
+    const panel = panelRef.current;
+    if (!drag || drag.id !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (drag.frame) cancelAnimationFrame(drag.frame);
+    const size = panel?.getBoundingClientRect();
+    const at = event.type === "pointerup" && drag.moved && size
+      ? clampParkedPoint(
+          {
+            x: drag.left + (event.clientX - drag.x),
+            y: drag.top + (event.clientY - drag.y),
+          },
+          { width: size.width, height: size.height },
+          { width: window.innerWidth, height: window.innerHeight },
+          MARGIN,
+        )
+      : drag.next;
+    dragState.current = null;
+    if (!drag.moved || !drawerId) return;
+    parked.current = true;
+    setPos((current) => ({ ...(current ?? { side }), left: at.x, top: at.y }));
+    writePark(drawerId, at);
+  };
+
+  useEffect(() => () => {
+    if (dragState.current?.frame) cancelAnimationFrame(dragState.current.frame);
+  }, []);
 
   return (
     <>
@@ -364,6 +398,10 @@ export function AnchorMenu({
                   aria-label={`نقل ${drawer.title}`}
                   title="اسحب لنقل اللوحة — نقرتان لإعادتها إلى الزر"
                   onPointerDown={startDrag}
+                  onPointerMove={moveDrag}
+                  onPointerUp={finishDrag}
+                  onPointerCancel={finishDrag}
+                  onLostPointerCapture={finishDrag}
                   onDoubleClick={() => {
                     parked.current = false;
                     writePark(drawer.id, null);

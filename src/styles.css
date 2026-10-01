@@ -2090,6 +2090,12 @@ body.is-resizing-rail {
   animation-name: floating-toolbar-in-side;
 }
 
+/* Placement selectors must not restart the entrance animation during a drag. */
+.floating-toolbar.is-dragging[data-placement] {
+  animation: none;
+  transform: none;
+}
+
 @keyframes floating-toolbar-in-down {
   from {
     opacity: 0;
