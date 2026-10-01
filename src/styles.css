@@ -1048,8 +1048,22 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   /* High-contrast "this is interactive" accent for library/palette items. */
   --primary-accent: #1d4ed8;
   --library-active-bg: rgba(29, 78, 216, 0.1);
-  /* Figma-style selection: one crisp NASAQ-blue hairline, no halo/glow. */
-  --sel-color: #2f6fb0;
+  /*
+   * Figma-style selection: one crisp blue hairline, no glow.
+   *
+   * The hairline is a SINGLE screen pixel wide at every zoom, so its own
+   * colour has to carry the whole signal — #2f6fb0 was too desaturated to read
+   * as a 1px line on a white page, and selection looked like a faint smudge
+   * (or vanished entirely over a mid-tone image). #1d64d8 keeps the NASAQ
+   * blue hue but lifts the chroma until a one-pixel line is unmistakable.
+   *
+   * `--sel-ring` is the contrast ring painted just OUTSIDE that hairline. It is
+   * white in light mode so the blue stays legible on dark artwork (Figma and
+   * Illustrator both pair their selection colour with a light outer ring); the
+   * studio-dark theme overrides it with a dark ring instead.
+   */
+  --sel-color: #1d64d8;
+  --sel-ring: rgba(255, 255, 255, 0.92);
   --hover-outline: rgba(29, 78, 216, 0.55);
 }
 /*
@@ -1060,7 +1074,13 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .editor-ui.editor-dark {
   --primary-accent: #58a2d8;
   --library-active-bg: rgba(88, 162, 216, 0.16);
+  /* Unchanged: the studio-dark selection already reads on the charcoal stage,
+     on the white page and over artwork. Only the ring flips dark, so the same
+     double-ring construction works in both themes. */
   --sel-color: #58a2d8;
+  /* Deliberately NO --sel-ring / --sel-handle-bg override: the studio-dark
+     selection already reads everywhere, so the ring stays `transparent` and
+     the handle dots stay white-with-a-blue-hairline exactly as before. */
   --hover-outline: rgba(88, 162, 216, 0.6);
 }
 /* z-index comes from SELECTION_LAYER_Z in CanvasStage — the one source. */
@@ -1094,7 +1114,15 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   outline: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
   outline-offset: calc(-1px / var(--editor-zoom, 1));
   transform-origin: center center;
-  box-shadow: none;
+  /*
+   * Contrast ring, painted OUTSIDE the hairline.
+   *
+   * A one-pixel line of any single colour disappears over artwork of a similar
+   * value — a navy chart, a photograph, a dark table header. The ring is the
+   * cheap, exact fix: it is drawn as a spread box-shadow so it adds no layout,
+   * no fill over the artwork, and no second border to keep in sync.
+   */
+  box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, transparent);
   background: transparent;
   pointer-events: auto;
   touch-action: none;
@@ -1312,6 +1340,24 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   border: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
   box-sizing: border-box;
+}
+
+/*
+ * LIGHT MODE ONLY — fill the handle dots with the selection colour and ring
+ * them in white, instead of a white dot wearing a coloured hairline.
+ *
+ * A white dot on the white page was the core of the light-mode problem: at 7px
+ * only its 1px border carried any signal, so the eight resize targets read as
+ * faint specks and the whole selection looked washed out. Filling them makes
+ * the targets unmistakable over any artwork, and the white ring keeps them
+ * separated from an element of the same blue underneath. The studio-dark theme
+ * keeps the original white-dot styling, which already reads on the charcoal
+ * stage.
+ */
+.editor-ui.editor-light .handle::after {
+  background: var(--sel-color, #2f6fb0);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, rgba(255, 255, 255, 0.92));
 }
 
 .handle.is-axis-locked::after {

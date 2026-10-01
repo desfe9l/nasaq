@@ -3,6 +3,24 @@ import { PublicTemplatePage } from "@/components/site/PublicTemplatePage";
 import { getPublishedTemplateMetaFn } from "@/lib/admin/functions";
 import { publishedTemplateAbsoluteUrl, templateDisplaySlug } from "@/lib/templates/published";
 
+/**
+ * Absolute URL of a template's own preview image.
+ *
+ * Crawlers fetch `og:image` themselves and ignore `data:` URLs, so the stored
+ * preview is served from `/api/templates/thumbnail` — a real, cacheable HTTP
+ * address. Without it every shared link fell back to the platform card and the
+ * recipient saw NASAQ's branding instead of the template they were sent.
+ */
+function templateShareImageUrl(idOrSlug: string, thumbnail?: string | null): string {
+  const card = `${publishedTemplateAbsoluteUrl(idOrSlug).split("/templates/")[0]}/og.jpg`;
+  if (!thumbnail) return card;
+  // An SVG preview is a document, not a share image: no major crawler renders
+  // `og:image` as SVG, so the platform card is the honest fallback.
+  if (thumbnail.startsWith("data:image/svg")) return card;
+  const base = publishedTemplateAbsoluteUrl(idOrSlug).split("/templates/")[0];
+  return `${base}/api/templates/thumbnail?id=${encodeURIComponent(idOrSlug)}`;
+}
+
 export const Route = createFileRoute("/templates/$templateId")({
   ssr: true,
   // SSR enabled for SEO/social preview
@@ -26,18 +44,12 @@ export const Route = createFileRoute("/templates/$templateId")({
       : tpl
         ? `قالب ${tpl.title} من نَسَق — جاهز للتحرير والطباعة، مع دعم كامل للهوية المؤسسية والخطوط العربية.`
         : "قوالب نَسَق الاحترافية — تقارير، خطابات، عروض وإنفوجرافيك جاهزة للتحرير.";
-    // og:image: use thumbnail if it's https url, else fallback to brand mark
-    let ogImage = "https://nasaq-sa.vercel.app/nasaq-mark.svg";
-    if (tpl?.thumbnail) {
-      if (tpl.thumbnail.startsWith("https://") || tpl.thumbnail.startsWith("http://")) {
-        ogImage = tpl.thumbnail;
-      } else if (tpl.thumbnail.startsWith("data:image/")) {
-        // data URLs are not crawlable for OG, keep fallback but still include data as secondary?
-        // We'll keep fallback for crawlers, but also include data URL via meta if possible.
-        // For now, keep fallback to ensure WhatsApp etc show brand.
-        ogImage = "https://nasaq-sa.vercel.app/nasaq-mark.svg";
-      }
-    }
+    /*
+     * The share image is the template's OWN preview when it has one, served
+     * from a crawlable URL; otherwise the platform card (which carries the
+     * current NASAQ mark — never the old stand-in logo).
+     */
+    const ogImage = templateShareImageUrl(slug, tpl?.thumbnail);
 
     const meta: any[] = [
       { title },
@@ -55,11 +67,8 @@ export const Route = createFileRoute("/templates/$templateId")({
       { name: "twitter:image", content: ogImage },
     ];
 
-    // If thumbnail is data URL, also expose it as og:image:secure_url alternative? We'll add second og:image if data
-    if (tpl?.thumbnail && tpl.thumbnail.startsWith("data:image/")) {
-      // Some platforms accept data URLs, add as additional image
-      meta.push({ property: "og:image:alt", content: tpl.title });
-    }
+    meta.push({ property: "og:image:alt", content: tpl?.title ?? "قالب نَسَق" });
+    meta.push({ property: "og:image:type", content: ogImage.endsWith(".jpg") ? "image/jpeg" : "image/png" });
 
     return {
       meta,

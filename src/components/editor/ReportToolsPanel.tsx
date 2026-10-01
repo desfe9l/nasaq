@@ -26,7 +26,7 @@ import {
   DEFAULT_PRINT_GUIDES,
   type PrintGuideSettings,
 } from "@/lib/editor/print-guides";
-import { domImageSize } from "@/lib/editor/images";
+import { imageSizeResolver } from "@/lib/editor/images";
 import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { AiReportPanel } from "./AiReportPanel";
@@ -93,7 +93,17 @@ export function ReportToolsPanel() {
 
   /* The same checker the export dialog runs, so the two can never disagree. */
   const report = useMemo(
-    () => runPreflight(pages, { guides: printGuides, imageSize: domImageSize }),
+    /*
+     * One DOM pass for the whole run. `domImageSize` rescanned every `<img>` in
+     * the document for each placed image, so a long document made this panel —
+     * and the preflight numbers the export dialog shows — quadratic in the
+     * number of images.
+     */
+    () =>
+      runPreflight(pages, {
+        guides: printGuides,
+        imageSize: imageSizeResolver(),
+      }),
     [pages, printGuides],
   );
 

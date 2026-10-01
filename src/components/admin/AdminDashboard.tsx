@@ -11,6 +11,7 @@ import {
   LayoutTemplate,
   Store,
   Megaphone,
+  Image as ImageIcon,
   KeyRound,
   Trash2,
   Loader2,
@@ -22,7 +23,7 @@ import { toast } from "sonner";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   adminSaveSettingsFn,
-  adminVerifyFn,
+  adminTemplatesAccessFn,
   getSiteSettingsFn,
 } from "@/lib/admin/functions";
 import {
@@ -33,15 +34,17 @@ import {
 } from "@/lib/admin/types";
 import AdminLicensePanel from "@/components/license/AdminLicensePanel";
 import { AdminTemplatesPanel } from "@/components/admin/AdminTemplatesPanel";
+import { SiteImagesPanel } from "@/components/admin/SiteImagesPanel";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth/client";
 
-type Tab = "templates" | "commercial" | "content" | "licenses";
+type Tab = "templates" | "commercial" | "content" | "images" | "licenses";
 
 const TABS: { id: Tab; label: string; icon: typeof Shield }[] = [
   { id: "templates", label: "إدارة القوالب", icon: LayoutTemplate },
   { id: "commercial", label: "الإعدادات التجارية", icon: Store },
   { id: "content", label: "محتوى الموقع", icon: Megaphone },
+  { id: "images", label: "صور الموقع", icon: ImageIcon },
   { id: "licenses", label: "التراخيص", icon: KeyRound },
 ];
 
@@ -59,16 +62,31 @@ export default function AdminDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("templates");
 
+  /*
+   * The panel owns the platform's PAID template catalogue, so it asks the
+   * server's owner gate — not a client-side flag — before it shows a single
+   * row. The route's `beforeLoad` already redirected a caller with no session;
+   * this is the check that keeps the component honest when it is reached from
+   * inside the app (and re-checked on every server call below).
+   */
   useEffect(() => {
+    let alive = true;
     setChecking(true);
-    void adminVerifyFn()
-      .then((res) => {
-      if (!res.configured) setError("لوحة الإدارة غير مهيأة: عيّن هوية المالك على الخادم.");
-      else if (!res.ok) setError("هذا الحساب لا يملك صلاحية الإدارة.");
-      else setAuthed(true);
-      })
-      .catch(() => setError("تعذر التحقق من صلاحيات الحساب."))
-      .finally(() => setChecking(false));
+    void (async () => {
+      try {
+        const access = await adminTemplatesAccessFn();
+        if (!alive) return;
+        if (access.ok) setAuthed(true);
+        else setError(access.error);
+      } catch {
+        if (alive) setError("يجب تسجيل الدخول بحساب المالك للوصول إلى لوحة إدارة القوالب.");
+      } finally {
+        if (alive) setChecking(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   if (!authed) {
@@ -138,6 +156,7 @@ export default function AdminDashboard() {
         {tab === "templates" && <AdminTemplatesPanel />}
         {tab === "commercial" && <SettingsTab kind="commercial" />}
         {tab === "content" && <SettingsTab kind="content" />}
+        {tab === "images" && <SiteImagesPanel />}
         {tab === "licenses" && (
           <div className="overflow-hidden rounded-xl border border-line">
             <AdminLicensePanel />

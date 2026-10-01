@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   AlignCenter,
@@ -111,6 +111,22 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
 
   const fontChoices = useEditor((s) => s.fontChoices);
   const zoom = useEditor((s) => s.zoom);
+  /**
+   * Which page the canvas is showing, and which panels are over it.
+   *
+   * Both change WHERE the selected element sits on screen without changing the
+   * element itself, so neither was ever a trigger before — and that is exactly
+   * why the bubble used to stay behind when the author turned the page.
+   * `panelsKey` is a single string so one subscription covers every panel
+   * arrangement instead of four.
+   */
+  const activePageId = useEditor((s) => s.activePageId);
+  const panelsKey = useEditor(
+    (s) =>
+      `${s.leftOpen ? 1 : 0}${s.rightOpen ? 1 : 0}${s.pagesRailCollapsed ? 1 : 0}${
+        s.focusMode ? 1 : 0
+      }${s.leftCollapsed ? 1 : 0}${s.rightCollapsed ? 1 : 0}`,
+  );
   /*
    * Follow the element while it is being dragged/rotated WITHOUT subscribing
    * to the document: the transient interaction store bumps `version` for this
@@ -151,7 +167,20 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       `.editor-canvas-stage [data-page-id] [data-el-id="${CSS.escape(el.id)}"]`,
     );
     const toolbar = boxRef.current;
-    if (!target || !toolbar) return;
+    /*
+     * The anchor is gone: the page was switched away from, its artboard is
+     * virtualised out of the tree, or the element itself was deleted.
+     *
+     * Returning early here is what left a dead rectangle hanging over the
+     * canvas — `pos` kept its last value while `visibility` stayed `visible`,
+     * so the bubble looked attached to nothing at all. Parking it (pos → null)
+     * makes it invisible until the anchor is on screen again, which is both
+     * honest and the only correct answer for an element you cannot see.
+     */
+    if (!target || !toolbar) {
+      setPos((current) => (current === null ? current : null));
+      return;
+    }
     const rect = target.getBoundingClientRect();
     // A narrow tool rail must not force a phone toolbar down to the page rail.
     // Fit the bar into the lane beside the tools before placing it.
@@ -174,7 +203,21 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
      * resizing it there would be a loop.
      */
     setLane((current) => (current === nextLane ? current : nextLane));
-    const size = toolbar.getBoundingClientRect();
+    const box = toolbar.getBoundingClientRect();
+    /*
+     * `max-width` caps the border box while `overflow: visible` lets a wider
+     * child paint outside it, so placement has to reason about what is ACTUALLY
+     * painted — otherwise the bubble is positioned as if it were narrower than
+     * it looks and ends up clipped at the viewport edge or thrown onto an
+     * obstacle it was supposed to dodge.
+     */
+    const size = {
+      width: Math.min(
+        Math.max(box.width, toolbar.scrollWidth),
+        Math.max(0, window.innerWidth - MARGIN * 2),
+      ),
+      height: box.height,
+    };
     if (!rect.width && !rect.height) return;
     // Keep the bubble clear of the real, outward-expanded grip hit regions,
     // not just the visible 7px dots. These measurements include rotation/zoom.
@@ -239,32 +282,93 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     setSide(placement);
   }, [el.id]);
 
-  // Re-place on every input that can move the element on screen: its own
-  // geometry, the zoom, a page re-render, a scroll inside the stage, a resize.
-  // `lane` is in the list because a new lane means a new bar, and the bar has
-  // to be measured AFTER it re-rendered, not before.
-  useEffect(() => {
+  /**
+   * One coalesced frame, shared by every trigger.
+   *
+   * The previous version CANCELLED the pending frame and requested a new one on
+   * every trigger. While an element is being dragged the interaction store bumps
+   * `version` once per pointer event — 120Hz on an iPad Pro and on any precision
+   * mouse — but `requestAnimationFrame` only runs 60 times a second, so each
+   * pending frame was cancelled before it could fire and the bubble stopped
+   * following the element until the drag ended. That single cancel is the whole
+   * "the toolbar will not stay attached while I drag" bug.
+   *
+   * `schedule()` now only marks the placement dirty and asks for ONE frame when
+   * none is pending; the frame then calls the freshest `place` through a ref, so
+   * a burst of pointer events costs exactly one placement per frame.
+   */
+  const placeRef = useRef(place);
+  placeRef.current = place;
+  const schedulerRef = useRef<{
+    schedule: () => void;
+    dispose: () => void;
+  } | null>(null);
+  if (!schedulerRef.current) {
     let frame = 0;
-    const schedule = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(place);
+    schedulerRef.current = {
+      schedule: () => {
+        if (frame) return;
+        frame = requestAnimationFrame(() => {
+          frame = 0;
+          placeRef.current();
+        });
+      },
+      dispose: () => {
+        if (frame) cancelAnimationFrame(frame);
+        frame = 0;
+      },
     };
+  }
+  const schedule = schedulerRef.current.schedule;
+
+  /**
+   * Re-place on every input that can move the element on screen: its own
+   * geometry, the zoom, a live drag, a manual park, the ACTIVE PAGE (switching
+   * pages changes what is under the bubble even when `el` is unchanged) and any
+   * panel that opens, closes or collapses over the canvas.
+   *
+   * `lane` is in the list because a new lane means a new bar, and the bar has to
+   * be measured AFTER it re-rendered, not before.
+   */
+  useLayoutEffect(() => {
     schedule();
+  }, [
+    schedule,
+    lane,
+    el.x,
+    el.y,
+    el.w,
+    el.h,
+    el.rotation,
+    zoom,
+    dragVersion,
+    bubbleOffset,
+    activePageId,
+    panelsKey,
+  ]);
+
+  /**
+   * Live triggers, registered once: a scroll inside the stage (which is what
+   * panning actually is), a window resize, a panel transition finishing, and a
+   * resize of any obstacle the bubble has to dodge.
+   */
+  useEffect(() => {
     window.addEventListener("scroll", schedule, true);
     window.addEventListener("resize", schedule);
     window.addEventListener("transitionend", schedule, true);
-    const observer = new ResizeObserver(schedule);
-    document.querySelectorAll("[data-editor-obstacle]").forEach(node => observer.observe(node));
     window.addEventListener("nasaq:panel-layout", schedule);
+    const observer = new ResizeObserver(schedule);
+    document
+      .querySelectorAll("[data-editor-obstacle]")
+      .forEach((node) => observer.observe(node));
     return () => {
       observer.disconnect();
       window.removeEventListener("nasaq:panel-layout", schedule);
       window.removeEventListener("transitionend", schedule, true);
-      cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule, true);
       window.removeEventListener("resize", schedule);
     };
-  }, [place, lane, el.x, el.y, el.w, el.h, el.rotation, zoom, dragVersion, bubbleOffset]);
+  }, [schedule, panelsKey]);
 
   useEffect(() => {
     const inside = (event: Event) => {

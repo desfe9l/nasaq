@@ -319,8 +319,16 @@ interface Ui {
 }
 
 interface History {
-  past: string[];
-  future: string[];
+  /**
+   * Undo stack — STRUCTURAL snapshots, not serialised documents.
+   *
+   * See `pushHistory` for why: a JSON string per entry cost a full
+   * `JSON.stringify` of every page (images included) on every single commit,
+   * and up to 60 whole documents of memory. Structural snapshots share every
+   * page object the edit did not touch, so one entry costs one page.
+   */
+  past: ProjectSnapshot[];
+  future: ProjectSnapshot[];
 }
 
 export interface StorageInfo {
@@ -1029,20 +1037,55 @@ export const useEditor = create<EditorStore>((set, get) => {
     }, delay);
   };
 
+  /*
+   * WHY STRUCTURAL SNAPSHOTS (the single biggest editor cost on a long
+   * document)
+   *
+   * History used to hold `JSON.stringify(projectSlice(...))`. Every commit —
+   * one per drag release, one per typed character pause, one per style tick —
+   * therefore serialised ALL pages, including every embedded image as base64,
+   * and kept up to 60 of those strings alive. On a 10–30 page report that is
+   * tens of megabytes stringified per edit and hundreds of megabytes retained:
+   * the editor stuttered on desktop and crawled on an iPad, and nothing about
+   * the drag itself was slow.
+   *
+   * The store updates immutably (`pages.map(...)`), so a snapshot of the
+   * project slice is already a valid immutable history entry: unchanged pages
+   * are SHARED with the live state, and one entry costs one page, not the whole
+   * document. `undo`/`redo` clone before handing the entry to `applyProject`
+   * (which normalises in place), so history entries are never mutated.
+   */
+  const HISTORY_LIMIT = 60;
+
+  /** Structural equality between two snapshots, using the store's own immutability. */
+  const sameSnapshot = (a: ProjectSnapshot, b: ProjectSnapshot) =>
+    a.pages === b.pages &&
+    a.name === b.name &&
+    a.theme === b.theme &&
+    a.orgName === b.orgName &&
+    a.editorSettings === b.editorSettings &&
+    a.transactionNo === b.transactionNo &&
+    a.activePageId === b.activePageId &&
+    a.id === b.id &&
+    a.createdAt === b.createdAt &&
+    a.defaultSize === b.defaultSize &&
+    a.pack === b.pack;
+
   const pushHistory = () => {
-    const snapStr = JSON.stringify(projectSlice(get()));
+    const snapshot = projectSlice(get());
     const { past } = get();
-    // Dedupe: a commit that changes nothing (a blur after a live edit already
-    // recorded its state, a double `commit()` after `updateStyle`) must not
-    // push a second identical entry — the first Undo would look dead. The
-    // future stack is only discarded by a REAL change (see `set` below), so
-    // Redo survives a no-op commit after an Undo.
-    if (past.length && past[past.length - 1] === snapStr) {
+    // Dedupe WITHOUT serialising: a commit that changes nothing (a blur after a
+    // live edit already recorded its state, a double `commit()` after
+    // `updateStyle`) must not push a second identical entry — the first Undo
+    // would look dead. Identity comparison is exact here because every write
+    // replaces the objects it touches. The future stack is only discarded by a
+    // REAL change (see `set` below), so Redo survives a no-op commit after Undo.
+    if (past.length && sameSnapshot(past[past.length - 1], snapshot)) {
       scheduleSave();
       return;
     }
-    const nextPast = [...past, snapStr];
-    if (nextPast.length > 60) nextPast.shift();
+    const nextPast = [...past, snapshot];
+    if (nextPast.length > HISTORY_LIMIT) nextPast.shift();
     set({ past: nextPast, future: [] });
     scheduleSave();
   };
@@ -1315,7 +1358,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         set({
           hydrated: true,
           showcase: true,
-          past: [JSON.stringify(projectSlice(get()))],
+          past: [projectSlice(get())],
           future: [],
           saveState: "saved",
           savedAt: Date.now(),
@@ -1509,7 +1552,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       const recoveredDirty = get().saveState === "dirty";
       set({
         hydrated: true,
-        past: [JSON.stringify(projectSlice(get()))],
+        past: [projectSlice(get())],
         future: [],
         saveState: recoveredDirty ? "dirty" : "saved",
         savedAt: Date.now(),
@@ -1938,7 +1981,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       const saved = get().showcase ? project : await saveProject(project);
       applyProject(saved, { zoom: 0.82 });
       set({
-        past: [JSON.stringify(projectSlice(get()))],
+        past: [projectSlice(get())],
         future: [],
         saveState: "saved",
         savedAt: Date.now(),
@@ -2004,7 +2047,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       const saved = get().showcase ? incoming : await saveProject(incoming);
       applyProject(saved, { zoom: get().zoom || 0.82 });
       set({
-        past: [JSON.stringify(projectSlice(get()))],
+        past: [projectSlice(get())],
         future: [],
         saveState: "saved",
         savedAt: Date.now(),
@@ -2029,7 +2072,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (getStorageOwner() !== owner) return;
       applyProject(project, { zoom: get().zoom || 0.82 });
       set({
-        past: [JSON.stringify(projectSlice(get()))],
+        past: [projectSlice(get())],
         future: [],
         saveState: "saved",
         savedAt: Date.now(),
@@ -2286,7 +2329,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         activePageId: saved.pages[pageIndex]?.id || saved.pages[0]?.id,
       });
       set({
-        past: [JSON.stringify(projectSlice(get()))],
+        past: [projectSlice(get())],
         future: [],
         saveState: "saved",
         savedAt: Date.now(),
@@ -4327,7 +4370,10 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (past.length <= 1) return;
       const current = past[past.length - 1];
       const prev = past[past.length - 2];
-      const restored = JSON.parse(prev) as ProjectSnapshot;
+      // `applyProject` normalises in place (it fills defaults on the object it
+      // is handed), so the entry is cloned first: mutating history would
+      // corrupt the live document that shares its untouched pages.
+      const restored = clone(prev) as ProjectSnapshot;
       applyProject(restored, restoreSelectionExtra(restored));
       set({ past: past.slice(0, -1), future: [current, ...future] });
       scheduleSave(300);
@@ -4337,7 +4383,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       const { past, future } = get();
       if (!future.length) return;
       const [next, ...rest] = future;
-      const restored = JSON.parse(next) as ProjectSnapshot;
+      const restored = clone(next) as ProjectSnapshot;
       applyProject(restored, restoreSelectionExtra(restored));
       set({ past: [...past, next], future: rest });
       scheduleSave(300);

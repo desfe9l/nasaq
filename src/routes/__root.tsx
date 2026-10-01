@@ -13,6 +13,14 @@ import { AppUpdateNotice } from "@/components/AppUpdateNotice";
 // <html> before any route renders, so every page starts on the same mode.
 import "@/lib/theme";
 import { BRAND } from "@/lib/brand";
+import {
+  SITE_ORIGIN,
+  SITE_OG_IMAGE,
+  SITE_OG_IMAGE_ALT,
+  SITE_OG_IMAGE_HEIGHT,
+  SITE_OG_IMAGE_TYPE,
+  SITE_OG_IMAGE_WIDTH,
+} from "@/lib/og/share";
 import appCss from "../styles.css?url";
 
 const PAGE_TITLE = "نَسَق | NASAQ — محرر التقارير والمخرجات المؤسسية";
@@ -28,6 +36,33 @@ export const Route = createRootRoute({
       { name: "theme-color", content: "#006C35" },
       { name: "description", content: DESCRIPTION },
       { name: "author", content: BRAND.developer },
+      /*
+       * Link / social preview.
+       *
+       * Without these the crawler has no image to render and falls back to
+       * whatever it cached from an earlier deploy — which is exactly how the
+       * retired green document glyph kept appearing in shared links after the
+       * mark changed. The card is declared ABSOLUTELY (the Open Graph protocol
+       * does not resolve relative `og:image` values) and points at the
+       * regenerated `/og.jpg`, which now carries the current mark.
+       */
+      { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "نَسَق | NASAQ" },
+      { property: "og:locale", content: "ar_SA" },
+      { property: "og:title", content: PAGE_TITLE },
+      { property: "og:description", content: DESCRIPTION },
+      { property: "og:url", content: SITE_ORIGIN },
+      { property: "og:image", content: SITE_OG_IMAGE },
+      { property: "og:image:secure_url", content: SITE_OG_IMAGE },
+      { property: "og:image:type", content: SITE_OG_IMAGE_TYPE },
+      { property: "og:image:width", content: String(SITE_OG_IMAGE_WIDTH) },
+      { property: "og:image:height", content: String(SITE_OG_IMAGE_HEIGHT) },
+      { property: "og:image:alt", content: SITE_OG_IMAGE_ALT },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: PAGE_TITLE },
+      { name: "twitter:description", content: DESCRIPTION },
+      { name: "twitter:image", content: SITE_OG_IMAGE },
+      { name: "twitter:image:alt", content: SITE_OG_IMAGE_ALT },
     ],
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/nasaq-mark.svg" },

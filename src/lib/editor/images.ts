@@ -170,3 +170,40 @@ export function domImageSize(
   }
   return null;
 }
+
+/**
+ * A reusable image-size resolver.
+ *
+ * `domImageSize` walks EVERY `<img>` in the document for every call, which makes
+ * a pre-flight run quadratic: N images × M rendered `<img>` nodes. On a 30-page
+ * report with the export dialog open that is tens of thousands of comparisons
+ * on each re-render — the dialog stuttered, and the export button felt blocked
+ * by work that has nothing to do with exporting.
+ *
+ * Building the index once per document revision turns the same check into one
+ * pass over the DOM plus O(1) lookups, so pre-flight stays instant no matter
+ * how long the document is.
+ */
+export function imageSizeResolver(
+  root: ParentNode | null = typeof document === "undefined" ? null : document,
+): (src: string) => { w: number; h: number } | null {
+  let index: Map<string, { w: number; h: number }> | null = null;
+  const build = () => {
+    const map = new Map<string, { w: number; h: number }>();
+    if (!root) return map;
+    for (const img of Array.from(root.querySelectorAll("img"))) {
+      if (!(img.naturalWidth > 0) || !(img.naturalHeight > 0)) continue;
+      const size = { w: img.naturalWidth, h: img.naturalHeight };
+      const attr = img.getAttribute("src");
+      if (attr) map.set(attr, size);
+      if (img.src) map.set(img.src, size);
+    }
+    return map;
+  };
+  return (src: string) => {
+    const target = safeImageSrc(src);
+    if (!target) return null;
+    index ??= build();
+    return index.get(target) ?? null;
+  };
+}

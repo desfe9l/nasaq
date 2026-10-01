@@ -44,6 +44,7 @@ import { syncStorageOwner } from "@/lib/auth/storage-owner-sync";
 import type { ProjectMeta } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
 import { publishedTemplatePath, templateDisplaySlug, publishedTemplateAbsoluteUrl } from "@/lib/templates/published";
+import { prepareTemplateThumbnail } from "@/lib/templates/thumbnail";
 
 interface Draft {
   id?: string;
@@ -490,12 +491,18 @@ export function AdminTemplatesPanel() {
                 const f = e.target.files?.[0];
                 e.target.value = "";
                 if (!f) return;
-                if (f.size > 450_000) {
-                  toast.error("الصورة المصغرة يجب ألا تتجاوز 450KB");
-                  return;
+                try {
+                  /*
+                   * Any reasonable dimension is accepted: the upload is
+                   * re-encoded to a bounded longest edge with the aspect ratio
+                   * preserved, so a 6000px photo and a 200px preview both
+                   * become a storable image instead of a size error.
+                   */
+                  const dataUrl = await prepareTemplateThumbnail(f);
+                  setDraft((d) => (d ? { ...d, thumbnail: dataUrl } : d));
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : "تعذّرت معالجة الصورة");
                 }
-                const dataUrl = await readFile(f, "dataUrl");
-                setDraft((d) => (d ? { ...d, thumbnail: dataUrl } : d));
               }}
             />
             <button type="button" className={ghostBtn} onClick={() => thumbRef.current?.click()}>
@@ -503,11 +510,13 @@ export function AdminTemplatesPanel() {
             </button>
             {draft.thumbnail && (
               <>
-                <img
-                  src={draft.thumbnail}
-                  alt=""
-                  className="h-14 w-10 rounded border border-line bg-surface object-contain"
-                />
+                <span className="grid h-14 w-16 place-items-center overflow-hidden rounded border border-line bg-surface p-0.5">
+                  <img
+                    src={draft.thumbnail}
+                    alt=""
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </span>
                 <button
                   type="button"
                   className={ghostBtn}
@@ -850,11 +859,19 @@ export function AdminTemplatesPanel() {
               </button>
             </div>
 
-            <div className="mt-4 grid place-items-center rounded-xl border border-line bg-line-2/30 p-4">
+            {/*
+             * No aspect ratio asserted here: the card is a fixed-height stage
+             * and the artwork keeps whatever proportions the owner uploaded.
+             */}
+            <div className="mt-4 grid h-64 place-items-center overflow-hidden rounded-xl border border-line bg-line-2/30 p-4">
               {preview.item.thumbnail ? (
-                <img src={preview.item.thumbnail} alt="" className="max-h-[46vh] w-auto object-contain" />
+                <img
+                  src={preview.item.thumbnail}
+                  alt=""
+                  className="max-h-full max-w-full object-contain"
+                />
               ) : (
-                <div className="grid aspect-[210/297] w-40 place-items-center rounded border border-dashed border-line text-muted">
+                <div className="grid h-40 w-32 place-items-center rounded border border-dashed border-line text-muted">
                   <LayoutTemplate className="size-6" />
                 </div>
               )}

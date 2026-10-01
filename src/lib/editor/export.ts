@@ -9,7 +9,7 @@ import { uploadedFontSources } from "../nsq/fonts";
 import { assertUniformSlideSize } from "./render-units";
 import { toast } from "sonner";
 import { downloadBlob, downloadText } from "@/lib/utils";
-import { pageSize, type Page, type Project } from "./model";
+import { mmToPx, pageSize, type Page, type Project } from "./model";
 import { applySvgColors, safeSvgSrc, sanitizeSvgContent } from "./svg";
 
 export type ExportFormat =
@@ -158,19 +158,59 @@ export async function captureElement(
  * pause between pages lets the main thread breathe so the dialog stays
  * responsive and the browser does not drop the file handle.
  */
+/**
+ * Total decoded-pixel budget for ONE raster export job.
+ *
+ * `paintSnapshot` already refuses a single page above 64 MP, but nothing
+ * bounded the JOB: every captured page is held until the file is written (a PDF
+ * or a deck needs them all), so 30 A4 pages at 300 DPI is 30 × ~32 MP ≈ 950 MB
+ * of RGBA alive at once. That is far past what mobile Safari will hand a tab —
+ * the export died, or the tab was killed outright, on exactly the documents that
+ * matter most, for a reason that had nothing to do with the document's content.
+ *
+ * Raising the per-page cap was never the fix; bounding the whole job is. 96 MP
+ * (≈ 384 MB of RGBA) keeps a long report comfortably inside the mobile ceiling
+ * while still allowing a single page to render at full 300 DPI.
+ */
+export const EXPORT_JOB_PIXEL_BUDGET = 96_000_000;
+
+/**
+ * The scale a whole job can actually afford.
+ *
+ * Pure, so the dialog can tell the author what it is doing instead of silently
+ * shipping a softer file.
+ */
+export function jobExportScale(
+  targets: { w: number; h: number }[],
+  requested: number,
+): number {
+  // `mmToPx(mm, 1)` is the un-zoomed 96 DPI page the exporter always paints:
+  // export resolution is independent of the editor's on-screen zoom.
+  const base = targets.reduce(
+    (sum, t) => sum + mmToPx(t.w, 1) * mmToPx(t.h, 1),
+    0,
+  );
+  if (!(base > 0) || !(requested > 0)) return requested;
+  return Math.min(requested, Math.sqrt(EXPORT_JOB_PIXEL_BUDGET / base));
+}
+
 export async function capturePages(
   targets: { node: HTMLElement; w: number; h: number }[],
   scale: number,
   onProgress?: (i: number, n: number) => void,
   delayMs = 30,
 ): Promise<CapturedPage[]> {
+  // One scale for the whole job, chosen up front: degrading page 27 of 30 is
+  // worse than rendering the document at one slightly softer, CONSISTENT
+  // resolution — and it is the difference between a file and a crash.
+  const jobScale = jobExportScale(targets, scale);
   const out: CapturedPage[] = [];
   for (let i = 0; i < targets.length; i++) {
     onProgress?.(i, targets.length);
     const target = targets[i];
     const snapshot = await snapshotPage(target);
     out.push({
-      canvas: await paintSnapshot(snapshot, scale),
+      canvas: await paintSnapshot(snapshot, jobScale),
       snapshot,
       w: target.w,
       h: target.h,
@@ -178,6 +218,21 @@ export async function capturePages(
     if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
   }
   return out;
+}
+
+/**
+ * Drop the decoded bitmaps once the file is written.
+ *
+ * Canvas backing stores are freed by the garbage collector, not by dropping the
+ * last JS reference, so a long export used to hold hundreds of megabytes until
+ * the collector got round to it. Zeroing the dimensions releases them now.
+ */
+export function releaseCapturedPages(pages: CapturedPage[] | null) {
+  if (!pages) return;
+  for (const page of pages) {
+    page.canvas.width = 0;
+    page.canvas.height = 0;
+  }
 }
 
 /** Resolve the same non-interactive artboards used by preview. No partial exports. */

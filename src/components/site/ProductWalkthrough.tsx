@@ -7,36 +7,68 @@ import {
   LayoutTemplate,
   Shapes,
 } from "lucide-react";
+import { useSiteSettings } from "@/lib/admin/use-site-settings";
+import {
+  DEFAULT_SITE_IMAGES,
+  SITE_IMAGE_SLOTS,
+  type SiteImages,
+} from "@/lib/admin/types";
 
+/**
+ * The walkthrough's four captions.
+ *
+ * The IMAGE for each card is owner-managed (site_settings → `images`), so the
+ * artwork lives beside only its words here; `slot` is the key that pairs them.
+ */
 const PREVIEWS = [
   {
-    src: "/editor-previews/document.png",
+    slot: "document",
     alt: "لقطة فعلية من مساحة تحرير المستند المؤسسي",
     icon: FileText,
     title: "مستند مؤسسي داخل المحرر",
     copy: "صفحة تقرير عربية مفتوحة على لوحة العمل، مع رأس وتذييل ومحتوى قابل للتحرير.",
-    imageClass: "aspect-[1.08/1] object-cover object-center",
   },
   {
-    src: "/editor-previews/pages.png",
+    slot: "pages",
     alt: "شريط صفحات المستند في محرر نَسَق",
     icon: Layers3,
     title: "الصفحات وبنية المستند",
     copy: "معاينة شريط الصفحات الفعلي؛ أضف الصفحات ورتّبها وانتقل بينها من مساحة العمل.",
-    imageClass: "aspect-[1.08/1] object-cover object-center",
   },
   {
-    src: "/editor-previews/tools.png",
+    slot: "tools",
     alt: "لوحة أدوات المحرر الفعلية وتبويبات المكتبة والقوالب والأشكال",
     icon: Shapes,
     title: "أدوات التصميم والمكتبة",
     copy: "تظهر لوحة الأشكال وتبويبات المكتبة والقوالب كما هي في المحرر، لا كواجهة تسويقية مرسومة.",
-    imageClass: "aspect-[1.08/1] object-cover object-top",
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  slot: keyof SiteImages;
+  alt: string;
+  icon: typeof FileText;
+  title: string;
+  copy: string;
+}>;
 
-/** Real editor captures and crops, kept as source screenshots rather than a simulated product UI. */
+/** Bundled artwork for a slot, used when the owner has not uploaded one. */
+function fallbackFor(slot: keyof SiteImages): string {
+  return (
+    SITE_IMAGE_SLOTS.find((entry) => entry.id === slot)?.fallback ??
+    "/editor-previews/document.png"
+  );
+}
+
+/** Real editor captures, owned by the site owner and dimension-free on screen. */
 export function ProductWalkthrough() {
+  /*
+   * Owner-managed imagery. `images` starts empty (the bundled artwork), so a
+   * first paint never waits on the settings fetch and a failed fetch degrades
+   * to the shipped captures rather than to a broken image.
+   */
+  const { images } = useSiteSettings();
+  const slotSrc = (slot: keyof SiteImages) =>
+    images?.[slot]?.trim() ? images[slot].trim() : fallbackFor(slot);
+  void DEFAULT_SITE_IMAGES;
   return (
     <section className="border-b border-line/70 bg-surface-2 py-14 sm:py-18">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
@@ -63,21 +95,34 @@ export function ProductWalkthrough() {
             </div>
             <span className="hidden rounded-full border border-line px-3 py-1 text-[10px] font-semibold text-muted sm:inline-flex">المحرر · الصفحات · الأدوات</span>
           </div>
+          {/*
+           * No intrinsic width/height and no fixed aspect: the owner's upload
+           * keeps its own proportions and the frame grows with it, so a wide
+           * desktop capture and a portrait iPad capture both render intact.
+           */}
           <img
-            src="/editor-previews/workspace.png"
+            src={slotSrc("workspace")}
             alt="لقطة حقيقية للمحرر: مستند على اللوحة، الأدوات والصفحات الجانبية"
-            width={1440}
-            height={1000}
             loading="lazy"
-            className="block h-auto w-full bg-surface-2"
+            className="block h-auto max-h-[620px] w-full bg-surface-2 object-contain"
           />
         </figure>
 
         <div className="mt-5 grid gap-4 md:grid-cols-3">
-          {PREVIEWS.map(({ src, alt, icon: Icon, title, copy, imageClass }) => (
+          {PREVIEWS.map(({ slot, alt, icon: Icon, title, copy }) => (
             <article key={title} className="overflow-hidden rounded-[14px] border border-line bg-surface">
-              <div className="overflow-hidden border-b border-line bg-surface-2">
-                <img src={src} alt={alt} width={960} height={880} loading="lazy" className={`block w-full ${imageClass}`} />
+              {/*
+               * A fixed-height stage with `object-contain`: any aspect ratio
+               * the owner uploads fits the card without cropping or stretching,
+               * and every card stays the same height so the row stays even.
+               */}
+              <div className="grid h-44 place-items-center overflow-hidden border-b border-line bg-surface-2 p-2">
+                <img
+                  src={slotSrc(slot)}
+                  alt={alt}
+                  loading="lazy"
+                  className="max-h-full max-w-full object-contain"
+                />
               </div>
               <div className="p-4">
                 <div className="flex items-center gap-2">
