@@ -204,9 +204,9 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
           <span className="font-bold text-ink truncate">{template.title}</span>
         </nav>
 
-        <div className="grid gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
+        <div className="grid min-w-0 gap-8 lg:grid-cols-[1.15fr_0.85fr] lg:items-start">
           {/* Preview */}
-          <div className="order-1">
+          <div className="order-1 min-w-0">
             <div className="group relative overflow-hidden rounded-[20px] border border-line bg-surface shadow-card">
               <div className="absolute right-4 top-4 z-10 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-surface/90 px-3 py-1 text-[11px] font-extrabold text-ink shadow-sm backdrop-blur">
@@ -276,7 +276,7 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
           </div>
 
           {/* Details & CTA */}
-          <div className="order-2 grid gap-5 lg:sticky lg:top-24">
+          <div className="order-2 grid min-w-0 gap-5 lg:sticky lg:top-24 [&>*]:min-w-0">
             <div className="rounded-[20px] border border-line bg-surface p-6 shadow-card sm:p-7">
               <div className="flex items-start justify-between gap-4">
                 <div>

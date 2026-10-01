@@ -65,8 +65,23 @@ try {
         () => document.documentElement.scrollWidth <= innerWidth,
       ),
     );
+    await page.goto(`${base}/templates/ats-resume-en`, {
+      waitUntil: "networkidle",
+    });
+    await page.locator('img[alt="ATS Resume — English"]').waitFor();
+    assert.ok(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+      `template detail overflows at ${width}px`,
+    );
+    assert.ok(
+      await page.locator('img[alt="ATS Resume — English"]').evaluate(
+        (image) => image.complete && image.naturalWidth > 0,
+      ),
+    );
     console.log(
-      `PASS UI smoke ${width}×${height}: interactive editor, stroke, identity, Premium and footer`,
+      `PASS UI smoke ${width}×${height}: editor, stroke, template preview, identity, Premium and footer`,
     );
     await context.close();
   }
