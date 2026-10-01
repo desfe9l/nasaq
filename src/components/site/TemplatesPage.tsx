@@ -30,6 +30,7 @@ import { PublishedTemplates } from "@/components/site/PublishedTemplates";
 import { CARD_W, CARD_WRAP } from "@/components/site/cards";
 import { cn } from "@/lib/utils";
 import { DEMO_LICENSE, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
+import { getPublishedTemplateFn } from "@/lib/admin/functions";
 import { useLicense } from "@/lib/license/client";
 import {
   CATALOG_PILLS,
@@ -56,6 +57,7 @@ import {
   type TemplateFormValues,
 } from "@/components/site/TemplateDialogs";
 import { useCatalogEntries, useCustomTemplates, useTemplateDraft } from "@/components/site/useCatalog";
+import { publishedTemplateSeed, templateDisplaySlug } from "@/lib/templates/published";
 
 const SIZE_OPTIONS = SIZE_PRESETS.filter((s) => s.id !== "custom");
 const THEME_ORDER: ThemeId[] = ["official", "eid", "ministry", "slate", "sand"];
@@ -140,19 +142,39 @@ export function TemplatesPage() {
 
   /** Starter packs outside the demo allowance open the pricing page, as before. */
   const packLocked = (entry: CatalogEntry): boolean =>
-    entry.kind === "pack" && !canUseDemoPack(entry.sourceId) && !entitlements.premium_templates;
+    entry.managedTemplate
+      ? entry.managedTemplate.tier === "licensed" && !entitlements.premium_templates
+      : entry.kind === "pack" && !canUseDemoPack(entry.sourceId) && !entitlements.premium_templates;
+
+  /** Managed legacy content is fetched through the existing server license gate. */
+  const projectSeedForEntry = async (entry: CatalogEntry) => {
+    if (!entry.managedTemplate) return entryProjectSeed(entry, { themeId: theme, orgName });
+    const result = await getPublishedTemplateFn({
+      data: { id: templateDisplaySlug(entry.managedTemplate) },
+    });
+    if (!result.ok) {
+      if ("locked" in result && result.locked) {
+        window.location.assign("/license");
+      } else {
+        toast.error(result.error || "القالب غير متاح");
+      }
+      return null;
+    }
+    return publishedTemplateSeed(result.template);
+  };
 
   /* ── actions ─────────────────────────────────────────────────────────── */
 
   /** «استخدام القالب» — build a project from the entry and open the editor. */
   const startFromEntry = async (entry: CatalogEntry) => {
-    if (packLocked(entry)) {
+    if (!entry.managedTemplate && packLocked(entry)) {
       window.location.assign("/license");
       return;
     }
     // The page caps are only as good as the project list they are counted from.
     await hydrate();
-    const seed = entryProjectSeed(entry, { themeId: theme, orgName });
+    const seed = await projectSeedForEntry(entry);
+    if (!seed) return;
     if (demoBlocked(seed.pages.length)) return;
     setQuickViewId(null);
     await importProject(seed);
@@ -165,12 +187,13 @@ export function TemplatesPage() {
    * or published as a new one (shipped templates). See the draft banner below.
    */
   const editEntry = async (entry: CatalogEntry) => {
-    if (packLocked(entry)) {
+    if (!entry.managedTemplate && packLocked(entry)) {
       window.location.assign("/license");
       return;
     }
     await hydrate();
-    const seed = entryProjectSeed(entry, { themeId: theme, orgName });
+    const seed = await projectSeedForEntry(entry);
+    if (!seed) return;
     if (demoBlocked(seed.pages.length)) return;
     setQuickViewId(null);
     await importProject({ ...seed, name: `${entry.title} — مسودة` });
@@ -192,9 +215,9 @@ export function TemplatesPage() {
   };
 
   /** «تكرار» — the copy is always a custom template, whatever the source was. */
-  const duplicateEntry = (entry: CatalogEntry) => {
+  const duplicateEntry = async (entry: CatalogEntry) => {
     // Copying a pack would otherwise hand out its pages without its licence.
-    if (packLocked(entry)) {
+    if (!entry.managedTemplate && packLocked(entry)) {
       window.location.assign("/license");
       return;
     }
@@ -202,6 +225,8 @@ export function TemplatesPage() {
       if (entry.kind === "custom") {
         duplicateCustomTemplate(entry.sourceId);
       } else {
+        const seed = await projectSeedForEntry(entry);
+        if (!seed) return;
         saveCustomTemplate({
           title: `${entry.title} — نسخة`,
           desc: entry.desc,
@@ -209,7 +234,7 @@ export function TemplatesPage() {
           pills: entry.pills.filter((p) => p !== "all" && p !== "custom"),
           tags: entry.tags,
           derivedFrom: entry.id,
-          pages: entryTemplatePages(entry, { themeId: theme, orgName }),
+          pages: seed.pages,
         });
       }
       toast.success(`تم تكرار «${entry.title}» في قوالبي الخاصة`);
@@ -247,7 +272,7 @@ export function TemplatesPage() {
       } else if (values.source.kind === "entry") {
         const sourceId = values.source.entryId;
         const picked = entries.find((e) => e.id === sourceId);
-        if (picked) pages = entryTemplatePages(picked, { themeId: theme, orgName });
+        if (picked) pages = (await projectSeedForEntry(picked))?.pages;
       } else {
         const blank = entries.find((e) => e.id === "pack:blank");
         if (blank) pages = entryTemplatePages(blank, { themeId: theme, orgName });

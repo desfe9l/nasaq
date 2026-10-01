@@ -8,7 +8,9 @@ import { LicenseBadgeIcon } from "./LicenseBadge";
 /** Published templates have stable, public links. The destination rechecks
  * publication and entitlement before importing a private working copy. */
 export function PublishedTemplates() {
-  const items = usePublishedTemplates();
+  const items = usePublishedTemplates().filter(
+    (item) => !item.id.startsWith("builtin_pack_") && !item.id.startsWith("builtin_page_"),
+  );
   const [copied, setCopied] = useState<string | null>(null);
   if (!items.length) return null;
 

@@ -23,7 +23,7 @@ export function PremiumTemplates({
   showHeading?: boolean;
 }) {
   const published = usePublishedTemplates().filter(
-    (item) => item.tier === "licensed",
+    (item) => item.tier === "licensed" && !item.id.startsWith("builtin_pack_") && !item.id.startsWith("builtin_page_"),
   );
   const card =
     "flex min-w-0 flex-col gap-2 rounded-lg border border-line bg-surface p-3 text-right transition-colors hover:border-brand/50";

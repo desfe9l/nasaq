@@ -132,6 +132,18 @@ try {
       assert.ok(Math.abs(afterZoom.width - beforeZoom.width) < 0.5);
       assert.ok(Math.abs(afterZoom.height - beforeZoom.height) < 0.5);
     }
+    const libraryToggle = page.getByRole("button", { name: "المكتبة", exact: true });
+    const libraryActive = () => libraryToggle.evaluate((button) => button.classList.contains("is-active"));
+    const libraryPanel = page.locator('.editor-floating-panel[aria-label="لوحة العناصر"]');
+    const libraryPanelOpen = () => libraryPanel.evaluate((panel) => panel.classList.contains("is-open"));
+    const libraryWasActive = await libraryActive();
+    const libraryWasOpen = await libraryPanelOpen();
+    await libraryToggle.click();
+    assert.equal(await libraryActive(), !libraryWasActive, "header library button toggles the visible panel");
+    assert.equal(await libraryPanelOpen(), !libraryWasOpen);
+    await libraryToggle.click();
+    assert.equal(await libraryActive(), libraryWasActive, "header library button closes/reopens consistently");
+    assert.equal(await libraryPanelOpen(), libraryWasOpen);
     await page.locator(".editor-canvas-stage [data-el-id]").first().click();
     const toolbar = page.locator(".floating-toolbar");
     await toolbar.waitFor({ state: "visible" });
@@ -208,6 +220,15 @@ try {
       .boundingBox();
     assert.ok(Math.abs(paper.width / paper.height - 297 / 210) < 0.01);
     await page.goto(`${base}/`, { waitUntil: "networkidle" });
+    const showcase = page.getByRole("tablist", {
+      name: "نماذج المخرجات",
+      exact: true,
+    });
+    await showcase.waitFor();
+    const showcaseTabs = showcase.getByRole("tab");
+    assert.equal(await showcaseTabs.count(), 3);
+    await showcaseTabs.nth(1).click();
+    assert.equal(await showcaseTabs.nth(1).getAttribute("aria-selected"), "true");
     const premium = page.locator('section[aria-label="قوالب Premium"]');
     await premium.locator("summary").click();
     assert.equal(await premium.locator("details").getAttribute("open"), null);

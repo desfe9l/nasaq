@@ -1174,6 +1174,12 @@ function Studio({
     }
   }, [leftDocked]);
 
+  const leftPanelVisible = !focusMode && (leftDocked && isDesktop ? !leftCollapsed : leftOpen);
+  const closeLeftPanel = () => {
+    if (leftDocked && isDesktop) toggle("leftCollapsed");
+    else closeFloatingPanels();
+  };
+
   const resizePanel = (
     side: "left" | "right",
     startClientX: number,
@@ -1415,12 +1421,12 @@ function Studio({
           <IconButton
             label="المكتبة"
             hint="صورك، شعاراتك وملفات SVG المحفوظة"
-            active={leftOpen && leftTab === "library"}
+            active={leftPanelVisible && leftTab === "library"}
             tipSide="bottom"
             icon={<Library className="size-4" strokeWidth={1.7} />}
             onClick={() => {
-              if (leftOpen && leftTab === "library") {
-                useEditor.setState({ leftOpen: false, leftCollapsed: true });
+              if (leftPanelVisible && leftTab === "library") {
+                closeLeftPanel();
                 return;
               }
               openLeftFromDock("library");
@@ -1540,6 +1546,8 @@ function Studio({
           {!focusMode && (
             <CanvasDock
               onOpenLeft={openLeftFromDock}
+              leftPanelOpen={leftPanelVisible}
+              onCloseLeft={closeLeftPanel}
               onOpenRight={openRightFromDock}
               onUpload={(kind) => onUpload(kind)}
               onUploadSvg={onUploadSvg}

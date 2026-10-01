@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { getSiteSettingsFn, listPublishedTemplatesFn } from "./functions";
-import { DEFAULT_SITE_SETTINGS, type AdminTemplateSummary, type PublicSiteSettings } from "./types";
+import { getSiteSettingsFn, listBuiltinTemplateStatesFn, listPublishedTemplatesFn } from "./functions";
+import { DEFAULT_SITE_SETTINGS, type AdminTemplateSummary, type PublicSiteSettings, type TemplateStatus } from "./types";
 
 /**
  * Admin-managed site settings for public pages. One fetch per page load,
@@ -44,6 +44,23 @@ export function usePublishedTemplates(): AdminTemplateSummary[] {
     };
   }, []);
   return items;
+}
+
+/** Stable built-in IDs plus visibility only; template content stays server-side. */
+export function useBuiltinTemplateStates(): { id: string; status: TemplateStatus }[] {
+  const [states, setStates] = useState<{ id: string; status: TemplateStatus }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    listBuiltinTemplateStatesFn()
+      .then((result) => {
+        if (alive) setStates(result);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return states;
 }
 
 export function whatsappLink(number: string, message: string): string {

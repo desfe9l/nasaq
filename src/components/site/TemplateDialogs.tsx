@@ -152,12 +152,20 @@ export function QuickViewDialog({
             </button>
           </div>
           <div className="max-h-[58vh] overflow-auto rounded-xl bg-paper p-4">
-            <div
-              className="mx-auto"
-              style={{ width: full ? `${size.w}mm` : `min(100%, ${Math.max(160, Math.round(580 * (size.w / size.h)))}px)` }}
-            >
-              <TemplatePreview page={page} className="rounded-md border border-line shadow-lg" />
-            </div>
+            {entry.thumbnail ? (
+              <img
+                src={entry.thumbnail}
+                alt={`معاينة ${entry.title}`}
+                className="mx-auto max-h-[54vh] max-w-full object-contain"
+              />
+            ) : (
+              <div
+                className="mx-auto"
+                style={{ width: full ? `${size.w}mm` : `min(100%, ${Math.max(160, Math.round(580 * (size.w / size.h)))}px)` }}
+              >
+                <TemplatePreview page={page} className="rounded-md border border-line shadow-lg" />
+              </div>
+            )}
           </div>
           {entry.pages.length > 1 && (
             <div className="mt-3 flex flex-wrap gap-2">

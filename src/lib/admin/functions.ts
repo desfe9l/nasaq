@@ -82,17 +82,21 @@ async function sql() {
 }
 
 const PRODUCT_TEMPLATE_SEED_KEY = "product-template-seeds.v1";
+const LEGACY_TEMPLATE_SEED_KEY = "legacy-template-seeds.v1";
 
 /** Insert bundled native masters once; subsequent owner edits and deletes persist. */
-async function ensureProductTemplates(db: Awaited<ReturnType<typeof sql>>) {
+async function insertTemplateSeedsOnce(
+  db: Awaited<ReturnType<typeof sql>>,
+  seedKey: string,
+  build: () => ReturnType<typeof import("@/lib/editor/product-templates")["buildProductTemplateSeeds"]>,
+) {
   const seeded = await db.query(
     `SELECT key FROM site_settings WHERE key = $1 LIMIT 1`,
-    [PRODUCT_TEMPLATE_SEED_KEY],
+    [seedKey],
   );
   if (seeded.length) return;
 
-  const { buildProductTemplateSeeds } = await import("@/lib/editor/product-templates");
-  const templates = buildProductTemplateSeeds();
+  const templates = build();
   const values: unknown[] = [];
   const rows = templates.map((template) => {
     const fields = [
@@ -124,8 +128,14 @@ async function ensureProductTemplates(db: Awaited<ReturnType<typeof sql>>) {
     `INSERT INTO site_settings (key, value, updated_at)
      VALUES ($1, $2::jsonb, now())
      ON CONFLICT (key) DO NOTHING`,
-    [PRODUCT_TEMPLATE_SEED_KEY, JSON.stringify({ version: 1 })],
+    [seedKey, JSON.stringify({ version: 1 })],
   );
+}
+
+async function ensureProductTemplates(db: Awaited<ReturnType<typeof sql>>) {
+  const { buildProductTemplateSeeds, buildLegacyTemplateSeeds } = await import("@/lib/editor/product-templates");
+  await insertTemplateSeedsOnce(db, PRODUCT_TEMPLATE_SEED_KEY, buildProductTemplateSeeds);
+  await insertTemplateSeedsOnce(db, LEGACY_TEMPLATE_SEED_KEY, buildLegacyTemplateSeeds);
 }
 
 function parseJson(value: unknown): unknown {
@@ -350,6 +360,25 @@ export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handle
     return [];
   }
 });
+
+/** Public IDs/statuses only: keeps the code-bundled catalog in sync with Admin visibility. */
+export const listBuiltinTemplateStatesFn = createServerFn({ method: "GET" })
+  .handler(async (): Promise<{ id: string; status: TemplateStatus }[]> => {
+    try {
+      const db = await sql();
+      await ensureProductTemplates(db);
+      const rows = await db.query<{ id: string; status: string }>(
+        `SELECT id, status FROM admin_templates
+         WHERE id LIKE 'builtin_pack_%' OR id LIKE 'builtin_page_%'`,
+      );
+      return rows.map((row) => ({
+        id: String(row.id),
+        status: row.status as TemplateStatus,
+      }));
+    } catch {
+      return [];
+    }
+  });
 
 /** Public metadata for a single published template by slug or id. No license check - preview is public. */
 export const getPublishedTemplateMetaFn = createServerFn({ method: "GET" })

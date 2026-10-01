@@ -9,6 +9,7 @@
 import { useMemo, useSyncExternalStore } from "react";
 import type { ThemeId } from "@/lib/editor/model";
 import { buildCatalog, type CatalogEntry } from "@/lib/templates/catalog";
+import { useBuiltinTemplateStates, usePublishedTemplates } from "@/lib/admin/use-site-settings";
 import {
   customTemplatesSnapshot,
   draftSnapshot,
@@ -35,8 +36,10 @@ export function useTemplateDraft(): TemplateDraft | null {
 /** Every catalog entry — custom templates first — for a theme and organisation. */
 export function useCatalogEntries(themeId: ThemeId, orgName: string): CatalogEntry[] {
   const custom = useCustomTemplates();
+  const managedTemplates = usePublishedTemplates();
+  const managedStates = useBuiltinTemplateStates();
   return useMemo(
-    () => buildCatalog({ themeId, orgName, custom }),
-    [themeId, orgName, custom],
+    () => buildCatalog({ themeId, orgName, custom, managedTemplates, managedStates }),
+    [themeId, orgName, custom, managedTemplates, managedStates],
   );
 }

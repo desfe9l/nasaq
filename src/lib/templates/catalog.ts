@@ -33,6 +33,7 @@ import {
   type Theme,
   type ThemeId,
 } from "@/lib/editor/model";
+import type { AdminTemplateSummary } from "@/lib/admin/types";
 import { freshPages, type CatalogPillId, type CustomTemplate } from "./custom-templates";
 
 /**
@@ -82,6 +83,38 @@ export interface CatalogEntry {
   pages: Page[];
   /** Custom templates only — the stored record. */
   custom?: CustomTemplate;
+  /** Admin-managed source for a bundled pack/page; content is fetched on use. */
+  managedTemplate?: AdminTemplateSummary;
+  /** Owner-managed thumbnail, when a bundled template has been edited. */
+  thumbnail?: string;
+}
+
+function builtinTemplateId(entry: Pick<CatalogEntry, "kind" | "sourceId">): string | null {
+  if (entry.kind === "pack") return `builtin_pack_${entry.sourceId}`;
+  if (entry.kind === "page") return `builtin_page_${entry.sourceId}`;
+  return null;
+}
+
+function applyManagedTemplate(
+  entry: CatalogEntry,
+  template: AdminTemplateSummary | undefined,
+): CatalogEntry {
+  if (!template) return entry;
+  const validCategory = TEMPLATE_CATEGORIES.find((item) => item.id === template.category);
+  const category = validCategory?.id ?? entry.category;
+  const categoryLabel = template.category || entry.categoryLabel;
+  const text = `${template.title} ${template.description} ${categoryLabel}`;
+  const evidence = elementEvidence(entry.pages);
+  return {
+    ...entry,
+    title: template.title,
+    desc: template.description,
+    category,
+    categoryLabel,
+    pills: [...new Set([...entry.pills, ...pillsFor(category, { text, ...evidence })])],
+    thumbnail: template.thumbnail || undefined,
+    managedTemplate: template,
+  };
 }
 
 /** Categories that belong to each pill. A category may answer to several. */
@@ -265,12 +298,27 @@ export function buildCatalog(options: {
   themeId: ThemeId;
   orgName?: string;
   custom?: CustomTemplate[];
+  managedTemplates?: AdminTemplateSummary[];
+  managedStates?: { id: string; status: string }[];
 }): CatalogEntry[] {
   const theme = THEMES[options.themeId] ?? THEMES.official;
   const org = options.orgName ?? "";
   const custom = (options.custom ?? []).map(customEntry);
-  const pages = PAGE_TEMPLATES.map((def) => pageEntry(def, theme, org));
-  const packs = PACKS.map((pack) => packEntry(pack, theme, org));
+  const managed = new Map((options.managedTemplates ?? []).map((template) => [template.id, template]));
+  const states = new Map((options.managedStates ?? []).map((template) => [template.id, template.status]));
+  const resolveBuiltin = (entry: CatalogEntry): CatalogEntry | null => {
+    const id = builtinTemplateId(entry);
+    if (!id) return entry;
+    const status = states.get(id);
+    if (status && status !== "published") return null;
+    return applyManagedTemplate(entry, managed.get(id));
+  };
+  const pages = PAGE_TEMPLATES
+    .map((def) => resolveBuiltin(pageEntry(def, theme, org)))
+    .filter((entry): entry is CatalogEntry => entry !== null);
+  const packs = PACKS
+    .map((pack) => resolveBuiltin(packEntry(pack, theme, org)))
+    .filter((entry): entry is CatalogEntry => entry !== null);
   return [...custom, ...pages, ...packs];
 }
 

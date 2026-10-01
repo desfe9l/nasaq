@@ -63,6 +63,8 @@ const DOCK_LANE_INSET = 24;
 
 export interface CanvasDockProps {
   onOpenLeft: (tab: LeftTab) => void;
+  leftPanelOpen: boolean;
+  onCloseLeft: () => void;
   onOpenRight: (tab: RightTab) => void;
   onUpload: (kind: "image" | "logo" | "library") => void;
   onUploadSvg: () => void;
@@ -73,6 +75,8 @@ export interface CanvasDockProps {
 
 export function CanvasDock({
   onOpenLeft,
+  leftPanelOpen,
+  onCloseLeft,
   onOpenRight,
   onUpload,
   onUploadSvg,
@@ -99,7 +103,6 @@ export function CanvasDock({
 
   const rightOpen = useEditor((s) => s.rightOpen);
   const rightTab = useEditor((s) => s.rightTab);
-  const leftOpen = useEditor((s) => s.leftOpen);
   const leftTab = useEditor((s) => s.leftTab);
   const activeLeftPanel = LEFT_PANEL_TABS.find((tab) => tab.id === leftTab);
   const ActiveLeftIcon = activeLeftPanel?.icon ?? FolderOpen;
@@ -382,11 +385,8 @@ export function CanvasDock({
     ),
   };
   const toggleLeftPanel = () => {
-    if (leftOpen) {
-      useEditor.setState({ leftOpen: false, leftCollapsed: true });
-    } else {
-      onOpenLeft(leftTab);
-    }
+    if (leftPanelOpen) onCloseLeft();
+    else onOpenLeft(leftTab);
   };
   const toggleRightPanel = (tab: "properties" | "layers") => {
     if (rightOpen && rightTab === tab) {
@@ -401,7 +401,7 @@ export function CanvasDock({
         icon={<FolderOpen className="size-4" />}
         label="العناصر والمكتبة"
         hint="عناصر، أشكال، قوالب، صفحات، سمة وخطوط"
-        checked={leftOpen}
+        checked={leftPanelOpen}
         onSelect={toggleLeftPanel}
       />
       <MenuRow
@@ -604,7 +604,7 @@ export function CanvasDock({
                     ref={ref}
                     label="اللوحات"
                     hint="العناصر، الخصائص والطبقات"
-                    active={leftOpen || rightOpen}
+                    active={leftPanelOpen || rightOpen}
                     tipSide="top"
                     icon={<LayoutGrid className="size-4" />}
                   />
@@ -621,9 +621,9 @@ export function CanvasDock({
             ) : (
               <>
                 <IconButton
-                  label={`${leftOpen ? "إخفاء" : "فتح"} لوحة ${activeLeftLabel}`}
+                  label={`${leftPanelOpen ? "إخفاء" : "فتح"} لوحة ${activeLeftLabel}`}
                   hint="يتغير الرمز حسب اللوحة النشطة: المكتبة، القوالب، الصفحات، الأشكال أو الأدوات"
-                  active={leftOpen}
+                  active={leftPanelOpen}
                   tipSide="top"
                   onClick={toggleLeftPanel}
                   icon={<ActiveLeftIcon className="size-4" />}

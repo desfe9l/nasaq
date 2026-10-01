@@ -1,5 +1,13 @@
-import { createElement, type CanvasEl, type Page } from "./model";
+import { createElement, THEMES, type CanvasEl, type Page, type PackId } from "./model";
+import {
+  createProject,
+  createTemplatePage,
+  PACKS,
+  PAGE_TEMPLATES,
+  type TemplateCategoryId,
+} from "./templates";
 import { uid } from "@/lib/utils";
+import { canUseDemoPack } from "@/lib/product/product";
 
 export interface ProductTemplateSeed {
   id: string;
@@ -7,8 +15,8 @@ export interface ProductTemplateSeed {
   title: string;
   description: string;
   category: string;
-  tier: "licensed";
-  status: "published";
+  tier: "free" | "licensed";
+  status: "draft" | "published";
   kind: "json";
   sortOrder: number;
   content: string;
@@ -452,6 +460,51 @@ function pagePreview(page: Page): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return `data:image/svg+xml;base64,${btoa(binary)}`;
+}
+
+const PACK_CATEGORY: Record<PackId, TemplateCategoryId> = {
+  official: "reports",
+  eid: "covers",
+  briefing: "executive",
+  slides: "slides",
+  blank: "editorial",
+};
+
+/** Existing code-bundled catalog entries, mirrored into Admin as editable native drafts. */
+export function buildLegacyTemplateSeeds(): ProductTemplateSeed[] {
+  const packSeeds = PACKS.map((pack, index) => {
+    const project = createProject(pack.id);
+    return {
+      id: `builtin_pack_${pack.id}`,
+      slug: `nasaq-pack-${pack.id}`,
+      title: pack.title,
+      description: pack.desc,
+      category: PACK_CATEGORY[pack.id],
+      tier: canUseDemoPack(pack.id) ? "free" as const : "licensed" as const,
+      status: "published" as const,
+      kind: "json" as const,
+      sortOrder: 300 + index,
+      content: JSON.stringify({ name: project.name, pages: project.pages }),
+      thumbnail: pagePreview(project.pages[0]),
+    };
+  });
+  const pageSeeds = PAGE_TEMPLATES.map((definition, index) => {
+    const page = createTemplatePage(definition.id, THEMES.official, "");
+    return {
+      id: `builtin_page_${definition.id}`,
+      slug: `nasaq-page-${definition.id}`,
+      title: definition.title,
+      description: definition.desc,
+      category: definition.category,
+      tier: "free" as const,
+      status: "published" as const,
+      kind: "json" as const,
+      sortOrder: 320 + index,
+      content: JSON.stringify({ name: definition.title, pages: [page] }),
+      thumbnail: pagePreview(page),
+    };
+  });
+  return [...packSeeds, ...pageSeeds];
 }
 
 const DEFINITIONS = [

@@ -29,11 +29,27 @@ export interface Announcement {
   tone: "info" | "success" | "warning";
 }
 
+export type ShowcaseTemplateId = "official" | "slides" | "briefing" | "eid" | "blank";
+
+export interface HomeShowcaseTab {
+  id: string;
+  label: string;
+  templateId: ShowcaseTemplateId;
+  enabled: boolean;
+}
+
+export const DEFAULT_HOME_SHOWCASE_TABS: HomeShowcaseTab[] = [
+  { id: "official", label: "تقرير رسمي", templateId: "official", enabled: true },
+  { id: "slides", label: "عرض تقديمي", templateId: "slides", enabled: true },
+  { id: "briefing", label: "عرض قيادي", templateId: "briefing", enabled: true },
+];
+
 export interface SiteTexts {
   heroEyebrow: string;
   heroTitle: string;
   heroDescription: string;
   footerNote: string;
+  showcaseTabs: HomeShowcaseTab[];
 }
 
 export interface BrandPreset {
@@ -137,7 +153,13 @@ export const DEFAULT_SITE_SETTINGS: PublicSiteSettings = {
     annualDiscountPercent: Math.round(planSavings(CENTRAL_PLANS["individual-annual"]) / (CENTRAL_PLANS["individual-monthly"].amount * 12) * 100),
   },
   announcement: { enabled: false, text: "", href: "", tone: "info" },
-  texts: { heroEyebrow: "", heroTitle: "", heroDescription: "", footerNote: "" },
+  texts: {
+    heroEyebrow: "",
+    heroTitle: "",
+    heroDescription: "",
+    footerNote: "",
+    showcaseTabs: DEFAULT_HOME_SHOWCASE_TABS.map((tab) => ({ ...tab })),
+  },
   brandPresets: [],
   images: { ...DEFAULT_SITE_IMAGES },
 };
@@ -251,11 +273,36 @@ export function normalizeSection<K extends SettingsSection>(key: K, raw: unknown
       return value as PublicSiteSettings[K];
     }
     case "texts": {
+      const rawTabs = Array.isArray(r.showcaseTabs)
+        ? r.showcaseTabs.slice(0, 6)
+        : d.texts.showcaseTabs;
+      const allowedTemplates: ShowcaseTemplateId[] = ["official", "slides", "briefing", "eid", "blank"];
+      const usedIds = new Set<string>();
+      const showcaseTabs = rawTabs
+        .filter((tab): tab is Record<string, unknown> => !!tab && typeof tab === "object")
+        .map((tab, index) => {
+          const templateId = allowedTemplates.includes(tab.templateId as ShowcaseTemplateId)
+            ? tab.templateId as ShowcaseTemplateId
+            : DEFAULT_HOME_SHOWCASE_TABS[index % DEFAULT_HOME_SHOWCASE_TABS.length].templateId;
+          let id = str(tab.id, 60) || `showcase-${index + 1}`;
+          if (usedIds.has(id)) id = `showcase-${index + 1}`;
+          usedIds.add(id);
+          return {
+            id,
+            label: str(tab.label, 48) || `نموذج ${index + 1}`,
+            templateId,
+            enabled: tab.enabled !== false,
+          };
+        });
+      if (showcaseTabs.length && !showcaseTabs.some((tab) => tab.enabled)) {
+        showcaseTabs[0].enabled = true;
+      }
       const value: SiteTexts = {
         heroEyebrow: str(r.heroEyebrow, 120),
         heroTitle: str(r.heroTitle, 200),
         heroDescription: str(r.heroDescription, 600),
         footerNote: str(r.footerNote, 300),
+        showcaseTabs: showcaseTabs.length ? showcaseTabs : d.texts.showcaseTabs.map((tab) => ({ ...tab })),
       };
       return value as PublicSiteSettings[K];
     }

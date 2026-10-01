@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { buildProductTemplateSeeds } from "./product-templates.ts";
+import { buildLegacyTemplateSeeds, buildProductTemplateSeeds } from "./product-templates.ts";
+import { PACKS, PAGE_TEMPLATES } from "./templates.ts";
+import { buildCatalog } from "@/lib/templates/catalog";
+import { DEFAULT_HOME_SHOWCASE_TABS, normalizeSection } from "@/lib/admin/types";
 
 test("product masters are licensed native documents with complete editable pages", () => {
   const templates = buildProductTemplateSeeds();
@@ -66,4 +69,79 @@ test("product masters are licensed native documents with complete editable pages
   assert.deepEqual(card.pages.map((page: { w: number; h: number }) => [page.w, page.h]), [[94.9, 56.8], [94.9, 56.8]]);
   const education = templates.find((item) => item.id === "builtin_education_letterhead")!;
   assert.match(education.description, /بلا شعارات محمية أو ادعاء اعتماد حكومي/);
+});
+
+test("all legacy packs and page templates receive stable Admin records preserving visibility", () => {
+  const templates = buildLegacyTemplateSeeds();
+  assert.equal(templates.length, PACKS.length + PAGE_TEMPLATES.length);
+  assert.equal(new Set(templates.map((template) => template.id)).size, templates.length);
+  assert.deepEqual(
+    templates.filter((template) => template.id.startsWith("builtin_pack_")).map((template) => template.id),
+    PACKS.map((pack) => `builtin_pack_${pack.id}`),
+  );
+  assert.deepEqual(
+    templates.filter((template) => template.id.startsWith("builtin_page_")).map((template) => template.id),
+    PAGE_TEMPLATES.map((page) => `builtin_page_${page.id}`),
+  );
+  for (const template of templates) {
+    assert.equal(template.status, "published");
+    assert.equal(template.kind, "json");
+    assert.match(template.thumbnail, /^data:image\/svg\+xml;base64,/);
+    const document = JSON.parse(template.content) as { pages: { elements: unknown[] }[] };
+    assert.ok(document.pages.length > 0, template.id);
+    assert.ok(document.pages.every((page) => page.elements.length > 0), template.id);
+  }
+  assert.equal(templates.find((template) => template.id === "builtin_pack_blank")?.tier, "free");
+  assert.ok(templates.filter((template) => template.id.startsWith("builtin_pack_") && template.id !== "builtin_pack_blank").every((template) => template.tier === "licensed"));
+});
+
+test("Admin template overrides replace their catalog entry and drafts hide the fallback", () => {
+  const managed = {
+    id: "builtin_page_cover",
+    slug: "nasaq-page-cover",
+    title: "غلاف معدل من الإدارة",
+    description: "بيانات محدثة",
+    category: "covers",
+    tier: "free" as const,
+    status: "published" as const,
+    kind: "json" as const,
+    thumbnail: "data:image/svg+xml;base64,PHN2Zy8+",
+    sortOrder: 0,
+    createdAt: "",
+    updatedAt: "",
+  };
+  const published = buildCatalog({
+    themeId: "official",
+    managedTemplates: [managed],
+    managedStates: [{ id: managed.id, status: "published" }],
+  });
+  const entry = published.find((item) => item.id === "page:cover");
+  assert.equal(entry?.title, managed.title);
+  assert.equal(entry?.thumbnail, managed.thumbnail);
+  assert.equal(entry?.managedTemplate?.id, managed.id);
+
+  const draft = buildCatalog({
+    themeId: "official",
+    managedTemplates: [],
+    managedStates: [{ id: managed.id, status: "draft" }],
+  });
+  assert.equal(draft.some((item) => item.id === "page:cover"), false);
+});
+
+test("homepage showcase tabs remain backward compatible and normalize editable choices", () => {
+  const legacy = normalizeSection("texts", { heroTitle: "عنوان قديم" });
+  assert.equal(legacy.heroTitle, "عنوان قديم");
+  assert.deepEqual(legacy.showcaseTabs, DEFAULT_HOME_SHOWCASE_TABS);
+
+  const edited = normalizeSection("texts", {
+    showcaseTabs: [
+      { id: "presentation", label: "عرض خاص", templateId: "slides", enabled: true },
+      { id: "invalid", label: "قالب غير صالح", templateId: "../../admin", enabled: false },
+    ],
+  });
+  assert.equal(edited.showcaseTabs.length, 2);
+  assert.equal(edited.showcaseTabs[0].label, "عرض خاص");
+  assert.equal(edited.showcaseTabs[0].templateId, "slides");
+  assert.equal(edited.showcaseTabs[1].templateId, "slides");
+  assert.equal(edited.showcaseTabs.some((tab) => tab.enabled), true);
 });

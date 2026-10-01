@@ -195,14 +195,22 @@ export function TemplateCard({
           className="relative grid place-items-center p-4 [container-type:size]"
           style={{ height: PREVIEW_BOX }}
         >
-          <TemplateStackPreview
-            pages={entry.pages}
-            style={{
-              aspectRatio: `${size.w} / ${size.h}`,
-              width: `min(100cqw, ${(size.w / size.h).toFixed(4)} * 100cqh)`,
-            }}
-            className="rounded-[3px] border border-line shadow-md transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-xl"
-          />
+          {entry.thumbnail ? (
+            <img
+              src={entry.thumbnail}
+              alt={`معاينة ${entry.title}`}
+              className="max-h-full max-w-full rounded-[3px] border border-line bg-white object-contain shadow-md transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-xl"
+            />
+          ) : (
+            <TemplateStackPreview
+              pages={entry.pages}
+              style={{
+                aspectRatio: `${size.w} / ${size.h}`,
+                width: `min(100cqw, ${(size.w / size.h).toFixed(4)} * 100cqh)`,
+              }}
+              className="rounded-[3px] border border-line shadow-md transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-xl"
+            />
+          )}
         </div>
 
         <div className="pointer-events-none absolute right-3 top-3 flex max-w-[80%] flex-wrap justify-end gap-1">

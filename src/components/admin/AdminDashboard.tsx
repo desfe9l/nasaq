@@ -7,6 +7,8 @@
  */
 import { useEffect, useState } from "react";
 import {
+  ArrowDown,
+  ArrowUp,
   Shield,
   LayoutTemplate,
   Store,
@@ -29,6 +31,7 @@ import {
 import {
   DEFAULT_SITE_SETTINGS,
   type BrandPreset,
+  type ShowcaseTemplateId,
   type PublicSiteSettings,
   type SettingsSection,
 } from "@/lib/admin/types";
@@ -198,6 +201,13 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
   const setA = (patch: Partial<typeof a>) => setSettings((s) => ({ ...s, announcement: { ...s.announcement, ...patch } }));
   const t = settings.texts;
   const setT = (patch: Partial<typeof t>) => setSettings((s) => ({ ...s, texts: { ...s.texts, ...patch } }));
+  const moveShowcaseTab = (index: number, delta: -1 | 1) => {
+    const nextIndex = index + delta;
+    if (nextIndex < 0 || nextIndex >= t.showcaseTabs.length) return;
+    const showcaseTabs = [...t.showcaseTabs];
+    [showcaseTabs[index], showcaseTabs[nextIndex]] = [showcaseTabs[nextIndex], showcaseTabs[index]];
+    setT({ showcaseTabs });
+  };
 
   const SaveBtn = ({ section }: { section: SettingsSection }) => (
     <button type="button" className={primaryBtn} disabled={saving !== null} onClick={() => void save(section)}>
@@ -253,6 +263,58 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
         <label className={label}>عنوان الواجهة<input className={input} value={t.heroTitle} onChange={(e) => setT({ heroTitle: e.target.value })} /></label>
         <label className={label}>وصف الواجهة<textarea className={cn(input, "h-20 py-2")} value={t.heroDescription} onChange={(e) => setT({ heroDescription: e.target.value })} /></label>
         <label className={label}>ملاحظة التذييل<input className={input} value={t.footerNote} onChange={(e) => setT({ footerNote: e.target.value })} /></label>
+        <div className="grid gap-3 border-t border-line pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-[13px] font-extrabold text-ink">تبويبات معاينة المخرجات</h3>
+              <p className="mt-1 text-[11px] text-muted">عدّل الاسم والقالب والترتيب والظهور في معاينة الصفحة الرئيسية.</p>
+            </div>
+            <button
+              type="button"
+              className={ghostBtn}
+              disabled={t.showcaseTabs.length >= 6}
+              onClick={() => setT({ showcaseTabs: [...t.showcaseTabs, {
+                id: `showcase-${Date.now()}`,
+                label: "معاينة جديدة",
+                templateId: "official",
+                enabled: true,
+              }] })}
+            >
+              <Plus className="size-3.5" /> إضافة تبويب
+            </button>
+          </div>
+          {t.showcaseTabs.map((tab, index) => (
+            <div key={tab.id} className="grid gap-2 rounded-lg border border-line bg-surface-2 p-3 sm:grid-cols-[minmax(0,1fr)_180px_auto_auto_auto_auto] sm:items-end">
+              <label className={label}>
+                اسم التبويب
+                <input className={input} value={tab.label} onChange={(event) => setT({ showcaseTabs: t.showcaseTabs.map((item) => item.id === tab.id ? { ...item, label: event.target.value } : item) })} />
+              </label>
+              <label className={label}>
+                قالب المعاينة
+                <select className={input} value={tab.templateId} onChange={(event) => setT({ showcaseTabs: t.showcaseTabs.map((item) => item.id === tab.id ? { ...item, templateId: event.target.value as ShowcaseTemplateId } : item) })}>
+                  <option value="official">تقرير رسمي</option>
+                  <option value="slides">عرض تقديمي</option>
+                  <option value="briefing">عرض قيادي</option>
+                  <option value="eid">تقرير فعالية</option>
+                  <option value="blank">مستند فارغ</option>
+                </select>
+              </label>
+              <label className="flex h-10 items-center gap-2 text-[11px] font-bold text-muted">
+                <input type="checkbox" checked={tab.enabled} onChange={(event) => setT({ showcaseTabs: t.showcaseTabs.map((item) => item.id === tab.id ? { ...item, enabled: event.target.checked } : item) })} />
+                ظاهر
+              </label>
+              <button type="button" className={ghostBtn} disabled={index === 0} aria-label={`رفع ${tab.label}`} onClick={() => moveShowcaseTab(index, -1)}>
+                <ArrowUp className="size-3.5" />
+              </button>
+              <button type="button" className={ghostBtn} disabled={index === t.showcaseTabs.length - 1} aria-label={`خفض ${tab.label}`} onClick={() => moveShowcaseTab(index, 1)}>
+                <ArrowDown className="size-3.5" />
+              </button>
+              <button type="button" className={cn(ghostBtn, "text-error")} disabled={t.showcaseTabs.length <= 1} aria-label={`حذف ${tab.label}`} onClick={() => setT({ showcaseTabs: t.showcaseTabs.filter((item) => item.id !== tab.id) })}>
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
         <div><SaveBtn section="texts" /></div>
       </section>
 

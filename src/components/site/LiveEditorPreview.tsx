@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-
-const DOCS = [
-  { id: "official", label: "تقرير رسمي" },
-  { id: "slides", label: "عرض تقديمي" },
-  { id: "briefing", label: "عرض قيادي" },
-] as const;
+import { useSiteSettings } from "@/lib/admin/use-site-settings";
+import { DEFAULT_HOME_SHOWCASE_TABS } from "@/lib/admin/types";
 
 /**
  * The real editor, live in the page — not a screenshot, not a mockup.
@@ -22,6 +18,10 @@ export function LiveEditorPreview() {
   const [active, setActive] = useState(0);
   const frameRef = useRef<HTMLDivElement>(null);
   const [armed, setArmed] = useState(false);
+  const { texts } = useSiteSettings();
+  const configuredTabs = texts.showcaseTabs.filter((tab) => tab.enabled);
+  const docs = configuredTabs.length ? configuredTabs : DEFAULT_HOME_SHOWCASE_TABS;
+  const activeIndex = Math.min(active, docs.length - 1);
 
   useEffect(() => {
     const el = frameRef.current;
@@ -39,7 +39,7 @@ export function LiveEditorPreview() {
     return () => io.disconnect();
   }, []);
 
-  const doc = DOCS[active];
+  const doc = docs[activeIndex];
 
   return (
     <div className="mx-auto w-full lg:max-w-none">
@@ -49,16 +49,16 @@ export function LiveEditorPreview() {
           role="tablist"
           aria-label="نماذج المخرجات"
         >
-          {DOCS.map((d, idx) => (
+          {docs.map((d, idx) => (
             <button
               key={d.id}
               type="button"
               role="tab"
-              aria-selected={active === idx}
+              aria-selected={activeIndex === idx}
               onClick={() => setActive(idx)}
               className={cn(
                 "shrink-0 rounded-[8px] border px-3 py-1.5 text-[11px] font-bold transition",
-                active === idx
+                activeIndex === idx
                   ? "border-inverse/10 bg-inverse text-on-inverse"
                   : "border-transparent bg-surface-2 text-muted hover:border-line",
               )}

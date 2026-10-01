@@ -28,7 +28,7 @@ import {
   Sparkles,
   Table2,
 } from "lucide-react";
-import { THEMES, type PackId, type ProjectMeta } from "@/lib/editor/model";
+import { THEMES, sizeIdOf, type PackId, type ProjectMeta } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import {
   docKind,
@@ -40,8 +40,10 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { OPEN_NEW_DOCUMENT_EVENT } from "@/lib/auth/use-workspace-entry";
 import { licenseSummary } from "@/lib/license/summary";
 import { useLicense, type LicenseState } from "@/lib/license/client";
+import { toast } from "sonner";
 import { Navigate } from "@tanstack/react-router";
 import { canUseDemoPack } from "@/lib/product/product";
+import { getPublishedTemplateFn } from "@/lib/admin/functions";
 import {
   CATALOG_PILLS,
   entryProjectSeed,
@@ -57,6 +59,7 @@ import { QuickViewDialog } from "./TemplateDialogs";
 import { PublishedTemplates } from "./PublishedTemplates";
 import { NewDocumentDialog } from "./NewDocumentDialog";
 import { useCatalogEntries } from "./useCatalog";
+import { publishedTemplateSeed, templateDisplaySlug } from "@/lib/templates/published";
 import { CARD_W, CARD_WRAP } from "./cards";
 import { ProjectFileButton } from "./ProjectFileButton";
 
@@ -286,9 +289,9 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
   const entries = useCatalogEntries("official", storeOrg);
   const packLocked = useCallback(
     (entry: CatalogEntry) =>
-      entry.kind === "pack" &&
-      !canUseDemoPack(entry.sourceId) &&
-      !entitlements.premium_templates,
+      entry.managedTemplate
+        ? entry.managedTemplate.tier === "licensed" && !entitlements.premium_templates
+        : entry.kind === "pack" && !canUseDemoPack(entry.sourceId) && !entitlements.premium_templates,
     [entitlements.premium_templates],
   );
 
@@ -332,17 +335,39 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
   /** «استخدام القالب» — a NEW editable document; the template stays as it is. */
   const startFromTemplate = async (entry: CatalogEntry) => {
     if (busy.current) return;
-    if (packLocked(entry)) {
+    if (!entry.managedTemplate && packLocked(entry)) {
       window.location.assign("/license");
       return;
     }
     busy.current = true;
     try {
       await hydrate();
-      const seed = entryProjectSeed(entry, {
-        themeId: "official",
-        orgName: storeOrg,
-      });
+      let seed: ReturnType<typeof entryProjectSeed>;
+      if (entry.managedTemplate) {
+        const result = await getPublishedTemplateFn({
+          data: { id: templateDisplaySlug(entry.managedTemplate) },
+        });
+        if (!result.ok) {
+          if ("locked" in result && result.locked) {
+            window.location.assign("/license");
+          } else {
+            toast.error(result.error || "القالب غير متاح");
+          }
+          return;
+        }
+        const managed = publishedTemplateSeed(result.template);
+        seed = {
+          ...entryProjectSeed(entry, { themeId: "official", orgName: storeOrg }),
+          name: managed.name,
+          pages: managed.pages,
+          defaultSize: sizeIdOf(managed.pages[0]),
+        };
+      } else {
+        seed = entryProjectSeed(entry, {
+          themeId: "official",
+          orgName: storeOrg,
+        });
+      }
       const created = await createDocument(
         {
           version: 2,
