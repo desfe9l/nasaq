@@ -46,6 +46,7 @@ import { AccordionSection, useAccordionState } from "./ui/Accordion";
 import { ScrubField } from "./ui/ScrubInput";
 import { AssetLibrary } from "./AssetLibrary";
 import { SmartLibraryPanel, TemplatePreview } from "./SmartLibrary";
+import { promptForQr } from "@/lib/editor/qr";
 import { TablePickerOverlay } from "./TablePicker";
 import { writeLibraryDrag, type LibraryDropPayload } from "@/lib/editor/library-dnd";
 import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
@@ -185,20 +186,11 @@ export function LeftPanel({
       return;
     }
     if (type === "qr") {
-      const text = window.prompt("رابط أو نص الرمز", "https://") || "";
-      if (!text.trim()) return;
+      // One flow, shared with the «إضافة» menu (see `promptForQr`): the palette
+      // must not grow a second, subtly different QR implementation.
       setQrBusy(true);
       try {
-        const QRCode = (await import("qrcode")).default;
-        const src = await QRCode.toDataURL(text, {
-          margin: 1,
-          width: 512,
-          color: { dark: "#006c35", light: "#ffffff" },
-        });
-        addElement("qr", { content: text, src });
-      } catch {
-        // Encoding failures (an over-long payload) still leave a usable frame.
-        addElement("qr", { content: text });
+        await promptForQr();
       } finally {
         setQrBusy(false);
       }

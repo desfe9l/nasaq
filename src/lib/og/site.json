@@ -1,5 +1,8 @@
 {
   "title": "نَسَق | NASAQ — منصة التصميم والتحرير المؤسسي",
   "card": "custom",
-  "color": "006C35"
+  "color": "006C35",
+  "image": "/og.jpg",
+  "imageWidth": 1200,
+  "imageHeight": 630
 }

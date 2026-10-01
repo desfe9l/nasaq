@@ -46,11 +46,83 @@ export interface BrandPreset {
   textColor: string;
 }
 
+/**
+ * Owner-managed site imagery.
+ *
+ * One slot per image the marketing pages and the editor walkthrough paint.
+ * A slot holds either an `https:` URL or a `data:image/…;base64,` payload the
+ * owner uploaded from the admin dashboard; an EMPTY string means "use the
+ * bundled artwork shipped in `public/`". That fallback is what lets the owner
+ * replace one image at a time without having to fill the whole set.
+ *
+ * The slots are deliberately dimension-free: the owner uploads whatever they
+ * have and the surfaces render it with `object-contain` in a flexible box, so
+ * a 4:3 screenshot and a 16:9 capture both fit the same card.
+ */
+export interface SiteImages {
+  /** «واجهة المحرر» — the wide workspace capture on the home page. */
+  workspace: string;
+  /** «مستند مؤسسي داخل المحرر» — the document card. */
+  document: string;
+  /** «الصفحات وبنية المستند» — the pages / document-structure card. */
+  pages: string;
+  /** «أدوات التصميم والمكتبة» — the tools and library card. */
+  tools: string;
+}
+
+/** Label, description and the bundled fallback for every image slot. */
+export const SITE_IMAGE_SLOTS: ReadonlyArray<{
+  id: keyof SiteImages;
+  label: string;
+  hint: string;
+  /** Bundled artwork used when the owner has not uploaded a replacement. */
+  fallback: string;
+}> = [
+  {
+    id: "workspace",
+    label: "واجهة المحرر (لقطة واسعة)",
+    hint: "تظهر أعلى جولة المنتج في الصفحة الرئيسية — أي مقاس يتناسب تلقائيًا.",
+    fallback: "/editor-previews/workspace.png",
+  },
+  {
+    id: "document",
+    label: "بطاقة المستند",
+    hint: "صورة بطاقة «مستند مؤسسي داخل المحرر».",
+    fallback: "/editor-previews/document.png",
+  },
+  {
+    id: "pages",
+    label: "بطاقة الصفحات وبنية المستند",
+    hint: "صورة بطاقة «الصفحات وبنية المستند».",
+    fallback: "/editor-previews/pages.png",
+  },
+  {
+    id: "tools",
+    label: "بطاقة الأدوات والمكتبة",
+    hint: "صورة بطاقة «أدوات التصميم والمكتبة».",
+    fallback: "/editor-previews/tools.png",
+  },
+] as const;
+
+/** An empty slot: every surface falls back to the bundled artwork. */
+export const DEFAULT_SITE_IMAGES: SiteImages = {
+  workspace: "",
+  document: "",
+  pages: "",
+  tools: "",
+};
+
+/** Largest accepted upload per slot, in bytes (before re-encoding). */
+export const MAX_SITE_IMAGE_BYTES = 8 * 1024 * 1024;
+/** Longest edge the browser re-encodes an upload to, in pixels. */
+export const SITE_IMAGE_MAX_EDGE = 1800;
+
 export interface PublicSiteSettings {
   commercial: CommercialSettings;
   announcement: Announcement;
   texts: SiteTexts;
   brandPresets: BrandPreset[];
+  images: SiteImages;
 }
 
 export type SettingsSection = keyof PublicSiteSettings;
@@ -67,6 +139,7 @@ export const DEFAULT_SITE_SETTINGS: PublicSiteSettings = {
   announcement: { enabled: false, text: "", href: "", tone: "info" },
   texts: { heroEyebrow: "", heroTitle: "", heroDescription: "", footerNote: "" },
   brandPresets: [],
+  images: { ...DEFAULT_SITE_IMAGES },
 };
 
 export type TemplateTier = "free" | "licensed";
@@ -129,6 +202,24 @@ function safeHref(value: unknown): string {
   return httpsOrEmpty(s);
 }
 
+/**
+ * One owner-uploaded image.
+ *
+ * Accepts an `https:` URL or a `data:image/…;base64,` payload and rejects
+ * everything else — a `javascript:` or `vbscript:` src in a marketing page is
+ * an XSS hole, not a misconfiguration. `svg+xml` is refused on purpose: an SVG
+ * is a document, and letting one be uploaded into a page-wide `<img>` slot
+ * re-opens the whole script-injection surface the editor's own sanitiser
+ * exists to close.
+ */
+export function siteImage(value: unknown): string {
+  const s = str(value, MAX_SITE_IMAGE_BYTES).trim();
+  if (!s) return "";
+  if (/^data:image\/(png|jpe?g|webp|gif|avif);base64,[A-Za-z0-9+/=]+$/i.test(s))
+    return s;
+  return httpsOrEmpty(s);
+}
+
 function hex(value: unknown, fallback: string): string {
   return typeof value === "string" && HEX.test(value) ? value : fallback;
 }
@@ -166,6 +257,13 @@ export function normalizeSection<K extends SettingsSection>(key: K, raw: unknown
         heroDescription: str(r.heroDescription, 600),
         footerNote: str(r.footerNote, 300),
       };
+      return value as PublicSiteSettings[K];
+    }
+    case "images": {
+      const value: SiteImages = { ...DEFAULT_SITE_IMAGES };
+      for (const slot of SITE_IMAGE_SLOTS) {
+        value[slot.id] = siteImage(r[slot.id]);
+      }
       return value as PublicSiteSettings[K];
     }
     case "brandPresets": {

@@ -3,12 +3,15 @@ import {
   FileCode2,
   FilePlus2,
   FolderPlus,
+  Gauge,
   Heading1,
   ImagePlus,
   Plus,
   ClipboardList,
   Minus,
+  QrCode,
   SeparatorHorizontal,
+  Stamp,
   Table2,
   Type,
   SquareDashedMousePointer,
@@ -16,6 +19,7 @@ import {
   Waypoints,
 } from "lucide-react";
 import { useEditor, type LeftTab } from "@/lib/editor/store";
+import { promptForQr } from "@/lib/editor/qr";
 import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
 import { IconButton } from "./ui/IconButton";
 
@@ -94,11 +98,6 @@ export function AddMenu({
         onSelect={() => onOpenLeft("shapes")}
       />
       <MenuRow
-        icon={<Table2 className="size-4" />}
-        label="جدول أو استيراد Excel/CSV"
-        onSelect={() => openTablePicker()}
-      />
-      <MenuRow
         icon={<Minus className="size-4" />}
         label="خط مستقيم"
         onSelect={() => addElement("line")}
@@ -112,6 +111,27 @@ export function AddMenu({
         icon={<Waypoints className="size-4" />}
         label="الموصلات والخطوط"
         onSelect={() => onOpenLeft("shapes")}
+      />
+      <MenuGroup title="جداول وإحصاءات" />
+      <MenuRow
+        icon={<Table2 className="size-4" />}
+        label="جدول أو استيراد Excel/CSV"
+        onSelect={() => openTablePicker()}
+      />
+      <MenuRow
+        icon={<BadgePercent className="size-4" />}
+        label="بطاقة رقم"
+        onSelect={() => addElement("stat")}
+      />
+      <MenuRow
+        icon={<Gauge className="size-4" />}
+        label="شريط تقدم"
+        onSelect={() => addElement("progress")}
+      />
+      <MenuRow
+        icon={<Stamp className="size-4" />}
+        label="ختم"
+        onSelect={() => addElement("stamp")}
       />
       <MenuGroup title="وسائط" />
       <MenuRow
@@ -129,6 +149,12 @@ export function AddMenu({
         icon={<FileCode2 className="size-4" />}
         label="استيراد SVG"
         onSelect={onUploadSvg}
+      />
+      <MenuRow
+        icon={<QrCode className="size-4" />}
+        label="رمز QR"
+        hint="رابط أو نص يُولَّد كصورة"
+        onSelect={() => void promptForQr()}
       />
       <MenuRow
         icon={<ImagePlus className="size-4" />}

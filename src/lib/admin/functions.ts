@@ -25,11 +25,45 @@ import {
   type TemplateTier,
 } from "./types";
 
-const SECTIONS: SettingsSection[] = ["commercial", "announcement", "texts", "brandPresets"];
+const SECTIONS: SettingsSection[] = [
+  "commercial",
+  "announcement",
+  "texts",
+  "brandPresets",
+  "images",
+];
 const MAX_TEMPLATE_BYTES = 4 * 1024 * 1024;
-const MAX_THUMB_BYTES = 600 * 1024;
+/*
+ * Ceiling on a stored preview image.
+ *
+ * It is a payload budget, not a dimension test: the browser re-encodes an
+ * upload to a bounded longest edge before it gets here (see
+ * `templates/thumbnail.ts`), so any reasonable SOURCE dimension is accepted
+ * and only a genuinely oversized payload — a vector that inlines another
+ * document, a pathological PNG — is refused.
+ */
+const MAX_THUMB_BYTES = 2 * 1024 * 1024;
 
 type VerifiedContext = { userId: string; userEmail: string | null };
+
+/**
+ * Authorize a caller for the template catalogue — the platform's PAID content.
+ *
+ * Templates (and especially their `licensed` tier) are commercial inventory, so
+ * they go through `verifyTemplateManager`: a real session, then the owner /
+ * super-admin / admin lookup, never the shared dev user. Site-wide settings
+ * (texts, announcement, brand presets, images) stay on the ordinary
+ * administrator check — they are presentation, not inventory.
+ */
+async function verifyTemplateManagerContext(
+  context: VerifiedContext,
+): Promise<{ ok: boolean; error: string }> {
+  const { verifyTemplateManager } = await import("./owner-gate.server");
+  const result = await verifyTemplateManager(context, sql());
+  return result.ok
+    ? { ok: true, error: "" }
+    : { ok: false, error: result.error };
+}
 
 async function verifyAdmin(context: VerifiedContext): Promise<boolean> {
   const [{ getSql }, { isAdminIdentity }] = await Promise.all([
@@ -172,6 +206,27 @@ export const adminVerifyFn = createServerFn({ method: "POST" })
   });
 
 /**
+ * Access probe for «إدارة القوالب» (paid-template management).
+ *
+ * Called by the `/admin-dashboard` route guard BEFORE the panel mounts, which
+ * is what makes a direct URL safe: a visitor who types the address is sent to
+ * sign-in by the router, not by a component that briefly rendered anyway. The
+ * server re-checks the same thing on every template call below, so this probe
+ * is convenience (a correct redirect), never the security boundary.
+ */
+export const adminTemplatesAccessFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const result = await verifyTemplateManagerContext(context);
+    if (result.ok) return { ok: true as const };
+    return {
+      ok: false as const,
+      reason: result.error.includes("تسجيل") ? ("signin" as const) : ("forbidden" as const),
+      error: result.error,
+    };
+  });
+
+/**
  * Licence-administration probe for the owner.
  */
 export const adminLicenseAccessFn = createServerFn({ method: "POST" })
@@ -302,7 +357,8 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
 export const adminListTemplatesFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح", templates: [] };
+    const gate = await verifyTemplateManagerContext(context);
+    if (!gate.ok) return { ok: false as const, error: gate.error, templates: [] };
     const db = await sql();
     const rows = await db.query(
       `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
@@ -315,7 +371,8 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { template: AdminTemplateInput }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح" };
+    const gate = await verifyTemplateManagerContext(context);
+    if (!gate.ok) return { ok: false as const, error: gate.error };
     const t = data.template;
     const kind: TemplateKind = t.kind === "svg" ? "svg" : "json";
     const tier: TemplateTier = t.tier === "licensed" ? "licensed" : "free";
@@ -324,11 +381,35 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
     if (!title) return { ok: false as const, error: "العنوان مطلوب" };
     const db = await sql();
     const existing = t.id
-      ? await db.query<{ content: string; kind: string; slug: string | null }>(`SELECT content, kind, slug FROM admin_templates WHERE id = $1`, [t.id])
+      ? await db.query<{ content: string; kind: string; slug: string | null; thumbnail: string | null }>(
+          `SELECT content, kind, slug, thumbnail FROM admin_templates WHERE id = $1`,
+          [t.id],
+        )
       : [];
-    const content = t.content ? String(t.content) : existing[0]?.content ?? "";
-    const contentError = validateContent(kind, content);
+    const replacingContent = Boolean(t.content);
+    const content = replacingContent ? String(t.content) : existing[0]?.content ?? "";
+    /* Only NEW content is validated. An EDIT that leaves the payload alone
+     * keeps whatever is stored: re-validating a template that was accepted
+     * before a rule changed (or that arrived from an older export) would make
+     * the owner unable to rename or re-tier their own published work — the
+     * licensed catalogue especially, which is exactly what must stay editable. */
+    const contentError = replacingContent ? validateContent(kind, content) : content ? null : "المحتوى فارغ";
     if (contentError) return { ok: false as const, error: contentError };
+    /*
+     * PREVIEW IMAGE — keep, replace or clear; never silently drop.
+     *
+     * The old code ran `validThumbnail(t.thumbnail)` and stored the result, so
+     * editing a template sent back its own (already stored) data URL, failed
+     * the byte ceiling, and wiped the preview: opening a licensed template to
+     * fix its title left it with no image. The three cases are now distinct —
+     * an explicit `null` clears it, a valid upload replaces it, and anything
+     * else (absent, or a payload the browser could not re-encode) keeps the
+     * stored image untouched.
+     */
+    let thumbnail: string | null;
+    if (t.thumbnail === null) thumbnail = null;
+    else if (validThumbnail(t.thumbnail)) thumbnail = t.thumbnail!;
+    else thumbnail = existing[0]?.thumbnail ?? null;
     const { randomUUID } = await import("node:crypto");
     const id = existing.length ? String(t.id) : `tpl_${randomUUID()}`;
     // Slug handling: keep existing if present, else generate from title or explicit input
@@ -370,7 +451,7 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
         status,
         kind,
         content,
-        validThumbnail(t.thumbnail),
+        thumbnail,
         Number.isFinite(Number(t.sortOrder)) ? Math.trunc(Number(t.sortOrder)) : 0,
       ],
     );
@@ -381,7 +462,8 @@ export const adminSetTemplateStatusFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { id: string; status?: TemplateStatus; tier?: TemplateTier }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح" };
+    const gate = await verifyTemplateManagerContext(context);
+    if (!gate.ok) return { ok: false as const, error: gate.error };
     const db = await sql();
     if (data.status && ["draft", "published", "archived"].includes(data.status)) {
       await db.query(`UPDATE admin_templates SET status = $2, updated_at = now() WHERE id = $1`, [data.id, data.status]);
@@ -396,7 +478,8 @@ export const adminDeleteTemplateFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { id: string }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح" };
+    const gate = await verifyTemplateManagerContext(context);
+    if (!gate.ok) return { ok: false as const, error: gate.error };
     const db = await sql();
     await db.query(`DELETE FROM admin_templates WHERE id = $1`, [data.id]);
     return { ok: true as const };
@@ -406,7 +489,8 @@ export const adminRegenerateSlugFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { id: string; slug?: string }) => data)
   .handler(async ({ data, context }) => {
-    if (!(await verifyAdmin(context))) return { ok: false as const, error: "غير مصرح" };
+    const gate = await verifyTemplateManagerContext(context);
+    if (!gate.ok) return { ok: false as const, error: gate.error };
     const db = await sql();
     const rows = await db.query<{ title: string }>(`SELECT title FROM admin_templates WHERE id = $1 LIMIT 1`, [data.id]);
     if (!rows.length) return { ok: false as const, error: "القالب غير موجود" };

@@ -24,6 +24,7 @@ export const OPEN_REPORT_TOOLS_EVENT = "nasaq:open-report-tools";
 import {
   Check,
   Download,
+  Library,
   Minus,
   Plus,
   Redo2,
@@ -392,6 +393,7 @@ function Studio({
   const toggle = useEditor((s) => s.toggle);
   const focusMode = useEditor((s) => s.focusMode);
   const leftOpen = useEditor((s) => s.leftOpen);
+  const leftTab = useEditor((s) => s.leftTab);
   const rightOpen = useEditor((s) => s.rightOpen);
   const leftCollapsed = useEditor((s) => s.leftCollapsed);
   const closeFloatingPanels = useEditor((s) => s.closeFloatingPanels);
@@ -1401,6 +1403,29 @@ function Studio({
 
         {/* ③ Document actions and the account. */}
         <div className="editor-header-zone editor-header-actions ms-auto">
+          {/*
+            «المكتبة» — the asset library, one click from the header.
+            The dock's left-panel button takes the icon of whichever tab was
+            last used, so once an author opened «الصفحات» or «القوالب» the
+            library had no header/dock shortcut left at all. This one always
+            opens (and, when it is already the open tab, closes) the library
+            tab, so the surface every other insert flow depends on is never
+            more than a click away.
+          */}
+          <IconButton
+            label="المكتبة"
+            hint="صورك، شعاراتك وملفات SVG المحفوظة"
+            active={leftOpen && leftTab === "library"}
+            tipSide="bottom"
+            icon={<Library className="size-4" strokeWidth={1.7} />}
+            onClick={() => {
+              if (leftOpen && leftTab === "library") {
+                useEditor.setState({ leftOpen: false, leftCollapsed: true });
+                return;
+              }
+              openLeftFromDock("library");
+            }}
+          />
           <ViewMenu fitToScreen={fitToScreen} fitToSelection={fitToSelection} />
           <SaveBadge onClick={() => void saveNow()} />
           <ProjectFileMenu onOpenFile={onOpenFile} />

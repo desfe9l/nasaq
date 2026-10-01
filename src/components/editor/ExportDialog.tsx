@@ -16,8 +16,16 @@ import {
   LogIn,
 } from "lucide-react";
 import { LicenseBadgeIcon } from "@/components/site/LicenseBadge";
-import { capturePages, runExport, safeFileName, type CapturedPage, type ExportFormat } from "@/lib/editor/export";
-import { pageSize } from "@/lib/editor/model";
+import {
+  capturePages,
+  jobExportScale,
+  releaseCapturedPages,
+  runExport,
+  safeFileName,
+  type CapturedPage,
+  type ExportFormat,
+} from "@/lib/editor/export";
+import { pageSize, type Page } from "@/lib/editor/model";
 import {
   runPreflight,
   preflightSummary,
@@ -25,7 +33,7 @@ import {
   type PreflightIssue,
 } from "@/lib/editor/preflight";
 import { GUTTER_MARGIN_MM, type PrintGuideSettings } from "@/lib/editor/print-guides";
-import { domImageSize } from "@/lib/editor/images";
+import { imageSizeResolver } from "@/lib/editor/images";
 import { useEditor } from "@/lib/editor/store";
 import { downloadCurrentNsq } from "@/lib/nsq/editor-io";
 import { cn } from "@/lib/utils";
@@ -76,6 +84,39 @@ const GUIDE_LABELS: {
 const RASTER_FORMATS = new Set<ExportFormat>(["pdf", "png", "jpg"]);
 const OFFICE_FORMATS = new Set<ExportFormat>(["pptx", "docx"]);
 
+/**
+ * Resolve the hidden artboards the raster exporters paint from.
+ *
+ * `ExportCaptureLayer` mounts them when the dialog opens, and React commits
+ * that asynchronously — so an author who opened the dialog and pressed
+ * «تنزيل الملف» straight away could out-run the commit, and the export failed
+ * with "reload the editor and try again": a UI race reported as a broken
+ * document. One frame of patience makes the race a non-event; only a genuinely
+ * missing page (deleted mid-export) still raises the error.
+ */
+async function exportTargets(pages: Page[]) {
+  const read = () =>
+    pages.flatMap((p) => {
+      const node = document.querySelector<HTMLElement>(
+        `[data-export-page="${CSS.escape(p.id)}"]`,
+      );
+      if (!node) return [];
+      const size = pageSize(p);
+      return [{ node, w: size.w, h: size.h }];
+    });
+  let targets = read();
+  if (targets.length !== pages.length) {
+    await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+    targets = read();
+  }
+  if (targets.length !== pages.length) {
+    throw new Error(
+      "تعذر العثور على صفحات التصدير — أعد تحميل المحرر ثم حاول مرة أخرى",
+    );
+  }
+  return targets;
+}
+
 export function ExportDialog() {
   const open = useEditor((s) => s.exportOpen);
   const toggle = useEditor((s) => s.toggle);
@@ -106,14 +147,30 @@ export function ExportDialog() {
   const selected =
     scope === "all" ? pages : pages.filter((p) => p.id === activePageId);
 
+  /**
+   * One DOM pass for the whole pre-flight.
+   *
+   * `runPreflight` asks for an image's pixel size once per placed image. With
+   * `domImageSize` that meant a full `querySelectorAll("img")` walk per image,
+   * so a 30-page report (and the export dialog renders every page into the
+   * hidden capture layer) did tens of thousands of comparisons on every
+   * re-render — pure UI cost, felt as a frozen dialog. `imageSizeResolver`
+   * builds the index once per revision and then answers in O(1), so the check
+   * can never gate the export on its own bookkeeping.
+   */
+  const imageSize = useMemo(
+    () => imageSizeResolver(),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pages, scope, activePageId, open],
+  );
   const report = useMemo(
     () =>
       runPreflight(selected, {
         guides: printGuides,
-        imageSize: (src) => domImageSize(src),
+        imageSize,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pages, scope, activePageId, printGuides],
+    [pages, scope, activePageId, printGuides, imageSize],
   );
   const [riskAccepted, setRiskAccepted] = useState(false);
   const { user, isPending } = useCurrentUserState();
@@ -186,18 +243,25 @@ export function ExportDialog() {
     }
     setBusy(true);
     setError(null);
+    let captured: CapturedPage[] | null = null;
+    /** The scale the pages were ACTUALLY painted at — what the file contains. */
+    let usedScale = captureScale;
     try {
-      let captured: CapturedPage[] | null = null;
       if (needsRaster) {
         setProgress("تهيئة الصفحات…");
-        const targets = selected.flatMap((p) => {
-          const node = document.querySelector(`[data-export-page="${p.id}"]`) as HTMLElement | null;
-          if (!node) return [];
-          const size = pageSize(p);
-          return [{ node, w: size.w, h: size.h }];
-        });
-        if (targets.length !== selected.length) {
-          throw new Error("تعذر العثور على صفحات التصدير — أعد تحميل المحرر ثم حاول مرة أخرى");
+        const targets = await exportTargets(selected);
+        /*
+         * Tell the author when the job-level memory budget (see
+         * `jobExportScale`) lowers the render scale. A long document exporting
+         * at a consistent, slightly softer resolution is the intended
+         * behaviour — but it must never look like the app quietly ignored the
+         * quality the author picked.
+         */
+        usedScale = jobExportScale(targets, captureScale);
+        if (usedScale < captureScale - 0.01) {
+          setProgress(
+            `تقليل الدقة إلى ${Math.max(1, Math.round((usedScale / captureScale) * 100))}% من المطلوب ليتسع المستند كاملًا في الذاكرة…`,
+          );
         }
         captured = await capturePages(targets, captureScale, (i, n) => {
           setProgress(`التقاط الصفحة ${i + 1} من ${n}…`);
@@ -210,13 +274,16 @@ export function ExportDialog() {
         { version, name, theme, orgName, pages, defaultSize: undefined },
         selected,
         editableOffice,
-        captureScale,
+        usedScale,
       );
       toggle("exportOpen");
     } catch (err) {
       const message = err instanceof Error ? err.message : "فشل التصدير";
       setError(message);
     } finally {
+      // The bitmaps are hundreds of megabytes on a long document and the file
+      // is already written; free them now instead of waiting for the collector.
+      releaseCapturedPages(captured);
       setBusy(false);
       setProgress("");
     }
@@ -226,13 +293,7 @@ export function ExportDialog() {
     setPreviewBusy(true);
     setError(null);
     try {
-      const targets = selected.flatMap((p) => {
-        const node = document.querySelector(`[data-export-page="${p.id}"]`) as HTMLElement | null;
-        if (!node) return [];
-        const size = pageSize(p);
-        return [{ node, w: size.w, h: size.h }];
-      });
-      if (targets.length !== selected.length) throw new Error("تعذر تجهيز معاينة التصدير");
+      const targets = await exportTargets(selected);
       setPreviewPages(await capturePages(targets, captureScale, undefined, 0));
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تجهيز المعاينة");
@@ -527,7 +588,7 @@ export function ExportDialog() {
             </button>
             <button
               type="button"
-              disabled={busy || previewBusy}
+              disabled={busy}
               onClick={() => void run()}
               className="h-11 flex-1 rounded-[10px] bg-navy text-[14px] font-extrabold text-white disabled:opacity-50"
             >

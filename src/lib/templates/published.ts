@@ -12,8 +12,10 @@ export function templateDisplaySlug(template: { slug?: string | null; id: string
 }
 
 /** Stable absolute URL for SEO / social sharing */
+import { SITE_ORIGIN } from "@/lib/og/share";
+
 export function publishedTemplateAbsoluteUrl(idOrSlug: string, origin?: string): string {
-  const base = origin || "https://nasaq-sa.vercel.app";
+  const base = origin || SITE_ORIGIN;
   return `${base.replace(/\/$/, "")}${publishedTemplatePath(idOrSlug)}`;
 }
 
