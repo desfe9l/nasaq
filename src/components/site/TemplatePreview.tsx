@@ -1,3 +1,8 @@
+import { useId } from "react";
+import { GradientDefs } from "@/components/editor/GradientDefs";
+import { ShapeGlyph } from "@/components/editor/ShapeGlyph";
+import { normalizeCrop, imageLayout } from "@/lib/editor/image-crop";
+import { pageBackgroundCss, paintCss } from "@/lib/editor/gradient";
 /*
  * Real template previews.
  *
@@ -21,7 +26,14 @@
  * `ElementNode`, so the preview and the artboard agree.
  */
 
-import { ICONS, cssFont, pageSize, parseTable, type CanvasEl, type Page } from "@/lib/editor/model";
+import {
+  ICONS,
+  cssFont,
+  pageSize,
+  parseTable,
+  type CanvasEl,
+  type Page,
+} from "@/lib/editor/model";
 import { applyNumerals } from "@/lib/editor/arabic";
 import { safeImageSrc } from "@/lib/editor/images";
 import { prepareText, textPadding } from "@/lib/editor/text-render";
@@ -36,6 +48,8 @@ interface Scale {
   pw: number;
   /** Page height in mm. */
   ph: number;
+  parentW?: number;
+  parentH?: number;
 }
 
 /** A length in mm as a share of the page width. */
@@ -66,7 +80,11 @@ export interface TemplatePreviewProps {
  * The wrapper keeps the document's exact aspect ratio, so a slide template
  * (338.7 × 190.5mm) previews as a slide and an A4 page previews as A4.
  */
-export function TemplatePreview({ page, className, paperClassName }: TemplatePreviewProps) {
+export function TemplatePreview({
+  page,
+  className,
+  paperClassName,
+}: TemplatePreviewProps) {
   const size = pageSize(page);
   const scale: Scale = { pw: size.w, ph: size.h };
   const elements = [...(page.elements ?? [])]
@@ -79,7 +97,7 @@ export function TemplatePreview({ page, className, paperClassName }: TemplatePre
       style={{
         aspectRatio: `${size.w} / ${size.h}`,
         containerType: "inline-size",
-        background: page.bg || "#fff",
+        background: pageBackgroundCss(page),
         direction: "rtl",
       }}
     >
@@ -125,7 +143,9 @@ export function TemplateStackPreview({
             key={depth}
             aria-hidden
             className="absolute inset-0 rounded-[3px] border border-line/70 bg-white dark:border-white/10"
-            style={{ transform: `translate(${depth * 3}%, ${depth * 2.2}%) scale(${1 - depth * 0.045})` }}
+            style={{
+              transform: `translate(${depth * 3}%, ${depth * 2.2}%) scale(${1 - depth * 0.045})`,
+            }}
           />
         );
       })}
@@ -140,13 +160,14 @@ export function TemplateStackPreview({
 }
 
 function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
+  const paintId = `preview-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const s = el.style || {};
   const box: React.CSSProperties = {
     position: "absolute",
-    left: pc(el.x, scale.pw),
-    top: pc(el.y, scale.ph),
-    width: pc(el.w, scale.pw),
-    height: pc(el.h, scale.ph),
+    left: pc(el.x, scale.parentW || scale.pw),
+    top: pc(el.y, scale.parentH || scale.ph),
+    width: pc(el.w, scale.parentW || scale.pw),
+    height: pc(el.h, scale.parentH || scale.ph),
     opacity: el.opacity ?? 1,
     zIndex: el.z ?? 0,
     transform: `rotate(${el.rotation || 0}deg)${s.flipX ? " scaleX(-1)" : ""}${s.flipY ? " scaleY(-1)" : ""}`,
@@ -160,7 +181,11 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
           .filter((child) => !child.hidden)
           .sort((a, b) => (a.z ?? 0) - (b.z ?? 0))
           .map((child) => (
-            <PreviewElement key={child.id} el={child} scale={scale} />
+            <PreviewElement
+              key={child.id}
+              el={child}
+              scale={{ ...scale, parentW: el.w, parentH: el.h }}
+            />
           ))}
       </div>
     );
@@ -180,7 +205,7 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
     direction: "rtl",
     textDecoration: s.underline ? "underline" : undefined,
   };
-  const fill = s.fill || s.background;
+  const fill = paintCss(s.fill || s.background, s.gradient, "#f7f8fb");
   const border =
     Number(s.borderWidth) > 0
       ? `${mm(Number(s.borderWidth), scale)} solid ${s.borderColor || "#d9dee8"}`
@@ -188,7 +213,13 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
 
   if (el.type === "text") {
     return (
-      <div style={{ ...box, ...textCss, padding: pad ? mm(pad, scale) : undefined }}>
+      <div
+        style={{
+          ...box,
+          ...textCss,
+          padding: pad ? mm(pad, scale) : undefined,
+        }}
+      >
         {text.text}
       </div>
     );
@@ -207,7 +238,11 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
           display: "flex",
           alignItems: el.type === "stat" ? "center" : "flex-start",
           justifyContent:
-            s.textAlign === "center" ? "center" : s.textAlign === "left" ? "flex-end" : "flex-start",
+            s.textAlign === "center"
+              ? "center"
+              : s.textAlign === "left"
+                ? "flex-end"
+                : "flex-start",
         }}
       >
         {text.text}
@@ -235,11 +270,26 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
       const dot = Math.max(2.4, Math.min(el.h * 0.34, 7));
       return (
         <div style={container}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: mm(2, scale), alignItems: "baseline" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: mm(2, scale),
+              alignItems: "baseline",
+            }}
+          >
             <span style={{ flex: 1, minWidth: 0 }}>{text.text}</span>
-            {s.showValue !== false && <span style={{ color: s.fill || "#006c35" }}>{shown}</span>}
+            {s.showValue !== false && (
+              <span style={{ color: s.fill || "#006c35" }}>{shown}</span>
+            )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: mm(dot * 0.55, scale) }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: mm(dot * 0.55, scale),
+            }}
+          >
             {Array.from({ length: total }, (_, i) => (
               <span
                 key={i}
@@ -247,7 +297,10 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
                   width: mm(dot, scale),
                   height: mm(dot, scale),
                   borderRadius: "999px",
-                  background: i < filled ? s.fill || "#006c35" : s.background || "#e8ecf3",
+                  background:
+                    i < filled
+                      ? paintCss(s.fill, s.gradient, "#006c35")
+                      : s.background || "#e8ecf3",
                 }}
               />
             ))}
@@ -263,15 +316,34 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
       const c = 2 * Math.PI * r;
       return (
         <div style={container}>
-          <div style={{ position: "relative", width: mm(size, scale), height: mm(size, scale) }}>
+          <div
+            style={{
+              position: "relative",
+              width: mm(size, scale),
+              height: mm(size, scale),
+            }}
+          >
             <svg viewBox={`0 0 ${size} ${size}`} width="100%" height="100%">
-              <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={s.background || "#e8ecf3"} strokeWidth={thickness} />
+              <GradientDefs
+                gradient={s.gradient}
+                id={paintId}
+                box={{ w: size, h: size }}
+                coordinates={{ w: size, h: size }}
+              />
               <circle
                 cx={size / 2}
                 cy={size / 2}
                 r={r}
                 fill="none"
-                stroke={s.fill || "#006c35"}
+                stroke={s.background || "#e8ecf3"}
+                strokeWidth={thickness}
+              />
+              <circle
+                cx={size / 2}
+                cy={size / 2}
+                r={r}
+                fill="none"
+                stroke={s.gradient ? `url(#${paintId})` : s.fill || "#006c35"}
                 strokeWidth={thickness}
                 strokeLinecap="round"
                 strokeDasharray={`${(c * value) / 100} ${c}`}
@@ -279,10 +351,26 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
               />
             </svg>
             {s.showValue !== false && (
-              <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center" }}>{shown}</div>
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  display: "grid",
+                  placeItems: "center",
+                }}
+              >
+                {shown}
+              </div>
             )}
           </div>
-          <span style={{ maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          <span
+            style={{
+              maxWidth: "100%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
             {text.text}
           </span>
         </div>
@@ -292,11 +380,28 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
     const barHeight = Math.max(2, el.h * 0.3);
     return (
       <div style={container}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: mm(2, scale), alignItems: "baseline" }}>
-          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: mm(2, scale),
+            alignItems: "baseline",
+          }}
+        >
+          <span
+            style={{
+              flex: 1,
+              minWidth: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
             {text.text}
           </span>
-          {s.showValue !== false && <span style={{ color: s.fill || "#006c35" }}>{shown}</span>}
+          {s.showValue !== false && (
+            <span style={{ color: s.fill || "#006c35" }}>{shown}</span>
+          )}
         </div>
         <div
           style={{
@@ -306,7 +411,13 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
             overflow: "hidden",
           }}
         >
-          <div style={{ width: `${value}%`, height: "100%", background: s.fill || "#006c35" }} />
+          <div
+            style={{
+              width: `${value}%`,
+              height: "100%",
+              background: paintCss(s.fill, s.gradient, "#006c35"),
+            }}
+          />
         </div>
       </div>
     );
@@ -316,7 +427,14 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
     const vertical = el.h > el.w;
     const thickness = mm(s.stroke ?? 0.8, scale);
     return (
-      <div style={{ ...box, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div
+        style={{
+          ...box,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
         <div
           style={{
             background: s.color || "#c9a86a",
@@ -333,9 +451,24 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
     const thickness = mm(s.stroke ?? 0.5, scale);
     const diamond = mm(3.6, scale);
     return (
-      <div style={{ ...box, display: "flex", alignItems: "center", gap: mm(1.5, scale), padding: `0 ${mm(1, scale)}` }}>
+      <div
+        style={{
+          ...box,
+          display: "flex",
+          alignItems: "center",
+          gap: mm(1.5, scale),
+          padding: `0 ${mm(1, scale)}`,
+        }}
+      >
         <span style={{ flex: 1, background: c, height: thickness }} />
-        <span style={{ width: diamond, height: diamond, border: `${mm(0.4, scale)} solid ${c}`, transform: "rotate(45deg)" }} />
+        <span
+          style={{
+            width: diamond,
+            height: diamond,
+            border: `${mm(0.4, scale)} solid ${c}`,
+            transform: "rotate(45deg)",
+          }}
+        />
         <span style={{ flex: 1, background: c, height: thickness }} />
       </div>
     );
@@ -349,10 +482,56 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
         <div
           style={{
             ...box,
-            background: "repeating-linear-gradient(45deg, #eef2f7, #eef2f7 2px, #e2e8f0 2px, #e2e8f0 4px)",
+            background:
+              "repeating-linear-gradient(45deg, #eef2f7, #eef2f7 2px, #e2e8f0 2px, #e2e8f0 4px)",
             borderRadius: s.radius ? mm(s.radius, scale) : undefined,
           }}
         />
+      );
+    }
+    const crop = normalizeCrop(s.crop);
+    if (crop) {
+      const layout = imageLayout(
+        el,
+        { w: crop.sourceW, h: crop.sourceH },
+        crop,
+        s.objectFit || (el.type === "logo" ? "contain" : "cover"),
+        s.objectX,
+        s.objectY,
+      );
+      return (
+        <div
+          style={{
+            ...box,
+            borderRadius: s.radius ? mm(s.radius, scale) : undefined,
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              overflow: "hidden",
+              left: `${(layout.x / el.w) * 100}%`,
+              top: `${(layout.y / el.h) * 100}%`,
+              width: `${(layout.w / el.w) * 100}%`,
+              height: `${(layout.h / el.h) * 100}%`,
+            }}
+          >
+            <img
+              alt=""
+              src={src}
+              draggable={false}
+              loading="lazy"
+              style={{
+                position: "absolute",
+                maxWidth: "none",
+                width: `${(crop.sourceW / crop.w) * 100}%`,
+                height: `${(crop.sourceH / crop.h) * 100}%`,
+                left: `${(-crop.x / crop.w) * 100}%`,
+                top: `${(-crop.y / crop.h) * 100}%`,
+              }}
+            />
+          </div>
+        </div>
       );
     }
     return (
@@ -366,7 +545,8 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
         decoding="async"
         style={{
           ...box,
-          objectFit: (s.objectFit as React.CSSProperties["objectFit"]) ||
+          objectFit:
+            (s.objectFit as React.CSSProperties["objectFit"]) ||
             (el.type === "logo" || el.type === "qr" ? "contain" : "cover"),
           objectPosition: `${s.objectX ?? 50}% ${s.objectY ?? 50}%`,
           borderRadius: s.radius ? mm(s.radius, scale) : undefined,
@@ -380,11 +560,19 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
       fill: s.svgFill,
       stroke: s.svgStroke,
       strokeWidth: s.svgStrokeWidth,
+      gradient: s.gradient,
+      gradientId: paintId,
+      box: el,
     });
     if (!markup) return null;
     return (
       <div
-        style={{ ...box, color: s.color || "#172033", display: "grid", placeItems: "center" }}
+        style={{
+          ...box,
+          color: s.color || "#172033",
+          display: "grid",
+          placeItems: "center",
+        }}
         // Sanitised above by the editor's own allow-list walk.
         dangerouslySetInnerHTML={{ __html: markup }}
       />
@@ -394,8 +582,24 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
   if (el.type === "icon") {
     const d = ICONS[el.icon || "star"] || ICONS.star;
     return (
-      <div style={{ ...box, color: s.color || "#c9a86a", display: "grid", placeItems: "center" }}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={s.stroke ?? 1.8} strokeLinecap="round" strokeLinejoin="round" width="100%" height="100%">
+      <div
+        style={{
+          ...box,
+          color: s.color || "#c9a86a",
+          display: "grid",
+          placeItems: "center",
+        }}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={s.stroke ?? 1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          width="100%"
+          height="100%"
+        >
           <path d={d} />
         </svg>
       </div>
@@ -403,17 +607,18 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
   }
 
   if (el.type === "shape") {
-    const shapeId = String(s.shapeId || s.shape || "rect");
-    const round = shapeId === "circle" || shapeId === "ellipse" || shapeId === "seal";
     return (
-      <div
-        style={{
-          ...box,
-          background: round ? undefined : fill || undefined,
-          border,
-          borderRadius: round ? "50%" : s.radius ? mm(s.radius, scale) : undefined,
-        }}
-      />
+      <div style={box}>
+        <ShapeGlyph
+          style={s}
+          fill={s.fill || "none"}
+          stroke={s.borderColor || "transparent"}
+          borderWidthMm={Number(s.borderWidth) || 0}
+          box={el}
+          dash={s.borderDash === true}
+          radiusMm={Number(s.radius) || 0}
+        />
+      </div>
     );
   }
 
@@ -460,17 +665,26 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
             {data.map((row, ri) => (
               <tr key={ri}>
                 {row.map((cell, ci) => {
-                  const zebra = stripe && ri > 0 && ri % 2 === 0 ? stripe : undefined;
+                  const zebra =
+                    stripe && ri > 0 && ri % 2 === 0 ? stripe : undefined;
                   return (
                     <td
                       key={ci}
                       style={{
                         border: `${mm(Number(s.borderWidth) || 0.3, scale)} solid ${s.borderColor || "#bfc7d6"}`,
                         padding: mm(1.6, scale),
-                        background: ri === 0 ? s.headerBg || "#006c35" : zebra || s.tableBg || "#fff",
-                        color: ri === 0 ? s.headerColor || "#fff" : s.color || "#172033",
+                        background:
+                          ri === 0
+                            ? s.headerBg || "#006c35"
+                            : zebra || s.tableBg || "#fff",
+                        color:
+                          ri === 0
+                            ? s.headerColor || "#fff"
+                            : s.color || "#172033",
                         fontWeight: ri === 0 ? 800 : 500,
-                        textAlign: (s.cellAlign as React.CSSProperties["textAlign"]) || "right",
+                        textAlign:
+                          (s.cellAlign as React.CSSProperties["textAlign"]) ||
+                          "right",
                         verticalAlign: "top",
                         overflow: "hidden",
                       }}

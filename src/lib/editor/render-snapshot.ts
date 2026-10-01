@@ -22,7 +22,7 @@ export interface RenderSnapshot {
 }
 let snapshotSequence = 0;
 const CHROME =
-  ".handle,.rotate-handle,.selection-layer,.overflow-badge,.print-guides,.guide-v,.guide-h,.marquee";
+  ".handle,.rotate-handle,.selection-layer,.overflow-badge,.print-guides,.guide-v,.guide-h,.snap-feedback,.crop-overlay,.crop-actions,.marquee";
 
 export async function snapshotPage({
   node,
@@ -226,6 +226,40 @@ export function trimLayer(
   };
 }
 
+/** Render one isolated object, or the page paint when elementId is omitted.
+ * Native Office reuses this renderer for paint/crop it cannot express, without
+ * flattening unrelated text, tables or shapes or maintaining a second renderer. */
+export async function snapshotLayer(
+  snapshot: RenderSnapshot,
+  elementId?: string,
+  scale = 3,
+  name = elementId ? "عنصر" : "خلفية الصفحة",
+): Promise<SceneImage | null> {
+  const doc = new DOMParser().parseFromString(snapshot.svg, "image/svg+xml");
+  const page = doc.querySelector("[data-export-page]") as HTMLElement | null;
+  if (!page) throw new Error("تعذر العثور على لوحة التصدير");
+  const layers = [...page.children].filter((el) =>
+    el.hasAttribute("data-el-id"),
+  ) as HTMLElement[];
+  const active = elementId
+    ? layers.find((el) => el.getAttribute("data-el-id") === elementId)
+    : undefined;
+  if (elementId && !active) throw new Error("تعذر العثور على عنصر التصدير");
+  for (const layer of layers)
+    if (layer !== active) {
+      for (const node of [layer, ...layer.querySelectorAll<HTMLElement>("*")])
+        node.style.visibility = "hidden";
+    }
+  if (active) page.style.background = "transparent";
+  const svg = new XMLSerializer().serializeToString(doc.documentElement);
+  const canvas = await paintSnapshot({ ...snapshot, svg }, scale);
+  try {
+    return trimLayer(canvas, scale, name);
+  } finally {
+    canvas.width = canvas.height = 0;
+  }
+}
+
 /**
  * Top-level objects stay separate and in paint order; groups remain atomic to
  * preserve group opacity/transform compositing. All text is shaped by the same
@@ -237,39 +271,23 @@ export async function snapshotLayers(
   scale = 3,
 ): Promise<ScenePage> {
   const doc = new DOMParser().parseFromString(snapshot.svg, "image/svg+xml");
-  const page = doc.querySelector("[data-export-page]") as HTMLElement | null;
+  const page = doc.querySelector("[data-export-page]");
   if (!page) throw new Error("تعذر العثور على لوحة التصدير");
+  const items: SceneImage[] = [];
+  const background = await snapshotLayer(snapshot, undefined, scale);
+  if (background) items.push(background);
   const layers = [...page.children].filter((el) =>
     el.hasAttribute("data-el-id"),
-  ) as HTMLElement[];
-  const background = page.style.background;
-  const items: SceneImage[] = [];
-  // Visibility keeps geometry and clip definitions alive. Descendant computed
-  // visibility must also be hidden, since explicit `visible` overrides parents.
-  const paint = async (active: HTMLElement | null, name: string) => {
-    const hidden: [HTMLElement, string][] = [];
-    for (const layer of layers)
-      if (layer !== active) {
-        for (const el of [layer, ...layer.querySelectorAll<HTMLElement>("*")]) {
-          hidden.push([el, el.style.visibility]);
-          el.style.visibility = "hidden";
-        }
-      }
-    page.style.background = active ? "transparent" : background;
-    const svg = new XMLSerializer().serializeToString(doc.documentElement);
-    const item = trimLayer(
-      await paintSnapshot({ ...snapshot, svg }, scale),
+  );
+  for (const [index, layer] of layers.entries()) {
+    const item = await snapshotLayer(
+      snapshot,
+      layer.getAttribute("data-el-id")!,
       scale,
-      name,
+      `عنصر ${index + 1}`,
     );
     if (item) items.push(item);
-    hidden.forEach(([el, visibility]) => {
-      el.style.visibility = visibility;
-    });
-  };
-  await paint(null, "خلفية الصفحة");
-  for (const [index, layer] of layers.entries())
-    await paint(layer, `عنصر ${index + 1}`);
+  }
   return {
     w: snapshot.w,
     h: snapshot.h,

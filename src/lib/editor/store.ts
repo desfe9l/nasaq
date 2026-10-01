@@ -3,7 +3,6 @@ import { create } from "zustand";
 import { toast } from "sonner";
 import {
   A4,
-  GRID,
   MIN_SIZE,
   THEMES,
   absoluteBounds,
@@ -55,11 +54,7 @@ import {
   type SettingsKey,
 } from "./storage";
 import { getStorageOwner, hasSignedInOwner } from "./storage-owner";
-import {
-  createProject,
-  createTemplatePage,
-  PACKS,
-} from "./templates";
+import { createProject, createTemplatePage, PACKS } from "./templates";
 import {
   FONTS,
   LEGACY_STORE_KEY,
@@ -95,6 +90,19 @@ import {
 import { buildGraphicHeading, type GraphicHeadingId } from "./graphic-headings";
 import type { ReportDraft } from "../ai/contract";
 import { safeImageSrc } from "./images";
+import { clampZoom } from "./document-space";
+import {
+  visiblePageRect as measuredVisiblePageRect,
+  revealInsertedElement,
+  insertionPage,
+} from "./canvas-space";
+import { normalizeGradient, type Gradient } from "./gradient";
+import { normalizeCrop } from "./image-crop";
+import {
+  insertLibraryDrop,
+  normalizeLibraryDrop,
+  type LibraryDropPayload,
+} from "./library-dnd";
 import { captureThumbnail, thumbnailCaptureDue } from "./thumbnail";
 import type { LibraryImportPlan } from "./library-export";
 import { DEFAULT_FOLDER_ID, DEFAULT_FOLDER_NAME } from "./library-manager";
@@ -458,7 +466,10 @@ interface EditorStore extends Project, Ui, History {
   setArtboardGridCols: (cols: number) => void;
   toggleArtboardLock: (id?: string) => void;
   toggleArtboardHidden: (id?: string) => void;
-  splitArtboardPage: (id?: string, direction?: "horizontal" | "vertical") => void;
+  splitArtboardPage: (
+    id?: string,
+    direction?: "horizontal" | "vertical",
+  ) => void;
   addArtboardAdjacent: (
     targetId: string,
     direction: "row" | "col" | "top" | "bottom" | "left" | "right",
@@ -633,7 +644,13 @@ interface EditorStore extends Project, Ui, History {
     type: ElType,
     over?: Partial<CanvasEl>,
     center?: { x: number; y: number },
+    pageId?: string,
   ) => CanvasEl | undefined;
+  insertLibraryElements: (
+    payload: LibraryDropPayload,
+    at?: { x: number; y: number } | null,
+    pageId?: string,
+  ) => string[];
   /** Create a text element at an exact drawn box (the «نص بالرسم» tool). */
   addTextAt: (
     box: { x: number; y: number; w: number; h: number },
@@ -734,6 +751,11 @@ interface EditorStore extends Project, Ui, History {
   movePageById: (id: string, dir: -1 | 1) => void;
   reorderPages: (from: number, to: number) => void;
   renamePage: (id: string, name: string) => void;
+  setPageBackground: (
+    id: string,
+    paint: { bg?: string; bgGradient?: Gradient },
+    live?: boolean,
+  ) => void;
   setPageSize: (
     id: string,
     sizeId: SizeId,
@@ -769,11 +791,6 @@ function projectSlice(s: ProjectSnapshot): ProjectSnapshot {
   };
 }
 
-function snap(v: number, enabled: boolean) {
-  if (!enabled) return v;
-  return Math.round(v / GRID) * GRID;
-}
-
 const blank = createProject("official");
 
 /**
@@ -804,27 +821,17 @@ const BOOT_TEMPLATE = BOOT_PARAMS?.get("template") ?? "";
 function visiblePageRect(
   stage: HTMLElement | null,
   page: Page,
-  zoom: number,
-  previewAll: boolean,
+  _zoom?: number,
+  _previewAll?: boolean,
 ): { x: number; y: number; w: number; h: number } {
-  const size = pageSize(page);
-  try {
-    const host =
-      stage?.querySelector<HTMLElement>(`[data-page-id="${page.id}"]`) ?? null;
-    if (stage && host) {
-      const vr = stage.getBoundingClientRect();
-      const pr = host.getBoundingClientRect();
-      const x0 = Math.max(0, (vr.left - pr.left) / zoom);
-      const y0 = Math.max(0, (vr.top - pr.top) / zoom);
-      const x1 = Math.min(size.w, (vr.right - pr.left) / zoom);
-      const y1 = Math.min(size.h, (vr.bottom - pr.top) / zoom);
-      if (x1 > x0 && y1 > y0) return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
-    }
-  } catch {
-    /* no viewport (SSR/tests) — fall through */
-  }
-  void previewAll;
-  return { x: 0, y: 0, w: size.w, h: size.h };
+  return (
+    measuredVisiblePageRect(stage, page) || { x: 0, y: 0, ...pageSize(page) }
+  );
+}
+function canvasStage() {
+  return typeof document === "undefined"
+    ? null
+    : document.querySelector<HTMLElement>(".editor-canvas-stage");
 }
 
 const activePageOf = (s: { pages: Page[]; activePageId: string }) =>
@@ -978,6 +985,8 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
   incoming.transactionNo ||= "";
   pages.forEach((p) => {
     p.elements ||= [];
+    if (p.bgGradient !== undefined)
+      p.bgGradient = normalizeGradient(p.bgGradient);
     p.w = pageSize(p).w;
     p.h = pageSize(p).h;
     const size = pageSize(p);
@@ -985,6 +994,10 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
     // so a project written before groups existed loads unchanged.
     const normalizeEl = (el: CanvasEl) => {
       el.style ||= {};
+      if (el.style.gradient !== undefined)
+        el.style.gradient = normalizeGradient(el.style.gradient);
+      if (el.style.crop !== undefined)
+        el.style.crop = normalizeCrop(el.style.crop);
       el.opacity ??= 1;
       el.rotation ??= 0;
       el.name ||= TYPE_NAME[el.type] || "عنصر";
@@ -1029,6 +1042,8 @@ export const useEditor = create<EditorStore>((set, get) => {
 
   /** Debounced autosave. Kept off the render path: no store writes until it fires. */
   const scheduleSave = (delay = 900) => {
+    // Store geometry is also used during SSR/unit checks; autosave is browser-only.
+    if (typeof window === "undefined") return;
     if (get().showcase) return; // showcase boot: the document never persists
     if (saveTimer) clearTimeout(saveTimer);
     if (get().saveState !== "saving") set({ saveState: "dirty" });
@@ -1071,7 +1086,9 @@ export const useEditor = create<EditorStore>((set, get) => {
     a.defaultSize === b.defaultSize &&
     a.pack === b.pack;
 
+  let historyBatch = 0;
   const pushHistory = () => {
+    if (historyBatch) return;
     const snapshot = projectSlice(get());
     const { past } = get();
     // Dedupe WITHOUT serialising: a commit that changes nothing (a blur after a
@@ -1347,10 +1364,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           );
           await restoreFonts(project);
           applyProject(project, {
-            zoom:
-              typeof ui.zoom === "number"
-                ? clamp(ui.zoom, 0.35, 1.6)
-                : 0.82,
+            zoom: typeof ui.zoom === "number" ? clampZoom(ui.zoom) : 0.82,
           });
         } catch {
           /* a failed showcase boot still leaves the default blank document */
@@ -1471,9 +1485,12 @@ export const useEditor = create<EditorStore>((set, get) => {
           rightOpen: nextRightOpen,
           leftCollapsed: Boolean(ui.leftCollapsed),
           rightCollapsed: Boolean(ui.rightCollapsed),
-          artboardGridCols: typeof ui.artboardGridCols === "number" ? clamp(ui.artboardGridCols, 1, 8) : 4,
+          artboardGridCols:
+            typeof ui.artboardGridCols === "number"
+              ? clamp(ui.artboardGridCols, 1, 8)
+              : 4,
           previewAll: true,
-          zoom: typeof ui.zoom === "number" ? clamp(ui.zoom, 0.35, 1.6) : 0.82,
+          zoom: typeof ui.zoom === "number" ? clampZoom(ui.zoom) : 0.82,
           pagesPanelHeight: clampPagesHeight(
             typeof ui.pagesPanelHeight === "number"
               ? ui.pagesPanelHeight
@@ -1507,7 +1524,9 @@ export const useEditor = create<EditorStore>((set, get) => {
                 : {}),
             });
           if (restoredFromDraft) {
-            toast.success("تمت استعادة آخر تعديلات غير محفوظة بعد إعادة التحميل");
+            toast.success(
+              "تمت استعادة آخر تعديلات غير محفوظة بعد إعادة التحميل",
+            );
             // The restored draft IS the current document — mark it dirty so
             // the next auto-save makes the recovery durable in IndexedDB.
             set({ saveState: "dirty" });
@@ -1567,7 +1586,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       const list = await listProjects();
       // An auth transition can finish while IndexedDB is resolving. Never let
       // the previous owner's response repopulate the newly active session.
-      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+        return;
       set({ projects: list, projectsLoading: false });
     },
 
@@ -1577,7 +1597,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       const assets = await listAssets();
       // Asset shelves are owner-scoped just like projects; discard stale reads
       // after a popup login/logout or an in-tab account switch.
-      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+        return;
       set({ assets, assetsLoading: false });
 
       if (hasSignedInOwner()) {
@@ -2191,9 +2212,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       const sessionOwner = get().sessionOwner;
       const project = await getProject(id);
       if (!project) return;
-      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+        return;
       await saveProject({ ...project, name, id });
-      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+        return;
       if (get().id === id) set({ name });
       await get().refreshProjects();
     },
@@ -2204,9 +2227,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       const project = await getProject(id);
       if (!project) return;
       const favorite = !project.favorite;
-      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+        return;
       await saveProject({ ...project, favorite, id });
-      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+        return;
       if (get().id === id) set({ favorite });
       await get().refreshProjects();
     },
@@ -2230,11 +2255,13 @@ export const useEditor = create<EditorStore>((set, get) => {
         toast.error("تعذر تكرار المستند");
         return;
       }
-      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+        return;
       // Fresh identity: a copy never inherits the original's star (and its
       // thumbnail is re-captured on the next auto-save anyway).
       await saveProject({ ...project, favorite: false, thumbnail: undefined });
-      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+        return;
       await get().refreshProjects();
     },
 
@@ -2243,7 +2270,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       const sessionOwner = get().sessionOwner;
       if (!get().projects.some((project) => project.id === id)) return;
       await removeProject(id);
-      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner) return;
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+        return;
       const s = get();
       if (s.id === id) {
         applyProject(createProject("blank", s.theme), { selectedId: null });
@@ -2343,7 +2371,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     setZoom: (z) => {
-      const zoom = clamp(z, 0.2, 2);
+      const zoom = clampZoom(z);
       set({ zoom });
       // A ctrl+wheel zoom fires dozens of steps a second; persisting each one
       // was an IndexedDB transaction per tick. One trailing write is enough.
@@ -2403,11 +2431,15 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (leftTab === "fonts") get().probeFonts();
     },
     setRightTab: (rightTab) =>
-      set({ rightTab, rightCollapsed: false, rightOpen: true, leftOpen: false }),
+      set({
+        rightTab,
+        rightCollapsed: false,
+        rightOpen: true,
+        leftOpen: false,
+      }),
 
     toggleSidebar: (side) => {
-      const overlay =
-        isOverlayViewport() || side === "right";
+      const overlay = isOverlayViewport() || side === "right";
       // Docked panels persist as `*Collapsed`; floating ones as `*Open`.
       const key =
         side === "left"
@@ -2420,8 +2452,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       const next = !get()[key];
       set({
         [key]: next,
-        ...(next && key === "leftOpen" ? { rightOpen: false }
-          : next && key === "rightOpen" ? { leftOpen: false } : {}),
+        ...(next && key === "leftOpen"
+          ? { rightOpen: false }
+          : next && key === "rightOpen"
+            ? { leftOpen: false }
+            : {}),
       } as Partial<EditorStore>);
       void setSetting(key, next);
     },
@@ -2624,9 +2659,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       const page = activePageOf(s);
       if (!page || page.locked || page.hidden) return;
       const elements = s.enteredGroupId
-        ? findElement(page.elements, s.enteredGroupId)?.el.children ?? []
+        ? (findElement(page.elements, s.enteredGroupId)?.el.children ?? [])
         : page.elements;
-      s.selectMany(elements.filter((el) => !el.locked && !el.hidden).map((el) => el.id));
+      s.selectMany(
+        elements.filter((el) => !el.locked && !el.hidden).map((el) => el.id),
+      );
     },
 
     invertSelection: () => {
@@ -2634,9 +2671,15 @@ export const useEditor = create<EditorStore>((set, get) => {
       const page = activePageOf(s);
       if (!page || page.locked || page.hidden) return;
       const elements = s.enteredGroupId
-        ? findElement(page.elements, s.enteredGroupId)?.el.children ?? []
+        ? (findElement(page.elements, s.enteredGroupId)?.el.children ?? [])
         : page.elements;
-      s.selectMany(elements.filter((el) => !el.locked && !el.hidden && !s.selectedIds.includes(el.id)).map((el) => el.id));
+      s.selectMany(
+        elements
+          .filter(
+            (el) => !el.locked && !el.hidden && !s.selectedIds.includes(el.id),
+          )
+          .map((el) => el.id),
+      );
     },
 
     linkSelected: () => {
@@ -2920,10 +2963,18 @@ export const useEditor = create<EditorStore>((set, get) => {
       pushHistory();
     },
 
-    addElementAt: (type, over, center) => {
+    addElementAt: (type, over, center, pageId) => {
       const s = get();
-      const page = activePageOf(s);
-      if (!page) return undefined;
+      const page = pageId
+        ? s.pages.find((p) => p.id === pageId)
+        : center
+          ? activePageOf(s)
+          : insertionPage(canvasStage(), s.pages, s.activePageId);
+      if (!page || page.locked || page.hidden) return undefined;
+      // Undefined picker coordinates must never overwrite computed placement.
+      const overrides = Object.fromEntries(
+        Object.entries(over || {}).filter(([, value]) => value !== undefined),
+      ) as Partial<CanvasEl>;
       const theme = THEMES[s.theme];
       const size = pageSize(page);
       /*
@@ -2938,35 +2989,25 @@ export const useEditor = create<EditorStore>((set, get) => {
        * source of defaults without changing createElement's theming contract.
        */
       const defaults = createElementDefaults(type);
-      const box = {
-        w: over?.w ?? defaults.w ?? 40,
-        h: over?.h ?? defaults.h ?? 30,
-      };
-      let pos = center;
-      if (pos) pos = { x: pos.x - box.w / 2, y: pos.y - box.h / 2 };
-      else {
-        const stage = document.querySelector<HTMLElement>(
-          ".editor-canvas-stage",
-        );
-        const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
-        pos = centerFor(visible, {
-          w: size.w,
-          h: size.h,
-          elW: box.w,
-          elH: box.h,
-        });
-      }
       const el = createElement(
         type,
-        {
-          ...defaults,
-          x: pos.x,
-          y: pos.y,
-          z: nextZ(page),
-          ...over,
-        },
+        { ...defaults, ...overrides, z: nextZ(page) },
         theme,
       );
+      // Normalise the actual frame BEFORE positioning. Small pages can constrain
+      // WH; centring the old requested size would move the final frame off-target.
+      constrainElement(el, size);
+      const visible = visiblePageRect(
+        canvasStage(),
+        page,
+        s.zoom,
+        s.previewAll,
+      );
+      const pos = center
+        ? { x: center.x - el.w / 2, y: center.y - el.h / 2 }
+        : centerFor(visible, { w: size.w, h: size.h, elW: el.w, elH: el.h });
+      if (center || overrides.x == null) el.x = pos.x;
+      if (center || overrides.y == null) el.y = pos.y;
       constrainElement(el, size);
       set({
         pages: s.pages.map((p) =>
@@ -2975,11 +3016,15 @@ export const useEditor = create<EditorStore>((set, get) => {
         // Both selection fields together: selectedId alone leaves selectedIds
         // empty, so the selection frame, the arrange bar and every
         // selection-scoped command ignored the element that was just added.
+        activePageId: page.id,
+        editingId: null,
         selectedId: el.id,
         selectedIds: [el.id],
         rightTab: "properties",
       });
       pushHistory();
+      if (!historyBatch && typeof document !== "undefined")
+        revealInsertedElement(page.id, el.id);
       /*
        * Step 10 — one confirmation for EVERY insertion funnel.
        *
@@ -2988,11 +3033,59 @@ export const useEditor = create<EditorStore>((set, get) => {
        * "click or drag a library item" exactly, with no chance of a path being
        * forgotten. Short duration keeps it subtle: a receipt, not an alert.
        */
-      toast.success("تمت إضافة العنصر إلى مساحة العمل", { duration: 1600 });
+      if (!historyBatch)
+        toast.success("تمت إضافة العنصر إلى مساحة العمل", { duration: 1600 });
       return el;
     },
 
     addElement: (type, over) => get().addElementAt(type, over)?.id,
+
+    insertLibraryElements: (input, at = null, pageId) => {
+      const payload = normalizeLibraryDrop(input);
+      if (!payload) return [];
+      const state = get();
+      const page =
+        pageId || at
+          ? state.pages.find((p) => p.id === (pageId || state.activePageId))
+          : insertionPage(canvasStage(), state.pages, state.activePageId);
+      if (!page) return [];
+      const visible = visiblePageRect(
+        canvasStage(),
+        page,
+        get().zoom,
+        get().previewAll,
+      );
+      const size = pageSize(page);
+      // Every batch has one visible/exact anchor; preset XY never overrides it.
+      const anchor = at || {
+        x: visible ? visible.x + visible.w / 2 : size.w / 2,
+        y: visible ? visible.y + visible.h / 2 : size.h / 2,
+      };
+      const ids: string[] = [];
+      historyBatch += 1;
+      try {
+        insertLibraryDrop(payload, anchor, (type, over, center) => {
+          const el = get().addElementAt(
+            type as ElType,
+            over as Partial<CanvasEl>,
+            center,
+            page.id,
+          );
+          if (el) ids.push(el.id);
+          return el;
+        });
+      } finally {
+        historyBatch -= 1;
+      }
+      if (ids.length) {
+        get().selectMany(ids);
+        pushHistory();
+        if (typeof document !== "undefined")
+          revealInsertedElement(page.id, ids);
+        toast.success("تمت إضافة العنصر إلى مساحة العمل", { duration: 1600 });
+      }
+      return ids;
+    },
 
     /* ── Print guides ────────────────────────────────────────────────────── */
 
@@ -3303,9 +3396,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           (el) => el.type === "text" || el.type === "box" || el.type === "stat",
         );
       if (!targets.length) {
-        const stage = document.querySelector<HTMLElement>(
-          ".editor-canvas-stage",
-        );
+        const stage = canvasStage();
         const size = pageSize(page);
         const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
         const pos = centerFor(visible, {
@@ -3385,9 +3476,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         );
       if (!target) {
         const size = pageSize(page);
-        const stage = document.querySelector<HTMLElement>(
-          ".editor-canvas-stage",
-        );
+        const stage = canvasStage();
         const visible = visiblePageRect(stage, page, s.zoom, s.previewAll);
         const pos = centerFor(visible, {
           w: size.w,
@@ -3487,16 +3576,35 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return;
       const size = pageSize(page);
       const next = mapElement(page, id, (el) => {
+        if (el.locked && patch.locked !== false && patch.name === undefined)
+          return el;
         const merged = {
           ...el,
           ...patch,
           style: { ...el.style, ...(patch.style || {}) },
         };
-        if (patch.x != null && !live)
-          merged.x = snap(Number(patch.x), s.snapGrid);
-        if (patch.y != null && !live)
-          merged.y = snap(Number(patch.y), s.snapGrid);
+        // Precision fields do not grid-snap; snapping belongs to the pointer
+        // gesture, otherwise X/Y and a committed crop shift after release.
+        if (el.resizeLocked) {
+          merged.w = el.w;
+          merged.h = el.h;
+        }
+        if (el.widthLocked) merged.w = el.w;
+        if (el.heightLocked) merged.h = el.h;
+        if (el.style.aspectLock && !el.resizeLocked) {
+          if (patch.w != null && patch.h == null && !el.heightLocked)
+            merged.h = (el.h * merged.w) / el.w;
+          if (patch.h != null && patch.w == null && !el.widthLocked)
+            merged.w = (el.w * merged.h) / el.h;
+        }
         constrainElement(merged, size);
+        if (
+          merged.children?.length &&
+          (merged.w !== el.w || merged.h !== el.h)
+        ) {
+          merged.children = clone(merged.children);
+          scaleChildren(merged, el.w, el.h);
+        }
         return merged;
       });
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
@@ -3510,6 +3618,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return;
       const size = pageSize(page);
       const next = mapElement(page, id, (el) => {
+        if (el.locked) return el;
         const merged = { ...el, style: { ...el.style, ...patch } };
         constrainElement(merged, size);
         return merged;
@@ -3561,7 +3670,13 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     nudgeSelection: (dx, dy) => {
       const s = get();
-      if (!s.selectedIds.length || !dx || !dy) return;
+      if (
+        !s.selectedIds.length ||
+        !Number.isFinite(dx) ||
+        !Number.isFinite(dy) ||
+        (dx === 0 && dy === 0)
+      )
+        return;
       const page = activePageOf(s);
       if (!page) return;
       const size = pageSize(page);
@@ -3671,7 +3786,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       const next = page.elements.map((root) => {
         const walk = (el: CanvasEl): CanvasEl => {
           if (!s.selectedIds.includes(el.id)) {
-            return el.children?.length ? { ...el, children: el.children.map(walk) } : el;
+            return el.children?.length
+              ? { ...el, children: el.children.map(walk) }
+              : el;
           }
           changed = true;
           return { ...el, style: { ...style } };
@@ -3679,7 +3796,11 @@ export const useEditor = create<EditorStore>((set, get) => {
         return walk(root);
       });
       if (!changed) return;
-      set({ pages: s.pages.map((p) => (p.id === page.id ? { ...p, elements: next } : p)) });
+      set({
+        pages: s.pages.map((p) =>
+          p.id === page.id ? { ...p, elements: next } : p,
+        ),
+      });
       pushHistory();
       toast.success("تم لصق التنسيق", {
         description: `${s.selectedIds.length} عنصر محدث بالتنسيق الجديد.`,
@@ -4156,7 +4277,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       );
       set({ pages });
       pushHistory();
-      toast.success(newLocked ? "تم قفل لوحة التصميم" : "تم فك قفل لوحة التصميم");
+      toast.success(
+        newLocked ? "تم قفل لوحة التصميم" : "تم فك قفل لوحة التصميم",
+      );
     },
 
     toggleArtboardHidden: (id) => {
@@ -4170,12 +4293,17 @@ export const useEditor = create<EditorStore>((set, get) => {
       );
       set({ pages });
       pushHistory();
-      toast.success(newHidden ? "تم إخفاء لوحة التصميم" : "تم إظهار لوحة التصميم");
+      toast.success(
+        newHidden ? "تم إخفاء لوحة التصميم" : "تم إظهار لوحة التصميم",
+      );
     },
 
     splitArtboardPage: (id, direction = "horizontal") => {
       const s = get();
-      if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length + 1)) {
+      if (
+        !s.entitlements.unlimited_pages &&
+        !canAddDemoPage(s.pages.length + 1)
+      ) {
         toast.error("وصلت إلى حد صفحات تجربة المحرر", {
           description: "افتح النسخة الكاملة لتقسيم اللوحات والمزيد من الصفحات.",
         });
@@ -4209,7 +4337,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       const s = get();
       if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
         toast.error("وصلت إلى حد صفحات تجربة المحرر", {
-          description: "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
+          description:
+            "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
         });
         return;
       }
@@ -4220,6 +4349,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         name: `لوحة ${s.pages.length + 1}`,
         elements: [],
         bg: page?.bg || THEMES[s.theme].paper,
+        bgGradient: page?.bgGradient ? clone(page.bgGradient) : undefined,
         w: size.w,
         h: size.h,
       };
@@ -4310,6 +4440,27 @@ export const useEditor = create<EditorStore>((set, get) => {
         pages: get().pages.map((p) => (p.id === id ? { ...p, name } : p)),
       });
       scheduleSave(500);
+    },
+
+    setPageBackground: (id, paint, live = false) => {
+      const s = get();
+      const page = s.pages.find((p) => p.id === id);
+      if (!page || page.locked) return;
+      set({
+        pages: s.pages.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                ...paint,
+                ...(Object.hasOwn(paint, "bgGradient")
+                  ? { bgGradient: normalizeGradient(paint.bgGradient) }
+                  : {}),
+              }
+            : p,
+        ),
+      });
+      if (live) scheduleSave();
+      else pushHistory();
     },
 
     setPageSize: (id, sizeId, custom) => {
@@ -4518,11 +4669,7 @@ function clearDraftSnapshot(): void {
  */
 const settingWriteTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
-function debounceSetting(
-  key: SettingsKey,
-  value: unknown,
-  delay = 500,
-): void {
+function debounceSetting(key: SettingsKey, value: unknown, delay = 500): void {
   const existing = settingWriteTimers.get(key);
   if (existing) clearTimeout(existing);
   settingWriteTimers.set(

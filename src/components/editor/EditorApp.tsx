@@ -45,6 +45,15 @@ import {
 import { absoluteBounds, elementsBounds, pageSize } from "@/lib/editor/model";
 import { fitImageBox, prepareImage } from "@/lib/editor/images";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
+import { clampZoom, stepZoom } from "@/lib/editor/document-space";
+import {
+  canvasViewport,
+  visiblePageRect,
+  insertionPage,
+} from "@/lib/editor/canvas-space";
+import { mmToPx } from "@/lib/editor/render-units";
+import { useInteraction } from "@/lib/editor/interaction-store";
+import { findElement } from "@/lib/editor/model";
 import { LeftPanel } from "./LeftPanel";
 import { RightPanel } from "./RightPanel";
 import { CanvasDock } from "./CanvasDock";
@@ -99,6 +108,7 @@ export function EditorApp() {
   const imageIntent = useRef<{
     type: "image" | "logo" | "replace" | "library";
     targetId?: string;
+    pageId?: string;
   }>({ type: "image" });
   /** Which kind of reusable vector the next file pick will register. */
   const customAssetIntent = useRef<"icon" | "divider">("icon");
@@ -126,16 +136,46 @@ export function EditorApp() {
    * `at` places a dropped image where the pointer landed instead of the
    * palette's default spot, which is what makes dropping feel direct.
    */
-  const ingestImage = async (file: File, at?: { x: number; y: number }) => {
+  const ingestImage = async (
+    file: File,
+    at?: { x: number; y: number; pageId: string },
+  ) => {
     const api = useEditor.getState();
-    const intent = imageIntent.current;
+    const intent = at ? { type: "image" as const } : imageIntent.current;
+    const requestedPage = at?.pageId || ("pageId" in intent && intent.pageId);
+    const targetPage = requestedPage
+      ? api.pages.find((page) => page.id === requestedPage)
+      : insertionPage(
+          document.querySelector<HTMLElement>(".editor-canvas-stage"),
+          api.pages,
+          api.activePageId,
+        );
+    if (!targetPage) return;
+    const pageId = targetPage.id;
+    const visible = targetPage
+      ? visiblePageRect(
+          document.querySelector<HTMLElement>(".editor-canvas-stage"),
+          targetPage,
+        )
+      : null;
+    const size = pageSize(targetPage);
+    const center =
+      at ||
+      (visible
+        ? { x: visible.x + visible.w / 2, y: visible.y + visible.h / 2 }
+        : { x: size.w / 2, y: size.h / 2 });
     try {
       const img = await prepareImage(file);
       const kind = intent.type === "logo" ? "logo" : "image";
 
       if (intent.type === "replace" && intent.targetId) {
         // Swapping the source keeps the author's box, rotation, and effects.
-        api.updateElement(intent.targetId, { src: img.src });
+        const page = useEditor.getState().pages.find((p) => p.id === pageId);
+        const el = page && findElement(page.elements, intent.targetId)?.el;
+        if (el && !el.locked && !page?.locked)
+          api.applyElements(pageId, [
+            { ...el, src: img.src, style: { ...el.style, crop: undefined } },
+          ]);
       } else if (intent.type === "library") {
         await api.addAsset({
           name: file.name.replace(/\.[^.]+$/, "").slice(0, 40) || "عنصر",
@@ -146,15 +186,21 @@ export function EditorApp() {
         toast.success("تمت إضافة العنصر إلى المكتبة");
       } else {
         const max = kind === "logo" ? { w: 40, h: 40 } : { w: 110, h: 90 };
-        const box = fitImageBox(img, max);
-        api.addElement(kind, {
-          src: img.src,
-          name: kind === "logo" ? "شعار" : "صورة",
-          w: box.w,
-          h: box.h,
-          x: at ? at.x - box.w / 2 : undefined,
-          y: at ? at.y - box.h / 2 : undefined,
+        const box = fitImageBox(img, {
+          w: Math.min(max.w, size.w),
+          h: Math.min(max.h, size.h),
         });
+        api.addElementAt(
+          kind,
+          {
+            src: img.src,
+            name: kind === "logo" ? "شعار" : "صورة",
+            w: box.w,
+            h: box.h,
+          },
+          center,
+          pageId,
+        );
       }
 
       if (img.resized) {
@@ -182,7 +228,11 @@ export function EditorApp() {
     }
   };
   const replaceImage = (id: string) => {
-    imageIntent.current = { type: "replace", targetId: id };
+    imageIntent.current = {
+      type: "replace",
+      targetId: id,
+      pageId: useEditor.getState().activePageId,
+    };
     imageInput.current?.click();
   };
 
@@ -252,6 +302,22 @@ export function EditorApp() {
           const file = e.target.files?.[0];
           e.target.value = "";
           if (!file) return;
+          const state = useEditor.getState();
+          const stage = document.querySelector<HTMLElement>(
+            ".editor-canvas-stage",
+          );
+          const targetPage = insertionPage(
+            stage,
+            state.pages,
+            state.activePageId,
+          );
+          if (!targetPage) return;
+          const visible = visiblePageRect(stage, targetPage),
+            size = pageSize(targetPage);
+          const center = {
+            x: visible ? visible.x + visible.w / 2 : size.w / 2,
+            y: visible ? visible.y + visible.h / 2 : size.h / 2,
+          };
           const reader = new FileReader();
           reader.onload = () => {
             const markup = String(reader.result || "");
@@ -259,10 +325,16 @@ export function EditorApp() {
               toast.error("الملف ليس رسم SVG صالحًا");
               return;
             }
-            useEditor.getState().addElement("svg", {
-              content: markup,
-              name: file.name.replace(/\.svg$/i, "").slice(0, 30) || "رسم SVG",
-            });
+            useEditor.getState().addElementAt(
+              "svg",
+              {
+                content: markup,
+                name:
+                  file.name.replace(/\.svg$/i, "").slice(0, 30) || "رسم SVG",
+              },
+              center,
+              targetPage.id,
+            );
             toast.success("أُضيف الرسم إلى الصفحة");
           };
           reader.readAsText(file);
@@ -355,7 +427,10 @@ function Studio({
   onOpenFile: () => void;
   onUpload: (kind: "image" | "logo" | "font" | "library") => void;
   onReplaceImage: (id: string) => void;
-  onDropImage: (file: File, at?: { x: number; y: number }) => Promise<void>;
+  onDropImage: (
+    file: File,
+    at?: { x: number; y: number; pageId: string },
+  ) => Promise<void>;
   onUploadSvg: () => void;
   onAddCustomAsset: (kind: "icon" | "divider") => void;
   /** Where «الرئيسية» leads: the licensed Home, or the site for everyone else. */
@@ -364,6 +439,12 @@ function Studio({
   const name = useEditor((s) => s.name);
   const setName = useEditor((s) => s.setName);
   const zoom = useEditor((s) => s.zoom);
+  const selectionIdentity = useEditor((s) => s.selectedIds.join(" "));
+  useEffect(() => {
+    // Selection owns the next surface; stale global drawers/paint sessions yield.
+    window.dispatchEvent(new Event("nasaq:selection-ui-reset"));
+  }, [selectionIdentity]);
+  const cropActive = useInteraction((s) => s.crop !== null);
   const setZoom = useEditor((s) => s.setZoom);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
@@ -543,12 +624,26 @@ function Studio({
         const page = stage?.querySelector<HTMLElement>(
           `[data-page-id="${CSS.escape(activeId ?? "")}"]`,
         );
-        const fits =
-          !!stage &&
-          !!page &&
-          page.getBoundingClientRect().width <= stage.clientWidth - 8 &&
-          stage.scrollWidth <= stage.clientWidth + 4;
-        if (fits) return;
+        if (stage && page) {
+          const viewport = canvasViewport(stage);
+          const bounds = (
+            page.closest(".artboard-cell") ?? page
+          ).getBoundingClientRect();
+          if (
+            bounds.width <= viewport.width - 32 &&
+            bounds.height <= viewport.height - 32
+          ) {
+            stage.scrollLeft +=
+              bounds.left +
+              bounds.width / 2 -
+              (viewport.left + viewport.width / 2);
+            stage.scrollTop +=
+              bounds.top +
+              bounds.height / 2 -
+              (viewport.top + viewport.height / 2);
+            return;
+          }
+        }
       }
       fitRef.current();
     }, 60);
@@ -639,32 +734,28 @@ function Studio({
     const activeSize = pageSize(activePage);
     const el = document.querySelector<HTMLElement>(".editor-canvas-stage");
     if (!el) return setZoom(0.82);
-    const rect = el.getBoundingClientRect();
+    const rect = canvasViewport(el, activeSize);
     // Measure the ACTIVE artboard, not whichever page happens to be first in
     // the all-pages preview — the fit must always bring the page being edited
     // into view, and pages may carry different sizes.
     const pageEl = document.querySelector<HTMLElement>(
       `.editor-canvas-stage [data-page-id="${CSS.escape(activePage.id)}"]`,
     );
-    const pxPerMm =
-      pageEl && activeSize.w > 0
-        ? pageEl.clientWidth / activeSize.w
-        : 96 / 25.4;
-    const pagePxW = activeSize.w * pxPerMm;
-    const pagePxH = activeSize.h * pxPerMm;
-    const padding = 28; // pixels of breathing room on every edge
+    const pagePxW = mmToPx(activeSize.w);
+    const pagePxH = mmToPx(activeSize.h);
+    const padding = 16;
     const next = Math.min(
       Math.max(0, rect.width - padding * 2) / pagePxW,
       Math.max(0, rect.height - padding * 2 - 36) / pagePxH,
     );
-    setZoom(Math.max(0.2, Math.min(2, next)));
+    setZoom(clampZoom(next));
     requestAnimationFrame(() => {
       const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
       const pageEl2 = stage?.querySelector<HTMLElement>(
         `[data-page-id="${CSS.escape(activePage.id)}"]`,
       );
       if (!stage || !pageEl2) return;
-      const sr = stage.getBoundingClientRect();
+      const sr = canvasViewport(stage, activeSize);
       const pr = (
         pageEl2.closest(".artboard-cell") ?? pageEl2
       ).getBoundingClientRect();
@@ -720,8 +811,8 @@ function Studio({
   const zoomCentered = useCallback(
     (next: number) => {
       const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
-      if (!stage) return setZoom(Math.max(0.2, Math.min(2, next)));
-      const r = stage.getBoundingClientRect();
+      if (!stage) return setZoom(clampZoom(next));
+      const r = canvasViewport(stage);
       zoomAnchoredAt(
         stage,
         useEditor.getState().zoom,
@@ -982,7 +1073,7 @@ function Studio({
           e.code === "NumpadAdd")
       ) {
         e.preventDefault();
-        zoomCentered(useEditor.getState().zoom + 0.08);
+        zoomCentered(stepZoom(useEditor.getState().zoom, 1));
         return;
       }
       if (
@@ -990,7 +1081,7 @@ function Studio({
         (key === "-" || e.code === "Minus" || e.code === "NumpadSubtract")
       ) {
         e.preventDefault();
-        zoomCentered(useEditor.getState().zoom - 0.08);
+        zoomCentered(stepZoom(useEditor.getState().zoom, -1));
         return;
       }
       if (meta && (key === "0" || e.code === "Digit0")) {
@@ -1174,7 +1265,10 @@ function Studio({
     }
   }, [leftDocked]);
 
-  const leftPanelVisible = !focusMode && (leftDocked && isDesktop ? !leftCollapsed : leftOpen);
+  const leftPanelVisible =
+    !cropActive &&
+    !focusMode &&
+    (leftDocked && isDesktop ? !leftCollapsed : leftOpen);
   const closeLeftPanel = () => {
     if (leftDocked && isDesktop) toggle("leftCollapsed");
     else closeFloatingPanels();
@@ -1256,30 +1350,29 @@ function Studio({
         selected.map((element) => element.id),
       ) || elementsBounds(selected);
     if (!bounds) return fitToScreen();
-    const el = document.querySelector(".editor-canvas-stage");
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const activePageEl = document.querySelector<HTMLElement>(
-      `.editor-canvas-stage [data-page-id="${CSS.escape(activePage.id)}"]`,
-    );
-    const pageContent = activePageEl?.closest<HTMLElement>(
-      ".page-frame-content",
-    );
-    const activePageScale =
-      pageContent && activeSize.w > 0
-        ? pageContent.clientWidth / activeSize.w
-        : 96 / 25.4;
-    const padding = 20; // pixels
+    const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+    if (!stage) return;
+    const view = canvasViewport(stage);
     const next = Math.min(
-      (rect.width - padding * 2) / (bounds.w * activePageScale),
-      (rect.height - padding * 2) / (bounds.h * activePageScale),
+      (view.width - 40) / mmToPx(bounds.w),
+      (view.height - 40) / mmToPx(bounds.h),
     );
-    setZoom(Math.max(0.2, Math.min(2, next)));
+    setZoom(clampZoom(next));
     requestAnimationFrame(() => {
-      const target = activePageEl?.querySelector<HTMLElement>(
-        `[data-el-id="${CSS.escape(selected[0]?.id || "")}"]`,
+      const page = stage.querySelector<HTMLElement>(
+        `[data-page-id="${CSS.escape(activePage.id)}"]`,
       );
-      target?.scrollIntoView({ block: "center", inline: "center" });
+      if (!page) return;
+      const rect = page.getBoundingClientRect();
+      const viewport = canvasViewport(stage);
+      stage.scrollLeft +=
+        rect.left +
+        ((bounds.x + bounds.w / 2) / activeSize.w) * rect.width -
+        (viewport.left + viewport.width / 2);
+      stage.scrollTop +=
+        rect.top +
+        ((bounds.y + bounds.h / 2) / activeSize.h) * rect.height -
+        (viewport.top + viewport.height / 2);
     });
   };
 
@@ -1362,7 +1455,7 @@ function Studio({
                   shortcut="⌘−"
                   className="editor-zoom-btn"
                   icon={<Minus className="size-4" strokeWidth={1.8} />}
-                  onClick={() => zoomCentered(zoom - 0.08)}
+                  onClick={() => zoomCentered(stepZoom(zoom, -1))}
                 />
                 <button
                   type="button"
@@ -1378,7 +1471,7 @@ function Studio({
                   shortcut="⌘+"
                   className="editor-zoom-btn"
                   icon={<Plus className="size-4" strokeWidth={1.8} />}
-                  onClick={() => zoomCentered(zoom + 0.08)}
+                  onClick={() => zoomCentered(stepZoom(zoom, 1))}
                 />
                 <IconButton
                   label="ملاءمة الصفحة"
@@ -1445,7 +1538,10 @@ function Studio({
             onClick={() => toggle("exportOpen")}
           />
           {!showcase && (
-            <EditorAccountMenu homeHref={homeHref} onNavigateHome={leaveEditor} />
+            <EditorAccountMenu
+              homeHref={homeHref}
+              onNavigateHome={leaveEditor}
+            />
           )}
         </div>
       </header>
@@ -1497,7 +1593,9 @@ function Studio({
           title="لوحة العناصر"
           side="left"
           open={
-            !focusMode && (leftDocked && isDesktop ? !leftCollapsed : leftOpen)
+            !cropActive &&
+            !focusMode &&
+            (leftDocked && isDesktop ? !leftCollapsed : leftOpen)
           }
           docked={leftDocked && isDesktop}
           onDockChange={(docked) => {
@@ -1602,7 +1700,7 @@ function Studio({
           storageKey="nasaq.panel.properties"
           title="الخصائص والطبقات"
           side="right"
-          open={rightOpen && !focusMode}
+          open={!cropActive && rightOpen && !focusMode}
           onClose={() => useEditor.setState({ rightOpen: false })}
         >
           <RightPanel onReplaceImage={onReplaceImage} />

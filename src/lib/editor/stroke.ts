@@ -3,14 +3,15 @@ import { mmToPx, pxToMm } from "./render-units";
 
 /** The document is metric; icons/imported SVGs retain their native viewBox units.
  * Convert only at the inspector boundary, never change saved artwork units. */
-export function strokeBinding(
-  el: CanvasEl,
-): {
+export function strokeBinding(el: CanvasEl): {
   key: "stroke" | "borderWidth" | "svgStrokeWidth";
   pxPerUnit: number;
   fallback: number;
 } | null {
   switch (el.type) {
+    case "image":
+    case "logo":
+    case "stat":
     case "shape":
       return { key: "borderWidth", pxPerUnit: mmToPx(1), fallback: 0 };
     case "box":

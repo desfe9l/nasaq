@@ -35,7 +35,7 @@ test("stroke round trips CSS pixels through actual metric and native SVG fields"
 });
 
 test("stroke rejects nonfinite values and unsupported artwork", () => {
-  assert.equal(strokePatch(createElement("image"), 2), null);
+  assert.equal(strokePatch(createElement("text"), 2), null);
   assert.equal(strokePatch(createElement("shape"), NaN), null);
   assert.equal(strokePixels(createElement("svg")), undefined);
 });
@@ -170,8 +170,10 @@ test("active page rail and artboard use clean green active-state tokens and lice
   assert.match(css, /\.page-rail-number-active\s*\{[^}]*--editor-success/);
   assert.match(css, /\.artboard-active-outline\s*\{[^}]*--editor-success/);
 
-  const premium = readFileSync("src/components/site/PremiumTemplates.tsx", "utf8");
+  const premium = readFileSync(
+    "src/components/site/PremiumTemplates.tsx",
+    "utf8",
+  );
   assert.doesNotMatch(premium, /قالب مرخص/);
   assert.match(premium, /متاح في النسخة الكاملة/);
 });
-

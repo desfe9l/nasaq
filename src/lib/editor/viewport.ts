@@ -1,4 +1,6 @@
 import { useEditor } from "./store";
+import { clampZoom } from "./document-space";
+import { canvasViewport } from "./canvas-space";
 
 /*
  * Token guarding the post-render scroll adjustment below: a rapid burst of
@@ -28,7 +30,7 @@ export function zoomAnchoredAt(
   clientY: number,
 ) {
   if (!stage) return;
-  const target = Math.min(2, Math.max(0.2, next));
+  const target = clampZoom(next);
   if (target === prev) return;
   const pages = Array.from(
     stage.querySelectorAll<HTMLElement>("[data-page-id]"),
@@ -42,8 +44,10 @@ export function zoomAnchoredAt(
         clientY >= r.top &&
         clientY <= r.bottom
       );
-    }) || pages.find((p) => p.dataset.pageId === useEditor.getState().activePageId) || pages[0];
-  if (!page || !page.offsetWidth) return;
+    }) ||
+    pages.find((p) => p.dataset.pageId === useEditor.getState().activePageId) ||
+    pages[0];
+  if (!page || !(parseFloat(page.style.width) || page.offsetWidth)) return;
   const seq = ++zoomSeq;
   useEditor.getState().setZoom(target);
   /*
@@ -56,7 +60,8 @@ export function zoomAnchoredAt(
    * behind the events.
    */
   const rect = page.getBoundingClientRect();
-  const renderedBefore = rect.width / page.offsetWidth;
+  const renderedBefore =
+    rect.width / (parseFloat(page.style.width) || page.offsetWidth);
   // The anchor's offset inside the artboard, in rendered pixels; the same
   // artboard offset at the new zoom is offset × (target / renderedBefore).
   const ax = clientX - rect.left;
@@ -67,17 +72,32 @@ export function zoomAnchoredAt(
       seq !== zoomSeq ||
       useEditor.getState().zoom !== target ||
       !page.isConnected ||
-      !page.offsetWidth
+      !(parseFloat(page.style.width) || page.offsetWidth)
     )
       return;
     const r2 = page.getBoundingClientRect();
     // The re-render has not repainted the new size yet — try the next frame.
-    if (Math.abs(r2.width / page.offsetWidth - target) > 0.01) {
+    if (
+      Math.abs(
+        r2.width / (parseFloat(page.style.width) || page.offsetWidth) - target,
+      ) > 0.01
+    ) {
       requestAnimationFrame(land);
       return;
     }
-    stage.scrollLeft += r2.left + ax * ratio - clientX;
-    stage.scrollTop += r2.top + ay * ratio - clientY;
+    const viewport = canvasViewport(stage);
+    if (
+      r2.width <= viewport.width - 32 &&
+      r2.height + 36 <= viewport.height - 32
+    ) {
+      stage.scrollLeft +=
+        r2.left + r2.width / 2 - (viewport.left + viewport.width / 2);
+      stage.scrollTop +=
+        r2.top + (r2.height - 36) / 2 - (viewport.top + viewport.height / 2);
+    } else {
+      stage.scrollLeft += r2.left + ax * ratio - clientX;
+      stage.scrollTop += r2.top + ay * ratio - clientY;
+    }
   };
   requestAnimationFrame(land);
 }
@@ -104,14 +124,16 @@ export function beginCanvasNavigation(
     pages[0];
   const initialZoom = state.zoom;
   const rect = page?.getBoundingClientRect();
-  const scale = rect && page ? rect.width / page.offsetWidth : initialZoom;
+  const scale =
+    rect && page
+      ? rect.width / (parseFloat(page.style.width) || page.offsetWidth)
+      : initialZoom;
   const ax = rect ? (start.x - rect.left) / scale : 0;
   const ay = rect ? (start.y - rect.top) / scale : 0;
   return (next: { x: number; y: number; distance: number }) => {
     if (!page) return;
-    const target = Math.min(
-      2,
-      Math.max(0.2, (initialZoom * next.distance) / start.distance),
+    const target = clampZoom(
+      (initialZoom * next.distance) / Math.max(1, start.distance),
     );
     const seq = ++zoomSeq;
     useEditor.getState().setZoom(target);
@@ -123,7 +145,11 @@ export function beginCanvasNavigation(
       )
         return;
       const r = page.getBoundingClientRect();
-      if (Math.abs(r.width / page.offsetWidth - target) > 0.01) {
+      if (
+        Math.abs(
+          r.width / (parseFloat(page.style.width) || page.offsetWidth) - target,
+        ) > 0.01
+      ) {
         requestAnimationFrame(land);
         return;
       }

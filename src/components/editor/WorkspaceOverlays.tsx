@@ -1,5 +1,7 @@
 import { shortcutHint, shortcutKey } from "@/lib/editor/keyboard";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
+import { stepZoom } from "@/lib/editor/document-space";
+import { canvasViewport } from "@/lib/editor/canvas-space";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlignCenter,
@@ -59,13 +61,23 @@ type ContextAction = {
 
 const ACTIONS = [
   { id: "select-all", label: "تحديد الكل", hint: "⌘ A", icon: Focus },
-  { id: "appearance", label: "تبديل المظهر الفاتح / الداكن", hint: "", icon: Contrast },
+  {
+    id: "appearance",
+    label: "تبديل المظهر الفاتح / الداكن",
+    hint: "",
+    icon: Contrast,
+  },
   { id: "undo", label: "تراجع", hint: "⌘ Z", icon: Undo2 },
   { id: "redo", label: "إعادة", hint: "⌘ ⇧ Z", icon: Redo2 },
   { id: "duplicate", label: "تكرار العنصر", hint: "⌘ D / ⌘ J", icon: Copy },
   { id: "group", label: "تجميع المحدد", hint: "⌘ G", icon: Group },
   { id: "ungroup", label: "فك التجميع", hint: "⌘ ⇧ G", icon: Ungroup },
-  { id: "invert-selection", label: "عكس التحديد", hint: "", icon: FlipHorizontal2 },
+  {
+    id: "invert-selection",
+    label: "عكس التحديد",
+    hint: "",
+    icon: FlipHorizontal2,
+  },
   { id: "zoom-fit", label: "ملاءمة مساحة العمل", hint: "⌘ 0", icon: Maximize2 },
   { id: "zoom-in", label: "تكبير", hint: "⌘ +", icon: ZoomIn },
   { id: "zoom-out", label: "تصغير", hint: "⌘ -", icon: ZoomOut },
@@ -73,7 +85,12 @@ const ACTIONS = [
   { id: "export", label: "تصدير", hint: "⌘ E", icon: Download },
   { id: "tool-move", label: "أداة التحديد والتحريك", hint: "V", icon: Move },
   { id: "tool-text", label: "أداة النص (ارسم صندوقًا)", hint: "T", icon: Type },
-  { id: "tool-shape", label: "أداة الأشكال (ارسم مستطيلًا)", hint: "R", icon: Square },
+  {
+    id: "tool-shape",
+    label: "أداة الأشكال (ارسم مستطيلًا)",
+    hint: "R",
+    icon: Square,
+  },
 ];
 
 export function WorkspaceOverlays({
@@ -113,9 +130,14 @@ export function WorkspaceOverlays({
     const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
     if (!stage) return;
     const rect = stage.getBoundingClientRect();
-    zoomAnchoredAt(stage, useEditor.getState().zoom, next, rect.left + rect.width / 2, rect.top + rect.height / 2);
+    zoomAnchoredAt(
+      stage,
+      useEditor.getState().zoom,
+      next,
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2,
+    );
   };
-  const zoom = useEditor((s) => s.zoom);
   const selectAll = useEditor((s) => s.selectAll);
   const invertSelection = useEditor((s) => s.invertSelection);
   const select = useEditor((s) => s.select);
@@ -198,10 +220,10 @@ export function WorkspaceOverlays({
         window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: "rect" }));
         break;
       case "zoom-in":
-        setZoom(zoom + 0.08);
+        setZoom(stepZoom(useEditor.getState().zoom, 1));
         break;
       case "zoom-out":
-        setZoom(zoom - 0.08);
+        setZoom(stepZoom(useEditor.getState().zoom, -1));
         break;
       case "focus":
         toggle("focusMode");
@@ -534,7 +556,12 @@ export function WorkspaceOverlays({
             setRenaming({ id: menu.targetId!, name: primaryName || "" }),
           disabled: selectedCount > 1,
         },
-        { label: "الخصائص", icon: Settings2, run: openProperties, sepBefore: true },
+        {
+          label: "الخصائص",
+          icon: Settings2,
+          run: openProperties,
+          sepBefore: true,
+        },
       ]
     : [
         {
@@ -580,11 +607,26 @@ export function WorkspaceOverlays({
               } as ContextAction,
             ]
           : []),
-        { label: "عكس التحديد", icon: FlipHorizontal2, run: invertSelection, sepBefore: true },
-        { label: "ملاءمة مساحة العمل", icon: Maximize2, run: fitToScreen, hint: "⌘0" },
-        { label: "تكبير", icon: ZoomIn, run: () => setZoom(zoom + 0.12), hint: "⌘+" },
-        { label: "تصغير", icon: ZoomOut, run: () => setZoom(Math.max(0.2, zoom - 0.12)), hint: "⌘-" },
-        { label: "وضع التركيز", icon: Focus, run: () => toggle("focusMode"), sepBefore: true },
+        {
+          label: "عكس التحديد",
+          icon: FlipHorizontal2,
+          run: invertSelection,
+          sepBefore: true,
+        },
+        {
+          label: "ملاءمة مساحة العمل",
+          icon: Maximize2,
+          run: fitToScreen,
+          hint: "⌘0",
+        },
+        { label: "تكبير", icon: ZoomIn, run: () => zoomView(1), hint: "⌘+" },
+        { label: "تصغير", icon: ZoomOut, run: () => zoomView(-1), hint: "⌘-" },
+        {
+          label: "وضع التركيز",
+          icon: Focus,
+          run: () => toggle("focusMode"),
+          sepBefore: true,
+        },
         {
           label: "إظهار / إخفاء الشبكة",
           icon: Eye,
@@ -593,7 +635,10 @@ export function WorkspaceOverlays({
       ];
 
   const menuRef = useRef<HTMLDivElement>(null);
-  const [adjustedPos, setAdjustedPos] = useState<{ left: number; top: number } | null>(null);
+  const [adjustedPos, setAdjustedPos] = useState<{
+    left: number;
+    top: number;
+  } | null>(null);
 
   useEffect(() => {
     if (!menu) {
@@ -619,21 +664,39 @@ export function WorkspaceOverlays({
     setAdjustedPos({ left, top });
   }, [menu]);
 
-  const menuStyle = adjustedPos ?? (() => {
-    if (!menu) return {};
-    const margin = 10;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const estimatedW = 260;
-    const estimatedH = 420;
-    let left = menu.x;
-    let top = menu.y;
-    if (left + estimatedW > vw - margin) left = Math.max(margin, vw - estimatedW - margin);
-    if (top + estimatedH > vh - margin) top = Math.max(margin, vh - estimatedH - margin);
-    if (left < margin) left = margin;
-    if (top < margin) top = margin;
-    return { left, top };
-  })();
+  const zoomView = (direction: 1 | -1) => {
+    const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+    const next = stepZoom(useEditor.getState().zoom, direction);
+    if (!stage) return setZoom(next);
+    const r = canvasViewport(stage);
+    zoomAnchoredAt(
+      stage,
+      useEditor.getState().zoom,
+      next,
+      r.left + r.width / 2,
+      r.top + r.height / 2,
+    );
+  };
+
+  const menuStyle =
+    adjustedPos ??
+    (() => {
+      if (!menu) return {};
+      const margin = 10;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const estimatedW = 260;
+      const estimatedH = 420;
+      let left = menu.x;
+      let top = menu.y;
+      if (left + estimatedW > vw - margin)
+        left = Math.max(margin, vw - estimatedW - margin);
+      if (top + estimatedH > vh - margin)
+        top = Math.max(margin, vh - estimatedH - margin);
+      if (left < margin) left = margin;
+      if (top < margin) top = margin;
+      return { left, top };
+    })();
 
   return (
     <>
@@ -687,7 +750,9 @@ export function WorkspaceOverlays({
                     <Icon className="size-3.5 shrink-0" />
                     <span className="flex-1">{action.label}</span>
                     {action.hint && (
-                      <span dir="ltr" className="text-[9px] text-muted">{shortcutHint(action.hint)}</span>
+                      <span dir="ltr" className="text-[9px] text-muted">
+                        {shortcutHint(action.hint)}
+                      </span>
                     )}
                   </button>
                 </div>
@@ -695,7 +760,8 @@ export function WorkspaceOverlays({
             })}
             <div className="my-1 border-t border-[var(--editor-border)]" />
             <span className="flex items-center gap-2 px-2.5 py-1.5 text-[9px] text-[var(--editor-text-secondary)]">
-              <Keyboard className="size-3" /> اضغط Escape للإغلاق · Right-click داخل Artboard
+              <Keyboard className="size-3" /> اضغط Escape للإغلاق · Right-click
+              داخل Artboard
             </span>
           </div>
         </div>
@@ -872,7 +938,10 @@ export function WorkspaceStatusBar() {
       data-editor-obstacle="status-bar"
       className="editor-status-bar flex h-7 shrink-0 items-center justify-between gap-3 border-t px-3 text-[10px] tabular-nums"
     >
-      <span className="selectable-value min-w-0 truncate" aria-label="معلومات الصفحة">
+      <span
+        className="selectable-value min-w-0 truncate"
+        aria-label="معلومات الصفحة"
+      >
         {page?.name || "صفحة"}
         {pageIndex !== null ? ` · ${pageIndex + 1}/${pageCount}` : ""}
         {page

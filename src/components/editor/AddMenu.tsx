@@ -6,6 +6,7 @@ import {
   Gauge,
   Heading1,
   ImagePlus,
+  PaintBucket,
   Plus,
   ClipboardList,
   Minus,
@@ -78,6 +79,20 @@ export function AddMenu({
         />
       )}
     >
+      <MenuRow
+        icon={<PaintBucket className="size-4" />}
+        label="خلفية الصفحة · Page Background"
+        hint="لون أو تدرّج يغطي الصفحة كاملة"
+        onSelect={() => {
+          const state = useEditor.getState();
+          const page = state.pages.find((p) => p.id === state.activePageId);
+          if (!page || page.locked) return;
+          if (!page.bg || page.bg === "transparent")
+            state.setPageBackground(page.id, { bg: "#ffffff" });
+          state.select(null);
+          state.setRightTab("properties");
+        }}
+      />
       <MenuGroup title="نصوص وأشكال" />
       {/* No key cap here: «T» is already printed on the dock's text tool, and
           the same shortcut in two places competes with the tool itself. */}

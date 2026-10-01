@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   AlignCenter,
@@ -9,6 +16,15 @@ import {
   ArrowUpDown,
   Bold,
   Copy,
+  Crop,
+  Image,
+  Group,
+  Ungroup,
+  ArrowUp,
+  ArrowDown,
+  ChevronsUp,
+  ChevronsDown,
+  Ratio,
   EyeOff,
   FlipHorizontal2,
   FlipVertical2,
@@ -36,6 +52,9 @@ import { bubbleLayout, placeFloatingToolbar } from "@/lib/editor/ui-state";
 import { cn } from "@/lib/utils";
 import { StrokeControls, StrokeField } from "./StrokeControls";
 import { ScrubInput } from "./ui/ScrubInput";
+import { FillField } from "./ui/FillField";
+import { beginImageCrop } from "@/lib/editor/crop-session";
+import type { Gradient } from "@/lib/editor/gradient";
 import { ColorField } from "./ui/ColorField";
 import { Tip } from "./ui/Tip";
 import {
@@ -134,8 +153,8 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
    * element only. (The old `pages` subscription re-rendered the bubble on
    * every document write, and a drag wrote per frame.)
    */
-  const dragVersion = useInteraction(
-    (s) => (s.overrides[el.id] ? s.version : 0),
+  const dragVersion = useInteraction((s) =>
+    s.overrides[el.id] ? s.version : 0,
   );
   const updateStyle = useEditor((s) => s.updateStyle);
   const updateElement = useEditor((s) => s.updateElement);
@@ -149,7 +168,9 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   const bubbleOffset = useEditor((s) => s.bubbleOffset);
   const setBubbleOffset = useEditor((s) => s.setBubbleOffset);
   const [dragging, setDragging] = useState(false);
-  const [dragPos, setDragPos] = useState<{ left: number; top: number } | null>(null);
+  const [dragPos, setDragPos] = useState<{ left: number; top: number } | null>(
+    null,
+  );
   const dragRef = useRef<{
     pointerId: number;
     startX: number;
@@ -195,13 +216,23 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     const rect = target.getBoundingClientRect();
     // A narrow tool rail must not force a phone toolbar down to the page rail.
     // Fit the bar into the lane beside the tools before placing it.
-    let laneLeft = MARGIN, laneRight = window.innerWidth - MARGIN;
-    document.querySelectorAll<HTMLElement>('[data-editor-obstacle="tool-dock"]').forEach(dock => {
-      const r = dock.getBoundingClientRect();
-      if (!r.width || r.height < r.width || getComputedStyle(dock).visibility === "hidden") return;
-      if (r.left > rect.left + rect.width / 2) laneRight = Math.min(laneRight, r.left - MARGIN);
-      else if (r.right < rect.left + rect.width / 2) laneLeft = Math.max(laneLeft, r.right + MARGIN);
-    });
+    let laneLeft = MARGIN,
+      laneRight = window.innerWidth - MARGIN;
+    document
+      .querySelectorAll<HTMLElement>('[data-editor-obstacle="tool-dock"]')
+      .forEach((dock) => {
+        const r = dock.getBoundingClientRect();
+        if (
+          !r.width ||
+          r.height < r.width ||
+          getComputedStyle(dock).visibility === "hidden"
+        )
+          return;
+        if (r.left > rect.left + rect.width / 2)
+          laneRight = Math.min(laneRight, r.left - MARGIN);
+        else if (r.right < rect.left + rect.width / 2)
+          laneLeft = Math.max(laneLeft, r.right + MARGIN);
+      });
     const nextLane = Math.min(
       MAX_LANE,
       window.innerWidth - MARGIN * 2,
@@ -232,9 +263,11 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     if (!rect.width && !rect.height) return;
     // Keep the bubble clear of the real, outward-expanded grip hit regions,
     // not just the visible 7px dots. These measurements include rotation/zoom.
-    const grips = [...document.querySelectorAll<HTMLElement>(
-      `.selection-frame[data-el-id="${CSS.escape(el.id)}"] .handle, .selection-frame[data-el-id="${CSS.escape(el.id)}"] .rotate-handle`,
-    )].map(node => node.getBoundingClientRect());
+    const grips = [
+      ...document.querySelectorAll<HTMLElement>(
+        `.selection-frame[data-el-id="${CSS.escape(el.id)}"] .handle, .selection-frame[data-el-id="${CSS.escape(el.id)}"] .rotate-handle`,
+      ),
+    ].map((node) => node.getBoundingClientRect());
     /*
      * The selection frame can be the MEASURED artwork box, so it is part of
      * the anchor: the bubble must clear what the author sees as "the
@@ -244,12 +277,18 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       `.selection-frame[data-el-id="${CSS.escape(el.id)}"]`,
     );
     if (frameNode) grips.push(frameNode.getBoundingClientRect());
-    const leftEdge = Math.min(rect.left, ...grips.map(r => r.left));
-    const rightEdge = Math.max(rect.right, ...grips.map(r => r.right));
-    const topEdge = Math.min(rect.top, ...grips.map(r => r.top));
-    const bottomEdge = Math.max(rect.bottom, ...grips.map(r => r.bottom));
-    const interactionBox = { left: leftEdge, right: rightEdge, top: topEdge,
-      bottom: bottomEdge, width: rightEdge - leftEdge, height: bottomEdge - topEdge };
+    const leftEdge = Math.min(rect.left, ...grips.map((r) => r.left));
+    const rightEdge = Math.max(rect.right, ...grips.map((r) => r.right));
+    const topEdge = Math.min(rect.top, ...grips.map((r) => r.top));
+    const bottomEdge = Math.max(rect.bottom, ...grips.map((r) => r.bottom));
+    const interactionBox = {
+      left: leftEdge,
+      right: rightEdge,
+      top: topEdge,
+      bottom: bottomEdge,
+      width: rightEdge - leftEdge,
+      height: bottomEdge - topEdge,
+    };
     /*
      * Obstacles: the header, both sidebars, the pages rail and the status bar
      * all mark themselves `data-editor-obstacle`. Measuring them at placement
@@ -260,7 +299,11 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     const avoid = [
       ...document.querySelectorAll<HTMLElement>("[data-editor-obstacle]"),
     ]
-      .filter((node) => node.getClientRects().length > 0 && getComputedStyle(node).visibility !== "hidden")
+      .filter(
+        (node) =>
+          node.getClientRects().length > 0 &&
+          getComputedStyle(node).visibility !== "hidden",
+      )
       .map((node) => node.getBoundingClientRect());
     // The arithmetic is pure and unit-tested (`placeFloatingToolbar`); this
     // callback only feeds it live screen measurements.
@@ -392,7 +435,8 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     // Capture phase on move and press: both fire before the panel acts on the
     // gesture, so the bubble is already gone when the hit test resolves.
     const onMove = (event: Event) => {
-      if (event instanceof PointerEvent && event.pointerType === "mouse") inside(event);
+      if (event instanceof PointerEvent && event.pointerType === "mouse")
+        inside(event);
     };
     document.addEventListener("pointermove", onMove, true);
     document.addEventListener("pointerdown", inside, true);
@@ -443,13 +487,26 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     if (!drag || drag.pointerId !== event.pointerId) return;
     event.preventDefault();
     event.stopPropagation();
-    const maxLeft = Math.max(MARGIN, window.innerWidth - drag.origin.width - MARGIN);
-    const maxTop = Math.max(MARGIN, window.innerHeight - drag.origin.height - MARGIN);
+    const maxLeft = Math.max(
+      MARGIN,
+      window.innerWidth - drag.origin.width - MARGIN,
+    );
+    const maxTop = Math.max(
+      MARGIN,
+      window.innerHeight - drag.origin.height - MARGIN,
+    );
     drag.next = {
-      left: Math.min(maxLeft, Math.max(MARGIN, drag.origin.left + event.clientX - drag.startX)),
-      top: Math.min(maxTop, Math.max(MARGIN, drag.origin.top + event.clientY - drag.startY)),
+      left: Math.min(
+        maxLeft,
+        Math.max(MARGIN, drag.origin.left + event.clientX - drag.startX),
+      ),
+      top: Math.min(
+        maxTop,
+        Math.max(MARGIN, drag.origin.top + event.clientY - drag.startY),
+      ),
     };
-    drag.moved ||= Math.abs(drag.next.left - drag.origin.left) > 1 ||
+    drag.moved ||=
+      Math.abs(drag.next.left - drag.origin.left) > 1 ||
       Math.abs(drag.next.top - drag.origin.top) > 1;
     if (drag.frame) return;
     drag.frame = requestAnimationFrame(() => {
@@ -464,37 +521,71 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     event.preventDefault();
     event.stopPropagation();
     if (drag.frame) cancelAnimationFrame(drag.frame);
-    const maxLeft = Math.max(MARGIN, window.innerWidth - drag.origin.width - MARGIN);
-    const maxTop = Math.max(MARGIN, window.innerHeight - drag.origin.height - MARGIN);
-    const position = event.type === "pointerup"
-      ? {
-          left: Math.min(maxLeft, Math.max(MARGIN, drag.origin.left + event.clientX - drag.startX)),
-          top: Math.min(maxTop, Math.max(MARGIN, drag.origin.top + event.clientY - drag.startY)),
-        }
-      : drag.next;
+    const maxLeft = Math.max(
+      MARGIN,
+      window.innerWidth - drag.origin.width - MARGIN,
+    );
+    const maxTop = Math.max(
+      MARGIN,
+      window.innerHeight - drag.origin.height - MARGIN,
+    );
+    const position =
+      event.type === "pointerup"
+        ? {
+            left: Math.min(
+              maxLeft,
+              Math.max(MARGIN, drag.origin.left + event.clientX - drag.startX),
+            ),
+            top: Math.min(
+              maxTop,
+              Math.max(MARGIN, drag.origin.top + event.clientY - drag.startY),
+            ),
+          }
+        : drag.next;
     const automatic = automaticPosRef.current ?? {
       left: drag.origin.left - (bubbleOffset?.dx ?? 0),
       top: drag.origin.top - (bubbleOffset?.dy ?? 0),
     };
-    const moved = drag.moved ||
+    const moved =
+      drag.moved ||
       Math.abs(position.left - drag.origin.left) > 1 ||
       Math.abs(position.top - drag.origin.top) > 1;
     dragRef.current = null;
     setPos(position);
     if (moved) {
-      setBubbleOffset({ dx: position.left - automatic.left, dy: position.top - automatic.top });
+      setBubbleOffset({
+        dx: position.left - automatic.left,
+        dy: position.top - automatic.top,
+      });
     }
     setDragPos(null);
     setDragging(false);
   };
 
-  useEffect(() => () => {
-    if (dragRef.current?.frame) cancelAnimationFrame(dragRef.current.frame);
-  }, []);
+  useEffect(
+    () => () => {
+      if (dragRef.current?.frame) cancelAnimationFrame(dragRef.current.frame);
+    },
+    [],
+  );
 
   const style = el.style || {};
   const isText = TEXT_TYPES.has(el.type);
   const count = selectedIds.length;
+  const isImage = el.type === "image" || el.type === "logo";
+  const supportsFill = [
+    "shape",
+    "box",
+    "stat",
+    "progress",
+    "svg",
+    "icon",
+    "line",
+    "divider",
+  ].includes(el.type);
+  const supportsGradient = ["shape", "box", "stat", "progress", "svg"].includes(
+    el.type,
+  );
   /*
    * Border support is a property of the element's TYPE (and, for an imported
    * SVG, of its viewBox), so it is read here without subscribing to the
@@ -512,24 +603,37 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       .selectedElements()
       .some((item) => strokeBinding(item) !== null);
   }, [el, selectedIds]);
-  const layout = bubbleLayout(isText ? "text" : "object", lane, {
-    stroke: supportsStroke,
-  });
+  const layout = bubbleLayout(
+    isImage ? "image" : isText ? "text" : "object",
+    lane,
+    {
+      stroke: supportsStroke,
+      fill: supportsFill,
+    },
+  );
   const inBar = new Set(layout.bar);
   const inDrawer = new Set(layout.drawer);
 
-  const paragraphAlign: Array<{ id: string; label: string; icon: LucideIcon }> = [
-    { id: "right", label: "محاذاة لليمين", icon: AlignRight },
-    { id: "center", label: "توسيط", icon: AlignCenter },
-    { id: "left", label: "محاذاة لليسار", icon: AlignLeft },
-    { id: "justify", label: "ضبط", icon: AlignJustify },
-  ];
+  const paragraphAlign: Array<{ id: string; label: string; icon: LucideIcon }> =
+    [
+      { id: "right", label: "محاذاة لليمين", icon: AlignRight },
+      { id: "center", label: "توسيط", icon: AlignCenter },
+      { id: "left", label: "محاذاة لليسار", icon: AlignLeft },
+      { id: "justify", label: "ضبط", icon: AlignJustify },
+    ];
   const AlignCurrent =
     paragraphAlign.find((item) => item.id === (style.textAlign || "right"))
       ?.icon ?? AlignRight;
   /** Align/distribute the selection (or the page when a single object is picked). */
   const alignEdge = (edge: string) =>
-    align(edge as AlignEdge, count >= 2 ? "selection" : "page");
+    align(
+      (edge === "center-h"
+        ? "center"
+        : edge === "center-v"
+          ? "middle"
+          : edge) as AlignEdge,
+      count >= 2 ? "selection" : "page",
+    );
   const setParagraphAlign = (id: string) => {
     updateStyle(el.id, {
       textAlign: id as "right" | "center" | "left" | "justify",
@@ -548,12 +652,32 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
   /** The two colour bindings of an object, shared by the bar and the drawer. */
   const objectColors = {
     fill: {
-      value: el.type === "svg" ? style.svgFill : style.fill,
+      value:
+        el.type === "svg"
+          ? style.svgFill
+          : ["icon", "line", "divider"].includes(el.type)
+            ? style.color
+            : style.fill,
       fallback: style.background || "#006c35",
-      onChange: (v: string) =>
-        updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v }, true),
-      onCommit: (v: string) =>
-        updateStyle(el.id, el.type === "svg" ? { svgFill: v } : { fill: v }),
+      onChange: (v: string, gradient?: Gradient) =>
+        updateStyle(
+          el.id,
+          el.type === "svg"
+            ? { svgFill: v, gradient }
+            : ["icon", "line", "divider"].includes(el.type)
+              ? { color: v }
+              : { fill: v, gradient },
+          true,
+        ),
+      onCommit: (v: string, gradient?: Gradient) =>
+        updateStyle(
+          el.id,
+          el.type === "svg"
+            ? { svgFill: v, gradient }
+            : ["icon", "line", "divider"].includes(el.type)
+              ? { color: v }
+              : { fill: v, gradient },
+        ),
     },
     border: {
       value:
@@ -641,7 +765,9 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       )}
       data-floating-toolbar={el.id}
       data-placement={side}
-      data-density={layout.drawer.length || layout.more.length ? "folded" : "full"}
+      data-density={
+        layout.drawer.length || layout.more.length ? "folded" : "full"
+      }
       style={{
         left: dragPos?.left ?? pos?.left ?? -9999,
         top: dragPos?.top ?? pos?.top ?? -9999,
@@ -728,7 +854,8 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
                   active={style.fontStyle === "italic"}
                   onSelect={() => {
                     updateStyle(el.id, {
-                      fontStyle: style.fontStyle === "italic" ? "normal" : "italic",
+                      fontStyle:
+                        style.fontStyle === "italic" ? "normal" : "italic",
                     });
                     commit();
                   }}
@@ -769,12 +896,13 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
           )}
           {inDrawer.has("ink") && (
             <MenuGrid columns={2} label="ألوان العنصر">
-              <ColorField
+              <FillField
                 className="editor-menu-swatch"
                 label="لون التعبئة"
                 value={objectColors.fill.value}
+                gradient={supportsGradient ? style.gradient : undefined}
+                allowGradient={supportsGradient}
                 fallback={objectColors.fill.fallback}
-                allowNone
                 onChange={objectColors.fill.onChange}
                 onCommit={objectColors.fill.onCommit}
               />
@@ -917,12 +1045,13 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
 
       {inBar.has("ink") && (
         <div className="floating-toolbar-section">
-          <ColorField
+          <FillField
             className="floating-toolbar-swatch"
             label="لون التعبئة"
             value={objectColors.fill.value}
+            gradient={supportsGradient ? style.gradient : undefined}
+            allowGradient={supportsGradient}
             fallback={objectColors.fill.fallback}
-            allowNone
             onChange={objectColors.fill.onChange}
             onCommit={objectColors.fill.onCommit}
           />
@@ -937,6 +1066,62 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
         </div>
       )}
 
+      {inBar.has("image") && (
+        <div className="floating-toolbar-section">
+          <TipButton
+            label="قص الصورة"
+            disabled={
+              el.locked ||
+              el.resizeLocked ||
+              el.widthLocked ||
+              el.heightLocked ||
+              count !== 1
+            }
+            onClick={() => beginImageCrop(el.id)}
+          >
+            <Crop />
+          </TipButton>
+          <AnchorMenu
+            label="ملاءمة الصورة"
+            width={220}
+            trigger={({ ref, ...props }) => (
+              <button
+                {...props}
+                ref={ref}
+                type="button"
+                className="floating-toolbar-btn"
+                aria-label="ملاءمة الصورة"
+              >
+                <Image />
+              </button>
+            )}
+          >
+            <MenuRow
+              label="Fit · احتواء الصورة كاملة"
+              checked={style.objectFit === "contain"}
+              onSelect={() => updateStyle(el.id, { objectFit: "contain" })}
+            />
+            <MenuRow
+              label="Fill · تعبئة الإطار دون تشويه"
+              checked={style.objectFit !== "contain"}
+              onSelect={() => updateStyle(el.id, { objectFit: "cover" })}
+            />
+            <MenuRow
+              label="إزالة القص"
+              disabled={!style.crop}
+              onSelect={() =>
+                updateStyle(el.id, {
+                  crop: undefined,
+                  objectFit: "contain",
+                  objectX: 50,
+                  objectY: 50,
+                })
+              }
+            />
+          </AnchorMenu>
+        </div>
+      )}
+
       {/* Owns its leading separator, so a selection without stroke support
           never leaves a stray divider in the bar. */}
       {inBar.has("stroke") && <StrokeControls />}
@@ -946,7 +1131,12 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
           <TipButton label="تكرار" shortcut="⌘D" onClick={duplicateSelected}>
             <Copy />
           </TipButton>
-          <TipButton label="حذف" shortcut="Delete" danger onClick={deleteSelected}>
+          <TipButton
+            label="حذف"
+            shortcut="Delete"
+            danger
+            onClick={deleteSelected}
+          >
             <Trash2 />
           </TipButton>
         </div>
@@ -979,6 +1169,41 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
           </button>
         )}
       >
+        <MenuGroup title="الموضع والأبعاد" />
+        <div className="editor-menu-field grid grid-cols-2 gap-2">
+          {(
+            [
+              ["x", "X مم"],
+              ["y", "Y مم"],
+              ["w", "العرض مم"],
+              ["h", "الارتفاع مم"],
+              ["rotation", "الدوران °"],
+            ] as const
+          ).map(([key, label]) => (
+            <ScrubInput
+              key={key}
+              label={label}
+              value={el[key]}
+              min={key === "w" || key === "h" ? 4 : -10000}
+              max={10000}
+              disabled={
+                el.locked ||
+                count > 1 ||
+                ((key === "w" || key === "h") && el.resizeLocked) ||
+                (key === "w" && el.widthLocked) ||
+                (key === "h" && el.heightLocked)
+              }
+              onChange={(v) => updateElement(el.id, { [key]: v }, true)}
+              onCommit={(v) => updateElement(el.id, { [key]: v })}
+            />
+          ))}
+          <MenuCell
+            icon={<Ratio />}
+            label="قفل نسبة الأبعاد"
+            active={style.aspectLock === true}
+            onSelect={() => useEditor.getState().toggleAspectLock()}
+          />
+        </div>
         <MenuGrid columns={3} label="المحاذاة">
           {(
             [
@@ -1048,6 +1273,42 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
             onSelect={() => fitTextBox(el.id)}
           />
         </MenuGrid>
+        <MenuGrid columns={4} label="ترتيب الطبقات">
+          <MenuCell
+            icon={<ChevronsUp />}
+            label="إلى المقدمة"
+            onSelect={() => useEditor.getState().bring("front")}
+          />
+          <MenuCell
+            icon={<ArrowUp />}
+            label="طبقة للأمام"
+            onSelect={() => useEditor.getState().bring("forward")}
+          />
+          <MenuCell
+            icon={<ArrowDown />}
+            label="طبقة للخلف"
+            onSelect={() => useEditor.getState().bring("back")}
+          />
+          <MenuCell
+            icon={<ChevronsDown />}
+            label="إلى الخلف"
+            onSelect={() => useEditor.getState().bring("bottom")}
+          />
+        </MenuGrid>
+        <MenuGrid columns={2} label="التجميع">
+          <MenuCell
+            icon={<Group />}
+            label="تجميع"
+            disabled={count < 2}
+            onSelect={() => useEditor.getState().group()}
+          />
+          <MenuCell
+            icon={<Ungroup />}
+            label="فك التجميع"
+            disabled={el.type !== "group"}
+            onSelect={() => useEditor.getState().ungroup()}
+          />
+        </MenuGrid>
         <MenuGrid columns={4} label="العنصر">
           <MenuCell
             icon={el.locked ? <Unlock /> : <Lock />}
@@ -1060,7 +1321,11 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
             label="إخفاء العنصر — يظهر مرة أخرى من شجرة الطبقات"
             onSelect={() => toggleHidden()}
           />
-          <MenuCell icon={<Copy />} label="تكرار" onSelect={duplicateSelected} />
+          <MenuCell
+            icon={<Copy />}
+            label="تكرار"
+            onSelect={duplicateSelected}
+          />
           <MenuCell
             icon={<Trash2 />}
             label="حذف العنصر"
@@ -1137,7 +1402,6 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       >
         <X />
       </button>
-
     </div>,
     document.body,
   );
@@ -1157,6 +1421,7 @@ function TipButton({
   shortcut,
   pressed,
   danger,
+  disabled,
   onClick,
   children,
 }: {
@@ -1165,6 +1430,7 @@ function TipButton({
   shortcut?: string;
   pressed?: boolean;
   danger?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
 }) {
@@ -1180,6 +1446,7 @@ function TipButton({
         aria-label={label}
         aria-pressed={pressed}
         aria-keyshortcuts={shortcut || undefined}
+        disabled={disabled}
         onClick={onClick}
       >
         {children}

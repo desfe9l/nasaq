@@ -2,6 +2,7 @@ import {
   snapshotPage,
   paintSnapshot,
   snapshotLayers,
+  snapshotLayer,
   snapshotsHtml,
   type RenderSnapshot,
 } from "./render-snapshot";
@@ -9,7 +10,13 @@ import { uploadedFontSources } from "../nsq/fonts";
 import { assertUniformSlideSize } from "./render-units";
 import { toast } from "sonner";
 import { downloadBlob, downloadText } from "@/lib/utils";
-import { mmToPx, pageSize, type Page, type Project } from "./model";
+import {
+  mmToPx,
+  pageSize,
+  type Page,
+  type Project,
+  type CanvasEl,
+} from "./model";
 import { applySvgColors, safeSvgSrc, sanitizeSvgContent } from "./svg";
 
 export type ExportFormat =
@@ -287,7 +294,7 @@ export async function exportPptxEditable(
   const { buildScene } = await import("./scene");
   const { writePptx } = await import("./pptx-writer");
   const blob = await writePptx(
-    buildScene(await materializeSvgSources(pages), documentPages),
+    buildScene(await materializeSceneSources(pages), documentPages),
     name,
   );
   downloadBlob(blob, `${name}.pptx`);
@@ -308,46 +315,79 @@ export async function exportDocxEditable(
   const { buildScene } = await import("./scene");
   const { writeDocx } = await import("./docx-writer");
   const blob = await writeDocx({
-    scenes: buildScene(await materializeSvgSources(pages), documentPages),
+    scenes: buildScene(await materializeSceneSources(pages), documentPages),
     title: name,
   });
   downloadBlob(blob, `${name}.docx`);
 }
 
-/**
- * Materialise every svg element's raster source before scene building.
- *
- * SVG elements carry their vector markup in `content`; the Office scene needs
- * image bytes in `src`. Each svg's PNG is written into a CLONE of the page
- * list (originals untouched — the editor keeps its vector), then the scene is
- * built from the clones. Failures leave `src` empty and the element is simply
- * skipped by the scene mapper, exactly like a broken image.
- */
-async function materializeSvgSources(pages: Page[]): Promise<Page[]> {
-  const needs = pages.some((p) =>
-    p.elements.some((el) => el.type === "svg" && !safeSvgSrc(el.src)),
-  );
-  if (!needs) return pages;
+/** Native Office keeps normal objects editable. Only unsupported gradient/crop
+ * paint (including groups that contain it) uses the existing browser renderer. */
+async function materializeSceneSources(pages: Page[]): Promise<Page[]> {
+  const needsPaint = (el: CanvasEl): boolean =>
+    !!el.style.gradient || !!el.style.crop || !!el.children?.some(needsPaint);
   const { svgToPngDataUrl } = await import("./svg");
-  return Promise.all(
-    pages.map(async (page) => ({
+  const scale = jobExportScale(pages.map(pageSize), 2);
+  const output: Page[] = [];
+  for (const page of pages) {
+    const painted = page.elements.filter(needsPaint);
+    let snapshot: RenderSnapshot | undefined;
+    if (page.bgGradient || painted.length) {
+      const node = document.querySelector<HTMLElement>(
+        `[data-export-page="${CSS.escape(page.id)}"]`,
+      );
+      if (!node) throw new Error("تعذر العثور على صفحة التصدير");
+      snapshot = await snapshotPage({ node, ...pageSize(page) });
+    }
+    const imageLayer = async (el?: CanvasEl): Promise<CanvasEl | null> => {
+      const image = await snapshotLayer(snapshot!, el?.id, scale, el?.name);
+      if (!image) return null;
+      return {
+        id: el?.id || `background-${page.id}`,
+        type: "image",
+        name: el?.name || "خلفية الصفحة",
+        x: image.x,
+        y: image.y,
+        w: image.w,
+        h: image.h,
+        rotation: 0,
+        opacity: 1,
+        z:
+          el?.z ?? Math.min(0, ...page.elements.map((item) => item.z || 0)) - 1,
+        content: "",
+        src: image.src,
+        locked: true,
+        style: { objectFit: "fill", radius: 0 },
+      };
+    };
+    const visit = async (el: CanvasEl): Promise<CanvasEl> => {
+      if (needsPaint(el))
+        return (await imageLayer(el)) || { ...el, opacity: 0 };
+      if (el.children?.length)
+        return { ...el, children: await Promise.all(el.children.map(visit)) };
+      if (el.type !== "svg" || safeSvgSrc(el.src)) return el;
+      const markup = applySvgColors(sanitizeSvgContent(el.content || ""), {
+        fill: el.style.svgFill,
+        stroke: el.style.svgStroke,
+        strokeWidth: el.style.svgStrokeWidth,
+      });
+      const png = await svgToPngDataUrl(markup, el.w, el.h, 2);
+      return png ? { ...el, src: png } : el;
+    };
+    // One full-page bitmap at a time, including on memory-limited iPads.
+    const elements: CanvasEl[] = [];
+    for (const element of page.elements) elements.push(await visit(element));
+    if (page.bgGradient) {
+      const background = await imageLayer();
+      if (background) elements.unshift(background);
+    }
+    output.push({
       ...page,
-      elements: await Promise.all(
-        page.elements.map(async (el) => {
-          if (el.type !== "svg" || safeSvgSrc(el.src)) return el;
-          // Rasterise with the same panel overrides the canvas showed, so the
-          // exported file matches what the author sees.
-          const painted = applySvgColors(sanitizeSvgContent(el.content || ""), {
-            fill: el.style.svgFill,
-            stroke: el.style.svgStroke,
-            strokeWidth: el.style.svgStrokeWidth,
-          });
-          const png = await svgToPngDataUrl(painted, el.w, el.h, 2);
-          return png ? { ...el, src: png } : el;
-        }),
-      ),
-    })),
-  );
+      bg: page.bgGradient ? "transparent" : page.bg,
+      elements,
+    });
+  }
+  return output;
 }
 
 function canvasToBlob(

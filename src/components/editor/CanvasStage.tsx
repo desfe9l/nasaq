@@ -1,11 +1,23 @@
+import { screenToDocument, clampZoom } from "@/lib/editor/document-space";
+import { canvasDropPoint } from "@/lib/editor/canvas-space";
+import { pageBackgroundCss } from "@/lib/editor/gradient";
+import { CropOverlay } from "./CropOverlay";
 import { mmToPx } from "@/lib/editor/render-units";
 import { likelyNsqDrag } from "@/lib/nsq/format";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   findElement,
   MIN_SIZE,
-  pageSize,
   WORKSPACE_MARGIN_MM,
+  pageSize,
   type Box,
   type CanvasEl,
   type ElType,
@@ -28,15 +40,8 @@ import type { PrintGuideSettings } from "@/lib/editor/print-guides";
 import { FloatingToolbar } from "./FloatingToolbar";
 import { toast } from "sonner";
 import { beginCanvasNavigation, zoomAnchoredAt } from "@/lib/editor/viewport";
-import {
-  measuredSelectionBox,
-  type PageBoxMm,
-} from "@/lib/editor/ui-state";
-import {
-  LIBRARY_DND_MIME,
-  insertLibraryDrop,
-  parseLibraryDrop,
-} from "@/lib/editor/library-dnd";
+import { measuredSelectionBox, type PageBoxMm } from "@/lib/editor/ui-state";
+import { LIBRARY_DND_MIME, parseLibraryDrop } from "@/lib/editor/library-dnd";
 import { ARTBOARD_GUTTER_MM } from "@/lib/editor/artboard";
 const GRAPHIC_HEADING_MIME = "application/x-nasaq-graphic-heading";
 import {
@@ -49,7 +54,11 @@ import {
   updatePenHover,
 } from "@/lib/editor/pen-input";
 
-import { CanvasPointerSession, LONG_PRESS_MS, POINTER_SLOP } from "@/lib/editor/canvas-pointer";
+import {
+  CanvasPointerSession,
+  LONG_PRESS_MS,
+  POINTER_SLOP,
+} from "@/lib/editor/canvas-pointer";
 
 type Op = {
   kind: "move" | "resize" | "rotate";
@@ -96,17 +105,7 @@ function snapRotation(raw: number, shift: boolean): number {
   return (((fifteen % 360) + 540) % 360) - 180;
 }
 
-function pagePoint(
-  rect: DOMRect,
-  size: { w: number; h: number },
-  clientX: number,
-  clientY: number,
-) {
-  return {
-    x: ((clientX - rect.left) / rect.width) * size.w,
-    y: ((clientY - rect.top) / rect.height) * size.h,
-  };
-}
+const pagePoint = screenToDocument;
 
 /**
  * هل النقطة داخل صندوق العنصر مع مراعاة الدوران — لاختيار دقيق بالقلم
@@ -150,9 +149,10 @@ function elementsAtPoint(
   const hits: CanvasEl[] = [];
   for (const el of list) {
     if (el.hidden) continue;
-    const absEl = offset.x || offset.y
-      ? { ...el, x: el.x + offset.x, y: el.y + offset.y }
-      : el;
+    const absEl =
+      offset.x || offset.y
+        ? { ...el, x: el.x + offset.x, y: el.y + offset.y }
+        : el;
     if (pointInRotatedBox(absEl, px, py)) {
       hits.push(absEl);
     }
@@ -165,7 +165,10 @@ export function CanvasStage({
   onDropImage,
   onCanvasTap,
 }: {
-  onDropImage?: (file: File, at?: { x: number; y: number }) => void;
+  onDropImage?: (
+    file: File,
+    at?: { x: number; y: number; pageId: string },
+  ) => void;
   onCanvasTap?: () => void;
 }) {
   const pages = useEditor((s) => s.pages);
@@ -202,12 +205,15 @@ export function CanvasStage({
   const stageRef = useRef<HTMLDivElement>(null);
   const spaceDown = useRef(false);
   const input = useRef<CanvasPointerSession | null>(null);
-  if (!input.current) input.current = new CanvasPointerSession({
-    navigate: (start) => stageRef.current
-      ? beginCanvasNavigation(stageRef.current, start) : () => {},
-    undo: () => useEditor.getState().undo(),
-    redo: () => useEditor.getState().redo(),
-  });
+  if (!input.current)
+    input.current = new CanvasPointerSession({
+      navigate: (start) =>
+        stageRef.current
+          ? beginCanvasNavigation(stageRef.current, start)
+          : () => {},
+      undo: () => useEditor.getState().undo(),
+      redo: () => useEditor.getState().redo(),
+    });
 
   /*
    * Guides, the rotation readout and the marquee are TRANSIENT interaction
@@ -227,7 +233,30 @@ export function CanvasStage({
   /** The stage node, as state so the artboard IntersectionObservers (which are
    *  created in an effect and need a real element for `root`) can use it. */
   const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
-  useEffect(() => setStageEl(stageRef.current), []);
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    setStageEl(stage);
+    const measure = () => {
+      stage.style.setProperty("--canvas-pan-x", `${stage.clientWidth}px`);
+      stage.style.setProperty("--canvas-pan-y", `${stage.clientHeight}px`);
+    };
+    measure();
+    const active = stage.querySelector<HTMLElement>(
+      `[data-page-id="${CSS.escape(useEditor.getState().activePageId || "")}"]`,
+    );
+    if (active) {
+      const rect = active.getBoundingClientRect(),
+        viewport = stage.getBoundingClientRect();
+      stage.scrollLeft +=
+        rect.left + rect.width / 2 - viewport.left - stage.clientWidth / 2;
+      stage.scrollTop +=
+        rect.top + rect.height / 2 - viewport.top - stage.clientHeight / 2;
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, []);
   /**
    * Page node registry, stable across renders.
    *
@@ -243,13 +272,10 @@ export function CanvasStage({
     [],
   );
   /** Clicking an artboard's name: make it active and drop the selection. */
-  const activatePage = useCallback(
-    (pageId: string) => {
-      useEditor.getState().setActivePage(pageId);
-      useEditor.getState().select(null);
-    },
-    [],
-  );
+  const activatePage = useCallback((pageId: string) => {
+    useEditor.getState().setActivePage(pageId);
+    useEditor.getState().select(null);
+  }, []);
   const [layerPicker, setLayerPicker] = useState<LayerPickerState>(null);
 
   useEffect(() => {
@@ -281,10 +307,7 @@ export function CanvasStage({
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
       const prev = useEditor.getState().zoom;
-      const next = Math.min(
-        2,
-        Math.max(0.2, prev + (e.deltaY < 0 ? 0.06 : -0.06)),
-      );
+      const next = clampZoom(prev * Math.exp(-e.deltaY * 0.002));
       zoomAnchoredAt(stage, prev, next, e.clientX, e.clientY);
     };
     stage.addEventListener("wheel", onWheel, { passive: false });
@@ -297,7 +320,9 @@ export function CanvasStage({
     const up = (event: PointerEvent) => session.end(event);
     const cancel = (event: PointerEvent) => session.end(event, true);
     const reset = () => session.reset();
-    const visibility = () => { if (document.hidden) reset(); };
+    const visibility = () => {
+      if (document.hidden) reset();
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", cancel);
@@ -347,7 +372,11 @@ export function CanvasStage({
     window.addEventListener("blur", onBlur);
 
     const claim = (event: Event) => event.preventDefault();
-    const GESTURE_EVENTS = ["gesturestart", "gesturechange", "gestureend"] as const;
+    const GESTURE_EVENTS = [
+      "gesturestart",
+      "gesturechange",
+      "gestureend",
+    ] as const;
     for (const type of GESTURE_EVENTS) {
       stage.addEventListener(type, claim, { passive: false });
     }
@@ -390,61 +419,13 @@ export function CanvasStage({
     };
   }, []);
 
-  const dropPoint = (
-    e: React.DragEvent | { clientX: number; clientY: number; target?: any },
-  ): { x: number; y: number; pageId: string } | null => {
-    const target = (e.target as HTMLElement | null)?.closest<HTMLElement>(
-      "[data-page-id]",
+  const dropPoint = (e: { clientX: number; clientY: number }) =>
+    canvasDropPoint(
+      stageRef.current,
+      useEditor.getState().pages,
+      e.clientX,
+      e.clientY,
     );
-    if (target) {
-      const pageId = target.dataset.pageId;
-      const page = pages.find((p) => p.id === pageId);
-      if (!page) return null;
-      const size = pageSize(page);
-      const rect = target.getBoundingClientRect();
-      const point = pagePoint(rect, size, (e as any).clientX, (e as any).clientY);
-      return { pageId: page.id, ...point };
-    }
-    // إذا لم يكن فوق صفحة مباشرة، استخدم أقرب صفحة أو الصفحة النشطة — لا نلغي السحب بسبب حدود الـArtboard
-    const stage = stageRef.current;
-    if (!stage) return null;
-    // ابحث عن أقرب صفحة لنقطة المؤشر
-    let closest: { page: Page; rect: DOMRect; dist: number } | null = null;
-    for (const page of pages) {
-      const el = pageRefs.current[page.id];
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      const cx = rect.left + rect.width / 2;
-      const cy = rect.top + rect.height / 2;
-      const dist = Math.hypot((e as any).clientX - cx, (e as any).clientY - cy);
-      if (!closest || dist < closest.dist) {
-        closest = { page, rect, dist };
-      }
-    }
-    if (closest) {
-      const size = pageSize(closest.page);
-      // حتى لو خارج الحدود، احسب النقطة مع clamp ناعم داخل مساحة العمل
-      const clampedX = Math.max(
-        closest.rect.left,
-        Math.min((e as any).clientX, closest.rect.right),
-      );
-      const clampedY = Math.max(
-        closest.rect.top,
-        Math.min((e as any).clientY, closest.rect.bottom),
-      );
-      const point = pagePoint(closest.rect, size, clampedX, clampedY);
-      return { pageId: closest.page.id, ...point };
-    }
-    // fallback للصفحة النشطة
-    const active = pages.find((p) => p.id === activePageId) || pages[0];
-    if (!active) return null;
-    const ref = pageRefs.current[active.id];
-    if (!ref) return null;
-    const size = pageSize(active);
-    const rect = ref.getBoundingClientRect();
-    const point = pagePoint(rect, size, (e as any).clientX, (e as any).clientY);
-    return { pageId: active.id, ...point };
-  };
 
   const visible = useMemo(
     () => (previewAll ? pages : pages.filter((p) => p.id === activePageId)),
@@ -464,7 +445,8 @@ export function CanvasStage({
       e.preventDefault();
       return;
     }
-    if (e.button !== 0 || input.current!.busy) return;
+    if (e.button !== 0 || input.current!.busy || useInteraction.getState().crop)
+      return;
     onCanvasTap?.();
     setLayerPicker(null);
     if (el.locked) {
@@ -489,7 +471,7 @@ export function CanvasStage({
           return;
         }
         // إذا كان مقفل عرض فقط، نسمح بتغيير الارتفاع فقط إذا كان المقبض عمودي
-        const isHorizontalOnly = (handle === "e" || handle === "w");
+        const isHorizontalOnly = handle === "e" || handle === "w";
         if (isHorizontalOnly) {
           e.stopPropagation();
           select(el.id);
@@ -497,7 +479,7 @@ export function CanvasStage({
         }
       }
       if (el.heightLocked && (handle.includes("n") || handle.includes("s"))) {
-        const isVerticalOnly = (handle === "n" || handle === "s");
+        const isVerticalOnly = handle === "n" || handle === "s";
         if (isVerticalOnly) {
           e.stopPropagation();
           select(el.id);
@@ -515,7 +497,11 @@ export function CanvasStage({
     e.preventDefault();
     const captureTarget = stageRef.current!;
     if (e.pointerType !== "mouse") {
-      try { captureTarget.setPointerCapture(e.pointerId); } catch { /* detached */ }
+      try {
+        captureTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* detached */
+      }
     }
 
     setActivePage(page.id);
@@ -528,7 +514,10 @@ export function CanvasStage({
       pagePoint(pageEl.getBoundingClientRect(), size, ev.clientX, ev.clientY);
 
     const start = toMm(e);
-    const slopMm = Math.max(0.2, (POINTER_SLOP * size.w) / Math.max(1, rect.width));
+    const slopMm = Math.max(
+      0.2,
+      (POINTER_SLOP * size.w) / Math.max(1, rect.width),
+    );
     let maxDist = 0;
 
     const enteredGroup = enteredGroupId
@@ -618,7 +607,10 @@ export function CanvasStage({
         decided = true;
         applyPressSelection();
         useEditor.getState().openContextMenu({
-          x: e.clientX, y: e.clientY, targetId: el.id, source: "canvas",
+          x: e.clientX,
+          y: e.clientY,
+          targetId: el.id,
+          source: "canvas",
         });
       }, LONG_PRESS_MS);
     }
@@ -715,8 +707,7 @@ export function CanvasStage({
           op.orig.style?.flipX === true,
           op.orig.style?.flipY === true,
         );
-        const ratioLocked =
-          ev.shiftKey || op.orig.style?.aspectLock === true;
+        const ratioLocked = ev.shiftKey || op.orig.style?.aspectLock === true;
         /*
          * Anchor-based resize — the ONE model for every shape at every
          * rotation (see `resizeToPointer`). The pointer's absolute page
@@ -753,8 +744,8 @@ export function CanvasStage({
               mirrored,
               others,
               size,
-              snapGrid,
-              snapElements,
+              snapGrid && !ev.altKey,
+              snapElements && !ev.altKey,
               zoomNow,
               op.orig.rotation || 0,
             ),
@@ -775,9 +766,7 @@ export function CanvasStage({
          */
         const distC = Math.hypot(cur.x - cx, cur.y - cy);
         const a1 =
-          distC < 2
-            ? rotateHold ?? a0
-            : Math.atan2(cur.y - cy, cur.x - cx);
+          distC < 2 ? (rotateHold ?? a0) : Math.atan2(cur.y - cy, cur.x - cx);
         if (distC >= 2) rotateHold = a1;
         const raw = (op.orig.rotation || 0) + ((a1 - a0) * 180) / Math.PI;
         next.rotation = snapRotation(raw, ev.shiftKey);
@@ -894,13 +883,20 @@ export function CanvasStage({
         // تحقق من العناصر المتداخلة — إذا كان هناك أكثر من عنصر في نقطة الضغط، اعرض قائمة اختيار
         const pageForHit = pages.find((p) => p.id === page.id);
         if (pageForHit) {
-          const hits = elementsAtPoint(pageForHit, enteredGroupId, start.x, start.y);
+          const hits = elementsAtPoint(
+            pageForHit,
+            enteredGroupId,
+            start.x,
+            start.y,
+          );
           if (hits.length > 1) {
             // إذا كان العنصر المحدد هو الأعلى، وكان هناك تداخل صعب، اعرض القائمة
             // نعرض القائمة عندما يكون هناك أكثر من عنصرين متداخلين أو عندما يكون الضغط بالقلم/اللمس
             const shouldShowPicker =
               hits.length >= 2 &&
-              (ev.pointerType === "pen" || ev.pointerType === "touch" || hits.length > 2);
+              (ev.pointerType === "pen" ||
+                ev.pointerType === "touch" ||
+                hits.length > 2);
             if (shouldShowPicker) {
               // تأخير صغير لتجنب التعارض مع double-tap
               setTimeout(() => {
@@ -1024,7 +1020,13 @@ export function CanvasStage({
   })();
 
   const startMarquee = (e: React.PointerEvent, pageId: string) => {
-    if (e.button !== 0 || input.current!.busy || isPalmTouch(e)) return;
+    if (
+      e.button !== 0 ||
+      input.current!.busy ||
+      isPalmTouch(e) ||
+      useInteraction.getState().crop
+    )
+      return;
     /** Resolved at gesture time, like every other handler here: the node that
      *  started the gesture may belong to a page that has since been
      *  re-created by an undo, and virtualisation may have unmounted it. */
@@ -1050,13 +1052,19 @@ export function CanvasStage({
      * pointer sweep does not write the store (and re-render the editor) on
      * every frame when the hit set has not actually changed. */
     let lastHitKey = "";
-    const timer = !drawTool && e.pointerType !== "mouse" ? setTimeout(() => {
-      held = true;
-      input.current!.lock(e.pointerId);
-      useEditor.getState().openContextMenu({
-        x: e.clientX, y: e.clientY, targetId: null, source: "canvas",
-      });
-    }, LONG_PRESS_MS) : undefined;
+    const timer =
+      !drawTool && e.pointerType !== "mouse"
+        ? setTimeout(() => {
+            held = true;
+            input.current!.lock(e.pointerId);
+            useEditor.getState().openContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              targetId: null,
+              source: "canvas",
+            });
+          }, LONG_PRESS_MS)
+        : undefined;
     const finish = () => {
       clearTimeout(timer);
       setMarquee(null);
@@ -1065,7 +1073,12 @@ export function CanvasStage({
       yieldable: e.pointerType === "touch",
       move: (ev) => {
         if (held) return;
-        if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < POINTER_SLOP) return;
+        if (
+          !moved &&
+          Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) <
+            POINTER_SLOP
+        )
+          return;
         clearTimeout(timer);
         moved = true;
         // A blank one-finger pan may promote to a two-finger navigation;
@@ -1077,12 +1090,28 @@ export function CanvasStage({
           return;
         }
         const cur = toMm(ev);
-        const box = { x: Math.min(start.x, cur.x), y: Math.min(start.y, cur.y),
-          w: Math.abs(cur.x - start.x), h: Math.abs(cur.y - start.y) };
-        setMarquee({ x0: box.x, y0: box.y, x1: box.x + box.w, y1: box.y + box.h });
+        const box = {
+          x: Math.min(start.x, cur.x),
+          y: Math.min(start.y, cur.y),
+          w: Math.abs(cur.x - start.x),
+          h: Math.abs(cur.y - start.y),
+        };
+        setMarquee({
+          x0: box.x,
+          y0: box.y,
+          x1: box.x + box.w,
+          y1: box.y + box.h,
+        });
         if (!drawTool) {
-          const hits = candidates.filter(p => p.box.x < box.x + box.w && p.box.x + p.box.w > box.x &&
-            p.box.y < box.y + box.h && p.box.y + p.box.h > box.y).map(p => p.id);
+          const hits = candidates
+            .filter(
+              (p) =>
+                p.box.x < box.x + box.w &&
+                p.box.x + p.box.w > box.x &&
+                p.box.y < box.y + box.h &&
+                p.box.y + p.box.h > box.y,
+            )
+            .map((p) => p.id);
           const merged = [...new Set([...before, ...hits])];
           const key = merged.join("\\u0000");
           if (key !== lastHitKey) {
@@ -1096,8 +1125,12 @@ export function CanvasStage({
         if (held) return;
         if (drawTool) {
           const end = toMm(ev);
-          const box = { x: Math.min(start.x, end.x), y: Math.min(start.y, end.y),
-            w: Math.max(MIN_SIZE, Math.abs(end.x - start.x)), h: Math.max(MIN_SIZE, Math.abs(end.y - start.y)) };
+          const box = {
+            x: Math.min(start.x, end.x),
+            y: Math.min(start.y, end.y),
+            w: Math.max(MIN_SIZE, Math.abs(end.x - start.x)),
+            h: Math.max(MIN_SIZE, Math.abs(end.y - start.y)),
+          };
           setDrawTool(null);
           /*
            * «Draw Square» paints a real filled rectangle SHAPE in the
@@ -1132,16 +1165,34 @@ export function CanvasStage({
     for (const page of [...visible].reverse()) {
       const node = pageRefs.current[page.id];
       if (!node) continue;
-      const point = pagePoint(node.getBoundingClientRect(), pageSize(page), x, y);
-      const hits = elementsAtPoint(page, enteredGroupId, point.x, point.y).filter(el => !el.locked);
-      let el = hits.find(el => selectedSet.has(el.id)) || hits[0];
+      const point = pagePoint(
+        node.getBoundingClientRect(),
+        pageSize(page),
+        x,
+        y,
+      );
+      const hits = elementsAtPoint(
+        page,
+        enteredGroupId,
+        point.x,
+        point.y,
+      ).filter((el) => !el.locked);
+      let el = hits.find((el) => selectedSet.has(el.id)) || hits[0];
       if (cycle && hits.length > 1) {
-        const selectedIndex = hits.findIndex((item) => selectedSet.has(item.id));
+        const selectedIndex = hits.findIndex((item) =>
+          selectedSet.has(item.id),
+        );
         el = hits[(selectedIndex + 1 + hits.length) % hits.length] || hits[0];
       }
       if (el) {
-        const group = enteredGroupId ? findElement(page.elements, enteredGroupId)?.el : null;
-        return { page, el, parent: group ? { x: group.x, y: group.y } : undefined };
+        const group = enteredGroupId
+          ? findElement(page.elements, enteredGroupId)?.el
+          : null;
+        return {
+          page,
+          el,
+          parent: group ? { x: group.x, y: group.y } : undefined,
+        };
       }
     }
     return null;
@@ -1151,7 +1202,7 @@ export function CanvasStage({
     <div
       ref={stageRef}
       className={cn(
-        "editor-canvas-stage studio-grid relative min-h-0 min-w-0 overflow-auto px-6 py-8",
+        "editor-canvas-stage studio-grid relative min-h-0 min-w-0 overflow-auto",
         dropping && "is-dropping",
         drawArmed && "draw-armed",
         drawTool === "rect" && "draw-rect",
@@ -1160,22 +1211,46 @@ export function CanvasStage({
       dir="ltr"
       onLostPointerCapture={(e) => input.current!.end(e.nativeEvent, true)}
       onPointerDownCapture={(e) => {
-        if (isPalmTouch(e)) { e.stopPropagation(); return; }
-        const target = e.target as HTMLElement;
-        if (target.closest("button, input, textarea, select, [contenteditable=true], .floating-toolbar, .layer-picker-popup")) return;
-        if (input.current!.down(e.nativeEvent)) {
+        if (isPalmTouch(e)) {
           e.stopPropagation();
-          try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* detached */ }
           return;
         }
-        if (spaceDown.current && e.pointerType === "mouse" && e.button === 0 && !target.closest(".handle, .rotate-handle")) {
+        const target = e.target as HTMLElement;
+        if (target.closest(".crop-overlay")) return;
+        if (
+          target.closest(
+            "button, input, textarea, select, [contenteditable=true], .floating-toolbar, .layer-picker-popup",
+          )
+        )
+          return;
+        if (input.current!.down(e.nativeEvent)) {
+          e.stopPropagation();
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            /* detached */
+          }
+          return;
+        }
+        if (
+          spaceDown.current &&
+          e.pointerType === "mouse" &&
+          e.button === 0 &&
+          !target.closest(".handle, .rotate-handle")
+        ) {
           e.preventDefault(); // Space+drag replaces native text selection.
           e.stopPropagation();
           const stage = e.currentTarget;
-          const left = stage.scrollLeft, top = stage.scrollTop;
-          input.current!.claim(e, { yieldable: false,
-            move: ev => { stage.scrollLeft = left - (ev.clientX - e.clientX); stage.scrollTop = top - (ev.clientY - e.clientY); },
-            end: () => {}, cancel: () => {},
+          const left = stage.scrollLeft,
+            top = stage.scrollTop;
+          input.current!.claim(e, {
+            yieldable: false,
+            move: (ev) => {
+              stage.scrollLeft = left - (ev.clientX - e.clientX);
+              stage.scrollTop = top - (ev.clientY - e.clientY);
+            },
+            end: () => {},
+            cancel: () => {},
           });
           return;
         }
@@ -1190,10 +1265,16 @@ export function CanvasStage({
       onPointerDown={(e) => {
         if (isPalmTouch(e) || input.current!.busy) return;
         const target = e.target as HTMLElement;
-        if (target.closest("button, input, textarea, select, [contenteditable=true], .floating-toolbar, .layer-picker-popup")) return;
+        if (target.closest(".crop-overlay")) return;
+        if (
+          target.closest(
+            "button, input, textarea, select, [contenteditable=true], .floating-toolbar, .layer-picker-popup",
+          )
+        )
+          return;
         setLayerPicker(null);
         onCanvasTap?.();
-        const page = pages.find(p => p.id === activePageId);
+        const page = pages.find((p) => p.id === activePageId);
         if (page) startMarquee(e, page.id);
       }}
       onContextMenu={(e) => {
@@ -1201,8 +1282,16 @@ export function CanvasStage({
         e.stopPropagation();
         const hit = workspaceHit(e.clientX, e.clientY);
         const state = useEditor.getState();
-        if (hit) { state.setActivePage(hit.page.id); if (!state.selectedIds.includes(hit.el.id)) state.select(hit.el.id); }
-        state.openContextMenu({ x: e.clientX, y: e.clientY, targetId: hit?.el.id ?? null, source: "canvas" });
+        if (hit) {
+          state.setActivePage(hit.page.id);
+          if (!state.selectedIds.includes(hit.el.id)) state.select(hit.el.id);
+        }
+        state.openContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          targetId: hit?.el.id ?? null,
+          source: "canvas",
+        });
       }}
       onDragOver={(e) => {
         const isFile = e.dataTransfer.types.includes("Files");
@@ -1211,7 +1300,8 @@ export function CanvasStage({
         if ((!onDropImage || !isFile) && !isLibrary && !isGraphic) return;
         // An `.nsq` project is opened by the editor-wide intake (NsqIntake),
         // which shows its own drop overlay — not the image hint.
-        if (isFile && !isLibrary && !isGraphic && likelyNsqDrag(e.dataTransfer)) return;
+        if (isFile && !isLibrary && !isGraphic && likelyNsqDrag(e.dataTransfer))
+          return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
         setDropping(isLibrary || isGraphic ? "library" : "file");
@@ -1229,7 +1319,11 @@ export function CanvasStage({
           if (at) {
             setActivePage(at.pageId);
             const store = useEditor.getState();
-            if (store.insertGraphicHeadingAt) store.insertGraphicHeadingAt(graphicId as any, { x: at.x, y: at.y });
+            if (store.insertGraphicHeadingAt)
+              store.insertGraphicHeadingAt(graphicId as any, {
+                x: at.x,
+                y: at.y,
+              });
           }
           return;
         }
@@ -1239,19 +1333,8 @@ export function CanvasStage({
         if (payload) {
           e.preventDefault();
           const at = dropPoint(e);
-          if (at) setActivePage(at.pageId);
-          insertLibraryDrop(
-            payload,
-            at ? { x: at.x, y: at.y } : null,
-            (type, over, center) => {
-              const el = addElementAt(
-                type as ElType,
-                over as Partial<CanvasEl>,
-                center,
-              );
-              return el ? { x: el.x, y: el.y, w: el.w, h: el.h } : undefined;
-            },
-          );
+          if (!at) return;
+          useEditor.getState().insertLibraryElements(payload, at, at.pageId);
           return;
         }
         if (!onDropImage) return;
@@ -1263,20 +1346,23 @@ export function CanvasStage({
         }
         const at = dropPoint(e);
         if (at) setActivePage(at.pageId);
-        onDropImage(file, at ? { x: at.x, y: at.y } : undefined);
+        if (at) onDropImage(file, at);
       }}
     >
       {dropping && (
-        <div className="pointer-events-none sticky top-0 z-[var(--z-canvas-overlay)] mx-auto w-max rounded-full border border-gold/40 bg-white/95 px-4 py-1.5 text-[11px] font-extrabold text-brand shadow-sm dark:bg-[#161c26] dark:text-gold-2">
+        <div className="canvas-drop-hint pointer-events-none absolute top-3 left-1/2 z-[var(--z-canvas-overlay)] -translate-x-1/2 w-max rounded-full border border-line bg-surface px-4 py-1.5 text-[11px] font-extrabold text-brand shadow-sm">
           {dropping === "library"
             ? "أفلت العنصر ليُضاف في هذا الموضع"
             : "أفلت الصورة لإضافتها إلى الصفحة"}
         </div>
       )}
       <div
-        className="mx-auto flex w-max min-w-full items-center justify-center"
+        className="workspace-scroll-surface mx-auto flex w-max min-w-full min-h-full items-center justify-center"
         dir="ltr"
-        style={{ padding: `${WORKSPACE_MARGIN_MM * zoom}mm` }}
+        style={{
+          padding:
+            "max(48px, var(--canvas-pan-y, 100vh)) max(48px, var(--canvas-pan-x, 100vw))",
+        }}
       >
         <div
           className="artboard-grid"
@@ -1331,7 +1417,9 @@ export function CanvasStage({
         !exportOpen &&
         !pageManagerOpen &&
         !contextMenu &&
-        !layerPicker && <FloatingToolbar el={primarySelection} />}
+        !layerPicker && (
+          <SelectionTools key={primarySelection.id} el={primarySelection} />
+        )}
 
       {layerPicker && (
         <LayerPickerPopup
@@ -1485,7 +1573,11 @@ const ArtboardPage = memo(function ArtboardPage({
 
   const header = (
     /* The name is UI, never a document element or a transform child. */
-    <div className="artboard-header" dir="rtl" onPointerDown={(e) => e.stopPropagation()}>
+    <div
+      className="artboard-header"
+      dir="rtl"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       {isRenaming ? (
         <input
           autoFocus
@@ -1517,7 +1609,9 @@ const ArtboardPage = memo(function ArtboardPage({
               onStartRename(page.id);
             }
           }}
-        >{page.name}</button>
+        >
+          {page.name}
+        </button>
       )}
     </div>
   );
@@ -1559,11 +1653,7 @@ const ArtboardPage = memo(function ArtboardPage({
       }
     } else {
       for (const el of page.elements) {
-        if (
-          selectedSet.has(el.id) &&
-          !el.hidden &&
-          el.id !== entered?.id
-        ) {
+        if (selectedSet.has(el.id) && !el.hidden && el.id !== entered?.id) {
           selectionFrames.push({ el, parent: undefined });
         }
       }
@@ -1604,7 +1694,7 @@ const ArtboardPage = memo(function ArtboardPage({
           style={{
             width: `${mmToPx(size.w)}px`,
             height: `${mmToPx(size.h)}px`,
-            background: page.bg || "#fff",
+            background: pageBackgroundCss(page),
             opacity: isHidden ? 0.35 : 1,
             pointerEvents: isLocked ? "none" : undefined,
           }}
@@ -1639,11 +1729,7 @@ const ArtboardPage = memo(function ArtboardPage({
             .slice()
             .sort((a, b) => a.z - b.z)
             .map((el) => {
-              if (
-                entered &&
-                el.id === entered.id &&
-                enteredKids.length
-              ) {
+              if (entered && el.id === entered.id && enteredKids.length) {
                 return (
                   <div key={el.id}>
                     <div
@@ -1686,9 +1772,7 @@ const ArtboardPage = memo(function ArtboardPage({
                   pageCount={pageCount}
                   siblings={page.elements}
                   interactive={!isLocked && !isHidden}
-                  onEnterGroup={
-                    el.type === "group" ? onEnterGroup : undefined
-                  }
+                  onEnterGroup={el.type === "group" ? onEnterGroup : undefined}
                   pageId={page.id}
                   onGesture={onElementGesture}
                 />
@@ -1701,12 +1785,10 @@ const ArtboardPage = memo(function ArtboardPage({
           />
           <MarqueeLayer />
           {isActive && !isLocked && !isHidden && (
-            <OverflowFlagLayer
-              elements={page.elements}
-              onFit={onFit}
-            />
+            <OverflowFlagLayer elements={page.elements} onFit={onFit} />
           )}
-          {isActive && !isLocked && <GuideLines />}
+          {isActive && !isLocked && <GuideLines size={size} />}
+          {isActive && !isLocked && <CropLayer pageId={page.id} />}
           {isActive && <RotationHintLayer />}
           {isActive && !isLocked && !isHidden && selectionFrames.length > 0 && (
             <div
@@ -1725,9 +1807,7 @@ const ArtboardPage = memo(function ArtboardPage({
                       parent: frame.parent,
                     })
                   }
-                  onEditRequest={() =>
-                    onEditRequest(page.id, frame.el.id)
-                  }
+                  onEditRequest={() => onEditRequest(page.id, frame.el.id)}
                 />
               ))}
             </div>
@@ -1847,17 +1927,59 @@ function MarqueeLayer() {
 }
 
 /** Alignment guides, driven by the transient interaction store. */
-const GuideLines = memo(function GuideLines() {
+const GuideLines = memo(function GuideLines({
+  size,
+}: {
+  size: { w: number; h: number };
+}) {
   const guides = useInteraction((s) => s.guides);
   if (!guides.v.length && !guides.h.length) return null;
   return (
     <>
       {guides.v.map((x) => (
-        <div key={`v${x}`} className="guide-v" style={{ left: `${x}mm` }} />
+        <div
+          key={`v${x}`}
+          className={cn(
+            "guide-v",
+            (x === 0 || x === size.w) && "is-page-edge",
+            x === size.w / 2 && "is-page-center",
+          )}
+          data-snap-target={
+            x === 0 || x === size.w
+              ? "edge"
+              : x === size.w / 2
+                ? "center"
+                : "alignment"
+          }
+          style={{ left: `${x}mm` }}
+        />
       ))}
       {guides.h.map((y) => (
-        <div key={`h${y}`} className="guide-h" style={{ top: `${y}mm` }} />
+        <div
+          key={`h${y}`}
+          className={cn(
+            "guide-h",
+            (y === 0 || y === size.h) && "is-page-edge",
+            y === size.h / 2 && "is-page-center",
+          )}
+          data-snap-target={
+            y === 0 || y === size.h
+              ? "edge"
+              : y === size.h / 2
+                ? "center"
+                : "alignment"
+          }
+          style={{ top: `${y}mm` }}
+        />
       ))}
+      <span className="snap-feedback" aria-live="polite">
+        {guides.v.some((x) => x === 0 || x === size.w) ||
+        guides.h.some((y) => y === 0 || y === size.h)
+          ? "ملاصق لحافة الصفحة"
+          : guides.v.includes(size.w / 2) || guides.h.includes(size.h / 2)
+            ? "توسيط الصفحة"
+            : "محاذاة"}
+      </span>
     </>
   );
 });
@@ -1912,6 +2034,7 @@ function SelectionFrame({
    * Live drag geometry for THIS element: the frame follows the pointer at
    * display rate without the document (or the stage) re-rendering.
    */
+  const cropping = useInteraction((s) => s.crop?.original.id === frame.el.id);
   const transient = useInteraction((s) => s.overrides[frame.el.id]);
   const el = transient ? { ...frame.el, ...transient } : frame.el;
   const frameRef = useRef<HTMLDivElement>(null);
@@ -1948,8 +2071,12 @@ function SelectionFrame({
       const pageRect = page.getBoundingClientRect();
       // The page element is authored in CSS pixels for its millimetre size and
       // then scaled by the zoom, so its layout width is the millimetre truth.
-      const modelPage = useEditor.getState().pages.find(p => p.id === node?.dataset.pageId);
-      const pageWidthMm = modelPage ? pageSize(modelPage).w : page.clientWidth / mmToPx(1);
+      const modelPage = useEditor
+        .getState()
+        .pages.find((p) => p.id === node?.dataset.pageId);
+      const pageWidthMm = modelPage
+        ? pageSize(modelPage).w
+        : page.clientWidth / mmToPx(1);
       setMeasured(
         measuredSelectionBox({
           node: artworkRect,
@@ -1965,32 +2092,35 @@ function SelectionFrame({
       cancelled = true;
       cancelAnimationFrame(id);
     };
-  }, [
-    primary,
-    editing,
-    zoom,
-    el.id,
-    el.x,
-    el.y,
-    el.w,
-    el.h,
-    el.rotation,
-  ]);
+  }, [primary, editing, zoom, el.id, el.x, el.y, el.w, el.h, el.rotation]);
 
-  const box = el.type === "line"
-    ? el.h > el.w
-      ? { x: el.x + (el.w - (el.style.stroke ?? 0.8)) / 2, y: el.y, w: el.style.stroke ?? 0.8, h: el.h }
-      : { x: el.x, y: el.y + (el.h - (el.style.stroke ?? 0.8)) / 2, w: el.w, h: el.style.stroke ?? 0.8 }
-    : measured ?? { x: el.x, y: el.y, w: el.w, h: el.h };
-  const angle = ((Math.round((el.rotation || 0) * 10) / 10) % 360 + 360) % 360;
+  const box =
+    el.type === "line"
+      ? el.h > el.w
+        ? {
+            x: el.x + (el.w - (el.style.stroke ?? 0.8)) / 2,
+            y: el.y,
+            w: el.style.stroke ?? 0.8,
+            h: el.h,
+          }
+        : {
+            x: el.x,
+            y: el.y + (el.h - (el.style.stroke ?? 0.8)) / 2,
+            w: el.w,
+            h: el.style.stroke ?? 0.8,
+          }
+      : (measured ?? { x: el.x, y: el.y, w: el.w, h: el.h });
+  const angle =
+    (((Math.round((el.rotation || 0) * 10) / 10) % 360) + 360) % 360;
 
   /** One keyboard rotation step: 1°, or 15° with Shift (the pointer ladder). */
   const rotateBy = (delta: number) => {
-    const next = ((angle + delta) % 360 + 360) % 360;
+    const next = (((angle + delta) % 360) + 360) % 360;
     updateElement(el.id, { rotation: Number(next.toFixed(1)) });
     commit();
   };
 
+  if (cropping) return null;
   // Paint the exact geometry; only handle hit targets have a screen-space minimum.
   // Inflating small frames made separate objects appear attached at low zoom.
 
@@ -2006,13 +2136,15 @@ function SelectionFrame({
         editing && "is-editing",
       )}
       data-el-id={el.id}
-      style={{
-        left: `${box.x}mm`,
-        top: `${box.y}mm`,
-        width: `${box.w}mm`,
-        height: `${box.h}mm`,
-        transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
-      } as React.CSSProperties}
+      style={
+        {
+          left: `${box.x}mm`,
+          top: `${box.y}mm`,
+          width: `${box.w}mm`,
+          height: `${box.h}mm`,
+          transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
+        } as React.CSSProperties
+      }
       onPointerDown={(e) => {
         if (isPalmTouch(e)) {
           e.stopPropagation();
@@ -2041,7 +2173,8 @@ function SelectionFrame({
               const isLockedAxis =
                 (el.widthLocked && (h.includes("e") || h.includes("w"))) ||
                 (el.heightLocked && (h.includes("n") || h.includes("s")));
-              if (isLockedAxis && el.widthLocked && el.heightLocked) return null;
+              if (isLockedAxis && el.widthLocked && el.heightLocked)
+                return null;
               return (
                 <div
                   key={h}
@@ -2051,8 +2184,8 @@ function SelectionFrame({
                     if (isLockedAxis) {
                       // إذا كان المحور مقفلاً، لا نسمح بالتحجيم في هذا الاتجاه
                       if (
-                        (h === "e" || h === "w") && el.widthLocked ||
-                        (h === "n" || h === "s") && el.heightLocked
+                        ((h === "e" || h === "w") && el.widthLocked) ||
+                        ((h === "n" || h === "s") && el.heightLocked)
                       ) {
                         e.stopPropagation();
                         return;
@@ -2134,7 +2267,6 @@ function SelectionFrame({
               🔒
             </span>
           )}
-
         </>
       )}
     </div>
@@ -2265,7 +2397,7 @@ function ExportCaptureLayer() {
             style={{
               width: `${mmToPx(size.w)}px`,
               height: `${mmToPx(size.h)}px`,
-              background: page.bg || "#fff",
+              background: pageBackgroundCss(page),
             }}
           >
             {page.elements
@@ -2287,4 +2419,19 @@ function ExportCaptureLayer() {
       })}
     </div>
   );
+}
+
+/** Contextual properties yield during transforms/crop and to the explicit inspector. */
+function SelectionTools({ el }: { el: CanvasEl }) {
+  const active = useInteraction((s) => s.active);
+  const cropping = useInteraction((s) => s.crop !== null);
+  const inspector = useEditor(
+    (s) => s.rightOpen && s.rightTab === "properties",
+  );
+  if (active || cropping || inspector) return null;
+  return <FloatingToolbar el={el} />;
+}
+function CropLayer({ pageId }: { pageId: string }) {
+  const session = useInteraction((s) => s.crop);
+  return session?.pageId === pageId ? <CropOverlay session={session} /> : null;
 }

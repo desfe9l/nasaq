@@ -19,6 +19,8 @@
  * the schema, the path guards and the migrations directly.
  */
 
+import { normalizeGradient } from "../editor/gradient.ts";
+import { normalizeCrop } from "../editor/image-crop.ts";
 import type { CanvasEl, ElType, Page, Project } from "../editor/model.ts";
 
 export const NSQ_EXTENSION = ".nsq";
@@ -507,6 +509,9 @@ export function validatePages(
           out[key] = JSON.parse(json);
       }
     }
+    if (out.gradient !== undefined)
+      out.gradient = normalizeGradient(out.gradient);
+    if (out.crop !== undefined) out.crop = normalizeCrop(out.crop);
     return out;
   };
 
@@ -646,6 +651,11 @@ export function validatePages(
       throw new NsqError("invalid", "page background");
     if (typeof rawPage.bg === "string" && !STYLE_UNSAFE.test(rawPage.bg))
       page.bg = rawPage.bg.slice(0, 400);
+    if (rawPage.bgGradient !== undefined) {
+      page.bgGradient = normalizeGradient(rawPage.bgGradient);
+      if (opts.strict && !page.bgGradient)
+        throw new NsqError("invalid", "page gradient");
+    }
     for (const key of ["w", "h"])
       if (
         opts.strict &&

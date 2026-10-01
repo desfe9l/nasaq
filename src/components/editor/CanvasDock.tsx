@@ -25,6 +25,11 @@ import {
 import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
 import { IconButton } from "./ui/IconButton";
 import { AddMenu } from "./AddMenu";
+import { ColorField } from "./ui/ColorField";
+import { FillField } from "./ui/FillField";
+import { paintCss, type Gradient } from "@/lib/editor/gradient";
+import { strokeBinding } from "@/lib/editor/stroke";
+import { useInteraction } from "@/lib/editor/interaction-store";
 import { LEFT_PANEL_TABS } from "./panel-tabs";
 
 /**
@@ -53,7 +58,10 @@ import { LEFT_PANEL_TABS } from "./panel-tabs";
  */
 type DrawTool = "text" | "rect" | null;
 
-const DEFAULT_COLORS = { foreground: "#2563eb", background: "#f4f5f6" } as const;
+const DEFAULT_COLORS = {
+  foreground: "#2563eb",
+  background: "#f4f5f6",
+} as const;
 const HEX = /^#[\da-f]{6}$/i;
 /** Session memory for the drag position. */
 const POS_KEY = "nasaq.canvas-dock.pos";
@@ -92,11 +100,15 @@ export function CanvasDock({
     }
   });
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const dragState = useRef<{ id: number; x: number; y: number; ox: number; oy: number } | null>(null);
+  const dragState = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    ox: number;
+    oy: number;
+  } | null>(null);
   const dockRef = useRef<HTMLElement>(null);
   const [activeTool, setActiveTool] = useState<DrawTool>(null);
-  const foregroundInput = useRef<HTMLInputElement>(null);
-  const backgroundInput = useRef<HTMLInputElement>(null);
   /** Free width the dock may occupy — the canvas row it floats in. */
   const [lane, setLane] = useState(Number.POSITIVE_INFINITY);
   const [metrics, setMetrics] = useState<DockMetrics>(DOCK_METRICS_FALLBACK);
@@ -110,6 +122,7 @@ export function CanvasDock({
   // Identity-stable selection (see selectors.ts): subscribing to a derived
   // array would re-render the dock on every document write.
   const selected = useSelectedElement();
+  const cropActive = useInteraction((s) => s.crop !== null);
   const selectedId = selected?.id;
   const selectedType = selected?.type;
   const selectedFill =
@@ -121,17 +134,37 @@ export function CanvasDock({
       ? selected?.style?.svgStroke
       : selected?.style?.borderColor;
   const selectedStroke = selected?.style?.svgStroke;
-  const [colors, setColors] = useState<{ foreground: string; background: string }>({
+  const [colors, setColors] = useState<{
+    foreground: string;
+    background: string;
+  }>({
     ...DEFAULT_COLORS,
   });
-  const foreground = selectedFill || selectedColor || selectedBackground || colors.foreground;
+  const foregroundKey =
+    selectedType === "svg"
+      ? "svgFill"
+      : ["image", "logo", "qr", "group"].includes(selectedType || "")
+        ? null
+        : ["text", "stamp", "table", "icon", "line", "divider"].includes(
+              selectedType || "",
+            )
+          ? "color"
+          : "fill";
+  const supportsGradient = ["shape", "box", "stat", "progress", "svg"].includes(
+    selectedType || "",
+  );
+  const foreground =
+    (foregroundKey && selected?.style[foregroundKey]) || colors.foreground;
   const background = selectedBorder || selectedStroke || colors.background;
 
   useEffect(() => {
     if (!selectedId) return;
     setColors((current) => ({
       foreground:
-        selectedFill || selectedColor || selectedBackground || current.foreground,
+        selectedFill ||
+        selectedColor ||
+        selectedBackground ||
+        current.foreground,
       background: selectedBorder || selectedStroke || current.background,
     }));
   }, [
@@ -148,7 +181,8 @@ export function CanvasDock({
    * (V / T / R) and the command palette dispatch.
    */
   useEffect(() => {
-    const onTool = (event: Event) => setActiveTool((event as CustomEvent<DrawTool>).detail ?? null);
+    const onTool = (event: Event) =>
+      setActiveTool((event as CustomEvent<DrawTool>).detail ?? null);
     window.addEventListener("nasaq:tool", onTool);
     return () => window.removeEventListener("nasaq:tool", onTool);
   }, []);
@@ -184,10 +218,12 @@ export function CanvasDock({
       parseFloat(style.getPropertyValue("--dock-size")) ||
       DOCK_METRICS_FALLBACK.cell;
     const gap = parseFloat(style.gap) || DOCK_METRICS_FALLBACK.gap;
-    const pad = parseFloat(style.paddingInlineStart) || DOCK_METRICS_FALLBACK.pad;
+    const pad =
+      parseFloat(style.paddingInlineStart) || DOCK_METRICS_FALLBACK.pad;
     const grip =
-      dock.querySelector<HTMLElement>(".editor-dock-grip")?.getBoundingClientRect()
-        .width || DOCK_METRICS_FALLBACK.grip;
+      dock
+        .querySelector<HTMLElement>(".editor-dock-grip")
+        ?.getBoundingClientRect().width || DOCK_METRICS_FALLBACK.grip;
     setMetrics({ cell, gap, pad, grip, sep: DOCK_METRICS_FALLBACK.sep });
     setLane(Math.max(0, slot.getBoundingClientRect().width - DOCK_LANE_INSET));
   }, []);
@@ -221,7 +257,8 @@ export function CanvasDock({
 
   useEffect(() => {
     if (!pos) return;
-    const onResize = () => setPos((current) => (current ? clampInto(current) : current));
+    const onResize = () =>
+      setPos((current) => (current ? clampInto(current) : current));
     window.addEventListener("resize", onResize);
     window.addEventListener("nasaq:panel-layout", onResize);
     return () => {
@@ -272,23 +309,29 @@ export function CanvasDock({
     });
   };
 
-  const arm = (tool: DrawTool) => window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: tool }));
-  const patchFor = (key: "foreground" | "background", color: string) => {
-    const isText = ["text", "box", "stat", "stamp", "table", "progress"].includes(selectedType || "");
-    return key === "foreground"
-      ? selectedType === "svg"
-        ? { svgFill: color }
-        : selectedType === "icon"
-          ? { fill: color, color }
-          : isText
-            ? { color }
-            : { fill: color }
+  const arm = (tool: DrawTool) =>
+    window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: tool }));
+  const patchFor = (
+    key: "foreground" | "background",
+    color: string,
+    gradient?: Gradient,
+  ) =>
+    key === "foreground"
+      ? foregroundKey
+        ? { [foregroundKey]: color, ...(supportsGradient ? { gradient } : {}) }
+        : {}
       : { borderColor: color, svgStroke: color };
-  };
-  const colorChange = (key: "foreground" | "background", color: string) => {
+  const colorChange = (
+    key: "foreground" | "background",
+    color: string,
+    gradient?: Gradient,
+    live = false,
+  ) => {
     setColors((current) => ({ ...current, [key]: color }));
     if (!selectedId) return;
-    useEditor.getState().updateStyle(selectedId, patchFor(key, color));
+    useEditor
+      .getState()
+      .updateStyle(selectedId, patchFor(key, color, gradient), live);
   };
   /** Both swatches in one store update, so a swap is a single undo step. */
   const applyPair = (next: { foreground: string; background: string }) => {
@@ -299,19 +342,6 @@ export function CanvasDock({
       ...patchFor("background", next.background),
     });
   };
-  const openPicker = (input: HTMLInputElement | null) => {
-    if (!input) return;
-    try {
-      if (typeof input.showPicker === "function") {
-        input.showPicker();
-        return;
-      }
-    } catch {
-      /* fall back to a click */
-    }
-    input.click();
-  };
-
   const toggleCollapsed = () => {
     setCollapsed((current) => {
       const next = !current;
@@ -422,30 +452,58 @@ export function CanvasDock({
   );
   const colorRows = (
     <>
-      <MenuRow
-        icon={
-          <span className="tool-dock-menu-chip" style={{ backgroundColor: foreground }} />
+      <fieldset
+        disabled={!!selectedId && (!foregroundKey || selected?.locked)}
+        className="editor-menu-field flex items-center justify-between gap-2"
+      >
+        <span className="text-[11px] text-muted">
+          {foregroundKey === "color" ? "لون العنصر" : "التعبئة"}
+        </span>
+        <FillField
+          key={`fill-${selectedId || "default"}`}
+          label="لون التعبئة"
+          value={foreground}
+          gradient={supportsGradient ? selected?.style.gradient : undefined}
+          allowGradient={supportsGradient}
+          className="editor-menu-swatch"
+          onChange={(color, gradient) =>
+            colorChange("foreground", color, gradient, true)
+          }
+          onCommit={(color, gradient) =>
+            colorChange("foreground", color, gradient)
+          }
+        />
+      </fieldset>
+      <fieldset
+        disabled={
+          selected?.locked ||
+          (!!selected && selected.type !== "svg" && !strokeBinding(selected))
         }
-        label="لون التعبئة"
-        onSelect={() => openPicker(foregroundInput.current)}
-      />
-      <MenuRow
-        icon={
-          <span
-            className="tool-dock-menu-chip is-stroke"
-            style={{ borderColor: background }}
-          />
-        }
-        label="لون الإطار"
-        onSelect={() => openPicker(backgroundInput.current)}
-      />
+        className="editor-menu-field flex items-center justify-between gap-2"
+      >
+        <span className="text-[11px] text-muted">لون الإطار</span>
+        <ColorField
+          key={`stroke-${selectedId || "default"}`}
+          label="لون الإطار"
+          value={background}
+          className="editor-menu-swatch"
+          onChange={(color) =>
+            colorChange("background", color, undefined, true)
+          }
+          onCommit={(color) => colorChange("background", color)}
+        />
+      </fieldset>
       <MenuRow
         label="تبديل التعبئة والإطار"
+        disabled={!!selectedId && (!foregroundKey || selected?.locked)}
         separatorBefore
-        onSelect={() => applyPair({ foreground: background, background: foreground })}
+        onSelect={() =>
+          applyPair({ foreground: background, background: foreground })
+        }
       />
       <MenuRow
         label="الألوان الافتراضية"
+        disabled={!!selectedId && (!foregroundKey || selected?.locked)}
         onSelect={() => applyPair({ ...DEFAULT_COLORS })}
       />
     </>
@@ -455,11 +513,16 @@ export function CanvasDock({
     <div className="studio-tool-dock-slot">
       <aside
         ref={dockRef}
-        className={cn("studio-tool-dock", "editor-dock", collapsed && "is-collapsed")}
+        className={cn(
+          "studio-tool-dock",
+          "editor-dock",
+          collapsed && "is-collapsed",
+        )}
         data-editor-obstacle="tool-dock"
         data-tour="canvas-dock"
         data-density={layout.drawer.length ? "folded" : "full"}
         aria-label="أدوات مساحة العمل"
+        inert={cropActive}
         style={
           pos
             ? {
@@ -669,17 +732,28 @@ export function CanvasDock({
                         tipSide="top"
                         className="editor-dock-color-btn"
                         icon={
-                          <span className="editor-dock-color-chips" aria-hidden="true">
+                          <span
+                            className="editor-dock-color-chips"
+                            aria-hidden="true"
+                          >
                             <span
                               className="is-fill"
                               style={{
-                                backgroundColor: HEX.test(foreground) ? foreground : DEFAULT_COLORS.foreground,
+                                background: paintCss(
+                                  foreground,
+                                  supportsGradient
+                                    ? selected?.style.gradient
+                                    : undefined,
+                                  DEFAULT_COLORS.foreground,
+                                ),
                               }}
                             />
                             <span
                               className="is-stroke"
                               style={{
-                                borderColor: HEX.test(background) ? background : DEFAULT_COLORS.background,
+                                borderColor: HEX.test(background)
+                                  ? background
+                                  : DEFAULT_COLORS.background,
                               }}
                             />
                           </span>
@@ -726,26 +800,6 @@ export function CanvasDock({
           }
         />
       </aside>
-
-      {/* Native colour inputs: the same picker the panels use, on tap. */}
-      <input
-        ref={backgroundInput}
-        type="color"
-        aria-label="اختيار لون الإطار"
-        className="sr-only"
-        tabIndex={-1}
-        value={HEX.test(background) ? background : DEFAULT_COLORS.background}
-        onChange={(event) => colorChange("background", event.target.value)}
-      />
-      <input
-        ref={foregroundInput}
-        type="color"
-        aria-label="اختيار لون التعبئة"
-        className="sr-only"
-        tabIndex={-1}
-        value={HEX.test(foreground) ? foreground : DEFAULT_COLORS.foreground}
-        onChange={(event) => colorChange("foreground", event.target.value)}
-      />
     </div>
   );
 }

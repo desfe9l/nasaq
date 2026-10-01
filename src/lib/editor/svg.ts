@@ -1,3 +1,8 @@
+import {
+  gradientSvgDefinition,
+  normalizeGradient,
+  type Gradient,
+} from "./gradient";
 /**
  * SVG element support — sanitising author-pasted markup and rasterising it
  * for the Office exporters.
@@ -198,11 +203,21 @@ export function safeSvgSrc(src: unknown): string {
  */
 export function applySvgColors(
   svgMarkup: string,
-  overrides: { fill?: string; stroke?: string; strokeWidth?: number },
+  overrides: {
+    fill?: string;
+    stroke?: string;
+    strokeWidth?: number;
+    gradient?: Gradient;
+    gradientId?: string;
+    box?: { w: number; h: number };
+  },
 ): string {
   if (!svgMarkup) return "";
-  const { fill, stroke, strokeWidth } = overrides;
-  if (fill == null && stroke == null && strokeWidth == null) return svgMarkup;
+  let { fill } = overrides;
+  const { stroke, strokeWidth } = overrides;
+  const gradient = normalizeGradient(overrides.gradient);
+  if (fill == null && stroke == null && strokeWidth == null && !gradient)
+    return svgMarkup;
   try {
     const doc = new DOMParser().parseFromString(svgMarkup, "image/svg+xml");
     if (
@@ -210,6 +225,34 @@ export function applySvgColors(
       doc.documentElement?.nodeName.toLowerCase() !== "svg"
     )
       return svgMarkup;
+    if (gradient) {
+      const id = (overrides.gradientId || "nasaq-fill").replace(
+        /[^a-zA-Z0-9_-]/g,
+        "",
+      );
+      const values = (
+        doc.documentElement.getAttribute("viewBox") || "0 0 100 100"
+      )
+        .trim()
+        .split(/[\s,]+/)
+        .map(Number);
+      const coordinates =
+        values.length === 4 &&
+        values.every(Number.isFinite) &&
+        values[2] > 0 &&
+        values[3] > 0
+          ? { x: values[0], y: values[1], w: values[2], h: values[3] }
+          : { w: 100, h: 100 };
+      const markup = `<svg xmlns="http://www.w3.org/2000/svg"><defs>${gradientSvgDefinition(gradient, id, overrides.box || coordinates, coordinates)}</defs></svg>`;
+      const defs = new DOMParser().parseFromString(markup, "image/svg+xml")
+        .documentElement.firstElementChild;
+      if (defs)
+        doc.documentElement.insertBefore(
+          doc.importNode(defs, true),
+          doc.documentElement.firstChild,
+        );
+      fill = `url(#${id})`;
+    }
     // Paint-order trick: rewrite each drawable's presentation attrs in place.
     // Defaults matter — a rect with no fill attr paints black, so "no fill"
     // must become explicit `fill="none"` before an override can be applied.
@@ -238,7 +281,8 @@ export function applySvgColors(
         el.setAttribute("fill", fill);
       // An explicit stroke override may also add an outline to filled artwork.
       if (stroke != null) el.setAttribute("stroke", stroke);
-      if (strokeWidth != null) el.setAttribute("stroke-width", String(strokeWidth));
+      if (strokeWidth != null)
+        el.setAttribute("stroke-width", String(strokeWidth));
     }
     return new XMLSerializer().serializeToString(doc);
   } catch {

@@ -176,17 +176,38 @@ export function placeFloatingToolbar(
   // Four anchor positions are insufficient when a detached panel crosses them.
   // Also consider the free bands around measured obstacles; choose the closest
   // viable band, not a permanent bottom-of-screen parking spot.
-  const xs = new Set([clampLeft(centeredLeft), margin, clampLeft(viewport.width - size.width - margin)]);
-  const ys = new Set([clampTop(anchor.top - gap - size.height), clampTop(anchor.bottom + gap), margin, clampTop(viewport.height - size.height - margin)]);
+  const xs = new Set([
+    clampLeft(centeredLeft),
+    margin,
+    clampLeft(viewport.width - size.width - margin),
+  ]);
+  const ys = new Set([
+    clampTop(anchor.top - gap - size.height),
+    clampTop(anchor.bottom + gap),
+    margin,
+    clampTop(viewport.height - size.height - margin),
+  ]);
   for (const obstacle of avoid) {
     xs.add(clampLeft(obstacle.left - margin - size.width));
     xs.add(clampLeft(obstacle.right + margin));
     ys.add(clampTop(obstacle.top - margin - size.height));
     ys.add(clampTop(obstacle.bottom + margin));
   }
-  const alternatives = [...xs].flatMap(left => [...ys].map(top => ({
-    left, top, placement: (top + size.height <= anchor.top ? "above" : "below") as ToolbarPlacement["placement"],
-  }))).sort((a, b) => Math.hypot(a.left - centeredLeft, a.top - centeredTop) - Math.hypot(b.left - centeredLeft, b.top - centeredTop));
+  const alternatives = [...xs]
+    .flatMap((left) =>
+      [...ys].map((top) => ({
+        left,
+        top,
+        placement: (top + size.height <= anchor.top
+          ? "above"
+          : "below") as ToolbarPlacement["placement"],
+      })),
+    )
+    .sort(
+      (a, b) =>
+        Math.hypot(a.left - centeredLeft, a.top - centeredTop) -
+        Math.hypot(b.left - centeredLeft, b.top - centeredTop),
+    );
   candidates.push(...alternatives);
 
   let best = candidates[0];
@@ -339,7 +360,10 @@ export function panelSpawnRect(
   inset = 12,
 ): { left: number; top: number; width: number; height: number } {
   const width = Math.min(size.width, Math.max(200, viewport.width - inset * 2));
-  const height = Math.min(size.height, Math.max(160, viewport.height - inset * 2));
+  const height = Math.min(
+    size.height,
+    Math.max(160, viewport.height - inset * 2),
+  );
   return {
     width,
     height,
@@ -396,7 +420,7 @@ export const BUBBLE_FIELD_STROKE = 76;
 export const BUBBLE_SAFETY = 12;
 
 /** Which kind of element is selected — it decides the bubble's parts. */
-export type BubbleKind = "text" | "object";
+export type BubbleKind = "text" | "object" | "image";
 
 /**
  * The pieces of the selection bubble, in render order. `grip`, `more` and
@@ -411,6 +435,8 @@ export type BubblePart =
   | "format"
   /** Fill + border swatches (object only). */
   | "ink"
+  /** Image crop plus Fit/Fill — never a generic fill palette. */
+  | "image"
   /** Border/stroke width. */
   | "stroke"
   /** Duplicate + delete. */
@@ -424,6 +450,7 @@ export type BubblePart =
 export const BUBBLE_PARTS: Record<BubbleKind, readonly BubblePart[]> = {
   text: ["grip", "typography", "format", "stroke", "element", "more", "close"],
   object: ["grip", "ink", "stroke", "element", "more", "close"],
+  image: ["grip", "image", "stroke", "element", "more", "close"],
 };
 
 /** Parts that leave the bar for the group drawer (rather than for «المزيد»). */
@@ -450,6 +477,7 @@ export const BUBBLE_FOLDS: Record<
     ["element", "typography", "format"],
   ],
   object: [[], ["element"], ["element", "ink"], ["element", "ink", "stroke"]],
+  image: [[], ["element"], ["element", "stroke"]],
 };
 
 /** Rendered width of one bubble part, excluding the gutters around it. */
@@ -470,6 +498,7 @@ export function bubblePartWidth(part: BubblePart): number {
     // Fill + border. Two cells, so one selection kind never makes the bar
     // wider than the other.
     case "ink":
+    case "image":
     case "element":
       return cells(2);
     case "stroke":
@@ -526,10 +555,11 @@ export interface BubbleLayout {
 export function bubbleLayout(
   kind: BubbleKind,
   lane: number,
-  options: { stroke?: boolean } = {},
+  options: { stroke?: boolean; fill?: boolean } = {},
 ): BubbleLayout {
-  const { stroke = true } = options;
-  const supported = (part: BubblePart) => stroke || part !== "stroke";
+  const { stroke = true, fill = true } = options;
+  const supported = (part: BubblePart) =>
+    (stroke || part !== "stroke") && (fill || part !== "ink");
   const parts = BUBBLE_PARTS[kind].filter(supported);
   const available = Number.isFinite(lane) ? lane : Number.POSITIVE_INFINITY;
   const layoutFor = (folded: readonly BubblePart[]): BubbleLayout => {
@@ -542,7 +572,9 @@ export function bubbleLayout(
     return {
       bar,
       drawer: inDrawer,
-      more: folded.filter((part) => supported(part) && !inDrawer.includes(part)),
+      more: folded.filter(
+        (part) => supported(part) && !inDrawer.includes(part),
+      ),
     };
   };
   for (const folded of BUBBLE_FOLDS[kind]) {
@@ -648,7 +680,11 @@ export function dockBarWidth(
     metrics?: DockMetrics;
   } = {},
 ): number {
-  const { grip = true, divider = false, metrics = DOCK_METRICS_FALLBACK } = options;
+  const {
+    grip = true,
+    divider = false,
+    metrics = DOCK_METRICS_FALLBACK,
+  } = options;
   const children = cells + (grip ? 1 : 0) + (divider ? 1 : 0);
   return (
     metrics.pad * 2 +
@@ -808,10 +844,11 @@ export function measuredSelectionBox(args: {
   const height = node.bottom - node.top;
   /** Millimetres per screen pixel (the page's zoom is baked into this). */
   const scale = page.width > 0 ? pageWidthMm / page.width : 0;
-  if (!(width > 0) || !(height > 0) || !(scale > 0) || !(model.w > 0)) return null;
+  if (!(width > 0) || !(height > 0) || !(scale > 0) || !(model.w > 0))
+    return null;
   // A slanted, irregular glyph's axis-aligned rect is no longer a good proxy
   // for its own box, so the model geometry is trusted instead.
-  if (Math.abs(Math.sin(rotation * Math.PI / 90)) > 1e-8) return null;
+  if (Math.abs(Math.sin((rotation * Math.PI) / 90)) > 1e-8) return null;
 
   const rad = (rotation * Math.PI) / 180;
   const cos = Math.cos(rad);
