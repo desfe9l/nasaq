@@ -81,6 +81,53 @@ async function sql() {
   return getSql();
 }
 
+const PRODUCT_TEMPLATE_SEED_KEY = "product-template-seeds.v1";
+
+/** Insert bundled native masters once; subsequent owner edits and deletes persist. */
+async function ensureProductTemplates(db: Awaited<ReturnType<typeof sql>>) {
+  const seeded = await db.query(
+    `SELECT key FROM site_settings WHERE key = $1 LIMIT 1`,
+    [PRODUCT_TEMPLATE_SEED_KEY],
+  );
+  if (seeded.length) return;
+
+  const { buildProductTemplateSeeds } = await import("@/lib/editor/product-templates");
+  const templates = buildProductTemplateSeeds();
+  const values: unknown[] = [];
+  const rows = templates.map((template) => {
+    const fields = [
+      template.id,
+      template.slug,
+      template.title,
+      template.description,
+      template.category,
+      template.tier,
+      template.status,
+      template.kind,
+      template.content,
+      template.thumbnail,
+      template.sortOrder,
+    ];
+    const placeholders = fields.map((_, index) => `$${values.length + index + 1}`);
+    values.push(...fields);
+    return `(${placeholders.join(", ")})`;
+  });
+
+  await db.query(
+    `INSERT INTO admin_templates
+       (id, slug, title, description, category, tier, status, kind, content, thumbnail, sort_order)
+     VALUES ${rows.join(", ")}
+     ON CONFLICT DO NOTHING`,
+    values,
+  );
+  await db.query(
+    `INSERT INTO site_settings (key, value, updated_at)
+     VALUES ($1, $2::jsonb, now())
+     ON CONFLICT (key) DO NOTHING`,
+    [PRODUCT_TEMPLATE_SEED_KEY, JSON.stringify({ version: 1 })],
+  );
+}
+
 function parseJson(value: unknown): unknown {
   if (typeof value === "string") {
     try {
@@ -293,6 +340,7 @@ export const adminSaveSettingsFn = createServerFn({ method: "POST" })
 export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handler(async (): Promise<AdminTemplateSummary[]> => {
   try {
     const db = await sql();
+    await ensureProductTemplates(db);
     const rows = await db.query(
       `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
        FROM admin_templates WHERE status = 'published' ORDER BY sort_order ASC, updated_at DESC LIMIT 200`,
@@ -309,6 +357,7 @@ export const getPublishedTemplateMetaFn = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<{ ok: boolean; template?: AdminTemplateSummary; error?: string }> => {
     try {
       const db = await sql();
+      await ensureProductTemplates(db);
       const key = String(data.idOrSlug || "").trim().slice(0, 200);
       if (!key) return { ok: false, error: "معرّف غير صالح" };
       const rows = await db.query(
@@ -333,6 +382,7 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
   .validator((data: { id: string }) => data)
   .handler(async ({ data, context }) => {
     const db = await sql();
+    await ensureProductTemplates(db);
     const key = String(data.id || "").trim().slice(0, 200);
     if (!key) return { ok: false as const, error: "معرّف غير صالح" };
     const rows = await db.query(`SELECT * FROM admin_templates WHERE (slug = $1 OR id = $1) AND status = 'published' LIMIT 1`, [key]);
@@ -360,6 +410,7 @@ export const adminListTemplatesFn = createServerFn({ method: "POST" })
     const gate = await verifyTemplateManagerContext(context);
     if (!gate.ok) return { ok: false as const, error: gate.error, templates: [] };
     const db = await sql();
+    await ensureProductTemplates(db);
     const rows = await db.query(
       `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
        FROM admin_templates ORDER BY sort_order ASC, updated_at DESC LIMIT 500`,

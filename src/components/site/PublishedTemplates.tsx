@@ -40,7 +40,10 @@ export function PublishedTemplates() {
                     </span>
                   )}
                 </span>
-                <strong className="mt-2 block truncate text-[13px]">{t.title}</strong>
+                <span className="mt-2 w-fit rounded-md bg-surface-2 px-2 py-1 text-[10px] font-bold text-muted">
+                  {t.category}
+                </span>
+                <strong className="mt-1 block truncate text-[13px]">{t.title}</strong>
                 {t.description && <span className="line-clamp-2 text-[11px] text-muted">{t.description}</span>}
               </a>
               <button type="button" onClick={() => void share(t)} className="mt-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-line text-xs font-bold " aria-label={`نسخ رابط ${t.title}`}>

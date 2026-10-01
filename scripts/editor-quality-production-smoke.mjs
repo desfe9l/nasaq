@@ -21,28 +21,20 @@ try {
       viewport: { width, height },
       hasTouch: width < 1100,
     });
-    await context.addInitScript(() =>
-      localStorage.setItem("nasaq.onboarding.v1", "done"),
-    );
+    await context.addInitScript(() => {
+      try {
+        localStorage.setItem("nasaq.onboarding.v1", "done");
+      } catch {
+        // The script also runs in the initial opaque about:blank document.
+      }
+    });
     const page = await context.newPage();
-    page.on("pageerror", (error) => errors.push(error.message));
+    page.on("pageerror", (error) => errors.push(error.stack || error.message));
     await page.goto(`${base}/editor`, { waitUntil: "networkidle" });
     await page.locator(".editor-canvas-stage").waitFor();
-    const library = page.getByRole("region", {
-      name: "لوحة العناصر",
-      exact: true,
-    });
-    if (!(await library.isVisible()))
-      await page
-        .getByRole("button", { name: "فتح المكتبة", exact: true })
-        .click();
-    await library.getByRole("tab", { name: "أشكال", exact: true }).click();
-    await library.locator('button[draggable="true"]').first().click();
-    await library
-      .getByRole("button", { name: "إغلاق لوحة العناصر", exact: true })
-      .click();
+    await page.locator(".editor-canvas-stage [data-el-id]").first().click();
     const toolbar = page.locator(".floating-toolbar");
-    await toolbar.waitFor();
+    await toolbar.waitFor({ state: "visible" });
     const stroke = toolbar.getByRole("textbox", {
       name: "سماكة الحد بالبكسل",
       exact: true,
