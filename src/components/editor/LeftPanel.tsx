@@ -44,13 +44,21 @@ import { cn } from "@/lib/utils";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, useAccordionState } from "./ui/Accordion";
 import { ScrubField } from "./ui/ScrubInput";
-import { AssetLibrary } from "./AssetLibrary";
 import { SmartLibraryPanel, TemplatePreview } from "./SmartLibrary";
 import { promptForQr } from "@/lib/editor/qr";
 import { TablePickerOverlay } from "./TablePicker";
 import { writeLibraryDrag, type LibraryDropPayload } from "@/lib/editor/library-dnd";
 import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
 import { LEFT_PANEL_TABS } from "./panel-tabs";
+
+/**
+ * The elements window hosts every left tab EXCEPT «library» and «tools»:
+ * those became their own independent floating windows (task of the split), so
+ * keeping them here would render the same content in two places.
+ */
+const ELEMENTS_WINDOW_TABS = LEFT_PANEL_TABS.filter(
+  (t) => t.id !== "library" && t.id !== "tools",
+);
 
 const TOOL_GROUPS: {
   title: string;
@@ -91,20 +99,27 @@ const TOOL_GROUPS: {
   },
 ];
 
+/**
+ * لوحة العناصر — the elements window content.
+ *
+ * «library» and «tools» are no longer tabs here: they are their own floating
+ * windows (AssetLibrary / ElementToolsWindow, rendered by the shell), so this
+ * panel hosts the remaining tabs only.
+ */
 export function LeftPanel({
   onUpload,
   onUploadSvg,
-  onAddCustomAsset,
-  createLibraryFolderRequest = 0,
 }: {
   onUpload: (kind: "image" | "logo" | "font" | "library") => void;
   onUploadSvg: () => void;
-  /** «+ إضافة» in the smart library: import an SVG as a reusable icon/divider. */
-  onAddCustomAsset: (kind: "icon" | "divider") => void;
-  /** Monotonic request from the compact Add menu; may arrive before Library mounts. */
-  createLibraryFolderRequest?: number;
 }) {
-  const tab = useEditor((s) => s.leftTab);
+  const rawTab = useEditor((s) => s.leftTab);
+  /*
+   * «library» and «tools» are their own windows since the split. When the
+   * shared tab value points at them (it is set when those windows open), this
+   * window falls back to its first tab instead of rendering blank.
+   */
+  const tab = rawTab === "library" || rawTab === "tools" ? "elements" : rawTab;
   const setLeftTab = useEditor((s) => s.setLeftTab);
   const addElement = useEditor((s) => s.addElement);
   const addTemplatePage = useEditor((s) => s.addTemplatePage);
@@ -165,7 +180,7 @@ export function LeftPanel({
   const pickerOpen = useEditor((s) => s.tablePickerOpen);
   const setPickerOpen = (open: boolean) =>
     open
-      ? useEditor.getState().openTablePicker()
+      ? useEditor.getState().openTablePicker("elements")
       : useEditor.getState().closeTablePicker();
   const [previewTemplate, setPreviewTemplate] = useState<
     (typeof PAGE_TEMPLATES)[number] | null
@@ -265,7 +280,7 @@ export function LeftPanel({
        */}
       <div className="editor-panel-header flex shrink-0 items-center gap-1 border-b border-line p-1.5 ">
         <div className="editor-panel-tabs @container flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" role="tablist" aria-label="أقسام لوحة العناصر">
-        {LEFT_PANEL_TABS.map((t) => {
+        {ELEMENTS_WINDOW_TABS.map((t) => {
           const Icon = t.icon;
           return (
             <button
@@ -298,7 +313,7 @@ export function LeftPanel({
 
       </div>
 
-      <div className={cn("editor-pane-scroll editor-panel-body p-3", tab === "library" && "is-library")}>
+      <div className="editor-pane-scroll editor-panel-body p-3">
         {tab === "elements" && (
           <div className="grid gap-3">
             {pickerOpen && (
@@ -459,28 +474,6 @@ export function LeftPanel({
                 ))}
               </div>
             </section>
-          </div>
-        )}
-
-        {tab === "library" && (
-          <AssetLibrary createFolderRequest={createLibraryFolderRequest} />
-        )}
-
-        {tab === "tools" && (
-          <div className="element-tools-panel">
-            <header className="mb-3">
-              <h2 className="text-[13px] font-extrabold">أدوات العناصر</h2>
-              <p className="mt-1 text-[11px] leading-5 text-muted">
-                افتح القسم لإضافة عناصره، واسحب مقبضه لترتيبه كما يناسبك.
-              </p>
-            </header>
-            <SmartLibraryPanel
-              theme={theme}
-              onAddCustomAsset={onAddCustomAsset}
-              onOpenShapes={() => setLeftTab("shapes")}
-              onOpenTemplates={() => setLeftTab("templates")}
-              onPreviewTemplate={setPreviewTemplate}
-            />
           </div>
         )}
 
@@ -817,60 +810,130 @@ export function LeftPanel({
           </div>
         )}
       </div>
-      {/*
-       * Template preview dialog — global to the panel: the «نماذج جاهزة»
-       * cards in أدوات العناصر preview through the same dialog as the
-       * القوالب tab, so it must render outside any single tab's markup.
-       */}
-      {previewTemplate && (
-        <div
-          className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-black/45 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`معاينة ${previewTemplate.title}`}
-          onClick={() => setPreviewTemplate(null)}
-        >
-          <div
-            className="w-full max-w-sm rounded-[10px] border border-line bg-surface p-3 shadow-2xl "
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="mb-3 flex items-start justify-between gap-2">
-              <div>
-                <h3 className="text-[14px] font-extrabold">
-                  {previewTemplate.title}
-                </h3>
-                <p className="mt-0.5 text-[10px] uppercase tracking-wide text-ink">
-                  {previewTemplate.concept || "Template"}
-                </p>
-                <p className="mt-1 text-[11px] leading-5 text-muted">
-                  {previewTemplate.desc}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewTemplate(null)}
-                className="grid size-7 place-items-center rounded-[6px] border border-line "
-                title="إغلاق المعاينة"
-                aria-label="إغلاق المعاينة"
-              >
-                <X className="size-3.5" />
-              </button>
-            </div>
-            <TemplatePreview variant={previewTemplate.preview} large />
-            <button
-              type="button"
-              onClick={() => {
-                addTemplatePage(previewTemplate.id);
-                setPreviewTemplate(null);
-              }}
-              className="mt-3 h-9 w-full rounded-[7px] bg-navy text-[11px] font-extrabold text-white"
-            >
-              إضافة القالب كصفحة قابلة للتحرير
-            </button>
-          </div>
-        </div>
-      )}
+      <TemplatePreviewDialog
+        template={previewTemplate}
+        onClose={() => setPreviewTemplate(null)}
+        onAdd={(id) => {
+          addTemplatePage(id);
+          setPreviewTemplate(null);
+        }}
+      />
     </aside>
+  );
+}
+
+/**
+ * Shared template-preview dialog: the «نماذج جاهزة» cards in the elements
+ * tools window and the القوالب tab both preview through it, so the dialog is
+ * one component rendered by whichever window raised the request.
+ */
+function TemplatePreviewDialog({
+  template,
+  onClose,
+  onAdd,
+}: {
+  template: (typeof PAGE_TEMPLATES)[number] | null;
+  onClose: () => void;
+  onAdd: (id: string) => void;
+}) {
+  if (!template) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-black/45 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`معاينة ${template.title}`}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-[10px] border border-line bg-surface p-3 shadow-2xl "
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div>
+            <h3 className="text-[14px] font-extrabold">
+              {template.title}
+            </h3>
+            <p className="mt-0.5 text-[10px] uppercase tracking-wide text-ink">
+              {template.concept || "Template"}
+            </p>
+            <p className="mt-1 text-[11px] leading-5 text-muted">
+              {template.desc}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid size-7 place-items-center rounded-[6px] border border-line "
+            title="إغلاق المعاينة"
+            aria-label="إغلاق المعاينة"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+        <TemplatePreview variant={template.preview} large />
+        <button
+          type="button"
+          onClick={() => onAdd(template.id)}
+          className="mt-3 h-9 w-full rounded-[7px] bg-navy text-[11px] font-extrabold text-white"
+        >
+          إضافة القالب كصفحة قابلة للتحرير
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * أدوات العناصر — the smart library as a STANDALONE window.
+ *
+ * Split out of the old left-panel tab: the window carries its own template
+ * preview dialog, so «نماذج جاهزة» works the same from here as from the
+ * القوالب tab. The shell gives it a wider default so its 4-column card grids
+ * are never clipped.
+ */
+export function ElementToolsWindow({
+  onAddCustomAsset,
+  onOpenShapes,
+  onOpenTemplates,
+}: {
+  onAddCustomAsset: (kind: "icon" | "divider") => void;
+  onOpenShapes: () => void;
+  onOpenTemplates: () => void;
+}) {
+  const theme = useEditor((s) => s.theme);
+  const addTemplatePage = useEditor((s) => s.addTemplatePage);
+  const [previewTemplate, setPreviewTemplate] = useState<
+    (typeof PAGE_TEMPLATES)[number] | null
+  >(null);
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="editor-pane-scroll editor-panel-body no-bottom-pad p-3">
+        <div className="element-tools-panel">
+          <header className="mb-3">
+            <h2 className="text-[13px] font-extrabold">أدوات العناصر</h2>
+            <p className="mt-1 text-[11px] leading-5 text-muted">
+              افتح القسم لإضافة عناصره، واسحب مقبضه لترتيبه كما يناسبك.
+            </p>
+          </header>
+          <SmartLibraryPanel
+            theme={theme}
+            onAddCustomAsset={onAddCustomAsset}
+            onOpenShapes={onOpenShapes}
+            onOpenTemplates={onOpenTemplates}
+            onPreviewTemplate={setPreviewTemplate}
+          />
+        </div>
+      </div>
+      <TemplatePreviewDialog
+        template={previewTemplate}
+        onClose={() => setPreviewTemplate(null)}
+        onAdd={(id) => {
+          addTemplatePage(id);
+          setPreviewTemplate(null);
+        }}
+      />
+    </div>
   );
 }
 

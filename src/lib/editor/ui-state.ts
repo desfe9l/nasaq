@@ -33,8 +33,44 @@ export function isOverlayViewport(): boolean {
  * left — hence a viewport-derived ceiling rather than a fixed pixel value that
  * would be meaningless on a short laptop screen.
  */
-export const PAGES_PANEL_DEFAULT = 112;
-export const PAGES_PANEL_MIN = 96;
+/**
+ * Compact default: the rail is a thumbnail tray the author scrolls, not a
+ * second artboard. 96px keeps a full thumbnail row plus its caption while
+ * giving the canvas back the height the old 112px default spent.
+ */
+export const PAGES_PANEL_DEFAULT = 96;
+export const PAGES_PANEL_MIN = 84;
+/** The one-line strip the rail collapses to (page numbers only). */
+export const PAGES_RAIL_COLLAPSED = 36;
+/** A docked panel's strip may take at most this share of its screen axis. */
+export const DOCK_MAX_SHARE = 0.4;
+
+/** A physical screen edge a floating panel can dock to. */
+export type DockSide = "left" | "right" | "top" | "bottom";
+export const DOCK_SIDES: readonly DockSide[] = [
+  "top",
+  "bottom",
+  "left",
+  "right",
+];
+
+/**
+ * Clamp the size a docked panel may claim on its screen axis.
+ *
+ * The number comes from the panel's last floating rectangle (what the author
+ * was using), then bounded so docking can never leave the canvas a sliver:
+ * at least `min`, at most `share` of the viewport axis.
+ */
+export function clampDockSize(
+  requested: number,
+  axisLength: number,
+  min: number,
+  share = DOCK_MAX_SHARE,
+): number {
+  const max = Math.max(min, Math.round(axisLength * share));
+  const value = Number.isFinite(requested) ? requested : min;
+  return Math.min(max, Math.max(min, Math.round(value)));
+}
 
 /** Headroom kept for the canvas + status bar above the pages panel. */
 const PAGES_PANEL_RESERVED = 220;

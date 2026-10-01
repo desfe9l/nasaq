@@ -35,8 +35,14 @@ export function ViewMenu({
   const focusMode = useEditor((s) => s.focusMode);
   const leftOpen = useEditor((s) => s.leftOpen);
   const rightOpen = useEditor((s) => s.rightOpen);
+  const layersOpen = useEditor((s) => s.layersOpen);
+  const reportToolsOpen = useEditor((s) => s.reportToolsOpen);
+  const libraryOpen = useEditor((s) => s.libraryOpen);
+  const toolsOpen = useEditor((s) => s.toolsOpen);
   const pagesRailCollapsed = useEditor((s) => s.pagesRailCollapsed);
+  const pagesRailHidden = useEditor((s) => s.pagesRailHidden);
   const togglePagesRail = useEditor((s) => s.togglePagesRail);
+  const togglePagesRailHidden = useEditor((s) => s.togglePagesRailHidden);
   const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
   const artboardGridCols = useEditor((s) => s.artboardGridCols);
   const setArtboardGridCols = useEditor((s) => s.setArtboardGridCols);
@@ -167,20 +173,47 @@ export function ViewMenu({
           onSelect={() => setAppearance(mode.id)}
         />
       ))}
+      {/* The six independent windows — each can be on at the same time. */}
       <MenuRow
-        label="لوحة العناصر والمكتبة"
+        label="المكتبة"
+        checked={libraryOpen}
+        onSelect={() => toggle("libraryOpen")}
+      />
+      <MenuRow
+        label="أدوات العناصر"
+        checked={toolsOpen}
+        onSelect={() => toggle("toolsOpen")}
+      />
+      <MenuRow
+        label="لوحة العناصر"
         checked={leftOpen}
         onSelect={() => toggle("leftOpen")}
       />
       <MenuRow
-        label="الخصائص والطبقات"
+        label="الخصائص"
         checked={rightOpen}
         onSelect={() => toggle("rightOpen")}
       />
       <MenuRow
-        label="شريط الصفحات المصغرة"
-        checked={!pagesRailCollapsed}
+        label="الطبقات"
+        checked={layersOpen}
+        onSelect={() => toggle("layersOpen")}
+      />
+      <MenuRow
+        label="أدوات التقرير"
+        checked={reportToolsOpen}
+        onSelect={() => toggle("reportToolsOpen")}
+      />
+      <MenuRow
+        label="شريط الصفحات المصغّر"
+        checked={!pagesRailCollapsed && !pagesRailHidden}
         onSelect={() => togglePagesRail()}
+      />
+      <MenuRow
+        label="إخفاء شريط الصفحات"
+        checked={pagesRailHidden}
+        hint="يزيد مساحة العمل — أعيده من هنا أو من شريط الحالة"
+        onSelect={() => togglePagesRailHidden()}
       />
       <MenuRow
         label="الشريط العائم للعنصر المحدد"
