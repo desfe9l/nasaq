@@ -260,17 +260,26 @@ export function CropOverlay({ session }: { session: CropSession }) {
           ))}
         </div>
       </div>
-      <CropActions elementId={el.id} />
+      <CropActions pageId={session.pageId} elementId={el.id} />
     </>
   );
 }
-function CropActions({ elementId }: { elementId: string }) {
+function CropActions({
+  pageId,
+  elementId,
+}: {
+  pageId: string;
+  elementId: string;
+}) {
   const zoom = useEditor((s) => s.zoom);
   const [pos, setPos] = useState({ left: -9999, top: -9999 });
   useLayoutEffect(() => {
     const place = () => {
       const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
-      const element = stage?.querySelector<HTMLElement>(
+      const page = stage?.querySelector<HTMLElement>(
+        `[data-page-id="${CSS.escape(pageId)}"]`,
+      );
+      const element = page?.querySelector<HTMLElement>(
         `.canvas-el[data-el-id="${CSS.escape(elementId)}"]`,
       );
       if (!stage || !element) return;
@@ -294,7 +303,7 @@ function CropActions({ elementId }: { elementId: string }) {
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
-  }, [elementId, zoom]);
+  }, [pageId, elementId, zoom]);
   return createPortal(
     <div
       className="floating-toolbar crop-actions"

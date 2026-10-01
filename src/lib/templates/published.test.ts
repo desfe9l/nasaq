@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { publishedTemplatePath, publishedTemplateSeed, slugifyTitle, templateDisplaySlug, publishedTemplateAbsoluteUrl } from "./published.ts";
+import {
+  mergePublishedTemplateContext,
+  publishedTemplatePath,
+  publishedTemplateSeed,
+  slugifyTitle,
+  templateDisplaySlug,
+  publishedTemplateAbsoluteUrl,
+} from "./published.ts";
 import type { AdminTemplate } from "@/lib/admin/types";
 
 const base = { id: "tpl_1", slug: "nasaq-model", title: "نموذج", description: "", category: "general", tier: "free", status: "published", kind: "json", thumbnail: null, sortOrder: 0, createdAt: "", updatedAt: "" } as AdminTemplate;
@@ -16,12 +23,59 @@ test("published links identify a template without leaking content", () => {
 });
 
 test("published JSON opens as an independent copy, without original project identity", () => {
-  const original = { id: "private-project", name: "private", pages: [{ id: "old-page", name: "صفحة", w: 210, h: 297, elements: [{ id: "old-el", type: "text", content: "hello", children: [{ id: "child", type: "text" }] }] }] };
+  const original = {
+    id: "private-project",
+    name: "private",
+    pack: "official",
+    pages: [
+      {
+        id: "old-page",
+        name: "صفحة",
+        w: 210,
+        h: 297,
+        elements: [
+          {
+            id: "old-el",
+            type: "text",
+            content: "hello",
+            children: [{ id: "child", type: "text" }],
+          },
+        ],
+      },
+    ],
+  };
   const template = { ...base, content: JSON.stringify(original) };
   const first = publishedTemplateSeed(template);
   const second = publishedTemplateSeed(template);
-  assert.deepEqual(Object.keys(first).sort(), ["name", "pages"]);
+  assert.deepEqual(Object.keys(first).sort(), [
+    "defaultSize",
+    "name",
+    "orgName",
+    "pack",
+    "pages",
+    "theme",
+  ]);
+  assert.equal(first.pack, "official");
+  assert.equal(first.defaultSize, "a4-portrait");
+  const licensed = publishedTemplateSeed({
+    ...template,
+    tier: "licensed",
+  });
+  assert.equal(licensed.licensedTemplateId, template.id);
   assert.equal(first.name, base.title);
+  const merged = mergePublishedTemplateContext(licensed, {
+    ...first,
+    theme: "sand",
+    orgName: "الجهة",
+    defaultSize: "a4-landscape",
+    pack: "briefing",
+    licensedTemplateId: "stale-client-tier",
+  });
+  assert.equal(merged.theme, "sand");
+  assert.equal(merged.orgName, "الجهة");
+  assert.equal(merged.defaultSize, "a4-portrait");
+  assert.equal(merged.pack, "official");
+  assert.equal(merged.licensedTemplateId, base.id);
   assert.notEqual(first.pages[0].id, original.pages[0].id);
   assert.notEqual(first.pages[0].id, second.pages[0].id);
   assert.notEqual(first.pages[0].elements[0].id, original.pages[0].elements[0].id);

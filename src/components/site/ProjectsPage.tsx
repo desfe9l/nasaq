@@ -105,8 +105,7 @@ export function ProjectsPage() {
     });
 
   const open = async (id: string) => {
-    await openProject(id);
-    window.location.assign("/editor");
+    if (await openProject(id)) window.location.assign("/editor");
   };
 
   const startNew = async () => {

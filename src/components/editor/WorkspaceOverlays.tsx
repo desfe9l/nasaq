@@ -43,10 +43,22 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import { useEditor, type ContextMenuPoint } from "@/lib/editor/store";
+import {
+  editorAccessResolved,
+  useEditor,
+  type ContextMenuPoint,
+} from "@/lib/editor/store";
+import { projectAccessBlock } from "@/lib/editor/access-limits";
 import { normalizeFade } from "@/lib/editor/fade";
-import { elementsBounds, findElement } from "@/lib/editor/model";
-import { cn } from "@/lib/utils";
+import {
+  elementsBounds,
+  findElement,
+  parseTable,
+  type CanvasEl,
+} from "@/lib/editor/model";
+import { toCsv } from "@/lib/editor/tables";
+import { cn, downloadText } from "@/lib/utils";
+import { toast } from "sonner";
 
 type MenuPoint = ContextMenuPoint;
 type ContextAction = {
@@ -63,7 +75,7 @@ const ACTIONS = [
   { id: "select-all", label: "تحديد الكل", hint: "⌘ A", icon: Focus },
   {
     id: "appearance",
-    label: "تبديل المظهر الفاتح / الداكن",
+    label: "تبديل المظهر: فاتح، خافت، داكن",
     hint: "",
     icon: Contrast,
   },
@@ -92,6 +104,39 @@ const ACTIONS = [
     icon: Square,
   },
 ];
+
+async function copyTableCsv(table: CanvasEl): Promise<void> {
+  if (!editorAccessResolved()) {
+    toast.error("انتظر اكتمال التحقق من الحساب والترخيص قبل التصدير");
+    return;
+  }
+  const state = useEditor.getState();
+  const block = projectAccessBlock(state, state.entitlements);
+  if (block) {
+    toast.error(
+      block === "premium-template"
+        ? "يتطلب تصدير هذا المستند ترخيصًا مناسبًا"
+        : "يتجاوز هذا المستند حد الصفحات في خطتك الحالية",
+    );
+    return;
+  }
+
+  const csv = toCsv(parseTable(table.content, table.style.cols, table.style.rows));
+  const baseName = (table.name || "table")
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .slice(0, 80);
+  const filename = `${baseName || "table"}.csv`;
+  try {
+    await navigator.clipboard.writeText(csv);
+    toast.success("تم نسخ الجدول بصيغة CSV");
+  } catch {
+    downloadText(csv, filename, "text/csv;charset=utf-8");
+    toast.message("تم تنزيل الجدول بصيغة CSV", {
+      description: "تعذّر الوصول إلى الحافظة.",
+    });
+  }
+}
 
 export function WorkspaceOverlays({
   menu,
@@ -126,6 +171,8 @@ export function WorkspaceOverlays({
   const setLeftTab = useEditor((s) => s.setLeftTab);
   const toggleHidden = useEditor((s) => s.toggleHidden);
   const toggle = useEditor((s) => s.toggle);
+  const appearance = useEditor((s) => s.appearance);
+  const setAppearance = useEditor((s) => s.setAppearance);
   const setZoom = (next: number) => {
     const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
     if (!stage) return;
@@ -185,7 +232,13 @@ export function WorkspaceOverlays({
         selectAll();
         break;
       case "appearance":
-        toggle("dark");
+        setAppearance(
+          appearance === "light"
+            ? "dim"
+            : appearance === "dim"
+              ? "dark"
+              : "light",
+        );
         break;
       case "undo":
         undo();
@@ -240,6 +293,10 @@ export function WorkspaceOverlays({
   const applyMask = useEditor((s) => s.applyClipMask);
   const removeMask = useEditor((s) => s.removeClipMask);
   const selectedEls = selectedElements();
+  const selectedTable =
+    selectedCount === 1 && selectedEls[0]?.type === "table"
+      ? selectedEls[0]
+      : null;
   const maskSource = selectedEls.find(
     (el) => el.type === "image" || el.type === "logo" || el.type === "qr",
   );
@@ -320,6 +377,16 @@ export function WorkspaceOverlays({
           hint: "Tap",
         },
         { label: "نسخ", icon: Copy, run: copy, hint: "⌘C" },
+        ...(selectedTable
+          ? [
+              {
+                label: "نسخ الجدول بصيغة CSV",
+                icon: Copy,
+                run: () => void copyTableCsv(selectedTable),
+                sepBefore: true,
+              } as ContextAction,
+            ]
+          : []),
         {
           label: "قص",
           icon: Scissors,

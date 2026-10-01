@@ -38,6 +38,7 @@ function sampleProject(): NsqProjectInput {
     transactionNo: "123/أ",
     defaultSize: "a4-portrait",
     pack: "official",
+    licensedTemplateId: "tpl_premium-source",
     createdAt: 1_700_000_000_000,
     pages: [
       {
@@ -274,6 +275,7 @@ describe("nsq package round trip", () => {
     assert.equal(p.orgName, "وزارة");
     assert.equal(p.transactionNo, "123/أ");
     assert.equal(p.pack, "official");
+    assert.equal(p.licensedTemplateId, "tpl_premium-source");
     assert.equal(p.pages!.length, 2);
     assert.equal(p.pages![1].w, 297);
     assert.equal(p.pages![0].bg, "#fffdf8");

@@ -392,6 +392,8 @@ export interface EntryProjectSeed {
   orgName: string;
   defaultSize: SizeId;
   pages: Page[];
+  pack?: PackId;
+  licensedTemplateId?: string;
 }
 
 /**
@@ -421,6 +423,11 @@ export function entryProjectSeed(
       orgName: org,
       defaultSize: project.defaultSize || sizeIdOf(pageSize(project.pages[0])),
       pages: project.pages,
+      pack: entry.sourceId as PackId,
+      licensedTemplateId:
+        entry.managedTemplate?.tier === "licensed"
+          ? entry.managedTemplate.id
+          : undefined,
     };
   }
 
@@ -434,6 +441,11 @@ export function entryProjectSeed(
     orgName: org,
     defaultSize: sizeIdOf(pageSize(pages[0])),
     pages,
+    pack: entry.kind === "custom" ? entry.custom?.pack : undefined,
+    licensedTemplateId:
+      entry.managedTemplate?.tier === "licensed"
+        ? entry.managedTemplate.id
+        : entry.custom?.licensedTemplateId,
   };
 }
 

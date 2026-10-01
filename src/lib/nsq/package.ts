@@ -322,6 +322,7 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
       transactionNo: project.transactionNo || "",
       defaultSize: project.defaultSize,
       pack: project.pack,
+      licensedTemplateId: project.licensedTemplateId,
       sourceProjectId: project.nativeSourceProjectId || project.id,
       createdAt: project.createdAt,
       updatedAt: project.updatedAt || now,

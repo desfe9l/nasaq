@@ -29,8 +29,11 @@ export function beginImageCrop(elementId: string) {
     toast.message("فك قفل أبعاد الصورة قبل تغيير إطار القص");
     return;
   }
-  const img = document.querySelector<HTMLImageElement>(
-    `.editor-canvas-stage .canvas-el[data-el-id="${CSS.escape(elementId)}"] img`,
+  const pageNode = document.querySelector<HTMLElement>(
+    `.editor-canvas-stage [data-page-id="${CSS.escape(page.id)}"]`,
+  );
+  const img = pageNode?.querySelector<HTMLImageElement>(
+    `.canvas-el[data-el-id="${CSS.escape(elementId)}"] img`,
   );
   const source = {
     w: el.style.crop?.sourceW || img?.naturalWidth || 0,

@@ -266,6 +266,39 @@ html.dark {
     0 10px 15px -3px rgba(0, 0, 0, 0.55), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
 }
 
+/* Dim is a separate, medium-contrast palette rather than a fourth surface. */
+html.dark.dim {
+  --color-paper: #20262e;
+  --color-page: #252c35;
+  --color-surface: #2c343e;
+  --color-surface-2: #343d48;
+  --color-ink: #f0f3f6;
+  --color-muted: #b7c0ca;
+  --color-line: #485360;
+  --color-line-2: #3a444f;
+  --color-navy: #157a49;
+  --color-navy-2: #10683e;
+  --color-navy-3: #21905b;
+  --color-green: #27684d;
+  --color-green-2: #31785a;
+  --color-brand: #e8d3a7;
+  --color-brand-hover: #f1e2c2;
+  --color-inverse: #f0f3f6;
+  --color-inverse-hover: #ffffff;
+  --color-on-inverse: #20262e;
+  --color-danger: #b74b40;
+  --color-ok: #14805e;
+  --color-error: #ffaaa0;
+  --color-success: #73ddb5;
+  --color-warning: #f0d28f;
+  --color-scrim: rgba(5, 8, 12, 0.66);
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.36), 0 8px 24px rgba(0, 0, 0, 0.34);
+  --shadow-page: 0 24px 64px rgba(0, 0, 0, 0.44);
+  --shadow-card: 0 4px 18px -2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.045);
+  --shadow-card-hover: 0 10px 26px -6px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.075);
+  --shadow-dropdown: 0 10px 15px -3px rgba(0, 0, 0, 0.46), 0 4px 6px -4px rgba(0, 0, 0, 0.34);
+}
+
 
 @layer base {
   button:not(:disabled),
@@ -426,6 +459,28 @@ html.dark {
   --editor-success: #0b7a52;
 }
 
+.editor-ui.editor-dim,
+html.dark.dim {
+  --editor-bg: #30373e;
+  --editor-panel: #394149;
+  --editor-toolbar: #353d45;
+  --editor-surface: #424b54;
+  --editor-border: #59646e;
+  --editor-text: #f0f3f5;
+  --editor-text-secondary: #c0c9d0;
+  --editor-hover: #48535d;
+  --editor-active: #53636e;
+  --editor-disabled: #343c43;
+  --editor-accent: #739bb5;
+  --editor-accent-hover: #86afc8;
+  --editor-accent-ink: #a8d6f0;
+  --editor-accent-text: #ffffff;
+  --editor-accent-soft: #3b515e;
+  --editor-danger: #f0aaa4;
+  --editor-danger-soft: #563b3b;
+  --editor-success: #82d9b1;
+}
+
 .editor-ui .editor-toolbar,
 .editor-ui .editor-sidebar,
 .editor-ui .editor-page-rail {
@@ -475,6 +530,12 @@ html.dark {
   --editor-canvas-text: var(--editor-text);
   --editor-canvas-text-secondary: var(--editor-text-secondary);
 }
+.editor-ui.editor-dim {
+  --editor-canvas: #444d55;
+  --editor-canvas-grid: rgba(255, 255, 255, 0.045);
+  --editor-canvas-text: var(--editor-text);
+  --editor-canvas-text-secondary: var(--editor-text-secondary);
+}
 
 
 .editor-ui .editor-canvas-workspace,
@@ -513,16 +574,14 @@ html.dark {
 .editor-ui .editor-sidebar input,
 .editor-ui .editor-sidebar select,
 .editor-ui .editor-sidebar textarea,
-.editor-ui .editor-page-rail button,
-.editor-ui .studio-tool-dock button {
+.editor-ui .editor-page-rail button {
   border-color: var(--editor-border);
   color: var(--editor-text);
 }
 
 .editor-ui .editor-toolbar button:hover:not(:disabled),
 .editor-ui .editor-sidebar button:hover:not(:disabled),
-.editor-ui .editor-page-rail button:hover:not(:disabled),
-.editor-ui .studio-tool-dock button:hover:not(:disabled) {
+.editor-ui .editor-page-rail button:hover:not(:disabled) {
   background-color: var(--editor-hover);
 }
 
@@ -859,6 +918,14 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   background-size: 24px 24px;
 }
 
+.editor-ui.editor-dim .studio-grid {
+  background-color: #3a424a;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
 /* Drag-and-drop affordance while an image file hovers the canvas. */
 .studio-grid.is-dropping {
   box-shadow: inset 0 0 0 2px rgba(198, 160, 90, 0.55);
@@ -1009,10 +1076,16 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * uses. Applies to the document node and the selection frame alike (the frame
  * sits above the artwork, so a pen over its handles highlights it instead).
  */
-.canvas-el.is-pen-hover,
-.selection-frame.is-pen-hover {
+.editor-ui .artboard-cell.is-active .canvas-el.is-pen-hover,
+.editor-ui .artboard-cell.is-active .selection-frame.is-pen-hover {
   outline: calc(1.5px / var(--editor-zoom, 1)) solid rgba(217, 119, 6, 0.9);
   outline-offset: calc(2px / var(--editor-zoom, 1));
+}
+
+/* Quiet pointer hover: a zoom-invariant hairline, never a heavy card border. */
+.editor-ui .artboard-cell.is-active .canvas-el:not(.group-frame):hover {
+  outline: calc(1px / var(--editor-zoom, 1)) solid var(--hover-outline, rgba(29, 78, 216, 0.55));
+  outline-offset: calc(1px / var(--editor-zoom, 1));
 }
 
 /* تعديل لضمان عدم وجود خلفيات صلبة تجبر عناصر الـ PNG على فقدان الشفافية */
@@ -1044,11 +1117,11 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * Hairline selection with theme-aware colors:
  *  — Light mode: deep navy on white paper, with a white halo so it never
  *    disappears against dark artwork.
- *  — Dark mode: gold — NASAQ's accent — which reads clearly on both the dark
- *    chrome and the still-white page. The halo flips to dark.
+ *  — Dark mode: a bright studio blue with a dark contrast ring; Dim uses a
+ *    lighter blue on a charcoal ring. The page artwork itself remains untouched.
  * Both are double-ring (contrast ring + color ring) so the selection is
  * unmistakable over ANY artwork in EITHER theme without covering the element
- * (borders only, zero fill).
+ * (hairlines and a one-pixel contrast ring, zero fill).
  */
 .editor-ui.editor-light {
   /* High-contrast "this is interactive" accent for library/palette items. */
@@ -1080,14 +1153,16 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .editor-ui.editor-dark {
   --primary-accent: #58a2d8;
   --library-active-bg: rgba(88, 162, 216, 0.16);
-  /* Unchanged: the studio-dark selection already reads on the charcoal stage,
-     on the white page and over artwork. Only the ring flips dark, so the same
-     double-ring construction works in both themes. */
   --sel-color: #58a2d8;
-  /* Deliberately NO --sel-ring / --sel-handle-bg override: the studio-dark
-     selection already reads everywhere, so the ring stays `transparent` and
-     the handle dots stay white-with-a-blue-hairline exactly as before. */
+  --sel-ring: rgba(17, 23, 34, 0.94);
   --hover-outline: rgba(88, 162, 216, 0.6);
+}
+.editor-ui.editor-dim {
+  --primary-accent: #83c8ed;
+  --library-active-bg: rgba(131, 200, 237, 0.16);
+  --sel-color: #83c8ed;
+  --sel-ring: rgba(48, 55, 62, 0.96);
+  --hover-outline: rgba(131, 200, 237, 0.72);
 }
 /* z-index comes from SELECTION_LAYER_Z in CanvasStage — the one source. */
 .selection-layer {
@@ -1178,6 +1253,8 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  */
 .selection-frame.is-editing {
   pointer-events: none;
+  outline-style: dashed;
+  outline-color: color-mix(in srgb, var(--sel-color, #1d64d8) 76%, transparent);
 }
 
 /*
@@ -1366,6 +1443,12 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, rgba(255, 255, 255, 0.92));
 }
 
+.editor-ui.editor-dark .handle::after {
+  background: var(--sel-color, #58a2d8);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, rgba(17, 23, 34, 0.94));
+}
+
 .handle.is-axis-locked::after {
   background: #f1f5f9;
   border-color: #94a3b8;
@@ -1427,6 +1510,14 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   place-items: center;
   color: #ffffff;
   transition: transform 120ms ease;
+}
+
+.editor-ui.editor-dark .rotate-handle-grip {
+  box-shadow:
+    0 calc(2px / var(--editor-zoom, 1)) calc(6px / var(--editor-zoom, 1))
+      rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.9),
+    0 0 0 2px var(--sel-ring, rgba(17, 23, 34, 0.94));
 }
 
 .rotate-handle-grip svg {
@@ -1589,10 +1680,14 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 .el-text.editing,
-.el-box.editing {
+.el-box.editing,
+.progress-caption.editing {
   cursor: text;
   user-select: text;
   outline: none;
+  caret-color: var(--sel-color, #1d64d8);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sel-color, #1d64d8) 58%, transparent);
+  border-radius: 1px;
 }
 
 /*
@@ -1633,8 +1728,7 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * PHASE 1 — Panel containment.
  *
  * The shell publishes the header's real height as `--editor-header-h`, so the
- * panels can size themselves with `calc(100vh - header)` instead of a magic
- * number that drifts the moment the toolbar wraps to a second row.
+ * panels stay within the live workspace instead of following a fixed toolbar.
  */
 :root {
   --editor-header-h: 52px;
@@ -1653,23 +1747,10 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   max-height: calc(100vh - var(--editor-header-h));
 }
 
-/*
- * Bottom breathing room for every scrolling list.
- *
- * The last row of a long palette/layers list used to sit flush against the
- * panel edge: a drag handle at the very bottom was unreachable, and on touch
- * the browser's own gesture area swallowed the final tap. 80px of trailing
- * space (plus matching scroll padding) keeps the bottommost item — and any
- * drop zone behind it — fully visible and interactive.
- */
-/*
- * Scope: the vertical panel bodies only. `.editor-pane-scroll` is also used by
- * the HORIZONTAL tool strip inside the header — padding there would inflate the
- * measured header height — so it opts out explicitly.
- */
+/* Keep a small safe-area gutter now that the fixed shortcut footer is gone. */
 .editor-panel-body {
-  padding-bottom: 80px;
-  scroll-padding-bottom: 80px;
+  padding-bottom: calc(14px + var(--safe-bottom, 0px));
+  scroll-padding-bottom: calc(14px + var(--safe-bottom, 0px));
 }
 
 .editor-toolbar .editor-pane-scroll {
@@ -1677,10 +1758,10 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   scroll-padding-bottom: 0;
 }
 
-/* A row the author is dragging to can always scroll clear of the edge. */
+/* A dragged row can scroll clear of the safe-area gutter. */
 .layer-row,
 .editor-panel-body > * {
-  scroll-margin-bottom: 80px;
+  scroll-margin-bottom: 16px;
 }
 
 /* …except the media-panel rails, where the padding is only about the last row. */
@@ -2410,7 +2491,7 @@ body.is-resizing-rail {
 }
 
 /* Hover outlines on canvas elements use the same primary blue in dark mode. */
-.editor-ui.editor-dark .canvas-el:hover {
+.editor-ui.editor-dark .artboard-cell.is-active .canvas-el:not(.group-frame):hover {
   outline-color: var(--hover-outline) !important;
 }
 
@@ -2814,7 +2895,7 @@ summary,
 /* =====================================================================
  * NASAQ muted Photoshop-inspired workspace
  * Canvas, dark palette, main toolbar, panel anatomy (header tabs + `>>`,
- * control rows, content rows, bottom toolbar), collapsed icon docks and the
+ * control rows, content rows, collapsed icon docks and the
  * Library workspace — desktop and tablet.
  * ===================================================================== */
 
@@ -2834,8 +2915,7 @@ summary,
   .editor-ui .editor-panel-body { scroll-behavior: smooth; }
 }
 
-/* Panels fill their column exactly (no second chrome row), so the header,
-   the scrolling body and the bottom toolbar always fit. */
+/* Panels fill their column exactly, so the header and scrolling body fit. */
 /* (`flex flex-col` is set by utility classes on the column, so the docked
    `lg2:hidden` state still wins and a collapsed panel really leaves the grid.) */
 .editor-ui .editor-sidebar > aside {
@@ -3102,130 +3182,6 @@ summary,
   background: var(--editor-accent-soft);
 }
 
-/* =====================================================================
- * The canvas dock — a compact floating cluster over the workspace.
- *
- * Content-driven width (`width: max-content` with a ceiling), one row, one
- * radius, one icon size. It floats inside the canvas row, so it never claims
- * layout space, never stretches across the editor and never sits on the page
- * rail or the status bar below it.
- * ===================================================================== */
-
-.studio-tool-dock {
-  --dock-size: 34px;
-  --dock-gap: 3px;
-  --dock-pad: 5px;
-  position: absolute;
-  inset-inline-start: 12px;
-  bottom: 12px;
-  z-index: var(--z-panel);
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  gap: var(--dock-gap);
-  width: max-content;
-  /*
-   * A ceiling, not a squeeze: `dockLayout()` (ui-state.ts) reads `--dock-size`
-   * and folds a tool into a drawer long before this binds, so the bar never
-   * compresses an icon or wraps onto a second row on a narrow viewport.
-   */
-  max-width: min(520px, calc(100% - 24px));
-  padding: var(--dock-pad);
-  border: 1px solid var(--editor-border);
-  border-radius: 12px;
-  background: var(--editor-panel);
-  box-shadow: 0 10px 26px -8px rgba(15, 23, 42, 0.45),
-    0 2px 6px rgba(15, 23, 42, 0.18);
-  color: var(--editor-text);
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-  transition: opacity 140ms ease;
-}
-
-/* Every tool is a fixed cell; the bar gives up tools, never cell size. */
-.studio-tool-dock > * {
-  flex: 0 0 auto;
-}
-
-/* Collapsed: the whole bar folds to its insert button plus the chevron. */
-.studio-tool-dock.is-collapsed {
-  gap: 2px;
-  padding: 3px;
-}
-
-.editor-dock-grip {
-  display: grid;
-  width: 20px;
-  height: 26px;
-  flex: 0 0 auto;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--editor-text-secondary);
-  cursor: grab;
-  touch-action: none;
-}
-.editor-dock-grip:hover { background: var(--editor-hover); color: var(--editor-text); }
-.editor-dock-grip:focus-visible { outline: 2px solid var(--editor-accent-hover); outline-offset: 1px; }
-.editor-dock-grip:active { cursor: grabbing; }
-
-.editor-dock-sep {
-  width: 1px;
-  height: 20px;
-  flex: 0 0 auto;
-  margin: 0 2px;
-  background: var(--editor-border);
-}
-
-.editor-dock-collapse { opacity: 0.75; }
-.editor-dock-collapse:hover { opacity: 1; }
-
-/* Fill over stroke, overlapping exactly like Photoshop's default swatch. */
-.editor-dock-color-btn { width: var(--dock-size); }
-.editor-dock-color-chips {
-  position: relative;
-  display: block;
-  width: 20px;
-  height: 20px;
-}
-.editor-dock-color-chips .is-fill,
-.editor-dock-color-chips .is-stroke {
-  position: absolute;
-  display: block;
-  width: 13px;
-  height: 13px;
-  border-radius: 3px;
-}
-.editor-dock-color-chips .is-fill {
-  inset-inline-start: 0;
-  top: 0;
-  z-index: 1;
-  border: 1.5px solid var(--editor-border);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-}
-.editor-dock-color-chips .is-stroke {
-  inset-inline-end: 0;
-  bottom: 0;
-  border: 3px solid;
-  background: var(--editor-panel);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-}
-
-/* The slot: an absolutely positioned grid child pinned to the canvas row, so
-   the dock can never stretch over the page rail or the status bar. */
-.studio-tool-dock-slot {
-  position: absolute;
-  grid-row: 1 / 2;
-  grid-column: 1 / 2;
-  inset: 0;
-  z-index: var(--z-panel);
-  pointer-events: none;
-}
-.studio-tool-dock-slot > * { pointer-events: auto; }
-
 /* ---------- Panel anatomy (follows the Layers panel) ---------- */
 .editor-panel-header { min-height: 56px; }
 .editor-panel-tabs { scrollbar-width: none; }
@@ -3293,46 +3249,6 @@ summary,
   .layer-row > .layer-row-name { flex: 1 1 calc(100% - 72px); }
   .layer-row > .layer-row-action.is-first { margin-inline-start: auto; }
 }
-
-/* Quick actions wrap by their content width, not by the viewport width. */
-.editor-panel-footer {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
-  flex: 0 0 auto;
-  gap: 4px;
-  padding: 6px 8px calc(6px + var(--safe-bottom, 0px));
-  border-top: 1px solid var(--editor-border);
-  background: var(--editor-panel);
-}
-.editor-panel-footer > button {
-  display: inline-flex;
-  min-width: 40px;
-  min-height: 40px;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 0 6px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--editor-text-secondary);
-  font-size: 11px;
-  font-weight: 800;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 120ms ease, color 120ms ease;
-}
-.editor-ui .editor-sidebar .editor-panel-footer > button:hover:not(:disabled) {
-  background: var(--editor-hover);
-  color: var(--editor-text);
-}
-.editor-panel-footer > button:disabled { opacity: 0.4; cursor: default; }
-.editor-ui .editor-sidebar .editor-panel-footer > button.is-danger { color: #e0928c; }
-.editor-ui .editor-sidebar .editor-panel-footer > button.is-danger:hover:not(:disabled) {
-  background: rgba(224, 146, 140, 0.12);
-}
-.editor-panel-footer > button > span { white-space: normal; line-height: 1.4; }
-.editor-panel-footer > button > svg { flex-shrink: 0; }
 
 /* ---------- Library workspace ---------- */
 .asset-library { min-width: 0; container: assetlibrary / inline-size; }
@@ -3479,17 +3395,7 @@ summary,
 
 /* ---------- Touch devices (tablet): larger targets ---------- */
 @media (any-pointer: coarse) {
-  /* One touch-sized rhythm for every floating control (dock, panels, menus). */
-  .studio-tool-dock { --dock-size: 44px; --dock-pad: 6px; }
-  .editor-dock-grip { width: 26px; height: 34px; }
-  .editor-dock-sep { height: 24px; }
-  .editor-dock-color-chips { width: 24px; height: 24px; }
-  .editor-dock-color-chips .is-fill,
-  .editor-dock-color-chips .is-stroke { width: 16px; height: 16px; }
-
-
   .editor-panel-control select { height: 44px; }
-  .editor-panel-footer > button { min-width: 44px; min-height: 44px; }
   .editor-properties .layer-row button { min-height: 42px; }
 
   .asset-library-controls .asset-lib-icon-btn,
@@ -3511,7 +3417,6 @@ summary,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .studio-tool-dock,
   .editor-icon-btn,
   .editor-anchor-menu,
   .asset-card { transition: none; }
@@ -3523,9 +3428,8 @@ summary,
  * Studio redesign — unified chrome (v3)
  *
  * One dark slate workspace (#181d21 / #1e252b) with a single blue accent
- * (#3b6e9c). The header is three aligned zones, the dock is a slim
- * draw-and-drop rail, and every selected element carries an explicit
- * scale / hide / lock contextual overlay.
+ * (#3b6e9c). The header uses three aligned zones; Add and View menus keep
+ * insertion and workspace controls compact, while selection stays contextual.
  * ===================================================================== */
 
 /* ---------- Header: three zones, one line ---------- */
@@ -3681,7 +3585,7 @@ summary,
  * The shared icon control — every chrome button in the studio.
  *
  * One box (34px), one radius, one icon size, one hover, one active state and
- * one tooltip. The header, the canvas dock, the floating panels and the menus
+ * one tooltip. The header, the selection toolbar, the floating panels and the menus
  * all draw from this class, which is what makes the interface look designed
  * rather than assembled control by control.
  * ===================================================================== */
@@ -3705,8 +3609,8 @@ summary,
   width: 18px;
   height: 18px;
 }
-/* One stroke weight for every chrome icon, so the header, the dock and the
-   floating panels read as one system instead of three icon sets. */
+/* One stroke weight for every chrome icon, so the header, contextual toolbar,
+   and floating panels read as one system instead of separate icon sets. */
 .editor-icon-glyph svg { width: 18px; height: 18px; stroke-width: 1.75; }
 .editor-icon-btn:hover:not(:disabled) {
   background: var(--editor-hover);
@@ -3806,7 +3710,7 @@ summary,
 .editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .editor-settings-surface) .bg-navy:hover:not(:disabled) {
   background: var(--editor-accent-hover) !important;
 }
-.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .studio-tool-dock) :is([aria-pressed="true"], [aria-selected="true"]) {
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail) :is([aria-pressed="true"], [aria-selected="true"]) {
   background: var(--editor-accent-soft) !important;
   color: var(--editor-text) !important;
   border-color: var(--editor-accent);
@@ -3817,7 +3721,7 @@ summary,
 .editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .editor-settings-surface) :is(.text-danger, .is-danger, .editor-menu-danger):hover:not(:disabled) {
   background: var(--editor-danger-soft) !important;
 }
-.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .studio-tool-dock) button:disabled {
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail) button:disabled {
   opacity: .4;
   cursor: not-allowed;
   box-shadow: none;
@@ -3835,6 +3739,7 @@ summary,
 .editor-ui {
   --editor-control-h: 34px;
   --editor-touch-h: 44px;
+  --editor-page-rail-collapsed-height: 36px;
   --editor-control-radius: 8px;
   --editor-panel-radius: 10px;
   --editor-chrome-shadow: 0 1px 2px rgba(15, 30, 45, 0.08);
@@ -4020,19 +3925,25 @@ summary,
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
   .editor-sidebar[inert] { visibility: hidden; }
-  .studio-tool-dock.is-floating {
-    inset-inline-start: max(8px, env(safe-area-inset-right, 0px));
-    top: 8px;
-    bottom: 64px;
-    max-height: calc(100% - 72px);
-    transform: none;
-  }
 }
 @media (any-pointer: coarse) {
+  .editor-ui { --editor-page-rail-collapsed-height: 44px; }
+  .editor-ui .editor-page-rail-collapsed {
+    height: var(--editor-page-rail-collapsed-height);
+  }
   .editor-page-rail > div > button { min-height: 44px; }
-  .editor-page-rail .page-rail-nav { width: 44px; height: 44px; }
-  /* The per-card actions stay inside the compact card even on touch. */
-  .page-rail-actions button { width: 30px; height: 30px; }
+  .editor-page-rail .page-rail-nav { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  .editor-page-rail .page-rail-controls {
+    flex-direction: row;
+    align-items: center;
+  }
+  .editor-page-rail-collapsed .page-rail-chip { height: 44px; min-width: 44px; }
+  .page-rail-actions {
+    flex-direction: row;
+    align-self: center;
+    gap: 4px;
+  }
+  .page-rail-actions button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
   .editor-panel-tab { min-width: 44px; min-height: 44px; flex-shrink: 0; }
   .editor-panel-tabs { scrollbar-width: thin; }
   /* Comfortable touch targets for every shared control. */
@@ -4045,7 +3956,6 @@ summary,
   .editor-drawer-grip,
   .editor-drawer-close { width: 36px; height: 36px; }
   .editor-drawer-bar { padding: 4px; }
-  .editor-dock-color-chips { width: 24px; height: 24px; }
   .artboard-page-options :is(button, summary) { min-height: 44px; }
 }
 
@@ -4407,21 +4317,6 @@ li:has(> .text-success) {
 }
 
 /*
- * ── 32. Colour swatch refinement ─────────────────────────────────────────
- * The dock's fill/stroke pair eases on hover, like every other control.
- */
-.editor-dock-color-chips .is-fill,
-.editor-dock-color-chips .is-stroke {
-  transition: transform 140ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-.editor-dock-color-btn:hover .editor-dock-color-chips .is-fill {
-  transform: scale(1.08);
-}
-.editor-dock-color-btn:hover .editor-dock-color-chips .is-stroke {
-  transform: scale(1.08);
-}
-
-/*
  * ── 33. Page rail resizer polish ─────────────────────────────────────────
  * The page rail resizer gets a smoother transition.
  */
@@ -4448,8 +4343,6 @@ li:has(> .text-success) {
   .library-drag-card,
   .library-item,
   .asset-card,
-  .editor-dock-color-chips .is-fill,
-  .editor-dock-color-chips .is-stroke,
   .artboard-name,
   .editor-panel-tab,
   .editor-panel-resize-grip,

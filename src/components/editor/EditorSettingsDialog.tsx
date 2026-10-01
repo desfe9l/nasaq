@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Check,
+  Contrast,
   KeyRound,
   Loader2,
   Moon,
@@ -333,8 +334,8 @@ function PrefSwitch({
 function EditorSection() {
   /** Build this open document was served by — support's first question. */
   const buildId = documentBuildId();
-  const dark = useEditor((s) => s.dark);
-  const setDark = useEditor((s) => s.setDark);
+  const appearance = useEditor((s) => s.appearance);
+  const setAppearance = useEditor((s) => s.setAppearance);
   const showGrid = useEditor((s) => s.showGrid);
   const snapGrid = useEditor((s) => s.snapGrid);
   const snapElements = useEditor((s) => s.snapElements);
@@ -357,19 +358,20 @@ function EditorSection() {
         >
           {(
             [
-              { value: true, label: "داكن", Icon: Moon },
-              { value: false, label: "فاتح", Icon: Sun },
+              { value: "light" as const, label: "فاتح", Icon: Sun },
+              { value: "dim" as const, label: "خافت", Icon: Contrast },
+              { value: "dark" as const, label: "داكن", Icon: Moon },
             ] as const
           ).map(({ value, label, Icon }) => (
             <button
               key={label}
               type="button"
               role="radio"
-              aria-checked={dark === value}
-              onClick={() => setDark(value)}
+              aria-checked={appearance === value}
+              onClick={() => setAppearance(value)}
               className={cn(
                 "inline-flex h-11 flex-1 items-center justify-center gap-1.5 rounded-[8px] text-[12px] font-extrabold transition",
-                dark === value
+                appearance === value
                   ? "bg-navy text-white"
                   : "text-muted hover:bg-line-2",
               )}

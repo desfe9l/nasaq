@@ -8,7 +8,10 @@ import { PRODUCT_COPY } from "@/lib/product/copy";
 import { CARD_W, CARD_WRAP, SITE_CARD } from "@/components/site/cards";
 import { FullVersionModal } from "@/components/site/FullVersionModal";
 import { LiveEditorPreview } from "@/components/site/LiveEditorPreview";
-import { useSiteSettings } from "@/lib/admin/use-site-settings";
+import {
+  useSiteSettings,
+  usePublishedTemplates,
+} from "@/lib/admin/use-site-settings";
 import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 import { WORKSPACE_HOME_PATH, openNewDocumentFlow, useWorkspaceEntry } from "@/lib/auth/use-workspace-entry";
 import { ProjectFileButton } from "@/components/site/ProjectFileButton";
@@ -62,6 +65,13 @@ export function HomePage() {
     else window.location.assign(entry.href);
   };
   const { texts } = useSiteSettings();
+  const publishedTemplates = usePublishedTemplates();
+  const featuredDocument = publishedTemplates.find(
+    (item) =>
+      item.id === texts.featuredTemplateId &&
+      item.status === "published" &&
+      item.tier === "free",
+  );
 
   useEffect(() => {
     void hydrate();
@@ -70,8 +80,7 @@ export function HomePage() {
   const recent = projects.slice(0, 3);
 
   const openEditor = async (id: string) => {
-    await openProject(id);
-    window.location.assign("/editor");
+    if (await openProject(id)) window.location.assign("/editor");
   };
 
   return (
@@ -80,7 +89,11 @@ export function HomePage() {
       <main>
         {/* Hero — مؤسسي رسمي هادئ */}
         <section className="border-b border-line/70 bg-page">
-          <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-20">
+          <div
+            className={`mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-14 sm:px-6 ${
+              featuredDocument ? "lg:grid-cols-[1.05fr_0.95fr]" : "lg:grid-cols-1"
+            } lg:items-center lg:py-20`}
+          >
             <div>
               <div className="mb-5 inline-flex items-center rounded-full border border-brand/15 bg-navy/5 px-3.5 py-1.5 text-[11px] font-bold tracking-wide text-ink">
                 {texts.heroEyebrow.trim() || PRODUCT_COPY.hero.eyebrow}
@@ -129,7 +142,9 @@ export function HomePage() {
               </div>
             </div>
 
-            <LiveEditorPreview />
+            {featuredDocument && (
+              <LiveEditorPreview document={featuredDocument} />
+            )}
           </div>
         </section>
 

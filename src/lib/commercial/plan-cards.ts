@@ -45,6 +45,26 @@ export const HOME_BILLING_PERIODS: readonly SwitchablePeriod[] = [
   "quarterly",
 ];
 
+/** Only expose a billing period when checkout is live for a tier, or the user
+ * already holds that exact plan and needs its account-management shortcut. */
+export function billingPeriodsWithCheckout(
+  planKeys: Iterable<string>,
+  currentPlanKey?: string | null,
+): SwitchablePeriod[] {
+  const available = new Set(planKeys);
+  if (currentPlanKey) available.add(currentPlanKey);
+  return HOME_BILLING_PERIODS.filter((period) =>
+    (["individual", "team"] as const).some((family) =>
+      available.has(planKeyFor(family, period)),
+    ),
+  );
+}
+
+/** Unsupported/legacy deep links never select a plan with no live checkout. */
+export function purchasePeriodFromQuery(value: string | null): SwitchablePeriod {
+  return HOME_BILLING_PERIODS.find((period) => period === value) ?? "monthly";
+}
+
 /** Switcher button labels — the two words a buyer scans for. */
 export const PERIOD_LABELS: Record<SwitchablePeriod, string> = {
   monthly: "شهري",
@@ -163,7 +183,7 @@ function paidCard(
     featured: family === FEATURED_FAMILY,
     kind: "paid",
     ctaLabel: "اشترك الآن",
-    ctaHint: "ترخيص رقمي فوري · دفع آمن عبر بوابة الدفع الآمنة",
+    ctaHint: "الدفع عبر Gumroad · ترخيص بعد التحقق"
   };
 }
 

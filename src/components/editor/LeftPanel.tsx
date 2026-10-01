@@ -95,11 +95,14 @@ export function LeftPanel({
   onUpload,
   onUploadSvg,
   onAddCustomAsset,
+  createLibraryFolderRequest = 0,
 }: {
   onUpload: (kind: "image" | "logo" | "font" | "library") => void;
   onUploadSvg: () => void;
   /** «+ إضافة» in the smart library: import an SVG as a reusable icon/divider. */
   onAddCustomAsset: (kind: "icon" | "divider") => void;
+  /** Monotonic request from the compact Add menu; may arrive before Library mounts. */
+  createLibraryFolderRequest?: number;
 }) {
   const tab = useEditor((s) => s.leftTab);
   const setLeftTab = useEditor((s) => s.setLeftTab);
@@ -374,7 +377,7 @@ export function LeftPanel({
                     * One home for every media import: the panel used to repeat
                     * these in a permanent footer bar as well. The footer is
                     * gone; the same actions live here, next to the media they
-                    * produce, and in the canvas dock's «إضافة» menu.
+                    * produce, and in the header's «إضافة» menu.
                     */}
                   {group.title === "صور وشعارات" &&
                     (openGroups[group.title] ?? false) && (
@@ -459,7 +462,9 @@ export function LeftPanel({
           </div>
         )}
 
-        {tab === "library" && <AssetLibrary />}
+        {tab === "library" && (
+          <AssetLibrary createFolderRequest={createLibraryFolderRequest} />
+        )}
 
         {tab === "tools" && (
           <div className="element-tools-panel">
@@ -1233,8 +1238,11 @@ function PagesTabList({
             · {p.elements.length} عنصر
           </p>
           <div className="grid grid-cols-4 gap-1">
-            <MiniButton onClick={() => duplicatePage(p.id)} label="نسخ">
-              نسخ
+            <MiniButton
+              onClick={() => duplicatePage(p.id)}
+              label={`تكرار الصفحة ${i + 1}`}
+            >
+              تكرار
             </MiniButton>
             <MiniButton
               onClick={() => movePageById(p.id, -1)}

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { buildLegacyTemplateSeeds, buildProductTemplateSeeds } from "./product-templates.ts";
 import { PACKS, PAGE_TEMPLATES } from "./templates.ts";
 import { buildCatalog } from "@/lib/templates/catalog";
-import { DEFAULT_HOME_SHOWCASE_TABS, normalizeSection } from "@/lib/admin/types";
+import { normalizeSection } from "@/lib/admin/types";
 
 test("product masters are licensed native documents with complete editable pages", () => {
   const templates = buildProductTemplateSeeds();
@@ -93,6 +93,7 @@ test("all legacy packs and page templates receive stable Admin records preservin
   }
   assert.equal(templates.find((template) => template.id === "builtin_pack_blank")?.tier, "free");
   assert.ok(templates.filter((template) => template.id.startsWith("builtin_pack_") && template.id !== "builtin_pack_blank").every((template) => template.tier === "licensed"));
+  assert.ok(templates.filter((template) => template.id.startsWith("builtin_page_")).every((template) => template.tier === "free"));
 });
 
 test("Admin template overrides replace their catalog entry and drafts hide the fallback", () => {
@@ -128,20 +129,20 @@ test("Admin template overrides replace their catalog entry and drafts hide the f
   assert.equal(draft.some((item) => item.id === "page:cover"), false);
 });
 
-test("homepage showcase tabs remain backward compatible and normalize editable choices", () => {
-  const legacy = normalizeSection("texts", { heroTitle: "عنوان قديم" });
-  assert.equal(legacy.heroTitle, "عنوان قديم");
-  assert.deepEqual(legacy.showcaseTabs, DEFAULT_HOME_SHOWCASE_TABS);
-
-  const edited = normalizeSection("texts", {
-    showcaseTabs: [
-      { id: "presentation", label: "عرض خاص", templateId: "slides", enabled: true },
-      { id: "invalid", label: "قالب غير صالح", templateId: "../../admin", enabled: false },
-    ],
+test("homepage feature stores one real Admin catalog ID and can be explicitly removed", () => {
+  const legacy = normalizeSection("texts", {
+    heroTitle: "عنوان قديم",
+    // Old preset tabs are deliberately ignored; they are not catalog records.
+    showcaseTabs: [{ templateId: "slides", label: "عرض", enabled: true }],
   });
-  assert.equal(edited.showcaseTabs.length, 2);
-  assert.equal(edited.showcaseTabs[0].label, "عرض خاص");
-  assert.equal(edited.showcaseTabs[0].templateId, "slides");
-  assert.equal(edited.showcaseTabs[1].templateId, "slides");
-  assert.equal(edited.showcaseTabs.some((tab) => tab.enabled), true);
+  assert.equal(legacy.heroTitle, "عنوان قديم");
+  assert.equal(legacy.featuredTemplateId, "builtin_page_cover");
+
+  const selected = normalizeSection("texts", {
+    featuredTemplateId: "tpl_catalog_record_01",
+  });
+  assert.equal(selected.featuredTemplateId, "tpl_catalog_record_01");
+
+  const removed = normalizeSection("texts", { featuredTemplateId: "" });
+  assert.equal(removed.featuredTemplateId, "");
 });

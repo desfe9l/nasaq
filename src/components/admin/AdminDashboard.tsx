@@ -7,8 +7,6 @@
  */
 import { useEffect, useState } from "react";
 import {
-  ArrowDown,
-  ArrowUp,
   Shield,
   LayoutTemplate,
   Store,
@@ -24,14 +22,19 @@ import {
 import { toast } from "sonner";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
+  ADMIN_TEMPLATES_CHANGED_EVENT,
+  invalidateSiteSettings,
+} from "@/lib/admin/use-site-settings";
+import {
+  adminListTemplatesFn,
   adminSaveSettingsFn,
   adminTemplatesAccessFn,
   getSiteSettingsFn,
 } from "@/lib/admin/functions";
 import {
   DEFAULT_SITE_SETTINGS,
+  type AdminTemplateSummary,
   type BrandPreset,
-  type ShowcaseTemplateId,
   type PublicSiteSettings,
   type SettingsSection,
 } from "@/lib/admin/types";
@@ -156,9 +159,20 @@ export default function AdminDashboard() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-6">
-        {tab === "templates" && <AdminTemplatesPanel />}
-        {tab === "commercial" && <SettingsTab kind="commercial" />}
-        {tab === "content" && <SettingsTab kind="content" />}
+        {/* Keep content settings mounted while the Admin visits the catalog so
+            unsaved edits survive the two-step feature-management workflow. */}
+        <div hidden={tab !== "templates"}>
+          <AdminTemplatesPanel />
+        </div>
+        <div hidden={tab !== "commercial"}>
+          <SettingsTab kind="commercial" />
+        </div>
+        <div hidden={tab !== "content"}>
+          <SettingsTab
+            kind="content"
+            onManageTemplates={() => setTab("templates")}
+          />
+        </div>
         {tab === "images" && <SiteImagesPanel />}
         {tab === "licenses" && (
           <div className="overflow-hidden rounded-xl border border-line">
@@ -172,25 +186,73 @@ export default function AdminDashboard() {
 
 // ── Settings (commercial + content) ────────────────────────────────────────
 
-function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
+function SettingsTab({
+  kind,
+  onManageTemplates,
+}: {
+  kind: "commercial" | "content";
+  onManageTemplates?: () => void;
+}) {
   const [settings, setSettings] = useState<PublicSiteSettings>(DEFAULT_SITE_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<SettingsSection | null>(null);
+  const [catalog, setCatalog] = useState<AdminTemplateSummary[]>([]);
 
   useEffect(() => {
+    let alive = true;
     void getSiteSettingsFn().then((s) => {
+      if (!alive) return;
       setSettings(s);
       setLoading(false);
     });
+    return () => {
+      alive = false;
+    };
   }, []);
+
+  useEffect(() => {
+    if (kind !== "content") return;
+    let alive = true;
+    const loadCatalog = () => {
+      void adminListTemplatesFn()
+        .then((result) => {
+          if (!alive) return;
+          if (!result.ok) {
+            toast.error(result.error);
+            return;
+          }
+          setCatalog(result.templates);
+        })
+        .catch(() => {
+          if (alive) toast.error("تعذر تحميل سجل القوالب المنشورة");
+        });
+    };
+    loadCatalog();
+    window.addEventListener(ADMIN_TEMPLATES_CHANGED_EVENT, loadCatalog);
+    return () => {
+      alive = false;
+      window.removeEventListener(ADMIN_TEMPLATES_CHANGED_EVENT, loadCatalog);
+    };
+  }, [kind]);
 
   const save = async (section: SettingsSection) => {
     setSaving(section);
-    const res = await adminSaveSettingsFn({ data: { section, value: settings[section] } });
-    setSaving(null);
-    if (!res.ok) return toast.error(res.error);
-    setSettings((s) => ({ ...s, [section]: res.value }));
-    toast.success("تم الحفظ");
+    try {
+      const res = await adminSaveSettingsFn({
+        data: { section, value: settings[section] },
+      });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setSettings((current) => ({ ...current, [section]: res.value }));
+      invalidateSiteSettings();
+      toast.success("تم الحفظ");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر حفظ الإعدادات");
+    } finally {
+      setSaving(null);
+    }
   };
 
   if (loading) return <p className="flex items-center gap-2 text-[13px] text-muted"><Loader2 className="size-4 animate-spin" /> جارٍ التحميل…</p>;
@@ -201,14 +263,17 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
   const setA = (patch: Partial<typeof a>) => setSettings((s) => ({ ...s, announcement: { ...s.announcement, ...patch } }));
   const t = settings.texts;
   const setT = (patch: Partial<typeof t>) => setSettings((s) => ({ ...s, texts: { ...s.texts, ...patch } }));
-  const moveShowcaseTab = (index: number, delta: -1 | 1) => {
-    const nextIndex = index + delta;
-    if (nextIndex < 0 || nextIndex >= t.showcaseTabs.length) return;
-    const showcaseTabs = [...t.showcaseTabs];
-    [showcaseTabs[index], showcaseTabs[nextIndex]] = [showcaseTabs[nextIndex], showcaseTabs[index]];
-    setT({ showcaseTabs });
-  };
-
+  const featureCandidates = catalog
+    .filter((item) => item.status === "published" && item.tier === "free")
+    .sort((a, b) => a.title.localeCompare(b.title, "ar"));
+  const selectedFeature = catalog.find(
+    (item) => item.id === t.featuredTemplateId,
+  );
+  const selectedFeatureIsPublic = Boolean(
+    selectedFeature &&
+      selectedFeature.status === "published" &&
+      selectedFeature.tier === "free",
+  );
   const SaveBtn = ({ section }: { section: SettingsSection }) => (
     <button type="button" className={primaryBtn} disabled={saving !== null} onClick={() => void save(section)}>
       {saving === section ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} حفظ
@@ -263,58 +328,73 @@ function SettingsTab({ kind }: { kind: "commercial" | "content" }) {
         <label className={label}>عنوان الواجهة<input className={input} value={t.heroTitle} onChange={(e) => setT({ heroTitle: e.target.value })} /></label>
         <label className={label}>وصف الواجهة<textarea className={cn(input, "h-20 py-2")} value={t.heroDescription} onChange={(e) => setT({ heroDescription: e.target.value })} /></label>
         <label className={label}>ملاحظة التذييل<input className={input} value={t.footerNote} onChange={(e) => setT({ footerNote: e.target.value })} /></label>
-        <div className="grid gap-3 border-t border-line pt-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
+        <section className="grid gap-3 border-t border-line pt-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h3 className="text-[13px] font-extrabold text-ink">تبويبات معاينة المخرجات</h3>
-              <p className="mt-1 text-[11px] text-muted">عدّل الاسم والقالب والترتيب والظهور في معاينة الصفحة الرئيسية.</p>
+              <h3 className="text-[13px] font-extrabold text-ink">المستند المميز في الصفحة الرئيسية</h3>
+              <p className="mt-1 max-w-2xl text-[11px] leading-5 text-muted">
+                اختر سجلًا منشورًا مجانيًا من كتالوج القوالب. المعاينة الحية تفتح محتوى السجل نفسه؛ لا تستخدم تبويبًا تجريبيًا أو قالبًا موازيًا.
+              </p>
             </div>
-            <button
-              type="button"
-              className={ghostBtn}
-              disabled={t.showcaseTabs.length >= 6}
-              onClick={() => setT({ showcaseTabs: [...t.showcaseTabs, {
-                id: `showcase-${Date.now()}`,
-                label: "معاينة جديدة",
-                templateId: "official",
-                enabled: true,
-              }] })}
-            >
-              <Plus className="size-3.5" /> إضافة تبويب
-            </button>
+            {onManageTemplates && (
+              <button
+                type="button"
+                className={ghostBtn}
+                onClick={onManageTemplates}
+              >
+                <LayoutTemplate className="size-3.5" /> إدارة سجلات القوالب
+              </button>
+            )}
           </div>
-          {t.showcaseTabs.map((tab, index) => (
-            <div key={tab.id} className="grid gap-2 rounded-lg border border-line bg-surface-2 p-3 sm:grid-cols-[minmax(0,1fr)_180px_auto_auto_auto_auto] sm:items-end">
-              <label className={label}>
-                اسم التبويب
-                <input className={input} value={tab.label} onChange={(event) => setT({ showcaseTabs: t.showcaseTabs.map((item) => item.id === tab.id ? { ...item, label: event.target.value } : item) })} />
-              </label>
-              <label className={label}>
-                قالب المعاينة
-                <select className={input} value={tab.templateId} onChange={(event) => setT({ showcaseTabs: t.showcaseTabs.map((item) => item.id === tab.id ? { ...item, templateId: event.target.value as ShowcaseTemplateId } : item) })}>
-                  <option value="official">تقرير رسمي</option>
-                  <option value="slides">عرض تقديمي</option>
-                  <option value="briefing">عرض قيادي</option>
-                  <option value="eid">تقرير فعالية</option>
-                  <option value="blank">مستند فارغ</option>
-                </select>
-              </label>
-              <label className="flex h-10 items-center gap-2 text-[11px] font-bold text-muted">
-                <input type="checkbox" checked={tab.enabled} onChange={(event) => setT({ showcaseTabs: t.showcaseTabs.map((item) => item.id === tab.id ? { ...item, enabled: event.target.checked } : item) })} />
-                ظاهر
-              </label>
-              <button type="button" className={ghostBtn} disabled={index === 0} aria-label={`رفع ${tab.label}`} onClick={() => moveShowcaseTab(index, -1)}>
-                <ArrowUp className="size-3.5" />
-              </button>
-              <button type="button" className={ghostBtn} disabled={index === t.showcaseTabs.length - 1} aria-label={`خفض ${tab.label}`} onClick={() => moveShowcaseTab(index, 1)}>
-                <ArrowDown className="size-3.5" />
-              </button>
-              <button type="button" className={cn(ghostBtn, "text-error")} disabled={t.showcaseTabs.length <= 1} aria-label={`حذف ${tab.label}`} onClick={() => setT({ showcaseTabs: t.showcaseTabs.filter((item) => item.id !== tab.id) })}>
-                <Trash2 className="size-3.5" />
+          <label className={label}>
+            سجل القالب المنشور
+            <select
+              className={input}
+              value={selectedFeatureIsPublic ? t.featuredTemplateId : ""}
+              onChange={(event) =>
+                setT({ featuredTemplateId: event.currentTarget.value })
+              }
+            >
+              <option value="">بدون مستند مميز</option>
+              {featureCandidates.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.title} · {item.category}
+                </option>
+              ))}
+            </select>
+          </label>
+          {t.featuredTemplateId && !selectedFeatureIsPublic && (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-[11px] font-bold text-error">
+              <span>السجل المحفوظ غير منشور أو يتطلب ترخيصًا، لذلك لا يظهر في المعاينة العامة.</span>
+              <button
+                type="button"
+                className={ghostBtn}
+                onClick={() => setT({ featuredTemplateId: "" })}
+              >
+                إزالة التحديد
               </button>
             </div>
-          ))}
-        </div>
+          )}
+          {selectedFeatureIsPublic && selectedFeature && (
+            <div className="flex items-center gap-3 rounded-lg border border-line bg-surface-2 p-3">
+              {selectedFeature.thumbnail && (
+                <img
+                  src={selectedFeature.thumbnail}
+                  alt={`معاينة ${selectedFeature.title}`}
+                  className="h-16 w-12 shrink-0 rounded border border-line object-cover"
+                />
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-[12px] font-extrabold text-ink">
+                  {selectedFeature.title}
+                </p>
+                <p className="mt-1 text-[10px] text-muted">
+                  سجل Admin · {selectedFeature.kind.toUpperCase()} · منشور مجاني
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
         <div><SaveBtn section="texts" /></div>
       </section>
 

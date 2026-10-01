@@ -128,6 +128,7 @@ async function getFilesFromDrop(
 
 export function AssetLibrary({
   children,
+  createFolderRequest = 0,
 }: {
   /**
    * Optional extra content rendered after the library grid. The Library tab
@@ -135,6 +136,8 @@ export function AssetLibrary({
    * but the slot stays so callers can still append same-workspace content.
    */
   children?: React.ReactNode;
+  /** Monotonic request from the Add menu; handled when this tab mounts. */
+  createFolderRequest?: number;
 } = {}) {
   const assets = useEditor((s) => s.assets);
   const assetsLoading = useEditor((s) => s.assetsLoading);
@@ -205,6 +208,14 @@ export function AssetLibrary({
   const [sortBy, setSortBy] = useState<"recent" | "oldest" | "name">("recent");
   const [dragOver, setDragOver] = useState(false);
   const [importing, setImporting] = useState(false);
+  const lastFolderRequestRef = useRef(0);
+
+  useEffect(() => {
+    if (createFolderRequest <= lastFolderRequestRef.current) return;
+    lastFolderRequestRef.current = createFolderRequest;
+    setFolderDraft("");
+    setFolderDialog("create");
+  }, [createFolderRequest]);
 
   const rangeAnchorRef = useRef<string | null>(null);
 
@@ -637,10 +648,7 @@ export function AssetLibrary({
     >
       <div className="asset-library-controls grid gap-2">
       <header className="asset-library-header flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="text-[12px] font-extrabold tracking-wide">المكتبة</h3>
-          <p className="mt-0.5 truncate text-[10px] text-muted" title="شبكة مرنة · بحث · تصفية · مجلدات · سحب وإفلات مباشر">شبكة مرنة · بحث · تصفية · مجلدات · سحب وإفلات مباشر</p>
-        </div>
+        <h3 className="min-w-0 text-[12px] font-extrabold tracking-wide">المكتبة</h3>
         <div className="asset-library-tools flex shrink-0 items-center gap-1">
           <button
             type="button"

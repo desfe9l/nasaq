@@ -12,9 +12,11 @@ import {
   PERIOD_HINTS,
   PERIOD_LABELS,
   PERIOD_PRICE_LABELS,
+  billingPeriodsWithCheckout,
   checkoutKeyFor,
   homePlanCards,
   periodSaving,
+  purchasePeriodFromQuery,
 } from "./plan-cards.ts";
 import { CENTRAL_PLANS, planKeyFor } from "./catalog.ts";
 
@@ -35,6 +37,33 @@ describe("Homepage pricing cards", () => {
         assert.ok(CENTRAL_PLANS[planKeyFor(family, period)]);
       }
     }
+  });
+
+  it("shows only periods with a live checkout or the exact current membership", () => {
+    assert.deepEqual(
+      billingPeriodsWithCheckout(["individual-monthly", "team-monthly"]),
+      ["monthly"],
+    );
+    assert.deepEqual(
+      billingPeriodsWithCheckout(["team-quarterly"]),
+      ["quarterly"],
+    );
+    assert.deepEqual(
+      billingPeriodsWithCheckout([], "individual-quarterly"),
+      ["quarterly"],
+    );
+    assert.deepEqual(
+      billingPeriodsWithCheckout(["individual-annual"]),
+      [],
+    );
+  });
+
+  it("ignores unsupported purchase deep links such as annual Gumroad checkout", () => {
+    assert.equal(purchasePeriodFromQuery("monthly"), "monthly");
+    assert.equal(purchasePeriodFromQuery("quarterly"), "quarterly");
+    assert.equal(purchasePeriodFromQuery("annual"), "monthly");
+    assert.equal(purchasePeriodFromQuery("yearly"), "monthly");
+    assert.equal(purchasePeriodFromQuery(null), "monthly");
   });
 
   it("quotes the catalog prices for the monthly period", () => {

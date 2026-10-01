@@ -101,10 +101,14 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
         setNotFound(true);
         return;
       }
-      const seed = publishedTemplateSeed(result.template);
       const editor = useEditor.getState();
       await editor.hydrate();
       const current = useEditor.getState();
+      const seed = {
+        ...publishedTemplateSeed(result.template),
+        theme: current.theme,
+        orgName: current.orgName,
+      };
       if (!entitlements.unlimited_projects && !canCreateDemoProject(current.projects.length)) {
         toast.error("اكتملت مساحة تجربة المحرر", {
           description: "يتضمن العرض مشروعًا واحدًا. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",

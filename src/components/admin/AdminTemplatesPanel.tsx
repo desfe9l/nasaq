@@ -46,6 +46,7 @@ import type { ProjectMeta } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
 import { publishedTemplatePath, templateDisplaySlug, publishedTemplateAbsoluteUrl } from "@/lib/templates/published";
 import { prepareTemplateThumbnail } from "@/lib/templates/thumbnail";
+import { invalidateAdminPublicContent } from "@/lib/admin/use-site-settings";
 
 interface Draft {
   id?: string;
@@ -237,7 +238,13 @@ export function AdminTemplatesPanel() {
     setDraft((d) => ({
       ...(d ?? EMPTY_DRAFT),
       kind: "json",
-      content: JSON.stringify({ name: project.name, pages: project.pages }),
+      // Export only template content plus the reusable pack association; never
+      // serialize the local project id, owner, or storage metadata.
+      content: JSON.stringify({
+        name: project.name,
+        pages: project.pages,
+        ...(project.pack ? { pack: project.pack } : {}),
+      }),
       contentChanged: true,
       fileName: `${project.name}.json`,
       title: d?.title || project.name,
@@ -270,6 +277,7 @@ export function AdminTemplatesPanel() {
     setSaving(false);
     if (!res.ok) return toast.error(res.error);
     toast.success(draft.id ? "تم تحديث القالب" : "تم إضافة القالب");
+    invalidateAdminPublicContent();
     setDraft(null);
     void load();
   };
@@ -313,6 +321,7 @@ export function AdminTemplatesPanel() {
       }
     }
     setBulkBusy(false);
+    if (failed.length < ids.length) invalidateAdminPublicContent();
     setSelectedIds(failed);
     if (failed.length) toast.error(`تعذر تنفيذ الإجراء على ${failed.length} قالب`);
     else
@@ -331,6 +340,7 @@ export function AdminTemplatesPanel() {
     setBusyId(null);
     if (!res.ok) return toast.error(res.error);
     setItems((list) => list.map((t) => (t.id === id ? { ...t, ...patch } : t)));
+    invalidateAdminPublicContent();
   };
 
   const regenSlug = async (id: string) => {
@@ -338,6 +348,7 @@ export function AdminTemplatesPanel() {
     const res = await adminRegenerateSlugFn({ data: { id } });
     setBusyId(null);
     if (!res.ok) return toast.error(res.error);
+    invalidateAdminPublicContent();
     toast.success(`تم تحديث الرابط: ${res.slug}`);
     setItems((list) => list.map((t) => (t.id === id ? { ...t, slug: res.slug } : t)));
   };
@@ -349,6 +360,7 @@ export function AdminTemplatesPanel() {
     setConfirmId(null);
     if (!res.ok) return toast.error(res.error);
     setItems((list) => list.filter((x) => x.id !== t.id));
+    invalidateAdminPublicContent();
     toast.success(`تم حذف «${t.title}»`);
   };
 

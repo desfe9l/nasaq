@@ -1,9 +1,14 @@
 import { Eye, Printer, ZoomIn, ZoomOut } from "lucide-react";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { useEditor } from "@/lib/editor/store";
-import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
 import { IconButton } from "./ui/IconButton";
+
+const APPEARANCE_MODES = [
+  { id: "light", label: "فاتح" },
+  { id: "dim", label: "متوسط" },
+  { id: "dark", label: "داكن" },
+] as const;
 
 /**
  * «عرض» — the view options, behind one icon.
@@ -40,6 +45,8 @@ export function ViewMenu({
   const printGuides = useEditor((s) => s.printGuides);
   const togglePrintGuide = useEditor((s) => s.togglePrintGuide);
   const zoom = useEditor((s) => s.zoom);
+  const appearance = useEditor((s) => s.appearance);
+  const setAppearance = useEditor((s) => s.setAppearance);
   /** Zoom around the middle of the live stage, so the page never jumps. */
   const zoomBy = (delta: number) => {
     const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
@@ -63,8 +70,9 @@ export function ViewMenu({
           {...props}
           ref={ref}
           label="عرض"
-          hint="الشبكة، المحاذاة، الأدلة وملء الشاشة"
+          hint="الزوم، المظهر، الصفحات واللوحات"
           icon={<Eye className="size-4" strokeWidth={1.7} />}
+          data-tour="view"
         />
       )}
     >
@@ -150,12 +158,15 @@ export function ViewMenu({
           </button>
         ))}
       </div>
-      <MenuRow
-        label="مظهر المحرر"
-        onSelect={() =>
-          window.dispatchEvent(new CustomEvent(OPEN_EDITOR_SETTINGS_EVENT))
-        }
-      />
+      <MenuGroup title="مظهر مساحة العمل" />
+      {APPEARANCE_MODES.map((mode) => (
+        <MenuRow
+          key={mode.id}
+          label={mode.id === "dim" ? "متوسط / خافت" : mode.label}
+          checked={appearance === mode.id}
+          onSelect={() => setAppearance(mode.id)}
+        />
+      ))}
       <MenuRow
         label="لوحة العناصر والمكتبة"
         checked={leftOpen}

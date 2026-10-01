@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { createPortal } from "react-dom";
-import { ChevronDown, FilePlus2, KeyRound, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
+import { ChevronDown, Contrast, FilePlus2, KeyRound, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   BRAND,
@@ -297,11 +297,11 @@ function AnnouncementBar() {
 export function SiteHeader({ current }: { current: string }) {
   const [open, setOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
-  // Initialised from the shared preference; the root-level theme module has
-  // already applied the class before any route renders, so this never
-  // disagrees with what is on screen.
-  const [dark, setDark] = useState(() => readStoredTheme() ?? false);
-  useEffect(() => subscribeTheme(setDark), []);
+  // The root-level theme module applies the saved mode before routes render.
+  const [appearance, setAppearance] = useState(
+    () => readStoredTheme() ?? "light",
+  );
+  useEffect(() => subscribeTheme(setAppearance), []);
 
   useEffect(() => {
     setOpen(false);
@@ -315,9 +315,18 @@ export function SiteHeader({ current }: { current: string }) {
     return () => window.removeEventListener("click", close);
   }, [moreOpen]);
 
+  const appearanceLabel =
+    appearance === "light" ? "فاتح" : appearance === "dim" ? "خافت" : "داكن";
+  const AppearanceIcon =
+    appearance === "light" ? Sun : appearance === "dim" ? Contrast : Moon;
   const toggleTheme = () => {
-    const next = !dark;
-    setDark(next);
+    const next =
+      appearance === "light"
+        ? "dim"
+        : appearance === "dim"
+          ? "dark"
+          : "light";
+    setAppearance(next);
     writeStoredTheme(next);
   };
 
@@ -400,18 +409,15 @@ export function SiteHeader({ current }: { current: string }) {
         </nav>
 
         <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
-          {/* Light/Dark is the visitor's choice: one toggle, applied site-wide
-              and persisted (lib/theme.ts), so every page loads on the same
-              mode instead of each page forcing its own. */}
+          {/* Cycle the one persisted appearance preference across the site. */}
           <button
             type="button"
             onClick={toggleTheme}
-            aria-pressed={dark}
-            aria-label={dark ? "التبديل إلى الوضع الفاتح" : "التبديل إلى الوضع الداكن"}
-            title={dark ? "الوضع الفاتح" : "الوضع الداكن"}
+            aria-label={`المظهر الحالي: ${appearanceLabel}، انقر للتغيير`}
+            title={`المظهر الحالي: ${appearanceLabel}`}
             className="grid size-9 shrink-0 place-items-center rounded-[8px] border border-line"
           >
-            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+            <AppearanceIcon className="size-4" />
           </button>
           <a
             href={whatsappHref(WHATSAPP_MESSAGES.support)}
@@ -455,11 +461,11 @@ export function SiteHeader({ current }: { current: string }) {
           <button
             type="button"
             onClick={toggleTheme}
-            aria-pressed={dark}
-            className="mt-1 flex w-full items-center gap-2 rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted"
+            aria-label={`المظهر الحالي: ${appearanceLabel}، انقر للتغيير`}
+            className="mt-1 flex min-h-11 w-full items-center gap-2 rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted"
           >
-            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-            {dark ? "الوضع الفاتح" : "الوضع الداكن"}
+            <AppearanceIcon className="size-4" />
+            المظهر الحالي: {appearanceLabel}
           </button>
           {/* The account trigger above is shared across all breakpoints. */}
         </nav>

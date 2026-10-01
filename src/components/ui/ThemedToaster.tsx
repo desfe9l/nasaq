@@ -13,7 +13,9 @@ import { readStoredTheme, subscribeTheme } from "@/lib/theme";
  * toasts without a reload.
  */
 export function ThemedToaster(props: ToasterProps) {
-  const [dark, setDark] = useState(() => readStoredTheme() === true);
-  useEffect(() => subscribeTheme(setDark), []);
-  return <Toaster theme={dark ? "dark" : "light"} {...props} />;
+  const [appearance, setAppearance] = useState(
+    () => readStoredTheme() ?? "light",
+  );
+  useEffect(() => subscribeTheme(setAppearance), []);
+  return <Toaster theme={appearance === "light" ? "light" : "dark"} {...props} />;
 }

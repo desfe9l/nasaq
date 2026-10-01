@@ -5,12 +5,13 @@ import {
   readStoredTheme,
   subscribeTheme,
   writeStoredTheme,
+  type AppearanceMode,
 } from "../theme.ts";
 
-test("one preference drives live appearance, legacy migration and blocked-storage fallback", () => {
+test("one preference drives the three live appearance modes, legacy migration and blocked-storage fallback", () => {
   const values = new Map<string, string>();
   const events = new EventTarget();
-  let dark = false;
+  const classes = new Set<string>();
   let blocked = false;
   const meta: { content: string | null } = { content: null };
   const originalWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -41,8 +42,9 @@ test("one preference drives live appearance, legacy migration and blocked-storag
     value: {
       documentElement: {
         classList: {
-          toggle: (_: string, value: boolean) => {
-            dark = value;
+          toggle: (name: string, value: boolean) => {
+            if (value) classes.add(name);
+            else classes.delete(name);
           },
         },
       },
@@ -53,40 +55,53 @@ test("one preference drives live appearance, legacy migration and blocked-storag
           : null,
     },
   });
-  const seen: boolean[] = [];
+  const seen: AppearanceMode[] = [];
   const unsubscribe = subscribeTheme((value) => seen.push(value));
   try {
     applyStoredTheme();
-    assert.equal(dark, false);
+    assert.equal(classes.has("dark"), false);
+    assert.equal(classes.has("dim"), false);
     values.set("nasaq-report-ui-v2", JSON.stringify({ dark: true }));
-    assert.equal(readStoredTheme(), true);
-    writeStoredTheme(false);
-    assert.equal(dark, false);
+    assert.equal(readStoredTheme(), "dark");
+
+    writeStoredTheme("light");
+    assert.equal(classes.has("dark"), false);
+    assert.equal(classes.has("dim"), false);
     assert.equal(
       readStoredTheme(),
-      false,
+      "light",
       "explicit choice supersedes legacy settings",
     );
-    writeStoredTheme(true);
-    assert.equal(dark, true);
+
+    writeStoredTheme("dim");
+    assert.equal(classes.has("dark"), true);
+    assert.equal(classes.has("dim"), true);
+    assert.equal(meta.content, "#20262c", "browser chrome follows the dim palette");
+
+    writeStoredTheme("dark");
+    assert.equal(classes.has("dark"), true);
+    assert.equal(classes.has("dim"), false);
     assert.equal(meta.content, "#0f141c", "browser chrome follows the dark palette");
+
     const storage = new Event("storage");
     Object.defineProperty(storage, "key", { value: "nasaq-theme" });
     values.set("nasaq-theme", "light");
     events.dispatchEvent(storage);
-    assert.equal(dark, false, "other tabs synchronize");
+    assert.equal(classes.has("dark"), false, "other tabs synchronize");
+    assert.equal(classes.has("dim"), false);
     assert.equal(meta.content, "#006c35", "browser chrome follows the light palette");
+
     blocked = true;
-    writeStoredTheme(true);
+    writeStoredTheme("dim");
     assert.equal(
-      dark,
+      classes.has("dark") && classes.has("dim"),
       true,
       "live UI updates even if persistence is unavailable",
     );
-    assert.deepEqual(seen, [false, false, true, false, true]);
+    assert.deepEqual(seen, ["light", "light", "dim", "dark", "light", "dim"]);
     unsubscribe();
-    writeStoredTheme(false);
-    assert.equal(seen.length, 5);
+    writeStoredTheme("light");
+    assert.equal(seen.length, 6);
   } finally {
     unsubscribe();
     if (originalWindow)

@@ -164,6 +164,29 @@ async function readSettings(): Promise<PublicSiteSettings> {
   return out;
 }
 
+/** Remove a homepage reference when its catalog record stops being public. */
+async function clearFeaturedTemplateReference(
+  db: Awaited<ReturnType<typeof sql>>,
+  id: string,
+) {
+  const rows = await db.query<{ value: unknown }>(
+    `SELECT value FROM site_settings WHERE key = 'texts' LIMIT 1`,
+  );
+  // Defaults already select a real Admin record. Persist an explicit empty
+  // selection when that default is withdrawn; otherwise republishing it later
+  // would unexpectedly restore a feature the Admin had removed.
+  const texts = rows.length
+    ? normalizeSection("texts", parseJson(rows[0].value))
+    : DEFAULT_SITE_SETTINGS.texts;
+  if (texts.featuredTemplateId !== id) return;
+  await db.query(
+    `INSERT INTO site_settings (key, value, updated_at)
+     VALUES ('texts', $1::jsonb, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [JSON.stringify({ ...texts, featuredTemplateId: "" })],
+  );
+}
+
 function rowToSummary(row: Record<string, unknown>): AdminTemplateSummary {
   return {
     id: String(row.id),
@@ -336,6 +359,23 @@ export const adminSaveSettingsFn = createServerFn({ method: "POST" })
     if (!SECTIONS.includes(data.section)) return { ok: false as const, error: "قسم غير معروف" };
     const value = normalizeSection(data.section, data.value);
     const db = await sql();
+    if (data.section === "texts") {
+      const featuredId = (value as PublicSiteSettings["texts"]).featuredTemplateId;
+      if (featuredId) {
+        await ensureProductTemplates(db);
+        const records = await db.query<{ id: string }>(
+          `SELECT id FROM admin_templates
+           WHERE id = $1 AND status = 'published' AND tier = 'free' LIMIT 1`,
+          [featuredId],
+        );
+        if (!records.length) {
+          return {
+            ok: false as const,
+            error: "اختر سجلًا منشورًا مجانيًا من كتالوج القوالب أو أزل التحديد",
+          };
+        }
+      }
+    }
     await db.query(
       `INSERT INTO site_settings (key, value, updated_at) VALUES ($1, $2::jsonb, now())
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
@@ -353,7 +393,7 @@ export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handle
     await ensureProductTemplates(db);
     const rows = await db.query(
       `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
-       FROM admin_templates WHERE status = 'published' ORDER BY sort_order ASC, updated_at DESC LIMIT 200`,
+       FROM admin_templates WHERE status = 'published' ORDER BY sort_order ASC, updated_at DESC LIMIT 500`,
     );
     return rows.map(rowToSummary);
   } catch {
@@ -554,6 +594,9 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
         Number.isFinite(Number(t.sortOrder)) ? Math.trunc(Number(t.sortOrder)) : 0,
       ],
     );
+    if (status !== "published" || tier !== "free") {
+      await clearFeaturedTemplateReference(db, id);
+    }
     return { ok: true as const, id, slug };
   });
 
@@ -570,6 +613,16 @@ export const adminSetTemplateStatusFn = createServerFn({ method: "POST" })
     if (data.tier && ["free", "licensed"].includes(data.tier)) {
       await db.query(`UPDATE admin_templates SET tier = $2, updated_at = now() WHERE id = $1`, [data.id, data.tier]);
     }
+    const rows = await db.query<{ status: string; tier: string }>(
+      `SELECT status, tier FROM admin_templates WHERE id = $1 LIMIT 1`,
+      [data.id],
+    );
+    if (
+      rows.length &&
+      (rows[0].status !== "published" || rows[0].tier !== "free")
+    ) {
+      await clearFeaturedTemplateReference(db, data.id);
+    }
     return { ok: true as const };
   });
 
@@ -581,6 +634,7 @@ export const adminDeleteTemplateFn = createServerFn({ method: "POST" })
     if (!gate.ok) return { ok: false as const, error: gate.error };
     const db = await sql();
     await db.query(`DELETE FROM admin_templates WHERE id = $1`, [data.id]);
+    await clearFeaturedTemplateReference(db, data.id);
     return { ok: true as const };
   });
 

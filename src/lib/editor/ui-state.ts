@@ -379,25 +379,13 @@ export function panelSpawnRect(
 }
 
 /* -------------------------------------------------------------------------- */
-/* Chrome density (selection bubble + canvas dock)                            */
+/* Selection-bubble density                                                 */
 /* -------------------------------------------------------------------------- */
 
 /*
- * The two toolbars of the editor (the selection bubble and the canvas dock)
- * used to size themselves from their own CONTENT: a long font name widened the
- * bubble, a narrow lane made it wrap onto a second row, and a phone viewport
- * compressed the dock's icons instead of giving anything up. The result was a
- * toolbar whose width and height moved while the author worked.
- *
- * Both bars now have a FIXED cell geometry, and what is inside them is decided
- * by these pure functions from one number — the free lane beside the artwork —
- * so a bar's size is a deterministic function of the viewport, never of the
- * document, the selection's contents or the drawer that happens to be open.
- * Anything that does not fit leaves the bar for a drawer; nothing is shrunk,
- * clipped or wrapped.
- *
- * Every constant below mirrors one rule in `src/styles.css`; the comment names
- * it so the two files cannot drift apart silently.
+ * The selection bubble has fixed cell geometry; the controls that stay in the
+ * bar are decided from the available lane, so font names and selection content
+ * never change its width. Anything that does not fit moves to its menu.
  */
 
 /** `.floating-toolbar-btn` — one icon cell of the selection bubble. */
@@ -583,166 +571,6 @@ export function bubbleLayout(
       return candidate;
   }
   return layoutFor(BUBBLE_FOLDS[kind][BUBBLE_FOLDS[kind].length - 1] ?? []);
-}
-
-/** Canvas-dock cell geometry, read from the dock's own computed style. */
-export interface DockMetrics {
-  /** `--dock-size` — one tool cell (34px desktop, 44px coarse pointer). */
-  cell: number;
-  /** Drag grip width. */
-  grip: number;
-  /** `gap` between two direct children. */
-  gap: number;
-  /** `padding` of the dock box (one side). */
-  pad: number;
-  /** `.editor-dock-sep` footprint, inline margins included. */
-  sep: number;
-}
-
-/** The desktop values `styles.css` declares outside the coarse-pointer media. */
-export const DOCK_METRICS_FALLBACK: DockMetrics = {
-  cell: 34,
-  grip: 20,
-  gap: 3,
-  pad: 5,
-  sep: 5,
-};
-
-/** Dock tools, in render order. */
-export type DockPart =
-  | "grip"
-  | "select"
-  | "text"
-  | "shape"
-  | "library"
-  | "properties"
-  | "layers"
-  | "colors"
-  | "add"
-  | "collapse";
-
-export const DOCK_PARTS: readonly DockPart[] = [
-  "grip",
-  "select",
-  "text",
-  "shape",
-  "library",
-  "properties",
-  "layers",
-  "colors",
-  "add",
-  "collapse",
-];
-
-/**
- * The dock's tool groups. A folded group is replaced by ONE drawer trigger, so
- * the bar loses (group size − 1) cells instead of the group's whole contents —
- * which is exactly why folding beats shrinking.
- */
-export const DOCK_DRAWER_GROUPS: readonly {
-  id: "draw" | "panels" | "colors";
-  parts: readonly DockPart[];
-}[] = [
-  { id: "draw", parts: ["text", "shape", "select"] },
-  { id: "panels", parts: ["library", "properties", "layers"] },
-  { id: "colors", parts: ["colors"] },
-];
-
-/**
- * Fold order for the dock. Panel gateways go first (each panel is one click
- * away from its own contents), then the drawing tools merge into a single
- * «أدوات الرسم» drawer, and only on the narrowest phones does the pointer tool
- * join them.
- *
- * Folding the colour pair is deliberately NOT a level: a single-cell group
- * folds into a single-cell trigger, which buys no width and costs the author
- * the one control they read at a glance.
- */
-export const DOCK_FOLDS: readonly (readonly DockPart[])[] = [
-  [],
-  ["library", "properties", "layers"],
-  ["library", "properties", "layers", "text", "shape"],
-  ["library", "properties", "layers", "text", "shape", "select"],
-];
-
-/**
- * Rendered width of the dock for a given number of tool cells.
- *
- * `cells` counts every 34/44px box the bar draws — tools AND drawer triggers —
- * so this is the dock's real offsetWidth, and the fold decision below can be
- * trusted without measuring the bar itself (which would be a feedback loop).
- */
-export function dockBarWidth(
-  cells: number,
-  options: {
-    grip?: boolean;
-    divider?: boolean;
-    metrics?: DockMetrics;
-  } = {},
-): number {
-  const {
-    grip = true,
-    divider = false,
-    metrics = DOCK_METRICS_FALLBACK,
-  } = options;
-  const children = cells + (grip ? 1 : 0) + (divider ? 1 : 0);
-  return (
-    metrics.pad * 2 +
-    (grip ? metrics.grip : 0) +
-    cells * metrics.cell +
-    (divider ? metrics.sep : 0) +
-    Math.max(0, children - 1) * metrics.gap
-  );
-}
-
-/** How many cells the bar draws when `folded` has left for the drawers. */
-export function dockCellCount(folded: readonly DockPart[]): number {
-  const triggers = DOCK_DRAWER_GROUPS.filter((group) =>
-    group.parts.some((part) => folded.includes(part)),
-  ).length;
-  return (
-    DOCK_PARTS.filter((part) => part !== "grip" && !folded.includes(part))
-      .length + triggers
-  );
-}
-
-export interface DockLayout {
-  /** Tools that stay in the bar. */
-  bar: DockPart[];
-  /** Tools that moved into a drawer. */
-  drawer: DockPart[];
-  /** Drawer groups the bar shows a trigger for. */
-  triggers: Array<"draw" | "panels" | "colors">;
-}
-
-/**
- * Decide what the canvas dock shows for a measured lane.
- *
- * The lane is the canvas workspace the dock floats in, so a narrower window,
- * an opened drawer or a taller pages rail all re-run this with a smaller
- * number and the dock answers by folding a tool into its drawer — never by
- * shrinking an icon or wrapping onto a second row.
- */
-export function dockLayout(
-  lane: number,
-  metrics: DockMetrics = DOCK_METRICS_FALLBACK,
-): DockLayout {
-  const available = Number.isFinite(lane) ? lane : Number.POSITIVE_INFINITY;
-  const layoutFor = (folded: readonly DockPart[]): DockLayout => ({
-    bar: DOCK_PARTS.filter((part) => !folded.includes(part)),
-    drawer: [...folded],
-    triggers: DOCK_DRAWER_GROUPS.filter((group) =>
-      group.parts.some((part) => folded.includes(part)),
-    ).map((group) => group.id),
-  });
-  for (const folded of DOCK_FOLDS) {
-    const width = dockBarWidth(dockCellCount(folded), {
-      divider: !folded.includes("colors"),
-      metrics,
-    });
-    if (width <= available) return layoutFor(folded);
-  }
-  return layoutFor(DOCK_FOLDS[DOCK_FOLDS.length - 1] ?? []);
 }
 
 /* -------------------------------------------------------------------------- */

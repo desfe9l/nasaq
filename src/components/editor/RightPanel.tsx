@@ -9,9 +9,6 @@ import {
   Baseline,
   ChevronDown,
   Copy,
-  CopyPlus,
-  ClipboardPaste,
-  Download,
   Contrast,
   Eye,
   FlipHorizontal2,
@@ -22,7 +19,6 @@ import {
   ImagePlus,
   Link,
   Lock,
-  Paintbrush,
   RotateCcw,
   RotateCw,
   Search,
@@ -82,7 +78,7 @@ const BLEND_LABEL: Record<string, string> = {
 function normalizeDeg(deg: number): number {
   return (((deg % 360) + 540) % 360) - 180;
 }
-import { columnTotals, resizeMatrix, toCsv } from "@/lib/editor/tables";
+import { columnTotals, resizeMatrix } from "@/lib/editor/tables";
 import { prepareText } from "@/lib/editor/text-render";
 import { useEditor } from "@/lib/editor/store";
 import { OPEN_REPORT_TOOLS_EVENT } from "./EditorApp";
@@ -137,15 +133,7 @@ export function RightPanel({
   const flipSelected = useEditor((s) => s.flipSelected);
   const toggleFadeOverlay = useEditor((s) => s.toggleFadeOverlay);
   const updateStyle = useEditor((s) => s.updateStyle);
-  const duplicateSelected = useEditor((s) => s.duplicateSelected);
-  const copySelected = useEditor((s) => s.copySelected);
-  const pasteClipboard = useEditor((s) => s.pasteClipboard);
-  const copyStyle = useEditor((s) => s.copyStyle);
-  const pasteStyle = useEditor((s) => s.pasteStyle);
-  const styleClipboard = useEditor((s) => s.styleClipboard);
-  const clipboard = useEditor((s) => s.clipboard);
   const deleteSelected = useEditor((s) => s.deleteSelected);
-  const bring = useEditor((s) => s.bring);
   const toggleLock = useEditor((s) => s.toggleLock);
   const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
   const toggleWidthLock = useEditor((s) => s.toggleWidthLock);
@@ -159,34 +147,20 @@ export function RightPanel({
   const fontChoices = useEditor((s) => s.fontChoices);
   const probeFonts = useEditor((s) => s.probeFonts);
   const setLeftTab = useEditor((s) => s.setLeftTab);
-  const openExport = useEditor((s) => s.openExport);
   const customIcons = useEditor((s) => s.customIcons);
   const addElement = useEditor((s) => s.addElement);
   const theme = THEMES[useEditor((s) => s.theme)];
   const [cellEditor, setCellEditor] = useState(false);
   const [savingAsset, setSavingAsset] = useState(false);
-  /*
-   * Phase 2 — the inspector is organised into four collapsible groups:
-   * «الأبعاد والتحاذي» · «النص» · «الخلفية والحدود» · «تصدير».
-   *
-   * Dimensions, text AND background start open: fill/stroke/opacity are core
-   * properties and hiding them behind a closed tab reads as "the feature is
-   * missing" (the panel scrolls internally, so openness costs no screen).
-   * report/fade/export start closed. The choice persists per device.
-   */
+  /* Core properties start open; infrequent tools remain collapsible. */
   const accordions = useAccordionState<
-    "dimensions" | "text" | "background" | "fade" | "report" | "export"
+    "dimensions" | "text" | "background" | "fade" | "report"
   >("properties", {
     dimensions: true,
     text: true,
     background: true,
-    // «أدوات التقرير» opens on demand: it is a toolbox, not a per-element
-    // property, and folding it away keeps the inspector scannable.
     report: false,
-    // Opens by itself the moment a fade exists, so the layer is never invisible
-    // state: the author can always see what is painting over the picture.
     fade: false,
-    export: false,
   });
   /**
    * «أدوات التقرير» is pinned in the toolbar, but it lives here.
@@ -226,7 +200,8 @@ export function RightPanel({
     setSavingAsset(true);
     try {
       const { captureElement } = await import("@/lib/editor/export");
-      const src = await captureElement(el.id, 3);
+      const pageId = useEditor.getState().activePageId;
+      const src = await captureElement(pageId, el.id, 3);
       if (!src) {
         toast.error("تعذر التقاط العنصر", {
           description: "حاول مرة أخرى، أو أعد تحميل الصفحة إذا تكرر الخطأ.",
@@ -511,14 +486,6 @@ export function RightPanel({
               الشفافية، الخط، الألوان، الإطار والظل. النقر المزدوج على النص
               يفعّل التعديل المباشر.
             </EmptyNote>
-            <button
-              type="button"
-              disabled={!clipboard}
-              onClick={() => pasteClipboard()}
-              className="h-9 rounded-[8px] border border-line text-[12px] font-extrabold disabled:opacity-40"
-            >
-              لصق العنصر المنسوخ
-            </button>
           </div>
         )}
 
@@ -598,21 +565,6 @@ export function RightPanel({
               <button
                 type="button"
                 className="editor-mini-btn justify-center"
-                onClick={copyStyle}
-              >
-                <Paintbrush className="size-3.5" /> نسخ التنسيق
-              </button>
-              <button
-                type="button"
-                className="editor-mini-btn justify-center"
-                disabled={!styleClipboard}
-                onClick={pasteStyle}
-              >
-                <Paintbrush className="size-3.5" /> لصق التنسيق
-              </button>
-              <button
-                type="button"
-                className="editor-mini-btn justify-center"
                 onClick={toggleLock}
               >
                 <Lock className="size-3.5" /> قفل التحديد
@@ -623,20 +575,6 @@ export function RightPanel({
                 onClick={toggleHidden}
               >
                 <EyeOff className="size-3.5" /> إخفاء التحديد
-              </button>
-              <button
-                type="button"
-                className="editor-mini-btn justify-center"
-                onClick={() => bring("front")}
-              >
-                إلى المقدمة
-              </button>
-              <button
-                type="button"
-                className="editor-mini-btn justify-center"
-                onClick={() => bring("bottom")}
-              >
-                إلى الخلف
               </button>
             </section>
           </div>
@@ -1963,20 +1901,6 @@ export function RightPanel({
                     />
                   </Field>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const data = parseTable(
-                        el.content,
-                        el.style.cols,
-                        el.style.rows,
-                      );
-                      void copyTableCsv(data);
-                    }}
-                    className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-[8px] border border-line text-[11px] font-extrabold"
-                  >
-                    <Copy className="size-3.5" /> نسخ الجدول كـ CSV
-                  </button>
                 </>
               )}
 
@@ -2285,12 +2209,6 @@ export function RightPanel({
             </AccordionSection>
 
             {/*
-             * Phase 2 — «تصدير»: the export actions that belong to the element
-             * being edited, one press each. Every button opens the SAME export
-             * dialog the toolbar uses (no second export path), just with the
-             * format already chosen.
-             */}
-            {/*
              * Step 8 — طبقة التلاشي. Only the image family can carry one, so
              * the whole section is hidden elsewhere; inside, the four gradient
              * presets are buttons (not a dropdown) because they are the fast
@@ -2403,61 +2321,8 @@ export function RightPanel({
               </AccordionSection>
             )}
 
-            <AccordionSection
-              title="تصدير"
-              id="export"
-              open={accordions.isOpen("export", false)}
-              onToggle={() => accordions.toggle("export")}
-            >
-              <div className="grid grid-cols-2 gap-1.5">
-                <Action
-                  onClick={() => openExport("pdf")}
-                  icon={Download}
-                  label="PDF"
-                />
-                <Action
-                  onClick={() => openExport("png")}
-                  icon={Download}
-                  label="صورة PNG"
-                />
-                <Action
-                  onClick={() => openExport("docx")}
-                  icon={Download}
-                  label="Word"
-                />
-                <Action
-                  onClick={() => openExport("pptx")}
-                  icon={Download}
-                  label="PowerPoint"
-                />
-              </div>
-              <Action
-                onClick={() => void saveToLibrary(el)}
-                icon={ImagePlus}
-                label="حفظ العنصر في المكتبة"
-              />
-              <p className="text-[10px] leading-4 text-muted">
-                الصفحة الحالية متاحة داخل نافذة التصدير.
-              </p>
-            </AccordionSection>
 
             <div className="grid grid-cols-2 gap-1.5">
-              <Action
-                onClick={() => bring("forward")}
-                icon={ArrowUp}
-                label="تقديم"
-              />
-              <Action
-                onClick={() => bring("back")}
-                icon={ArrowDown}
-                label="تأخير"
-              />
-              <Action
-                onClick={duplicateSelected}
-                icon={Copy}
-                label="نسخ (⌘D)"
-              />
-              <Action onClick={copySelected} icon={Copy} label="قص للحافظة" />
               <Action
                 onClick={toggleLock}
                 icon={el.locked ? Unlock : Lock}
@@ -2521,72 +2386,6 @@ export function RightPanel({
           </AccordionSection>
         )}
       </div>
-      <footer
-        className="editor-panel-footer"
-        aria-label="إجراءات سريعة على العنصر"
-      >
-        <button
-          type="button"
-          onClick={duplicateSelected}
-          disabled={!selectedId}
-          aria-label="تكرار العنصر"
-          title="تكرار العنصر (⌘D)"
-        >
-          <CopyPlus className="size-4" strokeWidth={1.7} />
-          <span>تكرار</span>
-        </button>
-        <button
-          type="button"
-          onClick={copySelected}
-          disabled={!selectedId}
-          aria-label="نسخ العنصر"
-          title="نسخ العنصر (⌘C)"
-        >
-          <Copy className="size-4" strokeWidth={1.7} />
-          <span>نسخ</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => pasteClipboard()}
-          disabled={!clipboard}
-          aria-label="لصق العنصر"
-          title="لصق العنصر (⌘V)"
-        >
-          <ClipboardPaste className="size-4" strokeWidth={1.7} />
-          <span>لصق</span>
-        </button>
-        <button
-          type="button"
-          onClick={copyStyle}
-          disabled={!selectedId}
-          aria-label="نسخ التنسيق"
-          title="نسخ التنسيق"
-        >
-          <Paintbrush className="size-4" strokeWidth={1.7} />
-          <span>نسخ التنسيق</span>
-        </button>
-        <button
-          type="button"
-          onClick={pasteStyle}
-          disabled={!selectedId || !styleClipboard}
-          aria-label="لصق التنسيق"
-          title="لصق التنسيق"
-        >
-          <Paintbrush className="size-4" strokeWidth={1.7} />
-          <span>لصق التنسيق</span>
-        </button>
-        <button
-          type="button"
-          onClick={deleteSelected}
-          disabled={!selectedId}
-          aria-label="حذف العنصر"
-          title="حذف العنصر (Delete)"
-          className="is-danger"
-        >
-          <Trash2 className="size-4" strokeWidth={1.7} />
-          <span>حذف</span>
-        </button>
-      </footer>
     </aside>
   );
 }
@@ -2658,30 +2457,6 @@ function TextFitStatus({ el }: { el: CanvasEl }) {
         : "النص يتّسع داخل الإطار بالحجم الحالي."}
     </p>
   );
-}
-
-/** Copy the grid as CSV so it can travel into Excel, Sheets, or another app. */
-async function copyTableCsv(data: string[][]) {
-  const csv = toCsv(data);
-  try {
-    await navigator.clipboard.writeText(csv);
-    toast.success("تم نسخ الجدول بصيغة CSV");
-  } catch {
-    // Clipboard permission can be denied; fall back to a download so the data
-    // is still retrievable rather than silently lost. `toCsv` already includes
-    // the UTF-8 BOM that makes Excel read Arabic correctly.
-    const url = URL.createObjectURL(
-      new Blob([csv], { type: "text/csv;charset=utf-8" }),
-    );
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "table.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.message("تم تنزيل الجدول بصيغة CSV", {
-      description: "تعذّر الوصول إلى الحافظة.",
-    });
-  }
 }
 
 /** Read-only column sums, so the author can verify figures before typing them. */

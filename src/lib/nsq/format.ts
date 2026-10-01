@@ -202,6 +202,7 @@ export interface NsqDocument {
     transactionNo?: string;
     defaultSize?: string;
     pack?: string;
+    licensedTemplateId?: string;
     sourceProjectId?: string;
     createdAt?: number;
     updatedAt?: number;
@@ -223,6 +224,7 @@ export type NsqErrorCode =
   | "missing-asset"
   | "integrity"
   | "unsupported-env"
+  | "access-denied"
   | "storage"
   | "pending";
 
@@ -241,6 +243,7 @@ export const NSQ_ERROR_MESSAGES: Record<NsqErrorCode, string> = {
   "missing-asset": "بعض صور المشروع مفقودة داخل الملف — الملف غير مكتمل.",
   integrity: "فشل التحقق من سلامة محتوى الملف — قد يكون تالفًا.",
   "unsupported-env": "المتصفح الحالي لا يدعم فتح ملفات نَسَق.",
+  "access-denied": "يتطلب حفظ هذا الملف ترخيصًا مناسبًا وحدّ صفحات لا يتجاوزه.",
 };
 
 export class NsqError extends Error {
@@ -717,6 +720,7 @@ export const DOCUMENT_MIGRATIONS: Record<
       transactionNo: legacy.transactionNo,
       defaultSize: legacy.defaultSize,
       pack: legacy.pack,
+      licensedTemplateId: legacy.licensedTemplateId,
       sourceProjectId: legacy.id,
       createdAt: legacy.createdAt,
       updatedAt: legacy.updatedAt,
@@ -769,6 +773,7 @@ export function documentToProject(
     transactionNo: str(meta.transactionNo) || "",
     defaultSize: oneOf(meta.defaultSize, SIZE_IDS),
     pack: oneOf(meta.pack, PACK_IDS),
+    licensedTemplateId: str(meta.licensedTemplateId),
     pages,
   };
 }

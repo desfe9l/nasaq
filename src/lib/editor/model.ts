@@ -377,6 +377,11 @@ export interface Project {
   defaultSize?: SizeId;
   /** Which pack this document was created from (category filters on /projects). */
   pack?: PackId;
+  /**
+   * Originating licensed Admin template, retained with working copies and files
+   * so editor actions can re-check premium-template access after import/reload.
+   */
+  licensedTemplateId?: string;
   /** Starred by the owner. Persisted with the row, never part of undo history. */
   favorite?: boolean;
   /**
@@ -413,6 +418,7 @@ export interface ProjectMeta {
   createdAt: number;
   updatedAt: number;
   pack?: PackId;
+  licensedTemplateId?: string;
   favorite?: boolean;
   thumbnail?: string;
 }
@@ -427,6 +433,7 @@ export function projectMeta(p: Project): ProjectMeta {
     createdAt: p.createdAt || Date.now(),
     updatedAt: p.updatedAt || Date.now(),
     pack: p.pack,
+    licensedTemplateId: p.licensedTemplateId,
     favorite: p.favorite,
     thumbnail: p.thumbnail,
   };
