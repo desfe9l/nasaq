@@ -1,4 +1,17 @@
 import { create } from "zustand";
+import type { CanvasEl } from "./model";
+import type { CropTransform } from "./image-crop";
+import type { RectMm } from "./document-space";
+
+export interface CropSession {
+  pageId: string;
+  original: CanvasEl;
+  transform: CropTransform;
+  enteredGroupId: string | null;
+  source: { w: number; h: number };
+  box: RectMm;
+  bounds: RectMm;
+}
 
 /**
  * Transient canvas interaction state — the frame-rate layer.
@@ -57,6 +70,11 @@ export interface InteractionState {
   version: number;
   /** True between `beginInteraction` and `endInteraction`. */
   active: boolean;
+  /** Exclusive, non-destructive crop mode; never shares transform handles. */
+  crop: CropSession | null;
+  beginCrop: (session: CropSession) => void;
+  setCropBox: (box: RectMm) => void;
+  endCrop: () => void;
   /** Element id → transient geometry while a gesture is live. */
   overrides: Record<string, TransientGeom>;
   /** Alignment guides for the live gesture. */
@@ -83,6 +101,20 @@ const EMPTY_GUIDES = { v: [], h: [] };
 export const useInteraction = create<InteractionState>((set) => ({
   version: 0,
   active: false,
+  crop: null,
+  beginCrop: (crop) =>
+    set((s) => ({
+      crop,
+      active: false,
+      overrides: {},
+      guides: EMPTY_GUIDES,
+      version: s.version + 1,
+    })),
+  setCropBox: (box) =>
+    set((s) =>
+      s.crop ? { crop: { ...s.crop, box }, version: s.version + 1 } : {},
+    ),
+  endCrop: () => set((s) => ({ crop: null, version: s.version + 1 })),
   overrides: {},
   guides: EMPTY_GUIDES,
   rotationHint: null,

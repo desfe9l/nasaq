@@ -32,7 +32,10 @@ import {
   SEVERITY_LABEL,
   type PreflightIssue,
 } from "@/lib/editor/preflight";
-import { GUTTER_MARGIN_MM, type PrintGuideSettings } from "@/lib/editor/print-guides";
+import {
+  GUTTER_MARGIN_MM,
+  type PrintGuideSettings,
+} from "@/lib/editor/print-guides";
 import { imageSizeResolver } from "@/lib/editor/images";
 import { useEditor } from "@/lib/editor/store";
 import { downloadCurrentNsq } from "@/lib/nsq/editor-io";
@@ -53,23 +56,63 @@ const SignInRequiredModalLazy = lazy(() =>
 import { authEnabled } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 
-const FORMATS: { id: ExportFormat; title: string; desc: string; icon: typeof FileDown }[] = [
-  { id: "pdf", title: "PDF", desc: "طباعة وأرشفة رسمية · 300 DPI", icon: FileDown },
+const FORMATS: {
+  id: ExportFormat;
+  title: string;
+  desc: string;
+  icon: typeof FileDown;
+}[] = [
+  {
+    id: "pdf",
+    title: "PDF",
+    desc: "طباعة وأرشفة رسمية · 300 DPI",
+    icon: FileDown,
+  },
   { id: "png", title: "PNG", desc: "دقة عالية بلا فقدان", icon: ImageIcon },
   { id: "jpg", title: "JPG", desc: "حجم أصغر للصور", icon: ImageIcon },
-  { id: "pptx", title: "PowerPoint", desc: "طبقات مطابقة أو عناصر قابلة للتحرير", icon: Presentation },
-  { id: "docx", title: "Word", desc: "طبقات مطابقة أو نصوص قابلة للتحرير", icon: FileText },
-  { id: "svg", title: "SVG للويب", desc: "خطوط وصور مضمنة · محرك المتصفح", icon: FileCode2 },
-  { id: "html", title: "HTML مستقل", desc: "ملف واحد قابل للطباعة", icon: FileCode2 },
-  { id: "nsq", title: "ملف نَسَق (.nsq)", desc: "مشروع قابل للتحرير على أي جهاز", icon: FileArchive },
-  { id: "json", title: "JSON احتياطي", desc: "نسخة احتياطية بالصيغة القديمة", icon: FileJson },
+  {
+    id: "pptx",
+    title: "PowerPoint",
+    desc: "طبقات مطابقة أو عناصر قابلة للتحرير",
+    icon: Presentation,
+  },
+  {
+    id: "docx",
+    title: "Word",
+    desc: "طبقات مطابقة أو نصوص قابلة للتحرير",
+    icon: FileText,
+  },
+  {
+    id: "svg",
+    title: "SVG للويب",
+    desc: "خطوط وصور مضمنة · محرك المتصفح",
+    icon: FileCode2,
+  },
+  {
+    id: "html",
+    title: "HTML مستقل",
+    desc: "ملف واحد قابل للطباعة",
+    icon: FileCode2,
+  },
+  {
+    id: "nsq",
+    title: "ملف نَسَق (.nsq)",
+    desc: "مشروع قابل للتحرير على أي جهاز",
+    icon: FileArchive,
+  },
+  {
+    id: "json",
+    title: "JSON احتياطي",
+    desc: "نسخة احتياطية بالصيغة القديمة",
+    icon: FileJson,
+  },
 ];
 
 const FIX_LABEL: Record<NonNullable<PreflightIssue["fix"]>, string> = {
- "fit-text": "ملاءمة الإطار",
- "move-inward": "إبعادها عن الهامش",
- "delete-page": "حذف الصفحة",
- "delete-element": "حذف العناصر",
+  "fit-text": "ملاءمة الإطار",
+  "move-inward": "إبعادها عن الهامش",
+  "delete-page": "حذف الصفحة",
+  "delete-element": "حذف العناصر",
 };
 
 const GUIDE_LABELS: {
@@ -178,11 +221,15 @@ export function ExportDialog() {
   const guestNeedsSignIn = authEnabled && !isPending && !user;
 
   // Never show a cached preview after page edits, range or render-mode changes.
-  useEffect(() => { setPreviewPages([]); }, [pages, scope, activePageId, format, quality, editableOffice, open]);
+  useEffect(() => {
+    setPreviewPages([]);
+  }, [pages, scope, activePageId, format, quality, editableOffice, open]);
 
   if (!open) return null;
 
-  const needsRaster = RASTER_FORMATS.has(format) || (OFFICE_FORMATS.has(format) && !editableOffice);
+  const needsRaster =
+    RASTER_FORMATS.has(format) ||
+    (OFFICE_FORMATS.has(format) && !editableOffice);
   const licensed = entitlements.advanced_export === true;
   const formatAllowed = canUseDemoExport(format, licensed);
   const captureScale = effectiveExportScale(quality, licensed);
@@ -318,7 +365,9 @@ export function ExportDialog() {
         {/* Header - fixed */}
         <div className="flex shrink-0 items-start justify-between border-b border-line/70 px-5 py-4">
           <div>
-            <h2 className="text-[18px] font-extrabold text-brand">تصدير المستند</h2>
+            <h2 className="text-[18px] font-extrabold text-brand">
+              تصدير المستند
+            </h2>
             <p className="mt-0.5 text-[12px] text-muted">
               {selected.length} صفحة · {safeFileName(name)}
             </p>
@@ -340,8 +389,9 @@ export function ExportDialog() {
             <p className="mb-4 flex items-start gap-2 rounded-[10px] border border-navy/20 bg-navy/5 p-3 text-[12px] leading-6">
               <LogIn className="mt-0.5 size-4 shrink-0" aria-hidden />
               <span>
-                أنت تتصفح <strong className="font-extrabold">كزائر</strong> — التعديل والمعاينة
-                متاحان الآن، ويُطلب تسجيل الدخول عند تنزيل الملف.
+                أنت تتصفح <strong className="font-extrabold">كزائر</strong> —
+                التعديل والمعاينة متاحان الآن، ويُطلب تسجيل الدخول عند تنزيل
+                الملف.
               </span>
             </p>
           )}
@@ -363,9 +413,13 @@ export function ExportDialog() {
                   }}
                   aria-pressed={format === f.id}
                   aria-disabled={locked || undefined}
-                  title={locked ? "متاح في النسخة الكاملة — اضغط لطلب الترخيص" : undefined}
+                  title={
+                    locked
+                      ? "متاح في النسخة الكاملة — اضغط لطلب الترخيص"
+                      : undefined
+                  }
                   className={cn(
- "relative flex min-h-[88px] flex-col rounded-[10px] border p-3 text-right transition",
+                    "relative flex min-h-[88px] flex-col rounded-[10px] border p-3 text-right transition",
                     locked
                       ? "border-dashed border-line bg-line-2/40 opacity-80 hover:border-brand hover:opacity-100"
                       : format === f.id
@@ -375,17 +429,25 @@ export function ExportDialog() {
                 >
                   <Icon
                     className={cn(
- "mb-2 size-5",
+                      "mb-2 size-5",
                       format === f.id ? "text-gold-2" : "text-brand-hover",
                     )}
                   />
                   <strong className="block text-[13px]">{f.title}</strong>
-                  <span className={cn("mt-0.5 text-[11px] leading-4", format === f.id ? "text-white/70" : "text-muted")}>
+                  <span
+                    className={cn(
+                      "mt-0.5 text-[11px] leading-4",
+                      format === f.id ? "text-white/70" : "text-muted",
+                    )}
+                  >
                     {f.desc}
                   </span>
                   {locked && (
                     <span className="mt-1.5">
-                      <LicenseBadgeIcon state="locked" title="متاح في النسخة الكاملة — اضغط للترقية" />
+                      <LicenseBadgeIcon
+                        state="locked"
+                        title="متاح في النسخة الكاملة — اضغط للترقية"
+                      />
                     </span>
                   )}
                 </button>
@@ -407,8 +469,11 @@ export function ExportDialog() {
                     عناصر قابلة للتعديل
                   </strong>
                   <span className="text-[11px] leading-4 text-muted">
-                    النصوص والجداول والأشكال تُصدَّر كعناصر حقيقية يمكن تعديلها داخل البرنامج.
-                    قد تختلف الخطوط وتوزيع النص داخل Office. ألغِ التحديد للمطابقة البصرية: طبقات PNG شفافة مستقلة، والنصوص غير قابلة لتحرير الحروف.
+                    النصوص والجداول والأشكال تُصدَّر كعناصر حقيقية يمكن تعديلها
+                    داخل البرنامج. التدرجات والصور المقصوصة تبقى طبقات صورية
+                    مستقلة للحفاظ على مظهرها. قد تختلف الخطوط وتوزيع النص داخل
+                    Office. ألغِ التحديد للمطابقة البصرية: طبقات PNG شفافة
+                    مستقلة، والنصوص غير قابلة لتحرير الحروف.
                   </span>
                 </span>
               </label>
@@ -426,12 +491,16 @@ export function ExportDialog() {
                     className="h-9 rounded-[8px] border border-line bg-surface px-2 text-[13px] font-semibold"
                   >
                     <option value={2}>قياسية — 192 DPI (أسرع)</option>
-                    <option value={scaleForDpi(PRINT_EXPORT_DPI)}>طباعة احترافية — 300 DPI</option>
+                    <option value={scaleForDpi(PRINT_EXPORT_DPI)}>
+                      طباعة احترافية — 300 DPI
+                    </option>
                     <option value={4}>طباعة فائقة — 384 DPI (أبطأ)</option>
                   </select>
                 ) : (
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-[8px] border border-line bg-line-2/40 px-2.5 py-2 text-[12px] font-semibold">
-                    <span className="text-ink">قياسية — {DEMO_EXPORT_DPI} DPI (النسخة التجريبية)</span>
+                    <span className="text-ink">
+                      قياسية — {DEMO_EXPORT_DPI} DPI (النسخة التجريبية)
+                    </span>
                     <button
                       type="button"
                       onClick={() => setUpgradeOpen(true)}
@@ -462,20 +531,23 @@ export function ExportDialog() {
 
           {format === "nsq" && (
             <p className="mt-3 rounded-[8px] border border-line bg-line-2/60 p-3 text-[11px] leading-5 text-muted">
-              ملف نَسَق يضم المشروع كاملًا — كل الصفحات والنصوص والصور والرسوم والخطوط المرفوعة والطبقات والمجموعات —
-              في ملف واحد مضغوط يُفتح قابلًا للتعديل على أي جهاز، بما في ذلك معاينة للصفحة الأولى.
+              ملف نَسَق يضم المشروع كاملًا — كل الصفحات والنصوص والصور والرسوم
+              والخطوط المرفوعة والطبقات والمجموعات — في ملف واحد مضغوط يُفتح
+              قابلًا للتعديل على أي جهاز، بما في ذلك معاينة للصفحة الأولى.
             </p>
           )}
 
           {format === "json" && (
             <p className="mt-3 rounded-[8px] border border-line bg-line-2/60 p-3 text-[11px] leading-5 text-muted">
-              ملف المشروع يحفظ الصفحات والعناصر والصور، ويمكن استيراده على أي جهاز من صفحة المشاريع.
+              ملف المشروع يحفظ الصفحات والعناصر والصور، ويمكن استيراده على أي
+              جهاز من صفحة المشاريع.
             </p>
           )}
 
           {(format === "png" || format === "jpg") && selected.length > 1 && (
             <p className="mt-3 rounded-[8px] border border-line bg-line-2/60 p-3 text-[11px] leading-5 text-muted">
-              عند اختيار أكثر من صفحة يتم تنزيل ملف ZIP يحتوي صورة مستقلة لكل صفحة.
+              عند اختيار أكثر من صفحة يتم تنزيل ملف ZIP يحتوي صورة مستقلة لكل
+              صفحة.
             </p>
           )}
 
@@ -487,7 +559,7 @@ export function ExportDialog() {
               </strong>
               <span
                 className={cn(
- "rounded-full px-2 py-0.5 text-[11px] font-extrabold",
+                  "rounded-full px-2 py-0.5 text-[11px] font-extrabold",
                   report.counts.error
                     ? "bg-danger/10 text-error"
                     : report.counts.warning
@@ -510,7 +582,7 @@ export function ExportDialog() {
                   <li
                     key={`${issue.kind}-${issue.pageId}-${index}`}
                     className={cn(
- "rounded-[8px] border p-2",
+                      "rounded-[8px] border p-2",
                       issue.severity === "error"
                         ? "border-danger/30 bg-danger/10"
                         : issue.severity === "warning"
@@ -535,7 +607,9 @@ export function ExportDialog() {
                         </button>
                       )}
                     </div>
-                    <p className="mt-1 text-[10px] leading-4 text-muted">{issue.detail}</p>
+                    <p className="mt-1 text-[10px] leading-4 text-muted">
+                      {issue.detail}
+                    </p>
                   </li>
                 ))}
               </ul>
@@ -605,7 +679,10 @@ export function ExportDialog() {
           </div>
         </div>
 
-        <FullVersionModal open={upgradeOpen} onClose={() => setUpgradeOpen(false)} />
+        <FullVersionModal
+          open={upgradeOpen}
+          onClose={() => setUpgradeOpen(false)}
+        />
 
         {signInOpen && (
           <Suspense fallback={null}>
@@ -619,15 +696,50 @@ export function ExportDialog() {
         )}
 
         {previewPages.length > 0 && (
-          <div className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center bg-scrim p-4" role="dialog" aria-modal="true" aria-label="معاينة التصدير">
+          <div
+            className="fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center bg-scrim p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-label="معاينة التصدير"
+          >
             <div className="flex max-h-[92vh] w-full max-w-4xl flex-col rounded-[12px] border border-line bg-surface p-4">
               <div className="mb-3 flex items-center justify-between gap-2">
-                <div><h3 className="text-[15px] font-extrabold">معاينة التصدير</h3><p className="text-[11px] text-muted">{previewPages.length} صفحة · {OFFICE_FORMATS.has(format) && editableOffice ? "معاينة التصميم؛ قد يختلف توزيع النص في وضع التحرير داخل Office" : "محرك الرسم نفسه · 96 DPI للأبعاد"}</p></div>
-                <button type="button" onClick={() => setPreviewPages([])} className="grid size-8 place-items-center rounded-[7px] border border-line" title="إغلاق المعاينة" aria-label="إغلاق المعاينة"><X className="size-4" /></button>
+                <div>
+                  <h3 className="text-[15px] font-extrabold">معاينة التصدير</h3>
+                  <p className="text-[11px] text-muted">
+                    {previewPages.length} صفحة ·{" "}
+                    {OFFICE_FORMATS.has(format) && editableOffice
+                      ? "معاينة التصميم؛ قد يختلف توزيع النص في وضع التحرير داخل Office"
+                      : "محرك الرسم نفسه · 96 DPI للأبعاد"}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPreviewPages([])}
+                  className="grid size-8 place-items-center rounded-[7px] border border-line"
+                  title="إغلاق المعاينة"
+                  aria-label="إغلاق المعاينة"
+                >
+                  <X className="size-4" />
+                </button>
               </div>
               <div className="editor-pane-scroll min-h-0 flex-1 overflow-auto rounded-[8px] bg-[#252627] p-4">
                 <div className="grid gap-5 justify-items-center">
-                  {previewPages.map((page, index) => <figure key={index} className="grid gap-1 justify-items-center"><img src={page.canvas.toDataURL("image/png")} alt={`معاينة الصفحة ${index + 1}`} className="max-h-[68vh] max-w-full object-contain shadow-2xl" /><figcaption className="text-[10px] text-white/65">صفحة {index + 1}</figcaption></figure>)}
+                  {previewPages.map((page, index) => (
+                    <figure
+                      key={index}
+                      className="grid gap-1 justify-items-center"
+                    >
+                      <img
+                        src={page.canvas.toDataURL("image/png")}
+                        alt={`معاينة الصفحة ${index + 1}`}
+                        className="max-h-[68vh] max-w-full object-contain shadow-2xl"
+                      />
+                      <figcaption className="text-[10px] text-white/65">
+                        صفحة {index + 1}
+                      </figcaption>
+                    </figure>
+                  ))}
                 </div>
               </div>
             </div>

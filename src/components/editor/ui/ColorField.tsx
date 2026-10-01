@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Pipette } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useMenuAncestors } from "./AnchorMenu";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import {
@@ -50,7 +52,12 @@ export function ColorField({
   label?: string;
   className?: string;
 }) {
+  const menuId = useId();
+  const ancestors = useMenuAncestors();
+  const ancestorsRef = useRef(ancestors);
+  ancestorsRef.current = ancestors;
   const [open, setOpen] = useState(false);
+  const [hexInput, setHexInput] = useState<string | null>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const [recents, setRecents] = useState<string[]>(() => getRecentColors());
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -62,8 +69,23 @@ export function ColorField({
   const dirtyRef = useRef(false);
   /** The last colour this session actually applied (see `onCommit` above). */
   const appliedRef = useRef<string | null>(null);
+  const commitRef = useRef(onCommit);
+  commitRef.current = onCommit;
+  useEffect(
+    () => () => {
+      if (!dirtyRef.current) return;
+      dirtyRef.current = false;
+      const finalValue = appliedRef.current ?? valueRef.current ?? "";
+      recordRecentColor(finalValue);
+      commitRef.current?.(finalValue);
+    },
+    [],
+  );
 
-  useEffect(() => subscribeRecentColors(() => setRecents(getRecentColors())), []);
+  useEffect(
+    () => subscribeRecentColors(() => setRecents(getRecentColors())),
+    [],
+  );
 
   const raw = (value || "").trim();
   const isNone = allowNone && raw === "none";
@@ -80,8 +102,11 @@ export function ColorField({
     if (!trigger) return;
     const r = trigger.getBoundingClientRect();
     const W = 240;
-    const H = 168;
-    const left = Math.min(Math.max(8, r.left), Math.max(8, window.innerWidth - W - 8));
+    const H = panelRef.current?.getBoundingClientRect().height || 204;
+    const left = Math.min(
+      Math.max(8, r.left),
+      Math.max(8, window.innerWidth - W - 8),
+    );
     let top = r.bottom + 6;
     if (top + H > window.innerHeight - 8) top = Math.max(8, r.top - H - 6);
     setPos({ left, top });
@@ -89,7 +114,9 @@ export function ColorField({
 
   const finish = useCallback(() => {
     setOpen(false);
+    setHexInput(null);
     setPos(null);
+    setHexInput(null);
     if (dirtyRef.current) {
       dirtyRef.current = false;
       const finalValue = appliedRef.current ?? valueRef.current ?? "";
@@ -102,9 +129,14 @@ export function ColorField({
   const openIt = useCallback(() => {
     dirtyRef.current = false;
     appliedRef.current = null;
+    window.dispatchEvent(
+      new CustomEvent("nasaq:menu-open", {
+        detail: { id: menuId, ancestors: ancestorsRef.current },
+      }),
+    );
     setOpen(true);
     place();
-  }, [place]);
+  }, [place, menuId]);
 
   useEffect(() => {
     if (!open) return;
@@ -112,26 +144,37 @@ export function ColorField({
     const reposition = () => place();
     const onPointerDown = (e: PointerEvent) => {
       const t = e.target as Node | null;
-      if (panelRef.current?.contains(t) || triggerRef.current?.contains(t)) return;
+      if (panelRef.current?.contains(t) || triggerRef.current?.contains(t))
+        return;
       finish();
+    };
+    const onMenu = (event: Event) => {
+      const detail = (event as CustomEvent<{ id: string; ancestors: string[] }>)
+        .detail;
+      if (detail.id !== menuId && !detail.ancestors.includes(menuId)) finish();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        e.stopPropagation();
+        e.preventDefault();
+        e.stopImmediatePropagation();
         finish();
       }
     };
     window.addEventListener("scroll", reposition, true);
     window.addEventListener("resize", reposition);
+    window.addEventListener("nasaq:menu-open", onMenu);
+    window.addEventListener("nasaq:selection-ui-reset", finish);
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("scroll", reposition, true);
       window.removeEventListener("resize", reposition);
+      window.removeEventListener("nasaq:menu-open", onMenu);
+      window.removeEventListener("nasaq:selection-ui-reset", finish);
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKey, true);
     };
-  }, [open, place, finish]);
+  }, [open, place, finish, menuId]);
 
   const apply = (v: string) => {
     dirtyRef.current = true;
@@ -140,7 +183,7 @@ export function ColorField({
   };
 
   /** Hex typing mirrors ColorRow: accept any `#`+0..8 hex prefix, live. */
-  const hexDraft = isNone ? "" : raw;
+  const hexDraft = hexInput ?? (isNone ? "" : raw);
 
   return (
     <>
@@ -161,6 +204,8 @@ export function ColorField({
         createPortal(
           <div
             ref={panelRef}
+            data-menu-id={menuId}
+            data-menu-ancestors={ancestors.join(" ")}
             className="color-field-pop fixed z-[var(--z-context)] w-[240px] rounded-[10px] border border-line bg-white p-2 shadow-2xl dark:border-white/15 dark:bg-[#1e2633]"
             style={{ left: pos.left, top: pos.top }}
             role="dialog"
@@ -183,9 +228,21 @@ export function ColorField({
                 aria-label="قيمة HEX"
                 placeholder={isNone ? "بلا تعبئة" : "#000000"}
                 value={hexDraft}
+                onFocus={() => setHexInput(isNone ? "" : raw)}
+                onBlur={() => setHexInput(null)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    finish();
+                  }
+                }}
                 onChange={(e) => {
                   const v = e.target.value.trim();
-                  if (/^#[0-9a-fA-F]{0,8}$/.test(v)) apply(v);
+                  if (!/^#[0-9a-fA-F]{0,8}$/.test(v)) return;
+                  setHexInput(v);
+                  // Preserve a typing draft, but never send invalid prefixes to
+                  // structured gradients or the persisted document colour.
+                  if (normalizeColorHex(v)) apply(v);
                 }}
                 className="h-9 min-w-0 flex-1 rounded-[8px] border border-line px-2 text-[12px] font-semibold text-ink outline-none focus:border-navy dark:border-white/10 dark:bg-white/5 dark:text-white"
               />
@@ -198,6 +255,30 @@ export function ColorField({
                 className="h-9 w-10 shrink-0 cursor-pointer rounded-[8px] border border-line bg-white p-1 dark:border-white/10 dark:bg-white/5"
               />
             </div>
+            {typeof window !== "undefined" && "EyeDropper" in window && (
+              <button
+                type="button"
+                className="mt-2 flex h-8 w-full items-center justify-center gap-2 rounded-[8px] border border-line text-[11px] text-ink"
+                onClick={async () => {
+                  const EyeDropper = (
+                    window as unknown as {
+                      EyeDropper: new () => {
+                        open: () => Promise<{ sRGBHex: string }>;
+                      };
+                    }
+                  ).EyeDropper;
+                  try {
+                    const result = await new EyeDropper().open();
+                    apply(result.sRGBHex);
+                  } catch {
+                    /* cancelled / unsupported permission */
+                  }
+                }}
+              >
+                <Pipette className="size-3.5" />
+                التقاط لون من الشاشة
+              </button>
+            )}
             {allowNone && (
               <button
                 type="button"

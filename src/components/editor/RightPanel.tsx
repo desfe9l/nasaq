@@ -69,7 +69,7 @@ const BLEND_LABEL: Record<string, string> = {
   multiply: "تراكب ضربي (Multiply)",
   screen: "إضاءة (Screen)",
   overlay: "تغطية (Overlay)",
- "soft-light": "ضوء ناعم (Soft Light)",
+  "soft-light": "ضوء ناعم (Soft Light)",
   darken: "تغميق (Darken)",
   lighten: "تفتيح (Lighten)",
   luminosity: "إضاءة لونية (Luminosity)",
@@ -90,6 +90,9 @@ import { cn, round } from "@/lib/utils";
 import { toast } from "sonner";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, SubGroup, useAccordionState } from "./ui/Accordion";
+import { FillField } from "./ui/FillField";
+import { PageBackground } from "./PageBackground";
+import { beginImageCrop } from "@/lib/editor/crop-session";
 import { ColorField } from "./ui/ColorField";
 import {
   getRecentColors,
@@ -172,7 +175,7 @@ export function RightPanel({
    * report/fade/export start closed. The choice persists per device.
    */
   const accordions = useAccordionState<
- "dimensions" | "text" | "background" | "fade" | "report" | "export"
+    "dimensions" | "text" | "background" | "fade" | "report" | "export"
   >("properties", {
     dimensions: true,
     text: true,
@@ -199,7 +202,8 @@ export function RightPanel({
       accordions.open("report");
     };
     window.addEventListener(OPEN_REPORT_TOOLS_EVENT, openReportTools);
-    return () => window.removeEventListener(OPEN_REPORT_TOOLS_EVENT, openReportTools);
+    return () =>
+      window.removeEventListener(OPEN_REPORT_TOOLS_EVENT, openReportTools);
   }, [accordions, setRightTab]);
 
   const [draggedLayerId, setDraggedLayerId] = useState<string | null>(null);
@@ -263,7 +267,8 @@ export function RightPanel({
    * (circle/polygon/path geometry has none). `rounded` shows its preset
    * (14% of the width) until the author scrubs an explicit value.
    */
-  const shapeId = el?.type === "shape" ? el.style?.shapeId || el.style?.shape || "rect" : "";
+  const shapeId =
+    el?.type === "shape" ? el.style?.shapeId || el.style?.shape || "rect" : "";
   const rectFamilyShape = shapeId === "rect" || shapeId === "rounded";
   /*
    * Step 8 state: the normalised overlay (so a hand-edited save renders the
@@ -376,7 +381,11 @@ export function RightPanel({
   return (
     <aside className="editor-properties flex h-full min-h-0 flex-col border-r border-line bg-surface">
       <div className="editor-panel-header flex shrink-0 items-center gap-1 border-b border-line p-1.5">
-        <div className="editor-panel-tabs editor-right-tabs flex min-w-0 items-center gap-1" role="tablist" aria-label="أقسام لوحة المحرر">
+        <div
+          className="editor-panel-tabs editor-right-tabs flex min-w-0 items-center gap-1"
+          role="tablist"
+          aria-label="أقسام لوحة المحرر"
+        >
           {RIGHT_PANEL_TABS.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
@@ -398,7 +407,6 @@ export function RightPanel({
             </button>
           ))}
         </div>
-
       </div>
 
       {/*
@@ -408,11 +416,12 @@ export function RightPanel({
        * page rail and «الأبعاد والتحاذي».
        */}
       {tab === "layers" && (
-        <div className="editor-panel-controls" role="group" aria-label="تحكم الطبقات">
-          <PageSelect
-            activePageId={activePageId}
-            onChange={setActivePage}
-          />
+        <div
+          className="editor-panel-controls"
+          role="group"
+          aria-label="تحكم الطبقات"
+        >
+          <PageSelect activePageId={activePageId} onChange={setActivePage} />
           <div className="editor-panel-control is-opacity">
             <ScrubField
               label="الشفافية"
@@ -443,7 +452,7 @@ export function RightPanel({
         {tab === "layers" && (
           <div className="grid gap-2">
             {/* The list grows with the panel; the panel body is its one scroller (no nested scrollbar). */}
-          <div className="editor-layer-list min-h-[120px] overflow-x-hidden rounded-[8px] border border-line/50 p-1.5">
+            <div className="editor-layer-list min-h-[120px] overflow-x-hidden rounded-[8px] border border-line/50 p-1.5">
               <label className="relative mb-1.5 block">
                 <Search className="pointer-events-none absolute end-2 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
                 <input
@@ -496,6 +505,7 @@ export function RightPanel({
 
         {tab === "properties" && !el && (
           <div className="grid gap-2">
+            {page && <PageBackground key={page.id} page={page} />}
             <EmptyNote>
               اختر عنصراً على الصفحة لعرض خصائصه: الموضع، المقاس، الدوران،
               الشفافية، الخط، الألوان، الإطار والظل. النقر المزدوج على النص
@@ -515,7 +525,9 @@ export function RightPanel({
         {tab === "properties" && selectedCount > 1 && (
           <div className="grid gap-3" data-selection-inspector="multiple">
             <div className="rounded-xl border border-brand/25 bg-navy/5 p-3">
-              <p className="text-[11px] font-bold tracking-wide text-brand">تحديد متعدد</p>
+              <p className="text-[11px] font-bold tracking-wide text-brand">
+                تحديد متعدد
+              </p>
               <h3 className="mt-1 text-[16px] font-extrabold text-ink">
                 {selectedCount} عناصر جاهزة للتحرير الجماعي
               </h3>
@@ -525,7 +537,9 @@ export function RightPanel({
             </div>
 
             <section className="grid gap-2 rounded-lg border border-line p-2.5">
-              <h4 className="text-[11px] font-extrabold text-muted">محاذاة التحديد</h4>
+              <h4 className="text-[11px] font-extrabold text-muted">
+                محاذاة التحديد
+              </h4>
               <div className="grid grid-cols-3 gap-1.5">
                 {(
                   [
@@ -571,26 +585,57 @@ export function RightPanel({
             </section>
 
             <section className="grid grid-cols-2 gap-1.5 rounded-lg border border-line p-2.5">
-              <h4 className="col-span-2 text-[11px] font-extrabold text-muted">تنظيم سريع</h4>
-              <button type="button" className="editor-mini-btn justify-center" onClick={group}>
+              <h4 className="col-span-2 text-[11px] font-extrabold text-muted">
+                تنظيم سريع
+              </h4>
+              <button
+                type="button"
+                className="editor-mini-btn justify-center"
+                onClick={group}
+              >
                 تجميع العناصر
               </button>
-              <button type="button" className="editor-mini-btn justify-center" onClick={copyStyle}>
+              <button
+                type="button"
+                className="editor-mini-btn justify-center"
+                onClick={copyStyle}
+              >
                 <Paintbrush className="size-3.5" /> نسخ التنسيق
               </button>
-              <button type="button" className="editor-mini-btn justify-center" disabled={!styleClipboard} onClick={pasteStyle}>
+              <button
+                type="button"
+                className="editor-mini-btn justify-center"
+                disabled={!styleClipboard}
+                onClick={pasteStyle}
+              >
                 <Paintbrush className="size-3.5" /> لصق التنسيق
               </button>
-              <button type="button" className="editor-mini-btn justify-center" onClick={toggleLock}>
+              <button
+                type="button"
+                className="editor-mini-btn justify-center"
+                onClick={toggleLock}
+              >
                 <Lock className="size-3.5" /> قفل التحديد
               </button>
-              <button type="button" className="editor-mini-btn justify-center" onClick={toggleHidden}>
+              <button
+                type="button"
+                className="editor-mini-btn justify-center"
+                onClick={toggleHidden}
+              >
                 <EyeOff className="size-3.5" /> إخفاء التحديد
               </button>
-              <button type="button" className="editor-mini-btn justify-center" onClick={() => bring("front")}>
+              <button
+                type="button"
+                className="editor-mini-btn justify-center"
+                onClick={() => bring("front")}
+              >
                 إلى المقدمة
               </button>
-              <button type="button" className="editor-mini-btn justify-center" onClick={() => bring("bottom")}>
+              <button
+                type="button"
+                className="editor-mini-btn justify-center"
+                onClick={() => bring("bottom")}
+              >
                 إلى الخلف
               </button>
             </section>
@@ -598,7 +643,7 @@ export function RightPanel({
         )}
 
         {tab === "properties" && el && selectedCount === 1 && (
-          <div className="grid gap-3">
+          <div key={el.id} className="grid gap-3">
             <div className="flex items-center justify-between">
               <h3 className="text-[13px] font-extrabold">
                 {el.name || TYPE_NAME[el.type]}
@@ -693,7 +738,7 @@ export function RightPanel({
                   <button
                     type="button"
                     className={cn(
- "editor-mini-btn",
+                      "editor-mini-btn",
                       el.style?.flipX && "is-active",
                     )}
                     aria-pressed={el.style?.flipX === true}
@@ -706,7 +751,7 @@ export function RightPanel({
                   <button
                     type="button"
                     className={cn(
- "editor-mini-btn",
+                      "editor-mini-btn",
                       el.style?.flipY && "is-active",
                     )}
                     aria-pressed={el.style?.flipY === true}
@@ -863,7 +908,7 @@ export function RightPanel({
                           onClick={() => updateStyle(el.id, { textAlign: v })}
                           aria-pressed={el.style.textAlign === v}
                           className={cn(
- "grid h-9 flex-1 place-items-center rounded-[8px] border",
+                            "grid h-9 flex-1 place-items-center rounded-[8px] border",
                             el.style.textAlign === v
                               ? "border-navy bg-navy text-white"
                               : "border-line",
@@ -880,9 +925,7 @@ export function RightPanel({
                         value={el.style.color}
                         fallback={theme.ink}
                         label="لون النص"
-                        onChange={(v) =>
-                          updateStyle(el.id, { color: v }, true)
-                        }
+                        onChange={(v) => updateStyle(el.id, { color: v }, true)}
                         onCommit={(v) => updateStyle(el.id, { color: v })}
                         className="h-9 w-full"
                       />
@@ -929,7 +972,7 @@ export function RightPanel({
                               updateStyle(el.id, { lineHeight: l.value })
                             }
                             className={cn(
- "h-7 flex-1 rounded-[6px] border text-[10px] font-extrabold",
+                              "h-7 flex-1 rounded-[6px] border text-[10px] font-extrabold",
                               Math.abs(
                                 (el.style.lineHeight || 1.45) - l.value,
                               ) < 0.01
@@ -954,7 +997,7 @@ export function RightPanel({
                               updateStyle(el.id, { letterSpacing: l.value })
                             }
                             className={cn(
- "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
+                              "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
                               Math.abs(
                                 (el.style.letterSpacing || 0) - l.value,
                               ) < 0.01
@@ -982,7 +1025,7 @@ export function RightPanel({
                               updateStyle(el.id, { numerals: n.id })
                             }
                             className={cn(
- "h-9 rounded-[8px] border text-[11px] font-extrabold",
+                              "h-9 rounded-[8px] border text-[11px] font-extrabold",
                               (el.style.numerals || "western") === n.id
                                 ? "border-navy-2 bg-navy-2/5"
                                 : "border-line",
@@ -1008,7 +1051,7 @@ export function RightPanel({
                               (el.style.paragraphSpacing || 0) === p.value
                             }
                             className={cn(
- "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
+                              "h-8 flex-1 rounded-[6px] border text-[10px] font-extrabold",
                               (el.style.paragraphSpacing || 0) === p.value
                                 ? "border-navy-2 bg-navy-2/5"
                                 : "border-line",
@@ -1026,7 +1069,7 @@ export function RightPanel({
                         onChange={(e) =>
                           updateStyle(el.id, {
                             textFit: e.target.value as
- "clip" | "shrink" | "grow",
+                              "clip" | "shrink" | "grow",
                           })
                         }
                       >
@@ -1066,7 +1109,7 @@ export function RightPanel({
                                 (el.style.justifyLastLine || "start") === v
                               }
                               className={cn(
- "h-8 rounded-[6px] border text-[10px] font-extrabold",
+                                "h-8 rounded-[6px] border text-[10px] font-extrabold",
                                 (el.style.justifyLastLine || "start") === v
                                   ? "border-navy-2 bg-navy-2/5"
                                   : "border-line",
@@ -1195,15 +1238,17 @@ export function RightPanel({
                 <SubGroup title="المظهر والتعبئة">
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="التعبئة">
-                      <ColorField
+                      <FillField
                         value={el.style.fill}
+                        gradient={el.style.gradient}
                         fallback={theme.surface}
                         label="لون التعبئة"
-                        allowNone
-                        onChange={(v) =>
-                          updateStyle(el.id, { fill: v }, true)
+                        onChange={(v, gradient) =>
+                          updateStyle(el.id, { fill: v, gradient }, true)
                         }
-                        onCommit={(v) => updateStyle(el.id, { fill: v })}
+                        onCommit={(v, gradient) =>
+                          updateStyle(el.id, { fill: v, gradient })
+                        }
                         className="h-9 w-full"
                       />
                     </Field>
@@ -1278,7 +1323,7 @@ export function RightPanel({
                           type="button"
                           onClick={() => updateStyle(el.id, { variant: v })}
                           className={cn(
- "h-9 rounded-[8px] border text-[11px] font-extrabold",
+                            "h-9 rounded-[8px] border text-[11px] font-extrabold",
                             (el.style.variant || "bar") === v
                               ? "border-navy-2 bg-navy-2/5"
                               : "border-line",
@@ -1357,15 +1402,17 @@ export function RightPanel({
                         <option value="no">مخفي</option>
                       </select>
                     </Field>
-                    <Field label="لون الشريط">
-                      <input
-                        type="color"
-                        value={toColor(el.style.fill, theme.primary)}
-                        onChange={(e) =>
-                          updateStyle(el.id, { fill: e.target.value }, true)
+                    <Field label="تعبئة الشريط">
+                      <FillField
+                        value={el.style.fill}
+                        gradient={el.style.gradient}
+                        fallback={theme.primary}
+                        className="h-9 w-full"
+                        onChange={(fill, gradient) =>
+                          updateStyle(el.id, { fill, gradient }, true)
                         }
-                        onBlur={() =>
-                          updateStyle(el.id, { fill: el.style.fill })
+                        onCommit={(fill, gradient) =>
+                          updateStyle(el.id, { fill, gradient })
                         }
                       />
                     </Field>
@@ -1421,7 +1468,7 @@ export function RightPanel({
                             }
                             title={s.label}
                             className={cn(
- "library-hit grid aspect-square place-items-center rounded-[6px] border p-1",
+                              "library-hit grid aspect-square place-items-center rounded-[6px] border p-1",
                               active
                                 ? "border-navy-2 bg-navy-2/10 text-brand-hover"
                                 : "border-line text-muted",
@@ -1440,15 +1487,17 @@ export function RightPanel({
 
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="التعبئة">
-                      <ColorField
+                      <FillField
                         value={el.style.fill}
+                        gradient={el.style.gradient}
                         fallback={theme.primary}
                         label="لون التعبئة"
-                        allowNone
-                        onChange={(v) =>
-                          updateStyle(el.id, { fill: v }, true)
+                        onChange={(v, gradient) =>
+                          updateStyle(el.id, { fill: v, gradient }, true)
                         }
-                        onCommit={(v) => updateStyle(el.id, { fill: v })}
+                        onCommit={(v, gradient) =>
+                          updateStyle(el.id, { fill: v, gradient })
+                        }
                         className="h-9 w-full"
                       />
                     </Field>
@@ -1623,16 +1672,18 @@ export function RightPanel({
                       value={el.style.color}
                       fallback={theme.accent}
                       label="لون الخط"
-                      onChange={(v) =>
-                        updateStyle(el.id, { color: v }, true)
-                      }
+                      onChange={(v) => updateStyle(el.id, { color: v }, true)}
                       onCommit={(v) => updateStyle(el.id, { color: v })}
                       className="h-9 w-full"
                     />
                   </Field>
                   <ScrubField
                     label="السماكة مم"
-                    value={round(Number(el.style.stroke ?? (el.type === "divider" ? 0.5 : 0.8)) || 0)}
+                    value={round(
+                      Number(
+                        el.style.stroke ?? (el.type === "divider" ? 0.5 : 0.8),
+                      ) || 0,
+                    )}
                     min={0}
                     step={0.1}
                     onChange={(v) => updateStyle(el.id, { stroke: v }, true)}
@@ -1739,7 +1790,7 @@ export function RightPanel({
                       onChange={(e) =>
                         updateStyle(el.id, {
                           cellAlign: e.target.value as
- "right" | "center" | "left",
+                            "right" | "center" | "left",
                         })
                       }
                     >
@@ -1948,13 +1999,14 @@ export function RightPanel({
                       onChange={(e) =>
                         updateStyle(el.id, {
                           objectFit: e.target.value as
- "cover" | "contain" | "fill",
+                            "cover" | "contain" | "fill",
                         })
                       }
                     >
-                      <option value="cover">تعبئة مع قص (Cover)</option>
-                      <option value="contain">احتواء كامل (Contain)</option>
-                      <option value="fill">تمديد (Fill)</option>
+                      <option value="cover">
+                        Fill · تعبئة الإطار دون تشويه
+                      </option>
+                      <option value="contain">Fit · احتواء الصورة كاملة</option>
                     </select>
                   </Field>
                   <div className="grid grid-cols-2 gap-2">
@@ -1976,6 +2028,36 @@ export function RightPanel({
                       onChange={(v) => updateStyle(el.id, { objectY: v }, true)}
                       onCommit={(v) => updateStyle(el.id, { objectY: v })}
                     />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className="h-9 rounded-[8px] border border-line text-[11px] font-bold"
+                      disabled={
+                        el.locked ||
+                        el.resizeLocked ||
+                        el.widthLocked ||
+                        el.heightLocked
+                      }
+                      onClick={() => beginImageCrop(el.id)}
+                    >
+                      قص الصورة · Crop
+                    </button>
+                    <button
+                      type="button"
+                      className="h-9 rounded-[8px] border border-line text-[11px] font-bold"
+                      disabled={!el.style.crop || el.locked}
+                      onClick={() =>
+                        updateStyle(el.id, {
+                          crop: undefined,
+                          objectFit: "contain",
+                          objectX: 50,
+                          objectY: 50,
+                        })
+                      }
+                    >
+                      إزالة القص
+                    </button>
                   </div>
                   <button
                     type="button"
@@ -2011,11 +2093,17 @@ export function RightPanel({
                    * colors, so recoloring the fill never rewrites outlines.
                    */}
                   <Field label="لون التعبئة (Fill)" full>
-                    <ColorRow
-                      value={el.style.svgFill || ""}
+                    <FillField
+                      value={el.style.svgFill}
+                      gradient={el.style.gradient}
                       fallback={el.style.color || "#172033"}
-                      onChange={(v) => updateStyle(el.id, { svgFill: v }, true)}
-                      onCommit={(v) => updateStyle(el.id, { svgFill: v })}
+                      className="h-9 w-full"
+                      onChange={(svgFill, gradient) =>
+                        updateStyle(el.id, { svgFill, gradient }, true)
+                      }
+                      onCommit={(svgFill, gradient) =>
+                        updateStyle(el.id, { svgFill, gradient })
+                      }
                     />
                   </Field>
                   <Field label="لون الإطار (Stroke)" full>
@@ -2076,7 +2164,7 @@ export function RightPanel({
                       onChange={(e) =>
                         updateStyle(el.id, {
                           objectFit: e.target.value as
- "cover" | "contain" | "fill",
+                            "cover" | "contain" | "fill",
                         })
                       }
                     >
@@ -2098,7 +2186,9 @@ export function RightPanel({
                   onChange={(e) => {
                     if (e.target.value === "custom") {
                       updateStyle(el.id, {
-                        shadow: buildShadow(parseShadow(el.style.shadow || SHADOWS[2].value)),
+                        shadow: buildShadow(
+                          parseShadow(el.style.shadow || SHADOWS[2].value),
+                        ),
                       });
                       return;
                     }
@@ -2123,7 +2213,11 @@ export function RightPanel({
                 (() => {
                   const sh = parseShadow(el.style.shadow);
                   const set = (patch: Partial<typeof sh>, live = true) =>
-                    updateStyle(el.id, { shadow: buildShadow({ ...sh, ...patch }) }, live);
+                    updateStyle(
+                      el.id,
+                      { shadow: buildShadow({ ...sh, ...patch }) },
+                      live,
+                    );
                   return (
                     <div className="grid grid-cols-2 gap-2 rounded-[8px] border border-line p-2">
                       <Field label={`الإزاحة الأفقية X (${sh.x} مم)`}>
@@ -2155,18 +2249,24 @@ export function RightPanel({
                           max={30}
                           step={0.5}
                           value={sh.blur}
-                          onChange={(e) => set({ blur: Number(e.target.value) })}
+                          onChange={(e) =>
+                            set({ blur: Number(e.target.value) })
+                          }
                           onPointerUp={() => set({}, false)}
                         />
                       </Field>
-                      <Field label={`الشفافية (${Math.round(sh.alpha * 100)}%)`}>
+                      <Field
+                        label={`الشفافية (${Math.round(sh.alpha * 100)}%)`}
+                      >
                         <input
                           type="range"
                           min={5}
                           max={100}
                           step={1}
                           value={Math.round(sh.alpha * 100)}
-                          onChange={(e) => set({ alpha: Number(e.target.value) / 100 })}
+                          onChange={(e) =>
+                            set({ alpha: Number(e.target.value) / 100 })
+                          }
                           onPointerUp={() => set({}, false)}
                         />
                       </Field>
@@ -2174,7 +2274,9 @@ export function RightPanel({
                         <input
                           type="color"
                           value={sh.color}
-                          onChange={(e) => set({ color: e.target.value }, false)}
+                          onChange={(e) =>
+                            set({ color: e.target.value }, false)
+                          }
                         />
                       </Field>
                     </div>
@@ -2212,9 +2314,9 @@ export function RightPanel({
                             aria-pressed={fade.direction === direction}
                             onClick={() => updateFade({ direction })}
                             className={cn(
- "h-8 rounded-[8px] border border-line text-[10px] font-bold",
+                              "h-8 rounded-[8px] border border-line text-[10px] font-bold",
                               fade.direction === direction &&
- "border-[var(--primary-accent)] bg-[var(--library-active-bg)] text-[var(--primary-accent)]",
+                                "border-[var(--primary-accent)] bg-[var(--library-active-bg)] text-[var(--primary-accent)]",
                             )}
                           >
                             {fadeDirectionLabel(direction)}
@@ -2419,13 +2521,71 @@ export function RightPanel({
           </AccordionSection>
         )}
       </div>
-      <footer className="editor-panel-footer" aria-label="إجراءات سريعة على العنصر">
-        <button type="button" onClick={duplicateSelected} disabled={!selectedId} aria-label="تكرار العنصر" title="تكرار العنصر (⌘D)"><CopyPlus className="size-4" strokeWidth={1.7} /><span>تكرار</span></button>
-        <button type="button" onClick={copySelected} disabled={!selectedId} aria-label="نسخ العنصر" title="نسخ العنصر (⌘C)"><Copy className="size-4" strokeWidth={1.7} /><span>نسخ</span></button>
-        <button type="button" onClick={() => pasteClipboard()} disabled={!clipboard} aria-label="لصق العنصر" title="لصق العنصر (⌘V)"><ClipboardPaste className="size-4" strokeWidth={1.7} /><span>لصق</span></button>
-        <button type="button" onClick={copyStyle} disabled={!selectedId} aria-label="نسخ التنسيق" title="نسخ التنسيق"><Paintbrush className="size-4" strokeWidth={1.7} /><span>نسخ التنسيق</span></button>
-        <button type="button" onClick={pasteStyle} disabled={!selectedId || !styleClipboard} aria-label="لصق التنسيق" title="لصق التنسيق"><Paintbrush className="size-4" strokeWidth={1.7} /><span>لصق التنسيق</span></button>
-        <button type="button" onClick={deleteSelected} disabled={!selectedId} aria-label="حذف العنصر" title="حذف العنصر (Delete)" className="is-danger"><Trash2 className="size-4" strokeWidth={1.7} /><span>حذف</span></button>
+      <footer
+        className="editor-panel-footer"
+        aria-label="إجراءات سريعة على العنصر"
+      >
+        <button
+          type="button"
+          onClick={duplicateSelected}
+          disabled={!selectedId}
+          aria-label="تكرار العنصر"
+          title="تكرار العنصر (⌘D)"
+        >
+          <CopyPlus className="size-4" strokeWidth={1.7} />
+          <span>تكرار</span>
+        </button>
+        <button
+          type="button"
+          onClick={copySelected}
+          disabled={!selectedId}
+          aria-label="نسخ العنصر"
+          title="نسخ العنصر (⌘C)"
+        >
+          <Copy className="size-4" strokeWidth={1.7} />
+          <span>نسخ</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => pasteClipboard()}
+          disabled={!clipboard}
+          aria-label="لصق العنصر"
+          title="لصق العنصر (⌘V)"
+        >
+          <ClipboardPaste className="size-4" strokeWidth={1.7} />
+          <span>لصق</span>
+        </button>
+        <button
+          type="button"
+          onClick={copyStyle}
+          disabled={!selectedId}
+          aria-label="نسخ التنسيق"
+          title="نسخ التنسيق"
+        >
+          <Paintbrush className="size-4" strokeWidth={1.7} />
+          <span>نسخ التنسيق</span>
+        </button>
+        <button
+          type="button"
+          onClick={pasteStyle}
+          disabled={!selectedId || !styleClipboard}
+          aria-label="لصق التنسيق"
+          title="لصق التنسيق"
+        >
+          <Paintbrush className="size-4" strokeWidth={1.7} />
+          <span>لصق التنسيق</span>
+        </button>
+        <button
+          type="button"
+          onClick={deleteSelected}
+          disabled={!selectedId}
+          aria-label="حذف العنصر"
+          title="حذف العنصر (Delete)"
+          className="is-danger"
+        >
+          <Trash2 className="size-4" strokeWidth={1.7} />
+          <span>حذف</span>
+        </button>
       </footer>
     </aside>
   );
@@ -2683,7 +2843,7 @@ const LayerRow = memo(function LayerRow({
           });
         }}
         className={cn(
- "layer-row relative flex items-center gap-1.5 rounded-[8px] border px-2 py-1.5",
+          "layer-row relative flex items-center gap-1.5 rounded-[8px] border px-2 py-1.5",
           // Selected layer: a firm ring + tinted row, clearly stronger than the
           // idle border — it must read at a glance against the layers list.
           selected
@@ -2729,7 +2889,7 @@ const LayerRow = memo(function LayerRow({
               >
                 <ChevronDown
                   className={cn(
- "size-3.5 transition-transform",
+                    "size-3.5 transition-transform",
                     !expanded && "-rotate-90",
                   )}
                 />
@@ -2963,7 +3123,7 @@ function StrokeStyleField({
             aria-pressed={(dash ? "dashed" : "solid") === kind}
             onClick={() => onPick(kind === "dashed")}
             className={cn(
- "h-9 rounded-[8px] border text-[11px] font-extrabold",
+              "h-9 rounded-[8px] border text-[11px] font-extrabold",
               (dash ? "dashed" : "solid") === kind
                 ? "border-navy-2 bg-navy-2/5 text-brand-hover"
                 : "border-line",
@@ -2999,7 +3159,10 @@ function ColorRow({
   const themeId = useEditor((s) => s.theme);
   const theme = THEMES[themeId];
   const [recents, setRecents] = useState<string[]>(() => getRecentColors());
-  useEffect(() => subscribeRecentColors(() => setRecents(getRecentColors())), []);
+  useEffect(
+    () => subscribeRecentColors(() => setRecents(getRecentColors())),
+    [],
+  );
   // One session = one entry + one recents push, same contract as ColorField.
   // `v` lets immediate actions (swatch chips) commit the NEW colour while
   // blurs commit what the element already holds — passing it through means
@@ -3012,10 +3175,10 @@ function ColorRow({
     theme.primary,
     theme.accent,
     theme.ink,
- "#ffffff",
- "#111722",
- "#e11d48",
- "#2563eb",
+    "#ffffff",
+    "#111722",
+    "#e11d48",
+    "#2563eb",
   ];
   return (
     <div className="grid gap-1">
@@ -3065,7 +3228,7 @@ function ColorRow({
             }}
             style={{ background: c }}
             className={cn(
- "size-5 rounded-[5px] border",
+              "size-5 rounded-[5px] border",
               value.toLowerCase() === c.toLowerCase()
                 ? "border-navy ring-2 ring-navy/40"
                 : "border-line",
@@ -3087,7 +3250,7 @@ function ColorRow({
               }}
               style={{ background: c }}
               className={cn(
- "size-5 rounded-[5px] border",
+                "size-5 rounded-[5px] border",
                 value.toLowerCase() === c.toLowerCase()
                   ? "border-navy ring-2 ring-navy/40"
                   : "border-line",
@@ -3112,7 +3275,7 @@ function Field({
   return (
     <label
       className={cn(
- "editor-property-field grid gap-1 text-[11px] font-extrabold text-muted",
+        "editor-property-field grid gap-1 text-[11px] font-extrabold text-muted",
         full && "col-span-2",
       )}
     >
@@ -3140,10 +3303,8 @@ function Action({
       type="button"
       onClick={onClick}
       className={cn(
- "inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border text-[11px] font-extrabold",
-        danger
-          ? "border-danger/30 bg-danger/10 text-error"
-          : "border-line",
+        "inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border text-[11px] font-extrabold",
+        danger ? "border-danger/30 bg-danger/10 text-error" : "border-line",
       )}
     >
       <Icon className="size-3.5" />

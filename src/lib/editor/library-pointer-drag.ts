@@ -7,43 +7,10 @@
  * HTML5 path (insertLibraryDrop).
  */
 
-import { insertLibraryDrop, type LibraryDropPayload } from "./library-dnd";
+import type { LibraryDropPayload } from "./library-dnd";
+import { canvasDropPoint } from "./canvas-space";
 import { isOverlayViewport } from "./ui-state";
-import { pageSize } from "./model";
-import type { ElType, CanvasEl } from "./model";
 import { useEditor } from "./store";
-
-type DropResolver = (
-  type: string,
-  over: Record<string, unknown>,
-  center?: { x: number; y: number },
-) => { x: number; y: number; w: number; h: number } | undefined;
-
-function findPageElementAt(clientX: number, clientY: number): HTMLElement | null {
-  const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-  return el?.closest(".editor-canvas-stage") ? el.closest<HTMLElement>("[data-page-id]") : null;
-}
-
-function computeDropPoint(
-  clientX: number,
-  clientY: number,
-): { x: number; y: number; pageId: string } | null {
-  const pages = useEditor.getState().pages;
-
-  // أولاً: هل نحن فوق صفحة مباشرة؟
-  const direct = findPageElementAt(clientX, clientY);
-  if (direct) {
-    const pageId = direct.dataset.pageId!;
-    const page = pages.find((p) => p.id === pageId);
-    if (!page) return null;
-    const size = pageSize(page);
-    const rect = direct.getBoundingClientRect();
-    const x = ((clientX - rect.left) / rect.width) * size.w;
-    const y = ((clientY - rect.top) / rect.height) * size.h;
-    return { pageId, x, y };
-  }
-  return null; // Releasing over chrome is cancellation, never placeholder insertion.
-}
 
 export function startPointerLibraryDrag(
   e: React.PointerEvent,
@@ -110,7 +77,8 @@ export function startPointerLibraryDrag(
     if (dist > 8) {
       // A phone drawer covers most of the page. Once the drag owns the pointer,
       // reveal the canvas without unmounting the captured source element.
-      if (!moved && isOverlayViewport()) useEditor.getState().closeFloatingPanels();
+      if (!moved && isOverlayViewport())
+        useEditor.getState().closeFloatingPanels();
       moved = true;
       if (!ghost) createGhost();
       moveGhost(ev.clientX, ev.clientY);
@@ -123,22 +91,24 @@ export function startPointerLibraryDrag(
     if (ev.pointerId !== pointerId) return;
     cleanup();
     if (!moved) return;
-    const stopClick = (click: MouseEvent) => { click.preventDefault(); click.stopImmediatePropagation(); };
+    const stopClick = (click: MouseEvent) => {
+      click.preventDefault();
+      click.stopImmediatePropagation();
+    };
     target.addEventListener("click", stopClick, { capture: true, once: true });
-    window.setTimeout(() => target.removeEventListener("click", stopClick, true), 500);
-    const drop = computeDropPoint(ev.clientX, ev.clientY);
+    window.setTimeout(
+      () => target.removeEventListener("click", stopClick, true),
+      500,
+    );
+    const drop = canvasDropPoint(
+      document.querySelector<HTMLElement>(".editor-canvas-stage"),
+      useEditor.getState().pages,
+      ev.clientX,
+      ev.clientY,
+    );
     if (!drop) return;
     const store = useEditor.getState();
-    store.setActivePage(drop.pageId);
-    const resolver: DropResolver = (type, over, center) => {
-      const el = store.addElementAt(
-        type as ElType,
-        over as Partial<CanvasEl>,
-        center,
-      );
-      return el ? { x: el.x, y: el.y, w: el.w, h: el.h } : undefined;
-    };
-    insertLibraryDrop(payload, drop ? { x: drop.x, y: drop.y } : null, resolver);
+    store.insertLibraryElements(payload, drop, drop.pageId);
   };
 
   const onCancel = () => {

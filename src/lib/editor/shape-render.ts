@@ -1,3 +1,8 @@
+import {
+  gradientSvgDefinition,
+  normalizeGradient,
+  type Gradient,
+} from "./gradient";
 import { isCompoundShape, shapeDef, type ShapePart } from "./shapes";
 
 /**
@@ -77,9 +82,20 @@ export function shapeSvgMarkup(
     /** Corner radius in mm + the box it belongs to: round rect corners. */
     radiusMm?: number;
     box?: { w: number; h: number };
+    gradient?: Gradient;
+    gradientId?: string;
   },
 ): string {
   const def = shapeDef(shapeId);
+  const gradient = normalizeGradient(opts.gradient);
+  const gradientId = (opts.gradientId || "nasaq-shape-paint").replace(
+    /[^a-zA-Z0-9_-]/g,
+    "",
+  );
+  const defs = gradient
+    ? `<defs>${gradientSvgDefinition(gradient, gradientId, opts.box || { w: 100, h: 100 })}</defs>`
+    : "";
+  const fill = gradient ? `url(#${gradientId})` : opts.fill;
   const evenOdd = isCompoundShape(def.id) ? ' fill-rule="evenodd"' : "";
   const strokeUnits = Math.max(0, opts.strokeUnits);
   const inner = 100 - strokeUnits;
@@ -99,7 +115,7 @@ export function shapeSvgMarkup(
         `<${partTag(p)} ${partAttrs(p)}${p.k === "path" ? ' stroke-linejoin="round"' : ""}/>`,
     )
     .join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%"><g${transform} fill="${opts.fill}"${evenOdd}${stroke}>${body}</g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%">${defs}<g${transform} fill="${fill}"${evenOdd}${stroke}>${body}</g></svg>`;
 }
 
 /**
@@ -141,9 +157,10 @@ export function applyRectRadius(
   if (radiusMm == null || !(Number(radiusMm) > 0) || !box) return parts;
   const w = Number(box?.w) || 1;
   const h = Number(box?.h) || 1;
-  const clamp = (units: number) => Math.max(0, Math.min(50, Math.round(units * 100) / 100));
-  const rx = clamp((Number(radiusMm) || 0) / w * 100);
-  const ry = clamp((Number(radiusMm) || 0) / h * 100);
+  const clamp = (units: number) =>
+    Math.max(0, Math.min(50, Math.round(units * 100) / 100));
+  const rx = clamp(((Number(radiusMm) || 0) / w) * 100);
+  const ry = clamp(((Number(radiusMm) || 0) / h) * 100);
   let touched = false;
   const next = parts.map((p) => {
     if (p.k !== "rect") return p;

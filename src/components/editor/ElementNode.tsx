@@ -16,6 +16,9 @@ import { isCompoundShape, shapeDef } from "@/lib/editor/shapes";
 import { shapeIdOf } from "@/lib/editor/shape-render";
 import { mapShapePart } from "@/lib/editor/shape-affine";
 import { isPalmTouch } from "@/lib/editor/pen-input";
+import { paintCss } from "@/lib/editor/gradient";
+import { imageLayout, normalizeCrop } from "@/lib/editor/image-crop";
+import { GradientDefs } from "./GradientDefs";
 import { ShapeGlyph, ShapeParts } from "./ShapeGlyph";
 
 /**
@@ -81,7 +84,10 @@ const EMPTY_SIBLINGS: CanvasEl[] = [];
 
 type ElementNodeProps = Props & { onEnterGroup?: (id: string) => void };
 
-function resolveMaskShape(el: CanvasEl, siblings?: CanvasEl[]): CanvasEl | null {
+function resolveMaskShape(
+  el: CanvasEl,
+  siblings?: CanvasEl[],
+): CanvasEl | null {
   if (!el.clippedBy || !siblings?.length) return null;
   return (
     siblings.find(
@@ -189,7 +195,10 @@ export const ElementNode = memo(function ElementNode({
   const instanceId = useId().replace(/:/g, "");
   const clipId = `nasaq-clip-${instanceId}`;
   const clipPath = maskShape ? `url(#${clipId})` : undefined;
-  const maskDef = maskShape && maskShape.type === "shape" ? shapeDef(shapeIdOf(maskShape.style)) : undefined;
+  const maskDef =
+    maskShape && maskShape.type === "shape"
+      ? shapeDef(shapeIdOf(maskShape.style))
+      : undefined;
   /** Fractions of the masked element's own box (objectBoundingBox units). */
   const clipMap = maskShape
     ? {
@@ -199,8 +208,13 @@ export const ElementNode = memo(function ElementNode({
         ty: (maskShape.y - view.y) / Math.max(0.1, view.h),
       }
     : null;
-  const clipParts = maskDef && clipMap ? maskDef.parts.map((part) => mapShapePart(part, clipMap)) : null;
-  const clipBox = clipMap ? { x: clipMap.tx, y: clipMap.ty, w: clipMap.sx * 100, h: clipMap.sy * 100 } : null;
+  const clipParts =
+    maskDef && clipMap
+      ? maskDef.parts.map((part) => mapShapePart(part, clipMap))
+      : null;
+  const clipBox = clipMap
+    ? { x: clipMap.tx, y: clipMap.ty, w: clipMap.sx * 100, h: clipMap.sy * 100 }
+    : null;
   const textRef = useRef<HTMLDivElement>(null);
   const editing = useRef(false);
 
@@ -213,7 +227,11 @@ export const ElementNode = memo(function ElementNode({
   // A remount (undo, page switch) must never leave a stale contentEditable DOM
   // node behind: the rendered `{el.content}` would be out of sync with it.
   useEffect(() => {
-    if (editing.current && textRef.current && textRef.current.isContentEditable) {
+    if (
+      editing.current &&
+      textRef.current &&
+      textRef.current.isContentEditable
+    ) {
       editing.current = false;
       textRef.current.contentEditable = "false";
       textRef.current.classList.remove("editing");
@@ -325,13 +343,29 @@ export const ElementNode = memo(function ElementNode({
          * permitted children, and a wrapping `<g>` makes Chromium throw the whole
          * clip away (an empty region), which reads as "the picture vanished".
          */
-        <svg className="pointer-events-none absolute left-0 top-0 h-0 w-0" aria-hidden focusable={false}>
+        <svg
+          className="pointer-events-none absolute left-0 top-0 h-0 w-0"
+          aria-hidden
+          focusable={false}
+        >
           <defs>
             <clipPath id={clipId} clipPathUnits="objectBoundingBox">
               {clipParts ? (
-                <ShapeParts parts={clipParts} fillRule={maskDef && isCompoundShape(maskDef.id) ? "evenodd" : undefined} />
+                <ShapeParts
+                  parts={clipParts}
+                  fillRule={
+                    maskDef && isCompoundShape(maskDef.id)
+                      ? "evenodd"
+                      : undefined
+                  }
+                />
               ) : (
-                <rect x={clipBox.x} y={clipBox.y} width={clipBox.w} height={clipBox.h} />
+                <rect
+                  x={clipBox.x}
+                  y={clipBox.y}
+                  width={clipBox.w}
+                  height={clipBox.h}
+                />
               )}
             </clipPath>
           </defs>
@@ -370,6 +404,7 @@ function ElementContent({
   interactive: boolean;
 }) {
   const s = el.style || {};
+  const gradientId = `paint-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   /*
    * A shape that clips another element paints as the clip outline, not as a
    * filled shape (the same rule every vector editor uses): an opaque fill would
@@ -417,7 +452,10 @@ function ElementContent({
   // normalised string would fight the caret. `isContentEditable` distinguishes
   // that state without extra React state, so raw content is shown mid-edit and
   // the cleaned string appears once editing ends.
-  const renderText = (fallback: string) => (textRef.current?.isContentEditable ? el.content || "" : prepared.text || fallback);
+  const renderText = (fallback: string) =>
+    textRef.current?.isContentEditable
+      ? el.content || ""
+      : prepared.text || fallback;
 
   if (el.type === "text") {
     return (
@@ -441,14 +479,18 @@ function ElementContent({
         className="el-box"
         style={{
           ...textStyle,
-          background: s.fill || s.background || "#f7f8fb",
+          background: paintCss(s.fill || s.background, s.gradient, "#f7f8fb"),
           border: `${s.borderWidth ?? 0.35}mm ${s.borderDash ? "dashed" : "solid"} ${s.borderColor || "#d9dee8"}`,
           borderRadius: `${s.radius ?? 4}mm`,
           padding: `${pad}mm`,
           display: "flex",
           alignItems: el.type === "stat" ? "center" : "flex-start",
           justifyContent:
-            s.textAlign === "center" ? "center" : s.textAlign === "left" ? "flex-end" : "flex-start",
+            s.textAlign === "center"
+              ? "center"
+              : s.textAlign === "left"
+                ? "flex-end"
+                : "flex-start",
         }}
         onPointerDown={textPointerDown}
         onBlur={onBlur}
@@ -461,7 +503,9 @@ function ElementContent({
 
   if (el.type === "progress") {
     const value = Math.max(0, Math.min(100, Number(s.value) || 0));
-    const shown = s.numerals ? `${applyNumerals(String(value), s.numerals)}%` : `${value}%`;
+    const shown = s.numerals
+      ? `${applyNumerals(String(value), s.numerals)}%`
+      : `${value}%`;
     // `textRef` sits on the caption alone. Putting it on the flex container would
     // make the percentage and the bar part of `innerText`, so committing an edit
     // would write "نسبة الإنجاز70%" back into the element's content.
@@ -507,13 +551,30 @@ function ElementContent({
             overflow: "hidden",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "2mm" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "baseline",
+              gap: "2mm",
+            }}
+          >
             {caption}
             {s.showValue !== false && (
-              <span style={{ color: s.fill || "#006c35", flexShrink: 0 }}>{shown}</span>
+              <span style={{ color: s.fill || "#006c35", flexShrink: 0 }}>
+                {shown}
+              </span>
             )}
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: `${round2(dot * 0.55)}mm`, flexShrink: 0 }} aria-hidden>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: `${round2(dot * 0.55)}mm`,
+              flexShrink: 0,
+            }}
+            aria-hidden
+          >
             {Array.from({ length: total }, (_, i) => (
               <span
                 key={i}
@@ -522,7 +583,10 @@ function ElementContent({
                   height: `${round2(dot)}mm`,
                   borderRadius: "999px",
                   flexShrink: 0,
-                  background: i < filled ? s.fill || "#006c35" : s.background || "#e8ecf3",
+                  background:
+                    i < filled
+                      ? paintCss(s.fill, s.gradient, "#006c35")
+                      : s.background || "#e8ecf3",
                 }}
               />
             ))}
@@ -551,8 +615,21 @@ function ElementContent({
             overflow: "hidden",
           }}
         >
-          <div style={{ position: "relative", width: `${size}mm`, height: `${size}mm`, flexShrink: 0 }}>
+          <div
+            style={{
+              position: "relative",
+              width: `${size}mm`,
+              height: `${size}mm`,
+              flexShrink: 0,
+            }}
+          >
             <svg viewBox={`0 0 ${size} ${size}`} width="100%" height="100%">
+              <GradientDefs
+                gradient={s.gradient}
+                id={gradientId}
+                box={{ w: size, h: size }}
+                coordinates={{ w: size, h: size }}
+              />
               <circle
                 cx={size / 2}
                 cy={size / 2}
@@ -566,7 +643,9 @@ function ElementContent({
                 cy={size / 2}
                 r={r}
                 fill="none"
-                stroke={s.fill || "#006c35"}
+                stroke={
+                  s.gradient ? `url(#${gradientId})` : s.fill || "#006c35"
+                }
                 strokeWidth={thickness}
                 strokeLinecap="round"
                 strokeDasharray={`${(c * value) / 100} ${c}`}
@@ -610,10 +689,19 @@ function ElementContent({
           overflow: "hidden",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: "2mm" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: "2mm",
+          }}
+        >
           {caption}
           {s.showValue !== false && (
-            <span style={{ color: s.fill || "#006c35", flexShrink: 0 }}>{shown}</span>
+            <span style={{ color: s.fill || "#006c35", flexShrink: 0 }}>
+              {shown}
+            </span>
           )}
         </div>
         <div
@@ -625,7 +713,13 @@ function ElementContent({
             flexShrink: 0,
           }}
         >
-          <div style={{ width: `${value}%`, height: "100%", background: s.fill || "#006c35" }} />
+          <div
+            style={{
+              width: `${value}%`,
+              height: "100%",
+              background: paintCss(s.fill, s.gradient, "#006c35"),
+            }}
+          />
         </div>
       </div>
     );
@@ -657,7 +751,13 @@ function ElementContent({
       <ShapeGlyph
         style={s}
         fill={masking ? "none" : s.fill || "#006c35"}
-        stroke={maskOutline ? (interactive ? "var(--color-gold)" : "transparent") : s.borderColor || "transparent"}
+        stroke={
+          maskOutline
+            ? interactive
+              ? "var(--color-gold)"
+              : "transparent"
+            : s.borderColor || "transparent"
+        }
         borderWidthMm={maskOutline ? 0.25 : Number(s.borderWidth) || 0}
         strokeDasharray={maskOutline ? "2 2" : undefined}
         dash={!maskOutline && s.borderDash === true}
@@ -686,7 +786,10 @@ function ElementContent({
     const c = s.color || "#c9a86a";
     return (
       <div className="flex h-full w-full items-center gap-1.5 px-1">
-        <span className="h-px flex-1" style={{ background: c, height: `${s.stroke ?? 0.5}mm` }} />
+        <span
+          className="h-px flex-1"
+          style={{ background: c, height: `${s.stroke ?? 0.5}mm` }}
+        />
         <span
           className="shrink-0"
           style={{
@@ -696,7 +799,10 @@ function ElementContent({
             transform: "rotate(45deg)",
           }}
         />
-        <span className="h-px flex-1" style={{ background: c, height: `${s.stroke ?? 0.5}mm` }} />
+        <span
+          className="h-px flex-1"
+          style={{ background: c, height: `${s.stroke ?? 0.5}mm` }}
+        />
       </div>
     );
   }
@@ -713,25 +819,13 @@ function ElementContent({
     const fade = normalizeFade(s.fade);
     return (
       <>
-        <img
-          alt=""
-          src={src}
-          draggable={false}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: s.objectFit || (el.type === "logo" || el.type === "qr" ? "contain" : "cover"),
-            objectPosition: `${s.objectX ?? 50}% ${s.objectY ?? 50}%`,
-            borderRadius: `${s.radius || 0}mm`,
-            pointerEvents: "none",
-          }}
-        />
+        <ImageArtwork el={el} src={src} />
         {/*
-          * Step 8 — طبقة التلاشي. Painted after the image so it always sits on
-          * top, sized to the frame (not the photo), and inert: it is decoration,
-          * so a click must reach the image underneath and dragging the element
-          * must keep working.
-          */}
+         * Step 8 — طبقة التلاشي. Painted after the image so it always sits on
+         * top, sized to the frame (not the photo), and inert: it is decoration,
+         * so a click must reach the image underneath and dragging the element
+         * must keep working.
+         */}
         {fade && (
           <div
             aria-hidden
@@ -756,6 +850,9 @@ function ElementContent({
       fill: s.svgFill,
       stroke: s.svgStroke,
       strokeWidth: s.svgStrokeWidth,
+      gradient: s.gradient,
+      gradientId,
+      box: { w: el.w, h: el.h },
     });
     if (!clean) {
       return (
@@ -783,7 +880,10 @@ function ElementContent({
   if (el.type === "icon") {
     const d = ICONS[el.icon || "star"] || ICONS.star;
     return (
-      <div className="grid h-full w-full place-items-center" style={{ color: s.color || "#c9a86a" }}>
+      <div
+        className="grid h-full w-full place-items-center"
+        style={{ color: s.color || "#c9a86a" }}
+      >
         <svg
           viewBox="0 0 24 24"
           fill={s.fill || "none"}
@@ -845,15 +945,22 @@ function ElementContent({
             <tr key={ri}>
               {row.map((cell, ci) => {
                 const Tag = ri === 0 ? "th" : "td";
-                const zebra = stripe && ri > 0 && ri % 2 === 0 ? stripe : undefined;
+                const zebra =
+                  stripe && ri > 0 && ri % 2 === 0 ? stripe : undefined;
                 return (
                   <Tag
                     key={ci}
                     style={{
                       border: `${s.borderWidth ?? 0.3}mm solid ${s.borderColor || "#bfc7d6"}`,
                       padding: "1.6mm",
-                      background: ri === 0 ? s.headerBg || "#006c35" : zebra || s.tableBg || "#fff",
-                      color: ri === 0 ? s.headerColor || "#fff" : s.color || "#172033",
+                      background:
+                        ri === 0
+                          ? s.headerBg || "#006c35"
+                          : zebra || s.tableBg || "#fff",
+                      color:
+                        ri === 0
+                          ? s.headerColor || "#fff"
+                          : s.color || "#172033",
                       fontWeight: ri === 0 ? 800 : 500,
                       textAlign: s.cellAlign || "right",
                       verticalAlign: "top",
@@ -872,4 +979,84 @@ function ElementContent({
   }
 
   return null;
+}
+/** A source crop never stretches pixels: Fit/Fill change the viewport, not the source. */
+function ImageArtwork({ el, src }: { el: CanvasEl; src: string }) {
+  const s = el.style;
+  const crop = normalizeCrop(s.crop);
+  const radius = `${s.radius || 0}mm`;
+  const stroke =
+    Number(s.borderWidth) > 0
+      ? `${s.borderWidth}mm ${s.borderDash ? "dashed" : "solid"} ${s.borderColor || "transparent"}`
+      : undefined;
+  if (!crop)
+    return (
+      <img
+        alt=""
+        src={src}
+        draggable={false}
+        style={{
+          width: "100%",
+          height: "100%",
+          display: "block",
+          objectFit:
+            s.objectFit ||
+            (el.type === "logo" || el.type === "qr" ? "contain" : "cover"),
+          objectPosition: `${s.objectX ?? 50}% ${s.objectY ?? 50}%`,
+          borderRadius: radius,
+          outline: stroke,
+          outlineOffset: stroke ? `-${s.borderWidth}mm` : undefined,
+          pointerEvents: "none",
+        }}
+      />
+    );
+  const layout = imageLayout(
+    el,
+    { w: crop.sourceW, h: crop.sourceH },
+    crop,
+    s.objectFit || (el.type === "logo" ? "contain" : "cover"),
+    s.objectX,
+    s.objectY,
+  );
+  return (
+    <div
+      className="image-crop-content"
+      style={{
+        position: "relative",
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+        borderRadius: radius,
+        outline: stroke,
+        outlineOffset: stroke ? `-${s.borderWidth}mm` : undefined,
+        pointerEvents: "none",
+      }}
+    >
+      <div
+        style={{
+          position: "absolute",
+          left: `${layout.x}mm`,
+          top: `${layout.y}mm`,
+          width: `${layout.w}mm`,
+          height: `${layout.h}mm`,
+          overflow: "hidden",
+        }}
+      >
+        <img
+          alt=""
+          src={src}
+          draggable={false}
+          style={{
+            position: "absolute",
+            display: "block",
+            maxWidth: "none",
+            width: `${crop.sourceW * layout.scaleX}mm`,
+            height: `${crop.sourceH * layout.scaleY}mm`,
+            left: `${-crop.x * layout.scaleX}mm`,
+            top: `${-crop.y * layout.scaleY}mm`,
+          }}
+        />
+      </div>
+    </div>
+  );
 }

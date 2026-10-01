@@ -22,7 +22,6 @@ import { SHAPES } from "@/lib/editor/shapes";
 import { PAGE_TEMPLATES, type PageTemplateDef } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import {
-  insertLibraryDrop,
   writeLibraryDrag,
   type LibraryDropItem,
   type LibraryDropPayload,
@@ -64,17 +63,68 @@ const TABLE_TEMPLATES = [
  * under the cursor, siblings follow) — one source of truth, identical layout.
  */
 const INSTITUTIONAL_COMPONENTS = [
-  { id: "approval", label: "اعتماد وتوقيع", hint: "حقل اعتماد رسمي قابل للتحرير", items: [
-    { type: "line", over: { w: 65, h: 1, name: "خط التوقيع" } },
-    { type: "text", dy: 8, over: { w: 65, h: 10, content: "الاسم والتوقيع", style: { textAlign: "center", fontSize: 11 } } },
-  ] },
-  { id: "record", label: "سجل المتابعة", hint: "إجراء · مسؤول · تاريخ · حالة", items: [
-    { type: "table", over: { w: 160, h: 42, name: "سجل المتابعة", content: JSON.stringify([["الإجراء", "المسؤول", "التاريخ", "الحالة"], ["", "", "", ""], ["", "", "", ""]]), style: { cols: 4, rows: 3, fontSize: 10 } } },
-  ] },
-  { id: "confidential", label: "وسم سري", hint: "وسم استخدام داخلي", items: [
-    { type: "box", over: { w: 42, h: 12, name: "وسم السرية", content: "سري — للاستخدام الداخلي", style: { textAlign: "center", fontSize: 9, borderWidth: 0.3 } } },
-  ] },
-] satisfies { id: string; label: string; hint: string; items: LibraryDropItem[] }[];
+  {
+    id: "approval",
+    label: "اعتماد وتوقيع",
+    hint: "حقل اعتماد رسمي قابل للتحرير",
+    items: [
+      { type: "line", over: { w: 65, h: 1, name: "خط التوقيع" } },
+      {
+        type: "text",
+        dy: 8,
+        over: {
+          w: 65,
+          h: 10,
+          content: "الاسم والتوقيع",
+          style: { textAlign: "center", fontSize: 11 },
+        },
+      },
+    ],
+  },
+  {
+    id: "record",
+    label: "سجل المتابعة",
+    hint: "إجراء · مسؤول · تاريخ · حالة",
+    items: [
+      {
+        type: "table",
+        over: {
+          w: 160,
+          h: 42,
+          name: "سجل المتابعة",
+          content: JSON.stringify([
+            ["الإجراء", "المسؤول", "التاريخ", "الحالة"],
+            ["", "", "", ""],
+            ["", "", "", ""],
+          ]),
+          style: { cols: 4, rows: 3, fontSize: 10 },
+        },
+      },
+    ],
+  },
+  {
+    id: "confidential",
+    label: "وسم سري",
+    hint: "وسم استخدام داخلي",
+    items: [
+      {
+        type: "box",
+        over: {
+          w: 42,
+          h: 12,
+          name: "وسم السرية",
+          content: "سري — للاستخدام الداخلي",
+          style: { textAlign: "center", fontSize: 9, borderWidth: 0.3 },
+        },
+      },
+    ],
+  },
+] satisfies {
+  id: string;
+  label: string;
+  hint: string;
+  items: LibraryDropItem[];
+}[];
 
 const CHART_TEMPLATES = [
   { id: "bars", label: "مخطط أعمدة", hint: "4 أعمدة مقارنة" },
@@ -807,7 +857,13 @@ export function SmartLibraryPanel({
       ? useEditor.getState().openTablePicker()
       : useEditor.getState().closeTablePicker();
   const library = useAccordionState<
-    "shapes" | "icons" | "dividers" | "indicators" | "tables" | "templates" | "institutional"
+    | "shapes"
+    | "icons"
+    | "dividers"
+    | "indicators"
+    | "tables"
+    | "templates"
+    | "institutional"
   >("library", { shapes: true, icons: true });
   const addElement = useEditor((s) => s.addElement);
   const addElementAt = useEditor((s) => s.addElementAt);
@@ -825,14 +881,7 @@ export function SmartLibraryPanel({
     payload: LibraryDropPayload,
     at: { x: number; y: number } | null = null,
   ) => {
-    insertLibraryDrop(payload, at, (type, over, center) => {
-      const el = addElementAt(
-        type as ElType,
-        over as Partial<CanvasEl>,
-        center,
-      );
-      return el ? { x: el.x, y: el.y, w: el.w, h: el.h } : undefined;
-    });
+    useEditor.getState().insertLibraryElements(payload, at);
   };
 
   /** Start an HTML5 drag carrying a validated library payload. */
@@ -868,231 +917,96 @@ export function SmartLibraryPanel({
        * (no parallel model, no second renderer).
        */}
       <SortableSections>
-      <AccordionSection
-        title="أشكال"
-        id="shapes"
-        open={library.isOpen("shapes", true)}
-        onToggle={() => library.toggle("shapes")}
-        badge={
-          <span className="text-[10px] font-bold text-muted">
-            {SHAPES.length}
-          </span>
-        }
-      >
-        <div className="grid grid-cols-4 gap-1.5">
-          {SHAPE_TOOLS.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              onClick={() =>
-                addElement("shape", {
-                  w: s.w,
-                  h: s.h,
-                  name: s.label,
-                  style: { fill: THEMES[theme].primary, shapeId: s.shapeId },
-                })
-              }
-              title={s.label}
-              className="library-hit grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-brand-hover transition"
-            >
-              <ShapePreview shapeId={s.shapeId} className="size-full max-h-7" />
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={onOpenShapes}
-          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
+        <AccordionSection
+          title="أشكال"
+          id="shapes"
+          open={library.isOpen("shapes", true)}
+          onToggle={() => library.toggle("shapes")}
+          badge={
+            <span className="text-[10px] font-bold text-muted">
+              {SHAPES.length}
+            </span>
+          }
         >
-          <Shapes className="size-3.5" /> كل الأشكال ({SHAPES.length})
-        </button>
-      </AccordionSection>
-
-      {/*
-       * Phase 7.3 — icons & symbols, including the author's own vectors.
-       * Custom icons are stored as SVG markup and inserted as `svg`
-       * elements, so they stay vector on canvas, in print and in export.
-       */}
-      <AccordionSection
-        title="رموز وأيقونات"
-        id="icons"
-        open={library.isOpen("icons", true)}
-        onToggle={() => library.toggle("icons")}
-      >
-        <div className="library-grid-icons">
-          {Object.keys(ICONS).map((key) => (
-            <button
-              key={key}
-              type="button"
-              title={key}
-              aria-label={`إضافة أيقونة ${key}`}
-              onClick={() =>
-                addElement("icon", {
-                  icon: key,
-                  name: key,
-                  style: { color: THEMES[theme].accent },
-                })
-              }
-              className="library-asset-card"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                className="size-5"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={1.7}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
+          <div className="grid grid-cols-4 gap-1.5">
+            {SHAPE_TOOLS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() =>
+                  addElement("shape", {
+                    w: s.w,
+                    h: s.h,
+                    name: s.label,
+                    style: { fill: THEMES[theme].primary, shapeId: s.shapeId },
+                  })
+                }
+                title={s.label}
+                className="library-hit grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-brand-hover transition"
               >
-                <path d={ICONS[key]} />
-              </svg>
-            </button>
-          ))}
-          {customIcons
-            .filter((item) => item.kind === "icon")
-            .map((item) => (
-              <div
-                key={item.id}
-                className="library-asset-card"
-                title={item.name}
-              >
-                <button
-                  type="button"
-                  aria-label={`إضافة ${item.name}`}
-                  onClick={() =>
-                    addElement("svg", {
-                      name: item.name,
-                      content: item.svg,
-                      w: 24,
-                      h: 24,
-                    })
-                  }
-                  className="grid size-full place-items-center"
-                  dangerouslySetInnerHTML={{ __html: item.svg }}
+                <ShapePreview
+                  shapeId={s.shapeId}
+                  className="size-full max-h-7"
                 />
-                <button
-                  type="button"
-                  className="library-asset-remove"
-                  title={`حذف ${item.name}`}
-                  aria-label={`حذف ${item.name}`}
-                  onClick={() => void removeCustomIcon(item.id)}
-                >
-                  <X className="size-3" />
-                </button>
-              </div>
+              </button>
             ))}
-        </div>
-        <button
-          type="button"
-          onClick={() => onAddCustomAsset("icon")}
-          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[8px] border border-dashed border-line text-[11px] font-extrabold"
-        >
-          <Plus className="size-3.5" /> إضافة رمز جديد (SVG)
-        </button>
-      </AccordionSection>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenShapes}
+            className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
+          >
+            <Shapes className="size-3.5" /> كل الأشكال ({SHAPES.length})
+          </button>
+        </AccordionSection>
 
-      {/*
-       * Phase 7.4 — lines & dividers: weights, dashed variants and
-       * decorative arabesque dividers, plus the author's own divider SVGs.
-       */}
-      <AccordionSection
-        title="خطوط وفواصل"
-        id="dividers"
-        open={library.isOpen("dividers", false)}
-        onToggle={() => library.toggle("dividers")}
-      >
-        <div className="grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            onClick={() =>
-              addElement("line", {
-                w: 120,
-                h: 1,
-                style: { color: THEMES[theme].accent, stroke: 0.4 },
-              })
-            }
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
-          >
-            <Minus className="size-3.5" /> خط رقيق
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              addElement("line", {
-                w: 120,
-                h: 1,
-                style: { color: THEMES[theme].accent, stroke: 1.2 },
-              })
-            }
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
-          >
-            <Minus className="size-4" /> خط عريض
-          </button>
-          <button
-            type="button"
-            onClick={() => addElement("divider")}
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
-          >
-            <SeparatorHorizontal className="size-3.5" /> فاصل مزخرف
-          </button>
-          {/* Dashed line: a vector, so the dash pattern survives print. */}
-          <button
-            type="button"
-            onClick={() =>
-              addElement("svg", {
-                name: "فاصل متقطع",
-                w: 120,
-                h: 4,
-                content:
-                  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 4" preserveAspectRatio="none"><line x1="0" y1="2" x2="120" y2="2" stroke="currentColor" stroke-width="0.8" stroke-dasharray="3 3" /></svg>',
-              })
-            }
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
-          >
-            <Minus className="size-3.5 opacity-60" /> خط متقطع
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          <button
-            type="button"
-            onClick={() =>
-              addElement("svg", {
-                name: "زخرفة عربية",
-                w: 150,
-                h: 10,
-                content:
-                  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 10" preserveAspectRatio="none"><path d="M0 5h50l5-4 5 4h40l5-4 5 4h40" fill="none" stroke="currentColor" stroke-width="0.7"/></svg>',
-              })
-            }
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
-          >
-            زخرفة عربية
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              addElement("svg", {
-                name: "فاصل منقّط",
-                w: 150,
-                h: 8,
-                content:
-                  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 8" preserveAspectRatio="none"><path d="M0 4h64" stroke="currentColor" stroke-width="0.6"/><circle cx="75" cy="4" r="2.4" fill="currentColor"/><path d="M86 4h64" stroke="currentColor" stroke-width="0.6"/></svg>',
-              })
-            }
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
-          >
-            فاصل منقّط
-          </button>
-        </div>
-        {customIcons.filter((item) => item.kind === "divider").length > 0 && (
+        {/*
+         * Phase 7.3 — icons & symbols, including the author's own vectors.
+         * Custom icons are stored as SVG markup and inserted as `svg`
+         * elements, so they stay vector on canvas, in print and in export.
+         */}
+        <AccordionSection
+          title="رموز وأيقونات"
+          id="icons"
+          open={library.isOpen("icons", true)}
+          onToggle={() => library.toggle("icons")}
+        >
           <div className="library-grid-icons">
+            {Object.keys(ICONS).map((key) => (
+              <button
+                key={key}
+                type="button"
+                title={key}
+                aria-label={`إضافة أيقونة ${key}`}
+                onClick={() =>
+                  addElement("icon", {
+                    icon: key,
+                    name: key,
+                    style: { color: THEMES[theme].accent },
+                  })
+                }
+                className="library-asset-card"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="size-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={1.7}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d={ICONS[key]} />
+                </svg>
+              </button>
+            ))}
             {customIcons
-              .filter((item) => item.kind === "divider")
+              .filter((item) => item.kind === "icon")
               .map((item) => (
                 <div
                   key={item.id}
-                  className="library-asset-card col-span-2"
+                  className="library-asset-card"
                   title={item.name}
                 >
                   <button
@@ -1102,11 +1016,11 @@ export function SmartLibraryPanel({
                       addElement("svg", {
                         name: item.name,
                         content: item.svg,
-                        w: 150,
-                        h: 10,
+                        w: 24,
+                        h: 24,
                       })
                     }
-                    className="grid size-full place-items-center p-1"
+                    className="grid size-full place-items-center"
                     dangerouslySetInnerHTML={{ __html: item.svg }}
                   />
                   <button
@@ -1121,188 +1035,360 @@ export function SmartLibraryPanel({
                 </div>
               ))}
           </div>
-        )}
-        <button
-          type="button"
-          onClick={() => onAddCustomAsset("divider")}
-          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[8px] border border-dashed border-line text-[11px] font-extrabold"
-        >
-          <Plus className="size-3.5" /> إضافة فاصل جديد (SVG)
-        </button>
-      </AccordionSection>
+          <button
+            type="button"
+            onClick={() => onAddCustomAsset("icon")}
+            className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[8px] border border-dashed border-line text-[11px] font-extrabold"
+          >
+            <Plus className="size-3.5" /> إضافة رمز جديد (SVG)
+          </button>
+        </AccordionSection>
 
-      {/* «مؤشرات وإنجازات» — statistics, progress and achievement blocks. */}
-      <AccordionSection
-        title="مؤشرات وإنجازات"
-        id="indicators"
-        open={library.isOpen("indicators", false)}
-        onToggle={() => library.toggle("indicators")}
-      >
-        <section>
-          <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">
-            مؤشرات الإنجاز
-          </h3>
-          <div className="grid gap-2">
-            {PROGRESS_PRESETS.map((p) => (
+        {/*
+         * Phase 7.4 — lines & dividers: weights, dashed variants and
+         * decorative arabesque dividers, plus the author's own divider SVGs.
+         */}
+        <AccordionSection
+          title="خطوط وفواصل"
+          id="dividers"
+          open={library.isOpen("dividers", false)}
+          onToggle={() => library.toggle("dividers")}
+        >
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() =>
+                addElement("line", {
+                  w: 120,
+                  h: 1,
+                  style: { color: THEMES[theme].accent, stroke: 0.4 },
+                })
+              }
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
+            >
+              <Minus className="size-3.5" /> خط رقيق
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                addElement("line", {
+                  w: 120,
+                  h: 1,
+                  style: { color: THEMES[theme].accent, stroke: 1.2 },
+                })
+              }
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
+            >
+              <Minus className="size-4" /> خط عريض
+            </button>
+            <button
+              type="button"
+              onClick={() => addElement("divider")}
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
+            >
+              <SeparatorHorizontal className="size-3.5" /> فاصل مزخرف
+            </button>
+            {/* Dashed line: a vector, so the dash pattern survives print. */}
+            <button
+              type="button"
+              onClick={() =>
+                addElement("svg", {
+                  name: "فاصل متقطع",
+                  w: 120,
+                  h: 4,
+                  content:
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 4" preserveAspectRatio="none"><line x1="0" y1="2" x2="120" y2="2" stroke="currentColor" stroke-width="0.8" stroke-dasharray="3 3" /></svg>',
+                })
+              }
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
+            >
+              <Minus className="size-3.5 opacity-60" /> خط متقطع
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              type="button"
+              onClick={() =>
+                addElement("svg", {
+                  name: "زخرفة عربية",
+                  w: 150,
+                  h: 10,
+                  content:
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 10" preserveAspectRatio="none"><path d="M0 5h50l5-4 5 4h40l5-4 5 4h40" fill="none" stroke="currentColor" stroke-width="0.7"/></svg>',
+                })
+              }
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
+            >
+              زخرفة عربية
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                addElement("svg", {
+                  name: "فاصل منقّط",
+                  w: 150,
+                  h: 8,
+                  content:
+                    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 8" preserveAspectRatio="none"><path d="M0 4h64" stroke="currentColor" stroke-width="0.6"/><circle cx="75" cy="4" r="2.4" fill="currentColor"/><path d="M86 4h64" stroke="currentColor" stroke-width="0.6"/></svg>',
+                })
+              }
+              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
+            >
+              فاصل منقّط
+            </button>
+          </div>
+          {customIcons.filter((item) => item.kind === "divider").length > 0 && (
+            <div className="library-grid-icons">
+              {customIcons
+                .filter((item) => item.kind === "divider")
+                .map((item) => (
+                  <div
+                    key={item.id}
+                    className="library-asset-card col-span-2"
+                    title={item.name}
+                  >
+                    <button
+                      type="button"
+                      aria-label={`إضافة ${item.name}`}
+                      onClick={() =>
+                        addElement("svg", {
+                          name: item.name,
+                          content: item.svg,
+                          w: 150,
+                          h: 10,
+                        })
+                      }
+                      className="grid size-full place-items-center p-1"
+                      dangerouslySetInnerHTML={{ __html: item.svg }}
+                    />
+                    <button
+                      type="button"
+                      className="library-asset-remove"
+                      title={`حذف ${item.name}`}
+                      aria-label={`حذف ${item.name}`}
+                      onClick={() => void removeCustomIcon(item.id)}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => onAddCustomAsset("divider")}
+            className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[8px] border border-dashed border-line text-[11px] font-extrabold"
+          >
+            <Plus className="size-3.5" /> إضافة فاصل جديد (SVG)
+          </button>
+        </AccordionSection>
+
+        {/* «مؤشرات وإنجازات» — statistics, progress and achievement blocks. */}
+        <AccordionSection
+          title="مؤشرات وإنجازات"
+          id="indicators"
+          open={library.isOpen("indicators", false)}
+          onToggle={() => library.toggle("indicators")}
+        >
+          <section>
+            <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">
+              مؤشرات الإنجاز
+            </h3>
+            <div className="grid gap-2">
+              {PROGRESS_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() =>
+                    addElement("progress", {
+                      content: p.sample,
+                      w: p.w,
+                      h: p.h,
+                      name: p.label,
+                      style: {
+                        fontFamily: "Tajawal",
+                        color: THEMES[theme].ink,
+                        fill: THEMES[theme].primary,
+                        ...p.style,
+                        variant:
+                          p.style.variant ?? (p.id === "ring" ? "ring" : "bar"),
+                      },
+                    } as Partial<CanvasEl>)
+                  }
+                  className="flex items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-right transition hover:bg-line-2"
+                >
+                  <ProgressPreview preset={p} color={THEMES[theme].primary} />
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-[12px]">{p.label}</strong>
+                    <span className="text-[10px] text-muted">
+                      {Math.round(Number(p.style.value) || 0)}%
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        </AccordionSection>
+
+        {/*
+         * Phase 7.6 — tables & charts. Chart starters are REAL elements
+         * (progress bars / a numeric table) rather than a new element type:
+         * they inherit export, print and theming for free, and the author
+         * can keep editing every bar individually.
+         */}
+        <AccordionSection
+          title="جداول وإحصائيات"
+          id="tables"
+          open={library.isOpen("tables", false)}
+          onToggle={() => library.toggle("tables")}
+        >
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[11px] font-extrabold text-white"
+          >
+            <Table2 className="size-3.5" /> إدراج جدول بيانات (اختيار الأعمدة
+            والصفوف)
+          </button>
+
+          {/*
+           * Quick tables and chart templates. Every card is both clickable
+           * (inserts centred on the visible page) and DRAGGABLE (lands
+           * where it is dropped), and both paths run the same definition —
+           * so a chart keeps its internal layout however it is placed.
+           */}
+          <p className="text-[10px] font-bold text-muted">
+            اسحب إلى الصفحة، أو انقر لإدراجها في المنتصف
+          </p>
+          <div className="grid grid-cols-2 gap-1.5">
+            {TABLE_TEMPLATES.map((t) => (
               <button
-                key={p.id}
+                key={t.id}
                 type="button"
-                onClick={() =>
-                  addElement("progress", {
-                    content: p.sample,
-                    w: p.w,
-                    h: p.h,
-                    name: p.label,
-                    style: {
-                      fontFamily: "Tajawal",
-                      color: THEMES[theme].ink,
-                      fill: THEMES[theme].primary,
-                      ...p.style,
-                      variant:
-                        p.style.variant ?? (p.id === "ring" ? "ring" : "bar"),
-                    },
-                  } as Partial<CanvasEl>)
+                draggable
+                onDragStart={(event) =>
+                  startLibraryDrag(event, tableDrop(t.cols, t.rows, t.label))
                 }
-                className="flex items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-right transition hover:bg-line-2"
+                onPointerDown={(event) => {
+                  if (
+                    event.pointerType === "touch" ||
+                    event.pointerType === "pen"
+                  ) {
+                    startPointerLibraryDrag(
+                      event,
+                      tableDrop(t.cols, t.rows, t.label),
+                      t.label,
+                    );
+                  }
+                }}
+                onClick={() => insertDrop(tableDrop(t.cols, t.rows, t.label))}
+                className="library-drag-card flex min-h-[46px] flex-col items-start justify-center gap-0.5 rounded-[8px] border border-line px-2.5 py-1.5 text-start transition hover:border-navy-2 hover:bg-navy-2/5"
               >
-                <ProgressPreview preset={p} color={THEMES[theme].primary} />
-                <span className="min-w-0 flex-1">
-                  <strong className="block text-[12px]">{p.label}</strong>
-                  <span className="text-[10px] text-muted">
-                    {Math.round(Number(p.style.value) || 0)}%
+                <strong className="text-[11px]">{t.label}</strong>
+                <span className="text-[10px] text-muted">{t.hint}</span>
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-1.5">
+            {CHART_TEMPLATES.map((chart) => (
+              <button
+                key={chart.id}
+                type="button"
+                draggable
+                onDragStart={(event) =>
+                  startLibraryDrag(event, { items: chartItems(chart) })
+                }
+                onPointerDown={(event) => {
+                  if (
+                    event.pointerType === "touch" ||
+                    event.pointerType === "pen"
+                  ) {
+                    startPointerLibraryDrag(
+                      event,
+                      { items: chartItems(chart) },
+                      chart.label,
+                    );
+                  }
+                }}
+                onClick={() => insertDrop({ items: chartItems(chart) })}
+                className="library-drag-card flex min-h-[44px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold transition hover:border-navy-2 hover:bg-navy-2/5"
+              >
+                <span className="min-w-0">
+                  <strong className="block text-[12px]">{chart.label}</strong>
+                  <span className="text-[10px] text-muted">{chart.hint}</span>
+                </span>
+                <Gauge className="size-4 shrink-0 text-brand-hover" />
+              </button>
+            ))}
+          </div>
+        </AccordionSection>
+
+        <AccordionSection
+          title="مكونات مؤسسية"
+          id="institutional"
+          open={library.isOpen("institutional", false)}
+          onToggle={() => library.toggle("institutional")}
+        >
+          <div className="grid gap-1.5">
+            {INSTITUTIONAL_COMPONENTS.map((component) => (
+              <button
+                key={component.id}
+                type="button"
+                draggable
+                onDragStart={(event) =>
+                  startLibraryDrag(event, { items: component.items })
+                }
+                onPointerDown={(event) =>
+                  startPointerLibraryDrag(
+                    event,
+                    { items: component.items },
+                    component.label,
+                  )
+                }
+                onClick={() => insertDrop({ items: component.items })}
+                className="library-drag-card rounded-lg border border-line px-2.5 py-2 text-start hover:bg-surface-2"
+              >
+                <strong className="block text-[12px]">{component.label}</strong>
+                <span className="text-[10px] text-muted">{component.hint}</span>
+              </button>
+            ))}
+          </div>
+        </AccordionSection>
+
+        {/* Phase 7.7 — ready-made report page layouts. */}
+        <AccordionSection
+          title="نماذج جاهزة"
+          id="templates"
+          open={library.isOpen("templates", false)}
+          onToggle={() => library.toggle("templates")}
+        >
+          <div className="grid gap-2">
+            {PAGE_TEMPLATES.slice(0, 5).map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => onPreviewTemplate(t)}
+                className="library-hit grid min-h-[52px] grid-cols-[64px_1fr] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition"
+              >
+                <TemplatePreview variant={t.preview} />
+                <span className="min-w-0">
+                  <strong className="block text-[12px]">{t.title}</strong>
+                  <span className="block text-[10px] leading-4 text-muted">
+                    {t.desc}
                   </span>
                 </span>
               </button>
             ))}
           </div>
-        </section>
-      </AccordionSection>
-
-      {/*
-       * Phase 7.6 — tables & charts. Chart starters are REAL elements
-       * (progress bars / a numeric table) rather than a new element type:
-       * they inherit export, print and theming for free, and the author
-       * can keep editing every bar individually.
-       */}
-      <AccordionSection
-        title="جداول وإحصائيات"
-        id="tables"
-        open={library.isOpen("tables", false)}
-        onToggle={() => library.toggle("tables")}
-      >
-        <button
-          type="button"
-          onClick={() => setPickerOpen(true)}
-          className="inline-flex h-10 w-full items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[11px] font-extrabold text-white"
-        >
-          <Table2 className="size-3.5" /> إدراج جدول بيانات (اختيار الأعمدة
-          والصفوف)
-        </button>
-
-        {/*
-         * Quick tables and chart templates. Every card is both clickable
-         * (inserts centred on the visible page) and DRAGGABLE (lands
-         * where it is dropped), and both paths run the same definition —
-         * so a chart keeps its internal layout however it is placed.
-         */}
-        <p className="text-[10px] font-bold text-muted">
-          اسحب إلى الصفحة، أو انقر لإدراجها في المنتصف
-        </p>
-        <div className="grid grid-cols-2 gap-1.5">
-          {TABLE_TEMPLATES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              draggable
-              onDragStart={(event) =>
-                startLibraryDrag(event, tableDrop(t.cols, t.rows, t.label))
-              }
-              onPointerDown={(event) => {
-                if (event.pointerType === "touch" || event.pointerType === "pen") {
-                  startPointerLibraryDrag(event, tableDrop(t.cols, t.rows, t.label), t.label);
-                }
-              }}
-              onClick={() => insertDrop(tableDrop(t.cols, t.rows, t.label))}
-              className="library-drag-card flex min-h-[46px] flex-col items-start justify-center gap-0.5 rounded-[8px] border border-line px-2.5 py-1.5 text-start transition hover:border-navy-2 hover:bg-navy-2/5"
-            >
-              <strong className="text-[11px]">{t.label}</strong>
-              <span className="text-[10px] text-muted">{t.hint}</span>
-            </button>
-          ))}
-        </div>
-        <div className="grid gap-1.5">
-          {CHART_TEMPLATES.map((chart) => (
-            <button
-              key={chart.id}
-              type="button"
-              draggable
-              onDragStart={(event) =>
-                startLibraryDrag(event, { items: chartItems(chart) })
-              }
-              onPointerDown={(event) => {
-                if (event.pointerType === "touch" || event.pointerType === "pen") {
-                  startPointerLibraryDrag(event, { items: chartItems(chart) }, chart.label);
-                }
-              }}
-              onClick={() => insertDrop({ items: chartItems(chart) })}
-              className="library-drag-card flex min-h-[44px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold transition hover:border-navy-2 hover:bg-navy-2/5"
-            >
-              <span className="min-w-0">
-                <strong className="block text-[12px]">{chart.label}</strong>
-                <span className="text-[10px] text-muted">{chart.hint}</span>
-              </span>
-              <Gauge className="size-4 shrink-0 text-brand-hover" />
-            </button>
-          ))}
-        </div>
-      </AccordionSection>
-
-      <AccordionSection title="مكونات مؤسسية" id="institutional" open={library.isOpen("institutional", false)} onToggle={() => library.toggle("institutional")}>
-        <div className="grid gap-1.5">
-          {INSTITUTIONAL_COMPONENTS.map(component => <button key={component.id} type="button" draggable
-            onDragStart={event => startLibraryDrag(event, { items: component.items })}
-            onPointerDown={event => startPointerLibraryDrag(event, { items: component.items }, component.label)}
-            onClick={() => insertDrop({ items: component.items })}
-            className="library-drag-card rounded-lg border border-line px-2.5 py-2 text-start hover:bg-surface-2">
-            <strong className="block text-[12px]">{component.label}</strong><span className="text-[10px] text-muted">{component.hint}</span>
-          </button>)}
-        </div>
-      </AccordionSection>
-
-      {/* Phase 7.7 — ready-made report page layouts. */}
-      <AccordionSection
-        title="نماذج جاهزة"
-        id="templates"
-        open={library.isOpen("templates", false)}
-        onToggle={() => library.toggle("templates")}
-      >
-        <div className="grid gap-2">
-          {PAGE_TEMPLATES.slice(0, 5).map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => onPreviewTemplate(t)}
-              className="library-hit grid min-h-[52px] grid-cols-[64px_1fr] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition"
-            >
-              <TemplatePreview variant={t.preview} />
-              <span className="min-w-0">
-                <strong className="block text-[12px]">{t.title}</strong>
-                <span className="block text-[10px] leading-4 text-muted">
-                  {t.desc}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={onOpenTemplates}
-          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
-        >
-          <LayoutTemplate className="size-3.5" /> كل النماذج (
-          {PAGE_TEMPLATES.length})
-        </button>
-      </AccordionSection>
+          <button
+            type="button"
+            onClick={onOpenTemplates}
+            className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold"
+          >
+            <LayoutTemplate className="size-3.5" /> كل النماذج (
+            {PAGE_TEMPLATES.length})
+          </button>
+        </AccordionSection>
       </SortableSections>
     </>
   );

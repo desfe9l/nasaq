@@ -1,3 +1,6 @@
+import { useId } from "react";
+import type { Gradient } from "@/lib/editor/gradient";
+import { GradientDefs } from "./GradientDefs";
 import { isCompoundShape, shapeDef, type ShapePart } from "@/lib/editor/shapes";
 import {
   applyRectRadius,
@@ -8,7 +11,7 @@ import {
 
 interface Props {
   /** Resolved shape id; falls back to the legacy `shape` enum. */
-  style: { shapeId?: string; shape?: string };
+  style: { shapeId?: string; shape?: string; gradient?: Gradient };
   fill: string;
   stroke: string;
   borderWidthMm: number;
@@ -37,7 +40,13 @@ interface Props {
  * paints, otherwise the cut would follow a different silhouette than the shape
  * the author sees. Keeping one builder guarantees they can never drift.
  */
-export function ShapeParts({ parts, fillRule }: { parts: ShapePart[]; fillRule?: "evenodd" }) {
+export function ShapeParts({
+  parts,
+  fillRule,
+}: {
+  parts: ShapePart[];
+  fillRule?: "evenodd";
+}) {
   return (
     <>
       {parts.map((part, i) => {
@@ -57,10 +66,21 @@ export function ShapeParts({ parts, fillRule }: { parts: ShapePart[]; fillRule?:
           );
         }
         if (part.k === "circle") {
-          return <circle key={i} {...shared} cx={part.cx} cy={part.cy} r={part.r} />;
+          return (
+            <circle key={i} {...shared} cx={part.cx} cy={part.cy} r={part.r} />
+          );
         }
         if (part.k === "ellipse") {
-          return <ellipse key={i} {...shared} cx={part.cx} cy={part.cy} rx={part.rx} ry={part.ry} />;
+          return (
+            <ellipse
+              key={i}
+              {...shared}
+              cx={part.cx}
+              cy={part.cy}
+              rx={part.rx}
+              ry={part.ry}
+            />
+          );
         }
         if (part.k === "poly") {
           return <polygon key={i} {...shared} points={part.points} />;
@@ -81,13 +101,18 @@ export function ShapeGlyph({
   dash,
   radiusMm,
 }: Props) {
+  const gradientId = `gradient-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const def = shapeDef(shapeIdOf(style));
   const strokeUnits = strokeToUnits(borderWidthMm, box);
   const inner = Math.max(1, 100 - strokeUnits);
-  const transform = strokeUnits > 0 ? `translate(${strokeUnits / 2} ${strokeUnits / 2}) scale(${inner / 100})` : undefined;
+  const transform =
+    strokeUnits > 0
+      ? `translate(${strokeUnits / 2} ${strokeUnits / 2}) scale(${inner / 100})`
+      : undefined;
   const parts = applyRectRadius(def.parts, radiusMm, box);
   // The mask marker (explicit `strokeDasharray`) wins over the author's dash.
-  const dashArray = strokeDasharray ?? (dash ? dashArrayForUnits(strokeUnits) : undefined);
+  const dashArray =
+    strokeDasharray ?? (dash ? dashArrayForUnits(strokeUnits) : undefined);
 
   return (
     <svg
@@ -98,16 +123,22 @@ export function ShapeGlyph({
       aria-hidden
       focusable="false"
     >
+      {fill !== "none" && (
+        <GradientDefs gradient={style.gradient} id={gradientId} box={box} />
+      )}
       <g
         transform={transform}
-        fill={fill}
+        fill={style.gradient && fill !== "none" ? `url(#${gradientId})` : fill}
         fillRule={isCompoundShape(def.id) ? "evenodd" : undefined}
         stroke={strokeUnits > 0 ? stroke : undefined}
         strokeWidth={strokeUnits > 0 ? strokeUnits : undefined}
         strokeDasharray={dashArray}
         strokeLinejoin="round"
       >
-        <ShapeParts parts={parts} fillRule={isCompoundShape(def.id) ? "evenodd" : undefined} />
+        <ShapeParts
+          parts={parts}
+          fillRule={isCompoundShape(def.id) ? "evenodd" : undefined}
+        />
       </g>
     </svg>
   );

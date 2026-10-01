@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useId,
   useRef,
   useState,
   type ReactNode,
@@ -100,6 +101,8 @@ const writePark = (id: string, point: { x: number; y: number } | null) => {
  * they keep their native button semantics instead of claiming `menuitem`.
  */
 const DrawerContext = createContext(false);
+const MenuAncestors = createContext<string[]>([]);
+export const useMenuAncestors = () => useContext(MenuAncestors);
 
 export function AnchorMenu({
   trigger,
@@ -113,16 +116,30 @@ export function AnchorMenu({
   onOpenChange,
   drawer,
 }: AnchorMenuProps) {
+  const menuId = useId();
+  const ancestors = useContext(MenuAncestors);
+  const ancestorsRef = useRef(ancestors);
+  ancestorsRef.current = ancestors;
   const [uncontrolled, setUncontrolled] = useState(false);
   const open = controlledOpen ?? uncontrolled;
   const setOpen = useCallback(
     (next: boolean) => {
+      if (next)
+        window.dispatchEvent(
+          new CustomEvent("nasaq:menu-open", {
+            detail: { id: menuId, ancestors: ancestorsRef.current },
+          }),
+        );
       if (controlledOpen === undefined) setUncontrolled(next);
       onOpenChange?.(next);
     },
-    [controlledOpen, onOpenChange],
+    [controlledOpen, onOpenChange, menuId],
   );
-  const [pos, setPos] = useState<{ left: number; top: number; side: "top" | "bottom" } | null>(null);
+  const [pos, setPos] = useState<{
+    left: number;
+    top: number;
+    side: "top" | "bottom";
+  } | null>(null);
   /*
    * Primitives, not the inline `drawer` object: a caller re-renders far more
    * often than a drawer changes identity, and re-running the placement effect
@@ -196,7 +213,11 @@ export function AnchorMenu({
           { width: window.innerWidth, height: window.innerHeight },
           MARGIN,
         );
-        setPos((current) => ({ ...(current ?? { side }), left: at.x, top: at.y }));
+        setPos((current) => ({
+          ...(current ?? { side }),
+          left: at.x,
+          top: at.y,
+        }));
         return;
       }
       anchor();
@@ -210,9 +231,20 @@ export function AnchorMenu({
 
   useEffect(() => {
     if (!open) return;
+    const onMenu = (event: Event) => {
+      const detail = (event as CustomEvent<{ id: string; ancestors: string[] }>)
+        .detail;
+      if (detail.id !== menuId && !detail.ancestors.includes(menuId))
+        setOpen(false);
+    };
+    const reset = () => setOpen(false);
     const onDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
-      if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      if (
+        panelRef.current?.contains(target) ||
+        triggerRef.current?.contains(target)
+      )
+        return;
       /*
        * A drawer's own sub-surfaces are portals too: the colour picker that
        * opens from a swatch, a tooltip, another drawer. Pressing inside one of
@@ -221,21 +253,40 @@ export function AnchorMenu({
        */
       if (
         target instanceof Element &&
-        target.closest(".editor-anchor-menu, .color-field-pop, .editor-tip")
+        (target.closest(".editor-tip") ||
+          target
+            .closest<HTMLElement>(".editor-anchor-menu, .color-field-pop")
+            ?.dataset.menuAncestors?.split(" ")
+            .includes(menuId))
       )
         return;
       setOpen(false);
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        event.stopPropagation();
+        // The deepest open surface owns Escape, even before a pointer user focuses it.
+        if (
+          document.querySelector(
+            `[data-menu-ancestors~="${CSS.escape(menuId)}"]`,
+          )
+        )
+          return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
         setOpen(false);
         triggerRef.current?.focus();
         return;
       }
       if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      if (
+        event.target instanceof Element &&
+        event.target.closest("input, select, textarea")
+      )
+        return;
       const items = [
-        ...(bodyRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled)") ?? []),
+        ...(bodyRef.current?.querySelectorAll<HTMLElement>(
+          "button:not(:disabled)",
+        ) ?? []),
       ];
       if (!items.length) return;
       event.preventDefault();
@@ -252,25 +303,31 @@ export function AnchorMenu({
      * button. An anchored menu keeps following its trigger, as it must.
      */
     const reposition = () => (parked.current ? clampPark() : anchor());
+    window.addEventListener("nasaq:menu-open", onMenu);
+    window.addEventListener("nasaq:selection-ui-reset", reset);
     window.addEventListener("pointerdown", onDown, true);
     window.addEventListener("keydown", onKey, true);
     window.addEventListener("resize", reposition);
     window.addEventListener("scroll", reposition, true);
     window.addEventListener("nasaq:panel-layout", reposition);
     return () => {
+      window.removeEventListener("nasaq:menu-open", onMenu);
+      window.removeEventListener("nasaq:selection-ui-reset", reset);
       window.removeEventListener("pointerdown", onDown, true);
       window.removeEventListener("keydown", onKey, true);
       window.removeEventListener("resize", reposition);
       window.removeEventListener("scroll", reposition, true);
       window.removeEventListener("nasaq:panel-layout", reposition);
     };
-  }, [open, anchor, clampPark, setOpen]);
+  }, [open, anchor, clampPark, setOpen, menuId]);
 
   // Open with the keyboard already inside: arrows work immediately.
   useEffect(() => {
     if (!open) return;
     const frame = requestAnimationFrame(() => {
-      bodyRef.current?.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
+      bodyRef.current
+        ?.querySelector<HTMLElement>("button:not(:disabled)")
+        ?.focus();
     });
     return () => cancelAnimationFrame(frame);
   }, [open]);
@@ -320,7 +377,11 @@ export function AnchorMenu({
     drag.frame = requestAnimationFrame(() => {
       drag.frame = 0;
       if (dragState.current === drag) {
-        setPos((current) => ({ ...(current ?? { side }), left: drag.next.x, top: drag.next.y }));
+        setPos((current) => ({
+          ...(current ?? { side }),
+          left: drag.next.x,
+          top: drag.next.y,
+        }));
       }
     });
   };
@@ -333,17 +394,18 @@ export function AnchorMenu({
     event.stopPropagation();
     if (drag.frame) cancelAnimationFrame(drag.frame);
     const size = panel?.getBoundingClientRect();
-    const at = event.type === "pointerup" && drag.moved && size
-      ? clampParkedPoint(
-          {
-            x: drag.left + (event.clientX - drag.x),
-            y: drag.top + (event.clientY - drag.y),
-          },
-          { width: size.width, height: size.height },
-          { width: window.innerWidth, height: window.innerHeight },
-          MARGIN,
-        )
-      : drag.next;
+    const at =
+      event.type === "pointerup" && drag.moved && size
+        ? clampParkedPoint(
+            {
+              x: drag.left + (event.clientX - drag.x),
+              y: drag.top + (event.clientY - drag.y),
+            },
+            { width: size.width, height: size.height },
+            { width: window.innerWidth, height: window.innerHeight },
+            MARGIN,
+          )
+        : drag.next;
     dragState.current = null;
     if (!drag.moved || !drawerId) return;
     parked.current = true;
@@ -351,12 +413,16 @@ export function AnchorMenu({
     writePark(drawerId, at);
   };
 
-  useEffect(() => () => {
-    if (dragState.current?.frame) cancelAnimationFrame(dragState.current.frame);
-  }, []);
+  useEffect(
+    () => () => {
+      if (dragState.current?.frame)
+        cancelAnimationFrame(dragState.current.frame);
+    },
+    [],
+  );
 
   return (
-    <>
+    <MenuAncestors.Provider value={[...ancestors, menuId]}>
       {trigger({
         ref: (node) => {
           triggerRef.current = node;
@@ -370,9 +436,15 @@ export function AnchorMenu({
         createPortal(
           <div
             ref={panelRef}
+            data-menu-id={menuId}
+            data-menu-ancestors={ancestors.join(" ")}
             role={drawer ? "dialog" : "menu"}
             aria-label={drawer ? drawer.title : label}
-            className={cn("editor-anchor-menu", drawer && "is-drawer", className)}
+            className={cn(
+              "editor-anchor-menu",
+              drawer && "is-drawer",
+              className,
+            )}
             style={{
               left: pos?.left ?? -9999,
               top: pos?.top ?? -9999,
@@ -387,7 +459,8 @@ export function AnchorMenu({
                * dismiss it from its own bar, the trigger, Escape or outside.
                */
               if (drawer) return;
-              if ((event.target as HTMLElement).closest("button")) setOpen(false);
+              if ((event.target as HTMLElement).closest("button"))
+                setOpen(false);
             }}
           >
             {drawer && (
@@ -425,7 +498,7 @@ export function AnchorMenu({
                 </button>
               </div>
             )}
-            <div className="editor-drawer-body">
+            <div ref={bodyRef} className="editor-drawer-body">
               <DrawerContext.Provider value={Boolean(drawer)}>
                 {children}
               </DrawerContext.Provider>
@@ -433,7 +506,7 @@ export function AnchorMenu({
           </div>,
           document.body,
         )}
-    </>
+    </MenuAncestors.Provider>
   );
 }
 
@@ -489,7 +562,11 @@ export function MenuRow({
           <span className="editor-menu-label">{label}</span>
           {hint && <span className="editor-menu-hint">{hint}</span>}
         </span>
-        {checked && <span className="editor-menu-check" aria-hidden="true">✓</span>}
+        {checked && (
+          <span className="editor-menu-check" aria-hidden="true">
+            ✓
+          </span>
+        )}
         {shortcut && <kbd className="editor-menu-kbd">{shortcut}</kbd>}
       </button>
     </>

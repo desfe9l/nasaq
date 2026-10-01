@@ -91,10 +91,7 @@ export function rotationIsAxisAligned(rotation: number): boolean {
  * of the element, so aligning them to the artboard or a neighbour is exactly
  * what the author sees happen.
  */
-export function rotatedAABB(
-  el: GestureBox,
-  rotation: number,
-): GestureBox {
+export function rotatedAABB(el: GestureBox, rotation: number): GestureBox {
   const rad = ((Number(rotation) || 0) * Math.PI) / 180;
   const c = Math.abs(Math.cos(rad));
   const s = Math.abs(Math.sin(rad));
@@ -229,15 +226,41 @@ export function resizeToPointer(
       if (handle === "n" || handle === "s") sx = 0;
     }
   } else if (isCorner) {
-    if (handle === "se") { ref = fromCentre(-1, -1); sx = 1; sy = 1; }
-    else if (handle === "ne") { ref = fromCentre(-1, 1); sx = 1; sy = -1; }
-    else if (handle === "nw") { ref = fromCentre(1, 1); sx = -1; sy = -1; }
-    else { ref = fromCentre(1, -1); sx = -1; sy = 1; } // "sw"
+    if (handle === "se") {
+      ref = fromCentre(-1, -1);
+      sx = 1;
+      sy = 1;
+    } else if (handle === "ne") {
+      ref = fromCentre(-1, 1);
+      sx = 1;
+      sy = -1;
+    } else if (handle === "nw") {
+      ref = fromCentre(1, 1);
+      sx = -1;
+      sy = -1;
+    } else {
+      ref = fromCentre(1, -1);
+      sx = -1;
+      sy = 1;
+    } // "sw"
   } else {
-    if (handle === "e") { ref = fromCentre(-1, 0); sx = 1; sy = 0; }
-    else if (handle === "w") { ref = fromCentre(1, 0); sx = -1; sy = 0; }
-    else if (handle === "n") { ref = fromCentre(0, 1); sx = 0; sy = -1; }
-    else { ref = fromCentre(0, -1); sx = 0; sy = 1; } // "s"
+    if (handle === "e") {
+      ref = fromCentre(-1, 0);
+      sx = 1;
+      sy = 0;
+    } else if (handle === "w") {
+      ref = fromCentre(1, 0);
+      sx = -1;
+      sy = 0;
+    } else if (handle === "n") {
+      ref = fromCentre(0, 1);
+      sx = 0;
+      sy = -1;
+    } else {
+      ref = fromCentre(0, -1);
+      sx = 0;
+      sy = 1;
+    } // "s"
   }
 
   // Local components of the reference→pointer vector. A centered handle
@@ -402,7 +425,11 @@ export function elementAABB(
  * Swapping the axis letters is exactly equivalent to inverting dx/dy for the
  * axes the handle actually uses, and leaves the geometry maths untouched.
  */
-export function mirrorHandle(handle: string, flipX: boolean, flipY: boolean): string {
+export function mirrorHandle(
+  handle: string,
+  flipX: boolean,
+  flipY: boolean,
+): string {
   let out = "";
   for (const ch of handle) {
     if (ch === "e" && flipX) out += "w";
@@ -473,17 +500,21 @@ export function resizeByHandle(
   if (horizontal && vertical) {
     if (wLocked) {
       const heightScale =
-        (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
+        (orig.h + (handle.includes("s") ? dy : -dy)) /
+        Math.max(orig.h, MIN_SIZE);
       scale = heightScale;
     } else if (hLocked) {
       const widthScale =
-        (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
+        (orig.w + (handle.includes("e") ? dx : -dx)) /
+        Math.max(orig.w, MIN_SIZE);
       scale = widthScale;
     } else {
       const widthScale =
-        (orig.w + (handle.includes("e") ? dx : -dx)) / Math.max(orig.w, MIN_SIZE);
+        (orig.w + (handle.includes("e") ? dx : -dx)) /
+        Math.max(orig.w, MIN_SIZE);
       const heightScale =
-        (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
+        (orig.h + (handle.includes("s") ? dy : -dy)) /
+        Math.max(orig.h, MIN_SIZE);
       scale =
         Math.abs(widthScale - 1) >= Math.abs(heightScale - 1)
           ? widthScale
@@ -510,8 +541,15 @@ export function resizeByHandle(
     scale =
       (orig.h + (handle.includes("s") ? dy : -dy)) / Math.max(orig.h, MIN_SIZE);
   }
-  const nextW = wLocked ? orig.w : Math.max(MIN_SIZE, orig.w * Math.max(scale, 0.01));
-  const nextH = hLocked ? orig.h : Math.max(MIN_SIZE, (wLocked ? orig.h * Math.max(scale, 0.01) : nextW / ratio));
+  const nextW = wLocked
+    ? orig.w
+    : Math.max(MIN_SIZE, orig.w * Math.max(scale, 0.01));
+  const nextH = hLocked
+    ? orig.h
+    : Math.max(
+        MIN_SIZE,
+        wLocked ? orig.h * Math.max(scale, 0.01) : nextW / ratio,
+      );
   let finalW = nextW;
   let finalH = nextH;
   if (wLocked && !hLocked) {
@@ -583,10 +621,12 @@ export function applySnap(
    * independent object, so the algorithm's mutations land on it and are
    * transferred back to `el` as a translation at the end.
    */
-  const aligned = rotationIsAxisAligned(rotation);
-  const shape: GestureBox = aligned
-    ? el
-    : rotatedAABB(el, rotation);
+  const normalizedRotation = ((rotation % 360) + 360) % 360;
+  const aligned =
+    Math.min(normalizedRotation, 360 - normalizedRotation) <= AXIS_TOL_DEG;
+  const shape: GestureBox = aligned ? el : rotatedAABB(el, rotation);
+  const rawX = shape.x,
+    rawY = shape.y;
   const v: number[] = [];
   const h: number[] = [];
   if (grid) {
@@ -608,8 +648,8 @@ export function applySnap(
       size.h,
       ...stable.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h]),
     ];
-    const mineV = [shape.x, shape.x + shape.w / 2, shape.x + shape.w];
-    const mineH = [shape.y, shape.y + shape.h / 2, shape.y + shape.h];
+    const mineV = [rawX, rawX + shape.w / 2, rawX + shape.w];
+    const mineH = [rawY, rawY + shape.h / 2, rawY + shape.h];
     const nearest = (mine: number[], targets: number[]) => {
       let best: { delta: number; target: number } | null = null;
       for (const m of mine) {
@@ -628,11 +668,11 @@ export function applySnap(
     const bestV = nearest(mineV, edges);
     const bestH = nearest(mineH, hedges);
     if (bestV) {
-      shape.x += bestV.delta;
+      shape.x = rawX + bestV.delta;
       v.push(bestV.target);
     }
     if (bestH) {
-      shape.y += bestH.delta;
+      shape.y = rawY + bestH.delta;
       h.push(bestH.target);
     }
     /*
@@ -649,9 +689,13 @@ export function applySnap(
       let right: SnapCandidate | null = null;
       for (const o of stable) {
         if (!overlapV(o)) continue;
-        if (o.x + o.w <= shape.x + threshold && (!left || o.x + o.w > left.x + left.w))
+        if (
+          o.x + o.w <= shape.x + threshold &&
+          (!left || o.x + o.w > left.x + left.w)
+        )
           left = o;
-        if (o.x >= shape.x + shape.w - threshold && (!right || o.x < right.x)) right = o;
+        if (o.x >= shape.x + shape.w - threshold && (!right || o.x < right.x))
+          right = o;
       }
       if (left && right) {
         const span = right.x - (left.x + left.w);
@@ -672,9 +716,13 @@ export function applySnap(
       let below: SnapCandidate | null = null;
       for (const o of stable) {
         if (!overlapH(o)) continue;
-        if (o.y + o.h <= shape.y + threshold && (!above || o.y + o.h > above.y + above.h))
+        if (
+          o.y + o.h <= shape.y + threshold &&
+          (!above || o.y + o.h > above.y + above.h)
+        )
           above = o;
-        if (o.y >= shape.y + shape.h - threshold && (!below || o.y < below.y)) below = o;
+        if (o.y >= shape.y + shape.h - threshold && (!below || o.y < below.y))
+          below = o;
       }
       if (above && below) {
         const span = below.y - (above.y + above.h);
@@ -744,8 +792,18 @@ export function applyResizeSnap(
 
   const edgesFor = (axis: "x" | "y", extent: number) =>
     axis === "x"
-      ? [0, extent / 2, extent, ...others.flatMap((o) => [o.x, o.x + o.w / 2, o.x + o.w])]
-      : [0, extent / 2, extent, ...others.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h])];
+      ? [
+          0,
+          extent / 2,
+          extent,
+          ...others.flatMap((o) => [o.x, o.x + o.w / 2, o.x + o.w]),
+        ]
+      : [
+          0,
+          extent / 2,
+          extent,
+          ...others.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h]),
+        ];
 
   const nearest = (value: number, targets: number[]) => {
     let best: { delta: number; target: number } | null = null;
@@ -761,7 +819,9 @@ export function applyResizeSnap(
     return best;
   };
 
-  // Grid first (unconditional, same as move), then smart guides win if closer.
+  const raw = { ...box };
+  // Smart candidates are measured BEFORE grid quantisation. Otherwise a page
+  // edge such as 297 mm becomes unreachable at high zoom on a 5 mm grid.
   if (grid) {
     if (liveLeft) {
       const gx = Math.round(box.x / GRID) * GRID;
@@ -780,30 +840,30 @@ export function applyResizeSnap(
     const xTargets = edgesFor("x", size.w);
     const yTargets = edgesFor("y", size.h);
     if (liveLeft) {
-      const best = nearest(box.x, xTargets);
-      if (best) {
-        box.x += best.delta;
-        box.w -= best.delta;
+      const best = nearest(raw.x, xTargets);
+      if (best && raw.x + raw.w - best.target >= MIN_SIZE) {
+        box.x = best.target;
+        box.w = raw.w - best.delta;
         v.push(best.target);
       }
     } else if (liveRight) {
-      const best = nearest(box.x + box.w, xTargets);
-      if (best) {
-        box.w += best.delta;
+      const best = nearest(raw.x + raw.w, xTargets);
+      if (best && best.target - box.x >= MIN_SIZE) {
+        box.w = best.target - box.x;
         v.push(best.target);
       }
     }
     if (liveTop) {
-      const best = nearest(box.y, yTargets);
-      if (best) {
-        box.y += best.delta;
-        box.h -= best.delta;
+      const best = nearest(raw.y, yTargets);
+      if (best && raw.y + raw.h - best.target >= MIN_SIZE) {
+        box.y = best.target;
+        box.h = raw.h - best.delta;
         h.push(best.target);
       }
     } else if (liveBottom) {
-      const best = nearest(box.y + box.h, yTargets);
-      if (best) {
-        box.h += best.delta;
+      const best = nearest(raw.y + raw.h, yTargets);
+      if (best && best.target - box.y >= MIN_SIZE) {
+        box.h = best.target - box.y;
         h.push(best.target);
       }
     }

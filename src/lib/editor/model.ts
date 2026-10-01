@@ -1,4 +1,6 @@
 import type { FadeOverlay } from "./fade";
+import type { Gradient } from "./gradient";
+import type { ImageCrop } from "./image-crop";
 import { clamp, uid } from "../utils.ts";
 import type { Numerals, TextFit } from "./arabic";
 
@@ -136,6 +138,10 @@ export interface ElStyle {
   color?: string;
   background?: string;
   fill?: string;
+  /** Shared multi-stop paint; solid/transparent fill stays in `fill`. */
+  gradient?: Gradient;
+  /** Non-destructive source window; independent from frame resizing. */
+  crop?: ImageCrop;
   borderColor?: string;
   borderWidth?: number;
   /**
@@ -328,6 +334,8 @@ export interface Page {
   id: string;
   name: string;
   bg?: string;
+  /** Page-owned paint, always edge-to-edge and behind all document layers. */
+  bgGradient?: Gradient;
   /** Page width in mm; omitted means A4 portrait width. */
   w?: number;
   h?: number;
@@ -834,7 +842,7 @@ export function createElement(
       w: 72,
       h: 48,
       src: placeholderImage("image"),
-      style: { objectFit: "cover", radius: 2 },
+      style: { objectFit: "cover", radius: 0 },
     },
     logo: {
       w: 28,
