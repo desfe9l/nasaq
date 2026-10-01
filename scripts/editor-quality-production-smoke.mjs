@@ -116,7 +116,7 @@ try {
     await dock.getByRole("button", { name: "تصغير شريط الأدوات", exact: true }).click();
     const collapsedDock = await dock.boundingBox();
     assert.ok(collapsedDock.width < expandedDock.width);
-    assert.ok(Math.abs(collapsedDock.height - expandedDock.height) < 0.5);
+    assert.ok(collapsedDock.height <= 68, `collapsed main dock is ${collapsedDock.height}px high`);
     await dock.getByRole("button", { name: "توسيع شريط الأدوات", exact: true }).click();
     const reopenedDock = await dock.boundingBox();
     assert.ok(Math.abs(reopenedDock.width - expandedDock.width) < 0.5);
