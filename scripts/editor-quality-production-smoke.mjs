@@ -32,6 +32,99 @@ try {
     page.on("pageerror", (error) => errors.push(error.stack || error.message));
     await page.goto(`${base}/editor`, { waitUntil: "networkidle" });
     await page.locator(".editor-canvas-stage").waitFor();
+    const dock = page.locator(".studio-tool-dock");
+    await dock.waitFor();
+    const dragDock = async (type) => {
+      const before = await dock.boundingBox();
+      const viewport = page.viewportSize();
+      assert.ok(before.height <= 68, `main dock height is ${before.height}px at ${width}px`);
+      const dx = before.x + before.width + 16 <= viewport.width ? 16 : before.x >= 16 ? -16 : 0;
+      const dy = before.y >= 24 ? -16 : 16;
+      assert.ok(dx !== 0 || dy !== 0, "main dock has no available drag lane");
+      const grip = dock.locator(".editor-dock-grip");
+      const gripBox = await grip.boundingBox();
+      const start = { x: gripBox.x + gripBox.width / 2, y: gripBox.y + gripBox.height / 2 };
+      const samples = [];
+
+      if (type === "mouse") {
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        for (let step = 1; step <= 4; step++) {
+          await page.mouse.move(start.x + dx * step / 4, start.y + dy * step / 4);
+          await page.waitForTimeout(16);
+          samples.push(await dock.boundingBox());
+        }
+        await page.mouse.up();
+      } else {
+        const cdp = await context.newCDPSession(page);
+        await page.evaluate(() => {
+          window.__dockPointerTypes = [];
+          document.querySelector(".editor-dock-grip").addEventListener(
+            "pointerdown",
+            (event) => window.__dockPointerTypes.push(event.pointerType),
+            { once: true },
+          );
+        });
+        await cdp.send("Input.dispatchTouchEvent", {
+          type: "touchStart",
+          touchPoints: [{ id: 1, x: start.x, y: start.y, radiusX: 3, radiusY: 3, force: 1 }],
+        });
+        for (let step = 1; step <= 4; step++) {
+          await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ id: 1, x: start.x + dx * step / 4, y: start.y + dy * step / 4, radiusX: 3, radiusY: 3, force: 1 }],
+          });
+          await page.waitForTimeout(16);
+          samples.push(await dock.boundingBox());
+        }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        assert.deepEqual(await page.evaluate(() => window.__dockPointerTypes), ["touch"]);
+        await cdp.detach();
+      }
+
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.ok(samples.every((rect) =>
+        Math.abs(rect.width - before.width) < 0.5 && Math.abs(rect.height - before.height) < 0.5,
+      ), `main dock changed size during ${type} drag: ${JSON.stringify(samples)}`);
+      const after = await dock.boundingBox();
+      assert.ok(Math.abs(after.x - before.x) + Math.abs(after.y - before.y) > 2);
+      assert.ok(Math.abs(after.x - before.x - dx) < 2 && Math.abs(after.y - before.y - dy) < 2);
+      assert.ok(Math.abs(after.width - before.width) < 0.5 && Math.abs(after.height - before.height) < 0.5);
+      const position = await dock.evaluate((node) => ({
+        left: Number.parseFloat(node.style.left),
+        top: Number.parseFloat(node.style.top),
+        bottom: node.style.bottom,
+        inlineStart: node.style.insetInlineStart,
+        slot: node.parentElement.getBoundingClientRect().toJSON(),
+      }));
+      assert.ok(Math.abs(position.left - (after.x - position.slot.left)) < 0.5);
+      assert.ok(Math.abs(position.top - (after.y - position.slot.top)) < 0.5);
+      assert.equal(position.bottom, "auto");
+      assert.equal(position.inlineStart, "auto");
+    };
+
+    await dragDock("mouse");
+    if (width < 1100) await dragDock("touch");
+    const expandedDock = await dock.boundingBox();
+    await dock.getByRole("button", { name: "تصغير شريط الأدوات", exact: true }).click();
+    const collapsedDock = await dock.boundingBox();
+    assert.ok(collapsedDock.width < expandedDock.width);
+    assert.ok(Math.abs(collapsedDock.height - expandedDock.height) < 0.5);
+    await dock.getByRole("button", { name: "توسيع شريط الأدوات", exact: true }).click();
+    const reopenedDock = await dock.boundingBox();
+    assert.ok(Math.abs(reopenedDock.width - expandedDock.width) < 0.5);
+    assert.ok(Math.abs(reopenedDock.height - expandedDock.height) < 0.5);
+    if (width >= 1100) {
+      const beforeZoom = await dock.boundingBox();
+      await page.locator(".editor-canvas-stage").hover();
+      await page.keyboard.down("Control");
+      await page.mouse.wheel(0, -120);
+      await page.keyboard.up("Control");
+      await page.waitForTimeout(120);
+      const afterZoom = await dock.boundingBox();
+      assert.ok(Math.abs(afterZoom.width - beforeZoom.width) < 0.5);
+      assert.ok(Math.abs(afterZoom.height - beforeZoom.height) < 0.5);
+    }
     await page.locator(".editor-canvas-stage [data-el-id]").first().click();
     const toolbar = page.locator(".floating-toolbar");
     await toolbar.waitFor({ state: "visible" });

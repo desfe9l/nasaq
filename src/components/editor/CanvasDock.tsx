@@ -460,7 +460,16 @@ export function CanvasDock({
         data-tour="canvas-dock"
         data-density={layout.drawer.length ? "folded" : "full"}
         aria-label="أدوات مساحة العمل"
-        style={pos ? { insetInlineStart: pos.x, top: pos.y } : undefined}
+        style={
+          pos
+            ? {
+                insetInlineStart: "auto",
+                left: pos.x,
+                top: pos.y,
+                bottom: "auto",
+              }
+            : undefined
+        }
         // Chrome, not canvas: a right-click here must never open the element
         // context menu behind the dock.
         onContextMenu={(event) => {
