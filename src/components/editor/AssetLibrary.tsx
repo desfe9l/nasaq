@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
 import { useIncrementalList } from "@/lib/editor/use-incremental-list";
-import type { Asset, AssetFolder } from "@/lib/editor/storage";
+import type { Asset } from "@/lib/editor/storage";
 import { writeLibraryDrag } from "@/lib/editor/library-dnd";
 import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
 import {
@@ -35,6 +35,8 @@ import {
   planLibraryImportBlueprint,
   assetLabel,
   MAX_IMPORT_BYTES,
+  folderSegments,
+  resolveImportFolderIds,
   type ImportEntry,
 } from "@/lib/editor/library-import";
 import { extractSvgMarkup } from "@/lib/editor/ui-state";
@@ -282,6 +284,19 @@ export function AssetLibrary({
   } = useIncrementalList(filteredAssets, 48);
 
   const currentFolder = folders.find((folder) => folder.id === folderId);
+  const fullFolderName = (folder: (typeof folders)[number]) => {
+    const names = [folder.name];
+    const seen = new Set([folder.id]);
+    let parentId = folder.parentId ?? null;
+    while (parentId && !seen.has(parentId)) {
+      seen.add(parentId);
+      const parent = folders.find((candidate) => candidate.id === parentId);
+      if (!parent) break;
+      names.push(parent.name);
+      parentId = parent.parentId ?? null;
+    }
+    return names.reverse().join(" / ");
+  };
 
   const placedBox = (asset: Asset) => {
     const max = { w: 90, h: 90 };
@@ -412,48 +427,15 @@ export function AssetLibrary({
         const rootName = currentFolder?.name || "مكتبة مستوردة";
         const blueprint = planLibraryImportBlueprint(entries, rootName);
 
-        // Ensure folders exist
-        const folderIdByPath = new Map<string, string>();
-        const existingByName = new Map(folders.map((f) => [f.name, f.id]));
-        const newFolders: AssetFolder[] = [];
-
-        for (const bf of blueprint.folders) {
-          const existing = existingByName.get(bf.name);
-          if (existing) {
-            folderIdByPath.set(bf.path, existing);
-          } else {
-            const id = bf.id;
-            const parentId = bf.parentPath ? folderIdByPath.get(bf.parentPath) ?? null : null;
-            const folder: AssetFolder = {
-              id,
-              name: bf.name,
-              createdAt: Date.now(),
-              parentId,
-            };
-            newFolders.push(folder);
-            folderIdByPath.set(bf.path, id);
-            existingByName.set(bf.name, id);
-          }
-        }
-
-        // Create new folders sequentially to preserve parent order
-        for (const f of newFolders) {
-          try {
-            await createAssetFolder(f.name, f.parentId ?? null);
-          } catch {
-            /* folder already exists or store rejected it — assets fall back to the root */
-          }
-        }
-
-        // Refresh folder map after creation (store may have minted different ids, so re-resolve by name)
-        const latestFolders = useEditor.getState().assetFolders;
-        const nameToId = new Map(latestFolders.map((f) => [f.name, f.id]));
-        for (const bf of blueprint.folders) {
-          if (!folderIdByPath.has(bf.path)) {
-            const id = nameToId.get(bf.name);
-            if (id) folderIdByPath.set(bf.path, id);
-          }
-        }
+        const flatPick = picked.every(({ path }) => folderSegments(path).length === 0);
+        const folderIdByPath = await resolveImportFolderIds(
+          blueprint.folders,
+          {
+            getFolders: () => useEditor.getState().assetFolders,
+            createFolder: createAssetFolder,
+          },
+          { flatPick, targetFolderId },
+        );
 
         // For deduplication: track existing names per folder
         const existingAssets = useEditor.getState().assets;
@@ -544,6 +526,8 @@ export function AssetLibrary({
         }
 
         if (added > 0) {
+          // Reveal imported assets even when the author started inside a folder.
+          setAssetFolder(null);
           toast.success(`تمت إضافة ${added} عنصر${skipped ? ` — تخطي ${skipped} مكرر` : ""} — ظهرت فوراً في المكتبة`);
         } else if (skipped > 0) {
           toast.message("كل الملفات موجودة مسبقاً — تم منع التكرار");
@@ -552,7 +536,7 @@ export function AssetLibrary({
         setImporting(false);
       }
     },
-    [folders, folderId, currentFolder, createAssetFolder, addAsset, addCustomIcon, importLibraryPlan],
+    [folderId, currentFolder, createAssetFolder, addAsset, addCustomIcon, importLibraryPlan, setAssetFolder],
   );
 
   const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>, fromFolder: boolean) => {
@@ -817,13 +801,16 @@ export function AssetLibrary({
             key={folder.id}
             type="button"
             onClick={() => setAssetFolder(folder.id)}
+            aria-label={`مجلد ${fullFolderName(folder)}`}
             aria-pressed={folderId === folder.id}
+            title={fullFolderName(folder)}
             className={cn(
- "asset-library-chip inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold",
+ "asset-library-chip asset-library-folder-chip inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold",
               folderId === folder.id ? "border-navy bg-navy/10" : "border-line",
             )}
           >
-            <Folder className="size-3" /> {folder.name}
+            <Folder className="size-3 shrink-0" />
+            <span className="asset-library-folder-label">{fullFolderName(folder)}</span>
           </button>
         ))}
         <button
@@ -935,7 +922,7 @@ export function AssetLibrary({
             <option value="root">المكتبة الرئيسية</option>
             {folders.map((folder) => (
               <option key={folder.id} value={folder.id}>
-                {folder.name}
+                {fullFolderName(folder)}
               </option>
             ))}
           </select>
@@ -1047,7 +1034,7 @@ export function AssetLibrary({
                 {selectedAssetIds.includes(asset.id) && <Check className="size-3" />}
               </button>
               {editingId === asset.id ? (
-                <div className="flex h-20 flex-col gap-1 rounded-[6px] border border-navy-2 p-1">
+                <div className="asset-card-edit flex h-20 flex-col gap-1 rounded-[6px] border border-navy-2 p-1">
                   <input
                     autoFocus
                     value={draftName}
@@ -1080,7 +1067,9 @@ export function AssetLibrary({
                   >
                     <img src={asset.src} alt={asset.name} className={cn("max-w-full object-contain", viewMode === "grid" ? "max-h-[4.5rem]" : "max-h-[3.25rem]")} />
                   </button>
-                  <span className="mt-1 block truncate text-center text-[9px] font-bold text-muted">{asset.name}</span>
+                  <span className="asset-card-name mt-1 block truncate text-center text-[9px] font-bold text-muted" title={asset.name}>
+                    {asset.name}
+                  </span>
                   <div className="asset-card-actions mt-1 flex items-center justify-center gap-1">
                     <button
                       type="button"
@@ -1153,7 +1142,7 @@ export function AssetLibrary({
                     <MenuRow
                       key={folder.id}
                       icon={Folder}
-                      label={folder.name}
+                      label={fullFolderName(folder)}
                       disabled={!selectedAssetIds.includes(menu.asset.id) && menu.asset.folderId === folder.id}
                       onClick={() => {
                         const targets = selectedAssetIds.includes(menu.asset.id) ? selectedAssetIds : [menu.asset.id];

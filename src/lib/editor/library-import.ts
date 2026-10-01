@@ -113,6 +113,64 @@ export interface LibraryImportBlueprint {
   oversized: ImportEntry[];
 }
 
+export interface ImportFolderRecord {
+  id: string;
+  name: string;
+  parentId?: string | null;
+}
+
+export interface ImportFolderStore {
+  getFolders: () => readonly ImportFolderRecord[];
+  createFolder: (name: string, parentId: string | null) => Promise<void>;
+}
+
+/**
+ * Resolve planned paths to persisted store IDs. The store owns ID creation, so
+ * never trust IDs from the blueprint after calling `createFolder`. Matching by
+ * name AND parent keeps repeated names in separate branches distinct.
+ */
+export async function resolveImportFolderIds(
+  plannedFolders: readonly PlannedFolder[],
+  store: ImportFolderStore,
+  options: { flatPick: boolean; targetFolderId: string | null },
+): Promise<Map<string, string>> {
+  const folderIdByPath = new Map<string, string>();
+
+  for (const planned of plannedFolders) {
+    const parentId = planned.parentPath
+      ? folderIdByPath.get(planned.parentPath) ?? null
+      : null;
+
+    // Flat files picked while viewing a shelf go directly into that shelf.
+    if (options.flatPick && !planned.parentPath && options.targetFolderId) {
+      folderIdByPath.set(planned.path, options.targetFolderId);
+      continue;
+    }
+
+    const findFolder = () =>
+      store.getFolders().find(
+        (folder) =>
+          folder.name === planned.name &&
+          (folder.parentId ?? null) === parentId,
+      );
+    const existing = findFolder();
+    if (existing) {
+      folderIdByPath.set(planned.path, existing.id);
+      continue;
+    }
+
+    try {
+      await store.createFolder(planned.name, parentId);
+    } catch {
+      // Resolve below in case the store updated in-memory state before failing.
+    }
+    const created = findFolder();
+    if (created) folderIdByPath.set(planned.path, created.id);
+  }
+
+  return folderIdByPath;
+}
+
 function folderIdFor(path: string, seed: number): string {
   // Deterministic per path within one import: every reference to the same
   // folder resolves to the same id without a shared mutable counter.

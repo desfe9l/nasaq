@@ -7,7 +7,10 @@ import {
   listAssets,
   deleteAsset,
   saveProject,
+  duplicateProject,
   getProject,
+  getSetting,
+  setSetting,
 } from "./storage";
 import { createProject } from "./templates";
 
@@ -90,6 +93,51 @@ test("assets follow the same boundary", async () => {
   await deleteAsset(asset.id); // foreign — must no-op
   setStorageOwner("user-a");
   assert.equal((await listAssets()).length, 1);
+});
+
+test("asset folder ids, hierarchy, and names persist with their assets", async () => {
+  setStorageOwner("library-owner");
+  const folders = [
+    { id: "folder-brand", name: "الهوية", createdAt: 1, parentId: null },
+    { id: "folder-logos", name: "الشعارات", createdAt: 2, parentId: "folder-brand" },
+  ];
+  await setSetting("assetFolders", folders);
+  await saveAsset({
+    name: "الشعار الرئيسي",
+    src: "data:image/png;base64,AA",
+    w: 10,
+    h: 10,
+    folderId: "folder-logos",
+  });
+
+  setStorageOwner("other-owner");
+  assert.deepEqual(await getSetting("assetFolders"), null);
+  assert.deepEqual(await listAssets(), []);
+
+  setStorageOwner("library-owner");
+  assert.deepEqual(await getSetting("assetFolders"), folders);
+  assert.equal((await listAssets())[0]?.folderId, "folder-logos");
+});
+
+test("copied projects keep their name and contents and persist under a fresh id", async () => {
+  setStorageOwner("copy-owner");
+  const source = await saveProject({
+    ...createProject("blank"),
+    id: "source-project",
+    name: "تقرير أصلي",
+  });
+  const copy = await duplicateProject(source.id!);
+  assert.ok(copy);
+  const copyId = copy.id;
+  assert.ok(copyId);
+  assert.notEqual(copyId, source.id);
+  assert.equal(copy.name, "تقرير أصلي نسخة");
+  assert.equal(copy.pages.length, source.pages.length);
+  assert.notEqual(copy.pages[0]?.id, source.pages[0]?.id);
+  assert.equal((await getProject(copyId))?.name, "تقرير أصلي نسخة");
+
+  setStorageOwner("another-owner");
+  assert.equal(await getProject(copyId), null);
 });
 
 test("foreign asset and project ids cannot be overwritten", async () => {

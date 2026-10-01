@@ -376,25 +376,27 @@ export function RightPanel({
   return (
     <aside className="editor-properties flex h-full min-h-0 flex-col border-r border-line bg-surface">
       <div className="editor-panel-header flex shrink-0 items-center gap-1 border-b border-line p-1.5">
-        <div className="editor-panel-tabs grid min-w-0 flex-1 grid-cols-2 gap-1" role="tablist" aria-label="أقسام لوحة الخصائص">
-        {RIGHT_PANEL_TABS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            onClick={() => setRightTab(id)}
-            className={cn(
- "editor-panel-tab inline-flex min-h-11 min-w-0 items-center justify-center gap-1.5 rounded-[8px] px-2 text-[12px] font-extrabold",
-              tab === id
-                ? "bg-navy text-white"
-                : "text-muted hover:bg-line-2",
-            )}
-          >
-            <Icon className="size-4 shrink-0" strokeWidth={1.7} />
-            <span className="truncate">{label}</span>
-          </button>
-        ))}
+        <div className="editor-panel-tabs editor-right-tabs flex min-w-0 items-center gap-1" role="tablist" aria-label="أقسام لوحة المحرر">
+          {RIGHT_PANEL_TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              title={label}
+              aria-label={label}
+              aria-selected={tab === id}
+              onClick={() => setRightTab(id)}
+              className={cn(
+                "editor-panel-tab inline-flex items-center justify-center gap-1.5 rounded-[8px] text-[12px] font-extrabold",
+                tab === id
+                  ? "bg-navy text-white"
+                  : "text-muted hover:bg-line-2",
+              )}
+            >
+              <Icon className="size-4 shrink-0" strokeWidth={1.7} />
+              <span className="editor-right-tab-label truncate">{label}</span>
+            </button>
+          ))}
         </div>
 
       </div>
