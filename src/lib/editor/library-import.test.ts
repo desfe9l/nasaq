@@ -7,7 +7,9 @@ import {
   folderSegments,
   importKindFor,
   planLibraryImportBlueprint,
+  resolveImportFolderIds,
   type ImportEntry,
+  type ImportFolderRecord,
 } from "./library-import.ts";
 import {
   HEADING_PRESETS,
@@ -78,6 +80,77 @@ describe("«أضف مكتبة» — folder → shelves", () => {
     for (const item of plan.entries) {
       assert.equal(item.folderPath, "هوية الوزارة");
     }
+  });
+
+  it("maps planned nested paths to the store-minted folder ids", async () => {
+    const plan = planLibraryImportBlueprint(
+      [entry("brand/logos/primary/logo.png")],
+      "مكتبة مستوردة",
+    );
+    const folders: ImportFolderRecord[] = [];
+    let nextId = 0;
+    const resolved = await resolveImportFolderIds(
+      plan.folders,
+      {
+        getFolders: () => folders,
+        createFolder: async (name, parentId) => {
+          folders.push({
+            id: `store-folder-${++nextId}`,
+            name,
+            parentId,
+          });
+        },
+      },
+      { flatPick: false, targetFolderId: null },
+    );
+
+    const rootId = resolved.get("brand");
+    const nestedId = resolved.get("brand/logos");
+    const leafId = resolved.get("brand/logos/primary");
+    assert.ok(rootId && nestedId && leafId);
+    assert.notEqual(rootId, plan.folders[0]?.id);
+    assert.notEqual(nestedId, plan.folders[1]?.id);
+    assert.equal(folders.find((folder) => folder.id === nestedId)?.parentId, rootId);
+    assert.equal(folders.find((folder) => folder.id === leafId)?.parentId, nestedId);
+  });
+
+  it("matches duplicate names by parent and sends flat picks to the selected shelf", async () => {
+    const plan = planLibraryImportBlueprint(
+      [entry("brand/logos/logo.png")],
+      "مكتبة مستوردة",
+    );
+    const folders: ImportFolderRecord[] = [
+      { id: "brand-store-id", name: "brand", parentId: null },
+      { id: "unrelated-logos", name: "logos", parentId: null },
+      { id: "logos-store-id", name: "logos", parentId: "brand-store-id" },
+    ];
+    let created = 0;
+    const resolved = await resolveImportFolderIds(
+      plan.folders,
+      {
+        getFolders: () => folders,
+        createFolder: async () => {
+          created += 1;
+        },
+      },
+      { flatPick: false, targetFolderId: null },
+    );
+    assert.equal(resolved.get("brand/logos"), "logos-store-id");
+    assert.equal(created, 0);
+
+    const flatPlan = planLibraryImportBlueprint([entry("new-logo.png")], "هوية");
+    const flat = await resolveImportFolderIds(
+      flatPlan.folders,
+      {
+        getFolders: () => folders,
+        createFolder: async () => {
+          created += 1;
+        },
+      },
+      { flatPick: true, targetFolderId: "logos-store-id" },
+    );
+    assert.equal(flat.get("هوية"), "logos-store-id");
+    assert.equal(created, 0);
   });
 
   it("reports unsupported and oversized files instead of failing the import", () => {

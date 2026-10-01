@@ -8,6 +8,8 @@ import {
   deleteAsset,
   saveProject,
   getProject,
+  getSetting,
+  setSetting,
 } from "./storage";
 import { createProject } from "./templates";
 
@@ -90,6 +92,30 @@ test("assets follow the same boundary", async () => {
   await deleteAsset(asset.id); // foreign — must no-op
   setStorageOwner("user-a");
   assert.equal((await listAssets()).length, 1);
+});
+
+test("asset folder ids, hierarchy, and names persist with their assets", async () => {
+  setStorageOwner("library-owner");
+  const folders = [
+    { id: "folder-brand", name: "الهوية", createdAt: 1, parentId: null },
+    { id: "folder-logos", name: "الشعارات", createdAt: 2, parentId: "folder-brand" },
+  ];
+  await setSetting("assetFolders", folders);
+  await saveAsset({
+    name: "الشعار الرئيسي",
+    src: "data:image/png;base64,AA",
+    w: 10,
+    h: 10,
+    folderId: "folder-logos",
+  });
+
+  setStorageOwner("other-owner");
+  assert.deepEqual(await getSetting("assetFolders"), null);
+  assert.deepEqual(await listAssets(), []);
+
+  setStorageOwner("library-owner");
+  assert.deepEqual(await getSetting("assetFolders"), folders);
+  assert.equal((await listAssets())[0]?.folderId, "folder-logos");
 });
 
 test("foreign asset and project ids cannot be overwritten", async () => {

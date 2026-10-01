@@ -3344,6 +3344,58 @@ summary,
 .asset-card-actions { flex-wrap: nowrap; }
 .asset-card-actions > button { flex: 0 0 auto; min-width: 28px; min-height: 28px; }
 .asset-card-check::after { content: ""; position: absolute; inset: -6px; }
+
+/* Compact asset shelves without shrinking the actual touch targets. */
+.asset-library-controls.grid {
+  gap: 6px;
+  padding-block: 6px 7px;
+}
+.asset-library-folder-chip { max-width: min(18ch, 52vw); }
+.asset-library-folder-label {
+  display: block;
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-media-grid.is-compact {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+.asset-media-grid.is-compact .asset-card {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+}
+.asset-media-grid.is-compact .asset-card > .library-hit {
+  grid-column: 1;
+  grid-row: 1;
+  width: 40px;
+  height: 40px;
+}
+.asset-media-grid.is-compact .asset-card > .library-hit img {
+  max-width: 36px;
+  max-height: 36px;
+}
+.asset-media-grid.is-compact .asset-card > .asset-card-name {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  margin: 0;
+  text-align: start;
+  font-size: 11px;
+}
+.asset-media-grid.is-compact .asset-card > .asset-card-edit {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.asset-media-grid.is-compact .asset-card > .asset-card-actions {
+  grid-column: 3;
+  grid-row: 1;
+  margin: 0;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .asset-card { transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease; }
   .asset-card:hover {
@@ -3372,9 +3424,14 @@ summary,
   .asset-library-controls .asset-lib-icon-btn,
   .asset-library-categories .asset-lib-icon-btn { width: 42px; height: 42px; }
   .asset-library-controls .asset-library-chip { min-height: 42px; padding-inline: 12px; }
+  .asset-library-categories .asset-library-chip { min-height: 42px; padding-inline: 10px; }
+  .asset-library-folder-label { max-width: 12ch; }
+  .asset-library-controls.grid { gap: 8px; padding-block: 10px; }
   .asset-library-controls .asset-library-search { height: 42px; }
   .asset-library-add-actions > button { min-height: 42px; }
   .asset-card-actions > button { width: 42px; min-width: 42px; height: 42px; min-height: 42px; }
+  .asset-card-edit input { min-height: 36px; font-size: 12px; }
+  .asset-card-edit button { min-width: 36px; min-height: 36px; }
   .asset-card-check { width: 26px !important; height: 26px !important; }
   .asset-card-check::after { inset: -8px; }
   @container assetlibrary (max-width: 330px) {
@@ -4826,4 +4883,38 @@ button.license-badge-locked:focus-visible {
    single 36px line, no thumbnails. */
 .editor-page-rail-collapsed .editor-pane-scroll {
   scrollbar-width: thin;
+}
+
+/* The two inspector destinations stay distinct and visible in a small icon dock. */
+.editor-ui .editor-properties .editor-panel-header {
+  min-height: 40px;
+  padding: 4px 6px;
+}
+.editor-ui .editor-properties .editor-right-tabs {
+  flex: 0 0 auto;
+}
+.editor-ui .editor-properties .editor-panel-tab {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+.editor-ui .editor-properties .editor-right-tab-label {
+  display: none;
+}
+@media (any-pointer: coarse) {
+  .editor-ui .editor-properties .editor-panel-header {
+    min-height: 52px;
+    padding: 4px;
+  }
+  .editor-ui .editor-properties .editor-panel-tab {
+    width: auto;
+    min-width: 68px;
+    min-height: 44px;
+    padding-inline: 8px;
+  }
+  .editor-ui .editor-properties .editor-right-tab-label {
+    display: inline;
+  }
 }

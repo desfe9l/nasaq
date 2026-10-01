@@ -13,6 +13,7 @@ import { downloadLibraryFile } from "@/lib/editor/library-export";
 import { hasSignedInOwner } from "@/lib/editor/storage-owner";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
+import { useLicense } from "@/lib/license/client";
 
 type FilterId = "all" | "reports" | "letters" | "favorites";
 type ViewId = "grid" | "list";
@@ -52,7 +53,12 @@ export function ProjectsPage() {
   const storage = useEditor((s) => s.storage);
   const assets = useEditor((s) => s.assets);
   const assetFolders = useEditor((s) => s.assetFolders);
+  const setEntitlements = useEditor((s) => s.setEntitlements);
   const { user } = useCurrentUserState();
+  const { entitlements } = useLicense(
+    user?.id,
+    user?.primaryEmail,
+  );
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"recent" | "name" | "pages">("recent");
   const [filter, setFilter] = useState<FilterId>("all");
@@ -60,6 +66,10 @@ export function ProjectsPage() {
   const [usedBytes, setUsedBytes] = useState<number | null>(null);
   const [quotaBytes, setQuotaBytes] = useState<number | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setEntitlements(entitlements);
+  }, [entitlements, setEntitlements]);
 
   useEffect(() => {
     void hydrate().then(() => refreshProjects());
