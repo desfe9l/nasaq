@@ -75,7 +75,6 @@ export function ReportToolsPanel() {
   const removeHeaderFooter = useEditor((s) => s.removeHeaderFooter);
   const addPageNumbers = useEditor((s) => s.addPageNumbers);
   const removePageNumbers = useEditor((s) => s.removePageNumbers);
-  const openExport = useEditor((s) => s.openExport);
   const openTablePicker = useEditor((s) => s.openTablePicker);
 
   const [caption, setCaption] = useState("نسبة الإنجاز");
@@ -461,14 +460,6 @@ export function ReportToolsPanel() {
             {preflightSummary(report)}
           </span>
         </p>
-        <button
-          type="button"
-          onClick={() => openExport("pdf")}
-          className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold hover:border-navy-2"
-        >
-          <Ruler className="size-3.5" />
-          مراجعة التفاصيل والإصلاح
-        </button>
         <p className="text-[10px] leading-4 text-muted">
           يفحص نصًا مقطوعًا، محتوى داخل هامش التجليد، عناصر خارج الصفحة، صورًا
           بدقة أقل من الطباعة، صفحات فارغة، ورموزًا غير معروفة. القائمة الكاملة

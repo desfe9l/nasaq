@@ -170,7 +170,7 @@ export function PageRail({
           onClick={() => addPage()}
           title="إضافة صفحة"
           aria-label="إضافة صفحة"
-          className="grid size-7 shrink-0 place-items-center rounded-[7px] bg-navy text-white"
+          className="page-rail-nav grid size-7 shrink-0 place-items-center rounded-[7px] bg-navy text-white"
         >
           <Plus className="size-3.5" aria-hidden />
         </button>
@@ -212,14 +212,14 @@ export function PageRail({
        * tooltip. Text labels would cost the rail's height budget for words a
        * hover already says.
        */}
-      <div className="flex shrink-0 flex-col justify-center gap-1">
+      <div className="page-rail-controls flex shrink-0 flex-col justify-center gap-1">
         <button
           type="button"
           onClick={() => togglePagesRail()}
           title="تصغير شريط الصفحات — صف واحد من الأرقام"
           aria-label="تصغير شريط الصفحات"
           aria-expanded
-          className="grid size-8 place-items-center rounded-[8px] border border-line text-muted"
+          className="page-rail-nav grid size-8 place-items-center rounded-[8px] border border-line text-muted"
         >
           <ChevronUp className="size-4" aria-hidden />
         </button>
@@ -228,16 +228,16 @@ export function PageRail({
           onClick={() => addPage()}
           title="إضافة صفحة"
           aria-label="إضافة صفحة"
-          className="grid size-8 place-items-center rounded-[8px] bg-navy text-white"
+          className="page-rail-nav grid size-8 place-items-center rounded-[8px] bg-navy text-white"
         >
           <Plus className="size-4" aria-hidden />
         </button>
         <button
           type="button"
           onClick={() => duplicatePage()}
-          title="نسخ الصفحة الحالية"
-          aria-label="نسخ الصفحة الحالية"
-          className="grid size-8 place-items-center rounded-[8px] border border-line text-muted"
+          title="تكرار الصفحة الحالية كنسخة مطابقة — يشمل الإعدادات والعناصر"
+          aria-label="تكرار الصفحة الحالية كنسخة مطابقة"
+          className="page-rail-nav grid size-8 place-items-center rounded-[8px] border border-line text-muted"
         >
           <Copy className="size-4" aria-hidden />
         </button>

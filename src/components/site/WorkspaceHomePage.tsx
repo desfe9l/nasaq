@@ -28,7 +28,7 @@ import {
   Sparkles,
   Table2,
 } from "lucide-react";
-import { THEMES, sizeIdOf, type PackId, type ProjectMeta } from "@/lib/editor/model";
+import { THEMES, type ProjectMeta } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import {
   docKind,
@@ -59,7 +59,11 @@ import { QuickViewDialog } from "./TemplateDialogs";
 import { PublishedTemplates } from "./PublishedTemplates";
 import { NewDocumentDialog } from "./NewDocumentDialog";
 import { useCatalogEntries } from "./useCatalog";
-import { publishedTemplateSeed, templateDisplaySlug } from "@/lib/templates/published";
+import {
+  mergePublishedTemplateContext,
+  publishedTemplateSeed,
+  templateDisplaySlug,
+} from "@/lib/templates/published";
 import { CARD_W, CARD_WRAP } from "./cards";
 import { ProjectFileButton } from "./ProjectFileButton";
 
@@ -328,8 +332,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
   /* ── actions ───────────────────────────────────────────────────────── */
 
   const open = async (id: string) => {
-    await openProject(id);
-    window.location.assign("/editor");
+    if (await openProject(id)) window.location.assign("/editor");
   };
 
   /** «استخدام القالب» — a NEW editable document; the template stays as it is. */
@@ -356,12 +359,11 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
           return;
         }
         const managed = publishedTemplateSeed(result.template);
-        seed = {
-          ...entryProjectSeed(entry, { themeId: "official", orgName: storeOrg }),
-          name: managed.name,
-          pages: managed.pages,
-          defaultSize: sizeIdOf(managed.pages[0]),
-        };
+        const context = entryProjectSeed(entry, {
+          themeId: "official",
+          orgName: storeOrg,
+        });
+        seed = mergePublishedTemplateContext(managed, context);
       } else {
         seed = entryProjectSeed(entry, {
           themeId: "official",
@@ -372,7 +374,6 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
         {
           version: 2,
           ...seed,
-          pack: entry.kind === "pack" ? (entry.sourceId as PackId) : undefined,
         },
         { autoName: true },
       );

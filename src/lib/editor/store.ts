@@ -53,8 +53,17 @@ import {
   type AssetFolder,
   type SettingsKey,
 } from "./storage";
-import { getStorageOwner, hasSignedInOwner } from "./storage-owner";
-import { createProject, createTemplatePage, PACKS } from "./templates";
+import {
+  ANON_OWNER,
+  getStorageOwner,
+  hasSignedInOwner,
+} from "./storage-owner";
+import {
+  createProject,
+  createTemplatePage,
+  PACKS,
+  templateById,
+} from "./templates";
 import {
   FONTS,
   LEGACY_STORE_KEY,
@@ -110,14 +119,16 @@ import {
   applyStoredTheme,
   readStoredTheme,
   writeStoredTheme,
+  type AppearanceMode,
 } from "@/lib/theme";
 import { clamp, uid } from "@/lib/utils";
 import {
-  DEMO_LICENSE,
-  canAddDemoPage,
-  canCreateDemoProject,
-  canUseDemoPack,
-} from "@/lib/product/product";
+  exceedsProjectPageLimit,
+  exceedsSavedProjectLimit,
+  projectAccessBlock,
+  requiresLicensedTemplate,
+  requiresPremiumPack,
+} from "./access-limits";
 import { LICENSE_ENTITLEMENTS, type FeatureId } from "@/lib/license/types";
 import {
   PAGES_PANEL_DEFAULT,
@@ -247,7 +258,7 @@ interface Ui {
   snapElements: boolean;
   previewAll: boolean;
   focusMode: boolean;
-  dark: boolean;
+  appearance: AppearanceMode;
   leftTab: LeftTab;
   rightTab: RightTab;
   leftOpen: boolean;
@@ -376,7 +387,13 @@ interface EditorStore extends Project, Ui, History {
   resetUserScopedState: () => void;
   /** Server-derived access flags mirrored into the client editor state. */
   entitlements: Record<FeatureId, boolean>;
-  setEntitlements: (entitlements: Record<FeatureId, boolean>) => void;
+  /** False until the current storage owner's server-verified status is resolved. */
+  entitlementsResolved: boolean;
+  entitlementsOwner: string | null;
+  setEntitlements: (
+    entitlements: Record<FeatureId, boolean>,
+    owner?: string,
+  ) => void;
   clipboard: CanvasEl | null;
   /** Session-local formatting clipboard, separate from whole-element copy/paste. */
   styleClipboard: ElStyle | null;
@@ -441,7 +458,8 @@ interface EditorStore extends Project, Ui, History {
     project: Project,
     options?: { autoName?: boolean },
   ) => Promise<boolean>;
-  openProject: (id: string) => Promise<void>;
+  /** Opens only when the current owner and entitlements permit this file. */
+  openProject: (id: string) => Promise<boolean>;
   saveNow: () => Promise<void>;
   renameProject: (id: string, name: string) => Promise<void>;
   /** Flip a document's star — persists on the row, independent of auto-save. */
@@ -481,7 +499,6 @@ interface EditorStore extends Project, Ui, History {
       | "snapGrid"
       | "snapElements"
       | "previewAll"
-      | "dark"
       | "leftOpen"
       | "rightOpen"
       | "leftCollapsed"
@@ -491,15 +508,8 @@ interface EditorStore extends Project, Ui, History {
       | "pageManagerOpen"
     >,
   ) => void;
-  /**
-   * Set the colour mode directly (rather than flipping it).
-   *
-   * «الإعدادات → المحرر» offers «داكن» / «فاتح» as an explicit choice, so it
-   * needs a setter that cannot land on the wrong side when the author picks the
-   * mode they are already on. Persistence goes through the same shared theme
-   * module `toggle("dark")` uses, so one preference still rules the whole site.
-   */
-  setDark: (dark: boolean) => void;
+  /** Set one of the three shared, persistent interface appearance modes. */
+  setAppearance: (appearance: AppearanceMode) => void;
   setLeftTab: (t: LeftTab) => void;
   setRightTab: (t: RightTab) => void;
   /**
@@ -770,6 +780,26 @@ interface EditorStore extends Project, Ui, History {
   commit: () => void;
 }
 
+function hasResolvedEditorAccess(
+  state: Pick<
+    EditorStore,
+    | "hydrated"
+    | "showcase"
+    | "entitlementsResolved"
+    | "entitlementsOwner"
+    | "sessionOwner"
+  >,
+  owner: string,
+): boolean {
+  if (!state.hydrated) return false;
+  if (state.showcase) return true;
+  return (
+    state.entitlementsResolved &&
+    state.entitlementsOwner === owner &&
+    state.sessionOwner === owner
+  );
+}
+
 function projectSlice(s: ProjectSnapshot): ProjectSnapshot {
   return {
     version: s.version,
@@ -778,6 +808,7 @@ function projectSlice(s: ProjectSnapshot): ProjectSnapshot {
     editorSettings: s.editorSettings,
     transactionNo: s.transactionNo,
     pack: s.pack,
+    licensedTemplateId: s.licensedTemplateId,
     name: s.name,
     theme: s.theme,
     orgName: s.orgName,
@@ -811,6 +842,7 @@ const BOOT_PARAMS =
     : null;
 const BOOT_SHOWCASE = BOOT_PARAMS?.get("showcase") === "1";
 const BOOT_TEMPLATE = BOOT_PARAMS?.get("template") ?? "";
+const BOOT_ADMIN_TEMPLATE = BOOT_PARAMS?.get("adminTemplate")?.trim() ?? "";
 
 /**
  * The part of `page` (in document mm, page-relative) currently visible in the
@@ -1030,6 +1062,10 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
     activePageId: incoming.activePageId,
     defaultSize: incoming.defaultSize || "a4-portrait",
     pack: incoming.pack,
+    licensedTemplateId:
+      typeof incoming.licensedTemplateId === "string"
+        ? incoming.licensedTemplateId.slice(0, 120)
+        : undefined,
     favorite: incoming.favorite,
     thumbnail: incoming.thumbnail,
     nsqOrigin: incoming.nsqOrigin,
@@ -1045,6 +1081,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     // Store geometry is also used during SSR/unit checks; autosave is browser-only.
     if (typeof window === "undefined") return;
     if (get().showcase) return; // showcase boot: the document never persists
+    if (!hasResolvedEditorAccess(get(), getStorageOwner())) return;
     if (saveTimer) clearTimeout(saveTimer);
     if (get().saveState !== "saving") set({ saveState: "dirty" });
     saveTimer = setTimeout(() => {
@@ -1084,7 +1121,8 @@ export const useEditor = create<EditorStore>((set, get) => {
     a.id === b.id &&
     a.createdAt === b.createdAt &&
     a.defaultSize === b.defaultSize &&
-    a.pack === b.pack;
+    a.pack === b.pack &&
+    a.licensedTemplateId === b.licensedTemplateId;
 
   let historyBatch = 0;
   const pushHistory = () => {
@@ -1185,6 +1223,16 @@ export const useEditor = create<EditorStore>((set, get) => {
     };
   };
 
+  const editorAccessReady = () =>
+    hasResolvedEditorAccess(get(), getStorageOwner());
+  const requireEditorAccess = () => {
+    if (editorAccessReady()) return true;
+    toast.error("جارٍ التحقق من الحساب والترخيص؛ أعد المحاولة بعد اكتمال التحميل", {
+      id: "editor-access-not-ready",
+    });
+    return false;
+  };
+
   /** Apply a batch of new positions as one undoable step.
    *
    * Align and distribute move several elements at once; writing each through
@@ -1228,7 +1276,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     snapElements: true,
     previewAll: true,
     focusMode: false,
-    dark: readStoredTheme() === true,
+    appearance: readStoredTheme() ?? "light",
     leftTab: "library",
     rightTab: "properties",
     leftOpen: false,
@@ -1253,8 +1301,53 @@ export const useEditor = create<EditorStore>((set, get) => {
     showcase: BOOT_SHOWCASE,
     sessionOwner: null,
     entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
-    setEntitlements: (entitlements) =>
-      set({ entitlements: { ...entitlements } }),
+    entitlementsResolved: false,
+    entitlementsOwner: null,
+    setEntitlements: (entitlements, owner = getStorageOwner()) => {
+      if (owner !== getStorageOwner()) return;
+      const before = get();
+      if (before.hydrated && before.sessionOwner !== owner) return;
+      const resolved = { ...entitlements };
+      set({
+        entitlements: resolved,
+        entitlementsResolved: true,
+        entitlementsOwner: owner,
+      });
+
+      const current = get();
+      if (
+        current.showcase ||
+        !current.hydrated ||
+        current.sessionOwner !== owner
+      )
+        return;
+      const block = projectAccessBlock(current, resolved);
+      if (!block) return;
+
+      // A licence downgrade revokes the active document immediately. Keep the
+      // saved project row available for a later re-licence, but remove its
+      // contents and history from the live editor instead of leaving a writable
+      // canvas whose next save would be refused.
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      clearDraftSnapshot();
+      applyProject(createProject("blank", current.theme), { zoom: current.zoom });
+      set({
+        past: [projectSlice(get())],
+        future: [],
+        saveState: "saved",
+        savedAt: Date.now(),
+      });
+      void setSetting("activeProjectId", null);
+      toast.error(
+        block === "premium-template"
+          ? "انتهى الوصول إلى هذا المستند؛ فعّل ترخيصًا مناسبًا لمتابعة العمل"
+          : "يتجاوز هذا الملف حد صفحات خطتك الحالية",
+        { id: "editor-current-document-access" },
+      );
+    },
     clipboard: null,
     styleClipboard: null,
     past: [],
@@ -1336,6 +1429,8 @@ export const useEditor = create<EditorStore>((set, get) => {
         past: [],
         future: [],
         entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
+        entitlementsResolved: false,
+        entitlementsOwner: null,
         saveState: "idle",
         savedAt: null,
       });
@@ -1350,27 +1445,63 @@ export const useEditor = create<EditorStore>((set, get) => {
        * The regular hydration path below is left untouched.
        */
       if (get().showcase) {
+        const ui = readUi();
+        const appearance = readStoredTheme() ?? "light";
+        applyStoredTheme();
+        const zoom = typeof ui.zoom === "number" ? clampZoom(ui.zoom) : 0.82;
         try {
-          const ui = readUi();
-          const dark = readStoredTheme() === true;
-          applyStoredTheme();
-          const pack = PACKS.some((p) => p.id === BOOT_TEMPLATE)
-            ? (BOOT_TEMPLATE as PackId)
-            : "official";
-          const project = createProject(
-            pack,
-            pack === "eid" ? "eid" : "official",
-            "",
-          );
+          let project: Project;
+          if (BOOT_ADMIN_TEMPLATE) {
+            const [{ getPublishedTemplateFn }, { publishedTemplateSeed }] =
+              await Promise.all([
+                import("@/lib/admin/functions"),
+                import("@/lib/templates/published"),
+              ]);
+            const result = await getPublishedTemplateFn({
+              data: { id: BOOT_ADMIN_TEMPLATE },
+            });
+            if (!result.ok) throw new Error(result.error);
+            if (result.template.tier !== "free")
+              throw new Error("القالب المميز يتطلب ترخيصًا");
+            const seed = publishedTemplateSeed(result.template);
+            const shell = createProject(
+              seed.pack ?? "blank",
+              seed.theme,
+              seed.orgName,
+            );
+            project = {
+              ...shell,
+              ...seed,
+              pack: seed.pack ?? shell.pack,
+            };
+          } else {
+            const pack = PACKS.some((p) => p.id === BOOT_TEMPLATE)
+              ? (BOOT_TEMPLATE as PackId)
+              : "official";
+            project = createProject(
+              pack,
+              pack === "eid" ? "eid" : "official",
+              "",
+            );
+          }
           await restoreFonts(project);
-          applyProject(project, {
-            zoom: typeof ui.zoom === "number" ? clampZoom(ui.zoom) : 0.82,
-          });
-        } catch {
-          /* a failed showcase boot still leaves the default blank document */
+          applyProject(project, { zoom });
+        } catch (error) {
+          if (BOOT_ADMIN_TEMPLATE) {
+            // Never substitute a different showcase document when a catalog
+            // record is missing, unpublished or unavailable to the visitor.
+            const empty = createProject("blank");
+            await restoreFonts(empty);
+            applyProject(empty, { zoom });
+            toast.error("تعذر تحميل المستند المميز من سجل القوالب المنشور");
+            console.error("[editor] homepage catalog preview failed", error);
+          }
         }
         set({
           hydrated: true,
+          entitlementsResolved: true,
+          entitlementsOwner: null,
+          appearance,
           showcase: true,
           past: [projectSlice(get())],
           future: [],
@@ -1404,7 +1535,29 @@ export const useEditor = create<EditorStore>((set, get) => {
         if (get().sessionOwner === owner) return;
         get().resetUserScopedState();
       }
-      set({ sessionOwner: owner });
+      let entitlements: Record<FeatureId, boolean> = {
+        ...LICENSE_ENTITLEMENTS.FREE,
+      };
+      if (owner !== ANON_OWNER) {
+        try {
+          const { getLicenseStatusFn } =
+            await import("@/lib/license/functions");
+          const status = await getLicenseStatusFn();
+          entitlements = status.entitlements ?? entitlements;
+        } catch {
+          // A failed license lookup grants no additional access.
+          entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
+        }
+      }
+      // An account switch during the network round-trip invalidates both the
+      // status response and any following reads. Do not hydrate the old scope.
+      if (getStorageOwner() !== owner) return;
+      set({
+        sessionOwner: owner,
+        entitlements,
+        entitlementsResolved: true,
+        entitlementsOwner: owner,
+      });
       const mode = storageMode();
       set({ storage: { mode, persistent: mode === "indexeddb" } });
 
@@ -1465,8 +1618,26 @@ export const useEditor = create<EditorStore>((set, get) => {
           restoredFromDraft = true;
           restoredUnsavedDraft = true;
         }
+        const activeBlock = active
+          ? projectAccessBlock(active, get().entitlements)
+          : null;
+        if (active && activeBlock) {
+          // Never place an inaccessible saved file (or recovery draft) into the
+          // live editor state. Its saved row remains in the owner's library so
+          // restoring the entitlement can make it available again.
+          active = null;
+          restoredFromDraft = false;
+          restoredUnsavedDraft = false;
+          clearDraftSnapshot();
+          await setSetting("activeProjectId", null).catch(() => undefined);
+          toast.error(
+            activeBlock === "premium-template"
+              ? "المستند الأخير يتطلب ترخيصًا مناسبًا؛ افتح ملفًا متاحًا أو فعّل الترخيص"
+              : "المستند الأخير يتجاوز حد صفحات خطتك الحالية؛ افتح ملفًا متاحًا أو فعّل الترخيص",
+          );
+        }
         // The shared preference is the only authority, including the default.
-        const dark = readStoredTheme() === true;
+        const appearance = readStoredTheme() ?? "light";
         applyStoredTheme();
 
         const nextRightOpen =
@@ -1479,7 +1650,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         set({
           projects: list,
           projectsLoading: false,
-          dark,
+          appearance,
           focusMode: Boolean(ui.focusMode),
           leftOpen: nextLeftOpen,
           rightOpen: nextRightOpen,
@@ -1580,6 +1751,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     refreshProjects: async () => {
+      if (!editorAccessReady()) return;
       const owner = getStorageOwner();
       const sessionOwner = get().sessionOwner;
       set({ projectsLoading: true });
@@ -1968,38 +2140,86 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     createProject: async (pack, theme) => {
-      const s = get();
-      if (!s.entitlements.premium_templates && !canUseDemoPack(pack)) {
+      if (!requireEditorAccess()) return false;
+      const initial = get();
+      if (requiresPremiumPack(pack, initial.entitlements)) {
         toast.error("هذا القالب متاح ضمن النسخة الكاملة", {
           description:
             "يمكنك استكشافه من صفحة القوالب وطلب النسخة المناسبة لجهتك.",
         });
         return false;
       }
-      if (
-        !s.entitlements.unlimited_projects &&
-        !canCreateDemoProject(s.projects.length)
-      ) {
-        toast.error("اكتملت مساحة تجربة المحرر", {
-          description:
-            "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
-        });
+      const owner = getStorageOwner();
+      const sessionOwner = initial.sessionOwner;
+      let savedProjects = initial.projects;
+      if (!initial.showcase && !initial.entitlements.unlimited_projects) {
+        try {
+          savedProjects = await listProjects();
+        } catch {
+          toast.error("تعذر التحقق من مساحة المشاريع المحفوظة");
+          return false;
+        }
+        if (
+          getStorageOwner() !== owner ||
+          get().sessionOwner !== sessionOwner
+        )
+          return false;
+        const live = get();
+        if (requiresPremiumPack(pack, live.entitlements)) {
+          toast.error("هذا القالب متاح ضمن النسخة الكاملة");
+          return false;
+        }
+        if (exceedsSavedProjectLimit(savedProjects.length, live.entitlements)) {
+          toast.error("اكتملت مساحة تجربة المحرر", {
+            description:
+              "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
+          });
+          return false;
+        }
+      }
+      const current = get();
+      if (requiresPremiumPack(pack, current.entitlements)) {
+        toast.error("هذا القالب متاح ضمن النسخة الكاملة");
         return false;
       }
       const project = createProject(
         pack,
         theme || (pack === "eid" ? "eid" : "official"),
-        s.orgName,
+        current.orgName,
       );
       // Smart auto-increment: «تقرير رسمي 1», «تقرير رسمي 2», … while a
       // custom-named document never collides with an existing title.
       project.name = nextDefaultName(
         project.name,
-        s.projects.map((p) => p.name),
+        savedProjects.map((item) => item.name),
       );
       // Showcase boot: the document is interactive but never reaches the
       // visitor's storage — it exists in memory until the tab closes.
-      const saved = get().showcase ? project : await saveProject(project);
+      const saved = current.showcase ? project : await saveProject(project);
+      if (
+        !current.showcase &&
+        (getStorageOwner() !== owner ||
+          get().sessionOwner !== sessionOwner ||
+          !editorAccessReady())
+      )
+        return false;
+      const savedBlock = current.showcase
+        ? null
+        : projectAccessBlock(saved, get().entitlements);
+      const projectLimitChanged =
+        !current.showcase &&
+        !get().entitlements.unlimited_projects &&
+        exceedsSavedProjectLimit(savedProjects.length, get().entitlements);
+      if (savedBlock || projectLimitChanged) {
+        if (saved.id && getStorageOwner() === owner)
+          await removeProject(saved.id).catch(() => undefined);
+        toast.error(
+          savedBlock
+            ? "تغيّرت صلاحيات الترخيص أثناء إنشاء المشروع؛ لم يتم فتحه"
+            : "اكتملت مساحة المشاريع في الخطة الحالية؛ لم يتم إنشاء المشروع",
+        );
+        return false;
+      }
       applyProject(saved, { zoom: 0.82 });
       set({
         past: [projectSlice(get())],
@@ -2015,46 +2235,76 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     createDocument: async (project, options) => {
-      const s = get();
-      if (
-        project.pack &&
-        !s.entitlements.premium_templates &&
-        !canUseDemoPack(project.pack)
-      ) {
-        toast.error("هذا القالب متاح ضمن النسخة الكاملة", {
-          description:
-            "يمكنك استكشافه من صفحة القوالب وطلب النسخة المناسبة لجهتك.",
-        });
-        return false;
+      if (!requireEditorAccess()) return false;
+      const requestOwner = getStorageOwner();
+      const initial = get();
+      const requestSessionOwner = initial.sessionOwner;
+      const validateProjectAccess = () => {
+        const entitlements = get().entitlements;
+        if (
+          requiresPremiumPack(project.pack, entitlements) ||
+          requiresLicensedTemplate(project.licensedTemplateId, entitlements)
+        ) {
+          toast.error("هذا القالب متاح ضمن النسخة الكاملة", {
+            description:
+              "يمكنك استكشافه من صفحة القوالب وطلب النسخة المناسبة لجهتك.",
+          });
+          return false;
+        }
+        if (exceedsProjectPageLimit(project.pages.length, entitlements)) {
+          toast.error("وصلت إلى حد صفحات تجربة المحرر", {
+            description:
+              "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
+          });
+          return false;
+        }
+        return true;
+      };
+      if (!validateProjectAccess()) return false;
+
+      // Preserve pending edits before counting the library or replacing the
+      // current document. A failed/denied save must not silently lose them.
+      if (initial.saveState === "dirty" || initial.saveState === "saving") {
+        await get().saveNow();
+        if (
+          get().saveState !== "saved" ||
+          getStorageOwner() !== requestOwner ||
+          get().sessionOwner !== requestSessionOwner
+        )
+          return false;
       }
-      if (
-        !s.entitlements.unlimited_projects &&
-        !canCreateDemoProject(s.projects.length)
-      ) {
-        toast.error("اكتملت مساحة تجربة المحرر", {
-          description:
-            "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
-        });
-        return false;
+      let current = get();
+      if (!validateProjectAccess()) return false;
+      let savedProjects = current.projects;
+      if (!current.showcase && !current.entitlements.unlimited_projects) {
+        try {
+          savedProjects = await listProjects();
+        } catch {
+          toast.error("تعذر التحقق من مساحة المشاريع المحفوظة");
+          return false;
+        }
+        if (
+          getStorageOwner() !== requestOwner ||
+          get().sessionOwner !== requestSessionOwner
+        )
+          return false;
+        current = get();
+        if (!validateProjectAccess()) return false;
+        if (exceedsSavedProjectLimit(savedProjects.length, current.entitlements)) {
+          toast.error("اكتملت مساحة تجربة المحرر", {
+            description:
+              "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
+          });
+          return false;
+        }
       }
-      const maxPages = DEMO_LICENSE.entitlements.maxPagesPerProject ?? Infinity;
-      if (!s.entitlements.unlimited_pages && project.pages.length > maxPages) {
-        toast.error("وصلت إلى حد صفحات تجربة المحرر", {
-          description:
-            "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
-        });
-        return false;
-      }
-      // The document being replaced keeps its last edits: flush a pending
-      // debounced save before the new project takes over the store.
-      if (s.saveState === "dirty") await get().saveNow();
       const incoming = normalizeProject({
         ...project,
         version: project.version || 2,
         name: options?.autoName
           ? nextDefaultName(
               project.name,
-              get().projects.map((p) => p.name),
+              savedProjects.map((item) => item.name),
             )
           : project.name,
         id: uid("proj"),
@@ -2065,7 +2315,33 @@ export const useEditor = create<EditorStore>((set, get) => {
         nsqOrigin: undefined,
       });
       // Showcase boot: keep the new document in memory only (see createProject).
-      const saved = get().showcase ? incoming : await saveProject(incoming);
+      const saved = current.showcase ? incoming : await saveProject(incoming);
+      if (
+        !current.showcase &&
+        (getStorageOwner() !== requestOwner ||
+          get().sessionOwner !== requestSessionOwner ||
+          !editorAccessReady())
+      )
+        return false;
+      const liveBlock = current.showcase
+        ? null
+        : projectAccessBlock(saved, get().entitlements);
+      const projectLimitChanged =
+        !current.showcase &&
+        !get().entitlements.unlimited_projects &&
+        exceedsSavedProjectLimit(savedProjects.length, get().entitlements);
+      if (liveBlock || projectLimitChanged) {
+        if (getStorageOwner() === requestOwner)
+          await removeProject(saved.id!).catch(() => undefined);
+        toast.error(
+          liveBlock === "premium-template"
+            ? "تغيّرت صلاحيات الترخيص أثناء إنشاء المستند؛ لم يتم فتحه"
+            : liveBlock === "page-limit"
+              ? "تغيّر حد صفحات الخطة أثناء إنشاء المستند؛ لم يتم فتحه"
+              : "اكتملت مساحة المشاريع في الخطة الحالية؛ لم يتم إنشاء المستند",
+        );
+        return false;
+      }
       applyProject(saved, { zoom: get().zoom || 0.82 });
       set({
         past: [projectSlice(get())],
@@ -2081,16 +2357,43 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     openProject: async (id) => {
+      if (!requireEditorAccess()) return false;
       const owner = getStorageOwner();
-      const project = await getProject(id);
+      const sessionOwner = get().sessionOwner;
+      const sameOwner = () =>
+        getStorageOwner() === owner && get().sessionOwner === sessionOwner;
+      let project: Project | null;
+      try {
+        project = await getProject(id);
+      } catch {
+        if (sameOwner()) toast.error("تعذر قراءة المشروع المحفوظ");
+        return false;
+      }
+      if (!sameOwner()) return false;
       if (!project) {
         toast.error("تعذر فتح المشروع");
         await get().refreshProjects();
-        return;
+        return false;
       }
-      if (getStorageOwner() !== owner) return;
+      const denyBlockedProject = () => {
+        const block = projectAccessBlock(project, get().entitlements);
+        if (!block) return false;
+        toast.error(
+          block === "premium-template"
+            ? "هذا المستند مبني على قالب يتطلب النسخة الكاملة"
+            : "تجاوز هذا الملف حد صفحات خطتك الحالية",
+          {
+            description:
+              block === "premium-template"
+                ? "فعّل ترخيصًا مناسبًا لفتحه وتعديله."
+                : "تسمح الخطة الحالية بثلاث صفحات لكل مشروع.",
+          },
+        );
+        return true;
+      };
+      if (denyBlockedProject()) return false;
       await restoreFonts(project);
-      if (getStorageOwner() !== owner) return;
+      if (!sameOwner() || denyBlockedProject()) return false;
       applyProject(project, { zoom: get().zoom || 0.82 });
       set({
         past: [projectSlice(get())],
@@ -2098,11 +2401,17 @@ export const useEditor = create<EditorStore>((set, get) => {
         saveState: "saved",
         savedAt: Date.now(),
       });
-      await setSetting("activeProjectId", project.id);
+      try {
+        await setSetting("activeProjectId", project.id);
+      } catch {
+        // The document is open in memory even if the optional last-opened
+        // preference cannot be persisted by this browser.
+      }
+      return true;
     },
 
     saveNow: async () => {
-      if (get().showcase) return; // showcase boot: the document never persists
+      if (get().showcase || !editorAccessReady()) return;
       const requestOwner = getStorageOwner(),
         requestId = get().id;
       const save = async () => {
@@ -2110,6 +2419,24 @@ export const useEditor = create<EditorStore>((set, get) => {
           return;
         const s = get();
         if (!s.pages?.length) return;
+        const entitlements = s.entitlements;
+        if (exceedsProjectPageLimit(s.pages.length, entitlements)) {
+          set({ saveState: "error" });
+          toast.error("لا يمكن حفظ مستند يتجاوز حد الصفحات في خطتك", {
+            id: "editor-access-save-limit",
+          });
+          return;
+        }
+        if (
+          requiresPremiumPack(s.pack, entitlements) ||
+          requiresLicensedTemplate(s.licensedTemplateId, entitlements)
+        ) {
+          set({ saveState: "error" });
+          toast.error("يتطلب حفظ هذا المستند ترخيصًا مناسبًا", {
+            id: "editor-access-save-template",
+          });
+          return;
+        }
         const owner = getStorageOwner();
         set({ saveState: "saving" });
         try {
@@ -2208,12 +2535,18 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     renameProject: async (id, name) => {
+      if (!requireEditorAccess()) return;
       const owner = getStorageOwner();
       const sessionOwner = get().sessionOwner;
       const project = await getProject(id);
       if (!project) return;
       if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
         return;
+      const block = projectAccessBlock(project, get().entitlements);
+      if (block) {
+        toast.error("لا يمكن تعديل اسم مستند غير متاح في خطتك الحالية");
+        return;
+      }
       await saveProject({ ...project, name, id });
       if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
         return;
@@ -2237,31 +2570,105 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     duplicateProject: async (id) => {
+      if (!requireEditorAccess()) return;
       const s = get();
       const owner = getStorageOwner();
       const sessionOwner = s.sessionOwner;
-      if (
-        !s.entitlements.unlimited_projects &&
-        !canCreateDemoProject(s.projects.length)
-      ) {
-        toast.error("اكتملت مساحة تجربة المحرر", {
-          description:
-            "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
-        });
+      const source = await getProject(id);
+      if (!source) {
+        toast.error("تعذر تكرار المستند");
         return;
+      }
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+        return;
+      const entitlements = get().entitlements;
+      if (exceedsProjectPageLimit(source.pages.length, entitlements)) {
+        toast.error("تجاوز هذا الملف حد صفحات تجربة المحرر");
+        return;
+      }
+      if (
+        requiresPremiumPack(source.pack, entitlements) ||
+        requiresLicensedTemplate(source.licensedTemplateId, entitlements)
+      ) {
+        toast.error("لا يمكن تكرار مستند مبني على قالب النسخة الكاملة");
+        return;
+      }
+      if (!entitlements.unlimited_projects) {
+        let projectCount: number;
+        try {
+          projectCount = (await listProjects()).length;
+        } catch {
+          toast.error("تعذر التحقق من مساحة المشاريع المحفوظة");
+          return;
+        }
+        if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+          return;
+        if (exceedsSavedProjectLimit(projectCount, get().entitlements)) {
+          toast.error("اكتملت مساحة تجربة المحرر", {
+            description:
+              "يتضمن العرض مشروعاً واحداً. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
+          });
+          return;
+        }
       }
       const project = await copyProject(id);
       if (!project) {
         toast.error("تعذر تكرار المستند");
         return;
       }
-      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+      if (
+        getStorageOwner() !== owner ||
+        get().sessionOwner !== sessionOwner ||
+        !editorAccessReady()
+      )
         return;
+      const copiedBlock = projectAccessBlock(project, get().entitlements);
+      if (copiedBlock) {
+        if (project.id) await removeProject(project.id).catch(() => undefined);
+        toast.error("تغيّرت صلاحيات الترخيص؛ لا يمكن تكرار هذا المستند");
+        return;
+      }
       // Fresh identity: a copy never inherits the original's star (and its
       // thumbnail is re-captured on the next auto-save anyway).
-      await saveProject({ ...project, favorite: false, thumbnail: undefined });
-      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+      const savedCopy = await saveProject({
+        ...project,
+        favorite: false,
+        thumbnail: undefined,
+      });
+      if (
+        getStorageOwner() !== owner ||
+        get().sessionOwner !== sessionOwner ||
+        !editorAccessReady()
+      )
         return;
+      const copyBlock = projectAccessBlock(savedCopy, get().entitlements);
+      if (copyBlock) {
+        await removeProject(savedCopy.id!).catch(() => undefined);
+        toast.error("تغيّرت صلاحيات الترخيص أثناء تكرار المستند");
+        return;
+      }
+      if (!get().entitlements.unlimited_projects) {
+        let copyCount: number;
+        try {
+          copyCount = (await listProjects()).length;
+        } catch {
+          await removeProject(savedCopy.id!).catch(() => undefined);
+          toast.error("تعذر التحقق من مساحة المشاريع؛ أُلغي التكرار");
+          return;
+        }
+        if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+          return;
+        if (
+          exceedsSavedProjectLimit(
+            Math.max(0, copyCount - 1),
+            get().entitlements,
+          )
+        ) {
+          await removeProject(savedCopy.id!).catch(() => undefined);
+          toast.error("اكتملت مساحة المشاريع في الخطة الحالية؛ أُلغي التكرار");
+          return;
+        }
+      }
       await get().refreshProjects();
     },
 
@@ -2281,8 +2688,25 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     importProject: async (data, opts = {}) => {
+      if (!requireEditorAccess()) return false;
       if (!data || !Array.isArray(data.pages) || !data.pages.length) {
         toast.error("ملف المشروع غير صالح — لا يحتوي على صفحات");
+        return false;
+      }
+      const initialEntitlements = get().entitlements;
+      if (exceedsProjectPageLimit(data.pages.length, initialEntitlements)) {
+        toast.error("يتجاوز الملف حد صفحات تجربة المحرر", {
+          description: "يتاح حتى 3 صفحات لكل مشروع في الخطة الحالية.",
+        });
+        return false;
+      }
+      if (
+        requiresPremiumPack(data.pack, initialEntitlements) ||
+        requiresLicensedTemplate(data.licensedTemplateId, initialEntitlements)
+      ) {
+        toast.error("هذا الملف مبني على قالب النسخة الكاملة", {
+          description: "فعّل ترخيصًا مناسبًا لاستيراده وتعديله.",
+        });
         return false;
       }
       const owner = opts.expectedOwner ?? getStorageOwner();
@@ -2312,6 +2736,46 @@ export const useEditor = create<EditorStore>((set, get) => {
           : undefined;
       const existing = importId ? await getProject(importId) : null;
       if (!sameOwner()) return false;
+      const entitlements = get().entitlements;
+      if (
+        exceedsProjectPageLimit(
+          Math.max(data.pages.length, existing?.pages.length ?? 0),
+          entitlements,
+        )
+      ) {
+        toast.error("يتجاوز الملف حد صفحات تجربة المحرر", {
+          description: "يتاح حتى 3 صفحات لكل مشروع في الخطة الحالية.",
+        });
+        return false;
+      }
+      const sourcePack = existing?.pack ?? data.pack;
+      const sourceTemplateId =
+        existing?.licensedTemplateId ?? data.licensedTemplateId;
+      if (
+        requiresPremiumPack(sourcePack, entitlements) ||
+        requiresLicensedTemplate(sourceTemplateId, entitlements)
+      ) {
+        toast.error("هذا الملف مبني على قالب النسخة الكاملة", {
+          description: "فعّل ترخيصًا مناسبًا لاستيراده وتعديله.",
+        });
+        return false;
+      }
+      if (!existing && !entitlements.unlimited_projects) {
+        let projectCount: number;
+        try {
+          projectCount = (await listProjects()).length;
+        } catch {
+          toast.error("تعذر التحقق من مساحة المشاريع المحفوظة");
+          return false;
+        }
+        if (!sameOwner()) return false;
+        if (exceedsSavedProjectLimit(projectCount, entitlements)) {
+          toast.error("اكتملت مساحة تجربة المحرر", {
+            description: "يتضمن العرض مشروعًا واحدًا. افتح النسخة الكاملة لاستيراد مشاريع إضافية.",
+          });
+          return false;
+        }
+      }
       const incoming =
         existing ||
         normalizeProject({
@@ -2326,6 +2790,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           transactionNo: data.transactionNo || "",
           defaultSize: data.defaultSize,
           pack: data.pack,
+          licensedTemplateId: data.licensedTemplateId,
           pages: data.pages,
           id: importId || uid("proj"),
           createdAt: data.createdAt || Date.now(),
@@ -2349,9 +2814,40 @@ export const useEditor = create<EditorStore>((set, get) => {
         );
         return false;
       }
-      if (!sameOwner()) return false;
+      if (!sameOwner() || !editorAccessReady()) return false;
+      const savedBlock = projectAccessBlock(saved, get().entitlements);
+      if (savedBlock) {
+        if (!existing) await removeProject(saved.id!).catch(() => undefined);
+        toast.error(
+          savedBlock === "premium-template"
+            ? "تغيّرت صلاحيات الترخيص أثناء الاستيراد؛ لم يتم فتح المستند"
+            : "تغيّر حد صفحات الخطة أثناء الاستيراد؛ لم يتم فتح المستند",
+        );
+        return false;
+      }
+      if (!existing && !get().entitlements.unlimited_projects) {
+        let savedCount: number;
+        try {
+          savedCount = (await listProjects()).length;
+        } catch {
+          await removeProject(saved.id!).catch(() => undefined);
+          toast.error("تعذر التحقق من مساحة المشاريع؛ أُلغي الاستيراد");
+          return false;
+        }
+        if (!sameOwner() || !editorAccessReady()) return false;
+        if (
+          exceedsSavedProjectLimit(
+            Math.max(0, savedCount - 1),
+            get().entitlements,
+          )
+        ) {
+          await removeProject(saved.id!).catch(() => undefined);
+          toast.error("اكتملت مساحة المشاريع في الخطة الحالية؛ أُلغي الاستيراد");
+          return false;
+        }
+      }
       await restoreFonts(saved);
-      if (!sameOwner() || !sameDocument()) return false;
+      if (!sameOwner() || !sameDocument() || !editorAccessReady()) return false;
       const pageIndex = opts.activePageIndex ?? 0;
       applyProject(saved, {
         activePageId: saved.pages[pageIndex]?.id || saved.pages[0]?.id,
@@ -2391,12 +2887,6 @@ export const useEditor = create<EditorStore>((set, get) => {
                 ? { leftOpen: false, rightCollapsed: false }
                 : {}),
       } as Partial<EditorStore>);
-      // The `dark:` Tailwind variant keys off `html.dark` — the shared theme
-      // module both persists the choice and keeps the class in sync, so the
-      // editor toolbar, the site header and every page agree on one mode.
-      if (key === "dark") {
-        writeStoredTheme(next);
-      }
       // Workspace switches exposed in «الإعدادات → المحرر» are remembered like
       // the rest of the shell state, so the panel and the toolbar agree after
       // a reload instead of one of them silently reverting.
@@ -2420,10 +2910,10 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({ artboardGridCols });
       writeUi({ artboardGridCols });
     },
-    setDark: (dark) => {
-      if (get().dark === dark) return;
-      set({ dark });
-      writeStoredTheme(dark);
+    setAppearance: (appearance) => {
+      if (get().appearance === appearance) return;
+      set({ appearance });
+      writeStoredTheme(appearance);
     },
     setLeftTab: (leftTab) => {
       set({ leftTab, leftCollapsed: false, leftOpen: true, rightOpen: false });
@@ -2609,6 +3099,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedId: null,
         selectedIds: [],
         enteredGroupId: null,
+        editingId: null,
       });
       // Remember the page the author is ON (debounced) so a reload reopens
       // the same page even when no edit has triggered an auto-save since.
@@ -4196,54 +4687,84 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     addPage: (sizeId) => {
+      if (!requireEditorAccess()) return;
       const s = get();
-      if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
+      if (exceedsProjectPageLimit(s.pages.length + 1, s.entitlements)) {
         toast.error("وصلت إلى حد صفحات تجربة المحرر", {
           description:
             "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
         });
         return;
       }
-      const preset = sizePreset(sizeId || s.defaultSize || "a4-portrait");
+      const sourcePage = s.pages.find((page) => page.id === s.activePageId);
+      const preset = sizeId
+        ? sizePreset(sizeId)
+        : sourcePage
+          ? pageSize(sourcePage)
+          : sizePreset(s.defaultSize || "a4-portrait");
       const p: Page = {
+        ...(sourcePage ? clone(sourcePage) : {}),
         id: uid("page"),
         name: `صفحة ${s.pages.length + 1}`,
         elements: [],
-        bg: THEMES[s.theme].paper,
+        bg: sourcePage?.bg ?? THEMES[s.theme].paper,
+        ...(sourcePage?.bgGradient
+          ? { bgGradient: clone(sourcePage.bgGradient) }
+          : {}),
         w: preset.w,
         h: preset.h,
       };
+      // A new sheet inherits its visual/document configuration, never the
+      // source page's edit-lock or hidden state.
+      delete p.locked;
+      delete p.hidden;
       set({
         pages: [...s.pages, p],
         activePageId: p.id,
         selectedId: null,
+        selectedIds: [],
+        enteredGroupId: null,
+        editingId: null,
         previewAll: true,
       });
       pushHistory();
     },
 
     addTemplatePage: (id) => {
+      if (!requireEditorAccess()) return;
       const s = get();
-      if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
+      // This action inserts only the explicit, free built-in page gallery.
+      // Licensed Admin-catalog templates enter through importProject, where
+      // projectAccessBlock enforces their template lineage before editing.
+      const template = templateById(id);
+      if (!template) {
+        toast.error("قالب الصفحة غير متاح");
+        return;
+      }
+      if (exceedsProjectPageLimit(s.pages.length + 1, s.entitlements)) {
         toast.error("وصلت إلى حد صفحات تجربة المحرر", {
           description:
             "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
         });
         return;
       }
-      const p = createTemplatePage(id, THEMES[s.theme], s.orgName);
+      const p = createTemplatePage(template.id, THEMES[s.theme], s.orgName);
       set({
         pages: [...s.pages, p],
         activePageId: p.id,
         selectedId: null,
+        selectedIds: [],
+        enteredGroupId: null,
+        editingId: null,
         previewAll: true,
       });
       pushHistory();
     },
 
     duplicatePage: (id) => {
+      if (!requireEditorAccess()) return;
       const s = get();
-      if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
+      if (exceedsProjectPageLimit(s.pages.length + 1, s.entitlements)) {
         toast.error("وصلت إلى حد صفحات تجربة المحرر", {
           description:
             "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
@@ -4262,7 +4783,14 @@ export const useEditor = create<EditorStore>((set, get) => {
       const idx = s.pages.findIndex((p) => p.id === page.id);
       const pages = [...s.pages];
       pages.splice(idx + 1, 0, copy);
-      set({ pages, activePageId: copy.id, selectedId: null });
+      set({
+        pages,
+        activePageId: copy.id,
+        selectedId: null,
+        selectedIds: [],
+        enteredGroupId: null,
+        editingId: null,
+      });
       pushHistory();
     },
 
@@ -4299,11 +4827,9 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     splitArtboardPage: (id, direction = "horizontal") => {
+      if (!requireEditorAccess()) return;
       const s = get();
-      if (
-        !s.entitlements.unlimited_pages &&
-        !canAddDemoPage(s.pages.length + 1)
-      ) {
+      if (exceedsProjectPageLimit(s.pages.length + 1, s.entitlements)) {
         toast.error("وصلت إلى حد صفحات تجربة المحرر", {
           description: "افتح النسخة الكاملة لتقسيم اللوحات والمزيد من الصفحات.",
         });
@@ -4323,6 +4849,8 @@ export const useEditor = create<EditorStore>((set, get) => {
         activePageId: secondPage.id,
         selectedId: null,
         selectedIds: [],
+        enteredGroupId: null,
+        editingId: null,
         previewAll: true,
       });
       pushHistory();
@@ -4334,8 +4862,9 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     addArtboardAdjacent: (targetId, direction) => {
+      if (!requireEditorAccess()) return;
       const s = get();
-      if (!s.entitlements.unlimited_pages && !canAddDemoPage(s.pages.length)) {
+      if (exceedsProjectPageLimit(s.pages.length + 1, s.entitlements)) {
         toast.error("وصلت إلى حد صفحات تجربة المحرر", {
           description:
             "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",
@@ -4345,14 +4874,18 @@ export const useEditor = create<EditorStore>((set, get) => {
       const page = s.pages.find((p) => p.id === targetId) || s.pages[0];
       const size = pageSize(page);
       const newArtboard: Page = {
+        ...(page ? clone(page) : {}),
         id: uid("page"),
         name: `لوحة ${s.pages.length + 1}`,
         elements: [],
         bg: page?.bg || THEMES[s.theme].paper,
-        bgGradient: page?.bgGradient ? clone(page.bgGradient) : undefined,
         w: size.w,
         h: size.h,
       };
+      // New artboards inherit the source page's content/layout configuration,
+      // but not its empty state or interaction lock/visibility flags.
+      delete newArtboard.locked;
+      delete newArtboard.hidden;
 
       const idx = s.pages.findIndex((p) => p.id === targetId);
       const pages = [...s.pages];
@@ -4370,6 +4903,8 @@ export const useEditor = create<EditorStore>((set, get) => {
         activePageId: newArtboard.id,
         selectedId: null,
         selectedIds: [],
+        enteredGroupId: null,
+        editingId: null,
         previewAll: true,
       });
       pushHistory();
@@ -4390,7 +4925,18 @@ export const useEditor = create<EditorStore>((set, get) => {
         targetId === s.activePageId
           ? pages[Math.max(0, idx - 1)].id
           : s.activePageId;
-      set({ pages, activePageId: nextActive, selectedId: null });
+      set({
+        pages,
+        activePageId: nextActive,
+        ...(targetId === s.activePageId
+          ? {
+              selectedId: null,
+              selectedIds: [],
+              enteredGroupId: null,
+              editingId: null,
+            }
+          : {}),
+      });
       pushHistory();
     },
 
@@ -4776,6 +5322,10 @@ useEditor.subscribe((state, prev) => {
   }
   syncTextContext(state);
 });
+
+export function editorAccessResolved(): boolean {
+  return hasResolvedEditorAccess(useEditor.getState(), getStorageOwner());
+}
 
 export { UI_KEY };
 export const A4_SIZE = A4;

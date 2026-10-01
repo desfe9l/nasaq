@@ -56,7 +56,7 @@ import { useInteraction } from "@/lib/editor/interaction-store";
 import { findElement } from "@/lib/editor/model";
 import { LeftPanel } from "./LeftPanel";
 import { RightPanel } from "./RightPanel";
-import { CanvasDock } from "./CanvasDock";
+import { AddMenu } from "./AddMenu";
 import { CanvasStage } from "./CanvasStage";
 import { PageRail } from "./PageRail";
 import { ExportDialog } from "./ExportDialog";
@@ -92,10 +92,13 @@ export function EditorApp() {
   const showcase = useEditor((s) => s.showcase);
   const setEntitlements = useEditor((s) => s.setEntitlements);
   const { user } = useCurrentUserState();
-  const { entitlements, hasLicense, isAdmin, isSuspended } = useLicense(
-    user?.id,
-    user?.primaryEmail,
-  );
+  const {
+    entitlements,
+    hasLicense,
+    isAdmin,
+    isSuspended,
+    isLoading: licenseLoading,
+  } = useLicense(user?.id, user?.primaryEmail);
   /** A licensed account's «الرئيسية» is its NASAQ Home; everyone else's is the site. */
   const homeHref =
     !isSuspended && (hasLicense || isAdmin) ? WORKSPACE_HOME_PATH : "/";
@@ -121,8 +124,8 @@ export function EditorApp() {
   // Keep editor-side limits in sync with the same server-derived entitlements
   // used by the license and export surfaces.
   useEffect(() => {
-    setEntitlements(entitlements);
-  }, [entitlements, setEntitlements]);
+    if (!licenseLoading) setEntitlements(entitlements);
+  }, [entitlements, licenseLoading, setEntitlements]);
 
   // The studio is a fixed-height shell; the marketing pages scroll normally.
   useEffect(() => {
@@ -466,9 +469,12 @@ function Studio({
     return () =>
       window.removeEventListener(OPEN_EDITOR_SETTINGS_EVENT, openSettings);
   }, []);
-  const dark = useEditor((s) => s.dark);
+  const appearance = useEditor((s) => s.appearance);
   useEffect(
-    () => subscribeTheme((value) => useEditor.setState({ dark: value })),
+    () =>
+      subscribeTheme((value) =>
+        useEditor.setState({ appearance: value }),
+      ),
     [],
   );
   const toggle = useEditor((s) => s.toggle);
@@ -543,6 +549,7 @@ function Studio({
   const showcase = useEditor((s) => s.showcase);
   /** «أضف مكتبة» and «مولد عناوين الفقرات» are modal, so they own no store state. */
   const [addLibraryOpen, setAddLibraryOpen] = useState(false);
+  const [libraryFolderRequest, setLibraryFolderRequest] = useState(0);
   const [headingGeneratorOpen, setHeadingGeneratorOpen] = useState(false);
   /**
    * First-visit walkthrough. Read once, on mount, so the tour never reappears
@@ -1202,15 +1209,14 @@ function Studio({
     }
   };
   /** Toolbar shortcuts to a panel tab: open (and un-collapse) that panel. */
-  const openLeftFromDock = (tab: LeftTab) => {
+  const openLeftTab = (tab: LeftTab) => {
     if (useEditor.getState().focusMode) toggle("focusMode");
     expandPanel("left", tab);
   };
-  const openRightFromDock = (tab: RightTab) => {
-    if (useEditor.getState().focusMode) toggle("focusMode");
-    expandPanel("right", tab);
+  const requestLibraryFolder = () => {
+    openLeftTab("library");
+    setLibraryFolderRequest((request) => request + 1);
   };
-
   /**
    * «أدوات التقرير» is a section INSIDE the properties panel, so opening it is
    * two steps: show the panel, then ask the panel to expand its own accordion.
@@ -1388,7 +1394,8 @@ function Studio({
       dir="rtl"
       className={cn(
         "editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]",
-        dark ? "editor-dark" : "editor-light",
+        appearance === "light" ? "editor-light" : "editor-dark",
+        appearance === "dim" && "editor-dim",
         focusMode && "editor-focus",
       )}
     >
@@ -1399,13 +1406,9 @@ function Studio({
        * DOCUMENT: history, the scaling cluster, the document name, and the
        * document actions (view options, save, project file, export, account).
        *
-       * Everything canvas-shaped moved out of here and stayed reachable: insert
-       * (image, logo, upload, library, headings, report tools, pages) lives in
-       * one «إضافة» menu on the canvas dock, and the panel gateways (elements,
-       * properties, layers) are the dock's own toggles. Alignment, arrange and
-       * transform are selection-scoped, so they live in the selection toolbar
-       * and the context menu. One home per action, and nothing that only makes
-       * sense while something is selected occupies a permanent slot.
+       * Insert actions stay in «إضافة»; zoom, appearance and panel controls are
+       * in «عرض». Selection-only actions stay in the contextual toolbar and
+       * context menu, not in permanent Properties rows.
        *
        * Every control is an `IconButton`: same box, same icon size, same
        * tooltip (hover on pointer devices, long-press on touch), no labels to
@@ -1420,7 +1423,7 @@ function Studio({
       <header
         ref={headerRef}
         data-editor-obstacle="header"
-        className="editor-toolbar z-[var(--z-panel)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]"
+        className="editor-toolbar z-[var(--z-bubble)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]"
       >
         {/* ① History and the single scaling cluster. */}
         <div className="editor-header-zone editor-header-primary">
@@ -1502,28 +1505,36 @@ function Studio({
 
         {/* ③ Document actions and the account. */}
         <div className="editor-header-zone editor-header-actions ms-auto">
-          {/*
-            «المكتبة» — the asset library, one click from the header.
-            The dock's left-panel button takes the icon of whichever tab was
-            last used, so once an author opened «الصفحات» or «القوالب» the
-            library had no header/dock shortcut left at all. This one always
-            opens (and, when it is already the open tab, closes) the library
-            tab, so the surface every other insert flow depends on is never
-            more than a click away.
-          */}
-          <IconButton
-            label="المكتبة"
-            hint="صورك، شعاراتك وملفات SVG المحفوظة"
-            active={leftPanelVisible && leftTab === "library"}
-            tipSide="bottom"
-            icon={<Library className="size-4" strokeWidth={1.7} />}
-            onClick={() => {
-              if (leftPanelVisible && leftTab === "library") {
-                closeLeftPanel();
-                return;
-              }
-              openLeftFromDock("library");
+          {/* Keep the frequently used library door on wide layouts; on phones,
+              «إضافة» includes the same route without spending another toolbar cell. */}
+          {!isCompact && (
+            <IconButton
+              label="المكتبة"
+              hint="صورك، شعاراتك وملفات SVG المحفوظة"
+              active={leftPanelVisible && leftTab === "library"}
+              tipSide="bottom"
+              icon={<Library className="size-4" strokeWidth={1.7} />}
+              onClick={() => {
+                if (leftPanelVisible && leftTab === "library") {
+                  closeLeftPanel();
+                  return;
+                }
+                openLeftTab("library");
+              }}
+            />
+          )}
+          <AddMenu
+            onUpload={(kind) => onUpload(kind)}
+            onUploadSvg={onUploadSvg}
+            onAddLibrary={() => setAddLibraryOpen(true)}
+            onCreateLibraryFolder={requestLibraryFolder}
+            onHeadingGenerator={() => setHeadingGeneratorOpen(true)}
+            onReportTools={openReportTools}
+            onDrawText={() => {
+              openLeftTab("elements");
+              armTool("text");
             }}
+            onOpenLeft={openLeftTab}
           />
           <ViewMenu fitToScreen={fitToScreen} fitToSelection={fitToSelection} />
           <SaveBadge onClick={() => void saveNow()} />
@@ -1613,6 +1624,7 @@ function Studio({
             onUpload={onUpload}
             onUploadSvg={onUploadSvg}
             onAddCustomAsset={onAddCustomAsset}
+            createLibraryFolderRequest={libraryFolderRequest}
           />
           {leftDocked && isDesktop && !leftCollapsed && !focusMode && (
             <PanelResizeHandle
@@ -1636,24 +1648,6 @@ function Studio({
         <div className="editor-canvas-workspace relative grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden">
           {/* Non-modal drawers leave direct canvas manipulation available. */}
           <CanvasStage onDropImage={onDropImage} />
-          {/*
-           * The dock lives INSIDE the canvas row, so it floats over the
-           * workspace instead of occupying a column, and it can never sit on
-           * the page rail or the status bar below it.
-           */}
-          {!focusMode && (
-            <CanvasDock
-              onOpenLeft={openLeftFromDock}
-              leftPanelOpen={leftPanelVisible}
-              onCloseLeft={closeLeftPanel}
-              onOpenRight={openRightFromDock}
-              onUpload={(kind) => onUpload(kind)}
-              onUploadSvg={onUploadSvg}
-              onAddLibrary={() => setAddLibraryOpen(true)}
-              onHeadingGenerator={() => setHeadingGeneratorOpen(true)}
-              onReportTools={openReportTools}
-            />
-          )}
           <div
             data-editor-obstacle="page-rail-resizer"
             className="editor-page-rail-resizer"
@@ -1686,7 +1680,11 @@ function Studio({
           <div
             data-editor-obstacle="page-rail"
             className="min-h-0 min-w-0"
-            style={{ height: pagesRailCollapsed ? 36 : pagesPanelHeight }}
+            style={{
+              height: pagesRailCollapsed
+                ? "var(--editor-page-rail-collapsed-height, 36px)"
+                : pagesPanelHeight,
+            }}
           >
             <PageRail
               height={pagesRailCollapsed ? 36 : pagesPanelHeight}

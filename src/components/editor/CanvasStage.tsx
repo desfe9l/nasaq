@@ -95,6 +95,7 @@ const SELECTION_LAYER_Z = 5000;
 const GUIDE_LAYER_Z = SELECTION_LAYER_Z - 1;
 const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
 const ROTATE_HANDLES = ["n"] as const;
+const EMPTY_SELECTION = new Set<string>();
 
 function snapRotation(raw: number, shift: boolean): number {
   if (!shift) {
@@ -357,7 +358,11 @@ export function CanvasStage({
 
     const onPenMove = (event: PointerEvent) => {
       if (event.pointerType !== "pen") return;
-      updatePenHover(event.clientX, event.clientY);
+      updatePenHover(
+        event.clientX,
+        event.clientY,
+        useEditor.getState().activePageId,
+      );
     };
     const onPenLeave = () => {
       clearPenHover();
@@ -504,7 +509,12 @@ export function CanvasStage({
       }
     }
 
-    setActivePage(page.id);
+    const stateBeforeActivation = useEditor.getState();
+    const enteredGroupForPage =
+      stateBeforeActivation.activePageId === page.id
+        ? stateBeforeActivation.enteredGroupId
+        : null;
+    stateBeforeActivation.setActivePage(page.id);
 
     const pageEl = pageRefs.current[page.id];
     if (!pageEl) return;
@@ -520,8 +530,8 @@ export function CanvasStage({
     );
     let maxDist = 0;
 
-    const enteredGroup = enteredGroupId
-      ? findElement(page.elements, enteredGroupId)?.el || null
+    const enteredGroup = enteredGroupForPage
+      ? findElement(page.elements, enteredGroupForPage)?.el || null
       : null;
     const enteredChildren = enteredGroup?.children || [];
 
@@ -918,9 +928,9 @@ export function CanvasStage({
         }
         if (
           (ev.pointerType === "touch" || ev.pointerType === "pen") &&
-          noteElementTap(el.id, ev.pointerType)
+          noteElementTap(page.id, el.id, ev.pointerType)
         ) {
-          fireSyntheticDoubleClick(el.id);
+          fireSyntheticDoubleClick(page.id, el.id);
         }
       }
       opRef.current = null;
@@ -980,9 +990,12 @@ export function CanvasStage({
     [],
   );
 
-  const pickables = (page: Page): { id: string; box: Box }[] => {
-    const entered = enteredGroupId
-      ? findElement(page.elements, enteredGroupId)?.el || null
+  const pickables = (
+    page: Page,
+    groupId: string | null,
+  ): { id: string; box: Box }[] => {
+    const entered = groupId
+      ? findElement(page.elements, groupId)?.el || null
       : null;
     if (entered?.children?.length) {
       // Entered-group children are parent-relative; the group's own rotation
@@ -990,26 +1003,30 @@ export function CanvasStage({
       // in the group's local space (child rotation about the child's centre,
       // group rotation about the GROUP's centre) and translated by the
       // group's origin.
-      return entered.children.map((child) => ({
-        id: child.id,
-        box: elementAABB(
-          { x: child.x, y: child.y, w: child.w, h: child.h },
-          child.rotation || 0,
-          { x: entered.x, y: entered.y },
-          entered.rotation || 0,
-          { x: entered.w / 2, y: entered.h / 2 },
-        ),
-      }));
+      return entered.children
+        .filter((child) => !child.hidden)
+        .map((child) => ({
+          id: child.id,
+          box: elementAABB(
+            { x: child.x, y: child.y, w: child.w, h: child.h },
+            child.rotation || 0,
+            { x: entered.x, y: entered.y },
+            entered.rotation || 0,
+            { x: entered.w / 2, y: entered.h / 2 },
+          ),
+        }));
     }
     // Top level: the element's own box and rotation in page mm.
-    return page.elements.map((el) => ({
-      id: el.id,
-      box: elementAABB(
-        { x: el.x, y: el.y, w: el.w, h: el.h },
-        el.rotation || 0,
-        { x: 0, y: 0 },
-      ),
-    }));
+    return page.elements
+      .filter((el) => !el.hidden)
+      .map((el) => ({
+        id: el.id,
+        box: elementAABB(
+          { x: el.x, y: el.y, w: el.w, h: el.h },
+          el.rotation || 0,
+          { x: 0, y: 0 },
+        ),
+      }));
   };
 
   const activePageForSelection = pages.find((p) => p.id === activePageId);
@@ -1030,10 +1047,16 @@ export function CanvasStage({
     /** Resolved at gesture time, like every other handler here: the node that
      *  started the gesture may belong to a page that has since been
      *  re-created by an undo, and virtualisation may have unmounted it. */
-    const page = useEditor
-      .getState()
-      .pages.find((candidate) => candidate.id === pageId);
-    if (!page) return;
+    const stateAtStart = useEditor.getState();
+    const page = stateAtStart.pages.find((candidate) => candidate.id === pageId);
+    if (!page || page.locked || page.hidden) return;
+    if (stateAtStart.activePageId !== pageId)
+      stateAtStart.setActivePage(pageId);
+    const activeState = useEditor.getState();
+    const selectionForPage =
+      activeState.activePageId === pageId ? activeState.selectedIds : [];
+    const groupForPage =
+      activeState.activePageId === pageId ? activeState.enteredGroupId : null;
     const pageEl = pageRefs.current[page.id];
     if (!pageEl) return;
     e.stopPropagation();
@@ -1043,9 +1066,9 @@ export function CanvasStage({
     const start = toMm(e);
     const stage = stageRef.current!;
     const scroll = { x: stage.scrollLeft, y: stage.scrollTop };
-    const pan = e.pointerType === "touch" && !drawTool && !selectedIds.length;
-    const before = e.shiftKey ? [...selectedIds] : [];
-    const candidates = pickables(page);
+    const pan = e.pointerType === "touch" && !drawTool && !selectionForPage.length;
+    const before = e.shiftKey ? [...selectionForPage] : [];
+    const candidates = pickables(page, groupForPage);
     let moved = false;
     let held = false;
     /** Last selection written by the marquee — a set-difference guard so a
@@ -1153,6 +1176,18 @@ export function CanvasStage({
     });
   };
 
+  /** Resolve the visible artboard under a stage-level pointer start. */
+  const pageAtPoint = (x: number, y: number): Page | null => {
+    for (const page of [...visible].reverse()) {
+      const node = pageRefs.current[page.id];
+      if (!node) continue;
+      const rect = node.getBoundingClientRect();
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)
+        return page;
+    }
+    return null;
+  };
+
   // Geometry is relative to each artboard, NOT bounded by it. Rendering and
   // export clipping stay unchanged; visible workspace overflow remains usable.
   /**
@@ -1171,22 +1206,25 @@ export function CanvasStage({
         x,
         y,
       );
+      const pageIsActive = page.id === activePageId;
+      const pageSelection = pageIsActive ? selectedSet : EMPTY_SELECTION;
+      const pageEnteredGroupId = pageIsActive ? enteredGroupId : null;
       const hits = elementsAtPoint(
         page,
-        enteredGroupId,
+        pageEnteredGroupId,
         point.x,
         point.y,
       ).filter((el) => !el.locked);
-      let el = hits.find((el) => selectedSet.has(el.id)) || hits[0];
+      let el = hits.find((el) => pageSelection.has(el.id)) || hits[0];
       if (cycle && hits.length > 1) {
         const selectedIndex = hits.findIndex((item) =>
-          selectedSet.has(item.id),
+          pageSelection.has(item.id),
         );
         el = hits[(selectedIndex + 1 + hits.length) % hits.length] || hits[0];
       }
       if (el) {
-        const group = enteredGroupId
-          ? findElement(page.elements, enteredGroupId)?.el
+        const group = pageEnteredGroupId
+          ? findElement(page.elements, pageEnteredGroupId)?.el
           : null;
         return {
           page,
@@ -1274,19 +1312,26 @@ export function CanvasStage({
           return;
         setLayerPicker(null);
         onCanvasTap?.();
-        const page = pages.find((p) => p.id === activePageId);
-        if (page) startMarquee(e, page.id);
+        const page = pageAtPoint(e.clientX, e.clientY);
+        if (!page || page.locked || page.hidden) return;
+        if (useEditor.getState().activePageId !== page.id)
+          setActivePage(page.id);
+        startMarquee(e, page.id);
       }}
       onContextMenu={(e) => {
         e.preventDefault(); // Only the canvas replaces the browser context menu.
         e.stopPropagation();
         const hit = workspaceHit(e.clientX, e.clientY);
-        const state = useEditor.getState();
         if (hit) {
-          state.setActivePage(hit.page.id);
-          if (!state.selectedIds.includes(hit.el.id)) state.select(hit.el.id);
+          useEditor.getState().setActivePage(hit.page.id);
+          const activeState = useEditor.getState();
+          if (
+            activeState.activePageId === hit.page.id &&
+            !activeState.selectedIds.includes(hit.el.id)
+          )
+            activeState.select(hit.el.id);
         }
-        state.openContextMenu({
+        useEditor.getState().openContextMenu({
           x: e.clientX,
           y: e.clientY,
           targetId: hit?.el.id ?? null,
@@ -1392,10 +1437,10 @@ export function CanvasStage({
               isRenaming={renamingPageId === page.id}
               zoom={zoom}
               root={stageEl}
-              selectedSet={selectedSet}
-              selectedId={selectedId}
-              editingId={editingId}
-              enteredGroupId={enteredGroupId}
+              selectedSet={page.id === activePageId ? selectedSet : EMPTY_SELECTION}
+              selectedId={page.id === activePageId ? selectedId : null}
+              editingId={page.id === activePageId ? editingId : null}
+              enteredGroupId={page.id === activePageId ? enteredGroupId : null}
               showGrid={showGrid}
               printGuides={printGuides}
               onElementGesture={onElementGesture}
@@ -1418,7 +1463,11 @@ export function CanvasStage({
         !pageManagerOpen &&
         !contextMenu &&
         !layerPicker && (
-          <SelectionTools key={primarySelection.id} el={primarySelection} />
+          <SelectionTools
+            key={`${activePageId}:${primarySelection.id}`}
+            el={primarySelection}
+            pageId={activePageId}
+          />
         )}
 
       {layerPicker && (
@@ -2360,7 +2409,7 @@ function LayerPickerPopup({
 
 function requestEdit(pageId: string, elId: string) {
   const host = document.querySelector<HTMLElement>(
-    `[data-page-id="${pageId}"]`,
+    `[data-page-id="${CSS.escape(pageId)}"]`,
   );
   const node = host?.querySelector<HTMLElement>(
     `[data-el-id="${CSS.escape(elId)}"]`,
@@ -2421,15 +2470,18 @@ function ExportCaptureLayer() {
   );
 }
 
-/** Contextual properties yield during transforms/crop and to the explicit inspector. */
-function SelectionTools({ el }: { el: CanvasEl }) {
+/** Contextual tools stay available when panels open; the placer routes around them. */
+function SelectionTools({
+  el,
+  pageId,
+}: {
+  el: CanvasEl;
+  pageId: string;
+}) {
   const active = useInteraction((s) => s.active);
   const cropping = useInteraction((s) => s.crop !== null);
-  const inspector = useEditor(
-    (s) => s.rightOpen && s.rightTab === "properties",
-  );
-  if (active || cropping || inspector) return null;
-  return <FloatingToolbar el={el} />;
+  if (active || cropping) return null;
+  return <FloatingToolbar el={el} pageId={pageId} />;
 }
 function CropLayer({ pageId }: { pageId: string }) {
   const session = useInteraction((s) => s.crop);

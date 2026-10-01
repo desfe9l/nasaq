@@ -37,7 +37,8 @@ import {
   type PrintGuideSettings,
 } from "@/lib/editor/print-guides";
 import { imageSizeResolver } from "@/lib/editor/images";
-import { useEditor } from "@/lib/editor/store";
+import { editorAccessResolved, useEditor } from "@/lib/editor/store";
+import { projectAccessBlock } from "@/lib/editor/access-limits";
 import { downloadCurrentNsq } from "@/lib/nsq/editor-io";
 import { cn } from "@/lib/utils";
 import {
@@ -169,6 +170,8 @@ export function ExportDialog() {
   const orgName = useEditor((s) => s.orgName);
   const theme = useEditor((s) => s.theme);
   const version = useEditor((s) => s.version);
+  const pack = useEditor((s) => s.pack);
+  const licensedTemplateId = useEditor((s) => s.licensedTemplateId);
   const printGuides = useEditor((s) => s.printGuides);
   const togglePrintGuide = useEditor((s) => s.togglePrintGuide);
   const fitTextBox = useEditor((s) => s.fitTextBox);
@@ -232,6 +235,17 @@ export function ExportDialog() {
     (OFFICE_FORMATS.has(format) && !editableOffice);
   const licensed = entitlements.advanced_export === true;
   const formatAllowed = canUseDemoExport(format, licensed);
+  const accessBlock = projectAccessBlock(
+    { pack, licensedTemplateId, pages },
+    entitlements,
+  );
+  const accessError = !editorAccessResolved()
+    ? "انتظر اكتمال التحقق من الحساب والترخيص قبل التصدير"
+    : accessBlock === "premium-template"
+      ? "يتطلب تصدير هذا المستند ترخيصًا مناسبًا"
+      : accessBlock === "page-limit"
+        ? "يتجاوز هذا المستند حد الصفحات في خطتك الحالية"
+        : null;
   const captureScale = effectiveExportScale(quality, licensed);
 
   const applyFix = (issue: PreflightIssue) => {
@@ -259,8 +273,16 @@ export function ExportDialog() {
   };
 
   const run = async () => {
+    if (!editorAccessResolved()) {
+      setError("انتظر اكتمال التحقق من الحساب والترخيص قبل التصدير");
+      return;
+    }
     if (guestNeedsSignIn) {
       setSignInOpen(true);
+      return;
+    }
+    if (accessError) {
+      setError(accessError);
       return;
     }
     if (!formatAllowed) {
@@ -318,7 +340,16 @@ export function ExportDialog() {
       await runExport(
         format,
         captured,
-        { version, name, theme, orgName, pages, defaultSize: undefined },
+        {
+          version,
+          name,
+          theme,
+          orgName,
+          pages,
+          pack,
+          licensedTemplateId,
+          defaultSize: undefined,
+        },
         selected,
         editableOffice,
         usedScale,
@@ -337,6 +368,10 @@ export function ExportDialog() {
   };
 
   const preview = async () => {
+    if (accessError) {
+      setError(accessError);
+      return;
+    }
     setPreviewBusy(true);
     setError(null);
     try {

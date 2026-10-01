@@ -90,24 +90,26 @@ describe("double-tap pairing", () => {
     resetTapPairing();
   });
 
-  it("fires only on a second touch/pen tap of the same element in the window", () => {
-    assert.equal(noteElementTap("el-1", "touch", 0), false);
-    assert.equal(noteElementTap("el-1", "touch", 150), true);
+  it("fires only on a second touch/pen tap of the same page-scoped element", () => {
+    assert.equal(noteElementTap("page-1", "el-1", "touch", 0), false);
+    assert.equal(noteElementTap("page-1", "el-1", "touch", 150), true);
     // Pairing consumed — a third tap starts a new pair.
-    assert.equal(noteElementTap("el-1", "touch", 300), false);
+    assert.equal(noteElementTap("page-1", "el-1", "touch", 300), false);
   });
 
-  it("does not pair across elements or beyond the window", () => {
-    assert.equal(noteElementTap("el-1", "pen", 0), false);
+  it("does not pair across pages, elements or beyond the window", () => {
+    assert.equal(noteElementTap("page-1", "el-1", "pen", 0), false);
+    // The same element ID on another page is a different target.
+    assert.equal(noteElementTap("page-2", "el-1", "pen", 50), false);
     // A different element breaks the pair…
-    assert.equal(noteElementTap("el-2", "pen", 100), false);
+    assert.equal(noteElementTap("page-2", "el-2", "pen", 100), false);
     // …and so does a gap wider than the double-tap window.
-    assert.equal(noteElementTap("el-2", "pen", 100 + 401), false);
-    assert.equal(noteElementTap("el-2", "pen", 100 + 402), true);
+    assert.equal(noteElementTap("page-2", "el-2", "pen", 100 + 401), false);
+    assert.equal(noteElementTap("page-2", "el-2", "pen", 100 + 402), true);
   });
 
   it("never pairs mouse taps (the browser owns native dblclick)", () => {
-    assert.equal(noteElementTap("el-1", "mouse", 0), false);
-    assert.equal(noteElementTap("el-1", "mouse", 50), false);
+    assert.equal(noteElementTap("page-1", "el-1", "mouse", 0), false);
+    assert.equal(noteElementTap("page-1", "el-1", "mouse", 50), false);
   });
 });

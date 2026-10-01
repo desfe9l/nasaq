@@ -308,8 +308,9 @@ function PlanSection({
         </p>
       )}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        {plans.map((p) => {
+      {plans.length > 0 ? (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {plans.map((p) => {
           const active = selected === p.id;
           return (
             <button
@@ -350,11 +351,19 @@ function PlanSection({
               )}
             </button>
           );
-        })}
-      </div>
+          })}
+        </div>
+      ) : (
+        <p className="mt-4 text-[13px] text-muted">
+          {instructions.iban.trim() &&
+          instructions.bankName.trim() &&
+          instructions.accountName.trim()
+            ? "لا توجد باقات تحويل متاحة حاليًا."
+            : "الدفع بالتحويل غير متاح حاليًا."}
+        </p>
+      )}
 
-      {plan && (!instructions.iban || !instructions.bankName || !instructions.accountName) && <p className="mt-5 text-[13px] text-muted">الدفع قريبًا — تعليمات التحويل غير مكتملة.</p>}
-      {plan && instructions.iban && instructions.bankName && instructions.accountName && (
+      {plan && instructions.iban.trim() && instructions.bankName.trim() && instructions.accountName.trim() && (
         <div className="mt-5 grid gap-4 rounded-[12px] border border-line-2 bg-paper/60 p-4">
           <div>
             <h3 className="text-[13px] font-extrabold">تعليمات الدفع</h3>

@@ -18,7 +18,8 @@
  * round-trips through the editor and the export pipeline untouched.
  */
 
-import { clone, pageSize, type CanvasEl, type Page } from "@/lib/editor/model";
+import { clone, pageSize, type CanvasEl, type PackId, type Page } from "@/lib/editor/model";
+import { projectAccessBlock, type EditorAccessEntitlements } from "@/lib/editor/access-limits";
 import type { TemplateCategoryId } from "@/lib/editor/templates";
 import { uid } from "@/lib/utils";
 
@@ -55,6 +56,10 @@ export interface CustomTemplate {
   updatedAt: number;
   /** Entry this one was duplicated/derived from, for provenance. */
   derivedFrom?: string;
+  /** Premium Admin template lineage; kept gated in the derived local copy. */
+  licensedTemplateId?: string;
+  /** Starter-pack lineage; preserves pack entitlements in every derived copy. */
+  pack?: PackId;
 }
 
 /**
@@ -84,6 +89,8 @@ export interface CustomTemplateInput {
   tags?: string[];
   pages: Page[];
   derivedFrom?: string;
+  licensedTemplateId?: string;
+  pack?: PackId;
 }
 
 /** Thrown when the browser refuses the write because the quota is full. */
@@ -92,6 +99,38 @@ export class TemplateStorageError extends Error {
     super(message);
     this.name = "TemplateStorageError";
   }
+}
+
+/** A local template action was refused by the same gates as project files. */
+export class TemplateAccessError extends Error {
+  constructor(block: "premium-template" | "page-limit") {
+    super(
+      block === "premium-template"
+        ? "يتطلب هذا القالب ترخيصًا مناسبًا لمتابعة تعديله أو حفظه."
+        : "يتجاوز هذا القالب حد الصفحات في خطتك الحالية.",
+    );
+    this.name = "TemplateAccessError";
+  }
+}
+
+const PACK_IDS = new Set<PackId>([
+  "official",
+  "eid",
+  "briefing",
+  "blank",
+  "slides",
+]);
+
+function validPack(value: unknown): PackId | undefined {
+  return typeof value === "string" && PACK_IDS.has(value as PackId)
+    ? (value as PackId)
+    : undefined;
+}
+
+function packFromEntryId(value: unknown): PackId | undefined {
+  if (typeof value !== "string") return undefined;
+  const match = /^pack:(official|eid|briefing|blank|slides)$/.exec(value);
+  return match?.[1] as PackId | undefined;
 }
 
 const MAX_TITLE = 80;
@@ -182,6 +221,9 @@ function normalizeTemplate(raw: unknown): CustomTemplate | null {
       ) as CatalogPillId[])
     : [];
   const now = Date.now();
+  const derivedFrom = item.derivedFrom
+    ? asString(item.derivedFrom, 64)
+    : undefined;
   return {
     id: asString(item.id, 64),
     title: asString(item.title, MAX_TITLE) || "قالب بلا اسم",
@@ -193,7 +235,11 @@ function normalizeTemplate(raw: unknown): CustomTemplate | null {
     pages,
     createdAt: Number(item.createdAt) || now,
     updatedAt: Number(item.updatedAt) || Number(item.createdAt) || now,
-    derivedFrom: item.derivedFrom ? asString(item.derivedFrom, 64) : undefined,
+    derivedFrom,
+    licensedTemplateId: item.licensedTemplateId
+      ? asString(item.licensedTemplateId, 120)
+      : undefined,
+    pack: validPack(item.pack) ?? packFromEntryId(derivedFrom),
   };
 }
 
@@ -264,13 +310,25 @@ export function customTemplateById(id: string): CustomTemplate | undefined {
 }
 
 /** Create or update (by `id`) a template. Returns the stored record. */
-export function saveCustomTemplate(input: CustomTemplateInput): CustomTemplate {
+export function saveCustomTemplate(
+  input: CustomTemplateInput,
+  entitlements: EditorAccessEntitlements,
+): CustomTemplate {
   if (!input.pages?.length) {
     throw new TemplateStorageError("لا يمكن حفظ قالب بلا صفحات.");
   }
   const items = [...customTemplatesSnapshot()];
   const existingIndex = input.id ? items.findIndex((t) => t.id === input.id) : -1;
   const existing = existingIndex >= 0 ? items[existingIndex] : undefined;
+  const pack = validPack(input.pack) ?? existing?.pack ?? packFromEntryId(input.derivedFrom);
+  const licensedTemplateId =
+    input.licensedTemplateId ?? existing?.licensedTemplateId;
+  const block = projectAccessBlock(
+    { pack, licensedTemplateId, pages: input.pages },
+    entitlements,
+  );
+  if (block) throw new TemplateAccessError(block);
+
   const size = pageSize(input.pages[0]);
   const record: CustomTemplate = {
     id: existing?.id || uid("tpl"),
@@ -287,6 +345,8 @@ export function saveCustomTemplate(input: CustomTemplateInput): CustomTemplate {
     createdAt: existing?.createdAt || Date.now(),
     updatedAt: Date.now(),
     derivedFrom: input.derivedFrom ?? existing?.derivedFrom,
+    licensedTemplateId,
+    pack,
   };
   if (existingIndex >= 0) items[existingIndex] = record;
   else items.unshift(record);
@@ -308,18 +368,26 @@ export function deleteCustomTemplate(id: string): boolean {
 }
 
 /** Copy a template under a new id and name — the «تكرار» action. */
-export function duplicateCustomTemplate(id: string): CustomTemplate | null {
+export function duplicateCustomTemplate(
+  id: string,
+  entitlements: EditorAccessEntitlements,
+): CustomTemplate | null {
   const source = customTemplateById(id);
   if (!source) return null;
-  return saveCustomTemplate({
-    title: `${source.title} — نسخة`,
-    desc: source.desc,
-    category: source.category,
-    pills: source.pills,
-    tags: source.tags,
-    derivedFrom: source.derivedFrom || source.id,
-    pages: freshPages(source.pages),
-  });
+  return saveCustomTemplate(
+    {
+      title: `${source.title} — نسخة`,
+      desc: source.desc,
+      category: source.category,
+      pills: source.pills,
+      tags: source.tags,
+      derivedFrom: source.derivedFrom || source.id,
+      licensedTemplateId: source.licensedTemplateId,
+      pack: source.pack,
+      pages: freshPages(source.pages),
+    },
+    entitlements,
+  );
 }
 
 /** Rough size of the library in bytes — surfaced when a write threatens quota. */

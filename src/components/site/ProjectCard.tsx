@@ -77,7 +77,8 @@ export function ProjectCard({
         return;
       }
       const { exportJson: writeJson, safeFileName } = await import("@/lib/editor/export");
-      writeJson({ ...full, updatedAt: Date.now() });
+      const exported = writeJson({ ...full, updatedAt: Date.now() });
+      if (!exported) return;
       toast.success(`تم تنزيل ${safeFileName(full.name)}.json`);
     } catch {
       toast.error("تعذر تصدير المشروع");

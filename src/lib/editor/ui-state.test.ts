@@ -3,8 +3,6 @@ import assert from "node:assert/strict";
 import {
   BUBBLE_FOLDS,
   BUBBLE_PARTS,
-  DOCK_FOLDS,
-  DOCK_METRICS_FALLBACK,
   MEASURE_TOLERANCE_MM,
   OVERLAY_BREAKPOINT,
   PAGES_PANEL_DEFAULT,
@@ -14,9 +12,6 @@ import {
   bubbleLayout,
   clampPagesHeight,
   clampParkedPoint,
-  dockBarWidth,
-  dockCellCount,
-  dockLayout,
   extractSvgMarkup,
   isOverlayViewport,
   measuredSelectionBox,
@@ -24,21 +19,8 @@ import {
   parseStoredPoint,
   placeFloatingToolbar,
   tipPlacement,
-  type DockMetrics,
   type ScreenBox,
 } from "./ui-state.ts";
-
-/** The 44px cell geometry an iPad/Pencil session gets from `@media`. */
-const COARSE_DOCK: DockMetrics = { cell: 44, grip: 26, gap: 3, pad: 6, sep: 5 };
-
-/** Width the dock would actually paint for a fold level. */
-const dockWidthAt = (level: number, metrics: DockMetrics) => {
-  const folded = DOCK_FOLDS[level] ?? [];
-  return dockBarWidth(dockCellCount(folded), {
-    divider: !folded.includes("colors"),
-    metrics,
-  });
-};
 
 /** Overlap area of two boxes, used to assert "never covers X". */
 function overlap(
@@ -594,71 +576,6 @@ describe("selection bubble density", () => {
       const width = bubbleBarWidth(bar);
       assert.ok(width < previous, `folding ${folded.join("+") || "nothing"} narrows the bar`);
       previous = width;
-    }
-  });
-});
-
-describe("canvas dock density", () => {
-  it("keeps every tool on desktop and tablet lanes", () => {
-    for (const [lane, metrics] of [
-      [1920, DOCK_METRICS_FALLBACK],
-      [1194, COARSE_DOCK],
-      [834, COARSE_DOCK],
-    ] as const) {
-      const layout = dockLayout(lane, metrics);
-      assert.deepEqual(layout.drawer, []);
-      assert.deepEqual(layout.triggers, []);
-      assert.equal(layout.bar.length, 10);
-    }
-  });
-
-  it("folds panel gateways into one drawer on a phone lane", () => {
-    const layout = dockLayout(390, COARSE_DOCK);
-    assert.deepEqual(layout.drawer, ["library", "properties", "layers"]);
-    assert.deepEqual(layout.triggers, ["panels"]);
-    // Three tools became one trigger: the bar loses two cells, not three tools.
-    assert.equal(dockCellCount(layout.drawer), 7);
-    assert.ok(dockWidthAt(1, COARSE_DOCK) <= 390);
-  });
-
-  it("gives up the drawing tools only after the panels, and colours never", () => {
-    assert.deepEqual(dockLayout(366, COARSE_DOCK).triggers, ["draw", "panels"]);
-    assert.deepEqual(dockLayout(296, COARSE_DOCK).drawer, [
-      "library",
-      "properties",
-      "layers",
-      "text",
-      "shape",
-      "select",
-    ]);
-    // Folding a one-cell group would buy nothing, so the swatches always stay.
-    for (const lane of [1920, 834, 390, 320, 296, 200])
-      assert.ok(!dockLayout(lane, COARSE_DOCK).drawer.includes("colors"));
-    // Even the most folded bar can still insert, and every tool stays reachable.
-    const tightest = dockLayout(200, COARSE_DOCK);
-    assert.ok(tightest.bar.includes("add"));
-    assert.ok(tightest.triggers.includes("draw"));
-    assert.ok(tightest.drawer.includes("select"));
-  });
-
-  it("folds earlier with touch-sized cells, and never overflows the lane", () => {
-    assert.deepEqual(dockLayout(420, DOCK_METRICS_FALLBACK).drawer, []);
-    assert.deepEqual(dockLayout(420, COARSE_DOCK).drawer, [
-      "library",
-      "properties",
-      "layers",
-    ]);
-    // 296px is the lane of a 320px viewport (the narrowest phone NASAQ
-    // supports) minus the dock's own 24px of canvas edge.
-    for (const metrics of [DOCK_METRICS_FALLBACK, COARSE_DOCK]) {
-      for (const lane of [1920, 1194, 834, 768, 600, 480, 390, 366, 320, 296]) {
-        const layout = dockLayout(lane, metrics);
-        const width = dockBarWidth(dockCellCount(layout.drawer), {
-          divider: !layout.drawer.includes("colors"),
-          metrics,
-        });
-        assert.ok(width <= lane, `${width}px dock in a ${lane}px lane`);
-      }
     }
   });
 });

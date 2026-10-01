@@ -10,7 +10,7 @@
 import { toast } from "sonner";
 import { downloadBlob } from "@/lib/utils";
 import { getStorageOwner } from "../editor/storage-owner";
-import { useEditor } from "@/lib/editor/store";
+import { editorAccessResolved, useEditor } from "@/lib/editor/store";
 import {
   NSQ_EXTENSION,
   NSQ_MIME,
@@ -18,6 +18,8 @@ import {
   nsqFileName,
 } from "./format";
 import { writeNsq, type NsqWriteResult } from "./package";
+import { NsqError } from "./format";
+import { projectAccessBlock } from "@/lib/editor/access-limits";
 import { uploadedFontSources } from "./fonts";
 import { pageSize, clone, type Page } from "../editor/model";
 import { writeAtomically, type NsqSaveHandle } from "./atomic-file";
@@ -168,6 +170,7 @@ function saveSnapshot() {
         updatedAt: Date.now(),
         defaultSize: s.defaultSize,
         pack: s.pack,
+        licensedTemplateId: s.licensedTemplateId,
         nsqOrigin: s.nsqOrigin,
         embeddedFonts: s.embeddedFonts,
         nativeSourceProjectId: s.nativeSourceProjectId,
@@ -189,10 +192,22 @@ function saveSnapshot() {
   };
 }
 
+function assertSnapshotAccess(snapshot: ReturnType<typeof saveSnapshot>) {
+  const current = useEditor.getState();
+  if (
+    !editorAccessResolved() ||
+    getStorageOwner() !== snapshot.owner ||
+    current.id !== snapshot.id ||
+    projectAccessBlock(snapshot.input.project, current.entitlements)
+  )
+    throw new NsqError("access-denied");
+}
+
 /** Only a thumbnail of this snapshot may be attached; never a stale card image. */
 export async function buildCurrentNsq(
   snapshot = saveSnapshot(),
 ): Promise<NsqWriteResult> {
+  assertSnapshotAccess(snapshot);
   let timer: ReturnType<typeof setTimeout> | undefined;
   const thumbnail = await Promise.race([
     captureFirstPagePreview(snapshot.input.project.pages[0]?.id),
@@ -207,6 +222,7 @@ export async function buildCurrentNsq(
     now.theme === snapshot.input.project.theme &&
     now.orgName === snapshot.input.project.orgName &&
     now.transactionNo === snapshot.input.project.transactionNo;
+  assertSnapshotAccess(snapshot);
   return writeNsq({
     ...snapshot.input,
     thumbnail: unchanged ? thumbnail : null,

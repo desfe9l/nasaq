@@ -18,6 +18,12 @@ import {
   type CanvasEl,
 } from "./model";
 import { applySvgColors, safeSvgSrc, sanitizeSvgContent } from "./svg";
+import { projectAccessBlock } from "./access-limits";
+import { editorAccessResolved, useEditor } from "./store";
+import {
+  canUseDemoExport,
+  effectiveExportScale,
+} from "@/lib/product/product";
 
 export type ExportFormat =
   "pdf" | "pptx" | "docx" | "png" | "jpg" | "html" | "svg" | "json" | "nsq";
@@ -127,10 +133,14 @@ export interface CapturedPage {
  * instead of the current zoom level.
  */
 export async function captureElement(
+  pageId: string,
   elId: string,
   exportScale: number,
 ): Promise<string | null> {
-  const node = document.querySelector<HTMLElement>(
+  const page = document.querySelector<HTMLElement>(
+    `.editor-canvas-stage [data-page-id="${CSS.escape(pageId)}"]`,
+  );
+  const node = page?.querySelector<HTMLElement>(
     `[data-el-id="${CSS.escape(elId)}"]`,
   );
   if (!node) return null;
@@ -263,7 +273,9 @@ function jpegData(canvas: HTMLCanvasElement, quality = 0.94) {
 }
 
 export async function exportPdf(pages: CapturedPage[], name: string) {
+  if (notifyExportFormatBlock("pdf")) return;
   const { jsPDF } = await import("jspdf");
+  if (notifyExportFormatBlock("pdf")) return;
   const pdf = new jsPDF({
     orientation: pages[0].w > pages[0].h ? "landscape" : "portrait",
     unit: "mm",
@@ -290,13 +302,26 @@ export async function exportPptxEditable(
   pages: Page[],
   name: string,
   documentPages: Page[] = pages,
+  project?: Project,
 ) {
+  if (
+    project
+      ? notifyProjectAccessBlock(project, "pptx")
+      : notifyExportFormatBlock("pptx")
+  )
+    return;
   const { buildScene } = await import("./scene");
   const { writePptx } = await import("./pptx-writer");
   const blob = await writePptx(
     buildScene(await materializeSceneSources(pages), documentPages),
     name,
   );
+  if (
+    project
+      ? notifyProjectAccessBlock(project, "pptx")
+      : notifyExportFormatBlock("pptx")
+  )
+    return;
   downloadBlob(blob, `${name}.pptx`);
 }
 
@@ -311,13 +336,26 @@ export async function exportDocxEditable(
   pages: Page[],
   name: string,
   documentPages: Page[] = pages,
+  project?: Project,
 ) {
+  if (
+    project
+      ? notifyProjectAccessBlock(project, "docx")
+      : notifyExportFormatBlock("docx")
+  )
+    return;
   const { buildScene } = await import("./scene");
   const { writeDocx } = await import("./docx-writer");
   const blob = await writeDocx({
     scenes: buildScene(await materializeSceneSources(pages), documentPages),
     title: name,
   });
+  if (
+    project
+      ? notifyProjectAccessBlock(project, "docx")
+      : notifyExportFormatBlock("docx")
+  )
+    return;
   downloadBlob(blob, `${name}.docx`);
 }
 
@@ -400,56 +438,146 @@ function canvasToBlob(
   );
 }
 
+function clampCapturedPagesToScale(
+  pages: CapturedPage[],
+  maxScale: number,
+): CapturedPage[] {
+  return pages.map((page) => {
+    const maxWidth = Math.max(1, Math.floor(mmToPx(page.w, 1) * maxScale));
+    const maxHeight = Math.max(1, Math.floor(mmToPx(page.h, 1) * maxScale));
+    if (page.canvas.width <= maxWidth && page.canvas.height <= maxHeight)
+      return page;
+    const ratio = Math.min(
+      maxWidth / page.canvas.width,
+      maxHeight / page.canvas.height,
+      1,
+    );
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.floor(page.canvas.width * ratio));
+    canvas.height = Math.max(1, Math.floor(page.canvas.height * ratio));
+    const context = canvas.getContext("2d");
+    if (!context) return page;
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = "high";
+    context.drawImage(page.canvas, 0, 0, canvas.width, canvas.height);
+    return { ...page, canvas, snapshot: undefined };
+  });
+}
+
 export async function exportImages(
   pages: CapturedPage[],
   name: string,
   type: "png" | "jpg",
 ) {
+  if (notifyExportFormatBlock(type)) return;
+  const advanced = useEditor.getState().entitlements.advanced_export === true;
+  const outputPages = advanced
+    ? pages
+    : clampCapturedPagesToScale(
+        pages,
+        effectiveExportScale(1, false),
+      );
+  const sourceCanvases = new Set(pages.map((page) => page.canvas));
   const mime = type === "png" ? "image/png" : "image/jpeg";
   const ext = type === "png" ? "png" : "jpg";
-  if (pages.length === 1) {
-    const blob = await canvasToBlob(
-      pages[0].canvas,
-      mime,
-      type === "jpg" ? 0.95 : undefined,
-    );
-    if (blob) downloadBlob(blob, `${name}.${ext}`);
-    return;
+  try {
+    if (outputPages.length === 1) {
+      const blob = await canvasToBlob(
+        outputPages[0].canvas,
+        mime,
+        type === "jpg" ? 0.95 : undefined,
+      );
+      if (blob && !notifyExportFormatBlock(type))
+        downloadBlob(blob, `${name}.${ext}`);
+      return;
+    }
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
+    for (let i = 0; i < outputPages.length; i++) {
+      const blob = await canvasToBlob(
+        outputPages[i].canvas,
+        mime,
+        type === "jpg" ? 0.95 : undefined,
+      );
+      if (blob)
+        zip.file(`${name}-p${String(i + 1).padStart(2, "0")}.${ext}`, blob);
+    }
+    const out = await zip.generateAsync({ type: "blob" });
+    if (!notifyExportFormatBlock(type))
+      downloadBlob(out, `${name}-pages.zip`);
+  } finally {
+    for (const page of outputPages) {
+      if (!sourceCanvases.has(page.canvas)) {
+        page.canvas.width = 0;
+        page.canvas.height = 0;
+      }
+    }
   }
-  const JSZip = (await import("jszip")).default;
-  const zip = new JSZip();
-  for (let i = 0; i < pages.length; i++) {
-    const blob = await canvasToBlob(
-      pages[i].canvas,
-      mime,
-      type === "jpg" ? 0.95 : undefined,
-    );
-    if (blob)
-      zip.file(`${name}-p${String(i + 1).padStart(2, "0")}.${ext}`, blob);
-  }
-  const out = await zip.generateAsync({ type: "blob" });
-  downloadBlob(out, `${name}-pages.zip`);
 }
 
 /** The web document is serialized from the very same rendered artboards. */
 export async function buildStandaloneHtml(project: Project, pages: Page[]) {
-  return snapshotsHtml(await captureSnapshots(pages), project.name);
+  if (notifyProjectAccessBlock(project, "html"))
+    throw new Error("لا يمكن تصدير هذا المستند قبل اكتمال التحقق من الصلاحيات");
+  const snapshots = await captureSnapshots(pages);
+  if (notifyProjectAccessBlock(project, "html"))
+    throw new Error("تغيّرت صلاحيات التصدير أثناء تجهيز الملف");
+  return snapshotsHtml(snapshots, project.name);
 }
 
-export function exportJson(project: Project) {
+function notifyExportFormatBlock(format: ExportFormat): boolean {
+  if (!editorAccessResolved()) {
+    toast.error("انتظر اكتمال التحقق من الحساب والترخيص قبل التصدير");
+    return true;
+  }
+  const advanced = useEditor.getState().entitlements.advanced_export === true;
+  if (canUseDemoExport(format, advanced)) return false;
+  toast.error("هذه الصيغة متاحة ضمن الترخيص المتقدم فقط");
+  return true;
+}
+
+function notifyProjectAccessBlock(
+  project: Project,
+  format?: ExportFormat,
+): boolean {
+  if (format && notifyExportFormatBlock(format)) return true;
+  if (!editorAccessResolved()) {
+    toast.error("انتظر اكتمال التحقق من الحساب والترخيص قبل التصدير");
+    return true;
+  }
+  const block = projectAccessBlock(project, useEditor.getState().entitlements);
+  if (!block) return false;
+  toast.error(
+    block === "premium-template"
+      ? "يتطلب تصدير هذا المستند ترخيصًا مناسبًا"
+      : "يتجاوز هذا المستند حد الصفحات في خطتك الحالية",
+  );
+  return true;
+}
+
+export function exportJson(project: Project): boolean {
+  if (notifyProjectAccessBlock(project, "json")) return false;
   downloadText(
     JSON.stringify(project, null, 2),
     `${project.name || "report"}.json`,
     "application/json",
   );
+  return true;
 }
 
-export async function exportHtmlFile(project: Project, pages: Page[]) {
+export async function exportHtmlFile(
+  project: Project,
+  pages: Page[],
+): Promise<boolean> {
+  if (notifyProjectAccessBlock(project, "html")) return false;
+  const html = await buildStandaloneHtml(project, pages);
+  if (notifyProjectAccessBlock(project, "html")) return false;
   downloadText(
-    await buildStandaloneHtml(project, pages),
+    html,
     `${project.name || "report"}.html`,
     "text/html",
   );
+  return true;
 }
 
 export function safeFileName(name: string) {
@@ -474,6 +602,7 @@ export async function runExport(
   editableOffice = false,
   fidelityScale = 3,
 ) {
+  if (notifyProjectAccessBlock(project, format)) return;
   const name = safeFileName(project.name);
   try {
     if (format === "nsq") {
@@ -482,28 +611,30 @@ export async function runExport(
       return;
     }
     if (format === "json") {
-      exportJson({ ...project, pages: project.pages, updatedAt: Date.now() });
-      toast.success("تم تنزيل ملف المشروع");
+      if (
+        exportJson({ ...project, pages: project.pages, updatedAt: Date.now() })
+      )
+        toast.success("تم تنزيل ملف المشروع");
       return;
     }
     if (format === "html") {
-      await exportHtmlFile(project, selected);
-      toast.success("تم تنزيل ملف HTML المستقل");
+      if (await exportHtmlFile(project, selected))
+        toast.success("تم تنزيل ملف HTML المستقل");
       return;
     }
 
     if (format === "svg") {
       const snapshots = await captureSnapshots(selected);
+      if (notifyProjectAccessBlock(project, format)) return;
       if (snapshots.length === 1)
         downloadText(snapshots[0].svg, `${name}.svg`, "image/svg+xml");
       else {
         const JSZip = (await import("jszip")).default;
         const zip = new JSZip();
         snapshots.forEach((p, i) => zip.file(`${name}-${i + 1}.svg`, p.svg));
-        downloadBlob(
-          await zip.generateAsync({ type: "blob" }),
-          `${name}-svg.zip`,
-        );
+        const archive = await zip.generateAsync({ type: "blob" });
+        if (notifyProjectAccessBlock(project, format)) return;
+        downloadBlob(archive, `${name}-svg.zip`);
       }
       toast.success("تم تصدير SVG للويب مع الخطوط والصور المضمنة");
       return;
@@ -526,12 +657,14 @@ export async function runExport(
         const scenes = [];
         for (const snapshot of snapshots)
           scenes.push(await snapshotLayers(snapshot, fidelityScale));
+        if (notifyProjectAccessBlock(project, format)) return;
         const blob =
           format === "pptx"
             ? await (await import("./pptx-writer")).writePptx(scenes, name)
             : await (
                 await import("./docx-writer")
               ).writeDocx({ scenes, title: name });
+        if (notifyProjectAccessBlock(project, format)) return;
         downloadBlob(blob, `${name}.${format}`);
         toast.success(
           "تم التصدير بطبقات مستقلة مطابقة للتصميم؛ النصوص محفوظة بصريًا",
@@ -540,8 +673,8 @@ export async function runExport(
       }
       if (editableOffice) {
         if (format === "pptx")
-          await exportPptxEditable(selected, name, project.pages);
-        else await exportDocxEditable(selected, name, project.pages);
+          await exportPptxEditable(selected, name, project.pages, project);
+        else await exportDocxEditable(selected, name, project.pages, project);
         toast.success(
           format === "pptx"
             ? "تم تصدير عرض PowerPoint بنصوص وعناصر قابلة للتعديل"
@@ -554,10 +687,12 @@ export async function runExport(
       toast.error("تعذر التقاط الصفحات — أعد المحاولة");
       return;
     }
+    if (notifyProjectAccessBlock(project, format)) return;
     if (format === "pdf") await exportPdf(pages, name);
     else if (format === "png") await exportImages(pages, name, "png");
     else if (format === "jpg") await exportImages(pages, name, "jpg");
     else throw new Error(`صيغة غير مدعومة: ${format}`);
+    if (notifyProjectAccessBlock(project, format)) return;
     toast.success("تم التصدير بنجاح");
   } catch (err) {
     console.error(err);

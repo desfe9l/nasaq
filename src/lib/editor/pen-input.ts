@@ -91,7 +91,7 @@ export function resetPenInput(): void {
  * ------------------------------------------------------------------ */
 
 const DOUBLE_TAP_MS = 400;
-let lastTapId: string | null = null;
+let lastTapKey: string | null = null;
 let lastTapAt = -Infinity;
 
 /**
@@ -102,25 +102,30 @@ let lastTapAt = -Infinity;
  * Mouse is excluded: the browser already delivers a native dblclick.
  */
 export function noteElementTap(
+  pageId: string,
   elId: string,
   pointerType: string,
   at: number = nowMs(),
 ): boolean {
   if (pointerType !== "touch" && pointerType !== "pen") return false;
-  if (lastTapId === elId && at - lastTapAt <= DOUBLE_TAP_MS) {
-    lastTapId = null;
+  const key = `${pageId}\u0000${elId}`;
+  if (lastTapKey === key && at - lastTapAt <= DOUBLE_TAP_MS) {
+    lastTapKey = null;
     lastTapAt = -Infinity;
     return true;
   }
-  lastTapId = elId;
+  lastTapKey = key;
   lastTapAt = at;
   return false;
 }
 
-/** Dispatch a bubbling `dblclick` on the element node with `elId`. */
-export function fireSyntheticDoubleClick(elId: string): void {
+/** Dispatch a bubbling `dblclick` on the element node within its own page. */
+export function fireSyntheticDoubleClick(pageId: string, elId: string): void {
   if (typeof document === "undefined") return;
-  const node = document.querySelector<HTMLElement>(
+  const host = document.querySelector<HTMLElement>(
+    `[data-page-id="${CSS.escape(pageId)}"]`,
+  );
+  const node = host?.querySelector<HTMLElement>(
     `[data-el-id="${CSS.escape(elId)}"]`,
   );
   node?.dispatchEvent(
@@ -130,7 +135,7 @@ export function fireSyntheticDoubleClick(elId: string): void {
 
 /** Forget tap pairing (tests). */
 export function resetTapPairing(): void {
-  lastTapId = null;
+  lastTapKey = null;
   lastTapAt = -Infinity;
 }
 
@@ -147,14 +152,21 @@ const HOVER_CLASS = "is-pen-hover";
 let hoverEl: Element | null = null;
 
 /** Move the pen-hover highlight to whatever `[data-el-id]` node is under (x, y). */
-export function updatePenHover(x: number, y: number): void {
+export function updatePenHover(
+  x: number,
+  y: number,
+  activePageId?: string | null,
+): void {
   if (typeof document === "undefined") return;
   const hit = document.elementFromPoint(x, y);
+  const candidate = hit?.closest<HTMLElement>("[data-el-id]") ?? null;
+  const page = candidate?.closest<HTMLElement>("[data-page-id]");
   const target =
-    hit?.closest<HTMLElement>("[data-el-id]") ??
-    // Handles live in the selection overlay without their own id — highlight
-    // the frame's element when the pen is over a handle.
-    null;
+    candidate &&
+    page &&
+    (!activePageId || page.dataset.pageId === activePageId)
+      ? candidate
+      : null;
   if (target === hoverEl) return;
   hoverEl?.classList.remove(HOVER_CLASS);
   target?.classList.add(HOVER_CLASS);

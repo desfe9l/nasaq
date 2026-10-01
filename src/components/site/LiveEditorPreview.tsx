@@ -1,27 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { cn } from "@/lib/utils";
-import { useSiteSettings } from "@/lib/admin/use-site-settings";
-import { DEFAULT_HOME_SHOWCASE_TABS } from "@/lib/admin/types";
+import type { AdminTemplateSummary } from "@/lib/admin/types";
 
 /**
- * The real editor, live in the page — not a screenshot, not a mockup.
- *
- * The frame boots `/editor?template=…&showcase=1`: a fully interactive
- * document that never persists (the store's showcase boot no-ops every
- * save and keeps the project in memory). It is the same bundle the product
- * ships, so what the visitor sees and drags IS the product.
- *
- * The frame mounts lazily when the section nears the viewport, so the
- * homepage's first paint is not paying for the editor's boot.
+ * The homepage feature is a published Admin catalog record, not a bundled
+ * showcase preset. The editor frame loads that record through the same public
+ * template endpoint used by template pages; only free, published records are
+ * eligible for an interactive public preview.
  */
-export function LiveEditorPreview() {
-  const [active, setActive] = useState(0);
+export function LiveEditorPreview({
+  document,
+}: {
+  document: AdminTemplateSummary;
+}) {
   const frameRef = useRef<HTMLDivElement>(null);
   const [armed, setArmed] = useState(false);
-  const { texts } = useSiteSettings();
-  const configuredTabs = texts.showcaseTabs.filter((tab) => tab.enabled);
-  const docs = configuredTabs.length ? configuredTabs : DEFAULT_HOME_SHOWCASE_TABS;
-  const activeIndex = Math.min(active, docs.length - 1);
 
   useEffect(() => {
     const el = frameRef.current;
@@ -37,40 +29,36 @@ export function LiveEditorPreview() {
     );
     io.observe(el);
     return () => io.disconnect();
-  }, []);
-
-  const doc = docs[activeIndex];
+  }, [document?.id]);
 
   return (
     <div className="mx-auto w-full lg:max-w-none">
       <div className="overflow-hidden rounded-[14px] border border-line bg-surface shadow-card">
-        <div
-          className="flex items-center gap-1.5 border-b border-line/60 bg-surface px-3 py-2.5"
-          role="tablist"
-          aria-label="نماذج المخرجات"
-        >
-          {docs.map((d, idx) => (
-            <button
-              key={d.id}
-              type="button"
-              role="tab"
-              aria-selected={activeIndex === idx}
-              onClick={() => setActive(idx)}
-              className={cn(
-                "shrink-0 rounded-[8px] border px-3 py-1.5 text-[11px] font-bold transition",
-                activeIndex === idx
-                  ? "border-inverse/10 bg-inverse text-on-inverse"
-                  : "border-transparent bg-surface-2 text-muted hover:border-line",
-              )}
-            >
-              {d.label}
-            </button>
-          ))}
-          <span className="ms-auto hidden text-[10px] font-bold text-muted sm:block">
+        <div className="flex items-center gap-2 border-b border-line/60 bg-surface px-3 py-2.5">
+          {document.thumbnail && (
+            <img
+              src={document.thumbnail}
+              alt=""
+              aria-hidden="true"
+              className="size-8 shrink-0 rounded border border-line object-cover"
+            />
+          )}
+          <div className="min-w-0">
+            <p className="truncate text-[12px] font-extrabold text-ink">
+              {document.title}
+            </p>
+            <p className="truncate text-[10px] text-muted">
+              {document.category} · مستند مميز من كتالوج نَسَق
+            </p>
+          </div>
+          <span className="ms-auto hidden shrink-0 text-[10px] font-bold text-muted sm:block">
             محرر حقيقي — جرّبه بنفسك
           </span>
         </div>
-        <div ref={frameRef} className="relative h-[420px] bg-surface-2 sm:h-[480px]">
+        <div
+          ref={frameRef}
+          className="relative h-[420px] bg-surface-2 sm:h-[480px]"
+        >
           {!armed ? (
             <div className="absolute inset-0 grid place-items-center">
               <span className="text-[12px] font-semibold text-muted">
@@ -79,9 +67,9 @@ export function LiveEditorPreview() {
             </div>
           ) : (
             <iframe
-              key={doc.id}
-              src={`/editor?template=${doc.id}&showcase=1`}
-              title={`معاينة حية: ${doc.label}`}
+              key={document.id}
+              src={`/editor?adminTemplate=${encodeURIComponent(document.id)}&showcase=1`}
+              title={`معاينة حية: ${document.title}`}
               loading="lazy"
               className="absolute inset-0 h-full w-full border-0"
             />
@@ -89,8 +77,8 @@ export function LiveEditorPreview() {
         </div>
       </div>
       <p className="mt-3 text-[11px] leading-6 text-muted">
-        هذه المعاينة هي محرر نَسَق الفعلي — انقر وحرك العناصر بنفسك. ما
-        تفعله يبقى في هذه الجلسة فقط ولا يُحفظ على جهازك.
+        هذه المعاينة تفتح سجل «{document.title}» نفسه من كتالوج القوالب المنشور؛
+        التعديلات تبقى داخل هذه الجلسة ولا تُحفظ.
       </p>
     </div>
   );

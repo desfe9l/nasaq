@@ -106,7 +106,13 @@ const MAX_LANE = 760;
  * (`fontChoices`, `updateStyle`, `updateElement`), so there is no second
  * formatting model.
  */
-export function FloatingToolbar({ el }: { el: CanvasEl }) {
+export function FloatingToolbar({
+  el,
+  pageId,
+}: {
+  el: CanvasEl;
+  pageId: string;
+}) {
   const boxRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   const automaticPosRef = useRef<{ left: number; top: number } | null>(null);
@@ -116,14 +122,6 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
    * with the viewport but never with the document or an open drawer.
    */
   const [lane, setLane] = useState(MAX_LANE);
-  /**
-   * A floating panel is a surface the author placed deliberately; on a phone
-   * there is not enough room for the bubble AND the panel. While the pointer is
-   * inside a panel the bubble steps aside and returns the moment the author
-   * moves back to the canvas, so a panel's own controls are never behind a
-   * floating strip.
-   */
-  const [yielding, setYielding] = useState(false);
   /** Which side the bubble settled on — drives its entrance animation. */
   const [side, setSide] = useState<"above" | "below" | "left" | "right">(
     "above",
@@ -195,8 +193,11 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
    * room, and clamp horizontally so it can never leave the viewport.
    */
   const place = useCallback(() => {
-    const target = document.querySelector<HTMLElement>(
-      `.editor-canvas-stage [data-page-id] [data-el-id="${CSS.escape(el.id)}"]`,
+    const pageNode = document.querySelector<HTMLElement>(
+      `.editor-canvas-stage [data-page-id="${CSS.escape(pageId)}"]`,
+    );
+    const target = pageNode?.querySelector<HTMLElement>(
+      `[data-el-id="${CSS.escape(el.id)}"]`,
     );
     const toolbar = boxRef.current;
     /*
@@ -264,16 +265,16 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
     // Keep the bubble clear of the real, outward-expanded grip hit regions,
     // not just the visible 7px dots. These measurements include rotation/zoom.
     const grips = [
-      ...document.querySelectorAll<HTMLElement>(
+      ...(pageNode?.querySelectorAll<HTMLElement>(
         `.selection-frame[data-el-id="${CSS.escape(el.id)}"] .handle, .selection-frame[data-el-id="${CSS.escape(el.id)}"] .rotate-handle`,
-      ),
+      ) ?? []),
     ].map((node) => node.getBoundingClientRect());
     /*
      * The selection frame can be the MEASURED artwork box, so it is part of
      * the anchor: the bubble must clear what the author sees as "the
      * selection", not just the element's layout box.
      */
-    const frameNode = document.querySelector<HTMLElement>(
+    const frameNode = pageNode?.querySelector<HTMLElement>(
       `.selection-frame[data-el-id="${CSS.escape(el.id)}"]`,
     );
     if (frameNode) grips.push(frameNode.getBoundingClientRect());
@@ -335,7 +336,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       : { left, top };
     setPos(parked);
     setSide(placement);
-  }, [el.id]);
+  }, [el.id, pageId]);
 
   /**
    * One coalesced frame, shared by every trigger.
@@ -424,30 +425,6 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       window.removeEventListener("resize", schedule);
     };
   }, [schedule, panelsKey]);
-
-  useEffect(() => {
-    const inside = (event: Event) => {
-      const target = event.target;
-      setYielding(
-        target instanceof Element && !!target.closest(".editor-floating-panel"),
-      );
-    };
-    // Capture phase on move and press: both fire before the panel acts on the
-    // gesture, so the bubble is already gone when the hit test resolves.
-    const onMove = (event: Event) => {
-      if (event instanceof PointerEvent && event.pointerType === "mouse")
-        inside(event);
-    };
-    document.addEventListener("pointermove", onMove, true);
-    document.addEventListener("pointerdown", inside, true);
-    const onLeave = () => setYielding(false);
-    window.addEventListener("blur", onLeave);
-    return () => {
-      document.removeEventListener("pointermove", onMove, true);
-      document.removeEventListener("pointerdown", inside, true);
-      window.removeEventListener("blur", onLeave);
-    };
-  }, []);
 
   /** Drag locally at display rate; commit a single park when the gesture ends. */
   const startDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
@@ -771,7 +748,7 @@ export function FloatingToolbar({ el }: { el: CanvasEl }) {
       style={{
         left: dragPos?.left ?? pos?.left ?? -9999,
         top: dragPos?.top ?? pos?.top ?? -9999,
-        visibility: pos && !yielding ? "visible" : "hidden",
+        visibility: pos ? "visible" : "hidden",
       }}
       // The toolbar is chrome over the document: pointer events must never
       // reach the canvas beneath it. Right-click is stopped here too — the

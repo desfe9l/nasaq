@@ -1,7 +1,9 @@
 import {
   BadgePercent,
+  Copy,
   FileCode2,
   FilePlus2,
+  FolderOpen,
   FolderPlus,
   Gauge,
   Heading1,
@@ -37,7 +39,10 @@ import { IconButton } from "./ui/IconButton";
 export interface AddMenuProps {
   onUpload: (kind: "image" | "logo" | "library") => void;
   onUploadSvg: () => void;
+  /** Open the existing folder/file import dialog for the asset library. */
   onAddLibrary: () => void;
+  /** Open the Library tab's existing create-folder dialog. */
+  onCreateLibraryFolder?: () => void;
   onHeadingGenerator: () => void;
   /** Opens «أدوات التقرير» inside the properties panel. */
   onReportTools: () => void;
@@ -51,6 +56,7 @@ export function AddMenu({
   onUpload,
   onUploadSvg,
   onAddLibrary,
+  onCreateLibraryFolder,
   onHeadingGenerator,
   onReportTools,
   onDrawText,
@@ -59,6 +65,7 @@ export function AddMenu({
 }: AddMenuProps) {
   const addElement = useEditor((s) => s.addElement);
   const addPage = useEditor((s) => s.addPage);
+  const duplicatePage = useEditor((s) => s.duplicatePage);
   const openTablePicker = useEditor((s) => s.openTablePicker);
 
   return (
@@ -94,13 +101,16 @@ export function AddMenu({
         }}
       />
       <MenuGroup title="نصوص وأشكال" />
-      {/* No key cap here: «T» is already printed on the dock's text tool, and
-          the same shortcut in two places competes with the tool itself. */}
       <MenuRow
         icon={<Type className="size-4" />}
         label="نص بالرسم"
-        hint="اسحب على الصفحة لتحديد موضعه وحجمه"
+        hint="T · اسحب على الصفحة لتحديد موضعه وحجمه"
         onSelect={onDrawText}
+      />
+      <MenuRow
+        icon={<Heading1 className="size-4" />}
+        label="مولد عناوين الفقرات"
+        onSelect={onHeadingGenerator}
       />
       <MenuRow
         icon={<SquareDashedMousePointer className="size-4" />}
@@ -171,26 +181,44 @@ export function AddMenu({
         hint="رابط أو نص يُولَّد كصورة"
         onSelect={() => void promptForQr()}
       />
+      <MenuGroup title="المكتبة" />
       <MenuRow
         icon={<ImagePlus className="size-4" />}
         label="إضافة عنصر إلى المكتبة"
         onSelect={() => onUpload("library")}
       />
+      <MenuRow
+        icon={<FolderOpen className="size-4" />}
+        label="فتح المكتبة"
+        hint="عناصرك المحفوظة ومجلداتك"
+        onSelect={() => onOpenLeft("library")}
+      />
+      <MenuRow
+        icon={<FolderPlus className="size-4" />}
+        label="مجلد جديد"
+        onSelect={() =>
+          onCreateLibraryFolder
+            ? onCreateLibraryFolder()
+            : onOpenLeft("library")
+        }
+      />
+      <MenuRow
+        icon={<FolderOpen className="size-4" />}
+        label="استيراد مجلد أو ملفات"
+        onSelect={onAddLibrary}
+      />
       <MenuGroup title="مستندات" />
       <MenuRow
         icon={<FilePlus2 className="size-4" />}
         label="صفحة جديدة"
+        hint="تستخدم مقاس وخلفية الصفحة الحالية"
         onSelect={() => addPage()}
       />
       <MenuRow
-        icon={<FolderPlus className="size-4" />}
-        label="مكتبة جديدة"
-        onSelect={onAddLibrary}
-      />
-      <MenuRow
-        icon={<Heading1 className="size-4" />}
-        label="مولد عناوين الفقرات"
-        onSelect={onHeadingGenerator}
+        icon={<Copy className="size-4" />}
+        label="تكرار الصفحة الحالية كنسخة مطابقة"
+        hint="ينسخ إعدادات الصفحة وعناصرها إلى صفحة مستقلة"
+        onSelect={() => duplicatePage()}
       />
       <MenuRow
         icon={<ClipboardList className="size-4" />}

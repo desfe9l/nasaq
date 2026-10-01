@@ -22,7 +22,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Database, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
-import { SIZE_PRESETS, THEMES, type Page, type ThemeId } from "@/lib/editor/model";
+import { SIZE_PRESETS, THEMES, type PackId, type Page, type ThemeId } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { getProject } from "@/lib/editor/storage";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
@@ -30,17 +30,18 @@ import { PublishedTemplates } from "@/components/site/PublishedTemplates";
 import { CARD_W, CARD_WRAP } from "@/components/site/cards";
 import { cn } from "@/lib/utils";
 import { DEMO_LICENSE, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
+import { projectAccessBlock } from "@/lib/editor/access-limits";
 import { getPublishedTemplateFn } from "@/lib/admin/functions";
 import { useLicense } from "@/lib/license/client";
 import {
   CATALOG_PILLS,
   entryProjectSeed,
-  entryTemplatePages,
   filterCatalog,
   matchesQuery,
   type CatalogEntry,
 } from "@/lib/templates/catalog";
 import {
+  TemplateAccessError,
   TemplateStorageError,
   clearDraft,
   deleteCustomTemplate,
@@ -57,14 +58,22 @@ import {
   type TemplateFormValues,
 } from "@/components/site/TemplateDialogs";
 import { useCatalogEntries, useCustomTemplates, useTemplateDraft } from "@/components/site/useCatalog";
-import { publishedTemplateSeed, templateDisplaySlug } from "@/lib/templates/published";
+import {
+  mergePublishedTemplateContext,
+  publishedTemplateSeed,
+  templateDisplaySlug,
+} from "@/lib/templates/published";
 
 const SIZE_OPTIONS = SIZE_PRESETS.filter((s) => s.id !== "custom");
 const THEME_ORDER: ThemeId[] = ["official", "eid", "ministry", "slate", "sand"];
 
 /** A storage/quota failure carries its own Arabic message; anything else is generic. */
 function reportError(err: unknown, fallback: string) {
-  toast.error(err instanceof TemplateStorageError ? err.message : fallback);
+  toast.error(
+    err instanceof TemplateStorageError || err instanceof TemplateAccessError
+      ? err.message
+      : fallback,
+  );
 }
 
 export function TemplatesPage() {
@@ -146,6 +155,25 @@ export function TemplatesPage() {
       ? entry.managedTemplate.tier === "licensed" && !entitlements.premium_templates
       : entry.kind === "pack" && !canUseDemoPack(entry.sourceId) && !entitlements.premium_templates;
 
+  /** Keep template operations on the same gates as project import/save/export. */
+  const ensureProjectAccess = (
+    project: {
+      pack?: string;
+      licensedTemplateId?: string;
+      pages?: readonly unknown[];
+    },
+    action: string,
+  ): boolean => {
+    const block = projectAccessBlock(project, entitlements);
+    if (!block) return true;
+    toast.error(
+      block === "premium-template"
+        ? `يتطلب ${action} ترخيصًا مناسبًا لهذا القالب.`
+        : "يتجاوز هذا المستند حد الصفحات في خطتك الحالية.",
+    );
+    return false;
+  };
+
   /** Managed legacy content is fetched through the existing server license gate. */
   const projectSeedForEntry = async (entry: CatalogEntry) => {
     if (!entry.managedTemplate) return entryProjectSeed(entry, { themeId: theme, orgName });
@@ -160,7 +188,10 @@ export function TemplatesPage() {
       }
       return null;
     }
-    return publishedTemplateSeed(result.template);
+    return mergePublishedTemplateContext(
+      publishedTemplateSeed(result.template),
+      entryProjectSeed(entry, { themeId: theme, orgName }),
+    );
   };
 
   /* ── actions ─────────────────────────────────────────────────────────── */
@@ -177,7 +208,8 @@ export function TemplatesPage() {
     if (!seed) return;
     if (demoBlocked(seed.pages.length)) return;
     setQuickViewId(null);
-    await importProject(seed);
+    const imported = await importProject(seed);
+    if (!imported) return;
     window.location.assign("/editor");
   };
 
@@ -196,7 +228,11 @@ export function TemplatesPage() {
     if (!seed) return;
     if (demoBlocked(seed.pages.length)) return;
     setQuickViewId(null);
-    await importProject({ ...seed, name: `${entry.title} — مسودة` });
+    const imported = await importProject({
+      ...seed,
+      name: `${entry.title} — مسودة`,
+    });
+    if (!imported) return;
     const projectId = useEditor.getState().id;
     if (projectId) {
       try {
@@ -223,19 +259,24 @@ export function TemplatesPage() {
     }
     try {
       if (entry.kind === "custom") {
-        duplicateCustomTemplate(entry.sourceId);
+        duplicateCustomTemplate(entry.sourceId, entitlements);
       } else {
         const seed = await projectSeedForEntry(entry);
-        if (!seed) return;
-        saveCustomTemplate({
-          title: `${entry.title} — نسخة`,
-          desc: entry.desc,
-          category: entry.category,
-          pills: entry.pills.filter((p) => p !== "all" && p !== "custom"),
-          tags: entry.tags,
-          derivedFrom: entry.id,
-          pages: seed.pages,
-        });
+        if (!seed || !ensureProjectAccess(seed, "تكرار")) return;
+        saveCustomTemplate(
+          {
+            title: `${entry.title} — نسخة`,
+            desc: entry.desc,
+            category: entry.category,
+            pills: entry.pills.filter((p) => p !== "all" && p !== "custom"),
+            tags: entry.tags,
+            derivedFrom: entry.id,
+            licensedTemplateId: seed.licensedTemplateId,
+            pack: seed.pack,
+            pages: seed.pages,
+          },
+          entitlements,
+        );
       }
       toast.success(`تم تكرار «${entry.title}» في قوالبي الخاصة`);
       setQuickViewId(null);
@@ -262,33 +303,55 @@ export function TemplatesPage() {
   const createFrom = async (values: TemplateFormValues) => {
     try {
       let pages: Page[] | undefined;
+      let pack: PackId | undefined;
+      let licensedTemplateId: string | undefined;
       if (values.source.kind === "project") {
         const project = await getProject(values.source.projectId);
         if (!project?.pages?.length) {
           toast.error("تعذّر قراءة المشروع المحدد");
           return;
         }
+        if (!ensureProjectAccess(project, "إنشاء قالب من")) return;
+        pack = project.pack;
+        licensedTemplateId = project.licensedTemplateId;
         pages = project.pages;
       } else if (values.source.kind === "entry") {
         const sourceId = values.source.entryId;
         const picked = entries.find((e) => e.id === sourceId);
-        if (picked) pages = (await projectSeedForEntry(picked))?.pages;
+        const seed = picked ? await projectSeedForEntry(picked) : null;
+        if (seed) {
+          if (!ensureProjectAccess(seed, "إنشاء قالب من")) return;
+          pages = seed.pages;
+          pack = seed.pack;
+          licensedTemplateId = seed.licensedTemplateId;
+        }
       } else {
         const blank = entries.find((e) => e.id === "pack:blank");
-        if (blank) pages = entryTemplatePages(blank, { themeId: theme, orgName });
+        const seed = blank ? await projectSeedForEntry(blank) : null;
+        if (seed) {
+          if (!ensureProjectAccess(seed, "إنشاء قالب من")) return;
+          pages = seed.pages;
+          pack = seed.pack;
+          licensedTemplateId = seed.licensedTemplateId;
+        }
       }
       if (!pages?.length) {
         toast.error("لا توجد صفحات لهذا القالب");
         return;
       }
-      const saved = saveCustomTemplate({
-        title: values.title,
-        desc: values.desc,
-        category: values.category,
-        pills: values.pills,
-        tags: values.tags,
-        pages,
-      });
+      const saved = saveCustomTemplate(
+        {
+          title: values.title,
+          desc: values.desc,
+          category: values.category,
+          pills: values.pills,
+          tags: values.tags,
+          pages,
+          pack,
+          licensedTemplateId,
+        },
+        entitlements,
+      );
       toast.success(`تم حفظ «${saved.title}» في قوالبي الخاصة`);
       setForm(null);
       setJustSaved(`custom:${saved.id}`);
@@ -303,15 +366,20 @@ export function TemplatesPage() {
   const saveMeta = (values: TemplateFormValues) => {
     if (!formEntry?.custom) return;
     try {
-      const saved = saveCustomTemplate({
-        id: formEntry.custom.id,
-        title: values.title,
-        desc: values.desc,
-        category: values.category,
-        pills: values.pills,
-        tags: values.tags,
-        pages: formEntry.custom.pages,
-      });
+      const saved = saveCustomTemplate(
+        {
+          id: formEntry.custom.id,
+          title: values.title,
+          desc: values.desc,
+          category: values.category,
+          pills: values.pills,
+          tags: values.tags,
+          pages: formEntry.custom.pages,
+          pack: formEntry.custom.pack,
+          licensedTemplateId: formEntry.custom.licensedTemplateId,
+        },
+        entitlements,
+      );
       toast.success(`تم تحديث بيانات «${saved.title}»`);
       setForm(null);
       setJustSaved(`custom:${saved.id}`);
@@ -323,34 +391,65 @@ export function TemplatesPage() {
   /** Write the edited draft project back into the library. */
   const commitDraft = async () => {
     if (!draft) return;
-    const project = await getProject(draft.projectId);
-    if (!project?.pages?.length) {
-      clearDraft();
-      toast.error("تعذّر قراءة مسودة القالب — حُذف المشروع أو لم يعد موجودًا");
-      return;
-    }
     try {
+      const project = await getProject(draft.projectId);
+      if (!project?.pages?.length) {
+        clearDraft();
+        toast.error("تعذّر قراءة مسودة القالب — حُذف المشروع أو لم يعد موجودًا");
+        return;
+      }
       const target = entries.find((e) => e.id === draft.entryId);
+      const pack =
+        project.pack ??
+        target?.custom?.pack ??
+        (!target?.managedTemplate && target?.kind === "pack"
+          ? (target.sourceId as PackId)
+          : undefined);
+      const licensedTemplateId =
+        project.licensedTemplateId ??
+        target?.custom?.licensedTemplateId ??
+        (target?.managedTemplate?.tier === "licensed"
+          ? target.managedTemplate.id
+          : undefined);
+      if (
+        !ensureProjectAccess(
+          { ...project, pack, licensedTemplateId },
+          "حفظ تعديلات",
+        )
+      )
+        return;
+
       const saved =
         draft.kind === "custom" && target?.custom
-          ? saveCustomTemplate({
-              id: target.custom.id,
-              title: target.custom.title,
-              desc: target.custom.desc,
-              category: target.custom.category,
-              pills: target.custom.pills,
-              tags: target.custom.tags,
-              pages: project.pages,
-            })
-          : saveCustomTemplate({
-              title: draft.title,
-              desc: `مُشتق من «${draft.title}» بعد التعديل.`,
-              category: target?.category || "editorial",
-              pills: target?.pills.filter((p) => p !== "all" && p !== "custom") ?? [],
-              tags: target?.tags ?? [],
-              derivedFrom: draft.entryId,
-              pages: project.pages,
-            });
+          ? saveCustomTemplate(
+              {
+                id: target.custom.id,
+                title: target.custom.title,
+                desc: target.custom.desc,
+                category: target.custom.category,
+                pills: target.custom.pills,
+                tags: target.custom.tags,
+                pack,
+                licensedTemplateId,
+                pages: project.pages,
+              },
+              entitlements,
+            )
+          : saveCustomTemplate(
+              {
+                title: draft.title,
+                desc: `مُشتق من «${draft.title}» بعد التعديل.`,
+                category: target?.category || "editorial",
+                pills:
+                  target?.pills.filter((p) => p !== "all" && p !== "custom") ?? [],
+                tags: target?.tags ?? [],
+                derivedFrom: draft.entryId,
+                pack,
+                licensedTemplateId,
+                pages: project.pages,
+              },
+              entitlements,
+            );
       toast.success(
         draft.kind === "custom" && target?.custom
           ? `تم تحديث «${saved.title}» بتعديلاتك`
@@ -367,8 +466,7 @@ export function TemplatesPage() {
 
   const resumeDraft = async () => {
     if (!draft) return;
-    await openProject(draft.projectId);
-    window.location.assign("/editor");
+    if (await openProject(draft.projectId)) window.location.assign("/editor");
   };
 
   /* ── render ──────────────────────────────────────────────────────────── */

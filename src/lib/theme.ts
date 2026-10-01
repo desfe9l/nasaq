@@ -1,13 +1,11 @@
 /*
- * One theme preference for the whole site (marketing pages AND the editor).
- *
- * The previous behaviour keyed the mode off whichever page happened to run:
- * the editor store's `hydrate()` forced dark-on-default and only pages that
- * called it applied any theme at all, so the homepage opened dark while other
- * pages stayed light. The class on `<html>` is now driven solely by this
- * stored visitor choice — no page forces a mode on its own. With no stored
- * choice the site keeps its base (light) appearance everywhere.
+ * One persistent appearance preference for the whole site (marketing pages AND
+ * the editor). Light, Dim and Dark are explicit user choices; `html.dark`
+ * remains the Tailwind dark-variant hook for both Dim and Dark, while
+ * `html.dim` applies the middle palette over it.
  */
+
+export type AppearanceMode = "light" | "dim" | "dark";
 
 const THEME_KEY = "nasaq-theme";
 const THEME_EVENT = "nasaq:appearance-change";
@@ -15,17 +13,24 @@ const THEME_EVENT = "nasaq:appearance-change";
 /** Legacy slots that used to hold a `dark` flag, honoured once for migration. */
 const LEGACY_THEME_KEYS = ["nasaq-report-ui-v2", "diwan-report-ui-v2"];
 
-export function readStoredTheme(): boolean | null {
+function isAppearance(value: unknown): value is AppearanceMode {
+  return value === "light" || value === "dim" || value === "dark";
+}
+
+export function readStoredTheme(): AppearanceMode | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(THEME_KEY);
-    if (raw === "dark") return true;
-    if (raw === "light") return false;
+    if (isAppearance(raw)) return raw;
+    // Existing two-mode preferences keep their original meaning.
+    if (raw === "dark") return "dark";
+    if (raw === "light") return "light";
     // A visitor who picked a side in the old UI keeps it.
     for (const legacy of LEGACY_THEME_KEYS) {
       try {
         const parsed = JSON.parse(window.localStorage.getItem(legacy) || "{}");
-        if (typeof parsed?.dark === "boolean") return parsed.dark;
+        if (typeof parsed?.dark === "boolean")
+          return parsed.dark ? "dark" : "light";
       } catch {
         /* a corrupt legacy blob is not a preference */
       }
@@ -36,21 +41,21 @@ export function readStoredTheme(): boolean | null {
   return null;
 }
 
-/** Applies the stored choice to `<html>`; `null` (no choice) leaves light. */
+/** Applies the stored choice to `<html>`; no choice defaults to Light. */
 export function applyStoredTheme(): void {
   if (typeof document === "undefined") return;
-  applyTheme(readStoredTheme() === true);
+  applyTheme(readStoredTheme() ?? "light");
 }
 
 /** Persist the visitor's choice and apply it immediately. */
-export function writeStoredTheme(dark: boolean): void {
+export function writeStoredTheme(appearance: AppearanceMode): void {
   try {
-    window.localStorage.setItem(THEME_KEY, dark ? "dark" : "light");
+    window.localStorage.setItem(THEME_KEY, appearance);
   } catch {
     /* a blocked store still flips the live page */
   }
   // Apply the requested choice even when private-mode storage is blocked.
-  applyTheme(dark);
+  applyTheme(appearance);
 }
 
 // Applied once at module load — the root route imports this module, so every
@@ -58,31 +63,39 @@ export function writeStoredTheme(dark: boolean): void {
 // before its route component renders.
 applyStoredTheme();
 
-function applyTheme(dark: boolean): void {
-  document.documentElement.classList.toggle("dark", dark);
-  syncThemeColor(dark);
-  window.dispatchEvent(new CustomEvent<boolean>(THEME_EVENT, { detail: dark }));
+function applyTheme(appearance: AppearanceMode): void {
+  const root = document.documentElement;
+  const darkVariant = appearance !== "light";
+  root.classList.toggle("dark", darkVariant);
+  root.classList.toggle("dim", appearance === "dim");
+  syncThemeColor(appearance);
+  window.dispatchEvent(
+    new CustomEvent<AppearanceMode>(THEME_EVENT, { detail: appearance }),
+  );
 }
 
 /**
  * The browser's own chrome (URL bar, Android status bar) is painted outside our
  * stylesheet, so it cannot follow a CSS variable: it reads `<meta name="theme-
- * color">`. Left fixed, a Dark-mode visitor got a light green bar above a dark
- * page — the same class of bug as a hard-coded text colour, in the one place
- * that is not a Tailwind class. Kept here, next to the class toggle, so the two
- * can never disagree, whatever page applies the stored choice.
+ * color">`. Keep it in step with all three palettes.
  */
-function syncThemeColor(dark: boolean): void {
-  // Tolerate a document that has no such tag (or no querySelector at all): the
-  // tag is set in the route head, and a missing one must never break a toggle.
+function syncThemeColor(appearance: AppearanceMode): void {
   const meta = document?.querySelector?.('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", dark ? "#0f141c" : "#006c35");
+  const color =
+    appearance === "dark"
+      ? "#0f141c"
+      : appearance === "dim"
+        ? "#20262c"
+        : "#006c35";
+  if (meta) meta.setAttribute("content", color);
 }
 
 /** Same-tab settings and cross-tab preference changes share one notification. */
-export function subscribeTheme(onChange: (dark: boolean) => void): () => void {
+export function subscribeTheme(
+  onChange: (appearance: AppearanceMode) => void,
+): () => void {
   const onTheme = (event: Event) =>
-    onChange((event as CustomEvent<boolean>).detail);
+    onChange((event as CustomEvent<AppearanceMode>).detail);
   const onStorage = (event: StorageEvent) => {
     if (event.key === THEME_KEY || event.key === null) applyStoredTheme();
   };

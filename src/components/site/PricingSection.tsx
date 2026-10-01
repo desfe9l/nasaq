@@ -13,8 +13,8 @@
  *    editor (`onStartFree`), a paid plan opens its Gumroad checkout deep link —
  *    the same `variant + recurrence` URL `/purchase` sells from, with the
  *    signed-in buyer's email prefilled so the membership lands on the address
- *    that binds the licence. No link for the tier, or a failed gateway, falls
- *    back to `/purchase` with the chosen period preselected.
+ *    that binds the licence. A paid card appears only after its exact checkout
+ *    link has been returned; unavailable plans are not presented as purchasable.
  * 3. **A whole card that is one target.** The card's surface is a stretched hit
  *    area over the same handler as its button, so clicking anywhere on a card
  *    acts — while the visible button stays the single keyboard-reachable
@@ -24,19 +24,22 @@
  * price block inherit it; every colour here is a theme role, never a hex.
  */
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Sparkles } from "lucide-react";
 import { cardClass } from "@/components/site/cards";
 import { getGumroadCheckoutLinksFn } from "@/lib/gumroad/functions";
-import { withGumroadPrefilledEmail } from "@/lib/gumroad/mapping";
+import {
+  isGumroadPlanKey,
+  withGumroadPrefilledEmail,
+} from "@/lib/gumroad/mapping";
+import { toast } from "sonner";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import {
-  HOME_BILLING_PERIODS,
+  billingPeriodsWithCheckout,
   PERIOD_HINTS,
   PERIOD_LABELS,
   checkoutKeyFor,
   homePlanCards,
-  periodSaving,
   type HomePlanCard,
   type SwitchablePeriod,
 } from "@/lib/commercial/plan-cards";
@@ -49,88 +52,108 @@ export function PricingSection({
   onStartFree: () => void;
 }) {
   const [period, setPeriod] = useState<SwitchablePeriod>("monthly");
-  const [checkoutLinks, setCheckoutLinks] = useState<Record<string, string>>({});
+  const [checkoutLinks, setCheckoutLinks] = useState<Partial<Record<PlanKey, string>>>({});
+  const [checkoutResolved, setCheckoutResolved] = useState(false);
   const [pending, setPending] = useState<PlanKey | null>(null);
   const warmed = useRef(false);
   const busy = useRef(false);
   const { user } = useCurrentUserState();
 
-  // The purchase lands on the email that binds the licence. The sandbox
-  // fallback identity is NOT a buyer — its placeholder address must never be
-  // pushed into a real payment form.
+  // Never pass the sandbox's fallback identity to a real payment provider.
   const buyerEmail = user && !user.isDevFallback ? user.primaryEmail : null;
 
-  const cards = useMemo(() => homePlanCards(period), [period]);
-  const saving = periodSaving(period);
+  const loadLinks = useCallback(async (): Promise<Partial<Record<PlanKey, string>>> => {
+    try {
+      const links = await getGumroadCheckoutLinksFn();
+      const resolved: Partial<Record<PlanKey, string>> = {};
+      for (const link of links) {
+        if (!isGumroadPlanKey(link.planKey)) continue;
+        const url = typeof link.url === "string" ? link.url.trim() : "";
+        if (url) resolved[link.planKey] = url;
+      }
+      setCheckoutLinks(resolved);
+      setCheckoutResolved(true);
+      return resolved;
+    } catch (error) {
+      setCheckoutLinks({});
+      setCheckoutResolved(true);
+      throw error;
+    }
+  }, []);
 
-  const loadLinks = useCallback(async (): Promise<Record<string, string>> => {
-    const links = await getGumroadCheckoutLinksFn();
-    const resolved = Object.fromEntries(
-      links.map((link) => [
-        link.planKey,
-        withGumroadPrefilledEmail(link.url, buyerEmail),
-      ]),
-    );
-    setCheckoutLinks((current) => ({ ...current, ...resolved }));
-    return resolved;
-  }, [buyerEmail]);
-
-  /**
-   * Fetch the deep links the first time the buyer shows intent (hover, focus,
-   * touch) rather than on page load: a visitor who only reads the section
-   * never pays for a request it does not use, and by the time a click lands
-   * the URL is already in memory — so the checkout tab opens inside the click
-   * gesture, where no popup blocker can eat it.
-   */
   const warmUp = useCallback(() => {
     if (warmed.current) return;
     warmed.current = true;
     void loadLinks().catch(() => {
-      warmed.current = false; // a failed warm-up must not disable the button
+      warmed.current = false;
     });
   }, [loadLinks]);
 
+  // Only show paid plans after the server has confirmed a checkout URL.
+  useEffect(() => {
+    warmUp();
+  }, [warmUp]);
+
+  const availablePeriods = useMemo(
+    () => billingPeriodsWithCheckout(Object.keys(checkoutLinks)),
+    [checkoutLinks],
+  );
+  const activePeriod = availablePeriods.includes(period)
+    ? period
+    : (availablePeriods[0] ?? period);
+  useEffect(() => {
+    if (checkoutResolved && availablePeriods.length && period !== activePeriod) {
+      setPeriod(activePeriod);
+    }
+  }, [activePeriod, availablePeriods.length, checkoutResolved, period]);
+
+  const cards = useMemo(
+    () =>
+      homePlanCards(activePeriod).filter((card) => {
+        const planKey = checkoutKeyFor(card);
+        return !planKey || Boolean(checkoutLinks[planKey]);
+      }),
+    [activePeriod, checkoutLinks],
+  );
   const subscribe = useCallback(
     async (card: HomePlanCard) => {
       const planKey = checkoutKeyFor(card);
-      // The ref, not `pending`: two clicks in the same tick would both read the
-      // pre-render state and open two checkout tabs.
       if (!planKey || busy.current) return;
       busy.current = true;
       setPending(planKey);
-      const cached = Boolean(checkoutLinks[planKey]);
       const known = checkoutLinks[planKey];
-      // A tab opened synchronously, inside the click gesture, survives popup
-      // blockers; one opened after the `await` often does not. So when the link
-      // is not cached yet, the tab is opened first and navigated afterwards.
-      const tab = cached ? null : window.open("", "_blank");
-      const purchaseHref = `/purchase?period=${period}`;
+      const tab = known ? null : window.open("", "_blank");
       try {
         const url = known ?? (await loadLinks())[planKey] ?? null;
-        if (url) {
-          if (tab) {
-            tab.opener = null; // the checkout page gets no handle on this window
-            tab.location.replace(url);
-          } else if (cached) {
-            window.open(url, "_blank", "noopener,noreferrer");
-          } else {
-            // The tab was blocked: the click still has to reach checkout.
-            window.location.assign(url);
-          }
+        if (!url) {
+          tab?.close();
+          setCheckoutLinks((current) => {
+            const next = { ...current };
+            delete next[planKey];
+            return next;
+          });
+          toast.error("خطة الشراء هذه غير متاحة حاليًا.");
           return;
         }
-        // No deep link for this tier: the full pricing page still sells it.
-        tab?.close();
-        window.location.assign(purchaseHref);
+
+        const checkoutUrl = withGumroadPrefilledEmail(url, buyerEmail);
+        if (tab) {
+          tab.opener = null;
+          tab.location.replace(checkoutUrl);
+        } else if (known) {
+          window.open(checkoutUrl, "_blank", "noopener,noreferrer");
+        } else {
+          window.location.assign(checkoutUrl);
+        }
       } catch {
         tab?.close();
-        window.location.assign(purchaseHref);
+        toast.error("تعذّر تحميل رابط Gumroad. حاول مرة أخرى.");
       } finally {
         busy.current = false;
         setPending(null);
       }
     },
-    [checkoutLinks, loadLinks, period],
+    [buyerEmail, checkoutLinks, loadLinks],
   );
 
   const run = useCallback(
@@ -157,8 +180,7 @@ export function PricingSection({
               اختر الخطة المناسبة
             </h2>
             <p className="mt-1 text-[13px] leading-6 text-muted">
-              بدّل بين الدفع الشهري وكل 3 أشهر — تتحدّث الأسعار والمدد في
-              البطاقات فورًا.
+              تظهر الخطط المدفوعة فقط عند توفر رابط شراء فعلي.
             </p>
           </div>
           <a
@@ -169,44 +191,46 @@ export function PricingSection({
           </a>
         </div>
 
-        {/* Billing switcher */}
-        <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span className="text-[12px] font-bold text-ink">فترة الاشتراك</span>
-          <div
-            role="group"
-            aria-label="فترة الاشتراك"
-            className="inline-flex rounded-[10px] border border-line bg-surface p-1"
-          >
-            {HOME_BILLING_PERIODS.map((option) => {
-              const active = period === option;
-              return (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setPeriod(option)}
-                  aria-pressed={active}
-                  className={`inline-flex items-center gap-1.5 rounded-[8px] px-4 py-2 text-[13px] font-bold transition ${
-                    active
-                      ? "bg-inverse text-on-inverse shadow-sm ring-1 ring-inverse"
-                      : "text-muted hover:bg-surface-2 hover:text-ink"
-                  }`}
-                >
-                  {PERIOD_LABELS[option]}
-                  {PERIOD_HINTS[option] === PERIOD_HINTS.monthly ? null : (
-                    <span className="rounded-full bg-gold px-1.5 py-0.5 text-[9px] font-extrabold text-on-gold">
-                      {PERIOD_HINTS[option]}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+        {checkoutResolved && availablePeriods.length > 0 && (
+          <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="text-[12px] font-bold text-ink">فترة الاشتراك</span>
+            {availablePeriods.length > 1 ? (
+              <div
+                role="group"
+                aria-label="فترة الاشتراك"
+                className="inline-flex rounded-[10px] border border-line bg-surface p-1"
+              >
+                {availablePeriods.map((option) => {
+                  const active = activePeriod === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setPeriod(option)}
+                      aria-pressed={active}
+                      className={`inline-flex items-center gap-1.5 rounded-[8px] px-4 py-2 text-[13px] font-bold transition ${
+                        active
+                          ? "bg-inverse text-on-inverse shadow-sm ring-1 ring-inverse"
+                          : "text-muted hover:bg-surface-2 hover:text-ink"
+                      }`}
+                    >
+                      {PERIOD_LABELS[option]}
+                      {PERIOD_HINTS[option] === PERIOD_HINTS.monthly ? null : (
+                        <span className="rounded-full bg-gold px-1.5 py-0.5 text-[9px] font-extrabold text-on-gold">
+                          {PERIOD_HINTS[option]}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <span className="text-[13px] font-semibold text-muted">
+                {PERIOD_LABELS[availablePeriods[0]]}
+              </span>
+            )}
           </div>
-          <p className="text-[12px] text-muted">
-            {saving > 0
-              ? `الدفع كل 3 أشهر يوفّر ${saving} ر.س على خطة Pro`
-              : "دفع شهري قابل للإلغاء في أي وقت"}
-          </p>
-        </div>
+        )}
 
         {/* Cards */}
         <div className="mt-6 grid items-stretch gap-4 md:grid-cols-3">
@@ -319,7 +343,7 @@ function PlanCard({
               : "subscription-cta"
           } disabled:cursor-wait disabled:opacity-70`}
         >
-          {busy ? "جارٍ فتح بوابة الدفع…" : card.ctaLabel}
+          {busy ? "جارٍ فتح Gumroad…" : card.ctaLabel}
         </button>
         <p className="mt-2 text-center text-[11px] text-muted">
           {card.ctaHint}

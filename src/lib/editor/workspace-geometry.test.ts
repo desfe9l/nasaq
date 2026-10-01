@@ -227,6 +227,51 @@ test("page background is metadata behind every object and undoes atomically", ()
   assert.equal(useEditor.getState().pages[0].bg, "#123456");
 });
 
+test("new pages inherit active page format and paint; duplicate page copies all content with fresh ids", () => {
+  const source = resetEditor();
+  useEditor.setState({
+    entitlements: {
+      ...useEditor.getState().entitlements,
+      unlimited_pages: true,
+    },
+  });
+  source.w = 297;
+  source.h = 210;
+  source.elements = [
+    createElement("shape", {
+      id: "source-shape",
+      x: 24,
+      y: 30,
+      w: 50,
+      h: 24,
+      z: 1,
+    }),
+  ];
+  useEditor.setState({ pages: [source] });
+  useEditor.getState().setPageBackground(source.id, {
+    bg: "#e8f0e8",
+    bgGradient: DEFAULT_GRADIENT,
+  });
+
+  useEditor.getState().addPage();
+  const newPage = useEditor.getState().pages[1];
+  assert.deepEqual([newPage.w, newPage.h], [297, 210]);
+  assert.equal(newPage.bg, "#e8f0e8");
+  assert.deepEqual(newPage.bgGradient, DEFAULT_GRADIENT);
+  assert.deepEqual(newPage.elements, []);
+
+  useEditor.getState().duplicatePage(source.id);
+  const duplicate = useEditor.getState().pages.find(
+    (page) => page.id === useEditor.getState().activePageId,
+  )!;
+  assert.notEqual(duplicate.id, source.id);
+  assert.deepEqual([duplicate.w, duplicate.h], [297, 210]);
+  assert.equal(duplicate.bg, "#e8f0e8");
+  assert.deepEqual(duplicate.bgGradient, DEFAULT_GRADIENT);
+  assert.equal(duplicate.elements.length, 1);
+  assert.notEqual(duplicate.elements[0].id, source.elements[0].id);
+});
+
 test("90-degree smart snapping uses visible bounds, not the unrotated model box", () => {
   const element = { x: 50.2, y: 30, w: 40, h: 20 };
   const guides = applySnap(

@@ -84,12 +84,21 @@ export const getMyAccountPage = createServerFn({ method: "GET" })
       const { claimGumroadSubscriptionsForUser } = await import("@/lib/gumroad/claim.server");
       await claimGumroadSubscriptionsForUser(sql, { userId: context.userId, userEmail: context.userEmail }).catch(() => undefined);
       const account = await getAccount(sql, context.userId);
-      const [requests, instructions, plans, hasPending] = await Promise.all([
-        listOwnPaymentRequests(sql, context.userId),
-        getPaymentInstructions(sql),
-        listEnabledPlans(sql),
-        hasPendingPaymentRequest(sql, context.userId),
-      ]);
+      const [requests, instructions, enabledPlans, hasPending] =
+        await Promise.all([
+          listOwnPaymentRequests(sql, context.userId),
+          getPaymentInstructions(sql),
+          listEnabledPlans(sql),
+          hasPendingPaymentRequest(sql, context.userId),
+        ]);
+      const transferReady = Boolean(
+        instructions.iban.trim() &&
+          instructions.bankName.trim() &&
+          instructions.accountName.trim(),
+      );
+      // This page accepts bank-transfer references only. Don't advertise a
+      // manual-payment plan while the receiving account cannot be shown.
+      const plans = transferReady ? enabledPlans : [];
       return { account, requests, instructions, plans, hasPending };
     },
   );
@@ -145,8 +154,12 @@ export const submitPayment = createServerFn({ method: "POST" })
     if (!plan) return { ok: false, error: "الباقة غير متاحة." };
 
     const instructions = await getPaymentInstructions(sql);
-    if (!instructions.iban || !instructions.bankName || !instructions.accountName) {
-      return { ok: false, error: "الدفع قريبًا — تعليمات التحويل غير مكتملة." };
+    if (
+      !instructions.iban.trim() ||
+      !instructions.bankName.trim() ||
+      !instructions.accountName.trim()
+    ) {
+      return { ok: false, error: "التحويل البنكي غير مهيأ حاليًا." };
     }
 
     // One open request at a time keeps the admin queue truthful: a second
