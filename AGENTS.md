@@ -23,6 +23,12 @@ integration, and when you think "can't access user data", "needs OAuth",
 "Grok Dashboard instead": it serves viewer connector data via the gate;
 **`neon`** / **`auth`** only per §0.5.
 
+**NASAQ templates and documents** — creating, redesigning, reviewing, or
+refining a pack, page template, family page, product master, cover, report, or
+presentation — open **`.grok/skills/nasaq-design/SKILL.md`** before placing or
+changing any page. Edit the existing generators. Do not add a parallel template
+collection. Project instructions in `AGENTS.project.md` repeat this route.
+
 **Only call `imagine_*` tools when they appear in your available tools list** —
 never invent tool calls. Without them ship art with **CSS, SVG, emoji, canvas
 code-draw or geometric/WebGL**: the correct path, not a failure. Gen-assuming
@@ -411,6 +417,23 @@ Verify with:
 - **Opening the library is best-effort.** `listAssets` / `saveAsset` fall back to
   a localStorage mirror so a private window still opens, but data URLs make that
   path a last resort — surface the failure as a toast rather than throwing.
+
+### NASAQ template design (`.grok/skills/nasaq-design/SKILL.md`)
+
+Template and document work is art direction, not a component dump. Before
+creating, redesigning, reviewing, or refining any pack, page, family, or
+product master:
+
+1. Open `.grok/skills/nasaq-design/SKILL.md` and follow it. The skill is the
+   source of truth; `src/lib/editor/design-skill.ts` only binds the generators.
+2. Change pages inside the existing generators (`templates.ts`,
+   `template-families.ts`, `template-layouts.ts`, `product-templates.ts`).
+   Do not add a replacement catalog and do not throw the current templates away.
+3. Keep every page as editable NASAQ elements (text, images, shapes, groups,
+   tables, charts, headers, footers, page numbers). Do not flatten a template
+   into an image.
+4. Five excellent pages beat thirty mediocre ones. A template is not done
+   because it renders.
 
 ### Shape and asset reuse flow
 

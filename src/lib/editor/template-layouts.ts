@@ -1,7 +1,11 @@
 import type { CanvasEl, Theme } from "./model";
+import { bindDesignSkill } from "./design-skill";
+
+bindDesignSkill("layouts");
 
 /**
  * Shared editorial grammar for the existing NASAQ templates.
+ * Art direction: `.grok/skills/nasaq-design/SKILL.md`.
  *
  * A4 measure: 16mm margin, 178mm column, 4mm rhythm.
  * Type roles stay stable: Tajawal for display, Noto Naskh for prose,

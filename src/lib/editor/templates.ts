@@ -12,6 +12,7 @@ import {
   normalizeZ,
 } from "./model";
 import { FAMILY_TEMPLATES, buildFamilyPage } from "./template-families";
+import { bindDesignSkill } from "./design-skill";
 import {
   A4,
   BODY,
@@ -28,6 +29,8 @@ import {
   tableStyle,
   tick,
 } from "./template-layouts";
+
+bindDesignSkill("packs");
 
 function page(
   name: string,
