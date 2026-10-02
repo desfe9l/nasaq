@@ -1,4 +1,5 @@
 import { subscribeTheme } from "@/lib/theme";
+import { BrandLogo } from "@/components/site/SiteChrome";
 import { shortcutKey } from "@/lib/editor/keyboard";
 import { EditorSettingsDialog } from "./EditorSettingsDialog";
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
@@ -2102,6 +2103,10 @@ function Studio({
       >
         {/* ① History and the single scaling cluster. */}
         <div className="editor-header-zone editor-header-primary">
+          <span className="editor-brand-mark" title="نَسَق | NASAQ">
+            <BrandLogo compact markOnly />
+          </span>
+          <span className="editor-header-sep" aria-hidden />
           <IconButton
             label="تراجع"
             hint="العودة إلى التغيير السابق"

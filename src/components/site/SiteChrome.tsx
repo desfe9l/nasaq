@@ -540,7 +540,13 @@ export function SiteFooter() {
   );
 }
 
-export function BrandLogo({ compact = false }: { compact?: boolean }) {
+export function BrandLogo({
+  compact = false,
+  markOnly = false,
+}: {
+  compact?: boolean;
+  markOnly?: boolean;
+}) {
   const mark = useSiteSettings().images.mark?.trim() ?? "";
   const klass = cn(compact ? "size-8 shrink-0" : "size-9 shrink-0", "object-contain");
   return (
@@ -563,7 +569,7 @@ export function BrandLogo({ compact = false }: { compact?: boolean }) {
           />
         </>
       )}
-      <span className="grid leading-none">
+      <span className={cn("grid leading-none", markOnly && "hidden")}>
         <strong className={compact ? "text-[14px] font-extrabold" : "text-[15px] font-extrabold"}>نَسَق</strong>
         <span className="mt-1 text-[8px] font-bold tracking-[0.16em] text-muted" dir="ltr">NASAQ</span>
       </span>

@@ -5,12 +5,12 @@ import {
   KeyRound,
   Loader2,
   Moon,
-  Settings2,
   Sun,
   UserRound,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { BrandLogo } from "@/components/site/SiteChrome";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
 import { useLicense } from "@/lib/license/client";
@@ -78,7 +78,7 @@ export function EditorSettingsDialog({
       <div className="editor-settings-surface flex max-h-[86dvh] w-full max-w-lg flex-col overflow-hidden rounded-[14px] border border-line bg-surface shadow-2xl">
         <header className="flex items-center justify-between border-b border-line px-4 py-3">
           <div className="flex items-center gap-2">
-            <Settings2 className="size-4 text-brand" aria-hidden />
+            <span className="editor-brand-mark"><BrandLogo compact markOnly /></span>
             <div>
               <h2 className="text-[13px] font-extrabold">الإعدادات</h2>
               <p className="text-[10px] text-muted">

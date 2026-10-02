@@ -5185,3 +5185,7 @@ button.license-badge-locked:focus-visible {
     display: inline;
   }
 }
+
+/* NASAQ mark in the editor header: fixed small box so the header height never changes. */
+.editor-brand-mark { display: inline-flex; align-items: center; flex-shrink: 0; }
+.editor-brand-mark img { width: 24px; height: 24px; }
