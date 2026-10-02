@@ -83,6 +83,8 @@ async function sql() {
 
 const PRODUCT_TEMPLATE_SEED_KEY = "product-template-seeds.v1";
 const LEGACY_TEMPLATE_SEED_KEY = "legacy-template-seeds.v1";
+/** Rewrites bundled documents after a catalog redesign. Deletes and status stay. */
+const BUNDLED_ARTWORK_KEY = "bundled-template-artwork.v2";
 
 /** Insert bundled native masters once; subsequent owner edits and deletes persist. */
 async function insertTemplateSeedsOnce(
@@ -136,6 +138,60 @@ async function ensureProductTemplates(db: Awaited<ReturnType<typeof sql>>) {
   const { buildProductTemplateSeeds, buildLegacyTemplateSeeds } = await import("@/lib/editor/product-templates");
   await insertTemplateSeedsOnce(db, PRODUCT_TEMPLATE_SEED_KEY, buildProductTemplateSeeds);
   await insertTemplateSeedsOnce(db, LEGACY_TEMPLATE_SEED_KEY, buildLegacyTemplateSeeds);
+  await refreshBundledTemplateArtwork(db, () => [
+    ...buildProductTemplateSeeds(),
+    ...buildLegacyTemplateSeeds(),
+  ]);
+}
+
+/**
+ * Public cards and «استخدام القالب» read `admin_templates`, which is filled once.
+ * A generator change never reaches that table until this refresh rewrites the
+ * bundled rows. Missing rows stay missing, and status/tier are left alone.
+ */
+async function refreshBundledTemplateArtwork(
+  db: Awaited<ReturnType<typeof sql>>,
+  build: () => ReturnType<typeof import("@/lib/editor/product-templates")["buildProductTemplateSeeds"]>,
+) {
+  const seeded = await db.query(
+    `SELECT key FROM site_settings WHERE key = $1 LIMIT 1`,
+    [BUNDLED_ARTWORK_KEY],
+  );
+  if (seeded.length) return;
+
+  const templates = build();
+  for (let i = 0; i < templates.length; i += 8) {
+    const payload = templates.slice(i, i + 8).map((template) => ({
+      id: template.id,
+      title: template.title,
+      description: template.description,
+      content: template.content,
+      thumbnail: template.thumbnail,
+    }));
+    await db.query(
+      `UPDATE admin_templates AS t
+       SET title = v.title,
+           description = v.description,
+           content = v.content,
+           thumbnail = v.thumbnail,
+           updated_at = now()
+       FROM jsonb_to_recordset($1::jsonb) AS v(
+         id text,
+         title text,
+         description text,
+         content text,
+         thumbnail text
+       )
+       WHERE t.id = v.id`,
+      [JSON.stringify(payload)],
+    );
+  }
+  await db.query(
+    `INSERT INTO site_settings (key, value, updated_at)
+     VALUES ($1, $2::jsonb, now())
+     ON CONFLICT (key) DO NOTHING`,
+    [BUNDLED_ARTWORK_KEY, JSON.stringify({ version: 2, count: templates.length })],
+  );
 }
 
 function parseJson(value: unknown): unknown {
