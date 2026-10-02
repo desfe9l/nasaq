@@ -18,9 +18,12 @@ import {
   BODY,
   CEREMONY,
   DISPLAY,
+  EDITORIAL,
   META,
+  ROLE,
   SLIDE,
   band,
+  cell,
   folio,
   hairline,
   paint,
@@ -128,135 +131,63 @@ function officialPages(theme: Theme, org: string): Page[] {
   const entity = org.trim() || "الجهة التنفيذية";
   return [
     page("الغلاف", theme, (add) => {
-      band(add, "عمود التجليد", 188, 0, 22, 297, theme.primary);
-      band(add, "خط الهوية", 186, 0, 1.6, 297, theme.accent);
-      add("logo", { name: "شعار الجهة", x: 191, y: 16, w: 16, h: 16 });
-      paint(add, "سنة الغلاف", "٢٠٢٦", 188, 250, 22, 14, {
-        fontFamily: DISPLAY,
-        fontSize: 11,
-        fontWeight: 700,
-        color: theme.accent,
-        textAlign: "center",
+      band(add, "عمود التجليد", 196, 0, 14, 297, theme.primary);
+      band(add, "خط الهوية", 194.2, 0, 1.4, 297, theme.accent);
+      add("logo", { name: "شعار الجهة", x: 197, y: 18, w: 12, h: 12 });
+      paint(add, "سنة الغلاف", "٢٦", 196, 248, 14, 16, {
+        ...ROLE.meta, fontFamily: DISPLAY, fontSize: 11, color: theme.accent, textAlign: "center",
       });
-      paint(add, "تصنيف", "تقرير أداء  ·  استخدام داخلي", 16, 24, 164, 6, {
-        fontFamily: META,
-        fontSize: 9,
-        fontWeight: 600,
-        color: theme.muted,
-        textAlign: "right",
-      });
-      paint(add, "عنوان التقرير", "تقرير الأداء\nالسنوي", 16, 36, 164, 34, {
-        fontFamily: DISPLAY,
-        fontSize: 34,
-        fontWeight: 800,
-        color: theme.primary,
-        textAlign: "right",
-        lineHeight: 1.05,
-      });
-      hairline(add, "فاصل العنوان", 132, 76, 48, theme.accent, 1);
+      paint(add, "تصنيف", "تقرير أداء  ·  استخدام داخلي", 16, 20, 170, 6, { ...ROLE.meta, color: theme.muted });
+      paint(add, "عنوان التقرير", "تقرير الأداء\nالسنوي", 16, 32, 170, 34, { ...ROLE.display, fontSize: 32, color: theme.primary });
+      hairline(add, "فاصل العنوان", 140, 72, 46, theme.accent, 1);
+      paint(add, "نبذة الغلاف", "نطاق العام، أبرز أثر على الخدمة، والقرار المطلوب من اللجنة في الدورة القادمة.", 16, 82, 168, 16, { ...ROLE.body, color: theme.ink });
       add("image", {
-        name: "صورة الغلاف",
-        x: 16,
-        y: 88,
-        w: 52,
-        h: 70,
-        src: plate("facade"),
-        style: { objectFit: "cover", radius: 0 },
+        name: "صورة الغلاف", x: 0, y: 110, w: 194, h: 187,
+        src: plate("facade"), style: { objectFit: "cover", radius: 0 },
       });
-      paint(add, "نبذة الغلاف", "ملخص العام في سطرين: نطاق التقرير، أبرز نتيجة، والقرار الذي تحتاجه الدورة القادمة.", 74, 90, 106, 28, {
-        fontFamily: BODY,
-        fontSize: 12,
-        fontWeight: 500,
-        color: theme.ink,
-        textAlign: "right",
-        lineHeight: 1.75,
-      });
-      paint(add, "تعليق الصورة", "مقر الجهة  ·  أرشيف ٢٠٢٦", 16, 160, 52, 10, {
-        fontFamily: META,
-        fontSize: 7.5,
-        fontWeight: 600,
-        color: theme.muted,
-        textAlign: "right",
-        lineHeight: 1.35,
-      });
-      hairline(add, "خط البيانات", 16, 186, 164, theme.line, 0.35);
-      paint(add, "تسمية الجهة", "الجهة", 124, 194, 56, 5, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
-      paint(add, "اسم الجهة", entity, 110, 202, 70, 10, {
-        fontFamily: DISPLAY, fontSize: 13, fontWeight: 700, color: theme.primary, textAlign: "right",
-      });
-      paint(add, "تسمية الفترة", "الفترة", 62, 194, 44, 5, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
-      paint(add, "الفترة", "يناير — ديسمبر", 52, 202, 54, 10, {
-        fontFamily: DISPLAY, fontSize: 12, fontWeight: 700, color: theme.ink, textAlign: "right",
-      });
-      paint(add, "تسمية الحالة", "الحالة", 16, 194, 32, 5, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
-      paint(add, "الحالة", "للمراجعة", 16, 202, 36, 10, {
-        fontFamily: DISPLAY, fontSize: 12, fontWeight: 700, color: theme.ink, textAlign: "right",
-      });
-      add("stamp", { name: "ختم رسمي", x: 16, y: 236, w: 34, h: 34, content: "رسمي" });
-      paint(add, "التاريخ", "محرم ١٤٤٨ هـ", 58, 246, 120, 8, {
-        fontFamily: META, fontSize: 10, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
+      band(add, "قاعدة الغلاف", 0, 250, 194, 47, theme.primary);
+      paint(add, "تسمية الجهة", "الجهة", 108, 256, 78, 5, { ...ROLE.caption, color: theme.accent });
+      paint(add, "اسم الجهة", entity, 100, 264, 86, 12, { ...ROLE.h3, fontSize: 13, color: "#f7f6f3" });
+      paint(add, "تسمية الفترة", "الفترة", 16, 256, 74, 5, { ...ROLE.caption, color: theme.accent });
+      paint(add, "الفترة", "يناير — ديسمبر", 16, 264, 78, 12, { ...ROLE.h3, fontSize: 13, color: "#f7f6f3" });
+      add("stamp", { name: "ختم رسمي", x: 158, y: 214, w: 28, h: 28, content: "رسمي" });
     }, A4),
 
     page("المحتويات", theme, (add) => {
       runningHead(add, theme, "المحتويات");
-      paint(add, "عنوان المحتويات", "ما في هذا التقرير", 16, 32, 178, 14, {
-        fontFamily: DISPLAY, fontSize: 26, fontWeight: 800, color: theme.primary, textAlign: "right",
-      });
-      paint(add, "مقدمة الفهرس", "من النطاق إلى التوصية، بالترتيب الذي يُعرض به على القيادة.", 16, 50, 178, 8, {
-        fontFamily: BODY, fontSize: 11, fontWeight: 500, color: theme.ink, textAlign: "right",
-      });
+      paint(add, "عنوان المحتويات", "ما في هذا التقرير", 16, 28, 120, 12, { ...ROLE.h1, color: theme.primary });
+      paint(add, "مقدمة الفهرس", "من النطاق إلى التوصية، بالترتيب الذي يُعرض به على لجنة الأداء.", 16, 46, 118, 16, { ...ROLE.body, fontSize: 11, color: theme.ink });
+      paint(add, "جمهور الوثيقة", "للجنة الأداء\nنسخة داخلية\nلا تُنشر", 144, 46, 50, 22, { ...ROLE.caption, color: theme.muted, lineHeight: 1.55 });
       const items: [string, string, string][] = [
         ["٠١", "المقدمة والنطاق", "٠٣"],
-        ["٠٢", "الأهداف الاستراتيجية", "٠٤"],
-        ["٠٣", "الإنجازات الرئيسية", "٠٥"],
-        ["٠٤", "المؤشرات والإحصائيات", "٠٦"],
-        ["٠٥", "التوصيات", "٠٧"],
+        ["٠٢", "الأهداف المعتمدة", "٠٤"],
+        ["٠٣", "أثر الخدمة", "٠٥"],
+        ["٠٤", "المؤشرات", "٠٦"],
+        ["٠٥", "التوصية", "٠٧"],
         ["٠٦", "الخاتمة", "٠٨"],
       ];
       items.forEach(([num, title, pg], i) => {
-        const y = 72 + i * 30;
-        paint(add, `رقم ${num}`, num, 168, y, 26, 8, {
-          fontFamily: DISPLAY, fontSize: 13, fontWeight: 800, color: theme.accent, textAlign: "right",
-        });
-        paint(add, `بند ${title}`, title, 36, y, 126, 8, {
-          fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, color: theme.ink, textAlign: "right",
-        });
-        paint(add, `صفحة ${num}`, pg, 16, y, 16, 8, {
-          fontFamily: META, fontSize: 12, fontWeight: 600, color: theme.muted, textAlign: "left",
-        });
-        hairline(add, `فاصل ${num}`, 16, y + 16, 178, theme.line, 0.3);
+        const y = 80 + i * 26;
+        paint(add, `رقم ${num}`, num, 158, y, 36, 8, { ...ROLE.h3, color: theme.accent });
+        paint(add, `بند ${title}`, title, 40, y, 112, 8, { ...ROLE.h2, fontSize: 14, color: theme.ink });
+        paint(add, `صفحة ${num}`, pg, 16, y, 18, 8, { ...ROLE.meta, fontSize: 12, color: theme.muted, textAlign: "left" });
+        hairline(add, `فاصل ${num}`, 16, y + 14, 178, theme.line, 0.3);
       });
+      paint(add, "ملاحظة الإصدار", "إصدار ديسمبر ٢٠٢٦. أرقام الصفحات تُستبدل عند إعادة الترقيم.", 16, 242, 178, 8, { ...ROLE.caption, color: theme.muted });
       folio(add, theme, entity, "٠٢");
     }, A4),
 
     page("ملخص تنفيذي", theme, (add) => {
       runningHead(add, theme, "ملخص تنفيذي");
-      paint(add, "عنوان الفقرة", "نظرة عامة", 16, 30, 178, 12, {
-        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
-      });
-      paint(add, "العمود الأول", "يغلق هذا العام بإنجاز ٩٤٪ من الخطة التشغيلية. الرضا ارتفع إلى ٤٫٧، وأُقفلت ١٨ مبادرة من ٢٠. الفجوة المتبقية مبادرة واحدة في التحول الرقمي، ومبادرة شراكة ما زالت في التعاقد.", 100, 50, 94, 52, {
-        fontFamily: BODY, fontSize: 11.5, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.8,
-      });
-      paint(add, "العمود الثاني", "التوصية للقيادة: اعتماد تمديد مبادرة التحول إلى الربع الأول، دون زيادة الاعتماد، مقابل تجميد شراكة لم يُستكمل تقييم أثرها.", 16, 50, 76, 52, {
-        fontFamily: BODY, fontSize: 11.5, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.8,
-      });
-      band(add, "علامة الاقتباس", 16, 112, 1.4, 22, theme.accent);
-      paint(add, "اقتباس الملخص", "الطلب ليس العائق. العائق طاقة التشغيل في وحدة واحدة.", 22, 112, 172, 16, {
-        fontFamily: DISPLAY, fontSize: 14, fontWeight: 700, color: theme.primary, textAlign: "right", lineHeight: 1.4,
-      });
+      paint(add, "عنوان الفقرة", "قبل التفاصيل", 16, 28, 110, 12, { ...ROLE.h1, color: theme.primary });
+      paint(add, "الرقم القائد", "٩٤٪", 128, 28, 66, 16, { ...ROLE.display, fontSize: 28, color: theme.primary, lineHeight: 1 });
+      paint(add, "تسمية الرقم", "من خطة العام", 128, 46, 66, 6, { ...ROLE.caption, color: theme.muted });
+      paint(add, "العمود الأول", "أُنجز أربعة وتسعون في المئة من الخطة. الرضا ارتفع إلى ٤٫٧، وأُقفلت ثماني عشرة مبادرة من عشرين. الفجوة المتبقية في التحول الرقمي، وشراكة ما زالت في التعاقد.", 16, 62, 178, 32, { ...ROLE.body, color: theme.ink });
+      band(add, "علامة الاقتباس", 16, 102, 1.4, 20, theme.accent);
+      paint(add, "اقتباس الملخص", "الطلب ليس العائق. العائق طاقة التشغيل في وحدة واحدة.", 22, 102, 172, 14, { ...ROLE.h2, fontSize: 13, color: theme.primary, lineHeight: 1.4 });
       add("table", {
         name: "جدول الملخص",
-        x: 16,
-        y: 144,
-        w: 178,
-        h: 78,
+        x: 16, y: 132, w: 178, h: 78,
         content: JSON.stringify([
           ["المحور", "المستهدف", "المتحقق", "الحالة"],
           ["التشغيل", "١٠٠٪", "٩٤٪", "ضمن المسار"],
@@ -266,126 +197,79 @@ function officialPages(theme: Theme, org: string): Page[] {
         ]),
         style: tableStyle(theme, 4, 5),
       });
-      paint(add, "مصدر الجدول", "المصدر: مكتب التخطيط — إغلاق ديسمبر ٢٠٢٦.", 16, 228, 178, 6, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
+      paint(add, "مصدر الجدول", "المصدر: مكتب التخطيط — إغلاق ديسمبر ٢٠٢٦.", 16, 216, 178, 6, { ...ROLE.caption, color: theme.muted });
+      paint(add, "الحكم", "النتائج لا تطلب خطة جديدة. تطلب إغلاق ما فُتح، وتثبيت ما ثبت أثره.", 16, 228, 178, 16, { ...ROLE.body, fontSize: 12, color: theme.ink });
       folio(add, theme, entity, "٠٣");
     }, A4),
 
     page("الإنجازات", theme, (add) => {
-      runningHead(add, theme, "الإنجازات");
-      paint(add, "تسمية", "الأثر", 16, 30, 178, 6, {
-        fontFamily: META, fontSize: 9, fontWeight: 700, color: theme.accent, textAlign: "right",
+      runningHead(add, theme, "الأثر");
+      paint(add, "تسمية", "ما تغيّر في الخدمة", 16, 28, 178, 6, { ...ROLE.meta, color: theme.accent });
+      paint(add, "عنوان الصفحة", "أثر واحد، ثم ثلاثة", 16, 38, 178, 12, { ...ROLE.h1, color: theme.primary });
+      add("image", {
+        name: "صورة الأثر", x: 16, y: 58, w: 58, h: 72,
+        src: plate("field"), style: { objectFit: "cover", radius: 0 },
       });
-      paint(add, "عنوان الصفحة", "ما تغيّر هذا العام", 16, 40, 178, 12, {
-        fontFamily: DISPLAY, fontSize: 24, fontWeight: 800, color: theme.primary, textAlign: "right",
-      });
-      paint(add, "رقم الإنجاز الأول", "٠١", 156, 64, 38, 16, {
-        fontFamily: DISPLAY, fontSize: 28, fontWeight: 800, color: theme.primary, textAlign: "right", lineHeight: 1,
-      });
-      paint(add, "عنوان الإنجاز الأول", "تشغيل المنافذ على مدار الساعة", 16, 68, 134, 12, {
-        fontFamily: DISPLAY, fontSize: 16, fontWeight: 800, color: theme.ink, textAlign: "right",
-      });
-      paint(add, "متن الإنجاز الأول", "انتقلت أربع بوابات من مناوبة نهارية إلى تغطية كاملة، وانخفض متوسط الانتظار من ٢٦ دقيقة إلى ١١. الجهة المنفذة: إدارة العمليات، والمؤشر المرتبط هو زمن الخدمة.", 16, 86, 178, 28, {
-        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.75,
-      });
-      hairline(add, "فاصل الأثر", 16, 122, 178, theme.line, 0.35);
+      paint(add, "رقم الإنجاز الأول", "٠١", 82, 58, 30, 10, { ...ROLE.h3, color: theme.accent });
+      paint(add, "عنوان الإنجاز الأول", "تشغيل المنافذ على مدار الساعة", 114, 58, 80, 12, { ...ROLE.h2, color: theme.ink });
+      paint(add, "متن الإنجاز الأول", "أربع بوابات انتقلت من مناوبة نهارية إلى تغطية كاملة. انخفض الانتظار من ٢٦ دقيقة إلى ١١، بلا زيادة في عدد الموظفين.", 82, 76, 112, 36, { ...ROLE.body, fontSize: 11, color: theme.ink });
+      paint(add, "تعليق الأثر", "المنفذ الرئيسي  ·  بعد تعديل المناوبة", 16, 132, 58, 12, { ...ROLE.caption, color: theme.muted, lineHeight: 1.35 });
       const rows: [string, string, string][] = [
         ["٠٢", "شراكات الخدمة", "اثنتا عشرة اتفاقية سارية، آخرها مع جهة الإسناد الطبي في المنافذ الغربية."],
         ["٠٣", "رضا المستفيدين", "ارتفع المتوسط من ٤٫٢ إلى ٤٫٧ بعد توحيد نموذج الشكوى وإغلاقها خلال خمسة أيام."],
-        ["٠٤", "توثيق المعرفة", "أُرشف منهج التشغيل في دليل واحد، واستُبدل به ثلاث نسخ متباينة كانت تُستخدم ميدانيًا."],
+        ["٠٤", "مرجع التشغيل", "استُبدل بثلاث نسخ ميدانية دليل واحد، وأُخرجت النسخ القديمة من التداول."],
       ];
       rows.forEach(([num, title, body], i) => {
-        const y = 134 + i * 40;
-        paint(add, `رقم ${num}`, num, 164, y, 30, 8, {
-          fontFamily: DISPLAY, fontSize: 13, fontWeight: 800, color: theme.accent, textAlign: "right",
-        });
-        paint(add, `عنوان ${title}`, title, 16, y, 142, 8, {
-          fontFamily: DISPLAY, fontSize: 13, fontWeight: 700, color: theme.ink, textAlign: "right",
-        });
-        paint(add, `متن ${title}`, body, 16, y + 12, 178, 16, {
-          fontFamily: BODY, fontSize: 11, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.6,
-        });
+        const y = 154 + i * 32;
+        paint(add, `رقم ${num}`, num, 166, y, 28, 8, { ...ROLE.h3, color: theme.accent });
+        paint(add, `عنوان ${title}`, title, 16, y, 144, 8, { ...ROLE.h2, fontSize: 13, color: theme.ink });
+        paint(add, `متن ${title}`, body, 16, y + 10, 178, 14, { ...ROLE.body, fontSize: 11, color: theme.ink, lineHeight: 1.45 });
       });
       folio(add, theme, entity, "٠٤");
     }, A4),
 
     page("المؤشرات", theme, (add) => {
       runningHead(add, theme, "المؤشرات");
-      paint(add, "عنوان المؤشرات", "أربعة أرقام تكفي للقراءة", 16, 30, 178, 12, {
-        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
-      });
-      paint(add, "الرقم القائد", "٩٤٪", 120, 50, 74, 22, {
-        fontFamily: DISPLAY, fontSize: 40, fontWeight: 800, color: theme.primary, textAlign: "right", lineHeight: 1,
-      });
-      paint(add, "تسمية الرقم القائد", "نسبة الإنجاز مقابل الخطة", 120, 74, 74, 8, {
-        fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
-      const side: [string, string][] = [
-        ["١٨", "مبادرة مكتملة"],
-        ["٤٫٧", "متوسط الرضا"],
-        ["١٢", "شراكة فاعلة"],
-      ];
-      side.forEach(([value, label], i) => {
-        const y = 50 + i * 18;
-        paint(add, `رقم جانبي ${i + 1}`, value, 16, y, 28, 10, {
-          fontFamily: DISPLAY, fontSize: 16, fontWeight: 800, color: theme.ink, textAlign: "right",
-        });
-        paint(add, `تسمية جانبية ${i + 1}`, label, 46, y + 1, 60, 8, {
-          fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.muted, textAlign: "right",
-        });
-      });
-      hairline(add, "خط الرسم", 16, 112, 178, theme.line, 0.35);
-      paint(add, "عنوان الرسم", "الإنجاز الشهري  ·  النسبة من الخطة", 16, 118, 178, 6, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
+      paint(add, "عنوان المؤشرات", "مسار الإنجاز", 16, 28, 100, 12, { ...ROLE.h1, color: theme.primary });
+      paint(add, "الرقم القائد", "٩٤٪", 124, 26, 70, 16, { ...ROLE.display, fontSize: 28, color: theme.primary, lineHeight: 1 });
+      paint(add, "تسمية الرقم القائد", "مقابل الخطة في ديسمبر", 124, 44, 70, 8, { ...ROLE.caption, color: theme.muted });
+      paint(add, "عنوان الرسم", "النسبة الشهرية من الخطة", 16, 58, 100, 6, { ...ROLE.caption, color: theme.muted });
       const bars = [42, 55, 61, 74, 88, 96];
       const months = ["يناير", "مارس", "مايو", "يوليو", "سبتمبر", "ديسمبر"];
-      bars.forEach((height, i) => {
-        const x = 22 + i * 28;
-        const h = height * 0.72;
-        band(add, `عمود ${months[i]}`, x, 210 - h, 14, h, i === bars.length - 1 ? theme.accent : theme.primary);
-        paint(add, `شهر ${months[i]}`, months[i], x - 4, 214, 22, 8, {
-          fontFamily: META, fontSize: 7, fontWeight: 600, color: theme.muted, textAlign: "center",
-        });
+      const base = 168;
+      hairline(add, "خط الأساس", 16, base, 178, theme.ink, 0.45);
+      hairline(add, "خط المستهدف", 16, base - 86, 178, theme.line, 0.3);
+      bars.forEach((value, i) => {
+        const x = 24 + i * 28;
+        const h = value * 0.9;
+        band(add, `عمود ${months[i]}`, x, base - h, 14, h, i === bars.length - 1 ? theme.accent : theme.primary);
+        paint(add, `شهر ${months[i]}`, months[i], x - 6, base + 4, 26, 8, { ...ROLE.caption, color: theme.muted, textAlign: "center" });
       });
-      paint(add, "قراءة الرسم", "التسارع بدأ في يوليو مع إغلاق مبادرات التشغيل، لا مع زيادة الإنفاق.", 16, 228, 178, 12, {
-        fontFamily: BODY, fontSize: 11, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.6,
-      });
+      paint(add, "قراءة الرسم", "التسارع بدأ في يوليو مع إغلاق مبادرات التشغيل، لا مع زيادة الإنفاق.", 16, 186, 178, 14, { ...ROLE.body, fontSize: 12, color: theme.ink });
+      paint(add, "هامش الرسم", "الخط الرفيع أعلى الأعمدة هو مستهدف نهاية العام.", 16, 204, 178, 8, { ...ROLE.caption, color: theme.muted });
       folio(add, theme, entity, "٠٥");
     }, A4),
 
     page("الخاتمة", theme, (add) => {
-      runningHead(add, theme, "الخاتمة والتوصيات");
-      paint(add, "عنوان الخاتمة", "ما نوصي باعتماده", 16, 30, 178, 12, {
-        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
-      });
-      const recs: [string, string][] = [
-        ["٠١", "تمديد مبادرة التحول الرقمي إلى الربع الأول دون زيادة الاعتماد."],
-        ["٠٢", "تجميد الشراكة غير المقيَّمة حتى يصدر تقرير أثرها."],
-        ["٠٣", "تثبيت دليل التشغيل الجديد مرجعًا وحيدًا للوحدات الميدانية."],
+      runningHead(add, theme, "التوصية");
+      paint(add, "عنوان الخاتمة", "ما نوصي باعتماده", 16, 28, 178, 12, { ...ROLE.h1, color: theme.primary });
+      paint(add, "تمهيد التوصية", "ثلاثة بنود فقط. ما عداها يبقى في الملاحق.", 16, 46, 178, 8, { ...ROLE.body, fontSize: 12, color: theme.ink });
+      const recs: [string, string, string][] = [
+        ["٠١", "تمديد", "تمديد مبادرة التحول الرقمي إلى الربع الأول دون زيادة الاعتماد."],
+        ["٠٢", "تجميد", "تجميد الشراكة غير المقيَّمة حتى يصدر تقرير أثرها."],
+        ["٠٣", "تثبيت", "تثبيت دليل التشغيل الجديد مرجعًا وحيدًا للوحدات الميدانية."],
       ];
-      recs.forEach(([num, text], i) => {
-        const y = 56 + i * 28;
-        paint(add, `توصية ${num}`, num, 166, y, 28, 8, {
-          fontFamily: DISPLAY, fontSize: 13, fontWeight: 800, color: theme.accent, textAlign: "right",
-        });
-        paint(add, `نص ${num}`, text, 16, y, 146, 14, {
-          fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.6,
-        });
-        hairline(add, `خط ${num}`, 16, y + 20, 178, theme.line, 0.25);
+      recs.forEach(([num, title, body], i) => {
+        const y = 64 + i * 32;
+        paint(add, `توصية ${num}`, num, 166, y, 28, 8, { ...ROLE.h3, color: theme.accent });
+        paint(add, `عنوان ${title}`, title, 16, y, 144, 8, { ...ROLE.h2, color: theme.ink });
+        paint(add, `نص ${num}`, body, 16, y + 12, 178, 12, { ...ROLE.body, fontSize: 12, color: theme.ink });
       });
-      paint(add, "خلاصة", "النتائج لا تطلب خطة جديدة. تطلب إغلاق ما فُتح، وتثبيت ما ثبت أثره.", 16, 150, 178, 16, {
-        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.7,
-      });
-      hairline(add, "خط التوقيع", 110, 196, 64, theme.ink, 0.35);
-      paint(add, "التوقيع", "اسم المسؤول\nالمنصب", 110, 202, 64, 14, {
-        fontFamily: META, fontSize: 10, fontWeight: 600, color: theme.ink, textAlign: "right", lineHeight: 1.45,
-      });
-      add("stamp", { name: "ختم الاعتماد", x: 16, y: 188, w: 36, h: 36, content: "خُتم" });
-      paint(add, "تاريخ الاعتماد", "للاعتماد في اجتماع الدورة القادمة", 58, 206, 48, 16, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right", lineHeight: 1.4,
-      });
+      paint(add, "خلاصة", "لا تُطلب خطة موازية. يُطلب إغلاق ما فُتح وتثبيت ما ثبت أثره.", 16, 168, 178, 14, { ...ROLE.body, color: theme.ink });
+      hairline(add, "خط التوقيع", 118, 200, 76, theme.ink, 0.35);
+      paint(add, "التوقيع", "اسم المسؤول\nالمنصب", 118, 206, 76, 14, { ...ROLE.meta, fontSize: 10, color: theme.ink, lineHeight: 1.45 });
+      add("stamp", { name: "ختم الاعتماد", x: 16, y: 196, w: 32, h: 32, content: "خُتم" });
+      paint(add, "تاريخ الاعتماد", "لاعتماد الدورة القادمة", 52, 206, 58, 12, { ...ROLE.caption, color: theme.muted, lineHeight: 1.35 });
       folio(add, theme, entity, "٠٦");
     }, A4),
   ];
@@ -396,121 +280,82 @@ function eidPages(theme: Theme, org: string): Page[] {
   return [
     page("غلاف العيد", theme, (add) => {
       add("image", {
-        name: "صورة الغلاف",
-        x: 0, y: 0, w: 210, h: 128,
-        src: plate("court"),
-        style: { objectFit: "cover", radius: 0 },
+        name: "صورة الغلاف", x: 0, y: 0, w: 210, h: 158,
+        src: plate("court"), style: { objectFit: "cover", radius: 0 },
       });
-      band(add, "فاصل ذهبي", 0, 128, 210, 1.6, theme.accent);
-      add("logo", { name: "شعار الجهة", x: 174, y: 142, w: 22, h: 22 });
-      paint(add, "الجهة", entity, 16, 146, 150, 8, {
-        fontFamily: META, fontSize: 10, fontWeight: 600, color: theme.accent, textAlign: "right",
+      band(add, "فاصل ذهبي", 0, 158, 210, 1.6, theme.accent);
+      paint(add, "الجهة", entity, 16, 172, 150, 8, { ...ROLE.meta, fontSize: 10, color: theme.accent });
+      add("logo", { name: "شعار الجهة", x: 172, y: 168, w: 22, h: 22 });
+      paint(add, "عنوان التقرير", "توثيق ميدان\nعيد الأضحى", 16, 190, 178, 36, {
+        ...ROLE.display, fontFamily: CEREMONY, fontWeight: 700, fontSize: 32, color: "#f7f3e8", lineHeight: 1.15,
       });
-      paint(add, "عنوان التقرير", "مجهودات فعاليات\nعيد الأضحى المبارك", 16, 164, 178, 36, {
-        fontFamily: CEREMONY, fontSize: 28, fontWeight: 700, color: "#f7f3e8", textAlign: "right", lineHeight: 1.25,
-      });
-      paint(add, "السنة", "١٤٤٧ هـ", 16, 208, 80, 10, {
-        fontFamily: CEREMONY, fontSize: 16, fontWeight: 700, color: theme.accent, textAlign: "right",
-      });
-      hairline(add, "خط سفلي داخلي", 16, 236, 48, theme.accent, 0.8);
-      paint(add, "جهة الإصدار", "إدارة الإعلام والاتصال المؤسسي\nتوثيق الميدان والمنافذ", 16, 248, 178, 16, {
-        fontFamily: META, fontSize: 11, fontWeight: 600, color: "#e7efe9", textAlign: "right", lineHeight: 1.5,
-      });
+      paint(add, "السنة", "١٤٤٧ هـ", 16, 234, 80, 10, { ...ROLE.h2, fontFamily: CEREMONY, fontSize: 16, color: theme.accent });
+      paint(add, "جهة الإصدار", "إدارة الإعلام والاتصال المؤسسي — المنافذ والفرق الميدانية", 16, 254, 178, 12, { ...ROLE.body, fontFamily: META, fontSize: 11, color: "#e7efe9" });
     }, { ...A4, bg: theme.primary }),
 
     page("المؤشرات الميدانية", theme, (add) => {
-      runningHead(add, theme, "المؤشرات الميدانية");
-      paint(add, "عنوان الصفحة", "الميدان هذا الموسم", 16, 30, 178, 12, {
-        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
-      });
-      const stats: [string, string][] = [
-        ["٤٨", "موقعًا ميدانيًا"],
+      runningHead(add, theme, "الميدان");
+      paint(add, "عنوان الصفحة", "ما عمله الميدان", 16, 28, 178, 12, { ...ROLE.h1, color: theme.primary });
+      paint(add, "الرقم", "٤٨", 16, 48, 70, 22, { ...ROLE.display, fontSize: 42, color: theme.primary, lineHeight: 0.9 });
+      paint(add, "تسمية الرقم", "موقعًا غُطّي\nعلى مدار العيد", 16, 74, 70, 14, { ...ROLE.caption, color: theme.muted, lineHeight: 1.4 });
+      const side: [string, string][] = [
         ["١٢٠", "مشاركة توعوية"],
         ["١٦", "فرقة ميدانية"],
-        ["١٠٠٪", "تغطية المنافذ"],
+        ["١٠٠٪", "تغطية المنافذ بعد اليوم الأول"],
       ];
-      stats.forEach(([value, label], i) => {
-        const x = 16 + i * 46;
-        if (i > 0) tick(add, `فاصل ${i}`, x - 4, 54, 28, theme.line);
-        paint(add, `رقم ${label}`, value, x, 52, 40, 14, {
-          fontFamily: DISPLAY, fontSize: 20, fontWeight: 800, color: theme.primary, textAlign: "right", lineHeight: 1,
-        });
-        paint(add, `تسمية ${label}`, label, x, 68, 40, 12, {
-          fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right", lineHeight: 1.3,
-        });
+      side.forEach(([value, label], i) => {
+        const y = 50 + i * 18;
+        paint(add, `رقم ${label}`, value, 100, y, 36, 8, { ...ROLE.h2, color: theme.ink });
+        paint(add, `تسمية ${label}`, label, 138, y, 56, 8, { ...ROLE.caption, color: theme.muted });
+        if (i < side.length - 1) hairline(add, `حد ${label}`, 100, y + 14, 94, theme.line, 0.25);
       });
-      hairline(add, "خط القراءة", 16, 92, 178, theme.line, 0.35);
-      paint(add, "المتن الأيمن", "شملت الفعاليات تنظيم الحركة عند المنافذ، ونقاط توعية للقادمين والمغادرين، وتوثيقًا بصريًا لكل محطة عملت فيها الفرق.", 100, 104, 94, 40, {
-        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.75,
-      });
-      paint(add, "المتن الأيسر", "لم تُسجَّل فجوة تغطية. الملاحظة الوحيدة تأخر وصول مواد التوعية إلى منفذين في اليوم الأول، وأُغلقت قبل ذروة الحركة.", 16, 104, 76, 40, {
-        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.75,
-      });
-      paint(add, "ملاحظة ميدانية", "ملاحظة الميدان", 16, 158, 178, 6, {
-        fontFamily: META, fontSize: 8, fontWeight: 700, color: theme.accent, textAlign: "right",
-      });
-      paint(add, "نص الملاحظة", "تُستبدل هذه الفقرة بتقرير قائد الفرق عند اعتماد النسخة النهائية.", 16, 168, 178, 14, {
-        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.7,
-      });
+      hairline(add, "حد المتن", 16, 108, 178, theme.line, 0.35);
+      paint(add, "المتن", "شملت الفعاليات تنظيم الحركة عند المنافذ، ونقاط توعية للقادمين والمغادرين، وتوثيقًا لكل محطة عملت فيها الفرق. الملاحظة الوحيدة: تأخر مواد التوعية إلى منفذين في اليوم الأول، وأُغلقت قبل الذروة.", 16, 118, 178, 36, { ...ROLE.body, color: theme.ink });
+      band(add, "علامة الميدان", 16, 164, 1.4, 22, theme.accent);
+      paint(add, "ملاحظة ميدانية", "ملاحظة قائد الفرق", 22, 162, 80, 6, { ...ROLE.meta, color: theme.accent });
+      paint(add, "نص الملاحظة", "لا فجوة تغطية بعد اليوم الأول. التقرير التالي يقيس الأثر، ولا يعيد وصف الحركة.", 22, 172, 172, 16, { ...ROLE.body, fontSize: 12, color: theme.ink });
       folio(add, theme, entity, "٠٢");
     }, A4),
 
     page("معرض الصور", theme, (add) => {
-      runningHead(add, theme, "التوثيق البصري");
       add("image", {
-        name: "صورة الاستقبال",
-        x: 16, y: 30, w: 118, h: 132,
-        src: plate("field"),
-        style: { objectFit: "cover", radius: 0 },
+        name: "صورة الاستقبال", x: 0, y: 0, w: 210, h: 132,
+        src: plate("field"), style: { objectFit: "cover", radius: 0 },
       });
+      band(add, "شريط التعليق", 0, 112, 210, 20, theme.primary);
+      paint(add, "تعليق الاستقبال", "استقبال المنفذ الرئيسي  ·  أول أيام العيد", 16, 116, 178, 8, { ...ROLE.caption, color: "#f7f3e8" });
       add("image", {
-        name: "صورة التوعية",
-        x: 140, y: 30, w: 54, h: 62,
-        src: plate("dune"),
-        style: { objectFit: "cover", radius: 0 },
+        name: "صورة التوعية", x: 16, y: 144, w: 108, h: 72,
+        src: plate("dune"), style: { objectFit: "cover", radius: 0 },
       });
       add("image", {
-        name: "صورة التنظيم",
-        x: 140, y: 100, w: 54, h: 62,
-        src: plate("archive"),
-        style: { objectFit: "cover", radius: 0 },
+        name: "صورة التنظيم", x: 130, y: 144, w: 64, h: 72,
+        src: plate("archive"), style: { objectFit: "cover", radius: 0 },
       });
-      paint(add, "تعليق الاستقبال", "استقبال عند المنفذ الرئيسي", 16, 164, 118, 6, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
-      paint(add, "تعليق جانبي", "توعية  ·  تنظيم", 140, 164, 54, 6, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
+      paint(add, "تعليق التوعية", "نقطة التوعية", 16, 218, 108, 6, { ...ROLE.caption, color: theme.muted });
+      paint(add, "تعليق التنظيم", "تنظيم الحركة", 130, 218, 64, 6, { ...ROLE.caption, color: theme.muted });
       add("image", {
-        name: "صورة الإغلاق",
-        x: 16, y: 180, w: 178, h: 62,
-        src: plate("night"),
-        style: { objectFit: "cover", radius: 0 },
+        name: "صورة الإغلاق", x: 16, y: 232, w: 178, h: 36,
+        src: plate("night"), style: { objectFit: "cover", radius: 0 },
       });
-      paint(add, "تعليق الإغلاق", "إغلاق المناوبة  ·  اليوم الثالث من العيد", 16, 246, 178, 6, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
+      paint(add, "تعليق الإغلاق", "إغلاق المناوبة  ·  اليوم الثالث", 16, 270, 140, 6, { ...ROLE.caption, color: theme.muted });
       folio(add, theme, entity, "٠٣");
     }, A4),
 
     page("ختام", theme, (add) => {
       band(add, "خط علوي", 0, 0, 210, 1.6, theme.accent);
-      paint(add, "تسمية الختام", "ختام التوثيق", 16, 36, 178, 6, {
-        fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.accent, textAlign: "right",
+      paint(add, "تسمية الختام", "ختام التوثيق", 16, 28, 178, 6, { ...ROLE.meta, color: theme.accent });
+      paint(add, "عنوان الختام", "شكرًا\nلكم", 16, 44, 160, 40, {
+        ...ROLE.display, fontFamily: CEREMONY, fontWeight: 700, fontSize: 40, color: "#f7f3e8", lineHeight: 1.05,
       });
-      paint(add, "عنوان الختام", "شكرًا\nلكم", 16, 56, 160, 40, {
-        fontFamily: CEREMONY, fontSize: 40, fontWeight: 700, color: "#f7f3e8", textAlign: "right", lineHeight: 1.05,
+      hairline(add, "فاصل الختام", 146, 96, 32, theme.accent, 0.9);
+      paint(add, "نص الختام", "نقدر جهد الفرق الميدانية والإسناد الإعلامي. النسخة التالية تصدر مع تقرير الأثر.", 16, 110, 168, 24, { ...ROLE.body, fontSize: 13, color: "#e7efe9" });
+      add("image", {
+        name: "شريط الختام", x: 0, y: 210, w: 210, h: 52,
+        src: plate("court"), style: { objectFit: "cover", radius: 0 },
       });
-      hairline(add, "فاصل الختام", 140, 108, 36, theme.accent, 0.9);
-      paint(add, "نص الختام", "نقدر جهد الفرق الميدانية والإسناد الإعلامي. النسخة التالية تصدر مع تقرير الأثر، لا مع تكرار الوصف.", 16, 122, 160, 28, {
-        fontFamily: BODY, fontSize: 13, fontWeight: 500, color: "#e7efe9", textAlign: "right", lineHeight: 1.75,
-      });
-      paint(add, "الجهة", entity, 16, 230, 178, 8, {
-        fontFamily: DISPLAY, fontSize: 13, fontWeight: 700, color: theme.accent, textAlign: "right",
-      });
-      paint(add, "الإدارة", "إدارة الإعلام والاتصال المؤسسي", 16, 242, 178, 8, {
-        fontFamily: META, fontSize: 10, fontWeight: 600, color: "#e7efe9", textAlign: "right",
-      });
+      paint(add, "الجهة", entity, 16, 272, 178, 8, { ...ROLE.h3, color: theme.accent });
+      paint(add, "الإدارة", "إدارة الإعلام والاتصال المؤسسي", 16, 282, 178, 8, { ...ROLE.meta, color: "#e7efe9" });
     }, { ...A4, bg: theme.primary }),
   ];
 }
@@ -519,82 +364,53 @@ function briefingPages(theme: Theme, org: string): Page[] {
   const entity = org.trim() || "مكتب المدير العام";
   return [
     page("غلاف العرض", theme, (add) => {
-      paint(add, "تصنيف العرض", "عرض قيادي  ·  للتداول الداخلي", 16, 28, 178, 6, {
-        fontFamily: META, fontSize: 9, fontWeight: 700, color: theme.accent, textAlign: "right",
-      });
-      paint(add, "عنوان العرض", "ما يجب\nأن يُحسم", 16, 48, 178, 42, {
-        fontFamily: DISPLAY, fontSize: 40, fontWeight: 800, color: theme.ink, textAlign: "right", lineHeight: 1.02,
-      });
-      hairline(add, "فاصل العنوان", 146, 98, 48, theme.accent, 1.1);
-      paint(add, "جملة العرض", "صفحة واحدة للقرار، لا لسرد الأعمال. التفاصيل في المرفقات.", 16, 112, 140, 18, {
-        fontFamily: BODY, fontSize: 13, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.7,
-      });
-      band(add, "شريط البيانات", 0, 228, 210, 69, theme.primary);
-      add("logo", { name: "شعار الجهة", x: 176, y: 240, w: 18, h: 18 });
-      paint(add, "الجهة", entity, 16, 242, 150, 10, {
-        fontFamily: DISPLAY, fontSize: 14, fontWeight: 700, color: "#ffffff", textAlign: "right",
-      });
-      paint(add, "التاريخ", "سبتمبر ٢٠٢٦  ·  اجتماع القيادة الأسبوعي", 16, 258, 150, 8, {
-        fontFamily: META, fontSize: 10, fontWeight: 600, color: theme.accent, textAlign: "right",
-      });
+      paint(add, "تصنيف العرض", "عرض قيادي  ·  للتداول الداخلي", 16, 22, 178, 6, { ...ROLE.meta, color: theme.accent });
+      paint(add, "عنوان العرض", "ما يجب\nأن يُحسم", 16, 36, 178, 40, { ...ROLE.display, fontSize: 38, color: theme.ink, lineHeight: 1.02 });
+      hairline(add, "فاصل العنوان", 150, 84, 44, theme.accent, 1.1);
+      paint(add, "جملة العرض", "صفحة للقرار، لا لسرد الأعمال. التفاصيل في المرفقات.", 16, 96, 178, 12, { ...ROLE.body, fontSize: 13, color: theme.ink });
+      paint(add, "وقت الحكم", "٠٥ د   الحكم", 16, 188, 78, 8, { ...ROLE.meta, fontSize: 11, color: theme.ink });
+      paint(add, "وقت القيد", "١٥ د   القيد", 16, 202, 78, 8, { ...ROLE.meta, fontSize: 11, color: theme.ink });
+      paint(add, "وقت الاعتماد", "٢٥ د   الاعتماد", 16, 216, 78, 8, { ...ROLE.meta, fontSize: 11, color: theme.ink });
+      paint(add, "شرح الجدول", "ثلاثة أوقات. ما زاد عنها يُؤجل إلى المرفق.", 108, 190, 86, 22, { ...ROLE.body, fontSize: 12, color: theme.ink });
+      band(add, "شريط البيانات", 0, 248, 210, 49, theme.primary);
+      add("logo", { name: "شعار الجهة", x: 176, y: 258, w: 16, h: 16 });
+      paint(add, "الجهة", entity, 16, 258, 150, 8, { ...ROLE.h2, fontSize: 14, color: "#ffffff" });
+      paint(add, "التاريخ", "سبتمبر ٢٠٢٦  ·  اجتماع القيادة الأسبوعي", 16, 274, 150, 8, { ...ROLE.meta, fontSize: 10, color: theme.accent });
     }, A4),
 
     page("الموجز", theme, (add) => {
-      runningHead(add, theme, "موجز تنفيذي");
-      paint(add, "العنوان", "القرار المطلوب هذا الأسبوع", 16, 30, 178, 12, {
-        fontFamily: DISPLAY, fontSize: 20, fontWeight: 800, color: theme.ink, textAlign: "right",
-      });
-      paint(add, "الرقم", "٤٢٪", 120, 52, 74, 20, {
-        fontFamily: DISPLAY, fontSize: 36, fontWeight: 800, color: theme.primary, textAlign: "right", lineHeight: 1,
-      });
-      paint(add, "تسمية الرقم", "نمو الإيراد مقابل الخطة", 120, 74, 74, 8, {
-        fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
-      paint(add, "العمود الأول", "الأداء تجاوز الخطة لأن الطلب ثبت، لا لأن الطاقة زادت. الاستمرار على هذا الإيقاع يصطدم بسقف التشغيل في وحدة الإسناد.", 16, 96, 86, 40, {
-        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.75,
-      });
-      paint(add, "العمود الثاني", "الخيار المعروض: تأجيل توسعة واحدة إلى الربع القادم، والإبقاء على هدف الإيراد كما هو.", 108, 96, 86, 40, {
-        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.75,
-      });
-      band(add, "علامة القيد", 16, 150, 1.6, 28, theme.accent);
-      paint(add, "عنوان القيد", "القيد", 22, 148, 40, 6, {
-        fontFamily: META, fontSize: 8, fontWeight: 700, color: theme.accent, textAlign: "right",
-      });
-      paint(add, "نص القيد", "القيد طاقة تشغيلية، لا طلب السوق. أي هدف أعلى من الطاقة الحالية قرار توظيف، لا قرار مبيعات.", 22, 158, 172, 16, {
-        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.65,
-      });
+      runningHead(add, theme, "الموجز");
+      paint(add, "العنوان", "القرار المطلوب", 16, 28, 178, 10, { ...ROLE.h1, fontSize: 20, color: theme.ink });
+      paint(add, "الرقم", "٤٢٪", 16, 46, 90, 22, { ...ROLE.display, fontSize: 40, color: theme.primary, lineHeight: 0.9 });
+      paint(add, "تسمية الرقم", "نمو الإيراد مقابل الخطة، والطاقة عند سقفها.", 16, 72, 90, 14, { ...ROLE.caption, color: theme.muted, lineHeight: 1.4 });
+      paint(add, "الحكم", "الاستمرار على هذا الإيقاع يصطدم بسقف وحدة الإسناد. الخيار: تأجيل توسعة واحدة، والإبقاء على هدف الإيراد.", 112, 50, 82, 40, { ...ROLE.body, fontSize: 12, color: theme.ink });
+      hairline(add, "حد القيد", 16, 100, 178, theme.line, 0.35);
+      paint(add, "عنوان القيد", "القيد", 16, 110, 40, 6, { ...ROLE.meta, color: theme.accent });
+      paint(add, "نص القيد", "القيد طاقة تشغيلية، لا طلب السوق. أي هدف أعلى من الطاقة الحالية قرار توظيف، لا قرار مبيعات.", 16, 120, 178, 20, { ...ROLE.body, color: theme.ink });
+      paint(add, "الخيار", "الخيار المعروض", 16, 152, 178, 6, { ...ROLE.meta, color: theme.primary });
+      paint(add, "نص الخيار", "تُؤجَّل التوسعة إلى الربع القادم. لا يُفتح مسار توظيف قبل خطة الطاقة.", 16, 162, 178, 16, { ...ROLE.h2, fontFamily: BODY, fontWeight: 500, fontSize: 13, color: theme.ink, lineHeight: 1.55 });
       folio(add, theme, entity, "٠٢");
     }, A4),
 
     page("القرار", theme, (add) => {
-      runningHead(add, theme, "القرار");
-      paint(add, "العنوان", "ثلاثة بنود للاعتماد", 16, 30, 178, 12, {
-        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
-      });
+      runningHead(add, theme, "الاعتماد");
+      paint(add, "العنوان", "ثلاثة بنود", 16, 28, 120, 12, { ...ROLE.h1, color: theme.primary });
+      paint(add, "الحالة العامة", "معروض على الجلسة", 16, 32, 70, 8, { ...ROLE.meta, color: theme.accent, textAlign: "left" });
       const items: [string, string, string][] = [
         ["٠١", "اعتماد", "تأجيل التوسعة إلى الربع القادم مع الإبقاء على هدف الإيراد."],
         ["٠٢", "تكليف", "إدارة الإسناد ترفع خطة الطاقة خلال عشرة أيام."],
         ["٠٣", "إيقاف", "لا يُفتح مسار توظيف قبل اعتماد خطة الطاقة."],
       ];
       items.forEach(([num, title, body], i) => {
-        const y = 56 + i * 42;
-        paint(add, `رقم ${num}`, num, 166, y, 28, 10, {
-          fontFamily: DISPLAY, fontSize: 16, fontWeight: 800, color: theme.accent, textAlign: "right",
-        });
-        paint(add, `عنوان ${title}`, title, 16, y, 144, 8, {
-          fontFamily: DISPLAY, fontSize: 14, fontWeight: 800, color: theme.ink, textAlign: "right",
-        });
-        paint(add, `متن ${title}`, body, 16, y + 12, 178, 12, {
-          fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.55,
-        });
+        const y = 56 + i * 40;
+        paint(add, `رقم ${num}`, num, 166, y, 28, 8, { ...ROLE.meta, color: theme.accent });
+        paint(add, `عنوان ${title}`, title, 16, y, 140, 10, { ...ROLE.h1, fontSize: 18, color: theme.ink });
+        paint(add, `متن ${title}`, body, 16, y + 14, 178, 12, { ...ROLE.body, fontSize: 12, color: theme.ink });
+        hairline(add, `حد ${title}`, 16, y + 30, 178, theme.line, 0.25);
       });
-      hairline(add, "خط التوقيع", 110, 196, 70, theme.ink, 0.35);
-      paint(add, "التوقيع", "الاسم\nالصفة", 110, 202, 70, 14, {
-        fontFamily: META, fontSize: 10, fontWeight: 600, color: theme.ink, textAlign: "right", lineHeight: 1.4,
-      });
-      paint(add, "الموعد", "يُحسم في الجلسة، لا بالتمرير.", 16, 206, 86, 10, {
-        fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
+      hairline(add, "خط التوقيع", 118, 188, 76, theme.ink, 0.35);
+      paint(add, "التوقيع", "الاسم\nالصفة", 118, 194, 76, 14, { ...ROLE.meta, fontSize: 10, color: theme.ink, lineHeight: 1.4 });
+      paint(add, "الموعد", "يُحسم في الجلسة، لا بالتمرير.", 16, 198, 90, 12, { ...ROLE.caption, color: theme.muted, lineHeight: 1.4 });
       folio(add, theme, entity, "٠٣");
     }, A4),
   ];
@@ -602,40 +418,23 @@ function briefingPages(theme: Theme, org: string): Page[] {
 
 function statsInfographicPage(theme: Theme, org: string): Page {
   return page("لوحة مؤشرات", theme, (add) => {
-    runningHead(add, theme, "لوحة المؤشرات");
-    paint(add, "عنوان اللوحة", "أين يقف التنفيذ", 16, 30, 110, 12, {
-      fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
-    });
-    paint(add, "الرقم القائد", "٧٨٪", 132, 28, 62, 20, {
-      fontFamily: DISPLAY, fontSize: 32, fontWeight: 800, color: theme.primary, textAlign: "left", lineHeight: 1,
-    });
-    paint(add, "تسمية الرقم", "الإنجاز العام", 132, 50, 62, 6, {
-      fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "left",
-    });
-    const bars: [string, number, string][] = [
-      ["نسبة الإنجاز العام", 78, theme.primary],
-      ["رضا المستفيدين", 92, theme.accent],
-      ["الالتزام بالجدول", 64, theme.primarySoft],
+    runningHead(add, theme, "أين يقف التنفيذ");
+    paint(add, "عنوان اللوحة", "قراءة الأسبوع", 16, 28, 110, 12, { ...ROLE.h1, color: theme.primary });
+    paint(add, "الرقم القائد", "٧٨٪", 132, 26, 62, 16, { ...ROLE.display, fontSize: 28, color: theme.primary, textAlign: "left", lineHeight: 1 });
+    paint(add, "تسمية الرقم", "الإنجاز العام", 132, 44, 62, 6, { ...ROLE.caption, color: theme.muted, textAlign: "left" });
+    const bars: [string, number][] = [
+      ["نسبة الإنجاز العام", 78],
+      ["رضا المستفيدين", 92],
+      ["الالتزام بالجدول", 64],
     ];
-    bars.forEach(([label, value, color], i) => {
-      const y = 72 + i * 28;
-      paint(add, `عنوان ${label}`, label, 16, y, 120, 6, {
-        fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.ink, textAlign: "right",
-      });
-      paint(add, `قيمة ${label}`, `${value}٪`, 150, y, 44, 6, {
-        fontFamily: DISPLAY, fontSize: 11, fontWeight: 800, color: theme.primary, textAlign: "left",
-      });
-      add("progress", {
-        name: label,
-        x: 16,
-        y: y + 8,
-        w: 178,
-        h: 8,
-        content: label,
-        style: { value, fill: color, showValue: false },
-      });
+    bars.forEach(([label, value], i) => {
+      const y = 64 + i * 28;
+      paint(add, `عنوان ${label}`, label, 16, y, 120, 6, { ...ROLE.meta, fontSize: 10, color: theme.ink });
+      paint(add, `قيمة ${label}`, `${value}٪`, 150, y, 44, 6, { ...ROLE.h3, color: theme.primary, textAlign: "left" });
+      band(add, `مسار ${label}`, 16, y + 10, 178, 1.2, theme.line);
+      band(add, `امتلاء ${label}`, 16, y + 10, Math.max(8, 178 * value / 100), 1.2, i === 1 ? theme.accent : theme.primary);
     });
-    hairline(add, "فاصل القراءة", 16, 164, 178, theme.line, 0.3);
+    hairline(add, "فاصل القراءة", 16, 156, 178, theme.line, 0.3);
     const notes: [string, string][] = [
       ["٩٠٤", "حالة مغلقة"],
       ["٢٧", "حالة مفتوحة"],
@@ -643,39 +442,26 @@ function statsInfographicPage(theme: Theme, org: string): Page {
     ];
     notes.forEach(([value, label], i) => {
       const x = 16 + i * 60;
-      if (i > 0) tick(add, `فاصل ملاحظة ${i}`, x - 3, 176, 22, theme.line);
-      paint(add, `ملاحظة ${label}`, value, x, 174, 52, 10, {
-        fontFamily: DISPLAY, fontSize: 16, fontWeight: 800, color: theme.ink, textAlign: "right",
-      });
-      paint(add, `شرح ${label}`, label, x, 186, 52, 6, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
+      if (i > 0) tick(add, `فاصل ملاحظة ${i}`, x - 4, 168, 22, theme.line);
+      paint(add, `ملاحظة ${label}`, value, x, 166, 52, 10, { ...ROLE.h2, fontSize: 16, color: theme.ink });
+      paint(add, `شرح ${label}`, label, x, 180, 52, 6, { ...ROLE.caption, color: theme.muted });
     });
-    paint(add, "القراءة", "الرضا يسبق الجدول. الحالات المفتوحة كلها في فرقة واحدة، لا في المنهج.", 16, 208, 178, 14, {
-      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.65,
-    });
-    paint(add, "المصدر", "المصدر: لوحة المتابعة — الأسبوع الحالي. الأرقام قابلة للاستبدال.", 16, 230, 178, 8, {
-      fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
-    });
+    paint(add, "القراءة", "الرضا يسبق الجدول. الحالات المفتوحة كلها في فرقة واحدة، لا في المنهج.", 16, 200, 178, 16, { ...ROLE.body, color: theme.ink });
+    paint(add, "المصدر", "المصدر: لوحة المتابعة — الأسبوع الحالي.", 16, 224, 178, 8, { ...ROLE.caption, color: theme.muted });
     folio(add, theme, org, "٠٢");
   }, A4);
 }
 
 function tablePage(theme: Theme, org: string): Page {
   return page("جدول بيانات", theme, (add) => {
-    runningHead(add, theme, "الجدول");
-    paint(add, "العنوان", "مقارنة البنود", 16, 30, 178, 12, {
-      fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
-    });
-    paint(add, "المقدمة", "الفارق السالب مركّز في التشغيل. بقية البنود إما ضمن المسار أو أعلى من المستهدف بقليل.", 16, 48, 178, 14, {
-      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.65,
-    });
+    runningHead(add, theme, "المقارنة");
+    paint(add, "العنوان", "أين الفارق", 16, 28, 110, 12, { ...ROLE.h1, color: theme.primary });
+    paint(add, "الفرق", "−٥", 150, 26, 44, 14, { ...ROLE.display, fontSize: 26, color: theme.accent, textAlign: "left", lineHeight: 1 });
+    paint(add, "تسمية الفرق", "صافي الحالات", 150, 42, 44, 6, { ...ROLE.caption, color: theme.muted, textAlign: "left" });
+    paint(add, "المقدمة", "الفارق السالب مركّز في التشغيل والصيانة. بقية البنود ضمن المسار أو أعلى بقليل.", 16, 52, 178, 14, { ...ROLE.body, fontSize: 12, color: theme.ink });
     add("table", {
       name: "جدول المقارنة",
-      x: 16,
-      y: 70,
-      w: 178,
-      h: 96,
+      x: 16, y: 74, w: 178, h: 96,
       content: JSON.stringify([
         ["البند", "الوحدة", "المستهدف", "المتحقق", "الفارق"],
         ["تشغيل المنافذ", "حالة", "١٠٠", "٩٤", "−٦"],
@@ -686,26 +472,17 @@ function tablePage(theme: Theme, org: string): Page {
       ]),
       style: tableStyle(theme, 5, 6),
     });
-    band(add, "علامة القراءة", 16, 178, 1.4, 20, theme.accent);
-    paint(add, "القراءة", "فارق خمس حالات لا يغيّر الحكم على العام، ويحدد أين تُراجع الخطة: التشغيل والصيانة.", 22, 176, 172, 18, {
-      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.65,
-    });
-    paint(add, "المصدر", "المصدر: السجل التشغيلي — ديسمبر ٢٠٢٦.", 16, 210, 178, 6, {
-      fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
-    });
+    band(add, "علامة القراءة", 16, 182, 1.4, 22, theme.accent);
+    paint(add, "القراءة", "فارق خمس حالات لا يغيّر الحكم على العام، ويحدد أين تُراجع الخطة: التشغيل والصيانة.", 22, 180, 172, 20, { ...ROLE.body, color: theme.ink });
+    paint(add, "المصدر", "المصدر: السجل التشغيلي — ديسمبر ٢٠٢٦.", 16, 214, 178, 6, { ...ROLE.caption, color: theme.muted });
     folio(add, theme, org, "٠٣");
   }, A4);
 }
 
 function infographicPage(theme: Theme, org: string): Page {
   return page("إنفوجرافيك", theme, (add) => {
-    paint(add, "تسمية", "منهج العمل", 16, 20, 178, 6, {
-      fontFamily: META, fontSize: 9, fontWeight: 700, color: theme.accent, textAlign: "right",
-    });
-    paint(add, "العنوان", "خمس مراحل، بترتيب واحد", 16, 30, 178, 12, {
-      fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
-    });
-    band(add, "مسار رأسي", 174, 58, 0.6, 190, theme.line);
+    paint(add, "تسمية", "منهج العمل", 16, 18, 178, 6, { ...ROLE.meta, color: theme.accent });
+    paint(add, "العنوان", "خمس مراحل، بترتيب واحد", 16, 28, 178, 12, { ...ROLE.h1, color: theme.primary });
     const steps: [string, string, string][] = [
       ["٠١", "التخطيط", "تحديد النطاق والجهة المالكة قبل جمع أي رقم."],
       ["٠٢", "الجمع", "البيانات من مصدر واحد، مع تاريخ إغلاق معلن."],
@@ -714,17 +491,11 @@ function infographicPage(theme: Theme, org: string): Page {
       ["٠٥", "الأثر", "ما تغيّر بعد النشر، لا عدد الصفحات."],
     ];
     steps.forEach(([num, title, body], i) => {
-      const y = 56 + i * 38;
-      band(add, `نقطة ${num}`, 170, y + 2, 8, 8, i === 0 ? theme.accent : theme.primary);
-      paint(add, `رقم ${num}`, num, 146, y, 20, 8, {
-        fontFamily: DISPLAY, fontSize: 12, fontWeight: 800, color: theme.primary, textAlign: "right",
-      });
-      paint(add, `عنوان ${title}`, title, 16, y, 124, 8, {
-        fontFamily: DISPLAY, fontSize: 14, fontWeight: 800, color: theme.ink, textAlign: "right",
-      });
-      paint(add, `متن ${title}`, body, 16, y + 12, 150, 12, {
-        fontFamily: BODY, fontSize: 11, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.45,
-      });
+      const y = 54 + i * 38;
+      tick(add, `عمود ${num}`, 186, y, 28, i === 2 ? theme.accent : theme.line);
+      paint(add, `رقم ${num}`, num, 156, y, 24, 8, { ...ROLE.h3, color: i === 2 ? theme.accent : theme.primary });
+      paint(add, `عنوان ${title}`, title, 16, y, 134, 8, { ...ROLE.h2, color: theme.ink });
+      paint(add, `متن ${title}`, body, 16, y + 12, 164, 12, { ...ROLE.body, fontSize: 11, color: theme.ink, lineHeight: 1.45 });
     });
     folio(add, theme, org, "٠٤");
   }, A4);
@@ -739,53 +510,29 @@ function slidesPages(theme: Theme, org: string): Page[] {
   return [
     page("شريحة الغلاف", theme, (add) => {
       add("image", {
-        name: "حقل الغلاف",
-        x: 0, y: 0, w: 124, h: 190.5,
-        src: plate("night"),
-        style: { objectFit: "cover", radius: 0 },
+        name: "حقل الغلاف", x: 0, y: 0, w: 132, h: 190.5,
+        src: plate("night"), style: { objectFit: "cover", radius: 0 },
       });
-      band(add, "فاصل", 124, 0, 1.4, 190.5, theme.accent);
-      add("logo", { name: "شعار", x: 296, y: 18, w: 22, h: 22 });
-      paint(add, "تصنيف", "عرض تنفيذي", 146, 28, 140, 6, {
-        fontFamily: META, fontSize: 10, fontWeight: 700, color: theme.accent, textAlign: "right",
-      });
-      paint(add, "عنوان العرض", "النتائج\nالرئيسية", 146, 44, 170, 40, {
-        fontFamily: DISPLAY, fontSize: 36, fontWeight: 800, color: "#f7f6f3", textAlign: "right", lineHeight: 1.05,
-      });
-      paint(add, "الجهة", `${entity}  ·  سبتمبر ٢٠٢٦`, 146, 156, 170, 8, {
-        fontFamily: META, fontSize: 11, fontWeight: 600, color: "#e7e5e4", textAlign: "right",
-      });
+      band(add, "فاصل", 132, 0, 1.6, 190.5, theme.accent);
+      add("logo", { name: "شعار", x: 300, y: 16, w: 20, h: 20 });
+      paint(add, "تصنيف", "عرض تنفيذي", 150, 28, 140, 6, { ...ROLE.meta, fontSize: 11, color: theme.accent });
+      paint(add, "عنوان العرض", "النتائج\nالرئيسية", 150, 42, 170, 36, { ...ROLE.display, fontSize: 32, color: "#f7f6f3", lineHeight: 1.05 });
+      paint(add, "الجملة", "رقمان للإغلاق، وجملة للحكم. الباقي في المرفق.", 150, 92, 168, 16, { ...ROLE.body, fontFamily: META, fontSize: 12, color: "#e7e5e4" });
+      paint(add, "الجهة", `${entity}  ·  سبتمبر ٢٠٢٦`, 150, 156, 170, 8, { ...ROLE.meta, fontSize: 11, color: "#e7e5e4" });
     }, { ...SLIDE, bg: theme.primary }),
     page("شريحة المؤشرات", theme, (add) => {
       runningHead(add, theme, "المؤشرات الرئيسية", SLIDE.w);
-      paint(add, "الرقم القائد", "٩٦٪", 220, 36, 100, 28, {
-        fontFamily: DISPLAY, fontSize: 48, fontWeight: 800, color: theme.primary, textAlign: "right", lineHeight: 1,
-      });
-      paint(add, "تسمية القائد", "اكتمال الخطة", 220, 68, 100, 8, {
-        fontFamily: META, fontSize: 11, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
-      tick(add, "فاصل المؤشرات", 200, 40, 48, theme.line);
-      paint(add, "رقم ثان", "٩٠٤", 16, 40, 70, 16, {
-        fontFamily: DISPLAY, fontSize: 26, fontWeight: 800, color: theme.ink, textAlign: "right",
-      });
-      paint(add, "تسمية ثانية", "حالة مغلقة", 90, 46, 90, 8, {
-        fontFamily: META, fontSize: 11, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
-      paint(add, "رقم ثالث", "٢٧", 16, 66, 70, 14, {
-        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.ink, textAlign: "right",
-      });
-      paint(add, "تسمية ثالثة", "حالة ما زالت مفتوحة", 90, 70, 90, 8, {
-        fontFamily: META, fontSize: 11, fontWeight: 600, color: theme.muted, textAlign: "right",
-      });
-      add("progress", {
-        name: "مؤشر الإنجاز",
-        x: 16, y: 108, w: 306, h: 12,
-        content: "نسبة الإنجاز العام",
-        style: { value: 78, fill: theme.primary, showValue: true },
-      });
-      paint(add, "القراءة", "الإغلاق شبه مكتمل. الحالات المفتوحة لا تغيّر اتجاه الربع.", 16, 132, 306, 10, {
-        fontFamily: BODY, fontSize: 13, fontWeight: 500, color: theme.ink, textAlign: "right",
-      });
+      paint(add, "الرقم القائد", "٩٦٪", 210, 36, 112, 28, { ...ROLE.display, fontSize: 44, color: theme.primary, lineHeight: 1 });
+      paint(add, "تسمية القائد", "اكتمال الخطة", 210, 68, 112, 8, { ...ROLE.meta, fontSize: 12, color: theme.muted });
+      tick(add, "فاصل المؤشرات", 196, 40, 40, theme.line);
+      paint(add, "رقم ثان", "٩٠٤", 16, 38, 70, 14, { ...ROLE.display, fontSize: 24, color: theme.ink, lineHeight: 1 });
+      paint(add, "تسمية ثانية", "حالة مغلقة", 90, 42, 96, 8, { ...ROLE.meta, fontSize: 12, color: theme.muted });
+      paint(add, "رقم ثالث", "٢٧", 16, 62, 70, 12, { ...ROLE.h1, fontSize: 20, color: theme.ink });
+      paint(add, "تسمية ثالثة", "حالة ما زالت مفتوحة", 90, 66, 96, 8, { ...ROLE.meta, fontSize: 12, color: theme.muted });
+      band(add, "مسار الإنجاز", 16, 104, 306, 2, theme.line);
+      band(add, "امتلاء الإنجاز", 16, 104, 240, 2, theme.primary);
+      paint(add, "نسبة الشريط", "٧٨٪ إنجاز عام", 16, 112, 140, 6, { ...ROLE.caption, color: theme.muted });
+      paint(add, "القراءة", "الإغلاق شبه مكتمل. الحالات المفتوحة لا تغيّر اتجاه الربع.", 16, 132, 306, 12, { ...ROLE.body, fontSize: 14, color: theme.ink });
       folio(add, theme, entity, "٠٢", SLIDE.w, SLIDE.h);
     }, SLIDE),
   ];
@@ -813,90 +560,56 @@ function identity(theme: Theme): TemplateInk {
 
 function editorialPage(theme: Theme, org: string): Page {
   const c = identity(theme);
+  const margin = cell(10, 2);
+  const col = cell(0, 9);
   return page("تحريرية", theme, (add) => {
-    paint(add, "كِكر", "ملف  ·  مذكرة تحريرية", 16, 22, 178, 6, {
-      fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
-    });
-    paint(add, "العنوان", "العنوان الذي\nيقود الصفحة\nلا يزينها", 16, 36, 128, 48, {
-      fontFamily: "Noto Kufi Arabic", fontSize: 26, fontWeight: 700, color: c.primary, textAlign: "right", lineHeight: 1.15,
-    });
-    paint(add, "الرقم البصري", "٠١", 152, 40, 42, 18, {
-      fontFamily: DISPLAY, fontSize: 32, fontWeight: 800, color: c.accent, textAlign: "left", lineHeight: 1,
-    });
-    hairline(add, "فاصل", 16, 96, 178, c.line, 0.35);
-    paint(add, "المتن", "فقرة تمهيدية بمقياس القراءة، لا داخل إطار. المسافة البيضاء هي الهامش، والعمود يقف عند قياس واحد حتى تُستبدل الكلمات دون أن ينكسر السطر.", 16, 108, 120, 48, {
-      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.8,
-    });
-    paint(add, "ملاحظة هامشية", "ملاحظة\nعلى الهامش\nلا بطاقة", 146, 112, 48, 28, {
-      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right", lineHeight: 1.5,
-    });
-    paint(add, "الجهة", org || "اسم الجهة", 16, 250, 120, 8, {
-      fontFamily: DISPLAY, fontSize: 12, fontWeight: 700, color: c.primary, textAlign: "right",
-    });
-    paint(add, "رقم الصفحة", "٠١", 16, 272, 178, 6, {
-      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "left",
-    });
+    paint(add, "كِكر", "ملف  ·  الخدمة", col.x, 20, col.w, 6, { ...ROLE.meta, color: c.accent });
+    paint(add, "العنوان", "الطاقة ثابتة\nوالطلب ليس كذلك", col.x, 32, col.w, 28, { ...ROLE.h1, fontFamily: EDITORIAL, fontWeight: 700, fontSize: 24, color: c.primary });
+    paint(add, "حقيقة هامشية", "١٨٪\nزيادة\nالمعاملات", margin.x, 36, margin.w, 28, { ...ROLE.caption, color: c.accent, lineHeight: 1.35 });
+    hairline(add, "فاصل", col.x, 70, col.w, c.line, 0.35);
+    paint(add, "المتن", "بقيت المنافذ على عددها، وارتفع الوارد. الانتظار الذي يراه المستفيد ليس ضعف حملة، بل مناوبة لم تُراجع منذ اعتماد الخطة.", col.x, 80, col.w, 36, { ...ROLE.body, color: c.ink });
+    paint(add, "عنوان فرعي", "ما يُطلب من هذه الصفحة", col.x, 124, col.w, 8, { ...ROLE.h2, color: c.ink });
+    paint(add, "التتمة", "أن تُقرأ الطاقة مع الرقم، لا بعده. التوصية في القسم التالي، وهذه الصفحة لا تلخّص العام.", col.x, 138, col.w, 28, { ...ROLE.body, color: c.ink });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 248, 120, 8, { ...ROLE.h3, color: c.primary });
+    paint(add, "رقم الصفحة", "٠١", 16, 272, 178, 6, { ...ROLE.folio, color: c.muted });
   }, A4);
 }
 
 function institutionalGridPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("شبكة مؤسسية", theme, (add) => {
-    band(add, "شريط الهوية", 0, 0, 210, 14, c.primary);
-    paint(add, "عنوان الشريط", "تقرير مؤسسي", 16, 3, 140, 8, {
-      fontFamily: DISPLAY, fontSize: 11, fontWeight: 700, color: "#f7f6f3", textAlign: "right",
-    });
-    add("logo", { name: "شعار الجهة", x: 178, y: 2, w: 10, h: 10 });
-    paint(add, "العنوان", "وحدات المعلومات على شبكة واحدة", 16, 26, 178, 12, {
-      fontFamily: DISPLAY, fontSize: 18, fontWeight: 800, color: c.primary, textAlign: "right",
-    });
-    paint(add, "المقدمة", "الصف يُقرأ من اليمين: البند، ثم الرقم، ثم الجملة التي تفسره. لا صندوق حول أي صف.", 16, 44, 178, 14, {
-      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.6,
-    });
+    band(add, "شريط الهوية", 0, 0, 210, 8, c.primary);
+    paint(add, "العنوان", "كيف يُرفع الرقم", 16, 20, 178, 12, { ...ROLE.h1, fontSize: 20, color: c.primary });
+    paint(add, "المقدمة", "كل صف ثلاثة حقول على خط واحد: البند، القيمة، والجملة التي تمنع إساءة قراءته.", 16, 38, 178, 14, { ...ROLE.body, fontSize: 12, color: c.ink });
     const rows: [string, string, string][] = [
       ["النطاق", "٦ قطاعات", "كل قطاع يرفع رقمه إلى مكتب واحد."],
       ["الإيقاع", "شهري", "الإغلاق في آخر خميس من الشهر."],
       ["المرجع", "دليل ٢٠٢٦", "النسخ السابقة أُخرجت من التداول."],
       ["الاعتماد", "لجنة واحدة", "لا يصدر رقم بلا توقيع المقرر."],
+      ["النشر", "بعد الاعتماد", "لا يُرسل جدول إلى القيادة قبل التوقيع."],
     ];
     rows.forEach(([label, value, note], i) => {
-      const y = 70 + i * 36;
+      const y = 62 + i * 32;
       hairline(add, `خط ${label}`, 16, y, 178, c.line, 0.3);
-      paint(add, `بند ${label}`, label, 150, y + 6, 44, 8, {
-        fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
-      });
-      paint(add, `قيمة ${label}`, value, 96, y + 6, 48, 10, {
-        fontFamily: DISPLAY, fontSize: 14, fontWeight: 800, color: c.primary, textAlign: "right",
-      });
-      paint(add, `شرح ${label}`, note, 16, y + 8, 76, 14, {
-        fontFamily: BODY, fontSize: 11, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.45,
-      });
+      paint(add, `بند ${label}`, label, 150, y + 8, 44, 8, { ...ROLE.meta, color: c.accent });
+      paint(add, `قيمة ${label}`, value, 96, y + 6, 48, 10, { ...ROLE.h2, color: c.primary });
+      paint(add, `شرح ${label}`, note, 16, y + 8, 76, 14, { ...ROLE.body, fontSize: 11, color: c.ink, lineHeight: 1.4 });
     });
-    paint(add, "الجهة", org || "اسم الجهة", 16, 230, 178, 8, {
-      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
-    paint(add, "التاريخ", "الفترة الحالية", 16, 242, 178, 6, {
-      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "left",
-    });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 236, 120, 8, { ...ROLE.meta, color: c.muted });
+    paint(add, "التاريخ", "الفترة الحالية", 16, 248, 178, 6, { ...ROLE.caption, color: c.muted, textAlign: "left" });
   }, A4);
 }
 
 function dataFocusPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تركيز البيانات", theme, (add) => {
-    runningHead(add, { ...theme, muted: c.muted, line: c.line }, "تركيز البيانات");
-    paint(add, "الرقم", "٩٤", 16, 32, 178, 28, {
-      fontFamily: DISPLAY, fontSize: 56, fontWeight: 800, color: c.primary, textAlign: "right", lineHeight: 0.9,
-    });
-    paint(add, "التسمية", "من مئة  ·  إنجاز الخطة المعتمدة", 16, 64, 178, 8, {
-      fontFamily: META, fontSize: 10, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
-    paint(add, "الجملة", "الرقم بلا جملته مضلِّل: الستة الناقصة كلها في محور واحد.", 16, 80, 178, 12, {
-      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.6,
-    });
+    runningHead(add, { ...theme, muted: c.muted, line: c.line }, "رقم واحد");
+    paint(add, "الرقم", "٩٤", 16, 32, 178, 32, { ...ROLE.display, fontSize: 64, color: c.primary, lineHeight: 0.85 });
+    paint(add, "التسمية", "من مئة  ·  إنجاز الخطة المعتمدة", 16, 70, 178, 8, { ...ROLE.meta, fontSize: 11, color: c.muted });
+    paint(add, "الجملة", "الستة الناقصة كلها في محور التشغيل. الخدمة والتمكين أُغلقا على الخطة.", 16, 84, 178, 14, { ...ROLE.body, fontSize: 13, color: c.ink });
     add("table", {
       name: "جدول التركيز",
-      x: 16, y: 104, w: 178, h: 62,
+      x: 16, y: 108, w: 178, h: 58,
       content: JSON.stringify([
         ["المحور", "الخطة", "الفعلي"],
         ["التشغيل", "٤٠", "٣٤"],
@@ -905,21 +618,12 @@ function dataFocusPage(theme: Theme, org: string): Page {
       ]),
       style: tableStyle({ ...theme, primary: c.primary, surface: c.surface, line: c.line, ink: c.ink }, 3, 4),
     });
-    paint(add, "فرق موجب", "+٠", 120, 178, 40, 12, {
-      fontFamily: DISPLAY, fontSize: 18, fontWeight: 800, color: c.primary, textAlign: "right",
-    });
-    paint(add, "شرح موجب", "الخدمة والتمكين", 120, 192, 74, 6, {
-      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
-    paint(add, "فرق سالب", "−٦", 16, 178, 40, 12, {
-      fontFamily: DISPLAY, fontSize: 18, fontWeight: 800, color: c.accent, textAlign: "right",
-    });
-    paint(add, "شرح سالب", "عجز التشغيل وحده", 16, 192, 70, 6, {
-      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
-    paint(add, "الجهة", org || "اسم الجهة", 16, 250, 178, 6, {
-      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
+    paint(add, "فرق موجب", "٠", 120, 178, 36, 12, { ...ROLE.h1, fontSize: 20, color: c.primary });
+    paint(add, "شرح موجب", "الخدمة والتمكين على الخطة", 120, 192, 74, 10, { ...ROLE.caption, color: c.muted, lineHeight: 1.35 });
+    tick(add, "فاصل الفرق", 108, 180, 24, c.line);
+    paint(add, "فرق سالب", "−٦", 16, 178, 50, 12, { ...ROLE.h1, fontSize: 20, color: c.accent });
+    paint(add, "شرح سالب", "عجز التشغيل وحده", 16, 192, 80, 8, { ...ROLE.caption, color: c.muted });
+    paint(add, "الأثر", "معالجة العجز لا تمر برفع هدف الخدمة. الخدمة أغلقت.", 16, 214, 178, 12, { ...ROLE.body, fontSize: 12, color: c.ink });
     folio(add, { ...theme, line: c.line, muted: c.muted }, org, "٠٥");
   }, A4);
 }
@@ -927,32 +631,23 @@ function dataFocusPage(theme: Theme, org: string): Page {
 function verticalFlowPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تدفق رأسي", theme, (add) => {
-    paint(add, "العنوان", "من الطلب إلى الأثر", 16, 20, 150, 12, {
-      fontFamily: DISPLAY, fontSize: 20, fontWeight: 800, color: c.primary, textAlign: "right",
-    });
-    paint(add, "الجهة", org || "اسم الجهة", 16, 36, 150, 6, {
-      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
-    band(add, "العمود", 186, 58, 0.5, 200, c.line);
+    paint(add, "العنوان", "من الطلب إلى الأثر", 16, 18, 140, 10, { ...ROLE.h1, fontSize: 20, color: c.primary });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 32, 140, 6, { ...ROLE.caption, color: c.muted });
     const steps: [string, string, string, boolean][] = [
-      ["٠١", "الطلب", "يصل مكتوبًا، لا شفهيًا.", false],
-      ["٠٢", "الفرز", "يُرد غير المكتمل في اليوم نفسه.", false],
-      ["٠٣", "التنفيذ", "هذه المرحلة الحالية. لها مالك واحد وموعد واحد.", true],
+      ["٠١", "الطلب", "يصل مكتوبًا، برقم وتاريخ، ولا يُعتمد شفهيًا.", false],
+      ["٠٢", "الفرز", "غير المكتمل يُرد في اليوم نفسه.", false],
+      ["٠٣", "التنفيذ", "هذه المرحلة الحالية. لها مالك واحد، وموعد واحد، ولا تُفتح مرحلة المراجعة قبلها.", true],
       ["٠٤", "المراجعة", "المراجع ليس المنفّذ.", false],
-      ["٠٥", "الأثر", "يُقاس بعد ثلاثين يومًا، لا عند التسليم.", false],
+      ["٠٥", "الأثر", "يُقاس بعد ثلاثين يومًا من التسليم.", false],
     ];
-    steps.forEach(([num, title, body, current], i) => {
-      const y = 56 + i * 40;
-      band(add, `علامة ${num}`, 182, y + 2, 8, 8, current ? c.accent : c.primary);
-      paint(add, `رقم ${num}`, num, 154, y, 24, 8, {
-        fontFamily: DISPLAY, fontSize: 12, fontWeight: 800, color: current ? c.accent : c.primary, textAlign: "right",
+    let y = 48;
+    steps.forEach(([num, title, body, current]) => {
+      paint(add, `رقم ${num}`, num, 166, y, 28, 8, { ...ROLE.h3, color: current ? c.accent : c.primary });
+      paint(add, `عنوان ${title}`, title, 16, y, 144, 8, { ...ROLE.h2, color: current ? c.primary : c.ink });
+      paint(add, `متن ${title}`, body, 16, y + 12, 178, current ? 18 : 10, {
+        ...ROLE.body, fontSize: 11, fontWeight: current ? 700 : 500, color: c.ink, lineHeight: 1.45,
       });
-      paint(add, `عنوان ${title}`, title, 16, y, 132, 8, {
-        fontFamily: DISPLAY, fontSize: 14, fontWeight: 800, color: c.ink, textAlign: "right",
-      });
-      paint(add, `متن ${title}`, body, 16, y + 12, 160, 12, {
-        fontFamily: BODY, fontSize: 11, fontWeight: current ? 700 : 500, color: c.ink, textAlign: "right",
-      });
+      y += current ? 40 : 30;
     });
   }, A4);
 }
@@ -961,145 +656,79 @@ function asymmetricPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تحريرية غير متماثلة", theme, (add) => {
     add("image", {
-      name: "الصورة القائدة",
-      x: 118, y: 0, w: 92, h: 297,
-      src: plate("press"),
-      style: { objectFit: "cover", radius: 0 },
+      name: "الصورة القائدة", x: 122, y: 0, w: 88, h: 297,
+      src: plate("press"), style: { objectFit: "cover", radius: 0 },
     });
-    paint(add, "كِكر", "ملف", 16, 28, 92, 6, {
-      fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
-    });
-    paint(add, "العنوان", "الصورة\nعلى الحافة\nوالنص في الداخل", 16, 42, 92, 42, {
-      fontFamily: "Noto Kufi Arabic", fontSize: 18, fontWeight: 700, color: c.primary, textAlign: "right", lineHeight: 1.25,
-    });
-    hairline(add, "فاصل", 16, 96, 40, c.accent, 1);
-    paint(add, "المتن", "العمود ضيق عمدًا. الجملة الطويلة تُكسر، والصورة لا تتنافس معها على العرض.", 16, 108, 92, 48, {
-      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.75,
-    });
-    paint(add, "التعليق", "تعليق الصورة يقف في عمود النص، لا فوق الصورة.", 16, 170, 92, 16, {
-      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right", lineHeight: 1.45,
-    });
-    paint(add, "الجهة", org || "اسم الجهة", 16, 260, 92, 8, {
-      fontFamily: DISPLAY, fontSize: 11, fontWeight: 700, color: c.primary, textAlign: "right",
-    });
+    paint(add, "كِكر", "تغطية", 16, 28, 96, 6, { ...ROLE.meta, color: c.accent });
+    paint(add, "العنوان", "البيان تأخر\nيومًا عن الصورة", 16, 40, 96, 28, { ...ROLE.h1, fontFamily: EDITORIAL, fontWeight: 700, fontSize: 18, color: c.primary, lineHeight: 1.25 });
+    hairline(add, "فاصل", 16, 76, 36, c.accent, 1);
+    paint(add, "المتن", "الصورة من المنفذ الغربي في اليوم الثاني. البيان صدر في اليوم الثالث، بعد إغلاق فجوة المواد لا قبلها.", 16, 88, 96, 48, { ...ROLE.body, fontSize: 12, color: c.ink });
+    paint(add, "التعليق", "اليوم الثاني  ·  المنفذ الغربي  ·  قبل البيان", 16, 148, 96, 16, { ...ROLE.caption, color: c.muted, lineHeight: 1.45 });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 260, 96, 10, { ...ROLE.h3, color: c.primary });
   }, A4);
 }
 
 function modularPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("وحدات معيارية", theme, (add) => {
-    paint(add, "كِكر", "وحدات  ·  بأحجام مختلفة", 16, 18, 178, 6, {
-      fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
-    });
-    paint(add, "الوحدة العريضة", "وحدة النص أعرض من وحدة الصورة، لأن القراءة هنا هي العمل.", 16, 30, 178, 16, {
-      fontFamily: DISPLAY, fontSize: 16, fontWeight: 800, color: c.primary, textAlign: "right", lineHeight: 1.35,
-    });
+    paint(add, "كِكر", "قراءة مركّبة", 16, 18, 178, 6, { ...ROLE.meta, color: c.accent });
+    paint(add, "الوحدة العريضة", "أربع بوابات صارت تغطية كاملة، وانخفض الانتظار إلى الثلث.", 16, 28, 178, 16, { ...ROLE.h2, fontSize: 16, color: c.primary, lineHeight: 1.35 });
     add("image", {
-      name: "وحدة الصورة",
-      x: 16, y: 58, w: 72, h: 88,
-      src: plate("archive"),
-      style: { objectFit: "cover", radius: 0 },
+      name: "وحدة الصورة", x: 16, y: 54, w: 78, h: 96,
+      src: plate("field"), style: { objectFit: "cover", radius: 0 },
     });
-    paint(add, "وحدة جانبية", "وحدة قائمة أضيق. ثلاثة أسطر تكفي، والرابع يُحذف.", 96, 58, 98, 28, {
-      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.7,
-    });
-    paint(add, "بند أول", "٠١  وضوح المرجع", 96, 96, 98, 8, {
-      fontFamily: META, fontSize: 10, fontWeight: 700, color: c.ink, textAlign: "right",
-    });
-    paint(add, "بند ثان", "٠٢  مقياس واحد للعنوان", 96, 108, 98, 8, {
-      fontFamily: META, fontSize: 10, fontWeight: 700, color: c.ink, textAlign: "right",
-    });
-    paint(add, "بند ثالث", "٠٣  صورة لها تعليق", 96, 120, 98, 8, {
-      fontFamily: META, fontSize: 10, fontWeight: 700, color: c.ink, textAlign: "right",
-    });
-    hairline(add, "فاصل الاقتباس", 16, 162, 178, c.line, 0.35);
-    band(add, "علامة الاقتباس", 16, 174, 18, 1.2, c.accent);
-    paint(add, "اقتباس", "الوحدة لا تعني البطاقة. تعني أن لكل كتلة عرضًا يليق بمهمتها.", 16, 182, 178, 20, {
-      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.7,
-    });
-    paint(add, "الجهة", org || "اسم الجهة", 16, 250, 178, 8, {
-      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
-    paint(add, "تعليق الصورة", "تعليق الوحدة البصرية", 16, 148, 72, 8, {
-      fontFamily: META, fontSize: 7.5, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
+    paint(add, "وحدة جانبية", "الانخفاض لم يحتج موظفين جدد. الذي تغيّر هو توزيع المناوبة.", 102, 54, 92, 24, { ...ROLE.body, fontSize: 12, color: c.ink });
+    paint(add, "بند أول", "٢٦ دقيقة كان متوسط الانتظار قبل التعديل", 102, 86, 92, 12, { ...ROLE.meta, fontSize: 10, color: c.ink, lineHeight: 1.35 });
+    paint(add, "بند ثان", "١١ دقيقة بعد أن صارت المناوبة كاملة", 102, 102, 92, 12, { ...ROLE.meta, fontSize: 10, color: c.ink, lineHeight: 1.35 });
+    paint(add, "بند ثالث", "صفر زيادة في عدد الموظفين الميدانيين", 102, 118, 92, 12, { ...ROLE.meta, fontSize: 10, color: c.ink, lineHeight: 1.35 });
+    paint(add, "تعليق الصورة", "المنفذ الرئيسي  ·  بعد تعديل المناوبة", 16, 152, 78, 10, { ...ROLE.caption, color: c.muted, lineHeight: 1.3 });
+    hairline(add, "فاصل الاقتباس", 16, 172, 178, c.line, 0.35);
+    band(add, "علامة الاقتباس", 16, 184, 22, 1.1, c.accent);
+    paint(add, "اقتباس", "الطلب لم يكن العائق. العائق مناوبة لم تُراجع منذ اعتماد الخطة.", 16, 192, 178, 16, { ...ROLE.body, fontSize: 13, color: c.ink });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 248, 178, 8, { ...ROLE.meta, color: c.muted });
   }, A4);
 }
 
 function executivePage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("ملخص تنفيذي", theme, (add) => {
-    paint(add, "تصنيف", "ملخص تنفيذي", 16, 36, 178, 6, {
-      fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
-    });
-    paint(add, "الرسالة", "جملة واحدة\nتكفي لهذا\nالاجتماع.", 16, 52, 178, 48, {
-      fontFamily: DISPLAY, fontSize: 32, fontWeight: 800, color: c.primary, textAlign: "right", lineHeight: 1.12,
-    });
-    hairline(add, "فاصل", 150, 112, 44, c.accent, 1);
-    paint(add, "الرقم", "٤٢٪", 16, 130, 70, 16, {
-      fontFamily: DISPLAY, fontSize: 28, fontWeight: 800, color: c.ink, textAlign: "right", lineHeight: 1,
-    });
-    paint(add, "تسمية الرقم", "فوق الخطة، وتحت الطاقة", 16, 148, 80, 8, {
-      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
-    paint(add, "المتن", "لا تُطلب شريحة إضافية. يُطلب قرار: نبقي الهدف، ونؤجل التوسعة.", 100, 132, 94, 28, {
-      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.7,
-    });
-    hairline(add, "خط التوقيع", 16, 220, 48, c.line, 0.4);
-    paint(add, "التوقيع", "الاسم\nالصفة", 16, 226, 60, 14, {
-      fontFamily: META, fontSize: 10, fontWeight: 600, color: c.muted, textAlign: "right", lineHeight: 1.4,
-    });
-    paint(add, "الجهة", org || "اسم الجهة", 100, 236, 94, 8, {
-      fontFamily: DISPLAY, fontSize: 12, fontWeight: 700, color: c.primary, textAlign: "right",
-    });
+    paint(add, "تصنيف", "ملخص تنفيذي", 16, 28, 178, 6, { ...ROLE.meta, color: c.accent });
+    paint(add, "الرسالة", "نبقي الهدف.\nونؤجل التوسعة.", 16, 42, 178, 36, { ...ROLE.display, fontSize: 30, color: c.primary, lineHeight: 1.12 });
+    hairline(add, "فاصل", 154, 88, 40, c.accent, 1);
+    paint(add, "الرقم", "٤٢٪", 16, 104, 70, 16, { ...ROLE.display, fontSize: 28, color: c.ink, lineHeight: 1 });
+    paint(add, "تسمية الرقم", "فوق الخطة\nوتحت الطاقة", 16, 122, 70, 12, { ...ROLE.caption, color: c.muted, lineHeight: 1.35 });
+    paint(add, "المتن", "لا تُطلب شريحة إضافية. يُطلب قرار في هذه الجلسة، والمرفقات لمن أراد السند.", 96, 106, 98, 32, { ...ROLE.body, fontSize: 13, color: c.ink });
+    hairline(add, "خط التوقيع", 16, 210, 52, c.line, 0.4);
+    paint(add, "التوقيع", "الاسم\nالصفة", 16, 216, 60, 14, { ...ROLE.meta, fontSize: 10, color: c.muted, lineHeight: 1.4 });
+    paint(add, "الجهة", org || "اسم الجهة", 100, 220, 94, 8, { ...ROLE.h3, color: c.primary });
+    paint(add, "الجلسة", "اجتماع القيادة  ·  هذا الأسبوع", 100, 232, 94, 6, { ...ROLE.caption, color: c.muted });
   }, A4);
 }
 
 function statisticalPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("قراءة إحصائية", theme, (add) => {
-    runningHead(add, { ...theme, muted: c.muted, line: c.line }, "قراءة إحصائية");
-    paint(add, "الرقم", "٤٫٧", 120, 32, 74, 20, {
-      fontFamily: DISPLAY, fontSize: 36, fontWeight: 800, color: c.primary, textAlign: "right", lineHeight: 1,
-    });
-    paint(add, "التسمية", "متوسط الرضا", 120, 54, 74, 6, {
-      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
-    const mini: [string, string][] = [
-      ["ن = ١٢٠٠", "العينة"],
-      ["±٠٫٢", "هامش الخطأ"],
-      ["٩٢٪", "اكتمال الاستجابة"],
-    ];
-    mini.forEach(([value, label], i) => {
-      const y = 32 + i * 14;
-      paint(add, `قيمة ${label}`, value, 16, y, 50, 6, {
-        fontFamily: DISPLAY, fontSize: 11, fontWeight: 800, color: c.ink, textAlign: "right",
-      });
-      paint(add, `اسم ${label}`, label, 68, y, 40, 6, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
-      });
-    });
-    hairline(add, "قاعدة الرسم", 16, 188, 178, c.ink, 0.4);
+    runningHead(add, { ...theme, muted: c.muted, line: c.line }, "الرضا");
+    paint(add, "الرقم", "٤.٧", 120, 28, 74, 18, { ...ROLE.display, fontSize: 32, color: c.primary, lineHeight: 1 });
+    paint(add, "التسمية", "متوسط الرضا من خمسة", 120, 48, 74, 8, { ...ROLE.caption, color: c.muted });
+    paint(add, "العينة", "١٢٠٠ مستفيد  ·  هامش ±٠.٢  ·  اكتمال ٩٢٪", 16, 36, 96, 16, { ...ROLE.caption, color: c.muted, lineHeight: 1.45 });
     const bars: [string, number][] = [
       ["الخدمة", 86],
       ["السرعة", 74],
       ["الوضوح", 91],
       ["المتابعة", 68],
     ];
+    const base = 176;
+    hairline(add, "قاعدة الرسم", 20, base, 170, c.ink, 0.4);
     bars.forEach(([label, value], i) => {
-      const x = 28 + i * 44;
-      const h = value * 0.9;
-      band(add, `عمود ${label}`, x, 188 - h, 18, h, i === 2 ? c.accent : c.primary);
-      paint(add, `محور ${label}`, String(label), x - 6, 192, 30, 8, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "center",
-      });
+      const x = 32 + i * 42;
+      const h = value * 0.85;
+      band(add, `عمود ${label}`, x, base - h, 16, h, i === 2 ? c.accent : c.primary);
+      const digits = "٠١٢٣٤٥٦٧٨٩";
+      paint(add, `قيمة ${label}`, String(value).replace(/[0-9]/g, (d) => digits[Number(d)]), x - 4, base - h - 8, 24, 6, { ...ROLE.caption, color: c.ink, textAlign: "center" });
+      paint(add, `محور ${label}`, label, x - 8, base + 4, 32, 8, { ...ROLE.caption, color: c.muted, textAlign: "center" });
     });
-    paint(add, "القراءة", "الوضوح أعلى المحاور، والمتابعة أدناها. الفجوة إجراء، لا حملة.", 16, 210, 178, 14, {
-      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.6,
-    });
-    paint(add, "الجهة", org || "اسم الجهة", 16, 236, 178, 6, {
-      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
+    paint(add, "القراءة", "الوضوح أعلى المحاور، والمتابعة أدناها. الفجوة إجراء داخل الفريق، لا حملة للجمهور.", 16, 196, 178, 16, { ...ROLE.body, color: c.ink });
     folio(add, { ...theme, line: c.line, muted: c.muted }, org, "٠٦");
   }, A4);
 }
@@ -1107,60 +736,42 @@ function statisticalPage(theme: Theme, org: string): Page {
 function sectionDividerPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("فاصل قسم", theme, (add) => {
-    paint(add, "الجهة", org || "اسم الجهة", 16, 28, 178, 6, {
-      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
-    paint(add, "رقم القسم", "٠٢", 16, 70, 178, 36, {
-      fontFamily: DISPLAY, fontSize: 72, fontWeight: 800, color: c.primary, textAlign: "right", lineHeight: 0.85,
-    });
-    hairline(add, "فاصل", 140, 118, 54, c.accent, 1.1);
-    paint(add, "عنوان القسم", "النتائج\nوالأثر", 16, 132, 150, 28, {
-      fontFamily: DISPLAY, fontSize: 28, fontWeight: 800, color: c.ink, textAlign: "right", lineHeight: 1.1,
-    });
-    paint(add, "وصف القسم", "ما الذي تغيّر، ولماذا يهم القرار التالي.", 16, 170, 140, 14, {
-      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.muted, textAlign: "right", lineHeight: 1.6,
-    });
-    paint(add, "الفهرس", "٠١ النطاق\n٠٢ النتائج\n٠٣ التوصية", 16, 220, 80, 24, {
-      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right", lineHeight: 1.6,
-    });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 24, 140, 6, { ...ROLE.meta, color: c.muted });
+    paint(add, "الوثيقة", "تقرير الأداء", 16, 24, 178, 6, { ...ROLE.meta, color: c.muted, textAlign: "left" });
+    tick(add, "حافة القسم", 194, 48, 120, c.accent);
+    paint(add, "رقم القسم", "٠٢", 16, 64, 170, 36, { ...ROLE.display, fontSize: 68, color: c.primary, lineHeight: 0.85 });
+    hairline(add, "فاصل", 140, 112, 46, c.accent, 1.1);
+    paint(add, "عنوان القسم", "النتائج والأثر", 16, 124, 160, 14, { ...ROLE.h1, fontSize: 26, color: c.ink });
+    paint(add, "وصف القسم", "ما الذي تغيّر في الخدمة، ولماذا يهم ذلك القرار التالي.", 16, 146, 150, 16, { ...ROLE.body, color: c.muted });
+    paint(add, "الفهرس", "٠١   النطاق\n٠٢   النتائج\n٠٣   التوصية", 16, 210, 80, 24, { ...ROLE.meta, color: c.muted, lineHeight: 1.7 });
+    paint(add, "التالي", "يليه جدول المؤشرات", 16, 250, 160, 8, { ...ROLE.caption, color: c.muted });
   }, A4);
 }
 
 function processPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("مراحل إجرائية", theme, (add) => {
-    paint(add, "تسمية", "تسلسل إجرائي", 16, 22, 178, 6, {
-      fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
-    });
-    paint(add, "العنوان", "أربع مراحل على خط واحد", 16, 34, 178, 12, {
-      fontFamily: DISPLAY, fontSize: 20, fontWeight: 800, color: c.primary, textAlign: "right",
-    });
-    hairline(add, "المسار", 20, 78, 170, c.line, 0.6);
+    paint(add, "تسمية", "تسلسل إجرائي", 16, 20, 120, 6, { ...ROLE.meta, color: c.accent });
+    paint(add, "العنوان", "أربع مراحل", 16, 30, 120, 12, { ...ROLE.h1, color: c.primary });
+    paint(add, "الحالة", "الآن: التنفيذ", 120, 34, 74, 8, { ...ROLE.meta, color: c.accent, textAlign: "left" });
+    hairline(add, "المسار", 24, 72, 164, c.line, 0.7);
     const stages: [string, string][] = [
-      ["تحديد", "نطاق مكتوب ومالك."],
-      ["تحليل", "رقم مع مصدر."],
-      ["تنفيذ", "هذه المرحلة الآن."],
-      ["قياس", "بعد ثلاثين يومًا."],
+      ["تحديد", "نطاق مكتوب"],
+      ["تحليل", "رقم ومصدر"],
+      ["تنفيذ", "المرحلة الحالية"],
+      ["قياس", "بعد ٣٠ يومًا"],
     ];
     stages.forEach(([label, note], i) => {
-      const x = 16 + i * 46;
-      band(add, `نقطة ${label}`, x + 14, 74, 8, 8, i === 2 ? c.accent : c.primary);
-      paint(add, `رقم ${label}`, `٠${i + 1}`, x, 90, 42, 8, {
-        fontFamily: DISPLAY, fontSize: 12, fontWeight: 800, color: i === 2 ? c.accent : c.primary, textAlign: "center",
-      });
-      paint(add, `اسم ${label}`, label, x, 102, 42, 8, {
-        fontFamily: DISPLAY, fontSize: 12, fontWeight: 800, color: c.ink, textAlign: "center",
-      });
-      paint(add, `شرح ${label}`, note, x, 114, 42, 16, {
-        fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "center", lineHeight: 1.4,
-      });
+      const x = 18 + i * 46;
+      band(add, `نقطة ${label}`, x + 16, 68, 8, 8, i === 2 ? c.accent : c.primary);
+      paint(add, `رقم ${label}`, `٠${i + 1}`, x, 84, 42, 8, { ...ROLE.h3, color: i === 2 ? c.accent : c.primary, textAlign: "center" });
+      paint(add, `اسم ${label}`, label, x, 96, 42, 8, { ...ROLE.h3, color: c.ink, textAlign: "center" });
+      paint(add, `شرح ${label}`, note, x, 108, 42, 10, { ...ROLE.caption, color: c.muted, textAlign: "center" });
     });
-    paint(add, "الحالة", "المرحلة الحالية هي التنفيذ. القياس لا يبدأ عند التسليم.", 16, 150, 178, 16, {
-      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.7,
-    });
-    paint(add, "الجهة", org || "اسم الجهة", 16, 250, 178, 8, {
-      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
-    });
+    band(add, "إسقاط", 126, 76, 0.7, 28, c.accent);
+    paint(add, "الحالة المفصّلة", "التنفيذ مفتوح. القياس لا يبدأ عند التسليم، بل بعد ثلاثين يومًا من استخدام المخرج.", 16, 136, 178, 18, { ...ROLE.body, color: c.ink });
+    paint(add, "المالك", "المالك: مكتب الخطة  ·  الموعد: نهاية هذا الربع.", 16, 162, 178, 8, { ...ROLE.caption, color: c.muted });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 250, 178, 8, { ...ROLE.meta, color: c.muted });
   }, A4);
 }
 
