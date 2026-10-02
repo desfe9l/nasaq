@@ -19,6 +19,7 @@ export type LicenseSummaryInput = {
   isSuspended?: boolean;
   hasLicense: boolean;
   license: LicenseInfo | null;
+  trial?: { startedAt: string; expiresAt: string } | null;
 };
 
 export type LicenseSummary = {
@@ -68,6 +69,14 @@ export function licenseSummary(input: LicenseSummaryInput): LicenseSummary {
       label: "موقوف بقرار الإدارة",
       detail: "تواصل مع الإدارة لاستعادة التفعيل.",
       tone: "suspended",
+    };
+  }
+  if (input.trial) {
+    const expiry = formatExpiry(input.trial.expiresAt);
+    return {
+      label: "تجربة مجانية",
+      detail: expiry ? `تنتهي في ${expiry}` : null,
+      tone: "licensed",
     };
   }
   if (input.hasLicense) {

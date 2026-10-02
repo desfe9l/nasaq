@@ -181,7 +181,8 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
       } else {
         setState({ isLoading: false, hasLicense: false, isAdmin: false,
           isSuspended: result.isSuspended === true,
-          license: result.license ?? null, entitlements: EMPTY_ENTITLEMENTS, error: result.message ?? null });
+          license: result.license ?? null, trial: null,
+          entitlements: EMPTY_ENTITLEMENTS, error: result.message ?? null });
       }
     } catch {
       // Status unavailable: keep whatever the key-based validation resolved,

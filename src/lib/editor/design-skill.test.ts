@@ -29,7 +29,7 @@ const REQUIRED_PHRASES = [
   "Educational",
 ];
 
-const KEPT_PACKS = ["official", "eid", "briefing", "slides", "blank"];
+const KEPT_PACKS: (typeof PACKS)[number]["id"][] = ["official", "eid", "briefing", "slides", "blank"];
 const KEPT_FAMILIES = [
   "family-gov-cover",
   "family-gov-opener",

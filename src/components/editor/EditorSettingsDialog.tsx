@@ -151,7 +151,7 @@ function Row({
 function AccountSection() {
   const { user } = useCurrentUserState();
   const identity = accountIdentity(user);
-  const { isLoading, hasLicense, isAdmin, isSuspended, license, activate } =
+  const { isLoading, hasLicense, isAdmin, isSuspended, license, trial, activate } =
     useLicense(user?.id, user?.primaryEmail);
   const summary = licenseSummary({
     isLoading,
@@ -159,6 +159,7 @@ function AccountSection() {
     isSuspended,
     hasLicense,
     license,
+    trial,
   });
 
   const [key, setKey] = useState("");

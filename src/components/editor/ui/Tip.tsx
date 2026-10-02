@@ -148,10 +148,8 @@ export function Tip({ label, hint, shortcut, side = "bottom", children }: TipPro
     };
   }, [open, hide]);
 
-  const child = children as ReactElement<Record<string, unknown>> & {
-    ref?: unknown;
-  };
-  const childRef = (child as { ref?: unknown }).ref;
+  const child = children as ReactElement<Record<string, unknown>>;
+  const childRef = child.props.ref;
 
   const handlers: Record<string, unknown> = {
     onPointerEnter: (event: React.PointerEvent) => {

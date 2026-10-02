@@ -146,12 +146,13 @@ async function stateOf(user: { id: string; email: string }) {
     isSuspended: access.isSuspended,
     hasLicense: Boolean(access.license),
     license: access.license ?? previous,
+    trial: access.trial,
   });
   return { access, summary };
 }
 
 describe("editor access per account state", () => {
-  it("lets a registered, unlicensed account in — on the free limits", async () => {
+  it("starts a verified, unlicensed account on the full individual trial", async () => {
     // The door: any verified session enters the editor directly — there is no
     // «Try Editor» step in front of it.
     const entry = editorEntryFor({ isPending: false, hasUser: true });
@@ -162,15 +163,14 @@ describe("editor access per account state", () => {
     const { access, summary } = await stateOf(USERS.unlicensed);
     assert.equal(access.isAdmin, false);
     assert.equal(access.license, null);
-    assert.deepEqual(access.entitlements, LICENSE_ENTITLEMENTS.FREE);
-    // Editing stays open. Saving or downloading any format does not — that
-    // waits for a purchased or trial licence.
+    assert.ok(access.trial);
+    assert.deepEqual(access.entitlements, LICENSE_ENTITLEMENTS.TRIAL);
     assert.equal(access.entitlements.core_editor, true);
-    assert.equal(access.entitlements.basic_export, false);
-    assert.equal(access.entitlements.premium_templates, false);
-    assert.equal(access.entitlements.advanced_export, false);
-    assert.equal(access.entitlements.brand_kit, false);
-    assert.equal(access.entitlements.unlimited_pages, false);
+    assert.equal(access.entitlements.basic_export, true);
+    assert.equal(access.entitlements.premium_templates, true);
+    assert.equal(access.entitlements.advanced_export, true);
+    assert.equal(access.entitlements.brand_kit, true);
+    assert.equal(access.entitlements.unlimited_pages, true);
 
     // The account is still named and told what is locked — with the name read
     // back from the auth database and mapped the way the session maps it.
@@ -178,9 +178,9 @@ describe("editor access per account state", () => {
     assert.equal(accountLabel(identity), "فيصل العنزي");
     assert.equal(accountIdentity(identity).initials, "فع");
     assert.equal(identity.primaryEmail, "free@example.com");
-    assert.equal(summary.tone, "free");
-    assert.equal(summary.label, "مجاني");
-    assert.ok(summary.detail?.includes("المزايا المدفوعة مقفلة"));
+    assert.equal(summary.tone, "licensed");
+    assert.equal(summary.label, "تجربة مجانية");
+    assert.ok(summary.detail?.startsWith("تنتهي في "));
   });
 
   it("gives a licensed account the full plan and names it", async () => {
