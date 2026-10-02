@@ -2669,12 +2669,8 @@ const LayerRow = memo(function LayerRow({
           });
         }}
         className={cn(
-          "layer-row relative flex items-center gap-1.5 rounded-[8px] border px-2 py-1.5",
-          // Selected layer: a firm ring + tinted row, clearly stronger than the
-          // idle border — it must read at a glance against the layers list.
-          selected
-            ? "border-navy-2 bg-navy-2/10 ring-2 ring-navy-2/40"
-            : "border-line",
+          "layer-row relative flex items-center gap-1 rounded-[6px] border px-1.5 py-0.5",
+          selected ? "is-selected" : "hover:bg-line-2/70",
           dragging && "is-dragging",
           dropBefore && "is-drop-before",
           dropAfter && "is-drop-after",
@@ -2782,6 +2778,8 @@ const LayerRow = memo(function LayerRow({
         {/* Move up/down: wired to `moveLayer`, which swaps real array order and
             renumbers z — the layers list, canvas stacking and export order all
             follow the same z rule, so one press moves the layer everywhere. */}
+        {selected && (
+          <>
         <button
           type="button"
           title="تقديم طبقة"
@@ -2800,11 +2798,6 @@ const LayerRow = memo(function LayerRow({
         >
           <ArrowDown className="size-3.5" />
         </button>
-        {/*
-         * The eye is the FOLDER switch: hiding a group also hides every nested
-         * child (the store cascades the flag), which is what makes "hide this
-         * folder" mean what the author expects.
-         */}
         <button
           type="button"
           title={layer.hidden ? "إظهار" : "إخفاء"}
@@ -2839,6 +2832,8 @@ const LayerRow = memo(function LayerRow({
             <Lock className="size-3.5" />
           )}
         </button>
+          </>
+        )}
       </div>
       {isFolder && expanded && children.length > 0 && (
         <div className="layer-children">

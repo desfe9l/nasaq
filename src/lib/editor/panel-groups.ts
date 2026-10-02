@@ -49,28 +49,27 @@ export interface PanelGroupState {
 }
 
 /*
- * v2: the shipped default became two docked groups (see
- * `defaultWorkspaceGroups`). Bumping the key resets every author to the new
- * arrangement once; their own regrouping is remembered from then on.
+ * v3: أدوات التقرير joins الخصائص والطبقات. Bumping the key resets every
+ * author to the new arrangement once; their own regrouping is remembered
+ * from then on.
  */
-const STORAGE_KEY = "nasaq.panel.groups.v2";
+const STORAGE_KEY = "nasaq.panel.groups.v3";
 
 /**
  * The two windows the editor opens with, as separate groups of tabs:
- *   • the RIGHT window — لوحة العناصر first, then أدوات العناصر, المكتبة and
- *     أدوات التقرير — everything that puts content on the page,
- *   • the LEFT window — الخصائص then الطبقات — everything that edits it.
+ *   • the RIGHT window — لوحة العناصر, then أدوات العناصر and المكتبة,
+ *   • the LEFT window — الخصائص, then الطبقات and أدوات التقرير.
  * Hosts lead their groups, so `elements` and `properties` are the windows.
  */
 export const WORKSPACE_RIGHT_GROUP: readonly EditorPanelId[] = [
   "elements",
   "tools",
   "library",
-  "report",
 ];
 export const WORKSPACE_LEFT_GROUP: readonly EditorPanelId[] = [
   "properties",
   "layers",
+  "report",
 ];
 
 function isPanelId(value: unknown): value is EditorPanelId {

@@ -126,8 +126,8 @@ test("stored garbage normalises back to a valid partition", () => {
 test("the shipped layout is two windows: content on the right, inspector on the left", () => {
   const state = defaultWorkspaceGroups();
   assertPartition(state);
-  assert.deepEqual(state.groups.elements, ["elements", "tools", "library", "report"]);
-  assert.deepEqual(state.groups.properties, ["properties", "layers"]);
+  assert.deepEqual(state.groups.elements, ["elements", "tools", "library"]);
+  assert.deepEqual(state.groups.properties, ["properties", "layers", "report"]);
   assert.equal(Object.keys(state.groups).length, 2);
   assert.equal(state.tabs.elements, "elements");
   assert.equal(state.tabs.properties, "properties");
