@@ -11,7 +11,12 @@ import { nitro } from "nitro/vite";
 import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
+// @ts-expect-error JS module alongside the TS vite config
+import { emitShareRasterAssets } from "./scripts/emit-share-raster-assets.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
+
+// Before any plugin or server bundle reads the rasterizer. See the script.
+emitShareRasterAssets();
 
 /**
  * Build identity for the stale-build guard (`src/lib/app-update.ts`).
@@ -215,8 +220,8 @@ export default defineConfig(({ command, isPreview }) => ({
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
             serverDir: "./server",
-            // The SVG→PNG share renderer is a wasm package. Keep it external
-            // and trace the wasm binary into the server function.
+            // Wasm bytes are inlined by emitShareRasterAssets(). Keep the JS
+            // package inside the function so initWasm is not an external require.
             traceDeps: ["@resvg/resvg-wasm"],
             noExternals: ["@resvg/resvg-wasm"],
           }),

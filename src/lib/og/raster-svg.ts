@@ -3,49 +3,31 @@
  *
  * WhatsApp, X and Telegram do not render `image/svg+xml` as `og:image`.
  * The thumbnail endpoint calls this for stored SVG previews and returns PNG.
+ *
+ * The wasm binary and the Arabic faces are inlined (see
+ * `share-raster-assets.generated.ts`). Opening them with `import.meta.url`
+ * resolves to `/var/task/_ssr/…` on Vercel, where Nitro does not emit the
+ * files, and the share image 500s.
  */
 
-import { readFile } from "node:fs/promises";
 import { initWasm, Resvg } from "@resvg/resvg-wasm";
 
 import { SHARE_RASTER_WIDTH } from "@/lib/templates/share-image";
+import { fonts, wasm } from "./share-raster-assets.generated";
 
 let ready: Promise<void> | null = null;
-let fonts: Uint8Array[] | null = null;
 
 async function ensureWasm(): Promise<void> {
   if (!ready) {
-    ready = (async () => {
-      // The binary sits beside this module so the server bundle traces it.
-      // Resolving it out of node_modules drops it from the Vercel function.
-      const wasm = await readFile(new URL("./resvg.wasm", import.meta.url));
-      await initWasm(wasm);
-    })().catch((error) => {
+    ready = initWasm(wasm).catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : "";
+      // Dev reloads re-evaluate this module after the isolate already started.
+      if (message.includes("Already initialized")) return;
       ready = null;
       throw error;
     });
   }
   await ready;
-}
-
-async function fontBuffers(): Promise<Uint8Array[]> {
-  if (fonts) return fonts;
-  const files = [
-    new URL("./fonts/Tajawal-Regular.ttf", import.meta.url),
-    new URL("./fonts/Tajawal-Bold.ttf", import.meta.url),
-    new URL("./fonts/NotoNaskhArabic-Regular.ttf", import.meta.url),
-    new URL("./fonts/NotoNaskhArabic-Bold.ttf", import.meta.url),
-  ];
-  const loaded: Uint8Array[] = [];
-  for (const file of files) {
-    try {
-      loaded.push(await readFile(file));
-    } catch {
-      /* a missing face falls back to the default family */
-    }
-  }
-  fonts = loaded;
-  return loaded;
 }
 
 function decodeDataUrl(href: string): Uint8Array | null {
@@ -63,7 +45,7 @@ export async function rasterizeSvgToPng(svg: string, width = SHARE_RASTER_WIDTH)
   const resvg = new Resvg(svg, {
     fitTo: { mode: "width", value: Math.max(1, Math.round(width)) },
     font: {
-      fontBuffers: await fontBuffers(),
+      fontBuffers: fonts,
       defaultFontFamily: "Tajawal",
       sansSerifFamily: "Tajawal",
       serifFamily: "Noto Naskh Arabic",
