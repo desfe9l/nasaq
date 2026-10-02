@@ -17,6 +17,13 @@
  */
 export const OVERLAY_BREAKPOINT = 768;
 
+/**
+ * Below this width windows float over a full-width canvas instead of docking
+ * as grid tracks: two docked panels leave a portrait iPad (≈820px) barely half
+ * its width for the artboard. Landscape iPad and desktop dock as before.
+ */
+export const DOCK_BREAKPOINT = 1100;
+
 /** True when the viewport is in slide-over mode (tablet/phone widths). */
 export function isOverlayViewport(): boolean {
   if (typeof window === "undefined" || typeof window.matchMedia !== "function")
@@ -561,9 +568,9 @@ export function bubblePartWidth(part: BubblePart): number {
     case "ink":
     case "element":
       return cells(2);
-    // Replace, crop, fit, enhance and lighten.
+    // Replace, crop, fit, rotate, enhance and lighten.
     case "image":
-      return cells(5);
+      return cells(6);
     case "stroke":
       // Owns its leading separator, so a selection without stroke support
       // never leaves a stray divider behind.

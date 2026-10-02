@@ -124,6 +124,7 @@ import { EditorAccountMenu } from "./EditorAccountMenu";
 import { HeaderPaint } from "./HeaderPaint";
 import {
   OVERLAY_BREAKPOINT,
+  DOCK_BREAKPOINT,
   isOverlayViewport,
   clampDockSize,
   fitSideDockWidths,
@@ -630,6 +631,11 @@ function Studio({
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window === "undefined" || !isOverlayViewport(),
   );
+  const [canDock, setCanDock] = useState(
+    () =>
+      typeof window === "undefined" ||
+      window.matchMedia(`(min-width: ${DOCK_BREAKPOINT}px)`).matches,
+  );
   /**
    * Phone width. The bar drops to two deliberate rows there and the scaling
    * cluster moves into «عرض», so history, export and the account control can
@@ -664,6 +670,18 @@ function Studio({
     onCompact();
     compact.addEventListener("change", onCompact);
     return () => compact.removeEventListener("change", onCompact);
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia(`(min-width: ${DOCK_BREAKPOINT}px)`);
+    const update = () => {
+      setCanDock(media.matches);
+      // Crossing into tablet width hands the whole width back to the canvas.
+      if (!media.matches) useEditor.getState().closeFloatingPanels();
+    };
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
   }, []);
 
   useEffect(() => {
@@ -1667,7 +1685,7 @@ function Studio({
           DOCK_MIN_H,
         );
   const requestedDock: Partial<Record<DockSide, PanelId>> = {};
-  if (isDesktop && !focusMode && !cropActive) {
+  if (isDesktop && canDock && !focusMode && !cropActive) {
     for (const id of hosts) {
       const side = dockSides[id];
       if (side && panelOpen[id]) requestedDock[side] = id;
@@ -2054,7 +2072,7 @@ function Studio({
       fitRef.current();
     }, 60);
     return () => clearTimeout(timer);
-  }, [isDesktop, hydrated, dockSignature]);
+  }, [isDesktop, canDock, hydrated, dockSignature]);
 
   return (
     /*

@@ -1140,6 +1140,13 @@ export function FloatingToolbar({
             />
           </AnchorMenu>
           <TipButton
+            label="تدوير 90°"
+            disabled={el.locked}
+            onClick={() => rotate(90)}
+          >
+            <RotateCw />
+          </TipButton>
+          <TipButton
             label="تحسين الوضوح"
             hint="رفع حدة الصورة — انقر مرة أخرى للإلغاء"
             pressed={Number(style.sharpness ?? 0) >= 30}
