@@ -8,9 +8,13 @@ import {
   type Theme,
 } from "./model";
 import { band, hairline, paint, plate, tick } from "./template-layouts";
+import { bindDesignSkill } from "./design-skill";
+
+bindDesignSkill("families");
 
 /**
  * Distinct editorial families for the template gallery.
+ * Art direction: `.grok/skills/nasaq-design/SKILL.md`.
  *
  * Each page is a real editable NASAQ document (text, shapes, tables, images),
  * laid on one A4 grid (18mm margin, 8mm rhythm). Families do not share a

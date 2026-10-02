@@ -8,6 +8,9 @@ import {
 } from "./templates";
 import { uid } from "@/lib/utils";
 import { canUseDemoPack } from "@/lib/product/product";
+import { bindDesignSkill } from "./design-skill";
+
+bindDesignSkill("products");
 
 export interface ProductTemplateSeed {
   id: string;
