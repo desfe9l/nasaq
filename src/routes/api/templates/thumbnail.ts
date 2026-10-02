@@ -76,8 +76,13 @@ export const Route = createFileRoute("/api/templates/thumbnail")({
                   "content-security-policy": "default-src 'none'; sandbox",
                 },
               });
-            } catch {
-              return notFound();
+            } catch (error) {
+              console.error("[thumbnail] raster", error);
+              const message = error instanceof Error ? error.message : "raster";
+              return new Response(message.slice(0, 300), {
+                status: 500,
+                headers: { "cache-control": "no-store", "content-type": "text/plain;charset=utf-8" },
+              });
             }
           }
           return new Response(bytes, {

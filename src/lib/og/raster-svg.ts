@@ -6,11 +6,9 @@
  */
 
 import { readFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { initWasm, Resvg } from "@resvg/resvg-wasm";
 
 import { SHARE_RASTER_WIDTH } from "@/lib/templates/share-image";
-
-const require = createRequire(import.meta.url);
 
 let ready: Promise<void> | null = null;
 let fonts: Uint8Array[] | null = null;
@@ -18,9 +16,10 @@ let fonts: Uint8Array[] | null = null;
 async function ensureWasm(): Promise<void> {
   if (!ready) {
     ready = (async () => {
-      const { initWasm } = await import("@resvg/resvg-wasm");
-      const wasmPath = require.resolve("@resvg/resvg-wasm/index_bg.wasm");
-      await initWasm(await readFile(wasmPath));
+      // The binary sits beside this module so the server bundle traces it.
+      // Resolving it out of node_modules drops it from the Vercel function.
+      const wasm = await readFile(new URL("./resvg.wasm", import.meta.url));
+      await initWasm(wasm);
     })().catch((error) => {
       ready = null;
       throw error;
@@ -61,7 +60,6 @@ function decodeDataUrl(href: string): Uint8Array | null {
 
 export async function rasterizeSvgToPng(svg: string, width = SHARE_RASTER_WIDTH): Promise<Uint8Array> {
   await ensureWasm();
-  const { Resvg } = await import("@resvg/resvg-wasm");
   const resvg = new Resvg(svg, {
     fitTo: { mode: "width", value: Math.max(1, Math.round(width)) },
     font: {
