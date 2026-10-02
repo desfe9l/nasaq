@@ -27,6 +27,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Sparkles } from "lucide-react";
 import { cardClass } from "@/components/site/cards";
+import { whatsappHref } from "@/lib/brand";
 import { getGumroadCheckoutLinksFn } from "@/lib/gumroad/functions";
 import {
   isGumroadPlanKey,
@@ -40,6 +41,7 @@ import {
   PERIOD_LABELS,
   checkoutKeyFor,
   homePlanCards,
+  institutionalAnnualCard,
   type HomePlanCard,
   type SwitchablePeriod,
 } from "@/lib/commercial/plan-cards";
@@ -108,11 +110,13 @@ export function PricingSection({
   }, [activePeriod, availablePeriods.length, checkoutResolved, period]);
 
   const cards = useMemo(
-    () =>
-      homePlanCards(activePeriod).filter((card) => {
+    () => [
+      ...homePlanCards(activePeriod).filter((card) => {
         const planKey = checkoutKeyFor(card);
         return !planKey || Boolean(checkoutLinks[planKey]);
       }),
+      institutionalAnnualCard(),
+    ],
     [activePeriod, checkoutLinks],
   );
   const subscribe = useCallback(
@@ -159,7 +163,15 @@ export function PricingSection({
   const run = useCallback(
     (card: HomePlanCard) => {
       if (card.kind === "free") onStartFree();
-      else void subscribe(card);
+      else if (card.kind === "contact") {
+        window.open(
+          whatsappHref(
+            "السلام عليكم، أرغب بطلب الاشتراك السنوي للجهة المؤسسية من منصة نَسَق.",
+          ),
+          "_blank",
+          "noopener,noreferrer",
+        );
+      } else void subscribe(card);
     },
     [onStartFree, subscribe],
   );
@@ -233,7 +245,7 @@ export function PricingSection({
         )}
 
         {/* Cards */}
-        <div className="mt-6 grid items-stretch gap-4 md:grid-cols-3">
+        <div className="mt-6 grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-4">
           {cards.map((card) => (
             <PlanCard
               key={card.id}
@@ -343,7 +355,9 @@ function PlanCard({
               : "subscription-cta"
           } disabled:cursor-wait disabled:opacity-70`}
         >
-          {busy ? "جارٍ فتح Gumroad…" : card.ctaLabel}
+          {busy
+            ? "جارٍ فتح Gumroad…"
+            : card.ctaLabel}
         </button>
         <p className="mt-2 text-center text-[11px] text-muted">
           {card.ctaHint}

@@ -31,6 +31,8 @@ import {
   X,
 } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
+import { pageSize } from "@/lib/editor/model";
+import { fitBoxToPage } from "@/lib/editor/fit-page";
 import { useIncrementalList } from "@/lib/editor/use-incremental-list";
 import type { Asset } from "@/lib/editor/storage";
 import { writeLibraryDrag } from "@/lib/editor/library-dnd";
@@ -347,6 +349,31 @@ export function AssetLibrary({
     };
   };
 
+  /** Raster insert: largest in-page box that keeps the asset's aspect ratio. */
+  const fittedImage = (asset: Asset) => {
+    const state = useEditor.getState();
+    const page =
+      state.pages.find((item) => item.id === state.activePageId) ??
+      state.pages[0];
+    const fitted = fitBoxToPage(
+      { w: Math.max(1, asset.w), h: Math.max(1, asset.h) },
+      pageSize(page),
+      "fit",
+    );
+    return {
+      x: fitted.x,
+      y: fitted.y,
+      w: fitted.w,
+      h: fitted.h,
+      style: {
+        objectFit: "contain" as const,
+        objectX: 50,
+        objectY: 50,
+        aspectLock: true,
+      },
+    };
+  };
+
   const place = (asset: Asset) => {
     // SVG remains vector editable
     const isSvg = asset.src.startsWith("data:image/svg") || asset.src.includes("<svg");
@@ -380,8 +407,7 @@ export function AssetLibrary({
         // fall through to image
       }
     }
-    const { w, h } = placedBox(asset);
-    addElement("image", { src: asset.src, name: asset.name, w, h });
+    addElement("image", { src: asset.src, name: asset.name, ...fittedImage(asset) });
   };
 
   const dragPayloadFor = (asset: Asset) => {
@@ -409,7 +435,7 @@ export function AssetLibrary({
       items: [
         {
           type: "image" as const,
-          over: { src: asset.src, name: asset.name, ...placedBox(asset) },
+          over: { src: asset.src, name: asset.name, ...fittedImage(asset) },
         },
       ],
     };

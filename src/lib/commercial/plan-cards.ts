@@ -118,7 +118,7 @@ export type HomePlanCard = {
   features: readonly string[];
   /** Wears the «الأكثر شعبية» ribbon. */
   featured: boolean;
-  kind: "free" | "paid";
+  kind: "free" | "paid" | "contact";
   /** Label of the card's action button. */
   ctaLabel: string;
   /** The line under the action button. */
@@ -218,6 +218,36 @@ function freeCard(): HomePlanCard {
  */
 export function homePlanCards(period: SwitchablePeriod): HomePlanCard[] {
   return [freeCard(), paidCard("individual", period), paidCard("team", period)];
+}
+
+/**
+ * Annual institutional licence.
+ *
+ * It lives in the catalog (`team-annual`) but has no Gumroad checkout, so it
+ * is not a switcher period. The homepage still offers it as its own card:
+ * the amount is the catalog's, and the action is a request, not a checkout
+ * the buyer cannot complete.
+ */
+export function institutionalAnnualCard(): HomePlanCard {
+  const plan = CENTRAL_PLANS["team-annual"];
+  const savings = planSavings(plan);
+  return {
+    id: plan.key,
+    name: "جهات — سنوي",
+    description: "اشتراك سنوي للجهات المؤسسية",
+    amount: plan.amount,
+    formattedAmount: formatAmount(plan.amount),
+    priceSuffix: "سنوياً",
+    termLabel: `مدة الترخيص ${plan.durationDays} يومًا (سنة)`,
+    renewalLabel: "تجديد سنوي للجهة",
+    savings,
+    hasSavings: savings > 0,
+    features: ["ترخيص الجهة لمدة سنة", "كل مزايا الفريق", "تفعيل مؤسسي"],
+    featured: false,
+    kind: "contact",
+    ctaLabel: "اطلب الاشتراك السنوي",
+    ctaHint: "يُرتَّب مع الجهة عبر واتساب",
+  };
 }
 
 /** The plan key a card's «اشترك الآن» button checks out, or null for Free. */

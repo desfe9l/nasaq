@@ -15,6 +15,7 @@ import {
   billingPeriodsWithCheckout,
   checkoutKeyFor,
   homePlanCards,
+  institutionalAnnualCard,
   periodSaving,
   purchasePeriodFromQuery,
 } from "./plan-cards.ts";
@@ -131,5 +132,17 @@ describe("Homepage pricing cards", () => {
     // when the buyer switches «شهري» ↔ «3 أشهر».
     assert.equal(byName(homePlanCards("quarterly"), "فريق — Team").featured, false);
     assert.equal(byName(homePlanCards("quarterly"), "فردي — Pro").featured, true);
+  });
+
+  it("keeps the annual institutional licence as its own catalog card", () => {
+    const card = institutionalAnnualCard();
+    const plan = CENTRAL_PLANS["team-annual"];
+    assert.equal(card.kind, "contact");
+    assert.equal(card.id, "team-annual");
+    assert.equal(card.amount, plan.amount);
+    assert.equal(card.formattedAmount, plan.amount.toLocaleString("en-US"));
+    assert.equal(card.name, "جهات — سنوي");
+    assert.equal(checkoutKeyFor(card), null);
+    assert.equal(HOME_BILLING_PERIODS.includes("annual" as never), false);
   });
 });

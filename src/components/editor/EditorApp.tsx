@@ -43,6 +43,8 @@ const DOCK_BAND_H = 236;
  */
 const DOCKS_KEY = "nasaq.panel.docks.v3";
 const LAYOUT_APPLIED_KEY = "nasaq.workspace.layout.v2";
+const COLLAPSED_KEY = "nasaq.panels.collapsed.v1";
+const COLLAPSED_TRACK = 44;
 const DEFAULT_DOCKS: Partial<Record<PanelId, DockSide>> = {
   [WORKSPACE_RIGHT_GROUP[0]]: "right",
   [WORKSPACE_LEFT_GROUP[0]]: "left",
@@ -79,6 +81,7 @@ import {
 } from "@/lib/editor/store";
 import { absoluteBounds, elementsBounds, pageSize } from "@/lib/editor/model";
 import { fitImageBox, prepareImage } from "@/lib/editor/images";
+import { fitBoxToPage } from "@/lib/editor/fit-page";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { clampZoom, stepZoom } from "@/lib/editor/document-space";
 import {
@@ -250,8 +253,16 @@ export function EditorApp() {
         });
         toast.success("تمت إضافة العنصر إلى المكتبة");
       } else {
-        const max = kind === "logo" ? { w: 40, h: 40 } : { w: 110, h: 90 };
-        const box = fitImageBox(img, {
+        const fitted =
+          kind === "image"
+            ? fitBoxToPage(
+                { w: Math.max(1, img.width), h: Math.max(1, img.height) },
+                size,
+                "fit",
+              )
+            : null;
+        const max = { w: 40, h: 40 };
+        const box = fitted ?? fitImageBox(img, {
           w: Math.min(max.w, size.w),
           h: Math.min(max.h, size.h),
         });
@@ -260,10 +271,22 @@ export function EditorApp() {
           {
             src: img.src,
             name: kind === "logo" ? "شعار" : "صورة",
-            w: box.w,
-            h: box.h,
+            ...(fitted
+              ? {
+                  x: fitted.x,
+                  y: fitted.y,
+                  w: fitted.w,
+                  h: fitted.h,
+                  style: {
+                    objectFit: "contain",
+                    objectX: 50,
+                    objectY: 50,
+                    aspectLock: true,
+                  },
+                }
+              : { w: box.w, h: box.h }),
           },
-          center,
+          fitted ? undefined : center,
           pageId,
         );
       }
@@ -1424,6 +1447,29 @@ function Studio({
     }
   }, [dockSizes]);
 
+  const [collapsedPanels, setCollapsedPanels] = useState<
+    Partial<Record<PanelId, boolean>>
+  >(() => {
+    if (typeof window === "undefined") return {};
+    try {
+      const raw = JSON.parse(localStorage.getItem(COLLAPSED_KEY) || "{}") as unknown;
+      return raw && typeof raw === "object" ? (raw as Partial<Record<PanelId, boolean>>) : {};
+    } catch {
+      return {};
+    }
+  });
+  const togglePanelCollapsed = (id: PanelId) => {
+    setCollapsedPanels((current) => {
+      const next = { ...current, [id]: !current[id] };
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next));
+      } catch {
+        /* session memory still holds the bar */
+      }
+      return next;
+    });
+  };
+
   const changeDockSide = (id: PanelId, side: DockSide | null) => {
     const next: Partial<Record<PanelId, DockSide>> = { ...dockSides };
     if (!side) {
@@ -1535,22 +1581,30 @@ function Studio({
    * boundary triggers.
    */
   const dockSignature = hosts
-    .map((id) => (visibleDock(id) ? `${id}:${dockSides[id]}` : id))
+    .map((id) =>
+      visibleDock(id)
+        ? `${id}:${dockSides[id]}:${collapsedPanels[id] ? "c" : "o"}`
+        : id,
+    )
     .join("|");
 
   /** Docked strip length for a window (clamped so the canvas keeps its share). */
   const dockW = (id: PanelId) =>
-    clampDockSize(
-      dockSizes[id]?.w || PANEL_DEFS[id].defaultSize.width,
-      vp.w,
-      DOCK_MIN_W,
-    );
+    collapsedPanels[id]
+      ? COLLAPSED_TRACK
+      : clampDockSize(
+          dockSizes[id]?.w || PANEL_DEFS[id].defaultSize.width,
+          vp.w,
+          DOCK_MIN_W,
+        );
   const dockH = (id: PanelId) =>
-    clampDockSize(
-      dockSizes[id]?.h || PANEL_DEFS[id].defaultSize.height,
-      vp.h,
-      DOCK_MIN_H,
-    );
+    collapsedPanels[id]
+      ? COLLAPSED_TRACK
+      : clampDockSize(
+          dockSizes[id]?.h || PANEL_DEFS[id].defaultSize.height,
+          vp.h,
+          DOCK_MIN_H,
+        );
 
   /*
    * The workspace grid. In this RTL shell the FIRST column sits on the
@@ -1659,11 +1713,13 @@ function Studio({
           onClose={() => setPanelOpenFlag(id, false)}
           dockSide={side}
           onDockSideChange={(next) => changeDockSide(id, next)}
+          collapsed={Boolean(collapsedPanels[id])}
+          onToggleCollapsed={() => togglePanelCollapsed(id)}
           gridAreaStyle={{ width: "100%", height: "100%" }}
         >
           {renderPanelBody(id)}
         </FloatingPanel>
-        {stripSide && (
+        {stripSide && !collapsedPanels[id] && (
           <div
             className={cn(
               "editor-dock-strip",
@@ -1678,7 +1734,7 @@ function Studio({
             onPointerDown={(event) => startDockResize(id, side, event)}
           />
         )}
-        {stripSide === undefined && (
+        {stripSide === undefined && !collapsedPanels[id] && (
           <div
             className={cn(
               "editor-dock-strip",
@@ -2226,6 +2282,8 @@ function Studio({
             open={panelOpen[id] && !cropActive && !focusMode}
             onClose={() => setPanelOpenFlag(id, false)}
             onDockSideChange={(side) => changeDockSide(id, side)}
+            collapsed={Boolean(collapsedPanels[id])}
+            onToggleCollapsed={() => togglePanelCollapsed(id)}
             defaultSize={PANEL_DEFS[id].defaultSize}
             minSize={PANEL_DEFS[id].minSize}
             spawnShift={PANEL_DEFS[id].spawnShift}

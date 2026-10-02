@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import {
   createRootRoute,
   HeadContent,
@@ -70,7 +71,7 @@ export const Route = createRootRoute({
       { rel: "icon", type: "image/svg+xml", href: "/nasaq-mark.svg" },
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
+      { rel: "apple-touch-icon", href: "/icons/nasaq-192.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
         rel: "preconnect",
@@ -94,9 +95,8 @@ export const Route = createRootRoute({
       <head>
         <HeadContent />
       </head>
-      {/* data-build: which build this document was served by — the QA/ops
-          hook, and the value the stale-build guard (AppUpdateNotice) reads. */}
       <body data-build={__APP_BUILD_ID__}>
+        <ManagedBrandIcon />
         <PreviewHostBridge />
         <NsqFileLaunch />
         <AuthProvider>
@@ -109,3 +109,26 @@ export const Route = createRootRoute({
     );
   },
 });
+
+/** Owner mark wins; otherwise the current NASAQ logo. Never the retired glyph. */
+function ManagedBrandIcon() {
+  const mark = useSiteSettings().images.mark?.trim() ?? "";
+  useEffect(() => {
+    const href = mark || "/nasaq-mark.svg";
+    let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.type = mark.startsWith("data:image/png")
+      ? "image/png"
+      : mark.startsWith("data:image/jpeg") || mark.startsWith("data:image/jpg")
+        ? "image/jpeg"
+        : mark.startsWith("data:image/webp")
+          ? "image/webp"
+          : "image/svg+xml";
+    link.href = href;
+  }, [mark]);
+  return null;
+}

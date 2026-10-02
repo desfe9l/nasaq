@@ -525,7 +525,7 @@ html.dark.dim {
   --editor-canvas-text-secondary: #9aa5ae;
 }
 .editor-ui.editor-light {
-  --editor-canvas: #dfe3e5;
+  --editor-canvas: #c5ccd1;
   --editor-canvas-grid: rgba(40, 51, 59, 0.035);
   --editor-canvas-text: var(--editor-text);
   --editor-canvas-text-secondary: var(--editor-text-secondary);
@@ -2940,6 +2940,31 @@ summary,
   break-inside: avoid;
 }
 /* Quick right/left pins beside the main pin. */
+.editor-floating-panel.is-collapsed { overflow: hidden; }
+.editor-floating-panel.is-collapsed .touch-properties-content,
+.editor-floating-panel.is-collapsed .floating-panel-resize,
+.editor-floating-panel.is-collapsed .fp-dock-cluster { display: none; }
+.editor-floating-panel.is-collapsed .touch-properties-header {
+  height: 100%;
+  border-bottom: 0;
+  padding-inline: 2px;
+}
+.editor-floating-panel.is-collapsed.is-docked-left .touch-properties-header,
+.editor-floating-panel.is-collapsed.is-docked-right .touch-properties-header {
+  flex-direction: column;
+  justify-content: flex-start;
+}
+.editor-floating-panel.is-collapsed.is-docked-left .touch-properties-grip,
+.editor-floating-panel.is-collapsed.is-docked-right .touch-properties-grip {
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: 8px;
+}
+.editor-floating-panel.is-collapsed.is-docked-left .touch-properties-grip span,
+.editor-floating-panel.is-collapsed.is-docked-right .touch-properties-grip span {
+  writing-mode: vertical-rl;
+}
+
 .touch-properties-header button.fp-dock-quick { width: 30px; }
 /*
  * The eight resize grips of a floating window: thin edge strips and corner

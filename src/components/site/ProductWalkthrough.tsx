@@ -8,11 +8,7 @@ import {
   Shapes,
 } from "lucide-react";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
-import {
-  DEFAULT_SITE_IMAGES,
-  SITE_IMAGE_SLOTS,
-  type SiteImages,
-} from "@/lib/admin/types";
+import { type SiteImages } from "@/lib/admin/types";
 
 /**
  * The walkthrough's four captions.
@@ -50,25 +46,19 @@ const PREVIEWS = [
   copy: string;
 }>;
 
-/** Bundled artwork for a slot, used when the owner has not uploaded one. */
-function fallbackFor(slot: keyof SiteImages): string {
-  return (
-    SITE_IMAGE_SLOTS.find((entry) => entry.id === slot)?.fallback ??
-    "/editor-previews/document.png"
-  );
+/** Owner upload only. An empty slot stays empty — bundled captures never return. */
+function slotImage(images: SiteImages | undefined, slot: keyof SiteImages): string {
+  return images?.[slot]?.trim() ?? "";
 }
 
 /** Real editor captures, owned by the site owner and dimension-free on screen. */
 export function ProductWalkthrough() {
   /*
-   * Owner-managed imagery. `images` starts empty (the bundled artwork), so a
-   * first paint never waits on the settings fetch and a failed fetch degrades
-   * to the shipped captures rather than to a broken image.
+   * Owner-managed imagery only. An empty slot stays empty after refresh —
+   * the old bundled captures are not a fallback.
    */
   const { images } = useSiteSettings();
-  const slotSrc = (slot: keyof SiteImages) =>
-    images?.[slot]?.trim() ? images[slot].trim() : fallbackFor(slot);
-  void DEFAULT_SITE_IMAGES;
+  const workspace = slotImage(images, "workspace");
   return (
     <section className="border-b border-line/70 bg-surface-2 py-14 sm:py-18">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
@@ -100,12 +90,18 @@ export function ProductWalkthrough() {
            * keeps its own proportions and the frame grows with it, so a wide
            * desktop capture and a portrait iPad capture both render intact.
            */}
-          <img
-            src={slotSrc("workspace")}
-            alt="لقطة حقيقية للمحرر: مستند على اللوحة، الأدوات والصفحات الجانبية"
-            loading="lazy"
-            className="block h-auto max-h-[620px] w-full bg-surface-2 object-contain"
-          />
+          {workspace ? (
+            <img
+              src={workspace}
+              alt="لقطة حقيقية للمحرر: مستند على اللوحة، الأدوات والصفحات الجانبية"
+              loading="lazy"
+              className="block h-auto max-h-[620px] w-full bg-surface-2 object-contain"
+            />
+          ) : (
+            <div className="grid h-48 place-items-center bg-surface-2 text-[12px] font-bold text-muted">
+              لم تُضف صورة الواجهة بعد
+            </div>
+          )}
         </figure>
 
         <div className="mt-5 grid gap-4 md:grid-cols-3">
@@ -117,12 +113,16 @@ export function ProductWalkthrough() {
                * and every card stays the same height so the row stays even.
                */}
               <div className="grid h-44 place-items-center overflow-hidden border-b border-line bg-surface-2 p-2">
-                <img
-                  src={slotSrc(slot)}
-                  alt={alt}
-                  loading="lazy"
-                  className="max-h-full max-w-full object-contain"
-                />
+                {slotImage(images, slot) ? (
+                  <img
+                    src={slotImage(images, slot)}
+                    alt={alt}
+                    loading="lazy"
+                    className="max-h-full max-w-full object-contain"
+                  />
+                ) : (
+                  <span className="text-[11px] font-bold text-muted">لا توجد صورة</span>
+                )}
               </div>
               <div className="p-4">
                 <div className="flex items-center gap-2">

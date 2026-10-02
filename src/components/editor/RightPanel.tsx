@@ -1714,6 +1714,26 @@ export function PropertiesPanel({
                       ملاءمة داخل الصفحة
                     </button>
                   </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <ScrubField
+                      label="تفتيح %"
+                      value={round(Number(el.style.brightness ?? 100) || 0)}
+                      min={0}
+                      max={200}
+                      step={1}
+                      onChange={(v) => updateStyle(el.id, { brightness: v }, true)}
+                      onCommit={(v) => updateStyle(el.id, { brightness: v })}
+                    />
+                    <ScrubField
+                      label="حدة %"
+                      value={round(Number(el.style.sharpness ?? 0) || 0)}
+                      min={0}
+                      max={100}
+                      step={1}
+                      onChange={(v) => updateStyle(el.id, { sharpness: v }, true)}
+                      onCommit={(v) => updateStyle(el.id, { sharpness: v })}
+                    />
+                  </div>
                   <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
                     قفل النسبة أثناء التحجيم
                     <input

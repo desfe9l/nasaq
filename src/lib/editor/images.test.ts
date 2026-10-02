@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { fitImageBox, isAcceptedImage, safeImageSrc } from "./images.ts";
+import { fitImageBox, imageAdjustCss, isAcceptedImage, safeImageSrc, sharpnessKernel } from "./images.ts";
 
 describe("isAcceptedImage", () => {
   const file = (type: string) => ({ type }) as File;
@@ -52,6 +52,21 @@ describe("fitImageBox", () => {
   it("keeps a square image square", () => {
     const box = fitImageBox({ width: 500, height: 500 }, { w: 40, h: 40 });
     assert.equal(box.w, box.h);
+  });
+});
+
+describe("imageAdjustCss", () => {
+  it("is absent at the identity and otherwise stays a CSS filter", () => {
+    assert.equal(imageAdjustCss({}), undefined);
+    assert.equal(imageAdjustCss({ brightness: 100, sharpness: 0 }), undefined);
+    assert.equal(imageAdjustCss({ brightness: 130 }), "brightness(1.300)");
+    assert.match(imageAdjustCss({ sharpness: 40 }) ?? "", /^contrast\(/);
+    assert.match(
+      imageAdjustCss({ brightness: 80, sharpness: 50 }, "sharp-1") ?? "",
+      /^url\(#sharp-1\) brightness\(/,
+    );
+    assert.equal(sharpnessKernel(0), "0 0.000 0 0.000 1.000 0.000 0 0.000 0");
+    assert.equal(sharpnessKernel(100).includes("5.000"), true);
   });
 });
 

@@ -70,6 +70,8 @@ export interface SiteImages {
   pages: string;
   /** «أدوات التصميم والمكتبة» — the tools and library card. */
   tools: string;
+  /** Owner-managed platform mark. Empty keeps the current NASAQ logo. */
+  mark: string;
 }
 
 /** Label, description and the bundled fallback for every image slot. */
@@ -104,6 +106,12 @@ export const SITE_IMAGE_SLOTS: ReadonlyArray<{
     hint: "صورة بطاقة «أدوات التصميم والمكتبة».",
     fallback: "/editor-previews/tools.png",
   },
+  {
+    id: "mark",
+    label: "شعار الهوية",
+    hint: "يظهر في رأس الموقع وأيقونة المتصفح. الحذف يُبقي شعار نَسَق الحالي ولا يعيد الشعار القديم.",
+    fallback: "",
+  },
 ] as const;
 
 /** An empty slot: every surface falls back to the bundled artwork. */
@@ -112,6 +120,7 @@ export const DEFAULT_SITE_IMAGES: SiteImages = {
   document: "",
   pages: "",
   tools: "",
+  mark: "",
 };
 
 /** Largest accepted upload per slot, in bytes (before re-encoding). */
