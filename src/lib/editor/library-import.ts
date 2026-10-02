@@ -42,8 +42,8 @@ const IMAGE_EXTENSIONS = [
   "avif",
 ] as const;
 
-/** Files larger than this are skipped: data URLs live in IndexedDB. */
-export const MAX_IMPORT_BYTES = 6 * 1024 * 1024;
+/** Size is not a reason to skip an import. */
+export const MAX_IMPORT_BYTES = Number.POSITIVE_INFINITY;
 
 /** Folder names that carry no meaning when a folder is imported wholesale. */
 const NOISE_SEGMENTS = new Set(["", ".", "..", "__MACOSX"]);

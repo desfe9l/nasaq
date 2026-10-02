@@ -4,32 +4,18 @@ import { pageSize, type Page } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { FillEditor } from "./ui/FillField";
 
-/** Downscale a photo before it is stored on the page so large files stay light. */
+/** Store the picked background as-is. Size is not reduced. */
 async function pageImageDataUrl(file: File): Promise<string> {
   if (file.type === "image/svg+xml") {
     const text = await file.text();
     return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`;
   }
-  const url = URL.createObjectURL(file);
-  try {
-    const img = new Image();
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve();
-      img.onerror = () => reject(new Error("image"));
-      img.src = url;
-    });
-    const max = 1600;
-    const scale = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight, 1));
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
-    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return "";
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return canvas.toDataURL("image/jpeg", 0.82);
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("image"));
+    reader.readAsDataURL(file);
+  });
 }
 
 /** Page paint is metadata, not a selectable/transformable layer. */

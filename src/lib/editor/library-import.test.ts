@@ -1,7 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
-  MAX_IMPORT_BYTES,
   assetLabel,
   extensionOf,
   folderSegments,
@@ -153,20 +152,20 @@ describe("«أضف مكتبة» — folder → shelves", () => {
     assert.equal(created, 0);
   });
 
-  it("reports unsupported and oversized files instead of failing the import", () => {
+  it("accepts large files and only reports unsupported types", () => {
     const plan = planLibraryImportBlueprint(
       [
         entry("brand/a.png"),
         entry("brand/notes.txt"),
-        entry("brand/huge.png", "image/png", MAX_IMPORT_BYTES + 1),
+        entry("brand/huge.png", "image/png", 80 * 1024 * 1024),
       ],
       "مكتبة",
     );
-    assert.equal(plan.entries.length, 1);
+    assert.equal(plan.entries.length, 2);
     assert.equal(plan.unsupported.length, 1);
     assert.equal(plan.unsupported[0]?.path, "brand/notes.txt");
-    assert.equal(plan.oversized.length, 1);
-    assert.equal(plan.oversized[0]?.path, "brand/huge.png");
+    assert.equal(plan.oversized.length, 0);
+    assert.ok(plan.entries.some((item) => item.entry.path === "brand/huge.png"));
   });
 
   it("gives every asset a readable Arabic-safe label", () => {

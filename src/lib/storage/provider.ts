@@ -28,8 +28,8 @@ export const STORAGE_ALLOWED_CONTENT_TYPES: Record<StorageAssetKind, readonly st
   "project-file": ["application/json", "application/pdf", "application/zip"],
 };
 
-/** Hard ceiling per object (bytes). Mirrors the editor's own import guard. */
-export const STORAGE_MAX_OBJECT_BYTES = 10 * 1024 * 1024;
+/** No per-object size ceiling. */
+export const STORAGE_MAX_OBJECT_BYTES = Number.POSITIVE_INFINITY;
 
 export function isAllowedStorageContentType(
   kind: StorageAssetKind,

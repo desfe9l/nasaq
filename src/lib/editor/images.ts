@@ -18,10 +18,9 @@ export interface ImageLimits {
 }
 
 export const IMAGE_LIMITS: ImageLimits = {
-  // Report pages render at A4 print scale, so ~1600px on the long edge stays
-  // sharp at 300dpi for a half-page figure while keeping stored projects small.
-  maxEdge: 1600,
-  maxBytes: 400_000,
+  // No intake ceiling: the original file is stored as picked.
+  maxEdge: Number.POSITIVE_INFINITY,
+  maxBytes: Number.POSITIVE_INFINITY,
 };
 
 export function isAcceptedImage(file: File): boolean {
