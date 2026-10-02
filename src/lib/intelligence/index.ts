@@ -8,6 +8,7 @@ export type {
   PipelineResult,
 } from "./schema";
 export { referenceAnalyses, referenceById, designDna, generateTemplate, improveProject, improveReference } from "./pipeline";
-export { critiqueProject } from "./critic";
+export { critiqueProject, applyGatedFixes } from "./critic";
 export { validateProject } from "./layout";
-export { languageModelConfigured, DETERMINISTIC_MODEL_ID } from "./provider";
+export { languageModelConfigured, visualNoteReady, DETERMINISTIC_MODEL_ID } from "./provider";
+export { adapterFor } from "./sources";

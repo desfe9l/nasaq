@@ -59,7 +59,7 @@ function cleanLine(value: string): string {
   return value.normalize("NFKC").replace(/\s+/g, " ").trim();
 }
 
-export function extractLines(fact: ReferenceFact, limit = 8): string[] {
+export function extractLines(fact: ReferenceFact, limit = 12): string[] {
   const seen = new Set<string>();
   const lines: string[] = [];
   for (const sample of fact.textSamples) {

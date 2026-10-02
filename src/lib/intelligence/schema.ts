@@ -138,9 +138,29 @@ export interface DesignBrief {
   kind: "report" | "presentation" | "infographic";
 }
 
+export type CritiqueAxis =
+  | "structure"
+  | "hierarchy"
+  | "spacing"
+  | "alignment"
+  | "readability"
+  | "density"
+  | "consistency";
+
+export interface QualityAxes {
+  structure: number;
+  hierarchy: number;
+  spacing: number;
+  alignment: number;
+  readability: number;
+  density: number;
+  consistency: number;
+}
+
 export interface CritiqueIssue {
   id: string;
   severity: "high" | "medium" | "low";
+  axis: CritiqueAxis;
   metric: string;
   evidence: string;
   instruction: string;
@@ -149,6 +169,7 @@ export interface CritiqueIssue {
 export interface Critique {
   schemaVersion: typeof INTELLIGENCE_SCHEMA_VERSION;
   score: number;
+  axes: QualityAxes;
   issues: CritiqueIssue[];
 }
 
@@ -167,6 +188,10 @@ export interface ImprovementVerdict {
   contentKept: boolean;
   scoreBefore: number;
   scoreAfter: number;
+  axesBefore: QualityAxes;
+  axesAfter: QualityAxes;
+  /** Axes that rose. A dropped axis is not listed. */
+  improvedAxes: Array<keyof QualityAxes>;
   realImprovement: boolean;
   notes: string[];
 }

@@ -273,9 +273,12 @@ export function TemplateStudio() {
           </p>
           {outcome.result.verdict && (
             <ul className="mt-2 grid gap-1 text-[12px] leading-6">
-              {outcome.result.verdict.notes.map((line) => (
+              {outcome.result.verdict.notes.slice(0, 4).map((line) => (
                 <li key={line}>{line}</li>
               ))}
+              {outcome.result.verdict.improvedAxes.length > 0 && (
+                <li>تحسّن مقيس في: {outcome.result.verdict.improvedAxes.join("، ")}</li>
+              )}
             </ul>
           )}
           <ul className="mt-3 grid gap-2">

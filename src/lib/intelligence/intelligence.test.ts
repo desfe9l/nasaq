@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { createElement, pageSize, THEMES, type Project } from "@/lib/editor/model";
 import { createProject } from "@/lib/editor/templates";
-import { pageSize } from "@/lib/editor/model";
-import { critiqueProject } from "./critic";
+import { applyGatedFixes, critiqueProject } from "./critic";
 import { literalDraft, validateProject } from "./layout";
 import {
   designDna,
@@ -11,7 +11,8 @@ import {
   improveReference,
   referenceAnalyses,
 } from "./pipeline";
-import { languageModelConfigured, DETERMINISTIC_MODEL_ID } from "./provider";
+import { languageModelConfigured, visualNoteReady, DETERMINISTIC_MODEL_ID } from "./provider";
+import { adapterFor } from "./sources";
 
 test("measured corpus keeps real page counts and does not invent missing text", () => {
   const analyses = referenceAnalyses();
@@ -103,6 +104,10 @@ test("the critic names a fix, and the improve path keeps existing NASAQ text", (
   assert.equal(rebuilt.verdict?.realImprovement, true);
   assert.ok(rebuilt.verdict && rebuilt.verdict.scoreAfter > rebuilt.verdict.scoreBefore);
   assert.deepEqual(validateProject(rebuilt.project), []);
+  assert.equal(JSON.stringify(rebuilt.project).includes("أضف محتوى"), false);
+  assert.equal(/[\uFE70-\uFEFF]/.test(JSON.stringify(rebuilt.project)), false);
+  assert.ok((rebuilt.verdict?.improvedAxes.length ?? 0) > 0);
+  assert.ok(rebuilt.verdict?.axesAfter.structure >= rebuilt.verdict?.axesBefore.structure);
 });
 
 test("language model stays unwired unless a key exists", () => {
@@ -110,4 +115,81 @@ test("language model stays unwired unless a key exists", () => {
   assert.equal(languageModelConfigured({}), false);
   assert.equal(languageModelConfigured({ XAI_API_KEY: "  " }), false);
   assert.equal(languageModelConfigured({ XAI_API_KEY: "present" }), true);
+  assert.equal(visualNoteReady({ XAI_API_KEY: "present" }, []), false);
+  assert.equal(visualNoteReady({ XAI_API_KEY: "present" }, ["data:image/png;base64,abcd"]), false);
+  assert.equal(
+    visualNoteReady({ XAI_API_KEY: "present" }, [`data:image/png;base64,${"a".repeat(40)}`]),
+    true,
+  );
+  assert.equal(adapterFor("psd").kind, "psd");
+  assert.equal(adapterFor("psd").readsBytes, true);
+  assert.match(adapterFor("psd").note, /does not parse PSD/);
+  assert.equal(adapterFor("pdf").readsBytes, false);
+});
+
+test("a move that would overlap another element is not kept", () => {
+  const upper = createElement(
+    "text",
+    {
+      name: "أعلى",
+      content: "عنوان القسم",
+      x: 16,
+      y: 250,
+      w: 100,
+      h: 30,
+      style: { fontSize: 18, textAlign: "right", direction: "rtl", color: "#172033" },
+    },
+    THEMES.official,
+  );
+  const lower = createElement(
+    "text",
+    {
+      name: "أسفل",
+      content: "متن طويل",
+      x: 16,
+      y: 270,
+      w: 100,
+      h: 40,
+      style: { fontSize: 11, textAlign: "right", direction: "rtl", color: "#172033" },
+    },
+    THEMES.official,
+  );
+  const project: Project = {
+    version: 2,
+    name: "حراسة",
+    theme: "official",
+    orgName: "",
+    pages: [{ id: "p", name: "ص", w: 210, h: 297, elements: [upper, lower] }],
+  };
+  const beforeY = lower.y;
+  const before = critiqueProject(project).score;
+  const gated = applyGatedFixes(project);
+  assert.ok(gated.scoreAfter >= before);
+  assert.equal(gated.project.pages[0].elements.find((el) => el.name === "أسفل")?.y, beforeY);
+  assert.equal(gated.accepted, false);
+});
+
+test("editorial composition is not the same cover as the institutional report", () => {
+  const editorial = generateTemplate({
+    title: "مذكرة داخلية",
+    subtitle: "نص من الموجز فقط",
+    org: "مكتب الخطة",
+    style: "editorial",
+    pages: 2,
+    kind: "report",
+  });
+  const institutional = generateTemplate({
+    title: "مذكرة داخلية",
+    subtitle: "نص من الموجز فقط",
+    org: "مكتب الخطة",
+    style: "institutional",
+    pages: 2,
+    kind: "report",
+  });
+  const editorialTitle = editorial.project.pages[0].elements.find((el) => el.name === "العنوان");
+  const institutionalTitle = institutional.project.pages[0].elements.find((el) => el.name === "العنوان");
+  assert.ok(editorialTitle && institutionalTitle);
+  assert.ok(editorialTitle.y > institutionalTitle.y + 40);
+  assert.equal(editorial.project.pages[0].elements.some((el) => el.name === "حقل الغلاف"), false);
+  assert.deepEqual(validateProject(editorial.project), []);
 });
