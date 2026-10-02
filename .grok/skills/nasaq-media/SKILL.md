@@ -204,6 +204,17 @@ a full-width green bar; the page number sits in a gold circle toward the outer
 Use real editable elements: text, images, shapes, groups, tables, charts,
 headers, footers, page numbers.
 
+Text is free space, not a clipping box. A new text element uses `free`: the
+frame hugs the glyphs, Arabic ascenders are not shaved, and the width and
+height stay balanced to the words. A template column keeps its measure and
+grows in height (`autoHeight`) so a paragraph is never cut by a short frame.
+Page numbers use `verticalAlign: middle` inside the gold circle.
+
+Geometry the pages actually need lives in the shape library: `diagonal` for
+the cover block, `wave` under a portrait, `curve-side` and `arch` as clipping
+masks (`clippedBy`) so a photo is the shape and not a rectangle behind it.
+Do not fake those with a flat rectangle when the shape exists.
+
 Do not flatten a professional template into an image.
 
 ## Quality

@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useRef, useId } from "react";
 import { ICONS, cssFont, parseTable, type CanvasEl } from "@/lib/editor/model";
 import {
   prepareText,
+  textBoxMode,
   textPadding,
   type PageContext,
 } from "@/lib/editor/text-render";
@@ -446,7 +447,15 @@ function ElementContent({
     textOrientation: vertical ? "mixed" : undefined,
     hyphens: "none",
     padding: pad ? `${pad}mm` : undefined,
-    overflow: s.overflowVisible ? "visible" : undefined,
+    overflow:
+      textBoxMode(el) === "fixed" && !s.overflowVisible ? "hidden" : "visible",
+    display: s.verticalAlign && s.verticalAlign !== "top" ? "flex" : undefined,
+    alignItems:
+      s.verticalAlign === "middle"
+        ? "center"
+        : s.verticalAlign === "bottom"
+          ? "flex-end"
+          : undefined,
     ...(s.textAlign === "justify" && s.justifyLastLine === "stretch"
       ? { textAlignLast: "justify" as const }
       : {}),

@@ -9,7 +9,7 @@ import {
 import { uid } from "@/lib/utils";
 import { canUseDemoPack } from "@/lib/product/product";
 import { bindDesignSkill } from "./design-skill";
-import { BODY, META, plate } from "./template-layouts";
+import { BODY, META, balancedFrame, plate } from "./template-layouts";
 import { shapeSvgMarkup } from "./shape-render";
 
 bindDesignSkill("products");
@@ -86,13 +86,19 @@ function text(
     lineHeight?: number;
   } = {},
 ) {
-  return add(target, "text", name, x, y, w, h, content, {
+  const align = options.align ?? "right";
+  const fontSize = options.size ?? 10;
+  const lineHeight = options.lineHeight ?? 1.5;
+  const frame = balancedFrame(content, x, y, w, h, fontSize, lineHeight, align);
+  return add(target, "text", name, frame.x, frame.y, frame.w, frame.h, content, {
     fontFamily: options.font ?? "Tajawal",
-    fontSize: options.size ?? 10,
+    fontSize,
     fontWeight: options.weight ?? 500,
     color: options.color ?? INK,
-    textAlign: options.align ?? "right",
-    lineHeight: options.lineHeight ?? 1.45,
+    textAlign: align,
+    lineHeight,
+    textBoxMode: "autoHeight",
+    overflowVisible: true,
     fill: options.fill,
     borderColor: options.borderColor,
     borderWidth: options.borderColor ? 0.25 : 0,

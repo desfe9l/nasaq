@@ -3712,6 +3712,13 @@ export const useEditor = create<EditorStore>((set, get) => {
       // Normalise the actual frame BEFORE positioning. Small pages can constrain
       // WH; centring the old requested size would move the final frame off-target.
       constrainElement(el, size);
+      if (el.type === "text" && el.style?.textBoxMode === "free") {
+        const fitted = resolveTextBox(el);
+        if (fitted) {
+          el.w = fitted.w;
+          el.h = fitted.h;
+        }
+      }
       const visible = visiblePageRect(
         canvasStage(),
         page,

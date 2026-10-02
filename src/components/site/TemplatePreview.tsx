@@ -1,8 +1,11 @@
 import { useId } from "react";
 import { GradientDefs } from "@/components/editor/GradientDefs";
-import { ShapeGlyph } from "@/components/editor/ShapeGlyph";
+import { ShapeGlyph, ShapeParts } from "@/components/editor/ShapeGlyph";
 import { normalizeCrop, imageLayout } from "@/lib/editor/image-crop";
 import { pageBackgroundCss, paintCss } from "@/lib/editor/gradient";
+import { isCompoundShape, shapeDef } from "@/lib/editor/shapes";
+import { shapeIdOf } from "@/lib/editor/shape-render";
+import { mapShapePart } from "@/lib/editor/shape-affine";
 /*
  * Real template previews.
  *
@@ -103,7 +106,7 @@ export function TemplatePreview({
     >
       <div className={cn("absolute inset-0", paperClassName)}>
         {elements.map((el) => (
-          <PreviewElement key={el.id} el={el} scale={scale} />
+          <PreviewElement key={el.id} el={el} scale={scale} siblings={elements} />
         ))}
       </div>
     </div>
@@ -159,7 +162,15 @@ export function TemplateStackPreview({
   );
 }
 
-function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
+function PreviewElement({
+  el,
+  scale,
+  siblings,
+}: {
+  el: CanvasEl;
+  scale: Scale;
+  siblings?: CanvasEl[];
+}) {
   const paintId = `preview-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const s = el.style || {};
   const box: React.CSSProperties = {
@@ -185,6 +196,7 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
               key={child.id}
               el={child}
               scale={{ ...scale, parentW: el.w, parentH: el.h }}
+              siblings={el.children}
             />
           ))}
       </div>
@@ -217,7 +229,16 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
         style={{
           ...box,
           ...textCss,
+          lineHeight: text.lineHeight,
+          overflow: "visible",
           padding: pad ? mm(pad, scale) : undefined,
+          display: s.verticalAlign && s.verticalAlign !== "top" ? "flex" : undefined,
+          alignItems:
+            s.verticalAlign === "middle"
+              ? "center"
+              : s.verticalAlign === "bottom"
+                ? "flex-end"
+                : undefined,
         }}
       >
         {text.text}
@@ -475,6 +496,34 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
   }
 
   if (el.type === "image" || el.type === "logo" || el.type === "qr") {
+    const mask = el.clippedBy
+      ? siblings?.find((item) => item.id === el.clippedBy && item.type === "shape")
+      : undefined;
+    const clipId = `preview-clip-${paintId}`;
+    let clipPath: string | undefined;
+    let clipNode: React.ReactNode = null;
+    if (mask) {
+      const def = shapeDef(shapeIdOf(mask.style));
+      const placed = {
+        sx: Math.max(1, mask.w) / Math.max(0.1, el.w) / 100,
+        sy: Math.max(1, mask.h) / Math.max(0.1, el.h) / 100,
+        tx: (mask.x - el.x) / Math.max(0.1, el.w),
+        ty: (mask.y - el.y) / Math.max(0.1, el.h),
+      };
+      clipPath = `url(#${clipId})`;
+      clipNode = (
+        <svg className="pointer-events-none absolute h-0 w-0" aria-hidden focusable={false}>
+          <defs>
+            <clipPath id={clipId} clipPathUnits="objectBoundingBox">
+              <ShapeParts
+                parts={def.parts.map((part) => mapShapePart(part, placed))}
+                fillRule={isCompoundShape(def.id) ? "evenodd" : undefined}
+              />
+            </clipPath>
+          </defs>
+        </svg>
+      );
+    }
     const src = safeImageSrc(el.src);
     if (!src) {
       /* No source yet: a soft frame reads better than an empty hole. */
@@ -535,23 +584,22 @@ function PreviewElement({ el, scale }: { el: CanvasEl; scale: Scale }) {
       );
     }
     return (
-      /* Real artwork from the document: a data-URL or a remote image, exactly
-         as the canvas paints it. */
-      <img
-        alt=""
-        src={src}
-        draggable={false}
-        loading="lazy"
-        decoding="async"
-        style={{
-          ...box,
-          objectFit:
-            (s.objectFit as React.CSSProperties["objectFit"]) ||
-            (el.type === "logo" || el.type === "qr" ? "contain" : "cover"),
-          objectPosition: `${s.objectX ?? 50}% ${s.objectY ?? 50}%`,
-          borderRadius: s.radius ? mm(s.radius, scale) : undefined,
-        }}
-      />
+      <>
+        {clipNode}
+        <img
+          alt=""
+          src={src}
+          draggable={false}
+          loading="lazy"
+          decoding="async"
+          style={{
+            ...box,
+            objectFit: s.objectFit || (el.type === "logo" ? "contain" : "cover"),
+            borderRadius: s.radius ? mm(s.radius, scale) : undefined,
+            clipPath,
+          }}
+        />
+      </>
     );
   }
 

@@ -1,4 +1,5 @@
 import type { CanvasEl, Theme } from "./model";
+import { measureTextHeight, measureTextWidth } from "./arabic";
 import { bindDesignSkill } from "./design-skill";
 
 bindDesignSkill("layouts");
@@ -58,6 +59,42 @@ export const ROLE = {
   folio: { fontFamily: META, fontSize: 8, fontWeight: 600, lineHeight: 1, textAlign: "left" },
 } satisfies Record<string, RoleStyle>;
 
+/**
+ * A text frame that matches its words.
+ *
+ * A single line keeps its alignment edge and shrinks to the glyphs. A paragraph
+ * keeps the column width and grows just enough that the last line is inside
+ * the frame. Either way the box is the text, not a clip.
+ */
+export function balancedFrame(
+  content: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fontSize: number,
+  lineHeight: number,
+  align: "right" | "left" | "center" | "justify" = "right",
+): { x: number; y: number; w: number; h: number } {
+  const size = fontSize || 14;
+  const leading = lineHeight || 1.5;
+  const slack = size * 0.3528 * 0.36;
+  const natural = measureTextWidth(content, size, 400) + slack;
+  const wraps = align === "justify" || content.includes("\n") || natural > w + 1;
+  let nextW = w;
+  let nextX = x;
+  if (!wraps) {
+    nextW = Math.round(Math.max(8, Math.min(w, natural)) * 100) / 100;
+    if (align === "center") nextX = x + (w - nextW) / 2;
+    else if (align === "left") nextX = x;
+    else nextX = x + w - nextW;
+    nextX = Math.round(nextX * 100) / 100;
+  }
+  const needed = measureTextHeight(content, Math.max(8, nextW), size, leading) + slack;
+  const nextH = Math.round(Math.max(h, needed) * 100) / 100;
+  return { x: nextX, y, w: nextW, h: nextH };
+}
+
 export function paint(
   add: Add,
   name: string,
@@ -68,14 +105,23 @@ export function paint(
   h: number,
   style: Style,
 ) {
+  const fontSize = Number(style.fontSize) || 14;
+  const lineHeight = Number(style.lineHeight) || 1.5;
+  const align = style.textAlign || "right";
+  const frame = balancedFrame(content, x, y, w, h, fontSize, lineHeight, align);
   add("text", {
     name,
     content,
-    x,
-    y,
-    w,
-    h,
-    style: { textBoxMode: "fixed", lineHeight: 1.35, ...style },
+    x: frame.x,
+    y: frame.y,
+    w: frame.w,
+    h: frame.h,
+    style: {
+      textBoxMode: "autoHeight",
+      overflowVisible: true,
+      lineHeight,
+      ...style,
+    },
   });
 }
 
@@ -159,15 +205,16 @@ export function folio(
   const y = h - barH;
   band(add, "تذييل أخضر", 0, y, w, barH, ink.green);
   const d = 9;
-  const cx = 8;
-  mark(add, "دائرة الرقم", cx, y + (barH - d) / 2, d, d, ink.gold, "circle");
-  paint(add, "رقم الصفحة", pageNo, cx, y + 4.2, d, 5, {
+  const cy = y + (barH - d) / 2;
+  mark(add, "دائرة الرقم", 8, cy, d, d, ink.gold, "circle");
+  paint(add, "رقم الصفحة", pageNo, 8, cy, d, d, {
     fontFamily: META,
     fontSize: 6.5,
     fontWeight: 700,
     color: ink.green,
     textAlign: "center",
     lineHeight: 1,
+    verticalAlign: "middle",
   });
   paint(add, "تذييل الجهة", org || "اسم الجهة", 22, y + 3.6, w - 32, 7, {
     fontFamily: META,
@@ -208,7 +255,7 @@ export function mark(
   fill: string,
   shapeId: string,
 ) {
-  add("shape", {
+  return add("shape", {
     name,
     x,
     y,

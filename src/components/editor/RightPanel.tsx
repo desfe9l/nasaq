@@ -134,6 +134,7 @@ export function PropertiesPanel({
   const flipSelected = useEditor((s) => s.flipSelected);
   const toggleFadeOverlay = useEditor((s) => s.toggleFadeOverlay);
   const updateStyle = useEditor((s) => s.updateStyle);
+  const fitTextBox = useEditor((s) => s.fitTextBox);
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const toggleLock = useEditor((s) => s.toggleLock);
   const toggleResizeLock = useEditor((s) => s.toggleResizeLock);
@@ -770,6 +771,33 @@ export function PropertiesPanel({
                           </button>
                         ))}
                       </div>
+                    </Field>
+
+                    <Field label="مساحة النص">
+                      <select
+                        value={el.style.textBoxMode || "autoHeight"}
+                        onChange={(e) => {
+                          const textBoxMode = e.target.value as
+                            | "free"
+                            | "autoHeight"
+                            | "fixed"
+                            | "autoWidth"
+                            | "fit";
+                          updateStyle(el.id, {
+                            textBoxMode,
+                            overflowVisible: textBoxMode !== "fixed",
+                          });
+                          if (textBoxMode === "free" || textBoxMode === "autoHeight") {
+                            queueMicrotask(() => fitTextBox(el.id));
+                          }
+                        }}
+                      >
+                        <option value="free">مساحة حرة — المقاس يتبع النص</option>
+                        <option value="autoHeight">ارتفاع حر — العرض ثابت</option>
+                        <option value="autoWidth">عرض حر</option>
+                        <option value="fixed">إطار ثابت</option>
+                        <option value="fit">تصغير الخط داخل الإطار</option>
+                      </select>
                     </Field>
 
                     <Field label="النص الطويل">

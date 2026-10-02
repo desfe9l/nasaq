@@ -182,17 +182,23 @@ export function prepareText(el: CanvasEl, page?: PageContext): PreparedText {
       : el.w;
 
   const overflow = fontSize < base - 0.05;
-  // Only a fixed box can visibly cut text: every other mode resizes to fit, so
-  // reporting clipping there would be a false alarm.
+  // A fixed frame is the only one that cuts glyphs. Free and auto modes
+  // resize, so reporting a clip there would be a false alarm.
   const clipped = mode === "fixed" && neededHeight > el.h + 0.4;
+  const freeWidth =
+    mode === "free" ? freeTextWidth(justified, fontSize) : neededWidth;
 
   return {
     text: justified,
     fontSize,
     lineHeight,
     overflow,
-    neededHeight,
-    neededWidth,
+    neededHeight:
+      mode === "free"
+        ? measureTextHeight(justified, freeWidth, fontSize, lineHeight, paragraphSpacing) +
+          opticalSlack(fontSize)
+        : neededHeight,
+    neededWidth: mode === "free" ? freeWidth : neededWidth,
     clipped,
   };
 }
@@ -265,6 +271,12 @@ export function resolveTextBox(el: CanvasEl): { w: number; h: number } | null {
   if (!FIT_TYPES.has(el.type)) return null;
   const prepared = prepareText(el);
   const mode = textBoxMode(el);
+  if (mode === "free") {
+    const w = roundMm(prepared.neededWidth);
+    const h = roundMm(prepared.neededHeight);
+    if (Math.abs(w - el.w) < 0.2 && Math.abs(h - el.h) < 0.2) return null;
+    return { w, h };
+  }
   if (mode === "autoHeight") {
     const h = Math.max(el.h, prepared.neededHeight + (el.style?.slackMm || 0));
     return h > el.h + 0.2 ? { w: el.w, h } : null;
@@ -274,6 +286,29 @@ export function resolveTextBox(el: CanvasEl): { w: number; h: number } | null {
     return w > el.w + 0.2 ? { w, h: el.h } : null;
   }
   return null;
+}
+
+/** Balanced room under and over Arabic glyphs so a free frame does not shave them. */
+function opticalSlack(fontSizePt: number): number {
+  return fontSizePt * 0.3528 * 0.42;
+}
+
+/**
+ * Width of free text: the longest line, plus a little air, and no wrap.
+ *
+ * A free frame is not a column. Newlines the author typed stay; soft wrapping
+ * would put the words back inside a box they did not draw.
+ */
+function freeTextWidth(text: string, fontSizePt: number): number {
+  const longest = String(text ?? "")
+    .split("\n")
+    .reduce((max, line) => Math.max(max, line.trim().length), 1);
+  const perChar = fontSizePt * 0.3528 * 0.56;
+  return Math.max(12, longest * perChar + opticalSlack(fontSizePt));
+}
+
+function roundMm(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 /** Writing direction for an element's text, as a CSS value. */
