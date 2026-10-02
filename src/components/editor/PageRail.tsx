@@ -1,4 +1,5 @@
 import { pageBackgroundCss, paintCss } from "@/lib/editor/gradient";
+import { OPEN_PAGE_SETTINGS_EVENT } from "./PageSettingsDialog";
 import { memo, useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
@@ -91,6 +92,7 @@ export function PageRail({
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const itemRefs = useRef<Record<string, HTMLLIElement | null>>({});
+  const settingsTimer = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     itemRefs.current[activePageId]?.scrollIntoView({
@@ -107,34 +109,31 @@ export function PageRail({
     setDragIndex(index);
     setOverIndex(index);
 
-    const move = (ev: PointerEvent) => {
-      let target = index;
+    const indexAt = (clientX: number, fallback: number) => {
+      let best = fallback;
+      let bestDist = Number.POSITIVE_INFINITY;
       for (const [id, node] of Object.entries(itemRefs.current)) {
         if (!node) continue;
         const rect = node.getBoundingClientRect();
-        if (ev.clientX >= rect.left && ev.clientX <= rect.right) {
+        const dist = Math.abs(clientX - (rect.left + rect.width / 2));
+        if (dist < bestDist) {
+          bestDist = dist;
           const found = pages.findIndex((p) => p.id === id);
-          if (found >= 0) target = found;
-          break;
+          if (found >= 0) best = found;
         }
       }
-      setOverIndex(target);
+      return best;
+    };
+
+    const move = (ev: PointerEvent) => {
+      setOverIndex(indexAt(ev.clientX, index));
     };
 
     const up = (ev: PointerEvent) => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
-      let target = index;
-      for (const [id, node] of Object.entries(itemRefs.current)) {
-        if (!node) continue;
-        const rect = node.getBoundingClientRect();
-        if (ev.clientX >= rect.left && ev.clientX <= rect.right) {
-          const found = pages.findIndex((p) => p.id === id);
-          if (found >= 0) target = found;
-          break;
-        }
-      }
+      const target = indexAt(ev.clientX, index);
       setDragIndex(null);
       setOverIndex(null);
       if (ev.type !== "pointercancel" && target !== index)
@@ -318,8 +317,23 @@ export function PageRail({
                     <span
                       className="truncate font-bold"
                       style={{ maxWidth: `${Math.max(48, thumbW)}px` }}
-                      onDoubleClick={() => setRenaming(p.id)}
-                      title="انقر مرتين لإعادة التسمية"
+                      onClick={() => {
+                        activatePage(i);
+                        window.clearTimeout(settingsTimer.current);
+                        settingsTimer.current = window.setTimeout(() => {
+                          window.dispatchEvent(
+                            new CustomEvent(OPEN_PAGE_SETTINGS_EVENT, {
+                              detail: p.id,
+                            }),
+                          );
+                        }, 220);
+                      }}
+                      onDoubleClick={(event) => {
+                        event.stopPropagation();
+                        window.clearTimeout(settingsTimer.current);
+                        setRenaming(p.id);
+                      }}
+                      title="نقرة لإعدادات الصفحة — نقرتان لإعادة التسمية"
                     >
                       {p.name}
                     </span>
@@ -416,7 +430,20 @@ const PageThumb = memo(function PageThumb({
       style={{
         width: `${w}px`,
         height: `${h}px`,
-        background: pageBackgroundCss(page),
+        backgroundColor: page.bg || "#ffffff",
+        backgroundImage: page.bgImage
+          ? `url("${page.bgImage.replace(/"/g, "%22")}")`
+          : pageBackgroundCss(page).startsWith("linear") ||
+              pageBackgroundCss(page).startsWith("radial")
+            ? pageBackgroundCss(page)
+            : undefined,
+        backgroundSize: page.bgImage
+          ? page.bgImageFit === "contain"
+            ? "contain"
+            : "cover"
+          : undefined,
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
       }}
     >
       {page.elements

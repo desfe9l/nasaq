@@ -12,11 +12,10 @@
  * slide-overs. One source of truth, so the store (auto-open rules) and the
  * shell (layout) can never disagree about which mode is active.
  *
- * 1100 rather than 1024: at 1024–1100 the two panels plus a usable A4 artboard
- * do not fit side by side, so the tablet layout has to start a little earlier
- * than the classic iPad landscape width.
+ * iPad portrait is a full workspace, not a reduced phone layout: at 768 the two
+ * panels dock like the desktop. Phones stay slide-overs.
  */
-export const OVERLAY_BREAKPOINT = 1100;
+export const OVERLAY_BREAKPOINT = 768;
 
 /** True when the viewport is in slide-over mode (tablet/phone widths). */
 export function isOverlayViewport(): boolean {

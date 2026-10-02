@@ -49,6 +49,8 @@ export function ViewMenu({
   const snapElements = useEditor((s) => s.snapElements);
   const previewAll = useEditor((s) => s.previewAll);
   const focusMode = useEditor((s) => s.focusMode);
+  const appearance = useEditor((s) => s.appearance);
+  const setAppearance = useEditor((s) => s.setAppearance);
   const pagesRailCollapsed = useEditor((s) => s.pagesRailCollapsed);
   const pagesRailHidden = useEditor((s) => s.pagesRailHidden);
   const togglePagesRail = useEditor((s) => s.togglePagesRail);
@@ -61,8 +63,12 @@ export function ViewMenu({
   const printGuides = useEditor((s) => s.printGuides);
   const togglePrintGuide = useEditor((s) => s.togglePrintGuide);
   const zoom = useEditor((s) => s.zoom);
-  const appearance = useEditor((s) => s.appearance);
-  const setAppearance = useEditor((s) => s.setAppearance);
+  const clipExport = useEditor((s) => s.clipExport);
+  const setClipExport = useEditor((s) => s.setClipExport);
+  const activePage = useEditor((s) =>
+    s.pages.find((page) => page.id === s.activePageId),
+  );
+  const setPageBackground = useEditor((s) => s.setPageBackground);
   /** Zoom around the middle of the live stage, so the page never jumps. */
   const zoomBy = (delta: number) => {
     const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
@@ -144,6 +150,11 @@ export function ViewMenu({
       />
       <MenuRow label="ملاءمة التحديد" onSelect={fitToSelection} />
       <MenuRow label="مقياس 100%" onSelect={() => setZoom(1)} />
+      <MenuRow
+        label="ضبط مساحة العمل"
+        hint="يعيد اللوحات والأدوات إلى التخطيط الافتراضي دون المساس بالمشروع"
+        onSelect={() => useEditor.getState().resetWorkspaceLayout()}
+      />
       <MenuRow
         label="ملء الشاشة"
         checked={typeof document !== "undefined" && !!document.fullscreenElement}
@@ -233,6 +244,23 @@ export function ViewMenu({
         label="الشريط العائم للعنصر المحدد"
         checked={bubbleEnabled}
         onSelect={() => toggleBubble()}
+      />
+      <MenuRow
+        label="إخفاء العناصر خارج الصفحة"
+        checked={Boolean(activePage?.clipContent)}
+        hint="يقص الظهور فقط — العناصر تبقى في الملف"
+        onSelect={() => {
+          if (!activePage) return;
+          setPageBackground(activePage.id, {
+            clipContent: !activePage.clipContent,
+          });
+        }}
+      />
+      <MenuRow
+        label="قص التصدير على حدود الصفحة"
+        checked={clipExport !== false}
+        hint="لا يؤثر على أبعاد الصفحة ولا يحذف العناصر"
+        onSelect={() => setClipExport(clipExport === false)}
       />
       <MenuRow
         label="وضع التركيز"

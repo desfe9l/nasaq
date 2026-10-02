@@ -121,8 +121,7 @@ function pointInRotatedBox(el: CanvasEl, px: number, py: number): boolean {
   const sin = Math.sin(rad);
   const rx = dx * cos - dy * sin;
   const ry = dx * sin + dy * cos;
-  // تسامح صغير لتسهيل الالتقاط بالقلم والإصبع
-  const tol = 0.8;
+  const tol = 0.2;
   return Math.abs(rx) <= el.w / 2 + tol && Math.abs(ry) <= el.h / 2 + tol;
 }
 
@@ -161,6 +160,9 @@ function elementsAtPoint(
   // الأعلى أولاً
   return hits.sort((a, b) => b.z - a.z);
 }
+
+/** Second tap on the same overlapping stack opens the picker. The first tap selects. */
+let lastAmbiguousStack = { key: "", at: 0 };
 
 export function CanvasStage({
   onDropImage,
@@ -538,8 +540,9 @@ export function CanvasStage({
 
     const start = toMm(e);
     const slopMm = Math.max(
-      0.2,
-      (POINTER_SLOP * size.w) / Math.max(1, rect.width),
+      e.pointerType === "pen" ? 0.85 : 0.2,
+      ((e.pointerType === "pen" ? POINTER_SLOP * 2 : POINTER_SLOP) * size.w) /
+        Math.max(1, rect.width),
     );
     let maxDist = 0;
 
@@ -567,6 +570,7 @@ export function CanvasStage({
     };
 
     const beginGesture = () => {
+      document.body.classList.add("is-gesturing");
       applyPressSelection();
       const fresh = useEditor.getState();
       const live = new Set(fresh.selectedIds);
@@ -892,6 +896,7 @@ export function CanvasStage({
       if (longPressFired) {
         detach();
         opRef.current = null;
+      document.body.classList.remove("is-gesturing");
         interaction.endInteraction();
         return;
       }
@@ -903,7 +908,6 @@ export function CanvasStage({
       const wasTap = kind === "move" && !heldLong && maxDist < slopMm;
 
       if (wasTap) {
-        // تحقق من العناصر المتداخلة — إذا كان هناك أكثر من عنصر في نقطة الضغط، اعرض قائمة اختيار
         const pageForHit = pages.find((p) => p.id === page.id);
         if (pageForHit) {
           const hits = elementsAtPoint(
@@ -912,31 +916,28 @@ export function CanvasStage({
             start.x,
             start.y,
           );
-          if (hits.length > 1) {
-            // إذا كان العنصر المحدد هو الأعلى، وكان هناك تداخل صعب، اعرض القائمة
-            // نعرض القائمة عندما يكون هناك أكثر من عنصرين متداخلين أو عندما يكون الضغط بالقلم/اللمس
-            const shouldShowPicker =
-              hits.length >= 2 &&
-              (ev.pointerType === "pen" ||
-                ev.pointerType === "touch" ||
-                hits.length > 2);
-            if (shouldShowPicker) {
-              // تأخير صغير لتجنب التعارض مع double-tap
-              setTimeout(() => {
-                const stillTap = !input.current!.busy;
-                if (stillTap) {
-                  setLayerPicker({
-                    x: ev.clientX,
-                    y: ev.clientY,
-                    clientX: ev.clientX,
-                    clientY: ev.clientY,
-                    pageId: page.id,
-                    point: start,
-                    elements: hits,
-                  });
-                }
-              }, 80);
-            }
+          const key = hits.map((hit) => hit.id).join("\0");
+          const now = performance.now();
+          const repeat =
+            hits.length > 1 &&
+            key === lastAmbiguousStack.key &&
+            now - lastAmbiguousStack.at < 1400 &&
+            useEditor.getState().selectedIds.includes(hits[0].id);
+          lastAmbiguousStack = { key, at: now };
+          if (hits.length > 1 && (repeat || ev.altKey)) {
+            setTimeout(() => {
+              if (!input.current!.busy) {
+                setLayerPicker({
+                  x: ev.clientX,
+                  y: ev.clientY,
+                  clientX: ev.clientX,
+                  clientY: ev.clientY,
+                  pageId: page.id,
+                  point: start,
+                  elements: hits,
+                });
+              }
+            }, 80);
           }
         }
         if (
@@ -947,6 +948,7 @@ export function CanvasStage({
         }
       }
       opRef.current = null;
+      document.body.classList.remove("is-gesturing");
       /*
        * Commit: flush any frame the rAF gate had not painted, drop the
        * transient overrides, then write the final geometry to the document in
@@ -968,6 +970,7 @@ export function CanvasStage({
       const hadGesture = opRef.current !== null;
       detach();
       opRef.current = null;
+      document.body.classList.remove("is-gesturing");
       const committed = hadGesture ? finals : [];
       finals = [];
       interaction.endInteraction();
@@ -1273,7 +1276,7 @@ export function CanvasStage({
         pageEnteredGroupId,
         point.x,
         point.y,
-      ).filter((el) => !el.locked);
+      ).filter((el) => !el.hidden);
       let el = hits.find((el) => pageSelection.has(el.id)) || hits[0];
       if (cycle && hits.length > 1) {
         const selectedIndex = hits.findIndex((item) =>
@@ -1643,6 +1646,7 @@ const ArtboardPage = memo(function ArtboardPage({
 }) {
   const size = pageSize(page);
   const cellRef = useRef<HTMLDivElement>(null);
+  const renameTimer = useRef<number | undefined>(undefined);
   // The active page is pinned so its selection frames, guides and editing
   // surface exist no matter where the viewport is.
   const pinned = isActive || isRenaming;
@@ -1713,9 +1717,20 @@ const ArtboardPage = memo(function ArtboardPage({
           type="button"
           className="artboard-name"
           aria-pressed={isActive && selectedSet.size === 0}
-          title={page.name + " — انقر مرتين أو اضغط Enter لإعادة التسمية"}
-          onClick={() => onActivate(page.id)}
-          onDoubleClick={() => onStartRename(page.id)}
+          title={page.name + " — نقرة للإعدادات، نقرتان لإعادة التسمية"}
+          onClick={() => {
+            onActivate(page.id);
+            window.clearTimeout(renameTimer.current);
+            renameTimer.current = window.setTimeout(() => {
+              window.dispatchEvent(
+                new CustomEvent("nasaq:open-page-settings", { detail: page.id }),
+              );
+            }, 220);
+          }}
+          onDoubleClick={() => {
+            window.clearTimeout(renameTimer.current);
+            onStartRename(page.id);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" || e.key === "F2") {
               e.preventDefault();
@@ -1737,7 +1752,7 @@ const ArtboardPage = memo(function ArtboardPage({
         dir="ltr"
         style={{
           width: `${size.w * zoom}mm`,
-          height: `calc(${size.h * zoom}mm + 36px)`,
+          height: `calc(${size.h * zoom}mm + 22px)`,
         }}
       >
         {header}
@@ -1780,7 +1795,7 @@ const ArtboardPage = memo(function ArtboardPage({
       dir="ltr"
       style={{
         width: `${size.w * zoom}mm`,
-        height: `calc(${size.h * zoom}mm + 36px)`,
+        height: `calc(${size.h * zoom}mm + 22px)`,
       }}
     >
       {header}
@@ -1794,7 +1809,7 @@ const ArtboardPage = memo(function ArtboardPage({
           height: `${size.h}mm`,
           transform: `scale(${zoom})`,
           transformOrigin: "top left",
-          top: "36px",
+          top: "22px",
           left: 0,
         }}
       >
@@ -1803,7 +1818,9 @@ const ArtboardPage = memo(function ArtboardPage({
           data-page-id={page.id}
           className={`report-page ${showGrid ? "show-grid" : ""} ${
             isActive ? "artboard-active-outline" : ""
-          } ${isLocked ? "artboard-locked" : ""} ${isHidden ? "artboard-hidden-content" : ""}`}
+          } ${isLocked ? "artboard-locked" : ""} ${isHidden ? "artboard-hidden-content" : ""} ${
+            page.clipContent ? "is-clip-view" : ""
+          }`}
           style={{
             width: `${mmToPx(size.w)}px`,
             height: `${mmToPx(size.h)}px`,
@@ -1838,6 +1855,7 @@ const ArtboardPage = memo(function ArtboardPage({
             onMarquee(e, page.id);
           }}
         >
+          <PageSurface page={page} active={isActive} />
           {page.elements
             .slice()
             .sort((a, b) => a.z - b.z)
@@ -2038,6 +2056,43 @@ function MarqueeLayer() {
     />
   );
 }
+
+function PageSurface({ page, active }: { page: Page; active: boolean }) {
+  const size = pageSize(page);
+  const overrides = useInteraction((s) => (active ? s.overrides : EMPTY_OVERRIDES));
+  const gesturing = useInteraction((s) => active && s.active);
+  let nearEdge = false;
+  if (gesturing) {
+    for (const geom of Object.values(overrides)) {
+      const x = geom.x;
+      const y = geom.y;
+      const w = geom.w;
+      const h = geom.h;
+      if (x == null || y == null || w == null || h == null) continue;
+      if (x <= 2.5 || y <= 2.5 || x + w >= size.w - 2.5 || y + h >= size.h - 2.5) {
+        nearEdge = true;
+        break;
+      }
+    }
+  }
+  return (
+    <>
+      {page.bgImage ? (
+        <div
+          className="page-bg-image"
+          aria-hidden
+          style={{
+            backgroundImage: `url("${page.bgImage.replace(/"/g, "%22")}")`,
+            backgroundSize: page.bgImageFit === "contain" ? "contain" : "cover",
+          }}
+        />
+      ) : null}
+      <div className={nearEdge ? "page-trim is-hot" : "page-trim"} aria-hidden />
+    </>
+  );
+}
+
+const EMPTY_OVERRIDES: Record<string, { x?: number; y?: number; w?: number; h?: number }> = {};
 
 /** Alignment guides, driven by the transient interaction store. */
 const GuideLines = memo(function GuideLines({
@@ -2493,6 +2548,7 @@ function ExportCaptureLayer() {
   const pages = useEditor((s) => s.pages);
   const exportOpen = useEditor((s) => s.exportOpen);
   const captureArmed = useEditor((s) => s.captureArmed);
+  const clipExport = useEditor((s) => s.clipExport);
   if (!exportOpen && !captureArmed) return null;
   return (
     <div
@@ -2506,13 +2562,23 @@ function ExportCaptureLayer() {
           <div
             key={page.id}
             data-export-page={page.id}
-            className="report-page"
+            className={`report-page${clipExport !== false ? " is-clip-export" : " is-export-visible"}`}
             style={{
               width: `${mmToPx(size.w)}px`,
               height: `${mmToPx(size.h)}px`,
               background: pageBackgroundCss(page),
             }}
           >
+            {page.bgImage ? (
+              <div
+                className="page-bg-image"
+                aria-hidden
+                style={{
+                  backgroundImage: `url("${page.bgImage.replace(/"/g, "%22")}")`,
+                  backgroundSize: page.bgImageFit === "contain" ? "contain" : "cover",
+                }}
+              />
+            ) : null}
             {page.elements
               .slice()
               .sort((a, b) => a.z - b.z)
