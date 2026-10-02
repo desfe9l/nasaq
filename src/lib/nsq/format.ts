@@ -586,6 +586,27 @@ export function validatePages(
     }
     if (raw.hfRole === "header" || raw.hfRole === "footer")
       el.hfRole = raw.hfRole;
+    if (
+      isRecord(raw.source) &&
+      raw.source.kind === "psd" &&
+      typeof raw.source.layerId === "string" &&
+      raw.source.layerId
+    ) {
+      el.source = {
+        kind: "psd",
+        layerId: raw.source.layerId.slice(0, 80),
+        layerName:
+          typeof raw.source.layerName === "string"
+            ? raw.source.layerName.slice(0, 80)
+            : "",
+        ...(raw.source.fallback === "raster" || raw.source.fallback === "partial"
+          ? { fallback: raw.source.fallback }
+          : {}),
+        ...(typeof raw.source.reason === "string"
+          ? { reason: raw.source.reason.slice(0, 240) }
+          : {}),
+      };
+    }
     if (typeof raw.content === "string") el.content = raw.content;
     if (typeof raw.src === "string") el.src = raw.src;
     if (type === "table") {
