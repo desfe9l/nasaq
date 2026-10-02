@@ -115,20 +115,25 @@ function ManagedBrandIcon() {
   const mark = useSiteSettings().images.mark?.trim() ?? "";
   useEffect(() => {
     const href = mark || "/nasaq-mark.svg";
-    let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-    if (!link) {
-      link = document.createElement("link");
-      link.rel = "icon";
-      document.head.appendChild(link);
-    }
-    link.type = mark.startsWith("data:image/png")
+    const type = mark.startsWith("data:image/png")
       ? "image/png"
       : mark.startsWith("data:image/jpeg") || mark.startsWith("data:image/jpg")
         ? "image/jpeg"
         : mark.startsWith("data:image/webp")
           ? "image/webp"
           : "image/svg+xml";
-    link.href = href;
+    const ensure = (rel: string, fallback: string, fallbackType: string) => {
+      let link = document.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
+      if (!link) {
+        link = document.createElement("link");
+        link.rel = rel;
+        document.head.appendChild(link);
+      }
+      link.type = mark ? type : fallbackType;
+      link.href = mark || fallback;
+    };
+    ensure("icon", href, "image/svg+xml");
+    ensure("apple-touch-icon", "/icons/nasaq-192.png", "image/png");
   }, [mark]);
   return null;
 }
