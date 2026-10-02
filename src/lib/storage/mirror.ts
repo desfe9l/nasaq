@@ -11,6 +11,7 @@
  * endpoint and no bucket name is referenced here.
  */
 import { hasSignedInOwner } from "@/lib/editor/storage-owner";
+import type { LibraryCatalog } from "./library-sync";
 import type { StorageAssetKind, StoredAsset } from "./provider";
 
 /** Split a `data:` URL into its content type and raw base64 payload. */
@@ -108,4 +109,77 @@ export async function removeRemoteAsset(id: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/** Read the signed-in account's library catalog. `ok: false` means do not overwrite it. */
+export async function pullLibraryCatalog(): Promise<
+  { ok: true; payload: LibraryCatalog | null } | { ok: false }
+> {
+  try {
+    if (!hasSignedInOwner()) return { ok: false };
+    const { getLibraryCatalog } = await import("./functions");
+    const result = await getLibraryCatalog();
+    return { ok: true, payload: result?.payload ?? null };
+  } catch {
+    return { ok: false };
+  }
+}
+
+/** Persist the signed-in account's catalog. Failures stay local. */
+export async function pushLibraryCatalog(payload: LibraryCatalog): Promise<boolean> {
+  try {
+    if (!hasSignedInOwner()) return false;
+    const { saveLibraryCatalog } = await import("./functions");
+    const result = await saveLibraryCatalog({ data: { payload } });
+    return Boolean(result?.ok);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Server-side copies of objects the account already owns.
+ * One request covers up to eight sources so a folder copy is not N round-trips.
+ */
+export async function copyRemoteAssets(
+  sourceIds: string[],
+): Promise<Array<{ sourceId: string; remoteId: string }>> {
+  const unique = [...new Set(sourceIds.filter(Boolean))];
+  if (!hasSignedInOwner() || !unique.length) return [];
+  const copied: Array<{ sourceId: string; remoteId: string }> = [];
+  try {
+    const { copyStoredAssets } = await import("./functions");
+    for (let index = 0; index < unique.length; index += 8) {
+      const chunk = unique.slice(index, index + 8);
+      const result = await copyStoredAssets({ data: { sourceIds: chunk } });
+      for (const row of result?.copies ?? []) {
+        if (row?.asset?.id) copied.push({ sourceId: row.sourceId, remoteId: row.asset.id });
+      }
+    }
+  } catch {
+    return copied;
+  }
+  return copied;
+}
+
+/** Download up to eight objects per request. Partial results are kept. */
+export async function fetchRemoteAssetDataUrls(
+  ids: string[],
+): Promise<Array<{ id: string; dataUrl: string; asset: StoredAsset }>> {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!hasSignedInOwner() || !unique.length) return [];
+  const files: Array<{ id: string; dataUrl: string; asset: StoredAsset }> = [];
+  try {
+    const { downloadStoredAssets } = await import("./functions");
+    for (let index = 0; index < unique.length; index += 8) {
+      const chunk = unique.slice(index, index + 8);
+      const result = await downloadStoredAssets({ data: { ids: chunk } });
+      for (const file of result?.files ?? []) {
+        if (file?.id && file.dataUrl) files.push(file);
+      }
+    }
+  } catch {
+    return files;
+  }
+  return files;
 }

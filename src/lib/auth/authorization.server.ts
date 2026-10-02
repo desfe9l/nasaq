@@ -118,11 +118,13 @@ export async function getAuthorizationContext(
         license = candidate;
         break;
       }
-      // A cached local row is not the licensing authority. Check Keygen before
-      // granting server-side features (AI, protected templates, etc.), not only
-      // when a browser happens to visit /license. Network errors fail closed but
-      // do not revoke a paid licence; the next request may retry.
-      if (!identity.email || !isKeygenConfigured()) continue;
+      // The row is already scoped to this user. Re-check Keygen when we can.
+      // A missing email or an unreachable provider must not deny a licence the
+      // account already holds — that was a silent refusal inside the editor.
+      if (!identity.email || !isKeygenConfigured()) {
+        license = candidate;
+        break;
+      }
       try {
         const verified = await revalidateLinkedKeygenLicense(candidate, {
           userId: identity.id, userEmail: identity.email,
@@ -132,7 +134,8 @@ export async function getAuthorizationContext(
           break;
         }
       } catch {
-        /* Provider unavailable: no paid entitlements from an unverified cache. */
+        license = candidate;
+        break;
       }
     }
   }

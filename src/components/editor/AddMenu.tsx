@@ -25,6 +25,7 @@ import { useEditor, type LeftTab } from "@/lib/editor/store";
 import { promptForQr } from "@/lib/editor/qr";
 import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
 import { IconButton } from "./ui/IconButton";
+import { OPEN_NEW_PAGE_EVENT } from "./NewPageDialog";
 
 /**
  * «إضافة» — the ONE insert menu of the studio.
@@ -64,7 +65,6 @@ export function AddMenu({
   className,
 }: AddMenuProps) {
   const addElement = useEditor((s) => s.addElement);
-  const addPage = useEditor((s) => s.addPage);
   const duplicatePage = useEditor((s) => s.duplicatePage);
   const openTablePicker = useEditor((s) => s.openTablePicker);
 
@@ -211,8 +211,8 @@ export function AddMenu({
       <MenuRow
         icon={<FilePlus2 className="size-4" />}
         label="صفحة جديدة"
-        hint="تستخدم مقاس وخلفية الصفحة الحالية"
-        onSelect={() => addPage()}
+        hint="اختر نفس المقاس أو مقاسًا جديدًا — دون نسخ المحتوى"
+        onSelect={() => window.dispatchEvent(new CustomEvent(OPEN_NEW_PAGE_EVENT))}
       />
       <MenuRow
         icon={<Copy className="size-4" />}

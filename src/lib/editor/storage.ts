@@ -139,7 +139,10 @@ export type SettingsKey =
   | "assetFolders"
   /** SVG icons/dividers the author added to the smart library. */
   | "customLibrary"
-  | "brandProfiles";
+  | "brandProfiles"
+  /** Account-library deletions so a later sync does not restore them. */
+  | "libraryRemovedAssets"
+  | "libraryRemovedFolders";
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 

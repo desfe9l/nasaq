@@ -6,6 +6,7 @@ import {
   ArrowRight,
   CalendarClock,
   Check,
+  Copy,
   ChevronsDownUp,
   ChevronsUpDown,
   Download,
@@ -167,6 +168,7 @@ export function AssetLibrary({
   const renameAssetFolder = useEditor((s) => s.renameAssetFolder);
   const deleteAssetFolder = useEditor((s) => s.deleteAssetFolder);
   const moveAssetsToFolder = useEditor((s) => s.moveAssetsToFolder);
+  const duplicateLibrary = useEditor((s) => s.duplicateLibrary);
   const importLibraryPlan = useEditor((s) => s.importLibraryPlan);
   const addCustomIcon = useEditor((s) => s.addCustomIcon);
 
@@ -972,6 +974,15 @@ export function AssetLibrary({
             </button>
             <button
               type="button"
+              onClick={() => void duplicateLibrary([], [currentFolder.id])}
+              className="asset-lib-icon-btn grid size-7 shrink-0 place-items-center rounded-[6px] border border-line"
+              title="نسخ المجلد ومحتوياته"
+              aria-label="نسخ المجلد ومحتوياته"
+            >
+              <Copy className="size-3" />
+            </button>
+            <button
+              type="button"
               onClick={() => setFolderDialog("delete")}
               className="asset-lib-icon-btn grid size-7 shrink-0 place-items-center rounded-[6px] border border-line text-error"
               title="حذف المجلد"
@@ -1013,6 +1024,13 @@ export function AssetLibrary({
           <span className="inline-flex items-center gap-1 rounded-full bg-ok px-2 py-0.5 font-extrabold text-white tabular-nums">
             {selectedAssetIds.length} محدد
           </span>
+          <button
+            type="button"
+            className="h-7 rounded border border-brand/70 px-2 font-extrabold"
+            onClick={() => void duplicateLibrary(selectedAssetIds)}
+          >
+            نسخ المحدد
+          </button>
           <select
             aria-label="نقل العناصر إلى مجلد"
             defaultValue=""
@@ -1259,6 +1277,15 @@ export function AssetLibrary({
               ) : (
                 <>
                   <MenuRow icon={Plus} label="إدراج على الصفحة" onClick={() => { place(menu.asset); closeMenu(); }} />
+                  <MenuRow
+                    icon={Copy}
+                    label={selectedAssetIds.includes(menu.asset.id) && selectedAssetIds.length > 1 ? "نسخ المحدد" : "نسخ"}
+                    onClick={() => {
+                      const targets = selectedAssetIds.includes(menu.asset.id) ? selectedAssetIds : [menu.asset.id];
+                      void duplicateLibrary(targets);
+                      closeMenu();
+                    }}
+                  />
                   <MenuRow
                     icon={Check}
                     label={selectedAssetIds.includes(menu.asset.id) ? "❌ إلغاء التحديد" : "🎯 تحديد"}

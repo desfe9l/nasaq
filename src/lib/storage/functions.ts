@@ -27,6 +27,7 @@ import {
   type StorageAssetKind,
   type StoredAsset,
 } from "./provider";
+import { normalizeCatalog, type LibraryCatalog } from "./library-sync";
 
 export type StorageFailureReason =
   | "not_configured"
@@ -327,3 +328,163 @@ export const deleteStoredAsset = createServerFn({ method: "POST" })
     await sql`delete from storage_assets where id = ${data.id} and user_id = ${context.userId}`;
     return { ok: true };
   });
+
+const CATALOG_MAX_CHARS = 1_500_000;
+
+/** The signed-in account's library metadata. Empty when nothing has been synced. */
+export const getLibraryCatalog = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<{ payload: LibraryCatalog | null; updatedAt: string | null }> => {
+    const sql = await getSql();
+    const rows = await sql<{ payload: unknown; updated_at: string | Date }>`
+      select payload, updated_at from library_catalog
+      where user_id = ${context.userId}
+      limit 1
+    `;
+    const row = rows[0];
+    if (!row || row.payload == null) return { payload: null, updatedAt: null };
+    return {
+      payload: normalizeCatalog(row.payload),
+      updatedAt: new Date(row.updated_at).toISOString(),
+    };
+  });
+
+/** Replace the caller's catalog. The user id comes from the session, never the body. */
+export const saveLibraryCatalog = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown): { payload: LibraryCatalog } => {
+    const payload = (input as { payload?: unknown } | null)?.payload;
+    if (!payload || typeof payload !== "object") throw new Error("بيانات المكتبة غير صالحة");
+    if (JSON.stringify(payload).length > CATALOG_MAX_CHARS) {
+      throw new Error("بيانات المكتبة أكبر من الحد المسموح");
+    }
+    return { payload: normalizeCatalog(payload) };
+  })
+  .handler(async ({ context, data }): Promise<{ ok: true } | { ok: false; reason: "rejected" }> => {
+    const sql = await getSql();
+    const body = JSON.stringify(data.payload);
+    await sql`
+      insert into library_catalog (user_id, payload, updated_at)
+      values (${context.userId}, ${body}::jsonb, now())
+      on conflict (user_id) do update
+        set payload = excluded.payload,
+            updated_at = now()
+    `;
+    return { ok: true };
+  });
+
+/**
+ * Copy objects the caller already owns into new objects.
+ *
+ * The source row is not updated and the new key is minted server-side under
+ * the same user, so a copy cannot alias the original or another account.
+ */
+export const copyStoredAssets = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown): { sourceIds: string[] } => {
+    const raw = (input as { sourceIds?: unknown } | null)?.sourceIds;
+    if (!Array.isArray(raw) || raw.length === 0 || raw.length > 8) {
+      throw new Error("دفعة النسخ غير صالحة");
+    }
+    const sourceIds = raw.map((id) => (typeof id === "string" ? id.trim() : ""));
+    if (sourceIds.some((id) => !id || id.length > 120)) throw new Error("معرّف الأصل غير صالح");
+    return { sourceIds };
+  })
+  .handler(async ({ context, data }): Promise<{
+    copies: Array<{ sourceId: string; asset: StoredAsset }>;
+  }> => {
+    const { getObjectStorage } = await import("./r2.server");
+    const storage = getObjectStorage();
+    if (!storage) return { copies: [] };
+    const sql = await getSql();
+    const { findOwnedAsset } = await import("./ownership.server");
+    const { resolveOwnedProjectSlot } = await import("./ownership.server");
+    const ownedSlot = await resolveOwnedProjectSlot(sql, context.userId, null);
+    if (!ownedSlot.ok) return { copies: [] };
+    const copies: Array<{ sourceId: string; asset: StoredAsset }> = [];
+    for (const sourceId of data.sourceIds) {
+      const owned = await findOwnedAsset(sql, context.userId, sourceId);
+      if (!owned.ok) continue;
+      const rows = await sql<AssetRow>`
+        select id, kind, object_key, file_name, content_type, byte_size, width, height, project_id, created_at
+        from storage_assets
+        where id = ${owned.asset.id} and user_id = ${context.userId}
+        limit 1
+      `;
+      const row = rows[0];
+      if (!row) continue;
+      try {
+        const bytes = await storage.get(owned.asset.objectKey);
+        if (!bytes?.byteLength) continue;
+        const id = uid("obj").replace(/[^A-Za-z0-9_-]/g, "");
+        const objectKey = buildStorageObjectKey({
+          userId: context.userId,
+          projectId: ownedSlot.slot,
+          assetId: id,
+        });
+        await storage.put(objectKey, bytes, row.content_type);
+        const inserted = await sql<AssetRow>`
+          insert into storage_assets
+            (id, user_id, kind, object_key, file_name, content_type, byte_size, width, height, project_id)
+          values
+            (${id}, ${context.userId}, ${row.kind}, ${objectKey}, ${row.file_name},
+             ${row.content_type}, ${bytes.byteLength}, ${row.width}, ${row.height}, ${null})
+          returning id, kind, object_key, file_name, content_type, byte_size, width, height, project_id, created_at
+        `;
+        const created = inserted[0];
+        if (created) copies.push({ sourceId, asset: toStoredAsset(created) });
+      } catch {
+        /* one failed object must not abort the rest of the batch */
+      }
+    }
+    return { copies };
+  });
+
+/** Download up to eight of the caller's own objects in one request. */
+export const downloadStoredAssets = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((input: unknown): { ids: string[] } => {
+    const raw = (input as { ids?: unknown } | null)?.ids;
+    if (!Array.isArray(raw) || raw.length === 0 || raw.length > 8) {
+      throw new Error("دفعة التنزيل غير صالحة");
+    }
+    const ids = raw.map((id) => (typeof id === "string" ? id.trim() : ""));
+    if (ids.some((id) => !id || id.length > 120)) throw new Error("معرّف الأصل غير صالح");
+    return { ids };
+  })
+  .handler(async ({ context, data }): Promise<{
+    files: Array<{ id: string; dataUrl: string; asset: StoredAsset }>;
+  }> => {
+    const { getObjectStorage } = await import("./r2.server");
+    const storage = getObjectStorage();
+    if (!storage) return { files: [] };
+    const sql = await getSql();
+    const { findOwnedAsset } = await import("./ownership.server");
+    const files: Array<{ id: string; dataUrl: string; asset: StoredAsset }> = [];
+    for (const id of data.ids) {
+      const owned = await findOwnedAsset(sql, context.userId, id);
+      if (!owned.ok) continue;
+      const rows = await sql<AssetRow>`
+        select id, kind, object_key, file_name, content_type, byte_size, width, height, project_id, created_at
+        from storage_assets
+        where id = ${owned.asset.id} and user_id = ${context.userId}
+        limit 1
+      `;
+      const row = rows[0];
+      if (!row) continue;
+      try {
+        const bytes = await storage.get(owned.asset.objectKey);
+        if (!bytes?.byteLength) continue;
+        files.push({
+          id: row.id,
+          dataUrl: `data:${row.content_type};base64,${Buffer.from(bytes).toString("base64")}`,
+          asset: toStoredAsset(row),
+        });
+      } catch {
+        /* skip a single missing object */
+      }
+    }
+    return { files };
+  });
+
+

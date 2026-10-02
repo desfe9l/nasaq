@@ -31,6 +31,7 @@ import { createElement } from "./model";
 import { createProject } from "./templates";
 import { shapeSvgMarkup } from "./shape-render";
 import { useEditor } from "./store";
+import { getStorageOwner } from "./storage-owner";
 
 const near = (actual: number, expected: number) =>
   assert.ok(Math.abs(actual - expected) < 1e-8, `${actual} != ${expected}`);
@@ -227,9 +228,14 @@ test("page background is metadata behind every object and undoes atomically", ()
   assert.equal(useEditor.getState().pages[0].bg, "#123456");
 });
 
-test("new pages inherit active page format and paint; duplicate page copies all content with fresh ids", () => {
+test("new pages use an explicit size; inherit copies dimensions only and duplicate copies content", () => {
   const source = resetEditor();
+  const owner = getStorageOwner();
   useEditor.setState({
+    hydrated: true,
+    sessionOwner: owner,
+    entitlementsOwner: owner,
+    entitlementsResolved: true,
     entitlements: {
       ...useEditor.getState().entitlements,
       unlimited_pages: true,
@@ -247,18 +253,26 @@ test("new pages inherit active page format and paint; duplicate page copies all 
       z: 1,
     }),
   ];
-  useEditor.setState({ pages: [source] });
+  useEditor.setState({ pages: [source], activePageId: source.id });
   useEditor.getState().setPageBackground(source.id, {
     bg: "#e8f0e8",
     bgGradient: DEFAULT_GRADIENT,
   });
 
   useEditor.getState().addPage();
-  const newPage = useEditor.getState().pages[1];
-  assert.deepEqual([newPage.w, newPage.h], [297, 210]);
-  assert.equal(newPage.bg, "#e8f0e8");
-  assert.deepEqual(newPage.bgGradient, DEFAULT_GRADIENT);
-  assert.deepEqual(newPage.elements, []);
+  const presetPage = useEditor.getState().pages[1];
+  assert.deepEqual([presetPage.w, presetPage.h], [210, 297]);
+  assert.notEqual(presetPage.bg, "#e8f0e8");
+  assert.equal(presetPage.bgGradient, undefined);
+  assert.deepEqual(presetPage.elements, []);
+
+  useEditor.getState().setActivePage(source.id);
+  useEditor.getState().addPage({ mode: "inherit" });
+  const inherited = useEditor.getState().pages[1];
+  assert.deepEqual([inherited.w, inherited.h], [297, 210]);
+  assert.notEqual(inherited.bg, "#e8f0e8");
+  assert.equal(inherited.bgGradient, undefined);
+  assert.deepEqual(inherited.elements, []);
 
   useEditor.getState().duplicatePage(source.id);
   const duplicate = useEditor.getState().pages.find(
