@@ -113,6 +113,10 @@ async function copyTableCsv(table: CanvasEl): Promise<void> {
     return;
   }
   const state = useEditor.getState();
+  if (!state.entitlements.basic_export && !state.entitlements.advanced_export) {
+    toast.error("لا يمكن حفظ أي صيغة قبل شراء الترخيص");
+    return;
+  }
   const block = projectAccessBlock(state, state.entitlements);
   if (block) {
     toast.error(

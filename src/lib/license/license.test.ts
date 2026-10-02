@@ -10,6 +10,7 @@ import {
   normalizeLicenseKey,
 } from "./key.ts";
 import { entitlementsForPlan, entitlementsFromKeygenCodes, LICENSE_ENTITLEMENTS } from "./types.ts";
+import { canUseDemoExport } from "../product/product.ts";
 
 describe("License Key Generation", () => {
   it("generates keys matching the expected format", () => {
@@ -213,10 +214,10 @@ describe("License Entitlements", () => {
     assert.equal(entitlementsForPlan("team-monthly", "TRIAL").team_features, false);
   });
 
-  it("FREE tier has only core features", () => {
+  it("FREE tier can edit but cannot save a file", () => {
     const free = LICENSE_ENTITLEMENTS.FREE;
     assert.ok(free.core_editor);
-    assert.ok(free.basic_export);
+    assert.ok(!free.basic_export);
     assert.ok(!free.premium_templates);
     assert.ok(!free.advanced_export);
     assert.ok(!free.brand_kit);
@@ -251,5 +252,17 @@ describe("License Entitlements", () => {
     for (const [key, value] of Object.entries(lt)) {
       assert.ok(value === true, `LIFETIME tier should have ${key} enabled`);
     }
+  });
+
+  it("refuses every file format until an export licence is present", () => {
+    for (const format of ["png", "jpg", "pdf", "pptx", "docx", "svg", "html", "nsq", "json"]) {
+      assert.equal(canUseDemoExport(format, false, false), false, format);
+    }
+    assert.equal(canUseDemoExport("png", false, true), true);
+    assert.equal(canUseDemoExport("pdf", false, true), true);
+    assert.equal(canUseDemoExport("nsq", false, true), true);
+    assert.equal(canUseDemoExport("pptx", false, true), false);
+    assert.equal(canUseDemoExport("docx", true, false), true);
+    assert.equal(canUseDemoExport("json", true, false), true);
   });
 });

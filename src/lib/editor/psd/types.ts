@@ -65,6 +65,9 @@ export interface PsdNode {
   /** True when the file stored a degenerate box and the size was estimated. */
   boundsEstimated: boolean;
   rotation: number;
+  /** Mirror a smart-object asset whose stored pixels are not yet flipped. */
+  flipX?: boolean;
+  flipY?: boolean;
   text?: PsdTextRun;
   /** Solid fill discovered from a vector fill or a uniform bitmap. */
   shape?: {

@@ -215,6 +215,9 @@ export default defineConfig(({ command, isPreview }) => ({
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
             serverDir: "./server",
+            // The SVG→PNG share renderer is a wasm package. Keep it external
+            // and trace the wasm binary into the server function.
+            traceDeps: ["@resvg/resvg-wasm"],
           }),
         ]
       : []),

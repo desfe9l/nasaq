@@ -163,9 +163,10 @@ describe("editor access per account state", () => {
     assert.equal(access.isAdmin, false);
     assert.equal(access.license, null);
     assert.deepEqual(access.entitlements, LICENSE_ENTITLEMENTS.FREE);
-    // Editing and basic export stay open; every paid feature stays closed.
+    // Editing stays open. Saving or downloading any format does not — that
+    // waits for a purchased or trial licence.
     assert.equal(access.entitlements.core_editor, true);
-    assert.equal(access.entitlements.basic_export, true);
+    assert.equal(access.entitlements.basic_export, false);
     assert.equal(access.entitlements.premium_templates, false);
     assert.equal(access.entitlements.advanced_export, false);
     assert.equal(access.entitlements.brand_kit, false);

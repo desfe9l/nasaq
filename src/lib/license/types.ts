@@ -77,7 +77,7 @@ export type FeatureId =
 export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean>> = {
   FREE: {
     core_editor: true,
-    basic_export: true,
+    basic_export: false,
     premium_templates: false,
     advanced_export: false,
     brand_kit: false,
@@ -174,9 +174,9 @@ export const KEYGEN_ENTITLEMENT_FEATURES: Record<string, FeatureId[]> = {
 };
 
 export function entitlementsFromKeygenCodes(codes: string[]): Record<FeatureId, boolean> {
-  // A provider may omit codes for features already available on the FREE tier.
-  // Missing paid codes still fail closed, but a paid account never loses the
-  // editor and basic export simply because Keygen didn't return their codes.
+  // Saving a file is not a free feature. A code grants only what it names;
+  // `nasaq.export` is basic_export and `nasaq.advanced-export` is the rest.
+  // The editor itself stays on, because that still ships with FREE.
   const entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
   for (const code of codes) {
     for (const feature of KEYGEN_ENTITLEMENT_FEATURES[code] ?? []) {

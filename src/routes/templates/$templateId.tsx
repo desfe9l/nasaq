@@ -2,24 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PublicTemplatePage } from "@/components/site/PublicTemplatePage";
 import { getPublishedTemplateMetaFn } from "@/lib/admin/functions";
 import { publishedTemplateAbsoluteUrl, templateDisplaySlug } from "@/lib/templates/published";
-
-/**
- * Absolute URL of a template's own preview image.
- *
- * Crawlers fetch `og:image` themselves and ignore `data:` URLs, so the stored
- * preview is served from `/api/templates/thumbnail` — a real, cacheable HTTP
- * address. Without it every shared link fell back to the platform card and the
- * recipient saw NASAQ's branding instead of the template they were sent.
- */
-function templateShareImageUrl(idOrSlug: string, thumbnail?: string | null): string {
-  const card = `${publishedTemplateAbsoluteUrl(idOrSlug).split("/templates/")[0]}/og.jpg`;
-  if (!thumbnail) return card;
-  // An SVG preview is a document, not a share image: no major crawler renders
-  // `og:image` as SVG, so the platform card is the honest fallback.
-  if (thumbnail.startsWith("data:image/svg")) return card;
-  const base = publishedTemplateAbsoluteUrl(idOrSlug).split("/templates/")[0];
-  return `${base}/api/templates/thumbnail?id=${encodeURIComponent(idOrSlug)}`;
-}
+import { templateShareImage } from "@/lib/templates/share-image";
 
 export const Route = createFileRoute("/templates/$templateId")({
   ssr: true,
@@ -45,11 +28,12 @@ export const Route = createFileRoute("/templates/$templateId")({
         ? `قالب ${tpl.title} من نَسَق — جاهز للتحرير والطباعة، مع دعم كامل للهوية المؤسسية والخطوط العربية.`
         : "قوالب نَسَق الاحترافية — تقارير، خطابات، عروض وإنفوجرافيك جاهزة للتحرير.";
     /*
-     * The share image is the template's OWN preview when it has one, served
-     * from a crawlable URL; otherwise the platform card (which carries the
-     * current NASAQ mark — never the old stand-in logo).
+     * The share image is the template's OWN preview. SVG thumbnails are
+     * rasterised to PNG by `/api/templates/thumbnail`, because chats and
+     * tweets do not render SVG. The link itself stays the template page.
      */
-    const ogImage = templateShareImageUrl(slug, tpl?.thumbnail);
+    const share = templateShareImage(slug, tpl?.thumbnail);
+    const ogImage = share.url;
 
     const meta: any[] = [
       { title },
@@ -57,6 +41,11 @@ export const Route = createFileRoute("/templates/$templateId")({
       { property: "og:title", content: title },
       { property: "og:description", content: description },
       { property: "og:image", content: ogImage },
+      { property: "og:image:secure_url", content: ogImage },
+      { property: "og:image:type", content: share.type },
+      { property: "og:image:width", content: String(share.width) },
+      { property: "og:image:height", content: String(share.height) },
+      { property: "og:image:alt", content: tpl?.title ?? "قالب نَسَق" },
       { property: "og:type", content: "website" },
       { property: "og:url", content: canonical },
       { property: "og:site_name", content: "نَسَق | NASAQ" },
@@ -65,10 +54,8 @@ export const Route = createFileRoute("/templates/$templateId")({
       { name: "twitter:title", content: title },
       { name: "twitter:description", content: description },
       { name: "twitter:image", content: ogImage },
+      { name: "twitter:image:alt", content: tpl?.title ?? "قالب نَسَق" },
     ];
-
-    meta.push({ property: "og:image:alt", content: tpl?.title ?? "قالب نَسَق" });
-    meta.push({ property: "og:image:type", content: ogImage.endsWith(".jpg") ? "image/jpeg" : "image/png" });
 
     return {
       meta,

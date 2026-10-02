@@ -204,7 +204,7 @@ function freeCard(): HomePlanCard {
     renewalLabel: null,
     savings: 0,
     hasSavings: false,
-    features: ["أدوات أساسية", "حفظ محلي", "تصدير 72 DPI"],
+    features: ["أدوات أساسية", "معاينة في المتصفح", "التنزيل بعد شراء الترخيص"],
     featured: false,
     kind: "free",
     ctaLabel: "ابدأ مجانًا",
