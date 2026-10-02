@@ -100,10 +100,10 @@
   /* Surfaces. `page` is a marketing page's canvas, `paper` the alternating
    * section band, `surface` the card/panel on it, `surface-2` a recessed strip
    * inside a card (toolbars, chips, inset wells). */
-  --color-paper: #f2f4f8;
+  --color-paper: #f4f0e8;
   --color-page: #ffffff;
   --color-surface: #ffffff;
-  --color-surface-2: #f8faf9;
+  --color-surface-2: #faf7f0;
 
   /* Ink. Primary and secondary text; both are re-pointed for Dark below. */
   --color-ink: #172033;
@@ -115,8 +115,8 @@
   --color-muted: #5d6575;
 
   /* Hairlines: `line` frames, `line-2` separates and fills chips/hover rows. */
-  --color-line: #dde2ea;
-  --color-line-2: #edf0f5;
+  --color-line: #ddd6c8;
+  --color-line-2: #ece6da;
 
   /* Semantic fills + their matching text role. */
   --color-danger: #b42318;
@@ -192,7 +192,7 @@
  * `text-ink`, `border-line`, `bg-navy/10`, `shadow-card`… in the product follows,
  * including their `hover:`/`focus:`/`active:`/`group-hover:` forms.
  *
- * Surface values are the ones the dark theme already painted (page #0f141c,
+ * Surface values are the ones the dark theme already painted (page #0b1220,
  * card #161c26, inset #1e2633, ink #e9eef5, secondary #9aa5b4), so nothing here
  * is a redesign — it is the existing dark look, promoted from a thousand
  * copy-pasted `dark:` patches to a token set components can rely on.
@@ -210,16 +210,16 @@ html.dark {
    * wells never blur together. The steps are close enough to feel like one
    * family but far enough that the eye can separate them at a glance.
    */
-  --color-paper: #0f141c;
-  --color-page: #111722;
-  --color-surface: #161c26;
-  --color-surface-2: #1c2330;
+  --color-paper: #0b1220;
+  --color-page: #0e1626;
+  --color-surface: #141c2b;
+  --color-surface-2: #1a2336;
 
   --color-ink: #e9eef5;
   --color-muted: #9aa5b4;
 
-  --color-line: #2f3a49;
-  --color-line-2: #232d3c;
+  --color-line: #2c3850;
+  --color-line-2: #212b40;
 
   /* Brand fills stay saturated enough to hold a white label, but are lifted a
      step so they separate from a near-black page; the hover direction is
@@ -355,6 +355,12 @@ html.dark.dim {
   html.dark body {
     background: var(--color-paper);
     color: var(--color-ink);
+  }
+
+  /* Site pages only: a faint ivory-to-sand wash for depth; the editor keeps flat chrome. */
+  html:not(.dark) body:not(.is-editor) {
+    background-image: linear-gradient(180deg, #f8f4ec 0%, var(--color-paper) 55%, #eee7d9 100%);
+    background-attachment: fixed;
   }
 
   /*
@@ -3740,6 +3746,20 @@ body.is-resizing-panel .editor-dock-strip::before {
   .editor-ui .editor-header-primary > *,
   .editor-ui .editor-header-actions > * { flex-shrink: 0; }
   .editor-ui .editor-doc-capsule { min-width: 0; flex: 0 1 auto; }
+}
+
+/*
+ * Tablet / landscape phone (768–1099px): the bar cannot hold every control on
+ * one row, so the secondary ones (zoom stepper, library shortcut) yield to the
+ * «عرض» and «إضافة» menus, which carry the same commands, and the document
+ * name is the part that gives way. The row never exceeds the viewport.
+ */
+@media (min-width: 768px) and (max-width: 1099px) {
+  .editor-ui .editor-zoom-cluster,
+  .editor-ui .editor-header-sep:has(+ .editor-zoom-cluster),
+  .editor-ui .editor-header-library { display: none; }
+  .editor-ui .editor-header-center { flex-shrink: 1; }
+  .editor-ui .editor-doc-name { width: clamp(6ch, 14vw, 16ch); min-width: 6ch; }
 }
 
 /* The centre capsule keeps the document name and its view controls in one

@@ -40,7 +40,7 @@ export const Route = createRootRoute({
       { name: "apple-mobile-web-app-status-bar-style", content: "default" },
       { name: "apple-mobile-web-app-title", content: "نَسَق" },
       { title: PAGE_TITLE },
-      { name: "theme-color", content: "#006C35" },
+      { name: "theme-color", content: "#f4f0e8" },
       { name: "description", content: DESCRIPTION },
       { name: "author", content: BRAND.developer },
       /*
@@ -75,7 +75,7 @@ export const Route = createRootRoute({
       { rel: "icon", type: "image/svg+xml", href: "/nasaq-mark.svg" },
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
-      { rel: "apple-touch-icon", href: "/icons/nasaq-192.png" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/icons/nasaq-180.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
         rel: "preconnect",
@@ -137,7 +137,7 @@ function ManagedBrandIcon() {
       link.href = mark || fallback;
     };
     ensure("icon", href, "image/svg+xml");
-    ensure("apple-touch-icon", "/icons/nasaq-192.png", "image/png");
+    ensure("apple-touch-icon", "/icons/nasaq-180.png", "image/png");
   }, [mark]);
   return null;
 }

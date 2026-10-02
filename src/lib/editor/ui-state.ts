@@ -559,9 +559,11 @@ export function bubblePartWidth(part: BubblePart): number {
     // Fill + border. Two cells, so one selection kind never makes the bar
     // wider than the other.
     case "ink":
-    case "image":
     case "element":
       return cells(2);
+    // Replace, crop, fit, enhance and lighten.
+    case "image":
+      return cells(5);
     case "stroke":
       // Owns its leading separator, so a selection without stroke support
       // never leaves a stray divider behind.

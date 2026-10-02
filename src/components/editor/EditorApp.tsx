@@ -2244,6 +2244,7 @@ function Studio({
             <IconButton
               label="المكتبة"
               hint="صورك، شعاراتك وملفات SVG المحفوظة"
+              className="editor-header-library"
               active={libraryOpenFlag && !focusMode && !cropActive}
               tipSide="bottom"
               icon={<Library className="size-4" strokeWidth={1.7} />}

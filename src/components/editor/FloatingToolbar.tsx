@@ -18,6 +18,9 @@ import {
   Copy,
   Crop,
   Image,
+  ImagePlus,
+  Sparkles,
+  Sun,
   Group,
   Ungroup,
   ArrowUp,
@@ -1062,6 +1065,18 @@ export function FloatingToolbar({
       {inBar.has("image") && (
         <div className="floating-toolbar-section">
           <TipButton
+            label="تغيير الصورة"
+            hint="استبدال الصورة مع الإبقاء على الموضع والحجم"
+            disabled={el.locked || count !== 1}
+            onClick={() =>
+              window.dispatchEvent(
+                new CustomEvent("nasaq:replace-image", { detail: el.id }),
+              )
+            }
+          >
+            <ImagePlus />
+          </TipButton>
+          <TipButton
             label="قص الصورة"
             disabled={
               el.locked ||
@@ -1124,6 +1139,32 @@ export function FloatingToolbar({
               }
             />
           </AnchorMenu>
+          <TipButton
+            label="تحسين الوضوح"
+            hint="رفع حدة الصورة — انقر مرة أخرى للإلغاء"
+            pressed={Number(style.sharpness ?? 0) >= 30}
+            disabled={el.locked}
+            onClick={() =>
+              updateStyle(el.id, {
+                sharpness: Number(style.sharpness ?? 0) >= 30 ? 0 : 40,
+              })
+            }
+          >
+            <Sparkles />
+          </TipButton>
+          <TipButton
+            label="تفتيح"
+            hint="رفع إضاءة الصورة — انقر مرة أخرى للإلغاء"
+            pressed={Number(style.brightness ?? 100) > 100}
+            disabled={el.locked}
+            onClick={() =>
+              updateStyle(el.id, {
+                brightness: Number(style.brightness ?? 100) > 100 ? 100 : 118,
+              })
+            }
+          >
+            <Sun />
+          </TipButton>
         </div>
       )}
 
