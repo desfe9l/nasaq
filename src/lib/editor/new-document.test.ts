@@ -77,6 +77,38 @@ test("a blank configuration reaches every page with fresh ids", () => {
   assert.match(describeConfig(config), /A3 أفقي/);
 });
 
+test("a blank start is a truly empty sheet by default", () => {
+  const project = buildNewDocument(defaultNewDocument());
+  const page = project.pages[0];
+  assert.equal(page.elements.length, 0, "no header, footer or placeholder");
+  assert.equal(page.bg, "#ffffff");
+  assert.deepEqual([page.w, page.h], [210, 297]);
+});
+
+test("the blank start can carry the light chrome and a chosen background", () => {
+  const chrome = buildNewDocument(
+    defaultNewDocument({ content: "chrome", orgName: "وزارة الاختبار" }),
+  );
+  assert.ok(
+    chrome.pages[0].elements.length > 0,
+    "chrome start keeps its header/footer",
+  );
+  const tinted = buildNewDocument(defaultNewDocument({ bg: "#f4f6fa" }));
+  assert.equal(tinted.pages[0].bg, "#f4f6fa");
+  // A malformed colour falls back to white instead of shipping broken CSS.
+  const safe = buildNewDocument(defaultNewDocument({ bg: "not-a-color" }));
+  assert.equal(safe.pages[0].bg, "#ffffff");
+});
+
+test("letter and legal are first-class sizes", () => {
+  assert.deepEqual(pageDimensions("letter", "portrait"), {
+    w: 215.9,
+    h: 279.4,
+  });
+  const legal = pageDimensions("legal", "landscape");
+  assert.deepEqual(legal, { w: 355.6, h: 215.9 });
+});
+
 test("a template configuration keeps the pack's own pages and size", () => {
   const pack = createProject("official");
   const project = buildNewDocument(

@@ -928,7 +928,7 @@ export function SmartLibraryPanel({
             </span>
           }
         >
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(84px,1fr))] gap-1.5">
             {SHAPE_TOOLS.map((s) => (
               <button
                 key={s.id}
@@ -1054,7 +1054,7 @@ export function SmartLibraryPanel({
           open={library.isOpen("dividers", false)}
           onToggle={() => library.toggle("dividers")}
         >
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-1.5">
             <button
               type="button"
               onClick={() =>
@@ -1105,7 +1105,7 @@ export function SmartLibraryPanel({
               <Minus className="size-3.5 opacity-60" /> خط متقطع
             </button>
           </div>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-1.5">
             <button
               type="button"
               onClick={() =>
@@ -1260,7 +1260,7 @@ export function SmartLibraryPanel({
           <p className="text-[10px] font-bold text-muted">
             اسحب إلى الصفحة، أو انقر لإدراجها في المنتصف
           </p>
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-1.5">
             {TABLE_TEMPLATES.map((t) => (
               <button
                 key={t.id}

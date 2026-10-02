@@ -45,10 +45,13 @@ import {
   Download,
   Library,
   Minus,
+  MousePointer2,
   Plus,
   Redo2,
   Save,
   Scan,
+  Square,
+  Type as TypeIcon,
   Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -92,6 +95,20 @@ import {
   PAGES_RAIL_COLLAPSED,
   type DockSide,
 } from "@/lib/editor/ui-state";
+import {
+  detachPanelTab,
+  hostOf,
+  loadPanelGroups,
+  movePanelTab,
+  savePanelGroups,
+  type PanelGroupState,
+} from "@/lib/editor/panel-groups";
+import {
+  loadDockEdgePreference,
+  saveDockEdgePreference,
+  type DockEdgePreference,
+} from "@/lib/editor/workspace-dock";
+import { PANEL_META, PanelTabStrip } from "./PanelTabStrip";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useLicense } from "@/lib/license/client";
 import { WORKSPACE_HOME_PATH } from "@/lib/auth/use-workspace-entry";
@@ -99,6 +116,7 @@ import { AddLibraryDialog } from "./AddLibraryDialog";
 import { HeadingGeneratorDialog } from "./HeadingGeneratorDialog";
 import { OnboardingTour, hasSeenTour } from "./OnboardingTour";
 import { NsqIntake } from "./NsqIntake";
+import { AppInstallNotice } from "@/components/AppInstallNotice";
 import { useNsqSignedIn } from "@/lib/nsq/use-nsq-session";
 import { ProjectFileMenu, NSQ_SAVE_AS_EVENT } from "./ProjectFileMenu";
 import { NSQ_ACCEPT } from "@/lib/nsq/format";
@@ -1124,9 +1142,26 @@ function Studio({
    * (the canvas measures page coordinates), so this is a broadcast, not a
    * second source of truth.
    */
+  /*
+   * The live tool, mirrored from the canvas (the single source of truth):
+   * the header cluster must never claim a tool the canvas already dropped
+   * after drawing, so the canvas broadcasts every transition.
+   */
+  const [activeTool, setActiveTool] = useState<"select" | "text" | "rect">(
+    "select",
+  );
   const armTool = (tool: "text" | "rect" | null) => {
+    setActiveTool(tool ?? "select");
     window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: tool }));
   };
+  useEffect(() => {
+    const onToolState = (event: Event) => {
+      const detail = (event as CustomEvent<"text" | "rect" | null>).detail;
+      setActiveTool(detail ?? "select");
+    };
+    window.addEventListener("nasaq:tool-state", onToolState);
+    return () => window.removeEventListener("nasaq:tool-state", onToolState);
+  }, []);
 
   /**
    * Restore a collapsed desktop panel (optionally straight onto a tab) in one
@@ -1162,8 +1197,11 @@ function Studio({
     tools: {
       title: "أدوات العناصر",
       side: "left",
-      defaultSize: { width: 480, height: 560 },
-      minSize: { width: 380, height: 260 },
+      // Wider floor: its card grids wrapped into a horizontal scroll below
+      // ~460px and authors read that as "tools keep hiding". auto-fill grids
+      // plus this floor keep ONE visible surface at every width.
+      defaultSize: { width: 520, height: 560 },
+      minSize: { width: 420, height: 260 },
       spawnShift: 28,
     },
     elements: {
@@ -1203,6 +1241,80 @@ function Studio({
     properties: rightOpenFlag,
     layers: layersOpenFlag,
     report: reportOpenFlag,
+  };
+
+  /* ── Grouped windows (one window, several panels as tabs) ───────────────
+   * The six windows stay independent by default; an author who wants
+   * «أدوات التقرير» and «الخصائص» in ONE place drags a tab onto another
+   * window and they share it. The model (panel-groups) guarantees every
+   * panel lives in exactly one window, so nothing can vanish by grouping.
+   */
+  const [groupState, setGroupState] = useState<PanelGroupState>(() =>
+    loadPanelGroups(),
+  );
+  useEffect(() => {
+    savePanelGroups(groupState);
+  }, [groupState]);
+  /** Windows that exist right now (hosts); members live inside their host. */
+  const hosts = PANEL_IDS.filter((id) => Boolean(groupState.groups[id]));
+  const selectTab = (host: PanelId, tab: PanelId) =>
+    setGroupState((s) => ({ ...s, tabs: { ...s.tabs, [host]: tab } }));
+  const dropTab = (tab: PanelId, host: PanelId) =>
+    setGroupState((s) => movePanelTab(s, tab, host));
+  const detachTab = (tab: PanelId) =>
+    setGroupState((s) => detachPanelTab(s, tab));
+  /** Raise the window that holds `id`, on that tab. */
+  const revealPanel = (id: PanelId) => {
+    const host = hostOf(groupState, id);
+    setGroupState((s) =>
+      s.tabs[host] === id ? s : { ...s, tabs: { ...s.tabs, [host]: id } },
+    );
+    setPanelOpenFlag(host, true);
+  };
+  const togglePanelWindow = (id: PanelId) => {
+    const host = hostOf(groupState, id);
+    if (panelOpen[host] && groupState.tabs[host] === id)
+      setPanelOpenFlag(host, false);
+    else revealPanel(id);
+  };
+  /** Is the panel actually on screen right now (its host window, its tab)? */
+  const panelChecked = PANEL_IDS.reduce(
+    (acc, id) => {
+      const host = hostOf(groupState, id);
+      acc[id] = panelOpen[host] && groupState.tabs[host] === id;
+      return acc;
+    },
+    {} as Record<PanelId, boolean>,
+  );
+  /**
+   * Anything that opens a panel through the STORE (keyboard, command rows,
+   * the tools that jump to a tab) still works when that panel is grouped:
+   * the member flag going open raises its host window on the right tab.
+   */
+  useEffect(() => {
+    for (const id of PANEL_IDS) {
+      const host = hostOf(groupState, id);
+      if (host === id || !panelOpen[id]) continue;
+      setGroupState((s) => ({ ...s, tabs: { ...s.tabs, [host]: id } }));
+      setPanelOpenFlag(host, true);
+      setPanelOpenFlag(id, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    panelOpen.library,
+    panelOpen.tools,
+    panelOpen.elements,
+    panelOpen.properties,
+    panelOpen.layers,
+    panelOpen.report,
+  ]);
+  /** The workspace's preferred pin edge (right / left / mirror the UI). */
+  const [dockPref, setDockPref] = useState<DockEdgePreference>(() =>
+    loadDockEdgePreference(),
+  );
+  const changeDockPref = (pref: DockEdgePreference) => {
+    setDockPref(pref);
+    saveDockEdgePreference(pref);
   };
 
   // Live read (not the render-scoped flags): the keyboard effect outlives
@@ -1350,7 +1462,7 @@ function Studio({
   /** Which window (if any) currently occupies each screen edge. */
   const dockedBySide: Partial<Record<DockSide, PanelId>> = {};
   if (isDesktop && !focusMode && !cropActive) {
-    for (const id of PANEL_IDS) {
+    for (const id of hosts) {
       const side = dockSides[id];
       if (side && panelOpen[id]) dockedBySide[side] = id;
     }
@@ -1368,9 +1480,9 @@ function Studio({
    * re-fits the artboard to the new space — the same refit the tablet
    * boundary triggers.
    */
-  const dockSignature = PANEL_IDS.map((id) =>
-    visibleDock(id) ? `${id}:${dockSides[id]}` : id,
-  ).join("|");
+  const dockSignature = hosts
+    .map((id) => (visibleDock(id) ? `${id}:${dockSides[id]}` : id))
+    .join("|");
 
   /** Docked strip length for a window (clamped so the canvas keeps its share). */
   const dockW = (id: PanelId) =>
@@ -1487,7 +1599,7 @@ function Studio({
       >
         <FloatingPanel
           storageKey={`nasaq.panel.${id}`}
-          title={PANEL_DEFS[id].title}
+          title={PANEL_META[groupState.tabs[id] ?? id].title}
           side={PANEL_DEFS[id].side}
           open
           onClose={() => setPanelOpenFlag(id, false)}
@@ -1531,7 +1643,8 @@ function Studio({
     );
   };
 
-  const renderPanelBody = (id: PanelId) => {
+  /** One panel's own content — the tab strip composes these in a window. */
+  const renderPanelContent = (id: PanelId) => {
     switch (id) {
       case "library":
         return (
@@ -1565,6 +1678,27 @@ function Studio({
   };
 
   /**
+   * Window body: the group's tab strip above the active panel's content.
+   * A single-panel window still shows the strip — it is the drop zone the
+   * FIRST grouping drag needs, and it keeps every window one consistent
+   * shape instead of two different looks.
+   */
+  const renderPanelBody = (id: PanelId) => (
+    <div className="flex h-full min-h-0 flex-col">
+      <PanelTabStrip
+        host={id}
+        state={groupState}
+        onSelect={(tab) => selectTab(id, tab)}
+        onDropTab={dropTab}
+        onDetach={detachTab}
+      />
+      <div className="min-h-0 flex-1">
+        {renderPanelContent(groupState.tabs[id] ?? id)}
+      </div>
+    </div>
+  );
+
+  /**
    * Restore a collapsed desktop panel (optionally straight onto a tab) in one
    * click. Windows are independent now: opening one never closes the others.
    */
@@ -1588,7 +1722,11 @@ function Studio({
     if (useEditor.getState().focusMode) toggle("focusMode");
     // setLeftTab routes «library»/«tools» to their own windows.
     useEditor.getState().setLeftTab(tab);
-    if (tab === "library" || tab === "tools") return;
+    // Grouped panels live inside their host window: raise it on the tab.
+    if (tab === "library" || tab === "tools" || tab === "elements") {
+      revealPanel(tab);
+      return;
+    }
     expandPanel("left", tab);
   };
   const requestLibraryFolder = () => {
@@ -1601,6 +1739,7 @@ function Studio({
    */
   const openReportTools = () => {
     useEditor.setState({ focusMode: false, reportToolsOpen: true });
+    revealPanel("report");
   };
 
   const fitToSelection = () => {
@@ -1739,6 +1878,8 @@ function Studio({
           onClose={() => setSettingsTab(null)}
         />
       )}
+      {/* One-time offer to install the editor as a desktop app. */}
+      <AppInstallNotice />
       <header
         ref={headerRef}
         data-editor-obstacle="header"
@@ -1762,6 +1903,47 @@ function Studio({
             onClick={redo}
             disabled={!futureDepth}
           />
+          {/* ①½ The tool cluster — the pointer tool is ALWAYS visible here.
+              It used to live only in a keyboard shortcut and a command row,
+              which read as "the mouse tool disappeared"; one permanent,
+              labelled button per tool fixes that at every width. */}
+          <span className="editor-header-sep" aria-hidden />
+          <div
+            className="flex items-center gap-0.5"
+            role="group"
+            aria-label="أدوات التحديد والرسم"
+          >
+            <IconButton
+              label="أداة المؤشر والتحديد"
+              hint="تحديد وتحريك العناصر — انقر مساحة فارغة لإلغاء التحديد"
+              shortcut="V"
+              active={activeTool === "select"}
+              icon={<MousePointer2 className="size-4" strokeWidth={1.7} />}
+              onClick={() => armTool(null)}
+            />
+            <IconButton
+              label="نص بالرسم"
+              hint="اسحب على اللوحة ثم اكتب"
+              shortcut="T"
+              active={activeTool === "text"}
+              icon={<TypeIcon className="size-4" strokeWidth={1.7} />}
+              onClick={() => {
+                useEditor.getState().setLeftTab("elements");
+                armTool("text");
+              }}
+            />
+            <IconButton
+              label="رسم مربع وأشكال"
+              hint="اسحب على اللوحة لرسم شكل"
+              shortcut="R"
+              active={activeTool === "rect"}
+              icon={<Square className="size-4" strokeWidth={1.7} />}
+              onClick={() => {
+                useEditor.getState().setLeftTab("shapes");
+                armTool("rect");
+              }}
+            />
+          </div>
           {/* On a phone the stepper gives way to «عرض», which carries the same
               commands, so history and export are never pushed off screen. */}
           {!isCompact && (
@@ -1855,7 +2037,14 @@ function Studio({
             }}
             onOpenLeft={openLeftTab}
           />
-          <ViewMenu fitToScreen={fitToScreen} fitToSelection={fitToSelection} />
+          <ViewMenu
+            fitToScreen={fitToScreen}
+            fitToSelection={fitToSelection}
+            panelChecked={panelChecked}
+            onTogglePanel={togglePanelWindow}
+            dockPref={dockPref}
+            onDockPref={changeDockPref}
+          />
           <SaveBadge onClick={() => void saveNow()} />
           <ProjectFileMenu onOpenFile={onOpenFile} />
           <IconButton
@@ -1970,11 +2159,11 @@ function Studio({
         {dockedBySide.bottom && renderDockedWindow(dockedBySide.bottom, "bottom")}
 
         {/* Floating (undocked) windows — absolute overlays over the workspace. */}
-        {PANEL_IDS.filter((id) => !visibleDock(id)).map((id) => (
+        {hosts.filter((id) => !visibleDock(id)).map((id) => (
           <FloatingPanel
             key={id}
             storageKey={`nasaq.panel.${id}`}
-            title={PANEL_DEFS[id].title}
+            title={PANEL_META[groupState.tabs[id] ?? id].title}
             side={PANEL_DEFS[id].side}
             open={panelOpen[id] && !cropActive && !focusMode}
             onClose={() => setPanelOpenFlag(id, false)}

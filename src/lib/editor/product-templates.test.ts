@@ -89,7 +89,10 @@ test("all legacy packs and page templates receive stable Admin records preservin
     assert.match(template.thumbnail, /^data:image\/svg\+xml;base64,/);
     const document = JSON.parse(template.content) as { pages: { elements: unknown[] }[] };
     assert.ok(document.pages.length > 0, template.id);
-    assert.ok(document.pages.every((page) => page.elements.length > 0), template.id);
+    // The blank pack IS an empty sheet by product intent — every other seed
+    // must still carry real artwork.
+    if (template.id !== "builtin_pack_blank")
+      assert.ok(document.pages.every((page) => page.elements.length > 0), template.id);
   }
   assert.equal(templates.find((template) => template.id === "builtin_pack_blank")?.tier, "free");
   assert.ok(templates.filter((template) => template.id.startsWith("builtin_pack_") && template.id !== "builtin_pack_blank").every((template) => template.tier === "licensed"));

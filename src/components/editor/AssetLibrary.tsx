@@ -2,15 +2,24 @@ import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
+  ArrowDownAZ,
   ArrowRight,
+  CalendarClock,
   Check,
+  ChevronsDownUp,
+  ChevronsUpDown,
   Download,
   Eye,
+  FilePlus,
   Folder,
+  FolderInput,
   FolderOpen,
   FolderPlus,
   Grid2X2,
+  History,
+  Image as ImageIcon,
   ImagePlus,
+  LayoutGrid,
   List,
   MoreHorizontal,
   Pencil,
@@ -18,9 +27,8 @@ import {
   Search,
   Trash2,
   Upload,
+  PenTool,
   X,
-  FilePlus,
-  FolderInput,
 } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
 import { useIncrementalList } from "@/lib/editor/use-incremental-list";
@@ -200,6 +208,27 @@ export function AssetLibrary({
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [folderDraft, setFolderDraft] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "compact">("grid");
+  /*
+   * The control bar collapses to ONE icon row: authors with big shelves kept
+   * losing the assets themselves to the filters above them. The choice is
+   * remembered, so a collapsed library stays collapsed.
+   */
+  const [barCollapsed, setBarCollapsed] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem("nasaq.library.bar.v1") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleBarCollapsed = () =>
+    setBarCollapsed((value) => {
+      try {
+        window.localStorage.setItem("nasaq.library.bar.v1", value ? "0" : "1");
+      } catch {
+        /* the session keeps the choice in memory */
+      }
+      return !value;
+    });
   const [menu, setMenu] = useState<{ asset: Asset; x: number; y: number } | null>(null);
   const [pickFolder, setPickFolder] = useState(false);
   const [query, setQuery] = useState("");
@@ -708,65 +737,82 @@ export function AssetLibrary({
         </div>
       </header>
 
-      {/* Search + Type filter */}
+      {/*
+       * Search + filters + add, as ONE icon row that collapses away.
+       *
+       * The old bar stacked a search field, two chip rows and three labelled
+       * buttons above the shelf — on a narrow window the controls ate the
+       * assets themselves. Everything except folder NAMES is now an icon with
+       * a tooltip, and the whole bar folds to a single row (remembered).
+       */}
       <div className="grid gap-2">
-        <label className="relative">
-          <Search className="pointer-events-none absolute end-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="بحث في المكتبة…"
-            aria-label="بحث في المكتبة"
-            className="asset-library-search h-9 w-full rounded-[8px] border border-line bg-surface pe-8 ps-3 text-[12px] font-bold outline-none focus:border-navy"
-          />
-        </label>
-        <div className="asset-library-filters flex flex-wrap items-center gap-1">
-          {[
-            ["all", "الكل"],
-            ["image", "صور"],
-            ["svg", "SVG متجه"],
-          ].map(([id, label]) => (
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            onClick={toggleBarCollapsed}
+            aria-pressed={barCollapsed}
+            aria-label={barCollapsed ? "إظهار بحث المكتبة" : "طي أدوات المكتبة"}
+            title={
+              barCollapsed
+                ? "إظهار البحث في المكتبة"
+                : "طي البحث — صف أيقونات واحد يكفي"
+            }
+            className={cn(
+              "asset-lib-icon-btn grid size-8 shrink-0 place-items-center rounded-[6px] border",
+              barCollapsed ? "border-navy bg-navy/10" : "border-line",
+            )}
+          >
+            {barCollapsed ? (
+              <ChevronsUpDown className="size-3.5" />
+            ) : (
+              <ChevronsDownUp className="size-3.5" />
+            )}
+          </button>
+          {(
+            [
+              ["all", "كل العناصر", LayoutGrid],
+              ["image", "صور", ImageIcon],
+              ["svg", "SVG متجه", PenTool],
+            ] as [TypeFilter, string, typeof LayoutGrid][]
+          ).map(([id, label, Icon]) => (
             <button
               key={id}
               type="button"
-              onClick={() => setTypeFilter(id as TypeFilter)}
+              onClick={() => setTypeFilter(id)}
               aria-pressed={typeFilter === id}
+              aria-label={`تصفية: ${label}`}
+              title={`تصفية: ${label}`}
               className={cn(
- "asset-library-chip h-7 rounded-full px-3 text-[10px] font-extrabold",
-                typeFilter === id ? "bg-navy text-white" : "border border-line text-muted",
+                "asset-lib-icon-btn grid size-8 shrink-0 place-items-center rounded-[6px] border",
+                typeFilter === id
+                  ? "border-navy bg-navy/10 text-brand"
+                  : "border-line",
               )}
             >
-              {label}
+              <Icon className="size-3.5" />
             </button>
           ))}
-          <span className="ms-auto rounded-full bg-line-2 px-2 py-1 text-[10px] font-bold tabular-nums text-muted">
-            {visibleAssets.length} / {assets.length}
-          </span>
-        </div>
-        {/*
-         * Ordering + reset. A shelf of a hundred logos is unusable without
-         * knowing what "first" means, and a filtered view needs one control
-         * that puts everything back.
-         */}
-        <div className="flex flex-wrap items-center gap-1">
+          <span className="mx-1 h-5 w-px bg-line" aria-hidden />
           {(
             [
-              ["recent", "الأحدث"],
-              ["oldest", "الأقدم"],
-              ["name", "الاسم"],
+              ["recent", "ترتيب: الأحدث", History],
+              ["oldest", "ترتيب: الأقدم", CalendarClock],
+              ["name", "ترتيب: الاسم", ArrowDownAZ],
             ] as const
-          ).map(([id, label]) => (
+          ).map(([id, label, Icon]) => (
             <button
               key={id}
               type="button"
               onClick={() => setSortBy(id)}
               aria-pressed={sortBy === id}
+              aria-label={label}
+              title={label}
               className={cn(
-                "asset-library-chip inline-flex h-7 shrink-0 items-center rounded-[6px] border px-2 text-[10px] font-bold",
-                sortBy === id ? "border-navy bg-navy/10" : "border-line",
+                "asset-lib-icon-btn grid size-8 shrink-0 place-items-center rounded-[6px] border",
+                sortBy === id ? "border-navy bg-navy/10 text-brand" : "border-line",
               )}
             >
-              {label}
+              <Icon className="size-3.5" />
             </button>
           ))}
           {isFiltered && (
@@ -777,12 +823,63 @@ export function AssetLibrary({
                 setTypeFilter("all");
                 setAssetFolder(null);
               }}
-              className="asset-library-chip inline-flex h-7 shrink-0 items-center rounded-[6px] border border-line px-2 text-[10px] font-bold"
-              title="إزالة كل عوامل التصفية"
+              aria-label="مسح كل عوامل التصفية"
+              title="مسح كل عوامل التصفية"
+              className="asset-lib-icon-btn grid size-8 shrink-0 place-items-center rounded-[6px] border border-line text-error"
             >
-              مسح التصفية
+              <X className="size-3.5" />
             </button>
           )}
+          <span className="ms-auto rounded-full bg-line-2 px-2 py-1 text-[10px] font-bold tabular-nums text-muted">
+            {visibleAssets.length} / {assets.length}
+          </span>
+        </div>
+
+        {!barCollapsed && (
+          <label className="relative">
+            <Search className="pointer-events-none absolute end-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="بحث في المكتبة…"
+              aria-label="بحث في المكتبة"
+              className="asset-library-search h-9 w-full rounded-[8px] border border-line bg-surface pe-8 ps-3 text-[12px] font-bold outline-none focus:border-navy"
+            />
+          </label>
+        )}
+
+        {/* Add actions — icon buttons; the labels live in their tooltips. */}
+        <div className="asset-library-add-actions flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            aria-label="إضافة صورة"
+            title="إضافة صورة"
+            className="asset-lib-icon-btn grid size-8 shrink-0 place-items-center rounded-[6px] border border-line disabled:opacity-50"
+          >
+            <ImagePlus className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => anyFileInputRef.current?.click()}
+            disabled={importing}
+            aria-label="إضافة ملف"
+            title="إضافة ملف"
+            className="asset-lib-icon-btn grid size-8 shrink-0 place-items-center rounded-[6px] border border-line disabled:opacity-50"
+          >
+            <FilePlus className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => folderInputRef.current?.click()}
+            disabled={importing}
+            aria-label="إضافة مجلد"
+            title="إضافة مجلد"
+            className="asset-lib-icon-btn grid size-8 shrink-0 place-items-center rounded-[6px] border border-line disabled:opacity-50"
+          >
+            <FolderInput className="size-3.5" />
+          </button>
         </div>
       </div>
 
@@ -859,34 +956,6 @@ export function AssetLibrary({
           </>
         )}
         </div>
-      </div>
-
-      {/* Add buttons */}
-      <div className="asset-library-add-actions">
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={importing}
-          className="inline-flex h-9 items-center justify-center gap-1 rounded-[8px] bg-navy text-[10px] font-extrabold text-white disabled:opacity-50"
-        >
-          <ImagePlus className="size-3.5" /> إضافة صورة
-        </button>
-        <button
-          type="button"
-          onClick={() => anyFileInputRef.current?.click()}
-          disabled={importing}
-          className="inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border border-line text-[10px] font-extrabold disabled:opacity-50"
-        >
-          <FilePlus className="size-3.5" /> إضافة ملف
-        </button>
-        <button
-          type="button"
-          onClick={() => folderInputRef.current?.click()}
-          disabled={importing}
-          className="inline-flex h-9 items-center justify-center gap-1 rounded-[8px] border border-line text-[10px] font-extrabold disabled:opacity-50"
-        >
-          <FolderInput className="size-3.5" /> إضافة مجلد
-        </button>
       </div>
 
       </div>

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   createRootRoute,
   HeadContent,
@@ -8,6 +9,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { NsqFileLaunch } from "@/components/nsq/NsqFileLaunch";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { AppUpdateNotice } from "@/components/AppUpdateNotice";
+import { initInstallPrompt } from "@/lib/app-install";
 // `__APP_BUILD_ID__` is a build-time literal (src/env.d.ts), never a binding.
 // Side-effect import: applies the visitor's stored light/dark choice to
 // <html> before any route renders, so every page starts on the same mode.
@@ -67,7 +69,7 @@ export const Route = createRootRoute({
     links: [
       { rel: "icon", type: "image/svg+xml", href: "/nasaq-mark.svg" },
       { rel: "stylesheet", href: appCss },
-      { rel: "manifest", href: "/__grok/manifest.webmanifest" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
@@ -81,7 +83,13 @@ export const Route = createRootRoute({
       },
     ],
   }),
-  component: () => (
+  component: function RootComponent() {
+    // Capture `beforeinstallprompt` as early as possible so the workspace
+    // and editor install buttons always have a live event to trigger.
+    useEffect(() => {
+      initInstallPrompt();
+    }, []);
+    return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
         <HeadContent />
@@ -98,5 +106,6 @@ export const Route = createRootRoute({
         <Scripts />
       </body>
     </html>
-  ),
+    );
+  },
 });

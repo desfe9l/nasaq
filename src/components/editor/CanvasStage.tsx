@@ -229,6 +229,19 @@ export function CanvasStage({
   const [dropping, setDropping] = useState<"file" | "library" | null>(null);
   const [drawTool, setDrawTool] = useState<"text" | "rect" | null>(null);
   const drawArmed = drawTool !== null;
+  /*
+   * The header's tool cluster shows which tool is live. The tool state lives
+   * HERE (the canvas owns the gesture), so the canvas broadcasts every change
+   * — including the auto-disarm after drawing a box — and the buttons never
+   * claim a tool the canvas already dropped.
+   */
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent<"text" | "rect" | null>("nasaq:tool-state", {
+        detail: drawTool,
+      }),
+    );
+  }, [drawTool]);
   const pageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   /** The stage node, as state so the artboard IntersectionObservers (which are
@@ -1036,7 +1049,11 @@ export function CanvasStage({
     return found && !found.hidden ? found : null;
   })();
 
-  const startMarquee = (e: React.PointerEvent, pageId: string) => {
+  const startMarquee = (
+    e: React.PointerEvent,
+    pageId: string,
+    activate: "always" | "onmove" = "always",
+  ) => {
     if (
       e.button !== 0 ||
       input.current!.busy ||
@@ -1050,8 +1067,17 @@ export function CanvasStage({
     const stateAtStart = useEditor.getState();
     const page = stateAtStart.pages.find((candidate) => candidate.id === pageId);
     if (!page || page.locked || page.hidden) return;
-    if (stateAtStart.activePageId !== pageId)
+    /*
+     * A marquee that STARTS on the pasteboard (outside every artboard) must
+     * not hijack the active page on a mere click — the author may only want
+     * the selection cleared. Those gestures activate their page on the first
+     * real movement instead.
+     */
+    let activated = stateAtStart.activePageId === pageId;
+    if (!activated && activate === "always") {
       stateAtStart.setActivePage(pageId);
+      activated = true;
+    }
     const activeState = useEditor.getState();
     const selectionForPage =
       activeState.activePageId === pageId ? activeState.selectedIds : [];
@@ -1111,6 +1137,10 @@ export function CanvasStage({
           stage.scrollLeft = scroll.x - (ev.clientX - e.clientX);
           stage.scrollTop = scroll.y - (ev.clientY - e.clientY);
           return;
+        }
+        if (!activated) {
+          useEditor.getState().setActivePage(pageId);
+          activated = true;
         }
         const cur = toMm(ev);
         const box = {
@@ -1186,6 +1216,35 @@ export function CanvasStage({
         return page;
     }
     return null;
+  };
+
+  /**
+   * The visible artboard NEAREST a pasteboard point.
+   *
+   * Selection is a workspace gesture, not an artboard-only one: pressing the
+   * grey canvas beside a page and sweeping across it must marquee-select, and
+   * a plain click there must clear the selection — exactly like clicking empty
+   * space inside the page. The active page wins ties, then proximity.
+   */
+  const nearestPageToPoint = (x: number, y: number): Page | null => {
+    const activeId = useEditor.getState().activePageId;
+    let best: Page | null = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const page of visible) {
+      if (page.locked || page.hidden) continue;
+      const node = pageRefs.current[page.id];
+      if (!node) continue;
+      const rect = node.getBoundingClientRect();
+      const dx = Math.max(rect.left - x, 0, x - rect.right);
+      const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+      const dist =
+        Math.hypot(dx, dy) - (page.id === activeId ? Number.MIN_VALUE : 0);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = page;
+      }
+    }
+    return best;
   };
 
   // Geometry is relative to each artboard, NOT bounded by it. Rendering and
@@ -1312,11 +1371,16 @@ export function CanvasStage({
           return;
         setLayerPicker(null);
         onCanvasTap?.();
-        const page = pageAtPoint(e.clientX, e.clientY);
+        let page = pageAtPoint(e.clientX, e.clientY);
+        let activate: "always" | "onmove" = "always";
+        if (!page) {
+          // Pasteboard press: selection starts OUTSIDE the artboard too — a
+          // drag marquees on the nearest page, a plain click deselects.
+          page = nearestPageToPoint(e.clientX, e.clientY);
+          activate = "onmove";
+        }
         if (!page || page.locked || page.hidden) return;
-        if (useEditor.getState().activePageId !== page.id)
-          setActivePage(page.id);
-        startMarquee(e, page.id);
+        startMarquee(e, page.id, activate);
       }}
       onContextMenu={(e) => {
         e.preventDefault(); // Only the canvas replaces the browser context menu.

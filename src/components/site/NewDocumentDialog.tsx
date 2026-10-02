@@ -26,12 +26,14 @@ import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import { DEMO_LICENSE } from "@/lib/product/product";
 import {
+  BLANK_BACKGROUNDS,
   DOC_KINDS,
   MAX_CUSTOM_MM,
   MAX_NEW_PAGES,
   MIN_CUSTOM_MM,
   PAGE_SIZES,
   STARTER_PACKS,
+  blankBackground,
   buildNewDocument,
   clampPages,
   defaultDocumentName,
@@ -39,10 +41,22 @@ import {
   describeConfig,
   docKind,
   pagesText,
+  type BlankContent,
   type NewDocumentConfig,
   type Orientation,
   type PageSizeId,
 } from "@/lib/editor/new-document";
+import {
+  LENGTH_UNITS,
+  LENGTH_UNIT_LABELS,
+  describeSize,
+  fromMm,
+  loadLengthUnit,
+  roundUnit,
+  saveLengthUnit,
+  toMm,
+  type LengthUnit,
+} from "@/lib/editor/page-units";
 import { cn } from "@/lib/utils";
 import { DialogHeader, GHOST_BTN, Modal, PRIMARY_BTN } from "./TemplateDialogs";
 import { TemplatePreview } from "./TemplatePreview";
@@ -151,6 +165,12 @@ export function NewDocumentDialog({
   const [config, setConfig] = useState<NewDocumentConfig>(() =>
     defaultNewDocument({ orgName: storeOrg || "", ...initial }),
   );
+  /* The author's unit of thought — stored once, applied to every size field. */
+  const [unit, setUnitState] = useState<LengthUnit>(() => loadLengthUnit());
+  const setUnit = (next: LengthUnit) => {
+    setUnitState(next);
+    saveLengthUnit(next);
+  };
   const [busy, setBusy] = useState(false);
 
   const maxPages = entitlements.unlimited_pages
@@ -339,8 +359,37 @@ export function NewDocumentDialog({
                 </Section>
 
                 <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto]">
-                  <Section title="مقاس الصفحة">
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <Section
+                    title="مقاس الصفحة"
+                    hint="المقاسات المتعارف عليها + مقاس مخصص"
+                  >
+                    {/* One unit switcher for the whole dialog — stored per author. */}
+                    <div
+                      className="flex flex-wrap items-center gap-1.5"
+                      role="group"
+                      aria-label="وحدة القياس"
+                    >
+                      <span className="me-1 text-[11px] font-bold text-muted">
+                        وحدة القياس
+                      </span>
+                      {LENGTH_UNITS.map((id) => (
+                        <Choice
+                          key={id}
+                          active={unit === id}
+                          onClick={() => setUnit(id)}
+                          label={LENGTH_UNIT_LABELS[id]}
+                          className="px-2.5 py-1.5"
+                        >
+                          <span
+                            className="block text-[11px] font-extrabold text-ink"
+                            dir="ltr"
+                          >
+                            {id}
+                          </span>
+                        </Choice>
+                      ))}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                       {PAGE_SIZES.map((size) => {
                         const active = config.size === size.id;
                         const landscape = config.orientation === "landscape";
@@ -377,8 +426,8 @@ export function NewDocumentDialog({
                               dir="ltr"
                             >
                               {size.id === "custom"
-                                ? "mm"
-                                : size.desc.replace(" مم", "")}
+                                ? unit
+                                : describeSize(size.w, size.h, unit)}
                             </span>
                           </Choice>
                         );
@@ -421,20 +470,26 @@ export function NewDocumentDialog({
                     {(["w", "h"] as const).map((axis) => (
                       <label key={axis} className="grid gap-1">
                         <span className="text-[11px] font-extrabold text-muted">
-                          {axis === "w" ? "العرض (مم)" : "الارتفاع (مم)"}
+                          {axis === "w" ? "العرض" : "الارتفاع"} ({unit})
                         </span>
                         <input
                           type="number"
                           inputMode="decimal"
-                          min={MIN_CUSTOM_MM}
-                          max={MAX_CUSTOM_MM}
-                          step={1}
-                          value={config.custom[axis]}
+                          min={roundUnit(fromMm(MIN_CUSTOM_MM, unit), unit)}
+                          max={roundUnit(fromMm(MAX_CUSTOM_MM, unit), unit)}
+                          step={unit === "px" ? 1 : 0.1}
+                          value={roundUnit(fromMm(config.custom[axis], unit), unit)}
                           onChange={(e) =>
                             set({
                               custom: {
                                 ...config.custom,
-                                [axis]: Number(e.target.value),
+                                [axis]: Math.min(
+                                  MAX_CUSTOM_MM,
+                                  Math.max(
+                                    MIN_CUSTOM_MM,
+                                    toMm(Number(e.target.value), unit),
+                                  ),
+                                ),
                               },
                             })
                           }
@@ -445,6 +500,83 @@ export function NewDocumentDialog({
                     ))}
                   </div>
                 )}
+
+                <Section
+                  title="محتوى الصفحة الفارغة"
+                  hint="ينطبق على بداية «مستند فارغ»"
+                >
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <Choice
+                      active={config.content === "empty"}
+                      onClick={() => set({ content: "empty" as BlankContent })}
+                      className="flex items-start gap-3 p-3"
+                    >
+                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-navy/10 text-brand">
+                        <FileText className="size-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[12px] font-extrabold text-ink">
+                          فارغ تمامًا
+                        </span>
+                        <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                          صفحة بيضاء بلا أي محتوى
+                        </span>
+                      </span>
+                    </Choice>
+                    <Choice
+                      active={config.content === "chrome"}
+                      onClick={() => set({ content: "chrome" as BlankContent })}
+                      className="flex items-start gap-3 p-3"
+                    >
+                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-gold/25 text-ink">
+                        <LayoutTemplate className="size-4" />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-[12px] font-extrabold text-ink">
+                          رأس وتذييل خفيف
+                        </span>
+                        <span className="mt-0.5 block text-[10px] leading-4 text-muted">
+                          هوية الجهة أعلى الصفحة وأسفلها
+                        </span>
+                      </span>
+                    </Choice>
+                  </div>
+                </Section>
+
+                <Section title="خلفية الصفحة" hint="تُحفظ مع المستند">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {BLANK_BACKGROUNDS.filter((b) => b.color).map((swatch) => (
+                      <Choice
+                        key={swatch.id}
+                        active={config.bg === swatch.color}
+                        onClick={() => set({ bg: swatch.color })}
+                        label={swatch.name}
+                        className="flex items-center gap-2 px-2.5 py-2"
+                      >
+                        <span
+                          className="size-4 rounded-full border border-line"
+                          style={{ background: swatch.color }}
+                          aria-hidden
+                        />
+                        <span className="text-[11px] font-extrabold text-ink">
+                          {swatch.name}
+                        </span>
+                      </Choice>
+                    ))}
+                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-line bg-surface px-2.5 py-1.5">
+                      <input
+                        type="color"
+                        aria-label="لون خلفية مخصص"
+                        value={blankBackground(config.bg)}
+                        onChange={(e) => set({ bg: e.target.value })}
+                        className="size-6 cursor-pointer rounded border-0 bg-transparent p-0"
+                      />
+                      <span className="text-[11px] font-extrabold text-ink">
+                        لون مخصص
+                      </span>
+                    </label>
+                  </div>
+                </Section>
 
                 <Section
                   title="عدد الصفحات"
@@ -607,8 +739,7 @@ export function NewDocumentDialog({
                       className="font-bold tabular-nums text-ink"
                       dir="ltr"
                     >
-                      {Math.round(previewSize.w * 10) / 10} ×{" "}
-                      {Math.round(previewSize.h * 10) / 10} mm
+                      {describeSize(previewSize.w, previewSize.h, unit)}
                     </dd>
                   </div>
                   <div className="flex items-center justify-between gap-3">
