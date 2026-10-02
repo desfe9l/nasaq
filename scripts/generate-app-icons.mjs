@@ -125,7 +125,7 @@ function resize(src, target) {
   return out;
 }
 
-/** Maskable: brand emerald field, tile centred at 80% (safe zone). */
+/** Maskable: brand emerald field, the full tile scaled into the 80% safe zone. */
 function maskable(rgb, size) {
   const field = Buffer.alloc(size * size * 3);
   const inner = Math.round(size * 0.8);
@@ -139,7 +139,9 @@ function maskable(rgb, size) {
       const ix = x - offset;
       const iy = y - offset;
       if (ix >= 0 && iy >= 0 && ix < inner && iy < inner) {
-        const s = (iy * inner + ix) * 3;
+        const sx = Math.min(size - 1, Math.round(((ix + 0.5) * size) / inner - 0.5));
+        const sy = Math.min(size - 1, Math.round(((iy + 0.5) * size) / inner - 0.5));
+        const s = (sy * size + sx) * 3;
         field[o] = rgb[s];
         field[o + 1] = rgb[s + 1];
         field[o + 2] = rgb[s + 2];

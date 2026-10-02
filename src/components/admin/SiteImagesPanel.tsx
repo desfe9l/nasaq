@@ -23,7 +23,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { ImageUp, Loader2, RotateCcw, Save, Upload } from "lucide-react";
+import { ImageUp, Loader2, Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { adminSaveSettingsFn, getSiteSettingsFn } from "@/lib/admin/functions";
 import {
@@ -151,17 +151,17 @@ export function SiteImagesPanel() {
       <section className="grid gap-2 rounded-xl border border-line bg-surface p-5">
         <h2 className="text-[16px] font-black">صور الموقع</h2>
         <p className="text-[11px] leading-6 text-muted">
-          استبدل صور الصفحة الرئيسية وصور الشرح دون تعديل الكود. أي مقاس مقبول —
+          استبدل صور الصفحة الرئيسية وشعار الهوية دون تعديل الكود. أي مقاس مقبول —
           تُعاد معالجة الصورة إلى حد أقصى {SITE_IMAGE_MAX_EDGE} بكسل على أطول ضلع مع
-          الحفاظ على النسبة، وتُعرض في بطاقتها بدون قص. ترك الخانة فارغة يعيد الصورة
-          المدمجة مع المنصة.
+          الحفاظ على النسبة. الصورة المحفوظة تبقى بعد التحديث، والحذف لا يعيد
+          الصور الافتراضية القديمة.
         </p>
       </section>
 
       {SITE_IMAGE_SLOTS.map((slot) => {
         const current = images[slot.id];
-        const src = current || slot.fallback;
         const custom = Boolean(current);
+        const src = current || (slot.id === "mark" ? "/nasaq-mark.svg" : "");
         return (
           <section key={slot.id} className="grid gap-3 rounded-xl border border-line bg-surface p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -169,7 +169,11 @@ export function SiteImagesPanel() {
                 <h3 className="text-[14px] font-extrabold">{slot.label}</h3>
                 <p className="mt-0.5 text-[11px] text-muted">{slot.hint}</p>
                 <p className="mt-1 text-[10px] text-muted">
-                  {custom ? "صورة مخصّصة من المالك" : "الصورة المدمجة مع المنصة"}
+                  {custom
+                    ? "صورة محفوظة من المالك"
+                    : slot.id === "mark"
+                      ? "شعار نَسَق الحالي"
+                      : "لا توجد صورة — لن تظهر الصورة القديمة"}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -208,18 +212,22 @@ export function SiteImagesPanel() {
                     disabled={busySlot === slot.id || saving}
                     onClick={() => void reset(slot)}
                   >
-                    <RotateCcw className="size-3.5" /> إرجاع المدمجة
+                    <Trash2 className="size-3.5" /> حذف الصورة
                   </button>
                 )}
               </div>
             </div>
             <div className="grid h-44 place-items-center overflow-hidden rounded-lg border border-line bg-surface-2 p-2">
-              <img
-                src={src}
-                alt=""
-                className="max-h-full max-w-full object-contain"
-                loading="lazy"
-              />
+              {src ? (
+                <img
+                  src={src}
+                  alt=""
+                  className="max-h-full max-w-full object-contain"
+                  loading="lazy"
+                />
+              ) : (
+                <span className="text-[12px] font-bold text-muted">لا توجد صورة</span>
+              )}
             </div>
           </section>
         );

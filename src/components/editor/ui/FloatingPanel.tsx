@@ -10,6 +10,7 @@ import {
 import {
   ChevronDown,
   GripHorizontal,
+  Minus,
   Move,
   PanelBottom,
   PanelLeft,
@@ -83,6 +84,9 @@ export interface FloatingPanelProps {
    */
   spawnShift?: number;
   className?: string;
+  /** Compact rectangular bar. The parent releases the dock track. */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }
 
 const DEFAULT_SIZE = { width: 320, height: 520 };
@@ -140,6 +144,8 @@ export function FloatingPanel({
   minSize = DEFAULT_MIN,
   spawnShift = 0,
   className,
+  collapsed = false,
+  onToggleCollapsed,
 }: FloatingPanelProps) {
   const [rect, setRect] = useState<PanelRect>(() => ({
     left: 12,
@@ -587,12 +593,19 @@ export function FloatingPanel({
 
   const style: CSSProperties | undefined = dockSide
     ? gridAreaStyle
-    : {
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-      };
+    : collapsed
+      ? {
+          left: rect.left,
+          top: rect.top,
+          width: Math.min(rect.width, 220),
+          height: 40,
+        }
+      : {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        };
 
   return (
     <section
@@ -603,6 +616,7 @@ export function FloatingPanel({
         "editor-floating-panel touch-properties-sheet editor-sidebar",
         dockSide && "is-docked",
         dockSide && `is-docked-${dockSide}`,
+        collapsed && "is-collapsed",
         open && "is-open",
         dragging && "is-dragging",
         holding && "is-drag-armed",
@@ -649,7 +663,7 @@ export function FloatingPanel({
           <span>{title}</span>
         </button>
         {onDockSideChange && (
-          <div className="relative shrink-0 flex items-center">
+          <div className="fp-dock-cluster relative shrink-0 flex items-center">
             <button
               type="button"
               onClick={() => {
@@ -759,6 +773,16 @@ export function FloatingPanel({
         )}
         <button
           type="button"
+          aria-pressed={collapsed}
+          aria-label={collapsed ? `فتح ${title}` : `طي ${title}`}
+          title={collapsed ? "فتح اللوحة" : "طي اللوحة إلى شريط"}
+          onClick={onToggleCollapsed}
+          disabled={!onToggleCollapsed}
+        >
+          <Minus size={16} className={collapsed ? "rotate-90" : undefined} />
+        </button>
+        <button
+          type="button"
           aria-label={`إغلاق ${title}`}
           title={`إغلاق ${title}`}
           onClick={onClose}
@@ -767,7 +791,7 @@ export function FloatingPanel({
         </button>
       </div>
       <div className="touch-properties-content">{children}</div>
-      {!dockSide && (
+      {!dockSide && !collapsed && (
         <>
           {(["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const).map(grip)}
         </>

@@ -13,6 +13,8 @@ import {
   supportsSavePicker,
 } from "@/lib/nsq/editor-io";
 import { FullVersionModal } from "@/components/site/FullVersionModal";
+import { NewDocumentDialog } from "@/components/site/NewDocumentDialog";
+import { configFromPage, type NewDocumentConfig } from "@/lib/editor/new-document";
 import { cn } from "@/lib/utils";
 
 const SignInRequiredModalLazy = lazy(() =>
@@ -44,7 +46,7 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const projectId = useEditor((s) => s.id);
   const entitlements = useEditor((s) => s.entitlements);
-  const createProject = useEditor((s) => s.createProject);
+  const [docInitial, setDocInitial] = useState<Partial<NewDocumentConfig> | null>(null);
   const { user, isPending } = useCurrentUserState();
   const guest = authEnabled && !isPending && !user;
   const linked = open ? linkedFileName(projectId) : null;
@@ -160,7 +162,11 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
               label="مشروع جديد"
               onClick={() => {
                 setOpen(false);
-                void createProject("blank");
+                const state = useEditor.getState();
+                const page =
+                  state.pages.find((item) => item.id === state.activePageId) ??
+                  state.pages[0];
+                setDocInitial(configFromPage(page));
               }}
             />
             <Item
@@ -219,6 +225,16 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
           />
         </Suspense>
       )}
+      {docInitial &&
+        createPortal(
+          <NewDocumentDialog
+            submitLabel="إنشاء المستند"
+            initial={docInitial}
+            onClose={() => setDocInitial(null)}
+            onCreated={() => setDocInitial(null)}
+          />,
+          document.body,
+        )}
     </>
   );
 }

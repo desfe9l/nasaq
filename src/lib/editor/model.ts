@@ -161,6 +161,10 @@ export interface ElStyle {
   objectFit?: "cover" | "contain" | "fill";
   objectX?: number;
   objectY?: number;
+  /** Image lightness, percent. 100 is unchanged. */
+  brightness?: number;
+  /** Image clarity, percent. 0 is unchanged; higher sharpens. */
+  sharpness?: number;
   stroke?: number;
   shape?: "rect" | "circle" | "rounded";
   /**

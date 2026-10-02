@@ -137,6 +137,11 @@ export function ViewMenu({
         onSelect={() => zoomBy(-0.08)}
       />
       <MenuRow label="ملاءمة لوحة الصفحة" onSelect={fitToScreen} />
+      <MenuRow
+        label="إعادة ضبط العرض"
+        hint="الصفحة داخل المساحة المتاحة"
+        onSelect={fitToScreen}
+      />
       <MenuRow label="ملاءمة التحديد" onSelect={fitToSelection} />
       <MenuRow label="مقياس 100%" onSelect={() => setZoom(1)} />
       <MenuRow

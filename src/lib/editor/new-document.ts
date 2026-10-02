@@ -11,6 +11,7 @@
  */
 
 import {
+  pageSize,
   sizeIdOf,
   type PackId,
   type Project,
@@ -195,6 +196,45 @@ export function defaultNewDocument(
     content: "empty",
     bg: "#ffffff",
     ...overrides,
+  };
+}
+
+/**
+ * Seed «مستند جديد» from the page the author is already looking at.
+ *
+ * The dialog still has to confirm size, orientation and dimensions before a
+ * page exists. What it must not do is throw away a custom sheet and open on
+ * an unrelated A4. Preset sheets stay presets; anything else is an explicit
+ * custom size carrying the same millimetres.
+ */
+export function configFromPage(
+  page?: { w?: number; h?: number; bg?: string } | null,
+): Partial<NewDocumentConfig> {
+  const size = pageSize(page);
+  const long = Math.max(size.w, size.h);
+  const short = Math.min(size.w, size.h);
+  const square = Math.abs(size.w - size.h) < 0.5;
+  const orientation: Orientation = square
+    ? "portrait"
+    : size.w > size.h
+      ? "landscape"
+      : "portrait";
+  const hit = PAGE_SIZES.find(
+    (entry) =>
+      entry.id !== "custom" &&
+      Math.abs(Math.max(entry.w, entry.h) - long) < 0.6 &&
+      Math.abs(Math.min(entry.w, entry.h) - short) < 0.6,
+  );
+  const bg =
+    typeof page?.bg === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(page.bg)
+      ? page.bg
+      : undefined;
+  return {
+    start: "blank",
+    size: hit?.id ?? "custom",
+    orientation,
+    ...(hit ? {} : { custom: { w: short, h: square ? short : long } }),
+    ...(bg ? { bg } : {}),
   };
 }
 

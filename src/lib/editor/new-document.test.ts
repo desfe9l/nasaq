@@ -10,6 +10,7 @@ import {
   MAX_NEW_PAGES,
   buildNewDocument,
   clampPages,
+  configFromPage,
   defaultNewDocument,
   describeConfig,
   pageDimensions,
@@ -75,6 +76,25 @@ test("a blank configuration reaches every page with fresh ids", () => {
     ids,
   );
   assert.match(describeConfig(config), /A3 أفقي/);
+});
+
+test("a workspace document keeps the current sheet instead of an unrelated A4", () => {
+  const wide = configFromPage({ w: 400, h: 180, bg: "#f4f6fa" });
+  const project = buildNewDocument(defaultNewDocument(wide));
+  assert.equal(project.pages.length, 1);
+  assert.equal(project.pages[0].w, 400);
+  assert.equal(project.pages[0].h, 180);
+  assert.equal(project.pages[0].bg, "#f4f6fa");
+  const a4 = configFromPage({ w: 297, h: 210 });
+  assert.equal(a4.size, "a4");
+  assert.equal(a4.orientation, "landscape");
+  assert.deepEqual(
+    [
+      buildNewDocument(defaultNewDocument(a4)).pages[0].w,
+      buildNewDocument(defaultNewDocument(a4)).pages[0].h,
+    ],
+    [297, 210],
+  );
 });
 
 test("a blank start is a truly empty sheet by default", () => {

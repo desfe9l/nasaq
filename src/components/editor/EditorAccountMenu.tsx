@@ -24,6 +24,8 @@ import {
 import { cn } from "@/lib/utils";
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { NewDocumentDialog } from "@/components/site/NewDocumentDialog";
+import { useEditor } from "@/lib/editor/store";
+import { configFromPage } from "@/lib/editor/new-document";
 
 /**
  * The editor's account area: who is signed in, and the door to their settings.
@@ -66,7 +68,7 @@ export function EditorAccountMenu({
   homeHref,
   onNavigateHome,
 }: {
-  /** Where «العودة إلى الرئيسية» goes (NASAQ Home for a licensed account). */
+  /** Where «مساحة العمل» goes (the licensed Home, otherwise the site). */
   homeHref: string;
   /** Lets the shell finish a pending save before the page unloads. */
   onNavigateHome: (event: React.MouseEvent<HTMLAnchorElement>) => void;
@@ -212,7 +214,7 @@ export function EditorAccountMenu({
                 onClick={onNavigateHome}
               >
                 <House className="size-4 opacity-70" aria-hidden />
-                العودة إلى الرئيسية
+                مساحة العمل
               </a>
               <a href="/account" role="menuitem" className={accountMenuItemClass}>
                 <UserRound className="size-4 opacity-70" aria-hidden />
@@ -249,6 +251,15 @@ export function EditorAccountMenu({
         createPortal(
           <NewDocumentDialog
             submitLabel="إنشاء المستند"
+            initial={configFromPage(
+              (() => {
+                const state = useEditor.getState();
+                return (
+                  state.pages.find((page) => page.id === state.activePageId) ??
+                  state.pages[0]
+                );
+              })(),
+            )}
             onClose={() => setNewDocOpen(false)}
             onCreated={() => setNewDocOpen(false)}
           />,

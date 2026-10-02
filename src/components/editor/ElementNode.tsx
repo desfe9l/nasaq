@@ -10,7 +10,7 @@ import { useInteraction } from "@/lib/editor/interaction-store";
 import { cn, round as round2 } from "@/lib/utils";
 import { applyNumerals } from "@/lib/editor/arabic";
 import { fadeStyle, normalizeFade } from "@/lib/editor/fade";
-import { safeImageSrc } from "@/lib/editor/images";
+import { imageAdjustCss, safeImageSrc, sharpnessKernel } from "@/lib/editor/images";
 import { applySvgColors, sanitizeSvgContent } from "@/lib/editor/svg";
 import { isCompoundShape, shapeDef } from "@/lib/editor/shapes";
 import { shapeIdOf } from "@/lib/editor/shape-render";
@@ -983,6 +983,9 @@ function ElementContent({
 /** A source crop never stretches pixels: Fit/Fill change the viewport, not the source. */
 function ImageArtwork({ el, src }: { el: CanvasEl; src: string }) {
   const s = el.style;
+  const filterId = useId().replace(/:/g, "");
+  const sharp = Math.max(0, Math.min(100, Number(s.sharpness) || 0));
+  const filter = imageAdjustCss(s, sharp > 0 ? filterId : undefined);
   const crop = normalizeCrop(s.crop);
   const radius = `${s.radius || 0}mm`;
   const stroke =
@@ -991,24 +994,38 @@ function ImageArtwork({ el, src }: { el: CanvasEl; src: string }) {
       : undefined;
   if (!crop)
     return (
-      <img
-        alt=""
-        src={src}
-        draggable={false}
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "block",
-          objectFit:
-            s.objectFit ||
-            (el.type === "logo" || el.type === "qr" ? "contain" : "cover"),
-          objectPosition: `${s.objectX ?? 50}% ${s.objectY ?? 50}%`,
-          borderRadius: radius,
-          outline: stroke,
-          outlineOffset: stroke ? `-${s.borderWidth}mm` : undefined,
-          pointerEvents: "none",
-        }}
-      />
+      <>
+        {sharp > 0 && (
+          <svg width="0" height="0" aria-hidden className="absolute">
+            <filter id={filterId}>
+              <feConvolveMatrix
+                order="3"
+                kernelMatrix={sharpnessKernel(sharp)}
+                preserveAlpha="true"
+              />
+            </filter>
+          </svg>
+        )}
+        <img
+          alt=""
+          src={src}
+          draggable={false}
+          style={{
+            width: "100%",
+            height: "100%",
+            display: "block",
+            objectFit:
+              s.objectFit ||
+              (el.type === "logo" || el.type === "qr" ? "contain" : "cover"),
+            objectPosition: `${s.objectX ?? 50}% ${s.objectY ?? 50}%`,
+            borderRadius: radius,
+            outline: stroke,
+            outlineOffset: stroke ? `-${s.borderWidth}mm` : undefined,
+            filter,
+            pointerEvents: "none",
+          }}
+        />
+      </>
     );
   const layout = imageLayout(
     el,
@@ -1029,9 +1046,21 @@ function ImageArtwork({ el, src }: { el: CanvasEl; src: string }) {
         borderRadius: radius,
         outline: stroke,
         outlineOffset: stroke ? `-${s.borderWidth}mm` : undefined,
+        filter,
         pointerEvents: "none",
       }}
     >
+      {sharp > 0 && (
+        <svg width="0" height="0" aria-hidden className="absolute">
+          <filter id={filterId}>
+            <feConvolveMatrix
+              order="3"
+              kernelMatrix={sharpnessKernel(sharp)}
+              preserveAlpha="true"
+            />
+          </filter>
+        </svg>
+      )}
       <div
         style={{
           position: "absolute",

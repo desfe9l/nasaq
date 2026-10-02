@@ -123,6 +123,36 @@ export async function prepareImage(
   };
 }
 
+/** CSS filter for تفتيح / حدة. `100` brightness and `0` sharpness are identity. */
+export function imageAdjustCss(
+  style: { brightness?: number; sharpness?: number },
+  sharpFilterId?: string,
+): string | undefined {
+  const parts: string[] = [];
+  const sharpRaw = Number(style.sharpness);
+  const sharp = Number.isFinite(sharpRaw)
+    ? Math.max(0, Math.min(100, sharpRaw))
+    : 0;
+  if (sharp > 0 && sharpFilterId) parts.push(`url(#${sharpFilterId})`);
+  else if (sharp > 0)
+    parts.push(`contrast(${(1 + (sharp / 100) * 0.55).toFixed(3)})`);
+  const brightness = Number(style.brightness);
+  if (Number.isFinite(brightness) && Math.abs(brightness - 100) > 0.01) {
+    parts.push(
+      `brightness(${(Math.max(0, Math.min(200, brightness)) / 100).toFixed(3)})`,
+    );
+  }
+  return parts.length ? parts.join(" ") : undefined;
+}
+
+/** 3×3 unsharp kernel. `amount` is 0–100; 0 is the identity kernel. */
+export function sharpnessKernel(amount: number): string {
+  const k = Math.max(0, Math.min(100, Number(amount) || 0)) / 100;
+  const n = (-k).toFixed(3);
+  const c = (1 + 4 * k).toFixed(3);
+  return `0 ${n} 0 ${n} ${c} ${n} 0 ${n} 0`;
+}
+
 /**
  * Fit an image's box to the page: keep the aspect ratio, cap the longest edge at
  * `maxMm`, and never exceed the page.
