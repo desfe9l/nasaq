@@ -448,7 +448,10 @@ export function AnchorMenu({
             style={{
               left: pos?.left ?? -9999,
               top: pos?.top ?? -9999,
-              width,
+              width: drawer
+                ? `min(${width}px, calc(100vw - 16px))`
+                : width,
+              maxWidth: "calc(100vw - 16px)",
               visibility: pos ? "visible" : "hidden",
             }}
             onClick={(event) => {

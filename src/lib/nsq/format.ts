@@ -654,6 +654,19 @@ export function validatePages(
       throw new NsqError("invalid", "page background");
     if (typeof rawPage.bg === "string" && !STYLE_UNSAFE.test(rawPage.bg))
       page.bg = rawPage.bg.slice(0, 400);
+    if (typeof rawPage.bgImage === "string") {
+      const image = rawPage.bgImage;
+      const safeImage =
+        image.length <= 6_000_000 &&
+        /^data:image\/(?:png|jpe?g|webp|gif|svg\+xml)[;,]/i.test(image) &&
+        !/javascript:|expression\s*\(|@import/i.test(image);
+      if (safeImage) page.bgImage = image;
+      else if (opts.strict) throw new NsqError("invalid", "page background image");
+    }
+    if (rawPage.bgImageFit === "cover" || rawPage.bgImageFit === "contain")
+      page.bgImageFit = rawPage.bgImageFit;
+    if (typeof rawPage.clipContent === "boolean")
+      page.clipContent = rawPage.clipContent;
     if (rawPage.bgGradient !== undefined) {
       page.bgGradient = normalizeGradient(rawPage.bgGradient);
       if (opts.strict && !page.bgGradient)
@@ -809,7 +822,7 @@ export function validateProjectSettings(
       gutter: raw.printGuides.gutter === true,
       bleed: raw.printGuides.bleed === true,
     };
-  for (const key of ["showGrid", "snapGrid", "snapElements"] as const)
+  for (const key of ["showGrid", "snapGrid", "snapElements", "clipExport"] as const)
     if (typeof raw[key] === "boolean") settings[key] = raw[key];
   return settings;
 }

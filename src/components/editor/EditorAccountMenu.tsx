@@ -53,6 +53,19 @@ import { configFromPage } from "@/lib/editor/new-document";
  * widen free-tier access. Its own component so `useAccountTier` mounts only
  * while the card is open for a real session.
  */
+function AdminEditorLinks({ user }: { user: AppUser }) {
+  const tier = useAccountTier(user);
+  if (tier !== "ADMIN") return null;
+  return (
+    <>
+      <a href="/admin" role="menuitem" className={accountMenuItemClass}>لوحة الإدارة</a>
+      <a href="/admin-dashboard" role="menuitem" className={accountMenuItemClass}>القوالب ومحتوى الموقع</a>
+      <a href="/admin-licenses" role="menuitem" className={accountMenuItemClass}>إدارة التراخيص</a>
+      <a href="/owner-vault" role="menuitem" className={accountMenuItemClass}>إعدادات المالك</a>
+    </>
+  );
+}
+
 function NewDocumentMenuItem({ user, onRequest }: { user: AppUser; onRequest: () => void }) {
   const tier = useAccountTier(user);
   if (tier !== "LICENSED" && tier !== "ADMIN") return null;
@@ -220,6 +233,7 @@ export function EditorAccountMenu({
                 <UserRound className="size-4 opacity-70" aria-hidden />
                 حسابي والاشتراك
               </a>
+              <AdminEditorLinks user={user} />
               <a href="/license" role="menuitem" className={accountMenuItemClass}>
                 <KeyRound className="size-4 opacity-70" aria-hidden />
                 ترخيصي وتفعيله

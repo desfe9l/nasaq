@@ -184,6 +184,7 @@ function saveSnapshot() {
         showGrid: s.showGrid,
         snapGrid: s.snapGrid,
         snapElements: s.snapElements,
+        clipExport: s.clipExport !== false,
       },
       fontSources: uploadedFontSources(),
       resolveExternal: fetchImage,

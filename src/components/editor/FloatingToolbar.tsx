@@ -1159,7 +1159,7 @@ export function FloatingToolbar({
       <AnchorMenu
         label="المزيد"
         drawer={{ id: "selection-more", title: "أدوات العنصر" }}
-        width={240}
+        width={420}
         side="top"
         align="end"
         trigger={({ ref, ...props }) => (

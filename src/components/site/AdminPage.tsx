@@ -323,6 +323,18 @@ export function AdminPage() {
                 </span>
               </span>
               <a
+                href="/admin-dashboard"
+                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-line px-3 text-[12px] font-extrabold"
+              >
+                القوالب والمحتوى
+              </a>
+              <a
+                href="/owner-vault"
+                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-line px-3 text-[12px] font-extrabold"
+              >
+                إعدادات المالك
+              </a>
+              <a
                 href="/admin-licenses"
                 className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-navy px-3 text-[12px] font-extrabold text-on-brand"
               >

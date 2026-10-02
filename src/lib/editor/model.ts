@@ -340,6 +340,15 @@ export interface Page {
   bg?: string;
   /** Page-owned paint, always edge-to-edge and behind all document layers. */
   bgGradient?: Gradient;
+  /**
+   * Optional page background image. Metadata, not a canvas element: it cannot
+   * be selected, stacked, or transformed. `cover` fills the page without
+   * stretching; `contain` shows the whole image inside the page.
+   */
+  bgImage?: string;
+  bgImageFit?: "cover" | "contain";
+  /** While editing, clip paint that sits outside this page. Elements stay in the file. */
+  clipContent?: boolean;
   /** Page width in mm; omitted means A4 portrait width. */
   w?: number;
   h?: number;
@@ -361,6 +370,8 @@ export interface Project {
     showGrid?: boolean;
     snapGrid?: boolean;
     snapElements?: boolean;
+    /** When false, export may include artwork that hangs off the page. Default clips. */
+    clipExport?: boolean;
   };
   version: number;
   name: string;

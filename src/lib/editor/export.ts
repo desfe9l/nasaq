@@ -108,7 +108,7 @@ function stripAuthoringChrome(doc: Document) {
   // layer goes with them: it is overlay chrome above the artwork, not content.
   doc
     .querySelectorAll(
-      ".handle, .rotate-handle, .selection-layer, .overflow-badge, .guide-v, .guide-h, .marquee",
+      ".handle, .rotate-handle, .selection-layer, .overflow-badge, .guide-v, .guide-h, .marquee, .page-trim",
     )
     .forEach((h) => h.remove());
   // The selection ring is authoring chrome; it must not bake into the asset.

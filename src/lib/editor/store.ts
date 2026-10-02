@@ -346,6 +346,8 @@ interface Ui {
    * once and expects them to still be there tomorrow.
    */
   printGuides: PrintGuideSettings;
+  /** Export clips artwork to the page unless the author turns this off. */
+  clipExport: boolean;
   saveState: SaveState;
   savedAt: number | null;
   /** Re-renders the "saved N minutes ago" label without polling the store. */
@@ -794,9 +796,16 @@ interface EditorStore extends Project, Ui, History {
   renamePage: (id: string, name: string) => void;
   setPageBackground: (
     id: string,
-    paint: { bg?: string; bgGradient?: Gradient },
+    paint: {
+      bg?: string;
+      bgGradient?: Gradient;
+      bgImage?: string;
+      bgImageFit?: "cover" | "contain";
+      clipContent?: boolean;
+    },
     live?: boolean,
   ) => void;
+  setClipExport: (on: boolean) => void;
   setPageSize: (
     id: string,
     sizeId: SizeId,
@@ -1303,6 +1312,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     zoom: 0.82,
     showGrid: false,
     printGuides: { ...DEFAULT_PRINT_GUIDES },
+    clipExport: true,
     snapGrid: true,
     snapElements: true,
     previewAll: true,
@@ -2524,6 +2534,7 @@ export const useEditor = create<EditorStore>((set, get) => {
               showGrid: s.showGrid,
               snapGrid: s.snapGrid,
               snapElements: s.snapElements,
+              clipExport: s.clipExport !== false,
             },
             version: s.version,
             updatedAt: Date.now(),
@@ -3067,21 +3078,19 @@ export const useEditor = create<EditorStore>((set, get) => {
       writeUi({ bubbleOffset });
     },
     resetWorkspaceLayout: () => {
-      const overlay = isOverlayViewport();
       const pagesPanelHeight = clampPagesHeight(PAGES_PANEL_DEFAULT);
       set({
         focusMode: false,
         leftCollapsed: false,
         rightCollapsed: false,
-        // Tablet drawers float over the artwork, so "default" there is closed.
-        leftOpen: overlay ? false : get().leftOpen,
-        rightOpen: overlay ? false : get().rightOpen,
-        layersOpen: overlay ? false : get().layersOpen,
-        reportToolsOpen: overlay ? false : get().reportToolsOpen,
-        libraryOpen: overlay ? false : get().libraryOpen,
-        toolsOpen: overlay ? false : get().toolsOpen,
-        // A compact rail is the default now: the reset returns it, never hides it.
+        leftOpen: true,
+        rightOpen: true,
+        layersOpen: true,
+        reportToolsOpen: false,
+        libraryOpen: false,
+        toolsOpen: false,
         pagesRailHidden: false,
+        pagesRailCollapsed: false,
         pagesPanelHeight,
         bubbleEnabled: true,
         bubbleOffset: null,
@@ -3090,16 +3099,17 @@ export const useEditor = create<EditorStore>((set, get) => {
       void setSetting("focusMode", false);
       void setSetting("leftCollapsed", false);
       void setSetting("rightCollapsed", false);
-      if (overlay) {
-        void setSetting("leftOpen", false);
-        void setSetting("rightOpen", false);
-      }
+      void setSetting("leftOpen", true);
+      void setSetting("rightOpen", true);
       writeUi({
         pagesPanelHeight,
         pagesRailHidden: false,
+        pagesRailCollapsed: false,
         bubble: true,
         bubbleOffset: null,
       });
+      if (typeof window !== "undefined")
+        window.dispatchEvent(new CustomEvent("nasaq:reset-workspace"));
     },
     togglePagesRail: () => {
       // Expanding a HIDDEN rail restores the full tray, not the collapsed strip.
@@ -5101,20 +5111,30 @@ export const useEditor = create<EditorStore>((set, get) => {
       const page = s.pages.find((p) => p.id === id);
       if (!page || page.locked) return;
       set({
-        pages: s.pages.map((p) =>
-          p.id === id
-            ? {
-                ...p,
-                ...paint,
-                ...(Object.hasOwn(paint, "bgGradient")
-                  ? { bgGradient: normalizeGradient(paint.bgGradient) }
-                  : {}),
-              }
-            : p,
-        ),
+        pages: s.pages.map((p) => {
+          if (p.id !== id) return p;
+          const next = {
+            ...p,
+            ...paint,
+            ...(Object.hasOwn(paint, "bgGradient")
+              ? { bgGradient: normalizeGradient(paint.bgGradient) }
+              : {}),
+          };
+          if (Object.hasOwn(paint, "bgImage") && !paint.bgImage)
+            delete next.bgImage;
+          return next;
+        }),
       });
       if (live) scheduleSave();
       else pushHistory();
+    },
+
+    setClipExport: (on) => {
+      set({
+        clipExport: on,
+        editorSettings: { ...get().editorSettings, clipExport: on },
+      });
+      scheduleSave(400);
     },
 
     setPageSize: (id, sizeId, custom) => {

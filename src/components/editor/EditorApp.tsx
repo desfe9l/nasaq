@@ -100,6 +100,7 @@ import { AddMenu } from "./AddMenu";
 import { CanvasStage } from "./CanvasStage";
 import { PageRail } from "./PageRail";
 import { ExportDialog } from "./ExportDialog";
+import { PageSettingsHost } from "./PageSettingsDialog";
 import { cn } from "@/lib/utils";
 import { EditorWorkspaceSkeleton } from "@/components/ui/Skeleton";
 import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
@@ -195,7 +196,11 @@ export function EditorApp() {
   // The studio is a fixed-height shell; the marketing pages scroll normally.
   useEffect(() => {
     document.body.classList.add("is-editor");
-    return () => document.body.classList.remove("is-editor");
+    const previous = document.title;
+    return () => {
+      document.body.classList.remove("is-editor");
+      document.title = previous;
+    };
   }, []);
 
   /**
@@ -526,6 +531,10 @@ function Studio({
 }) {
   const name = useEditor((s) => s.name);
   const setName = useEditor((s) => s.setName);
+  useEffect(() => {
+    const project = name.trim() || "مستند جديد";
+    document.title = `${project} — نَسَق`;
+  }, [name]);
   const zoom = useEditor((s) => s.zoom);
   const selectionIdentity = useEditor((s) => s.selectedIds.join(" "));
   useEffect(() => {
@@ -599,8 +608,7 @@ function Studio({
    * Docked panels vs. slide-overs. The width comes from `OVERLAY_BREAKPOINT`
    * (the store's single source of truth) rather than a hardcoded number here:
    * a second copy of this rule is exactly how the shell and the auto-open logic
-   * drift apart, and 1100 is where two panels plus a usable A4 artboard stop
-   * fitting side by side.
+   * drift apart. iPad portrait (768) docks the same windows as the desktop.
    */
   const [isDesktop, setIsDesktop] = useState(
     () => typeof window === "undefined" || !isOverlayViewport(),
@@ -1437,6 +1445,32 @@ function Studio({
     }
   }, [dockSides]);
   useEffect(() => {
+    const reset = () => {
+      const groups = defaultWorkspaceGroups();
+      setGroupState(groups);
+      savePanelGroups(groups);
+      setDockSides({ ...DEFAULT_DOCKS });
+      setDockSizes({});
+      setCollapsedPanels({});
+      try {
+        localStorage.setItem(DOCKS_KEY, JSON.stringify(DEFAULT_DOCKS));
+        localStorage.setItem(COLLAPSED_KEY, "{}");
+        localStorage.removeItem("nasaq.panel.dock-sizes.v2");
+        for (const id of PANEL_IDS) {
+          localStorage.removeItem(`nasaq.panel.${id}.pos.v2`);
+          localStorage.removeItem(`nasaq.panel.${id}`);
+        }
+      } catch {
+        /* session state already reset */
+      }
+      for (const id of PANEL_IDS) setPanelOpenFlag(id, false);
+      setPanelOpenFlag(WORKSPACE_RIGHT_GROUP[0], true);
+      setPanelOpenFlag(WORKSPACE_LEFT_GROUP[0], true);
+    };
+    window.addEventListener("nasaq:reset-workspace", reset);
+    return () => window.removeEventListener("nasaq:reset-workspace", reset);
+  }, []);
+  useEffect(() => {
     try {
       localStorage.setItem(
         "nasaq.panel.dock-sizes.v2",
@@ -1552,10 +1586,8 @@ function Studio({
     setGroupState(groups);
     setDockSides({ ...DEFAULT_DOCKS });
     for (const id of PANEL_IDS) setPanelOpenFlag(id, false);
-    if (isDesktop) {
-      setPanelOpenFlag(WORKSPACE_RIGHT_GROUP[0], true);
-      setPanelOpenFlag(WORKSPACE_LEFT_GROUP[0], true);
-    }
+    setPanelOpenFlag(WORKSPACE_RIGHT_GROUP[0], true);
+    setPanelOpenFlag(WORKSPACE_LEFT_GROUP[0], true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
 
@@ -2299,6 +2331,7 @@ function Studio({
         fitToScreen={fitToScreen}
       />
       <ExportDialog />
+      <PageSettingsHost />
 
       {/*
        * Modal workbenches, mounted at the shell level so they survive a panel

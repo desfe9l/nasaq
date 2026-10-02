@@ -109,12 +109,11 @@ describe("isOverlayViewport", () => {
 
   it("keeps one breakpoint constant for the shell and the store", () => {
     /*
-     * 1100, not the classic 1024: at 1024–1100 two docked panels plus a usable
-     * A4 artboard no longer fit, so the tablet slide-over layout has to start a
-     * little earlier. The shell derives its `matchMedia` query from this same
-     * constant (`EditorApp`), which is what makes "one breakpoint" true.
+     * 768: iPad portrait docks the same windows as the desktop. Narrower viewports
+     * stay slide-overs. The shell derives its `matchMedia` query from this same
+     * constant (`EditorApp`).
      */
-    assert.equal(OVERLAY_BREAKPOINT, 1100);
+    assert.equal(OVERLAY_BREAKPOINT, 768);
   });
 });
 

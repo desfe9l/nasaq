@@ -72,15 +72,13 @@
   --font-serif-ar: "Amiri", "Noto Naskh Arabic", serif;
 
   /*
-   * `lg2` — the editor's own docked/overlay boundary, at 1100px.
+   * `lg2` — the editor's docked/overlay boundary, at 768px (iPad portrait).
    *
-   * Tailwind's stock `lg` (1024px) is one CSS pixel away from a layout the shell
-   * cannot actually fit: two panels plus a usable A4 artboard need 1100. The Java-
    * Script boundary lives in `ui-state.ts` (`OVERLAY_BREAKPOINT`) and the
    * layout's classes use `lg2:`/`max-lg2:` — the two must always be the same
    * number, which is why neither is spelled out in a component.
    */
-  --breakpoint-lg2: 1100px;
+  --breakpoint-lg2: 768px;
 
   /*
    * Brand — FILLS and tints.
@@ -1002,8 +1000,11 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   overflow: visible;
 }
 
-#export-root .report-page {
+#export-root .report-page.is-clip-export {
   overflow: hidden;
+}
+#export-root .report-page.is-export-visible {
+  overflow: visible;
 }
 
 .report-page.show-grid::before {
@@ -1192,14 +1193,11 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 .selection-frame {
-  /* 7px circular handles, a constant on-screen size at every zoom. */
-  --handle-size: calc(7px / var(--editor-zoom, 1));
-  /* Hit area أكبر من المرئي — 32px دائماً (Apple Pencil precision) */
-  --handle-hit-size: calc(32px / var(--editor-zoom, 1));
+  --handle-size: calc(6px / var(--editor-zoom, 1));
+  --handle-hit-size: calc(18px / var(--editor-zoom, 1));
   --handle-inset: calc(var(--handle-size) / 2);
-  --rotate-hit-size: calc(32px / var(--editor-zoom, 1));
-  /* Single rotation grip, separated from the top resize hit target. */
-  --rotate-gap: calc(36px / var(--editor-zoom, 1));
+  --rotate-hit-size: calc(20px / var(--editor-zoom, 1));
+  --rotate-gap: calc(22px / var(--editor-zoom, 1));
   /*
    * Tight bounding box (borderScaleFactor: 1): the frame mirrors the element's
    * exact box, and a single inset 1px outline is drawn without changing the
@@ -1242,20 +1240,13 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 /*
- * Locked elements: a clearly purple lock cursor state. The dashed frame and
- * the on-canvas pin both read purple so "this is pinned, it will not move" is
- * unmistakable from across the canvas.
- *
- * `pointer-events: none` is the protection that keeps locked artwork from
- * SHIELDING the document: a press on (or through) a locked element — and on
- * its selection frame — falls straight through to whichever element is under
- * it, so an open element overlapping a locked one is always one tap away,
- * above or below. Locked elements are reached (and unlocked) through the
- * layer tree, the marquee and the menus, never by clicking the artwork.
+ * Locked artwork stays hittable so a tap selects it and does not fall through
+ * onto whatever sits underneath. The gesture itself refuses to move or resize
+ * a lock. The pin is NASAQ green and does not catch pointers.
  */
 .selection-frame.is-locked {
   outline-style: dashed;
-  outline-color: #8b5cf6;
+  outline-color: #006c35;
   cursor: not-allowed;
   pointer-events: none;
 }
@@ -1278,34 +1269,24 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 /*
- * A locked element is hit-test transparent: pointer events pass straight
- * through to the document layer beneath, so open elements above or below it
- * select directly even where the locked artwork overlaps them. The lock pin
- * (pointer-events: none already) keeps the state visible.
+ * A locked element accepts the pointer so the editor can select it without
+ * starting a move. The NASAQ pin is visual only.
  */
 .canvas-el.locked {
   cursor: not-allowed;
-  pointer-events: none;
 }
-
-/* Purple lock pin pinned to the locked element's top-right corner. */
 .canvas-el.locked::after {
-  content: "🔒";
+  content: "";
   position: absolute;
-  top: calc(-3mm / var(--editor-zoom, 1));
-  right: calc(-3mm / var(--editor-zoom, 1));
-  width: calc(6mm / var(--editor-zoom, 1));
-  height: calc(6mm / var(--editor-zoom, 1));
-  display: grid;
-  place-items: center;
-  font-size: calc(4mm / var(--editor-zoom, 1));
-  line-height: 1;
-  background: #8b5cf6;
-  color: #fff;
+  top: calc(-8px / var(--editor-zoom, 1));
+  inset-inline-end: calc(-8px / var(--editor-zoom, 1));
+  width: calc(12px / var(--editor-zoom, 1));
+  height: calc(12px / var(--editor-zoom, 1));
+  background: #006c35 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4'><rect x='5' y='11' width='14' height='10' rx='2'/><path d='M8 11V8a4 4 0 0 1 8 0v3'/></svg>") center / 8px 8px no-repeat;
   border-radius: 999px;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 1px #fff;
   pointer-events: none;
-  z-index: 1;
+  z-index: 2;
 }
 
 /*
@@ -1637,9 +1618,32 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 
 .guide-v { translate: -50% 0; }
 .guide-h { translate: 0 -50%; }
+.report-page.is-clip-view { overflow: hidden; }
+.page-bg-image {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.page-trim {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 calc(1px / var(--editor-zoom, 1)) rgba(0, 108, 53, 0.55);
+}
+.page-trim.is-hot {
+  box-shadow: inset 0 0 0 calc(2px / var(--editor-zoom, 1)) #006c35;
+}
 .guide-v.is-page-edge, .guide-h.is-page-edge {
-  background: #f5b14c;
-  box-shadow: 0 0 calc(2px / var(--editor-zoom, 1)) #fff;
+  background: #006c35;
+  box-shadow: 0 0 calc(3px / var(--editor-zoom, 1)) rgba(0, 108, 53, 0.45);
+}
+body.is-gesturing .artboard-cell:not(.is-active) {
+  content-visibility: auto;
+  contain-intrinsic-size: 420px 640px;
 }
 .guide-v.is-page-center, .guide-h.is-page-center { background: #a855f7; }
 .snap-feedback {
@@ -2081,7 +2085,7 @@ body.is-scrubbing-value {
  * edge (so the panel's boundary is unmistakable over a busy page), and the
  * same 200ms ease the shell already animates with — no new timing language.
  */
-@media (max-width: 1099.98px) {
+@media (max-width: 767.98px) {
   .editor-ui .editor-sidebar:not(.touch-properties-sheet) {
     box-shadow:
       -22px 0 46px -26px rgba(15, 23, 42, 0.55),
@@ -2115,7 +2119,7 @@ body.is-scrubbing-value {
   }
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 768px) {
   .editor-drawer-backdrop {
     display: none;
   }
@@ -3336,7 +3340,9 @@ body.is-resizing-panel .editor-dock-strip::before {
 .editor-anchor-menu.is-drawer {
   gap: 0;
   padding: 0;
+  max-height: min(78dvh, calc(100dvh - 16px));
 }
+.editor-anchor-menu.is-drawer .editor-menu-label { white-space: normal; }
 .editor-drawer-bar {
   position: sticky;
   top: 0;
@@ -3584,11 +3590,17 @@ body.is-resizing-panel .editor-dock-strip::before {
 .asset-media-grid {
   display: grid;
   min-width: 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  align-items: start;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px;
+  align-items: stretch;
 }
 .asset-media-grid > * { min-width: 0; }
+.asset-media-grid:not(.is-compact) .asset-card img {
+  width: 100%;
+  height: 92px;
+  object-fit: contain;
+  background: color-mix(in srgb, var(--editor-surface) 80%, #fff);
+}
 @container assetlibrary (max-width: 240px) {
   .asset-media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -3715,7 +3727,7 @@ body.is-resizing-panel .editor-dock-strip::before {
  * opens is a toolbar that steals the artboard. The document name is the only
  * flexible part, and it is capped.
  */
-@media (min-width: 1100px) {
+@media (min-width: 768px) {
   .editor-ui .editor-toolbar { flex-wrap: nowrap; }
   .editor-ui .editor-header-primary > *,
   .editor-ui .editor-header-actions > * { flex-shrink: 0; }
@@ -3938,7 +3950,7 @@ body.is-resizing-panel .editor-dock-strip::before {
 
 /* Artboard names are constant-size UI outside the scaled document surface. */
 .artboard-header {
-  height: 28px;
+  height: 22px;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -4050,7 +4062,7 @@ body.is-resizing-panel .editor-dock-strip::before {
 }
 
 .editor-ui .editor-panel-header {
-  min-height: 54px;
+  min-height: 36px;
   background: color-mix(in srgb, var(--editor-panel) 96%, var(--editor-hover));
 }
 
@@ -4088,7 +4100,7 @@ body.is-resizing-panel .editor-dock-strip::before {
  * where the canvas is smallest — the single biggest source of the "the UI
  * grew and the page shrank" feeling.
  */
-@media (max-width: 1099px) {
+@media (max-width: 767px) {
   .editor-ui .editor-toolbar {
     flex-wrap: nowrap;
     gap: 4px;
@@ -4196,7 +4208,7 @@ body.is-resizing-panel .editor-dock-strip::before {
 .artboard-page-options summary { cursor: pointer; font-size: 11px; padding-block: 6px; }
 
 /* A fixed tablet drawer must not sit in a lower stacking context than its backdrop. */
-@media (max-width: 1099px) {
+@media (max-width: 767px) {
   .editor-shell > .editor-workspace-row { isolation: auto; }
   .editor-sidebar:not(.touch-properties-sheet) {
     height: 100dvh;
@@ -4226,9 +4238,12 @@ body.is-resizing-panel .editor-dock-strip::before {
   .editor-panel-tab { min-width: 44px; min-height: 44px; flex-shrink: 0; }
   .editor-panel-tabs { scrollbar-width: thin; }
   /* Comfortable touch targets for every shared control. */
-  .editor-icon-btn { width: 44px; height: 44px; border-radius: 10px; }
-  .editor-icon-glyph { width: 20px; height: 20px; }
-  .editor-icon-glyph svg { width: 20px; height: 20px; }
+  .editor-icon-btn { width: 36px; height: 36px; border-radius: 9px; }
+  .editor-icon-glyph { width: 16px; height: 16px; }
+  .editor-icon-glyph svg { width: 16px; height: 16px; }
+  .editor-page-rail .page-rail-nav { width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
+  .editor-page-rail-collapsed .page-rail-chip { height: 36px; min-width: 36px; }
+  .page-rail-actions button { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
   .editor-zoom-btn { width: 34px; height: 34px; }
   .editor-menu-row { min-height: 44px; }
   .editor-menu-grid button { min-height: 44px; }
