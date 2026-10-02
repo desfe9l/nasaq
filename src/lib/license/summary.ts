@@ -72,7 +72,7 @@ export function licenseSummary(input: LicenseSummaryInput): LicenseSummary {
   }
   if (input.hasLicense) {
     const license = input.license;
-    const type = license ? LICENSE_TYPE_LABELS[license.type] : "مرخّص";
+    const type = license ? LICENSE_TYPE_LABELS[license.type] : "مشترك";
     const expiry = formatExpiry(license?.expiresAt ?? null);
     return {
       label: type,

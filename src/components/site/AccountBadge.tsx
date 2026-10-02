@@ -5,7 +5,7 @@ import type { AppUser } from "@/lib/auth/use-current-user";
 import { cn } from "@/lib/utils";
 
 /**
- * Account state badge — «مرخّص» / «موقوف» / «مجاني».
+ * Account state badge — «مشترك» / «موقوف» / «مجاني».
  *
  * Mounted as its own component (rather than called as a hook inside
  * `HeaderAccount`) for two reasons: `useLicense` must run unconditionally, and
@@ -40,13 +40,13 @@ const BADGE_META: Record<
     Icon: Loader2,
   },
   LICENSED: {
-    label: "مرخّص",
+    label: "مشترك",
     className:
       "border-brand/20 bg-brand/10 text-brand",
     Icon: Check,
   },
   ADMIN: {
-    label: "مرخّص",
+    label: "مشترك",
     className:
       "border-brand/20 bg-brand/10 text-brand",
     Icon: Check,
@@ -93,9 +93,9 @@ export function AccountBadge({
       )}
       title={
         tier === "ADMIN"
-          ? "مرخّص — صلاحيات إدارية كاملة"
+          ? "مشترك — صلاحيات إدارية كاملة"
           : tier === "LICENSED"
-            ? "مرخّص"
+            ? "مشترك"
             : tier === "SUSPENDED"
               ? "الحساب موقوف مؤقتًا بقرار الإدارة"
             : tier === "LOADING"
