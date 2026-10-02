@@ -218,6 +218,7 @@ export default defineConfig(({ command, isPreview }) => ({
             // The SVG→PNG share renderer is a wasm package. Keep it external
             // and trace the wasm binary into the server function.
             traceDeps: ["@resvg/resvg-wasm"],
+            noExternals: ["@resvg/resvg-wasm"],
           }),
         ]
       : []),
