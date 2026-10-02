@@ -20,6 +20,44 @@ export const DISPLAY = "Tajawal";
 export const BODY = "Noto Naskh Arabic";
 export const META = "IBM Plex Sans Arabic";
 export const CEREMONY = "Amiri";
+export const EDITORIAL = "Noto Kufi Arabic";
+
+/** A4 text block: 16mm margin, 178mm measure, 4mm gutter, 12 columns. */
+export const MARGIN = 16;
+export const MEASURE = 178;
+export const RIGHT = MARGIN + MEASURE;
+const COL = 134 / 12;
+const GUTTER = 4;
+
+/**
+ * A column counted from the right, the way an Arabic page is set.
+ * `cell(0, 12)` is the full measure. `cell(0, 7)` is the right-hand block.
+ */
+export function cell(col: number, span = 1): { x: number; w: number } {
+  const w = span * COL + (span - 1) * GUTTER;
+  const x = RIGHT - (col + span) * COL - (col + span - 1) * GUTTER;
+  return { x: Math.round(x * 100) / 100, w: Math.round(w * 100) / 100 };
+}
+
+type RoleStyle = {
+  fontFamily: string;
+  fontSize: number;
+  fontWeight: number;
+  lineHeight: number;
+  textAlign: "right" | "left" | "center";
+};
+
+/** Fixed relationships. A page may color a role; it should not invent a new size. */
+export const ROLE = {
+  display: { fontFamily: DISPLAY, fontSize: 34, fontWeight: 800, lineHeight: 1.02, textAlign: "right" },
+  h1: { fontFamily: DISPLAY, fontSize: 22, fontWeight: 700, lineHeight: 1.15, textAlign: "right" },
+  h2: { fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, lineHeight: 1.25, textAlign: "right" },
+  h3: { fontFamily: DISPLAY, fontSize: 12, fontWeight: 700, lineHeight: 1.3, textAlign: "right" },
+  body: { fontFamily: BODY, fontSize: 11.5, fontWeight: 500, lineHeight: 1.75, textAlign: "right" },
+  caption: { fontFamily: META, fontSize: 8, fontWeight: 600, lineHeight: 1.4, textAlign: "right" },
+  meta: { fontFamily: META, fontSize: 8.5, fontWeight: 600, lineHeight: 1.35, textAlign: "right" },
+  folio: { fontFamily: META, fontSize: 8, fontWeight: 600, lineHeight: 1, textAlign: "left" },
+} satisfies Record<string, RoleStyle>;
 
 export function paint(
   add: Add,
@@ -136,7 +174,7 @@ export function folio(
  * placeholders. The author replaces the source; the crop and scale stay.
  */
 export function plate(
-  kind: "facade" | "court" | "archive" | "press" | "dune" | "night" | "field",
+  kind: "facade" | "court" | "archive" | "press" | "dune" | "night" | "field" | "portrait",
 ): string {
   const art: Record<typeof kind, string> = {
     facade: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 860"><rect width="640" height="860" fill="#1a2836"/><rect y="640" width="640" height="220" fill="#101820"/><rect x="36" y="150" width="54" height="610" fill="#243646"/><rect x="108" y="230" width="42" height="530" fill="#2d455c"/><rect x="168" y="120" width="96" height="640" fill="#1c3144"/><rect x="284" y="260" width="36" height="500" fill="#34506a"/><rect x="338" y="80" width="120" height="680" fill="#24384c"/><rect x="476" y="210" width="70" height="550" fill="#182838"/><g fill="#e7d3a8" opacity="0.85"><rect x="196" y="180" width="14" height="18"/><rect x="222" y="180" width="14" height="18"/><rect x="196" y="220" width="14" height="18"/><rect x="222" y="220" width="14" height="18"/><rect x="368" y="140" width="16" height="22"/><rect x="396" y="140" width="16" height="22"/><rect x="368" y="184" width="16" height="22"/><rect x="396" y="184" width="16" height="22"/><rect x="368" y="228" width="16" height="22"/><rect x="396" y="228" width="16" height="22"/></g><rect y="812" width="640" height="5" fill="#c6a05a"/></svg>`,
@@ -146,6 +184,7 @@ export function plate(
     dune: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520"><rect width="800" height="520" fill="#e7d7be"/><path d="M0 340 C180 260 280 400 460 320 C620 250 700 300 800 250 L800 520 L0 520 Z" fill="#c4a574"/><path d="M0 400 C200 340 360 460 560 390 C680 350 740 380 800 360 L800 520 L0 520 Z" fill="#3f2e1f"/><circle cx="150" cy="120" r="28" fill="#f4efe6"/></svg>`,
     night: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520"><rect width="800" height="520" fill="#14120f"/><rect x="180" y="80" width="220" height="360" fill="#1c1917"/><rect x="210" y="120" width="70" height="90" fill="#c6a05a"/><rect x="300" y="120" width="70" height="90" fill="#8a6232"/><rect x="460" y="160" width="180" height="280" fill="#231e1a"/><rect x="500" y="200" width="100" height="60" fill="#e7d3a8" opacity="0.8"/><rect y="470" width="800" height="50" fill="#0c0a09"/></svg>`,
     field: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420"><rect width="800" height="420" fill="#e9f3ed"/><rect y="250" width="800" height="170" fill="#006c35"/><rect x="40" y="80" width="16" height="250" fill="#0c3d2c"/><rect x="90" y="140" width="16" height="190" fill="#145c42"/><rect x="150" y="60" width="220" height="270" fill="#0c3d2c"/><rect x="400" y="110" width="160" height="220" fill="#1b4d3e"/><rect x="590" y="160" width="90" height="170" fill="#0c3d2c"/><rect y="400" width="800" height="6" fill="#c9a86a"/></svg>`,
+    portrait: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800"><rect width="640" height="800" fill="#1c1917"/><rect y="520" width="640" height="280" fill="#14120f"/><ellipse cx="320" cy="300" rx="118" ry="140" fill="#3f342c"/><rect x="176" y="430" width="288" height="280" fill="#2a241f"/><rect x="210" y="500" width="220" height="8" fill="#c6a05a" opacity="0.8"/><rect y="760" width="640" height="6" fill="#c6a05a"/></svg>`,
   };
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(art[kind])}`;
 }

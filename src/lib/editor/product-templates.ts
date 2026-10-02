@@ -9,6 +9,7 @@ import {
 import { uid } from "@/lib/utils";
 import { canUseDemoPack } from "@/lib/product/product";
 import { bindDesignSkill } from "./design-skill";
+import { BODY, META, plate } from "./template-layouts";
 
 bindDesignSkill("products");
 
@@ -28,7 +29,6 @@ export interface ProductTemplateSeed {
 
 const INK = "#18332b";
 const GREEN = "#006c35";
-const GREEN_SOFT = "#e9f3ed";
 const GOLD = "#c9a86a";
 const MUTED = "#62736b";
 const LINE = "#dce5df";
@@ -82,6 +82,7 @@ function text(
     fill?: string;
     borderColor?: string;
     padding?: number;
+    lineHeight?: number;
   } = {},
 ) {
   return add(target, "text", name, x, y, w, h, content, {
@@ -90,7 +91,7 @@ function text(
     fontWeight: options.weight ?? 500,
     color: options.color ?? INK,
     textAlign: options.align ?? "right",
-    lineHeight: 1.35,
+    lineHeight: options.lineHeight ?? 1.45,
     fill: options.fill,
     borderColor: options.borderColor,
     borderWidth: options.borderColor ? 0.25 : 0,
@@ -112,7 +113,7 @@ function shape(
     fill,
     borderColor: borderColor || undefined,
     borderWidth: borderColor ? 0.3 : 0,
-    radius: 1.5,
+    radius: 0,
   });
 }
 
@@ -123,266 +124,242 @@ function rule(target: Page, y: number, x = 17, w = 176, color = LINE) {
   });
 }
 
-function photoPlaceholder(label: string, landscape = false): string {
-  void label;
-  const width = landscape ? 900 : 600;
-  const height = landscape ? 560 : 760;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#143028"/><rect y="${height * 0.62}" width="100%" height="${height * 0.38}" fill="#0d241c"/><rect x="${width * 0.08}" y="${height * 0.18}" width="${width * 0.12}" height="${height * 0.62}" fill="#1d4a38"/><rect x="${width * 0.24}" y="${height * 0.28}" width="${width * 0.18}" height="${height * 0.52}" fill="#245743"/><rect x="${width * 0.46}" y="${height * 0.12}" width="${width * 0.22}" height="${height * 0.68}" fill="#1a3d2e"/><rect x="${width * 0.72}" y="${height * 0.22}" width="${width * 0.16}" height="${height * 0.1}" fill="#c9a86a"/><rect y="${height * 0.96}" width="100%" height="${height * 0.04}" fill="#c9a86a"/></svg>`;
-  const bytes = new TextEncoder().encode(svg);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return `data:image/svg+xml;base64,${btoa(binary)}`;
-}
-
 function resumePage(language: "ar" | "en"): Page {
   const arabic = language === "ar";
   const target = page(arabic ? "السيرة الذاتية" : "Resume");
   const align = arabic ? "right" : "left";
-  const startX = arabic ? 18 : 18;
-  const bodyW = arabic ? 140 : 174;
-  shape(target, "خط الهوية", 0, 0, 210, 2.2, GREEN);
+  const x = 18;
+  const textW = arabic ? 142 : 174;
+  add(target, "line", "خط علوي", 0, 0, 210, 0, "", { color: GREEN, stroke: 1.4 });
   if (arabic) {
-    add(target, "image", "صورة شخصية اختيارية", 168, 12, 24, 28, "", {}, photoPlaceholder("صورة اختيارية"));
+    add(target, "image", "صورة شخصية", 164, 16, 28, 34, "", { objectFit: "cover", radius: 0 }, plate("portrait"));
   }
-  text(target, "الاسم", arabic ? "الاسم الكامل" : "FULL NAME", startX, 12, bodyW, 12, {
-    size: 24,
-    color: GREEN,
-    weight: 800,
-    align,
-    font: arabic ? "Tajawal" : "Georgia",
+  text(target, "الاسم", arabic ? "نورة السبيعي" : "FULL NAME", x, 14, textW, 12, {
+    size: 26, color: GREEN, weight: 800, align, font: arabic ? "Tajawal" : "Georgia",
   });
-  text(target, "المسمى المهني", arabic ? "المسمى المهني المستهدف" : "TARGET ROLE", startX, 26, bodyW, 7, {
-    size: 10,
-    color: INK,
-    weight: 600,
-    align,
+  text(target, "المسمى المهني", arabic ? "أخصائية اتصال مؤسسي" : "Communications Lead", x, 28, textW, 7, {
+    size: 11, color: INK, weight: 600, align, font: arabic ? "IBM Plex Sans Arabic" : "Georgia",
   });
-  rule(target, 36, startX, bodyW, GOLD);
   text(target, "معلومات التواصل", arabic
-    ? "المدينة  ·  البريد الإلكتروني  ·  الهاتف  ·  LinkedIn"
-    : "City  ·  email@example.com  ·  +1 555 0100  ·  LinkedIn", startX, 40, bodyW, 6, {
-    size: 7.5,
-    color: MUTED,
-    align,
+    ? "الرياض  ·  nora@example.com  ·  ٠٥٥ ٠٠٠ ٠٠٠٠"
+    : "Riyadh  ·  name@example.com  ·  +966 55 000 0000", x, arabic ? 40 : 38, textW, 6, {
+    size: 8, color: MUTED, align, font: META,
   });
+  add(target, "line", "فاصل الهوية", x, arabic ? 50 : 48, textW, 0, "", { color: GOLD, stroke: 0.6 });
 
-  let y = 54;
+  let y = arabic ? 58 : 56;
   const section = (title: string, content: string, height: number) => {
-    text(target, `عنوان ${title}`, title, startX, y, bodyW, 7, {
-      size: 11,
-      color: GREEN,
-      weight: 800,
-      align,
+    text(target, `عنوان ${title}`, title, x, y, textW, 7, {
+      size: 12, color: GREEN, weight: 700, align, font: arabic ? "Tajawal" : "Georgia",
     });
-    rule(target, y + 9, startX, bodyW, GOLD);
-    text(target, title, content, startX, y + 12, bodyW, height, {
-      size: 8.5,
-      align,
-      font: arabic ? "Tajawal" : "Georgia",
+    add(target, "line", `خط ${title}`, arabic ? x + textW - 28 : x, y + 8, 28, 0, "", { color: GOLD, stroke: 0.7 });
+    text(target, title, content, x, y + 12, textW, height, {
+      size: 10, color: INK, align, font: arabic ? BODY : "Georgia", lineHeight: 1.65,
     });
-    y += height + 18;
+    y += height + 16;
   };
   section(
-    arabic ? "الملخص المهني" : "PROFILE",
+    arabic ? "الملخص" : "PROFILE",
     arabic
-      ? "ملخص مهني من 3 إلى 4 أسطر يوضح الخبرة والتخصص والقيمة التي تقدمها. استخدم كلمات مفتاحية مرتبطة بالوظيفة."
-      : "Write a concise 3–4 line profile focused on role, years of experience, strengths, and measurable value.",
-    17,
+      ? "ثماني سنوات في الاتصال المؤسسي للجهات الخدمية. أكتب ما يُعرض على القيادة، وأضبط ما يصل إلى الجمهور، وأقيس الأثر بعد النشر لا بعدد المواد."
+      : "Eight years leading institutional communications. I write what leadership reads, and I measure the effect after publication rather than by the volume of output.",
+    20,
   );
   section(
-    arabic ? "الخبرة المهنية" : "EXPERIENCE",
+    arabic ? "الخبرة" : "EXPERIENCE",
     arabic
-      ? "المسمى الوظيفي  |  اسم الجهة  |  2022–الآن\n• إنجاز قابل للقياس يبدأ بفعل واضح\n• أثر مهني مدعوم برقم أو نتيجة"
-      : "Job Title | Company | 2022–Present\n• Start with a strong action verb and measurable result.\n• Keep each achievement specific and relevant.",
-    34,
+      ? "رئيسة تحرير المحتوى  |  جهة خدمية  |  ٢٠٢٢ — الآن\nأعدت هيكل التقرير السنوي فصار يُعتمد في جلسة واحدة.\nخفضت زمن إعداد البيان الميداني من يومين إلى ست ساعات.\n\nأخصائية محتوى  |  مكتب استشاري  |  ٢٠١٨ — ٢٠٢٢\nأدارت ملفات اتصال لثلاث جهات بمعجم واحد."
+      : "Head of Content  |  Public institution  |  2022–Present\nRebuilt the annual report so leadership could decide it in one sitting.\nCut field-statement turnaround from two days to six hours.\n\nContent Specialist  |  Advisory office  |  2018–2022\nHeld one voice across three institutions.",
+    42,
   );
   section(
     arabic ? "التعليم" : "EDUCATION",
-    arabic
-      ? "الدرجة العلمية والتخصص  |  اسم الجامعة  |  سنة التخرج"
-      : "Degree and Major | University | Graduation Year",
-    12,
+    arabic ? "بكالوريوس إعلام  |  جامعة الملك سعود  |  ٢٠١٨" : "BA Media  |  King Saud University  |  2018",
+    8,
   );
   section(
-    arabic ? "المهارات واللغات" : "SKILLS & LANGUAGES",
+    arabic ? "المهارات" : "SKILLS",
     arabic
-      ? "مهارة تقنية  ·  مهارة تخصصية  ·  إدارة مشاريع\nالعربية: اللغة الأم  |  الإنجليزية: متقدم"
-      : "Technical skill · Domain skill · Project management\nEnglish: Fluent  |  Arabic: Professional",
-    17,
-  );
-  section(
-    arabic ? "المشاريع" : "PROJECTS",
-    arabic
-      ? "اسم المشروع — دورك والنتيجة التي حققتها في سطرين. أضف رابطًا عند الحاجة."
-      : "Project Name — your contribution and outcome in two short lines. Add a link when useful.",
-    13,
+      ? "تحرير مؤسسي  ·  تقارير قيادية  ·  بيان ميداني\nالعربية: اللغة الأم  ·  الإنجليزية: مهنية"
+      : "Institutional editing  ·  Executive reports  ·  Field statements\nArabic: Native  ·  English: Professional",
+    14,
   );
   return target;
 }
 
 function letterheadPage(title: string, subtitle: string): Page {
   const target = page(title);
-  shape(target, "رأس أخضر", 0, 0, 210, 3.2, GREEN);
-  shape(target, "لمسة ذهبية", 16, 18, 2, 17, GOLD);
-  add(target, "image", "شعار الجهة — استبدل من المكتبة", 164, 14, 30, 22, "", {}, photoPlaceholder("الشعار"));
-  text(target, "اسم الجهة", "اسم الجهة / الشركة", 24, 16, 126, 8, { size: 16, weight: 800 });
-  text(target, "بيانات الجهة", "العنوان  ·  الهاتف  ·  البريد الإلكتروني  ·  الموقع", 24, 27, 126, 6, { size: 7.5, color: MUTED });
-  text(target, "نوع المراسلة", subtitle, 24, 46, 162, 8, { size: 10, color: GREEN, weight: 700 });
-  text(target, "التاريخ والمرجع", "التاريخ:  ____ / ____ / ______      الرقم:  ______________", 24, 59, 162, 7, { size: 8, color: MUTED });
-  rule(target, 70, 24, 162, LINE);
-  text(target, "مخاطب إليه", "السادة / ____________________________________________", 24, 77, 162, 9, { size: 10 });
-  text(target, "الموضوع", "الموضوع: ___________________________________________", 24, 91, 162, 9, { size: 10, weight: 700 });
-  text(target, "نص الخطاب", "تحية طيبة وبعد،\n\nاكتب نص الخطاب هنا. تبقى مساحة المتن مرنة لاستيعاب أطوال مختلفة مع هوامش طباعة آمنة.\n\nوتفضلوا بقبول فائق الاحترام والتقدير.", 24, 108, 162, 92, { size: 10, align: "justify" });
-  text(target, "التوقيع", "الاسم: ____________________     المسمى: ____________________", 24, 220, 162, 8, { size: 8.5 });
-  rule(target, 273, 16, 178, GOLD);
-  text(target, "تذييل الجهة", "العنوان الكامل  ·  البريد الإلكتروني  ·  الهاتف  ·  الموقع الإلكتروني", 20, 279, 170, 7, { size: 7, color: MUTED, align: "center" });
+  add(target, "line", "خط علوي", 0, 0, 210, 0, "", { color: GREEN, stroke: 1.6 });
+  add(target, "image", "شعار الجهة", 166, 14, 26, 18, "", { objectFit: "cover", radius: 0 }, plate("archive"));
+  text(target, "اسم الجهة", "اسم الجهة", 18, 14, 140, 9, { size: 18, weight: 800, color: GREEN });
+  text(target, "بيانات الجهة", "الإدارة العامة  ·  مكتب المراسلات", 18, 26, 140, 6, { size: 9, color: MUTED, font: META });
+  add(target, "line", "خط الرأس", 18, 38, 174, 0, "", { color: GREEN, stroke: 0.45 });
+  add(target, "line", "خط الرأس الثاني", 18, 39.6, 174, 0, "", { color: GOLD, stroke: 0.35 });
+  text(target, "نوع المراسلة", subtitle, 18, 46, 174, 7, { size: 11, color: GREEN, weight: 700 });
+  text(target, "التاريخ والمرجع", "التاريخ  ١٤٤٧ / ٠٦ / ١٢          المرجع  ص / ٤٤٢١", 18, 56, 174, 6, { size: 9, color: MUTED, font: META });
+  text(target, "مخاطب إليه", "السادة / إدارة التخطيط", 18, 70, 174, 8, { size: 13, weight: 700 });
+  text(target, "تحية", "السلام عليكم ورحمة الله وبركاته", 18, 84, 174, 7, { size: 12, font: BODY, lineHeight: 1.6 });
+  text(target, "الموضوع", "الموضوع: اعتماد صيغة التقرير الربعي", 18, 100, 174, 8, { size: 13, weight: 700 });
+  text(target, "نص الخطاب", "نفيدكم بأن صيغة التقرير الربعي أصبحت جاهزة للعرض: غلاف، محتويات، حكم، أثر، مؤشرات، وتوصية.\n\nنرجو اعتمادها في اجتماع الأسبوع حتى تُقفل النسخة قبل نهاية الشهر. المرفقات تحمل الجدول كما أُغلق.", 18, 116, 174, 48, { size: 12, font: BODY, lineHeight: 1.75 });
+  text(target, "الختام", "وتفضلوا بقبول فائق الاحترام", 18, 172, 174, 8, { size: 12, font: BODY });
+  add(target, "line", "خط التوقيع", 112, 210, 60, 0, "", { color: INK, stroke: 0.3 });
+  text(target, "التوقيع", "الاسم\nمدير مكتب المراسلات", 112, 214, 60, 14, { size: 9, color: MUTED, font: META, lineHeight: 1.4 });
+  add(target, "line", "خط التذييل", 18, 272, 174, 0, "", { color: GOLD, stroke: 0.4 });
+  text(target, "تذييل الجهة", "الرياض  ·  ٠١١ ٠٠٠ ٠٠٠٠  ·  mail@example.com", 18, 278, 174, 7, { size: 8, color: MUTED, align: "center", font: META });
   return target;
 }
 
 function voucherPage(title: string, kind: "receipt" | "cash" | "payment"): Page {
   const target = page(title);
-  shape(target, "شريط العنوان", 0, 0, 210, 38, GREEN);
-  text(target, "عنوان السند", title, 18, 8, 174, 12, { size: 20, color: PAPER, weight: 800 });
-  text(target, "الرقم والتاريخ", "رقم السند:  ____________                         التاريخ:  ____ / ____ / ______", 20, 47, 170, 8, { size: 9, color: MUTED });
-  const nameLabel = kind === "payment" ? "ادفعوا إلى" : kind === "cash" ? "استلمنا من" : "استلمت من";
-  const amountLabel = kind === "payment" ? "مبلغ وقدره" : "مبلغ وقدره";
-  shape(target, "حقل الطرف", 20, 63, 170, 25, PAPER, LINE);
-  text(target, "اسم الطرف", `${nameLabel}:  ______________________________________________`, 25, 70, 160, 8, { size: 10 });
-  shape(target, "حقل المبلغ", 20, 96, 170, 23, GREEN_SOFT, LINE);
-  text(target, "المبلغ", `${amountLabel}:  ___________________________`, 25, 103, 160, 8, { size: 11, color: GREEN, weight: 700 });
-  text(target, "المبلغ كتابة", "فقط وقدره كتابة: _________________________________________________", 22, 127, 166, 9, { size: 9 });
-  text(target, "سبب السند", kind === "payment" ? "سبب الصرف / التفاصيل" : "وذلك عن", 22, 147, 166, 7, { size: 9, weight: 700 });
-  shape(target, "مربع الوصف", 20, 156, 170, 43, PAPER, LINE);
-  text(target, "وصف العملية", "____________________________________________________________\n____________________________________________________________", 25, 164, 160, 25, { size: 9, color: MUTED });
-  text(target, "طريقة الدفع", "طريقة الدفع:   □ نقداً     □ تحويل     □ بطاقة     □ أخرى: __________", 22, 210, 166, 8, { size: 8.5 });
-  if (kind === "payment") {
-    text(target, "مرجع المحاسبة", "مركز التكلفة: __________  ·  الحساب: __________  ·  المرجع: __________", 22, 224, 166, 8, { size: 7.5, color: MUTED });
-  }
-  rule(target, 249, 22, 166, LINE);
-  text(target, "توقيع المستلم", "توقيع المستلم\n\n____________________", 24, 255, 70, 24, { size: 8, align: "center" });
-  text(target, "توقيع المسؤول", "اسم وتوقيع المسؤول\n\n____________________", 116, 255, 70, 24, { size: 8, align: "center" });
+  const party = kind === "payment" ? "ادفعوا لأمر" : kind === "cash" ? "استلمنا نقدًا من" : "استلمنا من";
+  const copy = kind === "payment" ? "نسخة الحسابات" : kind === "cash" ? "نسخة الصندوق" : "أصل للمستفيد";
+  const detail = kind === "payment"
+    ? "مركز التكلفة ٤٢٠  ·  الحساب ٥١٠٣  ·  مرجع TR-٢٠٤١"
+    : kind === "cash"
+      ? "صندوق المقر  ·  أمين الصندوق يوقّع في الخانة اليسرى"
+      : "تحويل  ·  مصرف الراجحي  ·  مرجع العملية ٢٠٤١";
+  add(target, "line", "خط مزدوج", 16, 18, 178, 0, "", { color: GREEN, stroke: 1.2 });
+  add(target, "line", "خط مزدوج ثان", 16, 20.2, 178, 0, "", { color: GREEN, stroke: 0.3 });
+  text(target, "تصنيف السند", copy, 16, 28, 100, 6, { size: 8, color: MUTED, font: META });
+  text(target, "عنوان السند", title, 16, 38, 118, 12, { size: 22, color: GREEN, weight: 800 });
+  text(target, "رقم السند", "٤٤١٨", 138, 36, 56, 14, { size: 22, color: INK, weight: 800, align: "left" });
+  text(target, "تسمية الرقم", "رقم السند", 138, 52, 56, 5, { size: 8, color: MUTED, align: "left", font: META });
+  text(target, "التاريخ", "١٢ / ٠٦ / ١٤٤٧", 16, 56, 90, 6, { size: 10, color: INK, font: META });
+  add(target, "line", "حد البيانات", 16, 70, 178, 0, "", { color: LINE, stroke: 0.35 });
+  text(target, "تسمية الطرف", party, 16, 80, 178, 6, { size: 8, color: MUTED, font: META });
+  text(target, "اسم الطرف", "مؤسسة أفق للإسناد", 16, 90, 178, 10, { size: 16, weight: 700 });
+  text(target, "تسمية المبلغ", "المبلغ", 116, 110, 78, 6, { size: 8, color: MUTED, font: META });
+  text(target, "المبلغ", "١٢٬٥٠٠", 116, 118, 78, 14, { size: 26, color: GREEN, weight: 800 });
+  text(target, "العملة", "ريال سعودي", 16, 124, 92, 8, { size: 12, weight: 600 });
+  text(target, "المبلغ كتابة", "فقط اثنا عشر ألفًا وخمسمائة ريال سعودي لا غير.", 16, 146, 178, 8, { size: 12, font: BODY });
+  text(target, "سبب السند", kind === "payment" ? "مقابل دفعة عقد الإسناد للربع الحالي." : "عن خدمات الإسناد الميداني لشهر سبتمبر.", 16, 162, 178, 8, { size: 12, font: BODY });
+  text(target, "تفصيل الدفع", detail, 16, 178, 178, 8, { size: 10, color: MUTED, font: META });
+  add(target, "line", "حد التواقيع", 16, 200, 178, 0, "", { color: LINE, stroke: 0.35 });
+  text(target, "توقيع المستلم", "المستلم", 16, 214, 78, 6, { size: 8, color: MUTED, align: "center", font: META });
+  add(target, "line", "خط المستلم", 28, 246, 54, 0, "", { color: INK, stroke: 0.3 });
+  text(target, "توقيع المسؤول", "المسؤول المالي", 116, 214, 78, 6, { size: 8, color: MUTED, align: "center", font: META });
+  add(target, "line", "خط المسؤول", 128, 246, 54, 0, "", { color: INK, stroke: 0.3 });
+  text(target, "تذييل", "يُحفظ مع أصل المعاملة. الأرقام عينة وتُستبدل من المحرر.", 16, 270, 178, 6, { size: 8, color: MUTED, align: "center", font: META });
   return target;
 }
 
 function portfolioPages(): Page[] {
   const cover = page("الغلاف");
-  shape(cover, "حقل الغلاف", 0, 118, 210, 179, "#143028");
-  add(cover, "image", "صورة غلاف — استبدل من المكتبة", 0, 118, 210, 179, "", {}, photoPlaceholder("صورة المشروع", true));
-  shape(cover, "خط الهوية", 0, 0, 210, 2.2, GREEN);
-  text(cover, "عنوان الملف", "ملف أعمال", 20, 22, 170, 10, { size: 11, color: GREEN, weight: 700 });
-  text(cover, "اسم المصمم", "اسم المصمم", 20, 38, 170, 16, { size: 28, weight: 800 });
-  text(cover, "التخصص", "هوية  ·  تحرير  ·  أنظمة بصرية", 20, 60, 150, 8, { size: 11, color: MUTED });
-  rule(cover, 76, 20, 42, GOLD);
-  text(cover, "بيانات التواصل", "الموقع  ·  البريد  ·  الهاتف", 20, 88, 170, 8, { size: 8, color: MUTED });
+  add(cover, "image", "صورة الغلاف", 0, 0, 210, 297, "", { objectFit: "cover", radius: 0 }, plate("night"));
+  shape(cover, "حقل العنوان", 0, 196, 210, 101, "#14120f");
+  text(cover, "عنوان الملف", "أعمال مختارة", 18, 208, 174, 6, { size: 10, color: GOLD, weight: 700, font: META });
+  text(cover, "اسم المصمم", "ليان القاسم", 18, 218, 174, 14, { size: 26, weight: 800, color: "#f6f3ee" });
+  text(cover, "التخصص", "هوية  ·  تقارير  ·  أنظمة بصرية", 18, 238, 174, 8, { size: 12, color: "#d6d3d1", font: META });
+  text(cover, "بيانات التواصل", "layan@example.com", 18, 254, 174, 7, { size: 11, color: GOLD, font: META });
 
-  const about = page("نبذة عن المصمم");
-  shape(about, "شريط علوي", 0, 0, 210, 5, GOLD);
-  text(about, "عنوان النبذة", "الفكرة خلف العمل", 20, 28, 170, 15, { size: 22, color: GREEN, weight: 800 });
-  text(about, "نبذة تعريفية", "منهج مختصر: وضوح أولًا، ثم اتساق، ثم أثر يمكن قياسه. النص يُستبدل دون تحريك الشبكة.", 20, 52, 170, 28, { size: 12, align: "right" });
-  rule(about, 88, 20, 170, GOLD);
-  text(about, "التخصصات", "التخصص", 110, 98, 80, 6, { size: 8, color: GREEN, weight: 700 });
-  text(about, "تفاصيل التخصص", "هوية · تحرير · أنظمة رقمية", 110, 108, 80, 8, { size: 11, weight: 700 });
-  text(about, "سنوات الخبرة", "الخبرة", 20, 98, 70, 6, { size: 8, color: MUTED, weight: 700 });
-  text(about, "تفاصيل الخبرة", "خمس سنوات · مشاريع متنوعة", 20, 108, 80, 8, { size: 11, weight: 700 });
-  add(about, "image", "صورة شخصية — استبدل من المكتبة", 20, 132, 48, 58, "", {}, photoPlaceholder("صورة المصمم"));
-  text(about, "مبادئ التصميم", "٠١  وضوح المرجع\n٠٢  مقياس واحد للعناوين\n٠٣  صورة لا تُترك بلا تعليق", 80, 140, 110, 28, { size: 11, color: INK });
+  const about = page("نبذة");
+  text(about, "كِكر", "المنهج", 18, 22, 174, 6, { size: 9, color: GREEN, weight: 700, font: META });
+  text(about, "عنوان النبذة", "الوضوح قبل الزينة", 18, 34, 174, 12, { size: 24, weight: 800 });
+  text(about, "نبذة تعريفية", "أعمل مع الجهات التي تقدّم تقريرًا لا منشورًا. الصفحة تبدأ بالحكم، والصورة تُستخدم حين تكون دليلًا، واللون يبقى قليلًا حتى يُرى.", 18, 54, 174, 28, { size: 13, font: BODY, lineHeight: 1.7 });
+  add(about, "image", "صورة شخصية", 18, 98, 52, 66, "", { objectFit: "cover", radius: 0 }, plate("portrait"));
+  text(about, "سنوات الخبرة", "ثماني سنوات", 82, 100, 110, 8, { size: 14, weight: 800, color: GREEN });
+  text(about, "تفاصيل الخبرة", "تقارير سنوية، هويات جهات، وعروض تُحسم في الجلسة.", 82, 114, 110, 16, { size: 11, font: BODY, lineHeight: 1.6 });
+  text(about, "مبادئ التصميم", "الحكم أولًا، ثم السند، ثم الشكل الذي لا يزاحمهما.", 82, 138, 110, 18, { size: 12, font: BODY, lineHeight: 1.6 });
+  add(about, "line", "فاصل", 18, 184, 174, 0, "", { color: GOLD, stroke: 0.45 });
+  text(about, "ملاحظة", "المقر في الرياض. جهة واحدة في كل ربع، حتى تُغلق الوثيقة.", 18, 194, 174, 10, { size: 10, color: MUTED, font: META });
 
-  const projects = page("مشاريع مختارة");
-  text(projects, "عنوان المشاريع", "مشاريع مختارة", 20, 22, 170, 13, { size: 20, color: GREEN, weight: 800 });
-  const cards = [
-    { x: 20, y: 51, name: "المشروع الأول", category: "هوية بصرية" },
-    { x: 108, y: 51, name: "المشروع الثاني", category: "تجربة رقمية" },
-  ];
-  cards.forEach((card, index) => {
-    add(projects, "image", `صورة ${card.name} — استبدل من المكتبة`, card.x, card.y, 80, 79, "", {}, photoPlaceholder(`مشروع ${index + 1}`, true));
-    text(projects, `عنوان ${card.name}`, card.name, card.x, 136, 80, 8, { size: 11, weight: 800 });
-    text(projects, `نوع ${card.name}`, card.category, card.x, 147, 80, 6, { size: 8, color: GREEN });
-    text(projects, `وصف ${card.name}`, "التحدي · الفكرة · النتيجة\nاكتب وصفاً موجزاً يوضح دورك والأثر.", card.x, 158, 80, 22, { size: 8, color: MUTED });
-  });
-  rule(projects, 204, 20, 170, GOLD);
-  text(projects, "مشروع إضافي", "مشروع ثالث  ·  الجهة  ·  السنة\nوصف مختصر أو مؤشر نتيجة قابل للقياس.", 20, 216, 170, 23, { size: 9 });
-  add(projects, "image", "صورة مشروع ثالث — استبدل من المكتبة", 20, 246, 170, 33, "", {}, photoPlaceholder("مساحة صورة إضافية", true));
+  const projects = page("أعمال");
+  text(projects, "عنوان المشاريع", "ثلاثة أعمال", 18, 16, 174, 10, { size: 20, weight: 800 });
+  add(projects, "image", "صورة المشروع الأول", 18, 32, 174, 72, "", { objectFit: "cover", radius: 0 }, plate("facade"));
+  text(projects, "عنوان المشروع الأول", "تقرير سنوي لجهة خدمية", 18, 108, 120, 8, { size: 13, weight: 800 });
+  text(projects, "نوع المشروع الأول", "ست صفحات  ·  ٢٠٢٥", 140, 110, 52, 6, { size: 8, color: GREEN, align: "left", font: META });
+  add(projects, "image", "صورة المشروع الثاني", 18, 128, 82, 48, "", { objectFit: "cover", radius: 0 }, plate("archive"));
+  text(projects, "عنوان المشروع الثاني", "هوية مراسلات", 18, 180, 82, 7, { size: 11, weight: 700 });
+  text(projects, "وصف المشروع الثاني", "ورق المراسلات على المقاس الرسمي.", 18, 190, 82, 10, { size: 8, color: MUTED, font: META });
+  add(projects, "image", "صورة المشروع الثالث", 110, 128, 82, 48, "", { objectFit: "cover", radius: 0 }, plate("press"));
+  text(projects, "عنوان المشروع الثالث", "ملف ميداني", 110, 180, 82, 7, { size: 11, weight: 700 });
+  text(projects, "وصف المشروع الثالث", "تغطية عيد في أربع صفحات.", 110, 190, 82, 10, { size: 8, color: MUTED, font: META });
+  text(projects, "سطر ختامي", "كل عمل هنا طُبع أو عُرض في جلسة، ولم يبقَ ملفًا على الشاشة.", 18, 214, 174, 10, { size: 12, font: BODY });
 
   const contact = page("تواصل");
-  shape(contact, "خلفية التواصل", 0, 0, 210, 297, GREEN);
-  shape(contact, "خط ذهبي", 18, 30, 2, 231, GOLD);
-  text(contact, "عنوان التواصل", "لنبنِ شيئاً\nيُحدث فرقاً", 30, 56, 154, 42, { size: 27, color: PAPER, weight: 800 });
-  text(contact, "دعوة تواصل", "متاح لمشاريع الهوية والتصميم الرقمي والتحرير البصري.", 30, 116, 148, 19, { size: 11, color: "#e0eee5" });
-  text(contact, "قنوات التواصل", "البريد الإلكتروني\nhello@example.com\n\nالموقع\nexample.com\n\nالهاتف\n+966 5X XXX XXXX", 30, 164, 150, 57, { size: 10, color: PAPER });
+  text(contact, "كِكر", "للمشاريع القادمة", 18, 40, 174, 6, { size: 9, color: GREEN, weight: 700, font: META });
+  text(contact, "عنوان التواصل", "لنتحدّث\nعن وثيقة\nتُحسم.", 18, 54, 174, 46, { size: 30, weight: 800 });
+  add(contact, "line", "فاصل", 18, 112, 32, 0, "", { color: GOLD, stroke: 0.9 });
+  text(contact, "دعوة تواصل", "متاحة لتقارير القيادة، والهويات المؤسسية، والصفحات التي ستُطبع.", 18, 124, 160, 16, { size: 12, font: BODY, lineHeight: 1.6 });
+  text(contact, "البريد", "البريد", 18, 156, 174, 5, { size: 8, color: MUTED, font: META });
+  text(contact, "عنوان البريد", "layan@example.com", 18, 164, 174, 8, { size: 14, weight: 700, color: GREEN });
+  text(contact, "الهاتف", "الهاتف", 18, 182, 174, 5, { size: 8, color: MUTED, font: META });
+  text(contact, "رقم الهاتف", "٠٥٥ ٠٠٠ ٠٠٠٠", 18, 190, 174, 8, { size: 14, weight: 700 });
+  text(contact, "المدينة", "الرياض", 18, 210, 174, 8, { size: 12, color: MUTED, font: META });
   return [cover, about, projects, contact];
 }
 
 function digitalCardPage(): Page {
   const target = page("بطاقة رقمية", 108, 192);
-  shape(target, "خلفية البطاقة", 0, 0, 108, 192, "#f2f6f3");
-  shape(target, "ترويسة البطاقة", 0, 0, 108, 64, GREEN);
-  add(target, "image", "الصورة الشخصية — استبدل من المكتبة", 37, 19, 34, 34, "", {}, photoPlaceholder("الصورة"));
-  text(target, "الاسم", "الاسم الكامل", 10, 70, 88, 11, { size: 18, color: GREEN, weight: 800, align: "center" });
-  text(target, "المسمى", "المسمى المهني  ·  اسم الجهة", 10, 84, 88, 7, { size: 9, color: MUTED, align: "center" });
-  rule(target, 98, 16, 76, GOLD);
-  const links = ["اتصال مباشر", "البريد الإلكتروني", "الموقع الإلكتروني", "LinkedIn  ·  Instagram"];
-  links.forEach((label, index) => {
-    shape(target, `زر ${label}`, 13, 108 + index * 15, 82, 10, PAPER, LINE);
-    text(target, label, label, 17, 110 + index * 15, 74, 6, { size: 8, color: GREEN, weight: 700, align: "center" });
+  shape(target, "حقل الاسم", 0, 0, 108, 72, GREEN);
+  add(target, "image", "الصورة الشخصية", 36, 54, 36, 36, "", { objectFit: "cover", radius: 0 }, plate("portrait"));
+  text(target, "الاسم", "نورة السبيعي", 8, 98, 92, 10, { size: 14, color: GREEN, weight: 800, align: "center" });
+  text(target, "المسمى", "اتصال مؤسسي", 8, 110, 92, 6, { size: 8, color: MUTED, align: "center", font: META });
+  add(target, "line", "فاصل", 30, 122, 48, 0, "", { color: GOLD, stroke: 0.5 });
+  ["٠٥٥ ٠٠٠ ٠٠٠٠", "nora@example.com", "example.com", "الرياض"].forEach((label, index) => {
+    text(target, label, label, 8, 130 + index * 11, 92, 7, { size: 8, color: INK, align: "center", font: META });
   });
-  text(target, "شعار اختياري", "مساحة شعار", 27, 174, 54, 7, { size: 7, color: MUTED, align: "center" });
   return target;
 }
 
 function businessCardPages(): Page[] {
-  const make = (name: string, back: boolean) => {
-    const target = page(name, 94.9, 56.8);
-    shape(target, "لون خلفية", 0, 0, 94.9, 56.8, back ? INK : GREEN);
-    shape(target, "هامش قص آمن", 3, 3, 88.9, 50.8, "transparent", "#ffffff99");
-    if (!back) {
-      add(target, "image", "شعار قابل للاستبدال", 7, 11, 17, 17, "", {}, photoPlaceholder("شعار"));
-      text(target, "اسم الموظف", "الاسم الكامل", 28, 11, 58, 8, { size: 12, color: PAPER, weight: 800 });
-      text(target, "المسمى الوظيفي", "المسمى الوظيفي", 28, 21, 58, 6, { size: 7, color: "#e0eee5" });
-      text(target, "بيانات البطاقة", "+966 5X XXX XXXX  ·  name@example.com\nwww.example.com  ·  @social", 7, 36, 80, 11, { size: 6, color: PAPER });
-    } else {
-      text(target, "اسم العلامة", "اسم الشركة", 9, 10, 76, 8, { size: 13, color: PAPER, weight: 800, align: "center" });
-      shape(target, "علامة زخرفية", 40, 22, 14, 1, GOLD);
-      text(target, "عنوان الشركة", "العنوان المختصر  ·  المدينة\nرمز QR أو عبارة تعريفية اختيارية", 8, 29, 78, 14, { size: 6.5, color: "#e0eee5", align: "center" });
-    }
-    text(target, "ملاحظة الطباعة", "88.9 × 50.8 مم + نزف 3 مم", 8, 51, 78, 3, { size: 4.5, color: "#e0eee5", align: "center" });
-    return target;
-  };
-  return [make("الوجه الأمامي", false), make("الوجه الخلفي", true)];
+  const front = page("الوجه الأمامي", 94.9, 56.8);
+  shape(front, "أرضية", 0, 0, 94.9, 56.8, "#f7f6f3");
+  shape(front, "حافة الهوية", 90.5, 0, 4.4, 56.8, GREEN);
+  text(front, "اسم الموظف", "نورة السبيعي", 6, 8, 80, 8, { size: 11, color: GREEN, weight: 800 });
+  text(front, "المسمى الوظيفي", "اتصال مؤسسي", 6, 18, 80, 5, { size: 7, color: INK, font: META });
+  add(front, "line", "فاصل", 6, 26, 24, 0, "", { color: GOLD, stroke: 0.45 });
+  text(front, "بيانات البطاقة", "٠٥٥ ٠٠٠ ٠٠٠٠\nnora@example.com", 6, 30, 80, 12, { size: 6.5, color: INK, font: META, lineHeight: 1.35 });
+  text(front, "ملاحظة الطباعة", "٨٨٫٩ × ٥٠٫٨ مم", 6, 48, 80, 4, { size: 4.5, color: MUTED, font: META });
+
+  const back = page("الوجه الخلفي", 94.9, 56.8);
+  shape(back, "أرضية", 0, 0, 94.9, 56.8, GREEN);
+  text(back, "اسم العلامة", "اسم الجهة", 8, 14, 78, 8, { size: 12, color: "#f7f6f3", weight: 800 });
+  add(back, "line", "فاصل", 56, 26, 28, 0, "", { color: GOLD, stroke: 0.5 });
+  text(back, "عنوان الشركة", "الرياض  ·  مراسلات ومطبوعات", 8, 32, 78, 8, { size: 7, color: "#e7efe9", font: META });
+  text(back, "ملاحظة الطباعة", "وجه خلفي", 8, 48, 78, 4, { size: 4.5, color: GOLD, font: META });
+  return [front, back];
 }
 
 function greetingPages(): Page[] {
-  const layouts = [
-    { name: "تهنئة خضراء", bg: "#eaf3ec", accent: GREEN, greeting: "كل عام وأنتم بخير" },
-    { name: "تهنئة ذهبية", bg: "#f5f1e8", accent: "#8b6d35", greeting: "أجمل الأمنيات" },
-  ];
-  return layouts.map((layout) => {
-    const target = page(layout.name, 108, 135);
-    shape(target, "خلفية البطاقة", 0, 0, 108, 135, layout.bg);
-    add(target, "image", "صورة أو شعار — استبدل من المكتبة", 0, 0, 108, 46, "", {}, photoPlaceholder("صورة اختيارية", true));
-    shape(target, "خط الهوية", 0, 46, 108, 1.2, layout.accent);
-    text(target, "اسم المستلم", "إلى: الاسم الكريم", 10, 54, 88, 6, { size: 8, color: MUTED, align: "right" });
-    text(target, "نص التهنئة", layout.greeting, 10, 64, 88, 14, { size: 16, color: layout.accent, weight: 800, align: "right" });
-    text(target, "رسالة البطاقة", "أطيب التمنيات بالسعادة والنجاح،\nولتكن الأيام القادمة على قدر الجهد.", 10, 84, 88, 16, { size: 9, align: "right" });
-    text(target, "اسم المرسل", "مع التحية  ·  اسم المرسل", 10, 116, 88, 6, { size: 7, color: MUTED, align: "right" });
-    return target;
-  });
+  const photo = page("تهنئة بمشهد", 108, 135);
+  add(photo, "image", "مشهد التهنئة", 0, 0, 108, 74, "", { objectFit: "cover", radius: 0 }, plate("dune"));
+  shape(photo, "حقل النص", 0, 74, 108, 61, "#f7f3ea");
+  text(photo, "نص التهنئة", "كل عام وأنتم بخير", 8, 82, 92, 12, { size: 14, color: "#8b6d35", weight: 800, font: "Amiri" });
+  text(photo, "رسالة البطاقة", "أيامكم عامرة بما يسرّكم.", 8, 98, 92, 8, { size: 9, color: INK, font: BODY });
+  text(photo, "اسم المرسل", "نورة", 8, 116, 92, 6, { size: 8, color: MUTED, font: META });
+
+  const typeLed = page("تهنئة مكتوبة", 108, 135);
+  shape(typeLed, "أرضية", 0, 0, 108, 135, "#f6f3ee");
+  shape(typeLed, "حافة", 0, 0, 3.5, 135, "#1b4d3e");
+  text(typeLed, "المناسبة", "معايدة", 12, 18, 88, 5, { size: 8, color: "#1b4d3e", weight: 700, font: META });
+  text(typeLed, "نص التهنئة", "أجمل\nالأمنيات", 12, 30, 88, 28, { size: 22, weight: 800, font: "Amiri" });
+  add(typeLed, "line", "فاصل", 12, 66, 22, 0, "", { color: GOLD, stroke: 0.7 });
+  text(typeLed, "رسالة البطاقة", "للأيام التي تأتون بها،\nوللجهد الذي سبقها.", 12, 76, 86, 18, { size: 10, font: BODY, lineHeight: 1.6 });
+  text(typeLed, "اسم المرسل", "مع التحية  ·  نورة", 12, 114, 86, 6, { size: 8, color: MUTED, font: META });
+  return [photo, typeLed];
 }
 
 function ministryPages(): Page {
   const target = page("مراسلات تعليمية");
-  shape(target, "رأس المستند", 0, 0, 210, 2.4, GREEN);
-  add(target, "image", "شعار تملكه الجهة — استبدل من المكتبة", 167, 12, 25, 25, "", {}, photoPlaceholder("شعار مصرح به"));
-  text(target, "اسم الجهة التعليمية", "اسم الجهة التعليمية", 22, 12, 133, 8, { size: 14, color: GREEN, weight: 800 });
-  text(target, "الإدارة والقسم", "الإدارة العامة  ·  الإدارة / القسم", 22, 23, 133, 7, { size: 9, color: MUTED });
-  text(target, "صفة النموذج", "نموذج مراسلات قابل للتخصيص — غير معتمد حكومياً", 22, 37, 167, 7, { size: 8, color: MUTED, align: "center" });
-  rule(target, 49, 20, 170, GOLD);
-  text(target, "رقم وتاريخ الخطاب", "الرقم: _____________     التاريخ: ____ / ____ / ______     المرفقات: ______", 23, 61, 164, 8, { size: 8.5 });
-  text(target, "الجهة المرسل إليها", "إلى / _________________________________________________", 23, 78, 164, 8, { size: 10 });
-  text(target, "الموضوع", "الموضوع / _____________________________________________", 23, 94, 164, 8, { size: 10, weight: 700 });
-  text(target, "متن الخطاب", "السلام عليكم ورحمة الله وبركاته،\n\nيكتب نص الخطاب هنا. الحقول والعناصر قابلة للتعديل، ويمكن استبدال مساحة الشعار بصورة تملك الجهة حق استخدامها.\n\nوتقبلوا خالص التحية والتقدير.", 23, 111, 164, 84, { size: 10, align: "justify" });
-  text(target, "التوقيع", "الاسم: _______________________\nالمسمى الوظيفي: ________________\nالتوقيع: ______________________", 103, 213, 82, 31, { size: 8.5 });
-  rule(target, 272, 18, 174, LINE);
-  text(target, "بيانات التواصل", "العنوان  ·  الهاتف  ·  البريد الإلكتروني  ·  الرمز البريدي", 20, 279, 170, 7, { size: 7, color: MUTED, align: "center" });
+  target.bg = "#f7f6f3";
+  add(target, "line", "خط الهوية", 0, 0, 210, 0, "", { color: "#1b4d3e", stroke: 2 });
+  text(target, "اسم الجهة التعليمية", "مدرسة النور الأهلية", 18, 14, 174, 9, { size: 16, color: "#1b4d3e", weight: 800 });
+  text(target, "الإدارة والقسم", "المرحلة المتوسطة  ·  العام الدراسي ١٤٤٧ — ١٤٤٨", 18, 26, 174, 6, { size: 9, color: MUTED, font: META });
+  add(target, "line", "فاصل الرأس", 18, 38, 174, 0, "", { color: GOLD, stroke: 0.45 });
+  text(target, "صفة النموذج", "نموذج قابل للتخصيص — ليس اعتمادًا حكوميًا", 18, 44, 174, 6, { size: 8, color: MUTED, align: "center", font: META });
+  text(target, "رقم الخطاب", "٤٤ / م", 18, 58, 50, 6, { size: 10, weight: 700, font: META });
+  text(target, "تاريخ الخطاب", "١٢ / ٠٣ / ١٤٤٧", 74, 58, 60, 6, { size: 10, font: META });
+  text(target, "المرفقات", "مرفق واحد", 140, 58, 52, 6, { size: 10, align: "left", font: META });
+  add(target, "line", "حد الحقول", 18, 70, 174, 0, "", { color: LINE, stroke: 0.3 });
+  text(target, "الجهة المرسل إليها", "أولياء أمور الصف الثاني المتوسط", 18, 80, 174, 8, { size: 13, weight: 700 });
+  text(target, "الموضوع", "الموضوع: اجتماع الأداء الفصلي", 18, 96, 174, 8, { size: 13, weight: 700, color: "#1b4d3e" });
+  text(target, "متن الخطاب", "السلام عليكم ورحمة الله وبركاته،\n\nيسعدنا دعوتكم إلى اجتماع الأداء الفصلي يوم الأحد القادم في قاعة الاجتماعات. سنعرض نتائج الفترة وخطة المتابعة.\n\nوتقبلوا خالص التحية.", 18, 114, 174, 58, { size: 12, font: BODY, lineHeight: 1.75 });
+  add(target, "line", "خط التوقيع", 136, 190, 56, 0, "", { color: "#1b4d3e", stroke: 0.3 });
+  text(target, "التوقيع", "مديرة المرحلة\nالاسم", 122, 194, 70, 14, { size: 9, color: MUTED, font: META, lineHeight: 1.4 });
+  add(target, "line", "خط التذييل", 18, 268, 174, 0, "", { color: "#1b4d3e", stroke: 0.35 });
+  text(target, "بيانات التواصل", "الرياض  ·  ٠١١ ٠٠٠ ٠٠٠٠  ·  nore@example.com", 18, 274, 174, 6, { size: 8, color: MUTED, align: "center", font: META });
+  text(target, "تنبيه الملكية", "استبدلوا أي شعار بأصل تملكه الجهة. هذا النموذج بلا شعار محمي.", 18, 284, 174, 6, { size: 7.5, color: MUTED, align: "center", font: META });
   return target;
 }
 
