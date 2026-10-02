@@ -12,6 +12,22 @@ import {
   normalizeZ,
 } from "./model";
 import { FAMILY_TEMPLATES, buildFamilyPage } from "./template-families";
+import {
+  A4,
+  BODY,
+  CEREMONY,
+  DISPLAY,
+  META,
+  SLIDE,
+  band,
+  folio,
+  hairline,
+  paint,
+  plate,
+  runningHead,
+  tableStyle,
+  tick,
+} from "./template-layouts";
 
 function page(
   name: string,
@@ -106,905 +122,609 @@ function footer(add: Add, theme: Theme, org: string, w = 210, h = 297) {
 }
 
 function officialPages(theme: Theme, org: string): Page[] {
+  const entity = org.trim() || "الجهة التنفيذية";
   return [
     page("الغلاف", theme, (add) => {
-      add("shape", {
-        name: "الشريط الجانبي",
-        x: 0,
-        y: 0,
-        w: 26,
-        h: 297,
-        style: { fill: theme.primary, borderWidth: 0 },
+      band(add, "عمود التجليد", 188, 0, 22, 297, theme.primary);
+      band(add, "خط الهوية", 186, 0, 1.6, 297, theme.accent);
+      add("logo", { name: "شعار الجهة", x: 191, y: 16, w: 16, h: 16 });
+      paint(add, "سنة الغلاف", "٢٠٢٦", 188, 250, 22, 14, {
+        fontFamily: DISPLAY,
+        fontSize: 11,
+        fontWeight: 700,
+        color: theme.accent,
+        textAlign: "center",
       });
-      add("line", {
-        name: "خط ذهبي رأسي",
-        x: 29,
-        y: 18,
-        w: 1.4,
-        h: 252,
-        style: { color: theme.accent, stroke: 1.2 },
+      paint(add, "تصنيف", "تقرير أداء  ·  استخدام داخلي", 16, 24, 164, 6, {
+        fontFamily: META,
+        fontSize: 9,
+        fontWeight: 600,
+        color: theme.muted,
+        textAlign: "right",
       });
-      add("logo", { name: "شعار الجهة", x: 154, y: 18, w: 32, h: 32 });
-      add("text", {
-        name: "تصنيف",
-        x: 40,
-        y: 64,
-        w: 140,
-        h: 8,
-        content: "تقرير رسمي  ·  سري للاستخدام الداخلي",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 10,
-          color: theme.muted,
-          fontWeight: 600,
-          textAlign: "right",
-        },
+      paint(add, "عنوان التقرير", "تقرير الأداء\nالسنوي", 16, 36, 164, 34, {
+        fontFamily: DISPLAY,
+        fontSize: 34,
+        fontWeight: 800,
+        color: theme.primary,
+        textAlign: "right",
+        lineHeight: 1.05,
       });
-      add("text", {
-        name: "عنوان التقرير",
-        x: 40,
-        y: 80,
-        w: 146,
-        h: 40,
-        content: "تقرير الأداء السنوي\nللجهة التنفيذية",
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 28,
-          color: theme.primary,
-          fontWeight: 800,
-          textAlign: "right",
-          lineHeight: 1.2,
-        },
-      });
-      add("box", {
-        name: "نبذة الغلاف",
-        x: 40,
-        y: 132,
-        w: 132,
-        h: 44,
-        content:
-          "ملخص تنفيذي موجز يعرض نطاق التقرير، أبرز النتائج، والمؤشرات الرئيسية، مع توصيات قابلة للتنفيذ خلال الدورة القادمة.",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 12,
-          color: theme.ink,
-          fill: theme.surface,
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-          fontWeight: 500,
-          textAlign: "right",
-          lineHeight: 1.7,
-          padding: 4,
-        },
-      });
-      add("text", {
-        name: "الجهة",
-        x: 40,
-        y: 188,
-        w: 130,
-        h: 10,
-        content: org,
-        style: {
-          fontFamily: "IBM Plex Sans Arabic",
-          fontSize: 12,
-          color: theme.primary,
-          fontWeight: 700,
-          textAlign: "right",
-        },
-      });
-      add("text", {
-        name: "التاريخ",
-        x: 40,
-        y: 236,
-        w: 90,
-        h: 10,
-        content: "سبتمبر 2026  ·  محرم 1448 هـ",
-        style: {
-          fontFamily: "IBM Plex Sans Arabic",
-          fontSize: 11,
-          color: theme.muted,
-          fontWeight: 600,
-          textAlign: "right",
-        },
-      });
-      add("stamp", {
-        name: "ختم رسمي",
-        x: 142,
-        y: 216,
-        w: 40,
-        h: 40,
-        content: "رسمي",
-      });
-    }),
-    page("المحتويات", theme, (add) => {
-      header(add, theme, "المحتويات");
-      [
-        ["المقدمة والنطاق", "03"],
-        ["الأهداف الاستراتيجية", "04"],
-        ["الإنجازات الرئيسية", "05"],
-        ["المؤشرات والإحصائيات", "06"],
-        ["التوصيات", "07"],
-        ["الخاتمة", "08"],
-      ].forEach(([item, num], i) => {
-        add("text", {
-          name: `بند ${i + 1}`,
-          x: 28,
-          y: 48 + i * 22,
-          w: 154,
-          h: 12,
-          content: `${item}  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ${num}`,
-          style: {
-            fontFamily: "Cairo",
-            fontSize: 13,
-            color: theme.ink,
-            fontWeight: 600,
-            textAlign: "right",
-            lineHeight: 1.2,
-          },
-        });
-      });
-      footer(add, theme, org);
-    }),
-    page("ملخص تنفيذي", theme, (add) => {
-      header(add, theme, "ملخص تنفيذي");
-      add("text", {
-        name: "عنوان فقرة",
-        x: 24,
-        y: 38,
-        w: 162,
-        h: 12,
-        content: "نظرة عامة",
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 18,
-          color: theme.primary,
-          fontWeight: 800,
-          textAlign: "right",
-        },
-      });
-      add("box", {
-        name: "فقرة رئيسية",
-        x: 24,
-        y: 54,
-        w: 162,
-        h: 78,
-        content:
-          "يستعرض هذا القسم المعلومات الأساسية للتقرير بلغة واضحة ومنظمة. يمكن تعديل النص، الخط، اللون، التباعد، والمحاذاة من لوحة الخصائص بدقة كاملة. يُبرز الملخص أهم النتائج والتوصيات ليكون قابلاً للعرض أمام القيادة دون الحاجة إلى قراءة الوثيقة كاملة.",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 12.5,
-          color: theme.ink,
-          fill: "#ffffff",
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-          fontWeight: 500,
-          textAlign: "right",
-          lineHeight: 1.85,
-          padding: 5,
-        },
-      });
-      add("divider", { x: 36, y: 142, w: 138, h: 8 });
-      add("table", {
-        name: "جدول ملخص",
-        x: 24,
-        y: 158,
-        w: 162,
-        h: 72,
-        content: JSON.stringify([
-          ["المحور", "المستهدف", "المتحقق"],
-          ["التشغيل", "100%", "94%"],
-          ["الرضا", "4.5", "4.7"],
-          ["المبادرات", "20", "18"],
-        ]),
-        style: {
-          cols: 3,
-          rows: 4,
-          fontSize: 11,
-          fontFamily: "Cairo",
-          headerBg: theme.primary,
-          headerColor: "#ffffff",
-          tableBg: "#ffffff",
-          borderColor: theme.line,
-        },
-      });
-      footer(add, theme, org);
-    }),
-    page("الإنجازات", theme, (add) => {
-      header(add, theme, "الإنجازات");
-      for (let i = 0; i < 4; i++) {
-        add("box", {
-          name: `بطاقة إنجاز ${i + 1}`,
-          x: 24,
-          y: 40 + i * 50,
-          w: 162,
-          h: 42,
-          content: `إنجاز رقم ${i + 1}\nوصف مختصر للأثر والنتيجة المتحققة خلال الفترة، مع الإشارة إلى الجهة المنفذة والمؤشر المرتبط.`,
-          style: {
-            fontFamily: "Cairo",
-            fontSize: 12,
-            color: theme.ink,
-            fill: theme.surface,
-            borderColor: theme.line,
-            borderWidth: 0.35,
-            radius: 4,
-            fontWeight: 600,
-            textAlign: "right",
-            lineHeight: 1.55,
-            padding: 4,
-          },
-        });
-        add("icon", {
-          name: `أيقونة ${i + 1}`,
-          icon: "check",
-          x: 168,
-          y: 48 + i * 50,
-          w: 12,
-          h: 12,
-          style: { color: "#087f5b", stroke: 2 },
-        });
-      }
-      footer(add, theme, org);
-    }),
-    page("المؤشرات", theme, (add) => {
-      header(add, theme, "المؤشرات والإحصائيات");
-      const stats: [string, string][] = [
-        ["94%", "نسبة الإنجاز"],
-        ["18", "مبادرة مكتملة"],
-        ["4.7", "متوسط الرضا"],
-        ["12", "شراكة فاعلة"],
-      ];
-      stats.forEach((stat, i) => {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        add("stat", {
-          name: `مؤشر ${i + 1}`,
-          x: 24 + col * 84,
-          y: 42 + row * 52,
-          w: 76,
-          h: 42,
-          content: `${stat[0]}\n${stat[1]}`,
-        });
-      });
-      add("shape", {
-        name: "خلفية الرسم",
-        x: 24,
-        y: 152,
-        w: 162,
-        h: 88,
-        style: {
-          fill: theme.surface,
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-        },
-      });
-      [42, 58, 70, 84, 96].forEach((height, i) => {
-        add("shape", {
-          name: `عمود ${i + 1}`,
-          x: 42 + i * 28,
-          y: 228 - height * 0.7,
-          w: 14,
-          h: height * 0.7,
-          style: {
-            fill: i === 4 ? theme.accent : theme.primary,
-            borderWidth: 0,
-            radius: 2,
-          },
-        });
-      });
-      footer(add, theme, org);
-    }),
-    page("الخاتمة", theme, (add) => {
-      header(add, theme, "الخاتمة والتوصيات");
-      add("box", {
-        name: "خلاصة",
-        x: 24,
-        y: 44,
-        w: 162,
+      hairline(add, "فاصل العنوان", 132, 76, 48, theme.accent, 1);
+      add("image", {
+        name: "صورة الغلاف",
+        x: 16,
+        y: 88,
+        w: 52,
         h: 70,
-        content:
-          "تؤكد نتائج التقرير أهمية الاستمرار في تنفيذ المبادرات وفق منهجية واضحة، مع قياس مستمر للأثر وتحسين دوري للعمليات. نوصي بتعزيز التكامل بين الوحدات وتوثيق الدروس المستفادة للعام القادم.",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 13,
-          color: theme.ink,
-          fill: "#ffffff",
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-          fontWeight: 500,
-          textAlign: "right",
-          lineHeight: 1.8,
-          padding: 5,
-        },
+        src: plate("facade"),
+        style: { objectFit: "cover", radius: 0 },
       });
-      add("stamp", { x: 140, y: 132, w: 42, h: 42, content: "خُتم" });
-      add("line", {
-        x: 28,
-        y: 168,
-        w: 78,
-        h: 4,
-        style: { color: theme.ink, stroke: 0.4 },
+      paint(add, "نبذة الغلاف", "ملخص العام في سطرين: نطاق التقرير، أبرز نتيجة، والقرار الذي تحتاجه الدورة القادمة.", 74, 90, 106, 28, {
+        fontFamily: BODY,
+        fontSize: 12,
+        fontWeight: 500,
+        color: theme.ink,
+        textAlign: "right",
+        lineHeight: 1.75,
       });
-      add("text", {
-        name: "توقيع",
-        x: 28,
-        y: 174,
-        w: 78,
-        h: 16,
-        content: "اسم المسؤول\nالمنصب",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 11,
-          color: theme.ink,
-          fontWeight: 600,
-          textAlign: "center",
-          lineHeight: 1.45,
-        },
+      paint(add, "تعليق الصورة", "مقر الجهة  ·  أرشيف ٢٠٢٦", 16, 160, 52, 10, {
+        fontFamily: META,
+        fontSize: 7.5,
+        fontWeight: 600,
+        color: theme.muted,
+        textAlign: "right",
+        lineHeight: 1.35,
       });
-      footer(add, theme, org);
-    }),
+      hairline(add, "خط البيانات", 16, 186, 164, theme.line, 0.35);
+      paint(add, "تسمية الجهة", "الجهة", 124, 194, 56, 5, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      paint(add, "اسم الجهة", entity, 110, 202, 70, 10, {
+        fontFamily: DISPLAY, fontSize: 13, fontWeight: 700, color: theme.primary, textAlign: "right",
+      });
+      paint(add, "تسمية الفترة", "الفترة", 62, 194, 44, 5, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      paint(add, "الفترة", "يناير — ديسمبر", 52, 202, 54, 10, {
+        fontFamily: DISPLAY, fontSize: 12, fontWeight: 700, color: theme.ink, textAlign: "right",
+      });
+      paint(add, "تسمية الحالة", "الحالة", 16, 194, 32, 5, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      paint(add, "الحالة", "للمراجعة", 16, 202, 36, 10, {
+        fontFamily: DISPLAY, fontSize: 12, fontWeight: 700, color: theme.ink, textAlign: "right",
+      });
+      add("stamp", { name: "ختم رسمي", x: 16, y: 236, w: 34, h: 34, content: "رسمي" });
+      paint(add, "التاريخ", "محرم ١٤٤٨ هـ", 58, 246, 120, 8, {
+        fontFamily: META, fontSize: 10, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+    }, A4),
+
+    page("المحتويات", theme, (add) => {
+      runningHead(add, theme, "المحتويات");
+      paint(add, "عنوان المحتويات", "ما في هذا التقرير", 16, 32, 178, 14, {
+        fontFamily: DISPLAY, fontSize: 26, fontWeight: 800, color: theme.primary, textAlign: "right",
+      });
+      paint(add, "مقدمة الفهرس", "من النطاق إلى التوصية، بالترتيب الذي يُعرض به على القيادة.", 16, 50, 178, 8, {
+        fontFamily: BODY, fontSize: 11, fontWeight: 500, color: theme.ink, textAlign: "right",
+      });
+      const items: [string, string, string][] = [
+        ["٠١", "المقدمة والنطاق", "٠٣"],
+        ["٠٢", "الأهداف الاستراتيجية", "٠٤"],
+        ["٠٣", "الإنجازات الرئيسية", "٠٥"],
+        ["٠٤", "المؤشرات والإحصائيات", "٠٦"],
+        ["٠٥", "التوصيات", "٠٧"],
+        ["٠٦", "الخاتمة", "٠٨"],
+      ];
+      items.forEach(([num, title, pg], i) => {
+        const y = 72 + i * 30;
+        paint(add, `رقم ${num}`, num, 168, y, 26, 8, {
+          fontFamily: DISPLAY, fontSize: 13, fontWeight: 800, color: theme.accent, textAlign: "right",
+        });
+        paint(add, `بند ${title}`, title, 36, y, 126, 8, {
+          fontFamily: DISPLAY, fontSize: 15, fontWeight: 700, color: theme.ink, textAlign: "right",
+        });
+        paint(add, `صفحة ${num}`, pg, 16, y, 16, 8, {
+          fontFamily: META, fontSize: 12, fontWeight: 600, color: theme.muted, textAlign: "left",
+        });
+        hairline(add, `فاصل ${num}`, 16, y + 16, 178, theme.line, 0.3);
+      });
+      folio(add, theme, entity, "٠٢");
+    }, A4),
+
+    page("ملخص تنفيذي", theme, (add) => {
+      runningHead(add, theme, "ملخص تنفيذي");
+      paint(add, "عنوان الفقرة", "نظرة عامة", 16, 30, 178, 12, {
+        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
+      });
+      paint(add, "العمود الأول", "يغلق هذا العام بإنجاز ٩٤٪ من الخطة التشغيلية. الرضا ارتفع إلى ٤٫٧، وأُقفلت ١٨ مبادرة من ٢٠. الفجوة المتبقية مبادرة واحدة في التحول الرقمي، ومبادرة شراكة ما زالت في التعاقد.", 100, 50, 94, 52, {
+        fontFamily: BODY, fontSize: 11.5, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.8,
+      });
+      paint(add, "العمود الثاني", "التوصية للقيادة: اعتماد تمديد مبادرة التحول إلى الربع الأول، دون زيادة الاعتماد، مقابل تجميد شراكة لم يُستكمل تقييم أثرها.", 16, 50, 76, 52, {
+        fontFamily: BODY, fontSize: 11.5, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.8,
+      });
+      band(add, "علامة الاقتباس", 16, 112, 1.4, 22, theme.accent);
+      paint(add, "اقتباس الملخص", "الطلب ليس العائق. العائق طاقة التشغيل في وحدة واحدة.", 22, 112, 172, 16, {
+        fontFamily: DISPLAY, fontSize: 14, fontWeight: 700, color: theme.primary, textAlign: "right", lineHeight: 1.4,
+      });
+      add("table", {
+        name: "جدول الملخص",
+        x: 16,
+        y: 144,
+        w: 178,
+        h: 78,
+        content: JSON.stringify([
+          ["المحور", "المستهدف", "المتحقق", "الحالة"],
+          ["التشغيل", "١٠٠٪", "٩٤٪", "ضمن المسار"],
+          ["رضا المستفيدين", "٤٫٥", "٤٫٧", "تجاوز"],
+          ["المبادرات", "٢٠", "١٨", "مبادرتان مفتوحتان"],
+          ["الشراكات الفاعلة", "١٢", "١٢", "مكتمل"],
+        ]),
+        style: tableStyle(theme, 4, 5),
+      });
+      paint(add, "مصدر الجدول", "المصدر: مكتب التخطيط — إغلاق ديسمبر ٢٠٢٦.", 16, 228, 178, 6, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      folio(add, theme, entity, "٠٣");
+    }, A4),
+
+    page("الإنجازات", theme, (add) => {
+      runningHead(add, theme, "الإنجازات");
+      paint(add, "تسمية", "الأثر", 16, 30, 178, 6, {
+        fontFamily: META, fontSize: 9, fontWeight: 700, color: theme.accent, textAlign: "right",
+      });
+      paint(add, "عنوان الصفحة", "ما تغيّر هذا العام", 16, 40, 178, 12, {
+        fontFamily: DISPLAY, fontSize: 24, fontWeight: 800, color: theme.primary, textAlign: "right",
+      });
+      paint(add, "رقم الإنجاز الأول", "٠١", 156, 64, 38, 16, {
+        fontFamily: DISPLAY, fontSize: 28, fontWeight: 800, color: theme.primary, textAlign: "right", lineHeight: 1,
+      });
+      paint(add, "عنوان الإنجاز الأول", "تشغيل المنافذ على مدار الساعة", 16, 68, 134, 12, {
+        fontFamily: DISPLAY, fontSize: 16, fontWeight: 800, color: theme.ink, textAlign: "right",
+      });
+      paint(add, "متن الإنجاز الأول", "انتقلت أربع بوابات من مناوبة نهارية إلى تغطية كاملة، وانخفض متوسط الانتظار من ٢٦ دقيقة إلى ١١. الجهة المنفذة: إدارة العمليات، والمؤشر المرتبط هو زمن الخدمة.", 16, 86, 178, 28, {
+        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.75,
+      });
+      hairline(add, "فاصل الأثر", 16, 122, 178, theme.line, 0.35);
+      const rows: [string, string, string][] = [
+        ["٠٢", "شراكات الخدمة", "اثنتا عشرة اتفاقية سارية، آخرها مع جهة الإسناد الطبي في المنافذ الغربية."],
+        ["٠٣", "رضا المستفيدين", "ارتفع المتوسط من ٤٫٢ إلى ٤٫٧ بعد توحيد نموذج الشكوى وإغلاقها خلال خمسة أيام."],
+        ["٠٤", "توثيق المعرفة", "أُرشف منهج التشغيل في دليل واحد، واستُبدل به ثلاث نسخ متباينة كانت تُستخدم ميدانيًا."],
+      ];
+      rows.forEach(([num, title, body], i) => {
+        const y = 134 + i * 40;
+        paint(add, `رقم ${num}`, num, 164, y, 30, 8, {
+          fontFamily: DISPLAY, fontSize: 13, fontWeight: 800, color: theme.accent, textAlign: "right",
+        });
+        paint(add, `عنوان ${title}`, title, 16, y, 142, 8, {
+          fontFamily: DISPLAY, fontSize: 13, fontWeight: 700, color: theme.ink, textAlign: "right",
+        });
+        paint(add, `متن ${title}`, body, 16, y + 12, 178, 16, {
+          fontFamily: BODY, fontSize: 11, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.6,
+        });
+      });
+      folio(add, theme, entity, "٠٤");
+    }, A4),
+
+    page("المؤشرات", theme, (add) => {
+      runningHead(add, theme, "المؤشرات");
+      paint(add, "عنوان المؤشرات", "أربعة أرقام تكفي للقراءة", 16, 30, 178, 12, {
+        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
+      });
+      paint(add, "الرقم القائد", "٩٤٪", 120, 50, 74, 22, {
+        fontFamily: DISPLAY, fontSize: 40, fontWeight: 800, color: theme.primary, textAlign: "right", lineHeight: 1,
+      });
+      paint(add, "تسمية الرقم القائد", "نسبة الإنجاز مقابل الخطة", 120, 74, 74, 8, {
+        fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      const side: [string, string][] = [
+        ["١٨", "مبادرة مكتملة"],
+        ["٤٫٧", "متوسط الرضا"],
+        ["١٢", "شراكة فاعلة"],
+      ];
+      side.forEach(([value, label], i) => {
+        const y = 50 + i * 18;
+        paint(add, `رقم جانبي ${i + 1}`, value, 16, y, 28, 10, {
+          fontFamily: DISPLAY, fontSize: 16, fontWeight: 800, color: theme.ink, textAlign: "right",
+        });
+        paint(add, `تسمية جانبية ${i + 1}`, label, 46, y + 1, 60, 8, {
+          fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.muted, textAlign: "right",
+        });
+      });
+      hairline(add, "خط الرسم", 16, 112, 178, theme.line, 0.35);
+      paint(add, "عنوان الرسم", "الإنجاز الشهري  ·  النسبة من الخطة", 16, 118, 178, 6, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      const bars = [42, 55, 61, 74, 88, 96];
+      const months = ["يناير", "مارس", "مايو", "يوليو", "سبتمبر", "ديسمبر"];
+      bars.forEach((height, i) => {
+        const x = 22 + i * 28;
+        const h = height * 0.72;
+        band(add, `عمود ${months[i]}`, x, 210 - h, 14, h, i === bars.length - 1 ? theme.accent : theme.primary);
+        paint(add, `شهر ${months[i]}`, months[i], x - 4, 214, 22, 8, {
+          fontFamily: META, fontSize: 7, fontWeight: 600, color: theme.muted, textAlign: "center",
+        });
+      });
+      paint(add, "قراءة الرسم", "التسارع بدأ في يوليو مع إغلاق مبادرات التشغيل، لا مع زيادة الإنفاق.", 16, 228, 178, 12, {
+        fontFamily: BODY, fontSize: 11, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.6,
+      });
+      folio(add, theme, entity, "٠٥");
+    }, A4),
+
+    page("الخاتمة", theme, (add) => {
+      runningHead(add, theme, "الخاتمة والتوصيات");
+      paint(add, "عنوان الخاتمة", "ما نوصي باعتماده", 16, 30, 178, 12, {
+        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
+      });
+      const recs: [string, string][] = [
+        ["٠١", "تمديد مبادرة التحول الرقمي إلى الربع الأول دون زيادة الاعتماد."],
+        ["٠٢", "تجميد الشراكة غير المقيَّمة حتى يصدر تقرير أثرها."],
+        ["٠٣", "تثبيت دليل التشغيل الجديد مرجعًا وحيدًا للوحدات الميدانية."],
+      ];
+      recs.forEach(([num, text], i) => {
+        const y = 56 + i * 28;
+        paint(add, `توصية ${num}`, num, 166, y, 28, 8, {
+          fontFamily: DISPLAY, fontSize: 13, fontWeight: 800, color: theme.accent, textAlign: "right",
+        });
+        paint(add, `نص ${num}`, text, 16, y, 146, 14, {
+          fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.6,
+        });
+        hairline(add, `خط ${num}`, 16, y + 20, 178, theme.line, 0.25);
+      });
+      paint(add, "خلاصة", "النتائج لا تطلب خطة جديدة. تطلب إغلاق ما فُتح، وتثبيت ما ثبت أثره.", 16, 150, 178, 16, {
+        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.7,
+      });
+      hairline(add, "خط التوقيع", 110, 196, 64, theme.ink, 0.35);
+      paint(add, "التوقيع", "اسم المسؤول\nالمنصب", 110, 202, 64, 14, {
+        fontFamily: META, fontSize: 10, fontWeight: 600, color: theme.ink, textAlign: "right", lineHeight: 1.45,
+      });
+      add("stamp", { name: "ختم الاعتماد", x: 16, y: 188, w: 36, h: 36, content: "خُتم" });
+      paint(add, "تاريخ الاعتماد", "للاعتماد في اجتماع الدورة القادمة", 58, 206, 48, 16, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right", lineHeight: 1.4,
+      });
+      folio(add, theme, entity, "٠٦");
+    }, A4),
   ];
 }
 
 function eidPages(theme: Theme, org: string): Page[] {
+  const entity = org.trim() || "إدارة الإعلام والاتصال المؤسسي";
   return [
     page("غلاف العيد", theme, (add) => {
-      add("shape", {
-        name: "خلفية الغلاف",
-        x: 0,
-        y: 0,
-        w: 210,
-        h: 297,
-        style: { fill: theme.primary, borderWidth: 0 },
-      });
-      add("shape", {
-        name: "شريط ذهبي",
-        x: 0,
-        y: 0,
-        w: 210,
-        h: 6,
-        style: { fill: theme.accent, borderWidth: 0 },
-      });
-      add("logo", { name: "شعار", x: 16, y: 16, w: 28, h: 16 });
-      add("logo", { name: "شعار وطني", x: 166, y: 16, w: 28, h: 16 });
-      add("text", {
-        name: "عنوان علوي",
-        x: 24,
-        y: 48,
-        w: 162,
-        h: 10,
-        content: org,
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 13,
-          color: theme.accent,
-          fontWeight: 700,
-          textAlign: "center",
-        },
-      });
-      add("text", {
-        name: "عنوان التقرير",
-        x: 18,
-        y: 72,
-        w: 174,
-        h: 36,
-        content: "مجهودات فعاليات\nعيد الأضحى المبارك",
-        style: {
-          fontFamily: "Amiri",
-          fontSize: 28,
-          color: "#ffffff",
-          fontWeight: 700,
-          textAlign: "center",
-          lineHeight: 1.35,
-        },
-      });
-      add("text", {
-        name: "السنة",
-        x: 24,
-        y: 112,
-        w: 162,
-        h: 10,
-        content: "١٤٤٧ هـ",
-        style: {
-          fontFamily: "Amiri",
-          fontSize: 16,
-          color: theme.accent,
-          fontWeight: 700,
-          textAlign: "center",
-        },
-      });
       add("image", {
         name: "صورة الغلاف",
-        x: 18,
-        y: 132,
-        w: 174,
-        h: 96,
-        style: { objectFit: "cover", radius: 3 },
+        x: 0, y: 0, w: 210, h: 128,
+        src: plate("court"),
+        style: { objectFit: "cover", radius: 0 },
       });
-      add("text", {
-        name: "جهة الإصدار",
-        x: 24,
-        y: 244,
-        w: 162,
-        h: 16,
-        content: "إدارة الإعلام والاتصال المؤسسي",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 12,
-          color: "#ffffff",
-          fontWeight: 600,
-          textAlign: "center",
-          lineHeight: 1.4,
-        },
+      band(add, "فاصل ذهبي", 0, 128, 210, 1.6, theme.accent);
+      add("logo", { name: "شعار الجهة", x: 174, y: 142, w: 22, h: 22 });
+      paint(add, "الجهة", entity, 16, 146, 150, 8, {
+        fontFamily: META, fontSize: 10, fontWeight: 600, color: theme.accent, textAlign: "right",
       });
-      add("shape", {
-        name: "شريط سفلي",
-        x: 0,
-        y: 291,
-        w: 210,
-        h: 6,
-        style: { fill: theme.accent, borderWidth: 0 },
+      paint(add, "عنوان التقرير", "مجهودات فعاليات\nعيد الأضحى المبارك", 16, 164, 178, 36, {
+        fontFamily: CEREMONY, fontSize: 28, fontWeight: 700, color: "#f7f3e8", textAlign: "right", lineHeight: 1.25,
       });
-    }),
+      paint(add, "السنة", "١٤٤٧ هـ", 16, 208, 80, 10, {
+        fontFamily: CEREMONY, fontSize: 16, fontWeight: 700, color: theme.accent, textAlign: "right",
+      });
+      hairline(add, "خط سفلي داخلي", 16, 236, 48, theme.accent, 0.8);
+      paint(add, "جهة الإصدار", "إدارة الإعلام والاتصال المؤسسي\nتوثيق الميدان والمنافذ", 16, 248, 178, 16, {
+        fontFamily: META, fontSize: 11, fontWeight: 600, color: "#e7efe9", textAlign: "right", lineHeight: 1.5,
+      });
+    }, { ...A4, bg: theme.primary }),
+
     page("المؤشرات الميدانية", theme, (add) => {
-      header(add, theme, "المؤشرات الميدانية");
+      runningHead(add, theme, "المؤشرات الميدانية");
+      paint(add, "عنوان الصفحة", "الميدان هذا الموسم", 16, 30, 178, 12, {
+        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
+      });
       const stats: [string, string][] = [
-        ["48", "موقعاً ميدانياً"],
-        ["120", "مشاركة توعوية"],
-        ["16", "فرقاً ميدانية"],
-        ["100%", "تغطية المنافذ"],
+        ["٤٨", "موقعًا ميدانيًا"],
+        ["١٢٠", "مشاركة توعوية"],
+        ["١٦", "فرقة ميدانية"],
+        ["١٠٠٪", "تغطية المنافذ"],
       ];
-      stats.forEach((stat, i) => {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        add("stat", {
-          x: 24 + col * 84,
-          y: 42 + row * 52,
-          w: 76,
-          h: 42,
-          content: `${stat[0]}\n${stat[1]}`,
+      stats.forEach(([value, label], i) => {
+        const x = 16 + i * 46;
+        if (i > 0) tick(add, `فاصل ${i}`, x - 4, 54, 28, theme.line);
+        paint(add, `رقم ${label}`, value, x, 52, 40, 14, {
+          fontFamily: DISPLAY, fontSize: 20, fontWeight: 800, color: theme.primary, textAlign: "right", lineHeight: 1,
+        });
+        paint(add, `تسمية ${label}`, label, x, 68, 40, 12, {
+          fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right", lineHeight: 1.3,
         });
       });
-      add("box", {
-        x: 24,
-        y: 154,
-        w: 162,
-        h: 86,
-        content:
-          "شملت الفعاليات تعزيز الحضور الميداني، وتنظيم الحركة، وبرامج التوعية للقادمين والمغادرين، مع توثيق بصري لكافة المحطات. يمكن استبدال هذا النص بتفاصيل الجهة وإرفاق الصور في الصفحة التالية.",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 13,
-          color: theme.ink,
-          fill: theme.surface,
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-          padding: 5,
-          textAlign: "right",
-          lineHeight: 1.75,
-          fontWeight: 500,
-        },
+      hairline(add, "خط القراءة", 16, 92, 178, theme.line, 0.35);
+      paint(add, "المتن الأيمن", "شملت الفعاليات تنظيم الحركة عند المنافذ، ونقاط توعية للقادمين والمغادرين، وتوثيقًا بصريًا لكل محطة عملت فيها الفرق.", 100, 104, 94, 40, {
+        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.75,
       });
-      footer(add, theme, org);
-    }),
+      paint(add, "المتن الأيسر", "لم تُسجَّل فجوة تغطية. الملاحظة الوحيدة تأخر وصول مواد التوعية إلى منفذين في اليوم الأول، وأُغلقت قبل ذروة الحركة.", 16, 104, 76, 40, {
+        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.75,
+      });
+      paint(add, "ملاحظة ميدانية", "ملاحظة الميدان", 16, 158, 178, 6, {
+        fontFamily: META, fontSize: 8, fontWeight: 700, color: theme.accent, textAlign: "right",
+      });
+      paint(add, "نص الملاحظة", "تُستبدل هذه الفقرة بتقرير قائد الفرق عند اعتماد النسخة النهائية.", 16, 168, 178, 14, {
+        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.7,
+      });
+      folio(add, theme, entity, "٠٢");
+    }, A4),
+
     page("معرض الصور", theme, (add) => {
-      header(add, theme, "التوثيق البصري");
-      for (let i = 0; i < 4; i++) {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        add("image", {
-          name: `صورة ${i + 1}`,
-          x: 22 + col * 86,
-          y: 40 + row * 100,
-          w: 80,
-          h: 72,
-          style: { objectFit: "cover", radius: 3 },
-        });
-        add("text", {
-          name: `تعليق ${i + 1}`,
-          x: 22 + col * 86,
-          y: 114 + row * 100,
-          w: 80,
-          h: 8,
-          content: "تعليق مختصر للصورة",
-          style: {
-            fontFamily: "Cairo",
-            fontSize: 9,
-            color: theme.muted,
-            fontWeight: 600,
-            textAlign: "center",
-          },
-        });
-      }
-      footer(add, theme, org);
-    }),
+      runningHead(add, theme, "التوثيق البصري");
+      add("image", {
+        name: "صورة الاستقبال",
+        x: 16, y: 30, w: 118, h: 132,
+        src: plate("field"),
+        style: { objectFit: "cover", radius: 0 },
+      });
+      add("image", {
+        name: "صورة التوعية",
+        x: 140, y: 30, w: 54, h: 62,
+        src: plate("dune"),
+        style: { objectFit: "cover", radius: 0 },
+      });
+      add("image", {
+        name: "صورة التنظيم",
+        x: 140, y: 100, w: 54, h: 62,
+        src: plate("archive"),
+        style: { objectFit: "cover", radius: 0 },
+      });
+      paint(add, "تعليق الاستقبال", "استقبال عند المنفذ الرئيسي", 16, 164, 118, 6, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      paint(add, "تعليق جانبي", "توعية  ·  تنظيم", 140, 164, 54, 6, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      add("image", {
+        name: "صورة الإغلاق",
+        x: 16, y: 180, w: 178, h: 62,
+        src: plate("night"),
+        style: { objectFit: "cover", radius: 0 },
+      });
+      paint(add, "تعليق الإغلاق", "إغلاق المناوبة  ·  اليوم الثالث من العيد", 16, 246, 178, 6, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      folio(add, theme, entity, "٠٣");
+    }, A4),
+
     page("ختام", theme, (add) => {
-      add("shape", {
-        x: 0,
-        y: 0,
-        w: 210,
-        h: 297,
-        style: { fill: theme.primary, borderWidth: 0 },
+      band(add, "خط علوي", 0, 0, 210, 1.6, theme.accent);
+      paint(add, "تسمية الختام", "ختام التوثيق", 16, 36, 178, 6, {
+        fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.accent, textAlign: "right",
       });
-      add("logo", { x: 88, y: 52, w: 34, h: 34 });
-      add("text", {
-        x: 24,
-        y: 104,
-        w: 162,
-        h: 22,
-        content: "شكراً لكم",
-        style: {
-          fontFamily: "Amiri",
-          fontSize: 32,
-          color: "#ffffff",
-          fontWeight: 700,
-          textAlign: "center",
-        },
+      paint(add, "عنوان الختام", "شكرًا\nلكم", 16, 56, 160, 40, {
+        fontFamily: CEREMONY, fontSize: 40, fontWeight: 700, color: "#f7f3e8", textAlign: "right", lineHeight: 1.05,
       });
-      add("divider", {
-        x: 70,
-        y: 132,
-        w: 70,
-        h: 8,
-        style: { color: theme.accent },
+      hairline(add, "فاصل الختام", 140, 108, 36, theme.accent, 0.9);
+      paint(add, "نص الختام", "نقدر جهد الفرق الميدانية والإسناد الإعلامي. النسخة التالية تصدر مع تقرير الأثر، لا مع تكرار الوصف.", 16, 122, 160, 28, {
+        fontFamily: BODY, fontSize: 13, fontWeight: 500, color: "#e7efe9", textAlign: "right", lineHeight: 1.75,
       });
-      add("text", {
-        x: 30,
-        y: 148,
-        w: 150,
-        h: 28,
-        content:
-          "نقدر جهود الفرق الميدانية والإسناد الإعلامي، ونتطلع إلى مواصلة العمل بروح الفريق.",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 13,
-          color: "#e8efe9",
-          fontWeight: 500,
-          textAlign: "center",
-          lineHeight: 1.7,
-        },
+      paint(add, "الجهة", entity, 16, 230, 178, 8, {
+        fontFamily: DISPLAY, fontSize: 13, fontWeight: 700, color: theme.accent, textAlign: "right",
       });
-      add("text", {
-        x: 24,
-        y: 220,
-        w: 162,
-        h: 20,
-        content: `${org}\nإدارة الإعلام والاتصال المؤسسي`,
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 13,
-          color: theme.accent,
-          fontWeight: 700,
-          textAlign: "center",
-          lineHeight: 1.5,
-        },
+      paint(add, "الإدارة", "إدارة الإعلام والاتصال المؤسسي", 16, 242, 178, 8, {
+        fontFamily: META, fontSize: 10, fontWeight: 600, color: "#e7efe9", textAlign: "right",
       });
-    }),
+    }, { ...A4, bg: theme.primary }),
   ];
 }
 
 function briefingPages(theme: Theme, org: string): Page[] {
+  const entity = org.trim() || "مكتب المدير العام";
   return [
     page("غلاف العرض", theme, (add) => {
-      add("shape", {
-        x: 0,
-        y: 0,
-        w: 210,
-        h: 297,
-        style: { fill: theme.primary, borderWidth: 0 },
+      paint(add, "تصنيف العرض", "عرض قيادي  ·  للتداول الداخلي", 16, 28, 178, 6, {
+        fontFamily: META, fontSize: 9, fontWeight: 700, color: theme.accent, textAlign: "right",
       });
-      add("shape", {
-        x: 0,
-        y: 210,
-        w: 210,
-        h: 87,
-        style: { fill: theme.primarySoft, borderWidth: 0 },
+      paint(add, "عنوان العرض", "ما يجب\nأن يُحسم", 16, 48, 178, 42, {
+        fontFamily: DISPLAY, fontSize: 40, fontWeight: 800, color: theme.ink, textAlign: "right", lineHeight: 1.02,
       });
-      add("line", {
-        x: 28,
-        y: 198,
-        w: 40,
-        h: 4,
-        style: { color: theme.accent, stroke: 1.4 },
+      hairline(add, "فاصل العنوان", 146, 98, 48, theme.accent, 1.1);
+      paint(add, "جملة العرض", "صفحة واحدة للقرار، لا لسرد الأعمال. التفاصيل في المرفقات.", 16, 112, 140, 18, {
+        fontFamily: BODY, fontSize: 13, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.7,
       });
-      add("logo", { x: 28, y: 28, w: 28, h: 28 });
-      add("text", {
-        x: 28,
-        y: 88,
-        w: 154,
-        h: 40,
-        content: "عرض موجز\nللقيادة",
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 32,
-          color: "#ffffff",
-          fontWeight: 800,
-          textAlign: "right",
-          lineHeight: 1.2,
-        },
+      band(add, "شريط البيانات", 0, 228, 210, 69, theme.primary);
+      add("logo", { name: "شعار الجهة", x: 176, y: 240, w: 18, h: 18 });
+      paint(add, "الجهة", entity, 16, 242, 150, 10, {
+        fontFamily: DISPLAY, fontSize: 14, fontWeight: 700, color: "#ffffff", textAlign: "right",
       });
-      add("text", {
-        x: 28,
-        y: 228,
-        w: 154,
-        h: 20,
-        content: `${org}\nسبتمبر 2026`,
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 13,
-          color: "#ffffff",
-          fontWeight: 600,
-          textAlign: "right",
-          lineHeight: 1.5,
-        },
+      paint(add, "التاريخ", "سبتمبر ٢٠٢٦  ·  اجتماع القيادة الأسبوعي", 16, 258, 150, 8, {
+        fontFamily: META, fontSize: 10, fontWeight: 600, color: theme.accent, textAlign: "right",
       });
-    }),
-    ...officialPages(theme, org).slice(4, 6),
+    }, A4),
+
+    page("الموجز", theme, (add) => {
+      runningHead(add, theme, "موجز تنفيذي");
+      paint(add, "العنوان", "القرار المطلوب هذا الأسبوع", 16, 30, 178, 12, {
+        fontFamily: DISPLAY, fontSize: 20, fontWeight: 800, color: theme.ink, textAlign: "right",
+      });
+      paint(add, "الرقم", "٤٢٪", 120, 52, 74, 20, {
+        fontFamily: DISPLAY, fontSize: 36, fontWeight: 800, color: theme.primary, textAlign: "right", lineHeight: 1,
+      });
+      paint(add, "تسمية الرقم", "نمو الإيراد مقابل الخطة", 120, 74, 74, 8, {
+        fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      paint(add, "العمود الأول", "الأداء تجاوز الخطة لأن الطلب ثبت، لا لأن الطاقة زادت. الاستمرار على هذا الإيقاع يصطدم بسقف التشغيل في وحدة الإسناد.", 16, 96, 86, 40, {
+        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.75,
+      });
+      paint(add, "العمود الثاني", "الخيار المعروض: تأجيل توسعة واحدة إلى الربع القادم، والإبقاء على هدف الإيراد كما هو.", 108, 96, 86, 40, {
+        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.75,
+      });
+      band(add, "علامة القيد", 16, 150, 1.6, 28, theme.accent);
+      paint(add, "عنوان القيد", "القيد", 22, 148, 40, 6, {
+        fontFamily: META, fontSize: 8, fontWeight: 700, color: theme.accent, textAlign: "right",
+      });
+      paint(add, "نص القيد", "القيد طاقة تشغيلية، لا طلب السوق. أي هدف أعلى من الطاقة الحالية قرار توظيف، لا قرار مبيعات.", 22, 158, 172, 16, {
+        fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.65,
+      });
+      folio(add, theme, entity, "٠٢");
+    }, A4),
+
+    page("القرار", theme, (add) => {
+      runningHead(add, theme, "القرار");
+      paint(add, "العنوان", "ثلاثة بنود للاعتماد", 16, 30, 178, 12, {
+        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
+      });
+      const items: [string, string, string][] = [
+        ["٠١", "اعتماد", "تأجيل التوسعة إلى الربع القادم مع الإبقاء على هدف الإيراد."],
+        ["٠٢", "تكليف", "إدارة الإسناد ترفع خطة الطاقة خلال عشرة أيام."],
+        ["٠٣", "إيقاف", "لا يُفتح مسار توظيف قبل اعتماد خطة الطاقة."],
+      ];
+      items.forEach(([num, title, body], i) => {
+        const y = 56 + i * 42;
+        paint(add, `رقم ${num}`, num, 166, y, 28, 10, {
+          fontFamily: DISPLAY, fontSize: 16, fontWeight: 800, color: theme.accent, textAlign: "right",
+        });
+        paint(add, `عنوان ${title}`, title, 16, y, 144, 8, {
+          fontFamily: DISPLAY, fontSize: 14, fontWeight: 800, color: theme.ink, textAlign: "right",
+        });
+        paint(add, `متن ${title}`, body, 16, y + 12, 178, 12, {
+          fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.55,
+        });
+      });
+      hairline(add, "خط التوقيع", 110, 196, 70, theme.ink, 0.35);
+      paint(add, "التوقيع", "الاسم\nالصفة", 110, 202, 70, 14, {
+        fontFamily: META, fontSize: 10, fontWeight: 600, color: theme.ink, textAlign: "right", lineHeight: 1.4,
+      });
+      paint(add, "الموعد", "يُحسم في الجلسة، لا بالتمرير.", 16, 206, 86, 10, {
+        fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      folio(add, theme, entity, "٠٣");
+    }, A4),
   ];
 }
 
-/**
- * Standalone builders reused by the page-template gallery. Each returns a fresh
- * page (new ids), so inserting one never touches the template source.
- */
 function statsInfographicPage(theme: Theme, org: string): Page {
   return page("لوحة مؤشرات", theme, (add) => {
-    header(add, theme, "لوحة المؤشرات — بيانات تجريبية");
-    add("progress", {
-      name: "مؤشر تقدم",
-      x: 24,
-      y: 40,
-      w: 162,
-      h: 14,
-      content: "نسبة الإنجاز العام",
-      style: { value: 78, fill: theme.primary },
+    runningHead(add, theme, "لوحة المؤشرات");
+    paint(add, "عنوان اللوحة", "أين يقف التنفيذ", 16, 30, 110, 12, {
+      fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
     });
-    add("progress", {
-      name: "مؤشر تقدم",
-      x: 24,
-      y: 60,
-      w: 162,
-      h: 14,
-      content: "رضا المستفيدين",
-      style: { value: 92, fill: theme.accent },
+    paint(add, "الرقم القائد", "٧٨٪", 132, 28, 62, 20, {
+      fontFamily: DISPLAY, fontSize: 32, fontWeight: 800, color: theme.primary, textAlign: "left", lineHeight: 1,
     });
-    add("progress", {
-      name: "مؤشر تقدم",
-      x: 24,
-      y: 80,
-      w: 162,
-      h: 14,
-      content: "الالتزام بالجدول الزمني",
-      style: { value: 64, fill: theme.primarySoft },
+    paint(add, "تسمية الرقم", "الإنجاز العام", 132, 50, 62, 6, {
+      fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "left",
     });
-    const cards: [string, string][] = [
-      ["904", "إجمالي الحالات"],
-      ["27", "إصابة"],
-      ["96%", "نسبة الاكتمال"],
-      ["12", "فرق ميدانية"],
+    const bars: [string, number, string][] = [
+      ["نسبة الإنجاز العام", 78, theme.primary],
+      ["رضا المستفيدين", 92, theme.accent],
+      ["الالتزام بالجدول", 64, theme.primarySoft],
     ];
-    cards.forEach(([value, label], i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const x = 24 + col * 84;
-      const y = 104 + row * 44;
-      add("shape", {
-        name: `خلفية بطاقة ${i + 1}`,
-        x,
-        y,
-        w: 78,
-        h: 38,
-        style: {
-          fill: theme.surface,
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-        },
+    bars.forEach(([label, value, color], i) => {
+      const y = 72 + i * 28;
+      paint(add, `عنوان ${label}`, label, 16, y, 120, 6, {
+        fontFamily: META, fontSize: 9, fontWeight: 600, color: theme.ink, textAlign: "right",
       });
-      add("text", {
-        name: `رقم ${i + 1}`,
-        x,
-        y: y + 4,
-        w: 78,
-        h: 16,
-        content: value,
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 26,
-          color: theme.primary,
-          fontWeight: 800,
-          textAlign: "center",
-          lineHeight: 1.1,
-        },
+      paint(add, `قيمة ${label}`, `${value}٪`, 150, y, 44, 6, {
+        fontFamily: DISPLAY, fontSize: 11, fontWeight: 800, color: theme.primary, textAlign: "left",
       });
-      add("text", {
-        name: `تسمية ${i + 1}`,
-        x,
-        y: y + 23,
-        w: 78,
+      add("progress", {
+        name: label,
+        x: 16,
+        y: y + 8,
+        w: 178,
         h: 8,
         content: label,
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 10,
-          color: theme.muted,
-          fontWeight: 600,
-          textAlign: "center",
-        },
+        style: { value, fill: color, showValue: false },
       });
     });
-    add("text", {
-      name: "تنويه بيانات",
-      x: 24,
-      y: 196,
-      w: 162,
-      h: 8,
-      content: "بيانات تجريبية للعرض فقط — استبدلها بأرقامك الفعلية",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 9,
-        color: theme.muted,
-        fontWeight: 600,
-        textAlign: "center",
-      },
+    hairline(add, "فاصل القراءة", 16, 164, 178, theme.line, 0.3);
+    const notes: [string, string][] = [
+      ["٩٠٤", "حالة مغلقة"],
+      ["٢٧", "حالة مفتوحة"],
+      ["١٢", "فرقة ميدانية"],
+    ];
+    notes.forEach(([value, label], i) => {
+      const x = 16 + i * 60;
+      if (i > 0) tick(add, `فاصل ملاحظة ${i}`, x - 3, 176, 22, theme.line);
+      paint(add, `ملاحظة ${label}`, value, x, 174, 52, 10, {
+        fontFamily: DISPLAY, fontSize: 16, fontWeight: 800, color: theme.ink, textAlign: "right",
+      });
+      paint(add, `شرح ${label}`, label, x, 186, 52, 6, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
     });
-    footer(add, theme, org);
-  });
+    paint(add, "القراءة", "الرضا يسبق الجدول. الحالات المفتوحة كلها في فرقة واحدة، لا في المنهج.", 16, 208, 178, 14, {
+      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.65,
+    });
+    paint(add, "المصدر", "المصدر: لوحة المتابعة — الأسبوع الحالي. الأرقام قابلة للاستبدال.", 16, 230, 178, 8, {
+      fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
+    });
+    folio(add, theme, org, "٠٢");
+  }, A4);
 }
 
 function tablePage(theme: Theme, org: string): Page {
   return page("جدول بيانات", theme, (add) => {
-    header(add, theme, "جدول البيانات التفصيلي — بيانات تجريبية");
+    runningHead(add, theme, "الجدول");
+    paint(add, "العنوان", "مقارنة البنود", 16, 30, 178, 12, {
+      fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
+    });
+    paint(add, "المقدمة", "الفارق السالب مركّز في التشغيل. بقية البنود إما ضمن المسار أو أعلى من المستهدف بقليل.", 16, 48, 178, 14, {
+      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.65,
+    });
     add("table", {
-      name: "جدول تفصيلي",
-      x: 22,
-      y: 40,
-      w: 166,
+      name: "جدول المقارنة",
+      x: 16,
+      y: 70,
+      w: 178,
       h: 96,
       content: JSON.stringify([
         ["البند", "الوحدة", "المستهدف", "المتحقق", "الفارق"],
-        ["البنود 1", "حالة", "100", "94", "-6"],
-        ["البنود 2", "حالة", "80", "83", "+3"],
-        ["البنود 3", "حالة", "60", "57", "-3"],
-        ["البنود 4", "حالة", "40", "41", "+1"],
-        ["الإجمالي", "—", "280", "275", "-5"],
+        ["تشغيل المنافذ", "حالة", "١٠٠", "٩٤", "−٦"],
+        ["خدمة المستفيد", "حالة", "٨٠", "٨٣", "+٣"],
+        ["الصيانة الدورية", "حالة", "٦٠", "٥٧", "−٣"],
+        ["التدريب الميداني", "حالة", "٤٠", "٤١", "+١"],
+        ["الإجمالي", "—", "٢٨٠", "٢٧٥", "−٥"],
       ]),
-      style: {
-        cols: 5,
-        rows: 6,
-        fontSize: 10.5,
-        cellAlign: "center",
-      },
+      style: tableStyle(theme, 5, 6),
     });
-    add("text", {
-      name: "مصدر",
-      x: 22,
-      y: 142,
-      w: 166,
-      h: 8,
-      content: "المصدر: بيانات تجريبية (Demo) — عدّل الخلايا من لوحة الخصائص",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 9,
-        color: theme.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
+    band(add, "علامة القراءة", 16, 178, 1.4, 20, theme.accent);
+    paint(add, "القراءة", "فارق خمس حالات لا يغيّر الحكم على العام، ويحدد أين تُراجع الخطة: التشغيل والصيانة.", 22, 176, 172, 18, {
+      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.65,
     });
-    footer(add, theme, org);
-  });
+    paint(add, "المصدر", "المصدر: السجل التشغيلي — ديسمبر ٢٠٢٦.", 16, 210, 178, 6, {
+      fontFamily: META, fontSize: 8, fontWeight: 600, color: theme.muted, textAlign: "right",
+    });
+    folio(add, theme, org, "٠٣");
+  }, A4);
 }
 
 function infographicPage(theme: Theme, org: string): Page {
   return page("إنفوجرافيك", theme, (add) => {
-    add("shape", {
-      name: "خلفية",
-      x: 0,
-      y: 0,
-      w: 210,
-      h: 297,
-      style: { fill: theme.surface, borderWidth: 0 },
+    paint(add, "تسمية", "منهج العمل", 16, 20, 178, 6, {
+      fontFamily: META, fontSize: 9, fontWeight: 700, color: theme.accent, textAlign: "right",
     });
-    add("shape", {
-      name: "شريط رأسي",
-      x: 0,
-      y: 0,
-      w: 14,
-      h: 297,
-      style: { fill: theme.primary, borderWidth: 0 },
+    paint(add, "العنوان", "خمس مراحل، بترتيب واحد", 16, 30, 178, 12, {
+      fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.primary, textAlign: "right",
     });
-    add("text", {
-      name: "العنوان",
-      x: 30,
-      y: 28,
-      w: 156,
-      h: 20,
-      content: "مسار العمل في خمس مراحل",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 24,
-        color: theme.primary,
-        fontWeight: 800,
-        textAlign: "right",
-      },
-    });
-    add("line", {
-      name: "خط ذهبي",
-      x: 30,
-      y: 52,
-      w: 60,
-      h: 4,
-      style: { color: theme.accent, stroke: 1 },
-    });
-    const steps: [string, string][] = [
-      ["01", "التخطيط وتحديد النطاق"],
-      ["02", "جمع البيانات والتحقق منها"],
-      ["03", "التحليل واستخراج المؤشرات"],
-      ["04", "إعداد التقرير وإخراجه"],
-      ["05", "المتابعة وقياس الأثر"],
+    band(add, "مسار رأسي", 174, 58, 0.6, 190, theme.line);
+    const steps: [string, string, string][] = [
+      ["٠١", "التخطيط", "تحديد النطاق والجهة المالكة قبل جمع أي رقم."],
+      ["٠٢", "الجمع", "البيانات من مصدر واحد، مع تاريخ إغلاق معلن."],
+      ["٠٣", "التحليل", "المؤشر يُقرأ مع قيده، لا منفصلًا عنه."],
+      ["٠٤", "الإخراج", "صفحة قرار ثم الملاحق، لا العكس."],
+      ["٠٥", "الأثر", "ما تغيّر بعد النشر، لا عدد الصفحات."],
     ];
-    steps.forEach(([num, label], i) => {
-      const y = 72 + i * 40;
-      add("shape", {
-        name: `دائرة ${num}`,
-        x: 162,
-        y,
-        w: 24,
-        h: 24,
-        style: { fill: theme.primary, shape: "circle", borderWidth: 0 },
+    steps.forEach(([num, title, body], i) => {
+      const y = 56 + i * 38;
+      band(add, `نقطة ${num}`, 170, y + 2, 8, 8, i === 0 ? theme.accent : theme.primary);
+      paint(add, `رقم ${num}`, num, 146, y, 20, 8, {
+        fontFamily: DISPLAY, fontSize: 12, fontWeight: 800, color: theme.primary, textAlign: "right",
       });
-      add("text", {
-        name: `رقم ${num}`,
-        x: 162,
-        y: y + 6,
-        w: 24,
-        h: 12,
-        content: num,
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 13,
-          color: "#ffffff",
-          fontWeight: 800,
-          textAlign: "center",
-        },
+      paint(add, `عنوان ${title}`, title, 16, y, 124, 8, {
+        fontFamily: DISPLAY, fontSize: 14, fontWeight: 800, color: theme.ink, textAlign: "right",
       });
-      add("box", {
-        name: `مرحلة ${num}`,
-        x: 30,
-        y,
-        w: 124,
-        h: 24,
-        content: label,
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 12,
-          color: theme.ink,
-          fill: "#ffffff",
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-          padding: 5,
-          textAlign: "right",
-          fontWeight: 600,
-        },
+      paint(add, `متن ${title}`, body, 16, y + 12, 150, 12, {
+        fontFamily: BODY, fontSize: 11, fontWeight: 500, color: theme.ink, textAlign: "right", lineHeight: 1.45,
       });
-      if (i < steps.length - 1) {
-        add("line", {
-          name: `وصلة ${num}`,
-          x: 173,
-          y: y + 25,
-          w: 2,
-          h: 14,
-          style: { color: theme.line, stroke: 0.5 },
-        });
-      }
     });
-    footer(add, theme, org);
-  });
+    folio(add, theme, org, "٠٤");
+  }, A4);
 }
 
 function coverPage(theme: Theme, org: string): Page {
@@ -1012,141 +732,59 @@ function coverPage(theme: Theme, org: string): Page {
 }
 
 function slidesPages(theme: Theme, org: string): Page[] {
-  const size = { w: 338.7, h: 190.5 };
+  const entity = org.trim() || "اسم الجهة";
   return [
-    page(
-      "شريحة الغلاف",
-      theme,
-      (add) => {
-        add("shape", {
-          name: "خلفية",
-          x: 0,
-          y: 0,
-          w: 338.7,
-          h: 190.5,
-          style: { fill: theme.primary, borderWidth: 0 },
-        });
-        add("shape", {
-          name: "كتلة سفلية",
-          x: 0,
-          y: 140,
-          w: 338.7,
-          h: 50.5,
-          style: { fill: theme.primarySoft, borderWidth: 0 },
-        });
-        add("line", {
-          name: "خط ذهبي",
-          x: 30,
-          y: 126,
-          w: 56,
-          h: 4,
-          style: { color: theme.accent, stroke: 1.6 },
-        });
-        add("logo", { name: "شعار", x: 284, y: 26, w: 30, h: 30 });
-        add("text", {
-          name: "عنوان العرض",
-          x: 30,
-          y: 62,
-          w: 230,
-          h: 36,
-          content: "عرض تنفيذي\nللنتائج الرئيسية",
-          style: {
-            fontFamily: "Tajawal",
-            fontSize: 34,
-            color: "#ffffff",
-            fontWeight: 800,
-            textAlign: "right",
-            lineHeight: 1.2,
-          },
-        });
-        add("text", {
-          name: "الجهة",
-          x: 30,
-          y: 156,
-          w: 260,
-          h: 16,
-          content: `${org}  ·  بيانات تجريبية للعرض`,
-          style: {
-            fontFamily: "Cairo",
-            fontSize: 12,
-            color: "#ffffff",
-            fontWeight: 600,
-            textAlign: "right",
-          },
-        });
-      },
-      size,
-    ),
-    page(
-      "شريحة المؤشرات",
-      theme,
-      (add) => {
-        header(add, theme, "المؤشرات الرئيسية — بيانات تجريبية", size.w);
-        const cards: [string, string][] = [
-          ["904", "إجمالي الحالات"],
-          ["27", "إصابة"],
-          ["96%", "نسبة الاكتمال"],
-        ];
-        cards.forEach(([value, label], i) => {
-          const x = 28 + i * 100;
-          add("shape", {
-            name: `بطاقة ${i + 1}`,
-            x,
-            y: 48,
-            w: 92,
-            h: 62,
-            style: {
-              fill: theme.surface,
-              borderColor: theme.line,
-              borderWidth: 0.35,
-              radius: 5,
-            },
-          });
-          add("text", {
-            name: `رقم ${i + 1}`,
-            x,
-            y: 58,
-            w: 92,
-            h: 24,
-            content: value,
-            style: {
-              fontFamily: "Tajawal",
-              fontSize: 30,
-              color: theme.primary,
-              fontWeight: 800,
-              textAlign: "center",
-              lineHeight: 1.1,
-            },
-          });
-          add("text", {
-            name: `تسمية ${i + 1}`,
-            x,
-            y: 86,
-            w: 92,
-            h: 10,
-            content: label,
-            style: {
-              fontFamily: "Cairo",
-              fontSize: 11,
-              color: theme.muted,
-              fontWeight: 600,
-              textAlign: "center",
-            },
-          });
-        });
-        add("progress", {
-          name: "مؤشر",
-          x: 28,
-          y: 124,
-          w: 288,
-          h: 16,
-          content: "نسبة الإنجاز العام",
-          style: { value: 78, fill: theme.primary },
-        });
-        footer(add, theme, org, size.w, size.h);
-      },
-      size,
-    ),
+    page("شريحة الغلاف", theme, (add) => {
+      add("image", {
+        name: "حقل الغلاف",
+        x: 0, y: 0, w: 124, h: 190.5,
+        src: plate("night"),
+        style: { objectFit: "cover", radius: 0 },
+      });
+      band(add, "فاصل", 124, 0, 1.4, 190.5, theme.accent);
+      add("logo", { name: "شعار", x: 296, y: 18, w: 22, h: 22 });
+      paint(add, "تصنيف", "عرض تنفيذي", 146, 28, 140, 6, {
+        fontFamily: META, fontSize: 10, fontWeight: 700, color: theme.accent, textAlign: "right",
+      });
+      paint(add, "عنوان العرض", "النتائج\nالرئيسية", 146, 44, 170, 40, {
+        fontFamily: DISPLAY, fontSize: 36, fontWeight: 800, color: "#f7f6f3", textAlign: "right", lineHeight: 1.05,
+      });
+      paint(add, "الجهة", `${entity}  ·  سبتمبر ٢٠٢٦`, 146, 156, 170, 8, {
+        fontFamily: META, fontSize: 11, fontWeight: 600, color: "#e7e5e4", textAlign: "right",
+      });
+    }, { ...SLIDE, bg: theme.primary }),
+    page("شريحة المؤشرات", theme, (add) => {
+      runningHead(add, theme, "المؤشرات الرئيسية", SLIDE.w);
+      paint(add, "الرقم القائد", "٩٦٪", 220, 36, 100, 28, {
+        fontFamily: DISPLAY, fontSize: 48, fontWeight: 800, color: theme.primary, textAlign: "right", lineHeight: 1,
+      });
+      paint(add, "تسمية القائد", "اكتمال الخطة", 220, 68, 100, 8, {
+        fontFamily: META, fontSize: 11, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      tick(add, "فاصل المؤشرات", 200, 40, 48, theme.line);
+      paint(add, "رقم ثان", "٩٠٤", 16, 40, 70, 16, {
+        fontFamily: DISPLAY, fontSize: 26, fontWeight: 800, color: theme.ink, textAlign: "right",
+      });
+      paint(add, "تسمية ثانية", "حالة مغلقة", 90, 46, 90, 8, {
+        fontFamily: META, fontSize: 11, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      paint(add, "رقم ثالث", "٢٧", 16, 66, 70, 14, {
+        fontFamily: DISPLAY, fontSize: 22, fontWeight: 800, color: theme.ink, textAlign: "right",
+      });
+      paint(add, "تسمية ثالثة", "حالة ما زالت مفتوحة", 90, 70, 90, 8, {
+        fontFamily: META, fontSize: 11, fontWeight: 600, color: theme.muted, textAlign: "right",
+      });
+      add("progress", {
+        name: "مؤشر الإنجاز",
+        x: 16, y: 108, w: 306, h: 12,
+        content: "نسبة الإنجاز العام",
+        style: { value: 78, fill: theme.primary, showValue: true },
+      });
+      paint(add, "القراءة", "الإغلاق شبه مكتمل. الحالات المفتوحة لا تغيّر اتجاه الربع.", 16, 132, 306, 10, {
+        fontFamily: BODY, fontSize: 13, fontWeight: 500, color: theme.ink, textAlign: "right",
+      });
+      folio(add, theme, entity, "٠٢", SLIDE.w, SLIDE.h);
+    }, SLIDE),
   ];
 }
 
@@ -1170,998 +808,357 @@ function identity(theme: Theme): TemplateInk {
   };
 }
 
-function officialMark(add: Add, colors: TemplateInk, title: string, y = 18) {
-  add("logo", { name: "مساحة الشعار الرسمي", x: 24, y, w: 22, h: 22 });
-  add("text", {
-    name: "عنوان القالب",
-    x: 52,
-    y: y + 2,
-    w: 132,
-    h: 12,
-    content: title,
-    style: {
-      fontFamily: "Tajawal",
-      fontSize: 16,
-      color: colors.primary,
-      fontWeight: 800,
-      textAlign: "right",
-    },
-  });
-  add("text", {
-    name: "تاريخ التقرير",
-    x: 24,
-    y: y + 28,
-    w: 160,
-    h: 8,
-    content: "التاريخ",
-    style: {
-      fontFamily: "Cairo",
-      fontSize: 9,
-      color: colors.muted,
-      fontWeight: 600,
-      textAlign: "right",
-    },
-  });
-}
-
 function editorialPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تحريرية", theme, (add) => {
-    officialMark(add, c, "عنوان التقرير");
-    add("text", {
-      name: "عنوان رئيسي",
-      x: 24,
-      y: 70,
-      w: 112,
-      h: 42,
-      content: "العنوان الرئيسي\nللتقرير",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 27,
-        color: c.primary,
-        fontWeight: 800,
-        textAlign: "right",
-        lineHeight: 1.18,
-      },
+    paint(add, "كِكر", "ملف  ·  مذكرة تحريرية", 16, 22, 178, 6, {
+      fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
     });
-    add("stat", {
-      name: "الرقم البصري",
-      x: 150,
-      y: 66,
-      w: 36,
-      h: 42,
-      content: "01\nمؤشر",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 22,
-        color: c.primary,
-        fontWeight: 800,
-        textAlign: "center",
-      },
+    paint(add, "العنوان", "العنوان الذي\nيقود الصفحة\nلا يزينها", 16, 36, 128, 48, {
+      fontFamily: "Noto Kufi Arabic", fontSize: 26, fontWeight: 700, color: c.primary, textAlign: "right", lineHeight: 1.15,
     });
-    add("box", {
-      name: "كتلة النص",
-      x: 24,
-      y: 132,
-      w: 112,
-      h: 58,
-      content:
-        "نص تمهيدي مختصر يشرح موضوع الصفحة ويترك مساحة مريحة للقراءة والتحرير.",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 12,
-        color: c.ink,
-        fill: "#ffffff",
-        borderColor: c.line,
-        borderWidth: 0.35,
-        radius: 0,
-        padding: 5,
-        lineHeight: 1.8,
-        textAlign: "right",
-      },
+    paint(add, "الرقم البصري", "٠١", 152, 40, 42, 18, {
+      fontFamily: DISPLAY, fontSize: 32, fontWeight: 800, color: c.accent, textAlign: "left", lineHeight: 1,
     });
-    add("shape", {
-      name: "كتلة لونية هادئة",
-      x: 151,
-      y: 128,
-      w: 34,
-      h: 70,
-      style: { fill: c.primary, borderWidth: 0, radius: 0 },
+    hairline(add, "فاصل", 16, 96, 178, c.line, 0.35);
+    paint(add, "المتن", "فقرة تمهيدية بمقياس القراءة، لا داخل إطار. المسافة البيضاء هي الهامش، والعمود يقف عند قياس واحد حتى تُستبدل الكلمات دون أن ينكسر السطر.", 16, 108, 120, 48, {
+      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.8,
     });
-    add("text", {
-      name: "اسم الجهة",
-      x: 24,
-      y: 240,
-      w: 110,
-      h: 10,
-      content: org || "اسم الجهة",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 11,
-        color: c.primary,
-        fontWeight: 700,
-        textAlign: "right",
-      },
+    paint(add, "ملاحظة هامشية", "ملاحظة\nعلى الهامش\nلا بطاقة", 146, 112, 48, 28, {
+      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right", lineHeight: 1.5,
     });
-    add("text", {
-      name: "تذييل الصفحة",
-      x: 24,
-      y: 268,
-      w: 162,
-      h: 8,
-      content: "ملاحظة تحريرية",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 8,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
+    paint(add, "الجهة", org || "اسم الجهة", 16, 250, 120, 8, {
+      fontFamily: DISPLAY, fontSize: 12, fontWeight: 700, color: c.primary, textAlign: "right",
     });
-  });
+    paint(add, "رقم الصفحة", "٠١", 16, 272, 178, 6, {
+      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "left",
+    });
+  }, A4);
 }
 
 function institutionalGridPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("شبكة مؤسسية", theme, (add) => {
-    add("shape", {
-      name: "منطقة الترويسة",
-      x: 0,
-      y: 0,
-      w: 210,
-      h: 52,
-      style: { fill: c.primary, borderWidth: 0, radius: 0 },
+    band(add, "شريط الهوية", 0, 0, 210, 14, c.primary);
+    paint(add, "عنوان الشريط", "تقرير مؤسسي", 16, 3, 140, 8, {
+      fontFamily: DISPLAY, fontSize: 11, fontWeight: 700, color: "#f7f6f3", textAlign: "right",
     });
-    add("logo", { name: "مساحة الشعار الرسمي", x: 166, y: 12, w: 22, h: 22 });
-    add("text", {
-      name: "عنوان الشبكة",
-      x: 24,
-      y: 15,
-      w: 130,
-      h: 13,
-      content: "تقرير مؤسسي",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 17,
-        color: "#ffffff",
-        fontWeight: 800,
-        textAlign: "right",
-      },
+    add("logo", { name: "شعار الجهة", x: 178, y: 2, w: 10, h: 10 });
+    paint(add, "العنوان", "وحدات المعلومات على شبكة واحدة", 16, 26, 178, 12, {
+      fontFamily: DISPLAY, fontSize: 18, fontWeight: 800, color: c.primary, textAlign: "right",
     });
-    add("text", {
-      name: "التاريخ",
-      x: 24,
-      y: 35,
-      w: 130,
-      h: 7,
-      content: "التاريخ",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 8,
-        color: "#ffffff",
-        fontWeight: 600,
-        textAlign: "right",
-      },
+    paint(add, "المقدمة", "الصف يُقرأ من اليمين: البند، ثم الرقم، ثم الجملة التي تفسره. لا صندوق حول أي صف.", 16, 44, 178, 14, {
+      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.6,
     });
-    const cells = [
-      [24, 70, 76, 62],
-      [110, 70, 76, 62],
-      [24, 144, 76, 82],
-      [110, 144, 76, 82],
-    ] as const;
-    cells.forEach(([x, y, w, h], i) => {
-      add("shape", {
-        name: `وحدة شبكية ${i + 1}`,
-        x,
-        y,
-        w,
-        h,
-        style: {
-          fill: "#ffffff",
-          borderColor: c.line,
-          borderWidth: 0.35,
-          radius: 0,
-        },
+    const rows: [string, string, string][] = [
+      ["النطاق", "٦ قطاعات", "كل قطاع يرفع رقمه إلى مكتب واحد."],
+      ["الإيقاع", "شهري", "الإغلاق في آخر خميس من الشهر."],
+      ["المرجع", "دليل ٢٠٢٦", "النسخ السابقة أُخرجت من التداول."],
+      ["الاعتماد", "لجنة واحدة", "لا يصدر رقم بلا توقيع المقرر."],
+    ];
+    rows.forEach(([label, value, note], i) => {
+      const y = 70 + i * 36;
+      hairline(add, `خط ${label}`, 16, y, 178, c.line, 0.3);
+      paint(add, `بند ${label}`, label, 150, y + 6, 44, 8, {
+        fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
       });
-      add(i === 0 ? "stat" : "box", {
-        name: `محتوى الوحدة ${i + 1}`,
-        x: x + 6,
-        y: y + 8,
-        w: w - 12,
-        h: h - 16,
-        content:
-          i === 0 ? "01\nمؤشر رئيسي" : "عنوان الوحدة\nنص مختصر قابل للتحرير",
-        style: {
-          fontFamily: i === 0 ? "Tajawal" : "Cairo",
-          fontSize: i === 0 ? 22 : 11,
-          color: i === 0 ? c.primary : c.ink,
-          fontWeight: 700,
-          textAlign: "right",
-          lineHeight: 1.6,
-          padding: 2,
-        },
+      paint(add, `قيمة ${label}`, value, 96, y + 6, 48, 10, {
+        fontFamily: DISPLAY, fontSize: 14, fontWeight: 800, color: c.primary, textAlign: "right",
+      });
+      paint(add, `شرح ${label}`, note, 16, y + 8, 76, 14, {
+        fontFamily: BODY, fontSize: 11, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.45,
       });
     });
-    add("text", {
-      name: "الجهة",
-      x: 24,
-      y: 253,
-      w: 162,
-      h: 9,
-      content: org || "اسم الجهة",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 9,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
+    paint(add, "الجهة", org || "اسم الجهة", 16, 230, 178, 8, {
+      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
     });
-  });
+    paint(add, "التاريخ", "الفترة الحالية", 16, 242, 178, 6, {
+      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "left",
+    });
+  }, A4);
 }
 
 function dataFocusPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تركيز البيانات", theme, (add) => {
-    officialMark(add, c, "البيانات أولًا");
-    add("text", {
-      name: "عنوان صغير",
-      x: 24,
-      y: 68,
-      w: 162,
-      h: 10,
-      content: "ملخص المؤشر",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 11,
-        color: c.muted,
-        fontWeight: 700,
-        textAlign: "right",
-      },
+    runningHead(add, { ...theme, muted: c.muted, line: c.line }, "تركيز البيانات");
+    paint(add, "الرقم", "٩٤", 16, 32, 178, 28, {
+      fontFamily: DISPLAY, fontSize: 56, fontWeight: 800, color: c.primary, textAlign: "right", lineHeight: 0.9,
     });
-    add("text", {
-      name: "رقم رئيسي",
-      x: 24,
-      y: 82,
-      w: 100,
-      h: 38,
-      content: "000",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 48,
-        color: c.primary,
-        fontWeight: 800,
-        textAlign: "right",
-        lineHeight: 1,
-      },
+    paint(add, "التسمية", "من مئة  ·  إنجاز الخطة المعتمدة", 16, 64, 178, 8, {
+      fontFamily: META, fontSize: 10, fontWeight: 600, color: c.muted, textAlign: "right",
     });
-    add("text", {
-      name: "وصف الرقم",
-      x: 24,
-      y: 124,
-      w: 100,
-      h: 9,
-      content: "وصف الرقم الرئيسي",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 10,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
+    paint(add, "الجملة", "الرقم بلا جملته مضلِّل: الستة الناقصة كلها في محور واحد.", 16, 80, 178, 12, {
+      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.6,
     });
-    ["مؤشر ثانوي", "مؤشر ثانوي", "مؤشر ثانوي"].forEach((label, i) =>
-      add("stat", {
-        name: label,
-        x: 145,
-        y: 78 + i * 30,
-        w: 41,
-        h: 24,
-        content: `0${i + 1}\n${label}`,
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 13,
-          color: c.ink,
-          fontWeight: 700,
-          textAlign: "center",
-        },
-      }),
-    );
     add("table", {
-      name: "جدول البيانات",
-      x: 24,
-      y: 158,
-      w: 162,
-      h: 74,
+      name: "جدول التركيز",
+      x: 16, y: 104, w: 178, h: 62,
       content: JSON.stringify([
-        ["المؤشر", "القيمة", "الحالة"],
-        ["بند قابل للتحرير", "000", "--"],
-        ["بند قابل للتحرير", "000", "--"],
+        ["المحور", "الخطة", "الفعلي"],
+        ["التشغيل", "٤٠", "٣٤"],
+        ["الخدمة", "٣٥", "٣٥"],
+        ["التمكين", "٢٥", "٢٥"],
       ]),
-      style: {
-        cols: 3,
-        rows: 3,
-        fontSize: 10,
-        headerBg: c.primary,
-        headerColor: "#ffffff",
-        tableBg: "#ffffff",
-        borderColor: c.line,
-        cellAlign: "center",
-      },
+      style: tableStyle({ ...theme, primary: c.primary, surface: c.surface, line: c.line, ink: c.ink }, 3, 4),
     });
-    add("text", {
-      name: "مصدر البيانات",
-      x: 24,
-      y: 246,
-      w: 162,
-      h: 8,
-      content: "مصدر البيانات",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 8,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
+    paint(add, "فرق موجب", "+٠", 120, 178, 40, 12, {
+      fontFamily: DISPLAY, fontSize: 18, fontWeight: 800, color: c.primary, textAlign: "right",
     });
-    add("text", {
-      name: "اسم الجهة",
-      x: 24,
-      y: 266,
-      w: 162,
-      h: 8,
-      content: org || "اسم الجهة",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 8,
-        color: c.primary,
-        fontWeight: 700,
-        textAlign: "right",
-      },
+    paint(add, "شرح موجب", "الخدمة والتمكين", 120, 192, 74, 6, {
+      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
     });
-  });
+    paint(add, "فرق سالب", "−٦", 16, 178, 40, 12, {
+      fontFamily: DISPLAY, fontSize: 18, fontWeight: 800, color: c.accent, textAlign: "right",
+    });
+    paint(add, "شرح سالب", "عجز التشغيل وحده", 16, 192, 70, 6, {
+      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
+    });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 250, 178, 6, {
+      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
+    });
+    folio(add, { ...theme, line: c.line, muted: c.muted }, org, "٠٥");
+  }, A4);
 }
 
 function verticalFlowPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تدفق رأسي", theme, (add) => {
-    officialMark(add, c, "تدفق العمل", 14);
-    add("text", {
-      name: "عنوان التدفق",
-      x: 24,
-      y: 58,
-      w: 162,
-      h: 24,
-      content: "من الفكرة إلى الأثر",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 24,
-        color: c.primary,
-        fontWeight: 800,
-        textAlign: "right",
-      },
+    paint(add, "العنوان", "من الطلب إلى الأثر", 16, 20, 150, 12, {
+      fontFamily: DISPLAY, fontSize: 20, fontWeight: 800, color: c.primary, textAlign: "right",
     });
-    const blocks = [
-      [24, 98, 162, 30],
-      [42, 140, 144, 38],
-      [60, 190, 126, 48],
-      [78, 250, 108, 25],
-    ] as const;
-    blocks.forEach(([x, y, w, h], i) => {
-      add("shape", {
-        name: `مرحلة ${i + 1}`,
-        x,
-        y,
-        w,
-        h,
-        style: {
-          fill: i % 2 ? "#ffffff" : c.surface,
-          borderColor: c.line,
-          borderWidth: 0.35,
-          radius: 0,
-        },
+    paint(add, "الجهة", org || "اسم الجهة", 16, 36, 150, 6, {
+      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
+    });
+    band(add, "العمود", 186, 58, 0.5, 200, c.line);
+    const steps: [string, string, string, boolean][] = [
+      ["٠١", "الطلب", "يصل مكتوبًا، لا شفهيًا.", false],
+      ["٠٢", "الفرز", "يُرد غير المكتمل في اليوم نفسه.", false],
+      ["٠٣", "التنفيذ", "هذه المرحلة الحالية. لها مالك واحد وموعد واحد.", true],
+      ["٠٤", "المراجعة", "المراجع ليس المنفّذ.", false],
+      ["٠٥", "الأثر", "يُقاس بعد ثلاثين يومًا، لا عند التسليم.", false],
+    ];
+    steps.forEach(([num, title, body, current], i) => {
+      const y = 56 + i * 40;
+      band(add, `علامة ${num}`, 182, y + 2, 8, 8, current ? c.accent : c.primary);
+      paint(add, `رقم ${num}`, num, 154, y, 24, 8, {
+        fontFamily: DISPLAY, fontSize: 12, fontWeight: 800, color: current ? c.accent : c.primary, textAlign: "right",
       });
-      add("text", {
-        name: `عنوان مرحلة ${i + 1}`,
-        x: x + 7,
-        y: y + 7,
-        w: w - 14,
-        h: 10,
-        content: `0${i + 1}  ·  عنوان المرحلة`,
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 11,
-          color: c.ink,
-          fontWeight: 700,
-          textAlign: "right",
-        },
+      paint(add, `عنوان ${title}`, title, 16, y, 132, 8, {
+        fontFamily: DISPLAY, fontSize: 14, fontWeight: 800, color: c.ink, textAlign: "right",
+      });
+      paint(add, `متن ${title}`, body, 16, y + 12, 160, 12, {
+        fontFamily: BODY, fontSize: 11, fontWeight: current ? 700 : 500, color: c.ink, textAlign: "right",
       });
     });
-    add("text", {
-      name: "اسم الجهة",
-      x: 24,
-      y: 278,
-      w: 162,
-      h: 8,
-      content: org || "اسم الجهة",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 8,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
-    });
-  });
+  }, A4);
 }
 
 function asymmetricPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تحريرية غير متماثلة", theme, (add) => {
-    add("shape", {
-      name: "كتلة جانبية",
-      x: 0,
-      y: 0,
-      w: 72,
-      h: 297,
-      style: { fill: c.primary, borderWidth: 0, radius: 0 },
+    add("image", {
+      name: "الصورة القائدة",
+      x: 118, y: 0, w: 92, h: 297,
+      src: plate("press"),
+      style: { objectFit: "cover", radius: 0 },
     });
-    add("logo", { name: "مساحة الشعار الرسمي", x: 24, y: 20, w: 22, h: 22 });
-    add("text", {
-      name: "عنوان جانبي",
-      x: 18,
-      y: 62,
-      w: 38,
-      h: 90,
-      content: "قسم\nالتقرير",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 22,
-        color: "#ffffff",
-        fontWeight: 800,
-        textAlign: "center",
-        writingMode: "vertical",
-      },
+    paint(add, "كِكر", "ملف", 16, 28, 92, 6, {
+      fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
     });
-    add("text", {
-      name: "العنوان الرئيسي",
-      x: 92,
-      y: 42,
-      w: 92,
-      h: 38,
-      content: "عنوان غير\nمتماثل",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 25,
-        color: c.primary,
-        fontWeight: 800,
-        textAlign: "right",
-        lineHeight: 1.2,
-      },
+    paint(add, "العنوان", "الصورة\nعلى الحافة\nوالنص في الداخل", 16, 42, 92, 42, {
+      fontFamily: "Noto Kufi Arabic", fontSize: 18, fontWeight: 700, color: c.primary, textAlign: "right", lineHeight: 1.25,
     });
-    add("stat", {
-      name: "مرساة بصرية",
-      x: 94,
-      y: 102,
-      w: 48,
-      h: 46,
-      content: "01\nنتيجة",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 20,
-        color: c.primary,
-        fontWeight: 800,
-        textAlign: "center",
-      },
+    hairline(add, "فاصل", 16, 96, 40, c.accent, 1);
+    paint(add, "المتن", "العمود ضيق عمدًا. الجملة الطويلة تُكسر، والصورة لا تتنافس معها على العرض.", 16, 108, 92, 48, {
+      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.75,
     });
-    add("box", {
-      name: "النص الرئيسي",
-      x: 92,
-      y: 166,
-      w: 94,
-      h: 56,
-      content: "نص موجز يشرح الفكرة الأساسية للصفحة.",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 12,
-        color: c.ink,
-        fill: "#ffffff",
-        borderColor: c.line,
-        borderWidth: 0.35,
-        radius: 0,
-        padding: 5,
-        lineHeight: 1.8,
-        textAlign: "right",
-      },
+    paint(add, "التعليق", "تعليق الصورة يقف في عمود النص، لا فوق الصورة.", 16, 170, 92, 16, {
+      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right", lineHeight: 1.45,
     });
-    add("text", {
-      name: "التاريخ",
-      x: 92,
-      y: 254,
-      w: 94,
-      h: 8,
-      content: "التاريخ  ·  " + (org || "اسم الجهة"),
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 8,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
+    paint(add, "الجهة", org || "اسم الجهة", 16, 260, 92, 8, {
+      fontFamily: DISPLAY, fontSize: 11, fontWeight: 700, color: c.primary, textAlign: "right",
     });
-  });
+  }, A4);
 }
 
 function modularPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("وحدات معيارية", theme, (add) => {
-    officialMark(add, c, "وحدات التقرير", 12);
-    const modules = [
-      [24, 62, 78, 54, "عنوان ونص"],
-      [112, 62, 74, 32, "01  رقم"],
-      [112, 104, 74, 72, "ملاحظة"],
-      [24, 128, 78, 48, "مؤشر"],
-      [24, 188, 162, 42, "جدول أو رسم"],
-    ] as const;
-    modules.forEach(([x, y, w, h, label], i) => {
-      add("shape", {
-        name: `وحدة ${i + 1}`,
-        x,
-        y,
-        w,
-        h,
-        style: {
-          fill: i === 1 ? c.primary : "#ffffff",
-          borderColor: c.line,
-          borderWidth: 0.35,
-          radius: 0,
-        },
-      });
-      add(i === 1 ? "stat" : i === 4 ? "table" : "box", {
-        name: `محتوى الوحدة ${i + 1}`,
-        x: x + 5,
-        y: y + 5,
-        w: w - 10,
-        h: h - 10,
-        content:
-          i === 4
-            ? JSON.stringify([
-                ["البند", "القيمة"],
-                ["بند قابل للتحرير", "000"],
-              ])
-            : label,
-        style: {
-          fontFamily: i === 1 ? "Tajawal" : "Cairo",
-          fontSize: i === 1 ? 20 : 11,
-          color: i === 1 ? "#ffffff" : c.ink,
-          fontWeight: 700,
-          textAlign: "right",
-          cols: i === 4 ? 2 : undefined,
-          rows: i === 4 ? 2 : undefined,
-          headerBg: c.primary,
-          headerColor: "#ffffff",
-          tableBg: "#ffffff",
-          borderColor: c.line,
-          padding: 2,
-          lineHeight: 1.6,
-        },
-      });
+    paint(add, "كِكر", "وحدات  ·  بأحجام مختلفة", 16, 18, 178, 6, {
+      fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
     });
-    add("text", {
-      name: "اسم الجهة",
-      x: 24,
-      y: 260,
-      w: 162,
-      h: 8,
-      content: org || "اسم الجهة",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 8,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
+    paint(add, "الوحدة العريضة", "وحدة النص أعرض من وحدة الصورة، لأن القراءة هنا هي العمل.", 16, 30, 178, 16, {
+      fontFamily: DISPLAY, fontSize: 16, fontWeight: 800, color: c.primary, textAlign: "right", lineHeight: 1.35,
     });
-  });
+    add("image", {
+      name: "وحدة الصورة",
+      x: 16, y: 58, w: 72, h: 88,
+      src: plate("archive"),
+      style: { objectFit: "cover", radius: 0 },
+    });
+    paint(add, "وحدة جانبية", "وحدة قائمة أضيق. ثلاثة أسطر تكفي، والرابع يُحذف.", 96, 58, 98, 28, {
+      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.7,
+    });
+    paint(add, "بند أول", "٠١  وضوح المرجع", 96, 96, 98, 8, {
+      fontFamily: META, fontSize: 10, fontWeight: 700, color: c.ink, textAlign: "right",
+    });
+    paint(add, "بند ثان", "٠٢  مقياس واحد للعنوان", 96, 108, 98, 8, {
+      fontFamily: META, fontSize: 10, fontWeight: 700, color: c.ink, textAlign: "right",
+    });
+    paint(add, "بند ثالث", "٠٣  صورة لها تعليق", 96, 120, 98, 8, {
+      fontFamily: META, fontSize: 10, fontWeight: 700, color: c.ink, textAlign: "right",
+    });
+    hairline(add, "فاصل الاقتباس", 16, 162, 178, c.line, 0.35);
+    band(add, "علامة الاقتباس", 16, 174, 18, 1.2, c.accent);
+    paint(add, "اقتباس", "الوحدة لا تعني البطاقة. تعني أن لكل كتلة عرضًا يليق بمهمتها.", 16, 182, 178, 20, {
+      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.7,
+    });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 250, 178, 8, {
+      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
+    });
+    paint(add, "تعليق الصورة", "تعليق الوحدة البصرية", 16, 148, 72, 8, {
+      fontFamily: META, fontSize: 7.5, fontWeight: 600, color: c.muted, textAlign: "right",
+    });
+  }, A4);
 }
 
 function executivePage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("ملخص تنفيذي", theme, (add) => {
-    add("logo", { name: "مساحة الشعار الرسمي", x: 94, y: 20, w: 22, h: 22 });
-    add("text", {
-      name: "التاريخ",
-      x: 24,
-      y: 24,
-      w: 62,
-      h: 8,
-      content: "التاريخ",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 8,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "left",
-      },
+    paint(add, "تصنيف", "ملخص تنفيذي", 16, 36, 178, 6, {
+      fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
     });
-    add("text", {
-      name: "العنوان التنفيذي",
-      x: 34,
-      y: 72,
-      w: 142,
-      h: 36,
-      content: "ملخص تنفيذي",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 31,
-        color: c.primary,
-        fontWeight: 800,
-        textAlign: "center",
-      },
+    paint(add, "الرسالة", "جملة واحدة\nتكفي لهذا\nالاجتماع.", 16, 52, 178, 48, {
+      fontFamily: DISPLAY, fontSize: 32, fontWeight: 800, color: c.primary, textAlign: "right", lineHeight: 1.12,
     });
-    add("line", {
-      name: "خط مرجعي",
-      x: 82,
-      y: 120,
-      w: 46,
-      h: 2,
-      style: { color: c.accent, stroke: 0.8 },
+    hairline(add, "فاصل", 150, 112, 44, c.accent, 1);
+    paint(add, "الرقم", "٤٢٪", 16, 130, 70, 16, {
+      fontFamily: DISPLAY, fontSize: 28, fontWeight: 800, color: c.ink, textAlign: "right", lineHeight: 1,
     });
-    add("box", {
-      name: "الرسالة التنفيذية",
-      x: 46,
-      y: 142,
-      w: 118,
-      h: 48,
-      content: "رسالة واحدة مركزة تلخص القرار أو النتيجة الأهم.",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 13,
-        color: c.ink,
-        fill: "#ffffff",
-        borderWidth: 0,
-        padding: 4,
-        lineHeight: 1.8,
-        textAlign: "center",
-      },
+    paint(add, "تسمية الرقم", "فوق الخطة، وتحت الطاقة", 16, 148, 80, 8, {
+      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
     });
-    add("text", {
-      name: "الرقم التنفيذي",
-      x: 72,
-      y: 210,
-      w: 66,
-      h: 32,
-      content: "000",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 38,
-        color: c.primary,
-        fontWeight: 800,
-        textAlign: "center",
-      },
+    paint(add, "المتن", "لا تُطلب شريحة إضافية. يُطلب قرار: نبقي الهدف، ونؤجل التوسعة.", 100, 132, 94, 28, {
+      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.7,
     });
-    add("text", {
-      name: "اسم الجهة",
-      x: 24,
-      y: 266,
-      w: 162,
-      h: 8,
-      content: org || "اسم الجهة",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 8,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "center",
-      },
+    hairline(add, "خط التوقيع", 16, 220, 48, c.line, 0.4);
+    paint(add, "التوقيع", "الاسم\nالصفة", 16, 226, 60, 14, {
+      fontFamily: META, fontSize: 10, fontWeight: 600, color: c.muted, textAlign: "right", lineHeight: 1.4,
     });
-  });
+    paint(add, "الجهة", org || "اسم الجهة", 100, 236, 94, 8, {
+      fontFamily: DISPLAY, fontSize: 12, fontWeight: 700, color: c.primary, textAlign: "right",
+    });
+  }, A4);
 }
 
 function statisticalPage(theme: Theme, org: string): Page {
   const c = identity(theme);
-  return page("إحصائية", theme, (add) => {
-    officialMark(add, c, "قراءة إحصائية", 14);
-    add("text", {
-      name: "الرقم الأكبر",
-      x: 24,
-      y: 70,
-      w: 86,
-      h: 46,
-      content: "000",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 55,
-        color: c.primary,
-        fontWeight: 800,
-        textAlign: "right",
-      },
+  return page("قراءة إحصائية", theme, (add) => {
+    runningHead(add, { ...theme, muted: c.muted, line: c.line }, "قراءة إحصائية");
+    paint(add, "الرقم", "٤٫٧", 120, 32, 74, 20, {
+      fontFamily: DISPLAY, fontSize: 36, fontWeight: 800, color: c.primary, textAlign: "right", lineHeight: 1,
     });
-    add("text", {
-      name: "وصف الإحصائية",
-      x: 24,
-      y: 120,
-      w: 86,
-      h: 9,
-      content: "المؤشر الأساسي",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 10,
-        color: c.muted,
-        fontWeight: 700,
-        textAlign: "right",
-      },
+    paint(add, "التسمية", "متوسط الرضا", 120, 54, 74, 6, {
+      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
     });
-    ["مؤشر 01", "مؤشر 02", "مؤشر 03"].forEach((label, i) =>
-      add("stat", {
-        name: label,
-        x: 132,
-        y: 72 + i * 34,
-        w: 54,
-        h: 28,
-        content: `00${i + 1}\n${label}`,
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 14,
-          color: c.ink,
-          fontWeight: 700,
-          textAlign: "center",
-        },
-      }),
-    );
-    add("shape", {
-      name: "مساحة الرسم",
-      x: 24,
-      y: 154,
-      w: 162,
-      h: 66,
-      style: {
-        fill: c.surface,
-        borderColor: c.line,
-        borderWidth: 0.35,
-        radius: 0,
-      },
+    const mini: [string, string][] = [
+      ["ن = ١٢٠٠", "العينة"],
+      ["±٠٫٢", "هامش الخطأ"],
+      ["٩٢٪", "اكتمال الاستجابة"],
+    ];
+    mini.forEach(([value, label], i) => {
+      const y = 32 + i * 14;
+      paint(add, `قيمة ${label}`, value, 16, y, 50, 6, {
+        fontFamily: DISPLAY, fontSize: 11, fontWeight: 800, color: c.ink, textAlign: "right",
+      });
+      paint(add, `اسم ${label}`, label, 68, y, 40, 6, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
+      });
     });
-    [24, 44, 68, 52, 82].forEach((h, i) =>
-      add("shape", {
-        name: `عمود قابل للتحرير ${i + 1}`,
-        x: 42 + i * 25,
-        y: 210 - h,
-        w: 11,
-        h,
-        style: {
-          fill: i === 4 ? c.accent : c.primary,
-          borderWidth: 0,
-          radius: 0,
-        },
-      }),
-    );
-    add("table", {
-      name: "جدول الإحصائية",
-      x: 24,
-      y: 232,
-      w: 162,
-      h: 34,
-      content: JSON.stringify([
-        ["البند", "القيمة"],
-        ["بند قابل للتحرير", "000"],
-      ]),
-      style: {
-        cols: 2,
-        rows: 2,
-        fontSize: 9,
-        headerBg: c.primary,
-        headerColor: "#ffffff",
-        tableBg: "#ffffff",
-        borderColor: c.line,
-      },
+    hairline(add, "قاعدة الرسم", 16, 188, 178, c.ink, 0.4);
+    const bars: [string, number][] = [
+      ["الخدمة", 86],
+      ["السرعة", 74],
+      ["الوضوح", 91],
+      ["المتابعة", 68],
+    ];
+    bars.forEach(([label, value], i) => {
+      const x = 28 + i * 44;
+      const h = value * 0.9;
+      band(add, `عمود ${label}`, x, 188 - h, 18, h, i === 2 ? c.accent : c.primary);
+      paint(add, `محور ${label}`, String(label), x - 6, 192, 30, 8, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "center",
+      });
     });
-    add("text", {
-      name: "اسم الجهة",
-      x: 24,
-      y: 278,
-      w: 162,
-      h: 8,
-      content: org || "اسم الجهة",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 8,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
+    paint(add, "القراءة", "الوضوح أعلى المحاور، والمتابعة أدناها. الفجوة إجراء، لا حملة.", 16, 210, 178, 14, {
+      fontFamily: BODY, fontSize: 12, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.6,
     });
-  });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 236, 178, 6, {
+      fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "right",
+    });
+    folio(add, { ...theme, line: c.line, muted: c.muted }, org, "٠٦");
+  }, A4);
 }
 
 function sectionDividerPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("فاصل قسم", theme, (add) => {
-    add("logo", { name: "مساحة الشعار الرسمي", x: 24, y: 22, w: 22, h: 22 });
-    add("text", {
-      name: "اسم الجهة",
-      x: 52,
-      y: 28,
-      w: 134,
-      h: 8,
-      content: org || "اسم الجهة",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 9,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
+    paint(add, "الجهة", org || "اسم الجهة", 16, 28, 178, 6, {
+      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
     });
-    add("text", {
-      name: "رقم القسم",
-      x: 24,
-      y: 90,
-      w: 162,
-      h: 70,
-      content: "01",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 88,
-        color: c.primary,
-        fontWeight: 800,
-        textAlign: "right",
-        lineHeight: 0.9,
-      },
+    paint(add, "رقم القسم", "٠٢", 16, 70, 178, 36, {
+      fontFamily: DISPLAY, fontSize: 72, fontWeight: 800, color: c.primary, textAlign: "right", lineHeight: 0.85,
     });
-    add("text", {
-      name: "عنوان القسم",
-      x: 24,
-      y: 174,
-      w: 120,
-      h: 22,
-      content: "عنوان القسم",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 25,
-        color: c.ink,
-        fontWeight: 800,
-        textAlign: "right",
-      },
+    hairline(add, "فاصل", 140, 118, 54, c.accent, 1.1);
+    paint(add, "عنوان القسم", "النتائج\nوالأثر", 16, 132, 150, 28, {
+      fontFamily: DISPLAY, fontSize: 28, fontWeight: 800, color: c.ink, textAlign: "right", lineHeight: 1.1,
     });
-    add("text", {
-      name: "وصف القسم",
-      x: 24,
-      y: 208,
-      w: 108,
-      h: 26,
-      content: "وصف مختصر للقسم ومساره.",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 11,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "right",
-        lineHeight: 1.7,
-      },
+    paint(add, "وصف القسم", "ما الذي تغيّر، ولماذا يهم القرار التالي.", 16, 170, 140, 14, {
+      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.muted, textAlign: "right", lineHeight: 1.6,
     });
-    add("shape", {
-      name: "علامة القسم",
-      x: 158,
-      y: 174,
-      w: 28,
-      h: 28,
-      style: { fill: c.accent, borderWidth: 0, shape: "circle" },
+    paint(add, "الفهرس", "٠١ النطاق\n٠٢ النتائج\n٠٣ التوصية", 16, 220, 80, 24, {
+      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right", lineHeight: 1.6,
     });
-  });
+  }, A4);
 }
 
 function processPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("مراحل إجرائية", theme, (add) => {
-    officialMark(add, c, "المراحل الإجرائية", 14);
-    add("text", {
-      name: "عنوان المسار",
-      x: 24,
-      y: 62,
-      w: 162,
-      h: 18,
-      content: "منهجية التنفيذ",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 22,
-        color: c.primary,
-        fontWeight: 800,
-        textAlign: "right",
-      },
+    paint(add, "تسمية", "تسلسل إجرائي", 16, 22, 178, 6, {
+      fontFamily: META, fontSize: 9, fontWeight: 700, color: c.accent, textAlign: "right",
     });
-    const stages = ["تحديد", "تحليل", "تنفيذ", "قياس"];
-    stages.forEach((label, i) => {
-      const x = 24 + i * 43;
-      if (i < stages.length - 1)
-        add("line", {
-          name: `صلة المرحلة ${i + 1}`,
-          x: x + 18,
-          y: 128,
-          w: 25,
-          h: 2,
-          style: { color: c.line, stroke: 0.7 },
-        });
-      add("shape", {
-        name: `نقطة المرحلة ${i + 1}`,
-        x,
-        y: 116,
-        w: 24,
-        h: 24,
-        style: {
-          fill: i === 0 ? c.primary : "#ffffff",
-          borderColor: c.primary,
-          borderWidth: 0.7,
-          shape: "circle",
-        },
+    paint(add, "العنوان", "أربع مراحل على خط واحد", 16, 34, 178, 12, {
+      fontFamily: DISPLAY, fontSize: 20, fontWeight: 800, color: c.primary, textAlign: "right",
+    });
+    hairline(add, "المسار", 20, 78, 170, c.line, 0.6);
+    const stages: [string, string][] = [
+      ["تحديد", "نطاق مكتوب ومالك."],
+      ["تحليل", "رقم مع مصدر."],
+      ["تنفيذ", "هذه المرحلة الآن."],
+      ["قياس", "بعد ثلاثين يومًا."],
+    ];
+    stages.forEach(([label, note], i) => {
+      const x = 16 + i * 46;
+      band(add, `نقطة ${label}`, x + 14, 74, 8, 8, i === 2 ? c.accent : c.primary);
+      paint(add, `رقم ${label}`, `٠${i + 1}`, x, 90, 42, 8, {
+        fontFamily: DISPLAY, fontSize: 12, fontWeight: 800, color: i === 2 ? c.accent : c.primary, textAlign: "center",
       });
-      add("text", {
-        name: `رقم المرحلة ${i + 1}`,
-        x,
-        y: 122,
-        w: 24,
-        h: 8,
-        content: `0${i + 1}`,
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 10,
-          color: i === 0 ? "#ffffff" : c.primary,
-          fontWeight: 800,
-          textAlign: "center",
-        },
+      paint(add, `اسم ${label}`, label, x, 102, 42, 8, {
+        fontFamily: DISPLAY, fontSize: 12, fontWeight: 800, color: c.ink, textAlign: "center",
       });
-      add("text", {
-        name: `اسم المرحلة ${i + 1}`,
-        x: x - 5,
-        y: 150,
-        w: 34,
-        h: 10,
-        content: label,
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 10,
-          color: c.ink,
-          fontWeight: 700,
-          textAlign: "center",
-        },
+      paint(add, `شرح ${label}`, note, x, 114, 42, 16, {
+        fontFamily: META, fontSize: 8, fontWeight: 600, color: c.muted, textAlign: "center", lineHeight: 1.4,
       });
     });
-    add("box", {
-      name: "ملاحظة المسار",
-      x: 24,
-      y: 190,
-      w: 162,
-      h: 42,
-      content: "ملاحظة أو وصف مختصر للعملية.",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 12,
-        color: c.ink,
-        fill: "#ffffff",
-        borderColor: c.line,
-        borderWidth: 0.35,
-        radius: 0,
-        padding: 4,
-        lineHeight: 1.7,
-        textAlign: "right",
-      },
+    paint(add, "الحالة", "المرحلة الحالية هي التنفيذ. القياس لا يبدأ عند التسليم.", 16, 150, 178, 16, {
+      fontFamily: BODY, fontSize: 13, fontWeight: 500, color: c.ink, textAlign: "right", lineHeight: 1.7,
     });
-    add("text", {
-      name: "اسم الجهة",
-      x: 24,
-      y: 266,
-      w: 162,
-      h: 8,
-      content: org || "اسم الجهة",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 8,
-        color: c.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
+    paint(add, "الجهة", org || "اسم الجهة", 16, 250, 178, 8, {
+      fontFamily: META, fontSize: 9, fontWeight: 600, color: c.muted, textAlign: "right",
     });
-  });
+  }, A4);
 }
 
 export const PACKS: {
@@ -2185,7 +1182,7 @@ export const PACKS: {
   {
     id: "briefing",
     title: "عرض قيادي موجز",
-    desc: "غلاف عرض مع مؤشرات وخاتمة",
+    desc: "غلاف عرض مع موجز وقرار",
     pages: "3 صفحات",
   },
   {
@@ -2363,21 +1360,21 @@ export const PAGE_TEMPLATES: PageTemplateDef[] = [
   {
     id: "cover",
     title: "غلاف رسمي",
-    desc: "شريط كحلي وشعار وعنوان",
+    desc: "عمود تجليد، عنوان، وصورة بمعيار الغلاف",
     category: "covers",
     size: A4_SIZE,
   },
   {
     id: "cover-celebration",
     title: "غلاف مناسبة",
-    desc: "غلاف احتفالي بخلفية داكنة",
+    desc: "غلاف مناسبة: صورة ثم عنوان أميري",
     category: "covers",
     size: A4_SIZE,
   },
   {
     id: "text",
     title: "صفحة نصية",
-    desc: "عنوان وفقرة وجدول",
+    desc: "عمودان وقراءة ثم جدول",
     category: "reports",
     size: A4_SIZE,
   },
@@ -2391,14 +1388,14 @@ export const PAGE_TEMPLATES: PageTemplateDef[] = [
   {
     id: "achievements",
     title: "إنجازات",
-    desc: "بطاقات أثر",
+    desc: "أثر واحد ثم ثلاثة بنود",
     category: "inner",
     size: A4_SIZE,
   },
   {
     id: "images",
     title: "معرض صور",
-    desc: "أربع صور مع تعليق",
+    desc: "تكوين صور غير متماثل مع تعليق",
     category: "inner",
     size: A4_SIZE,
   },
@@ -2426,7 +1423,7 @@ export const PAGE_TEMPLATES: PageTemplateDef[] = [
   {
     id: "stats-board",
     title: "لوحة مؤشرات",
-    desc: "أربع بطاقات أرقام وأشرطة تقدم",
+    desc: "رقم قائد وأشرطة تقدم وقراءة",
     category: "stats",
     size: A4_SIZE,
   },
@@ -2454,7 +1451,7 @@ export const PAGE_TEMPLATES: PageTemplateDef[] = [
   {
     id: "slide-stats",
     title: "شريحة مؤشرات",
-    desc: "ثلاث بطاقات ومؤشر تقدم",
+    desc: "مؤشر قائد وقراءتان وشريط تقدم",
     category: "slides",
     size: SLIDE_SIZE,
   },

@@ -121,9 +121,10 @@ function rule(target: Page, y: number, x = 17, w = 176, color = LINE) {
 }
 
 function photoPlaceholder(label: string, landscape = false): string {
+  void label;
   const width = landscape ? 900 : 600;
   const height = landscape ? 560 : 760;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#edf3ef"/><path d="M${width * 0.08} ${height * 0.78}L${width * 0.38} ${height * 0.48}l${width * 0.18} ${height * 0.17} ${width * 0.18} -${height * 0.25} ${width * 0.18} ${height * 0.38}" fill="none" stroke="#9db7a7" stroke-width="12"/><circle cx="${width * 0.72}" cy="${height * 0.28}" r="${width * 0.065}" fill="#c9a86a"/><text x="50%" y="91%" text-anchor="middle" font-family="sans-serif" font-size="${landscape ? 24 : 28}" fill="#52675b">${label}</text></svg>`;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="100%" height="100%" fill="#143028"/><rect y="${height * 0.62}" width="100%" height="${height * 0.38}" fill="#0d241c"/><rect x="${width * 0.08}" y="${height * 0.18}" width="${width * 0.12}" height="${height * 0.62}" fill="#1d4a38"/><rect x="${width * 0.24}" y="${height * 0.28}" width="${width * 0.18}" height="${height * 0.52}" fill="#245743"/><rect x="${width * 0.46}" y="${height * 0.12}" width="${width * 0.22}" height="${height * 0.68}" fill="#1a3d2e"/><rect x="${width * 0.72}" y="${height * 0.22}" width="${width * 0.16}" height="${height * 0.1}" fill="#c9a86a"/><rect y="${height * 0.96}" width="100%" height="${height * 0.04}" fill="#c9a86a"/></svg>`;
   const bytes = new TextEncoder().encode(svg);
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
@@ -134,34 +135,35 @@ function resumePage(language: "ar" | "en"): Page {
   const arabic = language === "ar";
   const target = page(arabic ? "السيرة الذاتية" : "Resume");
   const align = arabic ? "right" : "left";
-  const startX = 19;
-  const bodyW = 172;
-  shape(target, "شريط الهوية", 0, 0, 210, 40, GREEN);
-  text(target, "الاسم", arabic ? "الاسم الكامل" : "FULL NAME", startX, 7, 138, 12, {
-    size: 22,
-    color: PAPER,
+  const startX = arabic ? 18 : 18;
+  const bodyW = arabic ? 140 : 174;
+  shape(target, "خط الهوية", 0, 0, 210, 2.2, GREEN);
+  if (arabic) {
+    add(target, "image", "صورة شخصية اختيارية", 168, 12, 24, 28, "", {}, photoPlaceholder("صورة اختيارية"));
+  }
+  text(target, "الاسم", arabic ? "الاسم الكامل" : "FULL NAME", startX, 12, bodyW, 12, {
+    size: 24,
+    color: GREEN,
     weight: 800,
     align,
     font: arabic ? "Tajawal" : "Georgia",
   });
-  text(target, "المسمى المهني", arabic ? "المسمى المهني المستهدف" : "TARGET ROLE", startX, 22, 138, 8, {
+  text(target, "المسمى المهني", arabic ? "المسمى المهني المستهدف" : "TARGET ROLE", startX, 26, bodyW, 7, {
     size: 10,
-    color: "#e0eee5",
+    color: INK,
     weight: 600,
     align,
   });
-  if (arabic) {
-    add(target, "image", "صورة شخصية اختيارية", 164, 6, 27, 27, "", {}, photoPlaceholder("صورة اختيارية"));
-  }
+  rule(target, 36, startX, bodyW, GOLD);
   text(target, "معلومات التواصل", arabic
     ? "المدينة  ·  البريد الإلكتروني  ·  الهاتف  ·  LinkedIn"
-    : "City  ·  email@example.com  ·  +1 555 0100  ·  LinkedIn", startX, 32, bodyW, 6, {
-    size: 7,
-    color: PAPER,
+    : "City  ·  email@example.com  ·  +1 555 0100  ·  LinkedIn", startX, 40, bodyW, 6, {
+    size: 7.5,
+    color: MUTED,
     align,
   });
 
-  let y = 51;
+  let y = 54;
   const section = (title: string, content: string, height: number) => {
     text(target, `عنوان ${title}`, title, startX, y, bodyW, 7, {
       size: 11,
@@ -261,24 +263,26 @@ function voucherPage(title: string, kind: "receipt" | "cash" | "payment"): Page 
 
 function portfolioPages(): Page[] {
   const cover = page("الغلاف");
-  shape(cover, "مساحة الغلاف", 0, 0, 210, 297, "#f1f5f2");
-  shape(cover, "الشريط الأخضر", 0, 0, 9, 297, GREEN);
-  add(cover, "image", "صورة غلاف — استبدل من المكتبة", 84, 38, 100, 126, "", {}, photoPlaceholder("صورة المشروع", true));
-  text(cover, "عنوان الملف", "PORTFOLIO\nملف الأعمال", 22, 42, 57, 31, { size: 18, color: GREEN, weight: 800, font: "Georgia" });
-  text(cover, "اسم المصمم", "اسم المصمم", 22, 190, 160, 13, { size: 23, weight: 800 });
-  text(cover, "التخصص", "مصمم بصري  ·  هوية وعلامات تجارية", 22, 207, 160, 8, { size: 10, color: MUTED });
-  text(cover, "بيانات التواصل", "الموقع الإلكتروني  ·  البريد  ·  الهاتف", 22, 258, 165, 8, { size: 8, color: MUTED });
+  shape(cover, "حقل الغلاف", 0, 118, 210, 179, "#143028");
+  add(cover, "image", "صورة غلاف — استبدل من المكتبة", 0, 118, 210, 179, "", {}, photoPlaceholder("صورة المشروع", true));
+  shape(cover, "خط الهوية", 0, 0, 210, 2.2, GREEN);
+  text(cover, "عنوان الملف", "ملف أعمال", 20, 22, 170, 10, { size: 11, color: GREEN, weight: 700 });
+  text(cover, "اسم المصمم", "اسم المصمم", 20, 38, 170, 16, { size: 28, weight: 800 });
+  text(cover, "التخصص", "هوية  ·  تحرير  ·  أنظمة بصرية", 20, 60, 150, 8, { size: 11, color: MUTED });
+  rule(cover, 76, 20, 42, GOLD);
+  text(cover, "بيانات التواصل", "الموقع  ·  البريد  ·  الهاتف", 20, 88, 170, 8, { size: 8, color: MUTED });
 
   const about = page("نبذة عن المصمم");
   shape(about, "شريط علوي", 0, 0, 210, 5, GOLD);
   text(about, "عنوان النبذة", "الفكرة خلف العمل", 20, 28, 170, 15, { size: 22, color: GREEN, weight: 800 });
-  text(about, "نبذة تعريفية", "اكتب نبذة قصيرة عن منهجك وخبرتك وما يميز طريقة عملك.\n\nاجعل النص واضحاً ومباشراً؛ ويمكن تمديد المساحة أو تعديل ارتفاعها حسب المحتوى.", 20, 54, 170, 42, { size: 11, align: "justify" });
-  shape(about, "بطاقة تخصص", 20, 122, 78, 49, GREEN_SOFT);
-  text(about, "التخصصات", "التخصصات\nهوية · تحرير · رقمية", 27, 134, 64, 23, { size: 10, color: GREEN, weight: 700 });
-  shape(about, "بطاقة الخبرة", 110, 122, 78, 49, "#f7f4ec");
-  text(about, "سنوات الخبرة", "سنوات الخبرة\n٠٥+  ·  مشاريع متنوعة", 117, 134, 64, 23, { size: 10, color: INK, weight: 700 });
-  add(about, "image", "صورة شخصية — استبدل من المكتبة", 20, 196, 52, 60, "", {}, photoPlaceholder("صورة المصمم"));
-  text(about, "مبادئ التصميم", "01  وضوح\n02  اتساق\n03  أثر قابل للقياس", 88, 205, 95, 31, { size: 10, color: MUTED });
+  text(about, "نبذة تعريفية", "منهج مختصر: وضوح أولًا، ثم اتساق، ثم أثر يمكن قياسه. النص يُستبدل دون تحريك الشبكة.", 20, 52, 170, 28, { size: 12, align: "right" });
+  rule(about, 88, 20, 170, GOLD);
+  text(about, "التخصصات", "التخصص", 110, 98, 80, 6, { size: 8, color: GREEN, weight: 700 });
+  text(about, "تفاصيل التخصص", "هوية · تحرير · أنظمة رقمية", 110, 108, 80, 8, { size: 11, weight: 700 });
+  text(about, "سنوات الخبرة", "الخبرة", 20, 98, 70, 6, { size: 8, color: MUTED, weight: 700 });
+  text(about, "تفاصيل الخبرة", "خمس سنوات · مشاريع متنوعة", 20, 108, 80, 8, { size: 11, weight: 700 });
+  add(about, "image", "صورة شخصية — استبدل من المكتبة", 20, 132, 48, 58, "", {}, photoPlaceholder("صورة المصمم"));
+  text(about, "مبادئ التصميم", "٠١  وضوح المرجع\n٠٢  مقياس واحد للعناوين\n٠٣  صورة لا تُترك بلا تعليق", 80, 140, 110, 28, { size: 11, color: INK });
 
   const projects = page("مشاريع مختارة");
   text(projects, "عنوان المشاريع", "مشاريع مختارة", 20, 22, 170, 13, { size: 20, color: GREEN, weight: 800 });
@@ -351,12 +355,12 @@ function greetingPages(): Page[] {
   return layouts.map((layout) => {
     const target = page(layout.name, 108, 135);
     shape(target, "خلفية البطاقة", 0, 0, 108, 135, layout.bg);
-    shape(target, "إطار رفيع", 6, 6, 96, 123, "transparent", layout.accent);
-    add(target, "image", "صورة أو شعار — استبدل من المكتبة", 37, 18, 34, 28, "", {}, photoPlaceholder("صورة اختيارية", true));
-    text(target, "اسم المستلم", "إلى: الاسم الكريم", 13, 51, 82, 7, { size: 8, color: MUTED, align: "center" });
-    text(target, "نص التهنئة", layout.greeting, 11, 64, 86, 15, { size: 20, color: layout.accent, weight: 800, align: "center" });
-    text(target, "رسالة البطاقة", "أطيب التمنيات بالسعادة والنجاح\nلتكن أيامكم مليئة بالفرح والإنجاز.", 14, 83, 80, 19, { size: 9, align: "center" });
-    text(target, "اسم المرسل", "مع أطيب التحيات  ·  اسم المرسل", 14, 111, 80, 7, { size: 7, color: MUTED, align: "center" });
+    add(target, "image", "صورة أو شعار — استبدل من المكتبة", 0, 0, 108, 46, "", {}, photoPlaceholder("صورة اختيارية", true));
+    shape(target, "خط الهوية", 0, 46, 108, 1.2, layout.accent);
+    text(target, "اسم المستلم", "إلى: الاسم الكريم", 10, 54, 88, 6, { size: 8, color: MUTED, align: "right" });
+    text(target, "نص التهنئة", layout.greeting, 10, 64, 88, 14, { size: 16, color: layout.accent, weight: 800, align: "right" });
+    text(target, "رسالة البطاقة", "أطيب التمنيات بالسعادة والنجاح،\nولتكن الأيام القادمة على قدر الجهد.", 10, 84, 88, 16, { size: 9, align: "right" });
+    text(target, "اسم المرسل", "مع التحية  ·  اسم المرسل", 10, 116, 88, 6, { size: 7, color: MUTED, align: "right" });
     return target;
   });
 }
