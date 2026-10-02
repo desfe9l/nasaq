@@ -32,9 +32,8 @@ export const NSQ_SAVE_AS_EVENT = "nasaq:nsq-save-as";
  * «ملف» — native project-file actions for `.nsq`.
  *
  * New / Open are available to everyone (opening a received file is how new
- * people discover NASAQ). Saving and downloading a project file follow the
- * same account gate as the export dialog. Native project portability is
- * available on every plan; other export entitlements are unchanged.
+ * people discover NASAQ). Saving or downloading the project file is a format
+ * like any other: it stays closed until the account has an export licence.
  */
 export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
   const [open, setOpen] = useState(false);
@@ -98,7 +97,13 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
       setSignInOpen(true);
       return false;
     }
-    if (!canUseDemoExport("nsq", entitlements.advanced_export === true)) {
+    if (
+      !canUseDemoExport(
+        "nsq",
+        entitlements.advanced_export === true,
+        entitlements.basic_export === true,
+      )
+    ) {
       setUpgradeOpen(true);
       return false;
     }

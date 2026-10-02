@@ -83,11 +83,12 @@ export const DEMO_LICENSE: LicenseRecord = {
 /** The public experience deliberately opens only a blank, three-page sample. */
 export const DEMO_ALLOWED_PACKS = ["blank"] as const;
 /**
- * Free / demo exports: raster images only, capped at 72 DPI. PDF (raster and
- * vector), 300 DPI print output, Word, PowerPoint, standalone HTML and the
- * project file all require a server-validated `advanced_export` entitlement.
+ * Free accounts cannot download a file in any format. A licence with
+ * `basic_export` (trial or a purchase that includes basic export) may save
+ * PNG, JPG, PDF and the native .nsq project. Word, PowerPoint, SVG, HTML and
+ * the JSON backup need `advanced_export`.
  */
-export const DEMO_ALLOWED_EXPORTS = ["png", "jpg"] as const;
+export const DEMO_ALLOWED_EXPORTS = ["png", "jpg", "pdf", "nsq"] as const;
 
 /** Layout stays at 96 CSS px/in; output DPI only controls raster sampling. */
 import { CSS_DPI } from "../editor/render-units.ts";
@@ -121,10 +122,14 @@ export function canCreateDemoProject(projectCount: number): boolean {
   return projectCount < (DEMO_LICENSE.entitlements.maxProjects ?? Infinity);
 }
 
-export function canUseDemoExport(format: string, hasAdvancedExport = false): boolean {
-  // Native source-file portability is available on every plan.
-  // Premium presentation/print export gates remain unchanged.
-  if (hasAdvancedExport || format === "nsq") return true;
+export function canUseDemoExport(
+  format: string,
+  hasAdvancedExport = false,
+  hasBasicExport = false,
+): boolean {
+  if (!format) return false;
+  if (hasAdvancedExport) return true;
+  if (!hasBasicExport) return false;
   return (DEMO_ALLOWED_EXPORTS as readonly string[]).includes(format);
 }
 

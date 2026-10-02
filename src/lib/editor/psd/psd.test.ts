@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { initializeCanvas, readPsd, writePsd } from "ag-psd";
 
 import { applyAssetDecisions, importPsdBytes } from "./pipeline.ts";
+import { placedFlip } from "./parse.ts";
 import { assertPsdBytes, sanitizeLayerName } from "./security.ts";
 import { resolvePsdFont } from "./fonts.ts";
 import type { CanvasEl } from "../model.ts";
@@ -305,5 +306,84 @@ describe("PSD → NASAQ", () => {
     const { parsePsd } = await import("./parse.ts");
     const again = validateConversion(await parsePsd(bytes, "stack.psd"), moved);
     assert.ok(again.issues.some((issue) => issue.code === "position"));
+  });
+
+  it("scales text by its matrix and does not rotate a smart object from its corners", async () => {
+    assert.deepEqual(placedFlip([300, 40, 100, 40, 100, 140, 300, 140]), { flipX: true, flipY: false });
+    assert.deepEqual(placedFlip([100, 140, 300, 140, 300, 40, 100, 40]), { flipX: false, flipY: true });
+    assert.deepEqual(placedFlip([100, 40, 300, 40, 300, 140, 100, 140]), { flipX: false, flipY: false });
+
+    const bytes = writePsd(
+      {
+        width: 800,
+        height: 600,
+        children: [
+          {
+            name: "Logo",
+            left: 400,
+            top: 300,
+            right: 560,
+            bottom: 380,
+            imageData: checker(160, 80),
+            placedLayer: {
+              id: "20953ddb-9391-11ec-b4f1-c15674f50bc4",
+              type: "raster",
+              transform: [400, 300, 560, 300, 560, 380, 400, 380],
+              width: 160,
+              height: 80,
+            },
+          },
+          {
+            name: "Scaled",
+            text: {
+              text: "عنوان الخبر",
+              transform: [2, 0, 0, 2, 180, 90],
+              style: {
+                font: { name: "Tajawal-Bold" },
+                fontSize: 12,
+                fillColor: { r: 12, g: 20, b: 30 },
+              },
+              paragraphStyle: { justification: "right" },
+            },
+          },
+          {
+            name: "Boxed",
+            left: 40,
+            top: 50,
+            right: 240,
+            bottom: 90,
+            text: {
+              text: "نَسَق",
+              transform: [2, 0, 0, 2, 0, 0],
+              style: {
+                font: { name: "Tajawal" },
+                fontSize: 11,
+                fillColor: { r: 0, g: 0, b: 0 },
+              },
+              paragraphStyle: { justification: "right" },
+            },
+          },
+        ],
+      },
+      { noBackground: true },
+    );
+    const result = await importPsdBytes(bytes, "fidelity.psd");
+    const elements = flat(result.project.pages[0]!.elements);
+    const logo = elements.find((el) => el.name === "Logo");
+    const scaled = elements.find((el) => el.name === "Scaled");
+    const boxed = elements.find((el) => el.name === "Boxed");
+    assert.equal(logo?.type, "image");
+    assert.equal(logo?.rotation || 0, 0);
+    assert.equal(logo?.style.flipX, undefined);
+    assert.ok(Math.abs((logo?.x || 0) - (400 * 25.4) / 72) < 0.2);
+    assert.equal(scaled?.style.fontSize, 24);
+    assert.equal(scaled?.style.direction, "rtl");
+    assert.equal(scaled?.style.textAlign, "right");
+    assert.ok((scaled?.x || 0) > 5, `scaled text piled at the origin: ${scaled?.x}`);
+    assert.ok((scaled?.y || 0) > 5 && (scaled?.y || 0) < 40);
+    assert.equal(boxed?.style.fontSize, 22);
+    assert.ok(Math.abs((boxed?.x || 0) - (40 * 25.4) / 72) < 0.3);
+    assert.equal(scaled?.style.overflowVisible, true);
+    assert.equal(scaled?.style.textBoxMode, "fixed");
   });
 });

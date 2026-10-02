@@ -186,6 +186,8 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
       letterSpacing: node.text.letterSpacingMm ? Math.round(node.text.letterSpacingMm * 100) / 100 : undefined,
       direction: node.text.direction,
       textBoxMode: "fixed",
+      overflowVisible: true,
+      verticalAlign: "top",
     };
     if (node.effects.strokeColor && node.effects.strokeWidthMm) {
       el.style.textShadow = `0 0 ${node.effects.strokeWidthMm}mm ${node.effects.strokeColor}`;
@@ -234,6 +236,8 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
       radius: 0,
       borderColor: node.effects.strokeColor,
       borderWidth: node.effects.strokeWidthMm || 0,
+      flipX: node.flipX || undefined,
+      flipY: node.flipY || undefined,
     };
     applyCommonStyle(el, node);
     acc.imageCount += 1;

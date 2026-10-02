@@ -558,8 +558,13 @@ function notifyExportFormatBlock(format: ExportFormat): boolean {
     return true;
   }
   const advanced = useEditor.getState().entitlements.advanced_export === true;
-  if (canUseDemoExport(format, advanced)) return false;
-  toast.error("هذه الصيغة متاحة ضمن الترخيص المتقدم فقط");
+  const basic = useEditor.getState().entitlements.basic_export === true;
+  if (canUseDemoExport(format, advanced, basic)) return false;
+  toast.error(
+    basic
+      ? "هذه الصيغة متاحة ضمن الترخيص المتقدم فقط"
+      : "لا يمكن حفظ أي صيغة قبل شراء الترخيص",
+  );
   return true;
 }
 

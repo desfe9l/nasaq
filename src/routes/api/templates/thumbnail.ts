@@ -19,8 +19,10 @@ import { createFileRoute } from "@tanstack/react-router";
  *   · `?id=` accepts a published template's slug or id (same lookup the public
  *     page uses), so a share link always resolves.
  *   · Only PUBLISHED rows are served — a draft's image is not public.
- *   · SVG is served as `image/svg+xml` and the payload's own declared mime type
- *     is always honoured; nothing here re-encodes or trusts a client mime.
+ *   · SVG previews are rasterised to PNG here. Crawlers do not paint
+ *     `image/svg+xml` as an `og:image`, so serving the SVG would make chats
+ *     and tweets fall back to whatever else they have cached.
+ *   · Other stored mime types are streamed as-is. Nothing trusts a client mime.
  *   · Cacheable for an hour: the image is immutable per row, and a crawler
  *     refetching it must not hit the database on every share render.
  *   · No `X-Content-Type-Options: nosniff` override is needed because the
@@ -61,6 +63,23 @@ export const Route = createFileRoute("/api/templates/thumbnail")({
           const [, mime, payload] = match;
           const bytes = Buffer.from(payload, "base64");
           if (bytes.byteLength > 8 * 1024 * 1024) return notFound();
+          if (mime.toLowerCase() === "image/svg+xml") {
+            try {
+              const { rasterizeSvgToPng } = await import("@/lib/og/raster-svg");
+              const png = Buffer.from(await rasterizeSvgToPng(bytes.toString("utf8")));
+              return new Response(png, {
+                status: 200,
+                headers: {
+                  "content-type": "image/png",
+                  "content-length": String(png.byteLength),
+                  "cache-control": "public, max-age=86400, immutable",
+                  "content-security-policy": "default-src 'none'; sandbox",
+                },
+              });
+            } catch {
+              return notFound();
+            }
+          }
           return new Response(bytes, {
             status: 200,
             headers: {

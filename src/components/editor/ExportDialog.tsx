@@ -233,8 +233,10 @@ export function ExportDialog() {
   const needsRaster =
     RASTER_FORMATS.has(format) ||
     (OFFICE_FORMATS.has(format) && !editableOffice);
-  const licensed = entitlements.advanced_export === true;
-  const formatAllowed = canUseDemoExport(format, licensed);
+  const advanced = entitlements.advanced_export === true;
+  const basic = entitlements.basic_export === true;
+  const licensed = advanced;
+  const formatAllowed = canUseDemoExport(format, advanced, basic);
   const accessBlock = projectAccessBlock(
     { pack, licensedTemplateId, pages },
     entitlements,
@@ -434,7 +436,7 @@ export function ExportDialog() {
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {FORMATS.map((f) => {
               const Icon = f.icon;
-              const locked = !canUseDemoExport(f.id, licensed);
+              const locked = !canUseDemoExport(f.id, advanced, basic);
               return (
                 <button
                   key={f.id}
@@ -450,7 +452,7 @@ export function ExportDialog() {
                   aria-disabled={locked || undefined}
                   title={
                     locked
-                      ? "متاح في النسخة الكاملة — اضغط لطلب الترخيص"
+                      ? "يُتاح بعد شراء الترخيص"
                       : undefined
                   }
                   className={cn(

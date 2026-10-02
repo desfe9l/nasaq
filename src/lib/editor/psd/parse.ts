@@ -81,11 +81,56 @@ const CSS_BLEND: Record<string, string> = {
   luminosity: "luminosity",
 };
 
-function rotationOf(transform?: number[]): number {
-  if (!transform || transform.length < 4) return 0;
-  const deg = (Math.atan2(transform[1] ?? 0, transform[0] ?? 1) * 180) / Math.PI;
-  if (!Number.isFinite(deg) || Math.abs(deg) < 0.4) return 0;
-  return Math.round(deg * 100) / 100;
+/**
+ * Text transform is a 2×3 matrix `[xx, xy, yx, yy, tx, ty]`.
+ * A placed-layer transform is eight corner coordinates and must never be read
+ * as that matrix — doing so rotates every logo by `atan2(y, x)` of its corner.
+ */
+export function textMatrix(transform?: number[]): {
+  scaleX: number;
+  scaleY: number;
+  rotation: number;
+  tx: number;
+  ty: number;
+} | null {
+  if (!transform || transform.length < 6 || transform.length >= 8) return null;
+  const xx = transform[0] ?? 1;
+  const xy = transform[1] ?? 0;
+  const yx = transform[2] ?? 0;
+  const yy = transform[3] ?? 1;
+  const scaleX = Math.hypot(xx, xy) || 1;
+  const scaleY = Math.hypot(yx, yy) || 1;
+  let deg = (Math.atan2(xy, xx) * 180) / Math.PI;
+  if (!Number.isFinite(deg) || Math.abs(deg) < 0.4) deg = 0;
+  else deg = Math.round(deg * 100) / 100;
+  return { scaleX, scaleY, rotation: deg, tx: transform[4] ?? 0, ty: transform[5] ?? 0 };
+}
+
+/**
+ * Four corners of a smart object, TL TR BR BL.
+ * The layer's stored pixels are already the on-canvas appearance when they
+ * match the layer box, so this is only applied when the pixel buffer is a
+ * different size from the placed frame (the raw asset, not the render).
+ */
+export function placedFlip(transform?: number[]): { flipX: boolean; flipY: boolean } {
+  if (!transform || transform.length < 8) return { flipX: false, flipY: false };
+  const x0 = transform[0] ?? 0;
+  const y0 = transform[1] ?? 0;
+  const ux = (transform[2] ?? 0) - x0;
+  const uy = (transform[3] ?? 0) - y0;
+  const vx = (transform[6] ?? 0) - x0;
+  const vy = (transform[7] ?? 0) - y0;
+  let angle = Math.atan2(uy, ux);
+  let flipX = false;
+  if (Math.cos(angle) < 0) {
+    flipX = true;
+    angle += Math.PI;
+    if (angle > Math.PI) angle -= Math.PI * 2;
+  }
+  const downX = -Math.sin(angle);
+  const downY = Math.cos(angle);
+  const flipY = vx * downX + vy * downY < 0;
+  return { flipX, flipY };
 }
 
 function effectsOf(layer: Layer, dpi: number): PsdEffectNotes {
@@ -138,31 +183,89 @@ function textOf(layer: Layer): PsdTextRun | null {
   const text = layer.text;
   if (!text || typeof text.text !== "string" || !text.text) return null;
   const style = text.style || {};
-  const fontName = style.font?.name || "Unknown";
-  const fontSize = typeof style.fontSize === "number" && style.fontSize > 0 ? style.fontSize : 16;
-  const resolved = resolvePsdFont(fontName, !!style.fauxBold, !!style.fauxItalic);
+  const run = text.styleRuns?.[0]?.style;
+  const fontName = style.font?.name || run?.font?.name || "Unknown";
+  const rawSize =
+    typeof style.fontSize === "number" && style.fontSize > 0
+      ? style.fontSize
+      : typeof run?.fontSize === "number" && run.fontSize > 0
+        ? run.fontSize
+        : 16;
+  // Photoshop's UI size is the stored size times the text-matrix scale.
+  // Without it a 22px label arrives as 1.5pt and the line no longer fits its box.
+  const scale = textMatrix(text.transform)?.scaleY ?? 1;
+  const fontSize = rawSize * scale;
+  const resolved = resolvePsdFont(fontName, !!(style.fauxBold || run?.fauxBold), !!(style.fauxItalic || run?.fauxItalic));
   const justification = text.paragraphStyle?.justification || "left";
   const align = justification.startsWith("justify")
     ? "justify"
     : justification === "center" || justification === "right" || justification === "left"
       ? justification
       : "left";
-  const leading = typeof style.leading === "number" && style.leading > 0 ? style.leading : fontSize * 1.2;
+  const rawLeading =
+    typeof style.leading === "number" && style.leading > 0
+      ? style.leading
+      : typeof run?.leading === "number" && run.leading > 0
+        ? run.leading
+        : rawSize * 1.2;
+  const leading = rawLeading * scale;
   const tracking = typeof style.tracking === "number" ? style.tracking : 0;
   const emMm = fontSize * 0.3528;
+  const fill = style.fillColor && "r" in style.fillColor
+    ? style.fillColor
+    : run?.fillColor && "r" in run.fillColor
+      ? run.fillColor
+      : undefined;
+  const content = text.text.replace(/\r\n?/g, "\n").replace(/\u0003/g, "").replace(/\n+$/g, "");
   return {
-    content: text.text.replace(/\r\n?/g, "\n"),
+    content,
     fontName: resolved.fontName,
     fontSize,
-    fauxBold: !!style.fauxBold,
-    fauxItalic: !!style.fauxItalic,
-    underline: !!style.underline,
-    color: rgbHex(style.fillColor && "r" in style.fillColor ? style.fillColor : undefined),
+    fauxBold: !!(style.fauxBold || run?.fauxBold),
+    fauxItalic: !!(style.fauxItalic || run?.fauxItalic),
+    underline: !!(style.underline || run?.underline),
+    color: rgbHex(fill),
     align,
     lineHeight: Math.min(4, Math.max(0.8, leading / fontSize)),
     letterSpacingMm: (tracking / 1000) * emMm,
-    direction: textDirection(text.text),
+    direction: textDirection(content),
   };
+}
+
+/** Frame for a text layer whose pixel bounds were not stored. */
+function textFrame(
+  layer: Layer,
+  text: PsdTextRun,
+  dpi: number,
+): { left: number; top: number; width: number; height: number } | null {
+  const matrix = textMatrix(layer.text?.transform);
+  if (!matrix) return null;
+  const box = layer.text?.boxBounds;
+  if (box && box.length >= 4) {
+    const l = box[0] ?? 0;
+    const t = box[1] ?? 0;
+    const r = box[2] ?? l;
+    const b = box[3] ?? t;
+    const width = Math.abs(r - l) * matrix.scaleX;
+    const height = Math.abs(b - t) * matrix.scaleY;
+    if (width > 1 && height > 1) {
+      return {
+        left: matrix.tx + Math.min(l, r) * matrix.scaleX,
+        top: matrix.ty + Math.min(t, b) * matrix.scaleY,
+        width,
+        height,
+      };
+    }
+  }
+  const fontPx = text.fontSize * (dpi / 72);
+  const lines = text.content.split("\n");
+  const longest = lines.reduce((max, line) => Math.max(max, line.length), 1);
+  const width = Math.max(fontPx * 0.62 * longest, fontPx * 2);
+  const height = Math.max(fontPx * text.lineHeight * lines.length, fontPx * 1.15);
+  let left = matrix.tx;
+  if (text.align === "center") left = matrix.tx - width / 2;
+  else if (text.align === "right" || text.align === "justify") left = matrix.tx - width;
+  return { left, top: matrix.ty - fontPx * 0.8, width, height };
 }
 
 function vectorBox(layer: Layer): { left: number; top: number; width: number; height: number; radius: number; kind: "rect" | "circle" | "rounded" } | null {
@@ -256,12 +359,25 @@ async function toNode(layer: Layer, walk: Walk): Promise<PsdNode> {
     height = vector.height;
   }
   if ((width < 1 || height < 1) && text) {
-    const lines = text.content.split("\n");
-    const longest = lines.reduce((m, line) => Math.max(m, line.length), 1);
-    width = Math.max(text.fontSize * 0.55 * longest, text.fontSize * 2);
-    height = Math.max(text.fontSize * text.lineHeight * lines.length, text.fontSize * 1.2);
+    const framed = textFrame(layer, text, walk.dpi);
+    const anchorMissing = Math.abs(left) < 0.5 && Math.abs(top) < 0.5;
+    if (framed && anchorMissing) {
+      left = framed.left;
+      top = framed.top;
+      width = framed.width;
+      height = framed.height;
+    } else if (framed) {
+      if (width < 1) width = framed.width;
+      if (height < 1) height = framed.height;
+    } else {
+      const fontPx = text.fontSize * (walk.dpi / 72);
+      const lines = text.content.split("\n");
+      const longest = lines.reduce((m, line) => Math.max(m, line.length), 1);
+      if (width < 1) width = Math.max(fontPx * 0.62 * longest, fontPx * 2);
+      if (height < 1) height = Math.max(fontPx * text.lineHeight * lines.length, fontPx * 1.15);
+    }
     boundsEstimated = true;
-    issues.push("إطار النص غير مخزّن في الملف، قُدّر من حجم الخط");
+    issues.push("إطار النص غير مخزّن في الملف، قُدّر من حجم الخط ومصفوفة التحويل");
   }
 
   const node: PsdNode = {
@@ -279,7 +395,7 @@ async function toNode(layer: Layer, walk: Walk): Promise<PsdNode> {
     width: Math.max(0, width),
     height: Math.max(0, height),
     boundsEstimated,
-    rotation: rotationOf(layer.text?.transform || layer.placedLayer?.transform),
+    rotation: textMatrix(layer.text?.transform)?.rotation ?? 0,
     effects,
     issues,
     children: [],
@@ -358,9 +474,30 @@ async function toNode(layer: Layer, walk: Walk): Promise<PsdNode> {
       height: pixels.height,
       hash: await sha256Hex(encoded.bytes),
     };
+    const boundsW = Math.max(0, (layer.right ?? left) - (layer.left ?? left));
+    const boundsH = Math.max(0, (layer.bottom ?? top) - (layer.top ?? top));
+    const mismatch =
+      boundsW > 1 &&
+      boundsH > 1 &&
+      (Math.abs(pixels.width - boundsW) > 2 || Math.abs(pixels.height - boundsH) > 2);
+    if (mismatch) {
+      // Pixel buffer is the untransformed asset. Keep the placed frame and
+      // mirror it the way the smart-object corners say.
+      const flip = placedFlip(layer.placedLayer?.transform);
+      node.left = layer.left ?? left;
+      node.top = layer.top ?? top;
+      node.width = boundsW;
+      node.height = boundsH;
+      node.flipX = flip.flipX || undefined;
+      node.flipY = flip.flipY || undefined;
+      if (flip.flipX || flip.flipY) issues.push("انعكاس الكائن الذكي طُبّق ليطابق اتجاهه في الملف");
+    } else {
+      // The buffer already is the on-canvas appearance, including any flip
+      // Photoshop baked into the layer. Do not flip or rotate it again.
+      node.width = pixels.width;
+      node.height = pixels.height;
+    }
     if (layer.placedLayer) issues.push("كائن ذكي حُوّل من نسخته النقطية داخل الملف");
-    node.width = pixels.width;
-    node.height = pixels.height;
     return node;
   }
 
