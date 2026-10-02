@@ -13,6 +13,7 @@ import {
   Megaphone,
   Image as ImageIcon,
   KeyRound,
+  Sparkles,
   Trash2,
   Loader2,
   Save,
@@ -42,14 +43,16 @@ import {
 import AdminLicensePanel from "@/components/license/AdminLicensePanel";
 import { AdminTemplatesPanel } from "@/components/admin/AdminTemplatesPanel";
 import { PsdImportPanel } from "@/components/admin/PsdImportPanel";
+import { TemplateStudio } from "@/components/admin/TemplateStudio";
 import { SiteImagesPanel } from "@/components/admin/SiteImagesPanel";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth/client";
 
-type Tab = "templates" | "psd" | "commercial" | "content" | "images" | "licenses";
+type Tab = "templates" | "studio" | "psd" | "commercial" | "content" | "images" | "licenses";
 
 const TABS: { id: Tab; label: string; icon: typeof Shield }[] = [
   { id: "templates", label: "إدارة القوالب", icon: LayoutTemplate },
+  { id: "studio", label: "استوديو القوالب", icon: Sparkles },
   { id: "psd", label: "PSD → NASAQ", icon: Layers },
   { id: "commercial", label: "الإعدادات التجارية", icon: Store },
   { id: "content", label: "محتوى الموقع", icon: Megaphone },
@@ -170,6 +173,7 @@ export default function AdminDashboard() {
           <AdminTemplatesPanel />
         </div>
         {tab === "psd" && <PsdImportPanel />}
+        {tab === "studio" && <TemplateStudio />}
         <div hidden={tab !== "commercial"}>
           <SettingsTab kind="commercial" />
         </div>
