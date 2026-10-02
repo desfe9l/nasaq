@@ -28,6 +28,8 @@ import {
   Unlock,
   X,
 } from "lucide-react";
+import { fitBoxToPage } from "@/lib/editor/fit-page";
+import { pageSize } from "@/lib/editor/model";
 import {
   ICONS,
   SHADOWS,
@@ -1675,6 +1677,43 @@ export function PropertiesPanel({
 
               {["image", "logo"].includes(el.type) && (
                 <>
+                  {/* «ملاءمة الصفحة»: one press takes the picture to the page's
+                      own size — full bleed, or the largest size that stays
+                      inside the sheet with the picture's proportions. */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className="editor-mini-btn justify-center"
+                      disabled={el.locked || el.resizeLocked}
+                      title="يغطي الصفحة كاملة دون تشويه الصورة"
+                      onClick={() => {
+                        const box = fitBoxToPage(el, pageSize(page), "fill");
+                        updateElement(el.id, {
+                          ...box,
+                          rotation: 0,
+                          style: { objectFit: "cover", objectX: 50, objectY: 50 },
+                        });
+                      }}
+                    >
+                      ملء الصفحة
+                    </button>
+                    <button
+                      type="button"
+                      className="editor-mini-btn justify-center"
+                      disabled={el.locked || el.resizeLocked}
+                      title="أكبر حجم يبقى داخل الصفحة بنسبة الصورة، في المنتصف"
+                      onClick={() => {
+                        const box = fitBoxToPage(el, pageSize(page), "fit");
+                        updateElement(el.id, {
+                          ...box,
+                          rotation: 0,
+                          style: { objectFit: "contain", objectX: 50, objectY: 50 },
+                        });
+                      }}
+                    >
+                      ملاءمة داخل الصفحة
+                    </button>
+                  </div>
                   <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">
                     قفل النسبة أثناء التحجيم
                     <input

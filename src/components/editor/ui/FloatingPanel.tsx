@@ -676,6 +676,28 @@ export function FloatingPanel({
             >
               <Pin size={16} />
             </button>
+            {/* One press each for the two edges authors actually use: pin to
+                the right or the left without opening the edge menu. */}
+            <button
+              type="button"
+              onClick={() => onDockSideChange(dockSide === "right" ? null : "right")}
+              aria-pressed={dockSide === "right"}
+              aria-label={dockSide === "right" ? `فك تثبيت ${title} من اليمين` : `تثبيت ${title} على اليمين`}
+              title={dockSide === "right" ? "مثبتة على اليمين — انقر للفك" : DOCK_LABELS.right}
+              className={cn("fp-dock-quick", dockSide === "right" && "is-docked-active")}
+            >
+              <PanelRight size={15} />
+            </button>
+            <button
+              type="button"
+              onClick={() => onDockSideChange(dockSide === "left" ? null : "left")}
+              aria-pressed={dockSide === "left"}
+              aria-label={dockSide === "left" ? `فك تثبيت ${title} من اليسار` : `تثبيت ${title} على اليسار`}
+              title={dockSide === "left" ? "مثبتة على اليسار — انقر للفك" : DOCK_LABELS.left}
+              className={cn("fp-dock-quick", dockSide === "left" && "is-docked-active")}
+            >
+              <PanelLeft size={15} />
+            </button>
             <button
               type="button"
               onClick={() => setDockMenuOpen((v) => !v)}

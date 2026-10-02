@@ -1082,10 +1082,30 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   outline-offset: calc(2px / var(--editor-zoom, 1));
 }
 
-/* Quiet pointer hover: a zoom-invariant hairline, never a heavy card border. */
-.editor-ui .artboard-cell.is-active .canvas-el:not(.group-frame):hover {
+/* Quiet pointer hover: a zoom-invariant hairline, never a heavy card border.
+   Every page gets it — an element on a non-active page is just as selectable
+   (a click activates its page), so the cursor must promise that too. */
+.editor-ui .artboard-cell .canvas-el:not(.group-frame):hover {
   outline: calc(1px / var(--editor-zoom, 1)) solid var(--hover-outline, rgba(29, 78, 216, 0.55));
   outline-offset: calc(1px / var(--editor-zoom, 1));
+}
+
+/*
+ * Pointer promises: the cursor says what a press will do, inside the page or
+ * on the pasteboard around it — «move» over anything that can be dragged,
+ * the default arrow over locked artwork, the text beam inside an editor.
+ */
+.editor-ui .editor-canvas-stage:not(.draw-armed):not(.draw-rect) .canvas-el:not(.group-frame):not(.locked),
+.editor-ui .editor-canvas-stage:not(.draw-armed):not(.draw-rect) .selection-frame:not(.is-locked):not(.is-editing) {
+  cursor: move;
+}
+.editor-ui .canvas-el.locked,
+.editor-ui .selection-frame.is-locked {
+  cursor: default;
+}
+.editor-ui .canvas-el [contenteditable="true"],
+.editor-ui .selection-frame.is-editing {
+  cursor: text;
 }
 
 /* تعديل لضمان عدم وجود خلفيات صلبة تجبر عناصر الـ PNG على فقدان الشفافية */
@@ -1448,6 +1468,20 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   border-color: #ffffff;
   box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, rgba(17, 23, 34, 0.94));
 }
+
+/*
+ * Hover affordance on every grip: the dot grows a soft ring the moment the
+ * pointer reaches its hit area, so all eight directions announce themselves
+ * as draggable before the press — not only the corners.
+ */
+.handle:hover::after,
+.handle:focus-visible::after {
+  box-shadow:
+    0 0 0 calc(1px / var(--editor-zoom, 1)) rgba(255, 255, 255, 0.95),
+    0 0 0 calc(4px / var(--editor-zoom, 1)) color-mix(in srgb, var(--sel-color, #2f6fb0) 35%, transparent);
+}
+.handle.is-axis-locked:hover::after { box-shadow: none; }
+.selection-frame .handle.is-axis-locked { cursor: not-allowed; }
 
 .handle.is-axis-locked::after {
   background: #f1f5f9;
@@ -2890,6 +2924,24 @@ summary,
 .touch-properties-sheet.is-docked { position: static; z-index: var(--z-panel); width: 100%; height: 100%; min-height: 0; border-radius: 0; box-shadow: none; }
 .touch-properties-content > * { height: 100%; min-height: 0; }
 /*
+ * Top/bottom docks are horizontal BANDS, not tall columns: the panel body
+ * flows in fixed-width columns across the band (CSS multi-column with
+ * sequential fill), so the controls line up side by side and the band scrolls
+ * sideways instead of eating the artboard's height.
+ */
+.touch-properties-sheet:is(.is-docked-top, .is-docked-bottom) .editor-panel-body {
+  column-width: 300px;
+  column-gap: 20px;
+  column-fill: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.touch-properties-sheet:is(.is-docked-top, .is-docked-bottom) .editor-panel-body > * {
+  break-inside: avoid;
+}
+/* Quick right/left pins beside the main pin. */
+.touch-properties-header button.fp-dock-quick { width: 30px; }
+/*
  * The eight resize grips of a floating window: thin edge strips and corner
  * squares positioned inline by the component. They sit just inside the frame
  * (a 1px hairline on hover) so a window reads as resizable from every side.
@@ -3725,6 +3777,20 @@ body.is-resizing-panel .editor-dock-strip::before {
 }
 .editor-capsule-sep { height: 18px; margin: 0 2px; }
 .editor-header-sep { height: 22px; margin: 0 5px; }
+/* Header paint swatches (fill/gradient + border) beside the tool cluster. */
+.editor-header-paint { display: flex; align-items: center; gap: 4px; }
+.editor-header-paint .editor-header-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+.editor-header-paint .editor-header-swatch.is-border {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+}
 
 /* Zoom cluster: one bordered group so scaling controls never scatter. */
 .editor-zoom-cluster {

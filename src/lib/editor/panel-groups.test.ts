@@ -7,6 +7,7 @@ import { test } from "node:test";
 import {
   EDITOR_PANEL_IDS,
   defaultPanelGroups,
+  defaultWorkspaceGroups,
   detachPanelTab,
   hostOf,
   isGrouped,
@@ -120,4 +121,14 @@ test("stored garbage normalises back to a valid partition", () => {
   assert.equal(parsed.tabs.report, "library", "a stored tab is honoured");
   // A panel that lost its window has no tab row of its own any more.
   assert.equal(parsed.tabs.properties, undefined);
+});
+
+test("the shipped layout is two windows: content on the right, inspector on the left", () => {
+  const state = defaultWorkspaceGroups();
+  assertPartition(state);
+  assert.deepEqual(state.groups.elements, ["elements", "tools", "library", "report"]);
+  assert.deepEqual(state.groups.properties, ["properties", "layers"]);
+  assert.equal(Object.keys(state.groups).length, 2);
+  assert.equal(state.tabs.elements, "elements");
+  assert.equal(state.tabs.properties, "properties");
 });

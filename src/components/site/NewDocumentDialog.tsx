@@ -40,6 +40,7 @@ import {
   defaultNewDocument,
   describeConfig,
   docKind,
+  pageDimensions,
   pagesText,
   type BlankContent,
   type NewDocumentConfig,
@@ -117,6 +118,62 @@ function Choice({
     >
       {children}
     </button>
+  );
+}
+
+/**
+ * One custom-size field that lets the author TYPE.
+ *
+ * The previous field clamped on every keystroke, so «2» became the 50 mm
+ * floor before «200» could be finished — the numbers felt locked. This one
+ * keeps a text draft while focused and commits (clamped to the printable
+ * range, converted from the chosen unit) on blur or Enter.
+ */
+function CustomSizeField({
+  axis,
+  unit,
+  valueMm,
+  onCommit,
+}: {
+  axis: "w" | "h";
+  unit: LengthUnit;
+  valueMm: number;
+  onCommit: (mm: number) => void;
+}) {
+  const shown = String(roundUnit(fromMm(valueMm, unit), unit));
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const n = Number(draft.replace(/[٠-٩]/g, (d) => String("٠١٢٣٤٥٦٧٨٩".indexOf(d))).replace(",", "."));
+    setDraft(null);
+    if (!Number.isFinite(n) || n <= 0) return;
+    const mm = Math.min(MAX_CUSTOM_MM, Math.max(MIN_CUSTOM_MM, toMm(n, unit)));
+    onCommit(Math.round(mm * 10) / 10);
+  };
+  return (
+    <label className="grid gap-1">
+      <span className="text-[11px] font-extrabold text-muted">
+        {axis === "w" ? "العرض" : "الارتفاع"} ({unit})
+      </span>
+      <input
+        type="text"
+        inputMode="decimal"
+        value={draft ?? shown}
+        onChange={(e) => setDraft(e.target.value)}
+        onFocus={(e) => e.currentTarget.select()}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+          if (e.key === "Escape") setDraft(null);
+        }}
+        aria-label={`${axis === "w" ? "العرض" : "الارتفاع"} بوحدة ${unit}`}
+        className="h-10 rounded-xl border border-line bg-surface px-3 text-[13px] font-bold tabular-nums text-ink outline-none focus:border-brand"
+        dir="ltr"
+      />
+    </label>
   );
 }
 
@@ -399,18 +456,31 @@ export function NewDocumentDialog({
                           <Choice
                             key={size.id}
                             active={active}
-                            onClick={() =>
+                            onClick={() => {
+                              // A slide is wide by nature; leaving it puts paper upright.
+                              const orientation: Orientation =
+                                size.id === "slide"
+                                  ? "landscape"
+                                  : config.size === "slide"
+                                    ? "portrait"
+                                    : config.orientation;
+                              // Entering «مخصص»: start from the sheet the author
+                              // was looking at, laid out in the current orientation,
+                              // so the fields never contradict the preview.
+                              const base =
+                                size.id === "custom"
+                                  ? pageDimensions(
+                                      config.size === "custom" ? "custom" : config.size,
+                                      orientation,
+                                      config.custom,
+                                    )
+                                  : config.custom;
                               set({
                                 size: size.id as PageSizeId,
-                                // A slide is wide by nature; leaving it puts paper upright.
-                                orientation:
-                                  size.id === "slide"
-                                    ? "landscape"
-                                    : config.size === "slide"
-                                      ? "portrait"
-                                      : config.orientation,
-                              })
-                            }
+                                orientation,
+                                custom: base,
+                              });
+                            }}
                             className="flex flex-col items-center gap-1 px-2 py-2.5 text-center"
                           >
                             <SheetGlyph
@@ -446,9 +516,24 @@ export function NewDocumentDialog({
                         <Choice
                           key={id}
                           active={config.orientation === id}
-                          onClick={() =>
-                            !orientationDisabled && set({ orientation: id })
-                          }
+                          onClick={() => {
+                            if (orientationDisabled) return;
+                            if (config.size !== "custom") {
+                              set({ orientation: id });
+                              return;
+                            }
+                            // Custom sheet: the orientation IS the numbers, so
+                            // flipping it swaps width and height in the fields.
+                            const long = Math.max(config.custom.w, config.custom.h);
+                            const short = Math.min(config.custom.w, config.custom.h);
+                            set({
+                              orientation: id,
+                              custom:
+                                id === "landscape"
+                                  ? { w: long, h: short }
+                                  : { w: short, h: long },
+                            });
+                          }}
                           className={cn(
                             "flex flex-col items-center gap-1 px-2 py-2.5 text-center",
                             orientationDisabled &&
@@ -466,38 +551,36 @@ export function NewDocumentDialog({
                 </div>
 
                 {config.size === "custom" && (
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {(["w", "h"] as const).map((axis) => (
-                      <label key={axis} className="grid gap-1">
-                        <span className="text-[11px] font-extrabold text-muted">
-                          {axis === "w" ? "العرض" : "الارتفاع"} ({unit})
-                        </span>
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          min={roundUnit(fromMm(MIN_CUSTOM_MM, unit), unit)}
-                          max={roundUnit(fromMm(MAX_CUSTOM_MM, unit), unit)}
-                          step={unit === "px" ? 1 : 0.1}
-                          value={roundUnit(fromMm(config.custom[axis], unit), unit)}
-                          onChange={(e) =>
+                  <div className="grid gap-1.5">
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {(["w", "h"] as const).map((axis) => (
+                        <CustomSizeField
+                          key={`${axis}-${unit}`}
+                          axis={axis}
+                          unit={unit}
+                          valueMm={config.custom[axis]}
+                          onCommit={(mm) => {
+                            const custom = { ...config.custom, [axis]: mm };
+                            // The numbers decide the orientation — never the
+                            // other way round — so a typed 300 × 200 stays wide.
                             set({
-                              custom: {
-                                ...config.custom,
-                                [axis]: Math.min(
-                                  MAX_CUSTOM_MM,
-                                  Math.max(
-                                    MIN_CUSTOM_MM,
-                                    toMm(Number(e.target.value), unit),
-                                  ),
-                                ),
-                              },
-                            })
-                          }
-                          className="h-10 rounded-xl border border-line bg-surface px-3 text-[13px] font-bold tabular-nums text-ink outline-none focus:border-brand"
-                          dir="ltr"
+                              custom,
+                              orientation:
+                                custom.w > custom.h
+                                  ? "landscape"
+                                  : custom.w < custom.h
+                                    ? "portrait"
+                                    : config.orientation,
+                            });
+                          }}
                         />
-                      </label>
-                    ))}
+                      ))}
+                    </div>
+                    <p className="text-[10px] font-bold text-muted" dir="auto">
+                      من {roundUnit(fromMm(MIN_CUSTOM_MM, unit), unit)} إلى{" "}
+                      {roundUnit(fromMm(MAX_CUSTOM_MM, unit), unit)} {unit} —
+                      اكتب الرقم ثم اضغط Enter أو انتقل للحقل التالي
+                    </p>
                   </div>
                 )}
 
