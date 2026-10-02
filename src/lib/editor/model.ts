@@ -279,20 +279,27 @@ export interface ElStyle {
   /**
    * How the text box reacts when its content outgrows it.
    *
-   * `autoHeight` is the default for prose: the box grows downwards and the text
-   * is never cut. `fixed` honours the author's box exactly and reports the
-   * overflow instead of hiding it. `autoWidth` expands sideways, and `fit`
-   * shrinks the font — the last resort, because a shrinking font is more
-   * noticeable than a growing box.
+   * `free` is point text: the frame hugs the glyphs and nothing is clipped.
+   * `autoHeight` keeps the author's width and grows downward. `fixed` honours
+   * the box and can clip. `autoWidth` expands sideways, and `fit` shrinks the
+   * font — the last resort, because a shrinking font is more noticeable than
+   * a growing box.
    */
   textBoxMode?: TextBoxMode;
+  /**
+   * Vertical placement of the glyphs inside the frame.
+   *
+   * `middle` is how a page number sits in a circle. Unset keeps the line at
+   * the top of the box, which is right for a paragraph.
+   */
+  verticalAlign?: "top" | "middle" | "bottom";
   /** Inner padding for text-ish elements, in mm. */
   padding?: number;
   /** Manual extra height added on top of measured text (mm, autoHeight only). */
   slackMm?: number;
 }
 
-export type TextBoxMode = "autoHeight" | "fixed" | "autoWidth" | "fit";
+export type TextBoxMode = "free" | "autoHeight" | "fixed" | "autoWidth" | "fit";
 
 /** Types whose box can auto-size to their text. */
 export const AUTO_TEXT_TYPES: ElType[] = ["text", "box", "stat", "stamp"];
@@ -835,7 +842,9 @@ export function createElement(
         color: t.ink,
         fontWeight: 600,
         textAlign: "right",
-        lineHeight: 1.45,
+        lineHeight: 1.6,
+        textBoxMode: "free",
+        overflowVisible: true,
       },
     },
     box: {
@@ -1399,15 +1408,20 @@ export function createElementDefaults(
        */
       return {
         ...base,
-        w: 80,
-        h: 14,
+        w: 48,
+        h: 12,
         style: {
           ...base.style,
           color: "#0F172A",
+          fontSize: 18,
+          fontWeight: 700,
+          lineHeight: 1.6,
           background: "",
           fill: "",
           borderWidth: 0,
           stroke: 0,
+          textBoxMode: "free",
+          overflowVisible: true,
         },
       };
     case "box":

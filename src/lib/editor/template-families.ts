@@ -320,8 +320,11 @@ export function buildFamilyPage(
       return sheet("ختام", theme, "#ffffff", (add) => {
         const ink = mediaInk(theme);
         paint(add, "تسمية", "ختام الدورة", 16, 20, 178, 6, { ...ROLE.meta, color: ink.gold });
-        add("image", { name: "صورة", x: 70, y: 52, w: 70, h: 90, src: plate("portrait"), style: { objectFit: "cover", radius: 0 } });
-        mark(add, "إطار", 58, 32, 94, 118, ink.gold, "arch-frame");
+        mark(add, "موجة", 40, 118, 130, 36, ink.green, "wave");
+        const photo = add("image", { name: "صورة", x: 66, y: 40, w: 78, h: 100, src: plate("portrait"), style: { objectFit: "cover", radius: 0 } });
+        const mask = mark(add, "قناع", 66, 40, 78, 100, "transparent", "arch");
+        photo.clippedBy = mask.id;
+        mark(add, "إطار", 62, 36, 86, 108, ink.gold, "arch-frame");
         paint(add, "الاسم", "اسم المسؤول", 16, 160, 178, 10, { ...ROLE.h2, color: ink.gold, textAlign: "center" });
         hairline(add, "خيط الاسم", 70, 174, 70, ink.gold, 0.6);
         paint(add, "الصفة", "الصفة", 16, 180, 178, 6, { ...ROLE.meta, color: ink.green, textAlign: "center" });

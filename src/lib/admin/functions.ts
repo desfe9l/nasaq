@@ -84,7 +84,7 @@ async function sql() {
 const PRODUCT_TEMPLATE_SEED_KEY = "product-template-seeds.v1";
 const LEGACY_TEMPLATE_SEED_KEY = "legacy-template-seeds.v1";
 /** Rewrites bundled documents after a catalog redesign. Deletes and status stay. */
-const BUNDLED_ARTWORK_KEY = "bundled-template-artwork.v3";
+const BUNDLED_ARTWORK_KEY = "bundled-template-artwork.v4";
 
 /** Insert bundled native masters once; subsequent owner edits and deletes persist. */
 async function insertTemplateSeedsOnce(
@@ -190,7 +190,7 @@ async function refreshBundledTemplateArtwork(
     `INSERT INTO site_settings (key, value, updated_at)
      VALUES ($1, $2::jsonb, now())
      ON CONFLICT (key) DO NOTHING`,
-    [BUNDLED_ARTWORK_KEY, JSON.stringify({ version: 3, count: templates.length })],
+    [BUNDLED_ARTWORK_KEY, JSON.stringify({ version: 4, count: templates.length })],
   );
 }
 

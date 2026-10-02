@@ -117,6 +117,34 @@ export const SHAPES: ShapeDef[] = [
     parts: [poly("20,2 100,2 80,98 0,98")],
   },
   {
+    id: "diagonal",
+    label: "كتلة قطرية",
+    group: "أساسية",
+    parts: [poly("0,34 100,0 100,100 0,100")],
+  },
+  {
+    id: "wave",
+    label: "موجة",
+    group: "زخرفة إسلامية",
+    parts: [
+      {
+        k: "path",
+        d: "M0 42C16 18 34 62 50 40C66 18 84 62 100 38V100H0Z",
+      },
+    ],
+  },
+  {
+    id: "curve-side",
+    label: "قناع منحنى",
+    group: "إطارات",
+    parts: [
+      {
+        k: "path",
+        d: "M0 0H72C96 8 100 28 100 50C100 72 96 92 72 100H0Z",
+      },
+    ],
+  },
+  {
     id: "trapezoid",
     label: "شبه منحرف",
     group: "أساسية",

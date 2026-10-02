@@ -140,17 +140,15 @@ function officialPages(theme: Theme, org: string): Page[] {
       hairline(add, "خيط ذهبي", 120, 82, 66, ink.gold, 1.1);
       paint(add, "نبذة الغلاف", "ما اكتمل في الخدمة، وما بقي مفتوحًا أمام اللجنة في الدورة القادمة.", 16, 90, 168, 14, { ...ROLE.body, fontSize: 12, color: theme.ink });
       add("image", {
-        name: "صورة الغلاف", x: 0, y: 112, w: 210, h: 78,
+        name: "صورة الغلاف", x: 0, y: 112, w: 210, h: 70,
         src: plate("field"), style: { objectFit: "cover", radius: 0 },
       });
-      band(add, "شريط التعليق", 0, 172, 210, 16, ink.green);
-      paint(add, "تعليق الصورة", "الميدان  ·  الربع الأخير", 16, 176, 178, 8, { ...ROLE.caption, color: "#f4f7f5" });
-      band(add, "كتلة خضراء", 0, 188, 210, 109, ink.green);
-      hairline(add, "خيط الكتلة", 0, 188, 210, ink.gold, 0.8);
-      paint(add, "تسمية الجهة", "الجهة", 16, 200, 178, 5, { ...ROLE.caption, color: ink.gold });
-      paint(add, "اسم الجهة", entity, 16, 208, 178, 12, { ...ROLE.h2, fontSize: 16, color: "#f7f6f3" });
-      paint(add, "الفترة", "يناير — ديسمبر", 16, 226, 100, 8, { ...ROLE.meta, color: "#d7e3dc" });
-      paint(add, "النسخة", "نسخة داخلية", 120, 226, 74, 8, { ...ROLE.meta, color: ink.gold, textAlign: "left" });
+      mark(add, "كتلة قطرية", 0, 176, 210, 121, ink.green, "diagonal");
+      paint(add, "تعليق الصورة", "الميدان  ·  الربع الأخير", 16, 196, 178, 8, { ...ROLE.caption, color: "#f4f7f5" });
+      paint(add, "تسمية الجهة", "الجهة", 16, 214, 178, 5, { ...ROLE.caption, color: ink.gold });
+      paint(add, "اسم الجهة", entity, 16, 222, 178, 12, { ...ROLE.h2, fontSize: 16, color: "#f7f6f3" });
+      paint(add, "الفترة", "يناير — ديسمبر", 16, 244, 100, 8, { ...ROLE.meta, color: "#d7e3dc" });
+      paint(add, "النسخة", "نسخة داخلية", 120, 244, 74, 8, { ...ROLE.meta, color: ink.gold, textAlign: "left" });
     }, A4),
 
     page("المحتويات", theme, (add) => {
@@ -206,10 +204,12 @@ function officialPages(theme: Theme, org: string): Page[] {
       const ink = mediaInk(theme);
       runningHead(add, theme, "الأهداف");
       paint(add, "عنوان الصفحة", "ثلاثة أهداف لهذا العام", 16, 26, 178, 12, { ...ROLE.h1, color: ink.green });
-      add("image", {
+      const photo = add("image", {
         name: "صورة القسم", x: 16, y: 46, w: 78, h: 96,
-        src: plate("field"), style: { objectFit: "cover", radius: 18 },
+        src: plate("field"), style: { objectFit: "cover", radius: 0 },
       });
+      const mask = mark(add, "قناع الصورة", 16, 46, 78, 96, "transparent", "curve-side");
+      photo.clippedBy = mask.id;
       const goals: [string, string, string][] = [
         ["٠١", "تشغيل مستمر", "أربع بوابات انتقلت إلى تغطية كاملة، وانخفض الانتظار من ٢٦ دقيقة إلى ١١."],
         ["٠٢", "شراكة واحدة", "اتفقت الجهة مع الإسناد الطبي على تغطية المنافذ الغربية."],
