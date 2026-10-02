@@ -288,6 +288,37 @@ test("published VITE_PUBLIC_HOSTNAME wins over request Host for og:image", () =>
   }
 });
 
+test("keeps a page share image when the host cannot publish a platform card", () => {
+  const prev = process.env.VITE_PUBLIC_HOSTNAME;
+  delete process.env.VITE_PUBLIC_HOSTNAME;
+  try {
+    const image = "https://nasaq-sa.vercel.app/api/templates/thumbnail?id=pack";
+    const page = "https://nasaq-sa.vercel.app/templates/pack";
+    const html = `<html><head><title>Report</title><meta property="og:title" content="Old"><meta property="og:image" content="${image}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="1700"><meta property="og:url" content="${page}"><meta name="twitter:image" content="${image}"></head></html>`;
+    const out = injectGrokPwaHead(html, {
+      host: "nasaq-sa.vercel.app",
+      site: { title: "نَسَق", card: "custom" },
+    });
+    assert.match(
+      out,
+      /property="og:image" content="https:\/\/nasaq-sa\.vercel\.app\/api\/templates\/thumbnail\?id=pack"/,
+    );
+    assert.match(out, /property="og:image:width" content="1200"/);
+    assert.match(out, /property="og:image:height" content="1700"/);
+    assert.match(out, /property="og:url" content="https:\/\/nasaq-sa\.vercel\.app\/templates\/pack"/);
+    assert.match(
+      out,
+      /name="twitter:image" content="https:\/\/nasaq-sa\.vercel\.app\/api\/templates\/thumbnail\?id=pack"/,
+    );
+    assert.doesNotMatch(out, /content="Old"/);
+    assert.equal(out.split('property="og:image"').length - 1, 1);
+    assert.equal(out.split('name="twitter:image"').length - 1, 1);
+  } finally {
+    if (prev === undefined) delete process.env.VITE_PUBLIC_HOSTNAME;
+    else process.env.VITE_PUBLIC_HOSTNAME = prev;
+  }
+});
+
 test("vercel Host without a public hostname emits no og:image", () => {
   const prev = process.env.VITE_PUBLIC_HOSTNAME;
   delete process.env.VITE_PUBLIC_HOSTNAME;

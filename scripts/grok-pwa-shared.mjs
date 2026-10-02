@@ -418,11 +418,13 @@ export function grokOgHeadTags({
   return tags;
 }
 
-export function stripShareMetaTags(html) {
+export function stripShareMetaTags(html, preserve = []) {
+  const keep = new Set(preserve.map((key) => String(key).toLowerCase()));
   return String(html).replace(/<meta\b[^>]*>/gi, (tag) => {
     const attrs = [...tag.matchAll(/\b(?:property|name)\s*=\s*["']([^"']+)["']/gi)];
     for (const match of attrs) {
-      if (SHARE_META_KEYS.has(String(match[1]).toLowerCase())) return "";
+      const key = String(match[1]).toLowerCase();
+      if (SHARE_META_KEYS.has(key) && !keep.has(key)) return "";
     }
     return tag;
   });
@@ -475,7 +477,15 @@ export function injectGrokPwaHead(html, ctx = {}) {
     host,
     documentTitle,
   );
-  let next = stripShareMetaTags(html);
+  let next = stripShareMetaTags(
+    html,
+    // A Vercel host is not a public card origin, so this injector emits no
+    // og:image of its own. Keep the page's image and URL — template shares
+    // point those at the template thumbnail and the template page.
+    resolvePublicHost(host)
+      ? []
+      : ["og:image", "og:image:width", "og:image:height", "og:url", "twitter:image"],
+  );
 
   const missing = grokPwaHeadTags(appName)
     .filter(([key]) => {
