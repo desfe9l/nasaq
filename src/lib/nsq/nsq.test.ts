@@ -47,6 +47,10 @@ function sampleProject(): NsqProjectInput {
         w: 210,
         h: 297,
         bg: "#fffdf8",
+        bgImage: PNG,
+        bgImageFit: "cover",
+        bgImageX: 24,
+        bgImageY: 76,
         elements: [
           {
             id: "t1",
@@ -279,6 +283,10 @@ describe("nsq package round trip", () => {
     assert.equal(p.pages!.length, 2);
     assert.equal(p.pages![1].w, 297);
     assert.equal(p.pages![0].bg, "#fffdf8");
+    assert.equal(p.pages![0].bgImage, PNG);
+    assert.equal(p.pages![0].bgImageFit, "cover");
+    assert.equal(p.pages![0].bgImageX, 24);
+    assert.equal(p.pages![0].bgImageY, 76);
     const [text, image, shape, group] = p.pages![0].elements;
     assert.deepEqual(text, original.pages[0].elements[0]);
     assert.equal(image.src, PNG);

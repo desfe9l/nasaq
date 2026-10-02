@@ -469,7 +469,7 @@ export interface DocumentValidation {
  */
 export function validatePages(
   rawPages: unknown,
-  opts: { strict?: boolean } = {},
+  opts: { strict?: boolean; allowAssetRefs?: boolean } = {},
 ): DocumentValidation {
   if (!Array.isArray(rawPages) || !rawPages.length)
     throw new NsqError("invalid", "document has no pages");
@@ -677,15 +677,22 @@ export function validatePages(
       page.bg = rawPage.bg.slice(0, 400);
     if (typeof rawPage.bgImage === "string") {
       const image = rawPage.bgImage;
+      const assetRef = opts.allowAssetRefs && image.startsWith(ASSET_REF);
       const safeImage =
         image.length <= 6_000_000 &&
         /^data:image\/(?:png|jpe?g|webp|gif|svg\+xml)[;,]/i.test(image) &&
         !/javascript:|expression\s*\(|@import/i.test(image);
-      if (safeImage) page.bgImage = image;
+      if (assetRef || safeImage) page.bgImage = image;
       else if (opts.strict) throw new NsqError("invalid", "page background image");
     }
     if (rawPage.bgImageFit === "cover" || rawPage.bgImageFit === "contain")
       page.bgImageFit = rawPage.bgImageFit;
+    for (const key of ["bgImageX", "bgImageY"] as const) {
+      const value = rawPage[key];
+      if (finite(value) && value >= 0 && value <= 100) page[key] = value;
+      else if (opts.strict && value !== undefined)
+        throw new NsqError("invalid", `page ${key}`);
+    }
     if (typeof rawPage.clipContent === "boolean")
       page.clipContent = rawPage.clipContent;
     if (rawPage.bgGradient !== undefined) {

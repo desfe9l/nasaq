@@ -812,6 +812,8 @@ interface EditorStore extends Project, Ui, History {
       bgGradient?: Gradient;
       bgImage?: string;
       bgImageFit?: "cover" | "contain";
+      bgImageX?: number;
+      bgImageY?: number;
       clipContent?: boolean;
     },
     live?: boolean,

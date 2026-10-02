@@ -18,6 +18,7 @@ import {
   type ProgressPreset,
   type ThemeId,
 } from "@/lib/editor/model";
+import type { Gradient } from "@/lib/editor/gradient";
 import { SHAPES } from "@/lib/editor/shapes";
 import { PAGE_TEMPLATES, type PageTemplateDef } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
@@ -131,6 +132,79 @@ const CHART_TEMPLATES = [
   { id: "rings", label: "حلقات الإنجاز", hint: "3 حلقات دائرية" },
   { id: "steps", label: "مراحل التنفيذ", hint: "شريط مراحل" },
 ] as const;
+
+const PAGE_BACKGROUND_PRESETS: {
+  id: string;
+  label: string;
+  bg: string;
+  gradient: Gradient;
+  swatch: string;
+}[] = [
+  {
+    id: "formal-white",
+    label: "أبيض رسمي",
+    bg: "#ffffff",
+    gradient: {
+      type: "linear",
+      angle: 90,
+      cx: 50,
+      cy: 50,
+      stops: [
+        { id: "start", offset: 0, color: "#ffffff", opacity: 1 },
+        { id: "end", offset: 1, color: "#edf3ee", opacity: 1 },
+      ],
+    },
+    swatch: "linear-gradient(90deg, #ffffff, #edf3ee)",
+  },
+  {
+    id: "soft-emerald",
+    label: "زمرد هادئ",
+    bg: "#f5faf6",
+    gradient: {
+      type: "linear",
+      angle: 90,
+      cx: 50,
+      cy: 50,
+      stops: [
+        { id: "start", offset: 0, color: "#f5faf6", opacity: 1 },
+        { id: "end", offset: 1, color: "#dcebe0", opacity: 1 },
+      ],
+    },
+    swatch: "linear-gradient(90deg, #f5faf6, #dcebe0)",
+  },
+  {
+    id: "report-blue",
+    label: "أزرق تقريري",
+    bg: "#f5f8fc",
+    gradient: {
+      type: "linear",
+      angle: 90,
+      cx: 50,
+      cy: 50,
+      stops: [
+        { id: "start", offset: 0, color: "#f5f8fc", opacity: 1 },
+        { id: "end", offset: 1, color: "#e1eaf4", opacity: 1 },
+      ],
+    },
+    swatch: "linear-gradient(90deg, #f5f8fc, #e1eaf4)",
+  },
+  {
+    id: "muted-gold",
+    label: "ذهبي خفيف",
+    bg: "#fcfbf6",
+    gradient: {
+      type: "linear",
+      angle: 90,
+      cx: 50,
+      cy: 50,
+      stops: [
+        { id: "start", offset: 0, color: "#fcfbf6", opacity: 1 },
+        { id: "end", offset: 1, color: "#eee9d9", opacity: 1 },
+      ],
+    },
+    swatch: "linear-gradient(90deg, #fcfbf6, #eee9d9)",
+  },
+];
 
 type ChartTemplate = (typeof CHART_TEMPLATES)[number];
 
@@ -864,11 +938,16 @@ export function SmartLibraryPanel({
     | "tables"
     | "templates"
     | "institutional"
+    | "backgrounds"
   >("library", { shapes: true, icons: true });
   const addElement = useEditor((s) => s.addElement);
   const addElementAt = useEditor((s) => s.addElementAt);
   const removeCustomIcon = useEditor((s) => s.removeCustomIcon);
   const customIcons = useEditor((s) => s.customIcons);
+  const activePage = useEditor((s) =>
+    s.pages.find((page) => page.id === s.activePageId),
+  );
+  const setPageBackground = useEditor((s) => s.setPageBackground);
 
   /**
    * Insert a library payload.
@@ -1318,6 +1397,38 @@ export function SmartLibraryPanel({
                   <span className="text-[10px] text-muted">{chart.hint}</span>
                 </span>
                 <Gauge className="size-4 shrink-0 text-brand-hover" />
+              </button>
+            ))}
+          </div>
+        </AccordionSection>
+
+        <AccordionSection
+          title="خلفيات مؤسسية"
+          id="backgrounds"
+          open={library.isOpen("backgrounds", false)}
+          onToggle={() => library.toggle("backgrounds")}
+        >
+          <div className="grid grid-cols-2 gap-2">
+            {PAGE_BACKGROUND_PRESETS.map((preset) => (
+              <button
+                key={preset.id}
+                type="button"
+                disabled={!activePage || activePage.locked}
+                aria-label={`تطبيق خلفية ${preset.label}`}
+                className="grid h-12 place-items-center overflow-hidden rounded-[8px] border border-line text-[10px] font-extrabold text-ink shadow-sm disabled:opacity-50"
+                style={{ background: preset.swatch }}
+                onClick={() => {
+                  if (!activePage) return;
+                  setPageBackground(activePage.id, {
+                    bg: preset.bg,
+                    bgGradient: preset.gradient,
+                    bgImage: "",
+                  });
+                }}
+              >
+                <span className="rounded-[4px] bg-surface/80 px-2 py-0.5">
+                  {preset.label}
+                </span>
               </button>
             ))}
           </div>

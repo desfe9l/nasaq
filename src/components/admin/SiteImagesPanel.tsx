@@ -26,6 +26,7 @@ import { useEffect, useRef, useState } from "react";
 import { ImageUp, Loader2, Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { adminSaveSettingsFn, getSiteSettingsFn } from "@/lib/admin/functions";
+import { invalidateSiteSettings } from "@/lib/admin/use-site-settings";
 import {
   DEFAULT_SITE_IMAGES,
   MAX_SITE_IMAGE_BYTES,
@@ -102,6 +103,7 @@ export function SiteImagesPanel() {
       return false;
     }
     setImages(res.value as SiteImages);
+    invalidateSiteSettings();
     toast.success("تم حفظ صور الموقع");
     return true;
   };

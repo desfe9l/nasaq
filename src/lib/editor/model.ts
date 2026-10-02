@@ -389,6 +389,9 @@ export interface Page {
    */
   bgImage?: string;
   bgImageFit?: "cover" | "contain";
+  /** Normalized background-image focal point, from 0 to 100 percent. */
+  bgImageX?: number;
+  bgImageY?: number;
   /** While editing, clip paint that sits outside this page. Elements stay in the file. */
   clipContent?: boolean;
   /** Page width in mm; omitted means A4 portrait width. */

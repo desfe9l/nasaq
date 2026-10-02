@@ -2084,6 +2084,7 @@ function PageSurface({ page, active }: { page: Page; active: boolean }) {
           style={{
             backgroundImage: `url("${page.bgImage.replace(/"/g, "%22")}")`,
             backgroundSize: page.bgImageFit === "contain" ? "contain" : "cover",
+            backgroundPosition: `${page.bgImageX ?? 50}% ${page.bgImageY ?? 50}%`,
           }}
         />
       ) : null}
@@ -2576,6 +2577,7 @@ function ExportCaptureLayer() {
                 style={{
                   backgroundImage: `url("${page.bgImage.replace(/"/g, "%22")}")`,
                   backgroundSize: page.bgImageFit === "contain" ? "contain" : "cover",
+                  backgroundPosition: `${page.bgImageX ?? 50}% ${page.bgImageY ?? 50}%`,
                 }}
               />
             ) : null}

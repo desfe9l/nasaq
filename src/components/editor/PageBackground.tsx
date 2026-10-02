@@ -24,6 +24,8 @@ export function PageBackground({ page }: { page: Page }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const size = pageSize(page);
   const fit = page.bgImageFit === "contain" ? "contain" : "cover";
+  const imageX = Math.max(0, Math.min(100, page.bgImageX ?? 50));
+  const imageY = Math.max(0, Math.min(100, page.bgImageY ?? 50));
   return (
     <section
       className="page-background-properties grid gap-3 rounded-[8px] border border-line p-3"
@@ -103,25 +105,56 @@ export function PageBackground({ page }: { page: Page }) {
           }}
         />
         {page.bgImage && (
-          <div className="flex gap-1" role="group" aria-label="ملاءمة صورة الخلفية">
-            {(
-              [
-                ["cover", "تعبئة دون تشويه"],
-                ["contain", "إظهار الصورة كاملة"],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                type="button"
-                disabled={page.locked}
-                aria-pressed={fit === id}
-                className="h-8 flex-1 rounded-[8px] border border-line text-[11px] font-bold aria-pressed:border-navy-2 aria-pressed:text-brand"
-                onClick={() => setBackground(page.id, { bgImageFit: id })}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="flex gap-1" role="group" aria-label="ملاءمة صورة الخلفية">
+              {(
+                [
+                  ["cover", "تعبئة دون تشويه"],
+                  ["contain", "إظهار الصورة كاملة"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  disabled={page.locked}
+                  aria-pressed={fit === id}
+                  className="h-8 flex-1 rounded-[8px] border border-line text-[11px] font-bold aria-pressed:border-navy-2 aria-pressed:text-brand"
+                  onClick={() => setBackground(page.id, { bgImageFit: id })}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              {([
+                ["bgImageX", "الموضع الأفقي", imageX],
+                ["bgImageY", "الموضع العمودي", imageY],
+              ] as const).map(([key, label, value]) => (
+                <label key={key} className="grid gap-1 text-[10px] font-bold text-muted">
+                  <span className="flex justify-between gap-2">
+                    {label}<output>{value}%</output>
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={value}
+                    disabled={page.locked}
+                    aria-label={label}
+                    onChange={(event) =>
+                      setBackground(page.id, { [key]: Number(event.currentTarget.value) }, true)
+                    }
+                    onPointerUp={(event) =>
+                      setBackground(page.id, { [key]: Number(event.currentTarget.value) })
+                    }
+                    onKeyUp={(event) =>
+                      setBackground(page.id, { [key]: Number(event.currentTarget.value) })
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+          </>
         )}
         <label className="flex items-start gap-2 text-[11px] font-bold">
           <input

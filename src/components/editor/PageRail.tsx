@@ -443,7 +443,7 @@ const PageThumb = memo(function PageThumb({
             ? "contain"
             : "cover"
           : undefined,
-        backgroundPosition: "center",
+        backgroundPosition: `${page.bgImageX ?? 50}% ${page.bgImageY ?? 50}%`,
         backgroundRepeat: "no-repeat",
       }}
     >

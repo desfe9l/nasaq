@@ -32,6 +32,7 @@ function PageSettingsDialog({
   onClose: () => void;
 }) {
   const page = useEditor((s) => s.pages.find((item) => item.id === pageId));
+  const renamePage = useEditor((s) => s.renamePage);
   const setPageSize = useEditor((s) => s.setPageSize);
   const clipExport = useEditor((s) => s.clipExport);
   const setClipExport = useEditor((s) => s.setClipExport);
@@ -65,8 +66,30 @@ function PageSettingsDialog({
           </button>
         </div>
         <p className="text-[11px] text-muted">
-          نقرة على الاسم تفتح الإعدادات. نقرتان تعيد التسمية.
+          حدّث اسم الصفحة وإعداداتها من هنا.
         </p>
+        <label className="grid gap-1 text-[12px] font-bold">
+          اسم الصفحة
+          <input
+            key={page.id}
+            type="text"
+            defaultValue={page.name}
+            maxLength={200}
+            aria-label="اسم الصفحة"
+            className="h-9 rounded-[8px] border border-line bg-surface px-3 text-[12px] font-semibold outline-none focus:border-brand"
+            onBlur={(event) => {
+              const name = event.currentTarget.value.trim();
+              if (name && name !== page.name) renamePage(page.id, name);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
+              if (event.key === "Escape") {
+                event.currentTarget.value = page.name;
+                event.currentTarget.blur();
+              }
+            }}
+          />
+        </label>
         <div className="grid gap-2">
           <span className="text-[12px] font-bold">المقاس والاتجاه</span>
           <div className="grid grid-cols-2 gap-1.5">

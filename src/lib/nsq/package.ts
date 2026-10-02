@@ -274,7 +274,13 @@ export async function writeNsq(input: NsqWriteInput): Promise<NsqWriteResult> {
   for (const page of project.pages) {
     const elements: CanvasEl[] = [];
     for (const el of page.elements || []) elements.push(await packEl(el));
-    pages.push({ ...page, elements });
+    const packedPage = { ...page, elements };
+    if (page.bgImage) {
+      const next = await packImage(page.bgImage);
+      if (next) packedPage.bgImage = next;
+      else delete packedPage.bgImage;
+    }
+    pages.push(packedPage);
   }
 
   // Fonts: record every family, embed uploaded files where this device has them.
@@ -572,6 +578,7 @@ export async function readNsq(
     throw new NsqError("invalid", "document schema");
   const { pages, warnings: pageWarnings } = validatePages(doc.pages, {
     strict: true,
+    allowAssetRefs: true,
   });
   warnings.push(...pageWarnings);
 
@@ -641,7 +648,18 @@ export async function readNsq(
     if (el.type === "svg" && el.content) assertPassiveSvg(el.content);
     for (const child of el.children || []) await resolveEl(child);
   };
-  for (const page of pages) for (const el of page.elements) await resolveEl(el);
+  for (const page of pages) {
+    if (page.bgImage?.startsWith(ASSET_REF)) {
+      page.bgImage = (await loadAsset(page.bgImage.slice(ASSET_REF.length), false)).dataUrl;
+    } else if (page.bgImage) {
+      const data = parseDataUrl(page.bgImage);
+      if (!data || !imageMime(data.mime, data.bytes))
+        throw new NsqError("invalid", "page background image");
+      if (data.mime === "image/svg+xml")
+        assertPassiveSvg(new TextDecoder().decode(data.bytes));
+    }
+    for (const el of page.elements) await resolveEl(el);
+  }
 
   const embeddedFonts: { family: string; dataUrl: string }[] = [];
   for (const font of manifest.fonts) {

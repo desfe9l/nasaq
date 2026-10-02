@@ -222,10 +222,14 @@ test("page background is metadata behind every object and undoes atomically", ()
   });
   assert.equal(useEditor.getState().pages[0].elements.length, 0);
   assert.equal(useEditor.getState().pages[0].bgGradient?.stops.length, 2);
+  useEditor.getState().setPageBackground(page.id, { bgImageX: 24, bgImageY: 76 });
+  assert.equal(useEditor.getState().pages[0].bgImageX, 24);
+  assert.equal(useEditor.getState().pages[0].bgImageY, 76);
   useEditor.getState().undo();
-  assert.equal(useEditor.getState().pages[0].bgGradient, undefined);
+  assert.equal(useEditor.getState().pages[0].bgImageX, undefined);
   useEditor.getState().redo();
   assert.equal(useEditor.getState().pages[0].bg, "#123456");
+  assert.equal(useEditor.getState().pages[0].bgImageY, 76);
 });
 
 test("new pages use an explicit size; inherit copies dimensions only and duplicate copies content", () => {
