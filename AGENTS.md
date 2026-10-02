@@ -25,7 +25,7 @@ integration, and when you think "can't access user data", "needs OAuth",
 
 **NASAQ templates and documents** — creating, redesigning, reviewing, or
 refining a pack, page template, family page, product master, cover, report, or
-presentation — open **`.grok/skills/nasaq-design/SKILL.md`** before placing or
+presentation — open **`.grok/skills/nasaq-media/SKILL.md`** before placing or
 changing any page. Edit the existing generators. Do not add a parallel template
 collection. Project instructions in `AGENTS.project.md` repeat this route.
 
@@ -418,13 +418,13 @@ Verify with:
   a localStorage mirror so a private window still opens, but data URLs make that
   path a last resort — surface the failure as a toast rather than throwing.
 
-### NASAQ template design (`.grok/skills/nasaq-design/SKILL.md`)
+### NASAQ template design (`.grok/skills/nasaq-media/SKILL.md`)
 
 Template and document work is art direction, not a component dump. Before
 creating, redesigning, reviewing, or refining any pack, page, family, or
 product master:
 
-1. Open `.grok/skills/nasaq-design/SKILL.md` and follow it. The skill is the
+1. Open `.grok/skills/nasaq-media/SKILL.md` and follow it. The skill is the
    source of truth; `src/lib/editor/design-skill.ts` only binds the generators.
 2. Change pages inside the existing generators (`templates.ts`,
    `template-families.ts`, `template-layouts.ts`, `product-templates.ts`).

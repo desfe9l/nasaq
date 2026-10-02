@@ -102,9 +102,9 @@ function definers(pattern: RegExp): string[] {
     .map((file) => relative(root, file));
 }
 
-test("template generation is bound to the nasaq-design skill", () => {
-  assert.equal(NASAQ_DESIGN_SKILL.id, "nasaq-design");
-  assert.equal(NASAQ_DESIGN_SKILL.path, ".grok/skills/nasaq-design/SKILL.md");
+test("template generation is bound to the nasaq-media skill", () => {
+  assert.equal(NASAQ_DESIGN_SKILL.id, "nasaq-media");
+  assert.equal(NASAQ_DESIGN_SKILL.path, ".grok/skills/nasaq-media/SKILL.md");
   assert.deepEqual(boundDesignSurfaces(), ["layouts", "packs", "families", "products"]);
 
   const skill = readFileSync(join(root, NASAQ_DESIGN_SKILL.path), "utf8");

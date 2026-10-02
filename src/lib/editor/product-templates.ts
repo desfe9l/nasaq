@@ -10,6 +10,7 @@ import { uid } from "@/lib/utils";
 import { canUseDemoPack } from "@/lib/product/product";
 import { bindDesignSkill } from "./design-skill";
 import { BODY, META, plate } from "./template-layouts";
+import { shapeSvgMarkup } from "./shape-render";
 
 bindDesignSkill("products");
 
@@ -108,12 +109,14 @@ function shape(
   h: number,
   fill: string,
   borderColor = "",
+  shapeId = "rect",
 ) {
   return add(target, "shape", name, x, y, w, h, "", {
     fill,
     borderColor: borderColor || undefined,
     borderWidth: borderColor ? 0.3 : 0,
-    radius: 0,
+    radius: shapeId === "rounded" ? 2 : 0,
+    shapeId,
   });
 }
 
@@ -130,9 +133,10 @@ function resumePage(language: "ar" | "en"): Page {
   const align = arabic ? "right" : "left";
   const x = 18;
   const textW = arabic ? 142 : 174;
-  add(target, "line", "خط علوي", 0, 0, 210, 0, "", { color: GREEN, stroke: 1.4 });
+  shape(target, "شريط الهوية", 0, 0, 210, 8, GREEN);
+  add(target, "line", "خيط ذهبي", 0, 8, 210, 0, "", { color: GOLD, stroke: 0.7 });
   if (arabic) {
-    add(target, "image", "صورة شخصية", 164, 16, 28, 34, "", { objectFit: "cover", radius: 0 }, plate("portrait"));
+    add(target, "image", "صورة شخصية", 164, 18, 28, 36, "", { objectFit: "cover", radius: 14 }, plate("portrait"));
   }
   text(target, "الاسم", arabic ? "نورة السبيعي" : "FULL NAME", x, 14, textW, 12, {
     size: 26, color: GREEN, weight: 800, align, font: arabic ? "Tajawal" : "Georgia",
@@ -189,9 +193,10 @@ function resumePage(language: "ar" | "en"): Page {
 
 function letterheadPage(title: string, subtitle: string): Page {
   const target = page(title);
-  add(target, "line", "خط علوي", 0, 0, 210, 0, "", { color: GREEN, stroke: 1.6 });
-  add(target, "image", "شعار الجهة", 166, 14, 26, 18, "", { objectFit: "cover", radius: 0 }, plate("archive"));
-  text(target, "اسم الجهة", "اسم الجهة", 18, 14, 140, 9, { size: 18, weight: 800, color: GREEN });
+  shape(target, "شريط علوي", 0, 0, 210, 10, GREEN);
+  add(target, "line", "خيط ذهبي", 0, 10, 210, 0, "", { color: GOLD, stroke: 0.6 });
+  add(target, "image", "شعار الجهة", 168, 16, 22, 16, "", { objectFit: "cover", radius: 0 }, plate("archive"));
+  text(target, "اسم الجهة", "اسم الجهة", 18, 16, 140, 8, { size: 18, weight: 800, color: GREEN });
   text(target, "بيانات الجهة", "الإدارة العامة  ·  مكتب المراسلات", 18, 26, 140, 6, { size: 9, color: MUTED, font: META });
   add(target, "line", "خط الرأس", 18, 38, 174, 0, "", { color: GREEN, stroke: 0.45 });
   add(target, "line", "خط الرأس الثاني", 18, 39.6, 174, 0, "", { color: GOLD, stroke: 0.35 });
@@ -204,8 +209,8 @@ function letterheadPage(title: string, subtitle: string): Page {
   text(target, "الختام", "وتفضلوا بقبول فائق الاحترام", 18, 172, 174, 8, { size: 12, font: BODY });
   add(target, "line", "خط التوقيع", 112, 210, 60, 0, "", { color: INK, stroke: 0.3 });
   text(target, "التوقيع", "الاسم\nمدير مكتب المراسلات", 112, 214, 60, 14, { size: 9, color: MUTED, font: META, lineHeight: 1.4 });
-  add(target, "line", "خط التذييل", 18, 272, 174, 0, "", { color: GOLD, stroke: 0.4 });
-  text(target, "تذييل الجهة", "الرياض  ·  ٠١١ ٠٠٠ ٠٠٠٠  ·  mail@example.com", 18, 278, 174, 7, { size: 8, color: MUTED, align: "center", font: META });
+  shape(target, "تذييل أخضر", 0, 274, 210, 23, GREEN);
+  text(target, "تذييل الجهة", "الرياض  ·  ٠١١ ٠٠٠ ٠٠٠٠  ·  mail@example.com", 18, 280, 174, 7, { size: 8, color: "#f4f7f5", align: "center", font: META });
   return target;
 }
 
@@ -218,10 +223,10 @@ function voucherPage(title: string, kind: "receipt" | "cash" | "payment"): Page 
     : kind === "cash"
       ? "صندوق المقر  ·  أمين الصندوق يوقّع في الخانة اليسرى"
       : "تحويل  ·  مصرف الراجحي  ·  مرجع العملية ٢٠٤١";
-  add(target, "line", "خط مزدوج", 16, 18, 178, 0, "", { color: GREEN, stroke: 1.2 });
-  add(target, "line", "خط مزدوج ثان", 16, 20.2, 178, 0, "", { color: GREEN, stroke: 0.3 });
-  text(target, "تصنيف السند", copy, 16, 28, 100, 6, { size: 8, color: MUTED, font: META });
-  text(target, "عنوان السند", title, 16, 38, 118, 12, { size: 22, color: GREEN, weight: 800 });
+  shape(target, "رأس السند", 0, 0, 210, 22, GREEN);
+  add(target, "line", "خيط ذهبي", 0, 22, 210, 0, "", { color: GOLD, stroke: 0.7 });
+  text(target, "تصنيف السند", copy, 16, 7, 120, 6, { size: 8, color: "#f4f7f5", font: META });
+  text(target, "عنوان السند", title, 16, 32, 118, 12, { size: 22, color: GREEN, weight: 800 });
   text(target, "رقم السند", "٤٤١٨", 138, 36, 56, 14, { size: 22, color: INK, weight: 800, align: "left" });
   text(target, "تسمية الرقم", "رقم السند", 138, 52, 56, 5, { size: 8, color: MUTED, align: "left", font: META });
   text(target, "التاريخ", "١٢ / ٠٦ / ١٤٤٧", 16, 56, 90, 6, { size: 10, color: INK, font: META });
@@ -245,12 +250,14 @@ function voucherPage(title: string, kind: "receipt" | "cash" | "payment"): Page 
 
 function portfolioPages(): Page[] {
   const cover = page("الغلاف");
-  add(cover, "image", "صورة الغلاف", 0, 0, 210, 297, "", { objectFit: "cover", radius: 0 }, plate("night"));
-  shape(cover, "حقل العنوان", 0, 196, 210, 101, "#14120f");
-  text(cover, "عنوان الملف", "أعمال مختارة", 18, 208, 174, 6, { size: 10, color: GOLD, weight: 700, font: META });
-  text(cover, "اسم المصمم", "ليان القاسم", 18, 218, 174, 14, { size: 26, weight: 800, color: "#f6f3ee" });
-  text(cover, "التخصص", "هوية  ·  تقارير  ·  أنظمة بصرية", 18, 238, 174, 8, { size: 12, color: "#d6d3d1", font: META });
-  text(cover, "بيانات التواصل", "layan@example.com", 18, 254, 174, 7, { size: 11, color: GOLD, font: META });
+  shape(cover, "حقل علوي", 0, 0, 210, 168, "#ffffff");
+  shape(cover, "كتلة خضراء", 0, 168, 210, 129, GREEN);
+  add(cover, "line", "خيط ذهبي", 0, 168, 210, 0, "", { color: GOLD, stroke: 0.8 });
+  add(cover, "image", "صورة الغلاف", 16, 36, 178, 110, "", { objectFit: "cover", radius: 0 }, plate("facade"));
+  text(cover, "عنوان الملف", "أعمال مختارة", 18, 180, 174, 6, { size: 10, color: GOLD, weight: 700, font: META });
+  text(cover, "اسم المصمم", "ليان القاسم", 18, 192, 174, 14, { size: 26, weight: 800, color: "#f6f3ee" });
+  text(cover, "التخصص", "هوية  ·  تقارير  ·  أنظمة بصرية", 18, 214, 174, 8, { size: 12, color: "#d7e3dc", font: META });
+  text(cover, "بيانات التواصل", "layan@example.com", 18, 232, 174, 7, { size: 11, color: GOLD, font: META });
 
   const about = page("نبذة");
   text(about, "كِكر", "المنهج", 18, 22, 174, 6, { size: 9, color: GREEN, weight: 700, font: META });
@@ -323,11 +330,12 @@ function businessCardPages(): Page[] {
 
 function greetingPages(): Page[] {
   const photo = page("تهنئة بمشهد", 108, 135);
-  add(photo, "image", "مشهد التهنئة", 0, 0, 108, 74, "", { objectFit: "cover", radius: 0 }, plate("dune"));
-  shape(photo, "حقل النص", 0, 74, 108, 61, "#f7f3ea");
-  text(photo, "نص التهنئة", "كل عام وأنتم بخير", 8, 82, 92, 12, { size: 14, color: "#8b6d35", weight: 800, font: "Amiri" });
-  text(photo, "رسالة البطاقة", "أيامكم عامرة بما يسرّكم.", 8, 98, 92, 8, { size: 9, color: INK, font: BODY });
-  text(photo, "اسم المرسل", "نورة", 8, 116, 92, 6, { size: 8, color: MUTED, font: META });
+  shape(photo, "حقل أخضر", 0, 0, 108, 135, GREEN);
+  add(photo, "image", "مشهد التهنئة", 8, 8, 92, 58, "", { objectFit: "cover", radius: 2 }, plate("dune"));
+  text(photo, "نص التهنئة", "كل عام وأنتم بخير", 8, 74, 92, 12, { size: 14, color: "#ffffff", weight: 800 });
+  add(photo, "line", "خيط", 8, 90, 28, 0, "", { color: GOLD, stroke: 0.7 });
+  text(photo, "رسالة البطاقة", "أيامكم عامرة بما يسرّكم.", 8, 96, 92, 8, { size: 9, color: "#e7efe9", font: BODY });
+  text(photo, "اسم المرسل", "نورة", 8, 114, 92, 6, { size: 8, color: GOLD, font: META });
 
   const typeLed = page("تهنئة مكتوبة", 108, 135);
   shape(typeLed, "أرضية", 0, 0, 108, 135, "#f6f3ee");
@@ -343,6 +351,7 @@ function greetingPages(): Page[] {
 function ministryPages(): Page {
   const target = page("مراسلات تعليمية");
   target.bg = "#f7f6f3";
+  shape(target, "زاوية", 176, 0, 34, 28, "#e7efe9", "", "triangle");
   add(target, "line", "خط الهوية", 0, 0, 210, 0, "", { color: "#1b4d3e", stroke: 2 });
   text(target, "اسم الجهة التعليمية", "مدرسة النور الأهلية", 18, 14, 174, 9, { size: 16, color: "#1b4d3e", weight: 800 });
   text(target, "الإدارة والقسم", "المرحلة المتوسطة  ·  العام الدراسي ١٤٤٧ — ١٤٤٨", 18, 26, 174, 6, { size: 9, color: MUTED, font: META });
@@ -419,7 +428,19 @@ function pagePreview(page: Page): string {
     if (element.type === "line" || element.type === "divider") {
       return `<line x1="${x}" y1="${y}" x2="${x + w}" y2="${y + h}" stroke="${escapeXml(style.color || LINE)}" stroke-width="${Math.max(0.25, Number(style.stroke) || 0.35)}"/>`;
     }
-    const frame = element.type === "shape" || element.type === "box"
+    if (element.type === "shape") {
+      const markup = shapeSvgMarkup(style.shapeId || "rect", {
+        fill: style.fill && style.fill !== "transparent" ? String(style.fill) : "none",
+        stroke: style.borderColor || "none",
+        strokeUnits: Math.max(0, Number(style.borderWidth) || 0) * (100 / Math.max(w, h, 1)),
+        radiusMm: Number(style.radius) || undefined,
+        box: { w, h },
+      });
+      return markup
+        .replace("<svg ", `<svg x="${x}" y="${y}" width="${w}" height="${h}" `)
+        .replace(' width="100%" height="100%"', "");
+    }
+    const frame = element.type === "box"
       ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${Math.max(0, Number(style.radius) || 0)}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}"/>`
       : "";
     if (!element.content) return frame;

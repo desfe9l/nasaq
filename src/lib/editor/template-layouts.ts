@@ -4,13 +4,12 @@ import { bindDesignSkill } from "./design-skill";
 bindDesignSkill("layouts");
 
 /**
- * Shared editorial grammar for the existing NASAQ templates.
- * Art direction: `.grok/skills/nasaq-design/SKILL.md`.
+ * Shared media grammar for the existing NASAQ templates.
+ * Art direction: `.grok/skills/nasaq-media/SKILL.md`.
  *
  * A4 measure: 16mm margin, 178mm column, 4mm rhythm.
- * Type roles stay stable: Tajawal for display, Noto Naskh for prose,
- * IBM Plex Sans Arabic for metadata, Amiri for ceremonial pages.
- * Every mark is a real element — nothing here is a flattened picture of a page.
+ * Display is Tajawal. Body prose is Noto Naskh. Metadata is IBM Plex Sans Arabic.
+ * Amiri is not a body face. Every mark is a real element.
  */
 
 export type Add = (type: CanvasEl["type"], over?: Partial<CanvasEl>) => CanvasEl;
@@ -129,9 +128,11 @@ export function tick(
   band(add, name, x, y, 0.35, h, color);
 }
 
-/** Quiet running head: section on the right, a single rule, no banner. */
+/** Quiet running head: section on the right, a gold diamond, one thread. */
 export function runningHead(add: Add, theme: Theme, section: string, w = 210) {
-  paint(add, "قسم الصفحة", section, 16, 12, w - 32, 6, {
+  const ink = mediaInk(theme);
+  mark(add, "معين الرأس", 16, 11.4, 3.2, 3.2, ink.gold, "diamond");
+  paint(add, "قسم الصفحة", section, 24, 10, w - 42, 6, {
     fontFamily: META,
     fontSize: 8,
     fontWeight: 600,
@@ -139,10 +140,12 @@ export function runningHead(add: Add, theme: Theme, section: string, w = 210) {
     textAlign: "right",
     letterSpacing: 0.4,
   });
-  hairline(add, "خط الرأس", 16, 20, w - 32, theme.line, 0.35);
+  hairline(add, "خط الرأس", 16, 18.5, w - 32, ink.gold, 0.35);
 }
 
-/** Page number on the outer edge, entity on the inner edge. */
+/**
+ * Green footer bar and the page number inside a gold circle on the outer edge.
+ */
 export function folio(
   add: Add,
   theme: Theme,
@@ -151,40 +154,124 @@ export function folio(
   w = 210,
   h = 297,
 ) {
-  const y = h - 12;
-  hairline(add, "خط التذييل", 16, y - 4, w - 32, theme.line, 0.3);
-  paint(add, "رقم الصفحة", pageNo, 16, y, 22, 6, {
+  const ink = mediaInk(theme);
+  const barH = 14;
+  const y = h - barH;
+  band(add, "تذييل أخضر", 0, y, w, barH, ink.green);
+  const d = 9;
+  const cx = 8;
+  mark(add, "دائرة الرقم", cx, y + (barH - d) / 2, d, d, ink.gold, "circle");
+  paint(add, "رقم الصفحة", pageNo, cx, y + 4.2, d, 5, {
     fontFamily: META,
-    fontSize: 8,
-    fontWeight: 600,
-    color: theme.muted,
-    textAlign: "left",
+    fontSize: 6.5,
+    fontWeight: 700,
+    color: ink.green,
+    textAlign: "center",
+    lineHeight: 1,
   });
-  paint(add, "تذييل الجهة", org || "اسم الجهة", 42, y, w - 58, 6, {
+  paint(add, "تذييل الجهة", org || "اسم الجهة", 22, y + 3.6, w - 32, 7, {
     fontFamily: META,
     fontSize: 8,
     fontWeight: 600,
-    color: theme.muted,
+    color: "#f4f7f5",
     textAlign: "right",
   });
 }
 
+/** Official catalog ink. Other themes keep their own primary and accent. */
+export function mediaInk(theme: Theme) {
+  if (theme.id === "official") {
+    return {
+      green: "#0c3d2c",
+      mid: "#1b4d3e",
+      line: "#1f6b45",
+      gold: "#c6a05a",
+      soft: "#e7efe9",
+    };
+  }
+  return {
+    green: theme.primary,
+    mid: theme.primarySoft,
+    line: theme.primarySoft,
+    gold: theme.accent,
+    soft: theme.surface,
+  };
+}
+
+export function mark(
+  add: Add,
+  name: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fill: string,
+  shapeId: string,
+) {
+  add("shape", {
+    name,
+    x,
+    y,
+    w,
+    h,
+    style: { fill, borderWidth: 0, radius: 0, shapeId },
+  });
+}
+
+/** White KPI card: green icon tile, huge number, gold diamond, short label. */
+export function kpiCard(
+  add: Add,
+  name: string,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  value: string,
+  label: string,
+  green: string,
+  gold: string,
+  ink: string,
+) {
+  add("shape", {
+    name: `بطاقة ${name}`,
+    x,
+    y,
+    w,
+    h,
+    style: { fill: "#ffffff", borderColor: "#e4e0d8", borderWidth: 0.35, radius: 2, shapeId: "rounded" },
+  });
+  band(add, `أيقونة ${name}`, x + w - 16, y + 5, 10, 10, green);
+  paint(add, `رقم ${name}`, value, x + 6, y + 6, w - 26, 16, {
+    ...ROLE.display,
+    fontSize: 22,
+    color: green,
+    lineHeight: 1,
+  });
+  mark(add, `معين ${name}`, x + 6, y + h - 14, 3, 3, gold, "diamond");
+  paint(add, `تسمية ${name}`, label, x + 12, y + h - 16, w - 18, 10, {
+    ...ROLE.caption,
+    fontSize: 8,
+    color: ink,
+    lineHeight: 1.25,
+  });
+}
+
 /**
- * Designed image plates — architectural and editorial fields, not labelled
- * placeholders. The author replaces the source; the crop and scale stay.
+ * Photographic stand-ins. The author replaces the source; the frame stays.
+ * No emblem, no flag, no real portrait.
  */
 export function plate(
   kind: "facade" | "court" | "archive" | "press" | "dune" | "night" | "field" | "portrait",
 ): string {
   const art: Record<typeof kind, string> = {
-    facade: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 860"><rect width="640" height="860" fill="#1a2836"/><rect y="640" width="640" height="220" fill="#101820"/><rect x="36" y="150" width="54" height="610" fill="#243646"/><rect x="108" y="230" width="42" height="530" fill="#2d455c"/><rect x="168" y="120" width="96" height="640" fill="#1c3144"/><rect x="284" y="260" width="36" height="500" fill="#34506a"/><rect x="338" y="80" width="120" height="680" fill="#24384c"/><rect x="476" y="210" width="70" height="550" fill="#182838"/><g fill="#e7d3a8" opacity="0.85"><rect x="196" y="180" width="14" height="18"/><rect x="222" y="180" width="14" height="18"/><rect x="196" y="220" width="14" height="18"/><rect x="222" y="220" width="14" height="18"/><rect x="368" y="140" width="16" height="22"/><rect x="396" y="140" width="16" height="22"/><rect x="368" y="184" width="16" height="22"/><rect x="396" y="184" width="16" height="22"/><rect x="368" y="228" width="16" height="22"/><rect x="396" y="228" width="16" height="22"/></g><rect y="812" width="640" height="5" fill="#c6a05a"/></svg>`,
-    court: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520"><rect width="800" height="520" fill="#0c3d2c"/><rect y="360" width="800" height="160" fill="#08281d"/><path d="M0 360 Q400 250 800 360" fill="#145c42"/><circle cx="640" cy="120" r="46" fill="#d4af37"/><rect x="70" y="250" width="18" height="200" fill="#d4af37" opacity="0.85"/><rect x="120" y="290" width="460" height="8" fill="#d4af37" opacity="0.55"/><rect x="150" y="180" width="90" height="230" fill="#0a3024"/><rect x="260" y="140" width="70" height="270" fill="#103f30"/></svg>`,
-    archive: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520"><rect width="800" height="520" fill="#efe6d6"/><rect x="0" y="0" width="280" height="520" fill="#1b4d3e"/><rect x="300" y="70" width="430" height="8" fill="#c6a05a"/><rect x="300" y="110" width="360" height="4" fill="#d9cbb6"/><rect x="300" y="140" width="390" height="4" fill="#d9cbb6"/><rect x="300" y="170" width="330" height="4" fill="#d9cbb6"/><rect x="300" y="220" width="200" height="220" fill="#1b4d3e"/><rect x="520" y="220" width="200" height="100" fill="#c6a05a"/><rect x="520" y="340" width="200" height="100" fill="#172033"/></svg>`,
-    press: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 860"><rect width="640" height="860" fill="#111318"/><rect x="0" y="520" width="640" height="340" fill="#1c1917"/><circle cx="470" cy="230" r="90" fill="#c2410c" opacity="0.9"/><rect x="60" y="300" width="240" height="420" fill="#2a241f"/><rect x="80" y="330" width="200" height="12" fill="#f5f0ea"/><rect x="80" y="360" width="160" height="6" fill="#a8a29e"/><rect x="80" y="380" width="180" height="6" fill="#a8a29e"/><rect x="80" y="400" width="140" height="6" fill="#a8a29e"/></svg>`,
-    dune: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520"><rect width="800" height="520" fill="#e7d7be"/><path d="M0 340 C180 260 280 400 460 320 C620 250 700 300 800 250 L800 520 L0 520 Z" fill="#c4a574"/><path d="M0 400 C200 340 360 460 560 390 C680 350 740 380 800 360 L800 520 L0 520 Z" fill="#3f2e1f"/><circle cx="150" cy="120" r="28" fill="#f4efe6"/></svg>`,
-    night: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520"><rect width="800" height="520" fill="#14120f"/><rect x="180" y="80" width="220" height="360" fill="#1c1917"/><rect x="210" y="120" width="70" height="90" fill="#c6a05a"/><rect x="300" y="120" width="70" height="90" fill="#8a6232"/><rect x="460" y="160" width="180" height="280" fill="#231e1a"/><rect x="500" y="200" width="100" height="60" fill="#e7d3a8" opacity="0.8"/><rect y="470" width="800" height="50" fill="#0c0a09"/></svg>`,
-    field: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420"><rect width="800" height="420" fill="#e9f3ed"/><rect y="250" width="800" height="170" fill="#006c35"/><rect x="40" y="80" width="16" height="250" fill="#0c3d2c"/><rect x="90" y="140" width="16" height="190" fill="#145c42"/><rect x="150" y="60" width="220" height="270" fill="#0c3d2c"/><rect x="400" y="110" width="160" height="220" fill="#1b4d3e"/><rect x="590" y="160" width="90" height="170" fill="#0c3d2c"/><rect y="400" width="800" height="6" fill="#c9a86a"/></svg>`,
-    portrait: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800"><rect width="640" height="800" fill="#1c1917"/><rect y="520" width="640" height="280" fill="#14120f"/><ellipse cx="320" cy="300" rx="118" ry="140" fill="#3f342c"/><rect x="176" y="430" width="288" height="280" fill="#2a241f"/><rect x="210" y="500" width="220" height="8" fill="#c6a05a" opacity="0.8"/><rect y="760" width="640" height="6" fill="#c6a05a"/></svg>`,
+    facade: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520"><rect width="800" height="520" fill="#c5d5cc"/><rect y="300" width="800" height="220" fill="#8ea396"/><rect x="70" y="150" width="180" height="280" fill="#24362e"/><rect x="270" y="90" width="250" height="340" fill="#1a2c24"/><rect x="540" y="180" width="160" height="250" fill="#31463c"/><rect x="300" y="140" width="70" height="46" fill="#e7d7b0"/><rect x="390" y="140" width="70" height="46" fill="#d7c49a"/><rect x="300" y="210" width="70" height="46" fill="#efe3c4"/><rect x="390" y="210" width="70" height="46" fill="#e7d7b0"/><rect y="470" width="800" height="50" fill="#0c3d2c"/></svg>`,
+    court: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520"><rect width="800" height="520" fill="#d5e3da"/><rect y="250" width="800" height="270" fill="#0c3d2c"/><path d="M0 250 C200 180 360 300 560 210 C680 160 740 200 800 170 L800 250 Z" fill="#1b4d3e"/><rect x="90" y="280" width="220" height="150" fill="#145c42"/><rect x="340" y="240" width="160" height="190" fill="#08281d"/><rect x="530" y="300" width="180" height="130" fill="#1f6b45"/><rect y="490" width="800" height="8" fill="#c6a05a"/></svg>`,
+    archive: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520"><rect width="800" height="520" fill="#ece7df"/><rect y="340" width="800" height="180" fill="#d9cbb8"/><rect x="80" y="150" width="280" height="220" fill="#f7f4ee"/><rect x="100" y="170" width="240" height="8" fill="#0c3d2c"/><rect x="100" y="190" width="180" height="4" fill="#c6a05a"/><rect x="100" y="210" width="200" height="4" fill="#cfc6ba"/><rect x="420" y="180" width="280" height="180" fill="#0c3d2c"/><rect x="450" y="210" width="90" height="120" fill="#1b4d3e"/><rect x="560" y="210" width="100" height="120" fill="#145c42"/></svg>`,
+    press: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 860"><rect width="640" height="860" fill="#1c2420"/><rect y="520" width="640" height="340" fill="#101614"/><circle cx="470" cy="250" r="70" fill="#c6a05a"/><rect x="70" y="300" width="260" height="420" fill="#24302a"/><rect x="100" y="340" width="180" height="12" fill="#f4f1ea"/><rect x="100" y="370" width="140" height="6" fill="#8fa396"/><rect x="100" y="390" width="160" height="6" fill="#8fa396"/><rect y="800" width="640" height="10" fill="#c6a05a"/></svg>`,
+    dune: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520"><rect width="800" height="520" fill="#e7efe9"/><path d="M0 300 C160 220 300 360 480 280 C640 210 720 250 800 200 L800 520 L0 520 Z" fill="#1b4d3e"/><path d="M0 380 C200 320 340 440 540 370 C680 330 740 360 800 340 L800 520 L0 520 Z" fill="#0c3d2c"/><circle cx="140" cy="110" r="26" fill="#c6a05a"/></svg>`,
+    night: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 520"><rect width="800" height="520" fill="#14211c"/><rect x="180" y="70" width="200" height="370" fill="#1c2e26"/><rect x="210" y="110" width="50" height="70" fill="#c6a05a"/><rect x="280" y="110" width="50" height="70" fill="#8a7344"/><rect x="430" y="140" width="220" height="300" fill="#0c1914"/><rect x="470" y="180" width="140" height="40" fill="#e7d7b0" opacity="0.85"/><rect y="470" width="800" height="50" fill="#08110e"/></svg>`,
+    field: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 420"><rect width="800" height="420" fill="#d5e4db"/><rect y="230" width="800" height="190" fill="#0c3d2c"/><rect x="60" y="80" width="28" height="250" fill="#145c42"/><rect x="140" y="40" width="240" height="290" fill="#1b4d3e"/><rect x="170" y="80" width="70" height="40" fill="#e7d7b0"/><rect x="260" y="80" width="70" height="40" fill="#f3ead2"/><rect x="430" y="120" width="180" height="210" fill="#08281d"/><rect x="640" y="160" width="100" height="170" fill="#145c42"/><rect y="400" width="800" height="8" fill="#c6a05a"/></svg>`,
+    portrait: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 800"><rect width="640" height="800" fill="#e7efe9"/><path d="M320 36C190 36 96 150 96 310V760H544V310C544 150 450 36 320 36Z" fill="#c6a05a"/><path d="M320 58C206 58 124 162 124 310V734H516V310C516 162 434 58 320 58Z" fill="#0c3d2c"/><ellipse cx="320" cy="300" rx="92" ry="112" fill="#1b4d3e"/><path d="M150 760 C190 560 250 500 320 500 C390 500 450 560 490 760 Z" fill="#145c42"/></svg>`,
   };
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(art[kind])}`;
 }
