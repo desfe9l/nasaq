@@ -7,10 +7,11 @@ import {
   type RenderSnapshot,
 } from "./render-snapshot";
 import { uploadedFontSources } from "../nsq/fonts";
-import { assertUniformSlideSize } from "./render-units";
+import { assertUniformSlideSize, pxToMm as flatPxToMm } from "./render-units";
 import { toast } from "sonner";
 import { downloadBlob, downloadText } from "@/lib/utils";
 import {
+  findElement,
   mmToPx,
   pageSize,
   type Page,
@@ -136,7 +137,23 @@ export async function captureElement(
   pageId: string,
   elId: string,
   exportScale: number,
-): Promise<string | null> {
+): Promise<{ src: string; w: number; h: number } | null> {
+  /*
+   * Preferred path: render ONLY the element's own layer from the hidden
+   * export surface and trim it to the artwork's box. The saved library asset
+   * is then exactly the element's size — authors kept getting page-sized
+   * crops around a small shape because a live-node raster carries whatever
+   * surrounded it.
+   */
+  const model = useEditor.getState().pages.find((p) => p.id === pageId);
+  const exportNode = document.querySelector<HTMLElement>(
+    `[data-export-page="${CSS.escape(pageId)}"]`,
+  );
+  if (model && exportNode) {
+    const snapshot = await snapshotPage({ node: exportNode, ...pageSize(model) });
+    const layer = await snapshotLayer(snapshot, elId, exportScale, "عنصر");
+    if (layer) return { src: layer.src, w: layer.w, h: layer.h };
+  }
   const page = document.querySelector<HTMLElement>(
     `.editor-canvas-stage [data-page-id="${CSS.escape(pageId)}"]`,
   );
@@ -165,7 +182,17 @@ export async function captureElement(
       stripAuthoringChrome(doc);
     },
   });
-  return canvas.toDataURL("image/png");
+  const src = canvas.toDataURL("image/png");
+  // Fallback raster is the element's own node box, so its model size is the
+  // honest dimension to store beside it.
+  const el = model
+    ? findElement(model.elements, elId)?.el
+    : undefined;
+  return {
+    src,
+    w: el?.w ?? flatPxToMm(node.offsetWidth),
+    h: el?.h ?? flatPxToMm(node.offsetHeight),
+  };
 }
 
 /**

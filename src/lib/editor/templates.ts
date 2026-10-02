@@ -16,12 +16,14 @@ function page(
   name: string,
   theme: Theme,
   build: (add: Add) => void,
-  size?: { w: number; h: number },
+  size?: { w?: number; h?: number; bg?: string },
 ): Page {
   const p: Page = {
     id: uid("page"),
     name,
-    bg: theme.paper,
+    // A caller-supplied paint wins (truly blank sheets); themes otherwise own
+    // the paper colour so every packed page keeps its identity.
+    bg: size?.bg ?? theme.paper,
     w: size?.w,
     h: size?.h,
     elements: [],
@@ -2194,7 +2196,7 @@ export const PACKS: {
   {
     id: "blank",
     title: "مستند فارغ A4",
-    desc: "صفحة بيضاء مع رأس وتذييل خفيف",
+    desc: "صفحة بيضاء فارغة تمامًا — بلا أي محتوى",
     pages: "1 صفحة",
   },
 ];
@@ -2217,12 +2219,9 @@ export function createProject(
           ? briefingPages(theme, orgName)
           : pack === "slides"
             ? slidesPages(theme, orgName)
-            : [
-                page("صفحة 1", theme, (add) => {
-                  header(add, theme, "مستند جديد");
-                  footer(add, theme, orgName);
-                }),
-              ];
+            : // The «blank» pack IS the empty sheet: no header, no footer —
+              // «مستند فارغ» means nothing on the page but its background.
+              [page("صفحة 1", theme, () => undefined, { bg: "#ffffff" })];
 
   return {
     version: 2,
@@ -2271,6 +2270,29 @@ export function blankPages(
       },
       { w: size.w, h: size.h },
     ),
+  );
+}
+
+/**
+ * Truly blank sheets: no header, no footer, no placeholder — only the page's
+ * own background at the requested size.
+ *
+ * «مستند فارغ» means EMPTY to the authors who ask for it; the header/footer
+ * variant stays available as `blankPages` (the «chrome» start), so neither
+ * workflow loses its sheet.
+ */
+export function plainPages(
+  count: number,
+  size: { w: number; h: number } = { w: 210, h: 297 },
+  bg = "#ffffff",
+): Page[] {
+  const total = Math.max(1, Math.floor(count) || 1);
+  return Array.from({ length: total }, (_, i) =>
+    page(`صفحة ${i + 1}`, THEMES.official, () => undefined, {
+      w: size.w,
+      h: size.h,
+      bg,
+    }),
   );
 }
 

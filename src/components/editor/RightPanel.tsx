@@ -174,8 +174,8 @@ export function PropertiesPanel({
     try {
       const { captureElement } = await import("@/lib/editor/export");
       const pageId = useEditor.getState().activePageId;
-      const src = await captureElement(pageId, el.id, 3);
-      if (!src) {
+      const captured = await captureElement(pageId, el.id, 3);
+      if (!captured) {
         toast.error("تعذر التقاط العنصر", {
           description: "حاول مرة أخرى، أو أعد تحميل الصفحة إذا تكرر الخطأ.",
         });
@@ -183,9 +183,11 @@ export function PropertiesPanel({
       }
       const saved = await useEditor.getState().addAsset({
         name: el.name || TYPE_NAME[el.type],
-        src,
-        w: el.w,
-        h: el.h,
+        src: captured.src,
+        // The trimmed artwork's own size — the shelf card and every later
+        // insertion show the element, never the page it lived on.
+        w: captured.w,
+        h: captured.h,
       });
       if (saved)
         toast.success(`تم حفظ "${saved.name}" في المكتبة`, {

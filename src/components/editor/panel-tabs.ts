@@ -33,3 +33,20 @@ export const RIGHT_PANEL_TABS: { id: RightTab; label: string; icon: LucideIcon }
   { id: "properties", label: "خصائص", icon: SlidersHorizontal },
   { id: "layers", label: "طبقات", icon: Layers },
 ];
+
+/**
+ * One look for every editor window: title + icon. Shared by the tab strip,
+ * the window headers and the dock, so a grouped window reads as the same
+ * six panels, never as new surfaces.
+ */
+export const PANEL_META: Record<
+  import("@/lib/editor/panel-groups").EditorPanelId,
+  { title: string; icon: LucideIcon }
+> = {
+  library: { title: "المكتبة", icon: FolderOpen },
+  tools: { title: "أدوات العناصر", icon: Blocks },
+  elements: { title: "لوحة العناصر", icon: LayoutTemplate },
+  properties: { title: "الخصائص", icon: SlidersHorizontal },
+  layers: { title: "الطبقات", icon: Layers },
+  report: { title: "أدوات التقرير", icon: FileText },
+};

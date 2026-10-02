@@ -35,6 +35,7 @@ import {
   type DocKindId,
   type NewDocumentConfig,
 } from "@/lib/editor/new-document";
+import { AppInstallNotice } from "@/components/AppInstallNotice";
 import { accountIdentity } from "@/lib/auth/identity";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { OPEN_NEW_DOCUMENT_EVENT } from "@/lib/auth/use-workspace-entry";
@@ -521,12 +522,16 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
 
         {/* ── 2. Create New Document ────────────────────────────────────── */}
         <section aria-labelledby="home-create" className="grid gap-4">
-          <SectionHeading
-            id="home-create"
-            eyebrow="ابدأ من هنا"
-            title="إنشاء مستند جديد"
-            desc="إعدادات افتراضية جاهزة للبدء فورًا، مع تحكم كامل في النوع والمقاس والاتجاه وعدد الصفحات قبل الدخول إلى المحرر."
-          />
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <SectionHeading
+              id="home-create"
+              eyebrow="ابدأ من هنا"
+              title="إنشاء مستند جديد"
+              desc="إعدادات افتراضية جاهزة للبدء فورًا، مع تحكم كامل في النوع والمقاس والاتجاه وعدد الصفحات قبل الدخول إلى المحرر."
+            />
+            {/* Install NASAQ as a desktop app, straight from the workspace. */}
+            <AppInstallNotice variant="button" />
+          </div>
           <div className="grid gap-3 md:grid-cols-[minmax(0,1.15fr)_minmax(0,2fr)]">
             <button
               type="button"

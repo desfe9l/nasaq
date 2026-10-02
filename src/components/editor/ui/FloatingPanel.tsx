@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  ChevronDown,
   GripHorizontal,
   Move,
   PanelBottom,
@@ -22,6 +23,13 @@ import {
   type PanelRect,
 } from "@/lib/editor/panel-geometry";
 import { panelSpawnRect, type DockSide, type ScreenBox } from "@/lib/editor/ui-state";
+import {
+  PANEL_DRAG_HOLD_MS,
+  loadDockEdgePreference,
+  pressArmsDrag,
+  resolveDockEdge,
+  type UiDirection,
+} from "@/lib/editor/workspace-dock";
 import { cn } from "@/lib/utils";
 
 /**
@@ -349,14 +357,78 @@ export function FloatingPanel({
     return { left, top, width, height };
   };
 
+  /**
+   * A press on the title bar arms the move gesture only after a HOLD.
+   *
+   * A click on a window title — to read it, to reach a tab under the pointer —
+   * must never relocate the window; authors kept dropping panels across the
+   * canvas that way. The drag earns the pointer after `PANEL_DRAG_HOLD_MS` of
+   * stillness, and a travelling press (a scroll, a text sweep) cancels it.
+   * The grip stays the keyboard/assistive face of the same gesture.
+   */
+  const pending = useRef<{
+    id: number;
+    x: number;
+    y: number;
+    target: HTMLElement;
+    timer: number;
+  } | null>(null);
+  const [holding, setHolding] = useState(false);
+
+  const cancelHold = () => {
+    if (!pending.current) return;
+    clearTimeout(pending.current.timer);
+    pending.current = null;
+    setHolding(false);
+  };
+
+  const armHold = (event: PointerEvent<HTMLElement>) => {
+    if (event.button !== 0) return;
+    cancelHold();
+    const target = event.currentTarget;
+    const record = {
+      id: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      target,
+      timer: 0,
+    };
+    record.timer = window.setTimeout(() => {
+      pending.current = null;
+      setHolding(false);
+      beginGesture(target, record.id, record.x, record.y, "move");
+    }, PANEL_DRAG_HOLD_MS);
+    pending.current = record;
+    setHolding(true);
+  };
+
+  const holdMove = (event: PointerEvent<HTMLElement>) => {
+    const p = pending.current;
+    if (!p || p.id !== event.pointerId) return;
+    if (!pressArmsDrag({ heldMs: PANEL_DRAG_HOLD_MS, movedPx: Math.hypot(event.clientX - p.x, event.clientY - p.y) })) {
+      // Travelled past the slop: this is a scroll or a click, not a hold.
+      cancelHold();
+    }
+  };
+
   const start = (event: PointerEvent<HTMLElement>, mode: GestureMode) => {
     if (event.button !== 0) return;
     event.preventDefault();
+    beginGesture(event.currentTarget, event.pointerId, event.clientX, event.clientY, mode);
+  };
+
+  const beginGesture = (
+    target: HTMLElement,
+    pointerId: number,
+    x: number,
+    y: number,
+    mode: GestureMode,
+  ) => {
     let current = latest.current;
     if (dockSide) {
       // Dragging a docked panel detaches it: the same gesture that positions a
       // floating panel is how you leave the fixed layout.
-      const node = event.currentTarget.closest<HTMLElement>(".editor-floating-panel");
+      const node = target.closest<HTMLElement>(".editor-floating-panel");
       const measured = node?.getBoundingClientRect();
       const row = sectionRef.current?.offsetParent as HTMLElement | null;
       const rowRect = row?.getBoundingClientRect();
@@ -374,16 +446,16 @@ export function FloatingPanel({
       onDockSideChange?.(null);
     }
     gesture.current = {
-      id: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
+      id: pointerId,
+      x,
+      y,
       rect: current,
       next: current,
       frame: 0,
       mode,
     };
     try {
-      event.currentTarget.setPointerCapture(event.pointerId);
+      target.setPointerCapture(pointerId);
     } catch {
       /* synthetic events still drive the window-level listeners */
     }
@@ -455,6 +527,29 @@ export function FloatingPanel({
     onLostPointerCapture: finish,
   };
 
+  /**
+   * Title-bar gesture set: a pending HOLD cancels on travel or release, and
+   * once the drag is armed the usual gesture handlers take over.
+   */
+  const holdGestureEvents = {
+    onPointerMove: (event: PointerEvent<HTMLElement>) => {
+      holdMove(event);
+      move(event);
+    },
+    onPointerUp: (event: PointerEvent<HTMLElement>) => {
+      cancelHold();
+      finish(event);
+    },
+    onPointerCancel: (event: PointerEvent<HTMLElement>) => {
+      cancelHold();
+      finish(event);
+    },
+    onLostPointerCapture: finish,
+  };
+
+  // Never leave a hold timer running behind a closed/unmounted window.
+  useEffect(() => cancelHold, []);
+
   /** One resize grip: a thin edge strip or a corner square. */
   const grip = (mode: GestureMode) => {
     const isCorner = mode.length === 2;
@@ -510,6 +605,7 @@ export function FloatingPanel({
         dockSide && `is-docked-${dockSide}`,
         open && "is-open",
         dragging && "is-dragging",
+        holding && "is-drag-armed",
         className,
       )}
       data-editor-obstacle={open ? side : undefined}
@@ -522,42 +618,72 @@ export function FloatingPanel({
       <div
         className="touch-properties-header"
         onPointerDown={(event) => {
-          // Buttons inside the title bar keep their clicks; the bar itself drags.
+          // Buttons inside the title bar keep their clicks; the bar itself
+          // only DRAGS after a hold (armHold), never on a plain click.
           if ((event.target as HTMLElement).closest("button:not(.touch-properties-grip)"))
             return;
-          start(event, "move");
+          armHold(event);
         }}
-        {...gestureEvents}
+        onContextMenu={(event) => {
+          // A touch hold must not summon the browser menu mid-drag.
+          if (pending.current || dragging) event.preventDefault();
+        }}
+        {...holdGestureEvents}
       >
         <button
           type="button"
           className="touch-properties-grip"
-          aria-label={`تحريك ${title}`}
-          title="اسحب لتحريك اللوحة — الأسهم للتحريك الدقيق"
+          aria-label={`تحريك ${title} — اضغط مطولًا ثم اسحب`}
+          title="اضغط مطولًا ثم اسحب لتحريك اللوحة — الأسهم للتحريك الدقيق"
           onPointerDown={(event) => {
-            // The whole title bar drags; the grip is its a11y/keyboard face.
-            // Stop the bubble so the header handler does not restart the
-            // gesture on a different capture target.
+            // The whole title bar holds-then-drags; the grip is its
+            // a11y/keyboard face and stops the bubble so the header handler
+            // does not arm a second gesture on a different capture target.
             event.stopPropagation();
-            start(event, "move");
+            armHold(event);
           }}
-          {...gestureEvents}
+          {...holdGestureEvents}
           onKeyDown={(event) => nudge(event, "move")}
         >
           <GripHorizontal size={16} aria-hidden="true" />
           <span>{title}</span>
         </button>
         {onDockSideChange && (
-          <div className="relative shrink-0">
+          <div className="relative shrink-0 flex items-center">
+            <button
+              type="button"
+              onClick={() => {
+                // One easy press: pin to the workspace's preferred edge
+                // (right in RTL, left in LTR, or the author's override),
+                // or release the pin when already docked.
+                if (dockSide) onDockSideChange(null);
+                else {
+                  const dir: UiDirection =
+                    sectionRef.current?.closest("[dir]")?.getAttribute("dir") ===
+                      "ltr" || document.dir === "ltr"
+                      ? "ltr"
+                      : "rtl";
+                  onDockSideChange(resolveDockEdge(loadDockEdgePreference(), dir));
+                }
+              }}
+              aria-label={dockSide ? `فك تثبيت ${title}` : `تثبيت ${title} على حافة العمل`}
+              title={
+                dockSide
+                  ? `فك تثبيت ${title}`
+                  : `تثبيت ${title} على ${resolveDockEdge(loadDockEdgePreference()) === "right" ? "اليمين" : "اليسار"}`
+              }
+              className={cn(dockSide && "is-docked-active")}
+            >
+              <Pin size={16} />
+            </button>
             <button
               type="button"
               onClick={() => setDockMenuOpen((v) => !v)}
-              aria-label={dockSide ? `تغيير تثبيت ${title}` : `تثبيت ${title}`}
+              aria-label={`اختيار حافة تثبيت ${title}`}
               aria-expanded={dockMenuOpen}
-              title={dockSide ? "تغيير حافة التثبيت" : "تثبيت اللوحة على حافة الشاشة"}
-              className={cn(dockSide && "is-docked-active")}
+              title="اختيار حافة التثبيت"
             >
-              {dockSide ? <Pin size={16} /> : <PanelRight size={16} />}
+              <ChevronDown size={15} />
             </button>
             {dockMenuOpen && (
               <div

@@ -3,6 +3,12 @@ import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { useEditor } from "@/lib/editor/store";
 import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
 import { IconButton } from "./ui/IconButton";
+import type { EditorPanelId } from "@/lib/editor/panel-groups";
+import {
+  DOCK_EDGE_LABELS,
+  DOCK_EDGE_PREFERENCES,
+  type DockEdgePreference,
+} from "@/lib/editor/workspace-dock";
 
 const APPEARANCE_MODES = [
   { id: "light", label: "فاتح" },
@@ -23,9 +29,19 @@ const APPEARANCE_MODES = [
 export function ViewMenu({
   fitToScreen,
   fitToSelection,
+  panelChecked,
+  onTogglePanel,
+  dockPref,
+  onDockPref,
 }: {
   fitToScreen: () => void;
   fitToSelection: () => void;
+  /** Which of the six panels is actually on screen (grouping-aware). */
+  panelChecked: Record<EditorPanelId, boolean>;
+  onTogglePanel: (id: EditorPanelId) => void;
+  /** The workspace's preferred pin edge for windows. */
+  dockPref: DockEdgePreference;
+  onDockPref: (pref: DockEdgePreference) => void;
 }) {
   const setZoom = useEditor((s) => s.setZoom);
   const showGrid = useEditor((s) => s.showGrid);
@@ -33,12 +49,6 @@ export function ViewMenu({
   const snapElements = useEditor((s) => s.snapElements);
   const previewAll = useEditor((s) => s.previewAll);
   const focusMode = useEditor((s) => s.focusMode);
-  const leftOpen = useEditor((s) => s.leftOpen);
-  const rightOpen = useEditor((s) => s.rightOpen);
-  const layersOpen = useEditor((s) => s.layersOpen);
-  const reportToolsOpen = useEditor((s) => s.reportToolsOpen);
-  const libraryOpen = useEditor((s) => s.libraryOpen);
-  const toolsOpen = useEditor((s) => s.toolsOpen);
   const pagesRailCollapsed = useEditor((s) => s.pagesRailCollapsed);
   const pagesRailHidden = useEditor((s) => s.pagesRailHidden);
   const togglePagesRail = useEditor((s) => s.togglePagesRail);
@@ -151,6 +161,15 @@ export function ViewMenu({
         onSelect={() => togglePrintGuide("bleed")}
       />
       <MenuGroup title="مساحة العمل" />
+      <MenuGroup title="حافة تثبيت النوافذ الافتراضية" />
+      {DOCK_EDGE_PREFERENCES.map((pref) => (
+        <MenuRow
+          key={pref}
+          label={DOCK_EDGE_LABELS[pref]}
+          checked={dockPref === pref}
+          onSelect={() => onDockPref(pref)}
+        />
+      ))}
       <div className="editor-menu-grid" dir="ltr">
         {[1, 2, 3, 4, 6].map((cols) => (
           <button
@@ -173,37 +192,26 @@ export function ViewMenu({
           onSelect={() => setAppearance(mode.id)}
         />
       ))}
-      {/* The six independent windows — each can be on at the same time. */}
-      <MenuRow
-        label="المكتبة"
-        checked={libraryOpen}
-        onSelect={() => toggle("libraryOpen")}
-      />
-      <MenuRow
-        label="أدوات العناصر"
-        checked={toolsOpen}
-        onSelect={() => toggle("toolsOpen")}
-      />
-      <MenuRow
-        label="لوحة العناصر"
-        checked={leftOpen}
-        onSelect={() => toggle("leftOpen")}
-      />
-      <MenuRow
-        label="الخصائص"
-        checked={rightOpen}
-        onSelect={() => toggle("rightOpen")}
-      />
-      <MenuRow
-        label="الطبقات"
-        checked={layersOpen}
-        onSelect={() => toggle("layersOpen")}
-      />
-      <MenuRow
-        label="أدوات التقرير"
-        checked={reportToolsOpen}
-        onSelect={() => toggle("reportToolsOpen")}
-      />
+      {/* The six windows — fixed order, grouping-aware: a panel that lives
+          inside another window toggles THAT window on the right tab. */}
+      <MenuGroup title="نوافذ مساحة العمل" />
+      {(
+        [
+          ["library", "المكتبة"],
+          ["tools", "أدوات العناصر"],
+          ["elements", "لوحة العناصر"],
+          ["properties", "الخصائص"],
+          ["layers", "الطبقات"],
+          ["report", "أدوات التقرير"],
+        ] as [EditorPanelId, string][]
+      ).map(([id, label]) => (
+        <MenuRow
+          key={id}
+          label={label}
+          checked={panelChecked[id]}
+          onSelect={() => onTogglePanel(id)}
+        />
+      ))}
       <MenuRow
         label="شريط الصفحات المصغّر"
         checked={!pagesRailCollapsed && !pagesRailHidden}

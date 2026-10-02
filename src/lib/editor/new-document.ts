@@ -17,9 +17,9 @@ import {
   type SizeId,
   type ThemeId,
 } from "./model";
-import { blankPages, createProject } from "./templates";
+import { blankPages, createProject, plainPages } from "./templates";
 
-export type PageSizeId = "a4" | "a3" | "slide" | "custom";
+export type PageSizeId = "a4" | "a3" | "letter" | "legal" | "slide" | "custom";
 export type Orientation = "portrait" | "landscape";
 export type DocKindId =
   | "report"
@@ -40,6 +40,20 @@ export const PAGE_SIZES: {
   { id: "a4", name: "A4", desc: "210 × 297 مم", w: 210, h: 297 },
   { id: "a3", name: "A3", desc: "297 × 420 مم", w: 297, h: 420 },
   {
+    id: "letter",
+    name: "Letter",
+    desc: "215.9 × 279.4 مم",
+    w: 215.9,
+    h: 279.4,
+  },
+  {
+    id: "legal",
+    name: "Legal",
+    desc: "215.9 × 355.6 مم",
+    w: 215.9,
+    h: 355.6,
+  },
+  {
     id: "slide",
     name: "عرض 16:9",
     desc: "338.7 × 190.5 مم",
@@ -47,6 +61,24 @@ export const PAGE_SIZES: {
     h: 190.5,
   },
   { id: "custom", name: "مخصص", desc: "بالمليمتر", w: 210, h: 297 },
+];
+
+/**
+ * What a blank start puts on the sheet.
+ *
+ * `empty` is a truly blank canvas — no header, no footer, nothing but the
+ * page's own background — which is what authors expect from «مستند فارغ».
+ * `chrome` keeps the light institutional header/footer the blank pages used
+ * to carry, one click away for letters that need it.
+ */
+export type BlankContent = "empty" | "chrome";
+
+/** Backgrounds offered for a blank sheet; white is the print default. */
+export const BLANK_BACKGROUNDS: { id: string; name: string; color: string }[] = [
+  { id: "white", name: "أبيض", color: "#ffffff" },
+  { id: "ivory", name: "عاجي", color: "#fbf8f1" },
+  { id: "mist", name: "رمادي فاتح", color: "#f4f6fa" },
+  { id: "custom", name: "لون مخصص", color: "" },
 ];
 
 /** Document types — each one is just a sensible starting size, orientation and name. */
@@ -139,9 +171,13 @@ export interface NewDocumentConfig {
   theme: ThemeId;
   name: string;
   orgName: string;
+  /** Blank starts only: a truly empty sheet or the light header/footer chrome. */
+  content: BlankContent;
+  /** Blank starts only: the sheet's own background paint. */
+  bg: string;
 }
 
-/** Everything a user can accept as-is: one A4 portrait page, official theme. */
+/** Everything a user can accept as-is: one EMPTY A4 portrait page, white. */
 export function defaultNewDocument(
   overrides: Partial<NewDocumentConfig> = {},
 ): NewDocumentConfig {
@@ -156,8 +192,18 @@ export function defaultNewDocument(
     theme: "official",
     name: "",
     orgName: "",
+    content: "empty",
+    bg: "#ffffff",
     ...overrides,
   };
+}
+
+/** Normalise a stored/derived background into a usable CSS colour. */
+export function blankBackground(color: unknown): string {
+  if (typeof color !== "string") return "#ffffff";
+  const value = color.trim();
+  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value)) return value.toLowerCase();
+  return "#ffffff";
 }
 
 export function docKind(id: DocKindId) {
@@ -222,6 +268,7 @@ export function buildNewDocument(config: NewDocumentConfig): Project {
 
   const size = pageDimensions(config.size, config.orientation, config.custom);
   const sizeId: SizeId = sizeIdOf(size);
+  const count = clampPages(config.pages);
   return {
     version: 2,
     name,
@@ -229,13 +276,10 @@ export function buildNewDocument(config: NewDocumentConfig): Project {
     orgName,
     pack: "blank",
     defaultSize: sizeId,
-    pages: blankPages(
-      clampPages(config.pages),
-      config.theme,
-      orgName,
-      size,
-      name,
-    ),
+    pages:
+      config.content === "chrome"
+        ? blankPages(count, config.theme, orgName, size, name)
+        : plainPages(count, size, blankBackground(config.bg)),
   };
 }
 

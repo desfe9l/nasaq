@@ -534,7 +534,7 @@ export function TemplateFormDialog({
               </select>
             )}
             {sourceKind === "blank" && (
-              <p className="text-[11px] leading-6 text-muted">يبدأ القالب بصفحة A4 بيضاء مع رأس وتذييل خفيف.</p>
+              <p className="text-[11px] leading-6 text-muted">يبدأ القالب بصفحة A4 بيضاء فارغة تمامًا، ويمكن اختيار رأس وتذييل عند الإنشاء.</p>
             )}
           </div>
         )}
