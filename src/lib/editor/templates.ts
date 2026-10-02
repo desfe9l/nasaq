@@ -11,6 +11,7 @@ import {
   nextZ,
   normalizeZ,
 } from "./model";
+import { FAMILY_TEMPLATES, buildFamilyPage } from "./template-families";
 
 function page(
   name: string,
@@ -2547,6 +2548,10 @@ export const PAGE_TEMPLATES: PageTemplateDef[] = [
     preview: "process",
     size: A4_SIZE,
   },
+  ...FAMILY_TEMPLATES.map((entry) => ({
+    ...entry,
+    size: A4_SIZE,
+  })),
 ];
 
 export function templateById(id: string): PageTemplateDef | undefined {
@@ -2611,8 +2616,10 @@ export function createTemplatePage(
       return sectionDividerPage(theme, org);
     case "process":
       return processPage(theme, org);
-    default:
-      return coverPage(theme, org);
+    default: {
+      const family = buildFamilyPage(id, theme, org);
+      return family ?? coverPage(theme, org);
+    }
   }
 }
 

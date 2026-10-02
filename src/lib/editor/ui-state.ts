@@ -71,6 +71,44 @@ export function clampDockSize(
   return Math.min(max, Math.max(min, Math.round(value)));
 }
 
+/**
+ * Fit one or two side docks beside a usable page.
+ *
+ * iPad portrait cannot hold two desktop docks at their minimums without
+ * reducing the artboard to a sliver. When both requested widths fit above
+ * `canvasFloor` they are scaled down together. When they cannot, the right
+ * (content) dock stays and the left one is returned as null so the shell
+ * floats it instead of docking it off the page.
+ */
+export function fitSideDockWidths(
+  viewport: number,
+  left: number | null,
+  right: number | null,
+  min: number,
+  canvasFloor: number,
+): { left: number | null; right: number | null } {
+  const width = Number.isFinite(viewport) ? viewport : 0;
+  const floor = Math.max(160, Math.round(canvasFloor));
+  const fitOne = (value: number) =>
+    Math.min(value, Math.max(min, width - floor));
+  if (left == null && right == null) return { left: null, right: null };
+  if (left != null && right == null) return { left: fitOne(left), right: null };
+  if (right != null && left == null) return { left: null, right: fitOne(right) };
+  const budget = width - floor;
+  if (left! + right! <= budget) return { left, right };
+  const scale = budget / (left! + right!);
+  const nextLeft = Math.floor(left! * scale);
+  const nextRight = Math.floor(right! * scale);
+  if (nextLeft >= min && nextRight >= min) {
+    return { left: nextLeft, right: nextRight };
+  }
+  const kept = Math.min(right!, Math.max(min, budget));
+  if (kept >= min && width - kept >= Math.min(floor, 280)) {
+    return { left: null, right: kept };
+  }
+  return { left: null, right: null };
+}
+
 /** Headroom kept for the canvas + status bar above the pages panel. */
 const PAGES_PANEL_RESERVED = 220;
 

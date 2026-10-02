@@ -111,6 +111,7 @@ import {
   OVERLAY_BREAKPOINT,
   isOverlayViewport,
   clampDockSize,
+  fitSideDockWidths,
   PAGES_RAIL_COLLAPSED,
   type DockSide,
 } from "@/lib/editor/ui-state";
@@ -1593,35 +1594,6 @@ function Studio({
   }, [hydrated]);
 
   /** Which window (if any) currently occupies each screen edge. */
-  const dockedBySide: Partial<Record<DockSide, PanelId>> = {};
-  if (isDesktop && !focusMode && !cropActive) {
-    for (const id of hosts) {
-      const side = dockSides[id];
-      if (side && panelOpen[id]) dockedBySide[side] = id;
-    }
-  }
-  const visibleDock = (id: PanelId): boolean =>
-    isDesktop &&
-    !focusMode &&
-    !cropActive &&
-    Boolean(dockSides[id]) &&
-    panelOpen[id];
-
-  /*
-   * A fingerprint of the docked layout. When it changes (a window docks,
-   * undocks, or swaps edges) the canvas gains or loses a track, so the shell
-   * re-fits the artboard to the new space — the same refit the tablet
-   * boundary triggers.
-   */
-  const dockSignature = hosts
-    .map((id) =>
-      visibleDock(id)
-        ? `${id}:${dockSides[id]}:${collapsedPanels[id] ? "c" : "o"}`
-        : id,
-    )
-    .join("|");
-
-  /** Docked strip length for a window (clamped so the canvas keeps its share). */
   const dockW = (id: PanelId) =>
     collapsedPanels[id]
       ? COLLAPSED_TRACK
@@ -1638,6 +1610,49 @@ function Studio({
           vp.h,
           DOCK_MIN_H,
         );
+  const requestedDock: Partial<Record<DockSide, PanelId>> = {};
+  if (isDesktop && !focusMode && !cropActive) {
+    for (const id of hosts) {
+      const side = dockSides[id];
+      if (side && panelOpen[id]) requestedDock[side] = id;
+    }
+  }
+  /*
+   * Two full side docks crush an iPad portrait page. Fit them against a
+   * canvas floor; the dock that cannot stay becomes a movable floating
+   * window instead of a grid track.
+   */
+  const sideFit = fitSideDockWidths(
+    vp.w,
+    requestedDock.left ? dockW(requestedDock.left) : null,
+    requestedDock.right ? dockW(requestedDock.right) : null,
+    DOCK_MIN_W,
+    Math.max(300, Math.round(vp.w * 0.42)),
+  );
+  const dockedBySide: Partial<Record<DockSide, PanelId>> = {
+    ...requestedDock,
+  };
+  if (requestedDock.left && sideFit.left == null) delete dockedBySide.left;
+  if (requestedDock.right && sideFit.right == null) delete dockedBySide.right;
+  const visibleDock = (id: PanelId): boolean =>
+    dockedBySide.left === id ||
+    dockedBySide.right === id ||
+    dockedBySide.top === id ||
+    dockedBySide.bottom === id;
+
+  /*
+   * A fingerprint of the docked layout. When it changes (a window docks,
+   * undocks, or swaps edges) the canvas gains or loses a track, so the shell
+   * re-fits the artboard to the new space — the same refit the tablet
+   * boundary triggers.
+   */
+  const dockSignature = hosts
+    .map((id) =>
+      visibleDock(id)
+        ? `${id}:${dockSides[id]}:${collapsedPanels[id] ? "c" : "o"}`
+        : id,
+    )
+    .join("|");
 
   /*
    * The workspace grid. In this RTL shell the FIRST column sits on the
@@ -1647,9 +1662,11 @@ function Studio({
    * track and the canvas owns the whole workspace.
    */
   const workspaceCols: string[] = [];
-  if (dockedBySide.right) workspaceCols.push(`${dockW(dockedBySide.right)}px`);
+  if (dockedBySide.right)
+    workspaceCols.push(`${sideFit.right ?? dockW(dockedBySide.right)}px`);
   workspaceCols.push("minmax(0, 1fr)");
-  if (dockedBySide.left) workspaceCols.push(`${dockW(dockedBySide.left)}px`);
+  if (dockedBySide.left)
+    workspaceCols.push(`${sideFit.left ?? dockW(dockedBySide.left)}px`);
   const workspaceRows: string[] = [];
   if (dockedBySide.top) workspaceRows.push(`${dockH(dockedBySide.top)}px`);
   workspaceRows.push("minmax(0, 1fr)");

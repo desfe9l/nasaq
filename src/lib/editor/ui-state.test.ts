@@ -18,6 +18,7 @@ import {
   panelSpawnRect,
   parseStoredPoint,
   placeFloatingToolbar,
+  fitSideDockWidths,
   tipPlacement,
   type ScreenBox,
 } from "./ui-state.ts";
@@ -47,6 +48,29 @@ const box = (
   height,
   right: left + width,
   bottom: top + height,
+});
+
+describe("fitSideDockWidths", () => {
+  it("keeps both docks on a wide desktop", () => {
+    assert.deepEqual(fitSideDockWidths(1440, 340, 380, 264, 500), {
+      left: 340,
+      right: 380,
+    });
+  });
+
+  it("scales both docks on an iPad landscape that is only slightly tight", () => {
+    const fit = fitSideDockWidths(1194, 340, 380, 264, 501);
+    assert.ok(fit.left && fit.right);
+    assert.ok(fit.left! >= 264 && fit.right! >= 264);
+    assert.ok(fit.left! + fit.right! <= 1194 - 501);
+  });
+
+  it("floats the inspector on iPad portrait so the page keeps a floor", () => {
+    const fit = fitSideDockWidths(834, 333, 333, 264, 350);
+    assert.equal(fit.left, null);
+    assert.ok((fit.right ?? 0) >= 264);
+    assert.ok(834 - (fit.right ?? 0) >= 280);
+  });
 });
 
 describe("clampPagesHeight", () => {
