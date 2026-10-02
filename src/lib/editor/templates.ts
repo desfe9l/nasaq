@@ -16,9 +16,6 @@ import { bindDesignSkill } from "./design-skill";
 import {
   A4,
   BODY,
-  CEREMONY,
-  DISPLAY,
-  EDITORIAL,
   META,
   ROLE,
   SLIDE,
@@ -26,6 +23,9 @@ import {
   cell,
   folio,
   hairline,
+  kpiCard,
+  mark,
+  mediaInk,
   paint,
   plate,
   runningHead,
@@ -131,26 +131,26 @@ function officialPages(theme: Theme, org: string): Page[] {
   const entity = org.trim() || "الجهة التنفيذية";
   return [
     page("الغلاف", theme, (add) => {
-      band(add, "عمود التجليد", 196, 0, 14, 297, theme.primary);
-      band(add, "خط الهوية", 194.2, 0, 1.4, 297, theme.accent);
-      add("logo", { name: "شعار الجهة", x: 197, y: 18, w: 12, h: 12 });
-      paint(add, "سنة الغلاف", "٢٦", 196, 248, 14, 16, {
-        ...ROLE.meta, fontFamily: DISPLAY, fontSize: 11, color: theme.accent, textAlign: "center",
-      });
-      paint(add, "تصنيف", "تقرير أداء  ·  استخدام داخلي", 16, 20, 170, 6, { ...ROLE.meta, color: theme.muted });
-      paint(add, "عنوان التقرير", "تقرير الأداء\nالسنوي", 16, 32, 170, 34, { ...ROLE.display, fontSize: 32, color: theme.primary });
-      hairline(add, "فاصل العنوان", 140, 72, 46, theme.accent, 1);
-      paint(add, "نبذة الغلاف", "نطاق العام، أبرز أثر على الخدمة، والقرار المطلوب من اللجنة في الدورة القادمة.", 16, 82, 168, 16, { ...ROLE.body, color: theme.ink });
+      const ink = mediaInk(theme);
+      mark(add, "زاوية هندسية", 168, 0, 42, 36, ink.soft, "triangle");
+      mark(add, "معين الغلاف", 186, 16, 7, 7, ink.gold, "diamond");
+      add("logo", { name: "شعار الجهة", x: 16, y: 14, w: 16, h: 16 });
+      paint(add, "تصنيف", "تقرير سنوي  ·  ٢٠٢٦", 36, 16, 120, 6, { ...ROLE.meta, color: theme.muted });
+      paint(add, "عنوان التقرير", "تقرير الأداء\nالسنوي", 16, 40, 170, 36, { ...ROLE.display, fontSize: 34, color: ink.green });
+      hairline(add, "خيط ذهبي", 120, 82, 66, ink.gold, 1.1);
+      paint(add, "نبذة الغلاف", "ما اكتمل في الخدمة، وما بقي مفتوحًا أمام اللجنة في الدورة القادمة.", 16, 90, 168, 14, { ...ROLE.body, fontSize: 12, color: theme.ink });
       add("image", {
-        name: "صورة الغلاف", x: 0, y: 110, w: 194, h: 187,
-        src: plate("facade"), style: { objectFit: "cover", radius: 0 },
+        name: "صورة الغلاف", x: 0, y: 112, w: 210, h: 78,
+        src: plate("field"), style: { objectFit: "cover", radius: 0 },
       });
-      band(add, "قاعدة الغلاف", 0, 250, 194, 47, theme.primary);
-      paint(add, "تسمية الجهة", "الجهة", 108, 256, 78, 5, { ...ROLE.caption, color: theme.accent });
-      paint(add, "اسم الجهة", entity, 100, 264, 86, 12, { ...ROLE.h3, fontSize: 13, color: "#f7f6f3" });
-      paint(add, "تسمية الفترة", "الفترة", 16, 256, 74, 5, { ...ROLE.caption, color: theme.accent });
-      paint(add, "الفترة", "يناير — ديسمبر", 16, 264, 78, 12, { ...ROLE.h3, fontSize: 13, color: "#f7f6f3" });
-      add("stamp", { name: "ختم رسمي", x: 158, y: 214, w: 28, h: 28, content: "رسمي" });
+      band(add, "شريط التعليق", 0, 172, 210, 16, ink.green);
+      paint(add, "تعليق الصورة", "الميدان  ·  الربع الأخير", 16, 176, 178, 8, { ...ROLE.caption, color: "#f4f7f5" });
+      band(add, "كتلة خضراء", 0, 188, 210, 109, ink.green);
+      hairline(add, "خيط الكتلة", 0, 188, 210, ink.gold, 0.8);
+      paint(add, "تسمية الجهة", "الجهة", 16, 200, 178, 5, { ...ROLE.caption, color: ink.gold });
+      paint(add, "اسم الجهة", entity, 16, 208, 178, 12, { ...ROLE.h2, fontSize: 16, color: "#f7f6f3" });
+      paint(add, "الفترة", "يناير — ديسمبر", 16, 226, 100, 8, { ...ROLE.meta, color: "#d7e3dc" });
+      paint(add, "النسخة", "نسخة داخلية", 120, 226, 74, 8, { ...ROLE.meta, color: ink.gold, textAlign: "left" });
     }, A4),
 
     page("المحتويات", theme, (add) => {
@@ -203,50 +203,59 @@ function officialPages(theme: Theme, org: string): Page[] {
     }, A4),
 
     page("الإنجازات", theme, (add) => {
-      runningHead(add, theme, "الأثر");
-      paint(add, "تسمية", "ما تغيّر في الخدمة", 16, 28, 178, 6, { ...ROLE.meta, color: theme.accent });
-      paint(add, "عنوان الصفحة", "أثر واحد، ثم ثلاثة", 16, 38, 178, 12, { ...ROLE.h1, color: theme.primary });
+      const ink = mediaInk(theme);
+      runningHead(add, theme, "الأهداف");
+      paint(add, "عنوان الصفحة", "ثلاثة أهداف لهذا العام", 16, 26, 178, 12, { ...ROLE.h1, color: ink.green });
       add("image", {
-        name: "صورة الأثر", x: 16, y: 58, w: 58, h: 72,
-        src: plate("field"), style: { objectFit: "cover", radius: 0 },
+        name: "صورة القسم", x: 16, y: 46, w: 78, h: 96,
+        src: plate("field"), style: { objectFit: "cover", radius: 18 },
       });
-      paint(add, "رقم الإنجاز الأول", "٠١", 82, 58, 30, 10, { ...ROLE.h3, color: theme.accent });
-      paint(add, "عنوان الإنجاز الأول", "تشغيل المنافذ على مدار الساعة", 114, 58, 80, 12, { ...ROLE.h2, color: theme.ink });
-      paint(add, "متن الإنجاز الأول", "أربع بوابات انتقلت من مناوبة نهارية إلى تغطية كاملة. انخفض الانتظار من ٢٦ دقيقة إلى ١١، بلا زيادة في عدد الموظفين.", 82, 76, 112, 36, { ...ROLE.body, fontSize: 11, color: theme.ink });
-      paint(add, "تعليق الأثر", "المنفذ الرئيسي  ·  بعد تعديل المناوبة", 16, 132, 58, 12, { ...ROLE.caption, color: theme.muted, lineHeight: 1.35 });
-      const rows: [string, string, string][] = [
-        ["٠٢", "شراكات الخدمة", "اثنتا عشرة اتفاقية سارية، آخرها مع جهة الإسناد الطبي في المنافذ الغربية."],
-        ["٠٣", "رضا المستفيدين", "ارتفع المتوسط من ٤٫٢ إلى ٤٫٧ بعد توحيد نموذج الشكوى وإغلاقها خلال خمسة أيام."],
-        ["٠٤", "مرجع التشغيل", "استُبدل بثلاث نسخ ميدانية دليل واحد، وأُخرجت النسخ القديمة من التداول."],
+      const goals: [string, string, string][] = [
+        ["٠١", "تشغيل مستمر", "أربع بوابات انتقلت إلى تغطية كاملة، وانخفض الانتظار من ٢٦ دقيقة إلى ١١."],
+        ["٠٢", "شراكة واحدة", "اتفقت الجهة مع الإسناد الطبي على تغطية المنافذ الغربية."],
+        ["٠٣", "مرجع واحد", "حل دليل تشغيل واحد محل ثلاث نسخ ميدانية."],
       ];
-      rows.forEach(([num, title, body], i) => {
-        const y = 154 + i * 32;
-        paint(add, `رقم ${num}`, num, 166, y, 28, 8, { ...ROLE.h3, color: theme.accent });
-        paint(add, `عنوان ${title}`, title, 16, y, 144, 8, { ...ROLE.h2, fontSize: 13, color: theme.ink });
-        paint(add, `متن ${title}`, body, 16, y + 10, 178, 14, { ...ROLE.body, fontSize: 11, color: theme.ink, lineHeight: 1.45 });
+      goals.forEach(([num, title, body], i) => {
+        const y = 46 + i * 34;
+        mark(add, `دائرة ${num}`, 104, y, 10, 10, ink.green, "circle");
+        paint(add, `رقم ${num}`, num, 104, y + 2.2, 10, 5, { ...ROLE.caption, fontSize: 6, color: "#ffffff", textAlign: "center" });
+        paint(add, `عنوان ${title}`, title, 118, y, 76, 8, { ...ROLE.h3, color: ink.green });
+        paint(add, `متن ${title}`, body, 118, y + 10, 76, 18, { ...ROLE.body, fontSize: 10, color: theme.ink, lineHeight: 1.35 });
       });
+      paint(add, "تعليق الصورة", "الميدان بعد تعديل المناوبة", 16, 146, 78, 8, { ...ROLE.caption, color: theme.muted });
+      add("image", {
+        name: "صورة ثانية", x: 16, y: 162, w: 178, h: 72,
+        src: plate("court"), style: { objectFit: "cover", radius: 0 },
+      });
+      band(add, "تعليق ثان", 16, 218, 178, 14, ink.green);
+      paint(add, "سطر التعليق", "تغطية كاملة  ·  بلا زيادة في عدد الموظفين", 24, 221, 162, 8, { ...ROLE.caption, color: "#f4f7f5" });
       folio(add, theme, entity, "٠٤");
     }, A4),
 
     page("المؤشرات", theme, (add) => {
-      runningHead(add, theme, "المؤشرات");
-      paint(add, "عنوان المؤشرات", "مسار الإنجاز", 16, 28, 100, 12, { ...ROLE.h1, color: theme.primary });
-      paint(add, "الرقم القائد", "٩٤٪", 124, 26, 70, 16, { ...ROLE.display, fontSize: 28, color: theme.primary, lineHeight: 1 });
-      paint(add, "تسمية الرقم القائد", "مقابل الخطة في ديسمبر", 124, 44, 70, 8, { ...ROLE.caption, color: theme.muted });
-      paint(add, "عنوان الرسم", "النسبة الشهرية من الخطة", 16, 58, 100, 6, { ...ROLE.caption, color: theme.muted });
-      const bars = [42, 55, 61, 74, 88, 96];
-      const months = ["يناير", "مارس", "مايو", "يوليو", "سبتمبر", "ديسمبر"];
-      const base = 168;
-      hairline(add, "خط الأساس", 16, base, 178, theme.ink, 0.45);
-      hairline(add, "خط المستهدف", 16, base - 86, 178, theme.line, 0.3);
-      bars.forEach((value, i) => {
-        const x = 24 + i * 28;
-        const h = value * 0.9;
-        band(add, `عمود ${months[i]}`, x, base - h, 14, h, i === bars.length - 1 ? theme.accent : theme.primary);
-        paint(add, `شهر ${months[i]}`, months[i], x - 6, base + 4, 26, 8, { ...ROLE.caption, color: theme.muted, textAlign: "center" });
+      const ink = mediaInk(theme);
+      runningHead(add, theme, "أبرز المؤشرات");
+      paint(add, "عنوان المؤشرات", "قراءة الإغلاق", 16, 26, 178, 10, { ...ROLE.h1, fontSize: 20, color: ink.green });
+      const cards: [string, string][] = [
+        ["١٨٦", "معاملة مغلقة"],
+        ["٩٤", "نسبة الإنجاز"],
+        ["٤١", "زيارة ميدانية"],
+        ["١٢", "شراكة سارية"],
+        ["١١", "دقيقة انتظار"],
+        ["٨", "مبادرات أُقفلت"],
+      ];
+      cards.forEach(([value, label], i) => {
+        const col = i % 2;
+        const row = Math.floor(i / 2);
+        const x = col === 0 ? 108 : 16;
+        const y = 44 + row * 58;
+        kpiCard(add, label, x, y, 86, 52, value, label, ink.green, ink.gold, theme.ink);
       });
-      paint(add, "قراءة الرسم", "التسارع بدأ في يوليو مع إغلاق مبادرات التشغيل، لا مع زيادة الإنفاق.", 16, 186, 178, 14, { ...ROLE.body, fontSize: 12, color: theme.ink });
-      paint(add, "هامش الرسم", "الخط الرفيع أعلى الأعمدة هو مستهدف نهاية العام.", 16, 204, 178, 8, { ...ROLE.caption, color: theme.muted });
+      band(add, "شريط الملخص", 16, 220, 178, 16, ink.green);
+      paint(add, "ملخص أول", "٣٤٨٦", 110, 222, 70, 8, { ...ROLE.h3, color: "#ffffff", textAlign: "center" });
+      paint(add, "تسمية أول", "إجمالي العمليات", 110, 230, 70, 5, { ...ROLE.caption, color: ink.gold, textAlign: "center" });
+      paint(add, "ملخص ثان", "٧٣٠", 24, 222, 70, 8, { ...ROLE.h3, color: "#ffffff", textAlign: "center" });
+      paint(add, "تسمية ثان", "ما زال مفتوحًا", 24, 230, 70, 5, { ...ROLE.caption, color: ink.gold, textAlign: "center" });
       folio(add, theme, entity, "٠٥");
     }, A4),
 
@@ -279,19 +288,24 @@ function eidPages(theme: Theme, org: string): Page[] {
   const entity = org.trim() || "إدارة الإعلام والاتصال المؤسسي";
   return [
     page("غلاف العيد", theme, (add) => {
+      const ink = mediaInk(theme);
+      band(add, "حقل أخضر", 0, 0, 210, 297, ink.green);
+      hairline(add, "خط أبيض", 16, 28, 178, "#ffffff", 0.7);
+      hairline(add, "خط أخضر فاتح", 16, 31, 178, ink.line, 0.7);
+      paint(add, "الجهة", entity, 16, 40, 150, 8, { ...ROLE.meta, fontSize: 10, color: ink.gold });
+      add("logo", { name: "شعار الجهة", x: 172, y: 36, w: 18, h: 18 });
+      paint(add, "عنوان التقرير", "توثيق ميدان\nعيد الأضحى", 16, 58, 178, 36, {
+        ...ROLE.display, fontSize: 34, color: "#f7f6f3", lineHeight: 1.05,
+      });
+      paint(add, "السنة", "١٤٤٧ هـ", 16, 100, 80, 10, { ...ROLE.h2, fontSize: 16, color: ink.gold });
       add("image", {
-        name: "صورة الغلاف", x: 0, y: 0, w: 210, h: 158,
+        name: "صورة الغلاف", x: 0, y: 122, w: 210, h: 96,
         src: plate("court"), style: { objectFit: "cover", radius: 0 },
       });
-      band(add, "فاصل ذهبي", 0, 158, 210, 1.6, theme.accent);
-      paint(add, "الجهة", entity, 16, 172, 150, 8, { ...ROLE.meta, fontSize: 10, color: theme.accent });
-      add("logo", { name: "شعار الجهة", x: 172, y: 168, w: 22, h: 22 });
-      paint(add, "عنوان التقرير", "توثيق ميدان\nعيد الأضحى", 16, 190, 178, 36, {
-        ...ROLE.display, fontFamily: CEREMONY, fontWeight: 700, fontSize: 32, color: "#f7f3e8", lineHeight: 1.15,
-      });
-      paint(add, "السنة", "١٤٤٧ هـ", 16, 234, 80, 10, { ...ROLE.h2, fontFamily: CEREMONY, fontSize: 16, color: theme.accent });
-      paint(add, "جهة الإصدار", "إدارة الإعلام والاتصال المؤسسي — المنافذ والفرق الميدانية", 16, 254, 178, 12, { ...ROLE.body, fontFamily: META, fontSize: 11, color: "#e7efe9" });
-    }, { ...A4, bg: theme.primary }),
+      band(add, "شريط هندسي", 0, 230, 210, 18, "#145c42");
+      paint(add, "تعليق الشريط", "المنافذ والفرق الميدانية", 16, 234, 178, 8, { ...ROLE.caption, color: "#f7f6f3" });
+      paint(add, "جهة الإصدار", "إدارة الإعلام والاتصال المؤسسي", 16, 262, 178, 8, { ...ROLE.meta, color: "#d7e3dc" });
+    }, { ...A4, bg: mediaInk(theme).green }),
 
     page("المؤشرات الميدانية", theme, (add) => {
       runningHead(add, theme, "الميدان");
@@ -318,45 +332,40 @@ function eidPages(theme: Theme, org: string): Page[] {
     }, A4),
 
     page("معرض الصور", theme, (add) => {
+      const ink = mediaInk(theme);
       add("image", {
-        name: "صورة الاستقبال", x: 0, y: 0, w: 210, h: 132,
+        name: "صورة الاستقبال", x: 16, y: 16, w: 178, h: 88,
         src: plate("field"), style: { objectFit: "cover", radius: 0 },
       });
-      band(add, "شريط التعليق", 0, 112, 210, 20, theme.primary);
-      paint(add, "تعليق الاستقبال", "استقبال المنفذ الرئيسي  ·  أول أيام العيد", 16, 116, 178, 8, { ...ROLE.caption, color: "#f7f3e8" });
+      band(add, "تعليق علوي", 16, 88, 178, 14, ink.green);
+      paint(add, "تعليق الاستقبال", "استقبال المنفذ الرئيسي  ·  أول أيام العيد", 22, 91, 166, 8, { ...ROLE.caption, color: "#f7f6f3" });
       add("image", {
-        name: "صورة التوعية", x: 16, y: 144, w: 108, h: 72,
-        src: plate("dune"), style: { objectFit: "cover", radius: 0 },
+        name: "صورة التوعية", x: 16, y: 112, w: 178, h: 78,
+        src: plate("court"), style: { objectFit: "cover", radius: 0 },
       });
-      add("image", {
-        name: "صورة التنظيم", x: 130, y: 144, w: 64, h: 72,
-        src: plate("archive"), style: { objectFit: "cover", radius: 0 },
-      });
-      paint(add, "تعليق التوعية", "نقطة التوعية", 16, 218, 108, 6, { ...ROLE.caption, color: theme.muted });
-      paint(add, "تعليق التنظيم", "تنظيم الحركة", 130, 218, 64, 6, { ...ROLE.caption, color: theme.muted });
-      add("image", {
-        name: "صورة الإغلاق", x: 16, y: 232, w: 178, h: 36,
-        src: plate("night"), style: { objectFit: "cover", radius: 0 },
-      });
-      paint(add, "تعليق الإغلاق", "إغلاق المناوبة  ·  اليوم الثالث", 16, 270, 140, 6, { ...ROLE.caption, color: theme.muted });
+      band(add, "تعليق سفلي", 16, 176, 178, 14, ink.green);
+      paint(add, "تعليق التوعية", "نقطة التوعية  ·  تنظيم الحركة", 22, 179, 166, 8, { ...ROLE.caption, color: "#f7f6f3" });
+      paint(add, "ملاحظة المعرض", "الصورتان من اليوم الأول. البيان صدر بعد إغلاق فجوة المواد، لا قبلها.", 16, 202, 178, 16, { ...ROLE.body, fontSize: 12, color: theme.ink });
       folio(add, theme, entity, "٠٣");
     }, A4),
 
     page("ختام", theme, (add) => {
-      band(add, "خط علوي", 0, 0, 210, 1.6, theme.accent);
-      paint(add, "تسمية الختام", "ختام التوثيق", 16, 28, 178, 6, { ...ROLE.meta, color: theme.accent });
-      paint(add, "عنوان الختام", "شكرًا\nلكم", 16, 44, 160, 40, {
-        ...ROLE.display, fontFamily: CEREMONY, fontWeight: 700, fontSize: 40, color: "#f7f3e8", lineHeight: 1.05,
+      const ink = mediaInk(theme);
+      band(add, "حقل الختام", 0, 0, 210, 297, ink.green);
+      hairline(add, "خط أبيض", 16, 36, 80, "#ffffff", 0.8);
+      hairline(add, "خط ذهبي", 16, 40, 48, ink.gold, 0.8);
+      paint(add, "تسمية الختام", "ختام التوثيق", 16, 52, 178, 6, { ...ROLE.meta, color: ink.gold });
+      paint(add, "عنوان الختام", "شكرًا لكم", 16, 66, 178, 20, {
+        ...ROLE.display, fontSize: 40, color: "#f7f6f3", lineHeight: 1,
       });
-      hairline(add, "فاصل الختام", 146, 96, 32, theme.accent, 0.9);
-      paint(add, "نص الختام", "نقدر جهد الفرق الميدانية والإسناد الإعلامي. النسخة التالية تصدر مع تقرير الأثر.", 16, 110, 168, 24, { ...ROLE.body, fontSize: 13, color: "#e7efe9" });
+      paint(add, "نص الختام", "نقدر جهد الفرق الميدانية والإسناد الإعلامي. النسخة التالية تصدر مع تقرير الأثر.", 16, 100, 168, 20, { ...ROLE.body, fontSize: 13, color: "#e7efe9" });
       add("image", {
-        name: "شريط الختام", x: 0, y: 210, w: 210, h: 52,
-        src: plate("court"), style: { objectFit: "cover", radius: 0 },
+        name: "شريط الختام", x: 16, y: 140, w: 178, h: 70,
+        src: plate("night"), style: { objectFit: "cover", radius: 8 },
       });
-      paint(add, "الجهة", entity, 16, 272, 178, 8, { ...ROLE.h3, color: theme.accent });
-      paint(add, "الإدارة", "إدارة الإعلام والاتصال المؤسسي", 16, 282, 178, 8, { ...ROLE.meta, color: "#e7efe9" });
-    }, { ...A4, bg: theme.primary }),
+      paint(add, "الجهة", entity, 16, 226, 178, 8, { ...ROLE.h3, color: ink.gold });
+      paint(add, "الإدارة", "إدارة الإعلام والاتصال المؤسسي", 16, 238, 178, 8, { ...ROLE.meta, color: "#e7efe9" });
+    }, { ...A4, bg: mediaInk(theme).green }),
   ];
 }
 
@@ -364,18 +373,29 @@ function briefingPages(theme: Theme, org: string): Page[] {
   const entity = org.trim() || "مكتب المدير العام";
   return [
     page("غلاف العرض", theme, (add) => {
-      paint(add, "تصنيف العرض", "عرض قيادي  ·  للتداول الداخلي", 16, 22, 178, 6, { ...ROLE.meta, color: theme.accent });
-      paint(add, "عنوان العرض", "ما يجب\nأن يُحسم", 16, 36, 178, 40, { ...ROLE.display, fontSize: 38, color: theme.ink, lineHeight: 1.02 });
-      hairline(add, "فاصل العنوان", 150, 84, 44, theme.accent, 1.1);
-      paint(add, "جملة العرض", "صفحة للقرار، لا لسرد الأعمال. التفاصيل في المرفقات.", 16, 96, 178, 12, { ...ROLE.body, fontSize: 13, color: theme.ink });
-      paint(add, "وقت الحكم", "٠٥ د   الحكم", 16, 188, 78, 8, { ...ROLE.meta, fontSize: 11, color: theme.ink });
-      paint(add, "وقت القيد", "١٥ د   القيد", 16, 202, 78, 8, { ...ROLE.meta, fontSize: 11, color: theme.ink });
-      paint(add, "وقت الاعتماد", "٢٥ د   الاعتماد", 16, 216, 78, 8, { ...ROLE.meta, fontSize: 11, color: theme.ink });
-      paint(add, "شرح الجدول", "ثلاثة أوقات. ما زاد عنها يُؤجل إلى المرفق.", 108, 190, 86, 22, { ...ROLE.body, fontSize: 12, color: theme.ink });
-      band(add, "شريط البيانات", 0, 248, 210, 49, theme.primary);
-      add("logo", { name: "شعار الجهة", x: 176, y: 258, w: 16, h: 16 });
-      paint(add, "الجهة", entity, 16, 258, 150, 8, { ...ROLE.h2, fontSize: 14, color: "#ffffff" });
-      paint(add, "التاريخ", "سبتمبر ٢٠٢٦  ·  اجتماع القيادة الأسبوعي", 16, 274, 150, 8, { ...ROLE.meta, fontSize: 10, color: theme.accent });
+      const ink = mediaInk(theme);
+      mark(add, "زاوية", 170, 0, 40, 34, ink.soft, "triangle");
+      mark(add, "معين", 184, 18, 6, 6, ink.gold, "diamond");
+      paint(add, "تصنيف العرض", "عرض قيادي  ·  للتداول الداخلي", 16, 20, 150, 6, { ...ROLE.meta, color: theme.muted });
+      paint(add, "عنوان العرض", "موجز الاجتماع", 16, 34, 178, 16, { ...ROLE.display, fontSize: 32, color: ink.green, lineHeight: 1 });
+      hairline(add, "خيط العنوان", 130, 56, 56, ink.gold, 1.1);
+      paint(add, "جملة العرض", "صفحة للقرار. التفاصيل في المرفقات، لا في هذه الورقة.", 16, 66, 178, 12, { ...ROLE.body, fontSize: 13, color: theme.ink });
+      const times: [string, string][] = [
+        ["٠٥ د", "الحكم"],
+        ["١٥ د", "القيد"],
+        ["٢٥ د", "الاعتماد"],
+      ];
+      times.forEach(([time, label], i) => {
+        const y = 100 + i * 28;
+        mark(add, `دائرة ${label}`, 176, y, 12, 12, ink.green, "circle");
+        paint(add, `وقت ${label}`, time, 16, y, 40, 10, { ...ROLE.h3, color: ink.green });
+        paint(add, `بند ${label}`, label, 60, y, 100, 10, { ...ROLE.h2, color: theme.ink });
+      });
+      band(add, "كتلة البيانات", 0, 210, 210, 87, ink.green);
+      hairline(add, "خيط الكتلة", 0, 210, 210, ink.gold, 0.8);
+      paint(add, "الجهة", entity, 16, 224, 160, 10, { ...ROLE.h2, fontSize: 16, color: "#ffffff" });
+      paint(add, "التاريخ", "سبتمبر ٢٠٢٦  ·  اجتماع القيادة", 16, 240, 160, 8, { ...ROLE.meta, color: ink.gold });
+      add("logo", { name: "شعار الجهة", x: 176, y: 224, w: 16, h: 16 });
     }, A4),
 
     page("الموجز", theme, (add) => {
@@ -417,37 +437,24 @@ function briefingPages(theme: Theme, org: string): Page[] {
 }
 
 function statsInfographicPage(theme: Theme, org: string): Page {
+  const ink = mediaInk(theme);
   return page("لوحة مؤشرات", theme, (add) => {
     runningHead(add, theme, "أين يقف التنفيذ");
-    paint(add, "عنوان اللوحة", "قراءة الأسبوع", 16, 28, 110, 12, { ...ROLE.h1, color: theme.primary });
-    paint(add, "الرقم القائد", "٧٨٪", 132, 26, 62, 16, { ...ROLE.display, fontSize: 28, color: theme.primary, textAlign: "left", lineHeight: 1 });
-    paint(add, "تسمية الرقم", "الإنجاز العام", 132, 44, 62, 6, { ...ROLE.caption, color: theme.muted, textAlign: "left" });
-    const bars: [string, number][] = [
-      ["نسبة الإنجاز العام", 78],
-      ["رضا المستفيدين", 92],
-      ["الالتزام بالجدول", 64],
-    ];
-    bars.forEach(([label, value], i) => {
-      const y = 64 + i * 28;
-      paint(add, `عنوان ${label}`, label, 16, y, 120, 6, { ...ROLE.meta, fontSize: 10, color: theme.ink });
-      paint(add, `قيمة ${label}`, `${value}٪`, 150, y, 44, 6, { ...ROLE.h3, color: theme.primary, textAlign: "left" });
-      band(add, `مسار ${label}`, 16, y + 10, 178, 1.2, theme.line);
-      band(add, `امتلاء ${label}`, 16, y + 10, Math.max(8, 178 * value / 100), 1.2, i === 1 ? theme.accent : theme.primary);
-    });
-    hairline(add, "فاصل القراءة", 16, 156, 178, theme.line, 0.3);
-    const notes: [string, string][] = [
+    paint(add, "عنوان اللوحة", "قراءة الأسبوع", 16, 26, 178, 10, { ...ROLE.h1, color: ink.green });
+    const cards: [string, string][] = [
+      ["٧٨٪", "الإنجاز العام"],
+      ["٩٢٪", "رضا المستفيدين"],
       ["٩٠٤", "حالة مغلقة"],
       ["٢٧", "حالة مفتوحة"],
-      ["١٢", "فرقة ميدانية"],
     ];
-    notes.forEach(([value, label], i) => {
-      const x = 16 + i * 60;
-      if (i > 0) tick(add, `فاصل ملاحظة ${i}`, x - 4, 168, 22, theme.line);
-      paint(add, `ملاحظة ${label}`, value, x, 166, 52, 10, { ...ROLE.h2, fontSize: 16, color: theme.ink });
-      paint(add, `شرح ${label}`, label, x, 180, 52, 6, { ...ROLE.caption, color: theme.muted });
+    cards.forEach(([value, label], i) => {
+      const x = i % 2 === 0 ? 108 : 16;
+      const y = 44 + Math.floor(i / 2) * 62;
+      kpiCard(add, label, x, y, 86, 56, value, label, ink.green, ink.gold, theme.ink);
     });
-    paint(add, "القراءة", "الرضا يسبق الجدول. الحالات المفتوحة كلها في فرقة واحدة، لا في المنهج.", 16, 200, 178, 16, { ...ROLE.body, color: theme.ink });
-    paint(add, "المصدر", "المصدر: لوحة المتابعة — الأسبوع الحالي.", 16, 224, 178, 8, { ...ROLE.caption, color: theme.muted });
+    band(add, "شريط الملخص", 16, 176, 178, 16, ink.green);
+    paint(add, "الملخص", "١٢ فرقة ميدانية ما زالت على الجدول", 24, 180, 162, 8, { ...ROLE.caption, color: "#f4f7f5" });
+    paint(add, "القراءة", "الرضا يسبق الجدول. الحالات المفتوحة كلها في فرقة واحدة.", 16, 204, 178, 14, { ...ROLE.body, color: theme.ink });
     folio(add, theme, org, "٠٢");
   }, A4);
 }
@@ -509,17 +516,18 @@ function slidesPages(theme: Theme, org: string): Page[] {
   const entity = org.trim() || "اسم الجهة";
   return [
     page("شريحة الغلاف", theme, (add) => {
+      const ink = mediaInk(theme);
+      band(add, "حقل أخضر", 0, 0, 338.7, 190.5, ink.green);
+      hairline(add, "خيط", 24, 28, 120, ink.gold, 0.9);
+      add("logo", { name: "شعار", x: 300, y: 18, w: 18, h: 18 });
+      paint(add, "تصنيف", "عرض تنفيذي", 24, 40, 200, 6, { ...ROLE.meta, fontSize: 11, color: ink.gold });
+      paint(add, "عنوان العرض", "النتائج الرئيسية", 24, 54, 250, 22, { ...ROLE.display, fontSize: 32, color: "#f7f6f3", lineHeight: 1 });
+      paint(add, "الجملة", "رقمان للإغلاق، وجملة للحكم. الباقي في المرفق.", 24, 86, 220, 12, { ...ROLE.body, fontFamily: META, fontSize: 13, color: "#e7efe9" });
       add("image", {
-        name: "حقل الغلاف", x: 0, y: 0, w: 132, h: 190.5,
+        name: "حقل الغلاف", x: 0, y: 118, w: 338.7, h: 72.5,
         src: plate("night"), style: { objectFit: "cover", radius: 0 },
       });
-      band(add, "فاصل", 132, 0, 1.6, 190.5, theme.accent);
-      add("logo", { name: "شعار", x: 300, y: 16, w: 20, h: 20 });
-      paint(add, "تصنيف", "عرض تنفيذي", 150, 28, 140, 6, { ...ROLE.meta, fontSize: 11, color: theme.accent });
-      paint(add, "عنوان العرض", "النتائج\nالرئيسية", 150, 42, 170, 36, { ...ROLE.display, fontSize: 32, color: "#f7f6f3", lineHeight: 1.05 });
-      paint(add, "الجملة", "رقمان للإغلاق، وجملة للحكم. الباقي في المرفق.", 150, 92, 168, 16, { ...ROLE.body, fontFamily: META, fontSize: 12, color: "#e7e5e4" });
-      paint(add, "الجهة", `${entity}  ·  سبتمبر ٢٠٢٦`, 150, 156, 170, 8, { ...ROLE.meta, fontSize: 11, color: "#e7e5e4" });
-    }, { ...SLIDE, bg: theme.primary }),
+    }, { ...SLIDE, bg: mediaInk(theme).green }),
     page("شريحة المؤشرات", theme, (add) => {
       runningHead(add, theme, "المؤشرات الرئيسية", SLIDE.w);
       paint(add, "الرقم القائد", "٩٦٪", 210, 36, 112, 28, { ...ROLE.display, fontSize: 44, color: theme.primary, lineHeight: 1 });
@@ -564,7 +572,7 @@ function editorialPage(theme: Theme, org: string): Page {
   const col = cell(0, 9);
   return page("تحريرية", theme, (add) => {
     paint(add, "كِكر", "ملف  ·  الخدمة", col.x, 20, col.w, 6, { ...ROLE.meta, color: c.accent });
-    paint(add, "العنوان", "الطاقة ثابتة\nوالطلب ليس كذلك", col.x, 32, col.w, 28, { ...ROLE.h1, fontFamily: EDITORIAL, fontWeight: 700, fontSize: 24, color: c.primary });
+    paint(add, "العنوان", "الطاقة ثابتة\nوالطلب ليس كذلك", col.x, 32, col.w, 28, { ...ROLE.h1, fontWeight: 800, fontSize: 24, color: c.primary });
     paint(add, "حقيقة هامشية", "١٨٪\nزيادة\nالمعاملات", margin.x, 36, margin.w, 28, { ...ROLE.caption, color: c.accent, lineHeight: 1.35 });
     hairline(add, "فاصل", col.x, 70, col.w, c.line, 0.35);
     paint(add, "المتن", "بقيت المنافذ على عددها، وارتفع الوارد. الانتظار الذي يراه المستفيد ليس ضعف حملة، بل مناوبة لم تُراجع منذ اعتماد الخطة.", col.x, 80, col.w, 36, { ...ROLE.body, color: c.ink });
@@ -660,7 +668,7 @@ function asymmetricPage(theme: Theme, org: string): Page {
       src: plate("press"), style: { objectFit: "cover", radius: 0 },
     });
     paint(add, "كِكر", "تغطية", 16, 28, 96, 6, { ...ROLE.meta, color: c.accent });
-    paint(add, "العنوان", "البيان تأخر\nيومًا عن الصورة", 16, 40, 96, 28, { ...ROLE.h1, fontFamily: EDITORIAL, fontWeight: 700, fontSize: 18, color: c.primary, lineHeight: 1.25 });
+    paint(add, "العنوان", "البيان تأخر\nيومًا عن الصورة", 16, 40, 96, 28, { ...ROLE.h1, fontWeight: 800, fontSize: 18, color: c.primary, lineHeight: 1.25 });
     hairline(add, "فاصل", 16, 76, 36, c.accent, 1);
     paint(add, "المتن", "الصورة من المنفذ الغربي في اليوم الثاني. البيان صدر في اليوم الثالث، بعد إغلاق فجوة المواد لا قبلها.", 16, 88, 96, 48, { ...ROLE.body, fontSize: 12, color: c.ink });
     paint(add, "التعليق", "اليوم الثاني  ·  المنفذ الغربي  ·  قبل البيان", 16, 148, 96, 16, { ...ROLE.caption, color: c.muted, lineHeight: 1.45 });
@@ -974,14 +982,14 @@ export const PAGE_TEMPLATES: PageTemplateDef[] = [
   {
     id: "cover",
     title: "غلاف رسمي",
-    desc: "عمود تجليد، عنوان، وصورة بمعيار الغلاف",
+    desc: "غلاف أبيض، عنوان أخضر، وكتلة سفلية بخيط ذهبي",
     category: "covers",
     size: A4_SIZE,
   },
   {
     id: "cover-celebration",
     title: "غلاف مناسبة",
-    desc: "غلاف مناسبة: صورة ثم عنوان أميري",
+    desc: "غلاف أخضر بخط أبيض وصورة عرض",
     category: "covers",
     size: A4_SIZE,
   },

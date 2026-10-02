@@ -9,14 +9,16 @@ import {
 } from "./model";
 import {
   BODY,
-  CEREMONY,
   DISPLAY,
-  EDITORIAL,
   META,
   ROLE,
   band,
   cell,
+  folio,
   hairline,
+  kpiCard,
+  mark,
+  mediaInk,
   paint,
   plate,
   tick,
@@ -27,7 +29,7 @@ bindDesignSkill("families");
 
 /**
  * Distinct editorial families for the template gallery.
- * Art direction: `.grok/skills/nasaq-design/SKILL.md`.
+ * Art direction: `.grok/skills/nasaq-media/SKILL.md`.
  *
  * Each page is a real editable NASAQ document. Families do not share a
  * layout with a recolor — the composition changes with the job.
@@ -68,20 +70,20 @@ export interface FamilyTemplateMeta {
 }
 
 export const FAMILY_TEMPLATES: FamilyTemplateMeta[] = [
-  { id: "family-gov-cover", title: "غلاف مؤسسي", desc: "حقل عنوان ثم صورة تنزف حتى حافة التجليد", category: "covers", concept: "Institutional", preview: "grid" },
+  { id: "family-gov-cover", title: "غلاف مؤسسي", desc: "غلاف أبيض، عنوان أخضر، وكتلة سفلية", category: "covers", concept: "Institutional", preview: "grid" },
   { id: "family-gov-opener", title: "فاتحة قسم حكومي", desc: "رقم قسم، عنوان، وملخص ما سيُقرأ", category: "section", concept: "Institutional", preview: "section" },
   { id: "family-corp-cover", title: "غلاف شركات", desc: "عمود هوية وصفّ بيانات وصورة أفقية", category: "institutional", concept: "Corporate", preview: "modular" },
   { id: "family-exec-brief", title: "موجز تنفيذي", desc: "قرار، رقم، وقيد على مقياس واحد", category: "executive", concept: "Executive", preview: "executive" },
   { id: "family-annual-kpis", title: "مؤشرات التقرير السنوي", desc: "رقم قائد ورقمان تابعان ثم قراءة", category: "kpis", concept: "Annual Report", preview: "statistical" },
   { id: "family-editorial-open", title: "افتتاح تحريري", desc: "عنوان ثم صورة بعرض غير مكتمل وتعليق", category: "editorial", concept: "Modern Editorial", preview: "editorial" },
-  { id: "family-editorial-quote", title: "اقتباس", desc: "اقتباس أميري وإسناد وسياق قصير", category: "editorial", concept: "Modern Editorial", preview: "asymmetric" },
+  { id: "family-editorial-quote", title: "اقتباس", desc: "جملة هندسية وخط ذهبي وإسناد قصير", category: "editorial", concept: "Modern Editorial", preview: "asymmetric" },
   { id: "family-minimal-prose", title: "متن بسيط", desc: "عمود قراءة وهامش ملاحظة", category: "reports", concept: "Minimal", preview: "flow" },
   { id: "family-finance-ledger", title: "جدول مالي", desc: "كشف بخط مزدوج وجدول وقراءة فارق", category: "tables", concept: "Financial", preview: "data" },
   { id: "family-media-spread", title: "صفحة بصرية", desc: "صورة بارتفاع الصفحة وعمود تحرير", category: "infographics", concept: "Media", preview: "asymmetric" },
   { id: "family-leadership-close", title: "ختام قيادي", desc: "ختام هادئ بتوقيع وموعد النسخة التالية", category: "inner", concept: "Leadership", preview: "section" },
   { id: "family-project-phases", title: "مراحل مشروع", desc: "مسار أفقي والمرحلة الحالية تنزل تحته", category: "timeline", concept: "Project Report", preview: "process" },
   { id: "family-performance", title: "مقارنة أداء", desc: "فرق ربعين وجدول وقضيبان نسبيان", category: "data", concept: "Performance", preview: "data" },
-  { id: "family-premium-cover", title: "غلاف فاخر", desc: "حقل فحمي وإطار نحاسي وعنوان في الثلث الأسفل", category: "covers", concept: "Premium", preview: "executive" },
+  { id: "family-premium-cover", title: "غلاف فاخر", desc: "حقل أخضر وخيط ذهبي وعنوان أبيض", category: "covers", concept: "Premium", preview: "executive" },
 ];
 
 const NAVY = "#071d3d";
@@ -92,7 +94,6 @@ const INK = "#172033";
 const FOREST = "#1b4d3e";
 const CHARCOAL = "#1c1917";
 const BRASS = "#a6844a";
-const CORP = "#12344d";
 const PRESS = "#9a3412";
 const LEDGER = "#0f3d2e";
 const PROJECT = "#1e3a5f";
@@ -131,27 +132,25 @@ export function buildFamilyPage(
   const full = cell(0, 12);
   switch (id) {
     case "family-gov-cover": {
-      const title = cell(0, 10);
-      return sheet("غلاف مؤسسي", theme, PAPER, (add) => {
-        band(add, "عمود التجليد", 196, 0, 14, 297, NAVY);
-        band(add, "خط التجليد", 194.4, 0, 1.2, 297, GOLD);
-        add("logo", { name: "الشعار", x: 197, y: 16, w: 12, h: 12 });
-        paint(add, "سنة العمود", "٢٦", 196, 250, 14, 16, { ...ROLE.meta, fontFamily: DISPLAY, fontSize: 11, color: GOLD, textAlign: "center" });
-        paint(add, "تصنيف", "تقرير مؤسسي  ·  استخدام داخلي", 16, 22, 170, 6, { ...ROLE.meta, color: "#66748a" });
-        paint(add, "السنة", "٢٠٢٦", 16, 34, 170, 18, { ...ROLE.display, fontSize: 36, color: NAVY, lineHeight: 0.9 });
-        paint(add, "عنوان الغلاف", "تقرير الأداء السنوي", title.x, 58, title.w, 12, { ...ROLE.h1, fontSize: 22, color: INK });
-        hairline(add, "فاصل العنوان", 150, 76, 36, GOLD, 1);
-        paint(add, "مقدمة", "يغلق هذا الإصدار عام العمل: ما اكتمل في الخدمة، وما بقي مفتوحًا أمام اللجنة.", 16, 86, 168, 16, { ...ROLE.body, fontSize: 12, color: INK });
-        ([["٠١", "النطاق"], ["٠٢", "النتائج"], ["٠٣", "الأثر على الخدمة"], ["٠٤", "التوصية"]] as const).forEach(([num, label], i) => {
-          const y = 118 + i * 18;
-          paint(add, `رقم ${num}`, num, 156, y, 30, 8, { ...ROLE.h3, color: GOLD });
-          paint(add, `بند ${label}`, label, 16, y, 132, 8, { ...ROLE.h3, fontSize: 13, color: NAVY });
-          hairline(add, `حد ${num}`, 16, y + 12, 170, "#e4e0d8", 0.3);
+      const ink = mediaInk(theme);
+      return sheet("غلاف مؤسسي", theme, "#ffffff", (add) => {
+        mark(add, "زاوية", 168, 0, 42, 36, ink.soft, "triangle");
+        mark(add, "معين", 184, 14, 7, 7, ink.gold, "diamond");
+        add("logo", { name: "الشعار", x: 16, y: 14, w: 14, h: 14 });
+        paint(add, "تصنيف", "تقرير مؤسسي  ·  ٢٠٢٦", 36, 16, 120, 6, { ...ROLE.meta, color: "#66748a" });
+        paint(add, "عنوان الغلاف", "تقرير الأداء\nالسنوي", 16, 40, 170, 32, { ...ROLE.display, fontSize: 32, color: ink.green });
+        hairline(add, "خيط", 130, 78, 48, ink.gold, 1);
+        paint(add, "مقدمة", "يغلق هذا الإصدار عام العمل: ما اكتمل في الخدمة، وما بقي أمام اللجنة.", 16, 88, 168, 14, { ...ROLE.body, fontSize: 12, color: INK });
+        add("image", { name: "صورة المقر", x: 0, y: 112, w: 210, h: 70, src: plate("facade"), style: { objectFit: "cover", radius: 0 } });
+        band(add, "كتلة خضراء", 0, 182, 210, 115, ink.green);
+        hairline(add, "خيط الكتلة", 0, 182, 210, ink.gold, 0.7);
+        ([["٠١", "النطاق"], ["٠٢", "النتائج"], ["٠٣", "الأثر"], ["٠٤", "التوصية"]] as const).forEach(([num, label], i) => {
+          const y = 196 + i * 16;
+          mark(add, `دائرة ${num}`, 176, y, 8, 8, ink.gold, "circle");
+          paint(add, `رقم ${num}`, num, 176, y + 1.6, 8, 5, { ...ROLE.caption, fontSize: 5, color: ink.green, textAlign: "center" });
+          paint(add, `بند ${label}`, label, 16, y, 150, 8, { ...ROLE.h3, fontSize: 13, color: "#f7f6f3" });
         });
-        add("image", { name: "صورة المقر", x: 0, y: 210, w: 194, h: 87, src: plate("facade"), style: { objectFit: "cover", radius: 0 } });
-        band(add, "قاعدة الغلاف", 0, 268, 194, 29, NAVY);
-        paint(add, "اسم الجهة", entity, 96, 274, 90, 10, { ...ROLE.h3, fontSize: 12, color: "#f7f6f3" });
-        paint(add, "التاريخ", "يناير — ديسمبر", 16, 276, 70, 8, { ...ROLE.meta, color: GOLD, textAlign: "left" });
+        paint(add, "اسم الجهة", entity, 16, 268, 140, 8, { ...ROLE.meta, color: ink.gold });
       });
     }
     case "family-gov-opener": {
@@ -171,19 +170,21 @@ export function buildFamilyPage(
       });
     }
     case "family-corp-cover": {
-      const block = cell(0, 11);
+      const ink = mediaInk(theme);
+      const block = cell(0, 12);
       return sheet("غلاف شركات", theme, "#ffffff", (add) => {
-        band(add, "عمود الهوية", 200, 0, 10, 297, CORP);
-        paint(add, "تصنيف", "تقرير أعمال  ·  الربع الحالي", block.x, 22, block.w, 6, { ...ROLE.meta, color: "#667887" });
-        paint(add, "العنوان", "تقرير الأعمال\nكما سيُعرض", block.x, 34, block.w, 28, { ...ROLE.display, fontSize: 30, color: CORP });
-        hairline(add, "خط أساس", block.x, 70, block.w, "#d5dde4", 0.4);
-        paint(add, "جهة", entity, 128, 78, 62, 8, { ...ROLE.h3, color: CORP });
-        paint(add, "إعداد", "مكتب المدير العام", 70, 78, 52, 8, { ...ROLE.meta, fontSize: 10, color: INK });
-        paint(add, "حالة", "للمراجعة", block.x, 78, 42, 8, { ...ROLE.meta, fontSize: 10, color: BRASS });
-        add("image", { name: "حقل الأعمال", x: block.x, y: 100, w: block.w, h: 78, src: plate("facade"), style: { objectFit: "cover", radius: 0 } });
-        paint(add, "تعليق", "المقر الإداري  ·  الربع المنتهي في سبتمبر", block.x, 182, block.w, 6, { ...ROLE.caption, color: "#667887" });
-        paint(add, "المتن", "الإيراد فوق الخطة، والطاقة التشغيلية عند سقفها. التوسعة تُؤجَّل حتى تراجع وحدة الإسناد طاقتها.", block.x, 198, block.w, 28, { ...ROLE.body, fontSize: 12, color: INK });
-        paint(add, "التوزيع", "يُوزَّع على الإدارة التنفيذية فقط.", block.x, 248, block.w, 8, { ...ROLE.meta, color: "#667887" });
+        paint(add, "تصنيف", "تقرير أعمال  ·  الربع الحالي", block.x, 18, block.w, 6, { ...ROLE.meta, color: "#667887" });
+        paint(add, "العنوان", "تقرير الأعمال", block.x, 30, block.w, 16, { ...ROLE.display, fontSize: 32, color: ink.green });
+        hairline(add, "خيط", 140, 52, 48, ink.gold, 1);
+        add("image", { name: "حقل الأعمال", x: 0, y: 68, w: 210, h: 78, src: plate("facade"), style: { objectFit: "cover", radius: 0 } });
+        band(add, "تعليق", 0, 130, 210, 14, ink.green);
+        paint(add, "سطر التعليق", "المقر الإداري  ·  الربع المنتهي في سبتمبر", 16, 133, 178, 8, { ...ROLE.caption, color: "#f7f6f3" });
+        paint(add, "المتن", "الإيراد فوق الخطة، والطاقة عند سقفها. التوسعة تُؤجَّل حتى تراجع وحدة الإسناد طاقتها.", 16, 156, 178, 22, { ...ROLE.body, fontSize: 12, color: INK });
+        band(add, "كتلة خضراء", 0, 200, 210, 97, ink.green);
+        hairline(add, "خيط الكتلة", 0, 200, 210, ink.gold, 0.7);
+        paint(add, "جهة", entity, 16, 214, 178, 10, { ...ROLE.h2, color: "#f7f6f3" });
+        paint(add, "إعداد", "مكتب المدير العام", 16, 230, 100, 8, { ...ROLE.meta, color: "#d7e3dc" });
+        paint(add, "حالة", "للمراجعة", 120, 230, 74, 8, { ...ROLE.meta, color: ink.gold, textAlign: "left" });
       });
     }
     case "family-exec-brief": {
@@ -191,7 +192,7 @@ export function buildFamilyPage(
       const side = cell(7, 5);
       return sheet("موجز تنفيذي", theme, IVORY, (add) => {
         paint(add, "تصنيف", "موجز تنفيذي  ·  اجتماع هذا الأسبوع", full.x, 20, full.w, 6, { ...ROLE.meta, color: BRASS });
-        paint(add, "العنوان", "ما يجب أن يُحسم", lead.x, 32, lead.w, 14, { ...ROLE.h1, fontSize: 24, color: CHARCOAL });
+        paint(add, "العنوان", "قرار هذه الجلسة", lead.x, 32, lead.w, 14, { ...ROLE.h1, fontSize: 24, color: CHARCOAL });
         hairline(add, "فاصل", 154, 52, 34, BRASS, 0.9);
         paint(add, "الرقم", "٤٢٪", lead.x, 62, 70, 18, { ...ROLE.display, fontSize: 36, color: CHARCOAL, lineHeight: 1 });
         paint(add, "تسمية الرقم", "نمو الإيراد\nمقابل الخطة", lead.x, 84, 70, 12, { ...ROLE.caption, color: "#6b6258", lineHeight: 1.4 });
@@ -208,30 +209,26 @@ export function buildFamilyPage(
       });
     }
     case "family-annual-kpis": {
-      const primary = cell(0, 6);
-      const secondary = cell(6, 6);
-      return sheet("مؤشرات سنوية", theme, "#f4efe6", (add) => {
-        paint(add, "الرأس", "التقرير السنوي  ·  مؤشرات الإغلاق", full.x, 18, full.w, 6, { ...ROLE.meta, color: FOREST });
-        hairline(add, "خط الرأس", full.x, 28, full.w, FOREST, 0.7);
-        paint(add, "العنوان", "ما يكفي للقراءة", full.x, 36, full.w, 12, { ...ROLE.h1, color: FOREST });
-        paint(add, "رقم ١", "٩٤", primary.x, 58, primary.w, 28, { ...ROLE.display, fontSize: 56, color: FOREST, lineHeight: 0.9 });
-        paint(add, "تسمية ١", "من مئة  ·  إنجاز الخطة المعتمدة", primary.x, 90, primary.w, 8, { ...ROLE.caption, color: "#5c5348" });
-        band(add, "مقياس ١", primary.x, 100, 36, 1.2, FOREST);
-        paint(add, "مقابل", "مقابل ٨٩ في العام السابق", primary.x, 106, primary.w, 8, { ...ROLE.meta, color: "#8a6232" });
-        paint(add, "رقم ٢", "١٢", secondary.x, 58, secondary.w, 14, { ...ROLE.display, fontSize: 26, color: FOREST, lineHeight: 1 });
-        paint(add, "تسمية ٢", "مبادرة مكتملة من أربع عشرة", secondary.x, 74, secondary.w, 8, { ...ROLE.caption, color: "#5c5348" });
-        paint(add, "رقم ٣", "٣.٢", secondary.x, 92, secondary.w, 14, { ...ROLE.display, fontSize: 26, color: "#8a6232", lineHeight: 1 });
-        paint(add, "تسمية ٣", "عائد كل ريال تشغيل", secondary.x, 112, secondary.w, 8, { ...ROLE.caption, color: "#5c5348" });
-        hairline(add, "حد القراءة", full.x, 136, full.w, "#d9cbb6", 0.4);
-        paint(add, "قراءة", "الرضا والعائد فوق الخطة. المبادرتان المفتوحتان في محور واحد، وهو التحول الرقمي، ولا تغيّران الحكم على العام.", full.x, 148, full.w, 28, { ...ROLE.body, color: INK });
-        paint(add, "المصدر", "المصدر: مكتب التخطيط — إغلاق ديسمبر.", full.x, 186, full.w, 6, { ...ROLE.caption, color: "#7a6a58" });
-        hairline(add, "حد المقارنة", full.x, 202, full.w, "#d9cbb6", 0.35);
-        ([["العام السابق", "٨٩"], ["هذا العام", "٩٤"], ["الفرق", "+٥"]] as const).forEach(([label, value], i) => {
-          const slot = cell(i * 4, 4);
-          paint(add, `مقارنة ${label}`, label, slot.x, 210, slot.w, 6, { ...ROLE.caption, color: "#7a6a58" });
-          paint(add, `رقم مقارنة ${label}`, value, slot.x, 218, slot.w, 10, { ...ROLE.h2, color: i === 2 ? "#8a6232" : FOREST });
+      const ink = mediaInk(theme);
+      return sheet("مؤشرات سنوية", theme, "#ffffff", (add) => {
+        paint(add, "الرأس", "التقرير السنوي  ·  مؤشرات الإغلاق", 16, 16, 178, 6, { ...ROLE.meta, color: ink.green });
+        hairline(add, "خط الرأس", 16, 26, 178, ink.gold, 0.6);
+        paint(add, "العنوان", "ما يكفي للقراءة", 16, 32, 178, 10, { ...ROLE.h1, color: ink.green });
+        const cards: [string, string][] = [
+          ["٩٤", "إنجاز الخطة من مئة"],
+          ["١٢", "مبادرة مكتملة"],
+          ["٣.٢", "عائد كل ريال"],
+          ["+٥", "فرق عن العام السابق"],
+        ];
+        cards.forEach(([value, label], i) => {
+          const x = i % 2 === 0 ? 108 : 16;
+          const y = 50 + Math.floor(i / 2) * 62;
+          kpiCard(add, label, x, y, 86, 56, value, label, ink.green, ink.gold, INK);
         });
-        paint(add, "الجهة", entity, full.x, 248, full.w, 8, { ...ROLE.meta, color: "#7a6a58" });
+        band(add, "شريط الملخص", 16, 182, 178, 16, ink.green);
+        paint(add, "الملخص", "المبادرتان المفتوحتان في محور واحد ولا تغيّران الحكم", 24, 186, 162, 8, { ...ROLE.caption, color: "#f7f6f3" });
+        paint(add, "المصدر", "المصدر: مكتب التخطيط — إغلاق ديسمبر.", 16, 208, 178, 6, { ...ROLE.caption, color: "#7a6a58" });
+        folio(add, theme, entity, "٠٤");
       });
     }
     case "family-editorial-open": {
@@ -239,7 +236,7 @@ export function buildFamilyPage(
       return sheet("افتتاح تحريري", theme, "#fafafa", (add) => {
         paint(add, "كِكر", "ملف الخدمة", text.x, 16, text.w, 6, { ...ROLE.meta, color: PRESS });
         paint(add, "عدد الملف", "٠٤", 16, 14, 28, 8, { ...ROLE.meta, fontFamily: DISPLAY, fontSize: 14, color: PRESS, textAlign: "left" });
-        paint(add, "العنوان", "لماذا يطول الانتظار\nحين تثبت الطاقة", text.x, 28, text.w, 28, { ...ROLE.h1, fontFamily: EDITORIAL, fontWeight: 700, fontSize: 24, color: "#12141a" });
+        paint(add, "العنوان", "لماذا يطول الانتظار\nحين تثبت الطاقة", text.x, 28, text.w, 28, { ...ROLE.h1, fontWeight: 800, fontSize: 22, color: "#12141a" });
         add("image", { name: "الصورة الرئيسية", x: 0, y: 68, w: 156, h: 112, src: plate("press"), style: { objectFit: "cover", radius: 0 } });
         paint(add, "هامش الصورة", "المنفذ\nالرئيسي\nساعة الذروة", 164, 78, 30, 28, { ...ROLE.caption, color: "#6b7280", lineHeight: 1.45 });
         paint(add, "تعليق", "الاستقبال عند المنفذ الرئيسي  ·  الأسبوع الثالث من رمضان", 16, 184, 140, 8, { ...ROLE.caption, color: "#6b7280" });
@@ -249,12 +246,14 @@ export function buildFamilyPage(
     }
     case "family-editorial-quote":
       return sheet("اقتباس", theme, "#ffffff", (add) => {
-        paint(add, "كِكر", "ملف الخدمة  ·  من محضر اللجنة", full.x, 36, full.w, 6, { ...ROLE.meta, color: PRESS });
-        hairline(add, "علامة", 164, 52, 24, PRESS, 1.2);
-        paint(add, "الاقتباس", "لا نحتاج حملة جديدة.\nنحتاج منفذًا يفتح\nقبل أن تصل الذروة.", full.x, 68, full.w, 52, { ...ROLE.display, fontFamily: CEREMONY, fontWeight: 700, fontSize: 26, color: "#12141a", lineHeight: 1.35 });
-        paint(add, "النسبة", "مديرة تشغيل المنافذ", full.x, 132, 120, 8, { ...ROLE.h3, color: PRESS });
-        paint(add, "سياق", "قيل في اجتماع الدورة، لا في مادة إعلامية.", full.x, 146, 140, 8, { ...ROLE.body, fontSize: 12, color: "#4b5563" });
-        paint(add, "الجهة", entity, full.x, 268, full.w, 8, { ...ROLE.caption, color: "#9ca3af" });
+        const ink = mediaInk(theme);
+        mark(add, "معين", 184, 48, 8, 8, ink.gold, "diamond");
+        paint(add, "كِكر", "من محضر اللجنة", full.x, 48, 150, 6, { ...ROLE.meta, color: ink.green });
+        hairline(add, "خيط", 140, 64, 48, ink.gold, 1);
+        paint(add, "الاقتباس", "لا نحتاج حملة جديدة.\nنحتاج منفذًا يفتح\nقبل أن تصل الذروة.", full.x, 80, full.w, 48, { ...ROLE.display, fontSize: 26, color: ink.green, lineHeight: 1.25 });
+        paint(add, "النسبة", "مديرة تشغيل المنافذ", full.x, 140, 140, 8, { ...ROLE.h3, color: ink.gold });
+        paint(add, "سياق", "قيل في اجتماع الدورة، لا في مادة إعلامية.", full.x, 154, 160, 10, { ...ROLE.body, fontSize: 12, color: "#4b5563" });
+        folio(add, theme, entity, "٠٦");
       });
     case "family-minimal-prose": {
       const col = cell(0, 9);
@@ -304,31 +303,30 @@ export function buildFamilyPage(
       });
     }
     case "family-media-spread": {
-      const col = { x: 108, w: 86 };
+      const ink = mediaInk(theme);
       return sheet("صفحة بصرية", theme, "#ffffff", (add) => {
-        add("image", { name: "الصورة", x: 0, y: 0, w: 96, h: 297, src: plate("press"), style: { objectFit: "cover", radius: 0 } });
-        paint(add, "كِكر", "اتصالات  ·  تغطية الميدان", col.x, 28, col.w, 6, { ...ROLE.meta, color: PRESS });
-        paint(add, "العنوان", "ما وثّقته الفرق قبل أن يُكتب البيان", col.x, 40, col.w, 28, { ...ROLE.h1, fontSize: 18, color: "#111827", lineHeight: 1.3 });
-        hairline(add, "فاصل", 154, 76, 40, PRESS, 0.8);
-        paint(add, "مقدمة", "الصورة من المنفذ الغربي في اليوم الثاني. البيان صدر في اليوم الثالث، بعد أن أُغلقت فجوة المواد.", col.x, 88, col.w, 32, { ...ROLE.body, fontSize: 11, color: INK });
-        paint(add, "متن", "ست عشرة فرقة عملت على أربع وعشرين ساعة. لم تُسجَّل فجوة تغطية بعد اليوم الأول.", col.x, 128, col.w, 28, { ...ROLE.body, fontSize: 11, color: INK });
-        paint(add, "تعليق", "المنفذ الغربي، اليوم الثاني. البيان صدر في اليوم التالي.", col.x, 168, col.w, 20, { ...ROLE.caption, color: "#6b7280", lineHeight: 1.45 });
-        paint(add, "الجهة", entity, col.x, 260, col.w, 8, { ...ROLE.meta, color: "#6b7280" });
+        add("image", { name: "الصورة الأولى", x: 16, y: 16, w: 178, h: 78, src: plate("press"), style: { objectFit: "cover", radius: 0 } });
+        band(add, "تعليق أول", 16, 78, 178, 14, ink.green);
+        paint(add, "سطر أول", "المنفذ الغربي  ·  اليوم الثاني", 24, 81, 162, 8, { ...ROLE.caption, color: "#f7f6f3" });
+        add("image", { name: "الصورة الثانية", x: 16, y: 102, w: 178, h: 70, src: plate("field"), style: { objectFit: "cover", radius: 0 } });
+        band(add, "تعليق ثان", 16, 158, 178, 14, ink.green);
+        paint(add, "سطر ثان", "قبل صدور البيان بيوم", 24, 161, 162, 8, { ...ROLE.caption, color: "#f7f6f3" });
+        paint(add, "العنوان", "ما وثّقته الفرق قبل البيان", 16, 184, 178, 10, { ...ROLE.h2, color: ink.green });
+        paint(add, "متن", "ست عشرة فرقة عملت على مدار الساعة. لم تُسجَّل فجوة تغطية بعد اليوم الأول.", 16, 198, 178, 18, { ...ROLE.body, fontSize: 12, color: INK });
+        folio(add, theme, entity, "٠٧");
       });
     }
     case "family-leadership-close":
-      return sheet("ختام", theme, IVORY, (add) => {
-        paint(add, "تسمية", "ختام الدورة", full.x, 48, full.w, 6, { ...ROLE.meta, color: BRASS });
-        paint(add, "الختام", "شكرًا لكم", full.x, 64, full.w, 18, { ...ROLE.display, fontSize: 36, color: CHARCOAL });
-        hairline(add, "فاصل", 150, 92, 38, BRASS, 0.8);
-        paint(add, "سطر", "نقدر وقت اللجنة. النسخة التالية تصدر مع إغلاق الربع، ولا تعيد وصف هذا الربع.", full.x, 108, 160, 20, { ...ROLE.body, fontSize: 13, color: "#4b453c" });
-        hairline(add, "خط التوقيع", 118, 156, 70, "#cfc6b8", 0.35);
-        paint(add, "التوقيع", "الاسم\nالصفة", 118, 164, 70, 14, { ...ROLE.meta, fontSize: 10, color: "#6b6258", lineHeight: 1.4 });
-        paint(add, "التاريخ", "نهاية الفترة", full.x, 168, 70, 8, { ...ROLE.meta, color: "#8a8175" });
-        band(add, "قاعدة الختام", 0, 248, 210, 49, CHARCOAL);
-        paint(add, "الموعد التالي", "النسخة التالية", 16, 258, 64, 6, { ...ROLE.caption, color: BRASS, textAlign: "left" });
-        paint(add, "تاريخ التالي", "مارس ٢٠٢٧", 16, 268, 64, 8, { ...ROLE.h3, color: "#f6f3ee", textAlign: "left" });
-        paint(add, "الجهة", entity, 90, 262, 100, 10, { ...ROLE.h3, color: BRASS });
+      return sheet("ختام", theme, "#ffffff", (add) => {
+        const ink = mediaInk(theme);
+        paint(add, "تسمية", "ختام الدورة", 16, 20, 178, 6, { ...ROLE.meta, color: ink.gold });
+        add("image", { name: "صورة", x: 70, y: 52, w: 70, h: 90, src: plate("portrait"), style: { objectFit: "cover", radius: 0 } });
+        mark(add, "إطار", 58, 32, 94, 118, ink.gold, "arch-frame");
+        paint(add, "الاسم", "اسم المسؤول", 16, 160, 178, 10, { ...ROLE.h2, color: ink.gold, textAlign: "center" });
+        hairline(add, "خيط الاسم", 70, 174, 70, ink.gold, 0.6);
+        paint(add, "الصفة", "الصفة", 16, 180, 178, 6, { ...ROLE.meta, color: ink.green, textAlign: "center" });
+        paint(add, "سطر", "النسخة التالية تصدر مع إغلاق الربع، ولا تعيد وصف هذا الربع.", 16, 196, 178, 14, { ...ROLE.body, fontSize: 12, color: INK, textAlign: "center" });
+        folio(add, theme, entity, "٠٨");
       });
     case "family-project-phases":
       return sheet("مراحل", theme, "#ffffff", (add) => {
@@ -389,17 +387,17 @@ export function buildFamilyPage(
       });
     }
     case "family-premium-cover":
-      return sheet("غلاف فاخر", theme, CHARCOAL, (add) => {
-        add("shape", { name: "إطار", x: 12, y: 12, w: 186, h: 273, style: { fill: "transparent", borderColor: BRASS, borderWidth: 0.4, radius: 0 } });
-        paint(add, "تصنيف", "للتداول الداخلي", 24, 28, 120, 6, { ...ROLE.meta, color: BRASS });
-        paint(add, "السنة", "٢٠٢٦", 24, 28, 40, 6, { ...ROLE.meta, color: "#a8a29e", textAlign: "left" });
-        paint(add, "فهرس الغلاف", "النتائج\nالقرار\nالملاحق", 148, 48, 38, 22, { ...ROLE.caption, color: "#a8a29e", lineHeight: 1.6, textAlign: "right" });
-        paint(add, "العنوان", "تقرير\nالقيادة", 24, 168, 162, 36, { ...ROLE.display, fontSize: 40, color: "#f6f3ee", lineHeight: 1 });
-        hairline(add, "خط", 150, 212, 36, BRASS, 0.9);
-        paint(add, "سطر", "يُتداول داخل الجهة. لا يُنشر كما هو.", 24, 222, 150, 10, { ...ROLE.body, fontFamily: META, fontSize: 11, color: "#d6d3d1" });
-        hairline(add, "خط البيانات", 24, 248, 162, "#44403c", 0.3);
-        paint(add, "الجهة", entity, 24, 256, 110, 8, { ...ROLE.h3, color: BRASS });
-        paint(add, "النسخة", "نسخة ٠١", 140, 256, 46, 8, { ...ROLE.meta, color: "#a8a29e", textAlign: "left" });
+      return sheet("غلاف فاخر", theme, "#0c3d2c", (add) => {
+        const ink = mediaInk(theme);
+        add("shape", { name: "إطار", x: 12, y: 12, w: 186, h: 273, style: { fill: "transparent", borderColor: ink.gold, borderWidth: 0.45, radius: 0 } });
+        mark(add, "معين", 96, 28, 8, 8, ink.gold, "diamond");
+        paint(add, "تصنيف", "للتداول الداخلي", 24, 46, 162, 6, { ...ROLE.meta, color: ink.gold, textAlign: "center" });
+        add("image", { name: "صورة", x: 28, y: 62, w: 154, h: 78, src: plate("night"), style: { objectFit: "cover", radius: 0 } });
+        paint(add, "العنوان", "تقرير القيادة", 24, 156, 162, 18, { ...ROLE.display, fontSize: 32, color: "#f7f6f3", textAlign: "center" });
+        hairline(add, "خيط", 78, 180, 54, ink.gold, 0.8);
+        paint(add, "سطر", "يُتداول داخل الجهة. لا يُنشر كما هو.", 24, 190, 162, 10, { ...ROLE.body, fontFamily: META, fontSize: 11, color: "#d7e3dc", textAlign: "center" });
+        paint(add, "الجهة", entity, 24, 230, 162, 8, { ...ROLE.h3, color: ink.gold, textAlign: "center" });
+        paint(add, "السنة", "٢٠٢٦", 24, 244, 162, 8, { ...ROLE.meta, color: "#f7f6f3", textAlign: "center" });
       });
     default:
       return null;

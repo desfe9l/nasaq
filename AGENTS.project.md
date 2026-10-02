@@ -6,7 +6,7 @@ generic document builder, a Canva clone, or an AI template generator.
 ## Template and document design
 
 Before creating, redesigning, reviewing, or refining any template, page, pack,
-family, or product master, open `.grok/skills/nasaq-design/SKILL.md` and follow
+family, or product master, open `.grok/skills/nasaq-media/SKILL.md` and follow
 it. That skill is the art-direction source of truth.
 
 Edit the existing generators only:

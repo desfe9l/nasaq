@@ -46,6 +46,8 @@ function partAttrs(part: ShapePart): string {
 
 function partTag(part: ShapePart): string {
   switch (part.k) {
+    case "rect":
+      return "rect";
     case "circle":
       return "circle";
     case "ellipse":

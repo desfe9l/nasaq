@@ -1,15 +1,15 @@
 /**
- * Binding between NASAQ template generation and the art-direction skill.
+ * Binding between NASAQ template generation and the media-system skill.
  *
- * The doctrine lives in `.grok/skills/nasaq-design/SKILL.md`. This module
+ * The doctrine lives in `.grok/skills/nasaq-media/SKILL.md`. This module
  * does not design pages and does not add a catalog. Generators call
  * `bindDesignSkill` as they load so the skill is a dependency of the
  * workflow, not an unused note.
  */
 
 export const NASAQ_DESIGN_SKILL = {
-  id: "nasaq-design",
-  path: ".grok/skills/nasaq-design/SKILL.md",
+  id: "nasaq-media",
+  path: ".grok/skills/nasaq-media/SKILL.md",
 } as const;
 
 export const DESIGN_SURFACES = ["layouts", "packs", "families", "products"] as const;
