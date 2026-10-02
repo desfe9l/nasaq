@@ -18,6 +18,7 @@ import {
   Save,
   Plus,
   LogOut,
+  Layers,
 } from "lucide-react";
 import { toast } from "sonner";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
@@ -40,14 +41,16 @@ import {
 } from "@/lib/admin/types";
 import AdminLicensePanel from "@/components/license/AdminLicensePanel";
 import { AdminTemplatesPanel } from "@/components/admin/AdminTemplatesPanel";
+import { PsdImportPanel } from "@/components/admin/PsdImportPanel";
 import { SiteImagesPanel } from "@/components/admin/SiteImagesPanel";
 import { cn } from "@/lib/utils";
 import { signOut } from "@/lib/auth/client";
 
-type Tab = "templates" | "commercial" | "content" | "images" | "licenses";
+type Tab = "templates" | "psd" | "commercial" | "content" | "images" | "licenses";
 
 const TABS: { id: Tab; label: string; icon: typeof Shield }[] = [
   { id: "templates", label: "إدارة القوالب", icon: LayoutTemplate },
+  { id: "psd", label: "PSD → NASAQ", icon: Layers },
   { id: "commercial", label: "الإعدادات التجارية", icon: Store },
   { id: "content", label: "محتوى الموقع", icon: Megaphone },
   { id: "images", label: "صور الموقع", icon: ImageIcon },
@@ -166,6 +169,7 @@ export default function AdminDashboard() {
         <div hidden={tab !== "templates"}>
           <AdminTemplatesPanel />
         </div>
+        {tab === "psd" && <PsdImportPanel />}
         <div hidden={tab !== "commercial"}>
           <SettingsTab kind="commercial" />
         </div>

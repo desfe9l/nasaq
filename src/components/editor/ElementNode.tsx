@@ -315,6 +315,10 @@ export const ElementNode = memo(function ElementNode({
          */
         transform: `rotate(${view.rotation || 0}deg)${view.style?.flipX ? " scaleX(-1)" : ""}${view.style?.flipY ? " scaleY(-1)" : ""}`,
         opacity: view.opacity ?? 1,
+        mixBlendMode:
+          view.style?.blendMode && view.style.blendMode !== "normal"
+            ? view.style.blendMode
+            : undefined,
         zIndex: view.z,
         boxShadow: view.style?.shadow || undefined,
         cursor: view.locked ? "not-allowed" : interactive ? "move" : "default",
@@ -437,7 +441,7 @@ function ElementContent({
     lineHeight: prepared.lineHeight,
     letterSpacing: s.letterSpacing ? `${s.letterSpacing}mm` : undefined,
     textShadow: s.textShadow || "none",
-    direction: "rtl",
+    direction: s.direction === "ltr" ? "ltr" : "rtl",
     writingMode: vertical ? "vertical-rl" : undefined,
     textOrientation: vertical ? "mixed" : undefined,
     hyphens: "none",

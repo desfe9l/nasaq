@@ -135,6 +135,30 @@ export interface ElStyle {
   fontStyle?: string;
   /** Underline is a text-decoration, not a font variant — hence its own flag. */
   underline?: boolean;
+  /** Explicit writing direction. Unset keeps the Arabic default (rtl). */
+  direction?: "rtl" | "ltr";
+  /**
+   * CSS blend mode painted by the canvas. Unset means normal. Only modes the
+   * editor can actually render are stored — PSD modes without a CSS equivalent
+   * stay in the import report instead of being renamed into a near miss.
+   */
+  blendMode?:
+    | "normal"
+    | "multiply"
+    | "screen"
+    | "overlay"
+    | "darken"
+    | "lighten"
+    | "color-dodge"
+    | "color-burn"
+    | "hard-light"
+    | "soft-light"
+    | "difference"
+    | "exclusion"
+    | "hue"
+    | "saturation"
+    | "color"
+    | "luminosity";
   color?: string;
   background?: string;
   fill?: string;
@@ -332,6 +356,17 @@ export interface CanvasEl {
    * element without the marker is an ordinary element.
    */
   hfRole?: "header" | "footer";
+  /**
+   * Where an imported element came from. The editor ignores it; PSD import
+   * uses it to keep each layer tied to the file it was read from.
+   */
+  source?: {
+    kind: "psd";
+    layerId: string;
+    layerName: string;
+    fallback?: "raster" | "partial";
+    reason?: string;
+  };
 }
 
 export interface Page {

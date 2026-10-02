@@ -116,6 +116,8 @@ export interface Asset {
   folderId?: string | null;
   /** Cloud storage asset id when mirrored to R2. */
   remoteId?: string;
+  /** SHA-256 of the stored image bytes. Used to recognise the same PSD asset. */
+  contentHash?: string;
 }
 
 export interface AssetFolder {
