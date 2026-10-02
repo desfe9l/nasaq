@@ -18,6 +18,7 @@ import {
   readAdminIdentityConfig,
 } from "./admin-identity.server";
 import { isOwnerIdentity, type OwnerIdentity } from "./owner.server";
+import { getTrial } from "@/lib/license/trial.server";
 
 export type AuthorizationContext = OwnerIdentity & {
   isOwner: boolean;
@@ -25,6 +26,7 @@ export type AuthorizationContext = OwnerIdentity & {
   /** An administrator's explicit account suspension also blocks licence gates. */
   isSuspended: boolean;
   license: License | null;
+  trial: { startedAt: string; expiresAt: string } | null;
   entitlements: Record<FeatureId, boolean>;
 };
 
@@ -79,6 +81,7 @@ export async function getAuthorizationContext(
       isAdmin: true,
       isSuspended: false,
       license: null,
+      trial: null,
       entitlements: { ...LICENSE_ENTITLEMENTS.LIFETIME },
     };
   }
@@ -95,6 +98,7 @@ export async function getAuthorizationContext(
       isAdmin: true,
       isSuspended: false,
       license: null,
+      trial: null,
       entitlements: { ...LICENSE_ENTITLEMENTS.LIFETIME },
     };
   }
@@ -104,15 +108,16 @@ export async function getAuthorizationContext(
     // A deliberate account suspension overrides ALL activation methods,
     // including a still-active external licence. Do not delete either record.
     return { ...identity, isOwner: false, isAdmin: false, isSuspended: true,
-      license: null, entitlements: { ...LICENSE_ENTITLEMENTS.FREE } };
+      license: null, trial: null, entitlements: { ...LICENSE_ENTITLEMENTS.FREE } };
   }
 
   // An explicit manual approval/activation is authoritative for its selected
   // plan. Paid Gumroad subscriptions carry a transaction id and never fall
   // back to this path when provider verification is unavailable.
   let license: License | null = subscription ? manualSubscriptionLicense(subscription, identity.id) : null;
+  const existingLicenses = await findLicensesByUserId(identity.id);
   if (!license) {
-    for (const candidate of await findLicensesByUserId(identity.id)) {
+    for (const candidate of existingLicenses) {
       if (!isActiveLicense(candidate)) continue;
       if (candidate.metadata?.source !== "keygen") {
         license = candidate;
@@ -139,12 +144,17 @@ export async function getAuthorizationContext(
       }
     }
   }
+  const trial = !subscription && existingLicenses.length === 0
+    ? await getTrial(sql, identity.id)
+    : null;
+  const activeTrial = trial && Date.parse(trial.expiresAt) > Date.now() ? trial : null;
   return {
     ...identity,
     isOwner: false,
     isAdmin: false,
     isSuspended: false,
     license,
+    trial: activeTrial,
     entitlements: license
       ? license.metadata?.source === "keygen"
         ? entitlementsFromKeygenCodes((license.metadata.entitlements || "").split(",").filter(Boolean))
@@ -152,7 +162,9 @@ export async function getAuthorizationContext(
             license.metadata?.plan as import("@/lib/license/types").LicensePlan | undefined,
             license.type,
           )
-      : { ...LICENSE_ENTITLEMENTS.FREE },
+      : activeTrial
+        ? { ...LICENSE_ENTITLEMENTS.TRIAL }
+        : { ...LICENSE_ENTITLEMENTS.FREE },
   };
 }
 

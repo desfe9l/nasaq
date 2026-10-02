@@ -319,6 +319,7 @@ export const getLicenseStatusFn = createServerFn({ method: "POST" })
         hasLicense: true,
         isOwner: access.isOwner,
         isAdmin: true,
+        trial: null,
         entitlements: access.entitlements,
       };
     }
@@ -331,9 +332,12 @@ export const getLicenseStatusFn = createServerFn({ method: "POST" })
       // request; do not issue a second provider call from the status page.
       return { hasLicense: true, license: publicLicense(access.license), entitlements: access.entitlements };
     }
+    if (access.trial) {
+      return { hasLicense: true, trial: access.trial, entitlements: access.entitlements };
+    }
     const ownLicenses = await findLicensesByUserId(context.userId);
     const previous = ownLicenses[0];
-    if (!previous) return { hasLicense: false, entitlements: access.entitlements };
+    if (!previous) return { hasLicense: false, trial: null, entitlements: access.entitlements };
     // Keep the type and inactive state visible without unlocking features.
     const info = publicLicense(previous);
     if (info.status === "ACTIVE" && info.expiresAt && Date.parse(info.expiresAt) <= Date.now()) {

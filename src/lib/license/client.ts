@@ -59,6 +59,8 @@ export interface LicenseState {
   isAdmin: boolean;
   /** License info (null if no license, administrator, or loading). */
   license: LicenseInfo | null;
+  /** Server-owned introductory trial, when the account is currently eligible. */
+  trial: { startedAt: string; expiresAt: string } | null;
   /** Feature entitlements (empty object if no license). */
   entitlements: Record<FeatureId, boolean>;
   /** Error message from last operation. */
@@ -72,6 +74,7 @@ const INITIAL_STATE: LicenseState = {
   hasLicense: false,
   isAdmin: false,
   license: null,
+  trial: null,
   entitlements: EMPTY_ENTITLEMENTS,
   error: null,
 };
@@ -116,6 +119,7 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
           hasLicense: true,
           isAdmin: false,
           license: result.license,
+          trial: null,
           entitlements: result.entitlements,
           error: null,
         });
@@ -127,6 +131,7 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
           hasLicense: false,
           isAdmin: false,
           license: null,
+          trial: null,
           entitlements: EMPTY_ENTITLEMENTS,
           error: null,
         });
@@ -149,6 +154,17 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
           hasLicense: true,
           isAdmin: Boolean(result.isAdmin),
           license: null,
+          trial: null,
+          entitlements: result.entitlements,
+          error: null,
+        });
+      } else if (result.trial && result.entitlements) {
+        setState({
+          isLoading: false,
+          hasLicense: true,
+          isAdmin: false,
+          license: null,
+          trial: result.trial,
           entitlements: result.entitlements,
           error: null,
         });
@@ -158,6 +174,7 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
           hasLicense: true,
           isAdmin: false,
           license: result.license,
+          trial: null,
           entitlements: result.entitlements,
           error: null,
         });
@@ -200,7 +217,7 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
         if (result.success && result.license && result.entitlements) {
           setCachedLicenseKey(key);
           setState({ isLoading: false, hasLicense: true, isAdmin: false,
-            license: result.license, entitlements: result.entitlements, error: null });
+            license: result.license, trial: null, entitlements: result.entitlements, error: null });
           notifyLicenseChanged();
           return { success: true, message: result.message };
         }
@@ -232,6 +249,7 @@ export function useLicense(userId?: string, _userEmail?: string | null) {
       hasLicense: false,
       isAdmin: false,
       license: null,
+      trial: null,
       entitlements: EMPTY_ENTITLEMENTS,
       error: null,
     });

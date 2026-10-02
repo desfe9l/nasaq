@@ -45,3 +45,4 @@ alter table subscriptions
 create unique index if not exists subscriptions_source_transaction_idx
   on subscriptions (source_transaction_id)
   where source_transaction_id is not null;
+

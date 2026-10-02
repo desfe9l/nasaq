@@ -151,7 +151,7 @@ export function PricingSection({
         }
       } catch {
         tab?.close();
-        toast.error("تعذّر تحميل رابط Gumroad. حاول مرة أخرى.");
+        toast.error("تعذّر تحميل رابط الدفع. حاول مرة أخرى.");
       } finally {
         busy.current = false;
         setPending(null);
@@ -356,7 +356,7 @@ function PlanCard({
           } disabled:cursor-wait disabled:opacity-70`}
         >
           {busy
-            ? "جارٍ فتح Gumroad…"
+            ? "جارٍ فتح صفحة الدفع…"
             : card.ctaLabel}
         </button>
         <p className="mt-2 text-center text-[11px] text-muted">

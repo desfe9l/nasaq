@@ -91,14 +91,14 @@ export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean
   },
   TRIAL: {
     core_editor: true,
-    basic_export: true,
+    basic_export: false,
     premium_templates: true,
-    advanced_export: true,
-    brand_kit: true,
+    advanced_export: false,
+    brand_kit: false,
     unlimited_projects: true,
     unlimited_pages: true,
-    data_import: true,
-    ai_report: true,
+    data_import: false,
+    ai_report: false,
     collaboration: false,
     team_features: false,
     multi_user_activation: false,
@@ -208,6 +208,7 @@ export interface LicenseStatusResult {
   isAdmin?: boolean;
   isSuspended?: boolean;
   license?: LicenseInfo;
+  trial?: { startedAt: string; expiresAt: string } | null;
   entitlements?: Record<FeatureId, boolean>;
   /** A paid/local key is not yet validated at Keygen; never unlock on this basis. */
   message?: string;
