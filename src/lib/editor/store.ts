@@ -137,6 +137,7 @@ import {
   extractSvgMarkup,
   isOverlayViewport,
 } from "./ui-state";
+import { nudgeStack, restack, type LayerDropSide } from "./layers";
 
 /*
  * The shell's pure layout/import helpers live in `ui-state.ts` (alias-free and
@@ -644,8 +645,12 @@ interface EditorStore extends Project, Ui, History {
     value?: boolean,
   ) => void;
   moveLayer: (id: string, dir: -1 | 1) => void;
-  /** Reorder top-level layers using their visible (front-to-back) list order. */
-  reorderLayers: (fromId: string, toId: string) => void;
+  /** Reorder sibling layers using their visible (front-to-back) list order. */
+  reorderLayers: (
+    fromId: string,
+    toId: string,
+    side?: "before" | "after",
+  ) => void;
   addElement: (type: ElType, over?: Partial<CanvasEl>) => string | undefined;
   /** Show or hide one print guide across every artboard. */
   togglePrintGuide: (kind: keyof PrintGuideSettings) => void;
@@ -956,6 +961,17 @@ function mapElements(
 /** Where an element lives: the array holding it and its index there. */
 function locate(page: Page, id: string) {
   return findElement(page.elements, id);
+}
+
+/** Swap one sibling array (top-level or a group's children) for a restacked copy. */
+function replaceSiblingList(page: Page, list: CanvasEl[], nextList: CanvasEl[]): Page {
+  const rewrite = (nodes: CanvasEl[]): CanvasEl[] => {
+    if (nodes === list) return nextList;
+    return nodes.map((el) =>
+      el.children?.length ? { ...el, children: rewrite(el.children) } : el,
+    );
+  };
+  return { ...page, elements: rewrite(page.elements) };
 }
 
 function cloneWithFreshIds(el: CanvasEl): CanvasEl {
@@ -3655,41 +3671,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!page) return;
       const found = locate(page, id);
       if (!found) return;
-      const index = found.index;
-      const target = index + dir;
-      if (target < 0 || target >= found.list.length) return;
-      // Swap positions in the array the element actually lives in; group members
-      // reorder inside their own `children` array so the tree shape is preserved.
-      const swapIn = (list: CanvasEl[]): CanvasEl[] => {
-        const arr = [...list];
-        [arr[index], arr[target]] = [arr[target], arr[index]];
-        return arr;
-      };
-      let next: Page;
-      if (found.list === page.elements) {
-        next = { ...page, elements: swapIn(page.elements) };
-      } else {
-        const applyIn = (list: CanvasEl[]): CanvasEl[] =>
-          list === found.list
-            ? swapIn(list)
-            : list.map((el) =>
-                el.children?.length
-                  ? { ...el, children: applyIn(el.children) }
-                  : el,
-              );
-        next = { ...page, elements: applyIn(page.elements) };
-      }
-      // NOT `normalizeZ` here: it re-sorts by the old z values and would undo the
-      // swap. Instead rewrite z from the new array order, which is the same rule
-      // the canvas painter and every exporter follow, so the list, the canvas and
-      // the exported file stay in one order.
-      const renumber = (list: CanvasEl[]): CanvasEl[] =>
-        list.map((el, i) => ({
-          ...el,
-          z: i + 1,
-          children: el.children?.length ? renumber(el.children) : el.children,
-        }));
-      next.elements = renumber(next.elements);
+      const nextList = nudgeStack(found.list, id, dir);
+      if (!nextList) return;
+      const next = replaceSiblingList(page, found.list, nextList);
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       pushHistory();
     },
@@ -4733,26 +4717,16 @@ export const useEditor = create<EditorStore>((set, get) => {
       toast.success("تمت إزالة قناع القص");
     },
 
-    reorderLayers: (fromId, toId) => {
+    reorderLayers: (fromId, toId, side: LayerDropSide = "before") => {
       const s = get();
       const page = activePageOf(s);
       if (!page || fromId === toId) return;
-      const ordered = [...page.elements].sort((a, b) => b.z - a.z);
-      const from = ordered.findIndex((el) => el.id === fromId);
-      const to = ordered.findIndex((el) => el.id === toId);
-      if (from < 0 || to < 0) return;
-      const [moved] = ordered.splice(from, 1);
-      ordered.splice(to, 0, moved);
-      const zById = new Map(
-        ordered.map((el, index) => [el.id, ordered.length - index]),
-      );
-      const next = {
-        ...page,
-        elements: page.elements.map((el) => ({
-          ...el,
-          z: zById.get(el.id) ?? el.z,
-        })),
-      };
+      const from = locate(page, fromId);
+      const to = locate(page, toId);
+      if (!from || !to || from.list !== to.list) return;
+      const nextList = restack(from.list, fromId, toId, side);
+      if (!nextList) return;
+      const next = replaceSiblingList(page, from.list, nextList);
       set({
         pages: s.pages.map((candidate) =>
           candidate.id === page.id ? next : candidate,

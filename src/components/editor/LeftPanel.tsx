@@ -1,6 +1,6 @@
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { OPEN_NEW_PAGE_EVENT } from "./NewPageDialog";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Type,
   Image as ImageIcon,
@@ -41,6 +41,7 @@ import {
   type TemplateCategoryId,
 } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
+import { useIncrementalList } from "@/lib/editor/use-incremental-list";
 import { cn } from "@/lib/utils";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, useAccordionState } from "./ui/Accordion";
@@ -259,9 +260,14 @@ export function LeftPanel({
     else if (activePageId) setPageSize(activePageId, "custom", { w, h });
   };
 
-  const templates = PAGE_TEMPLATES.filter(
-    (t) => category === "all" || t.category === category,
+  const templates = useMemo(
+    () =>
+      PAGE_TEMPLATES.filter(
+        (t) => category === "all" || t.category === category,
+      ),
+    [category],
   );
+  const templateWindow = useIncrementalList(templates, 8);
 
   return (
     <aside className="flex h-full min-h-0 flex-col border-l border-line bg-surface ">
@@ -577,7 +583,7 @@ export function LeftPanel({
               ))}
             </div>
             <div className="grid gap-2">
-              {templates.map((t) => (
+              {templateWindow.slice.map((t) => (
                 <button
                   key={t.id}
                   type="button"
@@ -599,6 +605,9 @@ export function LeftPanel({
                   <Eye className="size-3.5 shrink-0 text-muted" />
                 </button>
               ))}
+              {templateWindow.remaining > 0 && (
+                <div ref={templateWindow.sentinelRef} className="h-4" />
+              )}
               {!templates.length && (
                 <p className="rounded-[8px] border border-dashed border-line p-4 text-center text-[12px] text-muted">
                   لا قوالب في هذا التصنيف

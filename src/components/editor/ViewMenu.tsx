@@ -102,6 +102,11 @@ export function ViewMenu({
           for most. Fixed order, لوحة العناصر leading; grouping-aware: a panel
           that lives inside another window toggles THAT window on its tab. */}
       <MenuGroup title="نوافذ مساحة العمل" />
+      <MenuRow
+        label="التخطيط الافتراضي"
+        hint="يعيد اللوحات والأحجام والمواضع دون المساس بالمشروع أو الصفحات"
+        onSelect={() => useEditor.getState().resetWorkspaceLayout()}
+      />
       {(
         [
           ["elements", "لوحة العناصر"],
@@ -150,11 +155,6 @@ export function ViewMenu({
       />
       <MenuRow label="ملاءمة التحديد" onSelect={fitToSelection} />
       <MenuRow label="مقياس 100%" onSelect={() => setZoom(1)} />
-      <MenuRow
-        label="ضبط مساحة العمل"
-        hint="يعيد اللوحات والأدوات إلى التخطيط الافتراضي دون المساس بالمشروع"
-        onSelect={() => useEditor.getState().resetWorkspaceLayout()}
-      />
       <MenuRow
         label="ملء الشاشة"
         checked={typeof document !== "undefined" && !!document.fullscreenElement}

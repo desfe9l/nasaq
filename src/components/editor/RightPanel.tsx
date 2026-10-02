@@ -2214,17 +2214,19 @@ export function PropertiesPanel({
  * none of the three hides the others behind a tab.
  */
 export function LayersPanel() {
+  /*
+   * The panel is mounted only while its tab is actually showing. Grouped
+   * windows keep `layersOpen` false (the host flag is `rightOpen`), so gating
+   * the page on `layersOpen` rendered an empty list for every real document.
+   * Focus mode unmounts the window visually but this component can stay in
+   * the tree — skip the subscription then so a hidden panel does not repaint.
+   */
+  const focusMode = useEditor((s) => s.focusMode);
   const page = useEditor((s) =>
-    s.layersOpen && !s.focusMode
-      ? s.pages.find((p) => p.id === s.activePageId)
-      : undefined,
+    focusMode ? undefined : s.pages.find((p) => p.id === s.activePageId),
   );
-  const activePageId = useEditor((s) =>
-    s.layersOpen && !s.focusMode ? s.activePageId : "",
-  );
-  const selectedId = useEditor((s) =>
-    s.layersOpen && !s.focusMode ? s.selectedId : null,
-  );
+  const activePageId = useEditor((s) => (focusMode ? "" : s.activePageId));
+  const selectedId = useEditor((s) => (focusMode ? null : s.selectedId));
   const setActivePage = useEditor((s) => s.setActivePage);
   const updateElement = useEditor((s) => s.updateElement);
   const reorderLayers = useEditor((s) => s.reorderLayers);
@@ -2239,6 +2241,12 @@ export function LayersPanel() {
   } | null>(null);
   const [layerQuery, setLayerQuery] = useState("");
   const layerAnchorRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setLayerQuery("");
+    setDrop(null);
+    setDraggedLayerId(null);
+  }, [activePageId]);
 
   const el =
     page && selectedId ? findElement(page.elements, selectedId)?.el : undefined;
@@ -2310,7 +2318,7 @@ export function LayersPanel() {
       window.removeEventListener("pointercancel", finish);
       setDraggedLayerId(null);
       setDrop(null);
-      if (target && target.id !== id) reorderLayers(id, target.id);
+      if (target && target.id !== id) reorderLayers(id, target.id, target.side);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", finish);
@@ -2543,9 +2551,7 @@ function PageSelect({
   activePageId: string;
   onChange: (id: string) => void;
 }) {
-  const pages = useEditor((s) =>
-    s.rightOpen && !s.focusMode ? s.pages : EMPTY_PAGES,
-  );
+  const pages = useEditor((s) => (s.focusMode ? EMPTY_PAGES : s.pages));
   return (
     <label className="editor-panel-control">
       <span>الصفحة</span>
