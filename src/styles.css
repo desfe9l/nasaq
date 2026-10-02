@@ -423,10 +423,10 @@ html.dark.dim {
   --editor-text: #e9eef3;
   --editor-text-secondary: #9fb0bd;
   --editor-hover: #2a353e;
-  --editor-active: #39505f;
+  --editor-active: #3c454d;
   --editor-disabled: #1b232a;
-  --editor-accent: #477a9f;
-  --editor-accent-hover: #568caf;
+  --editor-accent: #8ea0ae;
+  --editor-accent-hover: #a3b4c0;
   --editor-accent-ink: #8ec6ea;
   --editor-accent-text: #ffffff;
   --editor-accent-soft: #293e4d;
@@ -437,21 +437,21 @@ html.dark.dim {
 .editor-ui { background: var(--editor-bg); color: var(--editor-text); }
 
 :root:not(.dark), .editor-ui.editor-light {
-  --editor-bg: #e5e7e8;
-  --editor-panel: #f2f3f3;
-  --editor-toolbar: #ebeded;
-  --editor-surface: #f9faf9;
-  --editor-border: #cdd2d5;
-  --editor-text: #28333b;
-  --editor-text-secondary: #5b6770;
-  --editor-hover: #e1e6e8;
-  --editor-active: #d7e3ec;
-  --editor-disabled: #e3e6e8;
-  --editor-accent: #365f7d;
-  --editor-accent-hover: #23425a;
-  --editor-accent-ink: #2a5878;
-  --editor-accent-text: #ffffff;
-  --editor-accent-soft: #e0eaf1;
+  --editor-bg: #d9dddf;
+  --editor-panel: #e4e7e9;
+  --editor-toolbar: #dde1e3;
+  --editor-surface: #e7eaec;
+  --editor-border: #c4cacf;
+  --editor-text: #242c33;
+  --editor-text-secondary: #55616a;
+  --editor-hover: #d3d8db;
+  --editor-active: #c5cbcf;
+  --editor-disabled: #d8dcde;
+  --editor-accent: #3d4c59;
+  --editor-accent-hover: #2c3944;
+  --editor-accent-ink: #2c3944;
+  --editor-accent-text: #f4f6f7;
+  --editor-accent-soft: #d7dde1;
   --editor-danger: #9b4541;
   --editor-danger-soft: #f2e4e2;
   --editor-success: #0b7a52;
@@ -467,10 +467,10 @@ html.dark.dim {
   --editor-text: #f0f3f5;
   --editor-text-secondary: #c0c9d0;
   --editor-hover: #48535d;
-  --editor-active: #53636e;
+  --editor-active: #59636c;
   --editor-disabled: #343c43;
-  --editor-accent: #739bb5;
-  --editor-accent-hover: #86afc8;
+  --editor-accent: #c5d0d8;
+  --editor-accent-hover: #d5dee4;
   --editor-accent-ink: #a8d6f0;
   --editor-accent-text: #ffffff;
   --editor-accent-soft: #3b515e;
@@ -3582,23 +3582,20 @@ body.is-resizing-panel .editor-dock-strip::before {
   text-align: center;
 }
 
-/* Media grid: 3 columns, 2 when the panel is narrow. */
+/* Media grid: three images per row, even in a docked panel. */
 .asset-media-grid {
   display: grid;
   min-width: 0;
-  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   align-items: stretch;
 }
 .asset-media-grid > * { min-width: 0; }
 .asset-media-grid:not(.is-compact) .asset-card img {
   width: 100%;
-  height: 92px;
+  height: 72px;
   object-fit: contain;
-  background: color-mix(in srgb, var(--editor-surface) 80%, #fff);
-}
-@container assetlibrary (max-width: 240px) {
-  .asset-media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  background: color-mix(in srgb, var(--editor-surface) 88%, var(--editor-text));
 }
 .asset-card { display: grid; padding: 6px; }
 .asset-card-actions { flex-wrap: nowrap; }
@@ -3669,7 +3666,7 @@ body.is-resizing-panel .editor-dock-strip::before {
 /* ---------- Touch devices (tablet): larger targets ---------- */
 @media (any-pointer: coarse) {
   .editor-panel-control select { height: 44px; }
-  .editor-properties .layer-row button { min-height: 42px; }
+  .editor-properties .layer-row button { min-height: 32px; }
 
   .asset-library-controls .asset-lib-icon-btn,
   .asset-library-categories .asset-lib-icon-btn { width: 42px; height: 42px; }
@@ -3684,9 +3681,6 @@ body.is-resizing-panel .editor-dock-strip::before {
   .asset-card-edit button { min-width: 36px; min-height: 36px; }
   .asset-card-check { width: 26px !important; height: 26px !important; }
   .asset-card-check::after { inset: -8px; }
-  @container assetlibrary (max-width: 330px) {
-    .asset-media-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3704,6 +3698,24 @@ body.is-resizing-panel .editor-dock-strip::before {
  * (#3b6e9c). The header uses three aligned zones; Add and View menus keep
  * insertion and workspace controls compact, while selection stays contextual.
  * ===================================================================== */
+
+.editor-ui .editor-layers .layer-row {
+  min-height: 30px;
+  gap: 4px;
+  border-color: transparent;
+  padding-block: 1px;
+}
+.editor-ui .editor-layers .layer-row.is-selected {
+  background: color-mix(in srgb, var(--editor-text) 12%, var(--editor-surface));
+  box-shadow: inset -3px 0 0 var(--editor-text);
+}
+.editor-ui .editor-layers .layer-row .layer-row-action,
+.editor-ui .editor-layers .layer-row .drag-handle {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+}
 
 /* ---------- Header: three zones, one line ---------- */
 
@@ -3910,6 +3922,17 @@ body.is-resizing-panel .editor-dock-strip::before {
 /* Toggle state (an open panel, an armed tool) — filled, never a thin border. */
 .editor-icon-btn.is-active,
 .editor-icon-btn[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--editor-text) 14%, var(--editor-toolbar, var(--editor-panel)));
+  color: var(--editor-text);
+}
+/* The toolbar's generic `button { color }` rule is more specific than the
+   class above and was painting black glyphs on a blue active plate. */
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail) .editor-icon-btn.is-active,
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail) .editor-icon-btn[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--editor-text) 14%, var(--editor-toolbar, var(--editor-panel)));
+  color: var(--editor-text);
+}
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail) .editor-icon-btn.is-primary {
   background: var(--editor-accent);
   color: var(--editor-accent-text);
 }

@@ -12,10 +12,8 @@ import {
   GripHorizontal,
   Minus,
   Move,
-  PanelBottom,
   PanelLeft,
   PanelRight,
-  PanelTop,
   Pin,
   X,
 } from "lucide-react";
@@ -46,9 +44,9 @@ import { cn } from "@/lib/utils";
  * What every window can do, without a per-panel implementation:
  *   • move by its whole title bar (pointer or touch, arrow-key nudging),
  *   • resize from ALL four corners and ALL four edges (8 grips),
- *   • dock to any of the four screen edges (top/bottom/left/right) — a docked
- *     window becomes a grid track, so the workspace row reserves its space and
- *     the canvas shrinks instead of being covered; undocking gives it back,
+ *   • dock to the left or the right only — top and bottom pins are not offered.
+ *     A docked window becomes a grid track, so the workspace row reserves its
+ *     space and the canvas shrinks instead of being covered; undocking gives it back,
  *   • close from the header, reopen instantly,
  *   • stay inside the workspace on every viewport, including orientation
  *     changes, because every move/resize re-runs the same clamp,
@@ -731,8 +729,6 @@ export function FloatingPanel({
               >
                 {(
                   [
-                    ["top", PanelTop],
-                    ["bottom", PanelBottom],
                     ["left", PanelLeft],
                     ["right", PanelRight],
                   ] as const

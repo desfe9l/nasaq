@@ -23,6 +23,7 @@ import {
   FlipVertical2,
   Focus,
   Group,
+  ImagePlus,
   Keyboard,
   Layers,
   Lock,
@@ -561,6 +562,24 @@ export function WorkspaceOverlays({
                 icon: Ungroup,
                 run: ungroup,
                 hint: "⇧⌘G",
+              } as ContextAction,
+            ]
+          : []),
+        ...(selectedEls.some((el) => el.type === "image" || el.type === "logo")
+          ? [
+              {
+                label: "استبدال الصورة",
+                icon: ImagePlus,
+                run: () => {
+                  const image = selectedEls.find(
+                    (el) => el.type === "image" || el.type === "logo",
+                  );
+                  if (!image) return;
+                  window.dispatchEvent(
+                    new CustomEvent("nasaq:replace-image", { detail: image.id }),
+                  );
+                },
+                sepBefore: true,
               } as ContextAction,
             ]
           : []),

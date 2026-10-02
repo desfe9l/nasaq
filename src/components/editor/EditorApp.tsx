@@ -38,8 +38,9 @@ const DOCK_MIN_H = 200;
 const DOCK_BAND_H = 236;
 /**
  * Dock-side storage. v3 resets every author ONCE to the shipped layout: the
- * content window (لوحة العناصر + أدوات العناصر + المكتبة + أدوات التقرير)
- * pinned on the right, the inspector window (الخصائص + الطبقات) on the left.
+ * content window (لوحة العناصر + أدوات العناصر + المكتبة)
+ * pinned on the right, the inspector window (الخصائص + الطبقات + أدوات التقرير)
+ * on the left.
  */
 const DOCKS_KEY = "nasaq.panel.docks.v3";
 const LAYOUT_APPLIED_KEY = "nasaq.workspace.layout.v2";
@@ -49,6 +50,18 @@ const DEFAULT_DOCKS: Partial<Record<PanelId, DockSide>> = {
   [WORKSPACE_RIGHT_GROUP[0]]: "right",
   [WORKSPACE_LEFT_GROUP[0]]: "left",
 };
+
+/** Top and bottom pins are gone: only the two side edges remain. */
+function sanitizeDockSides(
+  sides: Partial<Record<PanelId, DockSide>>,
+): Partial<Record<PanelId, DockSide>> {
+  const next: Partial<Record<PanelId, DockSide>> = {};
+  for (const id of PANEL_IDS) {
+    const side = sides[id];
+    if (side === "left" || side === "right") next[id] = side;
+  }
+  return next;
+}
 
 /**
  * Kept for external scripts/anchors. «أدوات التقرير» is now its own window;
@@ -65,6 +78,7 @@ import {
   Redo2,
   Save,
   Scan,
+  SlidersHorizontal,
   Square,
   Type as TypeIcon,
   Undo2,
@@ -786,6 +800,37 @@ function Studio({
     return () => window.removeEventListener("nasaq:fit-page", onFitPage);
   }, []);
 
+  /* Three-finger double tap on the artboard returns the page to a full fit.
+     A single three-finger touch is ignored so it does not fight scrolling. */
+  useEffect(() => {
+    let last = 0;
+    const onTouchStart = (event: TouchEvent) => {
+      if (event.touches.length !== 3) return;
+      const stage = document.querySelector(".editor-canvas-stage");
+      const target = event.target;
+      if (!stage || !(target instanceof Node) || !stage.contains(target)) return;
+      const now = performance.now();
+      if (now - last < 500) {
+        event.preventDefault();
+        fitRef.current();
+        last = 0;
+      } else {
+        last = now;
+      }
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: false });
+    return () => window.removeEventListener("touchstart", onTouchStart);
+  }, []);
+
+  useEffect(() => {
+    const onReplace = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      if (typeof id === "string" && id) onReplaceImage(id);
+    };
+    window.addEventListener("nasaq:replace-image", onReplace);
+    return () => window.removeEventListener("nasaq:replace-image", onReplace);
+  }, [onReplaceImage]);
+
   /*
    * Safe auto-fit whenever a DIFFERENT document is loaded (opening a project,
    * creating a new one, importing a file). Keyed on the project id so plain
@@ -1422,7 +1467,7 @@ function Studio({
         // First visit (or the v3 reset): the two default windows are docked —
         // content tools on the right, properties + layers on the left.
         if (raw === null) return { ...DEFAULT_DOCKS };
-        return JSON.parse(raw) as Partial<Record<PanelId, DockSide>>;
+        return sanitizeDockSides(JSON.parse(raw) as Partial<Record<PanelId, DockSide>>);
       } catch {
         return { ...DEFAULT_DOCKS };
       }
@@ -1507,13 +1552,23 @@ function Studio({
   };
 
   const changeDockSide = (id: PanelId, side: DockSide | null) => {
+    if (side === "top" || side === "bottom") return;
     const next: Partial<Record<PanelId, DockSide>> = { ...dockSides };
     if (!side) {
       delete next[id];
     } else {
-      // One window per edge: the previous occupant returns to floating.
-      for (const other of PANEL_IDS)
-        if (other !== id && next[other] === side) delete next[other];
+      const opposite: DockSide = side === "left" ? "right" : "left";
+      const occupant = PANEL_IDS.find((other) => other !== id && next[other] === side);
+      if (occupant) {
+        const previous = next[id];
+        const dest: DockSide =
+          previous === "left" || previous === "right" ? previous : opposite;
+        const blocked = PANEL_IDS.find(
+          (other) => other !== id && other !== occupant && next[other] === dest,
+        );
+        if (blocked) delete next[blocked];
+        next[occupant] = dest;
+      }
       next[id] = side;
       // Seed the strip size from the window's last floating rectangle so the
       // docked size is the one the author was actually using.
@@ -2104,6 +2159,14 @@ function Studio({
               }}
             />
           </div>
+          <span className="editor-header-sep" aria-hidden />
+          <IconButton
+            label="الخصائص"
+            hint="فتح خصائص العنصر المحدد"
+            active={panelChecked.properties && !focusMode && !cropActive}
+            icon={<SlidersHorizontal className="size-4" strokeWidth={1.7} />}
+            onClick={() => togglePanelWindow("properties")}
+          />
           {/* ①¾ Paint: fill / gradient / border of the selection, or the page
               background when nothing is selected — right beside the tools. */}
           <span className="editor-header-sep" aria-hidden />
