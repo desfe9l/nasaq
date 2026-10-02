@@ -34,6 +34,19 @@ const PANEL_IDS: readonly PanelId[] = [
 /** Docked strip bounds (px) — shared by the drag handlers and the defaults. */
 const DOCK_MIN_W = 264;
 const DOCK_MIN_H = 200;
+/** Opening height of a window docked to the top or bottom edge. */
+const DOCK_BAND_H = 236;
+/**
+ * Dock-side storage. v3 resets every author ONCE to the shipped layout: the
+ * content window (لوحة العناصر + أدوات العناصر + المكتبة + أدوات التقرير)
+ * pinned on the right, the inspector window (الخصائص + الطبقات) on the left.
+ */
+const DOCKS_KEY = "nasaq.panel.docks.v3";
+const LAYOUT_APPLIED_KEY = "nasaq.workspace.layout.v2";
+const DEFAULT_DOCKS: Partial<Record<PanelId, DockSide>> = {
+  [WORKSPACE_RIGHT_GROUP[0]]: "right",
+  [WORKSPACE_LEFT_GROUP[0]]: "left",
+};
 
 /**
  * Kept for external scripts/anchors. «أدوات التقرير» is now its own window;
@@ -88,6 +101,7 @@ import { cn } from "@/lib/utils";
 import { EditorWorkspaceSkeleton } from "@/components/ui/Skeleton";
 import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
 import { EditorAccountMenu } from "./EditorAccountMenu";
+import { HeaderPaint } from "./HeaderPaint";
 import {
   OVERLAY_BREAKPOINT,
   isOverlayViewport,
@@ -96,11 +110,14 @@ import {
   type DockSide,
 } from "@/lib/editor/ui-state";
 import {
+  defaultWorkspaceGroups,
   detachPanelTab,
   hostOf,
   loadPanelGroups,
   movePanelTab,
   savePanelGroups,
+  WORKSPACE_LEFT_GROUP,
+  WORKSPACE_RIGHT_GROUP,
   type PanelGroupState,
 } from "@/lib/editor/panel-groups";
 import {
@@ -1368,11 +1385,13 @@ function Studio({
   const [dockSides, setDockSides] = useState<Partial<Record<PanelId, DockSide>>>(
     () => {
       try {
-        return JSON.parse(
-          localStorage.getItem("nasaq.panel.docks.v2") || "{}",
-        ) as Partial<Record<PanelId, DockSide>>;
+        const raw = localStorage.getItem(DOCKS_KEY);
+        // First visit (or the v3 reset): the two default windows are docked —
+        // content tools on the right, properties + layers on the left.
+        if (raw === null) return { ...DEFAULT_DOCKS };
+        return JSON.parse(raw) as Partial<Record<PanelId, DockSide>>;
       } catch {
-        return {};
+        return { ...DEFAULT_DOCKS };
       }
     },
   );
@@ -1389,7 +1408,7 @@ function Studio({
   });
   useEffect(() => {
     try {
-      localStorage.setItem("nasaq.panel.docks.v2", JSON.stringify(dockSides));
+      localStorage.setItem(DOCKS_KEY, JSON.stringify(dockSides));
     } catch {
       /* the layout stays available for this session */
     }
@@ -1435,11 +1454,21 @@ function Studio({
             },
           };
         }
+        // A top/bottom dock is a horizontal BAND (its content flows in
+        // columns, see `.is-docked-top` in styles.css), so it opens compact
+        // and leaves the artboard its height; the strip resizes it.
         return {
           ...sizes,
           [id]: {
             w: 0,
-            h: clampDockSize(stored?.height ?? PANEL_DEFS[id].defaultSize.height, window.innerHeight, DOCK_MIN_H),
+            h: clampDockSize(
+              Math.min(
+                stored?.height ?? PANEL_DEFS[id].defaultSize.height,
+                DOCK_BAND_H,
+              ),
+              window.innerHeight,
+              DOCK_MIN_H,
+            ),
           },
         };
       });
@@ -1458,6 +1487,31 @@ function Studio({
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  /*
+   * One-time layout reset to the shipped arrangement (v2): every author sees
+   * the content window pinned on the right and the inspector window on the
+   * left the first time this build loads, whatever their old flags said.
+   * After that, the saved layout is theirs again.
+   */
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      if (localStorage.getItem(LAYOUT_APPLIED_KEY)) return;
+      localStorage.setItem(LAYOUT_APPLIED_KEY, "1");
+    } catch {
+      return;
+    }
+    const groups = defaultWorkspaceGroups();
+    setGroupState(groups);
+    setDockSides({ ...DEFAULT_DOCKS });
+    for (const id of PANEL_IDS) setPanelOpenFlag(id, false);
+    if (isDesktop) {
+      setPanelOpenFlag(WORKSPACE_RIGHT_GROUP[0], true);
+      setPanelOpenFlag(WORKSPACE_LEFT_GROUP[0], true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
 
   /** Which window (if any) currently occupies each screen edge. */
   const dockedBySide: Partial<Record<DockSide, PanelId>> = {};
@@ -1944,6 +1998,10 @@ function Studio({
               }}
             />
           </div>
+          {/* ①¾ Paint: fill / gradient / border of the selection, or the page
+              background when nothing is selected — right beside the tools. */}
+          <span className="editor-header-sep" aria-hidden />
+          <HeaderPaint />
           {/* On a phone the stepper gives way to «عرض», which carries the same
               commands, so history and export are never pushed off screen. */}
           {!isCompact && (

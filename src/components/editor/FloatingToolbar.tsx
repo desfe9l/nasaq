@@ -44,6 +44,8 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import { fitBoxToPage, type FitPageMode } from "@/lib/editor/fit-page";
+import { pageSize } from "@/lib/editor/model";
 import { TYPE_NAME, type CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { useInteraction } from "@/lib/editor/interaction-store";
@@ -157,6 +159,20 @@ export function FloatingToolbar({
   const updateStyle = useEditor((s) => s.updateStyle);
   const updateElement = useEditor((s) => s.updateElement);
   const commit = useEditor((s) => s.commit);
+  /** «ملاءمة الصفحة»: resize the element to the page it sits on. */
+  const fitElementToPage = (target: CanvasEl, mode: FitPageMode) => {
+    const state = useEditor.getState();
+    const page = state.pages.find((p) => p.id === pageId) ?? state.pages[0];
+    if (!page) return;
+    const box = fitBoxToPage(target, pageSize(page), mode);
+    updateElement(target.id, {
+      ...box,
+      rotation: 0,
+      ...(target.type === "image" || target.type === "logo"
+        ? { style: { objectFit: mode === "fill" ? "cover" : "contain", objectX: 50, objectY: 50 } }
+        : {}),
+    });
+  };
   const duplicateSelected = useEditor((s) => s.duplicateSelected);
   const copyStyle = useEditor((s) => s.copyStyle);
   const pasteStyle = useEditor((s) => s.pasteStyle);
@@ -1082,6 +1098,18 @@ export function FloatingToolbar({
               label="Fill · تعبئة الإطار دون تشويه"
               checked={style.objectFit !== "contain"}
               onSelect={() => updateStyle(el.id, { objectFit: "cover" })}
+            />
+            <MenuRow
+              label="ملء الصفحة — تكبير التصميم على حجم الصفحة"
+              hint="يغطي الصفحة كاملة دون تشويه الصورة"
+              disabled={el.locked || el.resizeLocked}
+              onSelect={() => fitElementToPage(el, "fill")}
+            />
+            <MenuRow
+              label="ملاءمة داخل الصفحة — بنسبة الصورة"
+              hint="أكبر حجم يبقى داخل الصفحة، في المنتصف"
+              disabled={el.locked || el.resizeLocked}
+              onSelect={() => fitElementToPage(el, "fit")}
             />
             <MenuRow
               label="إزالة القص"

@@ -92,6 +92,36 @@ export function ViewMenu({
         />
       )}
     >
+      {/* The six windows come FIRST — they are what authors open this menu
+          for most. Fixed order, لوحة العناصر leading; grouping-aware: a panel
+          that lives inside another window toggles THAT window on its tab. */}
+      <MenuGroup title="نوافذ مساحة العمل" />
+      {(
+        [
+          ["elements", "لوحة العناصر"],
+          ["tools", "أدوات العناصر"],
+          ["library", "المكتبة"],
+          ["report", "أدوات التقرير"],
+          ["properties", "الخصائص"],
+          ["layers", "الطبقات"],
+        ] as [EditorPanelId, string][]
+      ).map(([id, label]) => (
+        <MenuRow
+          key={id}
+          label={label}
+          checked={panelChecked[id]}
+          onSelect={() => onTogglePanel(id)}
+        />
+      ))}
+      <MenuGroup title="حافة تثبيت النوافذ الافتراضية" />
+      {DOCK_EDGE_PREFERENCES.map((pref) => (
+        <MenuRow
+          key={pref}
+          label={DOCK_EDGE_LABELS[pref]}
+          checked={dockPref === pref}
+          onSelect={() => onDockPref(pref)}
+        />
+      ))}
       {/* The zoom keys are printed once, on the header's zoom cluster — the
           control an author actually presses. Repeating ⌘+/⌘−/⌘0 here put the
           same three badges in two places for no gain. */}
@@ -160,16 +190,7 @@ export function ViewMenu({
         checked={Boolean(printGuides?.bleed)}
         onSelect={() => togglePrintGuide("bleed")}
       />
-      <MenuGroup title="مساحة العمل" />
-      <MenuGroup title="حافة تثبيت النوافذ الافتراضية" />
-      {DOCK_EDGE_PREFERENCES.map((pref) => (
-        <MenuRow
-          key={pref}
-          label={DOCK_EDGE_LABELS[pref]}
-          checked={dockPref === pref}
-          onSelect={() => onDockPref(pref)}
-        />
-      ))}
+      <MenuGroup title="أعمدة اللوحات" />
       <div className="editor-menu-grid" dir="ltr">
         {[1, 2, 3, 4, 6].map((cols) => (
           <button
@@ -190,26 +211,6 @@ export function ViewMenu({
           label={mode.id === "dim" ? "متوسط / خافت" : mode.label}
           checked={appearance === mode.id}
           onSelect={() => setAppearance(mode.id)}
-        />
-      ))}
-      {/* The six windows — fixed order, grouping-aware: a panel that lives
-          inside another window toggles THAT window on the right tab. */}
-      <MenuGroup title="نوافذ مساحة العمل" />
-      {(
-        [
-          ["library", "المكتبة"],
-          ["tools", "أدوات العناصر"],
-          ["elements", "لوحة العناصر"],
-          ["properties", "الخصائص"],
-          ["layers", "الطبقات"],
-          ["report", "أدوات التقرير"],
-        ] as [EditorPanelId, string][]
-      ).map(([id, label]) => (
-        <MenuRow
-          key={id}
-          label={label}
-          checked={panelChecked[id]}
-          onSelect={() => onTogglePanel(id)}
         />
       ))}
       <MenuRow

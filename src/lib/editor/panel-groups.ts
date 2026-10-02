@@ -48,7 +48,30 @@ export interface PanelGroupState {
   tabs: PanelGroupTabs;
 }
 
-const STORAGE_KEY = "nasaq.panel.groups.v1";
+/*
+ * v2: the shipped default became two docked groups (see
+ * `defaultWorkspaceGroups`). Bumping the key resets every author to the new
+ * arrangement once; their own regrouping is remembered from then on.
+ */
+const STORAGE_KEY = "nasaq.panel.groups.v2";
+
+/**
+ * The two windows the editor opens with, as separate groups of tabs:
+ *   • the RIGHT window — لوحة العناصر first, then أدوات العناصر, المكتبة and
+ *     أدوات التقرير — everything that puts content on the page,
+ *   • the LEFT window — الخصائص then الطبقات — everything that edits it.
+ * Hosts lead their groups, so `elements` and `properties` are the windows.
+ */
+export const WORKSPACE_RIGHT_GROUP: readonly EditorPanelId[] = [
+  "elements",
+  "tools",
+  "library",
+  "report",
+];
+export const WORKSPACE_LEFT_GROUP: readonly EditorPanelId[] = [
+  "properties",
+  "layers",
+];
 
 function isPanelId(value: unknown): value is EditorPanelId {
   return (
@@ -65,6 +88,19 @@ export function defaultPanelGroups(): PanelGroupState {
     tabs[id] = id;
   }
   return { groups, tabs };
+}
+
+/** The grouped default the editor opens with (two windows, see above). */
+export function defaultWorkspaceGroups(): PanelGroupState {
+  const right = WORKSPACE_RIGHT_GROUP[0];
+  const left = WORKSPACE_LEFT_GROUP[0];
+  return {
+    groups: {
+      [right]: [...WORKSPACE_RIGHT_GROUP],
+      [left]: [...WORKSPACE_LEFT_GROUP],
+    } as PanelGroups,
+    tabs: { [right]: right, [left]: left } as PanelGroupTabs,
+  };
 }
 
 /**
@@ -123,13 +159,13 @@ export function parsePanelGroups(raw: unknown): PanelGroupState {
 }
 
 export function loadPanelGroups(): PanelGroupState {
-  if (typeof window === "undefined") return defaultPanelGroups();
+  if (typeof window === "undefined") return defaultWorkspaceGroups();
   try {
-    return parsePanelGroups(
-      JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "null"),
-    );
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw === null) return defaultWorkspaceGroups();
+    return parsePanelGroups(JSON.parse(raw));
   } catch {
-    return defaultPanelGroups();
+    return defaultWorkspaceGroups();
   }
 }
 
