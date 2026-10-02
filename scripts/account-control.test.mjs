@@ -34,7 +34,7 @@ test("account status preserves server-derived tiers without inventing activation
     license = state;
     assert.equal(exports.useAccountTier({ id: "fixture" }), expected);
     const html = renderToStaticMarkup(React.createElement(exports.AccountBadge, { tier: expected }));
-    assert.equal(html.includes("الحساب مفعل"), ["ADMIN", "LICENSED"].includes(expected));
+    assert.equal(html.includes("مرخّص"), ["ADMIN", "LICENSED"].includes(expected));
     assert.ok(!html.includes("مرخص"));
     assert.equal((html.match(/data-account-status=/g) || []).length, 1);
     assert.ok(html.includes("whitespace-nowrap"));
