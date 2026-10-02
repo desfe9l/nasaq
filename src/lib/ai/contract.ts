@@ -22,6 +22,10 @@ export interface ReportDraftInput {
   reportType: ReportType;
   detailLevel: ReportDetail;
   pageTarget: number;
+  /** Current document title. Context only — the model must not rewrite the file. */
+  documentTitle?: string;
+  /** Existing report text the author already placed. */
+  documentContext?: string;
 }
 
 export interface ReportDraftSection {
@@ -70,6 +74,8 @@ export function normalizeDraftInput(input: ReportDraftInput): ReportDraftInput {
       ? input.detailLevel
       : "standard",
     pageTarget: Math.min(4, Math.max(1, Math.round(input.pageTarget || 1))),
+    documentTitle: (input.documentTitle || "").trim().slice(0, 180),
+    documentContext: (input.documentContext || "").trim().slice(0, 4_000),
   };
 }
 

@@ -101,6 +101,7 @@ import { CanvasStage } from "./CanvasStage";
 import { PageRail } from "./PageRail";
 import { ExportDialog } from "./ExportDialog";
 import { PageSettingsHost } from "./PageSettingsDialog";
+import { NewPageHost } from "./NewPageDialog";
 import { cn } from "@/lib/utils";
 import { EditorWorkspaceSkeleton } from "@/components/ui/Skeleton";
 import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
@@ -2332,6 +2333,7 @@ function Studio({
       />
       <ExportDialog />
       <PageSettingsHost />
+      <NewPageHost />
 
       {/*
        * Modal workbenches, mounted at the shell level so they survive a panel

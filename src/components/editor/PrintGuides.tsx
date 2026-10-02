@@ -43,7 +43,7 @@ export function PrintGuides(props: {
       width={`${w}mm`}
       height={`${h}mm`}
       viewBox={`${-pad} ${-pad} ${w} ${h}`}
-      style={{ left: `${-pad}mm`, top: `${-pad}mm`, zIndex }}
+      style={{ left: `${-pad}mm`, top: `${-pad}mm`, zIndex, direction: "ltr" }}
       aria-hidden
       focusable="false"
     >
@@ -88,15 +88,6 @@ export function PrintGuides(props: {
             strokeWidth={0.25}
             strokeDasharray="2 1.5"
           />
-          <text
-            x={geometry.gutter.x + geometry.gutter.w / 2}
-            y={geometry.gutter.h / 2}
-            fontSize={3.2}
-            textAnchor="middle"
-            transform={`rotate(-90 ${geometry.gutter.x + geometry.gutter.w / 2} ${geometry.gutter.h / 2})`}
-          >
-            هامش التجليد
-          </text>
         </g>
       )}
 
@@ -112,14 +103,6 @@ export function PrintGuides(props: {
             strokeWidth={0.25}
             strokeDasharray="2.5 1.5"
           />
-          <text
-            x={geometry.safe.x + geometry.safe.w - 2}
-            y={geometry.safe.y - 1.6}
-            fontSize={3}
-            textAnchor="end"
-          >
-            المنطقة الآمنة
-          </text>
         </g>
       )}
     </svg>

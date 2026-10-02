@@ -98,6 +98,7 @@ import {
 } from "./report-blocks";
 import { buildGraphicHeading, type GraphicHeadingId } from "./graphic-headings";
 import type { ReportDraft } from "../ai/contract";
+import { insertPageAfter, resolveNewPageSize, type NewPageRequest } from "./page-order";
 import { safeImageSrc } from "./images";
 import { clampZoom } from "./document-space";
 import {
@@ -452,6 +453,11 @@ interface EditorStore extends Project, Ui, History {
   deleteAssetFolder: (id: string) => Promise<void>;
   moveAssetsToFolder: (ids: string[], folderId: string | null) => Promise<void>;
   /**
+   * Independent copies of assets and, when folder ids are passed, their trees.
+   * Originals stay put. Remote objects are copied in the background.
+   */
+  duplicateLibrary: (assetIds: string[], folderIds?: string[]) => Promise<void>;
+  /**
    * Apply a planned library import (`planLibraryImport`) in one store update:
    * the plan's folders keep the exact ids its assets reference, and folders +
    * assets land in a single `set()` so the shelf re-renders atomically. The
@@ -777,7 +783,7 @@ interface EditorStore extends Project, Ui, History {
    * source page context, so the layers panel offers a direct action.
    */
   copyElementToPage: (elId: string, pageId: string) => void;
-  addPage: (size?: SizeId) => void;
+  addPage: (request?: NewPageRequest) => void;
   addTemplatePage: (id: string) => void;
   duplicatePage: (id?: string) => void;
   deletePage: (id?: string) => void;
@@ -1110,6 +1116,43 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
     thumbnail: incoming.thumbnail,
     nsqOrigin: incoming.nsqOrigin,
   };
+}
+
+let librarySyncTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Push the account catalog after local edits. Never runs for a guest. */
+function queueLibrarySync() {
+  if (!hasSignedInOwner()) return;
+  if (librarySyncTimer) clearTimeout(librarySyncTimer);
+  librarySyncTimer = setTimeout(() => {
+    librarySyncTimer = null;
+    const state = useEditor.getState();
+    void (async () => {
+      const removedAssets = await getSetting<Array<{ id: string; at: number }>>(
+        "libraryRemovedAssets",
+      );
+      const removedFolders = await getSetting<Array<{ id: string; at: number }>>(
+        "libraryRemovedFolders",
+      );
+      const { toCatalog } = await import("@/lib/storage/library-client");
+      const { pushLibraryCatalog } = await import("@/lib/storage/mirror");
+      await pushLibraryCatalog(
+        toCatalog({
+          folders: state.assetFolders,
+          assets: state.assets,
+          customItems: state.customIcons,
+          removedAssets: Array.isArray(removedAssets) ? removedAssets : [],
+          removedFolders: Array.isArray(removedFolders) ? removedFolders : [],
+        }),
+      );
+    })();
+  }, 800);
+}
+
+async function rememberLibraryRemoval(key: "libraryRemovedAssets" | "libraryRemovedFolders", id: string) {
+  const current = await getSetting<Array<{ id: string; at: number }>>(key);
+  const rows = Array.isArray(current) ? current : [];
+  await setSetting(key, [...rows.filter((row) => row.id !== id), { id, at: Date.now() }].slice(-800));
 }
 
 export const useEditor = create<EditorStore>((set, get) => {
@@ -1829,65 +1872,36 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({ assets, assetsLoading: false });
 
       if (hasSignedInOwner()) {
-        void import("@/lib/storage/mirror")
-          .then(async ({ pullRemoteAssets, fetchRemoteAssetDataUrl }) => {
-            const remotes = await pullRemoteAssets();
-            if (
-              !remotes.length ||
-              getStorageOwner() !== owner ||
-              get().sessionOwner !== sessionOwner
-            )
-              return;
-            const current = await listAssets();
-            const knownRemoteIds = new Set(
-              current.flatMap((a) =>
-                [a.id, a.remoteId].filter((v): v is string => Boolean(v)),
-              ),
+        const syncSession = get().sessionOwner;
+        void import("@/lib/storage/library-client")
+          .then(async ({ reconcileAccountLibrary }) => {
+            const removedAssets = await getSetting<Array<{ id: string; at: number }>>(
+              "libraryRemovedAssets",
             );
-            let hydratedAny = false;
-            for (const remote of remotes) {
-              if (knownRemoteIds.has(remote.id)) continue;
-              if (
-                getStorageOwner() !== owner ||
-                get().sessionOwner !== sessionOwner
-              )
-                return;
-              const fetched = await fetchRemoteAssetDataUrl(remote.id);
-              if (!fetched) continue;
-              if (
-                getStorageOwner() !== owner ||
-                get().sessionOwner !== sessionOwner
-              )
-                return;
-              try {
-                await saveAsset({
-                  id: remote.id,
-                  remoteId: remote.id,
-                  name: remote.fileName || "ملف سحابي",
-                  src: fetched.dataUrl,
-                  w: remote.width || 600,
-                  h: remote.height || 600,
-                  addedAt: Date.parse(remote.createdAt) || Date.now(),
-                  folderId: null,
-                });
-                hydratedAny = true;
-              } catch {
-                /* local storage quota or race — skip */
-              }
+            const removedFolders = await getSetting<Array<{ id: string; at: number }>>(
+              "libraryRemovedFolders",
+            );
+            const live = get();
+            if (getStorageOwner() !== owner || live.sessionOwner !== syncSession) return;
+            const reconciled = await reconcileAccountLibrary({
+              folders: live.assetFolders,
+              assets: live.assets,
+              customItems: live.customIcons,
+              removedAssets: Array.isArray(removedAssets) ? removedAssets : [],
+              removedFolders: Array.isArray(removedFolders) ? removedFolders : [],
+            });
+            if (!reconciled || getStorageOwner() !== owner || get().sessionOwner !== syncSession) {
+              return;
             }
-            if (
-              hydratedAny &&
-              getStorageOwner() === owner &&
-              get().sessionOwner === sessionOwner
-            ) {
-              const updated = await listAssets();
-              if (
-                getStorageOwner() === owner &&
-                get().sessionOwner === sessionOwner
-              ) {
-                set({ assets: updated });
-              }
-            }
+            set({
+              assets: reconciled.assets,
+              assetFolders: reconciled.folders,
+              customIcons: reconciled.customItems,
+            });
+            await setSetting("assetFolders", reconciled.folders);
+            await setSetting("customLibrary", reconciled.customItems);
+            await setSetting("libraryRemovedAssets", reconciled.removedAssets);
+            await setSetting("libraryRemovedFolders", reconciled.removedFolders);
           })
           .catch(() => undefined);
       }
@@ -1921,10 +1935,12 @@ export const useEditor = create<EditorStore>((set, get) => {
                     a.id === saved.id ? withRemote : a,
                   ),
                 });
+                queueLibrarySync();
               }
             }
           })
           .catch(() => null);
+        queueLibrarySync();
         return saved;
       } catch {
         // A full or unavailable store must not lose the element the author is
@@ -1941,12 +1957,14 @@ export const useEditor = create<EditorStore>((set, get) => {
       const target = get().assets.find((a) => a.id === id);
       await removeAsset(id);
       set({ assets: get().assets.filter((a) => a.id !== id) });
+      if (target) await rememberLibraryRemoval("libraryRemovedAssets", target.remoteId || target.id);
       const remoteId = target?.remoteId || target?.id || id;
       if (remoteId && hasSignedInOwner()) {
         void import("@/lib/storage/mirror")
           .then(({ removeRemoteAsset }) => removeRemoteAsset(remoteId))
           .catch(() => false);
       }
+      queueLibrarySync();
     },
 
     removeAssets: async (ids) => {
@@ -1978,6 +1996,12 @@ export const useEditor = create<EditorStore>((set, get) => {
           )
           .catch(() => undefined);
       }
+      await Promise.all(
+        targets.map((target) =>
+          rememberLibraryRemoval("libraryRemovedAssets", target.remoteId || target.id),
+        ),
+      );
+      queueLibrarySync();
     },
 
     selectAssets: (ids) => set({ selectedAssetIds: [...new Set(ids)] }),
@@ -1991,6 +2015,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           a.id === id ? { ...a, name: trimmed } : a,
         ),
       });
+      queueLibrarySync();
     },
 
     setAssetFolder: (id) => set({ assetFolderId: id, selectedAssetIds: [] }),
@@ -2013,6 +2038,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       const folders = [...get().assetFolders, folder];
       set({ assetFolders: folders });
       await setSetting("assetFolders", folders);
+      queueLibrarySync();
     },
     renameAssetFolder: async (id, name) => {
       const trimmed = name.trim();
@@ -2022,6 +2048,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       );
       set({ assetFolders: folders });
       await setSetting("assetFolders", folders);
+      queueLibrarySync();
     },
     deleteAssetFolder: async (id) => {
       const target = get().assetFolders.find((folder) => folder.id === id);
@@ -2054,6 +2081,8 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedAssetIds: [],
       });
       await setSetting("assetFolders", folders);
+      await rememberLibraryRemoval("libraryRemovedFolders", id);
+      queueLibrarySync();
     },
     moveAssetsToFolder: async (ids, folderId) => {
       const selected = new Set(ids);
@@ -2066,6 +2095,95 @@ export const useEditor = create<EditorStore>((set, get) => {
           .map((asset) => saveAsset(asset)),
       );
       set({ assets, selectedAssetIds: [] });
+      queueLibrarySync();
+    },
+
+    duplicateLibrary: async (assetIds, folderIds = []) => {
+      const state = get();
+      const { planLibraryDuplicate } = await import("@/lib/storage/library-sync");
+      const plan = planLibraryDuplicate({
+        folders: state.assetFolders,
+        assets: state.assets.map((asset) => ({
+          id: asset.id,
+          remoteId: asset.remoteId ?? null,
+          name: asset.name,
+          folderId: asset.folderId ?? null,
+          w: asset.w,
+          h: asset.h,
+          addedAt: asset.addedAt,
+        })),
+        assetIds,
+        folderIds,
+      });
+      if (!plan.assets.length && !plan.folders.length) return;
+      const sourceById = new Map(state.assets.map((asset) => [asset.id, asset]));
+      const copies: Asset[] = [];
+      for (const asset of plan.assets) {
+        const source = sourceById.get(asset.sourceId);
+        if (!source?.src) continue;
+        const saved = await saveAsset({
+          id: asset.id,
+          name: asset.name,
+          src: source.src,
+          w: source.w,
+          h: source.h,
+          folderId: asset.folderId,
+          addedAt: asset.addedAt,
+        });
+        copies.push(saved);
+      }
+      const folders = [...state.assetFolders, ...plan.folders];
+      set({
+        assetFolders: folders,
+        assets: [...copies, ...get().assets],
+        selectedAssetIds: copies.map((asset) => asset.id),
+      });
+      await setSetting("assetFolders", folders);
+      queueLibrarySync();
+      const owner = getStorageOwner();
+      const sources = plan.assets
+        .filter((asset) => asset.sourceRemoteId && copies.some((copy) => copy.id === asset.id))
+        .map((asset) => ({
+          copyId: asset.id,
+          sourceRemoteId: asset.sourceRemoteId as string,
+        }));
+      if (sources.length && hasSignedInOwner()) {
+        void import("@/lib/storage/mirror")
+          .then(async ({ copyRemoteAssets, mirrorAssetToStorage }) => {
+            const copied = await copyRemoteAssets(sources.map((row) => row.sourceRemoteId));
+            const bySource = new Map(copied.map((row) => [row.sourceId, row.remoteId]));
+            for (const row of sources) {
+              if (getStorageOwner() !== owner) return;
+              const remoteId = bySource.get(row.sourceRemoteId);
+              const local = get().assets.find((asset) => asset.id === row.copyId);
+              if (!local) continue;
+              if (remoteId) {
+                const updated = await saveAsset({ ...local, remoteId });
+                if (getStorageOwner() === owner) {
+                  set({
+                    assets: get().assets.map((asset) => (asset.id === local.id ? updated : asset)),
+                  });
+                }
+              } else {
+                const mirrored = await mirrorAssetToStorage({
+                  name: local.name,
+                  src: local.src,
+                  w: local.w,
+                  h: local.h,
+                  projectId: null,
+                });
+                if (mirrored && getStorageOwner() === owner) {
+                  const updated = await saveAsset({ ...local, remoteId: mirrored });
+                  set({
+                    assets: get().assets.map((asset) => (asset.id === local.id ? updated : asset)),
+                  });
+                }
+              }
+            }
+            if (getStorageOwner() === owner) queueLibrarySync();
+          })
+          .catch(() => undefined);
+      }
     },
 
     importLibraryPlan: async (plan) => {
@@ -2164,6 +2282,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedAssetIds: [],
       });
       await setSetting("assetFolders", folders);
+      queueLibrarySync();
       if (savedRows.length && hasSignedInOwner()) {
         const owner = getStorageOwner();
         void import("@/lib/storage/mirror")
@@ -2188,6 +2307,7 @@ export const useEditor = create<EditorStore>((set, get) => {
                 }
               }
             }
+            queueLibrarySync();
           })
           .catch(() => undefined);
       }
@@ -3158,6 +3278,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       const customIcons = [item, ...get().customIcons];
       set({ customIcons });
       await setSetting("customLibrary", customIcons);
+      queueLibrarySync();
       return item;
     },
 
@@ -3165,6 +3286,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       const customIcons = get().customIcons.filter((item) => item.id !== id);
       set({ customIcons });
       await setSetting("customLibrary", customIcons);
+      queueLibrarySync();
     },
     setTheme: (theme) => {
       set({ theme });
@@ -4804,7 +4926,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       toast.success(`تم نقل العنصر إلى «${target.name}»`);
     },
 
-    addPage: (sizeId) => {
+    addPage: (request) => {
       if (!requireEditorAccess()) return;
       const s = get();
       if (exceedsProjectPageLimit(s.pages.length + 1, s.entitlements)) {
@@ -4815,29 +4937,21 @@ export const useEditor = create<EditorStore>((set, get) => {
         return;
       }
       const sourcePage = s.pages.find((page) => page.id === s.activePageId);
-      const preset = sizeId
-        ? sizePreset(sizeId)
-        : sourcePage
-          ? pageSize(sourcePage)
-          : sizePreset(s.defaultSize || "a4-portrait");
+      const preset = resolveNewPageSize({
+        request,
+        source: sourcePage,
+        defaultSize: s.defaultSize,
+      });
       const p: Page = {
-        ...(sourcePage ? clone(sourcePage) : {}),
         id: uid("page"),
         name: `صفحة ${s.pages.length + 1}`,
         elements: [],
-        bg: sourcePage?.bg ?? THEMES[s.theme].paper,
-        ...(sourcePage?.bgGradient
-          ? { bgGradient: clone(sourcePage.bgGradient) }
-          : {}),
+        bg: THEMES[s.theme].paper,
         w: preset.w,
         h: preset.h,
       };
-      // A new sheet inherits its visual/document configuration, never the
-      // source page's edit-lock or hidden state.
-      delete p.locked;
-      delete p.hidden;
       set({
-        pages: [...s.pages, p],
+        pages: insertPageAfter(s.pages, p, sourcePage?.id),
         activePageId: p.id,
         selectedId: null,
         selectedIds: [],
@@ -4867,8 +4981,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         return;
       }
       const p = createTemplatePage(template.id, THEMES[s.theme], s.orgName);
+      const sourcePage = s.pages.find((page) => page.id === s.activePageId);
       set({
-        pages: [...s.pages, p],
+        pages: insertPageAfter(s.pages, p, sourcePage?.id),
         activePageId: p.id,
         selectedId: null,
         selectedIds: [],

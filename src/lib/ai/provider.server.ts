@@ -29,6 +29,7 @@ export async function generateReportDraft(
         model,
         temperature: 0.2,
         max_tokens: 2_400,
+        response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
@@ -36,6 +37,7 @@ export async function generateReportDraft(
               "You write an evidence-preserving report draft for NASAQ.",
               "Do not invent facts, figures, dates, names, citations, or sources.",
               "When the brief lacks evidence, state the gap instead of guessing.",
+              "The document title and existing report text are context only. Do not claim you edited the file.",
               "Return JSON only with title, summary, sections, and nextSteps.",
               "Each section must contain heading, body, and bullets.",
               "Respect the requested report type, detail level, and target page count when shaping the draft.",
@@ -52,13 +54,19 @@ export async function generateReportDraft(
               reportType: input.reportType,
               detailLevel: input.detailLevel,
               pageTarget: input.pageTarget,
+              documentTitle: input.documentTitle || "",
+              documentContext: input.documentContext || "",
             }),
           },
         ],
       }),
     });
 
-    if (!response.ok) throw new Error(`provider_${response.status}`);
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) throw new Error("provider_rejected");
+      if (response.status === 429) throw new Error("provider_rate");
+      throw new Error(`provider_${response.status}`);
+    }
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>;
     };
@@ -77,8 +85,21 @@ export async function generateReportDraft(
               .replace(/^```(?:json)?\s*|\s*```$/g, "")
               .trim()
           : "";
-    return normalizeDraft(JSON.parse(text), input.maxSections);
+    return normalizeDraft(parseProviderJson(text), input.maxSections);
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/** Models sometimes wrap JSON in prose or a fence. Keep the object, drop the rest. */
+function parseProviderJson(text: string): unknown {
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = trimmed.indexOf("{");
+    const end = trimmed.lastIndexOf("}");
+    if (start >= 0 && end > start) return JSON.parse(trimmed.slice(start, end + 1));
+    throw new Error("provider_error");
   }
 }

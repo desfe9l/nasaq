@@ -10,10 +10,29 @@ import {
   type ReportType,
 } from "@/lib/ai/contract";
 import { useEditor } from "@/lib/editor/store";
+import type { CanvasEl } from "@/lib/editor/model";
+
+function pageText(elements: CanvasEl[], limit: number): string {
+  const parts: string[] = [];
+  const walk = (list: CanvasEl[]) => {
+    for (const el of list) {
+      const text = String(el.content ?? "").trim();
+      if (text) parts.push(text);
+      if (el.children?.length) walk(el.children);
+      if (parts.join("\n").length >= limit) return;
+    }
+  };
+  walk(elements);
+  return parts.join("\n").slice(0, limit);
+}
 
 /** User-triggered AI intake. It never edits the page until the author inserts it. */
 export function AiReportPanel() {
   const insertReportDraft = useEditor((s) => s.insertReportDraft);
+  const documentTitle = useEditor((s) => s.name);
+  const pages = useEditor((s) => s.pages);
+  const entitlements = useEditor((s) => s.entitlements);
+  const entitlementsResolved = useEditor((s) => s.entitlementsResolved);
   const [brief, setBrief] = useState("");
   const [audience, setAudience] = useState("الإدارة العليا");
   const [tone, setTone] = useState<AiTone>("official");
@@ -28,6 +47,10 @@ export function AiReportPanel() {
 
   const generate = async () => {
     if (!brief.trim() || busy) return;
+    if (entitlementsResolved && !entitlements.ai_report) {
+      toast.error("تحتاج هذه الميزة إلى ترخيص نشط. لم يتغير المستند.");
+      return;
+    }
     setBusy(true);
     try {
       const result = await generateReportDraftFn({
@@ -40,6 +63,8 @@ export function AiReportPanel() {
           reportType,
           detailLevel,
           pageTarget,
+          documentTitle,
+          documentContext: pages.map((page) => pageText(page.elements, 1200)).join("\n").slice(0, 4000),
         },
       });
       if (!result.ok) {
@@ -72,7 +97,7 @@ export function AiReportPanel() {
         </span>
       </h4>
       <p className="text-[10px] leading-4 text-muted">
-        اكتب الحقائق أو النقاط المتاحة فقط. لن تُضاف أي نتيجة إلى الصفحة قبل الضغط على «إدراج».
+        اكتب الحقائق أو النقاط المتاحة فقط. يُرسل عنوان المستند ونص الصفحات كسياق، ولا يُضاف شيء إلى الصفحة قبل «إدراج».
       </p>
       <label className="grid gap-1 text-[11px] font-extrabold text-muted">
         موجز التقرير

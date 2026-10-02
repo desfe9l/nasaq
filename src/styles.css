@@ -1031,18 +1031,14 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   pointer-events: none;
   overflow: visible;
   color: rgba(37, 99, 235, 0.75);
+  /* The page is RTL. Guides are millimetre geometry, so they must not inherit
+     that direction — Arabic SVG text used to shatter around the trim. */
+  direction: ltr;
+  unicode-bidi: isolate;
 }
 
 .print-guides .pg-safe {
   color: rgba(37, 99, 235, 0.6);
-}
-
-.print-guides .pg-safe text,
-.print-guides .pg-gutter text {
-  fill: rgba(37, 99, 235, 0.85);
-  font-family: "Tajawal", "Cairo", sans-serif;
-  font-weight: 700;
-  direction: rtl;
 }
 
 .print-guides .pg-gutter rect {
@@ -4585,16 +4581,6 @@ li:has(> .text-success) {
   .editor-panel-body {
     scroll-behavior: smooth;
   }
-}
-
-/*
- * ── 30. Print guide refinement ───────────────────────────────────────────
- * Print guides get slightly more refined colors.
- */
-.print-guides .pg-safe text,
-.print-guides .pg-gutter text {
-  font-weight: 700;
-  letter-spacing: 0.02em;
 }
 
 /*

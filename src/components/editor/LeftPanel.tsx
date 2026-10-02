@@ -1,4 +1,5 @@
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
+import { OPEN_NEW_PAGE_EVENT } from "./NewPageDialog";
 import { useState } from "react";
 import {
   Type,
@@ -141,7 +142,6 @@ export function LeftPanel({
   const setActivePage = useEditor((s) => s.setActivePage);
   const setPageSize = useEditor((s) => s.setPageSize);
   const setAllPageSizes = useEditor((s) => s.setAllPageSizes);
-  const addPage = useEditor((s) => s.addPage);
   const duplicatePage = useEditor((s) => s.duplicatePage);
   const deletePage = useEditor((s) => s.deletePage);
   const movePageById = useEditor((s) => s.movePageById);
@@ -623,7 +623,7 @@ export function LeftPanel({
             </div>
             <button
               type="button"
-              onClick={() => addPage()}
+              onClick={() => window.dispatchEvent(new CustomEvent(OPEN_NEW_PAGE_EVENT))}
               className="h-10 rounded-[8px] bg-navy text-[12px] font-extrabold text-white"
             >
               إضافة صفحة

@@ -78,6 +78,27 @@ export const generateReportDraftFn = createServerFn({ method: "POST" })
           message: "خدمة الذكاء الاصطناعي غير مفعّلة لهذه البيئة بعد.",
         };
       }
+      if (code === "provider_rejected") {
+        return {
+          ok: false,
+          code: "provider_error",
+          message: "رفض مزود الذكاء الاصطناعي الطلب. لم يتغير محتوى المستند.",
+        };
+      }
+      if (code === "provider_rate") {
+        return {
+          ok: false,
+          code: "rate_limited",
+          message: "مزود الذكاء الاصطناعي مشغول مؤقتًا. حاول بعد قليل. لم يتغير المستند.",
+        };
+      }
+      if (code === "empty_draft") {
+        return {
+          ok: false,
+          code: "provider_error",
+          message: "أعاد الذكاء الاصطناعي مسودة فارغة. لم يتغير محتوى المستند.",
+        };
+      }
       return {
         ok: false,
         code: "provider_error",

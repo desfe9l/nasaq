@@ -1,5 +1,6 @@
 import { pageBackgroundCss, paintCss } from "@/lib/editor/gradient";
 import { OPEN_PAGE_SETTINGS_EVENT } from "./PageSettingsDialog";
+import { OPEN_NEW_PAGE_EVENT } from "./NewPageDialog";
 import { memo, useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
@@ -25,7 +26,7 @@ export function PageRail({
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
   const setActivePage = useEditor((s) => s.setActivePage);
-  const addPage = useEditor((s) => s.addPage);
+  const addPage = () => window.dispatchEvent(new CustomEvent(OPEN_NEW_PAGE_EVENT));
   const duplicatePage = useEditor((s) => s.duplicatePage);
   const deletePage = useEditor((s) => s.deletePage);
   const reorderPages = useEditor((s) => s.reorderPages);
