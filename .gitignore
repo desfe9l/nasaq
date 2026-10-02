@@ -47,3 +47,6 @@ Thumbs.db
 
 # Generated editor visual QA (not project assets)
 screenshots/editor-focused/
+
+# Inlined at vite build from resvg.wasm + fonts. Not source.
+src/lib/og/share-raster-assets.generated.ts
