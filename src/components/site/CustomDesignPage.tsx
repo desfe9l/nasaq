@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { BadgeCheck, Clock3, Crown } from "lucide-react";
+import { BadgeCheck, Clock3 } from "lucide-react";
 import { BRAND, CUSTOM_DESIGN } from "@/lib/brand";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
@@ -33,7 +33,6 @@ export function CustomDesignPage() {
                 نطاق العمل
               </p>
               <h2 className="mt-2 flex items-center gap-2 text-[19px] font-extrabold">
-                <Crown className="size-5 text-brand-hover" aria-hidden />
                 ماذا يشمل الطلب الخاص؟
               </h2>
             </div>

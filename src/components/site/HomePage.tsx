@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ArrowLeft, Briefcase, FileText, LayoutTemplate, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, FolderOpen, Layers, Shapes } from "lucide-react";
+import { ArrowLeft, ChevronDown, Briefcase, FileText, LayoutTemplate, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, FolderOpen, Layers, Shapes } from "lucide-react";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
@@ -37,6 +37,23 @@ export function HomePage() {
   const hydrate = useEditor((s) => s.hydrate);
   const openProject = useEditor((s) => s.openProject);
   const [modalOpen, setModalOpen] = useState(false);
+  const [recentHidden, setRecentHidden] = useState(false);
+  useEffect(() => {
+    try {
+      setRecentHidden(localStorage.getItem("nasaq-home-recent-hidden") === "1");
+    } catch {
+      /* private mode: the section just stays open */
+    }
+  }, []);
+  const toggleRecent = () =>
+    setRecentHidden((hidden) => {
+      try {
+        localStorage.setItem("nasaq-home-recent-hidden", hidden ? "0" : "1");
+      } catch {
+        /* ignore */
+      }
+      return !hidden;
+    });
   /**
    * «صفحة فارغة» entry.
    *
@@ -208,9 +225,22 @@ export function HomePage() {
 
         {/* أحدث المشاريع */}
         <section className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6">
-          <h2 className="text-[18px] font-bold text-ink ">أحدث المشاريع</h2>
-          <p className="mt-1 text-[13px] text-muted ">المشاريع تُحفظ محليًا في متصفحك، مع اتصال عند الحاجة للترخيص أو الذكاء الاصطناعي.</p>
-          {projectsLoading ? (
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[18px] font-bold text-ink ">أحدث المشاريع</h2>
+            <button
+              type="button"
+              onClick={toggleRecent}
+              aria-expanded={!recentHidden}
+              className="inline-flex h-8 items-center gap-1 rounded-full border border-line px-3 text-[12px] font-bold text-muted hover:text-ink"
+            >
+              {recentHidden ? "إظهار" : "إخفاء"}
+              <ChevronDown className={`size-3.5 transition-transform ${recentHidden ? "" : "rotate-180"}`} aria-hidden />
+            </button>
+          </div>
+          {!recentHidden && (
+            <p className="mt-1 text-[13px] text-muted ">المشاريع تُحفظ محليًا في متصفحك، مع اتصال عند الحاجة للترخيص أو الذكاء الاصطناعي.</p>
+          )}
+          {recentHidden ? null : projectsLoading ? (
             <div className="mt-6 grid gap-4 sm:grid-cols-3">
               {[0, 1, 2].map((i) => <div key={i} className="h-[120px] animate-pulse rounded-[12px] border border-line bg-surface-2 " />)}
             </div>

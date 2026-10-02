@@ -8,5 +8,6 @@ import { EditorApp } from "@/components/editor/EditorApp";
  */
 export const Route = createFileRoute("/editor")({
   ssr: false,
+  head: () => ({ meta: [{ title: "المحرر | نَسَق" }] }),
   component: EditorApp,
 });

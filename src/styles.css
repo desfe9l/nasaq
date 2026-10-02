@@ -1196,9 +1196,9 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 
 .selection-frame {
   --handle-size: calc(6px / var(--editor-zoom, 1));
-  --handle-hit-size: calc(18px / var(--editor-zoom, 1));
+  --handle-hit-size: calc(14px / var(--editor-zoom, 1));
   --handle-inset: calc(var(--handle-size) / 2);
-  --rotate-hit-size: calc(20px / var(--editor-zoom, 1));
+  --rotate-hit-size: calc(16px / var(--editor-zoom, 1));
   --rotate-gap: calc(22px / var(--editor-zoom, 1));
   /*
    * Tight bounding box (borderScaleFactor: 1): the frame mirrors the element's
@@ -2892,9 +2892,9 @@ summary,
    zoom; the separate rotation targets clear the resize corners completely. */
 @media (any-pointer: coarse) {
   .selection-frame {
-    --handle-hit-size: calc(44px / var(--editor-zoom, 1));
-    --rotate-hit-size: calc(44px / var(--editor-zoom, 1));
-    --rotate-gap: calc(48px / var(--editor-zoom, 1));
+    --handle-hit-size: calc(30px / var(--editor-zoom, 1));
+    --rotate-hit-size: calc(32px / var(--editor-zoom, 1));
+    --rotate-gap: calc(36px / var(--editor-zoom, 1));
   }
 }
 
