@@ -123,10 +123,10 @@ export const DEFAULT_SITE_IMAGES: SiteImages = {
   mark: "",
 };
 
-/** Largest accepted upload per slot, in bytes (before re-encoding). */
-export const MAX_SITE_IMAGE_BYTES = 8 * 1024 * 1024;
-/** Longest edge the browser re-encodes an upload to, in pixels. */
-export const SITE_IMAGE_MAX_EDGE = 1800;
+/** No per-slot upload ceiling. */
+export const MAX_SITE_IMAGE_BYTES = Number.POSITIVE_INFINITY;
+/** Uploads keep their original pixel size. */
+export const SITE_IMAGE_MAX_EDGE = Number.POSITIVE_INFINITY;
 
 export interface PublicSiteSettings {
   commercial: CommercialSettings;

@@ -2,7 +2,7 @@
  * PSD intake checks. Names from the file are display text, never paths.
  */
 
-export const PSD_MAX_BYTES = 80 * 1024 * 1024;
+export const PSD_MAX_BYTES = Number.POSITIVE_INFINITY;
 
 const MAGIC = [0x38, 0x42, 0x50, 0x53]; // "8BPS"
 
@@ -32,7 +32,7 @@ export function assertPsdBytes(bytes: Uint8Array): void {
     throw new Error("الملف ليس PSD أو PSB صالحًا.");
   }
   if (bytes.byteLength > PSD_MAX_BYTES) {
-    throw new Error("حجم الملف يتجاوز الحد المسموح (80 ميغابايت).");
+    throw new Error("حجم الملف يتجاوز الحد المسموح.");
   }
 }
 

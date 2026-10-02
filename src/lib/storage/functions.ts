@@ -329,8 +329,6 @@ export const deleteStoredAsset = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-const CATALOG_MAX_CHARS = 1_500_000;
-
 /** The signed-in account's library metadata. Empty when nothing has been synced. */
 export const getLibraryCatalog = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
@@ -355,9 +353,6 @@ export const saveLibraryCatalog = createServerFn({ method: "POST" })
   .validator((input: unknown): { payload: LibraryCatalog } => {
     const payload = (input as { payload?: unknown } | null)?.payload;
     if (!payload || typeof payload !== "object") throw new Error("بيانات المكتبة غير صالحة");
-    if (JSON.stringify(payload).length > CATALOG_MAX_CHARS) {
-      throw new Error("بيانات المكتبة أكبر من الحد المسموح");
-    }
     return { payload: normalizeCatalog(payload) };
   })
   .handler(async ({ context, data }): Promise<{ ok: true } | { ok: false; reason: "rejected" }> => {

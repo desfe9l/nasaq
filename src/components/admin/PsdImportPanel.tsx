@@ -315,7 +315,7 @@ export function PsdImportPanel() {
       >
         <FileUp className="mb-2 size-7 text-brand" />
         <p className="text-[14px] font-extrabold">أسقط ملف PSD هنا</p>
-        <p className="mt-1 text-[12px] font-semibold text-muted">أو اختره من جهازك. الحد 80 ميغابايت. الخدمة للمالك فقط.</p>
+        <p className="mt-1 text-[12px] font-semibold text-muted">أو اختره من جهازك. الخدمة للمالك فقط.</p>
         <button type="button" className={cn(ghost, "mt-4")} onClick={() => inputRef.current?.click()}>
           اختيار ملف
         </button>
