@@ -83,10 +83,10 @@ function syncThemeColor(appearance: AppearanceMode): void {
   const meta = document?.querySelector?.('meta[name="theme-color"]');
   const color =
     appearance === "dark"
-      ? "#0f141c"
+      ? "#0b1220"
       : appearance === "dim"
         ? "#20262c"
-        : "#006c35";
+        : "#f4f0e8";
   if (meta) meta.setAttribute("content", color);
 }
 

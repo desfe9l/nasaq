@@ -81,7 +81,7 @@ test("one preference drives the three live appearance modes, legacy migration an
     writeStoredTheme("dark");
     assert.equal(classes.has("dark"), true);
     assert.equal(classes.has("dim"), false);
-    assert.equal(meta.content, "#0f141c", "browser chrome follows the dark palette");
+    assert.equal(meta.content, "#0b1220", "browser chrome follows the dark palette");
 
     const storage = new Event("storage");
     Object.defineProperty(storage, "key", { value: "nasaq-theme" });
@@ -89,7 +89,7 @@ test("one preference drives the three live appearance modes, legacy migration an
     events.dispatchEvent(storage);
     assert.equal(classes.has("dark"), false, "other tabs synchronize");
     assert.equal(classes.has("dim"), false);
-    assert.equal(meta.content, "#006c35", "browser chrome follows the light palette");
+    assert.equal(meta.content, "#f4f0e8", "browser chrome follows the light palette");
 
     blocked = true;
     writeStoredTheme("dim");
