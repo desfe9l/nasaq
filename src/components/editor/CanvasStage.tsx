@@ -472,6 +472,57 @@ export function CanvasStage({
     [pages, previewAll, activePageId],
   );
 
+  const startErase = (e: React.PointerEvent, page: Page) => {
+    if (isPalmTouch(e) || e.button !== 0 || input.current!.busy) return;
+    if (page.locked || page.hidden) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onCanvasTap?.();
+    setLayerPicker(null);
+    const state = useEditor.getState();
+    if (state.activePageId !== page.id) state.setActivePage(page.id);
+    const pageEl = pageRefs.current[page.id];
+    if (!pageEl) return;
+    const size = pageSize(page);
+    const toMm = (event: { clientX: number; clientY: number }) =>
+      pagePoint(pageEl.getBoundingClientRect(), size, event.clientX, event.clientY);
+    const erased = new Set<string>();
+    const collect = (event: { clientX: number; clientY: number }) => {
+      const point = toMm(event);
+      const current = useEditor.getState();
+      const group =
+        current.activePageId === page.id && current.enteredGroupId
+          ? findElement(page.elements, current.enteredGroupId)?.el
+          : null;
+      const candidates = group?.children ?? page.elements;
+      const offset = group ? { x: group.x, y: group.y } : { x: 0, y: 0 };
+      const radius = eraseSizeRef.current / 2;
+      for (const element of candidates) {
+        const absolute =
+          offset.x || offset.y
+            ? { ...element, x: element.x + offset.x, y: element.y + offset.y }
+            : element;
+        if (
+          !element.hidden &&
+          !element.locked &&
+          brushHitsElement(absolute, point.x, point.y, radius)
+        ) {
+          erased.add(element.id);
+        }
+      }
+    };
+    collect(e);
+    input.current!.claim(e, {
+      yieldable: e.pointerType === "touch",
+      move: collect,
+      end: (event) => {
+        collect(event);
+        if (erased.size) useEditor.getState().deleteElementsById([...erased]);
+      },
+      cancel: () => {},
+    });
+  };
+
   const startOp = (
     e: React.PointerEvent,
     page: Page,
@@ -587,52 +638,6 @@ export function CanvasStage({
       const fresh = useEditor.getState();
       if (e.shiftKey) toggleSelect(el.id);
       else if (!fresh.selectedIds.includes(el.id)) select(el.id);
-    };
-
-    const startErase = (e: React.PointerEvent, page: Page) => {
-      if (isPalmTouch(e) || e.button !== 0 || input.current!.busy) return;
-      if (page.locked || page.hidden) return;
-      e.preventDefault();
-      e.stopPropagation();
-      onCanvasTap?.();
-      setLayerPicker(null);
-      const state = useEditor.getState();
-      if (state.activePageId !== page.id) state.setActivePage(page.id);
-      const pageEl = pageRefs.current[page.id];
-      if (!pageEl) return;
-      const size = pageSize(page);
-      const toMm = (event: { clientX: number; clientY: number }) =>
-        pagePoint(pageEl.getBoundingClientRect(), size, event.clientX, event.clientY);
-      const erased = new Set<string>();
-      const collect = (event: { clientX: number; clientY: number }) => {
-        const point = toMm(event);
-        const current = useEditor.getState();
-        const group =
-          current.activePageId === page.id && current.enteredGroupId
-            ? findElement(page.elements, current.enteredGroupId)?.el
-            : null;
-        const candidates = group?.children ?? page.elements;
-        const offset = group ? { x: group.x, y: group.y } : { x: 0, y: 0 };
-        const radius = eraseSizeRef.current / 2;
-        for (const element of candidates) {
-          const absolute = offset.x || offset.y
-            ? { ...element, x: element.x + offset.x, y: element.y + offset.y }
-            : element;
-          if (!element.hidden && !element.locked && brushHitsElement(absolute, point.x, point.y, radius)) {
-            erased.add(element.id);
-          }
-        }
-      };
-      collect(e);
-      input.current!.claim(e, {
-        yieldable: e.pointerType === "touch",
-        move: collect,
-        end: (event) => {
-          collect(event);
-          if (erased.size) useEditor.getState().deleteElementsById([...erased]);
-        },
-        cancel: () => {},
-      });
     };
 
     const beginGesture = () => {

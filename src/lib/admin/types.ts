@@ -82,8 +82,10 @@ export interface SiteImageGalleryItem {
 }
 
 /** Label, description and the bundled fallback for every image slot. */
+export type NamedSiteImageSlot = Exclude<keyof SiteImages, "gallery">;
+
 export const SITE_IMAGE_SLOTS: ReadonlyArray<{
-  id: keyof SiteImages;
+  id: NamedSiteImageSlot;
   label: string;
   hint: string;
   /** Bundled artwork used when the owner has not uploaded a replacement. */

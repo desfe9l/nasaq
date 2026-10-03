@@ -47,7 +47,10 @@ const PREVIEWS = [
 }>;
 
 /** Owner upload only. An empty slot stays empty — bundled captures never return. */
-function slotImage(images: SiteImages | undefined, slot: keyof SiteImages): string {
+function slotImage(
+  images: SiteImages | undefined,
+  slot: Exclude<keyof SiteImages, "gallery">,
+): string {
   return images?.[slot]?.trim() ?? "";
 }
 
