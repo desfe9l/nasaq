@@ -1288,6 +1288,11 @@ function Studio({
       new CustomEvent("nasaq:eraser-size", { detail: eraserSize }),
     );
   }, [eraserSize]);
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("nasaq:marquee-shape", { detail: marqueeShape }),
+    );
+  }, [marqueeShape]);
 
   /**
    * Restore a collapsed desktop panel (optionally straight onto a tab) in one
@@ -2179,9 +2184,6 @@ function Studio({
               onClick={() => {
                 setMarqueeShape("rect");
                 armTool(null);
-                window.dispatchEvent(
-                  new CustomEvent("nasaq:marquee-shape", { detail: "rect" }),
-                );
               }}
             />
             <IconButton
@@ -2192,11 +2194,6 @@ function Studio({
               onClick={() => {
                 setMarqueeShape("ellipse");
                 armTool(null);
-                window.dispatchEvent(
-                  new CustomEvent("nasaq:marquee-shape", {
-                    detail: "ellipse",
-                  }),
-                );
               }}
             />
             <IconButton

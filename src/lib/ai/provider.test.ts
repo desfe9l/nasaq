@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { generateReportDraft } from "./provider.server.ts";
+import { analyzeImage, generateReportDraft } from "./provider.server.ts";
 
 const input = {
   brief: "نتائج الربع الثاني والتحديات",
@@ -51,6 +51,44 @@ test("xAI provider sends the real server-side request and normalizes JSON", asyn
     const draft = await generateReportDraft(input);
     assert.equal(authorization, "Bearer test-server-key");
     assert.equal(draft.sections[0]?.heading, "النتائج");
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousKey === undefined) delete process.env.XAI_API_KEY;
+    else process.env.XAI_API_KEY = previousKey;
+  }
+});
+
+test("image analysis sends the inline image to the configured vision provider", async () => {
+  const previousKey = process.env.XAI_API_KEY;
+  const previousFetch = globalThis.fetch;
+  process.env.XAI_API_KEY = "test-server-key";
+  let requestBody = "";
+  globalThis.fetch = async (_input, init) => {
+    requestBody = String(init?.body || "");
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                description: "مشهد مكتبي",
+                recognizedText: "قرار",
+                objects: ["طاولة"],
+              }),
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    );
+  };
+
+  try {
+    const imageData = `data:image/png;base64,${"A".repeat(40)}`;
+    const result = await analyzeImage({ imageData, language: "ar" });
+    assert.equal(result.recognizedText, "قرار");
+    assert.match(requestBody, /image_url/);
+    assert.match(requestBody, new RegExp(imageData));
   } finally {
     globalThis.fetch = previousFetch;
     if (previousKey === undefined) delete process.env.XAI_API_KEY;

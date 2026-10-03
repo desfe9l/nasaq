@@ -97,6 +97,7 @@ import {
   subscribeRecentColors,
 } from "@/lib/editor/recent-colors";
 import { ArabicTextTools } from "./ArabicTextTools";
+import { ImageAiTools } from "./ImageAiTools";
 import { ScrubField, ScrubInput } from "./ui/ScrubInput";
 
 const TEXT_TYPES = ["text", "box", "stat", "stamp", "table", "progress"];
@@ -1705,6 +1706,7 @@ export function PropertiesPanel({
 
               {["image", "logo"].includes(el.type) && (
                 <>
+                  {page && <ImageAiTools el={el} pageId={page.id} />}
                   {/* «ملاءمة الصفحة»: one press takes the picture to the page's
                       own size — full bleed, or the largest size that stays
                       inside the sheet with the picture's proportions. */}

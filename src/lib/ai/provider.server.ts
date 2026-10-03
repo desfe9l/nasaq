@@ -4,6 +4,12 @@ import {
   type ReportDraft,
   type ReportDraftInput,
 } from "./contract.ts";
+import {
+  normalizeImageAnalysis,
+  normalizeImageAnalysisInput,
+  type ImageAnalysis,
+  type ImageAnalysisInput,
+} from "./image-contract.ts";
 
 /** Provider boundary: swap this adapter without changing editor code. */
 export async function generateReportDraft(
@@ -67,6 +73,7 @@ export async function generateReportDraft(
       if (response.status === 429) throw new Error("provider_rate");
       throw new Error(`provider_${response.status}`);
     }
+
     const payload = (await response.json()) as {
       choices?: Array<{ message?: { content?: unknown } }>;
     };
@@ -86,6 +93,63 @@ export async function generateReportDraft(
               .trim()
           : "";
     return normalizeDraft(parseProviderJson(text), input.maxSections);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export async function analyzeImage(
+  rawInput: ImageAnalysisInput,
+): Promise<ImageAnalysis> {
+  const apiKey = process.env.XAI_API_KEY?.trim();
+  if (!apiKey) throw new Error("not_configured");
+  const input = normalizeImageAnalysisInput(rawInput);
+  if (!input) throw new Error("invalid");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25_000);
+  try {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        authorization: ["Bearer", apiKey].join(" "),
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.NASAQ_AI_MODEL?.trim() || "grok-3-mini",
+        temperature: 0,
+        max_tokens: 1_600,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content:
+              "Inspect the supplied image. Return JSON with description, recognizedText, and objects. Transcribe only legible text exactly and preserve line breaks. Describe visible objects and people only by non-sensitive visual attributes; do not identify people or infer sensitive traits. Do not invent unreadable text or objects. Keep recognizedText empty if no text is legible. Write description and object labels in " +
+              (input.language === "ar" ? "Arabic." : "English."),
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Analyze this image for editable OCR text and visible objects." },
+              { type: "image_url", image_url: { url: input.imageData } },
+            ],
+          },
+        ],
+      }),
+    });
+    if (!response.ok) {
+      if (response.status === 429) throw new Error("provider_rate");
+      throw new Error("provider_error");
+    }
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: unknown } }>;
+    };
+    const content = payload.choices?.[0]?.message?.content;
+    if (typeof content !== "string") throw new Error("provider_error");
+    const result = normalizeImageAnalysis(parseProviderJson(content));
+    if (!result.description && !result.recognizedText && !result.objects.length)
+      throw new Error("provider_error");
+    return result;
   } finally {
     clearTimeout(timeout);
   }
