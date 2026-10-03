@@ -1,4 +1,8 @@
-import { shortcutHint, shortcutKey } from "@/lib/editor/keyboard";
+import {
+  isEditableTarget,
+  shortcutHint,
+  shortcutKey,
+} from "@/lib/editor/keyboard";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { stepZoom } from "@/lib/editor/document-space";
 import { canvasViewport } from "@/lib/editor/canvas-space";
@@ -220,27 +224,26 @@ export function WorkspaceOverlays({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const typing =
-        !!target &&
-        (target.isContentEditable ||
-          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName));
-      if (typing) return;
+      if (event.key === "Escape" && (commandOpen || menu)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (commandOpen) setCommandOpen(false);
+        else if (menu) onCloseMenu();
+        return;
+      }
+      if (isEditableTarget(event.target)) return;
       const meta = event.metaKey || event.ctrlKey;
       if (meta && shortcutKey(event) === "k") {
         event.preventDefault();
-        setCommandOpen(true);
+        event.stopImmediatePropagation();
+        setCommandOpen((open) => !open);
         setQuery("");
         setActiveIndex(0);
       }
-      if (event.key === "Escape") {
-        setCommandOpen(false);
-        onCloseMenu();
-      }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onCloseMenu]);
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [commandOpen, menu, onCloseMenu]);
 
   const run = (id: string) => {
     switch (id) {

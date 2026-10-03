@@ -64,7 +64,14 @@ import {
   parseHexColor,
   RasterStroke,
 } from "@/lib/editor/raster-session";
-import { cropSceneTransform } from "@/lib/editor/image-crop";
+import { cropLocalPoint, cropSceneTransform } from "@/lib/editor/image-crop";
+import {
+  CANVAS_LONG_PRESS_MS,
+  isEditableTarget,
+  shouldArmCanvasLongPress,
+  startLongPressTimer,
+  type LongPressHandle,
+} from "@/lib/editor/keyboard";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
@@ -89,7 +96,6 @@ import {
 
 import {
   CanvasPointerSession,
-  LONG_PRESS_MS,
   POINTER_SLOP,
 } from "@/lib/editor/canvas-pointer";
 
@@ -350,12 +356,14 @@ export function CanvasStage({
       return;
     }
     const node = document.createElement("div");
-    node.className = "raster-cursor";
+    node.className = `raster-cursor raster-cursor-${tool === "eraser" ? "eraser" : "brush"}`;
     node.setAttribute("aria-hidden", "true");
     node.style.display = "none";
     document.body.appendChild(node);
     rasterCursor.current = {
       show: (x, y, size) => {
+        const mode = toolState().tool === "eraser" ? "eraser" : "brush";
+        node.className = `raster-cursor raster-cursor-${mode}`;
         node.style.display = "block";
         node.style.width = `${size}px`;
         node.style.height = `${size}px`;
@@ -369,38 +377,66 @@ export function CanvasStage({
       node.remove();
       rasterCursor.current = null;
     };
-  }, [rasterActive]);
+  }, [rasterActive, tool]);
 
-  /** Escape drops the tool, then the region, then the picker — one layer each. */
+  /**
+   * Single-owner Escape hierarchy for canvas interactions:
+   *  1. Active pointer gesture / live raster stroke / marquee → cancel immediately
+   *  2. Open layer-picker popup → dismiss
+   *  3. Finished selection region → clear region (keeping tool armed)
+   *  4. Armed non-default tool → reset to plain pointer (`select`)
+   * Each press consumes at most one step and stops propagation so EditorApp
+   * never cascades into deselecting artwork on the same keydown event.
+   */
   useEffect(() => {
     const disarm = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      const target = e.target as HTMLElement | null;
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (isEditableTarget(e.target)) return;
       if (
-        target &&
-        (target.isContentEditable ||
-          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+        typeof document !== "undefined" &&
+        document.querySelector('[role="dialog"], [role="menu"], .anchor-menu')
       )
         return;
+      const interaction = useInteraction.getState();
+      if (
+        input.current?.busy ||
+        strokeRef.current !== null ||
+        interaction.active ||
+        interaction.marquee
+      ) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        input.current?.reset();
+        strokeRef.current?.cancel();
+        strokeRef.current = null;
+        useTools.getState().setPainting(false);
+        interaction.endInteraction();
+        interaction.setMarquee(null);
+        document.body.classList.remove("is-gesturing");
+        return;
+      }
       if (layerPicker) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         setLayerPicker(null);
         return;
       }
+      if (interaction.crop) return;
       const live = toolState();
-      /*
-       * Escape steps out one layer at a time: first the finished region (the
-       * armed shape stays for the next draw), then the whole tool — a region
-       * mode of the select tool, or brush/eraser/text/shape.
-       */
       if (live.region) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         useTools.getState().setRegion(null);
         return;
       }
-      if (live.tool !== "select" || live.regionMode !== "off")
+      if (live.tool !== "select" || live.regionMode !== "off") {
+        e.preventDefault();
+        e.stopImmediatePropagation();
         useTools.getState().resetTool();
+      }
     };
-    window.addEventListener("keydown", disarm);
-    return () => window.removeEventListener("keydown", disarm);
+    window.addEventListener("keydown", disarm, true);
+    return () => window.removeEventListener("keydown", disarm, true);
   }, [layerPicker]);
 
   /** A stroke must never outlive its component, a page switch or a tool swap. */
@@ -568,23 +604,42 @@ export function CanvasStage({
     page: Page,
     point: { x: number; y: number },
     preferSelected: boolean,
+    padMm = 0,
   ) => {
     const state = useEditor.getState();
-    const group =
-      state.activePageId === page.id && state.enteredGroupId
-        ? findElement(page.elements, state.enteredGroupId)?.el
-        : null;
+    const enteredGroupId =
+      state.activePageId === page.id ? state.enteredGroupId : null;
+    const group = enteredGroupId
+      ? findElement(page.elements, enteredGroupId)?.el
+      : null;
     const candidates = (group?.children ?? page.elements).filter(
       (el) => !el.hidden && !el.locked && isRasterElement(el),
     );
-    const offset = group ? { x: group.x, y: group.y } : { x: 0, y: 0 };
-    const hits = candidates.filter((el) =>
-      pointInRotatedBox(
-        { ...el, x: el.x + offset.x, y: el.y + offset.y },
+    const pad = Math.max(0, padMm);
+    const hits = candidates.filter((el) => {
+      const scene = cropSceneTransform(page.elements, el.id, enteredGroupId);
+      if (scene) {
+        const local = cropLocalPoint(scene, point);
+        return (
+          local.x >= -pad &&
+          local.x <= el.w + pad &&
+          local.y >= -pad &&
+          local.y <= el.h + pad
+        );
+      }
+      const offset = group ? { x: group.x, y: group.y } : { x: 0, y: 0 };
+      return pointInRotatedBox(
+        {
+          ...el,
+          x: el.x + offset.x - pad,
+          y: el.y + offset.y - pad,
+          w: el.w + pad * 2,
+          h: el.h + pad * 2,
+        },
         point.x,
         point.y,
-      ),
-    );
+      );
+    });
     if (!hits.length) return null;
     hits.sort((a, b) => b.z - a.z);
     if (preferSelected) {
@@ -600,38 +655,90 @@ export function CanvasStage({
     const pageEl = pageRefs.current[page.id];
     if (!pageEl) return;
     const size = pageSize(page);
-    const rect = pageEl.getBoundingClientRect();
-    const toMm = (event: { clientX: number; clientY: number }) =>
-      pagePoint(rect, size, event.clientX, event.clientY);
+    let cachedRect = pageEl.getBoundingClientRect();
+    const toMm = (
+      event: { clientX: number; clientY: number },
+      rect = cachedRect,
+    ) => pagePoint(rect, size, event.clientX, event.clientY);
     const active = useTools.getState();
     const strokeTool = toolState().tool === "eraser" ? "eraser" : "brush";
     const settings =
       strokeTool === "eraser" ? active.eraser : active.brush;
-    const point = toMm(e);
-    const target = rasterTargetAt(page, point, strokeTool === "eraser");
-    if (strokeTool === "eraser" && !target) {
-      toast.message("أداة المسح تعمل على الصور والطبقات النقطية — لا يوجد بكسل هنا");
-      return;
-    }
-    // Element-local → page mm (rotation, flips and ancestors included).
-    const transform = target
-      ? (cropSceneTransform(page.elements, target.id, state.enteredGroupId) ?? null)
-      : { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
-    if (!transform) return;
-    const pxPerMm = rect.width > 0 ? rect.width / size.w : mmToPx(1);
-    /*
-     * A decoded `<img>` is the common case and it is synchronous, so the first
-     * dab lands on the very first pointerdown. Anything that still needs a
-     * decode claims the pointer first and queues samples — the stroke is drawn
-     * as a continuous path when it arrives, never as a dotted line.
-     */
-    const node = target
-      ? pageEl.querySelector<HTMLImageElement>(
-          `.canvas-el[data-el-id="${CSS.escape(target.id)}"] img`,
-        )
-      : null;
-    const queued: { point: { x: number; y: number }; pressure?: number }[] = [];
-    const create = (image: CanvasImageSource | null, source: { w: number; h: number }) => {
+    const hitPadMm = strokeTool === "eraser" ? settings.sizeMm / 2 : 0;
+    const point = toMm(e, cachedRect);
+    let target = rasterTargetAt(page, point, true, hitPadMm);
+
+    const resolveTransform = (candidate: CanvasEl | null) =>
+      candidate
+        ? (cropSceneTransform(
+            page.elements,
+            candidate.id,
+            useEditor.getState().enteredGroupId,
+          ) ?? null)
+        : { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+
+    let transform = resolveTransform(target);
+    if (target && !transform) return;
+
+    const samplePressure = (ev: { pointerType?: string; pressure?: number }) =>
+      ev.pointerType === "pen" && typeof ev.pressure === "number" && ev.pressure > 0
+        ? ev.pressure
+        : ev.pressure && ev.pressure > 0
+          ? ev.pressure
+          : undefined;
+
+    let lastClient = { x: e.clientX, y: e.clientY };
+    let lastPressure = samplePressure(e);
+    let cancelled = false;
+    let loadingTarget = false;
+    let rafId = 0;
+
+    const queued: { clientX: number; clientY: number; pressure?: number }[] = [
+      { clientX: e.clientX, clientY: e.clientY, pressure: lastPressure },
+    ];
+    let node: HTMLImageElement | null = null;
+
+    const lookupNode = (candidate: CanvasEl | null) =>
+      candidate
+        ? pageEl.querySelector<HTMLImageElement>(
+            `.canvas-el[data-el-id="${CSS.escape(candidate.id)}"] img`,
+          )
+        : null;
+
+    node = lookupNode(target);
+    rasterCursor.current?.hide();
+    document.body.classList.add("is-gesturing");
+
+    const flushQueued = () => {
+      rafId = 0;
+      if (cancelled) return;
+      const stroke = strokeRef.current;
+      if (!stroke || !queued.length) return;
+      cachedRect = pageEl.getBoundingClientRect();
+      const livePxPerMm =
+        cachedRect.width > 0 ? cachedRect.width / size.w : mmToPx(1);
+      stroke.updatePxPerMm(livePxPerMm);
+      for (const sample of queued) {
+        const pt = toMm(sample, cachedRect);
+        stroke.paint(pt, sample.pressure, true);
+      }
+      queued.length = 0;
+      stroke.flush();
+    };
+
+    const scheduleFlush = () => {
+      if (rafId !== 0 || cancelled || !strokeRef.current) return;
+      rafId = requestAnimationFrame(flushQueued);
+    };
+
+    const create = (
+      image: CanvasImageSource | null,
+      source: { w: number; h: number },
+    ) => {
+      if (cancelled || !transform) return;
+      cachedRect = pageEl.getBoundingClientRect();
+      const pxPerMm =
+        cachedRect.width > 0 ? cachedRect.width / size.w : mmToPx(1);
       const stroke = new RasterStroke({
         pageId: page.id,
         pageNode: pageEl,
@@ -645,32 +752,98 @@ export function CanvasStage({
           strokeTool === "brush"
             ? parseHexColor(active.brush.color)
             : parseHexColor("#000000"),
-        target:
-          target && image ? { el: target, image, source } : null,
+        target: target && image ? { el: target, image, source } : null,
         page: { w: size.w, h: size.h },
         transform,
       });
       strokeRef.current = stroke;
       useTools.getState().setPainting(true);
-      stroke.moveCursor(e.clientX, e.clientY);
-      for (const sample of queued) stroke.paint(sample.point, sample.pressure);
-      queued.length = 0;
+      stroke.moveCursor(lastClient.x, lastClient.y);
+      flushQueued();
     };
-    const finish = (event?: PointerEvent) => {
+
+    const beginForTarget = () => {
+      if (cancelled) return;
+      if (strokeTool === "eraser" && !target) return;
+      node = lookupNode(target);
+      const loadedSync =
+        target && node && node.complete && node.naturalWidth
+          ? {
+              image: node as CanvasImageSource,
+              source: {
+                w: target.style.crop?.sourceW || node.naturalWidth,
+                h: target.style.crop?.sourceH || node.naturalHeight,
+              },
+            }
+          : null;
+      if (target && !loadedSync) {
+        loadingTarget = true;
+        void loadRasterSource(target, node).then((loaded) => {
+          loadingTarget = false;
+          if (!cancelled && loaded) create(loaded.image, loaded.source);
+        });
+        return;
+      }
+      create(
+        loadedSync?.image ?? null,
+        loadedSync?.source ?? { w: size.w, h: size.h },
+      );
+    };
+
+    const cancelStroke = () => {
+      cancelled = true;
+      if (rafId !== 0) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      queued.length = 0;
       const stroke = strokeRef.current;
       strokeRef.current = null;
       useTools.getState().setPainting(false);
-      if (!stroke) return;
+      document.body.classList.remove("is-gesturing");
+      stroke?.cancel();
+    };
+
+    const finish = (event?: PointerEvent) => {
+      if (cancelled) return;
+      if (rafId !== 0) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      document.body.classList.remove("is-gesturing");
+      const stroke = strokeRef.current;
+      if (!stroke) {
+        useTools.getState().setPainting(false);
+        if (strokeTool === "eraser" && !target) {
+          toast.message(
+            "أداة المسح تعمل على الصور والطبقات النقطية — لا يوجد بكسل هنا",
+          );
+        }
+        return;
+      }
+      if (event) {
+        const movedFromLast =
+          Math.hypot(
+            event.clientX - lastClient.x,
+            event.clientY - lastClient.y,
+          ) > 0.5;
+        if (movedFromLast || !stroke.painted) {
+          const endPressure = samplePressure(event) ?? lastPressure;
+          queued.push({
+            clientX: event.clientX,
+            clientY: event.clientY,
+            pressure: endPressure,
+          });
+        }
+      }
+      flushQueued();
+      strokeRef.current = null;
+      useTools.getState().setPainting(false);
       stroke.hideCursor();
-      // The final position is included: some devices coalesce the last move
-      // into pointerup, and a stroke must end where the finger actually lifted.
-      if (event) stroke.paint(toMm(event), event.pressure || undefined);
       let patch: ReturnType<RasterStroke["commit"]> = null;
       try {
         patch = stroke.commit();
       } catch {
-        // Tainted canvas (a remote image without CORS): refuse loudly, leave
-        // the document untouched. Nothing was written, so nothing to undo.
         toast.error("لا يمكن تعديل هذه الصورة — المصدر خارجي محمي");
         return;
       }
@@ -699,50 +872,59 @@ export function CanvasStage({
        * pixels and nothing else, so a stroke cannot move an element, break its
        * transform, or disturb its neighbours.
        */
+      if (node) node.src = patch.src;
       const elementPatch: Partial<CanvasEl> = { src: patch.src };
-      // A bitmap that had to be resampled carries its crop window along; an
-      // untouched crop stays exactly as the author left it.
-      if (patch.crop && target?.style.crop) elementPatch.style = { crop: patch.crop };
+      if (patch.crop && target?.style.crop)
+        elementPatch.style = { crop: patch.crop };
       const elementId = stroke.elementId ?? target?.id;
       if (elementId) store.patchElementOnPage(page.id, elementId, elementPatch);
     };
-    const begin = () => {
-      const loadedSync =
-        target && node && node.complete && node.naturalWidth
-          ? {
-              image: node as CanvasImageSource,
-              source: {
-                w: target.style.crop?.sourceW || node.naturalWidth,
-                h: target.style.crop?.sourceH || node.naturalHeight,
-              },
-            }
-          : null;
-      if (target && !loadedSync) {
-        void loadRasterSource(target, node).then((loaded) => {
-          if (loaded) create(loaded.image, loaded.source);
-        });
-        return;
-      }
-      create(loadedSync?.image ?? null, loadedSync?.source ?? { w: size.w, h: size.h });
-    };
+
     input.current!.claim(e, {
       yieldable: e.pointerType === "touch",
       move: (ev) => {
+        if (cancelled) return;
+        const coalesced =
+          typeof ev.getCoalescedEvents === "function"
+            ? ev.getCoalescedEvents()
+            : [];
+        const events = coalesced.length ? coalesced : [ev];
+        for (const item of events) {
+          const p = samplePressure(item) ?? lastPressure;
+          if (p !== undefined) lastPressure = p;
+          lastClient = { x: item.clientX, y: item.clientY };
+          queued.push({
+            clientX: item.clientX,
+            clientY: item.clientY,
+            pressure: p,
+          });
+        }
+        if (queued.length > 256) queued.splice(0, queued.length - 256);
+
         const stroke = strokeRef.current;
         if (!stroke) {
-          const mm = toMm(ev);
-          if (ev.pressure) queued.push({ point: mm, pressure: ev.pressure });
-          else queued.push({ point: mm });
-          if (queued.length > 64) queued.shift();
+          if (strokeTool === "eraser" && !target && !loadingTarget) {
+            cachedRect = pageEl.getBoundingClientRect();
+            const curPt = toMm(ev, cachedRect);
+            const swept = rasterTargetAt(page, curPt, true, hitPadMm);
+            if (swept) {
+              target = swept;
+              transform = resolveTransform(target);
+              if (transform) {
+                queued.splice(0, queued.length - 1);
+                beginForTarget();
+              }
+            }
+          }
           return;
         }
         stroke.moveCursor(ev.clientX, ev.clientY);
-        stroke.paint(toMm(ev), ev.pressure || undefined);
+        scheduleFlush();
       },
       end: (ev) => finish(ev),
-      cancel: () => finish(),
+      cancel: () => cancelStroke(),
     });
-    begin();
+    beginForTarget();
   };
 
   const startOp = (
@@ -848,9 +1030,8 @@ export function CanvasStage({
 
     const start = toMm(e);
     const slopMm = Math.max(
-      e.pointerType === "pen" ? 0.85 : 0.2,
-      ((e.pointerType === "pen" ? POINTER_SLOP * 2 : POINTER_SLOP) * size.w) /
-        Math.max(1, rect.width),
+      0.2,
+      (POINTER_SLOP * size.w) / Math.max(1, rect.width),
     );
     let maxDist = 0;
 
@@ -865,7 +1046,7 @@ export function CanvasStage({
       (e.pointerType === "touch" || e.pointerType === "pen");
     let decided = !defer;
     let heldLong = false;
-    let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+    let longPressHandle: LongPressHandle | null = null;
     let longPressFired = false;
     /** Last informative pointer angle for a rotation (see the dead zone in
      * the rotate branch of `paintFrame`). */
@@ -933,21 +1114,36 @@ export function CanvasStage({
 
     if (decided) beginGesture();
 
-    // One long-press timer, only for element bodies. Handles never open menus.
-    if (defer) {
-      longPressTimer = setTimeout(() => {
-        input.current!.lock(e.pointerId);
-        longPressFired = true;
-        heldLong = true;
-        decided = true;
-        applyPressSelection();
-        useEditor.getState().openContextMenu({
-          x: e.clientX,
-          y: e.clientY,
-          targetId: el.id,
-          source: "canvas",
-        });
-      }, LONG_PRESS_MS);
+    // Centralized long-press timer, only for element bodies when plain pointer is active.
+    if (
+      defer &&
+      shouldArmCanvasLongPress({
+        pointerType: e.pointerType,
+        tool: liveTool.tool,
+        regionMode: liveTool.regionMode,
+        cropActive: Boolean(useInteraction.getState().crop),
+        spacePanning: spaceDown.current,
+      })
+    ) {
+      longPressHandle = startLongPressTimer({
+        startX: e.clientX,
+        startY: e.clientY,
+        delayMs: CANVAS_LONG_PRESS_MS,
+        slopPx: POINTER_SLOP,
+        onTrigger: () => {
+          input.current!.lock(e.pointerId);
+          longPressFired = true;
+          heldLong = true;
+          decided = true;
+          applyPressSelection();
+          useEditor.getState().openContextMenu({
+            x: e.clientX,
+            y: e.clientY,
+            targetId: el.id,
+            source: "canvas",
+          });
+        },
+      });
     }
 
     const others = page.elements.filter((x) => x.id !== el.id && !x.hidden);
@@ -1167,15 +1363,18 @@ export function CanvasStage({
 
     const move = (ev: PointerEvent) => {
       if (longPressFired) return;
+      longPressHandle?.move(ev.clientX, ev.clientY);
       if (!decided) {
         const cur = toMm(ev);
         const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
-        if (dist < slopMm) return;
+        const screenDist = Math.hypot(
+          ev.clientX - e.clientX,
+          ev.clientY - e.clientY,
+        );
+        if (dist < slopMm && screenDist < POINTER_SLOP) return;
         decided = true;
-        if (longPressTimer !== undefined) {
-          clearTimeout(longPressTimer);
-          longPressTimer = undefined;
-        }
+        longPressHandle?.cancel();
+        longPressHandle = null;
         input.current!.lock(e.pointerId);
         beginGesture();
         maxDist = dist;
@@ -1193,10 +1392,8 @@ export function CanvasStage({
     const detach = () => {
       // Capture belongs to the stage until native up/cancel, including promotion
       // from a pending element press to a two-finger gesture.
-      if (longPressTimer !== undefined) {
-        clearTimeout(longPressTimer);
-        longPressTimer = undefined;
-      }
+      longPressHandle?.cancel();
+      longPressHandle = null;
     };
 
     const up = (ev: PointerEvent) => {
@@ -1275,14 +1472,13 @@ export function CanvasStage({
     };
 
     const cancel = () => {
-      const hadGesture = opRef.current !== null;
       detach();
+      framePending = false;
+      lastMoveEv = null;
       opRef.current = null;
       document.body.classList.remove("is-gesturing");
-      const committed = hadGesture ? finals : [];
       finals = [];
       interaction.endInteraction();
-      if (committed.length) applyElements(page.id, committed);
     };
 
     input.current!.claim(e, { move, end: up, cancel, yieldable: defer });
@@ -1439,13 +1635,13 @@ export function CanvasStage({
      * One-finger pan on blank canvas belongs to the PLAIN POINTER only. A
      * region tool must draw on the first finger, and a raster tool must paint:
      * letting navigation steal those gestures is exactly what made them feel
-     * dead.
+     * dead. Finger scrolling works on blank canvas even when an element is
+     * selected; a stationary tap on blank canvas still deselects on release.
      */
     const pan =
       e.pointerType === "touch" &&
       selecting &&
-      gestureState.regionMode === "off" &&
-      !selectionForPage.length;
+      gestureState.regionMode === "off";
     const before = e.shiftKey ? [...selectionForPage] : [];
     const candidates = pickables(page, groupForPage).filter((item) =>
       toolAccepts(gestureTool, item.el),
@@ -1461,9 +1657,19 @@ export function CanvasStage({
      * pointer sweep does not write the store (and re-render the editor) on
      * every frame when the hit set has not actually changed. */
     let lastHitKey = "";
-    const timer =
-      !drawing && e.pointerType !== "mouse"
-        ? setTimeout(() => {
+    const holdHandle = shouldArmCanvasLongPress({
+      pointerType: e.pointerType,
+      tool: gestureTool,
+      regionMode: gestureState.regionMode,
+      cropActive: Boolean(useInteraction.getState().crop),
+      spacePanning: spaceDown.current,
+    })
+      ? startLongPressTimer({
+          startX: e.clientX,
+          startY: e.clientY,
+          delayMs: CANVAS_LONG_PRESS_MS,
+          slopPx: POINTER_SLOP,
+          onTrigger: () => {
             held = true;
             input.current!.lock(e.pointerId);
             useEditor.getState().openContextMenu({
@@ -1472,23 +1678,25 @@ export function CanvasStage({
               targetId: null,
               source: "canvas",
             });
-          }, LONG_PRESS_MS)
-        : undefined;
+          },
+        })
+      : null;
     const finish = () => {
-      clearTimeout(timer);
+      holdHandle?.cancel();
       setMarquee(null);
     };
     input.current!.claim(e, {
       yieldable: e.pointerType === "touch",
       move: (ev) => {
         if (held) return;
+        holdHandle?.move(ev.clientX, ev.clientY);
         if (
           !moved &&
           Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) <
             POINTER_SLOP
         )
           return;
-        clearTimeout(timer);
+        holdHandle?.cancel();
         moved = true;
         // A blank one-finger pan may promote to a two-finger navigation;
         // drawing/marquee selection, like an element drag, owns its pointer.
@@ -1767,6 +1975,33 @@ export function CanvasStage({
       data-crosshair={crosshairTool ? "true" : "false"}
       style={{ "--editor-zoom": zoom } as React.CSSProperties}
       dir="ltr"
+      onPointerMove={(e) => {
+        if (!rasterActive || strokeRef.current || e.pointerType === "touch") {
+          rasterCursor.current?.hide();
+          return;
+        }
+        const page = pageAtPoint(e.clientX, e.clientY);
+        if (!page) {
+          rasterCursor.current?.hide();
+          return;
+        }
+        const pageNode = pageRefs.current[page.id];
+        const rect = pageNode?.getBoundingClientRect();
+        const size = pageSize(page);
+        const pxPerMm =
+          rect && rect.width > 0 ? rect.width / size.w : mmToPx(zoom);
+        const live = toolState();
+        const sizeMm =
+          live.tool === "eraser" ? live.eraser.sizeMm : live.brush.sizeMm;
+        rasterCursor.current?.show(
+          e.clientX,
+          e.clientY,
+          Math.max(2, sizeMm * pxPerMm),
+        );
+      }}
+      onPointerLeave={() => {
+        rasterCursor.current?.hide();
+      }}
       onLostPointerCapture={(e) => input.current!.end(e.nativeEvent, true)}
       onPointerDownCapture={(e) => {
         if (isPalmTouch(e)) {
@@ -2613,8 +2848,16 @@ function SelectionRegionLayer({ pageId }: { pageId: string }) {
     let moved = false;
     const move = (ev: PointerEvent) => {
       if (ev.pointerId !== pointerId) return;
-      const dx = rect.width > 0 ? ((ev.clientX - event.clientX) * size.w) / rect.width : 0;
-      const dy = rect.height > 0 ? ((ev.clientY - event.clientY) * size.h) / rect.height : 0;
+      const liveRect = pageNode.getBoundingClientRect();
+      const baseRect = liveRect.width > 0 ? liveRect : rect;
+      const dx =
+        baseRect.width > 0
+          ? ((ev.clientX - event.clientX) * size.w) / baseRect.width
+          : 0;
+      const dy =
+        baseRect.height > 0
+          ? ((ev.clientY - event.clientY) * size.h) / baseRect.height
+          : 0;
       if (!moved && Math.hypot(dx, dy) < 0.2) return;
       moved = true;
       const next = { ...origin };

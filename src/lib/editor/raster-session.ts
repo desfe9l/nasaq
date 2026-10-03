@@ -2,6 +2,7 @@ import { imageLayout, normalizeCrop, type ImageCrop } from "./image-crop";
 import { mmToPx } from "./render-units";
 import {
   brushRadiusPx,
+  mergeDirtyRect,
   stampDab,
   strokeSpacing,
   StrokeSmoother,
@@ -147,6 +148,8 @@ export class RasterStroke {
   private preview: HTMLCanvasElement | null = null;
   private previewHost: HTMLDivElement | null = null;
   private previewPxPerMm = mmToPx(1);
+  private hiddenTargetImg: HTMLElement | null = null;
+  private hiddenTargetPrevVisibility = "";
   private cursor: HTMLDivElement | null = null;
   private smoother: StrokeSmoother;
   private last: { x: number; y: number } | null = null;
@@ -156,6 +159,7 @@ export class RasterStroke {
   private pxPerMm: number;
   private target: RasterTarget | null;
   private touched = false;
+  private pendingDirty: RectPx | null = null;
   private strokeMin = { x: Infinity, y: Infinity };
   private strokeMax = { x: -Infinity, y: -Infinity };
   private destroyed = false;
@@ -172,6 +176,13 @@ export class RasterStroke {
     const el = args.target?.el ?? null;
     const source = args.target?.source ?? { w: 1, h: 1 };
     this.scale = args.target ? rasterScaleFor(source.w, source.h) : 1;
+
+    const width = args.target
+      ? Math.max(1, Math.round(source.w * this.scale))
+      : Math.max(1, Math.round(args.page.w * RASTER_LAYER_PX_PER_MM));
+    const height = args.target
+      ? Math.max(1, Math.round(source.h * this.scale))
+      : Math.max(1, Math.round(args.page.h * RASTER_LAYER_PX_PER_MM));
 
     if (args.target && el) {
       const fit =
@@ -214,9 +225,14 @@ export class RasterStroke {
               h: (visibleBottom - visibleTop) * this.axes.y.pxPerMm,
             }
           : null;
+      const t = args.transform;
+      const cx = t.a * (el.w / 2) + t.c * (el.h / 2) + t.e;
+      const cy = t.b * (el.w / 2) + t.d * (el.h / 2) + t.f;
+      const frameX = Math.abs(cx - el.w / 2 - el.x) < 1e-4 ? el.x : cx - el.w / 2;
+      const frameY = Math.abs(cy - el.h / 2 - el.y) < 1e-4 ? el.y : cy - el.h / 2;
       this.frame = {
-        x: el.x,
-        y: el.y,
+        x: frameX,
+        y: frameY,
         w: el.w,
         h: el.h,
         rotation: el.rotation || 0,
@@ -229,7 +245,7 @@ export class RasterStroke {
         x: { pxPerMm: density, originLocalMm: 0 },
         y: { pxPerMm: density, originLocalMm: 0 },
       };
-      this.clip = null;
+      this.clip = { x: 0, y: 0, w: width, h: height };
       this.frame = {
         x: 0,
         y: 0,
@@ -241,20 +257,22 @@ export class RasterStroke {
       };
     }
 
-    const width = args.target
-      ? Math.max(1, Math.round(source.w * this.scale))
-      : Math.max(1, Math.round(args.page.w * RASTER_LAYER_PX_PER_MM));
-    const height = args.target
-      ? Math.max(1, Math.round(source.h * this.scale))
-      : Math.max(1, Math.round(args.page.h * RASTER_LAYER_PX_PER_MM));
     this.layer = document.createElement("canvas");
     this.layer.width = width;
     this.layer.height = height;
     const ctx = this.layer.getContext("2d", { willReadFrequently: true });
     if (!ctx) throw new Error("لا يمكن تهيئة طبقة الرسم");
     this.layerCtx = ctx;
-    if (args.target) ctx.drawImage(args.target.image, 0, 0, width, height);
-    this.buffer = ctx.getImageData(0, 0, width, height);
+    if (args.target) {
+      ctx.drawImage(args.target.image, 0, 0, width, height);
+      this.buffer = ctx.getImageData(0, 0, width, height);
+    } else {
+      this.buffer = {
+        data: new Uint8ClampedArray(width * height * 4),
+        width,
+        height,
+      };
+    }
   }
 
   get width() {
@@ -270,9 +288,17 @@ export class RasterStroke {
     return Math.max(2, this.args.sizeMm * this.pxPerMm);
   }
 
+  updatePxPerMm(pxPerMm: number) {
+    if (Number.isFinite(pxPerMm) && pxPerMm > 0) {
+      this.pxPerMm = Math.max(0.1, pxPerMm);
+    }
+  }
+
   dispose() {
     if (this.destroyed) return;
     this.destroyed = true;
+    this.pendingDirty = null;
+    this.hideCursor();
     this.removePreview();
     const ctx = this.layer.getContext("2d");
     ctx?.clearRect(0, 0, this.layer.width, this.layer.height);
@@ -287,14 +313,18 @@ export class RasterStroke {
    * maps it into the element's own frame, which is what keeps a stroke on a
    * rotated, flipped or grouped image landing exactly under the pointer.
    */
-  paint(point: { x: number; y: number }, pressure?: number): boolean {
+  paint(
+    point: { x: number; y: number },
+    pressure?: number,
+    deferFlush = false,
+  ): boolean {
     if (this.destroyed) return false;
     const local = this.toLocal(point);
     const step = this.smoother.push(local, pressure);
     const radius = brushRadiusPx(this.args.sizeMm, this.axes.x.pxPerMm);
     const toWorking = (p: { x: number; y: number }) => ({
-      x: p.x * this.axes.x.pxPerMm,
-      y: p.y * this.axes.y.pxPerMm,
+      x: (p.x - this.axes.x.originLocalMm) * this.axes.x.pxPerMm,
+      y: (p.y - this.axes.y.originLocalMm) * this.axes.y.pxPerMm,
     });
     const to = toWorking(step.to);
     const spacing = strokeSpacing(radius);
@@ -307,8 +337,20 @@ export class RasterStroke {
       if (this.stamp(sample, radiusNow)) painted = true;
     }
     this.last = to;
-    if (painted) this.touched = true;
+    if (painted) {
+      this.touched = true;
+      if (!deferFlush) this.flush();
+    }
     return painted;
+  }
+
+  /** Flush accumulated dirty pixels to the working canvas and live overlay once. */
+  flush() {
+    if (this.destroyed || !this.pendingDirty) return;
+    const dirty = this.pendingDirty;
+    this.pendingDirty = null;
+    this.writeBack(dirty);
+    this.blit(dirty);
   }
 
   private stamp(point: { x: number; y: number }, radius: number): boolean {
@@ -324,8 +366,7 @@ export class RasterStroke {
     const dirty = stampDab(this.buffer, dab, this.clip);
     if (!dirty) return false;
     this.markStroke(dirty);
-    this.writeBack(dirty);
-    this.blit(dirty);
+    this.pendingDirty = mergeDirtyRect(this.pendingDirty, dirty);
     return true;
   }
 
@@ -389,6 +430,48 @@ export class RasterStroke {
     this.args.pageNode.appendChild(host);
     this.previewHost = host;
     this.preview = canvas;
+    if (this.target && this.elementId) {
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        const scale = this.previewPxPerMm;
+        const srcRect = this.clip ?? {
+          x: 0,
+          y: 0,
+          w: this.layer.width,
+          h: this.layer.height,
+        };
+        const dst = {
+          x: (srcRect.x / this.axes.x.pxPerMm + this.axes.x.originLocalMm) * scale,
+          y: (srcRect.y / this.axes.y.pxPerMm + this.axes.y.originLocalMm) * scale,
+          w: (srcRect.w / this.axes.x.pxPerMm) * scale,
+          h: (srcRect.h / this.axes.y.pxPerMm) * scale,
+        };
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        ctx.drawImage(
+          this.layer,
+          srcRect.x,
+          srcRect.y,
+          srcRect.w,
+          srcRect.h,
+          dst.x,
+          dst.y,
+          dst.w,
+          dst.h,
+        );
+      }
+      const selector = `.canvas-el[data-el-id="${
+        typeof CSS !== "undefined" && typeof CSS.escape === "function"
+          ? CSS.escape(this.elementId)
+          : this.elementId
+      }"] img`;
+      const targetImg = this.args.pageNode.querySelector<HTMLElement>(selector);
+      if (targetImg) {
+        this.hiddenTargetImg = targetImg;
+        this.hiddenTargetPrevVisibility = targetImg.style.visibility;
+        targetImg.style.visibility = "hidden";
+      }
+    }
     return canvas;
   }
 
@@ -399,8 +482,8 @@ export class RasterStroke {
     if (!ctx) return;
     const scale = this.previewPxPerMm;
     const dst = {
-      x: (dirty.x / this.axes.x.pxPerMm + this.axes.x.originLocalMm - this.frame.x) * scale,
-      y: (dirty.y / this.axes.y.pxPerMm + this.axes.y.originLocalMm - this.frame.y) * scale,
+      x: (dirty.x / this.axes.x.pxPerMm + this.axes.x.originLocalMm) * scale,
+      y: (dirty.y / this.axes.y.pxPerMm + this.axes.y.originLocalMm) * scale,
       w: (dirty.w / this.axes.x.pxPerMm) * scale,
       h: (dirty.h / this.axes.y.pxPerMm) * scale,
     };
@@ -427,6 +510,11 @@ export class RasterStroke {
   }
 
   private removePreview() {
+    if (this.hiddenTargetImg) {
+      this.hiddenTargetImg.style.visibility = this.hiddenTargetPrevVisibility;
+      this.hiddenTargetImg = null;
+      this.hiddenTargetPrevVisibility = "";
+    }
     this.previewHost?.remove();
     this.previewHost = null;
     this.preview = null;
@@ -468,12 +556,7 @@ export class RasterStroke {
       this.dispose();
       return null;
     }
-    const image = this.layerCtx.createImageData(
-      this.buffer.width,
-      this.buffer.height,
-    );
-    image.data.set(this.buffer.data);
-    this.layerCtx.putImageData(image, 0, 0);
+    this.flush();
     if (this.args.target && this.elementId) {
       const src = this.layer.toDataURL("image/png");
       const crop = scaleCropFor(

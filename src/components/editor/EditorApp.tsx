@@ -1,6 +1,11 @@
 import { subscribeTheme } from "@/lib/theme";
 import { BrandLogo } from "@/components/site/SiteChrome";
-import { shortcutKey } from "@/lib/editor/keyboard";
+import {
+  canRunShortcutInScope,
+  isEditableTarget,
+  shortcutKey,
+  stepBrushSizeMm,
+} from "@/lib/editor/keyboard";
 import { useTools } from "@/lib/editor/tool-store";
 import {
   REGION_MODES,
@@ -1114,36 +1119,44 @@ function Studio({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target instanceof HTMLElement ? e.target : null;
-      const typing =
-        !!t &&
-        (t.isContentEditable ||
-          ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
+      const typing = isEditableTarget(t);
       const meta = e.metaKey || e.ctrlKey;
-      if (
-        e.defaultPrevented ||
-        e.isComposing ||
-        t?.closest('[role="dialog"], [role="menu"]')
-      )
-        return;
+      const modalOpen = Boolean(
+        t?.closest('[role="dialog"], [role="menu"]') ||
+          document.querySelector('[role="dialog"], [role="menu"]'),
+      );
+      if (e.defaultPrevented || e.isComposing || modalOpen) return;
+      const interactionState = useInteraction.getState();
+      const toolLive = useTools.getState();
+      const shortcutCtx = {
+        editableTarget: typing,
+        modalOpen,
+        interactionBusy: interactionState.active || Boolean(interactionState.marquee),
+        painting: toolLive.painting,
+        cropActive: Boolean(interactionState.crop),
+      };
+      const canRunApp = canRunShortcutInScope("app", shortcutCtx);
+      const canRunCanvas = canRunShortcutInScope("canvas", shortcutCtx);
       const key = shortcutKey(e);
 
       if (meta && key === "z") {
         // While the caret is in a field or the in-place text editor, the browser's
         // own undo stack owns Cmd/Ctrl+Z — hijacking it would revert whole project
         // states when the author meant to undo a few characters.
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         if (e.shiftKey) redo();
         else undo();
         return;
       }
       if (meta && key === "y") {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         redo();
         return;
       }
       if (meta && key === "s") {
+        if (!canRunApp) return;
         e.preventDefault();
         // ⇧⌘S — «حفظ باسم» a native `.nsq` file; ⌘S keeps saving to the library.
         if (e.shiftKey)
@@ -1152,64 +1165,94 @@ function Studio({
         return;
       }
       if (meta && key === "o" && !e.shiftKey) {
+        if (!canRunApp) return;
         e.preventDefault();
         onOpenFile();
         return;
       }
       if (meta && key === "e") {
+        if (!canRunApp) return;
         e.preventDefault();
         toggle("exportOpen");
         return;
       }
       if (meta && key === "d") {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         duplicateSelected();
         return;
       }
       if (meta && e.altKey && key === "c") {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         copyStyle();
         return;
       }
       if (meta && e.altKey && key === "v") {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         pasteStyle();
         return;
       }
       if (meta && key === "c") {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         copySelected();
         return;
       }
       if (meta && key === "x") {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         copySelected();
         deleteSelected();
         return;
       }
       if (meta && key === "v") {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         // ⇧⌘V = لصق في مكانه (paste in place); ⌘V keeps the nudged paste.
         pasteClipboard(e.shiftKey);
         return;
       }
       if (meta && key === "a") {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         selectAll();
         return;
       }
       if (meta && key === "g") {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         if (e.shiftKey) ungroup();
         else group();
+        return;
+      }
+      /*
+       * Brush / Eraser diameter adjustment on bare `[` and `]` (when Cmd/Ctrl
+       * is not held, so ⌘[ / ⌘] layer-order shortcuts never conflict).
+       */
+      if (
+        canRunCanvas &&
+        !meta &&
+        !e.altKey &&
+        (toolLive.tool === "brush" || toolLive.tool === "eraser") &&
+        (key === "[" ||
+          key === "]" ||
+          e.code === "BracketLeft" ||
+          e.code === "BracketRight")
+      ) {
+        e.preventDefault();
+        const dir =
+          key === "]" || e.code === "BracketRight" ? 1 : -1;
+        if (toolLive.tool === "eraser") {
+          toolLive.setEraser({
+            sizeMm: stepBrushSizeMm(toolLive.eraser.sizeMm, dir),
+          });
+        } else {
+          toolLive.setBrush({
+            sizeMm: stepBrushSizeMm(toolLive.brush.sizeMm, dir),
+          });
+        }
         return;
       }
       /*
@@ -1222,14 +1265,14 @@ function Studio({
        * Space+drag stays pan (owned by the canvas).
        */
       const activation = resolveToolKey(key, e.shiftKey);
-      if (!typing && !meta && !e.altKey && activation) {
+      if (canRunCanvas && !meta && !e.altKey && activation) {
         e.preventDefault();
         if (activation.tool === "text") useEditor.getState().setLeftTab("elements");
         if (activation.tool === "shape") useEditor.getState().setLeftTab("shapes");
         useTools.getState().activate(activation);
         return;
       }
-      if (!typing && !meta && !e.altKey && key === "c") {
+      if (canRunCanvas && !meta && !e.altKey && key === "c") {
         const st = useEditor.getState();
         const page = st.pages.find((p) => p.id === st.activePageId);
         const el =
@@ -1246,7 +1289,7 @@ function Studio({
        * Enter applies a finished region exactly where it would otherwise sit
        * unused: the keyboard never needs a second confirm button.
        */
-      if (!typing && !meta && !e.altKey && e.key === "Enter") {
+      if (canRunCanvas && !meta && !e.altKey && e.key === "Enter") {
         const t = useTools.getState();
         if (
           t.tool === "select" &&
@@ -1261,7 +1304,7 @@ function Studio({
         }
       }
       if (meta && key === "j") {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         duplicateSelected();
         return;
@@ -1273,19 +1316,19 @@ function Studio({
        * (including the Arabic keymap), so the shortcut is not layout-dependent.
        */
       if (meta && (key === "[" || e.code === "BracketLeft")) {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         bring(e.shiftKey ? "bottom" : "back");
         return;
       }
       if (meta && (key === "]" || e.code === "BracketRight")) {
-        if (typing) return;
+        if (!canRunCanvas) return;
         e.preventDefault();
         bring(e.shiftKey ? "front" : "forward");
         return;
       }
       if (
-        !typing &&
+        canRunCanvas &&
         !meta &&
         e.shiftKey &&
         (key === "1" || e.code === "Digit1")
@@ -1301,6 +1344,7 @@ function Studio({
        * is never touched.
        */
       if (
+        canRunApp &&
         meta &&
         (key === "+" ||
           key === "=" ||
@@ -1312,6 +1356,7 @@ function Studio({
         return;
       }
       if (
+        canRunApp &&
         meta &&
         (key === "-" || e.code === "Minus" || e.code === "NumpadSubtract")
       ) {
@@ -1319,9 +1364,12 @@ function Studio({
         zoomCentered(stepZoom(useEditor.getState().zoom, -1));
         return;
       }
-      if (meta && (key === "0" || e.code === "Digit0")) {
+      if (canRunApp && meta && (key === "0" || e.code === "Digit0")) {
         e.preventDefault();
         fitToScreen();
+        return;
+      }
+      if (shortcutCtx.interactionBusy || shortcutCtx.painting || shortcutCtx.cropActive) {
         return;
       }
       /*
@@ -1779,35 +1827,80 @@ function Studio({
     setDockSides(next);
   };
 
-  /** Viewport size, re-rendered on resize so dock clamps track the screen. */
-  const [vp, setVp] = useState({
-    w: typeof window === "undefined" ? 1440 : window.innerWidth,
-    h: typeof window === "undefined" ? 900 : window.innerHeight,
-  });
+  /** Viewport size and fullscreen state, re-rendered on resize/orientation/fullscreen. */
+  const readLiveViewport = () => {
+    if (typeof window === "undefined") {
+      return { w: 1440, h: 900, fullscreen: false };
+    }
+    const vv = window.visualViewport;
+    const useVv = Boolean(vv && (!vv.scale || vv.scale <= 1.01) && vv.width > 0 && vv.height > 0);
+    const w = Math.round(useVv ? vv!.width : window.innerWidth);
+    const h = Math.round(useVv ? vv!.height : window.innerHeight);
+    const doc = typeof document !== "undefined" ? (document as Document & { webkitFullscreenElement?: Element | null }) : null;
+    const fullscreen = Boolean(doc?.fullscreenElement || doc?.webkitFullscreenElement);
+    return { w, h, fullscreen };
+  };
+  const [vp, setVp] = useState(readLiveViewport);
   useEffect(() => {
-    const onResize = () =>
-      setVp({ w: window.innerWidth, h: window.innerHeight });
+    const onResize = () => {
+      const next = readLiveViewport();
+      setVp((prev) =>
+        prev.w === next.w &&
+        prev.h === next.h &&
+        prev.fullscreen === next.fullscreen
+          ? prev
+          : next,
+      );
+      setIsDesktop(next.w >= OVERLAY_BREAKPOINT);
+      setCanDock(next.w >= DOCK_BREAKPOINT);
+      setIsCompact(next.w <= 600);
+    };
+    const onOrientationChange = () => {
+      onResize();
+      setTimeout(onResize, 60);
+    };
     window.addEventListener("resize", onResize);
-    window.addEventListener("orientationchange", onResize);
+    window.addEventListener("orientationchange", onOrientationChange);
+    screen?.orientation?.addEventListener?.("change", onOrientationChange);
     // iOS Safari keeps the visual viewport changing without firing `resize`
     // under some keyboard/rotation states; the second signal keeps dock
     // clamps honest during fullscreen and rotation.
     window.visualViewport?.addEventListener("resize", onResize);
+    window.visualViewport?.addEventListener("scroll", onResize);
+    document.addEventListener("fullscreenchange", onResize);
+    document.addEventListener("webkitfullscreenchange", onResize);
     return () => {
       window.removeEventListener("resize", onResize);
-      window.removeEventListener("orientationchange", onResize);
+      window.removeEventListener("orientationchange", onOrientationChange);
+      screen?.orientation?.removeEventListener?.("change", onOrientationChange);
       window.visualViewport?.removeEventListener("resize", onResize);
+      window.visualViewport?.removeEventListener("scroll", onResize);
+      document.removeEventListener("fullscreenchange", onResize);
+      document.removeEventListener("webkitfullscreenchange", onResize);
     };
   }, []);
   /*
-   * The resolved surface — desktop / tablet / mobile, portrait or landscape —
-   * is the ONLY layout mode the shell and the CSS density scale share.
+   * The resolved 6-mode surface — desktop / tablet-landscape / tablet-portrait /
+   * mobile-landscape / mobile-portrait / fullscreen — is the ONLY layout mode
+   * the shell and the CSS density scale share.
    */
+  const isFullscreenMode = Boolean(focusMode || vp.fullscreen);
+  const deviceSurface: EditorSurface = resolveEditorSurface(
+    vp.w,
+    vp.h,
+    coarsePointer,
+    false,
+  );
   const surface: EditorSurface = resolveEditorSurface(
     vp.w,
     vp.h,
     coarsePointer,
+    isFullscreenMode,
   );
+  const effectiveRailHeight =
+    deviceSurface === "mobile-landscape"
+      ? Math.min(pagesPanelHeight, 76)
+      : pagesPanelHeight;
   /*
    * Accidental zoom is fixed at the APP level — once, here — not per tool.
    *
@@ -2273,7 +2366,7 @@ function Studio({
       fitRef.current();
     }, 60);
     return () => clearTimeout(timer);
-  }, [isDesktop, canDock, hydrated, dockSignature]);
+  }, [isDesktop, canDock, hydrated, dockSignature, surface]);
 
   return (
     /*
@@ -2287,11 +2380,12 @@ function Studio({
       ref={shellRef}
       dir="rtl"
       data-editor-surface={surface}
+      data-device-surface={deviceSurface}
       className={cn(
         "editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]",
         appearance === "light" ? "editor-light" : "editor-dark",
         appearance === "dim" && "editor-dim",
-        focusMode && "editor-focus",
+        isFullscreenMode && "editor-focus",
       )}
     >
       {/*
@@ -2611,13 +2705,13 @@ function Studio({
                 ? 0
                 : pagesRailCollapsed
                   ? PAGES_RAIL_COLLAPSED
-                  : pagesPanelHeight,
+                  : effectiveRailHeight,
             }}
           >
             {!pagesRailHidden && (
               <PageRail
-                height={pagesRailCollapsed ? PAGES_RAIL_COLLAPSED : pagesPanelHeight}
-                minHeight={PAGES_PANEL_MIN}
+                height={pagesRailCollapsed ? PAGES_RAIL_COLLAPSED : effectiveRailHeight}
+                minHeight={deviceSurface === "mobile-landscape" ? 68 : PAGES_PANEL_MIN}
               />
             )}
           </div>

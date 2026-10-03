@@ -223,6 +223,20 @@ export function strokeBounds(
   };
 }
 
+/** Merge two pixel-aligned dirty rectangles into their bounding union. */
+export function mergeDirtyRect(
+  a: RectPx | null,
+  b: RectPx | null,
+): RectPx | null {
+  if (!a) return b ? { ...b } : null;
+  if (!b) return { ...a };
+  const x0 = Math.min(a.x, b.x);
+  const y0 = Math.min(a.y, b.y);
+  const x1 = Math.max(a.x + a.w, b.x + b.w);
+  const y1 = Math.max(a.y + a.h, b.y + b.h);
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
 /** Radius in buffer pixels for a brush of `sizeMm` document millimetres. */
 export function brushRadiusPx(sizeMm: number, pxPerMm: number): number {
   return Math.max(0.5, (Math.max(0.1, sizeMm) / 2) * Math.max(0.01, pxPerMm));

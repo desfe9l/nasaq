@@ -47,18 +47,20 @@ export type EditorSurface =
   | "tablet-landscape"
   | "tablet-portrait"
   | "mobile-landscape"
-  | "mobile-portrait";
+  | "mobile-portrait"
+  | "fullscreen";
 
 /**
  * Resolve the editor surface from raw geometry.
  *
  * Bands (width):
+ *   fullscreen === true → fullscreen (100% viewport priority for canvas)
  *   ≥ DOCK_BREAKPOINT and fine pointer → desktop (compact, docked panels)
  *   ≥ DOCK_BREAKPOINT with any coarse pointer → tablet (dockable, touch-first;
  *     an iPad Pro landscape is wide, but it is still a finger)
  *   OVERLAY_BREAKPOINT..DOCK_BREAKPOINT → tablet (full workspace, floating
  *     windows when the two docks cannot both fit)
- *   < OVERLAY_BREAKPOINT → mobile (either orientation)
+ *   < OVERLAY_BREAKPOINT (or short landscape height < 500) → mobile (either orientation)
  *
  * Orientation is the tie-breaker inside a band: a portrait phone gets the
  * widest touch targets, a landscape phone keeps the bar shorter because its
@@ -66,22 +68,30 @@ export type EditorSurface =
  * can never disagree.
  */
 const MOBILE_SHORT_EDGE = 600;
+const MOBILE_LANDSCAPE_MAX_HEIGHT = 500;
 
 export function resolveEditorSurface(
   width: number,
   height: number,
   coarse: boolean,
+  fullscreen = false,
 ): EditorSurface {
+  if (fullscreen) return "fullscreen";
   const w = Number.isFinite(width) ? width : 0;
   const h = Number.isFinite(height) ? height : 0;
+  if (w <= 0 || h <= 0) return "mobile-portrait";
   const landscape = w > h;
   /*
    * A finger-driven device is a phone the moment its SHORT edge cannot hold
    * a comfortable two-row bar — an 844×390 landscape phone is still a phone
-   * even though its width crosses the tablet band. Fine pointers resolve by
-   * width alone, so a resized desktop window never re-skins itself as mobile.
+   * even though its width crosses the tablet band. Short landscape viewports
+   * below DOCK_BREAKPOINT (< 500px tall) also resolve to mobile-landscape.
    */
-  if (w < OVERLAY_BREAKPOINT || (coarse && Math.min(w, h) < MOBILE_SHORT_EDGE))
+  if (
+    w < OVERLAY_BREAKPOINT ||
+    (w < DOCK_BREAKPOINT && h < MOBILE_LANDSCAPE_MAX_HEIGHT) ||
+    (coarse && Math.min(w, h) < MOBILE_SHORT_EDGE)
+  )
     return landscape ? "mobile-landscape" : "mobile-portrait";
   if (w < DOCK_BREAKPOINT)
     return landscape ? "tablet-landscape" : "tablet-portrait";
