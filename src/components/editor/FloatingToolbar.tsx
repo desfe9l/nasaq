@@ -16,6 +16,7 @@ import {
   ArrowUpDown,
   Bold,
   Copy,
+  Layers2,
   Crop,
   Image,
   ImagePlus,
@@ -59,6 +60,8 @@ import { StrokeControls, StrokeField } from "./StrokeControls";
 import { ScrubInput } from "./ui/ScrubInput";
 import { FillField } from "./ui/FillField";
 import { beginImageCrop } from "@/lib/editor/crop-session";
+import { snapshotPage, snapshotSelection } from "@/lib/editor/render-snapshot";
+import { toast } from "sonner";
 import type { Gradient } from "@/lib/editor/gradient";
 import { ColorField } from "./ui/ColorField";
 import { Tip } from "./ui/Tip";
@@ -206,6 +209,49 @@ export function FloatingToolbar({
   const matchSize = useEditor((s) => s.matchSize);
   const fitTextBox = useEditor((s) => s.fitTextBox);
   const selectedIds = useEditor((s) => s.selectedIds);
+  const selectedId = useEditor((s) => s.selectedId);
+  const mergeSelection = useEditor((s) => s.mergeSelection);
+
+  const mergeSelected = useCallback(async () => {
+    const state = useEditor.getState();
+    const page = state.pages.find((candidate) => candidate.id === pageId);
+    if (
+      !page ||
+      state.activePageId !== pageId ||
+      state.selectedIds.length < 2 ||
+      selectedId !== el.id
+    )
+      return;
+    const node = document.querySelector<HTMLElement>(
+      `.editor-canvas-stage [data-page-id="${CSS.escape(pageId)}"]`,
+    );
+    if (!node) {
+      toast.error("تعذر العثور على مساحة الصفحة للدمج");
+      return;
+    }
+    const hadExportId = node.hasAttribute("data-export-page");
+    node.setAttribute("data-export-page", pageId);
+    try {
+      const snapshot = await snapshotPage({ node, ...pageSize(page) });
+      const image = await snapshotSelection(snapshot, state.selectedIds, 2);
+      const current = useEditor.getState();
+      if (
+        !image ||
+        current.activePageId !== pageId ||
+        current.selectedIds.length !== state.selectedIds.length ||
+        current.selectedIds.some((id) => !state.selectedIds.includes(id))
+      )
+        throw new Error("تغير التحديد أثناء تجهيز الدمج؛ أعد المحاولة");
+      if (mergeSelection(image))
+        toast.success("دُمجت العناصر في طبقة صورة واحدة");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "تعذر دمج العناصر المحددة",
+      );
+    } finally {
+      if (!hadExportId) node.removeAttribute("data-export-page");
+    }
+  }, [el.id, mergeSelection, pageId, selectedId]);
 
   /**
    * Place the toolbar 16px beyond the grips, flipping below when there is no
@@ -1362,6 +1408,15 @@ export function FloatingToolbar({
             onSelect={() => useEditor.getState().ungroup()}
           />
         </MenuGrid>
+        {count > 1 && el.id === selectedId && (
+          <MenuGrid columns={2} label="دمج العناصر">
+            <MenuCell
+              icon={<Layers2 />}
+              label="دمج الطبقات المحددة في صورة واحدة — يتطلب طبقات متجاورة"
+              onSelect={mergeSelected}
+            />
+          </MenuGrid>
+        )}
         <MenuGrid columns={4} label="العنصر">
           <MenuCell
             icon={el.locked ? <Unlock /> : <Lock />}

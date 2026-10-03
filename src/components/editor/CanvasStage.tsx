@@ -31,7 +31,11 @@ import {
   resizeToPointer,
 } from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
-import { useInteraction } from "@/lib/editor/interaction-store";
+import {
+  marqueeForPage,
+  marqueeHitsBox,
+  useInteraction,
+} from "@/lib/editor/interaction-store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
@@ -123,6 +127,17 @@ function pointInRotatedBox(el: CanvasEl, px: number, py: number): boolean {
   const ry = dx * sin + dy * cos;
   const tol = 0.2;
   return Math.abs(rx) <= el.w / 2 + tol && Math.abs(ry) <= el.h / 2 + tol;
+}
+
+function brushHitsElement(el: CanvasEl, x: number, y: number, radius: number): boolean {
+  const dx = x - (el.x + el.w / 2);
+  const dy = y - (el.y + el.h / 2);
+  const angle = (-(el.rotation || 0) * Math.PI) / 180;
+  const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+  const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+  const nearestX = clamp(localX, -el.w / 2, el.w / 2);
+  const nearestY = clamp(localY, -el.h / 2, el.h / 2);
+  return (localX - nearestX) ** 2 + (localY - nearestY) ** 2 <= radius ** 2;
 }
 
 /**
@@ -229,7 +244,9 @@ export function CanvasStage({
   const setRotationHint = useInteraction((s) => s.setRotationHint);
   const setMarquee = useInteraction((s) => s.setMarquee);
   const [dropping, setDropping] = useState<"file" | "library" | null>(null);
-  const [drawTool, setDrawTool] = useState<"text" | "rect" | null>(null);
+  const [drawTool, setDrawTool] = useState<"text" | "rect" | "erase" | null>(null);
+  const eraseSizeRef = useRef(10);
+  const marqueeShapeRef = useRef<"rect" | "ellipse">("rect");
   const drawArmed = drawTool !== null;
   /*
    * The header's tool cluster shows which tool is live. The tool state lives
@@ -239,7 +256,7 @@ export function CanvasStage({
    */
   useEffect(() => {
     window.dispatchEvent(
-      new CustomEvent<"text" | "rect" | null>("nasaq:tool-state", {
+      new CustomEvent<"text" | "rect" | "erase" | null>("nasaq:tool-state", {
         detail: drawTool,
       }),
     );
@@ -297,8 +314,19 @@ export function CanvasStage({
   useEffect(() => {
     const armText = () => setDrawTool("text");
     const onTool = (event: Event) => {
-      const detail = (event as CustomEvent<"text" | "rect" | null>).detail;
+      const detail = (
+        event as CustomEvent<"text" | "rect" | "erase" | null>
+      ).detail;
       setDrawTool(detail ?? null);
+    };
+    const onEraseSize = (event: Event) => {
+      const size = Number((event as CustomEvent<number>).detail);
+      if (Number.isFinite(size)) eraseSizeRef.current = clamp(size, 2, 50);
+    };
+    const onMarqueeShape = (event: Event) => {
+      const shape = (event as CustomEvent<"rect" | "ellipse">).detail;
+      if (shape === "rect" || shape === "ellipse")
+        marqueeShapeRef.current = shape;
     };
     const disarm = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -308,10 +336,14 @@ export function CanvasStage({
     };
     window.addEventListener("nasaq:draw-text", armText);
     window.addEventListener("nasaq:tool", onTool);
+    window.addEventListener("nasaq:eraser-size", onEraseSize);
+    window.addEventListener("nasaq:marquee-shape", onMarqueeShape);
     window.addEventListener("keydown", disarm);
     return () => {
       window.removeEventListener("nasaq:draw-text", armText);
       window.removeEventListener("nasaq:tool", onTool);
+      window.removeEventListener("nasaq:eraser-size", onEraseSize);
+      window.removeEventListener("nasaq:marquee-shape", onMarqueeShape);
       window.removeEventListener("keydown", disarm);
     };
   }, []);
@@ -451,6 +483,57 @@ export function CanvasStage({
     () => (previewAll ? pages : pages.filter((p) => p.id === activePageId)),
     [pages, previewAll, activePageId],
   );
+
+  const startErase = (e: React.PointerEvent, page: Page) => {
+    if (isPalmTouch(e) || e.button !== 0 || input.current!.busy) return;
+    if (page.locked || page.hidden) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onCanvasTap?.();
+    setLayerPicker(null);
+    const state = useEditor.getState();
+    if (state.activePageId !== page.id) state.setActivePage(page.id);
+    const pageEl = pageRefs.current[page.id];
+    if (!pageEl) return;
+    const size = pageSize(page);
+    const toMm = (event: { clientX: number; clientY: number }) =>
+      pagePoint(pageEl.getBoundingClientRect(), size, event.clientX, event.clientY);
+    const erased = new Set<string>();
+    const collect = (event: { clientX: number; clientY: number }) => {
+      const point = toMm(event);
+      const current = useEditor.getState();
+      const group =
+        current.activePageId === page.id && current.enteredGroupId
+          ? findElement(page.elements, current.enteredGroupId)?.el
+          : null;
+      const candidates = group?.children ?? page.elements;
+      const offset = group ? { x: group.x, y: group.y } : { x: 0, y: 0 };
+      const radius = eraseSizeRef.current / 2;
+      for (const element of candidates) {
+        const absolute =
+          offset.x || offset.y
+            ? { ...element, x: element.x + offset.x, y: element.y + offset.y }
+            : element;
+        if (
+          !element.hidden &&
+          !element.locked &&
+          brushHitsElement(absolute, point.x, point.y, radius)
+        ) {
+          erased.add(element.id);
+        }
+      }
+    };
+    collect(e);
+    input.current!.claim(e, {
+      yieldable: e.pointerType === "touch",
+      move: collect,
+      end: (event) => {
+        collect(event);
+        if (erased.size) useEditor.getState().deleteElementsById([...erased]);
+      },
+      cancel: () => {},
+    });
+  };
 
   const startOp = (
     e: React.PointerEvent,
@@ -1153,19 +1236,26 @@ export function CanvasStage({
           h: Math.abs(cur.y - start.y),
         };
         setMarquee({
+          pageId,
           x0: box.x,
           y0: box.y,
           x1: box.x + box.w,
           y1: box.y + box.h,
+          shape: marqueeShapeRef.current,
         });
         if (!drawTool) {
           const hits = candidates
-            .filter(
-              (p) =>
-                p.box.x < box.x + box.w &&
-                p.box.x + p.box.w > box.x &&
-                p.box.y < box.y + box.h &&
-                p.box.y + p.box.h > box.y,
+            .filter((p) =>
+              marqueeHitsBox(
+                {
+                  x0: start.x,
+                  y0: start.y,
+                  x1: cur.x,
+                  y1: cur.y,
+                  shape: marqueeShapeRef.current,
+                },
+                p.box,
+              ),
             )
             .map((p) => p.id);
           const merged = [...new Set([...before, ...hits])];
@@ -1306,6 +1396,7 @@ export function CanvasStage({
         dropping && "is-dropping",
         drawArmed && "draw-armed",
         drawTool === "rect" && "draw-rect",
+        drawTool === "erase" && "draw-erase",
       )}
       style={{ "--editor-zoom": zoom } as React.CSSProperties}
       dir="ltr"
@@ -1330,6 +1421,11 @@ export function CanvasStage({
           } catch {
             /* detached */
           }
+          return;
+        }
+        if (drawTool === "erase" && e.button === 0) {
+          const page = pageAtPoint(e.clientX, e.clientY);
+          if (page) startErase(e, page);
           return;
         }
         if (
@@ -1914,7 +2010,7 @@ const ArtboardPage = memo(function ArtboardPage({
             settings={printGuides}
             zIndex={GUIDE_LAYER_Z}
           />
-          <MarqueeLayer />
+          <MarqueeLayer pageId={page.id} />
           {isActive && !isLocked && !isHidden && (
             <OverflowFlagLayer elements={page.elements} onFit={onFit} />
           )}
@@ -2040,13 +2136,13 @@ const EnteredChildNode = memo(function EnteredChildNode({
   );
 });
 
-/** Marquee rectangle, driven by the transient interaction store. */
-function MarqueeLayer() {
-  const marquee = useInteraction((s) => s.marquee);
+/** Page-scoped rectangle or ellipse marquee from the transient interaction store. */
+function MarqueeLayer({ pageId }: { pageId: string }) {
+  const marquee = useInteraction((s) => marqueeForPage(s.marquee, pageId));
   if (!marquee) return null;
   return (
     <div
-      className="marquee"
+      className={cn("marquee", marquee.shape === "ellipse" && "marquee-ellipse")}
       style={{
         left: `${marquee.x0}mm`,
         top: `${marquee.y0}mm`,

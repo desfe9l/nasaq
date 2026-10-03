@@ -51,11 +51,9 @@ export interface BrandPreset {
 /**
  * Owner-managed site imagery.
  *
- * One slot per image the marketing pages and the editor walkthrough paint.
- * A slot holds either an `https:` URL or a `data:image/…;base64,` payload the
- * owner uploaded from the admin dashboard; an EMPTY string means "use the
- * bundled artwork shipped in `public/`". That fallback is what lets the owner
- * replace one image at a time without having to fill the whole set.
+ * Named slots keep the existing homepage/editor surfaces stable; `gallery`
+ * adds an owner-managed, ordered collection of extra previews. Images hold an
+ * `https:` URL or a `data:image/…;base64,` payload uploaded from the dashboard.
  *
  * The slots are deliberately dimension-free: the owner uploads whatever they
  * have and the surfaces render it with `object-contain` in a flexible box, so
@@ -72,11 +70,22 @@ export interface SiteImages {
   tools: string;
   /** Owner-managed platform mark. Empty keeps the current NASAQ logo. */
   mark: string;
+  /** Additional owner-managed homepage/editor preview images, in display order. */
+  gallery: SiteImageGalleryItem[];
+}
+
+export interface SiteImageGalleryItem {
+  id: string;
+  src: string;
+  alt: string;
+  enabled: boolean;
 }
 
 /** Label, description and the bundled fallback for every image slot. */
+export type NamedSiteImageSlot = Exclude<keyof SiteImages, "gallery">;
+
 export const SITE_IMAGE_SLOTS: ReadonlyArray<{
-  id: keyof SiteImages;
+  id: NamedSiteImageSlot;
   label: string;
   hint: string;
   /** Bundled artwork used when the owner has not uploaded a replacement. */
@@ -121,6 +130,7 @@ export const DEFAULT_SITE_IMAGES: SiteImages = {
   pages: "",
   tools: "",
   mark: "",
+  gallery: [],
 };
 
 /** No per-slot upload ceiling. */
@@ -291,6 +301,23 @@ export function normalizeSection<K extends SettingsSection>(key: K, raw: unknown
       for (const slot of SITE_IMAGE_SLOTS) {
         value[slot.id] = siteImage(r[slot.id]);
       }
+      const galleryIds = new Set<string>();
+      value.gallery = (Array.isArray(r.gallery) ? r.gallery : [])
+        .filter(
+          (item): item is Record<string, unknown> =>
+            !!item && typeof item === "object" && !Array.isArray(item),
+        )
+        .map((item) => ({
+          id: str(item.id, 100).trim(),
+          src: siteImage(item.src),
+          alt: str(item.alt, 180).trim(),
+          enabled: item.enabled !== false,
+        }))
+        .filter((item) => {
+          if (!item.id || !item.src || galleryIds.has(item.id)) return false;
+          galleryIds.add(item.id);
+          return true;
+        });
       return value as PublicSiteSettings[K];
     }
     case "brandPresets": {

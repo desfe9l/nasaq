@@ -23,7 +23,18 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { ImageUp, Loader2, Save, Trash2, Upload } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Eye,
+  EyeOff,
+  ImageUp,
+  Loader2,
+  Plus,
+  Save,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import { toast } from "sonner";
 import { adminSaveSettingsFn, getSiteSettingsFn } from "@/lib/admin/functions";
 import { invalidateSiteSettings } from "@/lib/admin/use-site-settings";
@@ -86,6 +97,8 @@ export function SiteImagesPanel() {
   const [saving, setSaving] = useState(false);
   const [busySlot, setBusySlot] = useState<string | null>(null);
   const inputs = useRef<Partial<Record<keyof SiteImages, HTMLInputElement | null>>>({});
+  const galleryInputs = useRef<Record<string, HTMLInputElement | null>>({});
+  const [galleryUrl, setGalleryUrl] = useState("");
 
   useEffect(() => {
     void getSiteSettingsFn()
@@ -138,6 +151,73 @@ export function SiteImagesPanel() {
     const next = { ...images, [slot.id]: "" };
     setImages(next);
     await save(next);
+  };
+
+  const galleryItemId = () =>
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `preview-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+  const uploadGalleryImage = async (file: File, replaceId?: string) => {
+    if (!file.type.startsWith("image/") || file.type === "image/svg+xml") {
+      toast.error("استخدم صورة PNG أو JPG أو WebP أو صيغة صورة مدعومة");
+      return;
+    }
+    const busyId = replaceId ?? "gallery";
+    setBusySlot(busyId);
+    try {
+      const src = await encodeImage(file);
+      const gallery = [...(images.gallery ?? [])];
+      if (replaceId) {
+        const index = gallery.findIndex((item) => item.id === replaceId);
+        if (index < 0) return;
+        gallery[index] = { ...gallery[index], src };
+      } else {
+        gallery.push({
+          id: galleryItemId(),
+          src,
+          alt: file.name.replace(/\.[^.]+$/, "").slice(0, 180),
+          enabled: true,
+        });
+      }
+      await save({ ...images, gallery });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "تعذّرت معالجة الصورة");
+    } finally {
+      setBusySlot(null);
+    }
+  };
+
+  const updateGallery = async (
+    gallery: SiteImages["gallery"],
+    persist = false,
+  ) => {
+    const next = { ...images, gallery };
+    setImages(next);
+    if (persist) await save(next);
+  };
+
+  const addGalleryUrl = async () => {
+    const src = galleryUrl.trim();
+    try {
+      if (new URL(src).protocol !== "https:") throw new Error();
+    } catch {
+      toast.error("أدخل رابط صورة يبدأ بـ https://");
+      return;
+    }
+    const gallery = [
+      ...(images.gallery ?? []),
+      { id: galleryItemId(), src, alt: "", enabled: true },
+    ];
+    if (await save({ ...images, gallery })) setGalleryUrl("");
+  };
+
+  const moveGalleryItem = (index: number, delta: -1 | 1) => {
+    const nextIndex = index + delta;
+    if (nextIndex < 0 || nextIndex >= (images.gallery ?? []).length) return;
+    const gallery = [...(images.gallery ?? [])];
+    [gallery[index], gallery[nextIndex]] = [gallery[nextIndex], gallery[index]];
+    void updateGallery(gallery, true);
   };
 
   if (loading) {
@@ -234,6 +314,183 @@ export function SiteImagesPanel() {
           </section>
         );
       })}
+
+      <section className="grid gap-4 rounded-xl border border-line bg-surface p-5">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-[14px] font-extrabold">معرض صور المحرر</h2>
+            <p className="mt-1 text-[11px] leading-5 text-muted">
+              أضف أي عدد من لقطات المحرر، رتّبها، واختر الصور المنشورة في الصفحة الرئيسية.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <input
+              ref={(node) => {
+                galleryInputs.current.new = node;
+              }}
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (file) void uploadGalleryImage(file);
+              }}
+            />
+            <button
+              type="button"
+              className={ghostBtn}
+              disabled={saving || busySlot !== null}
+              onClick={() => galleryInputs.current.new?.click()}
+            >
+              {busySlot === "gallery" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Plus className="size-3.5" />
+              )}
+              إضافة صورة
+            </button>
+            <button
+              type="button"
+              className={primaryBtn}
+              disabled={saving || busySlot !== null}
+              onClick={() => void save(images)}
+            >
+              {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              حفظ المعرض
+            </button>
+          </div>
+        </div>
+
+        {images.gallery?.length ? (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {images.gallery.map((item, index) => (
+              <article
+                key={item.id}
+                className="overflow-hidden rounded-lg border border-line bg-surface-2"
+              >
+                <div className="grid h-40 place-items-center overflow-hidden p-2">
+                  <img
+                    src={item.src}
+                    alt={item.alt}
+                    loading="lazy"
+                    decoding="async"
+                    className="max-h-full max-w-full object-contain"
+                  />
+                </div>
+                <div className="grid gap-2 border-t border-line bg-surface p-3">
+                  <label className="grid gap-1 text-[11px] font-bold text-muted">
+                    وصف الصورة
+                    <input
+                      className="h-9 rounded-md border border-line bg-surface px-2 text-[12px] font-normal text-ink outline-none focus:border-brand"
+                      value={item.alt}
+                      onChange={(event) => {
+                        const gallery = [...images.gallery];
+                        gallery[index] = { ...item, alt: event.target.value };
+                        void updateGallery(gallery);
+                      }}
+                    />
+                  </label>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <input
+                      ref={(node) => {
+                        galleryInputs.current[item.id] = node;
+                      }}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif,image/avif"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) void uploadGalleryImage(file, item.id);
+                      }}
+                    />
+                    <button
+                      type="button"
+                      className={ghostBtn}
+                      disabled={busySlot === item.id || saving}
+                      onClick={() => galleryInputs.current[item.id]?.click()}
+                    >
+                      {busySlot === item.id ? <Loader2 className="size-3.5 animate-spin" /> : <Upload className="size-3.5" />}
+                      استبدال
+                    </button>
+                    <button
+                      type="button"
+                      className={ghostBtn}
+                      aria-label={item.enabled ? "إخفاء الصورة من المعرض" : "إظهار الصورة في المعرض"}
+                      onClick={() => {
+                        const gallery = [...images.gallery];
+                        gallery[index] = { ...item, enabled: !item.enabled };
+                        void updateGallery(gallery, true);
+                      }}
+                    >
+                      {item.enabled ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+                      {item.enabled ? "منشورة" : "مخفية"}
+                    </button>
+                    <button
+                      type="button"
+                      className={ghostBtn}
+                      aria-label="تحريك الصورة للأعلى"
+                      disabled={index === 0 || saving}
+                      onClick={() => moveGalleryItem(index, -1)}
+                    >
+                      <ArrowUp className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      className={ghostBtn}
+                      aria-label="تحريك الصورة للأسفل"
+                      disabled={index === images.gallery.length - 1 || saving}
+                      onClick={() => moveGalleryItem(index, 1)}
+                    >
+                      <ArrowDown className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      className={cn(ghostBtn, "text-error")}
+                      disabled={saving}
+                      onClick={() => {
+                        const gallery = images.gallery.filter((entry) => entry.id !== item.id);
+                        void updateGallery(gallery, true);
+                      }}
+                    >
+                      <Trash2 className="size-3.5" />
+                      حذف
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="rounded-lg border border-dashed border-line px-4 py-7 text-center text-[12px] font-semibold text-muted">
+            لا توجد صور في المعرض بعد.
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
+          <label className="grid min-w-0 flex-1 gap-1 text-[11px] font-bold text-muted">
+            أو أضف رابط صورة
+            <input
+              dir="ltr"
+              type="url"
+              value={galleryUrl}
+              onChange={(event) => setGalleryUrl(event.target.value)}
+              placeholder="https://example.com/preview.webp"
+              className="h-9 rounded-md border border-line bg-surface px-2 text-[12px] font-normal text-ink outline-none focus:border-brand"
+            />
+          </label>
+          <button
+            type="button"
+            className={ghostBtn}
+            disabled={!galleryUrl.trim() || saving}
+            onClick={() => void addGalleryUrl()}
+          >
+            <Plus className="size-3.5" />
+            إضافة الرابط
+          </button>
+        </div>
+      </section>
 
       <section className="grid gap-2 rounded-xl border border-line bg-surface p-5">
         <h3 className="text-[13px] font-extrabold">رابط صورة خارجي (اختياري)</h3>

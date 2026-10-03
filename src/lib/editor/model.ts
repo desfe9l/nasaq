@@ -187,6 +187,10 @@ export interface ElStyle {
   objectY?: number;
   /** Image lightness, percent. 100 is unchanged. */
   brightness?: number;
+  /** Image contrast, percent. 100 is unchanged. */
+  contrast?: number;
+  /** Image color saturation, percent. 100 is unchanged. */
+  saturation?: number;
   /** Image clarity, percent. 0 is unchanged; higher sharpens. */
   sharpness?: number;
   stroke?: number;

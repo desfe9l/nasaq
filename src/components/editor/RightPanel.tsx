@@ -97,7 +97,9 @@ import {
   subscribeRecentColors,
 } from "@/lib/editor/recent-colors";
 import { ArabicTextTools } from "./ArabicTextTools";
+import { ImageAiTools } from "./ImageAiTools";
 import { ScrubField, ScrubInput } from "./ui/ScrubInput";
+import { IMAGE_ADJUSTMENT_PRESETS } from "@/lib/editor/images";
 
 const TEXT_TYPES = ["text", "box", "stat", "stamp", "table", "progress"];
 
@@ -1705,6 +1707,7 @@ export function PropertiesPanel({
 
               {["image", "logo"].includes(el.type) && (
                 <>
+                  {page && <ImageAiTools el={el} pageId={page.id} />}
                   {/* «ملاءمة الصفحة»: one press takes the picture to the page's
                       own size — full bleed, or the largest size that stays
                       inside the sheet with the picture's proportions. */}
@@ -1760,6 +1763,65 @@ export function PropertiesPanel({
                       step={1}
                       onChange={(v) => updateStyle(el.id, { sharpness: v }, true)}
                       onCommit={(v) => updateStyle(el.id, { sharpness: v })}
+                    />
+                  </div>
+                  <Field label="معالجة الصورة" full>
+                    <select
+                      aria-label="معالجة الصورة"
+                      value={
+                        Object.entries(IMAGE_ADJUSTMENT_PRESETS).find(
+                          ([, preset]) =>
+                            preset.brightness === (el.style.brightness ?? 100) &&
+                            preset.contrast === (el.style.contrast ?? 100) &&
+                            preset.saturation === (el.style.saturation ?? 100) &&
+                            preset.sharpness === (el.style.sharpness ?? 0),
+                        )?.[0] ?? "custom"
+                      }
+                      onChange={(event) => {
+                        const preset =
+                          IMAGE_ADJUSTMENT_PRESETS[
+                            event.target
+                              .value as keyof typeof IMAGE_ADJUSTMENT_PRESETS
+                          ];
+                        if (preset)
+                          updateStyle(el.id, {
+                            brightness: preset.brightness,
+                            contrast: preset.contrast,
+                            saturation: preset.saturation,
+                            sharpness: preset.sharpness,
+                          });
+                      }}
+                    >
+                      <option value="custom">مخصص</option>
+                      {Object.entries(IMAGE_ADJUSTMENT_PRESETS).map(
+                        ([id, preset]) => (
+                          <option key={id} value={id}>
+                            {preset.label}
+                          </option>
+                        ),
+                      )}
+                    </select>
+                  </Field>
+                  <div className="grid grid-cols-2 gap-2">
+                    <ScrubField
+                      label="تباين %"
+                      value={round(Number(el.style.contrast ?? 100))}
+                      min={0}
+                      max={200}
+                      step={1}
+                      onChange={(v) => updateStyle(el.id, { contrast: v }, true)}
+                      onCommit={(v) => updateStyle(el.id, { contrast: v })}
+                    />
+                    <ScrubField
+                      label="تشبع %"
+                      value={round(Number(el.style.saturation ?? 100))}
+                      min={0}
+                      max={200}
+                      step={1}
+                      onChange={(v) =>
+                        updateStyle(el.id, { saturation: v }, true)
+                      }
+                      onCommit={(v) => updateStyle(el.id, { saturation: v })}
                     />
                   </div>
                   <label className="flex h-9 items-center justify-between gap-2 rounded-[8px] border border-line px-2 text-[10px] font-extrabold">

@@ -230,23 +230,22 @@ export function homePlanCards(period: SwitchablePeriod): HomePlanCard[] {
  */
 export function institutionalAnnualCard(): HomePlanCard {
   const plan = CENTRAL_PLANS["team-annual"];
-  const savings = planSavings(plan);
   return {
     id: plan.key,
     name: "جهات — سنوي",
     description: "اشتراك سنوي للجهات المؤسسية",
-    amount: plan.amount,
-    formattedAmount: formatAmount(plan.amount),
-    priceSuffix: "سنوياً",
-    termLabel: `مدة الترخيص ${plan.durationDays} يومًا (سنة)`,
-    renewalLabel: "تجديد سنوي للجهة",
-    savings,
-    hasSavings: savings > 0,
+    amount: 0,
+    formattedAmount: "تواصل معنا عبر WhatsApp",
+    priceSuffix: "",
+    termLabel: `ترخيص لمدة ${plan.durationDays} يومًا`,
+    renewalLabel: "تفاصيل التجديد عبر واتساب",
+    savings: 0,
+    hasSavings: false,
     features: ["ترخيص الجهة لمدة سنة", "كل مزايا الفريق", "تفعيل مؤسسي"],
     featured: false,
     kind: "contact",
-    ctaLabel: "اطلب الاشتراك السنوي",
-    ctaHint: "يُرتَّب مع الجهة عبر واتساب",
+    ctaLabel: "تواصل معنا عبر WhatsApp",
+    ctaHint: "السعر والتفاصيل تُحدَّد مع الجهة",
   };
 }
 

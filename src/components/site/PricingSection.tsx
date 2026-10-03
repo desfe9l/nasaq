@@ -311,12 +311,18 @@ function PlanCard({
         <p className="mt-1 text-[11px] text-muted">{card.description}</p>
 
         <p className="mt-4 text-[24px] font-extrabold leading-tight text-ink">
-          {card.formattedAmount}{" "}
-          <span className="text-[13px] font-bold text-muted">ر.س</span>{" "}
-          {free ? null : (
-            <span className="text-[12px] font-bold text-muted">
-              / {card.priceSuffix}
-            </span>
+          {card.kind === "contact" ? (
+            <span className="text-[17px] leading-7">{card.formattedAmount}</span>
+          ) : (
+            <>
+              {card.formattedAmount}{" "}
+              <span className="text-[13px] font-bold text-muted">ر.س</span>{" "}
+              {free ? null : (
+                <span className="text-[12px] font-bold text-muted">
+                  / {card.priceSuffix}
+                </span>
+              )}
+            </>
           )}
         </p>
         <p className="mt-1 text-[11px] text-muted">{card.termLabel}</p>

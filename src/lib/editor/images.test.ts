@@ -1,6 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { fitImageBox, imageAdjustCss, isAcceptedImage, safeImageSrc, sharpnessKernel } from "./images.ts";
+import {
+  fitImageBox,
+  imageAdjustCss,
+  isAcceptedImage,
+  safeImageSrc,
+  sharpnessKernel,
+} from "./images.ts";
 
 describe("isAcceptedImage", () => {
   const file = (type: string) => ({ type }) as File;
@@ -60,6 +66,10 @@ describe("imageAdjustCss", () => {
     assert.equal(imageAdjustCss({}), undefined);
     assert.equal(imageAdjustCss({ brightness: 100, sharpness: 0 }), undefined);
     assert.equal(imageAdjustCss({ brightness: 130 }), "brightness(1.300)");
+    assert.equal(
+    imageAdjustCss({ contrast: 120, saturation: 80 }),
+    "contrast(1.200) saturate(0.800)",
+    );
     assert.match(imageAdjustCss({ sharpness: 40 }) ?? "", /^contrast\(/);
     assert.match(
       imageAdjustCss({ brightness: 80, sharpness: 50 }, "sharp-1") ?? "",
