@@ -71,6 +71,7 @@ function sanitizeDockSides(
 export const OPEN_REPORT_TOOLS_EVENT = "nasaq:open-report-tools";
 import {
   Check,
+  Circle,
   Download,
   Eraser,
   Library,
@@ -1266,6 +1267,7 @@ function Studio({
   const [activeTool, setActiveTool] = useState<
     "select" | "text" | "rect" | "erase"
   >("select");
+  const [marqueeShape, setMarqueeShape] = useState<"rect" | "ellipse">("rect");
   const [eraserSize, setEraserSize] = useState(10);
   const armTool = (tool: "text" | "rect" | "erase" | null) => {
     setActiveTool(tool ?? "select");
@@ -2168,6 +2170,34 @@ function Studio({
               active={activeTool === "select"}
               icon={<MousePointer2 className="size-4" strokeWidth={1.7} />}
               onClick={() => armTool(null)}
+            />
+            <IconButton
+              label="تحديد مستطيل"
+              hint="اسحب لتحديد العناصر المتقاطعة مع المستطيل"
+              active={activeTool === "select" && marqueeShape === "rect"}
+              icon={<Square className="size-4" strokeWidth={1.7} />}
+              onClick={() => {
+                setMarqueeShape("rect");
+                armTool(null);
+                window.dispatchEvent(
+                  new CustomEvent("nasaq:marquee-shape", { detail: "rect" }),
+                );
+              }}
+            />
+            <IconButton
+              label="تحديد دائري أو بيضاوي"
+              hint="اسحب لتحديد العناصر المتقاطعة مع المنطقة البيضاوية"
+              active={activeTool === "select" && marqueeShape === "ellipse"}
+              icon={<Circle className="size-4" strokeWidth={1.7} />}
+              onClick={() => {
+                setMarqueeShape("ellipse");
+                armTool(null);
+                window.dispatchEvent(
+                  new CustomEvent("nasaq:marquee-shape", {
+                    detail: "ellipse",
+                  }),
+                );
+              }}
             />
             <IconButton
               label="نص بالرسم"

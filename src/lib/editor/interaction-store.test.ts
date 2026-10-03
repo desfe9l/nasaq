@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   interactionState,
   marqueeForPage,
+  marqueeHitsBox,
   useInteraction,
   type TransientGeom,
 } from "./interaction-store.ts";
@@ -68,6 +69,25 @@ describe("interaction store", () => {
     interactionState().endInteraction();
     // End also notifies (a follower gets the final clear).
     assert.ok(useInteraction.getState().version > v0 + 3);
+  });
+
+  it("selects boxes intersecting an ellipse marquee", () => {
+    const ellipse = {
+      x0: 0,
+      y0: 0,
+      x1: 100,
+      y1: 60,
+      shape: "ellipse" as const,
+    };
+    assert.equal(marqueeHitsBox(ellipse, { x: 48, y: 27, w: 8, h: 8 }), true);
+    assert.equal(marqueeHitsBox(ellipse, { x: 0, y: 0, w: 5, h: 5 }), false);
+    assert.equal(marqueeHitsBox(ellipse, { x: 90, y: 27, w: 10, h: 6 }), true);
+  });
+
+  it("preserves rectangular marquee overlap behavior", () => {
+    const rect = { x0: 10, y0: 10, x1: 30, y1: 30 };
+    assert.equal(marqueeHitsBox(rect, { x: 28, y: 28, w: 8, h: 8 }), true);
+    assert.equal(marqueeHitsBox(rect, { x: 31, y: 31, w: 8, h: 8 }), false);
   });
 
   it("collapses empty guides to the shared empty object", () => {

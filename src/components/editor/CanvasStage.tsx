@@ -31,7 +31,11 @@ import {
   resizeToPointer,
 } from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
-import { marqueeForPage, useInteraction } from "@/lib/editor/interaction-store";
+import {
+  marqueeForPage,
+  marqueeHitsBox,
+  useInteraction,
+} from "@/lib/editor/interaction-store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
@@ -242,6 +246,7 @@ export function CanvasStage({
   const [dropping, setDropping] = useState<"file" | "library" | null>(null);
   const [drawTool, setDrawTool] = useState<"text" | "rect" | "erase" | null>(null);
   const eraseSizeRef = useRef(10);
+  const marqueeShapeRef = useRef<"rect" | "ellipse">("rect");
   const drawArmed = drawTool !== null;
   /*
    * The header's tool cluster shows which tool is live. The tool state lives
@@ -318,6 +323,11 @@ export function CanvasStage({
       const size = Number((event as CustomEvent<number>).detail);
       if (Number.isFinite(size)) eraseSizeRef.current = clamp(size, 2, 50);
     };
+    const onMarqueeShape = (event: Event) => {
+      const shape = (event as CustomEvent<"rect" | "ellipse">).detail;
+      if (shape === "rect" || shape === "ellipse")
+        marqueeShapeRef.current = shape;
+    };
     const disarm = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setDrawTool(null);
@@ -327,11 +337,13 @@ export function CanvasStage({
     window.addEventListener("nasaq:draw-text", armText);
     window.addEventListener("nasaq:tool", onTool);
     window.addEventListener("nasaq:eraser-size", onEraseSize);
+    window.addEventListener("nasaq:marquee-shape", onMarqueeShape);
     window.addEventListener("keydown", disarm);
     return () => {
       window.removeEventListener("nasaq:draw-text", armText);
       window.removeEventListener("nasaq:tool", onTool);
       window.removeEventListener("nasaq:eraser-size", onEraseSize);
+      window.removeEventListener("nasaq:marquee-shape", onMarqueeShape);
       window.removeEventListener("keydown", disarm);
     };
   }, []);
@@ -1229,15 +1241,21 @@ export function CanvasStage({
           y0: box.y,
           x1: box.x + box.w,
           y1: box.y + box.h,
+          shape: marqueeShapeRef.current,
         });
         if (!drawTool) {
           const hits = candidates
-            .filter(
-              (p) =>
-                p.box.x < box.x + box.w &&
-                p.box.x + p.box.w > box.x &&
-                p.box.y < box.y + box.h &&
-                p.box.y + p.box.h > box.y,
+            .filter((p) =>
+              marqueeHitsBox(
+                {
+                  x0: start.x,
+                  y0: start.y,
+                  x1: cur.x,
+                  y1: cur.y,
+                  shape: marqueeShapeRef.current,
+                },
+                p.box,
+              ),
             )
             .map((p) => p.id);
           const merged = [...new Set([...before, ...hits])];
@@ -2118,13 +2136,13 @@ const EnteredChildNode = memo(function EnteredChildNode({
   );
 });
 
-/** Marquee rectangle, driven by the transient interaction store. */
+/** Page-scoped rectangle or ellipse marquee from the transient interaction store. */
 function MarqueeLayer({ pageId }: { pageId: string }) {
   const marquee = useInteraction((s) => marqueeForPage(s.marquee, pageId));
   if (!marquee) return null;
   return (
     <div
-      className="marquee"
+      className={cn("marquee", marquee.shape === "ellipse" && "marquee-ellipse")}
       style={{
         left: `${marquee.x0}mm`,
         top: `${marquee.y0}mm`,

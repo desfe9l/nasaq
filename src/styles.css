@@ -1352,6 +1352,9 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
   z-index: 60;
   pointer-events: none;
 }
+.marquee-ellipse {
+  border-radius: 50%;
+}
 
 /*
  * Overflow warning.

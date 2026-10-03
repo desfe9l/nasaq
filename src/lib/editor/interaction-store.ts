@@ -50,13 +50,40 @@ export interface TransientGeom {
   rotation?: number;
 }
 
-/** Marquee rectangle in page mm; `pageId` scopes the transient overlay. */
+/** Marquee geometry in page mm; `pageId` scopes the transient overlay. */
 export interface MarqueeRect {
   pageId: string;
   x0: number;
   y0: number;
   x1: number;
   y1: number;
+  shape?: "rect" | "ellipse";
+}
+
+export function marqueeHitsBox(
+  marquee: Pick<MarqueeRect, "x0" | "y0" | "x1" | "y1" | "shape">,
+  box: { x: number; y: number; w: number; h: number },
+): boolean {
+  const left = Math.min(marquee.x0, marquee.x1);
+  const top = Math.min(marquee.y0, marquee.y1);
+  const width = Math.abs(marquee.x1 - marquee.x0);
+  const height = Math.abs(marquee.y1 - marquee.y0);
+  if (marquee.shape !== "ellipse") {
+    return (
+      box.x < left + width &&
+      box.x + box.w > left &&
+      box.y < top + height &&
+      box.y + box.h > top
+    );
+  }
+  if (width <= 0 || height <= 0) return false;
+  const cx = left + width / 2;
+  const cy = top + height / 2;
+  const rx = width / 2;
+  const ry = height / 2;
+  const x = Math.max(box.x, Math.min(cx, box.x + box.w));
+  const y = Math.max(box.y, Math.min(cy, box.y + box.h));
+  return ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1;
 }
 
 export function marqueeForPage(
