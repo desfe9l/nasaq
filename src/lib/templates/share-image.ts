@@ -1,4 +1,5 @@
 import { SITE_OG_IMAGE_HEIGHT, SITE_OG_IMAGE_WIDTH } from "@/lib/og/share";
+import { previewCacheKey } from "@/lib/editor/import/shared";
 import { publishedTemplateAbsoluteUrl } from "@/lib/templates/published";
 
 /** Pixel width of a template preview served to crawlers. Height follows the page. */
@@ -70,7 +71,7 @@ export function templateShareImage(idOrSlug: string, thumbnail?: string | null):
   const jpeg = thumbnail.startsWith("data:image/jpeg") || thumbnail.startsWith("data:image/jpg");
   const size = svg ? svgShareSize(thumbnail) : { width: SITE_OG_IMAGE_WIDTH, height: SITE_OG_IMAGE_HEIGHT };
   return {
-    url: `${origin}/api/templates/thumbnail?id=${encodeURIComponent(idOrSlug)}`,
+    url: `${origin}/api/templates/thumbnail?id=${encodeURIComponent(idOrSlug)}&v=${previewCacheKey(thumbnail)}`,
     type: jpeg ? "image/jpeg" : "image/png",
     width: size.width,
     height: size.height,

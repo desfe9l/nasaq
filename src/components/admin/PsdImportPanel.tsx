@@ -1,10 +1,9 @@
 /**
- * PSD → NASAQ, inside the owner dashboard.
+ * Template import inside the owner dashboard.
  *
- * The file is authorised on the server, then parsed off the UI thread into
- * real NASAQ elements. The owner reviews the match, chooses which images
- * join the existing library, and either opens the document in the editor or
- * saves it as a draft template.
+ * PSD, DOCX, PPTX, PDF and images are authorised on the server, then converted
+ * in the browser into real NASAQ elements. The owner can open the document,
+ * save it, or keep it as a draft template.
  */
 
 import { useMemo, useRef, useState } from "react";
@@ -18,7 +17,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { adminUpsertTemplateFn } from "@/lib/admin/functions";
-import { psdAuthorizeImportFn } from "@/lib/psd/functions";
+import { authorizeTemplateImportFn } from "@/lib/psd/functions";
 import { syncStorageOwner } from "@/lib/auth/storage-owner-sync";
 import type { CanvasEl, Project } from "@/lib/editor/model";
 import {
@@ -30,6 +29,8 @@ import {
   type AssetFolder,
 } from "@/lib/editor/storage";
 import type { AssetDecision, AssetDisposition, PsdImportResult } from "@/lib/editor/psd/pipeline";
+import { classifyImport } from "@/lib/editor/import/detect";
+import type { BuiltImport, ImportKind } from "@/lib/editor/import/shared";
 import { magicHexOf } from "@/lib/editor/psd/security";
 import { rememberUploadedFont } from "@/lib/nsq/fonts";
 import { cn, uid } from "@/lib/utils";
@@ -38,6 +39,18 @@ const btn =
   "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-navy px-4 text-[13px] font-extrabold text-on-brand transition hover:bg-ok disabled:opacity-50";
 const ghost =
   "inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-line bg-surface px-3 text-[12px] font-extrabold transition hover:border-brand/40 disabled:opacity-50";
+
+const ACCEPT = ".psd,.psb,.docx,.pptx,.pdf,.png,.jpg,.jpeg,.svg";
+const FORMAT_CHIPS: { id: "all" | ImportKind; label: string }[] = [
+  { id: "all", label: "الكل" },
+  { id: "psd", label: "PSD" },
+  { id: "docx", label: "DOCX" },
+  { id: "pptx", label: "PPTX" },
+  { id: "pdf", label: "PDF" },
+  { id: "png", label: "PNG" },
+  { id: "jpg", label: "JPG" },
+  { id: "svg", label: "SVG" },
+];
 
 type Phase = "idle" | "working" | "ready";
 
@@ -105,7 +118,7 @@ function ResultPreview({ project, composite }: { project: Project; composite?: s
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <figure className="rounded-xl border border-line bg-[#e7e2d8] p-3">
-        <figcaption className="mb-2 text-[11px] font-extrabold text-muted">الأصل من PSD</figcaption>
+        <figcaption className="mb-2 text-[11px] font-extrabold text-muted">المرجع البصري</figcaption>
         {composite ? (
           <img alt="معاينة ملف PSD" src={composite} className="w-full bg-white shadow-sm" />
         ) : (
@@ -113,7 +126,7 @@ function ResultPreview({ project, composite }: { project: Project; composite?: s
         )}
       </figure>
       <figure className="rounded-xl border border-line bg-[#e7e2d8] p-3">
-        <figcaption className="mb-2 text-[11px] font-extrabold text-muted">نتيجة نَسَق</figcaption>
+        <figcaption className="mb-2 text-[11px] font-extrabold text-muted">عناصر نَسَق</figcaption>
         <div className="relative w-full bg-white shadow-sm" style={{ aspectRatio: `${page.w} / ${page.h}`, containerType: "inline-size" }}>
           {paint(page.elements, 0, 0)}
         </div>
@@ -129,6 +142,8 @@ export function PsdImportPanel() {
   const [progress, setProgress] = useState({ stage: "", percent: 0, detail: "" });
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PsdImportResult | null>(null);
+  const [office, setOffice] = useState<BuiltImport | null>(null);
+  const [formatFilter, setFormatFilter] = useState<(typeof FORMAT_CHIPS)[number]["id"]>("all");
   const [folders, setFolders] = useState<AssetFolder[]>([]);
   const [library, setLibrary] = useState<{ id: string; name: string; src: string }[]>([]);
   const [folderId, setFolderId] = useState("");
@@ -137,11 +152,12 @@ export function PsdImportPanel() {
   const [decisions, setDecisions] = useState<Record<string, AssetDisposition>>({});
   const [replacements, setReplacements] = useState<Record<string, string>>({});
   const [fonts, setFonts] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<"editor" | "template" | null>(null);
+  const [busy, setBusy] = useState<"editor" | "document" | "template" | null>(null);
 
   const take = (next: File | null) => {
     setError(null);
     setResult(null);
+    setOffice(null);
     setPhase("idle");
     setFonts({});
     if (!next) {
@@ -149,13 +165,21 @@ export function PsdImportPanel() {
       return;
     }
     const name = next.name.toLowerCase();
-    if (!name.endsWith(".psd") && !name.endsWith(".psb")) {
-      setError("يُقبل PSD أو PSB فقط.");
+    if (!/\.(psd|psb|docx|pptx|pdf|png|jpe?g|svg)$/i.test(name)) {
+      setError("صيغة غير مدعومة. المقبول: PSD وDOCX وPPTX وPDF وPNG وJPG وSVG.");
       setFile(null);
       return;
     }
+    if (formatFilter !== "all") {
+      const kind = name.endsWith(".psb") ? "psd" : name.endsWith(".jpeg") ? "jpg" : name.split(".").pop();
+      if (kind !== formatFilter) {
+        setError(`الملف ليس ${formatFilter.toUpperCase()}.`);
+        setFile(null);
+        return;
+      }
+    }
     setFile(next);
-    setTitle(next.name.replace(/\.ps[db]$/i, ""));
+    setTitle(next.name.replace(/\.[^.]+$/, ""));
   };
 
   const convert = async () => {
@@ -163,34 +187,51 @@ export function PsdImportPanel() {
     setPhase("working");
     setError(null);
     setResult(null);
+    setOffice(null);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
+      const classified = classifyImport(file.name, bytes);
+      if (!classified.format) throw new Error(classified.error || "صيغة غير مدعومة.");
       setProgress({ stage: "التحقق من صلاحية المالك", percent: 2, detail: "" });
-      const gate = await psdAuthorizeImportFn({
-        data: { fileName: file.name, byteLength: bytes.byteLength, magicHex: magicHexOf(bytes) },
+      const gate = await authorizeTemplateImportFn({
+        data: {
+          fileName: file.name,
+          byteLength: bytes.byteLength,
+          magicHex: magicHexOf(bytes),
+          format: classified.format,
+        },
       });
       if (!gate.ok) throw new Error(gate.error);
       await syncStorageOwner();
-      const [assets, storedFolders] = await Promise.all([
-        listAssets(),
-        getSetting<AssetFolder[]>("assetFolders"),
-      ]);
-      const folderList = Array.isArray(storedFolders) ? storedFolders : [];
-      setFolders(folderList);
-      setLibrary(assets.map((asset) => ({ id: asset.id, name: asset.name, src: asset.src })));
-      const { fingerprintAssets } = await import("@/lib/editor/psd/pipeline");
-      const { runPsdImport } = await import("@/lib/editor/psd/run");
-      const prints = await fingerprintAssets(assets, (stage, percent, detail) => {
-        setProgress({ stage, percent, detail: detail || "" });
-      });
-      const imported = await runPsdImport(bytes, gate.fileName, prints, (stage, percent, detail) => {
-        setProgress({ stage, percent, detail: detail || "" });
-      });
-      const initial: Record<string, AssetDisposition> = {};
-      for (const asset of imported.report.assets) initial[asset.hash] = "design";
-      setDecisions(initial);
-      setResult(imported);
-      setTitle(imported.project.name);
+      if (classified.format === "psd" || classified.format === "psb") {
+        const [assets, storedFolders] = await Promise.all([
+          listAssets(),
+          getSetting<AssetFolder[]>("assetFolders"),
+        ]);
+        const folderList = Array.isArray(storedFolders) ? storedFolders : [];
+        setFolders(folderList);
+        setLibrary(assets.map((asset) => ({ id: asset.id, name: asset.name, src: asset.src })));
+        const { fingerprintAssets } = await import("@/lib/editor/psd/pipeline");
+        const { runPsdImport } = await import("@/lib/editor/psd/run");
+        const prints = await fingerprintAssets(assets, (stage, percent, detail) => {
+          setProgress({ stage, percent, detail: detail || "" });
+        });
+        const imported = await runPsdImport(bytes, gate.fileName, prints, (stage, percent, detail) => {
+          setProgress({ stage, percent, detail: detail || "" });
+        });
+        const initial: Record<string, AssetDisposition> = {};
+        for (const asset of imported.report.assets) initial[asset.hash] = "design";
+        setDecisions(initial);
+        setResult(imported);
+        setTitle(imported.project.name);
+      } else {
+        const { importTemplateBytes } = await import("@/lib/editor/import/run");
+        setProgress({ stage: "تحويل الملف", percent: 20, detail: classified.format.toUpperCase() });
+        const imported = await importTemplateBytes(bytes, gate.fileName);
+        setOffice(imported);
+        setTitle(imported.project.name);
+        setProgress({ stage: "اكتمل", percent: 100, detail: "" });
+      }
       setPhase("ready");
     } catch (err) {
       setPhase("idle");
@@ -209,6 +250,14 @@ export function PsdImportPanel() {
   }, [result, decisions, replacements, folderId]);
 
   const commitProject = async (): Promise<Project> => {
+    if (office) {
+      await syncStorageOwner();
+      return {
+        ...office.project,
+        name: title.trim() || office.project.name,
+        thumbnail: office.previewDataUrl || office.project.thumbnail,
+      };
+    }
     if (!result || !prepared) throw new Error("لا توجد نتيجة تحويل");
     const { applyAssetDecisions } = await import("@/lib/editor/psd/pipeline");
     const src = new Map(library.map((asset) => [asset.id, asset.src]));
@@ -261,6 +310,19 @@ export function PsdImportPanel() {
     }
   };
 
+  const saveDocument = async () => {
+    setBusy("document");
+    try {
+      const project = await commitProject();
+      await saveProject(project);
+      toast.success("حُفظ المستند في المشاريع، ويمكن فتحه من المحرر لاحقًا.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "تعذر حفظ المستند");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const adoptTemplate = async () => {
     setBusy("template");
     try {
@@ -269,13 +331,21 @@ export function PsdImportPanel() {
       if (content.length > 4 * 1024 * 1024) {
         throw new Error("المستند أكبر من حد القالب (4 ميغابايت). افتحه في المحرر، أو أبقِ الصور داخل التصميم فقط.");
       }
-      const thumb = result?.compositeDataUrl;
+      const thumb = office?.previewDataUrl || (result?.compositeDataUrl && result.compositeDataUrl.length < 1_800_000 ? result.compositeDataUrl : null);
+      const partial = (office?.notes || [])
+        .filter((note) => note.mode !== "editable")
+        .slice(0, 2)
+        .map((note) => note.reason)
+        .join(" ");
+      const description = office
+        ? `محوّل من ${office.format.toUpperCase()} إلى عناصر نَسَق قابلة للتحرير. ${office.stats.texts} نص · ${office.stats.tables} جداول · ${office.stats.images} صور. ${partial}`.slice(0, 500)
+        : "محوَّل من PSD إلى عناصر نَسَق قابلة للتحرير";
       const saved = await adminUpsertTemplateFn({
         data: {
           template: {
             title: project.name,
-            description: "محوَّل من PSD إلى عناصر نَسَق قابلة للتحرير",
-            category: "psd",
+            description,
+            category: office ? "import" : "psd",
             tier: "free",
             status: "draft",
             kind: "json",
@@ -285,7 +355,7 @@ export function PsdImportPanel() {
         },
       });
       if (!saved.ok) throw new Error(saved.error);
-      toast.success("اعتُمد كقالب مسودة في كتالوج المالك");
+      toast.success("حُفظ كقالب مسودة. يمكن تعديله لاحقًا من إدارة القوالب أو فتحه في المحرر.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "تعذر حفظ القالب");
     } finally {
@@ -299,30 +369,49 @@ export function PsdImportPanel() {
   return (
     <section className="grid gap-5">
       <header>
-        <h2 className="text-[20px] font-black">PSD → NASAQ</h2>
+        <h2 className="text-[20px] font-black">استيراد وتحويل القوالب</h2>
         <p className="mt-1 max-w-2xl text-[13px] font-semibold leading-6 text-muted">
-          يحوّل ملف Photoshop إلى مستند نَسَق بطبقات قابلة للتعديل: نص، صور، أشكال ومجموعات. ما لا يملك مقابلًا أصليًا يُذكر في التقرير ولا يُخفى.
+          الملفات المدعومة تُحوَّل إلى مستند نَسَق قابل للتحرير: نص، جداول، صور وأشكال حيث يسمح الملف. ليس مطابقة كاملة لـ Word أو PowerPoint، وما لا يُستخرج يُذكر في التقرير ولا يُخفى.
+        </p>
+        <p className="mt-2 text-[12px] font-extrabold tracking-wide text-ink" dir="ltr">
+          PSD · DOCX · PPTX · PDF · PNG · JPG · SVG
         </p>
       </header>
 
+      <div className="flex flex-wrap gap-1.5">
+        {FORMAT_CHIPS.map((chip) => (
+          <button
+            key={chip.id}
+            type="button"
+            onClick={() => setFormatFilter(chip.id)}
+            className={cn(
+              "h-8 rounded-full border px-3 text-[12px] font-extrabold",
+              formatFilter === chip.id ? "border-brand bg-navy text-on-brand" : "border-line bg-surface text-muted",
+            )}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </div>
+
       <div
-        className="grid place-items-center rounded-2xl border border-dashed border-brand/50 bg-surface px-4 py-8 text-center"
+        className="grid place-items-center rounded-xl border border-dashed border-brand/50 bg-surface px-4 py-6 text-center"
         onDragOver={(event) => event.preventDefault()}
         onDrop={(event) => {
           event.preventDefault();
           take(event.dataTransfer.files?.[0] || null);
         }}
       >
-        <FileUp className="mb-2 size-7 text-brand" />
-        <p className="text-[14px] font-extrabold">أسقط ملف PSD هنا</p>
-        <p className="mt-1 text-[12px] font-semibold text-muted">أو اختره من جهازك. الخدمة للمالك فقط.</p>
-        <button type="button" className={cn(ghost, "mt-4")} onClick={() => inputRef.current?.click()}>
+        <FileUp className="mb-2 size-6 text-brand" />
+        <p className="text-[14px] font-extrabold">أسقط الملف هنا</p>
+        <p className="mt-1 text-[12px] font-semibold text-muted">PSD أو DOCX أو PPTX أو PDF أو صورة. الخدمة للمالك فقط.</p>
+        <button type="button" className={cn(ghost, "mt-3")} onClick={() => inputRef.current?.click()}>
           اختيار ملف
         </button>
         <input
           ref={inputRef}
           type="file"
-          accept=".psd,.psb"
+          accept={ACCEPT}
           className="sr-only"
           onChange={(event) => take(event.target.files?.[0] || null)}
         />
@@ -355,6 +444,61 @@ export function PsdImportPanel() {
           </div>
           {progress.detail && <p className="mt-2 text-[11px] font-semibold text-muted">{progress.detail}</p>}
         </div>
+      )}
+
+      {office && (
+        <section className="grid gap-4">
+          <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+            {[
+              ["الصيغة", office.format.toUpperCase()],
+              ["الصفحات", String(office.stats.pages)],
+              ["المقاس", `${Math.round(office.project.pages[0]?.w || 0)}×${Math.round(office.project.pages[0]?.h || 0)} مم`],
+              ["نص", String(office.stats.texts)],
+              ["جداول", String(office.stats.tables)],
+              ["صور", String(office.stats.images)],
+              ["أشكال", String(office.stats.shapes)],
+              ["قابل للتحرير", String(office.stats.editable)],
+              ["تقريبي", String(office.stats.partial)],
+              ["أُهمل", String(office.stats.skipped)],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-lg border border-line bg-surface px-3 py-2">
+                <dt className="text-[10px] font-bold text-muted">{label}</dt>
+                <dd className="text-[14px] font-black">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <ResultPreview project={office.project} composite={office.previewDataUrl || undefined} />
+          <ul className="grid max-h-64 gap-2 overflow-auto">
+            {office.notes.map((note, index) => (
+              <li key={`${note.name}-${index}`} className="rounded-lg bg-paper px-3 py-2 text-[12px] font-semibold">
+                <span className="font-black">{note.name}</span>
+                <span className="mx-1 text-muted">·</span>
+                {note.mode === "editable" ? "قابل للتحرير" : note.mode === "flattened" ? "طبقة بصرية" : note.mode === "skipped" ? "أُهمل" : "جزئي"}
+                <span className="mt-1 block text-[11px] text-muted">{note.reason}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className="h-10 min-w-56 flex-1 rounded-lg border border-line bg-surface px-3 text-[13px] font-bold"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              aria-label="اسم المشروع أو القالب"
+            />
+            <button type="button" className={btn} disabled={!!busy} onClick={() => void openInEditor()}>
+              {busy === "editor" ? <Loader2 className="size-4 animate-spin" /> : null}
+              فتح في المحرر
+            </button>
+            <button type="button" className={ghost} disabled={!!busy} onClick={() => void saveDocument()}>
+              {busy === "document" ? <Loader2 className="size-4 animate-spin" /> : null}
+              حفظ كمستند
+            </button>
+            <button type="button" className={ghost} disabled={!!busy} onClick={() => void adoptTemplate()}>
+              {busy === "template" ? <Loader2 className="size-4 animate-spin" /> : null}
+              حفظ كقالب
+            </button>
+          </div>
+        </section>
       )}
 
       {report && result && (
@@ -530,9 +674,13 @@ export function PsdImportPanel() {
               {busy === "editor" ? <Loader2 className="size-4 animate-spin" /> : null}
               فتح في المحرر
             </button>
+            <button type="button" className={ghost} disabled={!!busy} onClick={() => void saveDocument()}>
+              {busy === "document" ? <Loader2 className="size-4 animate-spin" /> : null}
+              حفظ كمستند
+            </button>
             <button type="button" className={ghost} disabled={!!busy} onClick={() => void adoptTemplate()}>
               {busy === "template" ? <Loader2 className="size-4 animate-spin" /> : null}
-              اعتماد كقالب
+              حفظ كقالب
             </button>
           </div>
         </>

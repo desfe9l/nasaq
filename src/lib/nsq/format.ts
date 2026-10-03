@@ -588,12 +588,16 @@ export function validatePages(
       el.hfRole = raw.hfRole;
     if (
       isRecord(raw.source) &&
-      raw.source.kind === "psd" &&
+      (raw.source.kind === "psd" ||
+        raw.source.kind === "docx" ||
+        raw.source.kind === "pptx" ||
+        raw.source.kind === "pdf" ||
+        raw.source.kind === "image") &&
       typeof raw.source.layerId === "string" &&
       raw.source.layerId
     ) {
       el.source = {
-        kind: "psd",
+        kind: raw.source.kind,
         layerId: raw.source.layerId.slice(0, 80),
         layerName:
           typeof raw.source.layerName === "string"

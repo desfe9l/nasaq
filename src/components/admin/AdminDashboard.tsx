@@ -53,7 +53,7 @@ type Tab = "templates" | "studio" | "psd" | "commercial" | "content" | "images" 
 const TABS: { id: Tab; label: string; icon: typeof Shield }[] = [
   { id: "templates", label: "إدارة القوالب", icon: LayoutTemplate },
   { id: "studio", label: "استوديو القوالب", icon: Sparkles },
-  { id: "psd", label: "PSD → NASAQ", icon: Layers },
+  { id: "psd", label: "استيراد القوالب", icon: Layers },
   { id: "commercial", label: "الإعدادات التجارية", icon: Store },
   { id: "content", label: "محتوى الموقع", icon: Megaphone },
   { id: "images", label: "صور الموقع", icon: ImageIcon },

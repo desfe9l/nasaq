@@ -63,6 +63,15 @@ export const Route = createFileRoute("/api/templates/thumbnail")({
           const [, mime, payload] = match;
           const bytes = Buffer.from(payload, "base64");
           if (bytes.byteLength > 8 * 1024 * 1024) return notFound();
+          const version = url.searchParams.get("v");
+          const { createHash } = await import("node:crypto");
+          const etag = `"${createHash("sha1").update(bytes).digest("hex").slice(0, 16)}"`;
+          const cache = version
+            ? "public, max-age=31536000, immutable"
+            : "public, max-age=60, must-revalidate";
+          if (request.headers.get("if-none-match") === etag) {
+            return new Response(null, { status: 304, headers: { etag, "cache-control": cache } });
+          }
           if (mime.toLowerCase() === "image/svg+xml") {
             try {
               const { rasterizeSvgToPng } = await import("@/lib/og/raster-svg");
@@ -72,7 +81,8 @@ export const Route = createFileRoute("/api/templates/thumbnail")({
                 headers: {
                   "content-type": "image/png",
                   "content-length": String(png.byteLength),
-                  "cache-control": "public, max-age=86400, immutable",
+                  etag,
+                  "cache-control": cache,
                   "content-security-policy": "default-src 'none'; sandbox",
                 },
               });
@@ -90,7 +100,8 @@ export const Route = createFileRoute("/api/templates/thumbnail")({
             headers: {
               "content-type": mime.toLowerCase(),
               "content-length": String(bytes.byteLength),
-              "cache-control": "public, max-age=3600, immutable",
+              etag,
+              "cache-control": cache,
               "content-security-policy": "default-src 'none'; sandbox",
             },
           });

@@ -9,7 +9,7 @@ describe("template share image", () => {
     const thumb = `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
     const image = templateShareImage("nasaq-pack-official", thumb);
     assert.equal(image.type, "image/png");
-    assert.match(image.url, /\/api\/templates\/thumbnail\?id=nasaq-pack-official$/);
+    assert.match(image.url, /\/api\/templates\/thumbnail\?id=nasaq-pack-official&v=[0-9a-z]+$/);
     assert.equal(image.width, 1200);
     assert.ok(image.height > 1200);
     assert.doesNotMatch(image.url, /\/og\.jpg$/);
@@ -24,6 +24,6 @@ describe("template share image", () => {
   it("serves a stored JPEG through the same endpoint", () => {
     const image = templateShareImage("card", "data:image/jpeg;base64,QQ==");
     assert.equal(image.type, "image/jpeg");
-    assert.match(image.url, /\/api\/templates\/thumbnail\?id=card$/);
+    assert.match(image.url, /\/api\/templates\/thumbnail\?id=card&v=[0-9a-z]+$/);
   });
 });

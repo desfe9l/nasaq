@@ -304,6 +304,8 @@ export type TextBoxMode = "free" | "autoHeight" | "fixed" | "autoWidth" | "fit";
 /** Types whose box can auto-size to their text. */
 export const AUTO_TEXT_TYPES: ElType[] = ["text", "box", "stat", "stamp"];
 
+export type ElementSourceKind = "psd" | "docx" | "pptx" | "pdf" | "image";
+
 export interface CanvasEl {
   id: string;
   type: ElType;
@@ -364,11 +366,11 @@ export interface CanvasEl {
    */
   hfRole?: "header" | "footer";
   /**
-   * Where an imported element came from. The editor ignores it; PSD import
-   * uses it to keep each layer tied to the file it was read from.
+   * Where an imported element came from. The editor ignores it; importers
+   * use it to keep each piece tied to the file it was read from.
    */
   source?: {
-    kind: "psd";
+    kind: ElementSourceKind;
     layerId: string;
     layerName: string;
     fallback?: "raster" | "partial";
