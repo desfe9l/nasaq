@@ -27,6 +27,7 @@ import {
   Paragraph,
   ShadingType,
   Table,
+  UnderlineType,
   TableAnchorType,
   TableCell,
   TableRow,
@@ -37,15 +38,28 @@ import {
   type ITableOptions,
   type ParagraphChild,
 } from "docx";
-import type { SceneImage, SceneItem, ScenePage, SceneShape, SceneStroke } from "./scene";
-import { parseSvgPath, scaleSegments, type PathSegment } from "./vector-path.ts";
-import { BRAND } from "@/lib/brand";
+import type {
+  SceneImage,
+  SceneItem,
+  ScenePage,
+  SceneShape,
+  SceneStroke,
+} from "./scene";
+import {
+  parseSvgPath,
+  scaleSegments,
+  type PathSegment,
+} from "./vector-path.ts";
+import { BRAND } from "../brand.ts";
+
+import { mmToPx, mmToEmu } from "./render-units";
 
 const mm2pt = (v: number) => v * (72 / 25.4);
 /** Word sizes strokes in eighths of a point; 2 (¼pt) is the practical minimum. */
-const strokeEighths = (widthMm: number) => Math.max(2, Math.round(mm2pt(widthMm) * 8));
+const strokeEighths = (widthMm: number) =>
+  Math.max(2, Math.round(mm2pt(widthMm) * 8));
 /** DrawingML distances are EMU: 1 mm = 36000 EMU. */
-const mm2emu = (v: number) => Math.round(v * 36000);
+const mm2emu = mmToEmu;
 
 function hex(color: string): string {
   const v = String(color || "").trim();
@@ -62,16 +76,24 @@ function hex(color: string): string {
 }
 
 function isTransparent(color: string): boolean {
-  const v = String(color || "").trim().toLowerCase();
+  const v = String(color || "")
+    .trim()
+    .toLowerCase();
   return !v || v === "transparent" || v === "none";
 }
 
 function fontFace(font: string): string {
-  const first = font.split(",")[0].trim().replace(/^["']|["']$/g, "");
+  const first = font
+    .split(",")[0]
+    .trim()
+    .replace(/^["']|["']$/g, "");
   return first || "Tajawal";
 }
 
-const ALIGN: Record<string, (typeof AlignmentType)[keyof typeof AlignmentType]> = {
+const ALIGN: Record<
+  string,
+  (typeof AlignmentType)[keyof typeof AlignmentType]
+> = {
   right: AlignmentType.RIGHT,
   center: AlignmentType.CENTER,
   left: AlignmentType.LEFT,
@@ -227,10 +249,14 @@ function pathSegmentsToXml(segments: PathSegment[]): string {
   for (const seg of segments) {
     switch (seg.kind) {
       case "move":
-        parts.push(`<a:moveTo><a:pt x="${Math.round(seg.x)}" y="${Math.round(seg.y)}"/></a:moveTo>`);
+        parts.push(
+          `<a:moveTo><a:pt x="${Math.round(seg.x)}" y="${Math.round(seg.y)}"/></a:moveTo>`,
+        );
         break;
       case "line":
-        parts.push(`<a:lnTo><a:pt x="${Math.round(seg.x)}" y="${Math.round(seg.y)}"/></a:lnTo>`);
+        parts.push(
+          `<a:lnTo><a:pt x="${Math.round(seg.x)}" y="${Math.round(seg.y)}"/></a:lnTo>`,
+        );
         break;
       case "cubic":
         parts.push(
@@ -259,7 +285,9 @@ function shapeDrawing(item: SceneShape): string {
   const wEmu = mm2emu(item.w);
   const hEmu = mm2emu(item.h);
   const id = ++shapeSeq;
-  const rot = item.rotation ? ` rot="${Math.round(item.rotation * 60000)}"` : "";
+  const rot = item.rotation
+    ? ` rot="${Math.round(item.rotation * 60000)}"`
+    : "";
 
   const fillXml = isTransparent(item.fill)
     ? "<a:noFill/>"
@@ -295,8 +323,8 @@ function shapeDrawing(item: SceneShape): string {
 
 function borderOpt(stroke: SceneStroke) {
   return {
-    style: BorderStyle.SINGLE,
-    size: strokeEighths(stroke.width),
+    style: stroke.width > 0 ? BorderStyle.SINGLE : BorderStyle.NIL,
+    size: stroke.width > 0 ? strokeEighths(stroke.width) : 0,
     color: hex(stroke.color),
   };
 }
@@ -314,17 +342,22 @@ function textBlock(item: Extract<SceneItem, { kind: "text" }>): Paragraph[] {
     position: { x: mm(item.x), y: mm(item.y) },
     width: mm(item.w),
     height: mm(item.h),
-    anchor: { horizontal: FrameAnchorType.PAGE, vertical: FrameAnchorType.PAGE },
+    anchor: {
+      horizontal: FrameAnchorType.PAGE,
+      vertical: FrameAnchorType.PAGE,
+    },
     wrap: FrameWrap.NONE,
     rule: HeightRule.ATLEAST,
   };
 
   const lines = item.text.split("\n");
-  const bordered = item.border && !isTransparent(item.border.color) ? item.border : null;
+  const bordered =
+    item.border && !isTransparent(item.border.color) ? item.border : null;
 
   return lines.map((line, idx) => {
     const isLast = idx === lines.length - 1;
-    const spaceAfter = !isLast && item.paragraphSpacing > 0 ? mm(item.paragraphSpacing) : 0;
+    const spaceAfter =
+      !isLast && item.paragraphSpacing > 0 ? mm(item.paragraphSpacing) : 0;
     return new Paragraph({
       ...(idx === 0 ? { frame } : {}),
       alignment: ALIGN[item.align] || AlignmentType.RIGHT,
@@ -347,17 +380,28 @@ function textBlock(item: Extract<SceneItem, { kind: "text" }>): Paragraph[] {
             right: borderOpt(bordered),
           }
         : undefined,
-      indent: item.padding ? { start: mm(item.padding), end: mm(item.padding) } : undefined,
+      indent: item.padding
+        ? { start: mm(item.padding), end: mm(item.padding) }
+        : undefined,
       children: [
         new TextRun({
           text: line.length ? line : " ",
           rightToLeft: true,
           bold: item.weight >= 600,
           italics: item.italic,
+          // Complex scripts (Arabic) need the explicit complex-script flags,
+          // otherwise Word renders the run without them.
+          underline: item.underline
+            ? { type: UnderlineType.SINGLE }
+            : undefined,
+          boldComplexScript: item.weight >= 600,
+          italicsComplexScript: item.italic,
           size: Math.max(4, Math.round(item.size * 2)),
           color: hex(item.color),
           font: fontFace(item.font),
-          characterSpacing: item.letterSpacing ? Math.round(item.letterSpacing * 20) : undefined,
+          characterSpacing: item.letterSpacing
+            ? Math.round(item.letterSpacing * 20)
+            : undefined,
         }),
       ],
     });
@@ -378,7 +422,8 @@ function floatingTable(item: Extract<SceneItem, { kind: "table" }>): Table {
 
   const rows = item.rows.map((row, ri) => {
     const header = ri === 0;
-    const stripe = !header && item.stripeFill && ri % 2 === 0 ? item.stripeFill : null;
+    const stripe =
+      !header && item.stripeFill && ri % 2 === 0 ? item.stripeFill : null;
     return new TableRow({
       children: row.map(
         (cell) =>
@@ -416,11 +461,7 @@ function floatingTable(item: Extract<SceneItem, { kind: "table" }>): Table {
     });
   });
 
-  const borderSet = {
-    style: BorderStyle.SINGLE,
-    size: strokeEighths(item.border.width),
-    color: hex(item.border.color),
-  };
+  const borderSet = borderOpt(item.border);
 
   return new Table({
     rows,
@@ -459,19 +500,20 @@ export function imageOptions(item: SceneImage): IImageOptions | null {
   const match = /^data:image\/(png|jpe?g|gif|bmp);base64,(.+)$/i.exec(item.src);
   if (!match) return null;
   const kind = match[1].toLowerCase();
-  const type = kind === "jpg" || kind === "jpeg" ? "jpg" : (kind as "png" | "gif" | "bmp");
-  const data = Buffer.from(match[2], "base64");
+  const type =
+    kind === "jpg" || kind === "jpeg" ? "jpg" : (kind as "png" | "gif" | "bmp");
+  const data = Uint8Array.from(atob(match[2]), (char) => char.charCodeAt(0));
 
   return {
     type,
     data,
-    transformation: { width: mm(item.w), height: mm(item.h) },
+    transformation: { width: mmToPx(item.w), height: mmToPx(item.h), rotation: item.rotation || 0, flip: { horizontal: !!item.flipX, vertical: !!item.flipY } },
     floating: {
-      horizontalPosition: { relative: "page", offset: mm(item.x) },
-      verticalPosition: { relative: "page", offset: mm(item.y) },
+      horizontalPosition: { relative: "page", offset: mm2emu(item.x) },
+      verticalPosition: { relative: "page", offset: mm2emu(item.y) },
       behindDocument: false,
       allowOverlap: true,
-      zIndex: 1,
+      zIndex: shapeSeq + 1,
     },
     // `ImageRun` ignores `docProperties` and derives the drawing id from
     // `altText`, numbering from 1 for every picture. That collides with the ids
@@ -479,7 +521,7 @@ export function imageOptions(item: SceneImage): IImageOptions | null {
     // the id from the shared counter here instead.
     altText: {
       id: String(++shapeSeq),
-      name: "صورة",
+      name: item.name || "صورة",
       description: `صورة من ${BRAND.nameAr}`,
     },
   } as IImageOptions;
@@ -491,7 +533,7 @@ function imageParagraph(item: SceneImage): Paragraph | null {
   if (!options) return null;
   return new Paragraph({
     children: [new ImageRun(options) as unknown as ParagraphChild],
-    spacing: { before: 0, after: 0, line: 240, lineRule: "auto" },
+    spacing: { before: 0, after: 0, line: 1, lineRule: "exact" },
   });
 }
 
@@ -562,12 +604,12 @@ function iconParagraph(item: Extract<SceneItem, { kind: "icon" }>): Paragraph {
           type: "png",
           data: new Uint8Array(0),
         },
-        transformation: { width: mm(item.w), height: mm(item.h) },
+        transformation: { width: mmToPx(item.w), height: mmToPx(item.h), rotation: item.rotation || 0, flip: { horizontal: !!item.flipX, vertical: !!item.flipY } },
         floating: {
-          horizontalPosition: { relative: "page", offset: mm(item.x) },
-          verticalPosition: { relative: "page", offset: mm(item.y) },
+          horizontalPosition: { relative: "page", offset: mm2emu(item.x) },
+          verticalPosition: { relative: "page", offset: mm2emu(item.y) },
           allowOverlap: true,
-          zIndex: 1,
+          zIndex: shapeSeq + 1,
         },
         altText: {
           id: String(++shapeSeq),
@@ -585,7 +627,64 @@ function iconParagraph(item: Extract<SceneItem, { kind: "icon" }>): Paragraph {
  * caption as its own floating frame. All three pieces stay editable, so the
  * value can be retyped and the bars restyled in Word.
  */
-function progressBlocks(item: Extract<SceneItem, { kind: "progress" }>): Paragraph[] {
+function progressBlocks(
+  item: Extract<SceneItem, { kind: "progress" }>,
+): Paragraph[] {
+  if (item.variant === "steps") {
+    // Stages row: one dot per stage, filled up to the value — the same picture
+    // the canvas draws, kept as native ellipse shapes so Word stays editable.
+    const total = item.steps;
+    const filled = Math.round((item.value / 100) * total);
+    const dot = Math.max(2.4, Math.min(item.h * 0.34, 7));
+    const gap = dot * 0.55;
+    const rowW = total * dot + (total - 1) * gap;
+    const out: Paragraph[] = [];
+    for (let i = 0; i < total; i++) {
+      // RTL: the first stage sits at the right edge, matching the canvas.
+      const x = item.x + item.w - rowW + i * (dot + gap);
+      out.push(
+        ...shapeBlock({
+          kind: "shape",
+          x,
+          y: item.y + item.h - dot,
+          w: dot,
+          h: dot,
+          rotation: 0,
+          fill: i < filled ? item.fill : item.track,
+          stroke: null,
+          shapeId: "circle",
+          parts: [{ k: "rect", x: 0, y: 0, w: 100, h: 100 }],
+        }),
+      );
+    }
+    out.push(
+      ...textBlock({
+        kind: "text",
+        x: item.x + 1,
+        y: item.y,
+        w: Math.max(6, item.w - 2),
+        h: Math.max(4, item.h - dot),
+        rotation: 0,
+        text: `${item.label}${item.showValue ? ` — ${item.value}%` : ""}`.trim(),
+        font: item.font,
+        size: item.size,
+        weight: item.weight,
+        italic: false,
+        color: item.color,
+        align: "right",
+        lineHeight: 1.2,
+        letterSpacing: 0,
+        paragraphSpacing: 0,
+        vertical: false,
+        fill: null,
+        border: null,
+        radius: 0,
+        padding: 0,
+      }),
+    );
+    return out;
+  }
+
   const track = Math.max(2, item.h);
   const bar = (w: number, x: number, fill: string): Paragraph[] =>
     shapeBlock({
@@ -603,7 +702,8 @@ function progressBlocks(item: Extract<SceneItem, { kind: "progress" }>): Paragra
 
   const out = bar(item.w, item.x, item.track);
   const valueW = (item.w * item.value) / 100;
-  if (valueW > 0.3) out.push(...bar(valueW, item.x + item.w - valueW, item.fill));
+  if (valueW > 0.3)
+    out.push(...bar(valueW, item.x + item.w - valueW, item.fill));
 
   // The caption sits over the bar, matching the canvas where the label is
   // rendered on top of the track.
@@ -655,7 +755,10 @@ function blocksFor(item: SceneItem): Array<Paragraph | Table> {
       // `<w:tbl>` at body level, and nesting it inside `<w:p>` makes the reader
       // silently drop the table while leaving the paragraph behind.
       return [
-        new Paragraph({ children: [], spacing: { before: 0, after: 0, line: 1, lineRule: "auto" } }),
+        new Paragraph({
+          children: [],
+          spacing: { before: 0, after: 0, line: 1, lineRule: "auto" },
+        }),
         floatingTable(item),
       ];
     case "progress":
@@ -680,7 +783,17 @@ export async function writeDocx(options: DocxOptions): Promise<Blob> {
         margin: { top: 0, right: 0, bottom: 0, left: 0 },
       },
     },
-    children: scene.items.flatMap(blocksFor),
+    // Picture-only fidelity pages share one tiny anchor paragraph. One normal
+    // paragraph per layer would create extra pages on long designs.
+    children: scene.items.length && scene.items.every((item) => item.kind === "image")
+      ? [new Paragraph({
+          children: scene.items.flatMap((item) => {
+            const options = imageOptions(item as SceneImage);
+            return options ? [new ImageRun(options)] : [];
+          }),
+          spacing: { before: 0, after: 0, line: 1, lineRule: "exact" },
+        })]
+      : scene.items.flatMap(blocksFor),
   }));
 
   const doc = new Document({

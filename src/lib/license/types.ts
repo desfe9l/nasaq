@@ -1,0 +1,246 @@
+/**
+ * NASAQ License Management — Type definitions.
+ *
+ * These types are shared between server and client code.
+ * The actual license validation always happens server-side.
+ */
+
+// ── License Types ──────────────────────────────────────────────────────────
+
+export type LicenseType = "FREE" | "TRIAL" | "PRO" | "LIFETIME";
+export type LicenseSource = "manual" | "keygen";
+export type LicensePlan = "individual-monthly" | "individual-quarterly" | "team-monthly" | "team-quarterly" | "individual-annual" | "team-annual";
+export type BillingPeriod = "monthly" | "quarterly" | "annual";
+export type LicenseStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
+
+/**
+ * User-facing license type labels — the single source the website and the
+ * License Control Panel both render, so a type never appears under two names.
+ * The raw type id stays visible in parentheses for support/debugging.
+ */
+export const LICENSE_TYPE_LABELS: Record<LicenseType, string> = {
+  FREE: "مجاني (FREE)",
+  TRIAL: "تجريبي (TRIAL)",
+  PRO: "احترافي (PRO)",
+  LIFETIME: "مدى الحياة (LIFETIME)",
+};
+
+/** Full license record as stored in the database. */
+export interface License {
+  id: string;
+  keyHash: string;
+  keyPrefix: string;
+  type: LicenseType;
+  status: LicenseStatus;
+  userId: string | null;
+  activatedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  revokedAt: string | null;
+  activationCount: number;
+  maxActivations: number | null;
+  metadata: Record<string, string> | null;  // serializable for server functions
+}
+
+/** Minimal license info sent to the client (never the key hash). */
+export interface LicenseInfo {
+  id: string;
+  type: LicenseType;
+  status: LicenseStatus;
+  keyPrefix: string;
+  activatedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  source?: LicenseSource;
+  plan?: LicensePlan;
+  billing?: BillingPeriod;
+}
+
+// ── Feature Entitlements ───────────────────────────────────────────────────
+
+export type FeatureId =
+  | "core_editor"
+  | "basic_export"
+  | "premium_templates"
+  | "advanced_export"
+  | "brand_kit"
+  | "unlimited_projects"
+  | "unlimited_pages"
+  | "data_import"
+  | "ai_report"
+  | "collaboration"
+  | "team_features"
+  | "multi_user_activation";
+
+/** Feature entitlements per license type. */
+export const LICENSE_ENTITLEMENTS: Record<LicenseType, Record<FeatureId, boolean>> = {
+  FREE: {
+    core_editor: true,
+    basic_export: false,
+    premium_templates: false,
+    advanced_export: false,
+    brand_kit: false,
+    unlimited_projects: false,
+    unlimited_pages: false,
+    data_import: false,
+    ai_report: false,
+    collaboration: false,
+    team_features: false,
+    multi_user_activation: false,
+  },
+  TRIAL: {
+    core_editor: true,
+    basic_export: true,
+    premium_templates: true,
+    advanced_export: true,
+    brand_kit: true,
+    unlimited_projects: true,
+    unlimited_pages: true,
+    data_import: true,
+    ai_report: true,
+    collaboration: false,
+    team_features: false,
+    multi_user_activation: false,
+  },
+  PRO: {
+    core_editor: true,
+    basic_export: true,
+    premium_templates: true,
+    advanced_export: true,
+    brand_kit: true,
+    unlimited_projects: true,
+    unlimited_pages: true,
+    data_import: true,
+    ai_report: true,
+    collaboration: true,
+    team_features: true,
+    multi_user_activation: true,
+  },
+  LIFETIME: {
+    core_editor: true,
+    basic_export: true,
+    premium_templates: true,
+    advanced_export: true,
+    brand_kit: true,
+    unlimited_projects: true,
+    unlimited_pages: true,
+    data_import: true,
+    ai_report: true,
+    collaboration: true,
+    team_features: true,
+    multi_user_activation: true,
+  },
+};
+
+export function entitlementsForPlan(plan: LicensePlan | undefined, type: LicenseType): Record<FeatureId, boolean> {
+  // A stale plan string must never upgrade a revoked/downgraded FREE licence or
+  // turn a TRIAL into PRO. The verified licence type is the upper bound.
+  if (type === "FREE" || type === "TRIAL") return LICENSE_ENTITLEMENTS[type];
+  if (plan?.startsWith("individual-")) {
+    return { ...LICENSE_ENTITLEMENTS.PRO, collaboration: false, team_features: false, multi_user_activation: false };
+  }
+  return LICENSE_ENTITLEMENTS[type];
+}
+
+/** User-facing feature display names (Arabic). */
+export const FEATURE_LABELS: Record<FeatureId, { name: string; description: string }> = {
+  core_editor: { name: "المحرر الأساسي", description: "تحرير النصوص والصور والأشكال والجداول" },
+  basic_export: { name: "التصدير الأساسي", description: "تصدير PDF وPNG وJPG" },
+  premium_templates: { name: "القوالب المتميزة", description: "الوصول إلى جميع القوالب الجاهزة" },
+  advanced_export: { name: "التصدير المتقدم", description: "تصدير Word وPowerPoint وHTML" },
+  brand_kit: { name: "الهوية المؤسسية", description: "إدارة وتطبيق الهوية المؤسسية" },
+  unlimited_projects: { name: "مشاريع غير محدودة", description: "إنشاء عدد غير محدود من المشاريع" },
+  unlimited_pages: { name: "صفحات غير محدودة", description: "إضافة عدد غير محدود من الصفحات" },
+  data_import: { name: "استيراد البيانات", description: "استيراد البيانات والقوالب من ملفات" },
+  ai_report: { name: "مسودات التقارير بالذكاء الاصطناعي", description: "توليد مسودة قابلة للمراجعة من موجزك" },
+  collaboration: { name: "التعاون", description: "مشاركة المشاريع والعمل الجماعي" },
+  team_features: { name: "ميزات الفريق", description: "إدارة ميزات ومساحة عمل الفريق" },
+  multi_user_activation: { name: "تفعيل متعدد المستخدمين", description: "تفعيل الترخيص لأكثر من مستخدم" },
+};
+
+/** Keygen entitlement codes mapped to NASAQ feature gates. */
+export const KEYGEN_ENTITLEMENT_FEATURES: Record<string, FeatureId[]> = {
+  "nasaq.editor": ["core_editor"],
+  "nasaq.templates": ["premium_templates"],
+  "nasaq.projects": ["unlimited_projects"],
+  "nasaq.library": ["data_import"],
+  "nasaq.export": ["basic_export"],
+  "nasaq.advanced-export": ["advanced_export"],
+  "nasaq.brand-kit": ["brand_kit"],
+  "nasaq.advanced-tools": ["unlimited_pages", "ai_report"],
+  "nasaq.team": ["collaboration", "team_features", "multi_user_activation"],
+  "nasaq.priority-support": [],
+};
+
+export function entitlementsFromKeygenCodes(codes: string[]): Record<FeatureId, boolean> {
+  // Saving a file is not a free feature. A code grants only what it names;
+  // `nasaq.export` is basic_export and `nasaq.advanced-export` is the rest.
+  // The editor itself stays on, because that still ships with FREE.
+  const entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
+  for (const code of codes) {
+    for (const feature of KEYGEN_ENTITLEMENT_FEATURES[code] ?? []) {
+      entitlements[feature] = true;
+    }
+  }
+  return entitlements;
+}
+
+// ── API Response Types ─────────────────────────────────────────────────────
+
+export interface LicenseActivateResult {
+  success: boolean;
+  message: string;
+  license?: LicenseInfo;
+  entitlements?: Record<FeatureId, boolean>;
+}
+
+export interface LicenseValidateResult {
+  valid: boolean;
+  license?: LicenseInfo;
+  entitlements?: Record<FeatureId, boolean>;
+}
+
+export interface LicenseStatusResult {
+  hasLicense: boolean;
+  isOwner?: boolean;
+  /** True when full access comes from a verified administrator identity. */
+  isAdmin?: boolean;
+  isSuspended?: boolean;
+  license?: LicenseInfo;
+  trial?: { startedAt: string; expiresAt: string } | null;
+  entitlements?: Record<FeatureId, boolean>;
+  /** A paid/local key is not yet validated at Keygen; never unlock on this basis. */
+  message?: string;
+}
+
+// ── Admin Types ────────────────────────────────────────────────────────────
+
+export interface AdminLicenseCreate {
+  type: LicenseType;
+  /** Keygen policy for PRO; defaults to individual-monthly for old clients. */
+  plan?: LicensePlan;
+  expiresAt?: string;
+  /** Verified customer email or id, resolved on the server. */
+  user?: string;
+  userId?: string;
+  maxActivations?: number;
+}
+
+export type AdminLicenseRow = Omit<License, "keyHash"> & { userEmail: string | null };
+
+export interface AdminLicenseList {
+  licenses: AdminLicenseRow[];
+  total: number;
+}
+
+export interface AdminLicenseUpdate {
+  status?: LicenseStatus;
+  /**
+   * `null` clears the expiry (an open-ended licence). `undefined` leaves it
+   * alone — the distinction `updateLicense` relies on to tell "set this" from
+   * "don't touch it".
+   */
+  expiresAt?: string | null;
+  maxActivations?: number;
+}

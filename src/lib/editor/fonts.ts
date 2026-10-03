@@ -104,7 +104,11 @@ const GENERIC = new Set([
 const ARABIC_PROBE = "أبجد هوز شمسية";
 const LATIN_PROBE = "ABCDEFGHIJKLM";
 
-function isAvailable(ctx: CanvasRenderingContext2D, family: string, probe: string): boolean {
+function isAvailable(
+  ctx: CanvasRenderingContext2D,
+  family: string,
+  probe: string,
+): boolean {
   // Compare against two generic baselines: a family counts as present only when
   // it differs from BOTH, which rules out the cases where the default face
   // happens to coincide with one probe.
@@ -148,14 +152,24 @@ export function detectDeviceFonts(): DetectedFont[] {
     if (GENERIC.has(family.toLowerCase()) || seen.has(family)) continue;
     if (isAvailable(ctx, family, ARABIC_PROBE)) {
       seen.add(family);
-      found.push({ family, note, bundled: BUNDLED.has(family), script: "arabic" });
+      found.push({
+        family,
+        note,
+        bundled: BUNDLED.has(family),
+        script: "arabic",
+      });
     }
   }
   for (const { family, note } of LATIN_CANDIDATES) {
     if (GENERIC.has(family.toLowerCase()) || seen.has(family)) continue;
     if (isAvailable(ctx, family, LATIN_PROBE)) {
       seen.add(family);
-      found.push({ family, note, bundled: BUNDLED.has(family), script: "latin" });
+      found.push({
+        family,
+        note,
+        bundled: BUNDLED.has(family),
+        script: "latin",
+      });
     }
   }
 
@@ -164,7 +178,12 @@ export function detectDeviceFonts(): DetectedFont[] {
   for (const family of BUNDLED) {
     if (!seen.has(family)) {
       seen.add(family);
-      found.push({ family, note: "مضمّن في المنصة", bundled: true, script: "arabic" });
+      found.push({
+        family,
+        note: "مضمّن في المنصة",
+        bundled: true,
+        script: "arabic",
+      });
     }
   }
 
@@ -177,7 +196,10 @@ export function detectPlatform(): string {
   if (typeof navigator === "undefined") return "غير معروف";
   const ua = navigator.userAgent;
   // iPad reports as Macintosh, so check touch support before declaring macOS.
-  const iPad = /Macintosh/.test(ua) && typeof navigator.maxTouchPoints === "number" && navigator.maxTouchPoints > 1;
+  const iPad =
+    /Macintosh/.test(ua) &&
+    typeof navigator.maxTouchPoints === "number" &&
+    navigator.maxTouchPoints > 1;
   if (/Windows/i.test(ua)) return "ويندوز";
   if (iPad) return "آيباد";
   if (/Mac OS X|Macintosh/i.test(ua)) return "ماك";

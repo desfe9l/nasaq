@@ -6,6 +6,11 @@ export declare function appNameFromHost(hostHeader: string | null | undefined): 
 export declare function publicAppHost(hostHeader: string | null | undefined): string;
 export declare function resolvePublicHost(hostHeader: string | null | undefined): string;
 export declare function isInstallQuery(url: string | null | undefined): boolean;
+export declare const DOCUMENT_CACHE_CONTROL: string;
+export declare function applyDocumentCachePolicy(
+  getHeader: (name: string) => unknown,
+  setHeader: (name: string, value: string) => void,
+): void;
 export declare function isDocumentPath(pathname: string | null | undefined): boolean;
 export declare function acceptsHtml(accept: string | null | undefined): boolean;
 export declare function stripInstallParams(url: string | null | undefined): string;

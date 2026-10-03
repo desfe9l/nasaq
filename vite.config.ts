@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Plugin } from "vite";
@@ -10,7 +11,50 @@ import { nitro } from "nitro/vite";
 import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 // @ts-expect-error JS plugin alongside the TS vite config
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
+// @ts-expect-error JS module alongside the TS vite config
+import { emitShareRasterAssets } from "./scripts/emit-share-raster-assets.mjs";
+// @ts-expect-error JS module alongside the TS vite config
+import { emitUpscaleModel } from "./scripts/emit-upscale-model.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
+
+// Before any plugin or server bundle reads the rasterizer. See the script.
+emitShareRasterAssets();
+// Vendor the ESRGAN ×4 weights into public/ for same-origin model loading.
+emitUpscaleModel();
+
+/**
+ * Build identity for the stale-build guard (`src/lib/app-update.ts`).
+ *
+ * Computed ONCE at module scope, so the client bundle, the SSR bundle and the
+ * nitro server build of one deployment all carry the same token while a later
+ * deployment carries a different one. The commit sha keeps rebuilds of one
+ * commit together (no spurious reloads); the timestamp keeps two deployments of
+ * the same commit distinct, which is exactly the case a redeploy exists for.
+ */
+function computeBuildId(): string {
+  let sha = "";
+  try {
+    sha = execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+  } catch {
+    // Not a checkout (tarball, offline build): the timestamp alone is enough.
+  }
+  const stamp = Date.now().toString(36);
+  return sha ? `${sha}-${stamp}` : `b-${stamp}`;
+}
+
+const APP_BUILD_ID = computeBuildId();
+
+function appBuildIdPlugin(): Plugin {
+  return {
+    name: "nasaq:build-id",
+    config: () => ({
+      define: { __APP_BUILD_ID__: JSON.stringify(APP_BUILD_ID) },
+    }),
+  };
+}
 
 /** The files `src/lib/db.ts` globs — same directory, same non-recursive scope. */
 function hasGlobbedMigrations(root: string): boolean {
@@ -150,6 +194,9 @@ export default defineConfig(({ command, isPreview }) => ({
     host: "0.0.0.0",
     port: 8080,
     strictPort: true,
+    // Live-preview proxies reach the dev server through *.e2b.app; Vite's dev
+    // host allowlist must accept them or the preview never loads.
+    allowedHosts: [".e2b.app"],
   },
   preview: {
     host: "127.0.0.1",
@@ -161,6 +208,8 @@ export default defineConfig(({ command, isPreview }) => ({
     pgliteBootstrapPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
+    // Build identity read by the update guard and /api/app-version.
+    appBuildIdPlugin(),
     // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.
     appEnvPlugin(),
     // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
@@ -175,6 +224,10 @@ export default defineConfig(({ command, isPreview }) => ({
             // manifest + head-tag middleware). Nitro v3 defaults serverDir to
             // false, so removing this silently unwires /?install=1 on deploys.
             serverDir: "./server",
+            // Wasm bytes are inlined by emitShareRasterAssets(). Keep the JS
+            // package inside the function so initWasm is not an external require.
+            traceDeps: ["@resvg/resvg-wasm"],
+            noExternals: ["@resvg/resvg-wasm"],
           }),
         ]
       : []),

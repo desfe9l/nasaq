@@ -65,6 +65,15 @@ export function mergeAppEnv(appEnv, processEnv) {
   return { ...appEnv, ...processEnv };
 }
 
+/** Match the deployed Vercel runtime when serving its generated output locally. */
+export function environmentForCommand(command, args, appEnv, processEnv) {
+  const env = mergeAppEnv(appEnv, processEnv);
+  if (command === "vite" && args[0] === "preview" && env.VERCEL === undefined) {
+    env.VERCEL = "1";
+  }
+  return env;
+}
+
 /**
  * Translate a child's `exit` `(code, signal)` into this process's exit status.
  *
@@ -110,7 +119,7 @@ function main(argv) {
     console.error("usage: node scripts/with-app-env.mjs <command> [args…]");
     process.exit(2);
   }
-  const env = mergeAppEnv(readAppEnv(projectRoot()), process.env);
+  const env = environmentForCommand(command, args, readAppEnv(projectRoot()), process.env);
   const child = spawn(command, args, { stdio: "inherit", env });
   // The dev server is long-running and is stopped by signalling this wrapper.
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {

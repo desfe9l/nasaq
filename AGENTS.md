@@ -23,6 +23,12 @@ integration, and when you think "can't access user data", "needs OAuth",
 "Grok Dashboard instead": it serves viewer connector data via the gate;
 **`neon`** / **`auth`** only per §0.5.
 
+**NASAQ templates and documents** — creating, redesigning, reviewing, or
+refining a pack, page template, family page, product master, cover, report, or
+presentation — open **`.grok/skills/nasaq-media/SKILL.md`** before placing or
+changing any page. Edit the existing generators. Do not add a parallel template
+collection. Project instructions in `AGENTS.project.md` repeat this route.
+
 **Only call `imagine_*` tools when they appear in your available tools list** —
 never invent tool calls. Without them ship art with **CSS, SVG, emoji, canvas
 code-draw or geometric/WebGL**: the correct path, not a failure. Gen-assuming
@@ -337,6 +343,14 @@ in-browser say so and ship the best web-only build.
   cannot resolve their inputs. They are unrelated to the editor. Verify editor
   work instead with:
   `node --experimental-strip-types --test src/lib/editor/*.test.ts`
+- **Theme roles, not colours.** Light/Dark is one token system: chrome surfaces,
+  text, borders and states are written with role utilities (`bg-surface`,
+  `text-ink`, `text-muted`, `border-line`, `bg-navy` + `text-on-brand`,
+  `bg-inverse` + `text-on-inverse`, `bg-scrim`). A `dark:` variant or a literal
+  `bg-[#…]` / `text-slate-500` in chrome is how a label disappears on theme
+  switch, so `npm run theme:check` fails on it (document artwork — `tpl-paper`,
+  `.report-page`, `[data-doc]`, canvas stages, colour swatches — is exempt by
+  allowlist, because a printed page must stay paper in both themes).
 - Cohesive UI per **`design-ui`** (tokens, no-slop rules); no broken imports.
 - Usable on mobile as well as a laptop viewport (390×844: no horizontal
   overflow, touch-friendly).
@@ -403,6 +417,23 @@ Verify with:
 - **Opening the library is best-effort.** `listAssets` / `saveAsset` fall back to
   a localStorage mirror so a private window still opens, but data URLs make that
   path a last resort — surface the failure as a toast rather than throwing.
+
+### NASAQ template design (`.grok/skills/nasaq-media/SKILL.md`)
+
+Template and document work is art direction, not a component dump. Before
+creating, redesigning, reviewing, or refining any pack, page, family, or
+product master:
+
+1. Open `.grok/skills/nasaq-media/SKILL.md` and follow it. The skill is the
+   source of truth; `src/lib/editor/design-skill.ts` only binds the generators.
+2. Change pages inside the existing generators (`templates.ts`,
+   `template-families.ts`, `template-layouts.ts`, `product-templates.ts`).
+   Do not add a replacement catalog and do not throw the current templates away.
+3. Keep every page as editable NASAQ elements (text, images, shapes, groups,
+   tables, charts, headers, footers, page numbers). Do not flatten a template
+   into an image.
+4. Five excellent pages beat thirty mediocre ones. A template is not done
+   because it renders.
 
 ### Shape and asset reuse flow
 

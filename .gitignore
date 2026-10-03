@@ -1,29 +1,55 @@
 # Dependencies
 node_modules/
+.pnpm-store/
 
 # Build output
-.vercel/
 dist/
+build/
+out/
+.output/
+.vercel/
+.nitro/
 .tanstack/
 *.tsbuildinfo
 
-# Local database (PGLite) and logs
-.pglite/
-*.log
-
-# Environment secrets — never commit these
+# Environment & secrets (keep the documented template)
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+secrets/
 
-# macOS
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Caches & tooling
+.cache/
+.vite/
+.eslintcache
+coverage/
+.nyc_output/
+.turbo/
+
+# Local agent/tool state
+.openbrowser/
+
+# OS / editor
 .DS_Store
-
-# Editor
-.vscode/
+Thumbs.db
 .idea/
-# Runtime state (preview pid)
-.grok/
+.vscode/*
+!.vscode/extensions.json
 
-# Generated source archive served for download
-public/downloads/*.zip
+# Generated editor visual QA (not project assets)
+screenshots/editor-focused/
+
+# Inlined at vite build from resvg.wasm + fonts. Not source.
+src/lib/og/share-raster-assets.generated.ts
+
+# Vendored at vite config load from @upscalerjs/esrgan-medium. Not source.
+public/models/

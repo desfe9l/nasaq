@@ -1,12 +1,24 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { fitImageBox, isAcceptedImage, safeImageSrc } from "./images.ts";
+import {
+  fitImageBox,
+  imageAdjustCss,
+  isAcceptedImage,
+  safeImageSrc,
+  sharpnessKernel,
+} from "./images.ts";
 
 describe("isAcceptedImage", () => {
   const file = (type: string) => ({ type }) as File;
 
   it("accepts the formats the platform renders", () => {
-    for (const type of ["image/png", "image/jpeg", "image/webp", "image/svg+xml", "image/gif"]) {
+    for (const type of [
+      "image/png",
+      "image/jpeg",
+      "image/webp",
+      "image/svg+xml",
+      "image/gif",
+    ]) {
       assert.equal(isAcceptedImage(file(type)), true, type);
     }
   });
@@ -49,6 +61,25 @@ describe("fitImageBox", () => {
   });
 });
 
+describe("imageAdjustCss", () => {
+  it("is absent at the identity and otherwise stays a CSS filter", () => {
+    assert.equal(imageAdjustCss({}), undefined);
+    assert.equal(imageAdjustCss({ brightness: 100, sharpness: 0 }), undefined);
+    assert.equal(imageAdjustCss({ brightness: 130 }), "brightness(1.300)");
+    assert.equal(
+    imageAdjustCss({ contrast: 120, saturation: 80 }),
+    "contrast(1.200) saturate(0.800)",
+    );
+    assert.match(imageAdjustCss({ sharpness: 40 }) ?? "", /^contrast\(/);
+    assert.match(
+      imageAdjustCss({ brightness: 80, sharpness: 50 }, "sharp-1") ?? "",
+      /^url\(#sharp-1\) brightness\(/,
+    );
+    assert.equal(sharpnessKernel(0), "0 0.000 0 0.000 1.000 0.000 0 0.000 0");
+    assert.equal(sharpnessKernel(100).includes("5.000"), true);
+  });
+});
+
 describe("safeImageSrc", () => {
   it("keeps the data URLs the platform generates itself", () => {
     // Placeholder and QR artwork are URL-encoded SVG with a charset parameter
@@ -62,8 +93,14 @@ describe("safeImageSrc", () => {
   it("keeps ordinary sources", () => {
     const png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==";
     assert.equal(safeImageSrc(png), png);
-    assert.equal(safeImageSrc("https://example.com/a.png"), "https://example.com/a.png");
-    assert.equal(safeImageSrc("blob:http://localhost/abc"), "blob:http://localhost/abc");
+    assert.equal(
+      safeImageSrc("https://example.com/a.png"),
+      "https://example.com/a.png",
+    );
+    assert.equal(
+      safeImageSrc("blob:http://localhost/abc"),
+      "blob:http://localhost/abc",
+    );
   });
 
   it("drops sources that could execute script", () => {

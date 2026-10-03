@@ -1,0 +1,1201 @@
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { RedirectToSignIn } from "@/lib/auth/gates";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import {
+  adminActivateCustomer,
+  adminApprovePayment,
+  adminChangePlan,
+  adminExtendSubscription,
+  adminGrantAdmin,
+  adminRejectPayment,
+  adminRestoreCustomer,
+  adminSetExpiration,
+  adminSuspendCustomer,
+  adminUpdatePaymentSettings,
+  adminUpdatePlan,
+  amIAdmin,
+  getAdminAuditLog,
+  getAdminCustomers,
+  getAdminPaymentRequests,
+  getAdminPlans,
+} from "@/lib/commercial/admin-functions";
+import {
+  ACCOUNT_STATUS_META,
+  PAYMENT_STATUS_META,
+  formatDate,
+  formatPrice,
+} from "@/lib/commercial/format";
+import type {
+  AdminAuditEntry,
+  AdminCustomer,
+  AdminPaymentRequest,
+  PaymentInstructions,
+  PaymentRequestStatus,
+  Plan,
+} from "@/lib/commercial/types";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import {
+  KeyRound,
+  LayoutDashboard,
+  Package,
+  ReceiptText,
+  RefreshCw,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
+import { SiteFooter, SiteHeader } from "./SiteChrome";
+import { GUMROAD_PING_PATH } from "@/lib/gumroad/mapping";
+
+
+/** Compact KPI card used by the dashboard header. */
+function StatCard({
+  label,
+  value,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  tone?: "neutral" | "ok" | "warn";
+}) {
+  return (
+    <div className="rounded-[12px] border border-line bg-surface p-3">
+      <p className="text-[10px] font-bold text-muted">{label}</p>
+      <p
+        className={cn(
+          "mt-1 text-[18px] font-extrabold tabular-nums",
+          tone === "ok" && "text-success",
+          tone === "warn" && "text-warning",
+        )}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+type Tab = "dashboard" | "requests" | "customers" | "plans" | "settings" | "audit";
+
+const TABS: Array<{ id: Tab; label: string; icon: typeof Users }> = [
+  { id: "dashboard", label: "لوحة القيادة", icon: LayoutDashboard },
+  { id: "customers", label: "المستخدمون / الحسابات", icon: Users },
+  { id: "requests", label: "طلبات الدفع اليدوية", icon: ReceiptText },
+  { id: "plans", label: "الباقات والاشتراكات", icon: Package },
+  { id: "settings", label: "إعدادات النظام", icon: Settings },
+  { id: "audit", label: "سجل الإجراءات", icon: ScrollText },
+];
+
+/**
+ * Administrative dashboard.
+ *
+ * Access is decided by the server twice over: `amIAdmin` gates what renders, and
+ * every action below re-verifies authorization inside its server function. So a
+ * customer who navigates straight to /admin sees the denial screen, and a
+ * customer who calls an admin server function directly gets a 403 — the UI is
+ * never the thing standing between them and customer data.
+ */
+function DashboardTab() {
+  const [customers, setCustomers] = useState<AdminCustomer[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [requests, setRequests] = useState<AdminPaymentRequest[]>([]);
+  const [audit, setAudit] = useState<AdminAuditEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [cust, pl, req, aud] = await Promise.all([
+        getAdminCustomers(),
+        getAdminPlans(),
+        getAdminPaymentRequests({ data: {} }),
+        getAdminAuditLog().catch(() => [] as AdminAuditEntry[]),
+      ]);
+      setCustomers(cust);
+      setPlans(pl);
+      setRequests(req);
+      setAudit(aud);
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "تعذر تحميل الإحصائيات");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const stats = useMemo(() => {
+    const totalUsers = customers.length;
+    const active = customers.filter((c) => c.status === "ACTIVE").length;
+    const expired = customers.filter((c) => c.status === "EXPIRED").length;
+    const suspended = customers.filter((c) => c.status === "SUSPENDED").length;
+    const free = customers.filter((c) => c.status === "FREE").length;
+    const pendingReq = requests.filter((r) => r.status === "PENDING").length;
+    const approvedReq = requests.filter((r) => r.status === "APPROVED").length;
+    const planDist = plans.map((p) => ({
+      plan: p,
+      count: customers.filter((c) => c.planId === p.id).length,
+    }));
+    return { totalUsers, active, expired, suspended, free, pendingReq, approvedReq, planDist };
+  }, [customers, plans, requests]);
+
+  return (
+    <div className="grid gap-4">
+      <Panel
+        title="نظرة عامة — إحصائيات المنصة"
+        actions={
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading}
+            className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-line px-3 text-[11px] font-bold hover:bg-line-2 disabled:opacity-60"
+          >
+            <RefreshCw className={cn("size-3.5", loading && "animate-spin")} />
+            تحديث
+          </button>
+        }
+      >
+        {error && <p className="text-[12px] text-error">{error}</p>}
+        {loading ? (
+          <p className="text-[12px] text-muted">جارٍ التحميل…</p>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="إجمالي المستخدمين" value={String(stats.totalUsers)} />
+              <StatCard label="اشتراكات نشطة" value={String(stats.active)} tone="ok" />
+              <StatCard label="طلبات معلقة" value={String(stats.pendingReq)} tone="warn" />
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard label="منتهية" value={String(stats.expired)} />
+              <StatCard label="موقوفة" value={String(stats.suspended)} />
+              <StatCard label="مجانية" value={String(stats.free)} />
+              <StatCard label="مدفوعات معتمدة" value={String(stats.approvedReq)} />
+            </div>
+            <div className="mt-5 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-[12px] border border-line p-4">
+                <h3 className="text-[12px] font-extrabold">توزيع الباقات</h3>
+                <ul className="mt-3 grid gap-2">
+                  {stats.planDist.map(({ plan, count }) => (
+                    <li key={plan.id} className="flex items-center justify-between text-[11px]">
+                      <span className="font-bold">{plan.arabicName}</span>
+                      <span className="tabular-nums">{count} مستخدم</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-[12px] border border-line p-4">
+                <h3 className="text-[12px] font-extrabold">آخر الإجراءات</h3>
+                <ul className="mt-3 grid gap-1.5">
+                  {audit.slice(0, 6).map((a) => (
+                    <li key={a.id} className="flex justify-between gap-2 text-[10px] text-muted">
+                      <span className="font-bold text-ink">{a.action}</span>
+                      <span>{formatDate(a.createdAt)}</span>
+                    </li>
+                  ))}
+                  {audit.length === 0 && <li className="text-[11px] text-muted">لا يوجد سجل بعد.</li>}
+                </ul>
+              </div>
+            </div>
+            <div className="mt-4 rounded-[12px] border border-line p-4">
+              <h3 className="text-[12px] font-extrabold">المشاريع والحسابات</h3>
+              <p className="mt-2 text-[11px] leading-5 text-muted">
+                المشاريع محفوظة محليًا في متصفح كل مستخدم (IndexedDB) ولا تُزامَن مع الخادم. عدد الحسابات المسجلة هو {stats.totalUsers}. الاشتراكات تُدار عبر Gumroad، والتراخيص عبر Keygen.
+              </p>
+            </div>
+          </>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+export function AdminPage() {
+  const { user, isPending } = useCurrentUserState();
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [tab, setTab] = useState<Tab>("dashboard");
+
+  useEffect(() => {
+    if (isPending || !user) return;
+    void amIAdmin()
+      .then((result) => setAllowed(result.isAdmin))
+      .catch(() => setAllowed(false));
+  }, [isPending, user]);
+
+  if (isPending || allowed === null) {
+    return (
+      <div className="min-h-screen bg-paper">
+        <SiteHeader current="/admin" />
+        <main className="mx-auto w-full max-w-6xl px-4 py-24">
+          <p className="text-[13px] text-muted">جارٍ التحقق من الصلاحيات…</p>
+        </main>
+      </div>
+    );
+  }
+
+  if (!user) return <RedirectToSignIn />;
+
+  if (!allowed) {
+    return (
+      <div className="min-h-screen bg-paper">
+        <SiteHeader current="/admin" />
+        <main className="mx-auto w-full max-w-2xl px-4 py-24">
+          <div className="rounded-[14px] border border-danger/30 bg-danger/5 p-6">
+            <h1 className="text-lg font-extrabold text-error">لا تملك صلاحية الوصول</h1>
+            <p className="mt-2 text-[13px] leading-6">
+              هذه الصفحة مخصّصة لإدارة المنصة فقط. إذا كنت تعتقد أن هذا خطأ، تواصل مع
+              الإدارة. إذا كانت قاعدة البيانات جديدة ولا يوجد مسؤول بعد، يمكنك تفعيل حسابك كأول مسؤول.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <a
+                href="/account"
+                className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold"
+              >
+                العودة إلى حسابي
+              </a>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const { adminBootstrapFirst } = await import("@/lib/commercial/admin-functions");
+                    const res = await adminBootstrapFirst();
+                    if (res.ok) {
+                      toast.success("تم تفعيل حسابك كمسؤول أول — جارٍ التحديث…");
+                      setTimeout(() => window.location.reload(), 800);
+                    } else {
+                      toast.error(res.wasEmpty ? "فشل التفعيل" : "يوجد مسؤول بالفعل — لا يمكن التفعيل التلقائي");
+                    }
+                  } catch (e) {
+                    toast.error(e instanceof Error ? e.message : "تعذر التفعيل");
+                  }
+                }}
+                className="inline-flex h-9 items-center rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-on-brand"
+              >
+                تفعيل كأول مسؤول
+              </button>
+            </div>
+          </div>
+        </main>
+        <SiteFooter />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-paper">
+      <SiteHeader current="/admin" />
+      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
+        {/*
+         * Institutional masthead.
+         *
+         * An operations console should open by stating where you are and who is
+         * signed in — the two facts an operator needs before approving anything
+         * that spends the company's money. The licence console is a separate
+         * route because minting a licence is a different authority from
+         * approving a payment, and the two must never share a tab bar by
+         * accident.
+         */}
+        <header className="overflow-hidden rounded-[14px] border border-line bg-surface">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-5">
+            <div className="flex items-center gap-3">
+              <span className="grid size-11 place-items-center rounded-[10px] bg-navy/10 text-brand">
+                <LayoutDashboard className="size-5" aria-hidden />
+              </span>
+              <div>
+                <p className="text-[10px] font-extrabold tracking-[0.18em] text-muted">
+                  NASAQ · CONSOLE
+                </p>
+                <h1 className="text-[19px] font-extrabold">لوحة التحكم المؤسسية</h1>
+                <p className="mt-0.5 text-[11px] text-muted">
+                  مراجعة المدفوعات، إدارة العملاء والباقات، وسجل الإجراءات.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex max-w-[240px] items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[10px] font-bold text-muted">
+                <ShieldCheck className="size-3 text-brand" aria-hidden />
+                <span className="truncate" dir="ltr">
+                  {user.primaryEmail || user.displayName || user.id}
+                </span>
+              </span>
+              <a
+                href="/admin-dashboard"
+                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-line px-3 text-[12px] font-extrabold"
+              >
+                القوالب والمحتوى
+              </a>
+              <a
+                href="/owner-vault"
+                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-line px-3 text-[12px] font-extrabold"
+              >
+                إعدادات المالك
+              </a>
+              <a
+                href="/admin-licenses"
+                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-navy px-3 text-[12px] font-extrabold text-on-brand"
+              >
+                <KeyRound className="size-3.5" aria-hidden />
+                إدارة التراخيص
+              </a>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-line bg-paper/60 px-5 py-2 text-[10px] text-muted">
+            <span>
+              مزوّد الدفع: <strong className="font-extrabold text-ink">Gumroad</strong>
+            </span>
+            <span>
+              Webhook:{" "}
+              <code dir="ltr" className="font-bold">
+                {GUMROAD_PING_PATH}
+              </code>
+            </span>
+            <span>
+              جهة إصدار التراخيص:{" "}
+              <strong className="font-extrabold text-ink">Keygen</strong>
+            </span>
+          </div>
+        </header>
+
+        <nav className="mt-5 flex flex-wrap gap-2 border-b border-line pb-3">
+          {TABS.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setTab(item.id)}
+                aria-current={tab === item.id}
+                className={cn(
+                  "inline-flex h-9 items-center gap-1.5 rounded-[8px] px-3 text-[12px] font-extrabold transition",
+                  tab === item.id
+                    ? "bg-navy text-on-brand"
+                    : "text-muted hover:bg-line-2",
+                )}
+              >
+                <Icon className="size-3.5" aria-hidden />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="mt-5">
+          {tab === "dashboard" && <DashboardTab />}
+          {tab === "customers" && <CustomersTab />}
+          {tab === "requests" && <RequestsTab />}
+          {tab === "plans" && <PlansTab />}
+          {tab === "settings" && <SettingsTab />}
+          {tab === "audit" && <AuditTab />}
+        </div>
+      </main>
+      <SiteFooter />
+    </div>
+  );
+}
+
+function Panel({
+  title,
+  children,
+  actions,
+}: {
+  title: string;
+  children: ReactNode;
+  actions?: ReactNode;
+}) {
+  return (
+    <section className="rounded-[14px] border border-line bg-surface p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[13px] font-extrabold text-muted">{title}</h2>
+        {actions}
+      </div>
+      <div className="mt-3">{children}</div>
+    </section>
+  );
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return <p className="py-6 text-center text-[12px] text-muted">{children}</p>;
+}
+
+function Notice({ error, ok }: { error?: string | null; ok?: string | null }) {
+  if (!error && !ok) return null;
+  return (
+    <p
+      role={error ? "alert" : "status"}
+      className={cn(
+        "mt-3 rounded-[10px] p-3 text-[12px] leading-6",
+        error
+          ? "border border-danger/30 bg-danger/5 text-error"
+          : "border border-ok/30 bg-ok/5 text-success",
+      )}
+    >
+      {error ?? ok}
+    </p>
+  );
+}
+
+// ── Requests ────────────────────────────────────────────────────────────────
+
+function RequestsTab() {
+  const [status, setStatus] = useState<PaymentRequestStatus | "ALL">("PENDING");
+  const [rows, setRows] = useState<AdminPaymentRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const [note, setNote] = useState<Record<string, string>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setError(null);
+      const result = await getAdminPaymentRequests({
+        data: status === "ALL" ? {} : { status },
+      });
+      setRows(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذّر تحميل الطلبات.");
+    } finally {
+      setLoading(false);
+    }
+  }, [status]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function act(
+    id: string,
+    action: "approve" | "reject",
+  ) {
+    setBusy(id);
+    setError(null);
+    setOk(null);
+    try {
+      const adminNote = note[id]?.trim() || undefined;
+      const result =
+        action === "approve"
+          ? await adminApprovePayment({ data: { requestId: id, adminNote } })
+          : await adminRejectPayment({ data: { requestId: id, adminNote } });
+      if (!result.ok) {
+        setError(result.error ?? "تعذّر تنفيذ الإجراء.");
+        return;
+      }
+      setOk(action === "approve" ? "تم اعتماد الدفعة وتفعيل الباقة." : "تم رفض الطلب.");
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Panel
+      title="طلبات الدفع"
+      actions={
+        <div className="flex gap-1">
+          {(["PENDING", "APPROVED", "REJECTED", "CANCELLED", "ALL"] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => setStatus(s)}
+              className={cn(
+                "cursor-pointer rounded-[8px] border px-2.5 py-1 text-[11px] font-bold",
+                status === s
+                  ? "border-brand bg-navy text-on-brand"
+                  : "border-line text-muted",
+              )}
+            >
+              {s === "ALL" ? "الكل" : (PAYMENT_STATUS_META[s]?.label ?? s)}
+            </button>
+          ))}
+        </div>
+      }
+    >
+      {loading && <p className="text-[12px] text-muted">جارٍ التحميل…</p>}
+      <Notice error={error} ok={ok} />
+      {!loading && rows.length === 0 && <Empty>لا توجد طلبات في هذه الحالة.</Empty>}
+
+      <ul className="grid gap-3">
+        {rows.map((row) => {
+          const meta = PAYMENT_STATUS_META[row.status] ?? PAYMENT_STATUS_META.PENDING;
+          return (
+            <li
+              key={row.id}
+              className="rounded-[12px] border border-line-2 p-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <strong className="text-[13px] font-extrabold">
+                    {row.userName ?? "—"}{" "}
+                    <span dir="ltr" className="text-[11px] font-normal text-muted">
+                      {row.userEmail ?? row.userId}
+                    </span>
+                  </strong>
+                  <p className="mt-1 text-[11px] text-muted">
+                    {row.isRenewal ? "تجديد — لديه وصول فعلي" : "أول اشتراك"}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-[11px] font-extrabold",
+                    meta.className,
+                  )}
+                >
+                  {meta.label}
+                </span>
+              </div>
+
+              <dl className="mt-3 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
+                <Cell label="الباقة" value={row.planId} />
+                <Cell label="المبلغ" value={formatPrice(row.amount, row.currency)} />
+                <Cell label="طريقة الدفع" value={row.paymentMethod} />
+                <Cell label="تاريخ الإرسال" value={formatDate(row.createdAt)} />
+              </dl>
+
+              <div className="mt-3 rounded-[8px] bg-paper p-2.5 text-[11px]">
+                <div className="flex justify-between gap-3">
+                  <span className="text-muted">رقم مرجع الحوالة</span>
+                  <span dir="ltr" className="font-extrabold">
+                    {row.paymentReference}
+                  </span>
+                </div>
+                {row.customerNote && (
+                  <p className="mt-1.5 border-t border-line-2 pt-1.5">
+                    ملاحظة العميل: {row.customerNote}
+                  </p>
+                )}
+              </div>
+
+              {row.status === "PENDING" ? (
+                <div className="mt-3 grid gap-2">
+                  <input
+                    value={note[row.id] ?? ""}
+                    onChange={(e) =>
+                      setNote((prev) => ({ ...prev, [row.id]: e.target.value }))
+                    }
+                    maxLength={500}
+                    placeholder="ملاحظة داخلية للعميل (اختياري)"
+                    className="h-9 rounded-[8px] border border-line bg-surface px-3 text-[12px]"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={busy === row.id}
+                      onClick={() => void act(row.id, "approve")}
+                      className="h-9 cursor-pointer rounded-[8px] bg-ok px-4 text-[12px] font-extrabold text-on-brand disabled:cursor-wait disabled:opacity-60"
+                    >
+                      {busy === row.id ? "…" : "اعتماد وتفعيل"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy === row.id}
+                      onClick={() => void act(row.id, "reject")}
+                      className="h-9 cursor-pointer rounded-[8px] border border-danger px-4 text-[12px] font-extrabold text-error disabled:cursor-wait disabled:opacity-60"
+                    >
+                      رفض
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                row.adminNote && (
+                  <p className="mt-3 text-[11px] text-muted">ملاحظة الإدارة: {row.adminNote}</p>
+                )
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+}
+
+function Cell({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-muted">{label}</dt>
+      <dd className="font-extrabold">{value}</dd>
+    </div>
+  );
+}
+
+// ── Customers ───────────────────────────────────────────────────────────────
+
+function CustomersTab() {
+  const [rows, setRows] = useState<AdminCustomer[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setError(null);
+      const [customers, planList] = await Promise.all([
+        getAdminCustomers(),
+        getAdminPlans(),
+      ]);
+      setRows(customers);
+      setPlans(planList);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذّر تحميل العملاء.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function run(
+    userId: string,
+    fn: () => Promise<{ ok: boolean; error?: string }>,
+    successMessage: string,
+  ) {
+    setBusy(userId);
+    setError(null);
+    setOk(null);
+    try {
+      const result = await fn();
+      if (!result.ok) {
+        setError(result.error ?? "تعذّر تنفيذ الإجراء.");
+        return;
+      }
+      setOk(successMessage);
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Panel title="العملاء">
+      {loading && <p className="text-[12px] text-muted">جارٍ التحميل…</p>}
+      <Notice error={error} ok={ok} />
+      {!loading && rows.length === 0 && <Empty>لا يوجد عملاء بعد.</Empty>}
+
+      <ul className="grid gap-3">
+        {rows.map((row) => {
+          const meta = ACCOUNT_STATUS_META[row.status] ?? ACCOUNT_STATUS_META.FREE;
+          const busyRow = busy === row.userId;
+          return (
+            <li
+              key={row.userId}
+              className="rounded-[12px] border border-line-2 p-4"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <strong className="text-[13px] font-extrabold">
+                  {row.name ?? "—"}{" "}
+                  <span dir="ltr" className="text-[11px] font-normal text-muted">
+                    {row.email ?? row.userId}
+                  </span>
+                </strong>
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-[11px] font-extrabold",
+                    meta.className,
+                  )}
+                >
+                  {meta.label}
+                </span>
+              </div>
+
+              <dl className="mt-3 grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-4">
+                <Cell label="الباقة" value={row.planId ?? "—"} />
+                <Cell label="ينتهي في" value={formatDate(row.expiresAt)} />
+                <Cell label="طلب معلّق" value={String(row.pendingPayments)} />
+                <Cell label="مسجّل منذ" value={formatDate(row.createdAt)} />
+              </dl>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <select
+                  disabled={busyRow}
+                  defaultValue=""
+                  onChange={(e) => {
+                    const planId = e.target.value;
+                    if (!planId) return;
+                    e.target.value = "";
+                    void run(
+                      row.userId,
+                      () =>
+                        adminActivateCustomer({ data: { userId: row.userId, planId } }),
+                      "تم تفعيل الباقة.",
+                    );
+                  }}
+                  className="h-9 cursor-pointer rounded-[8px] border border-line bg-surface px-2 text-[12px]"
+                >
+                  <option value="">تفعيل / منح باقة…</option>
+                  {plans.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.arabicName} — {plan.durationDays} يوم
+                    </option>
+                  ))}
+                </select>
+
+                {row.planId && (
+                  <button
+                    type="button"
+                    disabled={busyRow}
+                    onClick={() =>
+                      void run(
+                        row.userId,
+                        () =>
+                          adminExtendSubscription({ data: { userId: row.userId, days: 30 } }),
+                        "تم تمديد الاشتراك ٣٠ يوماً.",
+                      )
+                    }
+                    className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold disabled:cursor-wait"
+                  >
+                    تمديد ٣٠ يوم
+                  </button>
+                )}
+
+                {row.status === "SUSPENDED" ? (
+                  <button
+                    type="button"
+                    disabled={busyRow}
+                    onClick={() =>
+                      void run(
+                        row.userId,
+                        () => adminRestoreCustomer({ data: { userId: row.userId } }),
+                        "تمت استعادة الوصول.",
+                      )
+                    }
+                    className="h-9 cursor-pointer rounded-[8px] border border-ok px-3 text-[12px] font-bold text-success disabled:cursor-wait"
+                  >
+                    استعادة
+                  </button>
+                ) : (
+                  row.status !== "FREE" && (
+                    <button
+                      type="button"
+                      disabled={busyRow}
+                      onClick={() =>
+                        void run(
+                          row.userId,
+                          () => adminSuspendCustomer({ data: { userId: row.userId } }),
+                          "تم إيقاف الوصول.",
+                        )
+                      }
+                      className="h-9 cursor-pointer rounded-[8px] border border-danger px-3 text-[12px] font-bold text-error disabled:cursor-wait"
+                    >
+                      إيقاف
+                    </button>
+                  )
+                )}
+
+                <button
+                  type="button"
+                  disabled={busyRow}
+                  onClick={() => {
+                    const days = window.prompt("عدد أيام التمديد الإضافية:", "90");
+                    if (!days) return;
+                    const parsed = Number(days);
+                    if (!Number.isInteger(parsed) || parsed <= 0) return;
+                    void run(
+                      row.userId,
+                      () =>
+                        adminExtendSubscription({
+                          data: { userId: row.userId, days: parsed },
+                        }),
+                      "تم التمديد.",
+                    );
+                  }}
+                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold disabled:cursor-wait"
+                >
+                  تمديد مخصص
+                </button>
+
+                <button
+                  type="button"
+                  disabled={busyRow}
+                  onClick={() => {
+                    const date = window.prompt("تاريخ الانتهاء (YYYY-MM-DD):");
+                    if (!date) return;
+                    void run(
+                      row.userId,
+                      () =>
+                        adminSetExpiration({
+                          data: { userId: row.userId, expiresAt: `${date}T23:59:59Z` },
+                        }),
+                      "تم تحديث تاريخ الانتهاء.",
+                    );
+                  }}
+                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold disabled:cursor-wait"
+                >
+                  تحديد تاريخ الانتهاء
+                </button>
+
+                {plans.length > 0 && row.planId && (
+                  <select
+                    disabled={busyRow}
+                    defaultValue=""
+                    onChange={(e) => {
+                      const planId = e.target.value;
+                      if (!planId) return;
+                      e.target.value = "";
+                      void run(
+                        row.userId,
+                        () => adminChangePlan({ data: { userId: row.userId, planId } }),
+                        "تم تغيير الباقة.",
+                      );
+                    }}
+                    className="h-9 cursor-pointer rounded-[8px] border border-line bg-surface px-2 text-[12px]"
+                  >
+                    <option value="">تغيير الباقة…</option>
+                    {plans.map((plan) => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.arabicName}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <button
+                  type="button"
+                  disabled={busyRow}
+                  onClick={() =>
+                    void run(
+                      row.userId,
+                      () =>
+                        adminGrantAdmin({
+                          data: { userId: row.userId, note: "مُنح من لوحة الإدارة" },
+                        }),
+                      "تم منح صلاحية الإدارة.",
+                    )
+                  }
+                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold text-muted disabled:cursor-wait"
+                >
+                  منح صلاحية إدارة
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+}
+
+// ── Plans ───────────────────────────────────────────────────────────────────
+
+function PlansTab() {
+  const [rows, setRows] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Record<string, { price: string; durationDays: string }>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setError(null);
+      setRows(await getAdminPlans());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "تعذّر تحميل الباقات.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function save(plan: Plan) {
+    const d = draft[plan.id];
+    const price = d?.price ?? plan.price;
+    const durationDays = Number(d?.durationDays ?? plan.durationDays);
+    setBusy(plan.id);
+    setError(null);
+    setOk(null);
+    try {
+      const result = await adminUpdatePlan({
+        data: { planId: plan.id, price, durationDays },
+      });
+      if (!result.ok) {
+        setError(result.error ?? "تعذّر الحفظ.");
+        return;
+      }
+      setOk("تم حفظ الباقة.");
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function toggleEnabled(plan: Plan) {
+    setBusy(plan.id);
+    setError(null);
+    setOk(null);
+    try {
+      const result = await adminUpdatePlan({
+        data: { planId: plan.id, enabled: !plan.enabled },
+      });
+      if (!result.ok) {
+        setError(result.error ?? "تعذّر التحديث.");
+        return;
+      }
+      setOk(plan.enabled ? "تم تعطيل الباقة." : "تم تفعيل الباقة.");
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Panel title="الباقات">
+      {loading && <p className="text-[12px] text-muted">جارٍ التحميل…</p>}
+      <Notice error={error} ok={ok} />
+      <ul className="grid gap-3">
+        {rows.map((plan) => {
+          const d = draft[plan.id];
+          return (
+            <li
+              key={plan.id}
+              className="rounded-[12px] border border-line-2 p-4"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <strong className="text-[13px] font-extrabold">
+                  {plan.arabicName}{" "}
+                  <span className="text-[11px] font-normal text-muted">({plan.name})</span>
+                </strong>
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-[11px] font-extrabold",
+                    plan.enabled ? "bg-ok/15 text-success" : "bg-line-2 text-muted",
+                  )}
+                >
+                  {plan.enabled ? "متاحة" : "معطّلة"}
+                </span>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <label className="grid gap-1">
+                  <span className="text-[11px] text-muted">السعر ({plan.currency})</span>
+                  <input
+                    dir="ltr"
+                    readOnly
+                    title="معتمد من الكتالوج المركزي"
+                    defaultValue={plan.price}
+                    onChange={(e) =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        [plan.id]: { durationDays: d?.durationDays ?? String(plan.durationDays), price: e.target.value },
+                      }))
+                    }
+                    className="h-9 w-28 rounded-[8px] border border-line bg-surface px-2 text-[12px] tabular-nums"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-[11px] text-muted">المدة (يوم)</span>
+                  <input
+                    dir="ltr"
+                    readOnly
+                    defaultValue={plan.durationDays}
+                    onChange={(e) =>
+                      setDraft((prev) => ({
+                        ...prev,
+                        [plan.id]: { price: d?.price ?? plan.price, durationDays: e.target.value },
+                      }))
+                    }
+                    className="h-9 w-24 rounded-[8px] border border-line bg-surface px-2 text-[12px] tabular-nums"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={busy === plan.id}
+                  onClick={() => void save(plan)}
+                  className="h-9 cursor-pointer rounded-[8px] bg-navy px-4 text-[12px] font-extrabold text-on-brand disabled:cursor-wait disabled:opacity-60"
+                >
+                  {busy === plan.id ? "…" : "حفظ"}
+                </button>
+                <button
+                  type="button"
+                  disabled={busy === plan.id}
+                  onClick={() => void toggleEnabled(plan)}
+                  className="h-9 cursor-pointer rounded-[8px] border border-line px-3 text-[12px] font-bold disabled:cursor-wait"
+                >
+                  {plan.enabled ? "تعطيل" : "تفعيل"}
+                </button>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+}
+
+// ── Payment settings ────────────────────────────────────────────────────────
+
+function SettingsTab() {
+  const [form, setForm] = useState<PaymentInstructions | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [ok, setOk] = useState<string | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        // Read through the customer-facing reader — the same values a customer
+        // is shown, so the admin edits exactly what the customer will see.
+        const { getPaymentInstructionsPublic } = await import(
+          "@/lib/commercial/functions"
+        );
+        setForm(await getPaymentInstructionsPublic());
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "تعذّر تحميل الإعدادات.");
+      }
+    })();
+  }, []);
+
+  if (!form) {
+    return (
+      <Panel title="إعدادات الدفع">
+        <p className="text-[12px] text-muted">جارٍ التحميل…</p>
+        <Notice error={error} />
+      </Panel>
+    );
+  }
+
+  const field = (
+    key: keyof PaymentInstructions,
+    label: string,
+    dir?: "ltr",
+  ) => (
+    <label className="grid gap-1.5">
+      <span className="text-[12px] font-extrabold">{label}</span>
+      <input
+        dir={dir}
+        value={form[key]}
+        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+        className="h-10 rounded-[10px] border border-line bg-surface px-3 text-[13px]"
+      />
+    </label>
+  );
+
+  return (
+    <div className="grid gap-4">
+      <Panel title="إعدادات الدفع">
+        <p className="text-[12px] leading-6 text-muted">
+          هذه التعليمات تظهر للعميل عند اختيار الباقة. لا تُدخل أي بيانات سرية أو كلمات
+          مرور — فقط بيانات الحساب البنكي المستلم.
+        </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          {field("bankName", "اسم البنك")}
+          {field("accountName", "اسم الحساب")}
+          {field("iban", "IBAN", "ltr")}
+        </div>
+        <div className="mt-3 grid gap-3">
+          <label className="grid gap-1.5">
+            <span className="text-[12px] font-extrabold">التعليمات (عربي)</span>
+            <textarea
+              rows={3}
+              value={form.instructionsAr}
+              onChange={(e) => setForm({ ...form, instructionsAr: e.target.value })}
+              className="rounded-[10px] border border-line bg-surface p-3 text-[13px]"
+            />
+          </label>
+          <label className="grid gap-1.5">
+            <span className="text-[12px] font-extrabold">التعليمات (English)</span>
+            <textarea
+              rows={3}
+              dir="ltr"
+              value={form.instructionsEn}
+              onChange={(e) => setForm({ ...form, instructionsEn: e.target.value })}
+              className="rounded-[10px] border border-line bg-surface p-3 text-[13px]"
+            />
+          </label>
+        </div>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            void (async () => {
+              setBusy(true);
+              setError(null);
+              setOk(null);
+              try {
+                const result = await adminUpdatePaymentSettings({ data: form });
+                if (!result.ok) {
+                  setError(result.error ?? "تعذّر الحفظ.");
+                  return;
+                }
+                setOk("تم حفظ الإعدادات.");
+              } finally {
+                setBusy(false);
+              }
+            })()
+          }
+          className="mt-4 h-10 cursor-pointer rounded-[10px] bg-navy px-5 text-[12px] font-extrabold text-on-brand disabled:cursor-wait disabled:opacity-60"
+        >
+          {busy ? "جارٍ الحفظ…" : "حفظ الإعدادات"}
+        </button>
+        <Notice error={error} ok={ok} />
+      </Panel>
+
+      <Panel title="إعدادات النظام">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <a href="/admin-licenses" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
+            إدارة التراخيص — Gumroad وKeygen
+          </a>
+          <a href="/owner-vault" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
+            خزنة المالك — مفاتيح API
+          </a>
+          <a href="/admin-dashboard" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
+            محتوى الموقع والقوالب — عبر لوحة الإدارة
+          </a>
+          <div className="rounded-[10px] border border-line p-3 text-[11px] leading-5 text-muted">
+            <strong className="block text-[12px] text-ink">الحماية</strong>
+            جميع مسارات /admin و /admin-licenses محمية خادمياً عبر requireAdmin — العميل العادي يحصل على 403 حتى لو استدعى الـAPI مباشرة.
+          </div>
+        </div>
+      </Panel>
+    </div>
+  );
+}
+
+// ── Audit log ───────────────────────────────────────────────────────────────
+
+function AuditTab() {
+  const [rows, setRows] = useState<AdminAuditEntry[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getAdminAuditLog()
+      .then((entries) => setRows(entries))
+      .catch((err: unknown) =>
+        setError(err instanceof Error ? err.message : "تعذّر تحميل السجل."),
+      );
+  }, []);
+
+  return (
+    <Panel title="سجل الإجراءات الحساسة">
+      <Notice error={error} />
+      {rows.length === 0 && !error && <Empty>لا توجد إجراءات مسجّلة.</Empty>}
+      <ul className="grid gap-2">
+        {rows.map((row) => (
+          <li
+            key={row.id}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-line-2 p-3 text-[11px]"
+          >
+            <span className="font-extrabold">{row.action}</span>
+            <span className="text-muted">
+              {row.targetType}: {row.targetId ?? "—"}
+            </span>
+            <span className="text-muted">بواسطة {row.adminUserId}</span>
+            <span className="text-muted">{formatDate(row.createdAt)}</span>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}

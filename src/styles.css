@@ -4,21 +4,90 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Design tokens.
+ * Editor chrome layer scale.
+ *
+ * One ordered set of tokens instead of scattered magic numbers, so a dropdown
+ * can never end up UNDER the panel it was opened from, and a floating bubble
+ * can never cover a dialog. Order (low → high):
+ *   canvas artwork < selection overlay < panels < drawer backdrop < drawer
+ *   < floating bubble < dropdown < dialog < context menu < command menu < toast
+ * The canvas overlay stays inside the page (see SELECTION_LAYER_Z in
+ * CanvasStage) and is unaffected by these values.
+ */
+:root {
+  --z-canvas: 0;
+  --z-canvas-overlay: 20;
+  --z-panel: 30;
+  --z-drawer-backdrop: 35;
+  --z-drawer: 40;
+  --z-bubble: 60;
+  --z-dropdown: 70;
+  --z-dialog: 90;
+  --z-context: 100;
+  --z-command: 110;
+  --z-toast: 200;
+}
+
+/*
+ * Design tokens — the single source of truth for BOTH themes.
  *
  * Palette is deliberately restrained: white paper, neutral greys, and
  * institutional emerald as the brand anchor, with muted gold used only as a
  * thin accent. No gradient-led surfaces, no decorative elements without a function.
+ *
+ * ── How theming works here (and why nothing else needs a `dark:` patch) ──
+ * Every colour below is a *role*, not a colour value: a surface, an ink, a
+ * hairline, a brand fill, a label that sits on that fill. `html.dark` (the one
+ * class `lib/theme.ts` toggles for the whole site) re-points every role — see
+ * the dark palette right after this block. Tailwind v4 compiles `bg-surface`,
+ * `text-ink`, `border-line`… to `var(--color-*)`, so a component that speaks in
+ * roles adapts automatically in both modes, on hover/focus/active, and in every
+ * portal. That is the whole contract:
+ *
+ *   • surfaces   → `page` (a marketing page), `paper` (section band),
+ *                  `surface` (card/panel), `surface-2` (inset strip)
+ *   • text       → `ink` (primary), `muted` (secondary), `on-brand`/`on-inverse`
+ *                  (labels that live on a solid fill)
+ *   • brand      → `navy*` for FILLS and tints, `brand`/`brand-hover` for the
+ *                  same hue as TEXT, ICONS and hairlines on a surface
+ *   • meaning    → `danger`/`ok`/`gold` as fills and tints, `error`/`success`/
+ *                  `warning` as text on a surface
+ *   • structure  → `line`, `line-2`, `inverse` (solid ink chip), `scrim`
+ *
+ * What must NEVER be themed is document artwork — the report page, a template
+ * preview, an exported PNG. Those surfaces are pinned back to their light
+ * values by `.report-page` / `.tpl-paper` below, so a white sheet of paper stays
+ * white in Dark mode while the chrome around it flips.
+ *
+ * Raw `#hex` values and Tailwind palette steps (`text-slate-500`, `bg-emerald-50`)
+ * are therefore bugs in chrome code: they cannot adapt, and each one is a second
+ * opinion about what the theme looks like. `scripts/theme-check.mjs` fails the
+ * build on them.
  */
 @theme {
-  --font-sans: "Tajawal", "Cairo", "IBM Plex Sans Arabic", "Noto Sans Arabic", ui-sans-serif, system-ui, sans-serif;
+  --font-sans:
+    "Tajawal", "Cairo", "IBM Plex Sans Arabic", "Noto Sans Arabic",
+    ui-sans-serif, system-ui, sans-serif;
   --font-display: "Cairo", "Tajawal", sans-serif;
   --font-serif-ar: "Amiri", "Noto Naskh Arabic", serif;
 
   /*
+   * `lg2` — the editor's docked/overlay boundary, at 768px (iPad portrait).
+   *
+   * Script boundary lives in `ui-state.ts` (`OVERLAY_BREAKPOINT`) and the
+   * layout's classes use `lg2:`/`max-lg2:` — the two must always be the same
+   * number, which is why neither is spelled out in a component.
+   */
+  --breakpoint-lg2: 768px;
+
+  /*
+   * Brand — FILLS and tints.
+   *
    * `navy` keeps its name because it is the historical token for the primary
    * surface colour and is referenced across the whole editor; it now carries the
-   * institutional emerald that NASAQ brands with.
+   * institutional emerald that NASAQ brands with. Every value in this family is
+   * a *fill*: a light `on-brand` label always sits on it with AA contrast, in
+   * both themes. Brand colour as text/icon is `--color-brand` below.
    */
   --color-navy: #006c35;
   --color-navy-2: #00874a;
@@ -27,22 +96,207 @@
   --color-green-2: #145c42;
   --color-gold: #c9a86a;
   --color-gold-2: #e0c894;
-  --color-ink: #172033;
-  --color-paper: #f2f4f8;
+
+  /* Surfaces. `page` is a marketing page's canvas, `paper` the alternating
+   * section band, `surface` the card/panel on it, `surface-2` a recessed strip
+   * inside a card (toolbars, chips, inset wells). */
+  --color-paper: #f4f0e8;
+  --color-page: #ffffff;
   --color-surface: #ffffff;
-  --color-muted: #6b7383;
-  --color-line: #dde2ea;
-  --color-line-2: #edf0f5;
+  --color-surface-2: #faf7f0;
+
+  /* Ink. Primary and secondary text; both are re-pointed for Dark below. */
+  --color-ink: #172033;
+  /*
+   * Secondary text. Kept just dark enough to clear WCAG AA for the 11–13px
+   * subtext used across the site and the editor (≈5.8:1 on white); the pale
+   * grey it replaced measured ≈4.7:1 and read as washed out on card surfaces.
+   */
+  --color-muted: #5d6575;
+
+  /* Hairlines: `line` frames, `line-2` separates and fills chips/hover rows. */
+  --color-line: #ddd6c8;
+  --color-line-2: #ece6da;
+
+  /* Semantic fills + their matching text role. */
   --color-danger: #b42318;
   --color-ok: #087f5b;
+  --color-error: #b42318;
+  --color-success: #076f50;
+  --color-warning: #8a6520;
+
+  /*
+   * Brand colour as a *role on a surface*: eyebrow labels, links, icons,
+   * focus rings and brand-tinted borders. It shares the brand hue in Light and
+   * becomes the theme's pale gold in Dark, which is the accent the dark chrome
+   * already uses — one token instead of the `text-navy dark:text-gold-2` pair
+   * that had to be repeated on hundreds of elements (and was forgotten on more).
+   */
+  --color-brand: #006c35;
+  /* Text roles get *deeper* on hover in light mode, so contrast only rises. */
+  --color-brand-hover: #00542a;
+
+  /* Label on a solid brand / green / gold / danger / ok fill. */
+  --color-on-brand: #ffffff;
+  /* Gold is a light decorative fill in both palettes, so its label is always ink. */
+  --color-on-gold: #172033;
+
+  /*
+   * The solid ink chip: near-black in Light, a light plate with dark type in
+   * Dark (the inversion the dark theme already used for `bg-[#0F1E33]`
+   * `dark:bg-white` buttons, now expressed as one token pair).
+   */
+  --color-inverse: #0f1e33;
+  --color-inverse-hover: #060e1c;
+  --color-on-inverse: #f8fafc;
+
+  /* Overlay behind a dialog. Always dark in both themes: it dims the page. */
+  --color-scrim: rgba(9, 13, 20, 0.62);
 
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 14px;
 
-  --shadow-panel: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  /*
+   * Unified shadow scale — one set of elevation tokens for the whole product.
+   * The hover pair is slightly stronger so a card lift reads as intentional
+   * feedback, not a glitch. All card shadows share the same base hue/opacity
+   * so a grid of cards reads as one surface family.
+   */
+  --shadow-panel:
+    0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
   --shadow-page: 0 24px 64px rgba(15, 23, 42, 0.18);
+  --shadow-card: 0 2px 12px -2px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-card-hover: 0 8px 24px -4px rgba(0, 0, 0, 0.1), 0 2px 6px rgba(0, 0, 0, 0.06);
+  --shadow-card-dark:
+    0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-card-dark-hover:
+    0 12px 28px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.09);
+  /*
+   * Floating chrome — cards that leave the page's plane (the account menu, and
+   * any dropdown that opens over artwork). A soft, wide drop shadow separates
+   * the card from whatever it covers, which matters most when the layer beneath
+   * is dense text: without it an opaque card floating mid-page reads as part of
+   * the background.
+   */
+  --shadow-dropdown:
+    0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.08);
 }
+
+/* =====================================================================
+ * DARK PALETTE — the one place the dark theme is defined.
+ *
+ * `html.dark` is toggled by `src/lib/theme.ts` (site header, editor toolbar,
+ * `?embed` host and cross-tab storage events all share it), so re-pointing the
+ * roles here is what fixes Light/Dark contrast *globally*: every `bg-surface`,
+ * `text-ink`, `border-line`, `bg-navy/10`, `shadow-card`… in the product follows,
+ * including their `hover:`/`focus:`/`active:`/`group-hover:` forms.
+ *
+ * Surface values are the ones the dark theme already painted (page #0b1220,
+ * card #161c26, inset #1e2633, ink #e9eef5, secondary #9aa5b4), so nothing here
+ * is a redesign — it is the existing dark look, promoted from a thousand
+ * copy-pasted `dark:` patches to a token set components can rely on.
+ *
+ * Contrast targets met (measured, see `scripts/theme-check.mjs`):
+ *   ink on paper/surface ≥ 13:1     muted on surface ≥ 6:1
+ *   on-brand white label on `navy` ≥ 4.5:1   inverse plate label ≥ 15:1
+ *   brand text on surface ≥ 8:1      error/success/warning on surface ≥ 7:1
+ * ===================================================================== */
+html.dark {
+  color-scheme: dark;
+
+  /*
+   * Dark surface hierarchy — four distinct levels so panels, cards, and inset
+   * wells never blur together. The steps are close enough to feel like one
+   * family but far enough that the eye can separate them at a glance.
+   */
+  --color-paper: #0b1220;
+  --color-page: #0e1626;
+  --color-surface: #141c2b;
+  --color-surface-2: #1a2336;
+
+  --color-ink: #e9eef5;
+  --color-muted: #9aa5b4;
+
+  --color-line: #2c3850;
+  --color-line-2: #212b40;
+
+  /* Brand fills stay saturated enough to hold a white label, but are lifted a
+     step so they separate from a near-black page; the hover direction is
+     inverted (deeper, not brighter) so the label never loses contrast. */
+  --color-navy: #0d8446;
+  --color-navy-2: #0a6b39;
+  --color-navy-3: #12a15c;
+  --color-green: #12593f;
+  --color-green-2: #1a6b4a;
+  --color-gold: #d8bd85;
+  --color-gold-2: #ecd8ab;
+
+  /* Brand *as text/icons/hairlines* on a dark surface: the dark theme's gold. */
+  --color-brand: #e0c894;
+  --color-brand-hover: #f0dfb8;
+  --color-on-brand: #ffffff;
+  /* Gold is a light decorative fill in both palettes, so its label is always ink. */
+  --color-on-gold: #172033;
+
+  /* The ink chip inverts: a light plate with dark type. */
+  --color-inverse: #e9eef5;
+  --color-inverse-hover: #ffffff;
+  --color-on-inverse: #0f141c;
+
+  --color-danger: #b23a2c;
+  --color-ok: #0d7d5b;
+  --color-error: #ff9a90;
+  --color-success: #5ad3a5;
+  --color-warning: #eec87e;
+
+  --color-scrim: rgba(4, 7, 12, 0.72);
+
+  --shadow-panel:
+    0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --shadow-page: 0 24px 64px rgba(0, 0, 0, 0.6);
+  --shadow-card:
+    0 4px 20px -2px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  --shadow-card-hover:
+    0 12px 28px -6px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.09);
+  /* A floating card on a dark page needs more separation, not less. */
+  --shadow-dropdown:
+    0 10px 15px -3px rgba(0, 0, 0, 0.55), 0 4px 6px -4px rgba(0, 0, 0, 0.4);
+}
+
+/* Dim is a separate, medium-contrast palette rather than a fourth surface. */
+html.dark.dim {
+  --color-paper: #20262e;
+  --color-page: #252c35;
+  --color-surface: #2c343e;
+  --color-surface-2: #343d48;
+  --color-ink: #f0f3f6;
+  --color-muted: #b7c0ca;
+  --color-line: #485360;
+  --color-line-2: #3a444f;
+  --color-navy: #157a49;
+  --color-navy-2: #10683e;
+  --color-navy-3: #21905b;
+  --color-green: #27684d;
+  --color-green-2: #31785a;
+  --color-brand: #e8d3a7;
+  --color-brand-hover: #f1e2c2;
+  --color-inverse: #f0f3f6;
+  --color-inverse-hover: #ffffff;
+  --color-on-inverse: #20262e;
+  --color-danger: #b74b40;
+  --color-ok: #14805e;
+  --color-error: #ffaaa0;
+  --color-success: #73ddb5;
+  --color-warning: #f0d28f;
+  --color-scrim: rgba(5, 8, 12, 0.66);
+  --shadow-panel: 0 1px 2px rgba(0, 0, 0, 0.36), 0 8px 24px rgba(0, 0, 0, 0.34);
+  --shadow-page: 0 24px 64px rgba(0, 0, 0, 0.44);
+  --shadow-card: 0 4px 18px -2px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.045);
+  --shadow-card-hover: 0 10px 26px -6px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.075);
+  --shadow-dropdown: 0 10px 15px -3px rgba(0, 0, 0, 0.46), 0 4px 6px -4px rgba(0, 0, 0, 0.34);
+}
+
 
 @layer base {
   button:not(:disabled),
@@ -58,10 +312,6 @@
   html {
     height: 100%;
     color-scheme: light;
-  }
-
-  html.dark {
-    color-scheme: dark;
   }
 
   /*
@@ -90,14 +340,59 @@
     overscroll-behavior: none;
   }
 
+  /*
+   * Theme-wide base colours.
+   *
+   * These used to be the ONLY dark-mode rules in the whole stylesheet — `body`
+   * got a dark page and `--color-muted` got a lighter grey, while `ink`,
+   * `surface`, `paper`, `line` and the brand family kept their light values.
+   * Every element that painted itself with a token therefore looked correct in
+   * Light and wrong in Dark, and each one needed its own `dark:` patch; the
+   * ones that never got one are the "text disappears in dark mode" bug.
+   * The palette now lives in one `html.dark` block above, so nothing is
+   * re-pointed per element here.
+   */
   html.dark body {
-    background: #0f141c;
-    color: #e9eef5;
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+
+  /* Site pages only: a faint ivory-to-sand wash for depth; the editor keeps flat chrome. */
+  html:not(.dark) body:not(.is-editor) {
+    background-image: linear-gradient(180deg, #f8f4ec 0%, var(--color-paper) 55%, #eee7d9 100%);
+    background-attachment: fixed;
+  }
+
+  /*
+   * Chrome that browsers paint outside our stylesheet: form widgets, scrollbars,
+   * selected text and the focus ring. `color-scheme` (set with the dark palette)
+   * already flips native controls; these keep the parts we control on-theme.
+   */
+  ::selection {
+    background: color-mix(in srgb, var(--color-brand) 30%, transparent);
+    color: var(--color-ink);
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-navy-2);
+    outline: 2px solid var(--color-brand);
     outline-offset: 2px;
+  }
+
+  /* Placeholders are the most common "invisible input" complaint: a literal
+     grey on a themed input has no business being one. */
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-muted);
+    opacity: 0.85;
+  }
+
+  /* Autofill keeps the field's own themed colours instead of the UA yellow. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-text-fill-color: var(--color-ink);
+    -webkit-box-shadow: 0 0 0 1000px var(--color-surface) inset;
+    caret-color: var(--color-ink);
   }
 
   /* Numbers in Arabic UI read better with tabular figures in forms. */
@@ -124,49 +419,99 @@
   min-height: 0;
 }
 
-/* Photoshop-inspired chrome. These tokens stop at editor chrome boundaries. */
-.editor-ui {
-  --editor-bg: #252627;
-  --editor-panel: #303132;
-  --editor-toolbar: #2b2c2d;
-  --editor-surface: #38393a;
-  --editor-border: #48494a;
-  --editor-text: #d7d8d9;
-  --editor-text-secondary: #9b9d9f;
-  --editor-hover: #414243;
-  --editor-active: #4b4c4d;
-  --editor-disabled: #252627;
-  background: var(--editor-bg);
-  color: var(--editor-text);
+/* Shared editor tokens also reach portalled menus; no document color uses them. */
+:root, .editor-ui {
+  --editor-bg: #181d21;
+  --editor-panel: #1e252b;
+  --editor-toolbar: #1a2229;
+  --editor-surface: #242d34;
+  --editor-border: #33404b;
+  --editor-text: #e9eef3;
+  --editor-text-secondary: #9fb0bd;
+  --editor-hover: #2a353e;
+  --editor-active: #3c454d;
+  --editor-disabled: #1b232a;
+  --editor-accent: #8ea0ae;
+  --editor-accent-hover: #a3b4c0;
+  --editor-accent-ink: #8ec6ea;
+  --editor-accent-text: #ffffff;
+  --editor-accent-soft: #293e4d;
+  --editor-danger: #e4a29d;
+  --editor-danger-soft: #422d30;
+  --editor-success: #63c29a;
+}
+.editor-ui { background: var(--editor-bg); color: var(--editor-text); }
+
+:root:not(.dark), .editor-ui.editor-light {
+  --editor-bg: #d9dddf;
+  --editor-panel: #e4e7e9;
+  --editor-toolbar: #dde1e3;
+  --editor-surface: #e7eaec;
+  --editor-border: #c4cacf;
+  --editor-text: #242c33;
+  --editor-text-secondary: #55616a;
+  --editor-hover: #d3d8db;
+  --editor-active: #c5cbcf;
+  --editor-disabled: #d8dcde;
+  --editor-accent: #3d4c59;
+  --editor-accent-hover: #2c3944;
+  --editor-accent-ink: #2c3944;
+  --editor-accent-text: #f4f6f7;
+  --editor-accent-soft: #d7dde1;
+  --editor-danger: #9b4541;
+  --editor-danger-soft: #f2e4e2;
+  --editor-success: #0b7a52;
 }
 
-.editor-ui.editor-light {
-  --editor-bg: #e2e3e4;
-  --editor-panel: #f0f0f1;
-  --editor-toolbar: #e8e8e9;
-  --editor-surface: #fafafa;
-  --editor-border: #c9cacc;
-  --editor-text: #28292a;
-  --editor-text-secondary: #686a6c;
-  --editor-hover: #dedfe0;
-  --editor-active: #d3d4d5;
-  --editor-disabled: #bfc0c1;
+.editor-ui.editor-dim,
+html.dark.dim {
+  --editor-bg: #30373e;
+  --editor-panel: #394149;
+  --editor-toolbar: #353d45;
+  --editor-surface: #424b54;
+  --editor-border: #59646e;
+  --editor-text: #f0f3f5;
+  --editor-text-secondary: #c0c9d0;
+  --editor-hover: #48535d;
+  --editor-active: #59636c;
+  --editor-disabled: #343c43;
+  --editor-accent: #c5d0d8;
+  --editor-accent-hover: #d5dee4;
+  --editor-accent-ink: #a8d6f0;
+  --editor-accent-text: #ffffff;
+  --editor-accent-soft: #3b515e;
+  --editor-danger: #f0aaa4;
+  --editor-danger-soft: #563b3b;
+  --editor-success: #82d9b1;
 }
 
 .editor-ui .editor-toolbar,
 .editor-ui .editor-sidebar,
-.editor-ui .editor-page-rail,
-.editor-ui .editor-arrange-bar {
+.editor-ui .editor-page-rail {
   --color-paper: var(--editor-panel);
   --color-surface: var(--editor-surface);
+  --color-surface-2: var(--editor-hover);
   --color-ink: var(--editor-text);
   --color-muted: var(--editor-text-secondary);
   --color-line: var(--editor-border);
   --color-line-2: var(--editor-hover);
   --color-navy: var(--editor-active);
-  --color-navy-2: #5b5c5d;
-  --color-navy-3: #666768;
+  --color-navy-2: var(--editor-accent);
+  --color-navy-3: var(--editor-accent-hover);
+  /* The role tokens follow the same re-point so chrome written with a role —
+     `text-brand`, `text-error`, `bg-surface-2` — resolves to the workspace
+     palette instead of the site's marketing colours. */
+  --color-brand: var(--editor-accent-ink);
+  --color-brand-hover: var(--editor-accent-hover);
+  --color-on-brand: var(--editor-accent-text);
+  --color-error: var(--editor-danger);
+  --color-success: var(--editor-success);
+  --color-warning: var(--color-gold);
+  --color-inverse: var(--editor-surface);
+  --color-inverse-hover: var(--editor-active);
+  --color-on-inverse: var(--editor-text);
   --color-white: var(--editor-text);
+
   background-color: var(--editor-panel) !important;
   border-color: var(--editor-border) !important;
   color: var(--editor-text);
@@ -176,14 +521,54 @@
   background-color: var(--editor-toolbar) !important;
 }
 
+/* Workspace is interface chrome; the artboard retains its own document colors. */
+.editor-ui {
+  --editor-canvas: #1e252b;
+  --editor-canvas-grid: rgba(255, 255, 255, 0.035);
+  --editor-canvas-text: #cfd6db;
+  --editor-canvas-text-secondary: #9aa5ae;
+}
+.editor-ui.editor-light {
+  --editor-canvas: #c5ccd1;
+  --editor-canvas-grid: rgba(40, 51, 59, 0.035);
+  --editor-canvas-text: var(--editor-text);
+  --editor-canvas-text-secondary: var(--editor-text-secondary);
+}
+.editor-ui.editor-dim {
+  --editor-canvas: #444d55;
+  --editor-canvas-grid: rgba(255, 255, 255, 0.045);
+  --editor-canvas-text: var(--editor-text);
+  --editor-canvas-text-secondary: var(--editor-text-secondary);
+}
+
+
 .editor-ui .editor-canvas-workspace,
 .editor-ui .editor-canvas-stage {
-  background-color: var(--editor-bg) !important;
-  color: var(--editor-text);
+  background-color: var(--editor-canvas) !important;
+  color: var(--editor-canvas-text);
+}
+
+/* Page caption above each artboard sits on the canvas, not on the page. */
+.editor-ui .editor-canvas-stage .canvas-page-meta {
+  color: var(--editor-canvas-text-secondary);
+}
+.editor-ui .editor-canvas-stage .canvas-page-meta strong {
+  color: var(--editor-canvas-text);
 }
 
 .editor-ui .editor-canvas-stage {
   background-image: none;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  overscroll-behavior: contain;
+  /*
+   * Chrome's scroll anchoring "helpfully" rescrolls the stage whenever the
+   * re-rendered artboard changes size under it — which is exactly what a zoom
+   * step is. That fights the anchored-zoom correction (viewport-tools.ts
+   * `zoomAnchoredAt`) and leaves the anchor point drifting several millimetres
+   * per wheel step. The canvas manages its own scroll on zoom; anchoring off.
+   */
+  overflow-anchor: none;
 }
 
 /* Control surfaces inside chrome only; the report page is not under these selectors. */
@@ -193,16 +578,14 @@
 .editor-ui .editor-sidebar input,
 .editor-ui .editor-sidebar select,
 .editor-ui .editor-sidebar textarea,
-.editor-ui .editor-page-rail button,
-.editor-ui .editor-arrange-bar button {
+.editor-ui .editor-page-rail button {
   border-color: var(--editor-border);
   color: var(--editor-text);
 }
 
 .editor-ui .editor-toolbar button:hover:not(:disabled),
 .editor-ui .editor-sidebar button:hover:not(:disabled),
-.editor-ui .editor-page-rail button:hover:not(:disabled),
-.editor-ui .editor-arrange-bar button:hover:not(:disabled) {
+.editor-ui .editor-page-rail button:hover:not(:disabled) {
   background-color: var(--editor-hover);
 }
 
@@ -219,6 +602,19 @@
   background-color: var(--editor-surface) !important;
 }
 
+/*
+ * Translucent white surfaces (`bg-white/60`, `/90`, `/95`) resolve through
+ * `--color-white`, which the chrome remaps to the TEXT colour so `text-white`
+ * stays readable on light active states. In the light theme that turned
+ * cards/chips near-black with unreadable captions — map them to the surface
+ * token like opaque `bg-white`. (Dark theme keeps each element's own
+ * `dark:` background.)
+ */
+.editor-ui.editor-light :is(.editor-toolbar, .editor-sidebar, .editor-page-rail)
+  :is(.bg-white\/60, .bg-white\/90, .bg-white\/95) {
+  background-color: color-mix(in srgb, var(--editor-surface) 92%, transparent) !important;
+}
+
 .editor-ui .editor-toolbar .text-white,
 .editor-ui .editor-sidebar .text-white,
 .editor-ui .editor-page-rail .text-white {
@@ -231,14 +627,71 @@
   color: var(--editor-text-secondary);
 }
 
-/* Reset inherited UI tokens at the document boundary. No design color is themed. */
-.editor-ui .report-page {
+/* Keep property values readable in both editor themes instead of inheriting page-form colors. */
+.editor-ui .editor-properties .editor-property-field {
+  color: var(--editor-text-secondary);
+}
+
+.editor-ui
+  .editor-properties
+  .field-control
+  > input:not([type="range"]):not([type="color"]),
+.editor-ui .editor-properties .field-control > select,
+.editor-ui .editor-properties .field-control > textarea {
+  background-color: var(--editor-surface) !important;
+  border-color: var(--editor-border) !important;
+  color: var(--editor-text) !important;
+}
+
+.editor-ui .editor-properties .field-control > input[type="number"] {
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-ui .editor-properties .field-control > input::placeholder,
+.editor-ui .editor-properties .field-control > textarea::placeholder {
+  color: var(--editor-text-secondary);
+  opacity: 1;
+}
+
+/*
+ * Document artwork is not chrome.
+ *
+ * The report page and every real template preview render a sheet of white paper
+ * with its own design colours — those must stay exactly as designed when the
+ * visitor switches themes, otherwise "dark mode" would repaint (and export) a
+ * dark sheet. Pinning the roles back at the document boundary is what lets the
+ * rest of the UI flip freely, so it is done once here instead of per component.
+ */
+.editor-ui .report-page,
+.tpl-paper,
+[data-doc] {
   --color-ink: #172033;
   --color-muted: #6b7383;
   --color-line: #dde2ea;
   --color-line-2: #edf0f5;
-  --color-surface: #ffffff;
   --color-paper: #f2f4f8;
+  --color-page: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-2: #f8faf9;
+  --color-navy: #006c35;
+  --color-navy-2: #00874a;
+  --color-navy-3: #0a9c59;
+  --color-brand: #006c35;
+  /* Text roles get *deeper* on hover in light mode, so contrast only rises. */
+  --color-brand-hover: #00542a;
+  --color-on-brand: #ffffff;
+  /* Gold is a light decorative fill in both palettes, so its label is always ink. */
+  --color-on-gold: #172033;
+  --color-green: #0c3d2c;
+  --color-gold: #c9a86a;
+  --color-gold-2: #e0c894;
+  --color-danger: #b42318;
+  --color-ok: #087f5b;
+  --color-error: #b42318;
+  --color-success: #076f50;
+  --color-warning: #8a6520;
+  --color-inverse: #0f1e33;
+  --color-on-inverse: #f8fafc;
 }
 
 .editor-ui.editor-focus .editor-sidebar,
@@ -248,15 +701,6 @@
 
 .editor-ui.editor-focus .editor-focus-workspace {
   grid-template-columns: minmax(0, 1fr) !important;
-}
-
-.editor-ui .editor-arrange-bar .arrange-count,
-.editor-ui .editor-arrange-bar .arrange-btn {
-  color: var(--editor-text);
-}
-
-.editor-ui .editor-arrange-bar .arrange-sep {
-  background: var(--editor-border);
 }
 
 .editor-ui .editor-status-bar {
@@ -272,6 +716,18 @@
 
 .editor-context-menu,
 .editor-command-menu {
+  background: var(--editor-panel);
+  border-color: var(--editor-border);
+  color: var(--editor-text);
+}
+
+/*
+ * Toolbar dropdowns (المحاذاة/الترتيب/تحويل/عرض) float over the artwork, so
+ * they must be opaque like the context menu — with no background of their own
+ * the page showed straight through the rows and the menu read as a broken
+ * translucent sheet.
+ */
+.editor-dropdown-panel {
   background: var(--editor-panel);
   border-color: var(--editor-border);
   color: var(--editor-text);
@@ -297,38 +753,122 @@
   text-align: left;
 }
 
+/*
+ * «المزيد» — the narrow-screen tool overflow in the header.
+ *
+ * Rendered only below the docked breakpoint (the shell adds `lg2:hidden`), the
+ * summary reuses the header button's box so the strip keeps one rhythm, and the
+ * menu opens BELOW the control without being clipped by the header's overflow.
+ */
+.editor-header-more {
+  position: relative;
+  display: inline-flex;
+}
+
+.editor-header-more > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.editor-header-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.editor-header-more[open] > summary {
+  background: var(--editor-active-bg, rgba(12, 61, 44, 0.12));
+}
+
+.editor-header-more-menu {
+  position: absolute;
+  z-index: var(--z-menu, calc(var(--z-panel) + 1));
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  min-width: 220px;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 12px;
+  border: 1px solid var(--editor-border, #c9cacc);
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #172033);
+  box-shadow: 0 16px 36px -12px rgba(15, 23, 42, 0.45);
+}
+
+.editor-header-more-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 42px;
+  padding-inline: 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: start;
+  color: inherit;
+}
+
+.editor-header-more-menu button:hover,
+.editor-header-more-menu button:focus-visible {
+  background: var(--editor-hover, rgba(15, 23, 42, 0.06));
+}
+
 .editor-panel-resize-handle {
   position: absolute;
   top: 0;
   bottom: 0;
-  z-index: 45;
-  width: 7px;
+  z-index: calc(var(--z-canvas-overlay) + 1);
+  width: 16px;
   cursor: col-resize;
   touch-action: none;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
 }
 
-.editor-panel-resize-handle::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 3px;
-  width: 1px;
-  background: transparent;
-  transition: background-color 120ms ease;
+/* The visible part: a slim grip pill hugging the canvas-facing edge. */
+.editor-panel-resize-grip {
+  width: 4px;
+  border-radius: 999px;
+  background: var(--editor-border);
+  transition:
+    background-color 120ms ease,
+    width 120ms ease;
 }
 
-.editor-panel-resize-handle:hover::after,
-.editor-panel-resize-handle:focus-visible::after {
+.editor-panel-resize-handle:hover .editor-panel-resize-grip,
+.editor-panel-resize-handle:focus-visible .editor-panel-resize-grip {
+  width: 6px;
   background: var(--editor-active);
 }
 
-.editor-panel-resize-left { inset-inline-start: -3px; }
-.editor-panel-resize-right { inset-inline-end: -3px; }
-
-@media (max-width: 1023px) {
-  .editor-panel-resize-handle { display: none; }
+/* While a drag is live, the whole app shows a resize cursor and text/element
+   selection is suppressed so the gesture never rubber-bands the canvas. */
+body.is-resizing-panel {
+  cursor: col-resize;
+  user-select: none;
+  -webkit-user-select: none;
 }
+
+body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
+  width: 6px;
+  background: var(--editor-active);
+}
+
+/* Left panel: inner (canvas-facing) edge is on the DOM-LTR right… which in this
+   RTL app is the LEFT side of the viewport. The handle must sit on the edge
+   that faces the canvas, i.e. the DOM start side of the panel.
+   Left panel  → handle on its canvas side = `left: -8px` in DOM terms.
+   Right panel → handle on its canvas side = `right: -8px`. */
+.editor-panel-resize-left {
+  left: -8px;
+}
+.editor-panel-resize-right {
+  right: -8px;
+}
+
+/* Tablet drawers are overlays, so resizing either side changes drawer width
+   without consuming any of the canvas workspace behind it. */
 
 /*
  * Panes scroll independently. `overscroll-behavior: contain` stops a flick at
@@ -356,19 +896,38 @@
   }
 }
 
+/*
+ * Infinite viewport.
+ *
+ * The stage is a scrolling surface, not a page: a subdued, low-contrast field
+ * (#F3F4F6 light / #1E293B dark) with a faint grid, so the white artboard reads
+ * as a physical sheet floating above the desk. The background is fixed-attached
+ * relative to the scroll container (`background-attachment: local` keeps the
+ * grid moving with the content while the field stays put), which is what makes
+ * the viewport feel unbounded instead of "a big div".
+ */
 .studio-grid {
-  background-color: var(--color-paper);
+  background-color: #f3f4f6;
   background-image:
-    linear-gradient(rgba(7, 29, 61, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(7, 29, 61, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(15, 23, 42, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.045) 1px, transparent 1px);
   background-size: 24px 24px;
 }
 
 .editor-ui.editor-dark .studio-grid {
-  background-color: #0f141c;
+  background-color: #1e293b;
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.editor-ui.editor-dim .studio-grid {
+  background-color: #3a424a;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 /* Drag-and-drop affordance while an image file hovers the canvas. */
@@ -381,21 +940,77 @@
   outline-offset: 6px;
 }
 
+/*
+ * Canvas containment (fix #3).
+ *
+ * The stage is its own stacking context, so every layer inside an artboard
+ * (grid, guides, marquee, selection frame, handles) resolves against the
+ * artboard and can never paint over a docked sidebar, the top toolbar or a
+ * floating bubble — however large a z-index an element style happens to carry.
+ * Grep `--z-` for the top-level scale these internal values stay under.
+ */
+.editor-canvas-stage {
+  z-index: var(--z-canvas);
+  isolation: isolate;
+}
+
 .page-frame {
   transform-origin: top center;
+  overflow: visible;
 }
 
 .report-page {
   position: relative;
+  /* Document bounds, not a rounded chrome card. No inset changes page space. */
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   width: 210mm;
   height: 297mm;
-  overflow: visible; /* تم التعديل هنا ليسمح للعناصر بالخروج عن مساحة العمل البيضاء بحرية */
+  overflow: visible;
   direction: rtl;
   background: #fff;
   color: #172033;
-  box-shadow: var(--shadow-page);
+  /*
+   * The artboard is a direct-manipulation surface: every touch and every
+   * Pencil stroke on it belongs to the editor (marquee, drag, draw tools) —
+   * never to the browser's pan / double-tap-zoom. `touch-action: none` on the
+   * page is also what stops Safari from firing pointercancel mid-drag the
+   * moment it mistakes a finger drag for a scroll. The surrounding workspace
+   * uses the same Pointer Events owner, including outside-artboard content.
+   */
+  touch-action: none;
+  /* iOS long-press callout (copy/share popover on images) hijacks canvas
+     presses — the editor owns selection instead. */
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  /*
+   * Physical page metaphor: a floating A4 sheet.
+   *
+   * Three stacked shadows give the scale of real paper on a desk — a wide soft
+   * ambient shadow (shadow-2xl scale), a tighter contact shadow, and a 1px
+   * hairline so the page edge stays visible when the artwork itself is white on
+   * a white stage. The sheet therefore reads as "lifted" in both themes.
+   */
+  box-shadow:
+    0 25px 50px -12px rgba(15, 23, 42, 0.34),
+    0 10px 22px -12px rgba(15, 23, 42, 0.2),
+    0 0 0 1px rgba(15, 23, 42, 0.07);
   isolation: isolate;
   user-select: none;
+}
+
+.page-frame-content {
+  overflow: visible;
+}
+
+#export-root .report-page.is-clip-export {
+  overflow: hidden;
+}
+#export-root .report-page.is-export-visible {
+  overflow: visible;
 }
 
 .report-page.show-grid::before {
@@ -410,13 +1025,90 @@
   background-size: 5mm 5mm;
 }
 
+/*
+ * Print guides (safe area / binding margin / bleed).
+ *
+ * Painted above the artwork and below the selection chrome: a guide is a
+ * measuring aid, never something the author can click or drag. Colours are
+ * deliberately quiet in both themes so the guides read as rulers, not as design.
+ */
+.print-guides {
+  position: absolute;
+  pointer-events: none;
+  overflow: visible;
+  color: rgba(37, 99, 235, 0.75);
+  /* The page is RTL. Guides are millimetre geometry, so they must not inherit
+     that direction — Arabic SVG text used to shatter around the trim. */
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.print-guides .pg-safe {
+  color: rgba(37, 99, 235, 0.6);
+}
+
+.print-guides .pg-gutter rect {
+  fill: rgba(217, 119, 6, 0.09);
+}
+
+.print-guides .pg-gutter {
+  color: rgba(217, 119, 6, 0.9);
+}
+
+.print-guides .pg-bleed {
+  color: rgba(220, 38, 38, 0.85);
+}
+
 .canvas-el {
   position: absolute;
   transform-origin: center center;
   overflow: visible;
   touch-action: none;
-  min-width: 3mm;
-  min-height: 3mm;
+  /* Model geometry is authoritative, including thin and scaled elements. */
+  min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * Pencil hover affordance (iPadOS + supported browsers).
+ *
+ * A hovering Apple Pencil fires pointer events with pointerType "pen" but does
+ * NOT flip CSS :hover, so the canvas paints its own hairline on the element
+ * under the tip. Counter-scaled by --editor-zoom so the ring stays a constant
+ * ≈1.5px ON SCREEN at every zoom level — the same trick the selection frame
+ * uses. Applies to the document node and the selection frame alike (the frame
+ * sits above the artwork, so a pen over its handles highlights it instead).
+ */
+.editor-ui .artboard-cell.is-active .canvas-el.is-pen-hover,
+.editor-ui .artboard-cell.is-active .selection-frame.is-pen-hover {
+  outline: calc(1.5px / var(--editor-zoom, 1)) solid rgba(217, 119, 6, 0.9);
+  outline-offset: calc(2px / var(--editor-zoom, 1));
+}
+
+/* Quiet pointer hover: a zoom-invariant hairline, never a heavy card border.
+   Every page gets it — an element on a non-active page is just as selectable
+   (a click activates its page), so the cursor must promise that too. */
+.editor-ui .artboard-cell .canvas-el:not(.group-frame):hover {
+  outline: calc(1px / var(--editor-zoom, 1)) solid var(--hover-outline, rgba(29, 78, 216, 0.55));
+  outline-offset: calc(1px / var(--editor-zoom, 1));
+}
+
+/*
+ * Pointer promises: the cursor says what a press will do, inside the page or
+ * on the pasteboard around it — «move» over anything that can be dragged,
+ * the default arrow over locked artwork, the text beam inside an editor.
+ */
+.editor-ui .editor-canvas-stage:not(.draw-armed):not(.draw-rect) .canvas-el:not(.group-frame):not(.locked),
+.editor-ui .editor-canvas-stage:not(.draw-armed):not(.draw-rect) .selection-frame:not(.is-locked):not(.is-editing) {
+  cursor: move;
+}
+.editor-ui .canvas-el.locked,
+.editor-ui .selection-frame.is-locked {
+  cursor: default;
+}
+.editor-ui .canvas-el [contenteditable="true"],
+.editor-ui .selection-frame.is-editing {
+  cursor: text;
 }
 
 /* تعديل لضمان عدم وجود خلفيات صلبة تجبر عناصر الـ PNG على فقدان الشفافية */
@@ -429,22 +1121,218 @@
   object-fit: contain;
 }
 
-.canvas-el.selected {
-  outline: 1.5px solid #2563eb !important;
-  outline-offset: 4px;
+/* Sanitised roots have no intrinsic width/height: size the actual SVG viewport
+   from the model box instead of the browser's default 300 × 150 viewport. */
+.canvas-svg-content > svg { display: block; width: 100%; height: 100%; }
+
+/*
+ * Selection & manipulation overlay.
+ *
+ * This layer is a sibling of the document elements and sits above all of them
+ * (SELECTION_LAYER_Z; document z stays at 1..n). It owns the selection outline,
+ * the resize/rotate handles and the drag-capture frame, so artwork that
+ * overlaps a selected element can never cover or steal its controls. The
+ * frame mirrors the element's box and rotation; sizes divide by the
+ * --editor-zoom custom property (set on the canvas stage) because mm scale
+ * with the zoomed page — dividing keeps the chrome a constant on-screen size.
+ */
+/*
+ * Hairline selection with theme-aware colors:
+ *  — Light mode: deep navy on white paper, with a white halo so it never
+ *    disappears against dark artwork.
+ *  — Dark mode: a bright studio blue with a dark contrast ring; Dim uses a
+ *    lighter blue on a charcoal ring. The page artwork itself remains untouched.
+ * Both are double-ring (contrast ring + color ring) so the selection is
+ * unmistakable over ANY artwork in EITHER theme without covering the element
+ * (hairlines and a one-pixel contrast ring, zero fill).
+ */
+.editor-ui.editor-light {
+  /* High-contrast "this is interactive" accent for library/palette items. */
+  --primary-accent: #1d4ed8;
+  --library-active-bg: rgba(29, 78, 216, 0.1);
+  /*
+   * Figma-style selection: one crisp blue hairline, no glow.
+   *
+   * The hairline is a SINGLE screen pixel wide at every zoom, so its own
+   * colour has to carry the whole signal — #2f6fb0 was too desaturated to read
+   * as a 1px line on a white page, and selection looked like a faint smudge
+   * (or vanished entirely over a mid-tone image). #1d64d8 keeps the NASAQ
+   * blue hue but lifts the chroma until a one-pixel line is unmistakable.
+   *
+   * `--sel-ring` is the contrast ring painted just OUTSIDE that hairline. It is
+   * white in light mode so the blue stays legible on dark artwork (Figma and
+   * Illustrator both pair their selection colour with a light outer ring); the
+   * studio-dark theme overrides it with a dark ring instead.
+   */
+  --sel-color: #1d64d8;
+  --sel-ring: rgba(255, 255, 255, 0.92);
+  --hover-outline: rgba(29, 78, 216, 0.55);
+}
+/*
+ * The studio-dark selection is the interface's own blue — a brighter step of
+ * the #3b6e9c accent so the frame stays unmistakable on the dark charcoal
+ * stage, on the still-white page, and on top of any artwork.
+ */
+.editor-ui.editor-dark {
+  --primary-accent: #58a2d8;
+  --library-active-bg: rgba(88, 162, 216, 0.16);
+  --sel-color: #58a2d8;
+  --sel-ring: rgba(17, 23, 34, 0.94);
+  --hover-outline: rgba(88, 162, 216, 0.6);
+}
+.editor-ui.editor-dim {
+  --primary-accent: #83c8ed;
+  --library-active-bg: rgba(131, 200, 237, 0.16);
+  --sel-color: #83c8ed;
+  --sel-ring: rgba(48, 55, 62, 0.96);
+  --hover-outline: rgba(131, 200, 237, 0.72);
+}
+/* z-index comes from SELECTION_LAYER_Z in CanvasStage — the one source. */
+.selection-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.selection-frame {
+  --handle-size: calc(6px / var(--editor-zoom, 1));
+  --handle-hit-size: calc(14px / var(--editor-zoom, 1));
+  --handle-inset: calc(var(--handle-size) / 2);
+  --rotate-hit-size: calc(16px / var(--editor-zoom, 1));
+  --rotate-gap: calc(22px / var(--editor-zoom, 1));
+  /*
+   * Tight bounding box (borderScaleFactor: 1): the frame mirrors the element's
+   * exact box, and a single inset 1px outline is drawn without changing the
+   * containing block for its handles, so the
+   * line touches the artwork's true outer edge with zero artificial padding.
+   * Counter-scaling by --editor-zoom keeps it a crisp 1 screen pixel at every
+   * zoom. No outline, halo, inset ring or tinted fill — one border only.
+   */
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  border: 0;
+  outline: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
+  outline-offset: calc(-1px / var(--editor-zoom, 1));
+  transform-origin: center center;
+  /*
+   * Contrast ring, painted OUTSIDE the hairline.
+   *
+   * A one-pixel line of any single colour disappears over artwork of a similar
+   * value — a navy chart, a photograph, a dark table header. The ring is the
+   * cheap, exact fix: it is drawn as a spread box-shadow so it adds no layout,
+   * no fill over the artwork, and no second border to keep in sync.
+   */
+  box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, transparent);
+  background: transparent;
+  pointer-events: auto;
+  touch-action: none;
+  cursor: move;
 }
 
 /*
- * Secondary members of a multi-selection get a thinner, dashed ring so the
- * handle-bearing primary element stays visually dominant.
+ * Secondary members of a multi-selection get a dashed boundary, no handles,
+ * and sit below the primary frame, so the handle-bearing element stays
+ * visually dominant even when the two boxes overlap.
  */
-.canvas-el.selected.is-secondary {
-  outline: 1px dashed rgba(37, 99, 235, 0.75);
-  outline-offset: 3px;
+.selection-frame.is-secondary {
+  z-index: 1;
+  outline-style: dashed;
+  outline-color: color-mix(in srgb, var(--sel-color, #10b981) 85%, transparent);
 }
 
+/*
+ * Locked artwork stays hittable so a tap selects it and does not fall through
+ * onto whatever sits underneath. The gesture itself refuses to move or resize
+ * a lock. The pin is NASAQ green and does not catch pointers.
+ */
+.selection-frame.is-locked {
+  outline-style: dashed;
+  outline-color: #006c35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.selection-frame.is-resize-locked,
+.selection-frame.is-dimension-locked {
+  outline-color: #f59e0b;
+  outline-style: dashed;
+}
+
+/*
+ * While the caret is inside the element's in-place text editor the frame must
+ * not intercept clicks, double-clicks or drag-selections meant for the
+ * contentEditable node beneath it.
+ */
+.selection-frame.is-editing {
+  pointer-events: none;
+  outline-style: dashed;
+  outline-color: color-mix(in srgb, var(--sel-color, #1d64d8) 76%, transparent);
+}
+
+/*
+ * A locked element accepts the pointer so the editor can select it without
+ * starting a move. The NASAQ pin is visual only.
+ */
 .canvas-el.locked {
   cursor: not-allowed;
+}
+.canvas-el.locked::after {
+  content: "";
+  position: absolute;
+  top: calc(-8px / var(--editor-zoom, 1));
+  inset-inline-end: calc(-8px / var(--editor-zoom, 1));
+  width: calc(12px / var(--editor-zoom, 1));
+  height: calc(12px / var(--editor-zoom, 1));
+  background: #006c35 url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.4'><rect x='5' y='11' width='14' height='10' rx='2'/><path d='M8 11V8a4 4 0 0 1 8 0v3'/></svg>") center / 8px 8px no-repeat;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px #fff;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/*
+ * Resize-lock badge: sits on the selection frame's top edge (where the north
+ * resize handle used to be), so its presence plus the missing handles reads
+ * as one statement — "size locked, everything else free". Purple like the
+ * element lock (lock semantics), counter-scaled by --editor-zoom like every
+ * other piece of chrome. Purely visual: presses fall through to the frame
+ * beneath, which still moves and rotates the element.
+ */
+.resize-lock-badge {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  display: grid;
+  place-items: center;
+  width: calc(16px / var(--editor-zoom, 1));
+  height: calc(16px / var(--editor-zoom, 1));
+  border-radius: 999px;
+  background: #8b5cf6;
+  color: #fff;
+  font-size: calc(10px / var(--editor-zoom, 1));
+  line-height: 1;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/*
+ * Draw-text mode: the whole canvas reads "crosshair" so the author knows the
+ * next page drag draws a text box instead of selecting.
+ */
+.editor-canvas-stage.draw-armed .report-page {
+  cursor: crosshair;
+}
+/* The shape tool shares the crosshair; only the draw gesture differs. */
+.editor-canvas-stage.draw-rect .report-page {
+  cursor: crosshair;
+}
+
+.editor-canvas-stage.draw-armed .marquee {
+  border-style: dashed;
+  border-color: rgba(0, 108, 53, 0.9);
 }
 
 /* Frame drawn around a group the author has stepped into. */
@@ -464,13 +1352,16 @@
   z-index: 60;
   pointer-events: none;
 }
+.marquee-ellipse {
+  border-radius: 50%;
+}
 
 /*
  * Overflow warning.
  */
 .overflow-badge {
   position: absolute;
-  z-index: 30;
+  z-index: var(--z-canvas-overlay);
   padding: 0.6mm 1.8mm;
   border-radius: 999px;
   border: 0;
@@ -489,130 +1380,234 @@
 /*
  * Arrangement bar.
  */
-.arrange-bar {
-  position: absolute;
-  top: 8px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 4px 6px;
-  border-radius: 10px;
-  border: 1px solid #d8dee9;
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.14);
-}
-
-.editor-ui.editor-dark .arrange-bar {
-  border-color: rgba(255, 255, 255, 0.14);
-  background: #161c26;
-}
-
-.arrange-count {
-  padding-inline: 4px;
-  font-size: 11px;
-  font-weight: 800;
-  color: #475569;
-  white-space: nowrap;
-}
-
-.editor-ui.editor-dark .arrange-count {
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.arrange-sep {
-  width: 1px;
-  height: 18px;
-  margin-inline: 3px;
-  background: #e2e8f0;
-}
-
-.editor-ui.editor-dark .arrange-sep {
-  background: rgba(255, 255, 255, 0.12);
-}
-
-.arrange-btn {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
-  border: 0;
-  background: transparent;
-  color: #1e293b;
-  cursor: pointer;
-}
-
-.editor-ui.editor-dark .arrange-btn {
-  color: rgba(255, 255, 255, 0.85);
-}
-
-.arrange-btn:hover:not(:disabled) {
-  background: #eef2f8;
-}
-
-.editor-ui.editor-dark .arrange-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.arrange-btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.arrange-btn.wide {
-  width: auto;
-  padding-inline: 8px;
-  font-size: 11px;
-  font-weight: 800;
-}
-
+/*
+ * Handles — تحسين لـ Apple Pencil واللمس:
+ * - الحجم المرئي ثابت بغض النظر عن الزوم (7px/zoom)
+ * - مساحة اللمس أكبر من المرئي (32px/zoom) بشكل دائم، و 44px/zoom على الشاشات اللمسية
+ * - المقابض لا تختفي ولا تصغر بسبب الزوم — visual constant size via --editor-zoom inverse
+ * - Hit-area أكبر من المرئي بكثير لسهولة الإمساك بالقلم
+ * - تم تحقيق ذلك بجعل div المقبض نفسه هو مساحة اللمس (شفاف) والنقطة المرئية ::after
+ */
 .handle,
 .rotate-handle {
   position: absolute;
-  z-index: 50;
-  background: #ffffff;
-  border: 0.5mm solid #2563eb;
-  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.25);
+  z-index: 2;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: none;
+  touch-action: none;
+}
+
+/*
+ * Small selections must stay selectable.
+ *
+ * A 32px hit target is right on a large element, but on a 6mm stamp it would
+ * overlap the neighbours on every side and swallow the click meant for the
+ * next element. Every target is therefore clamped to just under half its
+ * frame, and every anchor is expressed with the SAME clamp, so the visible dot
+ * stays exactly on the artwork's corner instead of drifting inward.
+ */
+.selection-frame {
+  --handle-hit: min(var(--handle-hit-size), 46%);
+  --rotate-hit: var(--rotate-hit-size);
 }
 
 .handle {
-  width: 3.2mm;
-  height: 3.2mm;
-  border-radius: 50%;
+  width: var(--handle-hit);
+  height: var(--handle-hit);
+  border-radius: 0;
 }
 
-.handle.nw { top: -7.2mm; left: -7.2mm; cursor: nwse-resize; }
-.handle.n  { top: -7.2mm; left: calc(50% - 1.6mm); cursor: ns-resize; }
-.handle.ne { top: -7.2mm; right: -7.2mm; cursor: nesw-resize; }
-.handle.e  { top: calc(50% - 1.6mm); right: -7.2mm; cursor: ew-resize; }
-.handle.se { bottom: -7.2mm; right: -7.2mm; cursor: nwse-resize; }
-.handle.s  { bottom: -7.2mm; left: calc(50% - 1.6mm); cursor: ns-resize; }
-.handle.sw { bottom: -7.2mm; left: -7.2mm; cursor: nesw-resize; }
-.handle.w  { top: calc(50% - 1.6mm); left: -7.2mm; cursor: ew-resize; }
+.handle::after {
+  content: "";
+  width: var(--handle-size);
+  height: var(--handle-size);
+  border-radius: 50%;
+  background: #ffffff;
+  border: calc(1px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.6);
+  box-sizing: border-box;
+}
 
+/*
+ * LIGHT MODE ONLY — fill the handle dots with the selection colour and ring
+ * them in white, instead of a white dot wearing a coloured hairline.
+ *
+ * A white dot on the white page was the core of the light-mode problem: at 7px
+ * only its 1px border carried any signal, so the eight resize targets read as
+ * faint specks and the whole selection looked washed out. Filling them makes
+ * the targets unmistakable over any artwork, and the white ring keeps them
+ * separated from an element of the same blue underneath. The studio-dark theme
+ * keeps the original white-dot styling, which already reads on the charcoal
+ * stage.
+ */
+.editor-ui.editor-light .handle::after {
+  background: var(--sel-color, #2f6fb0);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, rgba(255, 255, 255, 0.92));
+}
+
+.editor-ui.editor-dark .handle::after {
+  background: var(--sel-color, #58a2d8);
+  border-color: #ffffff;
+  box-shadow: 0 0 0 calc(1px / var(--editor-zoom, 1)) var(--sel-ring, rgba(17, 23, 34, 0.94));
+}
+
+/*
+ * Hover affordance on every grip: the dot grows a soft ring the moment the
+ * pointer reaches its hit area, so all eight directions announce themselves
+ * as draggable before the press — not only the corners.
+ */
+.handle:hover::after,
+.handle:focus-visible::after {
+  box-shadow:
+    0 0 0 calc(1px / var(--editor-zoom, 1)) rgba(255, 255, 255, 0.95),
+    0 0 0 calc(4px / var(--editor-zoom, 1)) color-mix(in srgb, var(--sel-color, #2f6fb0) 35%, transparent);
+}
+.handle.is-axis-locked:hover::after { box-shadow: none; }
+.selection-frame .handle.is-axis-locked { cursor: not-allowed; }
+
+.handle.is-axis-locked::after {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+  opacity: 0.5;
+}
+
+/* Corners grow outward; top/bottom targets straddle the true edge so the
+   rotation connector can stay compact without overlapping the resize target.
+   Visible dots remain anchored to the artwork boundary. */
+.handle::after { position: absolute; }
+.handle.nw { top: calc(var(--handle-inset) - var(--handle-hit)); left: calc(var(--handle-inset) - var(--handle-hit)); cursor: nwse-resize; }
+.handle.ne { top: calc(var(--handle-inset) - var(--handle-hit)); right: calc(var(--handle-inset) - var(--handle-hit)); cursor: nesw-resize; }
+.handle.se { bottom: calc(var(--handle-inset) - var(--handle-hit)); right: calc(var(--handle-inset) - var(--handle-hit)); cursor: nwse-resize; }
+.handle.sw { bottom: calc(var(--handle-inset) - var(--handle-hit)); left: calc(var(--handle-inset) - var(--handle-hit)); cursor: nesw-resize; }
+.handle.nw::after { right: 0; bottom: 0; }
+.handle.ne::after { left: 0; bottom: 0; }
+.handle.se::after { left: 0; top: 0; }
+.handle.sw::after { right: 0; top: 0; }
+.handle.n, .handle.s { width: min(var(--handle-hit), calc(100% - var(--handle-size))); left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.handle.n { top: calc(-1 * var(--handle-hit) / 2); }
+.handle.s { bottom: calc(-1 * var(--handle-hit) / 2); }
+.handle.n::after, .handle.s::after { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.handle.e, .handle.w { height: min(var(--handle-hit), calc(100% - var(--handle-size))); top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+.handle.e { right: calc(var(--handle-inset) - var(--handle-hit)); }
+.handle.w { left: calc(var(--handle-inset) - var(--handle-hit)); }
+.handle.e::after, .handle.w::after { top: 50%; transform: translateY(-50%); }
+.handle.e::after { left: 0; }
+.handle.w::after { right: 0; }
+
+/*
+ * Rotation grip — its own control, not a recoloured resize dot.
+ *
+ * The element itself is the invisible 44px hit area (constant on-screen size at
+ * any zoom); the visible part is `.rotate-handle-grip`, a brand-filled disc
+ * carrying a rotate glyph, tied to the frame by the hairline below. Focus is
+ * a visible ring so the grip reads as the keyboard slider it now is.
+ */
 .rotate-handle {
-  width: 4.2mm;
-  height: 4.2mm;
-  top: -15mm;
-  left: calc(50% - 2.1mm);
+  width: var(--rotate-hit);
+  height: var(--rotate-hit);
   border-radius: 50%;
   cursor: grab;
+  display: grid;
+  place-items: center;
 }
+
+.rotate-handle-grip {
+  width: calc(18px / var(--editor-zoom, 1));
+  height: calc(18px / var(--editor-zoom, 1));
+  border-radius: 999px;
+  background: var(--sel-color, #10b981);
+  border: calc(1.5px / var(--editor-zoom, 1)) solid #ffffff;
+  box-sizing: border-box;
+  box-shadow:
+    0 calc(2px / var(--editor-zoom, 1)) calc(6px / var(--editor-zoom, 1))
+      rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.55);
+  display: grid;
+  place-items: center;
+  color: #ffffff;
+  transition: transform 120ms ease;
+}
+
+.editor-ui.editor-dark .rotate-handle-grip {
+  box-shadow:
+    0 calc(2px / var(--editor-zoom, 1)) calc(6px / var(--editor-zoom, 1))
+      rgba(15, 23, 42, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.9),
+    0 0 0 2px var(--sel-ring, rgba(17, 23, 34, 0.94));
+}
+
+.rotate-handle-grip svg {
+  width: calc(11px / var(--editor-zoom, 1));
+  height: calc(11px / var(--editor-zoom, 1));
+  display: block;
+}
+
+.rotate-handle:hover .rotate-handle-grip,
+.rotate-handle:focus-visible .rotate-handle-grip {
+  transform: scale(1.12);
+}
+
+.rotate-handle:focus-visible {
+  outline: calc(2px / var(--editor-zoom, 1)) solid var(--sel-color, #10b981);
+  outline-offset: calc(3px / var(--editor-zoom, 1));
+  border-radius: 999px;
+}
+
+
+.rotate-handle::before {
+  content: "";
+  position: absolute;
+  width: 1px;
+  height: var(--rotate-gap);
+  background: color-mix(in srgb, var(--sel-color, #10b981) 60%, transparent);
+  top: 50%;
+  left: 50%;
+  transform-origin: top center;
+  pointer-events: none;
+}
+
+.rotate-handle.n {
+  top: calc(-1 * var(--rotate-gap) - var(--rotate-hit-size) / 2);
+  left: 50%;
+  transform: translateX(-50%);
+}
+.rotate-handle.n::before { transform: translateX(-50%); }
 
 .rotate-handle:active {
   cursor: grabbing;
 }
 
+/* Live angle readout while dragging a rotation grip. */
+.rotation-hint {
+  position: fixed;
+  z-index: var(--z-bubble);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--editor-border, #c9cacc);
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #172033);
+  font-size: 10px;
+  font-weight: 800;
+  box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.45);
+  pointer-events: none;
+  translate: 14px 14px;
+}
+
+
 .guide-v {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 0.4mm;
-  background: #0ea5e9;
-  z-index: 50;
+  width: calc(1.5px / var(--editor-zoom, 1));
+  background: #a855f7;
+  z-index: 4999;
   pointer-events: none;
 }
 
@@ -620,10 +1615,98 @@
   position: absolute;
   left: 0;
   right: 0;
-  height: 0.4mm;
-  background: #0ea5e9;
-  z-index: 50;
+  height: calc(1.5px / var(--editor-zoom, 1));
+  background: #a855f7;
+  z-index: 4999;
   pointer-events: none;
+}
+
+.guide-v { translate: -50% 0; }
+.guide-h { translate: 0 -50%; }
+.report-page.is-clip-view { overflow: hidden; }
+.page-bg-image {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.page-trim {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 calc(1px / var(--editor-zoom, 1)) rgba(0, 108, 53, 0.55);
+}
+.page-trim.is-hot {
+  box-shadow: inset 0 0 0 calc(2px / var(--editor-zoom, 1)) #006c35;
+}
+.guide-v.is-page-edge, .guide-h.is-page-edge {
+  background: #006c35;
+  box-shadow: 0 0 calc(3px / var(--editor-zoom, 1)) rgba(0, 108, 53, 0.45);
+}
+body.is-gesturing .artboard-cell:not(.is-active) {
+  content-visibility: auto;
+  contain-intrinsic-size: 420px 640px;
+}
+.guide-v.is-page-center, .guide-h.is-page-center { background: #a855f7; }
+.snap-feedback {
+  position: absolute;
+  left: 50%; top: calc(8px / var(--editor-zoom, 1));
+  translate: -50% 0;
+  padding: calc(4px / var(--editor-zoom, 1)) calc(8px / var(--editor-zoom, 1));
+  border-radius: calc(5px / var(--editor-zoom, 1));
+  background: var(--editor-panel); color: var(--editor-text);
+  border: calc(1px / var(--editor-zoom, 1)) solid #f5b14c;
+  font-size: calc(11px / var(--editor-zoom, 1)); font-weight: 700;
+  white-space: nowrap; pointer-events: none; z-index: 4999;
+}
+
+/* Crop replaces selection grips; its source window is never a resize gesture. */
+.crop-overlay {
+  position: absolute; transform-origin: center; z-index: 5001;
+  pointer-events: auto; touch-action: none;
+}
+.crop-shade { position: absolute; background: rgb(0 0 0 / 48%); pointer-events: none; }
+.crop-window {
+  position: absolute; cursor: move; touch-action: none;
+  outline: calc(2px / var(--editor-zoom, 1)) solid #fff;
+  background-image: linear-gradient(to right, transparent 33.1%, rgb(255 255 255 / 65%) 33.1% 33.5%, transparent 33.5% 66.4%, rgb(255 255 255 / 65%) 66.4% 66.8%, transparent 66.8%), linear-gradient(to bottom, transparent 33.1%, rgb(255 255 255 / 65%) 33.1% 33.5%, transparent 33.5% 66.4%, rgb(255 255 255 / 65%) 66.4% 66.8%, transparent 66.8%);
+}
+.crop-handle {
+  position: absolute; width: calc(32px / var(--editor-zoom, 1)); height: calc(32px / var(--editor-zoom, 1));
+  background: transparent; border: 0; padding: 0; touch-action: none; translate: -50% -50%;
+}
+.crop-handle::after {
+  content: ""; position: absolute; inset: 32%; background: #fff;
+  border: calc(1px / var(--editor-zoom, 1)) solid #172033;
+}
+.crop-handle.nw { top: 0; left: 0; cursor: nwse-resize; }
+.crop-handle.ne { top: 0; left: 100%; cursor: nesw-resize; }
+.crop-handle.se { top: 100%; left: 100%; cursor: nwse-resize; }
+.crop-handle.sw { top: 100%; left: 0; cursor: nesw-resize; }
+.crop-actions { gap: 8px; font-size: 11px; min-width: 200px; }
+@media (pointer: coarse) {
+  .crop-handle { width: calc(44px / var(--editor-zoom, 1)); height: calc(44px / var(--editor-zoom, 1)); }
+}
+
+/* Paint editors reuse the existing colour picker, recent colours and steppers. */
+.gradient-stop-track {
+  height: 32px; margin: 8px 12px 16px; position: relative;
+  border: 1px solid var(--editor-border, var(--color-line)); border-radius: 4px; touch-action: none;
+}
+.gradient-stop {
+  position: absolute; top: 22px; width: 22px; height: 22px; translate: -50% 0;
+  border: 2px solid var(--color-surface); border-radius: 50%; touch-action: none;
+  box-shadow: 0 0 0 1px var(--color-line); cursor: ew-resize;
+}
+.gradient-stop[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--color-brand); }
+.gradient-stop:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 3px; }
+.fill-editor select { width: 100%; min-height: 36px; }
+.fill-editor .scrub-input { min-width: 0; }
+@media (pointer: coarse) {
+  .gradient-stop::before { content: ""; position: absolute; inset: -10px; }
 }
 
 /*
@@ -640,10 +1723,14 @@
 }
 
 .el-text.editing,
-.el-box.editing {
+.el-box.editing,
+.progress-caption.editing {
   cursor: text;
   user-select: text;
   outline: none;
+  caret-color: var(--sel-color, #1d64d8);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sel-color, #1d64d8) 58%, transparent);
+  border-radius: 1px;
 }
 
 /*
@@ -664,6 +1751,3464 @@
 }
 
 @media print {
-  body { background: #fff !important; }
-  .no-print { display: none !important; }
+  body {
+    background: #fff !important;
+  }
+  .no-print {
+    display: none !important;
+  }
 }
+
+/* =====================================================================
+ * UX/UI overhaul — Phase 1 → 7
+ *
+ * Appended as one coherent block so the overhaul is reviewable in isolation.
+ * Everything here is additive: no existing selector's meaning is changed
+ * except where a comment says so explicitly.
+ * ===================================================================== */
+
+/*
+ * PHASE 1 — Panel containment.
+ *
+ * The shell publishes the header's real height as `--editor-header-h`, so the
+ * panels stay within the live workspace instead of following a fixed toolbar.
+ */
+:root {
+  --editor-header-h: 52px;
+}
+
+.editor-panel-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  /* Explicit height ceiling: on tablets the soft keyboard and browser chrome
+     change 100vh unpredictably, and the panel must still scroll rather than
+     push its last rows out of the viewport. */
+  max-height: calc(100vh - var(--editor-header-h));
+}
+
+/* Keep a small safe-area gutter now that the fixed shortcut footer is gone. */
+.editor-panel-body {
+  padding-bottom: calc(14px + var(--safe-bottom, 0px));
+  scroll-padding-bottom: calc(14px + var(--safe-bottom, 0px));
+}
+
+.editor-toolbar .editor-pane-scroll {
+  padding-bottom: 0;
+  scroll-padding-bottom: 0;
+}
+
+/* A dragged row can scroll clear of the safe-area gutter. */
+.layer-row,
+.editor-panel-body > * {
+  scroll-margin-bottom: 16px;
+}
+
+/* …except the media-panel rails, where the padding is only about the last row. */
+.editor-panel-body.no-bottom-pad {
+  padding-bottom: 0;
+  scroll-padding-bottom: 0;
+}
+
+/*
+ * Fluid property rows. Grids collapse to a single column below 300px of usable
+ * panel width, and inputs shrink (`min-width: 0`) instead of overflowing their
+ * cell — the two failure modes that produced overlapping controls before.
+ */
+.property-grid {
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+
+.editor-property-field {
+  min-width: 0;
+}
+
+.editor-property-field .field-control {
+  min-width: 0;
+}
+
+.editor-property-field .field-control > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Long select labels shrink rather than widening the panel. */
+.editor-property-field select,
+.editor-property-field input {
+  text-overflow: ellipsis;
+}
+
+/*
+ * PHASE 2 — Accordions.
+ */
+.editor-accordion {
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 9px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--editor-surface, #fff) 60%, transparent);
+}
+
+.editor-accordion-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  /* 44px minimum tap height, per the touch brief. */
+  min-height: 44px;
+  padding: 0 0.625rem;
+  border: 0;
+  background: transparent;
+  color: var(--editor-text, #172033);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+
+.editor-accordion-header:hover {
+  background: var(--editor-hover, rgba(15, 23, 42, 0.05));
+}
+
+.editor-accordion-header:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+}
+
+.editor-accordion-chevron {
+  color: var(--editor-text-secondary, #6b7383);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* RTL: the chevron closes toward its own direction, which reads correctly
+   without mirroring the rotation axis. */
+.editor-accordion-chevron.is-open {
+  transform: rotate(180deg);
+}
+
+.editor-accordion-body {
+  display: grid;
+  gap: 0.625rem;
+  padding: 0 0.625rem 0.75rem;
+  animation: accordion-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes accordion-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-accordion-body {
+    animation: none;
+  }
+  .editor-accordion-chevron {
+    transition: none;
+  }
+}
+
+.editor-subgroup {
+  display: grid;
+  gap: 0.5rem;
+  border-inline-start: 2px solid
+    color-mix(in srgb, var(--editor-border, #dde2ea) 80%, transparent);
+  padding-inline-start: 0.625rem;
+}
+
+.editor-subgroup-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: var(--editor-text-secondary, #6b7383);
+}
+
+/*
+ * PHASE 2 — Scrubbable inputs.
+ *
+ * The row is a 3-column track: − | value | +. On a fine pointer the steppers
+ * fade until the row is hovered (they are still focusable, so keyboard users
+ * keep them), while on touch they are permanent and full-size.
+ */
+.scrub-input {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+  width: 100%;
+}
+
+.scrub-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  background: var(--editor-surface, #fff);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.scrub-track:focus-within {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.scrub-field {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 34px;
+  padding: 0 0.5rem;
+  border: 0;
+  background: transparent;
+  color: var(--editor-text, #172033);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  cursor: text;
+}
+
+.scrub-field:focus {
+  outline: none;
+}
+
+.scrub-suffix {
+  padding-inline-end: 0.5rem;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--editor-text-secondary, #6b7383);
+}
+
+.scrub-stepper {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  min-height: 36px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  background: var(--editor-surface, #fff);
+  color: var(--editor-text-secondary, #6b7383);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
+  opacity: 0;
+}
+
+.scrub-input:hover .scrub-stepper,
+.scrub-input:focus-within .scrub-stepper,
+.scrub-stepper:focus-visible {
+  opacity: 1;
+}
+
+.scrub-stepper:hover:not(:disabled) {
+  background: var(--editor-hover, rgba(15, 23, 42, 0.06));
+  color: var(--editor-text, #172033);
+}
+
+.scrub-stepper:disabled {
+  cursor: not-allowed;
+  color: color-mix(
+    in srgb,
+    var(--editor-text-secondary, #6b7383) 50%,
+    transparent
+  );
+}
+
+.scrub-input.is-disabled .scrub-track {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* Touch: steppers are always visible and never smaller than 40px. */
+@media (pointer: coarse) {
+  .scrub-stepper {
+    opacity: 1;
+    width: 42px;
+    min-height: 42px;
+  }
+
+  .scrub-field {
+    height: 42px;
+  }
+}
+
+.scrub-label.is-scrubbable {
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.scrub-label.is-scrubbable:hover {
+  color: var(--editor-text, #172033);
+}
+
+/* While a scrub gesture is live the page must not select text or scroll. */
+body.is-scrubbing-value {
+  cursor: ew-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/*
+ * PHASE 1 — Slide-over drawers (<1024px).
+ *
+ * The docked panels become floating cards over the canvas, so the artboard
+ * keeps its full width; a shared backdrop dismisses them. `will-change`
+ * promotes the moving layer so the slide stays smooth on a tablet.
+ */
+.editor-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer-backdrop);
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(1.5px);
+  animation: drawer-backdrop-in 160ms ease;
+}
+
+/*
+ * Curtain drawers (tablet / phone).
+ *
+ * The slide-over reads as a curtain being drawn across the artwork: a soft
+ * edge shadow on the canvas-facing side, a hairline highlight on the leading
+ * edge (so the panel's boundary is unmistakable over a busy page), and the
+ * same 200ms ease the shell already animates with — no new timing language.
+ */
+@media (max-width: 767.98px) {
+  .editor-ui .editor-sidebar:not(.touch-properties-sheet) {
+    box-shadow:
+      -22px 0 46px -26px rgba(15, 23, 42, 0.55),
+      0 0 0 1px var(--editor-border, #c9cacc);
+    will-change: transform;
+  }
+
+  .editor-ui .editor-sidebar:not(.touch-properties-sheet)::before {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: 0;
+    width: 1px;
+    background: color-mix(in srgb, var(--editor-active, #0c3d2c) 45%, transparent);
+    pointer-events: none;
+  }
+
+  /* While an asset is dragged bare over the canvas, the artboard says so. */
+  .editor-ui .studio-grid.is-dropping .report-page {
+    outline: 2px dashed var(--sel-color, #2f6fb0);
+    outline-offset: 0;
+  }
+}
+
+@keyframes drawer-backdrop-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (min-width: 768px) {
+  .editor-drawer-backdrop {
+    display: none;
+  }
+}
+
+/*
+ * PHASE 3 — Resizable pages panel.
+ */
+.editor-page-rail-resizer {
+  position: relative;
+  height: 10px;
+  flex: 0 0 auto;
+  cursor: row-resize;
+  touch-action: none;
+  display: grid;
+  place-items: center;
+  background: transparent;
+}
+
+.editor-page-rail-resizer::before {
+  content: "";
+  width: 46px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--editor-border, #c9cacc);
+  transition:
+    background-color 140ms ease,
+    width 140ms ease;
+}
+
+.editor-page-rail-resizer:hover::before,
+.editor-page-rail-resizer:focus-visible::before,
+body.is-resizing-rail .editor-page-rail-resizer::before {
+  width: 72px;
+  background: var(--editor-active, #4b4c4d);
+}
+
+body.is-resizing-rail {
+  cursor: row-resize;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Manual panel resizing must track the pointer exactly — no easing. */
+.is-resizing-panel .editor-workspace-row {
+  transition: none !important;
+}
+
+.editor-page-rail-resizer:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/*
+ * PHASE 4 — Floating contextual toolbar.
+ *
+ * Rendered in a fixed overlay layer (never inside the scaled page) so its
+ * buttons keep a constant screen size and its 16px gap is a real 16px.
+ */
+/*
+ * The bar is ONE row of fixed cells, always 42px tall.
+ *
+ * What is inside it is decided by `bubbleLayout()` (ui-state.ts) from the free
+ * lane beside the artwork, so the box can never grow because a font name got
+ * longer, wrap onto a second row on a tablet, or scroll a control out of sight
+ * on a phone: anything that does not fit leaves the bar for a drawer instead.
+ * The numbers below are the ones `bubbleLayout` measures with.
+ */
+.floating-toolbar {
+  position: fixed;
+  z-index: var(--z-bubble);
+  display: flex;
+  align-items: center;
+  gap: 3px; /* BUBBLE_GUTTER */
+  height: 42px;
+  min-height: 42px;
+  padding: 4px 8px; /* BUBBLE_PAD */
+  border-radius: 8px;
+  border: 1px solid var(--editor-border, #c9cacc);
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #172033);
+  box-shadow: 0 10px 30px -8px rgba(15, 23, 42, 0.35);
+  animation: floating-toolbar-in 140ms cubic-bezier(0.22, 1, 0.36, 1);
+  max-width: min(calc(100vw - 16px), 760px);
+  white-space: nowrap;
+  flex-wrap: nowrap;
+  overflow: visible;
+}
+
+/*
+ * Nothing inside the bar may compress: an icon that shrinks is an icon the
+ * author cannot hit. If a lane is ever too small for the chosen density the
+ * controls keep their size instead of turning into a squeeze.
+ */
+.floating-toolbar > * {
+  flex: 0 0 auto;
+}
+
+/* One icon geometry for every control in the bar: 16px box, one stroke. */
+.floating-toolbar-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
+}
+
+/*
+ * Drag grip — six dots, a grab cursor and a live "picked up" state, so the
+ * bubble reads as movable chrome instead of a static strip.
+ */
+.floating-toolbar-grip {
+  position: relative;
+  cursor: grab;
+  color: var(--editor-text-secondary, #5d6575);
+  touch-action: none;
+}
+
+.floating-toolbar-grip::after {
+  content: "";
+  position: absolute;
+  inset: -6px -2px;
+}
+
+.floating-toolbar-grip:active {
+  cursor: grabbing;
+}
+
+.floating-toolbar.is-dragging {
+  animation: none;
+  box-shadow: 0 22px 48px -14px rgba(15, 23, 42, 0.5);
+  opacity: 0.96;
+}
+
+.floating-toolbar.is-dragging .floating-toolbar-btn:not(.floating-toolbar-grip) {
+  pointer-events: none;
+}
+
+/*
+ * The entrance follows the side the placer chose, so the bubble always appears
+ * to slide *away* from the element it belongs to, never across it.
+ */
+@keyframes floating-toolbar-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.floating-toolbar[data-placement="below"] {
+  animation-name: floating-toolbar-in-down;
+}
+
+.floating-toolbar[data-placement="left"],
+.floating-toolbar[data-placement="right"] {
+  animation-name: floating-toolbar-in-side;
+}
+
+/* Placement selectors must not restart the entrance animation during a drag. */
+.floating-toolbar.is-dragging[data-placement],
+.floating-toolbar.is-parked[data-placement] {
+  animation: none;
+  transform: none;
+}
+
+@keyframes floating-toolbar-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes floating-toolbar-in-side {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.floating-toolbar-section {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-inline: 3px;
+}
+
+.floating-toolbar-sep {
+  flex: 0 0 1px;
+  width: 1px;
+  align-self: stretch;
+  margin-inline: 3px;
+  background: var(--editor-border, #dde2ea);
+}
+
+.floating-toolbar-btn {
+  display: grid;
+  place-items: center;
+  gap: 0;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.floating-toolbar-btn:hover:not(:disabled) {
+  background: var(--editor-hover, rgba(15, 23, 42, 0.08));
+}
+
+.floating-toolbar-btn[aria-pressed="true"] {
+  background: var(--editor-accent, #3b82f6);
+  color: var(--editor-accent-text, #fff);
+}
+
+.floating-toolbar-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.floating-toolbar-select {
+  height: 32px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 7px;
+  background: var(--editor-surface, #fff);
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/*
+ * A fixed 96px field (BUBBLE_FIELD_FONT). A `<select>` sized by its own text
+ * made the whole bar change width every time the font changed; the name is
+ * truncated and the tooltip carries the full one.
+ */
+.floating-toolbar-select {
+  width: 96px;
+  max-width: 96px;
+  padding: 0 4px;
+  text-overflow: ellipsis;
+}
+
+/* Shared compact scrubber sizing keeps the toolbar one row on every viewport. */
+  .floating-toolbar .scrub-input {
+    width: 92px;
+    flex: 0 0 auto;
+  }
+
+  .floating-toolbar .scrub-field {
+    height: 32px;
+    font-size: 11px;
+  }
+
+  .floating-toolbar .scrub-stepper {
+    width: 26px;
+    min-height: 32px;
+    border-radius: 7px;
+    opacity: 1;
+  }
+
+  .floating-toolbar .scrub-stepper svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .floating-toolbar .scrub-suffix {
+    padding-inline-end: 4px;
+    font-size: 9px;
+  }
+
+.floating-toolbar .floating-toolbar-stroke { width: 76px; }
+.floating-toolbar-stroke .scrub-stepper { display: none; }
+
+.floating-toolbar-swatch {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 7px;
+  background: transparent;
+  cursor: pointer;
+}
+
+
+/*
+ * Unified colour picker (ColorField): the swatch button that opens the popup.
+ * Dimensions come from the context (properties Field / toolbar swatch); this
+ * rule only makes it read as a swatch everywhere — flat, clickable, focusable.
+ */
+.color-field-trigger {
+  display: block;
+  padding: 0;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.color-field-trigger:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+/* قفل العنصر — the locked state must read clearly in BOTH themes as purple,
+   matching the locked selection frame, never the blue "active" tint. */
+.floating-toolbar-btn.is-locked-active {
+  background: #8b5cf6;
+  color: #fff;
+}
+
+.floating-toolbar-btn.is-locked-active:hover:not(:disabled) {
+  background: #7c3aed;
+}
+
+/*
+ * PHASE 5 — Layer tree.
+ */
+.layer-row {
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 160ms ease,
+    background-color 140ms ease;
+}
+
+.layer-row.is-dragging {
+  opacity: 0.6;
+  transform: scale(0.985);
+}
+
+/* Drop indicator: a primary-coloured line on the side the layer will land. */
+.layer-row.is-drop-before::before,
+.layer-row.is-drop-after::after {
+  content: "";
+  position: absolute;
+  inset-inline: 4px;
+  height: 2px;
+  border-radius: 2px;
+  background: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+}
+
+.layer-row.is-drop-before::before {
+  top: -1px;
+}
+.layer-row.is-drop-after::after {
+  bottom: -1px;
+}
+
+.layer-children {
+  display: grid;
+  gap: 2px;
+  margin-inline-start: 10px;
+  padding-inline-start: 6px;
+  border-inline-start: 1px dashed var(--editor-border, #dde2ea);
+  animation: accordion-in 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.layer-row.is-nested-hidden {
+  opacity: 0.45;
+}
+
+.layer-eye-toggle {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (pointer: coarse) {
+  .layer-eye-toggle {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/*
+ * PHASE 6 — Contrast fixes for interactive states in dark mode.
+ */
+.editor-ui.editor-dark input:focus-visible,
+.editor-ui.editor-dark select:focus-visible,
+.editor-ui.editor-dark textarea:focus-visible,
+.editor-ui.editor-dark button:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+/* Hover outlines on canvas elements use the same primary blue in dark mode. */
+.editor-ui.editor-dark .artboard-cell.is-active .canvas-el:not(.group-frame):hover {
+  outline-color: var(--hover-outline) !important;
+}
+
+/*
+ * Table cell interaction (properties panel grid editor) — the previous
+ * `:focus` styling was a faint gray line that vanished on the dark surface.
+ */
+.editor-properties table td:focus-within,
+.editor-properties table th:focus-within {
+  outline: 2px solid #3b82f6;
+  outline-offset: -2px;
+  background: rgba(59, 130, 246, 0.14);
+}
+
+.editor-ui.editor-dark .editor-properties table input:focus {
+  background: rgba(59, 130, 246, 0.18);
+  color: #fff;
+}
+
+/*
+ * Active tab / toggle indicators in dark mode: a muted steel-blue accent
+ * instead of a saturated primary — clearly "on" (≈6:1 with its text) without
+ * glowing against the dark chrome.
+ */
+.editor-ui.editor-dark .bg-navy.text-white,
+.editor-ui.editor-dark [data-active="true"] {
+  background: var(--editor-accent) !important;
+  color: var(--editor-accent-text) !important;
+}
+.editor-ui.editor-dark .bg-navy.text-white:hover:not(:disabled) {
+  background: var(--editor-accent-hover) !important;
+}
+
+/*
+ * PHASE 7 — Library accordions & custom asset cards.
+ */
+.library-grid-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 6px;
+}
+
+/*
+ * Library items — hover / focus contrast (both themes).
+ *
+ * The previous states were a 1px border that changed to a *lighter* blue in
+ * dark mode, i.e. the hovered item looked dimmer than its neighbours. Every
+ * interactive item in the library now gets a real 2px `--primary-accent`
+ * outline plus a tinted fill, with focus-visible matching hover so keyboard
+ * users see exactly the same affordance.
+ */
+.library-asset-card,
+.library-drag-card,
+.library-item {
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  background: var(--editor-surface, #fff);
+  color: var(--editor-text, #172033);
+  cursor: pointer;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease,
+    transform 120ms ease;
+}
+
+.library-asset-card {
+  aspect-ratio: 1;
+}
+
+.library-asset-card:hover,
+.library-drag-card:hover,
+.library-item:hover,
+.library-asset-card:focus-visible,
+.library-drag-card:focus-visible,
+.library-item:focus-visible {
+  border: 2px solid var(--primary-accent, #1d4ed8);
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--primary-accent, #1d4ed8) 25%, transparent);
+  outline: none;
+}
+
+.library-asset-card:active,
+.library-drag-card:active,
+.library-item:active {
+  transform: scale(0.97);
+}
+
+/* Selected/permanent state for a library item (e.g. the active category). */
+.library-item[aria-pressed="true"],
+.library-item[data-active="true"] {
+  border: 2px solid var(--primary-accent, #1d4ed8);
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+}
+
+/*
+ * `library-hit` is the INTERACTION half of the same affordance, with no layout
+ * properties at all: cards that already own their own display/grid rules (the
+ * shape grid, font rows, template cards, saved assets) opt in without any risk
+ * of the shared box model overriding their layout.
+ *
+ * Every selector is scoped to `.editor-sidebar` so it outranks the per-card
+ * Tailwind `hover:` utilities that sit earlier in the bundle — one behaviour,
+ * whichever markup a card was written with.
+ */
+.library-hit,
+.editor-sidebar .library-asset-card,
+.editor-sidebar .library-drag-card,
+.editor-sidebar .library-item {
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+}
+
+.library-hit:hover,
+.library-hit:focus-visible,
+.editor-sidebar .library-asset-card:hover,
+.editor-sidebar .library-asset-card:focus-visible,
+.editor-sidebar .library-drag-card:hover,
+.editor-sidebar .library-drag-card:focus-visible,
+.editor-sidebar .library-item:hover,
+.editor-sidebar .library-item:focus-visible {
+  border: 2px solid var(--primary-accent, #1d4ed8) !important;
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+  box-shadow: 0 0 0 2px
+    color-mix(in srgb, var(--primary-accent, #1d4ed8) 25%, transparent);
+  outline: none;
+}
+
+.library-hit[aria-pressed="true"],
+.library-hit[data-active="true"],
+.editor-sidebar .library-item[aria-pressed="true"],
+.editor-sidebar .library-item[data-active="true"] {
+  border: 2px solid var(--primary-accent, #1d4ed8) !important;
+  background: var(--library-active-bg, rgba(29, 78, 216, 0.1));
+}
+
+/*
+ * Saved-asset card in multi-select (batch move). `.is-selected` sits on the
+ * AssetLibrary card itself, so it is scoped `.asset-library` to outrank the
+ * per-card Tailwind ring/bg utilities (both compile to single-class
+ * selectors) with the same navy family the folder chips use. `pointer-events`
+ * stays explicitly live: selection must never make the card inert to
+ * click-to-insert or drag.
+ */
+.asset-library .is-selected {
+  border-color: var(--color-navy, #006c35);
+  background: color-mix(in srgb, var(--color-navy-2, #00874a) 8%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-navy, #006c35) 45%, transparent),
+    0 0 0 4px color-mix(in srgb, var(--color-navy-2, #00874a) 16%, transparent);
+  pointer-events: auto;
+}
+
+/* Inline SVG icons inside a card follow the accent so they stay legible. */
+.editor-ui.editor-dark .library-asset-card svg,
+.editor-ui.editor-dark .library-item svg {
+  color: currentColor;
+}
+
+/*
+ * Draggable library card (tables / chart templates): the grab cursor plus a
+ * dotted leading edge advertise the drag, because a palette that can only be
+ * clicked should not look draggable — and vice versa.
+ */
+.library-drag-card {
+  cursor: grab;
+  touch-action: manipulation;
+}
+
+.library-drag-card:active {
+  cursor: grabbing;
+}
+
+.library-drag-card::after {
+  content: "";
+  flex: 0 0 auto;
+  align-self: center;
+  width: 10px;
+  height: 14px;
+  border-inline-start: 1px dotted currentColor;
+  border-inline-end: 1px dotted currentColor;
+  opacity: 0.35;
+}
+
+/* Remove chip only appears on hover/focus so the grid stays clean. */
+.library-asset-remove {
+  position: absolute;
+  top: -6px;
+  inset-inline-end: -6px;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  background: var(--editor-panel, #fff);
+  color: #b42318;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.library-asset-card:hover .library-asset-remove,
+.library-asset-card:focus-within .library-asset-remove {
+  opacity: 1;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * TEXT SELECTION POLICY
+ * ---------------------------------------------------------------------------
+ * UI chrome is not a document: labels, tab names, menu rows, tooltips and icon
+ * buttons must never paint a text selection, which is what makes an interface
+ * feel like a web page instead of an application (and what produced the
+ * "everything got selected blue while I was dragging" complaint).
+ *
+ * Selection is therefore OFF by default (html/body) and switched back ON only
+ * where the text is the content: form fields, in-place editors on the artboard,
+ * and anything explicitly marked `.selectable-value` (copyable data such as a
+ * share link, a font note, a generated id).
+ */
+html,
+body {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+input,
+textarea,
+select,
+[contenteditable]:not([contenteditable="false"]),
+.selectable-value,
+.selectable-text,
+code,
+pre,
+kbd,
+samp {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The artboard is a document surface, but only its text content is selectable —
+   the page itself stays a canvas the author can drag on. */
+.report-page {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.report-page [contenteditable="true"],
+.report-page .selectable-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/*
+ * Content protection (artboard only): images on the document surface must not
+ * be grabbable by the browser's native drag ("drag to desktop") nor offer the
+ * long-press save callout on touch devices. The native right-click menu is
+ * suppressed at the element level (see CanvasStage), which also removes
+ * "Save Image As". This is a friction layer against casual saving, not DRM —
+ * site imagery outside `.report-page` is untouched.
+ */
+.report-page img {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Chrome that looks like a control behaves like one, even outside `.editor-ui`
+   (portalled menus, dialogs and toasts render under <body>). */
+button,
+[role="button"],
+[role="menuitem"],
+[role="menuitemcheckbox"],
+[role="menuitemradio"],
+[role="tab"],
+[role="toolbar"],
+[role="separator"],
+label,
+summary,
+.editor-ui aside,
+.editor-ui header,
+.editor-ui nav,
+.editor-ui .no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/*
+ * STEP 7 — orientation controls (rotation helpers + mirrors).
+ *
+ * Small, dense, wrap-friendly buttons: the properties panel is often narrow, so
+ * these must reflow onto a second line rather than overflow. Every one is at
+ * least 32px tall for touch and the active mirror is unmistakable in both
+ * themes (`aria-pressed` drives the fill, not a hover-only style).
+ */
+.property-grid-span {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.editor-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--editor-border, #c9cacc);
+  border-radius: 8px;
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #172033);
+  font-size: 10px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.editor-mini-btn:hover:not(:disabled) {
+  border-color: var(--primary-accent);
+  color: var(--primary-accent);
+}
+
+.editor-mini-btn.is-active,
+.editor-mini-btn[aria-pressed="true"] {
+  border-color: var(--primary-accent);
+  background: var(--library-active-bg);
+  color: var(--primary-accent);
+}
+
+.editor-mini-btn:focus-visible {
+  outline: 2px solid var(--primary-accent);
+  outline-offset: 2px;
+}
+
+/*
+ * STEP 8 — طبقة التلاشي (fade overlay).
+ *
+ * A gradient scrim that sits above an image's frame. Its geometry is the image
+ * frame, so it stays put through resizes, rotation and mirroring; `inset: 0` is
+ * what makes it inherit every one of those transforms for free.
+ */
+.fade-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* The visible dots do not grow. Outward targets stay finger-sized at every
+   zoom; the separate rotation targets clear the resize corners completely. */
+@media (any-pointer: coarse) {
+  .selection-frame {
+    --handle-hit-size: calc(30px / var(--editor-zoom, 1));
+    --rotate-hit-size: calc(32px / var(--editor-zoom, 1));
+    --rotate-gap: calc(36px / var(--editor-zoom, 1));
+  }
+}
+
+/* Touch properties float above, never below/in the canvas grid. No backdrop:
+   users can adjust properties and manipulate artwork without dismissing them. */
+.touch-properties-sheet {
+  /*
+   * Absolute overlay inside the workspace row (which is position:relative),
+   * never fixed: the window floats OVER the artboard at a high z-index and
+   * takes no layout space, so opening/closing/moving it cannot push, hide or
+   * distort the canvas. `fixed` would have let a panel escape the workspace
+   * and cover the header on scroll.
+   */
+  position: absolute;
+  z-index: var(--z-drawer);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--editor-panel);
+  border: 1px solid var(--editor-border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px #0002;
+  visibility: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
+}
+.touch-properties-sheet.is-open { transform: none; visibility: visible; pointer-events: auto; opacity: 1; }
+.touch-properties-sheet.is-docked:not(.is-open) { display: none; }
+.editor-ui [draggable="true"] { touch-action: none; }
+.touch-properties-sheet.is-dragging { transition: none; }
+.touch-properties-sheet.is-docked { position: static; z-index: var(--z-panel); width: 100%; height: 100%; min-height: 0; border-radius: 0; box-shadow: none; }
+.touch-properties-content > * { height: 100%; min-height: 0; }
+/*
+ * Top/bottom docks are horizontal BANDS, not tall columns: the panel body
+ * flows in fixed-width columns across the band (CSS multi-column with
+ * sequential fill), so the controls line up side by side and the band scrolls
+ * sideways instead of eating the artboard's height.
+ */
+.touch-properties-sheet:is(.is-docked-top, .is-docked-bottom) .editor-panel-body {
+  column-width: 300px;
+  column-gap: 20px;
+  column-fill: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.touch-properties-sheet:is(.is-docked-top, .is-docked-bottom) .editor-panel-body > * {
+  break-inside: avoid;
+}
+/* Quick right/left pins beside the main pin. */
+.editor-floating-panel.is-collapsed { overflow: hidden; }
+.editor-floating-panel.is-collapsed .touch-properties-content,
+.editor-floating-panel.is-collapsed .floating-panel-resize,
+.editor-floating-panel.is-collapsed .fp-dock-cluster { display: none; }
+.editor-floating-panel.is-collapsed .touch-properties-header {
+  height: 100%;
+  border-bottom: 0;
+  padding-inline: 2px;
+}
+.editor-floating-panel.is-collapsed.is-docked-left .touch-properties-header,
+.editor-floating-panel.is-collapsed.is-docked-right .touch-properties-header {
+  flex-direction: column;
+  justify-content: flex-start;
+}
+.editor-floating-panel.is-collapsed.is-docked-left .touch-properties-grip,
+.editor-floating-panel.is-collapsed.is-docked-right .touch-properties-grip {
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: 8px;
+}
+.editor-floating-panel.is-collapsed.is-docked-left .touch-properties-grip span,
+.editor-floating-panel.is-collapsed.is-docked-right .touch-properties-grip span {
+  writing-mode: vertical-rl;
+}
+
+.touch-properties-header button.fp-dock-quick { width: 30px; }
+/*
+ * The eight resize grips of a floating window: thin edge strips and corner
+ * squares positioned inline by the component. They sit just inside the frame
+ * (a 1px hairline on hover) so a window reads as resizable from every side.
+ */
+.floating-panel-resize {
+  position: absolute;
+  z-index: 5;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  touch-action: none;
+}
+.floating-panel-resize:hover,
+.floating-panel-resize:focus-visible {
+  background: color-mix(in srgb, var(--editor-active, #2f6fb0) 18%, transparent);
+  outline: none;
+}
+.floating-panel-resize:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--editor-active, #2f6fb0) 55%, transparent);
+}
+/* Dock menu of the pin button in a window's title bar. */
+.fp-dock-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  inset-inline-end: -4px;
+  z-index: 10;
+  display: grid;
+  min-width: 168px;
+  padding: 4px;
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+  background: var(--editor-panel);
+  box-shadow: 0 10px 30px -10px rgba(15, 23, 42, 0.45);
+}
+.fp-dock-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  /* Finger-sized rows: the dock choices are pressed on tablets and pens. */
+  height: 38px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--editor-text);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: start;
+  cursor: pointer;
+}
+.fp-dock-menu button:hover {
+  background: var(--editor-hover);
+}
+.fp-dock-menu button.is-current {
+  background: color-mix(in srgb, var(--editor-active, #2f6fb0) 14%, transparent);
+  color: var(--editor-active, #2f6fb0);
+}
+.touch-properties-header button.is-docked-active {
+  background: color-mix(in srgb, var(--editor-active, #2f6fb0) 14%, transparent);
+  color: var(--editor-active, #2f6fb0);
+}
+/* ── Grouped-window tab strip ─────────────────────────────────────────────
+ * One window can host several panels as tabs. The strip is deliberately
+ * boring: same row height everywhere, finger-sized tabs, and a quiet hint
+ * that doubles as the drop zone for the FIRST drag that groups a window. */
+.panel-tab-strip {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  flex: 0 0 34px;
+  padding: 3px 4px 0;
+  border-bottom: 1px solid var(--editor-border);
+  background: color-mix(in srgb, var(--editor-panel) 92%, transparent);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.panel-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--editor-muted, #697184);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+.panel-tab:hover { background: var(--editor-hover); color: var(--editor-text); }
+.panel-tab.is-active {
+  background: color-mix(in srgb, var(--editor-active, #2f6fb0) 12%, transparent);
+  color: var(--editor-active, #2f6fb0);
+  box-shadow: inset 0 -2px 0 var(--editor-active, #2f6fb0);
+}
+.panel-tab button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin-inline-start: 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.panel-tab button:hover { background: var(--editor-hover); }
+.panel-tab-hint {
+  align-self: center;
+  margin-inline-start: auto;
+  padding-inline: 8px;
+  color: color-mix(in srgb, var(--editor-muted, #697184) 70%, transparent);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+/*
+ * Docked window cell: the grid track a pinned window occupies. The window
+ * fills it; the 10px inner-edge strip (editor-dock-strip) is how the author
+ * resizes the track and, with it, the canvas area — live, while dragging.
+ */
+.editor-dock-cell { overflow: hidden; }
+.editor-dock-strip {
+  position: absolute;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  touch-action: none;
+  background: transparent;
+}
+.editor-dock-strip::before {
+  content: "";
+  border-radius: 999px;
+  background: var(--editor-border);
+  transition: background-color 120ms ease;
+}
+.editor-dock-strip-left,
+.editor-dock-strip-right {
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: col-resize;
+}
+.editor-dock-strip-left { left: -5px; }
+.editor-dock-strip-right { right: -5px; }
+.editor-dock-strip-left::before,
+.editor-dock-strip-right::before {
+  width: 4px;
+  height: 44px;
+}
+.editor-dock-strip-top,
+.editor-dock-strip-bottom {
+  left: 0;
+  right: 0;
+  height: 10px;
+  cursor: row-resize;
+}
+.editor-dock-strip-top { top: -5px; }
+.editor-dock-strip-bottom { bottom: -5px; }
+.editor-dock-strip-top::before,
+.editor-dock-strip-bottom::before {
+  width: 44px;
+  height: 4px;
+}
+.editor-dock-strip:hover::before,
+body.is-resizing-panel .editor-dock-strip::before {
+  background: var(--editor-active);
+}
+.touch-properties-header { display: flex; align-items: center; flex: 0 0 40px; border-bottom: 1px solid var(--editor-border); padding-inline: 4px; touch-action: none; user-select: none; cursor: default; }
+.editor-floating-panel.is-dragging .touch-properties-header { cursor: grabbing; }
+/* A held title bar announces that the window is about to follow the finger. */
+.editor-floating-panel.is-drag-armed .touch-properties-header {
+  cursor: grab;
+  background: color-mix(in srgb, var(--editor-active, #2f6fb0) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--editor-active, #2f6fb0) 45%, transparent);
+}
+.touch-properties-header button { display: grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: 8px; }
+.touch-properties-header button:hover { background: var(--editor-hover); }
+.touch-properties-header .touch-properties-grip { flex: 1; display: flex; align-items: center; gap: 6px; touch-action: none; cursor: default; font-size: 11px; font-weight: 700; user-select: none; min-height: 36px; }
+.touch-properties-content { flex: 1; min-height: 0; overflow: hidden; }
+.touch-properties-content > aside { height: 100%; min-height: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .touch-properties-sheet { transition: none; }
+}
+
+/* =====================================================================
+ * NASAQ muted Photoshop-inspired workspace
+ * Canvas, dark palette, main toolbar, panel anatomy (header tabs + `>>`,
+ * control rows, content rows, collapsed icon docks and the
+ * Library workspace — desktop and tablet.
+ * ===================================================================== */
+
+/* Palette tokens are declared once at the editor shell boundary above. */
+
+.editor-ui.editor-light .studio-grid,
+.editor-ui.editor-dark .studio-grid {
+  background-color: var(--editor-canvas);
+  background-image:
+    linear-gradient(var(--editor-canvas-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--editor-canvas-grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Desktop panes: smooth wheel/trackpad scrolling. */
+@media (hover: hover) and (pointer: fine) {
+  .editor-ui .editor-panel-body { scroll-behavior: smooth; }
+}
+
+/* Panels fill their column exactly, so the header and scrolling body fit. */
+/* (`flex flex-col` is set by utility classes on the column, so the docked
+   `lg2:hidden` state still wins and a collapsed panel really leaves the grid.) */
+.editor-ui .editor-sidebar > aside {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+/* =====================================================================
+ * Floating surfaces: the tooltip and the anchored menu.
+ *
+ * Both are portals with no layout footprint, both sit on the dropdown layer so
+ * they are never clipped by a toolbar, a panel or the canvas, and both share
+ * one surface treatment (radius, border, shadow) with the floating panels.
+ * ===================================================================== */
+
+.editor-tip {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 2px 8px;
+  max-width: 260px;
+  padding: 6px 9px;
+  border: 1px solid var(--editor-border);
+  border-radius: 9px;
+  background: var(--editor-panel);
+  color: var(--editor-text);
+  font-size: 11px;
+  line-height: 1.45;
+  pointer-events: none;
+  animation: editor-tip-in 110ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.editor-tip.is-top { transform: translateY(-2px); }
+@keyframes editor-tip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.editor-tip-label {
+  font-weight: 800;
+  white-space: nowrap;
+}
+.editor-tip-hint {
+  grid-column: 1 / -1;
+  color: var(--editor-text-secondary);
+  font-weight: 600;
+  font-size: 10.5px;
+}
+.editor-tip-kbd {
+  grid-row: 1 / 3;
+  grid-column: 2;
+  align-self: center;
+  min-width: 18px;
+  padding: 2px 6px;
+  border: 1px solid var(--editor-border);
+  border-radius: 5px;
+  background: var(--editor-surface);
+  color: var(--editor-text-secondary);
+  font: 700 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.editor-anchor-menu {
+  position: fixed;
+  z-index: var(--z-dropdown);
+  display: grid;
+  gap: 1px;
+  max-height: min(70vh, 520px);
+  padding: 5px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--editor-border);
+  border-radius: 12px;
+  background: var(--editor-panel);
+  color: var(--editor-text);
+  direction: rtl;
+  scrollbar-width: thin;
+}
+.editor-menu-row {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color 110ms ease;
+}
+.editor-menu-row:hover:not(:disabled),
+.editor-menu-row:focus-visible {
+  background: var(--editor-hover);
+  outline: none;
+}
+.editor-menu-row:disabled { opacity: 0.38; cursor: default; }
+.editor-menu-row.is-danger { color: var(--editor-danger, #d98c86); }
+.editor-menu-icon {
+  display: grid;
+  width: 18px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--editor-text-secondary);
+}
+.editor-menu-icon svg { width: 16px; height: 16px; }
+.editor-menu-text { display: grid; flex: 1 1 auto; min-width: 0; }
+.editor-menu-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.editor-menu-hint {
+  color: var(--editor-text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.editor-menu-check { color: var(--editor-success); font-size: 12px; }
+.editor-menu-kbd {
+  min-width: 18px;
+  padding: 2px 5px;
+  border: 1px solid var(--editor-border);
+  border-radius: 5px;
+  background: var(--editor-surface);
+  color: var(--editor-text-secondary);
+  font: 700 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  text-align: center;
+  white-space: nowrap;
+}
+.editor-menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--editor-border);
+}
+.editor-menu-group {
+  padding: 7px 8px 3px;
+  color: var(--editor-text-secondary);
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+.editor-menu-field { padding: 2px 8px 6px; }
+
+/*
+ * A tool DRAWER is the same popover plus the bar that owns it: the group's
+ * name, a grip that moves the panel anywhere on screen, and its own close
+ * control. It is sticky, so a long drawer keeps its title and its dismissal
+ * while the author scrolls the controls.
+ */
+.editor-anchor-menu.is-drawer {
+  gap: 0;
+  padding: 0;
+  max-height: min(78dvh, calc(100dvh - 16px));
+}
+.editor-anchor-menu.is-drawer .editor-menu-label { white-space: normal; }
+.editor-drawer-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 3px 3px 4px;
+  border-bottom: 1px solid var(--editor-border);
+  border-radius: 11px 11px 0 0;
+  background: var(--editor-panel);
+}
+.editor-drawer-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--editor-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+.editor-drawer-grip,
+.editor-drawer-close {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--editor-text-secondary);
+  cursor: pointer;
+}
+.editor-drawer-grip { cursor: grab; touch-action: none; }
+.editor-drawer-grip:active { cursor: grabbing; }
+.editor-drawer-grip:hover,
+.editor-drawer-close:hover {
+  background: var(--editor-hover);
+  color: var(--editor-text);
+}
+.editor-drawer-grip:focus-visible,
+.editor-drawer-close:focus-visible {
+  outline: 2px solid var(--editor-accent-hover);
+  outline-offset: 1px;
+}
+.editor-drawer-body {
+  display: grid;
+  gap: 1px;
+  padding: 5px;
+}
+/*
+ * The drawer's own field chrome. A drawer has room for a full-width control,
+ * which is why a folded field is a loss of BAR space only, never of function.
+ */
+.editor-drawer-select {
+  width: 100%;
+  height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+  background: var(--editor-surface);
+  color: var(--editor-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+.editor-drawer-select:focus-visible {
+  outline: 2px solid var(--editor-accent-hover);
+  outline-offset: 1px;
+}
+/* A colour swatch inside a control grid fills its cell like the icon cells. */
+.editor-menu-grid > .color-field-trigger {
+  width: 100%;
+  min-height: 32px;
+  border-radius: 8px;
+}
+.editor-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  padding: 2px 8px 6px;
+}
+.editor-menu-grid.is-2 { grid-template-columns: repeat(2, 1fr); }
+.editor-menu-grid.is-3 { grid-template-columns: repeat(3, 1fr); }
+.editor-menu-grid.is-4 { grid-template-columns: repeat(4, 1fr); }
+.editor-menu-grid.is-6 { grid-template-columns: repeat(6, 1fr); }
+.editor-menu-grid button {
+  display: grid;
+  min-height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+  background: var(--editor-surface);
+  color: var(--editor-text);
+  cursor: pointer;
+  transition: background-color 110ms ease;
+}
+.editor-menu-grid button:hover:not(:disabled) { background: var(--editor-hover); }
+.editor-menu-grid button:disabled { opacity: 0.38; cursor: default; }
+.editor-menu-grid button.is-danger { color: var(--editor-danger, #d98c86); }
+.editor-menu-grid button svg { width: 16px; height: 16px; stroke-width: 1.75; }
+.editor-menu-grid button.is-active {
+  border-color: var(--editor-accent);
+  background: var(--editor-accent-soft);
+}
+
+/* ---------- Panel anatomy (follows the Layers panel) ---------- */
+.editor-panel-header { min-height: 56px; }
+.editor-panel-tabs { scrollbar-width: none; }
+.editor-panel-tabs::-webkit-scrollbar { display: none; }
+.editor-panel-tab { transition: background-color 120ms ease, color 120ms ease; }
+.editor-panel-collapse { color: var(--editor-text-secondary); }
+
+/* Control row: dropdowns + Opacity side by side, wrapping when narrow. */
+.editor-panel-controls {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--editor-border);
+}
+.editor-panel-control {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 128px;
+  gap: 4px;
+  color: var(--editor-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+.editor-panel-control select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+  background: var(--editor-surface);
+  color: var(--editor-text);
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+.editor-panel-control.is-opacity { flex-basis: 150px; }
+
+/*
+ * Flexible property rows. A two-up row of fields (dropdowns, opacity, colour)
+ * stays two-up while each cell has ≥116px and stacks otherwise; full-width
+ * fields always span the whole row — no cramped or clipped selects.
+ */
+.editor-properties .editor-panel-body .grid.grid-cols-2:has(> .editor-property-field) {
+  grid-template-columns: repeat(auto-fit, minmax(max(116px, calc((100% - 0.5rem) / 2)), 1fr));
+}
+.editor-properties .editor-panel-body .grid.grid-cols-2:has(> .editor-property-field) > .col-span-2 {
+  grid-column: 1 / -1;
+}
+
+/* Content rows: safe padding for mouse and touch. */
+.layer-row { min-height: 44px; padding: 7px 9px; }
+.editor-layer-list { container: layerlist / inline-size; overscroll-behavior: contain; }
+/*
+ * Narrow list (default-width or tablet panel): each layer becomes a two-line
+ * row — handle + name on top, its actions aligned underneath — instead of
+ * pushing the lock/eye buttons out past the panel edge.
+ */
+@container layerlist (max-width: 340px) {
+  .layer-row { flex-wrap: wrap; row-gap: 6px; }
+  .layer-row > .layer-row-spacer { width: 2px; }
+  .layer-row > .layer-row-name { flex: 1 1 calc(100% - 72px); }
+  .layer-row > .layer-row-action.is-first { margin-inline-start: auto; }
+}
+
+/* ---------- Library workspace ---------- */
+.asset-library { min-width: 0; container: assetlibrary / inline-size; }
+
+/* The Library opens on its own controls: flush with the panel top, sticky,
+   opaque, and covering the body's side padding so nothing scrolls into view
+   beside or above them. */
+.editor-panel-body.is-library { padding-top: 0; }
+.editor-panel-body.is-library > .asset-library { padding: 0 0 4px; }
+.asset-library-controls {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  min-width: 0;
+  margin-inline: -13px;
+  padding: 10px 13px 10px;
+  border-bottom: 1px solid var(--editor-border);
+  background: var(--editor-panel);
+  box-shadow: 0 6px 10px -10px rgba(0, 0, 0, 0.6);
+}
+.asset-library-controls > * { min-width: 0; }
+.asset-library-header .asset-library-tools { flex-wrap: wrap; justify-content: flex-end; }
+.asset-library-filters { row-gap: 6px; }
+
+/* Categories: one smooth horizontal scroller with safe spacing. */
+.asset-library-categories-wrap { min-width: 0; }
+.asset-library-categories {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* The inline-end padding reserves the fade zone: when the row does not
+     overflow (or is scrolled to its end) no chip ever sits under the fade. */
+  padding: 2px 2px 6px;
+  padding-inline-end: 22px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 22px);
+  mask-image: linear-gradient(to right, transparent 0, #000 22px);
+  scroll-behavior: smooth;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 8px;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--editor-border) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+.asset-library-categories > * { flex: 0 0 auto; scroll-snap-align: start; }
+.asset-library-categories::-webkit-scrollbar { height: 4px; }
+.asset-library-categories::-webkit-scrollbar-thumb { border-radius: 4px; background: var(--editor-border); }
+
+/* Quick actions (إضافة صورة / ملف / مجلد): a flexible grid, never cropped. */
+.asset-library-add-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(76px, 1fr));
+  gap: 6px;
+}
+.asset-library-add-actions > button {
+  min-width: 0;
+  min-height: 40px;
+  height: auto;
+  padding: 4px 6px;
+  white-space: normal;
+  line-height: 1.25;
+  text-align: center;
+}
+
+/* Media grid: three images per row, even in a docked panel. */
+.asset-media-grid {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: stretch;
+}
+.asset-media-grid > * { min-width: 0; }
+.asset-media-grid:not(.is-compact) .asset-card img {
+  width: 100%;
+  height: 72px;
+  object-fit: contain;
+  background: color-mix(in srgb, var(--editor-surface) 88%, var(--editor-text));
+}
+.asset-card { display: grid; padding: 6px; }
+.asset-card-actions { flex-wrap: nowrap; }
+.asset-card-actions > button { flex: 0 0 auto; min-width: 28px; min-height: 28px; }
+.asset-card-check::after { content: ""; position: absolute; inset: -6px; }
+
+/* Compact asset shelves without shrinking the actual touch targets. */
+.asset-library-controls.grid {
+  gap: 6px;
+  padding-block: 6px 7px;
+}
+.asset-library-folder-chip { max-width: min(18ch, 52vw); }
+.asset-library-folder-label {
+  display: block;
+  max-width: 14ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-media-grid.is-compact {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+}
+.asset-media-grid.is-compact .asset-card {
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 6px;
+}
+.asset-media-grid.is-compact .asset-card > .library-hit {
+  grid-column: 1;
+  grid-row: 1;
+  width: 40px;
+  height: 40px;
+}
+.asset-media-grid.is-compact .asset-card > .library-hit img {
+  max-width: 36px;
+  max-height: 36px;
+}
+.asset-media-grid.is-compact .asset-card > .asset-card-name {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  margin: 0;
+  text-align: start;
+  font-size: 11px;
+}
+.asset-media-grid.is-compact .asset-card > .asset-card-edit {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.asset-media-grid.is-compact .asset-card > .asset-card-actions {
+  grid-column: 3;
+  grid-row: 1;
+  margin: 0;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .asset-card { transition: border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease; }
+  .asset-card:hover {
+    background: var(--editor-hover);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  }
+  .asset-card .asset-card-actions > button:hover { background: var(--editor-hover); color: var(--editor-text); }
+  .asset-library-chip:hover { border-color: var(--editor-text-secondary); color: var(--editor-text); }
+}
+
+/* ---------- Touch devices (tablet): larger targets ---------- */
+@media (any-pointer: coarse) {
+  .editor-panel-control select { height: 44px; }
+  .editor-properties .layer-row button { min-height: 32px; }
+
+  .asset-library-controls .asset-lib-icon-btn,
+  .asset-library-categories .asset-lib-icon-btn { width: 42px; height: 42px; }
+  .asset-library-controls .asset-library-chip { min-height: 42px; padding-inline: 12px; }
+  .asset-library-categories .asset-library-chip { min-height: 42px; padding-inline: 10px; }
+  .asset-library-folder-label { max-width: 12ch; }
+  .asset-library-controls.grid { gap: 8px; padding-block: 10px; }
+  .asset-library-controls .asset-library-search { height: 42px; }
+  .asset-library-add-actions > button { min-height: 42px; }
+  .asset-card-actions > button { width: 42px; min-width: 42px; height: 42px; min-height: 42px; }
+  .asset-card-edit input { min-height: 36px; font-size: 12px; }
+  .asset-card-edit button { min-width: 36px; min-height: 36px; }
+  .asset-card-check { width: 26px !important; height: 26px !important; }
+  .asset-card-check::after { inset: -8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-icon-btn,
+  .editor-anchor-menu,
+  .asset-card { transition: none; }
+  .asset-library-categories,
+  .editor-ui .editor-panel-body { scroll-behavior: auto; }
+}
+
+/* =====================================================================
+ * Studio redesign — unified chrome (v3)
+ *
+ * One dark slate workspace (#181d21 / #1e252b) with a single blue accent
+ * (#3b6e9c). The header uses three aligned zones; Add and View menus keep
+ * insertion and workspace controls compact, while selection stays contextual.
+ * ===================================================================== */
+
+.editor-ui .editor-layers .layer-row {
+  min-height: 30px;
+  gap: 4px;
+  border-color: transparent;
+  padding-block: 1px;
+}
+.editor-ui .editor-layers .layer-row.is-selected {
+  background: color-mix(in srgb, var(--editor-text) 12%, var(--editor-surface));
+  box-shadow: inset -3px 0 0 var(--editor-text);
+}
+.editor-ui .editor-layers .layer-row .layer-row-action,
+.editor-ui .editor-layers .layer-row .drag-handle {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+}
+
+/* ---------- Header: three zones, one line ---------- */
+
+.editor-header-zone {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+/*
+ * Desktop: the header is ONE line, always.
+ *
+ * Nothing in it shrinks and the bar never wraps, so the canvas below keeps the
+ * same height at every desktop width — a toolbar that grows a row when a panel
+ * opens is a toolbar that steals the artboard. The document name is the only
+ * flexible part, and it is capped.
+ */
+@media (min-width: 768px) {
+  .editor-ui .editor-toolbar { flex-wrap: nowrap; }
+  .editor-ui .editor-header-primary > *,
+  .editor-ui .editor-header-actions > * { flex-shrink: 0; }
+  .editor-ui .editor-doc-capsule { min-width: 0; flex: 0 1 auto; }
+}
+
+/*
+ * Tablet / landscape phone (768–1099px): the bar cannot hold every control on
+ * one row, so the secondary ones (zoom stepper, library shortcut) yield to the
+ * «عرض» and «إضافة» menus, which carry the same commands, and the document
+ * name is the part that gives way. The row never exceeds the viewport.
+ */
+@media (min-width: 768px) and (max-width: 1099px) {
+  .editor-ui .editor-zoom-cluster,
+  .editor-ui .editor-header-sep:has(+ .editor-zoom-cluster),
+  .editor-ui .editor-header-library { display: none; }
+  .editor-ui .editor-header-center { flex-shrink: 1; }
+  .editor-ui .editor-doc-name { width: clamp(6ch, 14vw, 16ch); min-width: 6ch; }
+}
+
+/* The centre capsule keeps the document name and its view controls in one
+ * perfectly centered unit — no drifting alignment at any width. */
+.editor-header-center {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: center;
+}
+
+.editor-doc-capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  max-width: 100%;
+  padding: 3px;
+  border: 1px solid var(--editor-border);
+  border-radius: 11px;
+  background: var(--editor-surface);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.editor-ui .editor-doc-name {
+  /* The document identity is chrome, not a tiny fixed label. Let Arabic names
+     breathe on desktop/tablet while keeping the capsule usable on phones. */
+  width: clamp(12ch, 16vw, 22ch);
+  min-width: 9ch;
+  max-width: 22ch;
+  height: 28px;
+  flex: 0 1 auto;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--editor-text);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+  outline: none;
+  transition: background-color 120ms ease;
+}
+.editor-ui .editor-doc-name:hover,
+.editor-ui .editor-doc-name:focus {
+  background: var(--editor-hover);
+}
+.editor-ui .editor-doc-name:focus {
+  box-shadow: 0 0 0 1.5px var(--editor-accent);
+}
+
+/* One 32px chrome control for everything inside the capsule. */
+.editor-capsule-btn {
+  display: grid;
+  width: 30px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--editor-text-secondary);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.editor-capsule-btn:hover:not(:disabled) {
+  background: var(--editor-hover) !important;
+  color: var(--editor-text);
+}
+.editor-capsule-btn.is-active {
+  background: var(--editor-accent) !important;
+  color: var(--editor-accent-text) !important;
+}
+.editor-capsule-btn:disabled { opacity: 0.4; cursor: default; }
+
+.editor-capsule-sep,
+.editor-header-sep {
+  width: 1px;
+  flex: 0 0 auto;
+  background: var(--editor-border);
+}
+.editor-capsule-sep { height: 18px; margin: 0 2px; }
+.editor-header-sep { height: 22px; margin: 0 5px; }
+/* Header paint swatches (fill/gradient + border) beside the tool cluster. */
+.editor-header-paint { display: flex; align-items: center; gap: 4px; }
+.editor-header-paint .editor-header-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+}
+.editor-header-paint .editor-header-swatch.is-border {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+}
+
+/* Zoom cluster: one bordered group so scaling controls never scatter. */
+.editor-zoom-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 2px;
+  border: 1px solid var(--editor-border);
+  border-radius: 10px;
+  background: var(--editor-surface);
+}
+.editor-zoom-cluster .editor-capsule-btn { border-radius: 8px; }
+.editor-ui .editor-zoom-readout {
+  min-width: 46px;
+  height: 28px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--editor-text);
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: pointer;
+}
+.editor-ui .editor-zoom-readout:hover { background: var(--editor-hover) !important; }
+
+/* The export action keeps the brand accent, but as an icon-first control: the
+   label moved into its tooltip so the bar reads as one rhythm of icons. */
+.editor-ui .editor-export-btn {
+  background: var(--editor-accent);
+  color: var(--editor-accent-text);
+}
+.editor-ui .editor-export-btn:hover { background: var(--editor-accent-hover) !important; }
+
+/* ---------- Focus-visible ring shared by the new chrome ---------- */
+.editor-capsule-btn:focus-visible,
+.editor-ui .editor-zoom-readout:focus-visible,
+.editor-ui .editor-export-btn:focus-visible {
+  outline: 2px solid var(--editor-accent-hover);
+  outline-offset: 1px;
+}
+
+/* =====================================================================
+ * The shared icon control — every chrome button in the studio.
+ *
+ * One box (34px), one radius, one icon size, one hover, one active state and
+ * one tooltip. The header, the selection toolbar, the floating panels and the menus
+ * all draw from this class, which is what makes the interface look designed
+ * rather than assembled control by control.
+ * ===================================================================== */
+.editor-icon-btn {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--editor-text);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.editor-icon-glyph {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+}
+/* One stroke weight for every chrome icon, so the header, contextual toolbar,
+   and floating panels read as one system instead of separate icon sets. */
+.editor-icon-glyph svg { width: 18px; height: 18px; stroke-width: 1.75; }
+.editor-icon-btn:hover:not(:disabled) {
+  background: var(--editor-hover);
+  color: var(--editor-text);
+}
+.editor-icon-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+/* Toggle state (an open panel, an armed tool) — filled, never a thin border. */
+.editor-icon-btn.is-active,
+.editor-icon-btn[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--editor-text) 14%, var(--editor-toolbar, var(--editor-panel)));
+  color: var(--editor-text);
+}
+/* The toolbar's generic `button { color }` rule is more specific than the
+   class above and was painting black glyphs on a blue active plate. */
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail) .editor-icon-btn.is-active,
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail) .editor-icon-btn[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--editor-text) 14%, var(--editor-toolbar, var(--editor-panel)));
+  color: var(--editor-text);
+}
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail) .editor-icon-btn.is-primary {
+  background: var(--editor-accent);
+  color: var(--editor-accent-text);
+}
+.editor-icon-btn.is-primary {
+  background: var(--editor-accent);
+  color: var(--editor-accent-text);
+}
+.editor-icon-btn.is-primary:hover:not(:disabled) {
+  background: var(--editor-accent-hover);
+  color: var(--editor-accent-text);
+}
+.editor-icon-btn.is-danger { color: var(--editor-danger, #d98c86); }
+.editor-icon-btn.is-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--editor-danger, #d98c86) 14%, transparent);
+  color: var(--editor-danger, #d98c86);
+}
+.editor-icon-btn:focus-visible {
+  outline: 2px solid var(--editor-accent-hover);
+  outline-offset: 1px;
+}
+/* Save-state tones: one colour, three meanings, always explained by tooltip. */
+.editor-icon-btn.is-saved { color: var(--editor-success); }
+.editor-icon-btn.is-pending { color: var(--editor-text-secondary); }
+.editor-icon-btn.is-danger.is-error { color: var(--editor-danger, #d98c86); }
+
+/* The zoom cluster's buttons share the capsule, so they drop the margin. */
+.editor-zoom-btn { width: 30px; height: 28px; border-radius: 7px; }
+.editor-zoom-btn .editor-icon-glyph,
+.editor-zoom-btn .editor-icon-glyph svg { width: 16px; height: 16px; }
+
+/* =========================================================================
+   Advanced Multi-Artboard Canvas System (Photoshop / Figma inspired)
+   ========================================================================= */
+
+/* Artboard names are constant-size UI outside the scaled document surface. */
+.artboard-header {
+  height: 22px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  color: var(--editor-canvas-text-secondary);
+  font-size: 11px;
+  user-select: none;
+}
+.artboard-name {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 2px;
+  text-align: start;
+  font-weight: 600;
+  border-radius: 3px;
+}
+.artboard-name:hover { color: var(--editor-canvas-text); }
+.artboard-name[aria-pressed="true"] {
+  color: var(--editor-canvas-text);
+  outline: 1.5px solid var(--editor-success);
+  outline-offset: 2px;
+  background: var(--editor-success-soft);
+}
+.artboard-title-input {
+  width: 100%;
+  min-width: 0;
+  height: 26px;
+  background: var(--editor-surface);
+  color: var(--editor-text);
+  border: 1px solid var(--editor-accent);
+  border-radius: 3px;
+  padding-inline: 4px;
+  font-size: 11px;
+}
+.artboard-active-outline {
+  outline: calc(1.5px / var(--editor-zoom, 1)) solid var(--editor-success);
+  outline-offset: 0;
+}
+
+/* Chrome states share the palette without reaching into design content. */
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .editor-settings-surface) .bg-navy,
+.editor-ui .editor-settings-surface [role="radio"][aria-checked="true"] {
+  background: var(--editor-accent) !important;
+  color: var(--editor-accent-text) !important;
+}
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .editor-settings-surface) .bg-navy:hover:not(:disabled) {
+  background: var(--editor-accent-hover) !important;
+}
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail) :is([aria-pressed="true"], [aria-selected="true"]) {
+  background: var(--editor-accent-soft) !important;
+  color: var(--editor-text) !important;
+  border-color: var(--editor-accent);
+}
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .editor-settings-surface) :is(.text-danger, .is-danger, .editor-menu-danger) {
+  color: var(--editor-danger) !important;
+}
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail, .editor-settings-surface) :is(.text-danger, .is-danger, .editor-menu-danger):hover:not(:disabled) {
+  background: var(--editor-danger-soft) !important;
+}
+.editor-ui :is(.editor-toolbar, .editor-sidebar, .editor-page-rail) button:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.editor-settings-surface {
+  background: var(--editor-panel) !important;
+  color: var(--editor-text);
+  border-color: var(--editor-border) !important;
+}
+.editor-settings-surface :is(header, [role="tablist"], section, [role="radiogroup"]) { border-color: var(--editor-border); }
+.editor-settings-surface .text-muted { color: var(--editor-text-secondary); }
+.editor-ui .editor-toolbar kbd, .editor-ui .selectable-value { direction: ltr; unicode-bidi: isolate; }
+
+/* ---------- Chrome refinement: one measured control language ---------- */
+.editor-ui {
+  --editor-control-h: 34px;
+  --editor-touch-h: 44px;
+  --editor-page-rail-collapsed-height: 36px;
+  --editor-control-radius: 8px;
+  --editor-panel-radius: 10px;
+  --editor-chrome-shadow: 0 1px 2px rgba(15, 30, 45, 0.08);
+}
+
+.editor-ui .editor-toolbar,
+.editor-ui .editor-sidebar,
+.editor-ui .editor-page-rail {
+  box-shadow: var(--editor-chrome-shadow);
+}
+
+.editor-ui :is(.editor-icon-btn, .editor-capsule-btn, .editor-panel-collapse,
+  .editor-panel-tab, .editor-mini-btn) {
+  border-radius: var(--editor-control-radius);
+  transition: background-color 120ms ease, border-color 120ms ease,
+    color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.editor-ui :is(.editor-icon-btn, .editor-capsule-btn, .editor-panel-collapse,
+  .editor-panel-tab, .editor-mini-btn):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--editor-accent) 72%, transparent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--editor-accent) 18%, transparent);
+}
+
+.editor-ui .editor-sidebar {
+  border-inline-start-width: 1px;
+  border-inline-end-width: 1px;
+}
+
+.editor-ui .editor-panel-header {
+  min-height: 36px;
+  background: color-mix(in srgb, var(--editor-panel) 96%, var(--editor-hover));
+}
+
+.editor-ui .editor-panel-tab[aria-selected="true"] {
+  box-shadow: inset 0 -2px 0 var(--editor-accent);
+}
+
+.editor-ui .editor-layer-list,
+.editor-ui .editor-properties .editor-accordion,
+.editor-ui .asset-library-controls {
+  border-radius: var(--editor-panel-radius);
+}
+
+.editor-ui .layer-row {
+  min-height: 42px;
+  border-radius: 7px;
+  transition: background-color 120ms ease, border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.editor-ui .layer-row[aria-selected="true"],
+.editor-ui .layer-row.is-selected {
+  box-shadow: inset 2px 0 0 var(--editor-accent);
+}
+
+.editor-ui .editor-page-rail {
+  border-top-color: var(--editor-border);
+  background: color-mix(in srgb, var(--editor-panel) 97%, var(--editor-hover));
+}
+
+/*
+ * Responsive rule, stated once: the bar is ONE row at every width that can
+ * afford it, including a tablet in either orientation. The old tablet layout
+ * forced a second row for the tool cluster, which stole canvas height exactly
+ * where the canvas is smallest — the single biggest source of the "the UI
+ * grew and the page shrank" feeling.
+ */
+@media (max-width: 767px) {
+  .editor-ui .editor-toolbar {
+    flex-wrap: nowrap;
+    gap: 4px;
+    padding: 4px 8px;
+  }
+  .editor-ui .editor-header-zone { flex-wrap: nowrap; min-width: 0; gap: 3px; }
+  .editor-header-primary > *,
+  .editor-header-actions > * { flex-shrink: 0; }
+  .editor-ui .editor-header-center { flex: 1 1 auto; justify-content: center; }
+  .editor-ui .editor-header-actions { margin-inline-start: 0; }
+  .editor-ui .editor-doc-name { width: clamp(8ch, 22vw, 14ch); min-width: 6ch; }
+}
+
+/*
+ * Phone: two deliberate rows — the document identity, then the controls. The
+ * history cluster scrolls inside its own row rather than pushing the export
+ * and account controls off screen.
+ */
+@media (max-width: 600px) {
+  .editor-ui .editor-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+  }
+  .editor-ui .editor-header-center { grid-row: 1; grid-column: 1 / -1; }
+  .editor-ui .editor-header-primary {
+    grid-row: 2;
+    grid-column: 1;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    overscroll-behavior-inline: contain;
+  }
+  .editor-ui .editor-header-actions { grid-row: 2; grid-column: 2; }
+  .editor-ui .editor-doc-capsule { width: 100%; }
+  .editor-ui .editor-doc-name { width: 100%; max-width: 100%; }
+}
+
+@media (max-width: 600px) {
+  .editor-ui .editor-toolbar {
+    min-height: 56px;
+    padding-block: 5px;
+    overscroll-behavior-inline: contain;
+  }
+
+  .editor-ui .editor-doc-name {
+    font-size: 11px;
+  }
+
+  .editor-ui .editor-header-sep {
+    margin-inline: 2px;
+  }
+
+  .editor-ui .editor-page-rail {
+    box-shadow: 0 -2px 12px rgba(15, 30, 45, 0.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-ui :is(.editor-icon-btn, .editor-capsule-btn, .editor-panel-collapse,
+    .editor-panel-tab, .editor-mini-btn, .layer-row) {
+    transition: none;
+  }
+}
+
+/* Always a single row, with touch actions in flow rather than over the preview. */
+.page-rail-item { border-color: var(--editor-border); }
+.page-rail-item.is-active {
+  border-color: var(--editor-success);
+  background: var(--editor-success-soft);
+  box-shadow: inset 0 0 0 1.5px var(--editor-success);
+}
+.page-rail-number-active { background: var(--editor-success); color: #ffffff; }
+.editor-ui .editor-page-rail .page-rail-chip.is-active {
+  background: var(--editor-success) !important;
+  border-color: var(--editor-success) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--editor-success) 35%, transparent);
+}
+/* Page rail: the per-card actions (reorder grip, delete) sit quietly and
+   surface on hover/focus — the thumbnails stay the rail's cleanest surface.
+   Touch devices keep them visible: there is no hover to reveal them. */
+.page-rail-actions {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.page-rail-item:hover .page-rail-actions,
+.page-rail-item:focus-within .page-rail-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .page-rail-actions { opacity: 1; }
+}
+.page-rail-actions button {
+  background: transparent;
+  border: 1px solid transparent;
+}
+.page-rail-actions button:hover {
+  background: var(--editor-hover);
+  border-color: var(--editor-border);
+}
+.page-rail-actions .drag-handle { touch-action: none; }
+.editor-page-rail { padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+.editor-page-rail ul { overscroll-behavior-x: contain; touch-action: pan-x; }
+.editor-panel-tabs { direction: rtl; overscroll-behavior-x: contain; }
+.artboard-page-options summary { cursor: pointer; font-size: 11px; padding-block: 6px; }
+
+/* A fixed tablet drawer must not sit in a lower stacking context than its backdrop. */
+@media (max-width: 767px) {
+  .editor-shell > .editor-workspace-row { isolation: auto; }
+  .editor-sidebar:not(.touch-properties-sheet) {
+    height: 100dvh;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .editor-sidebar[inert] { visibility: hidden; }
+}
+@media (any-pointer: coarse) {
+  .editor-ui { --editor-page-rail-collapsed-height: 44px; }
+  .editor-ui .editor-page-rail-collapsed {
+    height: var(--editor-page-rail-collapsed-height);
+  }
+  .editor-page-rail > div > button { min-height: 44px; }
+  .editor-page-rail .page-rail-nav { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  .editor-page-rail .page-rail-controls {
+    flex-direction: row;
+    align-items: center;
+  }
+  .editor-page-rail-collapsed .page-rail-chip { height: 44px; min-width: 44px; }
+  .page-rail-actions {
+    flex-direction: row;
+    align-self: center;
+    gap: 4px;
+  }
+  .page-rail-actions button { width: 44px; height: 44px; min-width: 44px; min-height: 44px; }
+  .editor-panel-tab { min-width: 44px; min-height: 44px; flex-shrink: 0; }
+  .editor-panel-tabs { scrollbar-width: thin; }
+  /* Comfortable touch targets for every shared control. */
+  .editor-icon-btn { width: 36px; height: 36px; border-radius: 9px; }
+  .editor-icon-glyph { width: 16px; height: 16px; }
+  .editor-icon-glyph svg { width: 16px; height: 16px; }
+  .editor-page-rail .page-rail-nav { width: 36px; height: 36px; min-width: 36px; min-height: 36px; }
+  .editor-page-rail-collapsed .page-rail-chip { height: 36px; min-width: 36px; }
+  .page-rail-actions button { width: 32px; height: 32px; min-width: 32px; min-height: 32px; }
+  .editor-zoom-btn { width: 34px; height: 34px; }
+  .editor-menu-row { min-height: 44px; }
+  .editor-menu-grid button { min-height: 44px; }
+  .editor-drawer-grip,
+  .editor-drawer-close { width: 36px; height: 36px; }
+  .editor-drawer-bar { padding: 4px; }
+  .artboard-page-options :is(button, summary) { min-height: 44px; }
+}
+
+
+/* Element-tool sorting uses the existing panel scroller, never a nested one. */
+.sortable-sections { position: relative; display: grid; gap: 10px; min-width: 0; }
+.sortable-sections > [data-sortable-section] { min-width: 0; }
+.section-drag-handle {
+  display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px;
+  color: var(--editor-text-secondary); background: transparent; border: 0;
+  cursor: grab; touch-action: none; user-select: none; -webkit-touch-callout: none;
+}
+.section-drag-handle:hover { color: var(--editor-text); background: var(--editor-hover); }
+.section-drag-handle:active { cursor: grabbing; }
+.section-drag-handle:focus-visible { outline: 2px solid var(--editor-text-secondary); outline-offset: -4px; border-radius: 8px; }
+.sortable-sections .editor-accordion-header { flex: 1; min-width: 0; width: auto; }
+.section-drop-placeholder {
+  outline: 1.5px dashed var(--editor-text-secondary); outline-offset: -1px; border-radius: 9px;
+  background: color-mix(in srgb, var(--editor-text-secondary) 8%, transparent);
+}
+.section-drop-placeholder > .editor-accordion { opacity: 0; pointer-events: none; }
+.section-drag-ghost {
+  position: fixed; z-index: 200; display: flex; align-items: center; gap: 12px;
+  height: 44px; padding: 0 14px; border: 1px solid var(--editor-text-secondary);
+  border-radius: 9px; pointer-events: none; user-select: none;
+  color: var(--editor-text); background: var(--editor-surface);
+  box-shadow: 0 10px 28px #0003; font-size: 11px; font-weight: 800;
+}
+
+/* =====================================================================
+ * VISUAL OVERHAUL — Production polish pass
+ *
+ * Additive refinements that normalize the existing design system: consistent
+ * card hover behavior, smoother transitions, better surface separation in
+ * dark mode, refined editor chrome spacing, and purposeful micro-interactions.
+ * No existing selector's meaning is changed — these are layered improvements.
+ * ===================================================================== */
+
+/*
+ * ── 1. Card system consistency ──────────────────────────────────────────
+ * Every card-shaped surface in the product gets the same hover treatment:
+ * a subtle lift with a unified transition curve, so a grid of project cards,
+ * template cards, and feature cards all feel like members of one family.
+ */
+.shadow-card {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.shadow-card:hover {
+  transform: translateY(-2px);
+}
+
+/*
+ * ── 2. Site header refinement ───────────────────────────────────────────
+ * The sticky header gets a subtler bottom border and a hairline shadow so it
+ * separates from the page content without feeling heavy.
+ */
+.site-header, header.sticky {
+  backdrop-filter: blur(12px) saturate(1.1);
+  -webkit-backdrop-filter: blur(12px) saturate(1.1);
+}
+header.sticky.top-0 {
+  background: color-mix(in srgb, var(--color-page) 88%, transparent);
+}
+
+/*
+ * ── 3. Button hierarchy normalization ──────────────────────────────────
+ * All primary, secondary, and ghost buttons share the same height, radius,
+ * and transition timing so they line up visually in any row.
+ */
+.bg-navy {
+  transition: background-color 140ms ease, transform 100ms ease,
+    box-shadow 140ms ease;
+}
+.bg-navy:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.bg-navy:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+/*
+ * ── 4. Editor chrome surface separation ────────────────────────────────
+ * The editor panels, toolbar, and page rail get subtle inner highlights
+ * so they read as distinct surfaces rather than flat slabs.
+ */
+.editor-ui .editor-toolbar {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), var(--editor-chrome-shadow);
+}
+.editor-ui .editor-sidebar {
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.02), var(--editor-chrome-shadow);
+}
+.editor-ui.editor-dark .editor-toolbar {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), var(--editor-chrome-shadow);
+}
+.editor-ui.editor-dark .editor-sidebar {
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.03), var(--editor-chrome-shadow);
+}
+
+/*
+ * ── 5. Panel header refinement ──────────────────────────────────────────
+ * The panel header gets a subtle gradient so it reads as elevated chrome
+ * rather than a flat band.
+ */
+.editor-ui .editor-panel-header {
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--editor-panel) 98%, var(--editor-hover) 2%),
+    color-mix(in srgb, var(--editor-panel) 94%, var(--editor-hover) 6%));
+}
+
+/*
+ * ── 6. Layer row polish ──────────────────────────────────────────────────
+ * Selected layer rows get a clearer accent bar and a subtle background tint.
+ */
+.editor-ui .layer-row[aria-selected="true"],
+.editor-ui .layer-row.is-selected {
+  background: color-mix(in srgb, var(--editor-accent-soft) 50%, transparent);
+}
+
+/*
+ * ── 7. Page rail active state ───────────────────────────────────────────
+ * Active page thumbnail gets a clearer green ring and background tint.
+ */
+.page-rail-item.is-active {
+  box-shadow: inset 0 0 0 1.5px var(--editor-success),
+    0 0 0 1px color-mix(in srgb, var(--editor-success) 35%, transparent);
+}
+
+/*
+ * ── 9. Floating toolbar refinement ──────────────────────────────────────
+ * The floating toolbar gets a more refined shadow and a subtle inner glow.
+ */
+.floating-toolbar {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18), 0 1px 3px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.editor-ui.editor-dark .floating-toolbar {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/*
+ * ── 11. Smooth focus ring ───────────────────────────────────────────────
+ * A consistent focus ring that works across both themes without harshness.
+ */
+.editor-ui button:focus-visible,
+.editor-ui input:focus-visible,
+.editor-ui select:focus-visible,
+.editor-ui textarea:focus-visible,
+.editor-ui [role="button"]:focus-visible,
+.editor-ui [role="tab"]:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--editor-accent) 70%, transparent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--editor-accent) 15%, transparent);
+}
+
+/*
+ * ── 12. Tab indicator animation ──────────────────────────────────────────
+ * Panel tabs get a smooth animated indicator.
+ */
+.editor-ui .editor-panel-tab {
+  transition: background-color 160ms ease, color 160ms ease,
+    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.editor-ui .editor-panel-tab[aria-selected="true"] {
+  box-shadow: inset 0 -2px 0 var(--editor-accent);
+  color: var(--editor-text);
+}
+.editor-ui .editor-panel-tab:not([aria-selected="true"]):hover {
+  background: color-mix(in srgb, var(--editor-hover) 60%, transparent);
+}
+
+/*
+ * ── 13. Active-state polish for the shared icon control ───────────────────
+ * One inner highlight for every pressed/active button, both themes.
+ */
+.editor-icon-btn.is-active {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.editor-ui.editor-light .editor-icon-btn.is-active {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/*
+ * ── 14. Input field refinement ──────────────────────────────────────────
+ * Editor inputs get a subtle focus glow that's consistent across both themes.
+ */
+.editor-ui .editor-properties .field-control > input:not([type="range"]):not([type="color"]):focus,
+.editor-ui .editor-properties .field-control > select:focus,
+.editor-ui .editor-properties .field-control > textarea:focus {
+  border-color: var(--editor-accent) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--editor-accent) 20%, transparent);
+  outline: none;
+}
+
+/*
+ * ── 15. Scrub input polish ───────────────────────────────────────────────
+ * The scrub track gets a refined focus ring.
+ */
+.scrub-track:focus-within {
+  border-color: var(--editor-accent, #3b82f6);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--editor-accent, #3b82f6) 18%, transparent);
+}
+
+/*
+ * ── 16. Library card refinement ──────────────────────────────────────────
+ * Library cards get a smoother hover transition and a subtle lift.
+ */
+.library-asset-card,
+.library-drag-card,
+.library-item {
+  transition: border-color 140ms ease, box-shadow 140ms ease,
+    background-color 140ms ease, transform 140ms ease;
+}
+.library-asset-card:hover,
+.library-drag-card:hover,
+.library-item:hover {
+  transform: translateY(-1px);
+}
+
+/*
+ * ── 17. Asset card polish ────────────────────────────────────────────────
+ * Asset cards in the media grid get a refined hover state.
+ */
+.asset-card:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  border-color: color-mix(in srgb, var(--editor-accent) 40%, var(--editor-border));
+}
+
+/*
+ * ── 19. Homepage polish ──────────────────────────────────────────────────
+ * Refine the hero section spacing and card hover states.
+ */
+/* Hero badge: slightly more refined spacing */
+.rounded-full.border-brand\\/15 {
+  letter-spacing: 0.02em;
+}
+
+/* Feature cards: unified hover behavior */
+.rounded-\\[12px\\].border-line\\/60.bg-surface:hover,
+.rounded-\\[12px\\].border-line\\/60.bg-surface-2:hover {
+  border-color: color-mix(in srgb, var(--color-brand) 25%, var(--color-line));
+}
+
+/*
+ * ── 20. Demo page card polish ────────────────────────────────────────────
+ * Demo page cards get a subtle hover state.
+ */
+DemoPage section.border {
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+/*
+ * ── 21. Bidi text fix ────────────────────────────────────────────────────
+ * Mixed Arabic/English text in the demo page needs proper spacing around
+ * English words embedded in Arabic sentences. The Unicode Bidi algorithm
+ * should handle this, but some browsers need a helping hand.
+ */
+li:has(> .text-success) {
+  unicode-bidi: plaintext;
+}
+
+/*
+ * ── 22. Status bar polish ────────────────────────────────────────────────
+ * The editor status bar gets a refined background and border.
+ */
+.editor-status-bar {
+  background: color-mix(in srgb, var(--editor-toolbar) 97%, var(--editor-hover));
+  border-top: 1px solid var(--editor-border);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * ── 23. Dropdown panel polish ────────────────────────────────────────────
+ * Editor dropdown panels get a refined shadow.
+ */
+.editor-dropdown-panel {
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.15), 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+.editor-ui.editor-dark .editor-dropdown-panel {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+/*
+ * ── 24. Context menu polish ──────────────────────────────────────────────
+ * Context menus and command menus get a refined shadow.
+ */
+.editor-context-menu,
+.editor-command-menu {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.1);
+}
+.editor-ui.editor-dark .editor-context-menu,
+.editor-ui.editor-dark .editor-command-menu {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+/*
+ * ── 25. Tooltip + menu refinement ────────────────────────────────────────
+ * The shared tooltip and the shared anchored menu carry one shadow, so every
+ * floating surface in the editor separates from the artwork the same way.
+ */
+.editor-tip {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.editor-anchor-menu {
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34), 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+/*
+ * ── 26. Rotation hint polish ─────────────────────────────────────────────
+ * The rotation angle readout gets a refined shadow.
+ */
+.rotation-hint {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.35), 0 1px 2px rgba(15, 23, 42, 0.2);
+}
+
+/*
+ * ── 28. Section drag ghost polish ────────────────────────────────────────
+ * The section drag ghost gets a refined shadow.
+ */
+.section-drag-ghost {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/*
+ * ── 29. Smooth scrolling for editor panels ───────────────────────────────
+ * Ensure smooth scrolling on desktop without affecting touch.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .editor-panel-body {
+    scroll-behavior: smooth;
+  }
+}
+
+/*
+ * ── 31. Artboard header polish ───────────────────────────────────────────
+ * Artboard headers get a refined appearance.
+ */
+.artboard-name {
+  transition: color 140ms ease, background-color 140ms ease;
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+.artboard-name:hover {
+  background: color-mix(in srgb, var(--editor-canvas-text-secondary) 8%, transparent);
+}
+
+/*
+ * ── 33. Page rail resizer polish ─────────────────────────────────────────
+ * The page rail resizer gets a smoother transition.
+ */
+.editor-page-rail-resizer::before {
+  transition: background-color 160ms ease, width 160ms ease;
+}
+
+/*
+ * ── 34. Panel resize handle polish ───────────────────────────────────────
+ * The panel resize handle gets a smoother transition.
+ */
+.editor-panel-resize-grip {
+  transition: background-color 140ms ease, width 140ms ease;
+}
+
+/*
+ * ── 35. Reduced motion ───────────────────────────────────────────────────
+ * Respect the user's motion preference for all new transitions.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .shadow-card,
+  .bg-navy,
+  .library-asset-card,
+  .library-drag-card,
+  .library-item,
+  .asset-card,
+  .artboard-name,
+  .editor-panel-tab,
+  .editor-panel-resize-grip,
+  .editor-page-rail-resizer::before {
+    transition: none !important;
+  }
+  .shadow-card:hover,
+  .library-asset-card:hover,
+  .library-drag-card:hover,
+  .library-item:hover {
+    transform: none !important;
+  }
+}
+
+/*
+ * ── 36. Homepage pricing card polish ────────────────────────────────────
+ * The pricing cards on the homepage get a subtle hover state.
+ */
+.rounded-\\[12px\\].border.p-5:hover {
+  border-color: color-mix(in srgb, var(--color-brand) 20%, var(--color-line));
+}
+
+/*
+ * ── 37. Template card polish ─────────────────────────────────────────────
+ * Template cards on the homepage get a refined hover state.
+ */
+button.flex.flex-col.rounded-\\[12px\\].border.border-line\\/70.bg-surface {
+  transition: border-color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+button.flex.flex-col.rounded-\\[12px\\].border.border-line\\/70.bg-surface:hover {
+  border-color: color-mix(in srgb, var(--color-brand) 25%, var(--color-line));
+  box-shadow: var(--shadow-card);
+  transform: translateY(-2px);
+}
+
+/*
+ * ── 38. Workspace home card polish ───────────────────────────────────────
+ * Quick start cards on the workspace home get a refined hover state.
+ */
+.shadow-card.group.flex.flex-col.items-start.gap-2.rounded-2xl {
+  transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms ease;
+}
+
+/*
+ * ── 39. Footer legal line polish ────────────────────────────────────────
+ * The footer legal line gets refined spacing.
+ */
+footer .border-t.border-line\\/60 {
+  border-color: color-mix(in srgb, var(--color-line) 70%, transparent);
+}
+
+/*
+ * ── 40. Editor header capsule polish ────────────────────────────────────
+ * The document capsule gets a refined inner shadow.
+ */
+.editor-doc-capsule {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.editor-ui.editor-dark .editor-doc-capsule {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/*
+ * ── 41. Zoom cluster polish ──────────────────────────────────────────────
+ * The zoom cluster gets a refined shadow.
+ */
+.editor-zoom-cluster {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.editor-ui.editor-dark .editor-zoom-cluster {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/*
+ * ── 42. Icon button polish ───────────────────────────────────────────────
+ * Every chrome icon control shares one easing curve.
+ */
+.editor-icon-btn {
+  transition: background-color 140ms ease, color 140ms ease,
+    box-shadow 140ms ease, opacity 140ms ease;
+}
+
+/*
+ * ── 43. Capsule button polish ─────────────────────────────────────────────
+ * Capsule buttons get a consistent transition curve.
+ */
+.editor-capsule-btn {
+  transition: background-color 140ms ease, color 140ms ease,
+    box-shadow 140ms ease, opacity 140ms ease;
+}
+
+/*
+ * ── 45. Editor mini button polish ────────────────────────────────────────
+ * Mini buttons get a consistent transition curve.
+ */
+.editor-mini-btn {
+  transition: background-color 140ms ease, color 140ms ease,
+    border-color 140ms ease, box-shadow 140ms ease;
+}
+
+/*
+ * ── 46. Property grid polish ──────────────────────────────────────────────
+ * Property grid gets a consistent gap.
+ */
+.property-grid {
+  gap: 0.625rem;
+}
+
+/*
+ * ── 47. Editor accordion polish ───────────────────────────────────────────
+ * Accordion headers get a refined hover state.
+ */
+.editor-accordion-header {
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+/*
+ * ── 48. Library asset remove polish ───────────────────────────────────────
+ * The remove chip gets a smoother transition.
+ */
+.library-asset-remove {
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+.library-asset-card:hover .library-asset-remove {
+  transform: scale(1.05);
+}
+
+/*
+ * ── 50. Page rail item polish ──────────────────────────────────────────────
+ * Page rail items get a consistent transition.
+ */
+.page-rail-item {
+  transition: border-color 140ms ease, background-color 140ms ease,
+    box-shadow 140ms ease;
+}
+
+/* =====================================================================
+ * LICENSE BADGE SYSTEM
+ *
+ * Unified visual treatment for licensed vs. locked content across the product.
+ * Two states, immediately distinguishable at a glance:
+ *
+ *   licensed → BadgeCheck icon, solid border, navy/emerald tint
+ *   locked   → Lock icon, dashed border, gold tint
+ *
+ * The distinction is carried by iconography + border style + tint — not by
+ * colour alone, so it survives in both themes and for colour-blind users.
+ * ===================================================================== */
+
+/*
+ * Licensed badge — solid border, subtle navy tint, brand text.
+ * The BadgeCheck icon has a refined 2.25 stroke weight for crisp small-size
+ * rendering. On hover the border deepens and the tint intensifies.
+ */
+.license-badge-licensed {
+  border-style: solid;
+}
+
+/*
+ * Locked badge — dashed border, muted gold tint, ink text.
+ * The dashed border is the non-colour cue that distinguishes "locked" from
+ * "licensed" even in monochrome. On hover the border deepens.
+ */
+.license-badge-locked {
+  border-style: dashed;
+}
+
+/*
+ * Dark mode: both tints are lifted slightly so they read against the dark
+ * surface without becoming neon. The gold tint for locked gets a touch more
+ * opacity because gold on dark needs more body to be visible.
+ */
+html.dark .license-badge-licensed {
+  background: color-mix(in srgb, var(--color-navy) 12%, transparent);
+  border-color: color-mix(in srgb, var(--color-brand) 30%, transparent);
+  color: var(--color-brand);
+}
+html.dark .license-badge-locked {
+  background: color-mix(in srgb, var(--color-gold) 15%, transparent);
+  border-color: color-mix(in srgb, var(--color-gold) 35%, transparent);
+  color: var(--color-ink);
+}
+
+/*
+ * Focus ring for the badge when it's a link or button — consistent with the
+ * editor chrome focus ring.
+ */
+a.license-badge-licensed:focus-visible,
+a.license-badge-locked:focus-visible,
+button.license-badge-licensed:focus-visible,
+button.license-badge-locked:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-brand) 70%, transparent);
+  outline-offset: 1px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-brand) 15%, transparent);
+}
+
+/*
+ * Reduced motion — disable the hover transition.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .license-badge-licensed,
+  .license-badge-locked {
+    transition: none !important;
+  }
+}
+
+/* =====================================================================
+ * ACCOUNT MENU — the identity card behind the account chip.
+ *
+ * Opened from the far edge of a bar (the site header, the editor toolbar), the
+ * card has to do three things the chip-anchored versions did not:
+ *
+ *   1. open BELOW the bar it came from — the vertical offset is measured from
+ *      the bar's bottom edge (`src/lib/account-menu.ts`), never from the chip,
+ *      because the chip sits inside the bar and its own bottom edge still
+ *      belongs to the toolbar;
+ *   2. stay inside the viewport on a phone: `max-content` growth between a
+ *      280px floor and a `100vw - 32px` ceiling, with long studio names and
+ *      email addresses wrapping inside that box instead of pushing its edge;
+ *   3. sit on a fully opaque surface above every background layer, so the
+ *      page's own typography can never read through the card.
+ * ===================================================================== */
+
+.account-menu-panel {
+  /*
+   * The card's own layer: above the sticky header (z-40) and above the editor's
+   * panel layer (`--z-panel` = 30). `--z-dropdown` (70) is the ordered scale's
+   * dropdown slot; the 50 fallback keeps the card above the header even if the
+   * scale is ever trimmed.
+   */
+  z-index: var(--z-dropdown, 50);
+  display: grid;
+  gap: 0.5rem;
+  /*
+   * Sizing: grow to the content, floor at 280px, and never wider than the screen
+   * minus a 16px gutter on each side. `min()` keeps the floor and the ceiling
+   * from fighting on a narrow phone, where a bare 280px minimum would itself
+   * overflow the viewport.
+   */
+  width: max-content;
+  min-width: min(280px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  padding: 1rem;
+  /*
+   * Long identity, contained: a studio name or an address breaks inside the card
+   * instead of widening it, and a long action list scrolls inside the card
+   * instead of running off the screen (the height ceiling is measured per open,
+   * see `placeAccountMenu`).
+   */
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /*
+   * Fully opaque in BOTH themes — `--color-surface` is #ffffff in Light and
+   * #161c26 in Dark. A translucent background here is what let the page's
+   * headings bleed through the card and read as broken layering.
+   */
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-dropdown);
+  text-align: start;
+}
+
+/*
+ * Floating placement: `absolute` inside a positioned ancestor — the fixed
+ * portal layer both surfaces render into, so no ancestor's overflow, transform
+ * or stacking context can clip or bury the card. `pointer-events: auto` lets the
+ * site chrome's layer stay click-through (outside clicks must reach the page
+ * beneath it) while the card itself stays fully interactive.
+ */
+.account-menu-panel-floating {
+  position: absolute;
+  pointer-events: auto;
+}
+
+/*
+ * In-flow copy for the collapsed mobile nav: full width inside the sheet, no
+ * overlay and no measured geometry.
+ */
+.account-menu-panel-inline {
+  position: static;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  max-height: none;
+}
+
+/* Profile header: avatar, name, address — the identity the card confirms. */
+.account-menu-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  min-width: 0;
+}
+
+/* The wrap box for the two text lines; `min-width: 0` lets them wrap. */
+.account-menu-fields {
+  min-width: 0;
+}
+
+.account-menu-name {
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
+  color: var(--color-ink);
+}
+
+.account-menu-email {
+  margin-top: 0.125rem;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+/* Actions: one bordered list, separated from the identity block. */
+.account-menu-items {
+  display: grid;
+  gap: 0.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-line);
+}
+
+.account-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.6;
+  color: var(--color-ink);
+  text-align: start;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.account-menu-item:hover:not(:disabled) {
+  background-color: var(--color-line-2);
+}
+
+.account-menu-item:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-brand) 70%, transparent);
+  outline-offset: 1px;
+}
+
+.account-menu-item:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+/* «تسجيل الخروج» and other secondary rows. */
+.account-menu-item-muted {
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .account-menu-item {
+    transition: none;
+  }
+}
+
+/* Shared subscription action: fixed NASAQ green across plan variants/themes. */
+.subscription-cta { background: #0C3D2C; color: #fff; }
+.subscription-cta:hover { background: #092f22; }
+.subscription-cta:active { background: #062419; }
+.subscription-cta:focus-visible { outline: 2px solid #0C3D2C; outline-offset: 3px; }
+
+/* All five workspace rows participate in layout; no implicit, clipped status row.
+   The page commands scroll independently of thumbnails at narrow widths. */
+.editor-status-bar { height: 36px; min-height: 36px; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 12px; padding-block: 2px; }
+.editor-status-bar > span { flex-shrink: 0; }
+.editor-status-bar button { min-height: 32px; }
+
+.editor-page-rail > div:first-child { overflow-y: auto; }
+
+/* The trigger owns its status: a compact two-row layout on narrow headers,
+   one row when space permits. No absolute badge or fixed-height clipping. */
+.account-control {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 6px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+/*
+ * Inside the editor the account chip is ONE line at every width.
+ *
+ * It is identity, not a tool, and a chip that stacks its name over its badge
+ * below 1280px made the header — and therefore the canvas — change height when
+ * the viewport crossed that line. The full identity and the tier live in the
+ * card it opens.
+ */
+.editor-toolbar .account-control { min-height: 34px; gap: 6px; }
+.editor-toolbar .account-control-content {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+.editor-toolbar .account-control-identity { max-width: 108px; }
+.account-control:hover { border-color: var(--color-brand); }
+.account-control:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+.account-control-content { display: flex; flex-direction: column; align-items: start; gap: 1px; min-width: 0; }
+.account-control-identity { display: flex; align-items: center; gap: 4px; min-width: 0; max-width: 108px; }
+.account-control-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (min-width: 1280px) {
+  .account-control { min-height: 36px; gap: 6px; }
+  .account-control-content { flex-direction: row; align-items: center; gap: 6px; }
+  .account-control-identity { max-width: 120px; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   WORKSPACE DENSITY LAYER (fine pointers / desktop)
+   ═══════════════════════════════════════════════════════════════════════════
+
+   The 44px accordion headers and tall field rows were sized for iPad/Pencil
+   touch targets. On a mouse/trackpad machine they cost the artboard real
+   estate without buying accuracy, so the desktop density layer compresses the
+   INSPECTOR specifically: tighter section headers, tighter field rhythm.
+
+   Coarse-pointer devices (iPad + Pencil) keep every original touch target —
+   the whole block is scoped to `@media (hover: hover) and (pointer: fine)`.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+@media (hover: hover) and (pointer: fine) {
+  /* Section headers: 44 → 34px. Still a comfortable click, half the height. */
+  .editor-accordion-header {
+    min-height: 34px;
+    padding-inline: 0.5rem;
+  }
+
+  .editor-accordion-body {
+    gap: 0.5rem;
+    padding: 0 0.5rem 0.625rem;
+  }
+
+  /* Inspector fields: one compact rhythm for inputs, selects and swatches. */
+  .editor-property-field .field-control input,
+  .editor-property-field .field-control select,
+  .editor-property-field .field-control textarea {
+    height: 32px;
+    font-size: 12.5px;
+  }
+  .editor-property-field .field-control textarea {
+    min-height: 64px;
+  }
+  .editor-property-field .field-control input[type="range"] {
+    height: 32px;
+  }
+
+  .property-grid {
+    gap: 0.4rem;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  }
+
+  .editor-property-field {
+    gap: 0.25rem;
+  }
+
+  /* Panel bodies breathe a little less on tall lists. */
+  .editor-panel-body {
+    gap: 0.625rem;
+  }
+
+  /* Layer rows: compact height on desktop. iPad keeps the 44px-class rows. */
+  .layer-row {
+    padding-block: 0.25rem;
+  }
+  .layer-row .layer-row-action {
+    width: 28px;
+    height: 28px;
+  }
+  .layer-row .layer-row-spacer {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* The collapsed pages rail is exactly one control row. */
+  .editor-page-rail-collapsed {
+    height: 36px;
+  }
+}
+
+/* Collapsed pages rail — shared (both pointer classes): chips + controls on a
+   single 36px line, no thumbnails. */
+.editor-page-rail-collapsed .editor-pane-scroll {
+  scrollbar-width: thin;
+}
+
+/* The two inspector destinations stay distinct and visible in a small icon dock. */
+.editor-ui .editor-properties .editor-panel-header {
+  min-height: 40px;
+  padding: 4px 6px;
+}
+.editor-ui .editor-properties .editor-right-tabs {
+  flex: 0 0 auto;
+}
+.editor-ui .editor-properties .editor-panel-tab {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+.editor-ui .editor-properties .editor-right-tab-label {
+  display: none;
+}
+@media (any-pointer: coarse) {
+  .editor-ui .editor-properties .editor-panel-header {
+    min-height: 52px;
+    padding: 4px;
+  }
+  .editor-ui .editor-properties .editor-panel-tab {
+    width: auto;
+    min-width: 68px;
+    min-height: 44px;
+    padding-inline: 8px;
+  }
+  .editor-ui .editor-properties .editor-right-tab-label {
+    display: inline;
+  }
+}
+
+/* NASAQ mark in the editor header: fixed small box so the header height never changes. */
+.editor-brand-mark { display: inline-flex; align-items: center; flex-shrink: 0; }
+.editor-brand-mark img { width: 24px; height: 24px; }

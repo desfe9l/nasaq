@@ -27,16 +27,16 @@ export function parsePastedTable(text: string): string[][] {
   const rows = String(text ?? "")
     .replace(/\r\n?/g, "\n")
     .split("\n")
-    .filter((line, i, all) => line.trim() !== "" || (i > 0 && i < all.length - 1));
+    .filter(
+      (line, i, all) => line.trim() !== "" || (i > 0 && i < all.length - 1),
+    );
   if (!rows.length) return [];
 
   const delim = detectDelimiter(text);
   if (!delim) return rows.map((line) => [line.trim()]);
 
   return rows.map((line) =>
-    line
-      .split(delim)
-      .map((cell) => cell.trim().replace(/^"(.*)"$/, "$1")),
+    line.split(delim).map((cell) => cell.trim().replace(/^"(.*)"$/, "$1")),
   );
 }
 
@@ -50,7 +50,11 @@ export function serializeTable(data: string[][]): string {
  * Extra cells come back empty rather than "قيمة 2×3" placeholders so a resized
  * table does not fill up with generated noise.
  */
-export function resizeMatrix(data: string[][], cols: number, rows: number): string[][] {
+export function resizeMatrix(
+  data: string[][],
+  cols: number,
+  rows: number,
+): string[][] {
   const safeCols = Math.max(1, Math.min(60, Math.floor(cols) || 1));
   const safeRows = Math.max(1, Math.min(400, Math.floor(rows) || 1));
   return Array.from({ length: safeRows }, (_, r) =>
@@ -62,7 +66,11 @@ export function resizeMatrix(data: string[][], cols: number, rows: number): stri
 export function insertRow(data: string[][], at: number): string[][] {
   const cols = Math.max(1, ...data.map((r) => r.length));
   const next = data.map((r) => [...r]);
-  next.splice(Math.max(0, Math.min(next.length, at + 1)), 0, Array.from({ length: cols }, () => ""));
+  next.splice(
+    Math.max(0, Math.min(next.length, at + 1)),
+    0,
+    Array.from({ length: cols }, () => ""),
+  );
   return next;
 }
 
@@ -101,7 +109,9 @@ export function columnSum(data: string[][], col: number): number {
  * no cell fails: a text column that happens to contain one stray digit should
  * not be published as a total. Commas and whitespace are thousands separators.
  */
-export function columnTotals(data: string[][]): { col: number; total: number; numeric: boolean }[] {
+export function columnTotals(
+  data: string[][],
+): { col: number; total: number; numeric: boolean }[] {
   const { cols } = tableShape(data);
   const body = data.slice(1);
   return Array.from({ length: cols }, (_, c) => {
@@ -111,16 +121,25 @@ export function columnTotals(data: string[][]): { col: number; total: number; nu
       col: c,
       total: parsed.reduce((sum, n) => sum + (Number.isFinite(n) ? n : 0), 0),
       numeric:
-        cells.length > 0 && parsed.some((n) => Number.isFinite(n)) && parsed.every((n) => Number.isFinite(n)),
+        cells.length > 0 &&
+        parsed.some((n) => Number.isFinite(n)) &&
+        parsed.every((n) => Number.isFinite(n)),
     };
   });
 }
 
 /** One-line summary used for the table status caption in the panel. */
-export function tableShape(data: string[][]): { rows: number; cols: number; filled: number } {
+export function tableShape(data: string[][]): {
+  rows: number;
+  cols: number;
+  filled: number;
+} {
   const rows = data.length;
   const cols = Math.max(0, ...data.map((r) => r.length));
-  const filled = data.reduce((n, row) => n + row.filter((c) => c.trim() !== "").length, 0);
+  const filled = data.reduce(
+    (n, row) => n + row.filter((c) => c.trim() !== "").length,
+    0,
+  );
   return { rows, cols, filled };
 }
 

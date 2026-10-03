@@ -16,7 +16,15 @@
 export type PathSegment =
   | { kind: "move"; x: number; y: number }
   | { kind: "line"; x: number; y: number }
-  | { kind: "cubic"; x: number; y: number; x1: number; y1: number; x2: number; y2: number }
+  | {
+      kind: "cubic";
+      x: number;
+      y: number;
+      x1: number;
+      y1: number;
+      x2: number;
+      y2: number;
+    }
   | { kind: "close" };
 
 const SUPPORTED = new Set(["M", "L", "H", "V", "C", "A", "Z"]);

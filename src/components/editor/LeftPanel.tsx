@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
+import { OPEN_NEW_PAGE_EVENT } from "./NewPageDialog";
+import { useMemo, useState } from "react";
 import {
   Type,
   Image as ImageIcon,
-  Shapes,
   Minus,
   Star,
   Table2,
@@ -11,21 +12,14 @@ import {
   Stamp,
   QrCode,
   BadgePercent,
-  LayoutTemplate,
-  Palette,
-  Settings2,
-  Layers,
   Ruler,
   Gauge,
-  FileText,
-  Upload,
-  Baseline,
+  FileCode2,
+  ChevronDown,
   Eye,
   X,
 } from "lucide-react";
 import {
-  PROGRESS_PRESETS,
-  SHAPE_TOOLS,
   SIZE_PRESETS,
   TEXT_PRESETS,
   THEMES,
@@ -33,33 +27,45 @@ import {
   pageSize,
   sizeIdOf,
   type CanvasEl,
-  type ElStyle,
   type ElType,
-  type ProgressPreset,
-  type Theme,
   type ThemeId,
 } from "@/lib/editor/model";
 import { SHAPES, shapesByGroup } from "@/lib/editor/shapes";
+
+/** localStorage slot for the author's starred fonts. */
+const FAVORITE_FONTS_KEY = "nasaq.font-favorites";
 import { detectPlatform } from "@/lib/editor/fonts";
-import { PAGE_TEMPLATES, TEMPLATE_CATEGORIES, type TemplateCategoryId } from "@/lib/editor/templates";
-import { useEditor, type LeftTab } from "@/lib/editor/store";
+import {
+  PAGE_TEMPLATES,
+  TEMPLATE_CATEGORIES,
+  type TemplateCategoryId,
+} from "@/lib/editor/templates";
+import { useEditor } from "@/lib/editor/store";
+import { useIncrementalList } from "@/lib/editor/use-incremental-list";
 import { cn } from "@/lib/utils";
 import { ShapePreview } from "./ShapePreview";
-import { AssetLibrary } from "./AssetLibrary";
-import { TablePicker } from "./TablePicker";
+import { AccordionSection, useAccordionState } from "./ui/Accordion";
+import { ScrubField } from "./ui/ScrubInput";
+import { SmartLibraryPanel, TemplatePreview } from "./SmartLibrary";
+import { promptForQr } from "@/lib/editor/qr";
+import { TablePickerOverlay } from "./TablePicker";
+import { writeLibraryDrag, type LibraryDropPayload } from "@/lib/editor/library-dnd";
+import { startPointerLibraryDrag } from "@/lib/editor/library-pointer-drag";
+import { LEFT_PANEL_TABS } from "./panel-tabs";
 
-const TABS: { id: LeftTab; label: string; icon: typeof Type }[] = [
-  { id: "elements", label: "عناصر", icon: LayoutTemplate },
-  { id: "shapes", label: "أشكال", icon: Shapes },
-  { id: "templates", label: "قوالب", icon: FileText },
-  { id: "pages", label: "صفحات", icon: Layers },
-  { id: "theme", label: "سمة", icon: Palette },
-  { id: "fonts", label: "خطوط", icon: Baseline },
-  { id: "settings", label: "إعدادات", icon: Settings2 },
-];
+/**
+ * The elements window hosts every left tab EXCEPT «library» and «tools»:
+ * those became their own independent floating windows (task of the split), so
+ * keeping them here would render the same content in two places.
+ */
+const ELEMENTS_WINDOW_TABS = LEFT_PANEL_TABS.filter(
+  (t) => t.id !== "library" && t.id !== "tools",
+);
 
-/** Element palette, grouped by intent so the list stays scannable. */
-const TOOL_GROUPS: { title: string; items: { type: ElType; label: string; icon: typeof Type }[] }[] = [
+const TOOL_GROUPS: {
+  title: string;
+  items: { type: ElType; label: string; icon: typeof Type }[];
+}[] = [
   {
     title: "نص",
     items: [
@@ -72,6 +78,7 @@ const TOOL_GROUPS: { title: string; items: { type: ElType; label: string; icon: 
     items: [
       { type: "image", label: "صورة", icon: ImageIcon },
       { type: "logo", label: "شعار", icon: BadgePercent },
+      { type: "svg", label: "إضافة SVG من الجهاز", icon: FileCode2 },
       { type: "qr", label: "رمز QR", icon: QrCode },
     ],
   },
@@ -94,8 +101,27 @@ const TOOL_GROUPS: { title: string; items: { type: ElType; label: string; icon: 
   },
 ];
 
-export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "font" | "library") => void }) {
-  const tab = useEditor((s) => s.leftTab);
+/**
+ * لوحة العناصر — the elements window content.
+ *
+ * «library» and «tools» are no longer tabs here: they are their own floating
+ * windows (AssetLibrary / ElementToolsWindow, rendered by the shell), so this
+ * panel hosts the remaining tabs only.
+ */
+export function LeftPanel({
+  onUpload,
+  onUploadSvg,
+}: {
+  onUpload: (kind: "image" | "logo" | "font" | "library") => void;
+  onUploadSvg: () => void;
+}) {
+  const rawTab = useEditor((s) => s.leftTab);
+  /*
+   * «library» and «tools» are their own windows since the split. When the
+   * shared tab value points at them (it is set when those windows open), this
+   * window falls back to its first tab instead of rendering blank.
+   */
+  const tab = rawTab === "library" || rawTab === "tools" ? "elements" : rawTab;
   const setLeftTab = useEditor((s) => s.setLeftTab);
   const addElement = useEditor((s) => s.addElement);
   const addTemplatePage = useEditor((s) => s.addTemplatePage);
@@ -105,12 +131,18 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
   const setOrg = useEditor((s) => s.setOrg);
   const name = useEditor((s) => s.name);
   const setName = useEditor((s) => s.setName);
-  const pages = useEditor((s) => s.pages);
+  /*
+   * PERF: subscribe to the resolved size ID (a primitive string), not the
+   * active page object — an edit to any element on the active page replaces
+   * `page` and would otherwise re-render this entire panel.
+   */
+  const activeSizeId = useEditor((s) =>
+    sizeIdOf(s.pages.find((p) => p.id === s.activePageId)),
+  );
   const activePageId = useEditor((s) => s.activePageId);
   const setActivePage = useEditor((s) => s.setActivePage);
   const setPageSize = useEditor((s) => s.setPageSize);
   const setAllPageSizes = useEditor((s) => s.setAllPageSizes);
-  const addPage = useEditor((s) => s.addPage);
   const duplicatePage = useEditor((s) => s.duplicatePage);
   const deletePage = useEditor((s) => s.deletePage);
   const movePageById = useEditor((s) => s.movePageById);
@@ -119,21 +151,51 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
   const showGrid = useEditor((s) => s.showGrid);
   const snapGrid = useEditor((s) => s.snapGrid);
   const snapElements = useEditor((s) => s.snapElements);
-  const dark = useEditor((s) => s.dark);
   const storage = useEditor((s) => s.storage);
 
   const [category, setCategory] = useState<TemplateCategoryId | "all">("all");
+  /*
+   * Phase 7 — the smart library is a set of collapsible categories, so the
+   * palette reads as an index instead of an endless wall of buttons. Shapes and
+   * icons start open (the two the author reaches for first); the rest open on
+   * demand and stay open for the session.
+   */
+  // «عناصر أساسية» lives on the same persisted panel key the smart library uses,
+  // so the palette remembers what the author keeps open across reloads.
+  const library = useAccordionState<"basics">("library", { basics: true });
+
+  /*
+   * Collapsible tool categories: only the first (نص) starts open, so the
+   * palette reads as a short index instead of one long wall of buttons —
+   * the author opens the group they need rather than scrolling past all of
+   * them. Keys follow TOOL_GROUPS titles.
+   */
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    نص: true,
+  });
+  const toggleGroup = (title: string) =>
+    setOpenGroups((state) => ({ ...state, [title]: !(state[title] ?? false) }));
   const [customSize, setCustomSize] = useState({ w: 210, h: 297 });
   const [qrBusy, setQrBusy] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [previewTemplate, setPreviewTemplate] = useState<(typeof PAGE_TEMPLATES)[number] | null>(null);
-
-  const page = pages.find((p) => p.id === activePageId);
-  const activeSizeId = sizeIdOf(page);
+  /* Shared intent: the report tools raise the same flag (see store). */
+  const pickerOpen = useEditor((s) => s.tablePickerOpen);
+  const setPickerOpen = (open: boolean) =>
+    open
+      ? useEditor.getState().openTablePicker("elements")
+      : useEditor.getState().closeTablePicker();
+  const [previewTemplate, setPreviewTemplate] = useState<
+    (typeof PAGE_TEMPLATES)[number] | null
+  >(null);
 
   const add = async (type: ElType) => {
     if (type === "image" || type === "logo") {
       onUpload(type);
+      return;
+    }
+    // رسم SVG من الجهاز: opens the file picker (LeftPanel needs no input of
+    // its own — the studio owns the <input> and the toast flow).
+    if (type === "svg") {
+      onUploadSvg();
       return;
     }
     if (type === "table") {
@@ -143,20 +205,11 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
       return;
     }
     if (type === "qr") {
-      const text = window.prompt("رابط أو نص الرمز", "https://") || "";
-      if (!text.trim()) return;
+      // One flow, shared with the «إضافة» menu (see `promptForQr`): the palette
+      // must not grow a second, subtly different QR implementation.
       setQrBusy(true);
       try {
-        const QRCode = (await import("qrcode")).default;
-        const src = await QRCode.toDataURL(text, {
-          margin: 1,
-          width: 512,
-          color: { dark: "#006c35", light: "#ffffff" },
-        });
-        addElement("qr", { content: text, src });
-      } catch {
-        // Encoding failures (an over-long payload) still leave a usable frame.
-        addElement("qr", { content: text });
+        await promptForQr();
       } finally {
         setQrBusy(false);
       }
@@ -165,19 +218,75 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
     addElement(type);
   };
 
+  const startDrag = (e: React.DragEvent, type: string, over: Record<string, unknown> = {}) => {
+    const payload: LibraryDropPayload = { items: [{ type, over }] };
+    writeLibraryDrag(e.dataTransfer, payload);
+  };
+
+  const startShapeDrag = (e: React.DragEvent, shapeId: string, label: string) => {
+    const payload: LibraryDropPayload = {
+      items: [{ type: "shape", over: { name: label, style: { shapeId, fill: THEMES[theme].primary } } }],
+    };
+    writeLibraryDrag(e.dataTransfer, payload);
+  };
+
+  const startPointerDrag = (
+    e: React.PointerEvent,
+    type: string,
+    over: Record<string, unknown> = {},
+    label = type,
+  ) => {
+    if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+    const payload: LibraryDropPayload = { items: [{ type, over } as any] };
+    startPointerLibraryDrag(e, payload, label);
+  };
+
+  const startPointerShapeDrag = (
+    e: React.PointerEvent,
+    shapeId: string,
+    label: string,
+  ) => {
+    if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+    const payload: LibraryDropPayload = {
+      items: [{ type: "shape", over: { name: label, style: { shapeId, fill: THEMES[theme].primary } } }],
+    };
+    startPointerLibraryDrag(e, payload, label);
+  };
+
   const applyCustomSize = (scope: "page" | "all") => {
     const w = Math.max(20, Math.min(1000, customSize.w));
     const h = Math.max(20, Math.min(1000, customSize.h));
     if (scope === "all") setAllPageSizes("custom", { w, h });
-    else if (page) setPageSize(page.id, "custom", { w, h });
+    else if (activePageId) setPageSize(activePageId, "custom", { w, h });
   };
 
-  const templates = PAGE_TEMPLATES.filter((t) => category === "all" || t.category === category);
+  const templates = useMemo(
+    () =>
+      PAGE_TEMPLATES.filter(
+        (t) => category === "all" || t.category === category,
+      ),
+    [category],
+  );
+  const templateWindow = useIncrementalList(templates, 8);
 
   return (
-    <aside className="flex h-full min-h-0 flex-col border-l border-line bg-white dark:border-white/10 dark:bg-[#161c26]">
-      <div className="grid shrink-0 grid-cols-7 gap-0.5 border-b border-line p-1.5 dark:border-white/10">
-        {TABS.map((t) => {
+    <aside className="flex h-full min-h-0 flex-col border-l border-line bg-surface ">
+      {/*
+       * Tab strip — SHRINKABLE, never hidden.
+       *
+       * Two layers of defence, because eight tabs have to survive a panel the
+       * author has dragged down to 232px:
+       *   1. the strip is a container query context, so each tab drops its
+       *      caption and becomes icon-only once the strip is too narrow for
+       *      eight labels — the tabs compress instead of overflowing;
+       *   2. `overflow-x-auto` remains as the floor: should the strip ever get
+       *      narrower than eight icons, it scrolls. A tab is therefore never
+       *      clipped out of reach, which is what the old `flex-1 min-w-[52px]`
+       *      row did at the narrowest widths.
+       */}
+      <div className="editor-panel-header flex shrink-0 items-center gap-1 border-b border-line p-1.5 ">
+        <div className="editor-panel-tabs @container flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto" role="tablist" aria-label="أقسام لوحة العناصر">
+        {ELEMENTS_WINDOW_TABS.map((t) => {
           const Icon = t.icon;
           return (
             <button
@@ -185,64 +294,168 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
               type="button"
               onClick={() => setLeftTab(t.id)}
               title={t.label}
+              aria-label={t.label}
+              role="tab"
+              aria-selected={tab === t.id}
+              aria-current={tab === t.id}
               className={cn(
-                "grid h-12 place-items-center gap-0.5 rounded-[8px] text-[9px] font-extrabold",
+                "editor-panel-tab grid h-12 min-w-[44px] flex-1 basis-0 place-items-center gap-0.5 rounded-[8px] px-0.5 text-[9px] font-extrabold",
                 tab === t.id
                   ? "bg-navy text-white"
-                  : "text-muted hover:bg-line-2 dark:text-white/70 dark:hover:bg-white/5",
+                  : "text-muted hover:bg-line-2 ",
               )}
             >
-              <Icon className="size-4" />
-              {t.label}
+              <Icon className="size-4 shrink-0" />
+              {/*
+               * The caption is the part that gives: it disappears below a
+               * 380px strip, so the row keeps all eight icons on screen instead
+               * of pushing the last two into overflow.
+               */}
+              <span className="hidden truncate @[380px]:block">{t.label}</span>
             </button>
           );
         })}
+        </div>
+
       </div>
 
-      <div className="editor-pane-scroll min-h-0 flex-1 overflow-auto p-3">
+      <div className="editor-pane-scroll editor-panel-body p-3">
         {tab === "elements" && (
-          <div className="grid gap-4">
+          <div className="grid gap-3">
             {pickerOpen && (
               <TablePickerOverlay
                 theme={THEMES[theme]}
                 onClose={() => setPickerOpen(false)}
                 onAdd={(over, style) => {
-                  addElement("table", { ...over, style: { ...(over.style || {}), ...(style || {}) } });
+                  addElement("table", {
+                    ...over,
+                    style: { ...(over.style || {}), ...(style || {}) },
+                  });
                   setPickerOpen(false);
                 }}
               />
             )}
-            {TOOL_GROUPS.map((group) => (
-              <section key={group.title}>
-                <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">{group.title}</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {group.items.map((t) => {
-                    const Icon = t.icon;
-                    return (
-                      <button
-                        key={t.type}
-                        type="button"
-                        disabled={qrBusy && t.type === "qr"}
-                        onClick={() => void add(t.type)}
-                        className="flex h-[64px] flex-col items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-bold transition hover:border-navy-2 hover:bg-navy-2/5 disabled:opacity-50 dark:border-white/10 dark:hover:border-gold/60"
-                        title={TYPE_NAME[t.type]}
-                      >
-                        <Icon className="size-[18px] text-navy-2 dark:text-gold-2" />
-                        <span>{t.label}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
 
+            {/* «عناصر أساسية» — text, images/logos and the code-bearing blocks. */}
+            <div className="mb-2 rounded-[6px] bg-navy-2/5 px-2 py-1 text-[10px] leading-4 text-brand-hover">
+                💡 اسحب أي عنصر وأفلته في المكان المحدد داخل الـArtboard — يُضاف بدقة في موضع الإفلات
+              </div>
+            <AccordionSection
+              title="عناصر أساسية"
+              id="basics"
+              open={library.isOpen("basics", false)}
+              onToggle={() => library.toggle("basics")}
+            >
+              {TOOL_GROUPS.map((group) => (
+                <section key={group.title}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.title)}
+                    aria-expanded={openGroups[group.title] ?? false}
+                    className="mb-2 flex w-full items-center justify-between text-[11px] font-extrabold tracking-wide text-muted transition hover:text-ink "
+                  >
+                    {group.title}
+                    <ChevronDown
+                      className={cn(
+                        "size-3.5 transition-transform",
+                        (openGroups[group.title] ?? false)
+                          ? "rotate-0"
+                          : "-rotate-90",
+                      )}
+                    />
+                  </button>
+                  {(openGroups[group.title] ?? false) && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {group.items.map((t) => {
+                        const Icon = t.icon;
+                        return (
+                          <button
+                            key={t.type}
+                            type="button"
+                            disabled={qrBusy && t.type === "qr"}
+                            draggable={t.type !== "image" && t.type !== "logo" && t.type !== "svg" && t.type !== "table"}
+                            onDragStart={(e) => {
+                              if (t.type === "qr" || t.type === "table" || t.type === "image" || t.type === "logo" || t.type === "svg") return;
+                              startDrag(e, t.type, { name: t.label });
+                            }}
+                            onPointerDown={(e) => {
+                              if (t.type === "qr" || t.type === "table" || t.type === "image" || t.type === "logo" || t.type === "svg") return;
+                              startPointerDrag(e, t.type, { name: t.label }, t.label);
+                            }}
+                            onClick={() => void add(t.type)}
+                            className="library-hit flex min-h-[38px] items-center justify-between gap-2 rounded-[8px] border border-line px-2.5 py-1.5 text-start text-[11px] font-bold leading-snug transition disabled:opacity-50 cursor-grab active:cursor-grabbing"
+                            title={`${TYPE_NAME[t.type]} — اسحب وأفلت في الموضع المحدد داخل الصفحة`}
+
+                          >
+                            <span className="min-w-0">{t.label}</span>
+                            <Icon className="size-4 shrink-0 text-brand-hover" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/*
+                    * One home for every media import: the panel used to repeat
+                    * these in a permanent footer bar as well. The footer is
+                    * gone; the same actions live here, next to the media they
+                    * produce, and in the header's «إضافة» menu.
+                    */}
+                  {group.title === "صور وشعارات" &&
+                    (openGroups[group.title] ?? false) && (
+                      <>
+                        <div className="mt-2 grid grid-cols-3 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onUpload("image")}
+                            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[11px] font-extrabold text-white"
+                          >
+                            <ImageIcon className="size-3.5" /> صورة
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onUpload("logo")}
+                            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold "
+                          >
+                            <BadgePercent className="size-3.5" /> شعار
+                          </button>
+                          <button
+                            type="button"
+                            onClick={onUploadSvg}
+                            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold "
+                          >
+                            <FileCode2 className="size-3.5" /> SVG
+                          </button>
+                        </div>
+                        <p className="mt-1.5 text-[10px] leading-5 text-muted">
+                          أو اسحب الصورة وأفلتها على الصفحة مباشرة — تُضاف في
+                          موضع الإفلات.
+                        </p>
+                      </>
+                    )}
+                </section>
+              ))}
+            </AccordionSection>
+
+            {/* نصوص جاهزة — typography starters, kept with the basics palette. */}
             <section>
-              <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">نص سريع</h3>
-              <div className="grid gap-1.5">
+              <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">
+                نص سريع
+              </h3>
+              <div className="grid gap-2">
                 {TEXT_PRESETS.map((p) => (
                   <button
                     key={p.id}
                     type="button"
+                    draggable
+                    onDragStart={(e) => startDrag(e, "text", { content: p.sample, w: p.w, h: p.h, name: p.label, style: { fontFamily: "Tajawal", textAlign: "right", color: THEMES[theme].ink, ...(p.style as any) } })}
+                    onPointerDown={(e) =>
+                      startPointerDrag(
+                        e,
+                        "text",
+                        { content: p.sample, w: p.w, h: p.h, name: p.label, style: { fontFamily: "Tajawal", textAlign: "right", color: THEMES[theme].ink, ...(p.style as any) } },
+                        p.label,
+                      )
+                    }
                     onClick={() =>
                       addElement("text", {
                         content: p.sample,
@@ -257,113 +470,16 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
                         },
                       } as Partial<CanvasEl>)
                     }
-                    className="flex items-center justify-between rounded-[8px] border border-line px-2.5 py-2 text-right hover:border-navy-2 dark:border-white/10"
+                    className="flex items-center justify-between rounded-[8px] px-2.5 py-1.5 text-right transition hover:bg-line-2 cursor-grab active:cursor-grabbing"
                   >
                     <span className="text-[12px] font-bold">{p.label}</span>
-                    <span className="text-[11px] text-muted">{Math.round(Number(p.style.fontSize) || 12)}pt</span>
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section>
-              <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">مؤشرات الإنجاز</h3>
-              <div className="grid gap-1.5">
-                {PROGRESS_PRESETS.map((p) => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() =>
-                      addElement("progress", {
-                        content: p.sample,
-                        w: p.w,
-                        h: p.h,
-                        name: p.label,
-                        style: {
-                          fontFamily: "Tajawal",
-                          color: THEMES[theme].ink,
-                          fill: THEMES[theme].primary,
-                          ...p.style,
-                          variant: p.id === "ring" ? "ring" : "bar",
-                        },
-                      } as Partial<CanvasEl>)
-                    }
-                    className="flex items-center gap-2 rounded-[8px] border border-line px-2.5 py-2 text-right hover:border-navy-2 dark:border-white/10"
-                  >
-                    <ProgressPreview preset={p} color={THEMES[theme].primary} />
-                    <span className="min-w-0 flex-1">
-                      <strong className="block text-[12px]">{p.label}</strong>
-                      <span className="text-[10px] text-muted">{Math.round(Number(p.style.value) || 0)}%</span>
+                    <span className="text-[11px] text-muted">
+                      {Math.round(Number(p.style.fontSize) || 12)}pt
                     </span>
                   </button>
                 ))}
               </div>
             </section>
-
-            <section>
-              <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">أشكال سريعة</h3>
-              <div className="grid grid-cols-4 gap-1.5">
-                {SHAPE_TOOLS.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() =>
-                      addElement("shape", {
-                        w: s.w,
-                        h: s.h,
-                        name: s.label,
-                        style: { fill: THEMES[theme].primary, shapeId: s.shapeId },
-                      })
-                    }
-                    title={s.label}
-                    className="grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-navy-2 transition hover:border-navy-2 hover:bg-navy-2/5 dark:border-white/10 dark:text-gold-2"
-                  >
-                    <ShapePreview shapeId={s.shapeId} className="size-full max-h-7" />
-                  </button>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={() => setLeftTab("shapes")}
-                className="mt-1.5 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
-              >
-                <Shapes className="size-3.5" /> كل الأشكال ({SHAPES.length})
-              </button>
-            </section>
-
-            <section>
-              <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">صور وشعارات</h3>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => onUpload("image")}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[11px] font-extrabold text-white"
-                >
-                  <ImageIcon className="size-3.5" /> رفع صورة
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onUpload("logo")}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
-                >
-                  <BadgePercent className="size-3.5" /> رفع شعار
-                </button>
-              </div>
-              <p className="mt-1.5 text-[10px] leading-5 text-muted">
-                أو اسحب الصورة وأفلتها على الصفحة مباشرة — تُضاف في موضع الإفلات.
-              </p>
-            </section>
-
-            <AssetLibrary />
-
-            <button
-              type="button"
-              onClick={() => onUpload("font")}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] border border-line text-[12px] font-extrabold dark:border-white/10"
-            >
-              <Upload className="size-3.5" />
-              تحميل خط مخصص (TTF/OTF)
-            </button>
           </div>
         )}
 
@@ -373,30 +489,40 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
               <div>
                 <h2 className="text-[13px] font-extrabold">الأشكال</h2>
                 <p className="mt-0.5 text-[11px] leading-5 text-muted">
-                  انقر لإضافة الشكل، ثم عدّل التعبئة والإطار من لوحة الخصائص.
+                  اسحب الشكل وأفلته في الموضع المحدد داخل الصفحة، أو انقر لإضافته في المنتصف. عدّل التعبئة والإطار من لوحة الخصائص.
                 </p>
               </div>
-              <span className="text-[11px] text-muted tabular-nums">{SHAPES.length}</span>
+              <span className="text-[11px] text-muted tabular-nums">
+                {SHAPES.length}
+              </span>
             </header>
 
             {shapesByGroup().map((group) => (
               <section key={group.group}>
-                <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">{group.group}</h3>
+                <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">
+                  {group.group}
+                </h3>
                 <div className="grid grid-cols-4 gap-1.5">
                   {group.items.map((s) => (
                     <button
                       key={s.id}
                       type="button"
+                      draggable
+                      onDragStart={(e) => startShapeDrag(e, s.id, s.label)}
+                      onPointerDown={(e) => startPointerShapeDrag(e, s.id, s.label)}
                       onClick={() =>
                         addElement("shape", {
                           name: s.label,
                           style: { fill: THEMES[theme].primary, shapeId: s.id },
                         })
                       }
-                      title={s.label}
-                      className="grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-navy-2 transition hover:border-navy-2 hover:bg-navy-2/5 dark:border-white/10 dark:text-gold-2"
+                      title={`${s.label} — اسحب وأفلت في الموضع المحدد`}
+                      className="library-hit grid aspect-square place-items-center rounded-[8px] border border-line p-1.5 text-brand-hovertransition cursor-grab active:cursor-grabbing"
                     >
-                      <ShapePreview shapeId={s.id} className="size-full max-h-8" />
+                      <ShapePreview
+                        shapeId={s.id}
+                        className="size-full max-h-8"
+                      />
                     </button>
                   ))}
                 </div>
@@ -404,19 +530,25 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
             ))}
 
             <section className="grid gap-1.5">
-              <h3 className="text-[11px] font-extrabold tracking-wide text-muted">خطوط وفواصل</h3>
+              <h3 className="text-[11px] font-extrabold tracking-wide text-muted">
+                خطوط وفواصل
+              </h3>
               <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
+                  draggable
+                  onDragStart={(e) => startDrag(e, "line", { name: "خط" })}
                   onClick={() => addElement("line")}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold cursor-grab active:cursor-grabbing"
                 >
                   <Minus className="size-3.5" /> خط
                 </button>
                 <button
                   type="button"
+                  draggable
+                  onDragStart={(e) => startDrag(e, "divider", { name: "فاصل" })}
                   onClick={() => addElement("divider")}
-                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+                  className="inline-flex h-10 items-center justify-center gap-1.5 rounded-[8px] border border-line text-[11px] font-extrabold cursor-grab active:cursor-grabbing"
                 >
                   <SeparatorHorizontal className="size-3.5" /> فاصل
                 </button>
@@ -425,7 +557,7 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
           </div>
         )}
 
-        {tab === "fonts" && <FontsTab onUpload={onUpload} />}
+        {tab === "fonts" && <FontsTab />}
 
         {tab === "templates" && (
           <div>
@@ -436,7 +568,11 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
               </p>
             </header>
             <div className="mb-3 flex flex-wrap gap-1.5">
-              <CategoryChip active={category === "all"} onClick={() => setCategory("all")} label="الكل" />
+              <CategoryChip
+                active={category === "all"}
+                onClick={() => setCategory("all")}
+                label="الكل"
+              />
               {TEMPLATE_CATEGORIES.map((c) => (
                 <CategoryChip
                   key={c.id}
@@ -447,107 +583,63 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
               ))}
             </div>
             <div className="grid gap-2">
-              {templates.map((t) => (
+              {templateWindow.slice.map((t) => (
                 <button
                   key={t.id}
                   type="button"
                   onClick={() => setPreviewTemplate(t)}
-                  className="grid grid-cols-[72px_1fr_auto] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition hover:border-navy-2 hover:bg-navy-2/5 dark:border-white/10"
+                  className="library-hit grid grid-cols-[72px_1fr_auto] items-center gap-2 rounded-[8px] border border-line p-2 text-right transition "
                 >
                   <TemplatePreview variant={t.preview} />
                   <span className="min-w-0">
                     <strong className="block text-[12px]">{t.title}</strong>
-                    {t.concept && <span className="block text-[9px] font-bold uppercase tracking-wide text-green">{t.concept}</span>}
-                    <span className="block text-[11px] leading-4 text-muted">{t.desc}</span>
+                    {t.concept && (
+                      <span className="block text-[9px] font-bold uppercase tracking-wide text-ink">
+                        {t.concept}
+                      </span>
+                    )}
+                    <span className="block text-[11px] leading-4 text-muted">
+                      {t.desc}
+                    </span>
                   </span>
                   <Eye className="size-3.5 shrink-0 text-muted" />
                 </button>
               ))}
+              {templateWindow.remaining > 0 && (
+                <div ref={templateWindow.sentinelRef} className="h-4" />
+              )}
               {!templates.length && (
                 <p className="rounded-[8px] border border-dashed border-line p-4 text-center text-[12px] text-muted">
                   لا قوالب في هذا التصنيف
                 </p>
               )}
             </div>
-            {previewTemplate && (
-              <div className="fixed inset-0 z-[70] grid place-items-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-label={`معاينة ${previewTemplate.title}`} onClick={() => setPreviewTemplate(null)}>
-                <div className="w-full max-w-sm rounded-[10px] border border-line bg-white p-3 shadow-2xl dark:border-white/10 dark:bg-[#303132]" onClick={(e) => e.stopPropagation()}>
-                  <div className="mb-3 flex items-start justify-between gap-2">
-                    <div>
-                      <h3 className="text-[14px] font-extrabold">{previewTemplate.title}</h3>
-                      <p className="mt-0.5 text-[10px] uppercase tracking-wide text-green">{previewTemplate.concept || "Template"}</p>
-                      <p className="mt-1 text-[11px] leading-5 text-muted">{previewTemplate.desc}</p>
-                    </div>
-                    <button type="button" onClick={() => setPreviewTemplate(null)} className="grid size-7 place-items-center rounded-[6px] border border-line dark:border-white/10" title="إغلاق المعاينة" aria-label="إغلاق المعاينة"><X className="size-3.5" /></button>
-                  </div>
-                  <TemplatePreview variant={previewTemplate.preview} large />
-                  <button type="button" onClick={() => { addTemplatePage(previewTemplate.id); setPreviewTemplate(null); }} className="mt-3 h-9 w-full rounded-[7px] bg-navy text-[11px] font-extrabold text-white">إضافة القالب كصفحة قابلة للتحرير</button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
         {tab === "pages" && (
           <div className="grid gap-3">
-            <header className="flex items-center justify-between">
-              <h2 className="text-[13px] font-extrabold">الصفحات</h2>
-              <span className="text-[11px] text-muted tabular-nums">{pages.length}</span>
-            </header>
+            <PagesTabHeader />
             <div className="grid gap-2">
-              {pages.map((p, i) => (
-                <div
-                  key={p.id}
-                  className={cn(
-                    "rounded-[8px] border p-2",
-                    p.id === activePageId ? "border-navy-2 bg-navy-2/5" : "border-line dark:border-white/10",
-                  )}
-                >
-                  <div className="mb-1.5 flex items-center gap-1.5">
-                    <span className="grid size-5 shrink-0 place-items-center rounded bg-line-2 text-[10px] font-extrabold text-muted dark:bg-white/10">
-                      {i + 1}
-                    </span>
-                    <input
-                      value={p.name}
-                      onChange={(e) => renamePage(p.id, e.target.value)}
-                      onFocus={() => setActivePage(p.id)}
-                      aria-label={`اسم الصفحة ${i + 1}`}
-                      className="h-7 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-[12px] font-bold hover:border-line focus:border-navy-2 focus:bg-white dark:focus:bg-white/5"
-                    />
-                  </div>
-                  <p className="mb-2 text-[10px] text-muted tabular-nums">
-                    {Math.round(pageSize(p).w)} × {Math.round(pageSize(p).h)} مم · {p.elements.length} عنصر
-                  </p>
-                  <div className="grid grid-cols-4 gap-1">
-                    <MiniButton onClick={() => duplicatePage(p.id)} label="نسخ">
-                      نسخ
-                    </MiniButton>
-                    <MiniButton onClick={() => movePageById(p.id, -1)} label="تحريك لأعلى" disabled={i === 0}>
-                      ↑
-                    </MiniButton>
-                    <MiniButton
-                      onClick={() => movePageById(p.id, 1)}
-                      label="تحريك لأسفل"
-                      disabled={i === pages.length - 1}
-                    >
-                      ↓
-                    </MiniButton>
-                    <MiniButton onClick={() => deletePage(p.id)} label="حذف الصفحة" danger>
-                      حذف
-                    </MiniButton>
-                  </div>
-                </div>
-              ))}
+              <PagesTabList
+                activePageId={activePageId}
+                renamePage={renamePage}
+                setActivePage={setActivePage}
+                duplicatePage={duplicatePage}
+                movePageById={movePageById}
+                deletePage={deletePage}
+              />
             </div>
             <button
               type="button"
-              onClick={() => addPage()}
+              onClick={() => window.dispatchEvent(new CustomEvent(OPEN_NEW_PAGE_EVENT))}
               className="h-10 rounded-[8px] bg-navy text-[12px] font-extrabold text-white"
             >
               إضافة صفحة
             </button>
             <p className="text-[11px] leading-5 text-muted">
-              لإعادة الترتيب بالسحب والإفلات، استخدم شريط الصفحات أسفل منطقة التصميم.
+              لإعادة الترتيب بالسحب والإفلات، استخدم شريط الصفحات أسفل منطقة
+              التصميم.
             </p>
           </div>
         )}
@@ -562,7 +654,7 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-white px-2.5 text-[13px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[13px] font-semibold text-ink "
               />
             </label>
             <label className="mb-3 block text-[11px] font-extrabold text-muted">
@@ -571,34 +663,48 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
                 value={orgName}
                 onChange={(e) => setOrg(e.target.value)}
                 placeholder="اسم الجهة أو العميل"
-                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-white px-2.5 text-[13px] font-semibold text-ink dark:border-white/10 dark:bg-white/5 dark:text-white"
+                className="mt-1 h-9 w-full rounded-[8px] border border-line bg-surface px-2.5 text-[13px] font-semibold text-ink "
               />
             </label>
             <div className="grid gap-2">
-              {(Object.values(THEMES) as (typeof THEMES)[ThemeId][]).map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setTheme(t.id)}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-[8px] border p-2.5 text-right",
-                    theme === t.id ? "border-navy-2 bg-navy-2/5" : "border-line dark:border-white/10",
-                  )}
-                >
-                  <span className="flex size-9 shrink-0 overflow-hidden rounded-md border border-line">
-                    <span className="w-1/2" style={{ background: t.primary }} />
-                    <span className="w-1/3" style={{ background: t.accent }} />
-                    <span className="w-[16.6%]" style={{ background: t.surface }} />
-                  </span>
-                  <span className="min-w-0">
-                    <strong className="block text-[12px]">{t.name}</strong>
-                    <span className="text-[11px] text-muted">{t.desc}</span>
-                  </span>
-                </button>
-              ))}
+              {(Object.values(THEMES) as (typeof THEMES)[ThemeId][]).map(
+                (t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setTheme(t.id)}
+                    className={cn(
+                      "flex items-center gap-2.5 rounded-[8px] border p-2.5 text-right",
+                      theme === t.id
+                        ? "border-navy-2 bg-navy-2/5"
+                        : "border-line ",
+                    )}
+                  >
+                    <span className="flex size-9 shrink-0 overflow-hidden rounded-md border border-line">
+                      <span
+                        className="w-1/2"
+                        style={{ background: t.primary }}
+                      />
+                      <span
+                        className="w-1/3"
+                        style={{ background: t.accent }}
+                      />
+                      <span
+                        className="w-[16.6%]"
+                        style={{ background: t.surface }}
+                      />
+                    </span>
+                    <span className="min-w-0">
+                      <strong className="block text-[12px]">{t.name}</strong>
+                      <span className="text-[11px] text-muted">{t.desc}</span>
+                    </span>
+                  </button>
+                ),
+              )}
             </div>
             <p className="mt-3 text-[11px] leading-5 text-muted">
-              السمة تُطبَّق على العناصر الجديدة والقوالب المُدرجة. العناصر الحالية تحتفظ بألوانها.
+              السمة تُطبَّق على العناصر الجديدة والقوالب المُدرجة. العناصر
+              الحالية تحتفظ بألوانها.
             </p>
           </div>
         )}
@@ -614,10 +720,12 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
                   <button
                     key={s.id}
                     type="button"
-                    onClick={() => page && setPageSize(page.id, s.id)}
+                    onClick={() => activePageId && setPageSize(activePageId, s.id)}
                     className={cn(
                       "rounded-[8px] border px-2.5 py-2 text-right",
-                      activeSizeId === s.id ? "border-navy-2 bg-navy-2/5" : "border-line dark:border-white/10",
+                      activeSizeId === s.id
+                        ? "border-navy-2 bg-navy-2/5"
+                        : "border-line ",
                     )}
                   >
                     <strong className="block text-[12px]">{s.name}</strong>
@@ -626,37 +734,39 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
                 ))}
               </div>
               <div className="mt-2 grid grid-cols-2 gap-1.5">
-                <label className="text-[10px] font-extrabold text-muted">
-                  العرض مم
-                  <input
-                    type="number"
-                    value={customSize.w}
-                    onChange={(e) => setCustomSize((v) => ({ ...v, w: Number(e.target.value) }))}
-                    className="mt-1 h-8 w-full rounded-[6px] border border-line px-2 text-[12px] dark:border-white/10 dark:bg-white/5"
-                  />
-                </label>
-                <label className="text-[10px] font-extrabold text-muted">
-                  الارتفاع مم
-                  <input
-                    type="number"
-                    value={customSize.h}
-                    onChange={(e) => setCustomSize((v) => ({ ...v, h: Number(e.target.value) }))}
-                    className="mt-1 h-8 w-full rounded-[6px] border border-line px-2 text-[12px] dark:border-white/10 dark:bg-white/5"
-                  />
-                </label>
+                <ScrubField
+                  label="العرض مم"
+                  value={customSize.w}
+                  min={20}
+                  max={2000}
+                  step={1}
+                  precision={0}
+                  suffix="مم"
+                  onChange={(w) => setCustomSize((v) => ({ ...v, w }))}
+                />
+                <ScrubField
+                  label="الارتفاع مم"
+                  value={customSize.h}
+                  min={20}
+                  max={2000}
+                  step={1}
+                  precision={0}
+                  suffix="مم"
+                  onChange={(h) => setCustomSize((v) => ({ ...v, h }))}
+                />
               </div>
               <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
                   onClick={() => applyCustomSize("page")}
-                  className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+                  className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold "
                 >
                   تطبيق على الصفحة
                 </button>
                 <button
                   type="button"
                   onClick={() => applyCustomSize("all")}
-                  className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold dark:border-white/10"
+                  className="h-9 rounded-[8px] border border-line text-[11px] font-extrabold "
                 >
                   تطبيق على الكل
                 </button>
@@ -664,20 +774,37 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
             </section>
 
             <section>
-              <h2 className="mb-2 text-[13px] font-extrabold">الدقة والمحاذاة</h2>
+              <h2 className="mb-2 text-[13px] font-extrabold">
+                الدقة والمحاذاة
+              </h2>
               <div className="grid gap-1.5">
-                <ToggleRow label="إظهار الشبكة" value={showGrid} onChange={() => toggle("showGrid")} />
-                <ToggleRow label="التقاط للشبكة" value={snapGrid} onChange={() => toggle("snapGrid")} />
-                <ToggleRow label="محاذاة العناصر" value={snapElements} onChange={() => toggle("snapElements")} />
-                <ToggleRow label="الوضع الليلي" value={dark} onChange={() => toggle("dark")} />
+                <button type="button" className="h-11 rounded-lg border border-line text-[12px] font-bold" onClick={() => window.dispatchEvent(new CustomEvent(OPEN_EDITOR_SETTINGS_EVENT))}>
+                  مظهر المحرر — فاتح / داكن
+                </button>
+                <ToggleRow
+                  label="إظهار الشبكة"
+                  value={showGrid}
+                  onChange={() => toggle("showGrid")}
+                />
+                <ToggleRow
+                  label="التقاط للشبكة"
+                  value={snapGrid}
+                  onChange={() => toggle("snapGrid")}
+                />
+                <ToggleRow
+                  label="محاذاة العناصر"
+                  value={snapElements}
+                  onChange={() => toggle("snapElements")}
+                />
               </div>
             </section>
 
             <section>
               <h2 className="mb-2 text-[13px] font-extrabold">مكتبة الخطوط</h2>
               <p className="text-[11px] leading-5 text-muted">
-                ثمانية خطوط عربية مضمّنة (Tajawal، Cairo، IBM Plex Sans Arabic، Noto Sans/Naskh/Kufi، Amiri،
-                Reem Kufi)، مع إمكانية رفع خط مخصص بصيغة TTF/OTF/WOFF.
+                ثمانية خطوط عربية مضمّنة (Tajawal، Cairo، IBM Plex Sans Arabic،
+                Noto Sans/Naskh/Kufi، Amiri، Reem Kufi)، مع إمكانية رفع خط مخصص
+                بصيغة TTF/OTF/WOFF.
               </p>
             </section>
 
@@ -685,110 +812,137 @@ export function LeftPanel({ onUpload }: { onUpload: (kind: "image" | "logo" | "f
               <h2 className="mb-2 text-[13px] font-extrabold">التخزين</h2>
               <p className="text-[11px] leading-5 text-muted">
                 {storage.mode === "indexeddb"
-                  ? "المشاريع محفوظة محلياً في IndexedDB داخل متصفحك ولا تُرفع إلى أي سيرفر."
+                  ? "المشاريع محفوظة محلياً في IndexedDB داخل متصفحك؛ قد تتطلب خدمات الترخيص أو الذكاء الاصطناعي اتصالاً."
                   : "IndexedDB غير متاح في هذا المتصفح؛ يتم الحفظ في LocalStorage بمساحة محدودة."}
               </p>
             </section>
           </div>
         )}
       </div>
+      <TemplatePreviewDialog
+        template={previewTemplate}
+        onClose={() => setPreviewTemplate(null)}
+        onAdd={(id) => {
+          addTemplatePage(id);
+          setPreviewTemplate(null);
+        }}
+      />
     </aside>
   );
 }
 
-function TemplatePreview({
-  variant = "grid",
-  large = false,
-}: {
-  variant?: (typeof PAGE_TEMPLATES)[number]["preview"];
-  large?: boolean;
-}) {
-  const width = large ? "w-full" : "w-[72px]";
-  const height = large ? "h-64" : "h-[64px]";
-  const base = "relative overflow-hidden rounded-[5px] border border-line bg-white dark:border-white/10 dark:bg-white";
-  const block = "absolute block";
-  const green = "#0c3d2c";
-  const gold = "#c6a05a";
-  const ink = "#24352e";
-  const muted = "#aeb8b1";
-  const line = "#d8e0db";
-
-  return (
-    <span className={`${base} ${width} ${height}`} aria-hidden>
-      {variant === "editorial" && <><span className={block} style={{ right: "9%", top: "10%", width: "42%", height: "4%", background: green }} /><span className={block} style={{ right: "9%", top: "22%", width: "62%", height: "17%", background: ink }} /><span className={block} style={{ right: "9%", top: "50%", width: "43%", height: "25%", border: `1px solid ${line}` }} /><span className={block} style={{ left: "12%", top: "44%", width: "15%", height: "18%", background: green }} /></>}
-      {variant === "grid" && <><span className={block} style={{ inset: "0 0 auto", height: "18%", background: green }} /><span className={block} style={{ right: "8%", top: "25%", width: "38%", height: "23%", border: `1px solid ${line}` }} /><span className={block} style={{ left: "8%", top: "25%", width: "38%", height: "23%", border: `1px solid ${line}` }} /><span className={block} style={{ right: "8%", bottom: "12%", width: "38%", height: "22%", background: "#f5f8f5", border: `1px solid ${line}` }} /><span className={block} style={{ left: "8%", bottom: "12%", width: "38%", height: "22%", background: "#f5f8f5", border: `1px solid ${line}` }} /></>}
-      {variant === "data" && <><span className={block} style={{ right: "8%", top: "16%", width: "45%", height: "26%", background: green }} /><span className={block} style={{ left: "8%", top: "15%", width: "25%", height: "22%", background: ink }} /><span className={block} style={{ right: "8%", bottom: "16%", width: "84%", height: "30%", border: `1px solid ${line}` }} /><span className={block} style={{ left: "17%", bottom: "21%", width: "7%", height: "15%", background: gold }} /><span className={block} style={{ left: "29%", bottom: "21%", width: "7%", height: "24%", background: green }} /></>}
-      {variant === "flow" && <><span className={block} style={{ right: "9%", top: "12%", width: "55%", height: "5%", background: green }} /><span className={block} style={{ right: "9%", top: "28%", width: "76%", height: "12%", border: `1px solid ${line}` }} /><span className={block} style={{ right: "18%", top: "46%", width: "67%", height: "14%", background: "#f5f8f5", border: `1px solid ${line}` }} /><span className={block} style={{ right: "27%", top: "66%", width: "58%", height: "16%", border: `1px solid ${line}` }} /></>}
-      {variant === "asymmetric" && <><span className={block} style={{ inset: "0 auto 0 0", width: "30%", background: green }} /><span className={block} style={{ right: "8%", top: "20%", width: "52%", height: "16%", background: ink }} /><span className={block} style={{ right: "12%", top: "47%", width: "27%", height: "18%", background: gold }} /><span className={block} style={{ right: "8%", bottom: "12%", width: "55%", height: "16%", border: `1px solid ${line}` }} /></>}
-      {variant === "modular" && <><span className={block} style={{ right: "8%", top: "15%", width: "48%", height: "27%", border: `1px solid ${line}` }} /><span className={block} style={{ left: "8%", top: "15%", width: "31%", height: "16%", background: green }} /><span className={block} style={{ left: "8%", top: "36%", width: "31%", height: "30%", border: `1px solid ${line}` }} /><span className={block} style={{ right: "8%", bottom: "14%", width: "70%", height: "18%", background: "#f5f8f5" }} /></>}
-      {variant === "executive" && <><span className={block} style={{ left: "44%", top: "12%", width: "12%", height: "8%", borderRadius: "50%", background: gold }} /><span className={block} style={{ right: "20%", top: "31%", width: "60%", height: "9%", background: green }} /><span className={block} style={{ right: "28%", top: "48%", width: "44%", height: "14%", border: `1px solid ${line}` }} /><span className={block} style={{ left: "36%", bottom: "13%", width: "28%", height: "13%", background: ink }} /></>}
-      {variant === "statistical" && <><span className={block} style={{ right: "8%", top: "15%", width: "40%", height: "22%", background: green }} /><span className={block} style={{ left: "8%", top: "16%", width: "23%", height: "15%", background: ink }} /><span className={block} style={{ left: "13%", bottom: "17%", width: "74%", height: "28%", borderBottom: `2px solid ${line}` }} /><span className={block} style={{ left: "20%", bottom: "17%", width: "6%", height: "16%", background: green }} /><span className={block} style={{ left: "34%", bottom: "17%", width: "6%", height: "24%", background: gold }} /><span className={block} style={{ left: "48%", bottom: "17%", width: "6%", height: "20%", background: green }} /></>}
-      {variant === "section" && <><span className={block} style={{ right: "8%", top: "17%", width: "76%", height: "26%", background: green }} /><span className={block} style={{ right: "8%", top: "56%", width: "48%", height: "8%", background: ink }} /><span className={block} style={{ right: "8%", top: "71%", width: "33%", height: "5%", background: muted }} /><span className={block} style={{ left: "10%", bottom: "13%", width: "10%", height: "10%", background: gold, borderRadius: "50%" }} /></>}
-      {variant === "process" && <><span className={block} style={{ right: "8%", top: "18%", width: "80%", height: "5%", background: green }} /><span className={block} style={{ right: "74%", top: "13%", width: "12%", height: "12%", borderRadius: "50%", background: green }} /><span className={block} style={{ right: "51%", top: "13%", width: "12%", height: "12%", borderRadius: "50%", border: `1px solid ${green}` }} /><span className={block} style={{ right: "28%", top: "13%", width: "12%", height: "12%", borderRadius: "50%", border: `1px solid ${green}` }} /><span className={block} style={{ right: "8%", top: "13%", width: "12%", height: "12%", borderRadius: "50%", border: `1px solid ${green}` }} /><span className={block} style={{ right: "8%", bottom: "16%", width: "70%", height: "20%", border: `1px solid ${line}` }} /></>}
-    </span>
-  );
-}
-
-/** Miniature of a progress preset, drawn with the same shapes as the canvas. */
-function ProgressPreview({ preset, color }: { preset: ProgressPreset; color: string }) {
-  const value = Math.max(0, Math.min(100, Number(preset.style.value) || 0));
-  if (preset.id === "ring") {
-    const size = 22;
-    const thickness = 3;
-    const r = (size - thickness) / 2;
-    const c = 2 * Math.PI * r;
-    return (
-      <svg viewBox={`0 0 ${size} ${size}`} className="size-6 shrink-0" aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#e8ecf3" strokeWidth={thickness} />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth={thickness}
-          strokeLinecap="round"
-          strokeDasharray={`${(c * value) / 100} ${c}`}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </svg>
-    );
-  }
-  return (
-    <span className="flex size-6 shrink-0 items-center" aria-hidden>
-      <span className="block h-1.5 w-full overflow-hidden rounded-full bg-line-2 dark:bg-white/15">
-        <span className="block h-full" style={{ width: `${value}%`, background: color }} />
-      </span>
-    </span>
-  );
-}
-
-/** Modal-style panel that wraps the table builder inside the elements tab. */
-function TablePickerOverlay({
-  theme,
-  onAdd,
+/**
+ * Shared template-preview dialog: the «نماذج جاهزة» cards in the elements
+ * tools window and the القوالب tab both preview through it, so the dialog is
+ * one component rendered by whichever window raised the request.
+ */
+function TemplatePreviewDialog({
+  template,
   onClose,
+  onAdd,
 }: {
-  theme: Theme;
-  onAdd: (over: Partial<CanvasEl>, style?: Partial<ElStyle>) => void;
+  template: (typeof PAGE_TEMPLATES)[number] | null;
   onClose: () => void;
+  onAdd: (id: string) => void;
 }) {
+  if (!template) return null;
   return (
-    <section className="rounded-[10px] border border-navy-2 bg-navy-2/5 p-3 dark:border-gold/40">
-      <header className="mb-2 flex items-center justify-between">
-        <h3 className="inline-flex items-center gap-1.5 text-[12px] font-extrabold">
-          <Table2 className="size-3.5" /> إنشاء جدول
-        </h3>
+    <div
+      className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-black/45 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`معاينة ${template.title}`}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-sm rounded-[10px] border border-line bg-surface p-3 shadow-2xl "
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-2">
+          <div>
+            <h3 className="text-[14px] font-extrabold">
+              {template.title}
+            </h3>
+            <p className="mt-0.5 text-[10px] uppercase tracking-wide text-ink">
+              {template.concept || "Template"}
+            </p>
+            <p className="mt-1 text-[11px] leading-5 text-muted">
+              {template.desc}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="grid size-7 place-items-center rounded-[6px] border border-line "
+            title="إغلاق المعاينة"
+            aria-label="إغلاق المعاينة"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+        <TemplatePreview variant={template.preview} large />
         <button
           type="button"
-          onClick={onClose}
-          className="h-7 rounded-[6px] border border-line px-2 text-[10px] font-extrabold dark:border-white/10"
+          onClick={() => onAdd(template.id)}
+          className="mt-3 h-9 w-full rounded-[7px] bg-navy text-[11px] font-extrabold text-white"
         >
-          إلغاء
+          إضافة القالب كصفحة قابلة للتحرير
         </button>
-      </header>
-      <TablePicker theme={theme} onAdd={onAdd} />
-    </section>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * أدوات العناصر — the smart library as a STANDALONE window.
+ *
+ * Split out of the old left-panel tab: the window carries its own template
+ * preview dialog, so «نماذج جاهزة» works the same from here as from the
+ * القوالب tab. The shell gives it a wider default so its 4-column card grids
+ * are never clipped.
+ */
+export function ElementToolsWindow({
+  onAddCustomAsset,
+  onOpenShapes,
+  onOpenTemplates,
+}: {
+  onAddCustomAsset: (kind: "icon" | "divider") => void;
+  onOpenShapes: () => void;
+  onOpenTemplates: () => void;
+}) {
+  const theme = useEditor((s) => s.theme);
+  const addTemplatePage = useEditor((s) => s.addTemplatePage);
+  const [previewTemplate, setPreviewTemplate] = useState<
+    (typeof PAGE_TEMPLATES)[number] | null
+  >(null);
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="editor-pane-scroll editor-panel-body no-bottom-pad p-3">
+        <div className="element-tools-panel">
+          <header className="mb-3">
+            <h2 className="text-[13px] font-extrabold">أدوات العناصر</h2>
+            <p className="mt-1 text-[11px] leading-5 text-muted">
+              افتح القسم لإضافة عناصره، واسحب مقبضه لترتيبه كما يناسبك.
+            </p>
+          </header>
+          <SmartLibraryPanel
+            theme={theme}
+            onAddCustomAsset={onAddCustomAsset}
+            onOpenShapes={onOpenShapes}
+            onOpenTemplates={onOpenTemplates}
+            onPreviewTemplate={setPreviewTemplate}
+          />
+        </div>
+      </div>
+      <TemplatePreviewDialog
+        template={previewTemplate}
+        onClose={() => setPreviewTemplate(null)}
+        onAdd={(id) => {
+          addTemplatePage(id);
+          setPreviewTemplate(null);
+        }}
+      />
+    </div>
   );
 }
 
@@ -797,20 +951,70 @@ function TablePickerOverlay({
  * author uploaded. Applying a font here updates the selected text element, so
  * the panel doubles as the properties shortcut for typography.
  */
-function FontsTab({ onUpload }: { onUpload: (kind: "image" | "logo" | "font") => void }) {
+function FontsTab() {
   const choices = useEditor((s) => s.fontChoices);
   const probed = useEditor((s) => s.fontsProbed);
-  const selectedId = useEditor((s) => s.selectedId);
-  const pages = useEditor((s) => s.pages);
-  const activePageId = useEditor((s) => s.activePageId);
   const updateStyle = useEditor((s) => s.updateStyle);
+  const [query, setQuery] = useState("");
+  /*
+   * Starred fonts. Saved to localStorage so favourites survive a reload —
+   * the same "UX cache" contract as the rest of the editor's UI prefs.
+   */
+  const [favorites, setFavorites] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(FAVORITE_FONTS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed)
+        ? parsed.filter((x) => typeof x === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  });
 
-  const page = pages.find((p) => p.id === activePageId);
-  const selected = page?.elements.find((e) => e.id === selectedId);
+  const toggleFavorite = (family: string) => {
+    setFavorites((prev) => {
+      const next = prev.includes(family)
+        ? prev.filter((f) => f !== family)
+        : [...prev, family];
+      try {
+        localStorage.setItem(FAVORITE_FONTS_KEY, JSON.stringify(next));
+      } catch {
+        /* storage unavailable — favourites stay for this session only */
+      }
+      return next;
+    });
+  };
+
+  // Selected element by IDENTITY: re-renders only when that element (or the
+  // selection) changes, not on every element write of the active page.
+  const selected = useEditor((s) => {
+    const page = s.pages.find((p) => p.id === s.activePageId);
+    if (!page || !s.selectedId) return undefined;
+    let found: CanvasEl | undefined;
+    const walk = (list: CanvasEl[]) => {
+      for (const e of list) {
+        if (e.id === s.selectedId) { found = e; return; }
+        if (e.children?.length) walk(e.children);
+      }
+    };
+    walk(page.elements);
+    return found;
+  });
   const current = selected?.style.fontFamily;
-  const bundled = choices.filter((f) => f.source === "bundled");
-  const system = choices.filter((f) => f.source === "system");
-  const uploaded = choices.filter((f) => f.source === "uploaded");
+  const matching = choices.filter((f) =>
+    f.family.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+  );
+  // Favourites first (in star order), then everything else by source.
+  const favoriteSet = new Set(favorites);
+  const favs = matching.filter((f) => favoriteSet.has(f.family));
+  const rest = matching.filter((f) => !favoriteSet.has(f.family));
+  const bundled =
+    favs.length || rest.length
+      ? [...favs, ...rest.filter((f) => f.source === "bundled")]
+      : rest.filter((f) => f.source === "bundled");
+  const system = rest.filter((f) => f.source === "system");
+  const uploaded = rest.filter((f) => f.source === "uploaded");
 
   const apply = (family: string) => {
     if (!selected) return;
@@ -820,35 +1024,84 @@ function FontsTab({ onUpload }: { onUpload: (kind: "image" | "logo" | "font") =>
   const group = (title: string, items: typeof choices, hint?: string) =>
     items.length > 0 && (
       <section key={title}>
-        <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">{title}</h3>
-        {hint && <p className="mb-1.5 text-[10px] leading-4 text-muted">{hint}</p>}
+        <h3 className="mb-2 text-[11px] font-extrabold tracking-wide text-muted">
+          {title}
+        </h3>
+        {hint && (
+          <p className="mb-1.5 text-[10px] leading-4 text-muted">{hint}</p>
+        )}
         <div className="grid gap-1.5">
-          {items.map((f) => (
-            <button
-              key={f.family}
-              type="button"
-              disabled={!selected}
-              onClick={() => apply(f.family)}
-              title={selected ? `تطبيق ${f.family}` : "اختر عنصر نص أولاً"}
-              className={cn(
-                "flex items-center justify-between gap-2 rounded-[8px] border px-2.5 py-2 text-right disabled:opacity-55",
-                current === f.family
-                  ? "border-navy-2 bg-navy-2/5"
-                  : "border-line hover:border-navy-2 dark:border-white/10",
-              )}
-            >
-              <span className="min-w-0">
-                <span
-                  className="block truncate text-[13px]"
-                  style={{ fontFamily: `"${f.family.replace(/"/g, "")}", sans-serif` }}
-                >
-                  {f.family}
+          {items.map((f) => {
+            const fav = favoriteSet.has(f.family);
+            return (
+              <button
+                key={f.family}
+                type="button"
+                disabled={!selected}
+                onClick={() => apply(f.family)}
+                title={selected ? `تطبيق ${f.family}` : "اختر عنصر نص أولاً"}
+                className={cn(
+                  "library-hit flex items-center justify-between gap-2 rounded-[8px] border px-2.5 py-2 text-right disabled:opacity-55",
+                  current === f.family
+                    ? "border-navy-2 bg-navy-2/5"
+                    : "border-line ",
+                )}
+                aria-pressed={current === f.family}
+              >
+                <span className="min-w-0">
+                  <span
+                    className="block truncate text-[13px]"
+                    style={{
+                      fontFamily: `"${f.family.replace(/"/g, "")}", sans-serif`,
+                    }}
+                  >
+                    {f.family}
+                  </span>
+                  <span className="block truncate text-[10px] text-muted">
+                    {f.note}
+                  </span>
                 </span>
-                <span className="block truncate text-[10px] text-muted">{f.note}</span>
-              </span>
-              {current === f.family && <span className="shrink-0 text-[10px] font-extrabold text-navy-2">مُطبَّق</span>}
-            </button>
-          ))}
+                <span className="flex shrink-0 items-center gap-1">
+                  {/* Star toggle: works even without a text selection, so the
+                      author can organise the list before picking an element. */}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    aria-label={
+                      fav
+                        ? `إزالة ${f.family} من المفضلة`
+                        : `إضافة ${f.family} إلى المفضلة`
+                    }
+                    aria-pressed={fav}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(f.family);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        toggleFavorite(f.family);
+                      }
+                    }}
+                    className={cn(
+                      "grid size-6 place-items-center rounded-[6px]",
+                      fav
+                        ? "text-warning"
+                        : "text-muted/50 hover:text-warning",
+                    )}
+                  >
+                    <Star className={cn("size-3.5", fav && "fill-amber-400")} />
+                  </span>
+                  {current === f.family && (
+                    <span className="text-[10px] font-extrabold text-brand-hover">
+                      مُطبَّق
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
     );
@@ -864,27 +1117,37 @@ function FontsTab({ onUpload }: { onUpload: (kind: "image" | "logo" | "font") =>
         </p>
       </header>
 
+      <label className="grid gap-1 text-[11px] font-extrabold text-muted">
+        البحث في الخطوط
+        <input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="اكتب اسم الخط"
+          className="h-9 rounded-[8px] border border-line bg-surface px-2.5 text-[12px] font-semibold text-ink outline-none focus:border-navy-2 "
+        />
+      </label>
+
       {!selected && (
         <p className="rounded-[8px] border border-dashed border-line p-3 text-[11px] leading-5 text-muted">
           حدّد عنصر نص على الصفحة لتفعيل تطبيق الخطوط. يمكنك تصفّح القائمة الآن.
         </p>
       )}
 
-      {group("خطوط مضمّنة", bundled, "تُحمَّل مع المنصة وتظهر بنفس الشكل على أي جهاز.")}
-      {group("خطوط جهازك", system, "خطوط مثبّتة على هذا الجهاز — قد لا تتوفر على جهاز آخر.")}
+      {group(
+        "خطوط مضمّنة",
+        bundled,
+        "تُحمَّل مع المنصة وتظهر بنفس الشكل على أي جهاز.",
+      )}
+      {group(
+        "خطوط جهازك",
+        system,
+        "خطوط مثبّتة على هذا الجهاز — قد لا تتوفر على جهاز آخر.",
+      )}
       {group("خطوط مرفوعة", uploaded, "خطوط أضفتها أنت في هذا المتصفح.")}
 
-      <button
-        type="button"
-        onClick={() => onUpload("font")}
-        className="inline-flex h-10 items-center justify-center gap-2 rounded-[8px] border border-line text-[12px] font-extrabold dark:border-white/10"
-      >
-        <Upload className="size-3.5" /> تحميل خط مخصص (TTF / OTF / WOFF)
-      </button>
-
       <p className="text-[10px] leading-5 text-muted">
-        ملاحظة: الخطوط المرفوعة تُسجَّل في هذا المتصفح فقط. عند فتح المشروع على جهاز آخر، ثبّت الخط عليه أو
-        استخدم أحد الخطوط المضمّنة لضمان تطابق التصدير.
+        تعتمد القائمة على الخطوط المضمّنة وما يستطيع المتصفح التحقق منه على هذا
+        الجهاز. قد لا تتوفر خطوط الجهاز على أجهزة أخرى.
       </p>
     </div>
   );
@@ -912,8 +1175,8 @@ function MiniButton({
       className={cn(
         "h-7 rounded-[6px] border text-[10px] font-extrabold disabled:opacity-40",
         danger
-          ? "border-red-200 text-danger hover:bg-red-50"
-          : "border-line text-muted hover:border-navy-2 hover:text-ink dark:border-white/10 dark:text-white/70",
+          ? "border-danger/30 text-error hover:bg-danger/10"
+          : "border-line text-muted hover:border-navy-2 hover:text-ink ",
       )}
     >
       {children}
@@ -921,14 +1184,24 @@ function MiniButton({
   );
 }
 
-function CategoryChip({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+function CategoryChip({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
         "rounded-full border px-2.5 py-1 text-[11px] font-bold",
-        active ? "border-navy-2 bg-navy-2 text-white" : "border-line text-muted dark:border-white/10",
+        active
+          ? "border-navy-2 bg-navy-2 text-white"
+          : "border-line text-muted ",
       )}
     >
       {label}
@@ -936,23 +1209,152 @@ function CategoryChip({ active, onClick, label }: { active: boolean; onClick: ()
   );
 }
 
-function ToggleRow({ label, value, onChange }: { label: string; value: boolean; onChange: () => void }) {
+function ToggleRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: boolean;
+  onChange: () => void;
+}) {
   return (
     <button
       type="button"
       onClick={onChange}
       aria-pressed={value}
-      className="flex items-center justify-between rounded-[8px] border border-line px-2.5 py-2 text-[12px] font-bold dark:border-white/10"
+      className="flex items-center justify-between rounded-[8px] border border-line px-2.5 py-2 text-[12px] font-bold "
     >
       <span>{label}</span>
-      <span className={cn("relative h-5 w-9 rounded-full transition-colors", value ? "bg-navy-2" : "bg-line")}>
+      <span
+        className={cn(
+          "relative h-5 w-9 rounded-full transition-colors",
+          value ? "bg-navy-2" : "bg-line",
+        )}
+      >
         <span
           className={cn(
-            "absolute top-0.5 size-4 rounded-full bg-white shadow transition-all",
+            "absolute top-0.5 size-4 rounded-full bg-surface shadow transition-all",
             value ? "right-0.5" : "right-[18px]",
           )}
         />
       </span>
     </button>
+  );
+}
+
+/**
+ * Pages tab — header row. Own component so the page COUNT updates without
+ * re-rendering the palette around it.
+ */
+function PagesTabHeader() {
+  const count = useEditor((s) => s.pages.length);
+  return (
+    <header className="flex items-center justify-between">
+      <h2 className="text-[13px] font-extrabold">الصفحات</h2>
+      <span className="text-[11px] text-muted tabular-nums">{count}</span>
+    </header>
+  );
+}
+
+/**
+ * Pages tab — the page management list.
+ *
+ * Extracted from the palette body on purpose: THIS is the only part of the
+ * left panel that needs the whole page list, so a rename, reorder or element
+ * edit on another page no longer re-renders every template card and shape
+ * grid above it.
+ */
+function PagesTabList({
+  activePageId,
+  renamePage,
+  setActivePage,
+  duplicatePage,
+  movePageById,
+  deletePage,
+}: {
+  activePageId: string;
+  renamePage: (id: string, name: string) => void;
+  setActivePage: (id: string) => void;
+  duplicatePage: (id?: string) => void;
+  movePageById: (id: string, dir: -1 | 1) => void;
+  deletePage: (id?: string) => void;
+}) {
+  const pages = useEditor((s) => s.pages);
+  return (
+    <>
+      {pages.map((p, i) => (
+        <div
+          key={p.id}
+          className={cn(
+            "rounded-[8px] border p-2",
+            p.id === activePageId
+              ? "border-navy-2 bg-navy-2/5"
+              : "border-line ",
+          )}
+        >
+          <div className="mb-1.5 flex items-center gap-1.5">
+            <span className="grid size-5 shrink-0 place-items-center rounded bg-line-2 text-[10px] font-extrabold text-muted ">
+              {i + 1}
+            </span>
+            <input
+              value={p.name}
+              onChange={(e) => renamePage(p.id, e.target.value)}
+              onFocus={() => setActivePage(p.id)}
+              aria-label={`اسم الصفحة ${i + 1}`}
+              className="h-7 min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 text-[12px] font-bold hover:border-line focus:border-navy-2 focus:bg-surface "
+            />
+          </div>
+          <p className="mb-2 text-[10px] text-muted tabular-nums">
+            {Math.round(pageSize(p).w)} × {Math.round(pageSize(p).h)} مم
+            · {p.elements.length} عنصر
+          </p>
+          <div className="grid grid-cols-4 gap-1">
+            <MiniButton
+              onClick={() => duplicatePage(p.id)}
+              label={`تكرار الصفحة ${i + 1}`}
+            >
+              تكرار
+            </MiniButton>
+            <MiniButton
+              onClick={() => movePageById(p.id, -1)}
+              label="تحريك لأعلى"
+              disabled={i === 0}
+            >
+              ↑
+            </MiniButton>
+            <MiniButton
+              onClick={() => movePageById(p.id, 1)}
+              label="تحريك لأسفل"
+              disabled={i === pages.length - 1}
+            >
+              ↓
+            </MiniButton>
+            <MiniButton
+              onClick={() => deletePage(p.id)}
+              label="حذف الصفحة"
+              danger
+            >
+              حذف
+            </MiniButton>
+          </div>
+          <details className="artboard-page-options mt-2">
+            <summary>خيارات لوحة الرسم</summary>
+            <div className="grid grid-cols-2 gap-1 mt-2">
+              <MiniButton label="قفل لوحة الرسم" onClick={() => useEditor.getState().toggleArtboardLock(p.id)}>{p.locked ? "إلغاء القفل" : "قفل اللوحة"}</MiniButton>
+              <MiniButton label="إظهار / إخفاء لوحة الرسم" onClick={() => useEditor.getState().toggleArtboardHidden(p.id)}>{p.hidden ? "إظهار المحتوى" : "إخفاء المحتوى"}</MiniButton>
+              <MiniButton label="تقسيم أفقياً" onClick={() => useEditor.getState().splitArtboardPage(p.id, "horizontal")}>تقسيم أفقياً</MiniButton>
+              <MiniButton label="تقسيم رأسياً" onClick={() => useEditor.getState().splitArtboardPage(p.id, "vertical")}>تقسيم رأسياً</MiniButton>
+              {(["top", "bottom", "right", "left"] as const).map((side, index) => (
+                <MiniButton key={side} label={`إضافة لوحة ${["أعلى", "أسفل", "يمين", "يسار"][index]}`} onClick={() => useEditor.getState().addArtboardAdjacent(p.id, side)}>
+                  إضافة { ["أعلى", "أسفل", "يمين", "يسار"][index] }
+                </MiniButton>
+              ))}
+              <MiniButton label="تصدير لوحة الرسم" onClick={() => { setActivePage(p.id); useEditor.getState().openExport("png"); }}>تصدير</MiniButton>
+            </div>
+          </details>
+        </div>
+      ))}
+    </>
   );
 }

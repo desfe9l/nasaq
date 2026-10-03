@@ -1,0 +1,114 @@
+import { createFileRoute } from "@tanstack/react-router";
+
+/**
+ * `/api/templates/thumbnail?id=…` — a template's preview image as a real URL.
+ *
+ * WHY THIS EXISTS
+ *
+ * Social and chat crawlers (WhatsApp, X, LinkedIn, Slack, Telegram) fetch
+ * `og:image` themselves and will not follow a `data:` URL — the image simply
+ * never appears. A shared template link therefore had to fall back to the
+ * platform card, so the recipient saw NASAQ's branding instead of the template
+ * the sender actually picked.
+ *
+ * Preview images are stored with the template record, so this endpoint streams
+ * the stored bytes at a stable, crawlable URL and the share route can point
+ * `og:image` at the SELECTED template's own preview.
+ *
+ * Contract:
+ *   · `?id=` accepts a published template's slug or id (same lookup the public
+ *     page uses), so a share link always resolves.
+ *   · Only PUBLISHED rows are served — a draft's image is not public.
+ *   · SVG previews are rasterised to PNG here. Crawlers do not paint
+ *     `image/svg+xml` as an `og:image`, so serving the SVG would make chats
+ *     and tweets fall back to whatever else they have cached.
+ *   · Other stored mime types are streamed as-is. Nothing trusts a client mime.
+ *   · Cacheable for an hour: the image is immutable per row, and a crawler
+ *     refetching it must not hit the database on every share render.
+ *   · No `X-Content-Type-Options: nosniff` override is needed because the
+ *     content type comes from the stored payload, never from the request.
+ */
+export const Route = createFileRoute("/api/templates/thumbnail")({
+  server: {
+    handlers: {
+      GET: async ({ request }) => {
+        const url = new URL(request.url);
+        const key = (url.searchParams.get("id") ?? "").trim().slice(0, 200);
+        const notFound = () =>
+          new Response("not found", {
+            status: 404,
+            headers: { "cache-control": "no-store" },
+          });
+        if (!key) return notFound();
+        try {
+          const { getSql } = await import("@/lib/db");
+          const db = await getSql();
+          const rows = await db.query<{ thumbnail: string | null }>(
+            `SELECT thumbnail FROM admin_templates
+             WHERE (slug = $1 OR id = $1) AND status = 'published' LIMIT 1`,
+            [key],
+          );
+          const stored = rows[0]?.thumbnail;
+          if (!stored) return notFound();
+          // An external `https:` image: hand the crawler the real location
+          // rather than proxying remote bytes through the app.
+          if (/^https:\/\//i.test(stored)) {
+            return new Response(null, {
+              status: 302,
+              headers: { location: stored, "cache-control": "public, max-age=3600" },
+            });
+          }
+          const match = /^data:(image\/[a-z0-9.+-]+);base64,([\s\S]+)$/i.exec(stored);
+          if (!match) return notFound();
+          const [, mime, payload] = match;
+          const bytes = Buffer.from(payload, "base64");
+          if (bytes.byteLength > 8 * 1024 * 1024) return notFound();
+          const version = url.searchParams.get("v");
+          const { createHash } = await import("node:crypto");
+          const etag = `"${createHash("sha1").update(bytes).digest("hex").slice(0, 16)}"`;
+          const cache = version
+            ? "public, max-age=31536000, immutable"
+            : "public, max-age=60, must-revalidate";
+          if (request.headers.get("if-none-match") === etag) {
+            return new Response(null, { status: 304, headers: { etag, "cache-control": cache } });
+          }
+          if (mime.toLowerCase() === "image/svg+xml") {
+            try {
+              const { rasterizeSvgToPng } = await import("@/lib/og/raster-svg");
+              const png = Buffer.from(await rasterizeSvgToPng(bytes.toString("utf8")));
+              return new Response(png, {
+                status: 200,
+                headers: {
+                  "content-type": "image/png",
+                  "content-length": String(png.byteLength),
+                  etag,
+                  "cache-control": cache,
+                  "content-security-policy": "default-src 'none'; sandbox",
+                },
+              });
+            } catch (error) {
+              console.error("[thumbnail] raster", error);
+              const message = error instanceof Error ? error.message : "raster";
+              return new Response(message.slice(0, 300), {
+                status: 500,
+                headers: { "cache-control": "no-store", "content-type": "text/plain;charset=utf-8" },
+              });
+            }
+          }
+          return new Response(bytes, {
+            status: 200,
+            headers: {
+              "content-type": mime.toLowerCase(),
+              "content-length": String(bytes.byteLength),
+              etag,
+              "cache-control": cache,
+              "content-security-policy": "default-src 'none'; sandbox",
+            },
+          });
+        } catch {
+          return notFound();
+        }
+      },
+    },
+  },
+});

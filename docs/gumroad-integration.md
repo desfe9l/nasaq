@@ -1,0 +1,157 @@
+# Gumroad — بوابة الدفع الأساسية (تشغيل كامل)
+
+هذا المستند يصف بالضبط ما يجب إدخاله في لوحة Gumroad، وبأي قيم، حتى يعمل
+مسار **Gumroad → NASAQ → Keygen** من أول مرة. Gumroad هو مزوّد الدفع الوحيد في
+المنصة؛ أُزيل مزوّد الدفع القديم (Paylink) من الكود بالكامل — بما في ذلك جداوله
+(`migrations/0011_drop_paylink.sql`) ومتغيّراته `PAYLINK_API_ID` /
+`PAYLINK_SECRET_KEY`.
+
+## المنتج (لا يُنشأ منتج جديد)
+
+- المنتج المنشور: `https://nasaqar.gumroad.com/l/auaewk`
+  (نَسَق | الاشتراك الاحترافي — عضوية بـ Tier اثنين)
+- التسعير كما هو دون تغيير:
+  - نَسَق | فردي: Monthly ‏79 SAR · Quarterly ‏199 SAR
+  - نَسَق | فريق: Monthly ‏199 SAR · Quarterly ‏499 SAR
+- محتوى المنتج يبقى صفحة/رسالة توجيه: «سجّل الدخول إلى نَسَق بنفس بريد الشراء».
+  لا تُرفع ملفات نَسَق إلى Gumroad؛ الوصول الحقيقي عبر حساب NASAQ + ترخيص Keygen.
+
+## إنشاء Gumroad Application (مرة واحدة — بلا OAuth)
+
+المطلوب من لوحة Gumroad هو **تطبيق واحد خاص بحساب المتجر**، ووظيفته الوحيدة
+أنه الحاوية التي زرُّ «Generate access token» يعيش داخلها. NASAQ لا يطلب من أي
+مستخدم الربط بحسابه في Gumroad، ولا يوجد في الكود أي OAuth handler ولا أي قراءة
+لـ`Application ID` أو `Application Secret` — هما **غير مطلوبين** ولا يُخزَّنان.
+
+`Settings → Advanced → Applications → Create application`، والقيم بالحرف:
+
+| الخانة | القيمة | ملاحظة |
+| --- | --- | --- |
+| Application icon | اتركها فارغة | اختياري تمامًا (Gumroad يقبل JPG/JPEG/PNG فقط إن أردت رفع شعار نَسَق) |
+| Application name | `NASAQ — نَسَق (تكامل الخادم)` | أي اسم واضح يكفي؛ لا يُقرأ برمجيًا |
+| Redirect URI | `http://127.0.0.1` | **إلزامي في النموذج، وغير مستخدم في NASAQ.** يجب أن يحمل scheme وhost وبلا `#fragment`؛ لذلك يُرفض `localhost` وحده وتُقبل `http://127.0.0.1` |
+
+ثم في نفس الصفحة: `Your applications → Edit → Generate access token` → انسخ
+القيمة إلى `GUMROAD_ACCESS_TOKEN` في Vercel (Production) وأعد النشر.
+
+- المفتاح لا ينتهي تلقائيًا؛ إعادة الضغط على الزر تُعيد **نفس** المفتاح ولا
+  تُدوّره — للإلغاء يجب حذف التطبيق أو استخدام خيار Revoke من Gumroad.
+- للتحقق من أن المفتاح حيّ: افتح **Owner Vault → Gumroad · بوابة الدفع**؛ البطاقة
+  تنادي `GET /v2/user` فعليًا وتعرض اسم/رابط الحساب، وتفرّق بوضوح بين
+  «المفتاح مرفوض (401)» و«المنتج غير موجود».
+- عند تغيير المفتاح حدّث قيمة Vercel فقط؛ لا شيء آخر في المشروع يعتمد عليه.
+
+## متغيرات البيئة (Vercel فقط — لا قيم في Git أو الدردشة)
+
+| المتغير | أين | القيمة |
+| --- | --- | --- |
+| `GUMROAD_ACCESS_TOKEN` | الخادم فقط — **إلزامي** | القيمة من `Edit application → Generate access token` (انظر القسم أعلاه) |
+| `GUMROAD_PRODUCT_ID` | الخادم فقط — **اختياري** | من صفحة المنتج → قسم License key، أو `GET /v2/products` |
+| `GUMROAD_PRODUCT_PERMALINK` | اختياري | الافتراضي `auaewk` |
+| `GUMROAD_STORE_BASE_URL` | اختياري | الافتراضي `https://nasaqar.gumroad.com` |
+| `GUMROAD_TIER_INDIVIDUAL_NAME` / `GUMROAD_TIER_TEAM_NAME` | اختياري | الافتراضي «نَسَق | فردي» / «نَسَق | فريق» |
+
+### استخراج معرّف المنتج تلقائيًا
+
+لا يُفترض أن الـ permalink (`auaewk`) هو معرّف المنتج. `resolveGumroadProductId()`
+في `src/lib/gumroad/config.server.ts` يحسم المعرّف بهذا الترتيب:
+
+1. `GUMROAD_PRODUCT_ID` إن ضُبط — قيمة صريحة تفوز دائمًا.
+2. خلاف ذلك، وبوجود `GUMROAD_ACCESS_TOKEN`، يُستخرج المعرّف الحقيقي من
+   `GET /v2/products` بمطابقة الـ permalink (مع التسامح مع `custom_permalink`
+   ومسار `url`).
+3. خلاف ذلك يبقى غير مُستخرج، ويعود التحقق إلى `product_permalink` (تقبله
+   المنتجات المنشأة قبل 2023).
+
+نتيجة البحث تُحفظ في ذاكرة العملية؛ الفشل **لا** يُحفظ، حتى لا يُعطّل خطأ عابر
+من Gumroad البيع التالي. هذا يجعل `GUMROAD_PRODUCT_ID` اختياريًا بالكامل في
+متجر يحتوي منتجًا واحدًا، ومطلوبًا فقط عندما يستضيف المتجر أكثر من منتج.
+
+كل عملية بيع تُتحقق أيضًا من أنها تخص **هذا** المنتج: بيع يتبع منتج Gumroad
+آخر يُرفض بسبب `product_mismatch` ولا يُفعّل شيئًا.
+
+## ربط Ping / Resource subscriptions
+
+سجّل الـ endpoint التالي في Gumroad (Settings → Advanced → Pings، أو عبر
+`PUT /v2/resource_subscriptions` لكل مورد):
+
+```
+POST https://nasaq-sa.vercel.app/api/webhooks/gumroad
+```
+
+الموارد المطلوب تفعيلها إن استخدمت Resource subscriptions:
+`sale`, `refund`, `dispute`, `dispute_won`, `cancellation`,
+`subscription_ended`, `subscription_restarted` (و`subscription_updated` عند الحاجة).
+
+- أي `POST` يُرد عليه بـ 2xx (لا 404 أبدًا)؛ `GET` يعيد فحص صحة عام.
+- Ping يُعامل كإشعار Post-sale فقط: كل عملية بيع/تجديد تُتحقق منها خادميًا
+  (Gumroad API أو license verify) قبل أي تفعيل.
+- `test=true` (زر Send test ping) يُجاب 200 بدون أي تفعيل.
+- الإعادات (replays) تُخصم عبر `gumroad_pings.dedupe_key`.
+
+## حالات الاشتراك ← أثرها في NASAQ
+
+| حدث Gumroad | أثر النظام |
+| --- | --- |
+| أول دفعة (sale) | ربط العميل بالبريد + إصدار ترخيص Keygen + تفعيل الاشتراك |
+| Renewal (is_recurring_charge) | تمديد نفس ترخيص Keygen (لا ترخيص ثانٍ) |
+| Failed renewal / failed_payment | تبقى الفترة المدفوعة حتى نهايتها ثم تنتهي |
+| Cancellation | تُوقف التجديد فقط؛ الفترة الحالية تكمل حتى نهايتها |
+| subscription_ended | انتهاء الوصول فورًا (نهاية الفترة رسميًا) |
+| Refund | إلغاء الوصول وتعليق ترخيص Keygen فورًا |
+| Dispute (خسارة) / Chargeback | تعليق فوري (SUSPENDED) |
+| Dispute won | إعادة فتح الترخيص والوصول |
+
+## عمليات المالك (Owner Vault → Gumroad · بوابة الدفع)
+
+- Product/API/Ping/Tier/Keygen mapping status + حالة Subscriptions.
+- **API status**: نداء حقيقي `GET /v2/user` يثبت أن `GUMROAD_ACCESS_TOKEN` حيّ
+  ويعرض اسم/رابط حساب Gumroad الذي يخصّه؛ ويميّز «401 مفتاح مرفوض» عن
+  «المنتج غير موجود» لأن إصلاح كل حالة مختلف.
+- **فحص Ping**: يرسل Ping اصطناعي `test=true` للـ endpoint الحي ويتحقق من 2xx.
+- **اختبار تحقق الشراء**: يتأكد أن المُحقق يرفض معرفات بيع غير معروفة.
+- **مزامنة اشتراك**: يعيد قراءة حالة المشترك من Gumroad API بالبريد.
+
+## روابط الشراء (Monthly افتراضي)
+
+كل زر في `/purchase` (و`/pricing`) يفتح **Gumroad Checkout مباشرة** بالـ Tier والفترة
+الصحيحين، دون مرور على صفحة المنتج العامة:
+
+```
+https://nasaqar.gumroad.com/l/auaewk?variant=<Tier>&monthly=true&wanted=true
+https://nasaqar.gumroad.com/l/auaewk?variant=<Tier>&quarterly=true&wanted=true
+```
+
+- `variant=<اسم الـTier>` — Gumroad يطابقه بالاسم ثم يحوّله داخليًا إلى معرّف الـoption
+  ويهرّب المشتري إلى `/checkout`، وهذا ما يجعل `wanted=true` لازمًا.
+- `<monthly|quarterly>=true` — تُترجم إلى `recurrence` الخاص بالعضوية.
+- `email=<بريد المشتري>` يُضاف تلقائيًا للزائر المسجّل (autofill موثّق) ليكون بريد
+  الشراء هو نفسه بريد الحساب الذي سيُربط به الترخيص.
+- **لا تستخدم `?tier=`**: Gumroad لا يقرأه إطلاقًا ويسقط إلى الـTier الافتراضي (فردي)،
+  وهو خطأ قديم مُصلَح في `gumroadCheckoutUrl()` ويحرسه اختبار انحدار.
+
+التحقق الحي (2026-09-26) بقراءة السعر الذي يعرضه الـcheckout فعليًا:
+
+| الرابط | السعر الظاهر |
+| --- | --- |
+| `variant=نَسَق \| فردي & monthly=true` | US$21.06 Monthly (79 SAR) |
+| `variant=نَسَق \| فردي & quarterly=true` | US$53.06 Quarterly (199 SAR) |
+| `variant=نَسَق \| فريق & monthly=true` | US$53.06 Monthly (199 SAR) |
+| `variant=نَسَق \| فريق & quarterly=true` | US$133.07 Quarterly (499 SAR) |
+
+«مؤسسات» ليست منتج Gumroad: زرّها في `/purchase` يوجّه إلى `/contact` لعرض سعر مخصص.
+
+## العودة بعد الدفع
+
+اضبط في Gumroad (Product → Content / Purchase receipt) رابط العودة إلى:
+
+```
+https://nasaq-sa.vercel.app/payment/success
+```
+
+صفحة العودة لا تعتبر الرابط دليل سداد؛ تعرض فقط حالة الحساب الحقيقية كما
+يقرؤها الخادم (وتُجري ربط الاشتراك ببريد الجلسة تلقائيًا عند كل تحديث).
+
+> ملاحظة: رابط المتجر الحالي للمنتج هو `https://nasaqar.gumroad.com/l/auaewk`.
+> إذا تغيّر اسم المتجر (مثل `desfe9l.gumroad.com`) حدّث `GUMROAD_STORE_BASE_URL`
+> في Vercel فقط — لا يلزم أي تغيير في الكود.

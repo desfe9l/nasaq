@@ -36,7 +36,9 @@ describe("parsePastedTable", () => {
   });
 
   it("unquotes quoted cells", () => {
-    assert.deepEqual(parsePastedTable('"قيمة, فيها فاصلة"|ب'), [["قيمة, فيها فاصلة", "ب"]]);
+    assert.deepEqual(parsePastedTable('"قيمة, فيها فاصلة"|ب'), [
+      ["قيمة, فيها فاصلة", "ب"],
+    ]);
   });
 
   it("returns an empty matrix for blank input", () => {

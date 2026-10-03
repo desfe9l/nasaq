@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   appNameFromHost,
+  applyDocumentCachePolicy,
   createHeadInjector,
+  DOCUMENT_CACHE_CONTROL,
   grokXCreatorHeadTags,
   injectGrokPwaHead,
   isDocumentPath,
@@ -286,6 +288,37 @@ test("published VITE_PUBLIC_HOSTNAME wins over request Host for og:image", () =>
   }
 });
 
+test("keeps a page share image when the host cannot publish a platform card", () => {
+  const prev = process.env.VITE_PUBLIC_HOSTNAME;
+  delete process.env.VITE_PUBLIC_HOSTNAME;
+  try {
+    const image = "https://nasaq-sa.vercel.app/api/templates/thumbnail?id=pack";
+    const page = "https://nasaq-sa.vercel.app/templates/pack";
+    const html = `<html><head><title>Report</title><meta property="og:title" content="Old"><meta property="og:image" content="${image}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="1700"><meta property="og:url" content="${page}"><meta name="twitter:image" content="${image}"></head></html>`;
+    const out = injectGrokPwaHead(html, {
+      host: "nasaq-sa.vercel.app",
+      site: { title: "نَسَق", card: "custom" },
+    });
+    assert.match(
+      out,
+      /property="og:image" content="https:\/\/nasaq-sa\.vercel\.app\/api\/templates\/thumbnail\?id=pack"/,
+    );
+    assert.match(out, /property="og:image:width" content="1200"/);
+    assert.match(out, /property="og:image:height" content="1700"/);
+    assert.match(out, /property="og:url" content="https:\/\/nasaq-sa\.vercel\.app\/templates\/pack"/);
+    assert.match(
+      out,
+      /name="twitter:image" content="https:\/\/nasaq-sa\.vercel\.app\/api\/templates\/thumbnail\?id=pack"/,
+    );
+    assert.doesNotMatch(out, /content="Old"/);
+    assert.equal(out.split('property="og:image"').length - 1, 1);
+    assert.equal(out.split('name="twitter:image"').length - 1, 1);
+  } finally {
+    if (prev === undefined) delete process.env.VITE_PUBLIC_HOSTNAME;
+    else process.env.VITE_PUBLIC_HOSTNAME = prev;
+  }
+});
+
 test("vercel Host without a public hostname emits no og:image", () => {
   const prev = process.env.VITE_PUBLIC_HOSTNAME;
   delete process.env.VITE_PUBLIC_HOSTNAME;
@@ -449,14 +482,14 @@ test("strips install params from the app link", () => {
 });
 
 test("names the install page from host slug", () => {
-  assert.equal(appNameFromHost("localhost:8080"), "NASAQ | نَسَق");
-  assert.equal(appNameFromHost("172.17.154.217:8080"), "NASAQ | نَسَق");
+  assert.equal(appNameFromHost("localhost:8080"), "نسق");
+  assert.equal(appNameFromHost("172.17.154.217:8080"), "نسق");
   assert.equal(appNameFromHost("wild-race.grok.me"), "Wild Race");
 });
 
 test("rejects hosts that are not plain slugs", () => {
-  assert.equal(appNameFromHost("<script>alert(1)</script>"), "NASAQ | نَسَق");
-  assert.equal(appNameFromHost('"><img src=x onerror=1>.grok.me'), "NASAQ | نَسَق");
+  assert.equal(appNameFromHost("<script>alert(1)</script>"), "نسق");
+  assert.equal(appNameFromHost('"><img src=x onerror=1>.grok.me'), "نسق");
 });
 
 test("renders install page markup", () => {
@@ -502,5 +535,63 @@ test("vite plugin bakes og identity as a virtual module", () => {
   const plugin = readFileSync(join(TEMPLATE_ROOT, "scripts/grok-pwa-plugin.mjs"), "utf8");
   assert.match(plugin, /virtual:grok-og-identity/);
   assert.match(plugin, /snapshotOgIdentity/);
+});
+
+// ── Document cache policy (versioning vs stale deployments) ────────────────
+//
+// HTML documents are the only unversioned URL in the chain: the assets they
+// reference are content-hashed and `immutable`. Without an explicit policy a
+// browser/intermediary can keep serving the previous deployment's HTML, and
+// the user runs the old Workspace/editor until they clear caches by hand.
+// The contract: every HTML document revalidates (`no-cache`) on both serving
+// layers — deployed Nitro middleware and the dev/preview Vite plugin — while
+// nothing touches storage (no service worker, no cache clearing).
+
+test("document cache policy revalidates but is not no-store", () => {
+  assert.equal(DOCUMENT_CACHE_CONTROL, "no-cache");
+  assert.equal(DOCUMENT_CACHE_CONTROL.includes("no-store"), false);
+});
+
+function headerBag(initial = {}) {
+  const headers = new Map(Object.entries(initial));
+  return [
+    (name) => (headers.has(name.toLowerCase()) ? headers.get(name.toLowerCase()) : null),
+    (name, value) => headers.set(name.toLowerCase(), value),
+    headers,
+  ];
+}
+
+test("applyDocumentCachePolicy sets no-cache when no policy exists", () => {
+  const [get, set, headers] = headerBag();
+  applyDocumentCachePolicy(get, set);
+  assert.equal(headers.get("cache-control"), "no-cache");
+});
+
+test("applyDocumentCachePolicy treats null and empty as unset", () => {
+  for (const initial of [{}, { "cache-control": "" }, { "cache-control": "   " }]) {
+    const [get, set, headers] = headerBag(initial);
+    applyDocumentCachePolicy(get, set);
+    assert.equal(headers.get("cache-control"), "no-cache");
+  }
+});
+
+test("applyDocumentCachePolicy never overrides an explicit policy", () => {
+  for (const existing of ["no-store", "private, max-age=0", DOCUMENT_CACHE_CONTROL]) {
+    const [get, set, headers] = headerBag({ "cache-control": existing });
+    applyDocumentCachePolicy(get, set);
+    assert.equal(headers.get("cache-control"), existing);
+  }
+});
+
+test("deployed middleware applies the document cache policy", () => {
+  const middleware = readFileSync(join(TEMPLATE_ROOT, "server/middleware/grok-pwa.ts"), "utf8");
+  assert.match(middleware, /applyDocumentCachePolicy/);
+  assert.match(middleware, /grok-pwa-shared\.mjs/);
+});
+
+test("dev/preview plugin applies the document cache policy", () => {
+  const plugin = readFileSync(join(TEMPLATE_ROOT, "scripts/grok-pwa-plugin.mjs"), "utf8");
+  assert.match(plugin, /applyDocumentCachePolicy/);
+  assert.match(plugin, /grok-pwa-shared\.mjs/);
 });
 

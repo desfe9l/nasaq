@@ -1,79 +1,539 @@
-import { useMemo, useRef, useState } from "react";
-import { findElement, MIN_SIZE, pageSize, type Box, type CanvasEl, type Page } from "@/lib/editor/model";
+import { screenToDocument, clampZoom } from "@/lib/editor/document-space";
+import { canvasDropPoint } from "@/lib/editor/canvas-space";
+import { pageBackgroundCss } from "@/lib/editor/gradient";
+import { CropOverlay } from "./CropOverlay";
+import { mmToPx } from "@/lib/editor/render-units";
+import { likelyNsqDrag } from "@/lib/nsq/format";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  findElement,
+  MIN_SIZE,
+  WORKSPACE_MARGIN_MM,
+  pageSize,
+  type Box,
+  type CanvasEl,
+  type ElType,
+  type Page,
+} from "@/lib/editor/model";
+import {
+  applyResizeSnap,
+  applySnap,
+  elementAABB,
+  mirrorHandle,
+  resizeToPointer,
+} from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
+import {
+  marqueeForPage,
+  marqueeHitsBox,
+  useInteraction,
+} from "@/lib/editor/interaction-store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
+import { PrintGuides } from "./PrintGuides";
+import type { PrintGuideSettings } from "@/lib/editor/print-guides";
+import { FloatingToolbar } from "./FloatingToolbar";
+import { toast } from "sonner";
+import { beginCanvasNavigation, zoomAnchoredAt } from "@/lib/editor/viewport";
+import { measuredSelectionBox, type PageBoxMm } from "@/lib/editor/ui-state";
+import { LIBRARY_DND_MIME, parseLibraryDrop } from "@/lib/editor/library-dnd";
+import { ARTBOARD_GUTTER_MM } from "@/lib/editor/artboard";
+const GRAPHIC_HEADING_MIME = "application/x-nasaq-graphic-heading";
+import {
+  clearPenHover,
+  fireSyntheticDoubleClick,
+  isPalmTouch,
+  noteElementTap,
+  notePenActivity,
+  resetPenInput,
+  updatePenHover,
+} from "@/lib/editor/pen-input";
 
-type Op =
-  | {
-      kind: "move" | "resize" | "rotate";
-      id: string;
-      handle?: string;
-      startX: number;
-      startY: number;
-      /** Positions of every element the gesture moves, keyed by id. */
-      origins: Record<string, { x: number; y: number }>;
-      orig: CanvasEl;
-      pageId: string;
-      parent?: { x: number; y: number };
+import {
+  CanvasPointerSession,
+  LONG_PRESS_MS,
+  POINTER_SLOP,
+} from "@/lib/editor/canvas-pointer";
+
+type Op = {
+  kind: "move" | "resize" | "rotate";
+  id: string;
+  handle?: string;
+  startX: number;
+  startY: number;
+  origins: Record<string, { x: number; y: number }>;
+  orig: CanvasEl;
+  pageId: string;
+  parent?: { x: number; y: number };
+} | null;
+
+/** The stable gesture sink every element node receives (see ElementNode). */
+type ElementGestureHandler = (
+  e: React.PointerEvent,
+  el: CanvasEl,
+  kind: "move" | "resize" | "rotate",
+  handle?: string,
+  ctx?: { pageId?: string; parent?: { x: number; y: number } },
+) => void;
+
+type LayerPickerState = {
+  x: number;
+  y: number;
+  clientX: number;
+  clientY: number;
+  pageId: string;
+  point: { x: number; y: number };
+  elements: CanvasEl[];
+} | null;
+
+const SELECTION_LAYER_Z = 5000;
+const GUIDE_LAYER_Z = SELECTION_LAYER_Z - 1;
+const HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"] as const;
+const ROTATE_HANDLES = ["n"] as const;
+const EMPTY_SELECTION = new Set<string>();
+
+function snapRotation(raw: number, shift: boolean): number {
+  if (!shift) {
+    const free = (((raw % 360) + 540) % 360) - 180;
+    return round(free);
+  }
+  const fifteen = Math.round(raw / 15) * 15;
+  return (((fifteen % 360) + 540) % 360) - 180;
+}
+
+const pagePoint = screenToDocument;
+
+/**
+ * هل النقطة داخل صندوق العنصر مع مراعاة الدوران — لاختيار دقيق بالقلم
+ */
+function pointInRotatedBox(el: CanvasEl, px: number, py: number): boolean {
+  const cx = el.x + el.w / 2;
+  const cy = el.y + el.h / 2;
+  const dx = px - cx;
+  const dy = py - cy;
+  const rad = (-(el.rotation || 0) * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const rx = dx * cos - dy * sin;
+  const ry = dx * sin + dy * cos;
+  const tol = 0.2;
+  return Math.abs(rx) <= el.w / 2 + tol && Math.abs(ry) <= el.h / 2 + tol;
+}
+
+function brushHitsElement(el: CanvasEl, x: number, y: number, radius: number): boolean {
+  const dx = x - (el.x + el.w / 2);
+  const dy = y - (el.y + el.h / 2);
+  const angle = (-(el.rotation || 0) * Math.PI) / 180;
+  const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+  const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+  const nearestX = clamp(localX, -el.w / 2, el.w / 2);
+  const nearestY = clamp(localY, -el.h / 2, el.h / 2);
+  return (localX - nearestX) ** 2 + (localY - nearestY) ** 2 <= radius ** 2;
+}
+
+/**
+ * جميع العناصر الموجودة في نقطة معينة — مرتبة من الأعلى (z الأكبر) إلى الأسفل
+ * تراعي حالة الدخول إلى مجموعة (enteredGroup)
+ */
+function elementsAtPoint(
+  page: Page,
+  enteredGroupId: string | null,
+  px: number,
+  py: number,
+): CanvasEl[] {
+  const entered = enteredGroupId
+    ? findElement(page.elements, enteredGroupId)?.el || null
+    : null;
+  let list: CanvasEl[];
+  let offset = { x: 0, y: 0 };
+  if (entered?.children?.length) {
+    list = entered.children;
+    offset = { x: entered.x, y: entered.y };
+  } else {
+    list = page.elements;
+  }
+  const hits: CanvasEl[] = [];
+  for (const el of list) {
+    if (el.hidden) continue;
+    const absEl =
+      offset.x || offset.y
+        ? { ...el, x: el.x + offset.x, y: el.y + offset.y }
+        : el;
+    if (pointInRotatedBox(absEl, px, py)) {
+      hits.push(absEl);
     }
-  | null;
+  }
+  // الأعلى أولاً
+  return hits.sort((a, b) => b.z - a.z);
+}
 
-type Marquee = { x0: number; y0: number; x1: number; y1: number } | null;
+/** Second tap on the same overlapping stack opens the picker. The first tap selects. */
+let lastAmbiguousStack = { key: "", at: 0 };
 
-export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: { x: number; y: number }) => void }) {
+export function CanvasStage({
+  onDropImage,
+  onCanvasTap,
+}: {
+  onDropImage?: (
+    file: File,
+    at?: { x: number; y: number; pageId: string },
+  ) => void;
+  onCanvasTap?: () => void;
+}) {
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
   const selectedIds = useEditor((s) => s.selectedIds);
+  const selectedId = useEditor((s) => s.selectedId);
+  const addElementAt = useEditor((s) => s.addElementAt);
+  const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
+  const exportOpen = useEditor((s) => s.exportOpen);
+  const pageManagerOpen = useEditor((s) => s.pageManagerOpen);
+  const contextMenu = useEditor((s) => s.contextMenu);
   const enteredGroupId = useEditor((s) => s.enteredGroupId);
   const zoom = useEditor((s) => s.zoom);
   const previewAll = useEditor((s) => s.previewAll);
   const showGrid = useEditor((s) => s.showGrid);
+  const printGuides = useEditor((s) => s.printGuides);
   const snapGrid = useEditor((s) => s.snapGrid);
   const snapElements = useEditor((s) => s.snapElements);
   const select = useEditor((s) => s.select);
   const toggleSelect = useEditor((s) => s.toggleSelect);
   const selectMany = useEditor((s) => s.selectMany);
+  const addTextAt = useEditor((s) => s.addTextAt);
   const enterGroup = useEditor((s) => s.enterGroup);
-  const replaceElement = useEditor((s) => s.replaceElement);
+  const applyElements = useEditor((s) => s.applyElements);
   const fitTextBox = useEditor((s) => s.fitTextBox);
-  const commit = useEditor((s) => s.commit);
   const setActivePage = useEditor((s) => s.setActivePage);
+  const editingId = useEditor((s) => s.editingId);
+  const artboardGridCols = useEditor((s) => s.artboardGridCols);
+  const renamePage = useEditor((s) => s.renamePage);
+
+  const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
 
   const opRef = useRef<Op>(null);
-  const [guides, setGuides] = useState<{ v: number[]; h: number[] }>({ v: [], h: [] });
-  const [marquee, setMarquee] = useState<Marquee>(null);
-  const [dropping, setDropping] = useState(false);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const spaceDown = useRef(false);
+  const input = useRef<CanvasPointerSession | null>(null);
+  if (!input.current)
+    input.current = new CanvasPointerSession({
+      navigate: (start) =>
+        stageRef.current
+          ? beginCanvasNavigation(stageRef.current, start)
+          : () => {},
+      undo: () => useEditor.getState().undo(),
+      redo: () => useEditor.getState().redo(),
+    });
+
+  /*
+   * Guides, the rotation readout and the marquee are TRANSIENT interaction
+   * overlays: they live in the interaction store, and only the small overlay
+   * components that paint them subscribe. Keeping them as local state here
+   * re-rendered the ENTIRE stage (every artboard, every element) on each
+   * pointer frame of a drag.
+   */
+  const setGuides = useInteraction((s) => s.setGuides);
+  const setRotationHint = useInteraction((s) => s.setRotationHint);
+  const setMarquee = useInteraction((s) => s.setMarquee);
+  const [dropping, setDropping] = useState<"file" | "library" | null>(null);
+  const [drawTool, setDrawTool] = useState<"text" | "rect" | "erase" | null>(null);
+  const eraseSizeRef = useRef(10);
+  const marqueeShapeRef = useRef<"rect" | "ellipse">("rect");
+  const drawArmed = drawTool !== null;
+  /*
+   * The header's tool cluster shows which tool is live. The tool state lives
+   * HERE (the canvas owns the gesture), so the canvas broadcasts every change
+   * — including the auto-disarm after drawing a box — and the buttons never
+   * claim a tool the canvas already dropped.
+   */
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent<"text" | "rect" | "erase" | null>("nasaq:tool-state", {
+        detail: drawTool,
+      }),
+    );
+  }, [drawTool]);
   const pageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-
-  /**
-   * Translate a drop point into page millimetres.
-   *
-   * The drop target is resolved from the element under the pointer rather than
-   * a ref, because the author may drop onto any page — including one that is not
-   * the active page in the all-pages preview.
-   */
-  const dropPoint = (e: React.DragEvent): { x: number; y: number; pageId: string } | null => {
-    const target = (e.target as HTMLElement | null)?.closest<HTMLElement>("[data-page-id]");
-    if (!target) return null;
-    const pageId = target.dataset.pageId;
-    const page = pages.find((p) => p.id === pageId);
-    if (!page) return null;
-    const size = pageSize(page);
-    const rect = target.getBoundingClientRect();
-    return {
-      pageId: page.id,
-      x: ((e.clientX - rect.left) / rect.width) * size.w,
-      y: ((e.clientY - rect.top) / rect.height) * size.h,
+  /** The stage node, as state so the artboard IntersectionObservers (which are
+   *  created in an effect and need a real element for `root`) can use it. */
+  const [stageEl, setStageEl] = useState<HTMLDivElement | null>(null);
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    setStageEl(stage);
+    const measure = () => {
+      stage.style.setProperty("--canvas-pan-x", `${stage.clientWidth}px`);
+      stage.style.setProperty("--canvas-pan-y", `${stage.clientHeight}px`);
     };
-  };
+    measure();
+    const active = stage.querySelector<HTMLElement>(
+      `[data-page-id="${CSS.escape(useEditor.getState().activePageId || "")}"]`,
+    );
+    if (active) {
+      const rect = active.getBoundingClientRect(),
+        viewport = stage.getBoundingClientRect();
+      stage.scrollLeft +=
+        rect.left + rect.width / 2 - viewport.left - stage.clientWidth / 2;
+      stage.scrollTop +=
+        rect.top + rect.height / 2 - viewport.top - stage.clientHeight / 2;
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, []);
+  /**
+   * Page node registry, stable across renders.
+   *
+   * The key is deleted (not just nulled) when a virtualised artboard unmounts,
+   * so the map cannot grow without bound as you scroll a long document and
+   * hit-testing never sees a detached node for an offscreen page.
+   */
+  const registerPageRef = useCallback(
+    (pageId: string, node: HTMLDivElement | null) => {
+      if (node) pageRefs.current[pageId] = node;
+      else delete pageRefs.current[pageId];
+    },
+    [],
+  );
+  /** Clicking an artboard's name: make it active and drop the selection. */
+  const activatePage = useCallback((pageId: string) => {
+    useEditor.getState().setActivePage(pageId);
+    useEditor.getState().select(null);
+  }, []);
+  const [layerPicker, setLayerPicker] = useState<LayerPickerState>(null);
+
+  useEffect(() => {
+    const armText = () => setDrawTool("text");
+    const onTool = (event: Event) => {
+      const detail = (
+        event as CustomEvent<"text" | "rect" | "erase" | null>
+      ).detail;
+      setDrawTool(detail ?? null);
+    };
+    const onEraseSize = (event: Event) => {
+      const size = Number((event as CustomEvent<number>).detail);
+      if (Number.isFinite(size)) eraseSizeRef.current = clamp(size, 2, 50);
+    };
+    const onMarqueeShape = (event: Event) => {
+      const shape = (event as CustomEvent<"rect" | "ellipse">).detail;
+      if (shape === "rect" || shape === "ellipse")
+        marqueeShapeRef.current = shape;
+    };
+    const disarm = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDrawTool(null);
+        setLayerPicker(null);
+      }
+    };
+    window.addEventListener("nasaq:draw-text", armText);
+    window.addEventListener("nasaq:tool", onTool);
+    window.addEventListener("nasaq:eraser-size", onEraseSize);
+    window.addEventListener("nasaq:marquee-shape", onMarqueeShape);
+    window.addEventListener("keydown", disarm);
+    return () => {
+      window.removeEventListener("nasaq:draw-text", armText);
+      window.removeEventListener("nasaq:tool", onTool);
+      window.removeEventListener("nasaq:eraser-size", onEraseSize);
+      window.removeEventListener("nasaq:marquee-shape", onMarqueeShape);
+      window.removeEventListener("keydown", disarm);
+    };
+  }, []);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const prev = useEditor.getState().zoom;
+      const next = clampZoom(prev * Math.exp(-e.deltaY * 0.002));
+      zoomAnchoredAt(stage, prev, next, e.clientX, e.clientY);
+    };
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", onWheel);
+  }, []);
+
+  useEffect(() => {
+    const session = input.current!;
+    const move = (event: PointerEvent) => session.move(event);
+    const up = (event: PointerEvent) => session.end(event);
+    const cancel = (event: PointerEvent) => session.end(event, true);
+    const reset = () => session.reset();
+    const visibility = () => {
+      if (document.hidden) reset();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancel);
+    window.addEventListener("blur", reset);
+    document.addEventListener("visibilitychange", visibility);
+    return () => {
+      reset();
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancel);
+      window.removeEventListener("blur", reset);
+      document.removeEventListener("visibilitychange", visibility);
+    };
+  }, []);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+
+    const track = (event: Event) => notePenActivity(event as PointerEvent);
+    const PEN_WINDOW_EVENTS = [
+      "pointerdown",
+      "pointerup",
+      "pointercancel",
+      "pointerover",
+      "pointerout",
+      "pointermove",
+    ] as const;
+    for (const type of PEN_WINDOW_EVENTS) {
+      window.addEventListener(type, track, true);
+    }
+
+    const onPenMove = (event: PointerEvent) => {
+      if (event.pointerType !== "pen") return;
+      updatePenHover(
+        event.clientX,
+        event.clientY,
+        useEditor.getState().activePageId,
+      );
+    };
+    const onPenLeave = () => {
+      clearPenHover();
+    };
+    stage.addEventListener("pointermove", onPenMove);
+    stage.addEventListener("pointerleave", onPenLeave);
+
+    const onBlur = () => {
+      clearPenHover();
+      resetPenInput();
+    };
+    window.addEventListener("blur", onBlur);
+
+    const claim = (event: Event) => event.preventDefault();
+    const GESTURE_EVENTS = [
+      "gesturestart",
+      "gesturechange",
+      "gestureend",
+    ] as const;
+    for (const type of GESTURE_EVENTS) {
+      stage.addEventListener(type, claim, { passive: false });
+    }
+
+    return () => {
+      for (const type of PEN_WINDOW_EVENTS) {
+        window.removeEventListener(type, track, true);
+      }
+      stage.removeEventListener("pointermove", onPenMove);
+      stage.removeEventListener("pointerleave", onPenLeave);
+      window.removeEventListener("blur", onBlur);
+      for (const type of GESTURE_EVENTS) {
+        stage.removeEventListener(type, claim);
+      }
+      clearPenHover();
+    };
+  }, []);
+
+  useEffect(() => {
+    const down = (event: KeyboardEvent) => {
+      if (
+        event.code === "Space" &&
+        !(event.target as HTMLElement | null)?.isContentEditable
+      )
+        spaceDown.current = true;
+    };
+    const up = (event: KeyboardEvent) => {
+      if (event.code === "Space") spaceDown.current = false;
+    };
+    const blur = () => {
+      spaceDown.current = false;
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", blur);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", blur);
+    };
+  }, []);
+
+  const dropPoint = (e: { clientX: number; clientY: number }) =>
+    canvasDropPoint(
+      stageRef.current,
+      useEditor.getState().pages,
+      e.clientX,
+      e.clientY,
+    );
 
   const visible = useMemo(
     () => (previewAll ? pages : pages.filter((p) => p.id === activePageId)),
     [pages, previewAll, activePageId],
   );
+
+  const startErase = (e: React.PointerEvent, page: Page) => {
+    if (isPalmTouch(e) || e.button !== 0 || input.current!.busy) return;
+    if (page.locked || page.hidden) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onCanvasTap?.();
+    setLayerPicker(null);
+    const state = useEditor.getState();
+    if (state.activePageId !== page.id) state.setActivePage(page.id);
+    const pageEl = pageRefs.current[page.id];
+    if (!pageEl) return;
+    const size = pageSize(page);
+    const toMm = (event: { clientX: number; clientY: number }) =>
+      pagePoint(pageEl.getBoundingClientRect(), size, event.clientX, event.clientY);
+    const erased = new Set<string>();
+    const collect = (event: { clientX: number; clientY: number }) => {
+      const point = toMm(event);
+      const current = useEditor.getState();
+      const group =
+        current.activePageId === page.id && current.enteredGroupId
+          ? findElement(page.elements, current.enteredGroupId)?.el
+          : null;
+      const candidates = group?.children ?? page.elements;
+      const offset = group ? { x: group.x, y: group.y } : { x: 0, y: 0 };
+      const radius = eraseSizeRef.current / 2;
+      for (const element of candidates) {
+        const absolute =
+          offset.x || offset.y
+            ? { ...element, x: element.x + offset.x, y: element.y + offset.y }
+            : element;
+        if (
+          !element.hidden &&
+          !element.locked &&
+          brushHitsElement(absolute, point.x, point.y, radius)
+        ) {
+          erased.add(element.id);
+        }
+      }
+    };
+    collect(e);
+    input.current!.claim(e, {
+      yieldable: e.pointerType === "touch",
+      move: collect,
+      end: (event) => {
+        collect(event);
+        if (erased.size) useEditor.getState().deleteElementsById([...erased]);
+      },
+      cancel: () => {},
+    });
+  };
 
   const startOp = (
     e: React.PointerEvent,
@@ -83,364 +543,1515 @@ export function CanvasStage({ onDropImage }: { onDropImage?: (file: File, at?: {
     handle?: string,
     parent?: { x: number; y: number },
   ) => {
+    if (isPalmTouch(e)) {
+      e.stopPropagation();
+      e.preventDefault();
+      return;
+    }
+    if (e.button !== 0 || input.current!.busy || useInteraction.getState().crop)
+      return;
+    onCanvasTap?.();
+    setLayerPicker(null);
     if (el.locked) {
+      e.stopPropagation();
       select(el.id);
       return;
     }
+    if (el.resizeLocked && kind === "resize") {
+      e.stopPropagation();
+      e.preventDefault();
+      select(el.id);
+      return;
+    }
+    // قفل عرض/ارتفاع مستقل — يمنع Resize فقط على المحور المقفل
+    if (kind === "resize" && handle) {
+      if (el.widthLocked && (handle.includes("e") || handle.includes("w"))) {
+        // إذا كان العرض مقفلاً ونحاول تغييره مع بقاء الارتفاع مقفلاً أيضاً، امنع تماماً
+        if (el.heightLocked) {
+          e.stopPropagation();
+          select(el.id);
+          toast.info("العرض والارتفاع مقفلان — فك القفل للتحجيم");
+          return;
+        }
+        // إذا كان مقفل عرض فقط، نسمح بتغيير الارتفاع فقط إذا كان المقبض عمودي
+        const isHorizontalOnly = handle === "e" || handle === "w";
+        if (isHorizontalOnly) {
+          e.stopPropagation();
+          select(el.id);
+          return;
+        }
+      }
+      if (el.heightLocked && (handle.includes("n") || handle.includes("s"))) {
+        const isVerticalOnly = handle === "n" || handle === "s";
+        if (isVerticalOnly) {
+          e.stopPropagation();
+          select(el.id);
+          return;
+        }
+        if (el.widthLocked) {
+          e.stopPropagation();
+          select(el.id);
+          return;
+        }
+      }
+    }
     e.stopPropagation();
+    // Direct manipulation replaces native text/image dragging, only here.
     e.preventDefault();
-    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    setActivePage(page.id);
+    const captureTarget = stageRef.current!;
+    if (e.pointerType !== "mouse") {
+      try {
+        captureTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* detached */
+      }
+    }
 
-    /*
-     * Selection rules, in the order a design tool applies them:
-     *  · shift extends the selection, so several elements can be gathered;
-     *  · pressing an element that is already part of a multi-selection keeps the
-     *    whole selection, so it can be dragged as a unit;
-     *  · anything else replaces the selection with the pressed element.
-     */
-    if (e.shiftKey) toggleSelect(el.id);
-    else if (!selectedSet.has(el.id)) select(el.id);
+    const stateBeforeActivation = useEditor.getState();
+    const enteredGroupForPage =
+      stateBeforeActivation.activePageId === page.id
+        ? stateBeforeActivation.enteredGroupId
+        : null;
+    stateBeforeActivation.setActivePage(page.id);
 
     const pageEl = pageRefs.current[page.id];
     if (!pageEl) return;
     const size = pageSize(page);
-    // Snapshot the live page geometry once: reading it per pointermove would
-    // force a layout on every frame of a drag.
     const rect = pageEl.getBoundingClientRect();
-    const scaleX = size.w / rect.width;
-    const scaleY = size.h / rect.height;
-    const toMm = (ev: { clientX: number; clientY: number }) => ({
-      x: (ev.clientX - rect.left) * scaleX,
-      y: (ev.clientY - rect.top) * scaleY,
-    });
+    const toMm = (ev: { clientX: number; clientY: number }) =>
+      pagePoint(pageEl.getBoundingClientRect(), size, ev.clientX, ev.clientY);
 
     const start = toMm(e);
+    const slopMm = Math.max(
+      e.pointerType === "pen" ? 0.85 : 0.2,
+      ((e.pointerType === "pen" ? POINTER_SLOP * 2 : POINTER_SLOP) * size.w) /
+        Math.max(1, rect.width),
+    );
+    let maxDist = 0;
 
-    // The elements this gesture moves. A resize or rotate handle only ever acts
-    // on the pressed element; a plain drag carries the whole selection unless
-    // the press was a shift-toggle, which is a selection change and not a drag.
-    const draggingIds =
-      kind !== "move" || e.shiftKey ? [el.id] : selectedSet.has(el.id) ? selectedIds : [el.id];
-    const linkedIds =
-      kind === "move" && !e.shiftKey
-        ? page.elements
-            .filter((candidate) => candidate.linkId && draggingIds.some((id) => page.elements.find((item) => item.id === id)?.linkId === candidate.linkId))
-            .map((candidate) => candidate.id)
-        : [];
-    const gestureIds = [...new Set([...draggingIds, ...linkedIds])];
+    const enteredGroup = enteredGroupForPage
+      ? findElement(page.elements, enteredGroupForPage)?.el || null
+      : null;
+    const enteredChildren = enteredGroup?.children || [];
 
-    const origins: Record<string, { x: number; y: number }> = {};
-    if (kind === "move" && !e.shiftKey) {
-      for (const id of gestureIds) {
-        const found = page.elements.find((x) => x.id === id);
-        if (found) origins[id] = { x: found.x, y: found.y };
-      }
-    }
+    const defer =
+      kind === "move" &&
+      !e.shiftKey &&
+      (e.pointerType === "touch" || e.pointerType === "pen");
+    let decided = !defer;
+    let heldLong = false;
+    let longPressTimer: ReturnType<typeof setTimeout> | undefined;
+    let longPressFired = false;
+    /** Last informative pointer angle for a rotation (see the dead zone in
+     * the rotate branch of `paintFrame`). */
+    let rotateHold: number | null = null;
 
-    opRef.current = {
-      kind,
-      id: el.id,
-      handle,
-      startX: start.x,
-      startY: start.y,
-      origins,
-      orig: { ...el, style: { ...el.style } },
-      pageId: page.id,
-      parent,
+    const applyPressSelection = () => {
+      const fresh = useEditor.getState();
+      if (e.shiftKey) toggleSelect(el.id);
+      else if (!fresh.selectedIds.includes(el.id)) select(el.id);
     };
+
+    const beginGesture = () => {
+      document.body.classList.add("is-gesturing");
+      applyPressSelection();
+      const fresh = useEditor.getState();
+      const live = new Set(fresh.selectedIds);
+      const draggingIds =
+        kind !== "move" || e.shiftKey
+          ? [el.id]
+          : live.has(el.id)
+            ? fresh.selectedIds
+            : [el.id];
+      const linkedIds =
+        kind === "move" && !e.shiftKey
+          ? page.elements
+              .filter(
+                (candidate) =>
+                  candidate.linkId &&
+                  draggingIds.some(
+                    (id) =>
+                      page.elements.find((item) => item.id === id)?.linkId ===
+                      candidate.linkId,
+                  ),
+              )
+              .map((candidate) => candidate.id)
+          : [];
+      const gestureIds = [...new Set([...draggingIds, ...linkedIds])];
+
+      const origins: Record<string, { x: number; y: number }> = {};
+      if (kind === "move" && !e.shiftKey) {
+        for (const id of gestureIds) {
+          let found: CanvasEl | undefined;
+          if (enteredGroup && enteredChildren.some((c) => c.id === id)) {
+            found = enteredChildren.find((c) => c.id === id);
+          } else {
+            found = page.elements.find((x) => x.id === id);
+          }
+          if (found) origins[id] = { x: found.x, y: found.y };
+        }
+      }
+
+      opRef.current = {
+        kind,
+        id: el.id,
+        handle,
+        startX: start.x,
+        startY: start.y,
+        origins,
+        orig: { ...el, style: { ...el.style } },
+        pageId: page.id,
+        parent,
+      };
+      useInteraction.getState().beginInteraction();
+    };
+
+    if (decided) beginGesture();
+
+    // One long-press timer, only for element bodies. Handles never open menus.
+    if (defer) {
+      longPressTimer = setTimeout(() => {
+        input.current!.lock(e.pointerId);
+        longPressFired = true;
+        heldLong = true;
+        decided = true;
+        applyPressSelection();
+        useEditor.getState().openContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          targetId: el.id,
+          source: "canvas",
+        });
+      }, LONG_PRESS_MS);
+    }
 
     const others = page.elements.filter((x) => x.id !== el.id && !x.hidden);
 
-    const move = (ev: PointerEvent) => {
+    /*
+     * ── Transient gesture loop ────────────────────────────────────────────
+     *
+     * Pointer frames NEVER write the document store. Each frame:
+     *   1. computes the final geometry exactly as before (snap, clamp,
+     *      shift/alt semantics unchanged),
+     *   2. publishes it to the interaction store, which re-renders only the
+     *      dragged element nodes and the guide overlay at display rate,
+     *   3. records the STORE-space result for the commit.
+     * The document is written once, on release, through `applyElements` —
+     * one store notification, one undo entry, one autosave scheduling.
+     *
+     * Frames are coalesced with requestAnimationFrame: on 120 Hz pointers the
+     * old path recomputed snapping and re-rendered the app twice per displayed
+     * frame.
+     */
+    const interaction = useInteraction.getState();
+    /** Store-space geometry of every gesture element at the last frame. */
+    let finals: CanvasEl[] = [];
+    let framePending = false;
+    let lastMoveEv: PointerEvent | null = null;
+
+    const paintFrame = (ev: PointerEvent) => {
+      framePending = false;
       const op = opRef.current;
-      if (!op) return;
+      if (!op || heldLong) return;
       const cur = toMm(ev);
-      const dx = cur.x - op.startX;
-      const dy = cur.y - op.startY;
+      const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
+      if (dist > maxDist) maxDist = dist;
+      let dx = cur.x - op.startX;
+      let dy = cur.y - op.startY;
       const next: CanvasEl = { ...op.orig, style: { ...op.orig.style } };
+
+      const stageEl = stageRef.current;
+      if (stageEl) {
+        const vr = stageEl.getBoundingClientRect();
+        const margin = 80;
+        const ease = (dist: number) => (margin - Math.max(dist, 0)) * 0.12;
+        const fromLeft = ev.clientX - vr.left;
+        const fromRight = vr.right - ev.clientX;
+        const fromTop = ev.clientY - vr.top;
+        const fromBottom = vr.bottom - ev.clientY;
+        const ax =
+          fromLeft < margin
+            ? -ease(fromLeft)
+            : fromRight < margin
+              ? ease(fromRight)
+              : 0;
+        const ay =
+          fromTop < margin
+            ? -ease(fromTop)
+            : fromBottom < margin
+              ? ease(fromBottom)
+              : 0;
+        if (ax || ay) {
+          stageEl.scrollLeft += ax;
+          stageEl.scrollTop += ay;
+          const pageElNow = pageRefs.current[op.pageId];
+          if (pageElNow) {
+            const rectNow = pageElNow.getBoundingClientRect();
+            const curNow = pagePoint(rectNow, size, ev.clientX, ev.clientY);
+            cur.x = curNow.x;
+            cur.y = curNow.y;
+            dx = curNow.x - op.startX;
+            dy = curNow.y - op.startY;
+          }
+        }
+      }
 
       if (op.kind === "move") {
         next.x = op.orig.x + dx;
         next.y = op.orig.y + dy;
-        applySnap(next, others, size, snapGrid, snapElements, setGuides, op.origins);
-        // Everything else in the selection follows the pressed element's final,
-        // snapped offset, so their spacing relative to each other is preserved.
-        const appliedDx = next.x - op.orig.x;
-        const appliedDy = next.y - op.orig.y;
-        for (const [id, origin] of Object.entries(op.origins)) {
-          if (id === op.id) continue;
-          const sibling = page.elements.find((x) => x.id === id);
-          if (!sibling) continue;
-          replaceElement(
-            { ...sibling, x: origin.x + appliedDx, y: origin.y + appliedDy },
-            true,
+        const zoomNow = useEditor.getState().zoom;
+        const snapped = applySnap(
+          next,
+          others,
+          size,
+          snapGrid && !ev.altKey,
+          !ev.altKey && (snapElements || ev.shiftKey),
+          zoomNow,
+          op.origins,
+          op.orig.rotation || 0,
+        );
+        setGuides(snapped);
+      } else if (op.kind === "resize") {
+        const mirrored = mirrorHandle(
+          op.handle || "se",
+          op.orig.style?.flipX === true,
+          op.orig.style?.flipY === true,
+        );
+        const ratioLocked = ev.shiftKey || op.orig.style?.aspectLock === true;
+        /*
+         * Anchor-based resize — the ONE model for every shape at every
+         * rotation (see `resizeToPointer`). The pointer's absolute page
+         * position is the input: the anchor stays put, the grabbed
+         * corner/edge lands exactly under the pointer, and x/y/w/h are
+         * back-solved. At rotation 0 this reduces to the classic
+         * `resizeByHandle` results, so axis-aligned behaviour is unchanged.
+         *
+         * Alt = التحويل من المركز (center-based resize): the original centre
+         * stays pinned while both sides move — the same modifier the move
+         * gesture uses to suspend snapping, so holding Alt always means
+         * "raw, unassisted transform". Snapping is skipped while Alt is held
+         * and during ratio-locked resizes (the dragged edge would fight the
+         * proportion constraint).
+         */
+        resizeToPointer(
+          next,
+          op.orig,
+          mirrored,
+          { x: cur.x, y: cur.y },
+          op.orig.rotation || 0,
+          ratioLocked,
+          {
+            widthLocked: op.orig.widthLocked,
+            heightLocked: op.orig.heightLocked,
+            centered: ev.altKey,
+          },
+        );
+        if (!ratioLocked) {
+          const zoomNow = useEditor.getState().zoom;
+          setGuides(
+            applyResizeSnap(
+              next,
+              mirrored,
+              others,
+              size,
+              snapGrid && !ev.altKey,
+              snapElements && !ev.altKey,
+              zoomNow,
+              op.orig.rotation || 0,
+            ),
           );
         }
-      } else if (op.kind === "resize") {
-        resizeByHandle(next, op.orig, op.handle || "se", dx, dy, ev.shiftKey);
       } else if (op.kind === "rotate") {
         const cx = op.orig.x + op.orig.w / 2;
         const cy = op.orig.y + op.orig.h / 2;
         const a0 = Math.atan2(op.startY - cy, op.startX - cx);
-        const a1 = Math.atan2(cur.y - cy, cur.x - cx);
+        /*
+         * Guard against pointer noise at the centre: atan2 is undefined at
+         * zero radius, and within a couple of mm of the centre a 1px wobble
+         * swings the angle through tens of degrees, which reads as the
+         * object spinning "randomly". Inside that dead zone the pointer
+         * angle carries no information, so the angle is held from the last
+         * informative frame (the drag still rotates by whatever the pointer
+         * swept before entering the zone).
+         */
+        const distC = Math.hypot(cur.x - cx, cur.y - cy);
+        const a1 =
+          distC < 2 ? (rotateHold ?? a0) : Math.atan2(cur.y - cy, cur.x - cx);
+        if (distC >= 2) rotateHold = a1;
         const raw = (op.orig.rotation || 0) + ((a1 - a0) * 180) / Math.PI;
-        next.rotation = ev.shiftKey ? Math.round(raw / 15) * 15 : round(raw % 360);
+        next.rotation = snapRotation(raw, ev.shiftKey);
+        setRotationHint({
+          angle: next.rotation,
+          shift: ev.shiftKey,
+          x: ev.clientX,
+          y: ev.clientY,
+        });
       }
-      // Workspace allows free drag: elements may extend beyond the page
-      // boundary during editing. Only the page content is clipped at export.
-      // We keep a soft boundary (not hard clamp) so the user can freely
-      // position elements outside the page area when needed.
-      const workspaceMargin = 120; // extra workspace area around page (mm)
-      const workspaceW = size.w + workspaceMargin * 2;
-      const workspaceH = size.h + workspaceMargin * 2;
+      const workspaceW = size.w + WORKSPACE_MARGIN_MM * 2;
+      const workspaceH = size.h + WORKSPACE_MARGIN_MM * 2;
       next.w = Math.max(clamp(next.w, MIN_SIZE, workspaceW), MIN_SIZE);
       next.h = Math.max(clamp(next.h, MIN_SIZE, workspaceH), MIN_SIZE);
-      // Soft boundary: allow elements to extend beyond page but keep them
-      // within a generous workspace area so nothing disappears unexpectedly.
-      next.x = Math.max(-workspaceMargin, Math.min(next.x, workspaceW - next.w + workspaceMargin));
-      next.y = Math.max(-workspaceMargin, Math.min(next.y, workspaceH - next.h + workspaceMargin));
-      replaceElement(op.parent ? { ...next, x: next.x - op.parent.x, y: next.y - op.parent.y } : next, true);
+      next.x = Math.max(
+        -WORKSPACE_MARGIN_MM,
+        Math.min(next.x, size.w + WORKSPACE_MARGIN_MM - next.w),
+      );
+      next.y = Math.max(
+        -WORKSPACE_MARGIN_MM,
+        Math.min(next.y, size.h + WORKSPACE_MARGIN_MM - next.h),
+      );
+
+      /*
+       * Publish the frame. `next` (and the sibling maths below) are in
+       * ABSOLUTE page mm — the coordinate space the element nodes render in.
+       * The store, however, keeps entered-group children in parent-relative
+       * mm, so the commit stash carries the shifted copy.
+       */
+      const batch: CanvasEl[] = [
+        op.parent
+          ? { ...next, x: next.x - op.parent.x, y: next.y - op.parent.y }
+          : next,
+      ];
+      interaction.setOverride(op.id, {
+        x: next.x,
+        y: next.y,
+        w: next.w,
+        h: next.h,
+        rotation: next.rotation,
+      });
+      if (op.kind === "move") {
+        const appliedDx = next.x - op.orig.x;
+        const appliedDy = next.y - op.orig.y;
+        // Group members live in their own (parent-relative) list.
+        const siblingList =
+          op.parent && enteredGroup ? enteredChildren : page.elements;
+        for (const [id, origin] of Object.entries(op.origins)) {
+          if (id === op.id) continue;
+          const sibling = siblingList.find((x) => x.id === id);
+          if (!sibling) continue;
+          const storeX = origin.x + appliedDx;
+          const storeY = origin.y + appliedDy;
+          batch.push({ ...sibling, x: storeX, y: storeY });
+          interaction.setOverride(id, {
+            x: storeX + (op.parent?.x ?? 0),
+            y: storeY + (op.parent?.y ?? 0),
+          });
+        }
+      }
+      finals = batch;
     };
 
-    const up = () => {
-      opRef.current = null;
-      setGuides({ v: [], h: [] });
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      commit();
+    const move = (ev: PointerEvent) => {
+      if (longPressFired) return;
+      if (!decided) {
+        const cur = toMm(ev);
+        const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
+        if (dist < slopMm) return;
+        decided = true;
+        if (longPressTimer !== undefined) {
+          clearTimeout(longPressTimer);
+          longPressTimer = undefined;
+        }
+        input.current!.lock(e.pointerId);
+        beginGesture();
+        maxDist = dist;
+      }
+      if (heldLong) return;
+      lastMoveEv = ev;
+      if (!framePending) {
+        framePending = true;
+        requestAnimationFrame(() => {
+          if (framePending && lastMoveEv) paintFrame(lastMoveEv);
+        });
+      }
     };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+
+    const detach = () => {
+      // Capture belongs to the stage until native up/cancel, including promotion
+      // from a pending element press to a two-finger gesture.
+      if (longPressTimer !== undefined) {
+        clearTimeout(longPressTimer);
+        longPressTimer = undefined;
+      }
+    };
+
+    const up = (ev: PointerEvent) => {
+      const hadGesture = opRef.current !== null;
+      if (longPressFired) {
+        detach();
+        opRef.current = null;
+      document.body.classList.remove("is-gesturing");
+        interaction.endInteraction();
+        return;
+      }
+      if (!decided) {
+        decided = true;
+        applyPressSelection();
+      }
+      detach();
+      const wasTap = kind === "move" && !heldLong && maxDist < slopMm;
+
+      if (wasTap) {
+        const pageForHit = pages.find((p) => p.id === page.id);
+        if (pageForHit) {
+          const hits = elementsAtPoint(
+            pageForHit,
+            enteredGroupId,
+            start.x,
+            start.y,
+          );
+          const key = hits.map((hit) => hit.id).join("\0");
+          const now = performance.now();
+          const repeat =
+            hits.length > 1 &&
+            key === lastAmbiguousStack.key &&
+            now - lastAmbiguousStack.at < 1400 &&
+            useEditor.getState().selectedIds.includes(hits[0].id);
+          lastAmbiguousStack = { key, at: now };
+          if (hits.length > 1 && (repeat || ev.altKey)) {
+            setTimeout(() => {
+              if (!input.current!.busy) {
+                setLayerPicker({
+                  x: ev.clientX,
+                  y: ev.clientY,
+                  clientX: ev.clientX,
+                  clientY: ev.clientY,
+                  pageId: page.id,
+                  point: start,
+                  elements: hits,
+                });
+              }
+            }, 80);
+          }
+        }
+        if (
+          (ev.pointerType === "touch" || ev.pointerType === "pen") &&
+          noteElementTap(page.id, el.id, ev.pointerType)
+        ) {
+          fireSyntheticDoubleClick(page.id, el.id);
+        }
+      }
+      opRef.current = null;
+      document.body.classList.remove("is-gesturing");
+      /*
+       * Commit: flush any frame the rAF gate had not painted, drop the
+       * transient overrides, then write the final geometry to the document in
+       * ONE batched store update (single history entry, single autosave).
+       */
+      if (hadGesture) {
+        if (framePending && lastMoveEv) paintFrame(lastMoveEv);
+        framePending = false;
+        const committed = finals;
+        finals = [];
+        interaction.endInteraction();
+        if (committed.length) applyElements(page.id, committed);
+      } else {
+        interaction.endInteraction();
+      }
+    };
+
+    const cancel = () => {
+      const hadGesture = opRef.current !== null;
+      detach();
+      opRef.current = null;
+      document.body.classList.remove("is-gesturing");
+      const committed = hadGesture ? finals : [];
+      finals = [];
+      interaction.endInteraction();
+      if (committed.length) applyElements(page.id, committed);
+    };
+
+    input.current!.claim(e, { move, end: up, cancel, yieldable: defer });
+  };
+
+  /*
+   * Stable gesture sink for every element node. A fresh closure per stage
+   * render would defeat ElementNode's memo — the whole point is that a
+   * re-render of the stage (a zoom tick, a selection change, a page switch)
+   * reconciles hundreds of element wrappers without re-running their paint.
+   *
+   * The page and element are resolved from the LIVE store at call time, so a
+   * gesture that starts after an undo still acts on current geometry. The
+   * element passed by the node wins when it is already the stored one; the
+   * entered-group case passes absolute coordinates plus the parent offset,
+   * exactly like the old inline closures did.
+   */
+  const startOpRef = useRef(startOp);
+  startOpRef.current = startOp;
+  const onElementGesture = useCallback<ElementGestureHandler>(
+    (e, el, kind, handle, ctx) => {
+      const state = useEditor.getState();
+      const page = ctx?.pageId
+        ? state.pages.find((p) => p.id === ctx.pageId)
+        : state.pages.find((p) => p.id === state.activePageId);
+      if (!page) return;
+      startOpRef.current(e, page, el, kind, handle, ctx?.parent);
+    },
+    [],
+  );
+
+  const pickables = (
+    page: Page,
+    groupId: string | null,
+  ): { id: string; box: Box }[] => {
+    const entered = groupId
+      ? findElement(page.elements, groupId)?.el || null
+      : null;
+    if (entered?.children?.length) {
+      // Entered-group children are parent-relative; the group's own rotation
+      // is part of each child's visual silhouette, so the AABB is computed
+      // in the group's local space (child rotation about the child's centre,
+      // group rotation about the GROUP's centre) and translated by the
+      // group's origin.
+      return entered.children
+        .filter((child) => !child.hidden)
+        .map((child) => ({
+          id: child.id,
+          box: elementAABB(
+            { x: child.x, y: child.y, w: child.w, h: child.h },
+            child.rotation || 0,
+            { x: entered.x, y: entered.y },
+            entered.rotation || 0,
+            { x: entered.w / 2, y: entered.h / 2 },
+          ),
+        }));
+    }
+    // Top level: the element's own box and rotation in page mm.
+    return page.elements
+      .filter((el) => !el.hidden)
+      .map((el) => ({
+        id: el.id,
+        box: elementAABB(
+          { x: el.x, y: el.y, w: el.w, h: el.h },
+          el.rotation || 0,
+          { x: 0, y: 0 },
+        ),
+      }));
+  };
+
+  const activePageForSelection = pages.find((p) => p.id === activePageId);
+  const primarySelection = (() => {
+    if (!selectedId || !activePageForSelection) return null;
+    const found = findElement(activePageForSelection.elements, selectedId)?.el;
+    return found && !found.hidden ? found : null;
+  })();
+
+  const startMarquee = (
+    e: React.PointerEvent,
+    pageId: string,
+    activate: "always" | "onmove" = "always",
+  ) => {
+    if (
+      e.button !== 0 ||
+      input.current!.busy ||
+      isPalmTouch(e) ||
+      useInteraction.getState().crop
+    )
+      return;
+    /** Resolved at gesture time, like every other handler here: the node that
+     *  started the gesture may belong to a page that has since been
+     *  re-created by an undo, and virtualisation may have unmounted it. */
+    const stateAtStart = useEditor.getState();
+    const page = stateAtStart.pages.find((candidate) => candidate.id === pageId);
+    if (!page || page.locked || page.hidden) return;
+    /*
+     * A marquee that STARTS on the pasteboard (outside every artboard) must
+     * not hijack the active page on a mere click — the author may only want
+     * the selection cleared. Those gestures activate their page on the first
+     * real movement instead.
+     */
+    let activated = stateAtStart.activePageId === pageId;
+    if (!activated && activate === "always") {
+      stateAtStart.setActivePage(pageId);
+      activated = true;
+    }
+    const activeState = useEditor.getState();
+    const selectionForPage =
+      activeState.activePageId === pageId ? activeState.selectedIds : [];
+    const groupForPage =
+      activeState.activePageId === pageId ? activeState.enteredGroupId : null;
+    const pageEl = pageRefs.current[page.id];
+    if (!pageEl) return;
+    e.stopPropagation();
+    const size = pageSize(page);
+    const toMm = (ev: { clientX: number; clientY: number }) =>
+      pagePoint(pageEl.getBoundingClientRect(), size, ev.clientX, ev.clientY);
+    const start = toMm(e);
+    const stage = stageRef.current!;
+    const scroll = { x: stage.scrollLeft, y: stage.scrollTop };
+    const pan = e.pointerType === "touch" && !drawTool && !selectionForPage.length;
+    const before = e.shiftKey ? [...selectionForPage] : [];
+    const candidates = pickables(page, groupForPage);
+    let moved = false;
+    let held = false;
+    /** Last selection written by the marquee — a set-difference guard so a
+     * pointer sweep does not write the store (and re-render the editor) on
+     * every frame when the hit set has not actually changed. */
+    let lastHitKey = "";
+    const timer =
+      !drawTool && e.pointerType !== "mouse"
+        ? setTimeout(() => {
+            held = true;
+            input.current!.lock(e.pointerId);
+            useEditor.getState().openContextMenu({
+              x: e.clientX,
+              y: e.clientY,
+              targetId: null,
+              source: "canvas",
+            });
+          }, LONG_PRESS_MS)
+        : undefined;
+    const finish = () => {
+      clearTimeout(timer);
+      setMarquee(null);
+    };
+    input.current!.claim(e, {
+      yieldable: e.pointerType === "touch",
+      move: (ev) => {
+        if (held) return;
+        if (
+          !moved &&
+          Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) <
+            POINTER_SLOP
+        )
+          return;
+        clearTimeout(timer);
+        moved = true;
+        // A blank one-finger pan may promote to a two-finger navigation;
+        // drawing/marquee selection, like an element drag, owns its pointer.
+        if (!pan) input.current!.lock(e.pointerId);
+        if (pan) {
+          stage.scrollLeft = scroll.x - (ev.clientX - e.clientX);
+          stage.scrollTop = scroll.y - (ev.clientY - e.clientY);
+          return;
+        }
+        if (!activated) {
+          useEditor.getState().setActivePage(pageId);
+          activated = true;
+        }
+        const cur = toMm(ev);
+        const box = {
+          x: Math.min(start.x, cur.x),
+          y: Math.min(start.y, cur.y),
+          w: Math.abs(cur.x - start.x),
+          h: Math.abs(cur.y - start.y),
+        };
+        setMarquee({
+          pageId,
+          x0: box.x,
+          y0: box.y,
+          x1: box.x + box.w,
+          y1: box.y + box.h,
+          shape: marqueeShapeRef.current,
+        });
+        if (!drawTool) {
+          const hits = candidates
+            .filter((p) =>
+              marqueeHitsBox(
+                {
+                  x0: start.x,
+                  y0: start.y,
+                  x1: cur.x,
+                  y1: cur.y,
+                  shape: marqueeShapeRef.current,
+                },
+                p.box,
+              ),
+            )
+            .map((p) => p.id);
+          const merged = [...new Set([...before, ...hits])];
+          const key = merged.join("\\u0000");
+          if (key !== lastHitKey) {
+            lastHitKey = key;
+            selectMany(merged);
+          }
+        }
+      },
+      end: (ev) => {
+        finish();
+        if (held) return;
+        if (drawTool) {
+          const end = toMm(ev);
+          const box = {
+            x: Math.min(start.x, end.x),
+            y: Math.min(start.y, end.y),
+            w: Math.max(MIN_SIZE, Math.abs(end.x - start.x)),
+            h: Math.max(MIN_SIZE, Math.abs(end.y - start.y)),
+          };
+          setDrawTool(null);
+          /*
+           * «Draw Square» paints a real filled rectangle SHAPE in the
+           * interface's single blue — the author sketches the box and gets a
+           * finished, rescalable design element, not a blank container.
+           */
+          if (drawTool === "rect")
+            addElementAt("shape", {
+              ...box,
+              name: "مربع",
+              style: { fill: "#3b6e9c", shapeId: "rect", shape: "rect" },
+            });
+          else {
+            const id = addTextAt(box, page.id);
+            if (id) requestAnimationFrame(() => requestEdit(page.id, id));
+          }
+        } else if (!moved && !e.shiftKey) select(null);
+      },
+      cancel: finish,
+    });
+  };
+
+  /** Resolve the visible artboard under a stage-level pointer start. */
+  const pageAtPoint = (x: number, y: number): Page | null => {
+    for (const page of [...visible].reverse()) {
+      const node = pageRefs.current[page.id];
+      if (!node) continue;
+      const rect = node.getBoundingClientRect();
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom)
+        return page;
+    }
+    return null;
   };
 
   /**
-   * Elements a click or marquee can pick, in the current grouping context.
+   * The visible artboard NEAREST a pasteboard point.
    *
-   * Outside a group that is the top-level list — a group counts as one element.
-   * Once the author steps into a group, its members become pickable instead, at
-   * their absolute page positions.
+   * Selection is a workspace gesture, not an artboard-only one: pressing the
+   * grey canvas beside a page and sweeping across it must marquee-select, and
+   * a plain click there must clear the selection — exactly like clicking empty
+   * space inside the page. The active page wins ties, then proximity.
    */
-  const pickables = (page: Page): { id: string; box: Box }[] => {
-    const entered = enteredGroupId ? findElement(page.elements, enteredGroupId)?.el || null : null;
-    if (entered?.children?.length) {
-      return entered.children.map((child) => ({
-        id: child.id,
-        box: { x: entered.x + child.x, y: entered.y + child.y, w: child.w, h: child.h },
-      }));
+  const nearestPageToPoint = (x: number, y: number): Page | null => {
+    const activeId = useEditor.getState().activePageId;
+    let best: Page | null = null;
+    let bestDist = Number.POSITIVE_INFINITY;
+    for (const page of visible) {
+      if (page.locked || page.hidden) continue;
+      const node = pageRefs.current[page.id];
+      if (!node) continue;
+      const rect = node.getBoundingClientRect();
+      const dx = Math.max(rect.left - x, 0, x - rect.right);
+      const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+      const dist =
+        Math.hypot(dx, dy) - (page.id === activeId ? Number.MIN_VALUE : 0);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = page;
+      }
     }
-    return page.elements.map((el) => ({ id: el.id, box: { x: el.x, y: el.y, w: el.w, h: el.h } }));
+    return best;
   };
 
-  /** Rubber-band selection on empty page space. */
-  const startMarquee = (e: React.PointerEvent, page: Page) => {
-    const pageEl = pageRefs.current[page.id];
-    if (!pageEl) return;
-    const size = pageSize(page);
-    const rect = pageEl.getBoundingClientRect();
-    const toMm = (ev: { clientX: number; clientY: number }) => ({
-      x: ((ev.clientX - rect.left) / rect.width) * size.w,
-      y: ((ev.clientY - rect.top) / rect.height) * size.h,
-    });
-    const start = toMm(e);
-    const additive = e.shiftKey;
-    const before = additive ? [...selectedIds] : [];
-    const candidates = pickables(page);
-    let moved = false;
-
-    const move = (ev: PointerEvent) => {
-      const cur = toMm(ev);
-      moved = true;
-      const box: Box = {
-        x: Math.min(start.x, cur.x),
-        y: Math.min(start.y, cur.y),
-        w: Math.abs(cur.x - start.x),
-        h: Math.abs(cur.y - start.y),
-      };
-      setMarquee({ x0: box.x, y0: box.y, x1: box.x + box.w, y1: box.y + box.h });
-      // Intersection, not full containment: brushing across a row of elements is
-      // the gesture people actually use to grab them all.
-      const hits = candidates
-        .filter(
-          (p) =>
-            p.box.x < box.x + box.w &&
-            p.box.x + p.box.w > box.x &&
-            p.box.y < box.y + box.h &&
-            p.box.y + p.box.h > box.y,
-        )
-        .map((p) => p.id);
-      selectMany([...before, ...hits.filter((id) => !before.includes(id))]);
-    };
-
-    const up = () => {
-      setMarquee(null);
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      // A press with no drag is a plain click on empty space, which clears the
-      // selection the way every design tool does.
-      if (!moved && !additive) select(null);
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
+  // Geometry is relative to each artboard, NOT bounded by it. Rendering and
+  // export clipping stay unchanged; visible workspace overflow remains usable.
+  /**
+   * Resolve the topmost editable object at a screen point. Alt/Option-click
+   * deliberately advances through the hit stack, which gives desktop users a
+   * direct path to artwork behind another object without opening a context menu
+   * or temporarily changing layer order.
+   */
+  const workspaceHit = (x: number, y: number, cycle = false) => {
+    for (const page of [...visible].reverse()) {
+      const node = pageRefs.current[page.id];
+      if (!node) continue;
+      const point = pagePoint(
+        node.getBoundingClientRect(),
+        pageSize(page),
+        x,
+        y,
+      );
+      const pageIsActive = page.id === activePageId;
+      const pageSelection = pageIsActive ? selectedSet : EMPTY_SELECTION;
+      const pageEnteredGroupId = pageIsActive ? enteredGroupId : null;
+      const hits = elementsAtPoint(
+        page,
+        pageEnteredGroupId,
+        point.x,
+        point.y,
+      ).filter((el) => !el.hidden);
+      let el = hits.find((el) => pageSelection.has(el.id)) || hits[0];
+      if (cycle && hits.length > 1) {
+        const selectedIndex = hits.findIndex((item) =>
+          pageSelection.has(item.id),
+        );
+        el = hits[(selectedIndex + 1 + hits.length) % hits.length] || hits[0];
+      }
+      if (el) {
+        const group = pageEnteredGroupId
+          ? findElement(page.elements, pageEnteredGroupId)?.el
+          : null;
+        return {
+          page,
+          el,
+          parent: group ? { x: group.x, y: group.y } : undefined,
+        };
+      }
+    }
+    return null;
   };
 
   return (
     <div
-      className={cn("editor-canvas-stage studio-grid relative min-h-0 min-w-0 overflow-auto px-6 py-8", dropping && "is-dropping")}
+      ref={stageRef}
+      className={cn(
+        "editor-canvas-stage studio-grid relative min-h-0 min-w-0 overflow-auto",
+        dropping && "is-dropping",
+        drawArmed && "draw-armed",
+        drawTool === "rect" && "draw-rect",
+        drawTool === "erase" && "draw-erase",
+      )}
+      style={{ "--editor-zoom": zoom } as React.CSSProperties}
       dir="ltr"
-      onPointerDown={() => select(null)}
+      onLostPointerCapture={(e) => input.current!.end(e.nativeEvent, true)}
+      onPointerDownCapture={(e) => {
+        if (isPalmTouch(e)) {
+          e.stopPropagation();
+          return;
+        }
+        const target = e.target as HTMLElement;
+        if (target.closest(".crop-overlay")) return;
+        if (
+          target.closest(
+            "button, input, textarea, select, [contenteditable=true], .floating-toolbar, .layer-picker-popup",
+          )
+        )
+          return;
+        if (input.current!.down(e.nativeEvent)) {
+          e.stopPropagation();
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            /* detached */
+          }
+          return;
+        }
+        if (drawTool === "erase" && e.button === 0) {
+          const page = pageAtPoint(e.clientX, e.clientY);
+          if (page) startErase(e, page);
+          return;
+        }
+        if (
+          spaceDown.current &&
+          e.pointerType === "mouse" &&
+          e.button === 0 &&
+          !target.closest(".handle, .rotate-handle")
+        ) {
+          e.preventDefault(); // Space+drag replaces native text selection.
+          e.stopPropagation();
+          const stage = e.currentTarget;
+          const left = stage.scrollLeft,
+            top = stage.scrollTop;
+          input.current!.claim(e, {
+            yieldable: false,
+            move: (ev) => {
+              stage.scrollLeft = left - (ev.clientX - e.clientX);
+              stage.scrollTop = top - (ev.clientY - e.clientY);
+            },
+            end: () => {},
+            cancel: () => {},
+          });
+          return;
+        }
+        // Handles keep first refusal. Geometry then resolves selected artwork
+        // ahead of other elements, including overflow outside the page DOM box.
+        if (e.button === 0 && !target.closest(".handle, .rotate-handle")) {
+          if (e.altKey) e.preventDefault();
+          const hit = workspaceHit(e.clientX, e.clientY, e.altKey);
+          if (hit) startOp(e, hit.page, hit.el, "move", undefined, hit.parent);
+        }
+      }}
+      onPointerDown={(e) => {
+        if (isPalmTouch(e) || input.current!.busy) return;
+        const target = e.target as HTMLElement;
+        if (target.closest(".crop-overlay")) return;
+        if (
+          target.closest(
+            "button, input, textarea, select, [contenteditable=true], .floating-toolbar, .layer-picker-popup",
+          )
+        )
+          return;
+        setLayerPicker(null);
+        onCanvasTap?.();
+        let page = pageAtPoint(e.clientX, e.clientY);
+        let activate: "always" | "onmove" = "always";
+        if (!page) {
+          // Pasteboard press: selection starts OUTSIDE the artboard too — a
+          // drag marquees on the nearest page, a plain click deselects.
+          page = nearestPageToPoint(e.clientX, e.clientY);
+          activate = "onmove";
+        }
+        if (!page || page.locked || page.hidden) return;
+        startMarquee(e, page.id, activate);
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault(); // Only the canvas replaces the browser context menu.
+        e.stopPropagation();
+        const hit = workspaceHit(e.clientX, e.clientY);
+        if (hit) {
+          useEditor.getState().setActivePage(hit.page.id);
+          const activeState = useEditor.getState();
+          if (
+            activeState.activePageId === hit.page.id &&
+            !activeState.selectedIds.includes(hit.el.id)
+          )
+            activeState.select(hit.el.id);
+        }
+        useEditor.getState().openContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          targetId: hit?.el.id ?? null,
+          source: "canvas",
+        });
+      }}
       onDragOver={(e) => {
-        if (!onDropImage || !e.dataTransfer.types.includes("Files")) return;
-        // Claiming the drop is what suppresses the browser's "open the file" handoff.
+        const isFile = e.dataTransfer.types.includes("Files");
+        const isLibrary = e.dataTransfer.types.includes(LIBRARY_DND_MIME);
+        const isGraphic = e.dataTransfer.types.includes(GRAPHIC_HEADING_MIME);
+        if ((!onDropImage || !isFile) && !isLibrary && !isGraphic) return;
+        // An `.nsq` project is opened by the editor-wide intake (NsqIntake),
+        // which shows its own drop overlay — not the image hint.
+        if (isFile && !isLibrary && !isGraphic && likelyNsqDrag(e.dataTransfer))
+          return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
-        setDropping(true);
+        setDropping(isLibrary || isGraphic ? "library" : "file");
       }}
       onDragLeave={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-        setDropping(false);
+        setDropping(null);
       }}
       onDrop={(e) => {
-        setDropping(false);
+        setDropping(null);
+        const graphicId = e.dataTransfer.getData(GRAPHIC_HEADING_MIME);
+        if (graphicId) {
+          e.preventDefault();
+          const at = dropPoint(e);
+          if (at) {
+            setActivePage(at.pageId);
+            const store = useEditor.getState();
+            if (store.insertGraphicHeadingAt)
+              store.insertGraphicHeadingAt(graphicId as any, {
+                x: at.x,
+                y: at.y,
+              });
+          }
+          return;
+        }
+        const payload = parseLibraryDrop(
+          e.dataTransfer.getData(LIBRARY_DND_MIME),
+        );
+        if (payload) {
+          e.preventDefault();
+          const at = dropPoint(e);
+          if (!at) return;
+          useEditor.getState().insertLibraryElements(payload, at, at.pageId);
+          return;
+        }
         if (!onDropImage) return;
-        const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/"));
-        if (!file) return;
         e.preventDefault();
+        const file = Array.from(e.dataTransfer.files)[0];
+        if (!file || !file.type.startsWith("image/")) {
+          toast.error("نوع الملف غير مدعوم.");
+          return;
+        }
         const at = dropPoint(e);
         if (at) setActivePage(at.pageId);
-        onDropImage(file, at ? { x: at.x, y: at.y } : undefined);
+        if (at) onDropImage(file, at);
       }}
     >
       {dropping && (
-        <div className="pointer-events-none sticky top-0 z-50 mx-auto w-max rounded-full border border-gold/40 bg-white/95 px-4 py-1.5 text-[11px] font-extrabold text-navy shadow-sm dark:bg-[#161c26] dark:text-gold-2">
-          أفلت الصورة لإضافتها إلى الصفحة
+        <div className="canvas-drop-hint pointer-events-none absolute top-3 left-1/2 z-[var(--z-canvas-overlay)] -translate-x-1/2 w-max rounded-full border border-line bg-surface px-4 py-1.5 text-[11px] font-extrabold text-brand shadow-sm">
+          {dropping === "library"
+            ? "أفلت العنصر ليُضاف في هذا الموضع"
+            : "أفلت الصورة لإضافتها إلى الصفحة"}
         </div>
       )}
-      <div className="mx-auto flex w-max min-w-full flex-col items-center gap-10" dir="rtl">
-        {visible.map((page) => {
-          const size = pageSize(page);
-          const isActive = page.id === activePageId;
-          const entered = enteredGroupId ? findElement(page.elements, enteredGroupId)?.el || null : null;
-          const enteredKids = entered?.children ?? [];
-          return (
-            <div key={page.id} className="page-frame" style={{ transform: `scale(${zoom})` }}>
-              <div className="mb-2 flex items-center justify-between gap-4 text-[12px] text-muted" dir="rtl">
-                <strong className="text-ink dark:text-white">
-                  {page.name}
-                  {entered && <span className="ms-2 font-semibold text-gold-2">· داخل «{entered.name}»</span>}
-                </strong>
-                <span className="tabular-nums">
-                  {previewAll
-                    ? `صفحة ${pages.findIndex((p) => p.id === page.id) + 1} من ${pages.length}`
-                    : `${round(size.w)} × ${round(size.h)} مم`}
-                </span>
-              </div>
-              <div
-                ref={(n) => {
-                  pageRefs.current[page.id] = n;
-                }}
-                data-page-id={page.id}
-                className={`report-page ${showGrid ? "show-grid" : ""} ${isActive ? "ring-2 ring-gold ring-offset-8" : ""}`}
-                style={{ width: `${size.w}mm`, height: `${size.h}mm`, background: page.bg || "#fff" }}
-                onPointerDown={(e) => {
-                  // Only a press on the page itself starts a marquee; presses on
-                  // elements are handled by the element and stop propagation.
-                  if (e.target !== e.currentTarget) return;
-                  e.stopPropagation();
-                  setActivePage(page.id);
-                  startMarquee(e, page);
-                }}
-              >
-                {page.elements
-                  .slice()
-                  .sort((a, b) => a.z - b.z)
-                  .map((el) => {
-                    // Stepped into this group: its frame is drawn for context and
-                    // its members become individually selectable nodes, instead of
-                    // the group behaving as one opaque element.
-                    if (entered && el.id === entered.id && enteredKids.length) {
-                      return (
-                        <div key={el.id}>
-                          <div
-                            className="canvas-el group-frame"
-                            style={{
-                              left: `${el.x}mm`,
-                              top: `${el.y}mm`,
-                              width: `${el.w}mm`,
-                              height: `${el.h}mm`,
-                              transform: `rotate(${el.rotation || 0}deg)`,
-                              zIndex: el.z,
-                            }}
-                          />
-                          {enteredKids
-                            .slice()
-                            .sort((a, b) => a.z - b.z)
-                            .map((child) => {
-                              const abs = { ...child, x: entered.x + child.x, y: entered.y + child.y };
-                              return (
-                                <ElementNode
-                                  key={child.id}
-                                  el={abs}
-                                  selected={selectedSet.has(child.id)}
-                                  multi={selectedSet.size > 1}
-                                  interactive
-                                  onPointerDown={(ev, kind, handle) => startOp(ev, page, abs, kind, handle, { x: entered.x, y: entered.y })}
-                                />
-                              );
-                            })}
-                        </div>
-                      );
-                    }
-                    if (entered && el.id === entered.id) return null;
-                    return (
-                      <ElementNode
-                        key={el.id}
-                        el={el}
-                        selected={selectedSet.has(el.id)}
-                        multi={selectedSet.size > 1}
-                        interactive
-                        onEnterGroup={el.type === "group" ? () => enterGroup(el.id) : undefined}
-                        onPointerDown={(ev, kind, handle) => startOp(ev, page, el, kind, handle)}
-                      />
-                    );
-                  })}
-                {marquee && (
-                  <div
-                    className="marquee"
-                    style={{
-                      left: `${marquee.x0}mm`,
-                      top: `${marquee.y0}mm`,
-                      width: `${Math.abs(marquee.x1 - marquee.x0)}mm`,
-                      height: `${Math.abs(marquee.y1 - marquee.y0)}mm`,
-                    }}
-                  />
-                )}
-                {isActive &&
-                  page.elements.map((el) => (
-                    <OverflowFlag key={el.id} el={el} onFit={() => fitTextBox(el.id)} />
-                  ))}
-                {isActive &&
-                  guides.v.map((x) => <div key={`v${x}`} className="guide-v" style={{ left: `${x}mm` }} />)}
-                {isActive &&
-                  guides.h.map((y) => <div key={`h${y}`} className="guide-h" style={{ top: `${y}mm` }} />)}
-              </div>
-            </div>
-          );
-        })}
+      <div
+        className="workspace-scroll-surface mx-auto flex w-max min-w-full min-h-full items-center justify-center"
+        dir="ltr"
+        style={{
+          padding:
+            "max(48px, var(--canvas-pan-y, 100vh)) max(48px, var(--canvas-pan-x, 100vw))",
+        }}
+      >
+        <div
+          className="artboard-grid"
+          dir="rtl"
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${Math.max(1, Math.min(visible.length, artboardGridCols))}, max-content)`,
+            gap: `max(32px, ${ARTBOARD_GUTTER_MM * zoom}mm)`,
+            alignItems: "start",
+            justifyContent: "center",
+          }}
+        >
+          {visible.map((page) => (
+            /*
+             * One memoised artboard per page. `ArtboardPage` owns its own mount
+             * decision, so in preview-all the pages outside the viewport are not
+             * in the React tree at all — see the comment on the component for
+             * why that, and not "render everything and hide it", is what keeps a
+             * 30-page document responsive.
+             */
+            <ArtboardPage
+              key={page.id}
+              page={page}
+              pageNo={pages.findIndex((p) => p.id === page.id) + 1}
+              pageCount={pages.length}
+              isActive={page.id === activePageId}
+              isRenaming={renamingPageId === page.id}
+              zoom={zoom}
+              root={stageEl}
+              selectedSet={page.id === activePageId ? selectedSet : EMPTY_SELECTION}
+              selectedId={page.id === activePageId ? selectedId : null}
+              editingId={page.id === activePageId ? editingId : null}
+              enteredGroupId={page.id === activePageId ? enteredGroupId : null}
+              showGrid={showGrid}
+              printGuides={printGuides}
+              onElementGesture={onElementGesture}
+              onEnterGroup={enterGroup}
+              onMarquee={startMarquee}
+              onRegisterRef={registerPageRef}
+              onFit={fitTextBox}
+              onEditRequest={requestEdit}
+              onActivate={activatePage}
+              onStartRename={setRenamingPageId}
+              onRename={renamePage}
+            />
+          ))}
+        </div>
       </div>
-      <ExportCapture pages={pages} />
+      {primarySelection &&
+        editingId !== primarySelection.id &&
+        bubbleEnabled &&
+        !exportOpen &&
+        !pageManagerOpen &&
+        !contextMenu &&
+        !layerPicker && (
+          <SelectionTools
+            key={`${activePageId}:${primarySelection.id}`}
+            el={primarySelection}
+            pageId={activePageId}
+          />
+        )}
+
+      {layerPicker && (
+        <LayerPickerPopup
+          picker={layerPicker}
+          onSelect={(id) => {
+            const state = useEditor.getState();
+            state.setActivePage(layerPicker.pageId);
+            state.select(id);
+            setLayerPicker(null);
+          }}
+          onClose={() => setLayerPicker(null)}
+        />
+      )}
+
+      <ExportCaptureLayer />
     </div>
   );
 }
 
 /**
- * Overflow marker for an element whose text does not fit its box.
- *
- * Drawn as a sibling of the element rather than inside it, because `.canvas-el`
- * clips its own content — a badge placed inside would be cut off by exactly the
- * element it is warning about. Clicking it applies the fix.
+ * Mount margin for artboard virtualisation: a page starts rendering this far
+ * before it enters the viewport and is dropped this far after it leaves, which
+ * is what makes fast scrolling / cmd-scroll zooming feel like the page was
+ * always there instead of flashing empty artboards.
  */
-function OverflowFlag({ el, onFit }: { el: CanvasEl; onFit: () => void }) {
+const ARTBOARD_MOUNT_MARGIN = "900px 700px";
+
+/*
+ * WHY VIRTUALISE THE ARTBOARDS
+ *
+ * `previewAll` (View → «معاينة كل الصفحات») used to mount every page of the
+ * document at once. A 30-page report then means 30 artboards × their full
+ * element trees — every text run, table cell, chart SVG and embedded image —
+ * live in the DOM simultaneously, and because the stage re-renders on any
+ * document or selection change, React reconciled all of them on every commit.
+ * That is the wall the editor hits on long documents (and the reason an iPad
+ * Pro, with its much slower single-threaded paint, felt worst): the cost is not
+ * in one page, it is in thirty.
+ *
+ * The fix is not to hide offscreen pages with CSS — a hidden subtree still
+ * mounts, still measures, still reconciles. It is to keep them out of the tree
+ * entirely, and to give each page its OWN component so React can skip the ones
+ * whose data has not changed:
+ *
+ *   • `ArtboardPage` is memoised on its page object. The store updates
+ *     immutably, so editing page 4 leaves pages 1–3 and 5–30 with an identical
+ *     `page` reference and React skips them without rendering a single node.
+ *   • An IntersectionObserver against the stage decides whether the page's
+ *     contents are mounted at all. The outer cell keeps its exact size either
+ *     way, so the artboard grid geometry, scrollbars and scroll position never
+ *     move — the placeholder is indistinguishable from the real thing until you
+ *     scroll to it.
+ *   • The ACTIVE page is always mounted (`isActive`/`isRenaming` force it), so
+ *     selection, editing, guides and hit-testing behave exactly as before
+ *     however far you scroll.
+ *
+ * Unmounting a page is safe because nothing outside the viewport can be
+ * interacted with: the gesture layer resolves the page and element from the
+ * live store at pointer time, and `ExportCaptureLayer` renders all pages itself
+ * for export/thumbnails, so virtualisation never affects output.
+ */
+const ArtboardPage = memo(function ArtboardPage({
+  page,
+  pageNo,
+  pageCount,
+  isActive,
+  isRenaming,
+  zoom,
+  root,
+  selectedSet,
+  selectedId,
+  editingId,
+  enteredGroupId,
+  showGrid,
+  printGuides,
+  onElementGesture,
+  onEnterGroup,
+  onMarquee,
+  onRegisterRef,
+  onFit,
+  onEditRequest,
+  onActivate,
+  onStartRename,
+  onRename,
+}: {
+  page: Page;
+  pageNo: number;
+  pageCount: number;
+  isActive: boolean;
+  isRenaming: boolean;
+  zoom: number;
+  root: HTMLElement | null;
+  selectedSet: Set<string>;
+  selectedId: string | null;
+  editingId: string | null;
+  enteredGroupId: string | null;
+  showGrid: boolean;
+  printGuides: PrintGuideSettings | undefined;
+  onElementGesture: ElementGestureHandler;
+  onEnterGroup: (id: string) => void;
+  onMarquee: (e: React.PointerEvent, pageId: string) => void;
+  onRegisterRef: (pageId: string, node: HTMLDivElement | null) => void;
+  onFit: (id: string) => void;
+  onEditRequest: (pageId: string, elId: string) => void;
+  onActivate: (pageId: string) => void;
+  onStartRename: (pageId: string | null) => void;
+  onRename: (pageId: string, name: string) => void;
+}) {
+  const size = pageSize(page);
+  const cellRef = useRef<HTMLDivElement>(null);
+  const renameTimer = useRef<number | undefined>(undefined);
+  // The active page is pinned so its selection frames, guides and editing
+  // surface exist no matter where the viewport is.
+  const pinned = isActive || isRenaming;
+  const [mounted, setMounted] = useState(pinned);
+
+  useEffect(() => {
+    if (pinned) {
+      setMounted(true);
+      return;
+    }
+    const node = cellRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") {
+      // No observer (very old browser, or SSR): mount unconditionally rather
+      // than showing a document that never renders.
+      setMounted(true);
+      return;
+    }
+    /*
+     * Wait for the real scroll root.
+     *
+     * Children's effects run before the parent's, so on the very first commit
+     * `root` is still null. Observing against the viewport then would answer
+     * for content the stage CLIPS — briefly mounting pages that are scrolled
+     * out of the stage but inside the window, which is precisely the cost this
+     * exists to avoid. One frame later the parent publishes the stage element
+     * and this effect re-runs with the correct root.
+     */
+    if (!root) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) setMounted(entry.isIntersecting);
+      },
+      { root, rootMargin: ARTBOARD_MOUNT_MARGIN },
+    );
+    io.observe(node);
+    return () => io.disconnect();
+  }, [pinned, root]);
+
+  const isLocked = Boolean(page.locked);
+  const isHidden = Boolean(page.hidden);
+
+  const header = (
+    /* The name is UI, never a document element or a transform child. */
+    <div
+      className="artboard-header"
+      dir="rtl"
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      {isRenaming ? (
+        <input
+          autoFocus
+          aria-label="اسم لوحة الرسم"
+          defaultValue={page.name}
+          className="artboard-title-input"
+          onBlur={(e) => {
+            const value = e.currentTarget.value.trim();
+            if (value) onRename(page.id, value);
+            onStartRename(null);
+          }}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Escape") onStartRename(null);
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          className="artboard-name"
+          aria-pressed={isActive && selectedSet.size === 0}
+          title={page.name + " — نقرة للإعدادات، نقرتان لإعادة التسمية"}
+          onClick={() => {
+            onActivate(page.id);
+            window.clearTimeout(renameTimer.current);
+            renameTimer.current = window.setTimeout(() => {
+              window.dispatchEvent(
+                new CustomEvent("nasaq:open-page-settings", { detail: page.id }),
+              );
+            }, 220);
+          }}
+          onDoubleClick={() => {
+            window.clearTimeout(renameTimer.current);
+            onStartRename(page.id);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === "F2") {
+              e.preventDefault();
+              onStartRename(page.id);
+            }
+          }}
+        >
+          {page.name}
+        </button>
+      )}
+    </div>
+  );
+
+  if (!mounted) {
+    return (
+      <div
+        ref={cellRef}
+        className={`artboard-cell relative shrink-0 ${isActive ? "is-active" : ""}`}
+        dir="ltr"
+        style={{
+          width: `${size.w * zoom}mm`,
+          height: `calc(${size.h * zoom}mm + 22px)`,
+        }}
+      >
+        {header}
+      </div>
+    );
+  }
+
+  const entered = enteredGroupId
+    ? findElement(page.elements, enteredGroupId)?.el || null
+    : null;
+  const enteredKids = entered?.children ?? [];
+  const selectionFrames: SelectionBox[] = [];
+  if (isActive && !isLocked && !isHidden) {
+    if (entered && enteredKids.length) {
+      for (const child of enteredKids) {
+        if (selectedSet.has(child.id) && !child.hidden) {
+          selectionFrames.push({
+            el: {
+              ...child,
+              x: entered.x + child.x,
+              y: entered.y + child.y,
+            },
+            parent: { x: entered.x, y: entered.y },
+          });
+        }
+      }
+    } else {
+      for (const el of page.elements) {
+        if (selectedSet.has(el.id) && !el.hidden && el.id !== entered?.id) {
+          selectionFrames.push({ el, parent: undefined });
+        }
+      }
+    }
+  }
+
+  return (
+    <div
+      ref={cellRef}
+      className={`artboard-cell relative shrink-0 ${isActive ? "is-active" : ""}`}
+      dir="ltr"
+      style={{
+        width: `${size.w * zoom}mm`,
+        height: `calc(${size.h * zoom}mm + 22px)`,
+      }}
+    >
+      {header}
+
+      {/* Scaled Page Container */}
+      <div
+        className="page-frame-content absolute"
+        dir="ltr"
+        style={{
+          width: `${mmToPx(size.w)}px`,
+          height: `${size.h}mm`,
+          transform: `scale(${zoom})`,
+          transformOrigin: "top left",
+          top: "22px",
+          left: 0,
+        }}
+      >
+        <div
+          ref={(n) => onRegisterRef(page.id, n)}
+          data-page-id={page.id}
+          className={`report-page ${showGrid ? "show-grid" : ""} ${
+            isActive ? "artboard-active-outline" : ""
+          } ${isLocked ? "artboard-locked" : ""} ${isHidden ? "artboard-hidden-content" : ""} ${
+            page.clipContent ? "is-clip-view" : ""
+          }`}
+          style={{
+            width: `${mmToPx(size.w)}px`,
+            height: `${mmToPx(size.h)}px`,
+            background: pageBackgroundCss(page),
+            opacity: isHidden ? 0.35 : 1,
+            pointerEvents: isLocked ? "none" : undefined,
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+          }}
+          onDragStart={(e) => {
+            const t = e.target as HTMLElement;
+            if (
+              t.closest?.(
+                '[contenteditable="true"], [contenteditable=""], input, textarea',
+              )
+            ) {
+              return;
+            }
+            e.preventDefault();
+          }}
+          onPointerDown={(e) => {
+            if (e.target !== e.currentTarget) return;
+            if (isPalmTouch(e)) {
+              e.stopPropagation();
+              e.preventDefault();
+              return;
+            }
+            e.stopPropagation();
+            useEditor.getState().setActivePage(page.id);
+            if (e.button !== 0 || isLocked) return;
+            onMarquee(e, page.id);
+          }}
+        >
+          <PageSurface page={page} active={isActive} />
+          {page.elements
+            .slice()
+            .sort((a, b) => a.z - b.z)
+            .map((el) => {
+              if (entered && el.id === entered.id && enteredKids.length) {
+                return (
+                  <div key={el.id}>
+                    <div
+                      className="canvas-el group-frame"
+                      style={{
+                        left: `${el.x}mm`,
+                        top: `${el.y}mm`,
+                        width: `${el.w}mm`,
+                        height: `${el.h}mm`,
+                        transform: `rotate(${el.rotation || 0}deg)`,
+                        zIndex: el.z,
+                      }}
+                    />
+                    {enteredKids
+                      .slice()
+                      .sort((a, b) => a.z - b.z)
+                      .map((child) => (
+                        <EnteredChildNode
+                          key={child.id}
+                          child={child}
+                          pageNo={pageNo}
+                          pageCount={pageCount}
+                          siblings={enteredKids}
+                          interactive={!isLocked && !isHidden}
+                          onGesture={onElementGesture}
+                          pageId={page.id}
+                          offX={entered.x}
+                          offY={entered.y}
+                        />
+                      ))}
+                  </div>
+                );
+              }
+              if (entered && el.id === entered.id) return null;
+              return (
+                <ElementNode
+                  key={el.id}
+                  el={el}
+                  pageNo={pageNo}
+                  pageCount={pageCount}
+                  siblings={page.elements}
+                  interactive={!isLocked && !isHidden}
+                  onEnterGroup={el.type === "group" ? onEnterGroup : undefined}
+                  pageId={page.id}
+                  onGesture={onElementGesture}
+                />
+              );
+            })}
+          <PrintGuides
+            page={page}
+            settings={printGuides}
+            zIndex={GUIDE_LAYER_Z}
+          />
+          <MarqueeLayer pageId={page.id} />
+          {isActive && !isLocked && !isHidden && (
+            <OverflowFlagLayer elements={page.elements} onFit={onFit} />
+          )}
+          {isActive && !isLocked && <GuideLines size={size} />}
+          {isActive && !isLocked && <CropLayer pageId={page.id} />}
+          {isActive && <RotationHintLayer />}
+          {isActive && !isLocked && !isHidden && selectionFrames.length > 0 && (
+            <div
+              className="selection-layer"
+              style={{ zIndex: SELECTION_LAYER_Z }}
+            >
+              {selectionFrames.map((frame) => (
+                <SelectionFrame
+                  key={frame.el.id}
+                  frame={frame}
+                  primary={frame.el.id === selectedId}
+                  editing={editingId === frame.el.id}
+                  onGesture={(ev, kind, handle) =>
+                    onElementGesture(ev, frame.el, kind, handle, {
+                      pageId: page.id,
+                      parent: frame.parent,
+                    })
+                  }
+                  onEditRequest={() => onEditRequest(page.id, frame.el.id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const OverflowFlag = memo(function OverflowFlag({
+  el,
+  onFit,
+}: {
+  el: CanvasEl;
+  onFit: (id: string) => void;
+}) {
   if (el.hidden || el.type === "group") return null;
   const prepared = prepareText(el);
   if (!prepared.clipped) return null;
@@ -452,40 +2063,633 @@ function OverflowFlag({ el, onFit }: { el: CanvasEl; onFit: () => void }) {
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation();
-        onFit();
+        onFit(el.id);
       }}
       title="النص أطول من الصندوق — اضغط لملاءمة الصندوق مع النص"
     >
       النص أطول من الصندوق
     </button>
   );
+});
+
+/**
+ * The clipped-text badges for the active page. `prepareText` runs per element;
+ * rendering them through a memoized child means an edit to ONE element
+ * re-measures ONE badge, not the whole page's.
+ */
+const OverflowFlagLayer = memo(function OverflowFlagLayer({
+  elements,
+  onFit,
+}: {
+  elements: CanvasEl[];
+  onFit: (id: string) => void;
+}) {
+  return (
+    <>
+      {elements.map((el) => (
+        <OverflowFlag key={el.id} el={el} onFit={onFit} />
+      ))}
+    </>
+  );
+});
+
+/**
+ * Absolute-space node for an element of an ENTERED group (double-clicked
+ * into). Exists so the per-child `{...child, x: offX + child.x}` spread is
+ * computed inside a component memoized on the CHILD's identity — the spread
+ * object stays referentially stable across stage re-renders, which is what
+ * keeps the memoized ElementNode beneath it from re-rendering.
+ */
+const EnteredChildNode = memo(function EnteredChildNode({
+  child,
+  pageNo,
+  pageCount,
+  siblings,
+  interactive,
+  onGesture,
+  pageId,
+  offX,
+  offY,
+}: {
+  child: CanvasEl;
+  pageNo: number;
+  pageCount: number;
+  siblings: CanvasEl[];
+  interactive: boolean;
+  onGesture: ElementGestureHandler;
+  pageId: string;
+  offX: number;
+  offY: number;
+}) {
+  const abs = { ...child, x: child.x + offX, y: child.y + offY };
+  return (
+    <ElementNode
+      el={abs}
+      pageNo={pageNo}
+      pageCount={pageCount}
+      siblings={siblings}
+      interactive={interactive}
+      pageId={pageId}
+      parent={{ x: offX, y: offY }}
+      onGesture={onGesture}
+    />
+  );
+});
+
+/** Page-scoped rectangle or ellipse marquee from the transient interaction store. */
+function MarqueeLayer({ pageId }: { pageId: string }) {
+  const marquee = useInteraction((s) => marqueeForPage(s.marquee, pageId));
+  if (!marquee) return null;
+  return (
+    <div
+      className={cn("marquee", marquee.shape === "ellipse" && "marquee-ellipse")}
+      style={{
+        left: `${marquee.x0}mm`,
+        top: `${marquee.y0}mm`,
+        width: `${Math.abs(marquee.x1 - marquee.x0)}mm`,
+        height: `${Math.abs(marquee.y1 - marquee.y0)}mm`,
+      }}
+    />
+  );
+}
+
+function PageSurface({ page, active }: { page: Page; active: boolean }) {
+  const size = pageSize(page);
+  const overrides = useInteraction((s) => (active ? s.overrides : EMPTY_OVERRIDES));
+  const gesturing = useInteraction((s) => active && s.active);
+  let nearEdge = false;
+  if (gesturing) {
+    for (const geom of Object.values(overrides)) {
+      const x = geom.x;
+      const y = geom.y;
+      const w = geom.w;
+      const h = geom.h;
+      if (x == null || y == null || w == null || h == null) continue;
+      if (x <= 2.5 || y <= 2.5 || x + w >= size.w - 2.5 || y + h >= size.h - 2.5) {
+        nearEdge = true;
+        break;
+      }
+    }
+  }
+  return (
+    <>
+      {page.bgImage ? (
+        <div
+          className="page-bg-image"
+          aria-hidden
+          style={{
+            backgroundImage: `url("${page.bgImage.replace(/"/g, "%22")}")`,
+            backgroundSize: page.bgImageFit === "contain" ? "contain" : "cover",
+            backgroundPosition: `${page.bgImageX ?? 50}% ${page.bgImageY ?? 50}%`,
+          }}
+        />
+      ) : null}
+      <div className={nearEdge ? "page-trim is-hot" : "page-trim"} aria-hidden />
+    </>
+  );
+}
+
+const EMPTY_OVERRIDES: Record<string, { x?: number; y?: number; w?: number; h?: number }> = {};
+
+/** Alignment guides, driven by the transient interaction store. */
+const GuideLines = memo(function GuideLines({
+  size,
+}: {
+  size: { w: number; h: number };
+}) {
+  const guides = useInteraction((s) => s.guides);
+  if (!guides.v.length && !guides.h.length) return null;
+  return (
+    <>
+      {guides.v.map((x) => (
+        <div
+          key={`v${x}`}
+          className={cn(
+            "guide-v",
+            (x === 0 || x === size.w) && "is-page-edge",
+            x === size.w / 2 && "is-page-center",
+          )}
+          data-snap-target={
+            x === 0 || x === size.w
+              ? "edge"
+              : x === size.w / 2
+                ? "center"
+                : "alignment"
+          }
+          style={{ left: `${x}mm` }}
+        />
+      ))}
+      {guides.h.map((y) => (
+        <div
+          key={`h${y}`}
+          className={cn(
+            "guide-h",
+            (y === 0 || y === size.h) && "is-page-edge",
+            y === size.h / 2 && "is-page-center",
+          )}
+          data-snap-target={
+            y === 0 || y === size.h
+              ? "edge"
+              : y === size.h / 2
+                ? "center"
+                : "alignment"
+          }
+          style={{ top: `${y}mm` }}
+        />
+      ))}
+      <span className="snap-feedback" aria-live="polite">
+        {guides.v.some((x) => x === 0 || x === size.w) ||
+        guides.h.some((y) => y === 0 || y === size.h)
+          ? "ملاصق لحافة الصفحة"
+          : guides.v.includes(size.w / 2) || guides.h.includes(size.h / 2)
+            ? "توسيط الصفحة"
+            : "محاذاة"}
+      </span>
+    </>
+  );
+});
+
+/** Rotation readout, driven by the transient interaction store. */
+function RotationHintLayer() {
+  const rotationHint = useInteraction((s) => s.rotationHint);
+  if (!rotationHint) return null;
+  return (
+    <div
+      className="rotation-hint"
+      dir="ltr"
+      style={{ left: rotationHint.x, top: rotationHint.y }}
+    >
+      <strong className="tabular-nums">
+        {Math.round(rotationHint.angle)}°
+      </strong>
+      <span>
+        {rotationHint.shift ? "التقاط 15°/45°/90°" : "Shift للالتقاط"}
+      </span>
+    </div>
+  );
+}
+
+interface SelectionBox {
+  el: CanvasEl;
+  parent?: { x: number; y: number };
+}
+
+function SelectionFrame({
+  frame,
+  primary,
+  editing,
+  onGesture,
+  onEditRequest,
+}: {
+  frame: SelectionBox;
+  primary: boolean;
+  editing: boolean;
+  onGesture: (
+    e: React.PointerEvent,
+    kind: "move" | "resize" | "rotate",
+    handle?: string,
+  ) => void;
+  onEditRequest: () => void;
+}) {
+  const select = useEditor((s) => s.select);
+  const updateElement = useEditor((s) => s.updateElement);
+  const commit = useEditor((s) => s.commit);
+  const zoom = useEditor((s) => s.zoom);
+  /*
+   * Live drag geometry for THIS element: the frame follows the pointer at
+   * display rate without the document (or the stage) re-rendering.
+   */
+  const cropping = useInteraction((s) => s.crop?.original.id === frame.el.id);
+  const transient = useInteraction((s) => s.overrides[frame.el.id]);
+  const el = transient ? { ...frame.el, ...transient } : frame.el;
+  const frameRef = useRef<HTMLDivElement>(null);
+  /**
+   * The measured artwork box (page mm) — see `measuredSelectionBox`.
+   *
+   * A DOM node's `getBoundingClientRect` reports what is actually painted:
+   * padding, border, a shadowed/oversized SVG viewport. Painting the frame at
+   * that box is what makes the selection hug the artwork at every zoom, and
+   * because all edit mathematics run on `el.x/el.w` (never on handle
+   * positions), a measured frame is purely presentational — resizing, rotating
+   * and snapping behave exactly as before.
+   */
+  const [measured, setMeasured] = useState<PageBoxMm | null>(null);
+
+  useEffect(() => {
+    if (!primary || editing) {
+      setMeasured(null);
+      return;
+    }
+    let cancelled = false;
+    const read = () => {
+      if (cancelled) return;
+      const node = frameRef.current?.closest<HTMLElement>("[data-page-id]");
+      const artwork = node?.querySelector<HTMLElement>(
+        `.canvas-el[data-el-id="${CSS.escape(el.id)}"]`,
+      );
+      const page = node?.querySelector<HTMLElement>(".report-page") || node;
+      if (!artwork || !page) {
+        setMeasured(null);
+        return;
+      }
+      const artworkRect = artwork.getBoundingClientRect();
+      const pageRect = page.getBoundingClientRect();
+      // The page element is authored in CSS pixels for its millimetre size and
+      // then scaled by the zoom, so its layout width is the millimetre truth.
+      const modelPage = useEditor
+        .getState()
+        .pages.find((p) => p.id === node?.dataset.pageId);
+      const pageWidthMm = modelPage
+        ? pageSize(modelPage).w
+        : page.clientWidth / mmToPx(1);
+      setMeasured(
+        measuredSelectionBox({
+          node: artworkRect,
+          page: pageRect,
+          pageWidthMm,
+          model: { x: el.x, y: el.y, w: el.w, h: el.h },
+          rotation: el.rotation || 0,
+        }),
+      );
+    };
+    const id = requestAnimationFrame(read);
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+    };
+  }, [primary, editing, zoom, el.id, el.x, el.y, el.w, el.h, el.rotation]);
+
+  const box =
+    el.type === "line"
+      ? el.h > el.w
+        ? {
+            x: el.x + (el.w - (el.style.stroke ?? 0.8)) / 2,
+            y: el.y,
+            w: el.style.stroke ?? 0.8,
+            h: el.h,
+          }
+        : {
+            x: el.x,
+            y: el.y + (el.h - (el.style.stroke ?? 0.8)) / 2,
+            w: el.w,
+            h: el.style.stroke ?? 0.8,
+          }
+      : (measured ?? { x: el.x, y: el.y, w: el.w, h: el.h });
+  const angle =
+    (((Math.round((el.rotation || 0) * 10) / 10) % 360) + 360) % 360;
+
+  /** One keyboard rotation step: 1°, or 15° with Shift (the pointer ladder). */
+  const rotateBy = (delta: number) => {
+    const next = (((angle + delta) % 360) + 360) % 360;
+    updateElement(el.id, { rotation: Number(next.toFixed(1)) });
+    commit();
+  };
+
+  if (cropping) return null;
+  // Paint the exact geometry; only handle hit targets have a screen-space minimum.
+  // Inflating small frames made separate objects appear attached at low zoom.
+
+  return (
+    <div
+      ref={frameRef}
+      className={cn(
+        "selection-frame",
+        !primary && "is-secondary",
+        el.locked && "is-locked",
+        el.resizeLocked && "is-resize-locked",
+        (el.widthLocked || el.heightLocked) && "is-dimension-locked",
+        editing && "is-editing",
+      )}
+      data-el-id={el.id}
+      style={
+        {
+          left: `${box.x}mm`,
+          top: `${box.y}mm`,
+          width: `${box.w}mm`,
+          height: `${box.h}mm`,
+          transform: `rotate(${el.rotation || 0}deg)${el.style?.flipX ? " scaleX(-1)" : ""}${el.style?.flipY ? " scaleY(-1)" : ""}`,
+        } as React.CSSProperties
+      }
+      onPointerDown={(e) => {
+        if (isPalmTouch(e)) {
+          e.stopPropagation();
+          e.preventDefault();
+          return;
+        }
+        if ((e.target as HTMLElement).closest(".handle, .rotate-handle"))
+          return;
+        e.stopPropagation();
+        if (el.locked) {
+          select(el.id);
+          return;
+        }
+        onGesture(e, "move");
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onEditRequest();
+      }}
+    >
+      {primary && !el.locked && !editing && (
+        <>
+          {/* Resize handles — Hit Area أكبر من المرئي، مناسب لـ Apple Pencil */}
+          {!el.resizeLocked &&
+            HANDLES.map((h) => {
+              const isLockedAxis =
+                (el.widthLocked && (h.includes("e") || h.includes("w"))) ||
+                (el.heightLocked && (h.includes("n") || h.includes("s")));
+              if (isLockedAxis && el.widthLocked && el.heightLocked)
+                return null;
+              return (
+                <div
+                  key={h}
+                  className={cn("handle", h, isLockedAxis && "is-axis-locked")}
+                  data-handle={h}
+                  onPointerDown={(e) => {
+                    if (isLockedAxis) {
+                      // إذا كان المحور مقفلاً، لا نسمح بالتحجيم في هذا الاتجاه
+                      if (
+                        ((h === "e" || h === "w") && el.widthLocked) ||
+                        ((h === "n" || h === "s") && el.heightLocked)
+                      ) {
+                        e.stopPropagation();
+                        return;
+                      }
+                    }
+                    e.stopPropagation();
+                    onGesture(e, "resize", h);
+                  }}
+                />
+              );
+            })}
+          {/*
+           * Rotation grip: one distinct control, not a recoloured resize dot.
+           *
+           * The 44px hit area keeps it reachable with a finger or a Pencil
+           * while the visible grip stays small; the glyph marks it as
+           * "rotate" at a glance, the hairline ties it to the frame, the ready
+           * angle readout appears while dragging, and the whole control is a
+           * keyboard slider (←/→ = 1°, Shift = 15°) so rotation is not a
+           * pointer-only gesture.
+           */}
+          {ROTATE_HANDLES.map((corner) => (
+            <div
+              key={`rot-${corner}`}
+              className={cn("rotate-handle", corner)}
+              role="slider"
+              tabIndex={0}
+              aria-label={`تدوير العنصر — الزاوية الحالية ${Math.round(angle)} درجة`}
+              aria-valuemin={0}
+              aria-valuemax={359}
+              aria-valuenow={Math.round(angle)}
+              title="اسحب للتدوير — ← / → للتغيير الدقيق، مع Shift خطوات 15°، وShift أثناء السحب للالتقاط"
+              onKeyDown={(event) => {
+                const step = event.shiftKey ? 15 : 1;
+                if (event.key === "ArrowLeft") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  rotateBy(-step);
+                } else if (event.key === "ArrowRight") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  rotateBy(step);
+                } else if (event.key === "Home") {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  updateElement(el.id, { rotation: 0 });
+                  commit();
+                }
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                onGesture(e, "rotate");
+              }}
+            >
+              <span className="rotate-handle-grip" aria-hidden>
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path
+                    d="M20 12a8 8 0 1 1-2.4-5.7"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                  />
+                  <path
+                    d="M20 4.5V9h-4.5"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </div>
+          ))}
+          {(el.resizeLocked || el.widthLocked || el.heightLocked) && (
+            <span
+              className="resize-lock-badge"
+              title="التحجيم مقفل — فك القفل من القائمة السياقية أو الخصائص"
+            >
+              🔒
+            </span>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+function LayerPickerPopup({
+  picker,
+  onSelect,
+  onClose,
+}: {
+  picker: NonNullable<LayerPickerState>;
+  onSelect: (id: string) => void;
+  onClose: () => void;
+}) {
+  const [pos, setPos] = useState({ left: picker.clientX, top: picker.clientY });
+
+  useEffect(() => {
+    // ضمان عدم خروج القائمة خارج الشاشة
+    const margin = 12;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const estimatedW = 220;
+    const estimatedH = Math.min(320, picker.elements.length * 44 + 40);
+    let left = picker.clientX + 12;
+    let top = picker.clientY + 12;
+    if (left + estimatedW > vw - margin) left = vw - estimatedW - margin;
+    if (top + estimatedH > vh - margin) top = vh - estimatedH - margin;
+    if (left < margin) left = margin;
+    if (top < margin) top = margin;
+    setPos({ left, top });
+  }, [picker]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[var(--z-context)]"
+      onPointerDown={(e) => {
+        // إغلاق عند الضغط خارج القائمة
+        if (!(e.target as HTMLElement).closest(".layer-picker-popup")) {
+          onClose();
+        }
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+    >
+      <div
+        className="layer-picker-popup fixed min-w-[200px] max-w-[260px] rounded-[10px] border border-line bg-white p-1.5 shadow-2xl dark:border-white/15 dark:bg-[#1e2633]"
+        style={{ left: pos.left, top: pos.top }}
+        onPointerDown={(e) => e.stopPropagation()}
+        role="menu"
+        aria-label="اختيار طبقة متداخلة"
+      >
+        <div className="mb-1.5 px-2 py-1 text-[10px] font-extrabold text-muted">
+          {picker.elements.length} عناصر في هذه النقطة — اختر المطلوب
+        </div>
+        <div className="max-h-[280px] overflow-auto">
+          {picker.elements.map((el, idx) => (
+            <button
+              key={el.id}
+              type="button"
+              role="menuitem"
+              onClick={() => onSelect(el.id)}
+              className="flex w-full items-center gap-2 rounded-[7px] px-2.5 py-2 text-right text-[11px] font-bold hover:bg-line-2 dark:hover:bg-white/10"
+            >
+              <span className="grid size-6 shrink-0 place-items-center rounded-[5px] bg-navy/10 text-[10px] font-extrabold text-brand dark:bg-white/10 dark:text-gold-2">
+                {idx + 1}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                <span className="block truncate">{el.name || el.type}</span>
+                <span className="block truncate text-[9px] font-semibold text-muted">
+                  {el.type} · z:{el.z}
+                </span>
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="mt-1 border-t border-line pt-1 dark:border-white/10">
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full rounded-[6px] px-2.5 py-1.5 text-center text-[10px] font-bold text-muted hover:bg-line-2 dark:hover:bg-white/10"
+          >
+            إغلاق — Esc
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function requestEdit(pageId: string, elId: string) {
+  const host = document.querySelector<HTMLElement>(
+    `[data-page-id="${CSS.escape(pageId)}"]`,
+  );
+  const node = host?.querySelector<HTMLElement>(
+    `[data-el-id="${CSS.escape(elId)}"]`,
+  );
+  node?.dispatchEvent(
+    new MouseEvent("dblclick", { bubbles: true, cancelable: true }),
+  );
 }
 
 /**
- * Hidden 1:1 pages used by export capture. Rendered off-screen (not
- * `display:none`) so html2canvas still measures real boxes and loads images.
+ * The offscreen capture DOM. It paints the ENTIRE document a second time, so
+ * it is mounted only while something actually reads it: an open export
+ * dialog, or an armed thumbnail capture during a save. The old always-on
+ * mount doubled the render cost of every document edit for nothing.
  */
-function ExportCapture({ pages }: { pages: Page[] }) {
+function ExportCaptureLayer() {
+  const pages = useEditor((s) => s.pages);
+  const exportOpen = useEditor((s) => s.exportOpen);
+  const captureArmed = useEditor((s) => s.captureArmed);
+  const clipExport = useEditor((s) => s.clipExport);
+  if (!exportOpen && !captureArmed) return null;
   return (
     <div
       id="export-root"
       className="pointer-events-none fixed top-0 left-[-2400px] z-[-1]"
       aria-hidden
     >
-      {pages.map((page) => {
+      {pages.map((page, pageIndex) => {
         const size = pageSize(page);
         return (
           <div
             key={page.id}
             data-export-page={page.id}
-            className="report-page"
-            style={{ width: `${size.w}mm`, height: `${size.h}mm`, background: page.bg || "#fff" }}
+            className={`report-page${clipExport !== false ? " is-clip-export" : " is-export-visible"}`}
+            style={{
+              width: `${mmToPx(size.w)}px`,
+              height: `${mmToPx(size.h)}px`,
+              background: pageBackgroundCss(page),
+            }}
           >
+            {page.bgImage ? (
+              <div
+                className="page-bg-image"
+                aria-hidden
+                style={{
+                  backgroundImage: `url("${page.bgImage.replace(/"/g, "%22")}")`,
+                  backgroundSize: page.bgImageFit === "contain" ? "contain" : "cover",
+                  backgroundPosition: `${page.bgImageX ?? 50}% ${page.bgImageY ?? 50}%`,
+                }}
+              />
+            ) : null}
             {page.elements
               .slice()
               .sort((a, b) => a.z - b.z)
               .map((el) => (
-                <ElementNode key={el.id} el={el} selected={false} interactive={false} onPointerDown={() => {}} />
+                <ElementNode
+                  key={el.id}
+                  el={el}
+                  interactive={false}
+                  pageNo={pageIndex + 1}
+                  pageCount={pages.length}
+                  siblings={page.elements}
+                  onGesture={() => {}}
+                />
               ))}
           </div>
         );
@@ -494,88 +2698,20 @@ function ExportCapture({ pages }: { pages: Page[] }) {
   );
 }
 
-function resizeByHandle(next: CanvasEl, orig: CanvasEl, handle: string, dx: number, dy: number, lock: boolean) {
-  let { x, y, w, h } = orig;
-  if (handle.includes("e")) w = orig.w + dx;
-  if (handle.includes("s")) h = orig.h + dy;
-  if (handle.includes("w")) {
-    x = orig.x + dx;
-    w = orig.w - dx;
-  }
-  if (handle.includes("n")) {
-    y = orig.y + dy;
-    h = orig.h - dy;
-  }
-  if (lock) {
-    const ratio = orig.w / orig.h || 1;
-    if (handle === "e" || handle === "w") h = w / ratio;
-    else if (handle === "n" || handle === "s") w = h * ratio;
-    else h = w / ratio;
-  }
-  if (w < MIN_SIZE) {
-    if (handle.includes("w")) x = orig.x + orig.w - MIN_SIZE;
-    w = MIN_SIZE;
-  }
-  if (h < MIN_SIZE) {
-    if (handle.includes("n")) y = orig.y + orig.h - MIN_SIZE;
-    h = MIN_SIZE;
-  }
-  next.x = x;
-  next.y = y;
-  next.w = w;
-  next.h = h;
+/** Contextual tools stay available when panels open; the placer routes around them. */
+function SelectionTools({
+  el,
+  pageId,
+}: {
+  el: CanvasEl;
+  pageId: string;
+}) {
+  const active = useInteraction((s) => s.active);
+  const cropping = useInteraction((s) => s.crop !== null);
+  if (active || cropping) return null;
+  return <FloatingToolbar el={el} pageId={pageId} />;
 }
-
-/**
- * Grid snap plus smart guides, returning the guide lines to draw.
- *
- * Candidate edges include the page edges/centres and every other element's
- * edges and centres, so a dragged element can lock onto a neighbour's baseline
- * as readily as onto the page axis.
- */
-function applySnap(
-  el: CanvasEl,
-  others: CanvasEl[],
-  size: { w: number; h: number },
-  snapGrid: boolean,
-  snapEl: boolean,
-  setGuides: (g: { v: number[]; h: number[] }) => void,
-  moving: Record<string, unknown> = {},
-) {
-  const g = 5;
-  const v: number[] = [];
-  const h: number[] = [];
-  if (snapGrid) {
-    el.x = Math.round(el.x / g) * g;
-    el.y = Math.round(el.y / g) * g;
-  }
-  if (snapEl) {
-    // Elements that are moving with this gesture are not candidates: snapping a
-    // dragged element to a sibling travelling beside it would fight the drag.
-    const stable = others.filter((o) => !moving[o.id]);
-    const edges = [0, size.w / 2, size.w, ...stable.flatMap((o) => [o.x, o.x + o.w / 2, o.x + o.w])];
-    const hedges = [0, size.h / 2, size.h, ...stable.flatMap((o) => [o.y, o.y + o.h / 2, o.y + o.h])];
-    const mineV = [el.x, el.x + el.w / 2, el.x + el.w];
-    const mineH = [el.y, el.y + el.h / 2, el.y + el.h];
-    const thr = 1.4;
-    for (const m of mineV) {
-      for (const t of edges) {
-        if (Math.abs(m - t) < thr) {
-          el.x += t - m;
-          v.push(t);
-          break;
-        }
-      }
-    }
-    for (const m of mineH) {
-      for (const t of hedges) {
-        if (Math.abs(m - t) < thr) {
-          el.y += t - m;
-          h.push(t);
-          break;
-        }
-      }
-    }
-  }
-  setGuides({ v: [...new Set(v)], h: [...new Set(h)] });
+function CropLayer({ pageId }: { pageId: string }) {
+  const session = useInteraction((s) => s.crop);
+  return session?.pageId === pageId ? <CropOverlay session={session} /> : null;
 }

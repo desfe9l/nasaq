@@ -38,10 +38,17 @@ export interface OrganizationProfile {
 export interface BrandKit {
   organizationName: string;
   logoSrc?: string;
+  /** Secondary logo for dark / transparent surfaces. */
   secondaryLogoSrc?: string;
+  /** Stamp or signature image used on letters and certificates. */
+  stampSrc?: string;
   primaryColor: string;
   secondaryColor: string;
   accentColor: string;
+  /** Page paper tint (A4 background). */
+  paperColor?: string;
+  /** Body text colour on documents. */
+  textColor?: string;
   arabicFont: string;
   englishFont: string;
   headerStyle: "minimal" | "official" | "band";
@@ -49,6 +56,10 @@ export interface BrandKit {
   tableStyle: "clean" | "striped" | "formal";
   chartStyle: "flat" | "accent" | "formal";
   pageSize: "a4-portrait" | "a4-landscape" | "custom";
+  /** Optional official metadata for document headers/previews. */
+  subDepartment?: string;
+  contactLine?: string;
+  dateFormat?: "hijri" | "gregorian";
 }
 
 export const DEMO_LICENSE: LicenseRecord = {
@@ -57,11 +68,11 @@ export const DEMO_LICENSE: LicenseRecord = {
   scope: "individual",
   status: "DEMO",
   entitlements: {
-    maxProjects: 3,
-    maxPagesPerProject: 12,
+    maxProjects: 1,
+    maxPagesPerProject: 3,
     premiumTemplates: false,
-    advancedExports: true,
-    brandKit: true,
+    advancedExports: false,
+    brandKit: false,
     organizationWorkspace: false,
     collaboration: false,
     dataImport: false,
@@ -69,11 +80,66 @@ export const DEMO_LICENSE: LicenseRecord = {
   source: "demo-local",
 };
 
+/** The public experience deliberately opens only a blank, three-page sample. */
+export const DEMO_ALLOWED_PACKS = ["blank"] as const;
+/**
+ * Free accounts cannot download a file in any format. A licence with
+ * `basic_export` (trial or a purchase that includes basic export) may save
+ * PNG, JPG, PDF and the native .nsq project. Word, PowerPoint, SVG, HTML and
+ * the JSON backup need `advanced_export`.
+ */
+export const DEMO_ALLOWED_EXPORTS = ["png", "jpg", "pdf", "nsq"] as const;
+
+/** Layout stays at 96 CSS px/in; output DPI only controls raster sampling. */
+import { CSS_DPI } from "../editor/render-units.ts";
+export { CSS_DPI } from "../editor/render-units.ts";
+export const DEMO_EXPORT_DPI = 72;
+export const PRINT_EXPORT_DPI = 300;
+
+/** Raster capture scale for a DPI target. */
+export function scaleForDpi(dpi: number): number {
+  return dpi / CSS_DPI;
+}
+
+/**
+ * The capture scale actually used for an export: the demo is always clamped to
+ * 72 DPI whatever the UI asked for, so a tampered select can't lift the cap.
+ */
+export function effectiveExportScale(requested: number, hasAdvancedExport = false): number {
+  if (!hasAdvancedExport) return scaleForDpi(DEMO_EXPORT_DPI);
+  return Number.isFinite(requested) && requested > 0 ? requested : scaleForDpi(PRINT_EXPORT_DPI);
+}
+
+export function canUseDemoPack(pack: string): boolean {
+  return (DEMO_ALLOWED_PACKS as readonly string[]).includes(pack);
+}
+
+export function canAddDemoPage(pageCount: number): boolean {
+  return pageCount < (DEMO_LICENSE.entitlements.maxPagesPerProject ?? Infinity);
+}
+
+export function canCreateDemoProject(projectCount: number): boolean {
+  return projectCount < (DEMO_LICENSE.entitlements.maxProjects ?? Infinity);
+}
+
+export function canUseDemoExport(
+  format: string,
+  hasAdvancedExport = false,
+  hasBasicExport = false,
+): boolean {
+  if (!format) return false;
+  if (hasAdvancedExport) return true;
+  if (!hasBasicExport) return false;
+  return (DEMO_ALLOWED_EXPORTS as readonly string[]).includes(format);
+}
+
 export const DEFAULT_BRAND_KIT: BrandKit = {
   organizationName: "",
   primaryColor: "#0c3d2c",
   secondaryColor: "#145c42",
   accentColor: "#c6a05a",
+  paperColor: "#fbfaf6",
+  textColor: "#1f2937",
   arabicFont: "Tajawal",
   englishFont: "IBM Plex Sans",
   headerStyle: "official",
@@ -81,6 +147,7 @@ export const DEFAULT_BRAND_KIT: BrandKit = {
   tableStyle: "formal",
   chartStyle: "formal",
   pageSize: "a4-portrait",
+  dateFormat: "hijri",
 };
 
 export function hasFeature(license: LicenseRecord, feature: keyof FeatureEntitlements): boolean {
@@ -91,4 +158,41 @@ export function hasFeature(license: LicenseRecord, feature: keyof FeatureEntitle
 export function demoModeFromLocation(): boolean {
   if (typeof window === "undefined") return false;
   return new URLSearchParams(window.location.search).get("demo") === "1";
+}
+
+// ── License System Bridge ──────────────────────────────────────────────────
+// Bridges the existing demo license model with the new server-validated
+// license system. The new system is the source of truth; the old model
+// is kept for backward compatibility.
+
+import type { LicensePlan } from "@/lib/license/types";
+import { entitlementsForPlan, LICENSE_ENTITLEMENTS } from "@/lib/license/types";
+
+/** Convert a LicenseType from the new system to the old LicenseRecord shape. */
+export function licenseRecordFromEntitlements(
+  type: import("@/lib/license/types").LicenseType,
+  id?: string,
+  plan?: LicensePlan,
+): LicenseRecord {
+  // The plan matters: an individual PRO licence must not present itself as a
+  // team workspace, and a team plan must carry collaboration through to the
+  // product capabilities. Without it every paid licence looked identical here.
+  const e = plan ? entitlementsForPlan(plan, type) : LICENSE_ENTITLEMENTS[type];
+  return {
+    id: id ?? `server-${type}`,
+    edition: type === "FREE" ? "demo" : type === "TRIAL" ? "demo" : "commercial",
+    scope: e.team_features ? "team" : "individual",
+    status: type === "FREE" ? "DEMO" : type === "TRIAL" ? "TRIAL" : "ACTIVE",
+    entitlements: {
+      maxProjects: e.unlimited_projects ? null : 1,
+      maxPagesPerProject: e.unlimited_pages ? null : 3,
+      premiumTemplates: e.premium_templates,
+      advancedExports: e.advanced_export,
+      brandKit: e.brand_kit,
+      organizationWorkspace: e.collaboration,
+      collaboration: e.collaboration,
+      dataImport: e.data_import,
+    },
+    source: "server",
+  };
 }

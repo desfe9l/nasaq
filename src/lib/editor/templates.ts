@@ -11,12 +11,42 @@ import {
   nextZ,
   normalizeZ,
 } from "./model";
+import { FAMILY_TEMPLATES, buildFamilyPage } from "./template-families";
+import { bindDesignSkill } from "./design-skill";
+import {
+  A4,
+  BODY,
+  META,
+  ROLE,
+  SLIDE,
+  band,
+  cell,
+  folio,
+  hairline,
+  kpiCard,
+  mark,
+  mediaInk,
+  paint,
+  plate,
+  runningHead,
+  tableStyle,
+  tick,
+} from "./template-layouts";
 
-function page(name: string, theme: Theme, build: (add: Add) => void, size?: { w: number; h: number }): Page {
+bindDesignSkill("packs");
+
+function page(
+  name: string,
+  theme: Theme,
+  build: (add: Add) => void,
+  size?: { w?: number; h?: number; bg?: string },
+): Page {
   const p: Page = {
     id: uid("page"),
     name,
-    bg: theme.paper,
+    // A caller-supplied paint wins (truly blank sheets); themes otherwise own
+    // the paper colour so every packed page keeps its identity.
+    bg: size?.bg ?? theme.paper,
     w: size?.w,
     h: size?.h,
     elements: [],
@@ -98,875 +128,384 @@ function footer(add: Add, theme: Theme, org: string, w = 210, h = 297) {
 }
 
 function officialPages(theme: Theme, org: string): Page[] {
+  const entity = org.trim() || "الجهة التنفيذية";
   return [
     page("الغلاف", theme, (add) => {
-      add("shape", {
-        name: "الشريط الجانبي",
-        x: 0,
-        y: 0,
-        w: 26,
-        h: 297,
-        style: { fill: theme.primary, borderWidth: 0 },
+      const ink = mediaInk(theme);
+      mark(add, "زاوية هندسية", 168, 0, 42, 36, ink.soft, "triangle");
+      mark(add, "معين الغلاف", 186, 16, 7, 7, ink.gold, "diamond");
+      add("logo", { name: "شعار الجهة", x: 16, y: 14, w: 16, h: 16 });
+      paint(add, "تصنيف", "تقرير سنوي  ·  ٢٠٢٦", 36, 16, 120, 6, { ...ROLE.meta, color: theme.muted });
+      paint(add, "عنوان التقرير", "تقرير الأداء\nالسنوي", 16, 40, 170, 36, { ...ROLE.display, fontSize: 34, color: ink.green });
+      hairline(add, "خيط ذهبي", 120, 82, 66, ink.gold, 1.1);
+      paint(add, "نبذة الغلاف", "ما اكتمل في الخدمة، وما بقي مفتوحًا أمام اللجنة في الدورة القادمة.", 16, 90, 168, 14, { ...ROLE.body, fontSize: 12, color: theme.ink });
+      add("image", {
+        name: "صورة الغلاف", x: 0, y: 112, w: 210, h: 70,
+        src: plate("field"), style: { objectFit: "cover", radius: 0 },
       });
-      add("line", {
-        name: "خط ذهبي رأسي",
-        x: 29,
-        y: 18,
-        w: 1.4,
-        h: 252,
-        style: { color: theme.accent, stroke: 1.2 },
-      });
-      add("logo", { name: "شعار الجهة", x: 154, y: 18, w: 32, h: 32 });
-      add("text", {
-        name: "تصنيف",
-        x: 40,
-        y: 64,
-        w: 140,
-        h: 8,
-        content: "تقرير رسمي  ·  سري للاستخدام الداخلي",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 10,
-          color: theme.muted,
-          fontWeight: 600,
-          textAlign: "right",
-        },
-      });
-      add("text", {
-        name: "عنوان التقرير",
-        x: 40,
-        y: 80,
-        w: 146,
-        h: 40,
-        content: "تقرير الأداء السنوي\nللجهة التنفيذية",
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 28,
-          color: theme.primary,
-          fontWeight: 800,
-          textAlign: "right",
-          lineHeight: 1.2,
-        },
-      });
-      add("box", {
-        name: "نبذة الغلاف",
-        x: 40,
-        y: 132,
-        w: 132,
-        h: 44,
-        content:
-          "ملخص تنفيذي موجز يعرض نطاق التقرير، أبرز النتائج، والمؤشرات الرئيسية، مع توصيات قابلة للتنفيذ خلال الدورة القادمة.",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 12,
-          color: theme.ink,
-          fill: theme.surface,
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-          fontWeight: 500,
-          textAlign: "right",
-          lineHeight: 1.7,
-          padding: 4,
-        },
-      });
-      add("text", {
-        name: "الجهة",
-        x: 40,
-        y: 188,
-        w: 130,
-        h: 10,
-        content: org,
-        style: {
-          fontFamily: "IBM Plex Sans Arabic",
-          fontSize: 12,
-          color: theme.primary,
-          fontWeight: 700,
-          textAlign: "right",
-        },
-      });
-      add("text", {
-        name: "التاريخ",
-        x: 40,
-        y: 236,
-        w: 90,
-        h: 10,
-        content: "سبتمبر 2026  ·  محرم 1448 هـ",
-        style: {
-          fontFamily: "IBM Plex Sans Arabic",
-          fontSize: 11,
-          color: theme.muted,
-          fontWeight: 600,
-          textAlign: "right",
-        },
-      });
-      add("stamp", {
-        name: "ختم رسمي",
-        x: 142,
-        y: 216,
-        w: 40,
-        h: 40,
-        content: "رسمي",
-      });
-    }),
+      mark(add, "كتلة قطرية", 0, 176, 210, 121, ink.green, "diagonal");
+      paint(add, "تعليق الصورة", "الميدان  ·  الربع الأخير", 16, 196, 178, 8, { ...ROLE.caption, color: "#f4f7f5" });
+      paint(add, "تسمية الجهة", "الجهة", 16, 214, 178, 5, { ...ROLE.caption, color: ink.gold });
+      paint(add, "اسم الجهة", entity, 16, 222, 178, 12, { ...ROLE.h2, fontSize: 16, color: "#f7f6f3" });
+      paint(add, "الفترة", "يناير — ديسمبر", 16, 244, 100, 8, { ...ROLE.meta, color: "#d7e3dc" });
+      paint(add, "النسخة", "نسخة داخلية", 120, 244, 74, 8, { ...ROLE.meta, color: ink.gold, textAlign: "left" });
+    }, A4),
+
     page("المحتويات", theme, (add) => {
-      header(add, theme, "المحتويات");
-      [
-        ["المقدمة والنطاق", "03"],
-        ["الأهداف الاستراتيجية", "04"],
-        ["الإنجازات الرئيسية", "05"],
-        ["المؤشرات والإحصائيات", "06"],
-        ["التوصيات", "07"],
-        ["الخاتمة", "08"],
-      ].forEach(([item, num], i) => {
-        add("text", {
-          name: `بند ${i + 1}`,
-          x: 28,
-          y: 48 + i * 22,
-          w: 154,
-          h: 12,
-          content: `${item}  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ·  ${num}`,
-          style: {
-            fontFamily: "Cairo",
-            fontSize: 13,
-            color: theme.ink,
-            fontWeight: 600,
-            textAlign: "right",
-            lineHeight: 1.2,
-          },
-        });
-      });
-      footer(add, theme, org);
-    }),
-    page("ملخص تنفيذي", theme, (add) => {
-      header(add, theme, "ملخص تنفيذي");
-      add("text", {
-        name: "عنوان فقرة",
-        x: 24,
-        y: 38,
-        w: 162,
-        h: 12,
-        content: "نظرة عامة",
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 18,
-          color: theme.primary,
-          fontWeight: 800,
-          textAlign: "right",
-        },
-      });
-      add("box", {
-        name: "فقرة رئيسية",
-        x: 24,
-        y: 54,
-        w: 162,
-        h: 78,
-        content:
-          "يستعرض هذا القسم المعلومات الأساسية للتقرير بلغة واضحة ومنظمة. يمكن تعديل النص، الخط، اللون، التباعد، والمحاذاة من لوحة الخصائص بدقة كاملة. يُبرز الملخص أهم النتائج والتوصيات ليكون قابلاً للعرض أمام القيادة دون الحاجة إلى قراءة الوثيقة كاملة.",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 12.5,
-          color: theme.ink,
-          fill: "#ffffff",
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-          fontWeight: 500,
-          textAlign: "right",
-          lineHeight: 1.85,
-          padding: 5,
-        },
-      });
-      add("divider", { x: 36, y: 142, w: 138, h: 8 });
-      add("table", {
-        name: "جدول ملخص",
-        x: 24,
-        y: 158,
-        w: 162,
-        h: 72,
-        content: JSON.stringify([
-          ["المحور", "المستهدف", "المتحقق"],
-          ["التشغيل", "100%", "94%"],
-          ["الرضا", "4.5", "4.7"],
-          ["المبادرات", "20", "18"],
-        ]),
-        style: {
-          cols: 3,
-          rows: 4,
-          fontSize: 11,
-          fontFamily: "Cairo",
-          headerBg: theme.primary,
-          headerColor: "#ffffff",
-          tableBg: "#ffffff",
-          borderColor: theme.line,
-        },
-      });
-      footer(add, theme, org);
-    }),
-    page("الإنجازات", theme, (add) => {
-      header(add, theme, "الإنجازات");
-      for (let i = 0; i < 4; i++) {
-        add("box", {
-          name: `بطاقة إنجاز ${i + 1}`,
-          x: 24,
-          y: 40 + i * 50,
-          w: 162,
-          h: 42,
-          content: `إنجاز رقم ${i + 1}\nوصف مختصر للأثر والنتيجة المتحققة خلال الفترة، مع الإشارة إلى الجهة المنفذة والمؤشر المرتبط.`,
-          style: {
-            fontFamily: "Cairo",
-            fontSize: 12,
-            color: theme.ink,
-            fill: theme.surface,
-            borderColor: theme.line,
-            borderWidth: 0.35,
-            radius: 4,
-            fontWeight: 600,
-            textAlign: "right",
-            lineHeight: 1.55,
-            padding: 4,
-          },
-        });
-        add("icon", {
-          name: `أيقونة ${i + 1}`,
-          icon: "check",
-          x: 168,
-          y: 48 + i * 50,
-          w: 12,
-          h: 12,
-          style: { color: "#087f5b", stroke: 2 },
-        });
-      }
-      footer(add, theme, org);
-    }),
-    page("المؤشرات", theme, (add) => {
-      header(add, theme, "المؤشرات والإحصائيات");
-      const stats: [string, string][] = [
-        ["94%", "نسبة الإنجاز"],
-        ["18", "مبادرة مكتملة"],
-        ["4.7", "متوسط الرضا"],
-        ["12", "شراكة فاعلة"],
+      runningHead(add, theme, "المحتويات");
+      paint(add, "عنوان المحتويات", "ما في هذا التقرير", 16, 28, 120, 12, { ...ROLE.h1, color: theme.primary });
+      paint(add, "مقدمة الفهرس", "من النطاق إلى التوصية، بالترتيب الذي يُعرض به على لجنة الأداء.", 16, 46, 118, 16, { ...ROLE.body, fontSize: 11, color: theme.ink });
+      paint(add, "جمهور الوثيقة", "للجنة الأداء\nنسخة داخلية\nلا تُنشر", 144, 46, 50, 22, { ...ROLE.caption, color: theme.muted, lineHeight: 1.55 });
+      const items: [string, string, string][] = [
+        ["٠١", "المقدمة والنطاق", "٠٣"],
+        ["٠٢", "الأهداف المعتمدة", "٠٤"],
+        ["٠٣", "أثر الخدمة", "٠٥"],
+        ["٠٤", "المؤشرات", "٠٦"],
+        ["٠٥", "التوصية", "٠٧"],
+        ["٠٦", "الخاتمة", "٠٨"],
       ];
-      stats.forEach((stat, i) => {
+      items.forEach(([num, title, pg], i) => {
+        const y = 80 + i * 26;
+        paint(add, `رقم ${num}`, num, 158, y, 36, 8, { ...ROLE.h3, color: theme.accent });
+        paint(add, `بند ${title}`, title, 40, y, 112, 8, { ...ROLE.h2, fontSize: 14, color: theme.ink });
+        paint(add, `صفحة ${num}`, pg, 16, y, 18, 8, { ...ROLE.meta, fontSize: 12, color: theme.muted, textAlign: "left" });
+        hairline(add, `فاصل ${num}`, 16, y + 14, 178, theme.line, 0.3);
+      });
+      paint(add, "ملاحظة الإصدار", "إصدار ديسمبر ٢٠٢٦. أرقام الصفحات تُستبدل عند إعادة الترقيم.", 16, 242, 178, 8, { ...ROLE.caption, color: theme.muted });
+      folio(add, theme, entity, "٠٢");
+    }, A4),
+
+    page("ملخص تنفيذي", theme, (add) => {
+      runningHead(add, theme, "ملخص تنفيذي");
+      paint(add, "عنوان الفقرة", "قبل التفاصيل", 16, 28, 110, 12, { ...ROLE.h1, color: theme.primary });
+      paint(add, "الرقم القائد", "٩٤٪", 128, 28, 66, 16, { ...ROLE.display, fontSize: 28, color: theme.primary, lineHeight: 1 });
+      paint(add, "تسمية الرقم", "من خطة العام", 128, 46, 66, 6, { ...ROLE.caption, color: theme.muted });
+      paint(add, "العمود الأول", "أُنجز أربعة وتسعون في المئة من الخطة. الرضا ارتفع إلى ٤٫٧، وأُقفلت ثماني عشرة مبادرة من عشرين. الفجوة المتبقية في التحول الرقمي، وشراكة ما زالت في التعاقد.", 16, 62, 178, 32, { ...ROLE.body, color: theme.ink });
+      band(add, "علامة الاقتباس", 16, 102, 1.4, 20, theme.accent);
+      paint(add, "اقتباس الملخص", "الطلب ليس العائق. العائق طاقة التشغيل في وحدة واحدة.", 22, 102, 172, 14, { ...ROLE.h2, fontSize: 13, color: theme.primary, lineHeight: 1.4 });
+      add("table", {
+        name: "جدول الملخص",
+        x: 16, y: 132, w: 178, h: 78,
+        content: JSON.stringify([
+          ["المحور", "المستهدف", "المتحقق", "الحالة"],
+          ["التشغيل", "١٠٠٪", "٩٤٪", "ضمن المسار"],
+          ["رضا المستفيدين", "٤٫٥", "٤٫٧", "تجاوز"],
+          ["المبادرات", "٢٠", "١٨", "مبادرتان مفتوحتان"],
+          ["الشراكات الفاعلة", "١٢", "١٢", "مكتمل"],
+        ]),
+        style: tableStyle(theme, 4, 5),
+      });
+      paint(add, "مصدر الجدول", "المصدر: مكتب التخطيط — إغلاق ديسمبر ٢٠٢٦.", 16, 216, 178, 6, { ...ROLE.caption, color: theme.muted });
+      paint(add, "الحكم", "النتائج لا تطلب خطة جديدة. تطلب إغلاق ما فُتح، وتثبيت ما ثبت أثره.", 16, 228, 178, 16, { ...ROLE.body, fontSize: 12, color: theme.ink });
+      folio(add, theme, entity, "٠٣");
+    }, A4),
+
+    page("الإنجازات", theme, (add) => {
+      const ink = mediaInk(theme);
+      runningHead(add, theme, "الأهداف");
+      paint(add, "عنوان الصفحة", "ثلاثة أهداف لهذا العام", 16, 26, 178, 12, { ...ROLE.h1, color: ink.green });
+      const photo = add("image", {
+        name: "صورة القسم", x: 16, y: 46, w: 78, h: 96,
+        src: plate("field"), style: { objectFit: "cover", radius: 0 },
+      });
+      const mask = mark(add, "قناع الصورة", 16, 46, 78, 96, "transparent", "curve-side");
+      photo.clippedBy = mask.id;
+      const goals: [string, string, string][] = [
+        ["٠١", "تشغيل مستمر", "أربع بوابات انتقلت إلى تغطية كاملة، وانخفض الانتظار من ٢٦ دقيقة إلى ١١."],
+        ["٠٢", "شراكة واحدة", "اتفقت الجهة مع الإسناد الطبي على تغطية المنافذ الغربية."],
+        ["٠٣", "مرجع واحد", "حل دليل تشغيل واحد محل ثلاث نسخ ميدانية."],
+      ];
+      goals.forEach(([num, title, body], i) => {
+        const y = 46 + i * 34;
+        mark(add, `دائرة ${num}`, 104, y, 10, 10, ink.green, "circle");
+        paint(add, `رقم ${num}`, num, 104, y + 2.2, 10, 5, { ...ROLE.caption, fontSize: 6, color: "#ffffff", textAlign: "center" });
+        paint(add, `عنوان ${title}`, title, 118, y, 76, 8, { ...ROLE.h3, color: ink.green });
+        paint(add, `متن ${title}`, body, 118, y + 10, 76, 18, { ...ROLE.body, fontSize: 10, color: theme.ink, lineHeight: 1.35 });
+      });
+      paint(add, "تعليق الصورة", "الميدان بعد تعديل المناوبة", 16, 146, 78, 8, { ...ROLE.caption, color: theme.muted });
+      add("image", {
+        name: "صورة ثانية", x: 16, y: 162, w: 178, h: 72,
+        src: plate("court"), style: { objectFit: "cover", radius: 0 },
+      });
+      band(add, "تعليق ثان", 16, 218, 178, 14, ink.green);
+      paint(add, "سطر التعليق", "تغطية كاملة  ·  بلا زيادة في عدد الموظفين", 24, 221, 162, 8, { ...ROLE.caption, color: "#f4f7f5" });
+      folio(add, theme, entity, "٠٤");
+    }, A4),
+
+    page("المؤشرات", theme, (add) => {
+      const ink = mediaInk(theme);
+      runningHead(add, theme, "أبرز المؤشرات");
+      paint(add, "عنوان المؤشرات", "قراءة الإغلاق", 16, 26, 178, 10, { ...ROLE.h1, fontSize: 20, color: ink.green });
+      const cards: [string, string][] = [
+        ["١٨٦", "معاملة مغلقة"],
+        ["٩٤", "نسبة الإنجاز"],
+        ["٤١", "زيارة ميدانية"],
+        ["١٢", "شراكة سارية"],
+        ["١١", "دقيقة انتظار"],
+        ["٨", "مبادرات أُقفلت"],
+      ];
+      cards.forEach(([value, label], i) => {
         const col = i % 2;
         const row = Math.floor(i / 2);
-        add("stat", {
-          name: `مؤشر ${i + 1}`,
-          x: 24 + col * 84,
-          y: 42 + row * 52,
-          w: 76,
-          h: 42,
-          content: `${stat[0]}\n${stat[1]}`,
-        });
+        const x = col === 0 ? 108 : 16;
+        const y = 44 + row * 58;
+        kpiCard(add, label, x, y, 86, 52, value, label, ink.green, ink.gold, theme.ink);
       });
-      add("shape", {
-        name: "خلفية الرسم",
-        x: 24,
-        y: 152,
-        w: 162,
-        h: 88,
-        style: { fill: theme.surface, borderColor: theme.line, borderWidth: 0.35, radius: 4 },
-      });
-      [42, 58, 70, 84, 96].forEach((height, i) => {
-        add("shape", {
-          name: `عمود ${i + 1}`,
-          x: 42 + i * 28,
-          y: 228 - height * 0.7,
-          w: 14,
-          h: height * 0.7,
-          style: {
-            fill: i === 4 ? theme.accent : theme.primary,
-            borderWidth: 0,
-            radius: 2,
-          },
-        });
-      });
-      footer(add, theme, org);
-    }),
+      band(add, "شريط الملخص", 16, 220, 178, 16, ink.green);
+      paint(add, "ملخص أول", "٣٤٨٦", 110, 222, 70, 8, { ...ROLE.h3, color: "#ffffff", textAlign: "center" });
+      paint(add, "تسمية أول", "إجمالي العمليات", 110, 230, 70, 5, { ...ROLE.caption, color: ink.gold, textAlign: "center" });
+      paint(add, "ملخص ثان", "٧٣٠", 24, 222, 70, 8, { ...ROLE.h3, color: "#ffffff", textAlign: "center" });
+      paint(add, "تسمية ثان", "ما زال مفتوحًا", 24, 230, 70, 5, { ...ROLE.caption, color: ink.gold, textAlign: "center" });
+      folio(add, theme, entity, "٠٥");
+    }, A4),
+
     page("الخاتمة", theme, (add) => {
-      header(add, theme, "الخاتمة والتوصيات");
-      add("box", {
-        name: "خلاصة",
-        x: 24,
-        y: 44,
-        w: 162,
-        h: 70,
-        content:
-          "تؤكد نتائج التقرير أهمية الاستمرار في تنفيذ المبادرات وفق منهجية واضحة، مع قياس مستمر للأثر وتحسين دوري للعمليات. نوصي بتعزيز التكامل بين الوحدات وتوثيق الدروس المستفادة للعام القادم.",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 13,
-          color: theme.ink,
-          fill: "#ffffff",
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-          fontWeight: 500,
-          textAlign: "right",
-          lineHeight: 1.8,
-          padding: 5,
-        },
+      runningHead(add, theme, "التوصية");
+      paint(add, "عنوان الخاتمة", "ما نوصي باعتماده", 16, 28, 178, 12, { ...ROLE.h1, color: theme.primary });
+      paint(add, "تمهيد التوصية", "ثلاثة بنود فقط. ما عداها يبقى في الملاحق.", 16, 46, 178, 8, { ...ROLE.body, fontSize: 12, color: theme.ink });
+      const recs: [string, string, string][] = [
+        ["٠١", "تمديد", "تمديد مبادرة التحول الرقمي إلى الربع الأول دون زيادة الاعتماد."],
+        ["٠٢", "تجميد", "تجميد الشراكة غير المقيَّمة حتى يصدر تقرير أثرها."],
+        ["٠٣", "تثبيت", "تثبيت دليل التشغيل الجديد مرجعًا وحيدًا للوحدات الميدانية."],
+      ];
+      recs.forEach(([num, title, body], i) => {
+        const y = 64 + i * 32;
+        paint(add, `توصية ${num}`, num, 166, y, 28, 8, { ...ROLE.h3, color: theme.accent });
+        paint(add, `عنوان ${title}`, title, 16, y, 144, 8, { ...ROLE.h2, color: theme.ink });
+        paint(add, `نص ${num}`, body, 16, y + 12, 178, 12, { ...ROLE.body, fontSize: 12, color: theme.ink });
       });
-      add("stamp", { x: 140, y: 132, w: 42, h: 42, content: "خُتم" });
-      add("line", { x: 28, y: 168, w: 78, h: 4, style: { color: theme.ink, stroke: 0.4 } });
-      add("text", {
-        name: "توقيع",
-        x: 28,
-        y: 174,
-        w: 78,
-        h: 16,
-        content: "اسم المسؤول\nالمنصب",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 11,
-          color: theme.ink,
-          fontWeight: 600,
-          textAlign: "center",
-          lineHeight: 1.45,
-        },
-      });
-      footer(add, theme, org);
-    }),
+      paint(add, "خلاصة", "لا تُطلب خطة موازية. يُطلب إغلاق ما فُتح وتثبيت ما ثبت أثره.", 16, 168, 178, 14, { ...ROLE.body, color: theme.ink });
+      hairline(add, "خط التوقيع", 118, 200, 76, theme.ink, 0.35);
+      paint(add, "التوقيع", "اسم المسؤول\nالمنصب", 118, 206, 76, 14, { ...ROLE.meta, fontSize: 10, color: theme.ink, lineHeight: 1.45 });
+      add("stamp", { name: "ختم الاعتماد", x: 16, y: 196, w: 32, h: 32, content: "خُتم" });
+      paint(add, "تاريخ الاعتماد", "لاعتماد الدورة القادمة", 52, 206, 58, 12, { ...ROLE.caption, color: theme.muted, lineHeight: 1.35 });
+      folio(add, theme, entity, "٠٦");
+    }, A4),
   ];
 }
 
 function eidPages(theme: Theme, org: string): Page[] {
+  const entity = org.trim() || "إدارة الإعلام والاتصال المؤسسي";
   return [
     page("غلاف العيد", theme, (add) => {
-      add("shape", {
-        name: "خلفية الغلاف",
-        x: 0,
-        y: 0,
-        w: 210,
-        h: 297,
-        style: { fill: theme.primary, borderWidth: 0 },
+      const ink = mediaInk(theme);
+      band(add, "حقل أخضر", 0, 0, 210, 297, ink.green);
+      hairline(add, "خط أبيض", 16, 28, 178, "#ffffff", 0.7);
+      hairline(add, "خط أخضر فاتح", 16, 31, 178, ink.line, 0.7);
+      paint(add, "الجهة", entity, 16, 40, 150, 8, { ...ROLE.meta, fontSize: 10, color: ink.gold });
+      add("logo", { name: "شعار الجهة", x: 172, y: 36, w: 18, h: 18 });
+      paint(add, "عنوان التقرير", "توثيق ميدان\nعيد الأضحى", 16, 58, 178, 36, {
+        ...ROLE.display, fontSize: 34, color: "#f7f6f3", lineHeight: 1.05,
       });
-      add("shape", {
-        name: "شريط ذهبي",
-        x: 0,
-        y: 0,
-        w: 210,
-        h: 6,
-        style: { fill: theme.accent, borderWidth: 0 },
-      });
-      add("logo", { name: "شعار", x: 16, y: 16, w: 28, h: 16 });
-      add("logo", { name: "شعار وطني", x: 166, y: 16, w: 28, h: 16 });
-      add("text", {
-        name: "عنوان علوي",
-        x: 24,
-        y: 48,
-        w: 162,
-        h: 10,
-        content: org,
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 13,
-          color: theme.accent,
-          fontWeight: 700,
-          textAlign: "center",
-        },
-      });
-      add("text", {
-        name: "عنوان التقرير",
-        x: 18,
-        y: 72,
-        w: 174,
-        h: 36,
-        content: "مجهودات فعاليات\nعيد الأضحى المبارك",
-        style: {
-          fontFamily: "Amiri",
-          fontSize: 28,
-          color: "#ffffff",
-          fontWeight: 700,
-          textAlign: "center",
-          lineHeight: 1.35,
-        },
-      });
-      add("text", {
-        name: "السنة",
-        x: 24,
-        y: 112,
-        w: 162,
-        h: 10,
-        content: "١٤٤٧ هـ",
-        style: {
-          fontFamily: "Amiri",
-          fontSize: 16,
-          color: theme.accent,
-          fontWeight: 700,
-          textAlign: "center",
-        },
-      });
+      paint(add, "السنة", "١٤٤٧ هـ", 16, 100, 80, 10, { ...ROLE.h2, fontSize: 16, color: ink.gold });
       add("image", {
-        name: "صورة الغلاف",
-        x: 18,
-        y: 132,
-        w: 174,
-        h: 96,
-        style: { objectFit: "cover", radius: 3 },
+        name: "صورة الغلاف", x: 0, y: 122, w: 210, h: 96,
+        src: plate("court"), style: { objectFit: "cover", radius: 0 },
       });
-      add("text", {
-        name: "جهة الإصدار",
-        x: 24,
-        y: 244,
-        w: 162,
-        h: 16,
-        content: "إدارة الإعلام والاتصال المؤسسي",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 12,
-          color: "#ffffff",
-          fontWeight: 600,
-          textAlign: "center",
-          lineHeight: 1.4,
-        },
-      });
-      add("shape", {
-        name: "شريط سفلي",
-        x: 0,
-        y: 291,
-        w: 210,
-        h: 6,
-        style: { fill: theme.accent, borderWidth: 0 },
-      });
-    }),
+      band(add, "شريط هندسي", 0, 230, 210, 18, "#145c42");
+      paint(add, "تعليق الشريط", "المنافذ والفرق الميدانية", 16, 234, 178, 8, { ...ROLE.caption, color: "#f7f6f3" });
+      paint(add, "جهة الإصدار", "إدارة الإعلام والاتصال المؤسسي", 16, 262, 178, 8, { ...ROLE.meta, color: "#d7e3dc" });
+    }, { ...A4, bg: mediaInk(theme).green }),
+
     page("المؤشرات الميدانية", theme, (add) => {
-      header(add, theme, "المؤشرات الميدانية");
-      const stats: [string, string][] = [
-        ["48", "موقعاً ميدانياً"],
-        ["120", "مشاركة توعوية"],
-        ["16", "فرقاً ميدانية"],
-        ["100%", "تغطية المنافذ"],
+      runningHead(add, theme, "الميدان");
+      paint(add, "عنوان الصفحة", "ما عمله الميدان", 16, 28, 178, 12, { ...ROLE.h1, color: theme.primary });
+      paint(add, "الرقم", "٤٨", 16, 48, 70, 22, { ...ROLE.display, fontSize: 42, color: theme.primary, lineHeight: 0.9 });
+      paint(add, "تسمية الرقم", "موقعًا غُطّي\nعلى مدار العيد", 16, 74, 70, 14, { ...ROLE.caption, color: theme.muted, lineHeight: 1.4 });
+      const side: [string, string][] = [
+        ["١٢٠", "مشاركة توعوية"],
+        ["١٦", "فرقة ميدانية"],
+        ["١٠٠٪", "تغطية المنافذ بعد اليوم الأول"],
       ];
-      stats.forEach((stat, i) => {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        add("stat", {
-          x: 24 + col * 84,
-          y: 42 + row * 52,
-          w: 76,
-          h: 42,
-          content: `${stat[0]}\n${stat[1]}`,
-        });
+      side.forEach(([value, label], i) => {
+        const y = 50 + i * 18;
+        paint(add, `رقم ${label}`, value, 100, y, 36, 8, { ...ROLE.h2, color: theme.ink });
+        paint(add, `تسمية ${label}`, label, 138, y, 56, 8, { ...ROLE.caption, color: theme.muted });
+        if (i < side.length - 1) hairline(add, `حد ${label}`, 100, y + 14, 94, theme.line, 0.25);
       });
-      add("box", {
-        x: 24,
-        y: 154,
-        w: 162,
-        h: 86,
-        content:
-          "شملت الفعاليات تعزيز الحضور الميداني، وتنظيم الحركة، وبرامج التوعية للقادمين والمغادرين، مع توثيق بصري لكافة المحطات. يمكن استبدال هذا النص بتفاصيل الجهة وإرفاق الصور في الصفحة التالية.",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 13,
-          color: theme.ink,
-          fill: theme.surface,
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-          padding: 5,
-          textAlign: "right",
-          lineHeight: 1.75,
-          fontWeight: 500,
-        },
-      });
-      footer(add, theme, org);
-    }),
+      hairline(add, "حد المتن", 16, 108, 178, theme.line, 0.35);
+      paint(add, "المتن", "شملت الفعاليات تنظيم الحركة عند المنافذ، ونقاط توعية للقادمين والمغادرين، وتوثيقًا لكل محطة عملت فيها الفرق. الملاحظة الوحيدة: تأخر مواد التوعية إلى منفذين في اليوم الأول، وأُغلقت قبل الذروة.", 16, 118, 178, 36, { ...ROLE.body, color: theme.ink });
+      band(add, "علامة الميدان", 16, 164, 1.4, 22, theme.accent);
+      paint(add, "ملاحظة ميدانية", "ملاحظة قائد الفرق", 22, 162, 80, 6, { ...ROLE.meta, color: theme.accent });
+      paint(add, "نص الملاحظة", "لا فجوة تغطية بعد اليوم الأول. التقرير التالي يقيس الأثر، ولا يعيد وصف الحركة.", 22, 172, 172, 16, { ...ROLE.body, fontSize: 12, color: theme.ink });
+      folio(add, theme, entity, "٠٢");
+    }, A4),
+
     page("معرض الصور", theme, (add) => {
-      header(add, theme, "التوثيق البصري");
-      for (let i = 0; i < 4; i++) {
-        const col = i % 2;
-        const row = Math.floor(i / 2);
-        add("image", {
-          name: `صورة ${i + 1}`,
-          x: 22 + col * 86,
-          y: 40 + row * 100,
-          w: 80,
-          h: 72,
-          style: { objectFit: "cover", radius: 3 },
-        });
-        add("text", {
-          name: `تعليق ${i + 1}`,
-          x: 22 + col * 86,
-          y: 114 + row * 100,
-          w: 80,
-          h: 8,
-          content: "تعليق مختصر للصورة",
-          style: {
-            fontFamily: "Cairo",
-            fontSize: 9,
-            color: theme.muted,
-            fontWeight: 600,
-            textAlign: "center",
-          },
-        });
-      }
-      footer(add, theme, org);
-    }),
+      const ink = mediaInk(theme);
+      add("image", {
+        name: "صورة الاستقبال", x: 16, y: 16, w: 178, h: 88,
+        src: plate("field"), style: { objectFit: "cover", radius: 0 },
+      });
+      band(add, "تعليق علوي", 16, 88, 178, 14, ink.green);
+      paint(add, "تعليق الاستقبال", "استقبال المنفذ الرئيسي  ·  أول أيام العيد", 22, 91, 166, 8, { ...ROLE.caption, color: "#f7f6f3" });
+      add("image", {
+        name: "صورة التوعية", x: 16, y: 112, w: 178, h: 78,
+        src: plate("court"), style: { objectFit: "cover", radius: 0 },
+      });
+      band(add, "تعليق سفلي", 16, 176, 178, 14, ink.green);
+      paint(add, "تعليق التوعية", "نقطة التوعية  ·  تنظيم الحركة", 22, 179, 166, 8, { ...ROLE.caption, color: "#f7f6f3" });
+      paint(add, "ملاحظة المعرض", "الصورتان من اليوم الأول. البيان صدر بعد إغلاق فجوة المواد، لا قبلها.", 16, 202, 178, 16, { ...ROLE.body, fontSize: 12, color: theme.ink });
+      folio(add, theme, entity, "٠٣");
+    }, A4),
+
     page("ختام", theme, (add) => {
-      add("shape", {
-        x: 0,
-        y: 0,
-        w: 210,
-        h: 297,
-        style: { fill: theme.primary, borderWidth: 0 },
+      const ink = mediaInk(theme);
+      band(add, "حقل الختام", 0, 0, 210, 297, ink.green);
+      hairline(add, "خط أبيض", 16, 36, 80, "#ffffff", 0.8);
+      hairline(add, "خط ذهبي", 16, 40, 48, ink.gold, 0.8);
+      paint(add, "تسمية الختام", "ختام التوثيق", 16, 52, 178, 6, { ...ROLE.meta, color: ink.gold });
+      paint(add, "عنوان الختام", "شكرًا لكم", 16, 66, 178, 20, {
+        ...ROLE.display, fontSize: 40, color: "#f7f6f3", lineHeight: 1,
       });
-      add("logo", { x: 88, y: 52, w: 34, h: 34 });
-      add("text", {
-        x: 24,
-        y: 104,
-        w: 162,
-        h: 22,
-        content: "شكراً لكم",
-        style: {
-          fontFamily: "Amiri",
-          fontSize: 32,
-          color: "#ffffff",
-          fontWeight: 700,
-          textAlign: "center",
-        },
+      paint(add, "نص الختام", "نقدر جهد الفرق الميدانية والإسناد الإعلامي. النسخة التالية تصدر مع تقرير الأثر.", 16, 100, 168, 20, { ...ROLE.body, fontSize: 13, color: "#e7efe9" });
+      add("image", {
+        name: "شريط الختام", x: 16, y: 140, w: 178, h: 70,
+        src: plate("night"), style: { objectFit: "cover", radius: 8 },
       });
-      add("divider", { x: 70, y: 132, w: 70, h: 8, style: { color: theme.accent } });
-      add("text", {
-        x: 30,
-        y: 148,
-        w: 150,
-        h: 28,
-        content: "نقدر جهود الفرق الميدانية والإسناد الإعلامي، ونتطلع إلى مواصلة العمل بروح الفريق.",
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 13,
-          color: "#e8efe9",
-          fontWeight: 500,
-          textAlign: "center",
-          lineHeight: 1.7,
-        },
-      });
-      add("text", {
-        x: 24,
-        y: 220,
-        w: 162,
-        h: 20,
-        content: `${org}\nإدارة الإعلام والاتصال المؤسسي`,
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 13,
-          color: theme.accent,
-          fontWeight: 700,
-          textAlign: "center",
-          lineHeight: 1.5,
-        },
-      });
-    }),
+      paint(add, "الجهة", entity, 16, 226, 178, 8, { ...ROLE.h3, color: ink.gold });
+      paint(add, "الإدارة", "إدارة الإعلام والاتصال المؤسسي", 16, 238, 178, 8, { ...ROLE.meta, color: "#e7efe9" });
+    }, { ...A4, bg: mediaInk(theme).green }),
   ];
 }
 
 function briefingPages(theme: Theme, org: string): Page[] {
+  const entity = org.trim() || "مكتب المدير العام";
   return [
     page("غلاف العرض", theme, (add) => {
-      add("shape", {
-        x: 0,
-        y: 0,
-        w: 210,
-        h: 297,
-        style: { fill: theme.primary, borderWidth: 0 },
+      const ink = mediaInk(theme);
+      mark(add, "زاوية", 170, 0, 40, 34, ink.soft, "triangle");
+      mark(add, "معين", 184, 18, 6, 6, ink.gold, "diamond");
+      paint(add, "تصنيف العرض", "عرض قيادي  ·  للتداول الداخلي", 16, 20, 150, 6, { ...ROLE.meta, color: theme.muted });
+      paint(add, "عنوان العرض", "موجز الاجتماع", 16, 34, 178, 16, { ...ROLE.display, fontSize: 32, color: ink.green, lineHeight: 1 });
+      hairline(add, "خيط العنوان", 130, 56, 56, ink.gold, 1.1);
+      paint(add, "جملة العرض", "صفحة للقرار. التفاصيل في المرفقات، لا في هذه الورقة.", 16, 66, 178, 12, { ...ROLE.body, fontSize: 13, color: theme.ink });
+      const times: [string, string][] = [
+        ["٠٥ د", "الحكم"],
+        ["١٥ د", "القيد"],
+        ["٢٥ د", "الاعتماد"],
+      ];
+      times.forEach(([time, label], i) => {
+        const y = 100 + i * 28;
+        mark(add, `دائرة ${label}`, 176, y, 12, 12, ink.green, "circle");
+        paint(add, `وقت ${label}`, time, 16, y, 40, 10, { ...ROLE.h3, color: ink.green });
+        paint(add, `بند ${label}`, label, 60, y, 100, 10, { ...ROLE.h2, color: theme.ink });
       });
-      add("shape", {
-        x: 0,
-        y: 210,
-        w: 210,
-        h: 87,
-        style: { fill: theme.primarySoft, borderWidth: 0 },
+      band(add, "كتلة البيانات", 0, 210, 210, 87, ink.green);
+      hairline(add, "خيط الكتلة", 0, 210, 210, ink.gold, 0.8);
+      paint(add, "الجهة", entity, 16, 224, 160, 10, { ...ROLE.h2, fontSize: 16, color: "#ffffff" });
+      paint(add, "التاريخ", "سبتمبر ٢٠٢٦  ·  اجتماع القيادة", 16, 240, 160, 8, { ...ROLE.meta, color: ink.gold });
+      add("logo", { name: "شعار الجهة", x: 176, y: 224, w: 16, h: 16 });
+    }, A4),
+
+    page("الموجز", theme, (add) => {
+      runningHead(add, theme, "الموجز");
+      paint(add, "العنوان", "القرار المطلوب", 16, 28, 178, 10, { ...ROLE.h1, fontSize: 20, color: theme.ink });
+      paint(add, "الرقم", "٤٢٪", 16, 46, 90, 22, { ...ROLE.display, fontSize: 40, color: theme.primary, lineHeight: 0.9 });
+      paint(add, "تسمية الرقم", "نمو الإيراد مقابل الخطة، والطاقة عند سقفها.", 16, 72, 90, 14, { ...ROLE.caption, color: theme.muted, lineHeight: 1.4 });
+      paint(add, "الحكم", "الاستمرار على هذا الإيقاع يصطدم بسقف وحدة الإسناد. الخيار: تأجيل توسعة واحدة، والإبقاء على هدف الإيراد.", 112, 50, 82, 40, { ...ROLE.body, fontSize: 12, color: theme.ink });
+      hairline(add, "حد القيد", 16, 100, 178, theme.line, 0.35);
+      paint(add, "عنوان القيد", "القيد", 16, 110, 40, 6, { ...ROLE.meta, color: theme.accent });
+      paint(add, "نص القيد", "القيد طاقة تشغيلية، لا طلب السوق. أي هدف أعلى من الطاقة الحالية قرار توظيف، لا قرار مبيعات.", 16, 120, 178, 20, { ...ROLE.body, color: theme.ink });
+      paint(add, "الخيار", "الخيار المعروض", 16, 152, 178, 6, { ...ROLE.meta, color: theme.primary });
+      paint(add, "نص الخيار", "تُؤجَّل التوسعة إلى الربع القادم. لا يُفتح مسار توظيف قبل خطة الطاقة.", 16, 162, 178, 16, { ...ROLE.h2, fontFamily: BODY, fontWeight: 500, fontSize: 13, color: theme.ink, lineHeight: 1.55 });
+      folio(add, theme, entity, "٠٢");
+    }, A4),
+
+    page("القرار", theme, (add) => {
+      runningHead(add, theme, "الاعتماد");
+      paint(add, "العنوان", "ثلاثة بنود", 16, 28, 120, 12, { ...ROLE.h1, color: theme.primary });
+      paint(add, "الحالة العامة", "معروض على الجلسة", 16, 32, 70, 8, { ...ROLE.meta, color: theme.accent, textAlign: "left" });
+      const items: [string, string, string][] = [
+        ["٠١", "اعتماد", "تأجيل التوسعة إلى الربع القادم مع الإبقاء على هدف الإيراد."],
+        ["٠٢", "تكليف", "إدارة الإسناد ترفع خطة الطاقة خلال عشرة أيام."],
+        ["٠٣", "إيقاف", "لا يُفتح مسار توظيف قبل اعتماد خطة الطاقة."],
+      ];
+      items.forEach(([num, title, body], i) => {
+        const y = 56 + i * 40;
+        paint(add, `رقم ${num}`, num, 166, y, 28, 8, { ...ROLE.meta, color: theme.accent });
+        paint(add, `عنوان ${title}`, title, 16, y, 140, 10, { ...ROLE.h1, fontSize: 18, color: theme.ink });
+        paint(add, `متن ${title}`, body, 16, y + 14, 178, 12, { ...ROLE.body, fontSize: 12, color: theme.ink });
+        hairline(add, `حد ${title}`, 16, y + 30, 178, theme.line, 0.25);
       });
-      add("line", {
-        x: 28,
-        y: 198,
-        w: 40,
-        h: 4,
-        style: { color: theme.accent, stroke: 1.4 },
-      });
-      add("logo", { x: 28, y: 28, w: 28, h: 28 });
-      add("text", {
-        x: 28,
-        y: 88,
-        w: 154,
-        h: 40,
-        content: "عرض موجز\nللقيادة",
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 32,
-          color: "#ffffff",
-          fontWeight: 800,
-          textAlign: "right",
-          lineHeight: 1.2,
-        },
-      });
-      add("text", {
-        x: 28,
-        y: 228,
-        w: 154,
-        h: 20,
-        content: `${org}\nسبتمبر 2026`,
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 13,
-          color: "#ffffff",
-          fontWeight: 600,
-          textAlign: "right",
-          lineHeight: 1.5,
-        },
-      });
-    }),
-    ...officialPages(theme, org).slice(4, 6),
+      hairline(add, "خط التوقيع", 118, 188, 76, theme.ink, 0.35);
+      paint(add, "التوقيع", "الاسم\nالصفة", 118, 194, 76, 14, { ...ROLE.meta, fontSize: 10, color: theme.ink, lineHeight: 1.4 });
+      paint(add, "الموعد", "يُحسم في الجلسة، لا بالتمرير.", 16, 198, 90, 12, { ...ROLE.caption, color: theme.muted, lineHeight: 1.4 });
+      folio(add, theme, entity, "٠٣");
+    }, A4),
   ];
 }
 
-/**
- * Standalone builders reused by the page-template gallery. Each returns a fresh
- * page (new ids), so inserting one never touches the template source.
- */
 function statsInfographicPage(theme: Theme, org: string): Page {
+  const ink = mediaInk(theme);
   return page("لوحة مؤشرات", theme, (add) => {
-    header(add, theme, "لوحة المؤشرات — بيانات تجريبية");
-    add("progress", {
-      name: "مؤشر تقدم",
-      x: 24,
-      y: 40,
-      w: 162,
-      h: 14,
-      content: "نسبة الإنجاز العام",
-      style: { value: 78, fill: theme.primary },
-    });
-    add("progress", {
-      name: "مؤشر تقدم",
-      x: 24,
-      y: 60,
-      w: 162,
-      h: 14,
-      content: "رضا المستفيدين",
-      style: { value: 92, fill: theme.accent },
-    });
-    add("progress", {
-      name: "مؤشر تقدم",
-      x: 24,
-      y: 80,
-      w: 162,
-      h: 14,
-      content: "الالتزام بالجدول الزمني",
-      style: { value: 64, fill: theme.primarySoft },
-    });
+    runningHead(add, theme, "أين يقف التنفيذ");
+    paint(add, "عنوان اللوحة", "قراءة الأسبوع", 16, 26, 178, 10, { ...ROLE.h1, color: ink.green });
     const cards: [string, string][] = [
-      ["904", "إجمالي الحالات"],
-      ["27", "إصابة"],
-      ["96%", "نسبة الاكتمال"],
-      ["12", "فرق ميدانية"],
+      ["٧٨٪", "الإنجاز العام"],
+      ["٩٢٪", "رضا المستفيدين"],
+      ["٩٠٤", "حالة مغلقة"],
+      ["٢٧", "حالة مفتوحة"],
     ];
     cards.forEach(([value, label], i) => {
-      const col = i % 2;
-      const row = Math.floor(i / 2);
-      const x = 24 + col * 84;
-      const y = 104 + row * 44;
-      add("shape", {
-        name: `خلفية بطاقة ${i + 1}`,
-        x,
-        y,
-        w: 78,
-        h: 38,
-        style: { fill: theme.surface, borderColor: theme.line, borderWidth: 0.35, radius: 4 },
-      });
-      add("text", {
-        name: `رقم ${i + 1}`,
-        x,
-        y: y + 4,
-        w: 78,
-        h: 16,
-        content: value,
-        style: {
-          fontFamily: "Tajawal",
-          fontSize: 26,
-          color: theme.primary,
-          fontWeight: 800,
-          textAlign: "center",
-          lineHeight: 1.1,
-        },
-      });
-      add("text", {
-        name: `تسمية ${i + 1}`,
-        x,
-        y: y + 23,
-        w: 78,
-        h: 8,
-        content: label,
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 10,
-          color: theme.muted,
-          fontWeight: 600,
-          textAlign: "center",
-        },
-      });
+      const x = i % 2 === 0 ? 108 : 16;
+      const y = 44 + Math.floor(i / 2) * 62;
+      kpiCard(add, label, x, y, 86, 56, value, label, ink.green, ink.gold, theme.ink);
     });
-    add("text", {
-      name: "تنويه بيانات",
-      x: 24,
-      y: 196,
-      w: 162,
-      h: 8,
-      content: "بيانات تجريبية للعرض فقط — استبدلها بأرقامك الفعلية",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 9,
-        color: theme.muted,
-        fontWeight: 600,
-        textAlign: "center",
-      },
-    });
-    footer(add, theme, org);
-  });
+    band(add, "شريط الملخص", 16, 176, 178, 16, ink.green);
+    paint(add, "الملخص", "١٢ فرقة ميدانية ما زالت على الجدول", 24, 180, 162, 8, { ...ROLE.caption, color: "#f4f7f5" });
+    paint(add, "القراءة", "الرضا يسبق الجدول. الحالات المفتوحة كلها في فرقة واحدة.", 16, 204, 178, 14, { ...ROLE.body, color: theme.ink });
+    folio(add, theme, org, "٠٢");
+  }, A4);
 }
 
 function tablePage(theme: Theme, org: string): Page {
   return page("جدول بيانات", theme, (add) => {
-    header(add, theme, "جدول البيانات التفصيلي — بيانات تجريبية");
+    runningHead(add, theme, "المقارنة");
+    paint(add, "العنوان", "أين الفارق", 16, 28, 110, 12, { ...ROLE.h1, color: theme.primary });
+    paint(add, "الفرق", "−٥", 150, 26, 44, 14, { ...ROLE.display, fontSize: 26, color: theme.accent, textAlign: "left", lineHeight: 1 });
+    paint(add, "تسمية الفرق", "صافي الحالات", 150, 42, 44, 6, { ...ROLE.caption, color: theme.muted, textAlign: "left" });
+    paint(add, "المقدمة", "الفارق السالب مركّز في التشغيل والصيانة. بقية البنود ضمن المسار أو أعلى بقليل.", 16, 52, 178, 14, { ...ROLE.body, fontSize: 12, color: theme.ink });
     add("table", {
-      name: "جدول تفصيلي",
-      x: 22,
-      y: 40,
-      w: 166,
-      h: 96,
+      name: "جدول المقارنة",
+      x: 16, y: 74, w: 178, h: 96,
       content: JSON.stringify([
         ["البند", "الوحدة", "المستهدف", "المتحقق", "الفارق"],
-        ["البنود 1", "حالة", "100", "94", "-6"],
-        ["البنود 2", "حالة", "80", "83", "+3"],
-        ["البنود 3", "حالة", "60", "57", "-3"],
-        ["البنود 4", "حالة", "40", "41", "+1"],
-        ["الإجمالي", "—", "280", "275", "-5"],
+        ["تشغيل المنافذ", "حالة", "١٠٠", "٩٤", "−٦"],
+        ["خدمة المستفيد", "حالة", "٨٠", "٨٣", "+٣"],
+        ["الصيانة الدورية", "حالة", "٦٠", "٥٧", "−٣"],
+        ["التدريب الميداني", "حالة", "٤٠", "٤١", "+١"],
+        ["الإجمالي", "—", "٢٨٠", "٢٧٥", "−٥"],
       ]),
-      style: {
-        cols: 5,
-        rows: 6,
-        fontSize: 10.5,
-        cellAlign: "center",
-      },
+      style: tableStyle(theme, 5, 6),
     });
-    add("text", {
-      name: "مصدر",
-      x: 22,
-      y: 142,
-      w: 166,
-      h: 8,
-      content: "المصدر: بيانات تجريبية (Demo) — عدّل الخلايا من لوحة الخصائص",
-      style: {
-        fontFamily: "Cairo",
-        fontSize: 9,
-        color: theme.muted,
-        fontWeight: 600,
-        textAlign: "right",
-      },
-    });
-    footer(add, theme, org);
-  });
+    band(add, "علامة القراءة", 16, 182, 1.4, 22, theme.accent);
+    paint(add, "القراءة", "فارق خمس حالات لا يغيّر الحكم على العام، ويحدد أين تُراجع الخطة: التشغيل والصيانة.", 22, 180, 172, 20, { ...ROLE.body, color: theme.ink });
+    paint(add, "المصدر", "المصدر: السجل التشغيلي — ديسمبر ٢٠٢٦.", 16, 214, 178, 6, { ...ROLE.caption, color: theme.muted });
+    folio(add, theme, org, "٠٣");
+  }, A4);
 }
 
 function infographicPage(theme: Theme, org: string): Page {
   return page("إنفوجرافيك", theme, (add) => {
-    add("shape", {
-      name: "خلفية",
-      x: 0,
-      y: 0,
-      w: 210,
-      h: 297,
-      style: { fill: theme.surface, borderWidth: 0 },
-    });
-    add("shape", {
-      name: "شريط رأسي",
-      x: 0,
-      y: 0,
-      w: 14,
-      h: 297,
-      style: { fill: theme.primary, borderWidth: 0 },
-    });
-    add("text", {
-      name: "العنوان",
-      x: 30,
-      y: 28,
-      w: 156,
-      h: 20,
-      content: "مسار العمل في خمس مراحل",
-      style: {
-        fontFamily: "Tajawal",
-        fontSize: 24,
-        color: theme.primary,
-        fontWeight: 800,
-        textAlign: "right",
-      },
-    });
-    add("line", { name: "خط ذهبي", x: 30, y: 52, w: 60, h: 4, style: { color: theme.accent, stroke: 1 } });
-    const steps: [string, string][] = [
-      ["01", "التخطيط وتحديد النطاق"],
-      ["02", "جمع البيانات والتحقق منها"],
-      ["03", "التحليل واستخراج المؤشرات"],
-      ["04", "إعداد التقرير وإخراجه"],
-      ["05", "المتابعة وقياس الأثر"],
+    paint(add, "تسمية", "منهج العمل", 16, 18, 178, 6, { ...ROLE.meta, color: theme.accent });
+    paint(add, "العنوان", "خمس مراحل، بترتيب واحد", 16, 28, 178, 12, { ...ROLE.h1, color: theme.primary });
+    const steps: [string, string, string][] = [
+      ["٠١", "التخطيط", "تحديد النطاق والجهة المالكة قبل جمع أي رقم."],
+      ["٠٢", "الجمع", "البيانات من مصدر واحد، مع تاريخ إغلاق معلن."],
+      ["٠٣", "التحليل", "المؤشر يُقرأ مع قيده، لا منفصلًا عنه."],
+      ["٠٤", "الإخراج", "صفحة قرار ثم الملاحق، لا العكس."],
+      ["٠٥", "الأثر", "ما تغيّر بعد النشر، لا عدد الصفحات."],
     ];
-    steps.forEach(([num, label], i) => {
-      const y = 72 + i * 40;
-      add("shape", {
-        name: `دائرة ${num}`,
-        x: 162,
-        y,
-        w: 24,
-        h: 24,
-        style: { fill: theme.primary, shape: "circle", borderWidth: 0 },
-      });
-      add("text", {
-        name: `رقم ${num}`,
-        x: 162,
-        y: y + 6,
-        w: 24,
-        h: 12,
-        content: num,
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 13,
-          color: "#ffffff",
-          fontWeight: 800,
-          textAlign: "center",
-        },
-      });
-      add("box", {
-        name: `مرحلة ${num}`,
-        x: 30,
-        y,
-        w: 124,
-        h: 24,
-        content: label,
-        style: {
-          fontFamily: "Cairo",
-          fontSize: 12,
-          color: theme.ink,
-          fill: "#ffffff",
-          borderColor: theme.line,
-          borderWidth: 0.35,
-          radius: 4,
-          padding: 5,
-          textAlign: "right",
-          fontWeight: 600,
-        },
-      });
-      if (i < steps.length - 1) {
-        add("line", {
-          name: `وصلة ${num}`,
-          x: 173,
-          y: y + 25,
-          w: 2,
-          h: 14,
-          style: { color: theme.line, stroke: 0.5 },
-        });
-      }
+    steps.forEach(([num, title, body], i) => {
+      const y = 54 + i * 38;
+      tick(add, `عمود ${num}`, 186, y, 28, i === 2 ? theme.accent : theme.line);
+      paint(add, `رقم ${num}`, num, 156, y, 24, 8, { ...ROLE.h3, color: i === 2 ? theme.accent : theme.primary });
+      paint(add, `عنوان ${title}`, title, 16, y, 134, 8, { ...ROLE.h2, color: theme.ink });
+      paint(add, `متن ${title}`, body, 16, y + 12, 164, 12, { ...ROLE.body, fontSize: 11, color: theme.ink, lineHeight: 1.45 });
     });
-    footer(add, theme, org);
-  });
+    folio(add, theme, org, "٠٤");
+  }, A4);
 }
 
 function coverPage(theme: Theme, org: string): Page {
@@ -974,140 +513,47 @@ function coverPage(theme: Theme, org: string): Page {
 }
 
 function slidesPages(theme: Theme, org: string): Page[] {
-  const size = { w: 338.7, h: 190.5 };
+  const entity = org.trim() || "اسم الجهة";
   return [
-    page(
-      "شريحة الغلاف",
-      theme,
-      (add) => {
-        add("shape", {
-          name: "خلفية",
-          x: 0,
-          y: 0,
-          w: 338.7,
-          h: 190.5,
-          style: { fill: theme.primary, borderWidth: 0 },
-        });
-        add("shape", {
-          name: "كتلة سفلية",
-          x: 0,
-          y: 140,
-          w: 338.7,
-          h: 50.5,
-          style: { fill: theme.primarySoft, borderWidth: 0 },
-        });
-        add("line", {
-          name: "خط ذهبي",
-          x: 30,
-          y: 126,
-          w: 56,
-          h: 4,
-          style: { color: theme.accent, stroke: 1.6 },
-        });
-        add("logo", { name: "شعار", x: 284, y: 26, w: 30, h: 30 });
-        add("text", {
-          name: "عنوان العرض",
-          x: 30,
-          y: 62,
-          w: 230,
-          h: 36,
-          content: "عرض تنفيذي\nللنتائج الرئيسية",
-          style: {
-            fontFamily: "Tajawal",
-            fontSize: 34,
-            color: "#ffffff",
-            fontWeight: 800,
-            textAlign: "right",
-            lineHeight: 1.2,
-          },
-        });
-        add("text", {
-          name: "الجهة",
-          x: 30,
-          y: 156,
-          w: 260,
-          h: 16,
-          content: `${org}  ·  بيانات تجريبية للعرض`,
-          style: {
-            fontFamily: "Cairo",
-            fontSize: 12,
-            color: "#ffffff",
-            fontWeight: 600,
-            textAlign: "right",
-          },
-        });
-      },
-      size,
-    ),
-    page(
-      "شريحة المؤشرات",
-      theme,
-      (add) => {
-        header(add, theme, "المؤشرات الرئيسية — بيانات تجريبية", size.w);
-        const cards: [string, string][] = [
-          ["904", "إجمالي الحالات"],
-          ["27", "إصابة"],
-          ["96%", "نسبة الاكتمال"],
-        ];
-        cards.forEach(([value, label], i) => {
-          const x = 28 + i * 100;
-          add("shape", {
-            name: `بطاقة ${i + 1}`,
-            x,
-            y: 48,
-            w: 92,
-            h: 62,
-            style: { fill: theme.surface, borderColor: theme.line, borderWidth: 0.35, radius: 5 },
-          });
-          add("text", {
-            name: `رقم ${i + 1}`,
-            x,
-            y: 58,
-            w: 92,
-            h: 24,
-            content: value,
-            style: {
-              fontFamily: "Tajawal",
-              fontSize: 30,
-              color: theme.primary,
-              fontWeight: 800,
-              textAlign: "center",
-              lineHeight: 1.1,
-            },
-          });
-          add("text", {
-            name: `تسمية ${i + 1}`,
-            x,
-            y: 86,
-            w: 92,
-            h: 10,
-            content: label,
-            style: {
-              fontFamily: "Cairo",
-              fontSize: 11,
-              color: theme.muted,
-              fontWeight: 600,
-              textAlign: "center",
-            },
-          });
-        });
-        add("progress", {
-          name: "مؤشر",
-          x: 28,
-          y: 124,
-          w: 288,
-          h: 16,
-          content: "نسبة الإنجاز العام",
-          style: { value: 78, fill: theme.primary },
-        });
-        footer(add, theme, org, size.w, size.h);
-      },
-      size,
-    ),
+    page("شريحة الغلاف", theme, (add) => {
+      const ink = mediaInk(theme);
+      band(add, "حقل أخضر", 0, 0, 338.7, 190.5, ink.green);
+      hairline(add, "خيط", 24, 28, 120, ink.gold, 0.9);
+      add("logo", { name: "شعار", x: 300, y: 18, w: 18, h: 18 });
+      paint(add, "تصنيف", "عرض تنفيذي", 24, 40, 200, 6, { ...ROLE.meta, fontSize: 11, color: ink.gold });
+      paint(add, "عنوان العرض", "النتائج الرئيسية", 24, 54, 250, 22, { ...ROLE.display, fontSize: 32, color: "#f7f6f3", lineHeight: 1 });
+      paint(add, "الجملة", "رقمان للإغلاق، وجملة للحكم. الباقي في المرفق.", 24, 86, 220, 12, { ...ROLE.body, fontFamily: META, fontSize: 13, color: "#e7efe9" });
+      add("image", {
+        name: "حقل الغلاف", x: 0, y: 118, w: 338.7, h: 72.5,
+        src: plate("night"), style: { objectFit: "cover", radius: 0 },
+      });
+    }, { ...SLIDE, bg: mediaInk(theme).green }),
+    page("شريحة المؤشرات", theme, (add) => {
+      runningHead(add, theme, "المؤشرات الرئيسية", SLIDE.w);
+      paint(add, "الرقم القائد", "٩٦٪", 210, 36, 112, 28, { ...ROLE.display, fontSize: 44, color: theme.primary, lineHeight: 1 });
+      paint(add, "تسمية القائد", "اكتمال الخطة", 210, 68, 112, 8, { ...ROLE.meta, fontSize: 12, color: theme.muted });
+      tick(add, "فاصل المؤشرات", 196, 40, 40, theme.line);
+      paint(add, "رقم ثان", "٩٠٤", 16, 38, 70, 14, { ...ROLE.display, fontSize: 24, color: theme.ink, lineHeight: 1 });
+      paint(add, "تسمية ثانية", "حالة مغلقة", 90, 42, 96, 8, { ...ROLE.meta, fontSize: 12, color: theme.muted });
+      paint(add, "رقم ثالث", "٢٧", 16, 62, 70, 12, { ...ROLE.h1, fontSize: 20, color: theme.ink });
+      paint(add, "تسمية ثالثة", "حالة ما زالت مفتوحة", 90, 66, 96, 8, { ...ROLE.meta, fontSize: 12, color: theme.muted });
+      band(add, "مسار الإنجاز", 16, 104, 306, 2, theme.line);
+      band(add, "امتلاء الإنجاز", 16, 104, 240, 2, theme.primary);
+      paint(add, "نسبة الشريط", "٧٨٪ إنجاز عام", 16, 112, 140, 6, { ...ROLE.caption, color: theme.muted });
+      paint(add, "القراءة", "الإغلاق شبه مكتمل. الحالات المفتوحة لا تغيّر اتجاه الربع.", 16, 132, 306, 12, { ...ROLE.body, fontSize: 14, color: theme.ink });
+      folio(add, theme, entity, "٠٢", SLIDE.w, SLIDE.h);
+    }, SLIDE),
   ];
 }
 
-type TemplateInk = { primary: string; accent: string; ink: string; muted: string; line: string; surface: string };
+type TemplateInk = {
+  primary: string;
+  accent: string;
+  ink: string;
+  muted: string;
+  line: string;
+  surface: string;
+};
 
 function identity(theme: Theme): TemplateInk {
   return {
@@ -1120,178 +566,270 @@ function identity(theme: Theme): TemplateInk {
   };
 }
 
-function officialMark(add: Add, colors: TemplateInk, title: string, y = 18) {
-  add("logo", { name: "مساحة الشعار الرسمي", x: 24, y, w: 22, h: 22 });
-  add("text", {
-    name: "عنوان القالب",
-    x: 52,
-    y: y + 2,
-    w: 132,
-    h: 12,
-    content: title,
-    style: { fontFamily: "Tajawal", fontSize: 16, color: colors.primary, fontWeight: 800, textAlign: "right" },
-  });
-  add("text", {
-    name: "تاريخ التقرير",
-    x: 24,
-    y: y + 28,
-    w: 160,
-    h: 8,
-    content: "التاريخ",
-    style: { fontFamily: "Cairo", fontSize: 9, color: colors.muted, fontWeight: 600, textAlign: "right" },
-  });
-}
-
 function editorialPage(theme: Theme, org: string): Page {
   const c = identity(theme);
+  const margin = cell(10, 2);
+  const col = cell(0, 9);
   return page("تحريرية", theme, (add) => {
-    officialMark(add, c, "عنوان التقرير");
-    add("text", { name: "عنوان رئيسي", x: 24, y: 70, w: 112, h: 42, content: "العنوان الرئيسي\nللتقرير", style: { fontFamily: "Tajawal", fontSize: 27, color: c.primary, fontWeight: 800, textAlign: "right", lineHeight: 1.18 } });
-    add("stat", { name: "الرقم البصري", x: 150, y: 66, w: 36, h: 42, content: "01\nمؤشر", style: { fontFamily: "Tajawal", fontSize: 22, color: c.primary, fontWeight: 800, textAlign: "center" } });
-    add("box", { name: "كتلة النص", x: 24, y: 132, w: 112, h: 58, content: "نص تمهيدي مختصر يشرح موضوع الصفحة ويترك مساحة مريحة للقراءة والتحرير.", style: { fontFamily: "Cairo", fontSize: 12, color: c.ink, fill: "#ffffff", borderColor: c.line, borderWidth: 0.35, radius: 0, padding: 5, lineHeight: 1.8, textAlign: "right" } });
-    add("shape", { name: "كتلة لونية هادئة", x: 151, y: 128, w: 34, h: 70, style: { fill: c.primary, borderWidth: 0, radius: 0 } });
-    add("text", { name: "اسم الجهة", x: 24, y: 240, w: 110, h: 10, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 11, color: c.primary, fontWeight: 700, textAlign: "right" } });
-    add("text", { name: "تذييل الصفحة", x: 24, y: 268, w: 162, h: 8, content: "ملاحظة تحريرية", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
-  });
+    paint(add, "كِكر", "ملف  ·  الخدمة", col.x, 20, col.w, 6, { ...ROLE.meta, color: c.accent });
+    paint(add, "العنوان", "الطاقة ثابتة\nوالطلب ليس كذلك", col.x, 32, col.w, 28, { ...ROLE.h1, fontWeight: 800, fontSize: 24, color: c.primary });
+    paint(add, "حقيقة هامشية", "١٨٪\nزيادة\nالمعاملات", margin.x, 36, margin.w, 28, { ...ROLE.caption, color: c.accent, lineHeight: 1.35 });
+    hairline(add, "فاصل", col.x, 70, col.w, c.line, 0.35);
+    paint(add, "المتن", "بقيت المنافذ على عددها، وارتفع الوارد. الانتظار الذي يراه المستفيد ليس ضعف حملة، بل مناوبة لم تُراجع منذ اعتماد الخطة.", col.x, 80, col.w, 36, { ...ROLE.body, color: c.ink });
+    paint(add, "عنوان فرعي", "ما يُطلب من هذه الصفحة", col.x, 124, col.w, 8, { ...ROLE.h2, color: c.ink });
+    paint(add, "التتمة", "أن تُقرأ الطاقة مع الرقم، لا بعده. التوصية في القسم التالي، وهذه الصفحة لا تلخّص العام.", col.x, 138, col.w, 28, { ...ROLE.body, color: c.ink });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 248, 120, 8, { ...ROLE.h3, color: c.primary });
+    paint(add, "رقم الصفحة", "٠١", 16, 272, 178, 6, { ...ROLE.folio, color: c.muted });
+  }, A4);
 }
 
 function institutionalGridPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("شبكة مؤسسية", theme, (add) => {
-    add("shape", { name: "منطقة الترويسة", x: 0, y: 0, w: 210, h: 52, style: { fill: c.primary, borderWidth: 0, radius: 0 } });
-    add("logo", { name: "مساحة الشعار الرسمي", x: 166, y: 12, w: 22, h: 22 });
-    add("text", { name: "عنوان الشبكة", x: 24, y: 15, w: 130, h: 13, content: "تقرير مؤسسي", style: { fontFamily: "Tajawal", fontSize: 17, color: "#ffffff", fontWeight: 800, textAlign: "right" } });
-    add("text", { name: "التاريخ", x: 24, y: 35, w: 130, h: 7, content: "التاريخ", style: { fontFamily: "Cairo", fontSize: 8, color: "#ffffff", fontWeight: 600, textAlign: "right" } });
-    const cells = [[24, 70, 76, 62], [110, 70, 76, 62], [24, 144, 76, 82], [110, 144, 76, 82]] as const;
-    cells.forEach(([x, y, w, h], i) => {
-      add("shape", { name: `وحدة شبكية ${i + 1}`, x, y, w, h, style: { fill: "#ffffff", borderColor: c.line, borderWidth: 0.35, radius: 0 } });
-      add(i === 0 ? "stat" : "box", { name: `محتوى الوحدة ${i + 1}`, x: x + 6, y: y + 8, w: w - 12, h: h - 16, content: i === 0 ? "01\nمؤشر رئيسي" : "عنوان الوحدة\nنص مختصر قابل للتحرير", style: { fontFamily: i === 0 ? "Tajawal" : "Cairo", fontSize: i === 0 ? 22 : 11, color: i === 0 ? c.primary : c.ink, fontWeight: 700, textAlign: "right", lineHeight: 1.6, padding: 2 } });
+    band(add, "شريط الهوية", 0, 0, 210, 8, c.primary);
+    paint(add, "العنوان", "كيف يُرفع الرقم", 16, 20, 178, 12, { ...ROLE.h1, fontSize: 20, color: c.primary });
+    paint(add, "المقدمة", "كل صف ثلاثة حقول على خط واحد: البند، القيمة، والجملة التي تمنع إساءة قراءته.", 16, 38, 178, 14, { ...ROLE.body, fontSize: 12, color: c.ink });
+    const rows: [string, string, string][] = [
+      ["النطاق", "٦ قطاعات", "كل قطاع يرفع رقمه إلى مكتب واحد."],
+      ["الإيقاع", "شهري", "الإغلاق في آخر خميس من الشهر."],
+      ["المرجع", "دليل ٢٠٢٦", "النسخ السابقة أُخرجت من التداول."],
+      ["الاعتماد", "لجنة واحدة", "لا يصدر رقم بلا توقيع المقرر."],
+      ["النشر", "بعد الاعتماد", "لا يُرسل جدول إلى القيادة قبل التوقيع."],
+    ];
+    rows.forEach(([label, value, note], i) => {
+      const y = 62 + i * 32;
+      hairline(add, `خط ${label}`, 16, y, 178, c.line, 0.3);
+      paint(add, `بند ${label}`, label, 150, y + 8, 44, 8, { ...ROLE.meta, color: c.accent });
+      paint(add, `قيمة ${label}`, value, 96, y + 6, 48, 10, { ...ROLE.h2, color: c.primary });
+      paint(add, `شرح ${label}`, note, 16, y + 8, 76, 14, { ...ROLE.body, fontSize: 11, color: c.ink, lineHeight: 1.4 });
     });
-    add("text", { name: "الجهة", x: 24, y: 253, w: 162, h: 9, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 9, color: c.muted, fontWeight: 600, textAlign: "right" } });
-  });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 236, 120, 8, { ...ROLE.meta, color: c.muted });
+    paint(add, "التاريخ", "الفترة الحالية", 16, 248, 178, 6, { ...ROLE.caption, color: c.muted, textAlign: "left" });
+  }, A4);
 }
 
 function dataFocusPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تركيز البيانات", theme, (add) => {
-    officialMark(add, c, "البيانات أولًا");
-    add("text", { name: "عنوان صغير", x: 24, y: 68, w: 162, h: 10, content: "ملخص المؤشر", style: { fontFamily: "Cairo", fontSize: 11, color: c.muted, fontWeight: 700, textAlign: "right" } });
-    add("text", { name: "رقم رئيسي", x: 24, y: 82, w: 100, h: 38, content: "000", style: { fontFamily: "Tajawal", fontSize: 48, color: c.primary, fontWeight: 800, textAlign: "right", lineHeight: 1 } });
-    add("text", { name: "وصف الرقم", x: 24, y: 124, w: 100, h: 9, content: "وصف الرقم الرئيسي", style: { fontFamily: "Cairo", fontSize: 10, color: c.muted, fontWeight: 600, textAlign: "right" } });
-    ["مؤشر ثانوي", "مؤشر ثانوي", "مؤشر ثانوي"].forEach((label, i) => add("stat", { name: label, x: 145, y: 78 + i * 30, w: 41, h: 24, content: `0${i + 1}\n${label}`, style: { fontFamily: "Tajawal", fontSize: 13, color: c.ink, fontWeight: 700, textAlign: "center" } }));
-    add("table", { name: "جدول البيانات", x: 24, y: 158, w: 162, h: 74, content: JSON.stringify([["المؤشر", "القيمة", "الحالة"], ["بند قابل للتحرير", "000", "--"], ["بند قابل للتحرير", "000", "--"]]), style: { cols: 3, rows: 3, fontSize: 10, headerBg: c.primary, headerColor: "#ffffff", tableBg: "#ffffff", borderColor: c.line, cellAlign: "center" } });
-    add("text", { name: "مصدر البيانات", x: 24, y: 246, w: 162, h: 8, content: "مصدر البيانات", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
-    add("text", { name: "اسم الجهة", x: 24, y: 266, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.primary, fontWeight: 700, textAlign: "right" } });
-  });
+    runningHead(add, { ...theme, muted: c.muted, line: c.line }, "رقم واحد");
+    paint(add, "الرقم", "٩٤", 16, 32, 178, 32, { ...ROLE.display, fontSize: 64, color: c.primary, lineHeight: 0.85 });
+    paint(add, "التسمية", "من مئة  ·  إنجاز الخطة المعتمدة", 16, 70, 178, 8, { ...ROLE.meta, fontSize: 11, color: c.muted });
+    paint(add, "الجملة", "الستة الناقصة كلها في محور التشغيل. الخدمة والتمكين أُغلقا على الخطة.", 16, 84, 178, 14, { ...ROLE.body, fontSize: 13, color: c.ink });
+    add("table", {
+      name: "جدول التركيز",
+      x: 16, y: 108, w: 178, h: 58,
+      content: JSON.stringify([
+        ["المحور", "الخطة", "الفعلي"],
+        ["التشغيل", "٤٠", "٣٤"],
+        ["الخدمة", "٣٥", "٣٥"],
+        ["التمكين", "٢٥", "٢٥"],
+      ]),
+      style: tableStyle({ ...theme, primary: c.primary, surface: c.surface, line: c.line, ink: c.ink }, 3, 4),
+    });
+    paint(add, "فرق موجب", "٠", 120, 178, 36, 12, { ...ROLE.h1, fontSize: 20, color: c.primary });
+    paint(add, "شرح موجب", "الخدمة والتمكين على الخطة", 120, 192, 74, 10, { ...ROLE.caption, color: c.muted, lineHeight: 1.35 });
+    tick(add, "فاصل الفرق", 108, 180, 24, c.line);
+    paint(add, "فرق سالب", "−٦", 16, 178, 50, 12, { ...ROLE.h1, fontSize: 20, color: c.accent });
+    paint(add, "شرح سالب", "عجز التشغيل وحده", 16, 192, 80, 8, { ...ROLE.caption, color: c.muted });
+    paint(add, "الأثر", "معالجة العجز لا تمر برفع هدف الخدمة. الخدمة أغلقت.", 16, 214, 178, 12, { ...ROLE.body, fontSize: 12, color: c.ink });
+    folio(add, { ...theme, line: c.line, muted: c.muted }, org, "٠٥");
+  }, A4);
 }
 
 function verticalFlowPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تدفق رأسي", theme, (add) => {
-    officialMark(add, c, "تدفق العمل", 14);
-    add("text", { name: "عنوان التدفق", x: 24, y: 58, w: 162, h: 24, content: "من الفكرة إلى الأثر", style: { fontFamily: "Tajawal", fontSize: 24, color: c.primary, fontWeight: 800, textAlign: "right" } });
-    const blocks = [[24, 98, 162, 30], [42, 140, 144, 38], [60, 190, 126, 48], [78, 250, 108, 25]] as const;
-    blocks.forEach(([x, y, w, h], i) => {
-      add("shape", { name: `مرحلة ${i + 1}`, x, y, w, h, style: { fill: i % 2 ? "#ffffff" : c.surface, borderColor: c.line, borderWidth: 0.35, radius: 0 } });
-      add("text", { name: `عنوان مرحلة ${i + 1}`, x: x + 7, y: y + 7, w: w - 14, h: 10, content: `0${i + 1}  ·  عنوان المرحلة`, style: { fontFamily: "Cairo", fontSize: 11, color: c.ink, fontWeight: 700, textAlign: "right" } });
+    paint(add, "العنوان", "من الطلب إلى الأثر", 16, 18, 140, 10, { ...ROLE.h1, fontSize: 20, color: c.primary });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 32, 140, 6, { ...ROLE.caption, color: c.muted });
+    const steps: [string, string, string, boolean][] = [
+      ["٠١", "الطلب", "يصل مكتوبًا، برقم وتاريخ، ولا يُعتمد شفهيًا.", false],
+      ["٠٢", "الفرز", "غير المكتمل يُرد في اليوم نفسه.", false],
+      ["٠٣", "التنفيذ", "هذه المرحلة الحالية. لها مالك واحد، وموعد واحد، ولا تُفتح مرحلة المراجعة قبلها.", true],
+      ["٠٤", "المراجعة", "المراجع ليس المنفّذ.", false],
+      ["٠٥", "الأثر", "يُقاس بعد ثلاثين يومًا من التسليم.", false],
+    ];
+    let y = 48;
+    steps.forEach(([num, title, body, current]) => {
+      paint(add, `رقم ${num}`, num, 166, y, 28, 8, { ...ROLE.h3, color: current ? c.accent : c.primary });
+      paint(add, `عنوان ${title}`, title, 16, y, 144, 8, { ...ROLE.h2, color: current ? c.primary : c.ink });
+      paint(add, `متن ${title}`, body, 16, y + 12, 178, current ? 18 : 10, {
+        ...ROLE.body, fontSize: 11, fontWeight: current ? 700 : 500, color: c.ink, lineHeight: 1.45,
+      });
+      y += current ? 40 : 30;
     });
-    add("text", { name: "اسم الجهة", x: 24, y: 278, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
-  });
+  }, A4);
 }
 
 function asymmetricPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("تحريرية غير متماثلة", theme, (add) => {
-    add("shape", { name: "كتلة جانبية", x: 0, y: 0, w: 72, h: 297, style: { fill: c.primary, borderWidth: 0, radius: 0 } });
-    add("logo", { name: "مساحة الشعار الرسمي", x: 24, y: 20, w: 22, h: 22 });
-    add("text", { name: "عنوان جانبي", x: 18, y: 62, w: 38, h: 90, content: "قسم\nالتقرير", style: { fontFamily: "Tajawal", fontSize: 22, color: "#ffffff", fontWeight: 800, textAlign: "center", writingMode: "vertical" } });
-    add("text", { name: "العنوان الرئيسي", x: 92, y: 42, w: 92, h: 38, content: "عنوان غير\nمتماثل", style: { fontFamily: "Tajawal", fontSize: 25, color: c.primary, fontWeight: 800, textAlign: "right", lineHeight: 1.2 } });
-    add("stat", { name: "مرساة بصرية", x: 94, y: 102, w: 48, h: 46, content: "01\nنتيجة", style: { fontFamily: "Tajawal", fontSize: 20, color: c.primary, fontWeight: 800, textAlign: "center" } });
-    add("box", { name: "النص الرئيسي", x: 92, y: 166, w: 94, h: 56, content: "نص موجز يشرح الفكرة الأساسية للصفحة.", style: { fontFamily: "Cairo", fontSize: 12, color: c.ink, fill: "#ffffff", borderColor: c.line, borderWidth: 0.35, radius: 0, padding: 5, lineHeight: 1.8, textAlign: "right" } });
-    add("text", { name: "التاريخ", x: 92, y: 254, w: 94, h: 8, content: "التاريخ  ·  " + (org || "اسم الجهة"), style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
-  });
+    add("image", {
+      name: "الصورة القائدة", x: 122, y: 0, w: 88, h: 297,
+      src: plate("press"), style: { objectFit: "cover", radius: 0 },
+    });
+    paint(add, "كِكر", "تغطية", 16, 28, 96, 6, { ...ROLE.meta, color: c.accent });
+    paint(add, "العنوان", "البيان تأخر\nيومًا عن الصورة", 16, 40, 96, 28, { ...ROLE.h1, fontWeight: 800, fontSize: 18, color: c.primary, lineHeight: 1.25 });
+    hairline(add, "فاصل", 16, 76, 36, c.accent, 1);
+    paint(add, "المتن", "الصورة من المنفذ الغربي في اليوم الثاني. البيان صدر في اليوم الثالث، بعد إغلاق فجوة المواد لا قبلها.", 16, 88, 96, 48, { ...ROLE.body, fontSize: 12, color: c.ink });
+    paint(add, "التعليق", "اليوم الثاني  ·  المنفذ الغربي  ·  قبل البيان", 16, 148, 96, 16, { ...ROLE.caption, color: c.muted, lineHeight: 1.45 });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 260, 96, 10, { ...ROLE.h3, color: c.primary });
+  }, A4);
 }
 
 function modularPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("وحدات معيارية", theme, (add) => {
-    officialMark(add, c, "وحدات التقرير", 12);
-    const modules = [[24, 62, 78, 54, "عنوان ونص"], [112, 62, 74, 32, "01  رقم"], [112, 104, 74, 72, "ملاحظة"], [24, 128, 78, 48, "مؤشر"], [24, 188, 162, 42, "جدول أو رسم"]] as const;
-    modules.forEach(([x, y, w, h, label], i) => {
-      add("shape", { name: `وحدة ${i + 1}`, x, y, w, h, style: { fill: i === 1 ? c.primary : "#ffffff", borderColor: c.line, borderWidth: 0.35, radius: 0 } });
-      add(i === 1 ? "stat" : i === 4 ? "table" : "box", { name: `محتوى الوحدة ${i + 1}`, x: x + 5, y: y + 5, w: w - 10, h: h - 10, content: i === 4 ? JSON.stringify([["البند", "القيمة"], ["بند قابل للتحرير", "000"]]) : label, style: { fontFamily: i === 1 ? "Tajawal" : "Cairo", fontSize: i === 1 ? 20 : 11, color: i === 1 ? "#ffffff" : c.ink, fontWeight: 700, textAlign: "right", cols: i === 4 ? 2 : undefined, rows: i === 4 ? 2 : undefined, headerBg: c.primary, headerColor: "#ffffff", tableBg: "#ffffff", borderColor: c.line, padding: 2, lineHeight: 1.6 } });
+    paint(add, "كِكر", "قراءة مركّبة", 16, 18, 178, 6, { ...ROLE.meta, color: c.accent });
+    paint(add, "الوحدة العريضة", "أربع بوابات صارت تغطية كاملة، وانخفض الانتظار إلى الثلث.", 16, 28, 178, 16, { ...ROLE.h2, fontSize: 16, color: c.primary, lineHeight: 1.35 });
+    add("image", {
+      name: "وحدة الصورة", x: 16, y: 54, w: 78, h: 96,
+      src: plate("field"), style: { objectFit: "cover", radius: 0 },
     });
-    add("text", { name: "اسم الجهة", x: 24, y: 260, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
-  });
+    paint(add, "وحدة جانبية", "الانخفاض لم يحتج موظفين جدد. الذي تغيّر هو توزيع المناوبة.", 102, 54, 92, 24, { ...ROLE.body, fontSize: 12, color: c.ink });
+    paint(add, "بند أول", "٢٦ دقيقة كان متوسط الانتظار قبل التعديل", 102, 86, 92, 12, { ...ROLE.meta, fontSize: 10, color: c.ink, lineHeight: 1.35 });
+    paint(add, "بند ثان", "١١ دقيقة بعد أن صارت المناوبة كاملة", 102, 102, 92, 12, { ...ROLE.meta, fontSize: 10, color: c.ink, lineHeight: 1.35 });
+    paint(add, "بند ثالث", "صفر زيادة في عدد الموظفين الميدانيين", 102, 118, 92, 12, { ...ROLE.meta, fontSize: 10, color: c.ink, lineHeight: 1.35 });
+    paint(add, "تعليق الصورة", "المنفذ الرئيسي  ·  بعد تعديل المناوبة", 16, 152, 78, 10, { ...ROLE.caption, color: c.muted, lineHeight: 1.3 });
+    hairline(add, "فاصل الاقتباس", 16, 172, 178, c.line, 0.35);
+    band(add, "علامة الاقتباس", 16, 184, 22, 1.1, c.accent);
+    paint(add, "اقتباس", "الطلب لم يكن العائق. العائق مناوبة لم تُراجع منذ اعتماد الخطة.", 16, 192, 178, 16, { ...ROLE.body, fontSize: 13, color: c.ink });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 248, 178, 8, { ...ROLE.meta, color: c.muted });
+  }, A4);
 }
 
 function executivePage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("ملخص تنفيذي", theme, (add) => {
-    add("logo", { name: "مساحة الشعار الرسمي", x: 94, y: 20, w: 22, h: 22 });
-    add("text", { name: "التاريخ", x: 24, y: 24, w: 62, h: 8, content: "التاريخ", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "left" } });
-    add("text", { name: "العنوان التنفيذي", x: 34, y: 72, w: 142, h: 36, content: "ملخص تنفيذي", style: { fontFamily: "Tajawal", fontSize: 31, color: c.primary, fontWeight: 800, textAlign: "center" } });
-    add("line", { name: "خط مرجعي", x: 82, y: 120, w: 46, h: 2, style: { color: c.accent, stroke: 0.8 } });
-    add("box", { name: "الرسالة التنفيذية", x: 46, y: 142, w: 118, h: 48, content: "رسالة واحدة مركزة تلخص القرار أو النتيجة الأهم.", style: { fontFamily: "Cairo", fontSize: 13, color: c.ink, fill: "#ffffff", borderWidth: 0, padding: 4, lineHeight: 1.8, textAlign: "center" } });
-    add("text", { name: "الرقم التنفيذي", x: 72, y: 210, w: 66, h: 32, content: "000", style: { fontFamily: "Tajawal", fontSize: 38, color: c.primary, fontWeight: 800, textAlign: "center" } });
-    add("text", { name: "اسم الجهة", x: 24, y: 266, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "center" } });
-  });
+    paint(add, "تصنيف", "ملخص تنفيذي", 16, 28, 178, 6, { ...ROLE.meta, color: c.accent });
+    paint(add, "الرسالة", "نبقي الهدف.\nونؤجل التوسعة.", 16, 42, 178, 36, { ...ROLE.display, fontSize: 30, color: c.primary, lineHeight: 1.12 });
+    hairline(add, "فاصل", 154, 88, 40, c.accent, 1);
+    paint(add, "الرقم", "٤٢٪", 16, 104, 70, 16, { ...ROLE.display, fontSize: 28, color: c.ink, lineHeight: 1 });
+    paint(add, "تسمية الرقم", "فوق الخطة\nوتحت الطاقة", 16, 122, 70, 12, { ...ROLE.caption, color: c.muted, lineHeight: 1.35 });
+    paint(add, "المتن", "لا تُطلب شريحة إضافية. يُطلب قرار في هذه الجلسة، والمرفقات لمن أراد السند.", 96, 106, 98, 32, { ...ROLE.body, fontSize: 13, color: c.ink });
+    hairline(add, "خط التوقيع", 16, 210, 52, c.line, 0.4);
+    paint(add, "التوقيع", "الاسم\nالصفة", 16, 216, 60, 14, { ...ROLE.meta, fontSize: 10, color: c.muted, lineHeight: 1.4 });
+    paint(add, "الجهة", org || "اسم الجهة", 100, 220, 94, 8, { ...ROLE.h3, color: c.primary });
+    paint(add, "الجلسة", "اجتماع القيادة  ·  هذا الأسبوع", 100, 232, 94, 6, { ...ROLE.caption, color: c.muted });
+  }, A4);
 }
 
 function statisticalPage(theme: Theme, org: string): Page {
   const c = identity(theme);
-  return page("إحصائية", theme, (add) => {
-    officialMark(add, c, "قراءة إحصائية", 14);
-    add("text", { name: "الرقم الأكبر", x: 24, y: 70, w: 86, h: 46, content: "000", style: { fontFamily: "Tajawal", fontSize: 55, color: c.primary, fontWeight: 800, textAlign: "right" } });
-    add("text", { name: "وصف الإحصائية", x: 24, y: 120, w: 86, h: 9, content: "المؤشر الأساسي", style: { fontFamily: "Cairo", fontSize: 10, color: c.muted, fontWeight: 700, textAlign: "right" } });
-    ["مؤشر 01", "مؤشر 02", "مؤشر 03"].forEach((label, i) => add("stat", { name: label, x: 132, y: 72 + i * 34, w: 54, h: 28, content: `00${i + 1}\n${label}`, style: { fontFamily: "Tajawal", fontSize: 14, color: c.ink, fontWeight: 700, textAlign: "center" } }));
-    add("shape", { name: "مساحة الرسم", x: 24, y: 154, w: 162, h: 66, style: { fill: c.surface, borderColor: c.line, borderWidth: 0.35, radius: 0 } });
-    [24, 44, 68, 52, 82].forEach((h, i) => add("shape", { name: `عمود قابل للتحرير ${i + 1}`, x: 42 + i * 25, y: 210 - h, w: 11, h, style: { fill: i === 4 ? c.accent : c.primary, borderWidth: 0, radius: 0 } }));
-    add("table", { name: "جدول الإحصائية", x: 24, y: 232, w: 162, h: 34, content: JSON.stringify([["البند", "القيمة"], ["بند قابل للتحرير", "000"]]), style: { cols: 2, rows: 2, fontSize: 9, headerBg: c.primary, headerColor: "#ffffff", tableBg: "#ffffff", borderColor: c.line } });
-    add("text", { name: "اسم الجهة", x: 24, y: 278, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
-  });
+  return page("قراءة إحصائية", theme, (add) => {
+    runningHead(add, { ...theme, muted: c.muted, line: c.line }, "الرضا");
+    paint(add, "الرقم", "٤.٧", 120, 28, 74, 18, { ...ROLE.display, fontSize: 32, color: c.primary, lineHeight: 1 });
+    paint(add, "التسمية", "متوسط الرضا من خمسة", 120, 48, 74, 8, { ...ROLE.caption, color: c.muted });
+    paint(add, "العينة", "١٢٠٠ مستفيد  ·  هامش ±٠.٢  ·  اكتمال ٩٢٪", 16, 36, 96, 16, { ...ROLE.caption, color: c.muted, lineHeight: 1.45 });
+    const bars: [string, number][] = [
+      ["الخدمة", 86],
+      ["السرعة", 74],
+      ["الوضوح", 91],
+      ["المتابعة", 68],
+    ];
+    const base = 176;
+    hairline(add, "قاعدة الرسم", 20, base, 170, c.ink, 0.4);
+    bars.forEach(([label, value], i) => {
+      const x = 32 + i * 42;
+      const h = value * 0.85;
+      band(add, `عمود ${label}`, x, base - h, 16, h, i === 2 ? c.accent : c.primary);
+      const digits = "٠١٢٣٤٥٦٧٨٩";
+      paint(add, `قيمة ${label}`, String(value).replace(/[0-9]/g, (d) => digits[Number(d)]), x - 4, base - h - 8, 24, 6, { ...ROLE.caption, color: c.ink, textAlign: "center" });
+      paint(add, `محور ${label}`, label, x - 8, base + 4, 32, 8, { ...ROLE.caption, color: c.muted, textAlign: "center" });
+    });
+    paint(add, "القراءة", "الوضوح أعلى المحاور، والمتابعة أدناها. الفجوة إجراء داخل الفريق، لا حملة للجمهور.", 16, 196, 178, 16, { ...ROLE.body, color: c.ink });
+    folio(add, { ...theme, line: c.line, muted: c.muted }, org, "٠٦");
+  }, A4);
 }
 
 function sectionDividerPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("فاصل قسم", theme, (add) => {
-    add("logo", { name: "مساحة الشعار الرسمي", x: 24, y: 22, w: 22, h: 22 });
-    add("text", { name: "اسم الجهة", x: 52, y: 28, w: 134, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 9, color: c.muted, fontWeight: 600, textAlign: "right" } });
-    add("text", { name: "رقم القسم", x: 24, y: 90, w: 162, h: 70, content: "01", style: { fontFamily: "Tajawal", fontSize: 88, color: c.primary, fontWeight: 800, textAlign: "right", lineHeight: 0.9 } });
-    add("text", { name: "عنوان القسم", x: 24, y: 174, w: 120, h: 22, content: "عنوان القسم", style: { fontFamily: "Tajawal", fontSize: 25, color: c.ink, fontWeight: 800, textAlign: "right" } });
-    add("text", { name: "وصف القسم", x: 24, y: 208, w: 108, h: 26, content: "وصف مختصر للقسم ومساره.", style: { fontFamily: "Cairo", fontSize: 11, color: c.muted, fontWeight: 600, textAlign: "right", lineHeight: 1.7 } });
-    add("shape", { name: "علامة القسم", x: 158, y: 174, w: 28, h: 28, style: { fill: c.accent, borderWidth: 0, shape: "circle" } });
-  });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 24, 140, 6, { ...ROLE.meta, color: c.muted });
+    paint(add, "الوثيقة", "تقرير الأداء", 16, 24, 178, 6, { ...ROLE.meta, color: c.muted, textAlign: "left" });
+    tick(add, "حافة القسم", 194, 48, 120, c.accent);
+    paint(add, "رقم القسم", "٠٢", 16, 64, 170, 36, { ...ROLE.display, fontSize: 68, color: c.primary, lineHeight: 0.85 });
+    hairline(add, "فاصل", 140, 112, 46, c.accent, 1.1);
+    paint(add, "عنوان القسم", "النتائج والأثر", 16, 124, 160, 14, { ...ROLE.h1, fontSize: 26, color: c.ink });
+    paint(add, "وصف القسم", "ما الذي تغيّر في الخدمة، ولماذا يهم ذلك القرار التالي.", 16, 146, 150, 16, { ...ROLE.body, color: c.muted });
+    paint(add, "الفهرس", "٠١   النطاق\n٠٢   النتائج\n٠٣   التوصية", 16, 210, 80, 24, { ...ROLE.meta, color: c.muted, lineHeight: 1.7 });
+    paint(add, "التالي", "يليه جدول المؤشرات", 16, 250, 160, 8, { ...ROLE.caption, color: c.muted });
+  }, A4);
 }
 
 function processPage(theme: Theme, org: string): Page {
   const c = identity(theme);
   return page("مراحل إجرائية", theme, (add) => {
-    officialMark(add, c, "المراحل الإجرائية", 14);
-    add("text", { name: "عنوان المسار", x: 24, y: 62, w: 162, h: 18, content: "منهجية التنفيذ", style: { fontFamily: "Tajawal", fontSize: 22, color: c.primary, fontWeight: 800, textAlign: "right" } });
-    const stages = ["تحديد", "تحليل", "تنفيذ", "قياس"];
-    stages.forEach((label, i) => {
-      const x = 24 + i * 43;
-      if (i < stages.length - 1) add("line", { name: `صلة المرحلة ${i + 1}`, x: x + 18, y: 128, w: 25, h: 2, style: { color: c.line, stroke: 0.7 } });
-      add("shape", { name: `نقطة المرحلة ${i + 1}`, x, y: 116, w: 24, h: 24, style: { fill: i === 0 ? c.primary : "#ffffff", borderColor: c.primary, borderWidth: 0.7, shape: "circle" } });
-      add("text", { name: `رقم المرحلة ${i + 1}`, x, y: 122, w: 24, h: 8, content: `0${i + 1}`, style: { fontFamily: "Tajawal", fontSize: 10, color: i === 0 ? "#ffffff" : c.primary, fontWeight: 800, textAlign: "center" } });
-      add("text", { name: `اسم المرحلة ${i + 1}`, x: x - 5, y: 150, w: 34, h: 10, content: label, style: { fontFamily: "Cairo", fontSize: 10, color: c.ink, fontWeight: 700, textAlign: "center" } });
+    paint(add, "تسمية", "تسلسل إجرائي", 16, 20, 120, 6, { ...ROLE.meta, color: c.accent });
+    paint(add, "العنوان", "أربع مراحل", 16, 30, 120, 12, { ...ROLE.h1, color: c.primary });
+    paint(add, "الحالة", "الآن: التنفيذ", 120, 34, 74, 8, { ...ROLE.meta, color: c.accent, textAlign: "left" });
+    hairline(add, "المسار", 24, 72, 164, c.line, 0.7);
+    const stages: [string, string][] = [
+      ["تحديد", "نطاق مكتوب"],
+      ["تحليل", "رقم ومصدر"],
+      ["تنفيذ", "المرحلة الحالية"],
+      ["قياس", "بعد ٣٠ يومًا"],
+    ];
+    stages.forEach(([label, note], i) => {
+      const x = 18 + i * 46;
+      band(add, `نقطة ${label}`, x + 16, 68, 8, 8, i === 2 ? c.accent : c.primary);
+      paint(add, `رقم ${label}`, `٠${i + 1}`, x, 84, 42, 8, { ...ROLE.h3, color: i === 2 ? c.accent : c.primary, textAlign: "center" });
+      paint(add, `اسم ${label}`, label, x, 96, 42, 8, { ...ROLE.h3, color: c.ink, textAlign: "center" });
+      paint(add, `شرح ${label}`, note, x, 108, 42, 10, { ...ROLE.caption, color: c.muted, textAlign: "center" });
     });
-    add("box", { name: "ملاحظة المسار", x: 24, y: 190, w: 162, h: 42, content: "ملاحظة أو وصف مختصر للعملية.", style: { fontFamily: "Cairo", fontSize: 12, color: c.ink, fill: "#ffffff", borderColor: c.line, borderWidth: 0.35, radius: 0, padding: 4, lineHeight: 1.7, textAlign: "right" } });
-    add("text", { name: "اسم الجهة", x: 24, y: 266, w: 162, h: 8, content: org || "اسم الجهة", style: { fontFamily: "Cairo", fontSize: 8, color: c.muted, fontWeight: 600, textAlign: "right" } });
-  });
+    band(add, "إسقاط", 126, 76, 0.7, 28, c.accent);
+    paint(add, "الحالة المفصّلة", "التنفيذ مفتوح. القياس لا يبدأ عند التسليم، بل بعد ثلاثين يومًا من استخدام المخرج.", 16, 136, 178, 18, { ...ROLE.body, color: c.ink });
+    paint(add, "المالك", "المالك: مكتب الخطة  ·  الموعد: نهاية هذا الربع.", 16, 162, 178, 8, { ...ROLE.caption, color: c.muted });
+    paint(add, "الجهة", org || "اسم الجهة", 16, 250, 178, 8, { ...ROLE.meta, color: c.muted });
+  }, A4);
 }
 
-export const PACKS: { id: PackId; title: string; desc: string; pages: string }[] = [
-  { id: "official", title: "تقرير رسمي متكامل", desc: "غلاف، محتويات، ملخص، إنجازات، مؤشرات، خاتمة", pages: "6 صفحات" },
-  { id: "eid", title: "تقرير فعالية ومناسبة", desc: "غلاف احتفالي، مؤشرات، معرض صور، ختام", pages: "4 صفحات" },
-  { id: "briefing", title: "عرض قيادي موجز", desc: "غلاف عرض مع مؤشرات وخاتمة", pages: "3 صفحات" },
-  { id: "slides", title: "عرض تقديمي 16:9", desc: "شرائح بنسبة 16:9 للاجتماعات", pages: "2 شريحة" },
-  { id: "blank", title: "مستند فارغ A4", desc: "صفحة بيضاء مع رأس وتذييل خفيف", pages: "1 صفحة" },
+export const PACKS: {
+  id: PackId;
+  title: string;
+  desc: string;
+  pages: string;
+}[] = [
+  {
+    id: "official",
+    title: "تقرير رسمي متكامل",
+    desc: "غلاف، محتويات، ملخص، إنجازات، مؤشرات، خاتمة",
+    pages: "6 صفحات",
+  },
+  {
+    id: "eid",
+    title: "تقرير فعالية ومناسبة",
+    desc: "غلاف احتفالي، مؤشرات، معرض صور، ختام",
+    pages: "4 صفحات",
+  },
+  {
+    id: "briefing",
+    title: "عرض قيادي موجز",
+    desc: "غلاف عرض مع موجز وقرار",
+    pages: "3 صفحات",
+  },
+  {
+    id: "slides",
+    title: "عرض تقديمي 16:9",
+    desc: "شرائح بنسبة 16:9 للاجتماعات",
+    pages: "2 شريحة",
+  },
+  {
+    id: "blank",
+    title: "مستند فارغ A4",
+    desc: "صفحة بيضاء فارغة تمامًا — بلا أي محتوى",
+    pages: "1 صفحة",
+  },
 ];
 
-export function createProject(pack: PackId, themeId: ThemeId = "official", orgName = ""): Project {
-  const theme = THEMES[pack === "eid" ? (themeId === "official" ? "eid" : themeId) : themeId];
+export function createProject(
+  pack: PackId,
+  themeId: ThemeId = "official",
+  orgName = "",
+): Project {
+  const theme =
+    THEMES[
+      pack === "eid" ? (themeId === "official" ? "eid" : themeId) : themeId
+    ];
   const pages =
     pack === "official"
       ? officialPages(theme, orgName)
@@ -1301,12 +839,9 @@ export function createProject(pack: PackId, themeId: ThemeId = "official", orgNa
           ? briefingPages(theme, orgName)
           : pack === "slides"
             ? slidesPages(theme, orgName)
-            : [
-                page("صفحة 1", theme, (add) => {
-                  header(add, theme, "مستند جديد");
-                  footer(add, theme, orgName);
-                }),
-              ];
+            : // The «blank» pack IS the empty sheet: no header, no footer —
+              // «مستند فارغ» means nothing on the page but its background.
+              [page("صفحة 1", theme, () => undefined, { bg: "#ffffff" })];
 
   return {
     version: 2,
@@ -1316,15 +851,69 @@ export function createProject(pack: PackId, themeId: ThemeId = "official", orgNa
         : pack === "briefing"
           ? "عرض قيادي"
           : pack === "slides"
-            ? "عرض تقديمي 16:9"
+            ? "عرض تقديمي"
             : pack === "blank"
               ? "مستند جديد"
               : "تقرير رسمي",
+    pack,
     theme: pack === "eid" ? "eid" : themeId,
     orgName,
     defaultSize: pack === "slides" ? "slide-16-9" : "a4-portrait",
     pages,
   };
+}
+
+/**
+ * Blank pages at any size — the «مستند فارغ» body of the new-document flow.
+ *
+ * Same furniture as the `blank` pack (a light header band and footer rule),
+ * but laid out on the requested page so a landscape A4, an A3 poster or a
+ * 16:9 slide gets a header that spans its real width instead of an A4 band
+ * clamped onto a wider sheet.
+ */
+export function blankPages(
+  count: number,
+  themeId: ThemeId = "official",
+  orgName = "",
+  size: { w: number; h: number } = { w: 210, h: 297 },
+  title = "مستند جديد",
+): Page[] {
+  const theme = THEMES[themeId] ?? THEMES.official;
+  const total = Math.max(1, Math.floor(count) || 1);
+  return Array.from({ length: total }, (_, i) =>
+    page(
+      `صفحة ${i + 1}`,
+      theme,
+      (add) => {
+        header(add, theme, title, size.w);
+        footer(add, theme, orgName, size.w, size.h);
+      },
+      { w: size.w, h: size.h },
+    ),
+  );
+}
+
+/**
+ * Truly blank sheets: no header, no footer, no placeholder — only the page's
+ * own background at the requested size.
+ *
+ * «مستند فارغ» means EMPTY to the authors who ask for it; the header/footer
+ * variant stays available as `blankPages` (the «chrome» start), so neither
+ * workflow loses its sheet.
+ */
+export function plainPages(
+  count: number,
+  size: { w: number; h: number } = { w: 210, h: 297 },
+  bg = "#ffffff",
+): Page[] {
+  const total = Math.max(1, Math.floor(count) || 1);
+  return Array.from({ length: total }, (_, i) =>
+    page(`صفحة ${i + 1}`, THEMES.official, () => undefined, {
+      w: size.w,
+      h: size.h,
+      bg,
+    }),
+  );
 }
 
 export type TemplateCategoryId =
@@ -1373,37 +962,215 @@ export interface PageTemplateDef {
   category: TemplateCategoryId;
   size?: { w: number; h: number };
   concept?: string;
-  preview?: "editorial" | "grid" | "data" | "flow" | "asymmetric" | "modular" | "executive" | "statistical" | "section" | "process";
+  preview?:
+    | "editorial"
+    | "grid"
+    | "data"
+    | "flow"
+    | "asymmetric"
+    | "modular"
+    | "executive"
+    | "statistical"
+    | "section"
+    | "process";
 }
 
 const A4_SIZE = { w: 210, h: 297 };
 const SLIDE_SIZE = { w: 338.7, h: 190.5 };
 
 export const PAGE_TEMPLATES: PageTemplateDef[] = [
-  { id: "cover", title: "غلاف رسمي", desc: "شريط كحلي وشعار وعنوان", category: "covers", size: A4_SIZE },
-  { id: "cover-celebration", title: "غلاف مناسبة", desc: "غلاف احتفالي بخلفية داكنة", category: "covers", size: A4_SIZE },
-  { id: "text", title: "صفحة نصية", desc: "عنوان وفقرة وجدول", category: "reports", size: A4_SIZE },
-  { id: "contents", title: "محتويات", desc: "فهرس بنود مرقم", category: "inner", size: A4_SIZE },
-  { id: "achievements", title: "إنجازات", desc: "بطاقات أثر", category: "inner", size: A4_SIZE },
-  { id: "images", title: "معرض صور", desc: "أربع صور مع تعليق", category: "inner", size: A4_SIZE },
-  { id: "thanks", title: "شكر وختام", desc: "صفحة ختامية هادئة", category: "inner", size: A4_SIZE },
-  { id: "closing", title: "توقيع وختم", desc: "خلاصة وتوقيع", category: "inner", size: A4_SIZE },
-  { id: "stats", title: "مؤشرات ميدانية", desc: "أرقام ورسم أعمدة", category: "kpis", size: A4_SIZE },
-  { id: "stats-board", title: "لوحة مؤشرات", desc: "أربع بطاقات أرقام وأشرطة تقدم", category: "stats", size: A4_SIZE },
-  { id: "table-data", title: "جدول تفصيلي", desc: "جدول خمسة أعمدة للمقارنة", category: "tables", size: A4_SIZE },
-  { id: "infographic", title: "مسار من خمس مراحل", desc: "إنفوجرافيك عمودي جاهز", category: "infographics", size: A4_SIZE },
-  { id: "slide-cover", title: "شريحة غلاف", desc: "شريحة عريضة للعرض", category: "slides", size: SLIDE_SIZE },
-  { id: "slide-stats", title: "شريحة مؤشرات", desc: "ثلاث بطاقات ومؤشر تقدم", category: "slides", size: SLIDE_SIZE },
-  { id: "editorial", title: "تحريرية حديثة", desc: "عنوان مسيطر ومساحة بيضاء ورقم بصري", category: "editorial", concept: "Editorial", preview: "editorial", size: A4_SIZE },
-  { id: "institutional-grid", title: "شبكة مؤسسية", desc: "تقسيم شبكي واضح لوحدات المعلومات", category: "institutional", concept: "Institutional Grid", preview: "grid", size: A4_SIZE },
-  { id: "data-focus", title: "تركيز البيانات", desc: "رقم رئيسي وجدول ومؤشرات ثانوية", category: "data", concept: "Data Focus", preview: "data", size: A4_SIZE },
-  { id: "vertical-flow", title: "تدفق رأسي", desc: "كتل متدرجة تقود العين إلى الأسفل", category: "timeline", concept: "Vertical Flow", preview: "flow", size: A4_SIZE },
-  { id: "asymmetric", title: "تحريرية غير متماثلة", desc: "كتلة جانبية ومرساة بصرية خارج المركز", category: "editorial", concept: "Asymmetric Editorial", preview: "asymmetric", size: A4_SIZE },
-  { id: "modular", title: "وحدات معيارية", desc: "موزاييك من وحدات مستقلة بأحجام مختلفة", category: "institutional", concept: "Modular", preview: "modular", size: A4_SIZE },
-  { id: "executive", title: "ملخص تنفيذي", desc: "تكوين هادئ برسالة واحدة ورقم واضح", category: "executive", concept: "Executive Report", preview: "executive", size: A4_SIZE },
-  { id: "statistical", title: "قراءة إحصائية", desc: "رقم كبير وأعمدة ومؤشرات للقراءة السريعة", category: "stats", concept: "Statistical", preview: "statistical", size: A4_SIZE },
-  { id: "section-divider", title: "فاصل قسم", desc: "رقم قسم كبير ومساحة بيضاء واسعة", category: "section", concept: "Section Divider", preview: "section", size: A4_SIZE },
-  { id: "process", title: "مراحل إجرائية", desc: "تسلسل أفقي قابل للتحرير للمراحل", category: "timeline", concept: "Timeline / Process", preview: "process", size: A4_SIZE },
+  {
+    id: "cover",
+    title: "غلاف رسمي",
+    desc: "غلاف أبيض، عنوان أخضر، وكتلة سفلية بخيط ذهبي",
+    category: "covers",
+    size: A4_SIZE,
+  },
+  {
+    id: "cover-celebration",
+    title: "غلاف مناسبة",
+    desc: "غلاف أخضر بخط أبيض وصورة عرض",
+    category: "covers",
+    size: A4_SIZE,
+  },
+  {
+    id: "text",
+    title: "صفحة نصية",
+    desc: "عمودان وقراءة ثم جدول",
+    category: "reports",
+    size: A4_SIZE,
+  },
+  {
+    id: "contents",
+    title: "محتويات",
+    desc: "فهرس بنود مرقم",
+    category: "inner",
+    size: A4_SIZE,
+  },
+  {
+    id: "achievements",
+    title: "إنجازات",
+    desc: "أثر واحد ثم ثلاثة بنود",
+    category: "inner",
+    size: A4_SIZE,
+  },
+  {
+    id: "images",
+    title: "معرض صور",
+    desc: "تكوين صور غير متماثل مع تعليق",
+    category: "inner",
+    size: A4_SIZE,
+  },
+  {
+    id: "thanks",
+    title: "شكر وختام",
+    desc: "صفحة ختامية هادئة",
+    category: "inner",
+    size: A4_SIZE,
+  },
+  {
+    id: "closing",
+    title: "توقيع وختم",
+    desc: "خلاصة وتوقيع",
+    category: "inner",
+    size: A4_SIZE,
+  },
+  {
+    id: "stats",
+    title: "مؤشرات ميدانية",
+    desc: "أرقام ورسم أعمدة",
+    category: "kpis",
+    size: A4_SIZE,
+  },
+  {
+    id: "stats-board",
+    title: "لوحة مؤشرات",
+    desc: "رقم قائد وأشرطة تقدم وقراءة",
+    category: "stats",
+    size: A4_SIZE,
+  },
+  {
+    id: "table-data",
+    title: "جدول تفصيلي",
+    desc: "جدول خمسة أعمدة للمقارنة",
+    category: "tables",
+    size: A4_SIZE,
+  },
+  {
+    id: "infographic",
+    title: "مسار من خمس مراحل",
+    desc: "إنفوجرافيك عمودي جاهز",
+    category: "infographics",
+    size: A4_SIZE,
+  },
+  {
+    id: "slide-cover",
+    title: "شريحة غلاف",
+    desc: "شريحة عريضة للعرض",
+    category: "slides",
+    size: SLIDE_SIZE,
+  },
+  {
+    id: "slide-stats",
+    title: "شريحة مؤشرات",
+    desc: "مؤشر قائد وقراءتان وشريط تقدم",
+    category: "slides",
+    size: SLIDE_SIZE,
+  },
+  {
+    id: "editorial",
+    title: "تحريرية حديثة",
+    desc: "عنوان مسيطر ومساحة بيضاء ورقم بصري",
+    category: "editorial",
+    concept: "Editorial",
+    preview: "editorial",
+    size: A4_SIZE,
+  },
+  {
+    id: "institutional-grid",
+    title: "شبكة مؤسسية",
+    desc: "تقسيم شبكي واضح لوحدات المعلومات",
+    category: "institutional",
+    concept: "Institutional Grid",
+    preview: "grid",
+    size: A4_SIZE,
+  },
+  {
+    id: "data-focus",
+    title: "تركيز البيانات",
+    desc: "رقم رئيسي وجدول ومؤشرات ثانوية",
+    category: "data",
+    concept: "Data Focus",
+    preview: "data",
+    size: A4_SIZE,
+  },
+  {
+    id: "vertical-flow",
+    title: "تدفق رأسي",
+    desc: "كتل متدرجة تقود العين إلى الأسفل",
+    category: "timeline",
+    concept: "Vertical Flow",
+    preview: "flow",
+    size: A4_SIZE,
+  },
+  {
+    id: "asymmetric",
+    title: "تحريرية غير متماثلة",
+    desc: "كتلة جانبية ومرساة بصرية خارج المركز",
+    category: "editorial",
+    concept: "Asymmetric Editorial",
+    preview: "asymmetric",
+    size: A4_SIZE,
+  },
+  {
+    id: "modular",
+    title: "وحدات معيارية",
+    desc: "موزاييك من وحدات مستقلة بأحجام مختلفة",
+    category: "institutional",
+    concept: "Modular",
+    preview: "modular",
+    size: A4_SIZE,
+  },
+  {
+    id: "executive",
+    title: "ملخص تنفيذي",
+    desc: "تكوين هادئ برسالة واحدة ورقم واضح",
+    category: "executive",
+    concept: "Executive Report",
+    preview: "executive",
+    size: A4_SIZE,
+  },
+  {
+    id: "statistical",
+    title: "قراءة إحصائية",
+    desc: "رقم كبير وأعمدة ومؤشرات للقراءة السريعة",
+    category: "stats",
+    concept: "Statistical",
+    preview: "statistical",
+    size: A4_SIZE,
+  },
+  {
+    id: "section-divider",
+    title: "فاصل قسم",
+    desc: "رقم قسم كبير ومساحة بيضاء واسعة",
+    category: "section",
+    concept: "Section Divider",
+    preview: "section",
+    size: A4_SIZE,
+  },
+  {
+    id: "process",
+    title: "مراحل إجرائية",
+    desc: "تسلسل أفقي قابل للتحرير للمراحل",
+    category: "timeline",
+    concept: "Timeline / Process",
+    preview: "process",
+    size: A4_SIZE,
+  },
+  ...FAMILY_TEMPLATES.map((entry) => ({
+    ...entry,
+    size: A4_SIZE,
+  })),
 ];
 
 export function templateById(id: string): PageTemplateDef | undefined {
@@ -1414,7 +1181,11 @@ export function templateById(id: string): PageTemplateDef | undefined {
  * Builds a fresh page for a gallery entry. Every call returns new element ids,
  * so inserting a template copies it rather than editing the template source.
  */
-export function createTemplatePage(id: string, theme: Theme, org: string): Page {
+export function createTemplatePage(
+  id: string,
+  theme: Theme,
+  org: string,
+): Page {
   switch (id) {
     case "cover":
       return coverPage(theme, org);
@@ -1464,8 +1235,10 @@ export function createTemplatePage(id: string, theme: Theme, org: string): Page 
       return sectionDividerPage(theme, org);
     case "process":
       return processPage(theme, org);
-    default:
-      return coverPage(theme, org);
+    default: {
+      const family = buildFamilyPage(id, theme, org);
+      return family ?? coverPage(theme, org);
+    }
   }
 }
 

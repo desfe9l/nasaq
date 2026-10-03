@@ -7,6 +7,7 @@ import { test } from "node:test";
 import { promisify } from "node:util";
 import {
   APP_ENV_REL_PATH,
+  environmentForCommand,
   mergeAppEnv,
   parseAppEnv,
   projectRoot,
@@ -57,6 +58,15 @@ test("an explicit process-env override wins over the file", () => {
   );
   assert.equal(merged.VITE_AUTH_ENABLED, "true");
   assert.equal(merged.PATH, "/usr/bin");
+});
+
+test("Vite preview emulates Vercel unless the runtime is explicitly set", () => {
+  assert.equal(environmentForCommand("vite", ["preview"], {}, {}).VERCEL, "1");
+  assert.equal(
+    environmentForCommand("vite", ["preview"], {}, { VERCEL: "0" }).VERCEL,
+    "0",
+  );
+  assert.equal(environmentForCommand("vite", ["build"], {}, {}).VERCEL, undefined);
 });
 
 test("the template ships auth off", () => {

@@ -5,9 +5,9 @@
  * in a top-level popup (first-party cookies). This handler is the ENTIRE popup
  * document — no React shell:
  *
- *   Phase 1 (`?providerId=…`): start OAuth server-side and 302 straight to the
- *     broker / upstream login page. The popup never paints the app.
- *   Phase 2 (`?done=1`): after the broker round-trip, emit a tiny HTML page that
+ *   Phase 1 (`?providerId=…`): start OAuth server-side and 302 straight to
+ *     Google. The popup never paints the app.
+ *   Phase 2 (`?done=1`): after the Google round-trip, emit a tiny HTML page that
  *     posts the session token to the opener and closes. No SPA hydrate, no
  *     server-fn round-trip.
  *
@@ -62,9 +62,9 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
   // Stay first-party for the callback so the session cookie lands in THIS popup.
   const back = `${url.origin}/auth/popup?done=1`;
   try {
-    const apiRes = await auth.api.signInWithOAuth2({
+    const apiRes = await auth.api.signInSocial({
       body: {
-        providerId,
+        provider: providerId,
         callbackURL: back,
         errorCallbackURL: `${back}&error=1`,
       },
@@ -95,7 +95,7 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
       });
     }
 
-    // 302 to the broker (which headlessly forwards to Google/X). Forward any
+    // 302 to Google. Forward any
     // Set-Cookie (OAuth state / PKCE) so the callback can complete in this popup.
     const headers = new Headers({ location, "cache-control": "no-store" });
     for (const cookie of apiRes.headers.getSetCookie()) {

@@ -1,7 +1,6 @@
-import { genericOAuthClient } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { runPreSignInSignOut, runSignOut } from "../../../scripts/sign-out-plan.mjs";
-import { GROK_PROVIDERS } from "./providers";
+import { GOOGLE_PROVIDER_ID, SOCIAL_PROVIDERS } from "./providers";
 
 /**
  * Better Auth client for this React SPA (browser-side).
@@ -18,7 +17,6 @@ import { GROK_PROVIDERS } from "./providers";
  * the visitor stays signed in.
  */
 export const authClient = createAuthClient({
-  plugins: [genericOAuthClient()],
   fetchOptions: {
     onRequest(ctx) {
       const token = getBearerToken();
@@ -38,7 +36,8 @@ export const authClient = createAuthClient({
 export const authEnabled = import.meta.env.VITE_AUTH_ENABLED !== "false";
 
 /** The upstream providers to render sign-in buttons for. */
-export { GROK_PROVIDERS };
+export { SOCIAL_PROVIDERS };
+export { GOOGLE_PROVIDER_ID };
 
 // ── Live-preview bearer token ────────────────────────────────────────────────
 // The embedded preview iframe has partitioned cookies, so we keep the session's
@@ -69,7 +68,7 @@ function setBearerToken(token: string | null): void {
 
 /**
  * The sandbox live preview runs this app inside an iframe on a `*.grok-sandbox.com`
- * host, where a full-page redirect to the broker can't work — so sign-in uses a
+ * host, where a full-page redirect to Google can't work — so sign-in uses a
  * popup there and a normal redirect everywhere else.
  */
 function inLivePreview(): boolean {
@@ -83,21 +82,17 @@ function inLivePreview(): boolean {
 type PopupMessage = { source: "grok-auth-popup"; token: string | null; error?: string };
 
 /**
- * Start sign-in with one upstream provider (`providerId` from `GROK_PROVIDERS`),
- * federating through the Grok auth broker.
+ * Start direct Google sign-in with Better Auth.
  *
- * - **Live preview** (`*.grok-sandbox.com` iframe): opens a POPUP to
- *   `/auth/popup`, served by the template Vite plugin (see `vite.config.ts` +
- *   `popup.server.ts`) — 302s to the broker/upstream login (no app chrome) and,
- *   on return, posts the session bearer token back. We store it and refresh the
- *   session; no top-level navigation of the iframe to the broker.
- * - **Deployed** (and local non-iframe): a normal full-page redirect into the broker.
+ * - **Live preview** (`*.grok-sandbox.com` iframe): opens a popup to the
+ *   template handler and returns the session bearer token to the iframe.
+ * - **Deployed** (and local non-iframe): a normal full-page redirect to Google.
  *
  * Either way it clears any existing local session FIRST so switching providers
  * actually switches identity.
  */
 export async function signIn(
-  providerId: string,
+  providerId: typeof GOOGLE_PROVIDER_ID,
   opts: { callbackURL?: string; errorCallbackURL?: string } = {},
 ): Promise<void> {
   const callbackURL = opts.callbackURL ?? "/";
@@ -112,12 +107,15 @@ export async function signIn(
   // Bounded because the popup is already open — a request that never settles
   // would leave it hanging — but bounded PER ENVIRONMENT: only the server can
   // end a deployed session, so cutting it short at the preview's 1.5s would
-  // start OAuth with the old session still live.
+  // start OAuth with the old session still live. The outgoing identity's
+  // local state (library store, storage owner, licence cache) goes with it,
+  // so an account switch can never carry the previous account's data over.
   await runPreSignInSignOut({
     livePreview: inLivePreview(),
     hasBearer: Boolean(getBearerToken()),
     requestSignOut: () => authClient.signOut(),
     clearToken: () => setBearerToken(null),
+    clearLocalState: clearLocalIdentityState,
   });
 
   if (inLivePreview()) {
@@ -133,6 +131,10 @@ export async function signIn(
     } catch {
       /* session store will recover on next useSession fetch */
     }
+    // No reload below when we're already on the destination, so hand the new
+    // identity to the client state explicitly: re-pin the storage owner and
+    // reload whatever user-scoped data is on screen.
+    await applyNewSessionToClientState();
     if (typeof window !== "undefined") {
       const dest = new URL(callbackURL, window.location.origin);
       const here = window.location;
@@ -143,8 +145,8 @@ export async function signIn(
     return;
   }
 
-  const { data, error } = await authClient.signIn.oauth2({
-    providerId,
+  const { data, error } = await authClient.signIn.social({
+    provider: providerId,
     callbackURL,
     errorCallbackURL,
   });
@@ -207,10 +209,81 @@ function waitForPopupToken(popup: Window): Promise<string | null> {
 }
 
 /**
+ * Drop every piece of CLIENT state tied to the outgoing identity.
+ *
+ * The session clear alone is not enough: the editor library (projects, assets,
+ * custom vectors) lives in Zustand + IndexedDB and the licence key cache in
+ * localStorage, all of which outlive the session. This resets the storage
+ * owner to signed-out — so persisted reads fail closed against the previous
+ * account's rows — wipes the in-memory user-scoped store slices, and clears
+ * the cached licence key. Best effort: a module that never loaded has no
+ * state to clear, and the sign-out itself must not fail on a cache hiccup.
+ */
+async function clearLocalIdentityState(): Promise<void> {
+  try {
+    const { ANON_OWNER, getStorageOwner, setStorageOwner } = await import(
+      "@/lib/editor/storage-owner"
+    );
+    // Only an account session has user-scoped data in memory. For a
+    // signed-out visitor (e.g. the pre-sign-in clear before a popup OAuth
+    // they then CANCEL) the in-memory editor state is their own anonymous
+    // work — resetting it would blank their canvas for nothing.
+    const hadAccountData = getStorageOwner() !== ANON_OWNER;
+    setStorageOwner(null);
+    if (hadAccountData) {
+      try {
+        const { useEditor } = await import("@/lib/editor/store");
+        useEditor.getState().resetUserScopedState();
+      } catch {
+        /* editor store never loaded on this page — nothing in memory to drop */
+      }
+    }
+  } catch {
+    /* owner registry unavailable — nothing to unpin */
+  }
+  try {
+    // The cached licence key is account data (activation requires a session),
+    // so it goes on every identity boundary — an account switch must never
+    // offer the previous account's key.
+    const { setCachedLicenseKey } = await import("@/lib/license/client");
+    setCachedLicenseKey("");
+  } catch {
+    /* licence cache unavailable — nothing to clear */
+  }
+}
+
+/**
+ * Re-pin the storage owner to the NEW session and refresh any user-scoped
+ * client state that is already on screen. Needed for the popup sign-in that
+ * deliberately skips a page reload: without it the store would keep serving
+ * the previous identity's (or the signed-out) library until the next reload.
+ */
+async function applyNewSessionToClientState(): Promise<void> {
+  try {
+    const { syncStorageOwner } = await import("./storage-owner-sync");
+    await syncStorageOwner();
+  } catch {
+    /* owner sync unavailable — hydrate() re-attempts it on next mount */
+  }
+  try {
+    const { useEditor } = await import("@/lib/editor/store");
+    // hydrate() is identity-aware: it no-ops when the owner is unchanged and
+    // resets + reloads the user-scoped slices when it is not.
+    await useEditor.getState().hydrate();
+  } catch {
+    /* store unavailable on this page — nothing to refresh */
+  }
+}
+
+/**
  * Sign out of THIS app's local session, clear the preview token, then redirect.
  *
  * Use this, never `authClient.signOut()` — see the note on `authClient`.
  * Sequencing lives in `scripts/sign-out-plan.mjs` so it can be unit-tested.
+ *
+ * The local identity clear (library store, storage owner, licence cache) runs
+ * between the token clear and the redirect, so the signed-out page never
+ * renders — even for a frame — with the previous account's data still live.
  *
  * **Rejects when deployed if the server never confirms.** There the session is
  * an HttpOnly cookie only the server can clear, so redirecting anyway would
@@ -229,6 +302,7 @@ export async function signOut(redirectTo = "/"): Promise<void> {
       if (error) throw new Error(error.message ?? "Sign-out failed");
     },
     clearToken: () => setBearerToken(null),
+    clearLocalState: clearLocalIdentityState,
     redirect: () => {
       window.location.href = redirectTo;
     },

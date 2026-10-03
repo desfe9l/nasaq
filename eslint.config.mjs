@@ -15,6 +15,7 @@ export default tseslint.config(
       ".nitro/**",
       "node_modules/**",
       "src/routeTree.gen.ts",
+      "src/lib/og/share-raster-assets.generated.ts",
     ],
   },
   js.configs.recommended,

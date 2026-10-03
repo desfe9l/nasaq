@@ -1,5 +1,14 @@
 import { useState } from "react";
-import { Copy, FileDown, FolderOpen, MoreHorizontal, Pencil, Trash2, X } from "lucide-react";
+import {
+  Copy,
+  FileDown,
+  FolderOpen,
+  MoreHorizontal,
+  Pencil,
+  Star,
+  Trash2,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { THEMES, type ProjectMeta } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
@@ -10,25 +19,37 @@ function relativeTime(ts: number) {
   const mins = Math.round(diff / 60000);
   if (mins < 1) return "الآن";
   if (mins < 60) return `منذ ${mins} دقيقة`;
-  const hours = Math.round(mins / 60);
+  const hours = Math.round(diff / 3600000);
   if (hours < 24) return `منذ ${hours} ساعة`;
   const days = Math.round(hours / 24);
   if (days < 30) return `منذ ${days} يوم`;
   return new Date(ts).toLocaleDateString("ar-SA");
 }
 
+/**
+ * One document row in the grid / list / home rails.
+ *
+ * The preview is the real page-1 JPEG captured on auto-save, framed like an
+ * A4 sheet; the footer action buttons are gone — opening happens through the
+ * glassmorphism hover overlay («فتح المستند») or the title, and every other
+ * command lives in the single «…» menu (rename, favourite, duplicate,
+ * export JSON, delete). Titles wrap to two lines instead of truncating.
+ */
 export function ProjectCard({
   project,
   onOpen,
   compact,
+  variant = "grid",
 }: {
   project: ProjectMeta;
   onOpen: (id: string) => void | Promise<void>;
   compact?: boolean;
+  variant?: "grid" | "list";
 }) {
   const renameProject = useEditor((s) => s.renameProject);
   const duplicateProject = useEditor((s) => s.duplicateProject);
   const deleteProject = useEditor((s) => s.deleteProject);
+  const toggleProjectFavorite = useEditor((s) => s.toggleProjectFavorite);
   const [menu, setMenu] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -36,6 +57,7 @@ export function ProjectCard({
   const [busy, setBusy] = useState(false);
 
   const theme = THEMES[project.theme] || THEMES.official;
+  const isList = variant === "list";
 
   const commitRename = async () => {
     const next = draftName.trim();
@@ -55,7 +77,8 @@ export function ProjectCard({
         return;
       }
       const { exportJson: writeJson, safeFileName } = await import("@/lib/editor/export");
-      writeJson({ ...full, updatedAt: Date.now() });
+      const exported = writeJson({ ...full, updatedAt: Date.now() });
+      if (!exported) return;
       toast.success(`تم تنزيل ${safeFileName(full.name)}.json`);
     } catch {
       toast.error("تعذر تصدير المشروع");
@@ -75,6 +98,14 @@ export function ProjectCard({
     }
   };
 
+  const star = async () => {
+    setMenu(false);
+    await toggleProjectFavorite(project.id);
+    toast.success(
+      project.favorite ? "أُزيل من المفضلة" : "أُضيف إلى المفضلة ⭐",
+    );
+  };
+
   const remove = async () => {
     setBusy(true);
     try {
@@ -87,25 +118,75 @@ export function ProjectCard({
     }
   };
 
+  /**
+   * A4 paper frame: the captured page-1 JPEG (or a CSS fallback sheet when
+   * the thumbnail has not been captured yet). The overlay turns the whole
+   * sheet into the «open» affordance on hover / focus.
+   */
+  const preview = (
+    <div
+      className={cn(
+ "relative overflow-hidden rounded-[7px] border border-line bg-surface shadow-sm",
+        // Real A4 proportions (210 × 297): the page-1 snapshot sits inside a
+        // paper frame instead of being cropped into a banner strip.
+        isList ? "aspect-[210/297] w-[56px] shrink-0" : compact ? "mx-auto aspect-[210/297] h-[150px]" : "mx-auto aspect-[210/297] h-[200px]",
+      )}
+    >
+      {project.thumbnail ? (
+        <img
+          src={project.thumbnail}
+          alt=""
+          aria-hidden
+          loading="lazy"
+          className="h-full w-full bg-surface object-contain object-top"
+        />
+      ) : (
+        <span className="flex h-full w-full flex-col">
+          <span className="block h-5 shrink-0" style={{ background: theme.primary }} />
+          <span className="block h-[3px] shrink-0" style={{ background: theme.accent }} />
+          <span className="mx-2.5 mt-3 block h-1.5 rounded bg-navy/15" />
+          <span className="mx-2.5 mt-2 block h-1 w-2/3 rounded bg-navy/10" />
+          <span className="mx-2.5 mt-2 block h-1 w-1/2 rounded bg-navy/10" />
+        </span>
+      )}
+      {/* Glassmorphism open-overlay: replaces the old footer action buttons. */}
+      <button
+        type="button"
+        onClick={() => void onOpen(project.id)}
+        aria-label={`فتح ${project.name}`}
+        className="group/overlay absolute inset-0 grid place-items-center bg-navy/0 backdrop-blur-0 transition-all duration-200 hover:bg-navy-2/45 hover:backdrop-blur-[2px] focus-visible:bg-navy/45 focus-visible:backdrop-blur-[2px] focus:outline-none"
+      >
+        <span className="inline-flex translate-y-1 items-center gap-1.5 rounded-full border border-white/40 bg-surface/85 px-3 py-1.5 text-[11px] font-extrabold text-brand opacity-0 shadow-sm transition-all duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-hover/overlay:translate-y-0 group-hover/overlay:opacity-100 group-focus-visible/overlay:translate-y-0 group-focus-visible/overlay:opacity-100">
+          <FolderOpen className="size-3.5" />
+          فتح المستند
+        </span>
+      </button>
+      {project.favorite && (
+        <span
+          title="في المفضلة"
+          className="absolute top-1.5 left-1.5 grid size-5 place-items-center rounded-full bg-gold text-on-gold text-[11px] shadow-sm"
+        >
+          ⭐
+        </span>
+      )}
+    </div>
+  );
+
   return (
     <div
       className={cn(
-        "relative rounded-[12px] border border-line bg-white p-4 transition hover:border-navy-2 dark:border-white/10 dark:bg-white/5",
+ "shadow-card group relative rounded-xl border border-line bg-surface p-4 transition-all duration-200 hover:-translate-y-1 hover:border-brand hover:shadow-card-hover",
+        isList && "flex items-center gap-4 p-3",
         busy && "opacity-60",
       )}
     >
-      <div className="flex items-start gap-3">
-        <span className="grid h-[74px] w-[54px] shrink-0 overflow-hidden rounded-[6px] border border-line bg-white">
-          <span className="block h-4" style={{ background: theme.primary }} />
-          <span className="block h-[3px]" style={{ background: theme.accent }} />
-          <span className="mx-2 mt-3 block h-1.5 rounded bg-navy/15" />
-          <span className="mx-2 mt-1.5 block h-1 w-2/3 rounded bg-navy/10" />
-          <span className="mx-2 mt-1.5 block h-1 w-1/2 rounded bg-navy/10" />
-        </span>
+      <div className={cn(isList ? "flex min-w-0 flex-1 items-center gap-4" : "flex flex-col")}>
+        {!isList && preview}
+        {isList && <div className="hidden shrink-0 sm:block">{preview}</div>}
 
-        <div className="min-w-0 flex-1">
+        <div className={cn("min-w-0 flex-1", !isList && "mt-3")}>
           {renaming ? (
-            <div className="flex gap-1.5">
+            <div className="flex w-full gap-1.5">
               <input
                 autoFocus
                 value={draftName}
@@ -114,12 +195,12 @@ export function ProjectCard({
                   if (e.key === "Enter") void commitRename();
                   if (e.key === "Escape") setRenaming(false);
                 }}
-                className="h-8 min-w-0 flex-1 rounded-[6px] border border-line px-2 text-[13px] font-bold dark:border-white/10 dark:bg-white/5"
+                className="h-8 min-w-0 flex-1 rounded-[6px] border border-line px-2 text-[13px] font-bold bg-surface-2"
               />
               <button
                 type="button"
                 onClick={() => void commitRename()}
-                className="h-8 rounded-[6px] bg-navy px-2.5 text-[11px] font-extrabold text-white"
+                className="h-8 rounded-[6px] bg-navy px-2.5 text-[11px] font-extrabold text-on-brand"
               >
                 حفظ
               </button>
@@ -127,7 +208,7 @@ export function ProjectCard({
                 type="button"
                 onClick={() => setRenaming(false)}
                 aria-label="إلغاء"
-                className="grid size-8 place-items-center rounded-[6px] border border-line dark:border-white/10"
+                className="grid size-8 place-items-center rounded-[6px] border border-line"
               >
                 <X className="size-3.5" />
               </button>
@@ -138,7 +219,15 @@ export function ProjectCard({
               onClick={() => void onOpen(project.id)}
               className="block w-full text-right"
             >
-              <strong className="block truncate text-[14px] font-extrabold">{project.name}</strong>
+              {/* Wrap instead of truncate: long official titles stay readable. */}
+              <strong className="line-clamp-2 break-words text-[14px] font-extrabold leading-6">
+                {project.name}
+                {project.favorite && (
+                  <span className="mr-1 text-warning" title="في المفضلة">
+                    ★
+                  </span>
+                )}
+              </strong>
               <span className="mt-0.5 block text-[11px] text-muted">
                 {project.pages} صفحة · {theme.name}
               </span>
@@ -155,14 +244,17 @@ export function ProjectCard({
           onClick={() => setMenu((v) => !v)}
           aria-label={`خيارات ${project.name}`}
           aria-expanded={menu}
-          className="grid size-8 shrink-0 place-items-center rounded-[6px] border border-line dark:border-white/10"
+          className={cn(
+ "grid size-8 shrink-0 place-items-center rounded-[6px] border border-line",
+            isList && "absolute top-3 left-3",
+          )}
         >
           <MoreHorizontal className="size-4" />
         </button>
       </div>
 
       {menu && (
-        <div className="absolute top-12 left-3 z-20 w-44 rounded-[10px] border border-line bg-white p-1 shadow-xl dark:border-white/10 dark:bg-[#1b2433]">
+        <div className="absolute top-12 left-3 z-20 w-48 rounded-[10px] border border-line bg-surface p-1 shadow-xl">
           <MenuItem
             onClick={() => {
               setRenaming(true);
@@ -172,6 +264,9 @@ export function ProjectCard({
             icon={Pencil}
           >
             إعادة تسمية
+          </MenuItem>
+          <MenuItem onClick={() => void star()} icon={Star}>
+            {project.favorite ? "إزالة من المفضلة" : "إضافة إلى المفضلة"}
           </MenuItem>
           <MenuItem onClick={() => void duplicate()} icon={Copy}>
             نسخ المشروع
@@ -186,7 +281,7 @@ export function ProjectCard({
       )}
 
       {confirming && (
-        <div className="absolute inset-0 z-30 grid place-items-center rounded-[12px] bg-white/95 p-4 text-center dark:bg-[#1b2433]/95">
+        <div className="absolute inset-0 z-30 grid place-items-center rounded-xl bg-surface/95 p-4 text-center">
           <div>
             <p className="text-[13px] font-extrabold">حذف «{project.name}»؟</p>
             <p className="mt-1 text-[11px] text-muted">لا يمكن التراجع عن هذه العملية.</p>
@@ -194,48 +289,19 @@ export function ProjectCard({
               <button
                 type="button"
                 onClick={() => void remove()}
-                className="h-9 rounded-[8px] bg-danger px-3 text-[12px] font-extrabold text-white"
+                className="h-9 rounded-[8px] bg-danger px-3 text-[12px] font-extrabold text-on-brand"
               >
                 حذف نهائي
               </button>
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                className="h-9 rounded-[8px] border border-line px-3 text-[12px] font-bold dark:border-white/10"
+                className="h-9 rounded-[8px] border border-line px-3 text-[12px] font-bold"
               >
                 إلغاء
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {!compact && (
-        <div className="mt-3 flex gap-2 border-t border-line pt-3 dark:border-white/10">
-          <button
-            type="button"
-            onClick={() => void onOpen(project.id)}
-            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-[8px] bg-navy text-[12px] font-extrabold text-white"
-          >
-            <FolderOpen className="size-3.5" />
-            فتح المشروع
-          </button>
-          <button
-            type="button"
-            onClick={() => void duplicate()}
-            title="نسخ المشروع"
-            className="grid size-9 place-items-center rounded-[8px] border border-line dark:border-white/10"
-          >
-            <Copy className="size-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => setConfirming(true)}
-            title="حذف المشروع"
-            className="grid size-9 place-items-center rounded-[8px] border border-red-200 text-danger dark:border-red-500/30"
-          >
-            <Trash2 className="size-3.5" />
-          </button>
         </div>
       )}
     </div>
@@ -258,8 +324,8 @@ function MenuItem({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-2 rounded-[7px] px-2.5 py-2 text-right text-[12px] font-bold hover:bg-line-2 dark:hover:bg-white/5",
-        danger && "text-danger",
+ "flex w-full items-center gap-2 rounded-[7px] px-2.5 py-2 text-right text-[12px] font-bold hover:bg-line-2",
+        danger && "text-error",
       )}
     >
       <Icon className="size-3.5" />

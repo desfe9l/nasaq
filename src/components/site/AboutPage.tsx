@@ -1,7 +1,39 @@
 import { useEffect } from "react";
-import { BRAND, CONTACT_PHONE_DISPLAY, telHref, whatsappHref } from "@/lib/brand";
+import {
+  AlertTriangle,
+  BadgeCheck,
+  FileDown,
+  FileJson,
+  FileText,
+  Globe,
+  MessageCircle,
+  Phone,
+  Presentation,
+} from "lucide-react";
+import { BRAND, CONTACT_PHONE_DISPLAY, WHATSAPP_MESSAGES, telHref, whatsappHref } from "@/lib/brand";
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
+
+/** Export formats as self-describing pill badges — monochrome SVG, no emoji. */
+const FORMAT_PILLS = [
+  { icon: FileDown, label: "PDF" },
+  { icon: FileText, label: "PNG" },
+  { icon: FileText, label: "JPG" },
+  { icon: Presentation, label: "PowerPoint" },
+  { icon: FileText, label: "Word" },
+  { icon: Globe, label: "HTML" },
+  { icon: FileJson, label: "JSON" },
+] as const;
+
+/** 3×2 grid of platform guarantees. */
+const SPECS: { title: string; body: string }[] = [
+  { title: "عربي RTL كامل", body: "الواجهة والتحرير والمحاذاة بترتيب من اليمين لليسار — لا ترجمة سطحية." },
+  { title: "مقاسات قياسية", body: "A4 رأسي/أفقي، A3، وشرائح 16:9 مع مقاسات مخصصة بالمليمتر." },
+  { title: "جودة طباعة 300 DPI", body: "مخرجات PDF وصور بدقة طباعة رسمية صالحة للتسليم." },
+  { title: "تخزين محلي أولًا", body: "تُحفظ المشاريع داخل متصفح الجهاز، مع اتصال عند الحاجة إلى التحقق من الترخيص أو خدمات الذكاء الاصطناعي." },
+  { title: "تصميم متجاوب", body: "يعمل على الشاشات الكبيرة أولًا، ويدعم الأجهزة اللوحية والمس." },
+  { title: "تصدير متعدد الصيغ", body: "سبع صيغ تصدير (تظهر كشارات بالأعلى) مع معاينة قبل الإخراج." },
+];
 
 export function AboutPage() {
   const hydrate = useEditor((s) => s.hydrate);
@@ -11,84 +43,110 @@ export function AboutPage() {
   }, [hydrate]);
 
   return (
-    <div className="min-h-full bg-paper dark:bg-[#111722]">
+    <div className="min-h-full bg-paper">
       <SiteHeader current="/about" />
 
       <main className="mx-auto w-full max-w-3xl px-4 py-12 sm:px-6">
         <h1 className="text-[26px] font-extrabold">عن {BRAND.lockup}</h1>
-        <p className="mt-3 text-[14px] font-bold text-navy-2 dark:text-gold-2">
+        <p className="mt-3 text-[14px] font-bold text-brand-hover">
           {BRAND.platformEn}
         </p>
         <p className="mt-4 text-[15px] leading-8 text-muted">
-          {BRAND.name} منصة {BRAND.platform} — طوّرها {BRAND.owner} لتصميم وإخراج التقارير
+          {BRAND.name} منصة {BRAND.platform} — من تطوير {BRAND.team} لتصميم وإخراج التقارير
           والمستندات والتصاميم الرسمية. الفكرة بسيطة: بدلاً من إعادة بناء التقرير في كل مرة، تبدأ
           من صفحة أو قالب جاهز، تعدّل النصوص والأرقام والجداول والصور، ثم تصدّر الملف بجودة طباعة
           مناسبة للتسليم الرسمي.
         </p>
 
-        <section className="mt-8 grid gap-4 rounded-[12px] border border-line bg-white p-6 sm:grid-cols-2 dark:border-white/10 dark:bg-white/5">
-          <Fact title="الغرض" body={BRAND.tagline} />
-          <Fact title="اللغة" body="الواجهة عربية بترتيب RTL كامل — لا ترجمة سطحية." />
-          <Fact title="المقاسات" body="A4 رأسي/أفقي، A3، شرائح 16:9، ومقاسات مخصصة بالمليمتر." />
-          <Fact title="التصدير" body="PDF وPNG وJPG وPowerPoint وWord وHTML مع نسخة مشروع JSON." />
-          <Fact title="الخصوصية" body="الملفات تُحفظ في متصفح الجهاز ولا تُرفع إلى أي سيرفر." />
-          <Fact title="الملاءمة" body="مصمّمة للعمل على الشاشات الكبيرة أولاً، وتعمل على الأجهزة اللوحية." />
-        </section>
-
-        <section className="mt-8 rounded-[12px] border border-line bg-white p-6 dark:border-white/10 dark:bg-white/5">
-          <h2 className="text-[16px] font-extrabold">التطوير</h2>
-          <dl className="mt-3 grid gap-2 text-[14px]">
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted">الاسم</dt>
-              <dd className="font-bold">من تطوير {BRAND.owner}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted">English</dt>
-              <dd className="font-bold" dir="ltr">
-                Developed by {BRAND.developer}
-              </dd>
-            </div>
-          </dl>
-          <p className="mt-4 text-[12px] leading-6 text-muted">
-            {BRAND.name} هو اسم المنصة، ولا يُعد اسم المطوّر جزءاً منه. حقوق المنتج والتطوير
-            محفوظة لـ {BRAND.owner}.
-          </p>
-        </section>
-
-        <section className="mt-8 rounded-[12px] border border-line bg-white p-6 dark:border-white/10 dark:bg-white/5">
-          <h2 className="text-[16px] font-extrabold">بيانات التواصل</h2>
-          <dl className="mt-3 grid gap-2 text-[14px]">
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted">الاسم</dt>
-              <dd className="font-bold">{BRAND.owner}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-muted">رقم الجوال</dt>
-              <dd className="font-bold tabular-nums" dir="ltr">
-                {CONTACT_PHONE_DISPLAY}
-              </dd>
-            </div>
-          </dl>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <a
-              href={telHref()}
-              className="inline-flex h-11 items-center rounded-[10px] bg-navy px-4 text-[13px] font-extrabold text-white"
-            >
-              اتصال
-            </a>
-            <a
-              href={whatsappHref()}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-line px-4 text-[13px] font-bold dark:border-white/10"
-            >
-              واتساب
-            </a>
+        {/* Export formats as pills — each format stands alone, clearly labelled. */}
+        <section className="mt-6">
+          <h2 className="text-[13px] font-extrabold text-muted">صيغ التصدير المتاحة</h2>
+          <div className="mt-2 flex flex-wrap gap-2" dir="ltr">
+            {FORMAT_PILLS.map((pill) => {
+              const Icon = pill.icon;
+              return (
+                <span
+                  key={pill.label}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1.5 text-[12px] font-bold shadow-sm"
+                >
+                  <Icon className="size-3.5 text-brand-hover" aria-hidden />
+                  {pill.label}
+                </span>
+              );
+            })}
           </div>
         </section>
 
-        <section className="mt-8">
-          <h2 className="text-[16px] font-extrabold">ملاحظة عن البيانات</h2>
+        {/* 3×2 specifications grid. */}
+        <section className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {SPECS.map((spec) => (
+            <div
+              key={spec.title}
+              className="shadow-card rounded-xl border border-line bg-surface p-4"
+            >
+              <h3 className="text-[13px] font-extrabold text-brand-hover">
+                {spec.title}
+              </h3>
+              <p className="mt-1.5 text-[13px] leading-6 text-muted">{spec.body}</p>
+            </div>
+          ))}
+        </section>
+
+        {/* Verified institutional card with direct tel: and WhatsApp actions. */}
+        <section className="shadow-card mt-8 rounded-xl border border-line bg-surface p-6">
+          <div className="flex items-start gap-4">
+            <img src="/nasaq-mark.svg" alt="" aria-hidden className="size-14 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-[16px] font-extrabold">{BRAND.team}</h2>
+                <span className="inline-flex items-center gap-1 rounded-full bg-ok/10 px-2 py-0.5 text-[11px] font-extrabold text-success">
+                  <BadgeCheck className="size-3.5" /> الفريق المعتمد للمنصة
+                </span>
+              </div>
+              <p className="mt-1 text-[13px] text-muted">
+                التشغيل والدعم — <span dir="ltr" className="font-bold">{BRAND.developerEn}</span>
+              </p>
+              <dl className="mt-3 grid gap-1.5 text-[13px]">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted">الجوال</dt>
+                  <dd className="font-bold tabular-nums" dir="ltr">{CONTACT_PHONE_DISPLAY}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted">الدور</dt>
+                  <dd className="font-bold">تصميم وتطوير {BRAND.platform}</dd>
+                </div>
+              </dl>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <a
+                  href={telHref()}
+                  className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-navy px-4 text-[13px] font-extrabold text-on-brand"
+                >
+                  <Phone className="size-4" />
+                  اتصال مباشر
+                </a>
+                <a
+                  href={whatsappHref(WHATSAPP_MESSAGES.support)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-green px-4 text-[13px] font-extrabold text-on-brand"
+                >
+                  <MessageCircle className="size-4" />
+                  واتساب
+                </a>
+              </div>
+            </div>
+          </div>
+          <p className="mt-4 border-t border-line pt-3 text-[12px] leading-6 text-muted">
+            {BRAND.name} هو اسم المنصة. جميع الحقوق محفوظة لـ {BRAND.platform}.
+          </p>
+        </section>
+
+        {/* Warning banner for the demo-data disclaimer. */}
+        <section className="mt-8 rounded-xl border border-gold/40 bg-gold/10 p-5">
+          <h2 className="flex items-center gap-2 text-[15px] font-extrabold text-warning">
+            <AlertTriangle className="size-4" aria-hidden />
+            ملاحظة عن البيانات التجريبية
+          </h2>
           <p className="mt-2 text-[14px] leading-7 text-muted">
             القوالب المرفقة تحتوي على بيانات تجريبية موسومة بوضوح (Demo) للعرض فقط. لا تتضمن المنصة أي
             شعارات رسمية أو صور أشخاص أو بيانات جهات حقيقية؛ تُستبدل جميعها بمحتوى العميل قبل التسليم.
@@ -97,15 +155,6 @@ export function AboutPage() {
       </main>
 
       <SiteFooter />
-    </div>
-  );
-}
-
-function Fact({ title, body }: { title: string; body: string }) {
-  return (
-    <div>
-      <h3 className="text-[12px] font-extrabold text-muted">{title}</h3>
-      <p className="mt-1 text-[14px] leading-7">{body}</p>
     </div>
   );
 }

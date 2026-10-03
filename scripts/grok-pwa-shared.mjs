@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-export const DEFAULT_APP_NAME = "NASAQ | نَسَق";
+export const DEFAULT_APP_NAME = "نسق";
 export const OG_SERVICE_URL_DEFAULT = "https://og.grok.me";
 export const OG_SITE_REL_PATH = "src/lib/og/site.json";
 
@@ -124,6 +124,39 @@ export function isInstallQuery(url) {
   return (install === "1" || install === "true") && platform === "ios";
 }
 
+/**
+ * The document half of the versioning contract.
+ *
+ * Versioning here is asset-hashes + revalidated HTML — there is deliberately
+ * NO service worker that could serve a stale shell or wipe local data:
+ *  - built JS/CSS under `/assets/*` carry content-hashed filenames and ship
+ *    `cache-control: public, max-age=31536000, immutable` (safe forever — the
+ *    URL changes when the bytes do);
+ *  - every HTML *document* must therefore revalidate on each navigation, so
+ *    the HTML — the only unversioned URL in the chain — always resolves to
+ *    the current deployment's asset hashes.
+ *
+ * Without this, a browser (or any intermediary) is free to keep serving the
+ * previous deployment's HTML, and the user sees the old Workspace/editor
+ * until they manually clear the cache. `no-cache` (NOT `no-store`) disables
+ * freshness without touching stored user data, cookies, authorisations or
+ * the back/forward cache: projects, Library, sessions and settings survive
+ * untouched, and every new deployment simply loads on the next navigation.
+ */
+export const DOCUMENT_CACHE_CONTROL = "no-cache";
+
+/**
+ * Applies the document cache policy to a response, unless one was already
+ * declared explicitly (the license API's `no-store`, the install page, etc.).
+ * Read/write through callbacks so the same rule serves Fetch `Headers`
+ * (deployed) and Node's `ServerResponse` (dev/preview).
+ */
+export function applyDocumentCachePolicy(getHeader, setHeader) {
+  const current = getHeader("cache-control");
+  if (current !== null && current !== undefined && String(current).trim()) return;
+  setHeader("cache-control", DOCUMENT_CACHE_CONTROL);
+}
+
 /** Paths that can carry an app document (vs assets / API / internals). */
 export function isDocumentPath(pathname) {
   const path = String(pathname ?? "");
@@ -174,6 +207,16 @@ export function renderWebManifest(hostHeader) {
           src: "/__grok/icon-180.png",
           sizes: "180x180",
           type: "image/png",
+        },
+      ],
+      // Installed app: the OS opens NASAQ project files (.nsq) straight into
+      // `/open`, which validates, preserves and continues into the editor.
+      file_handlers: [
+        {
+          action: "/open",
+          accept: { "application/vnd.nasaq.project+zip": [".nsq"] },
+          icons: [{ src: "/__grok/icon-180.png", sizes: "180x180", type: "image/png" }],
+          launch_type: "single-client",
         },
       ],
     },
@@ -375,11 +418,13 @@ export function grokOgHeadTags({
   return tags;
 }
 
-export function stripShareMetaTags(html) {
+export function stripShareMetaTags(html, preserve = []) {
+  const keep = new Set(preserve.map((key) => String(key).toLowerCase()));
   return String(html).replace(/<meta\b[^>]*>/gi, (tag) => {
     const attrs = [...tag.matchAll(/\b(?:property|name)\s*=\s*["']([^"']+)["']/gi)];
     for (const match of attrs) {
-      if (SHARE_META_KEYS.has(String(match[1]).toLowerCase())) return "";
+      const key = String(match[1]).toLowerCase();
+      if (SHARE_META_KEYS.has(key) && !keep.has(key)) return "";
     }
     return tag;
   });
@@ -432,7 +477,15 @@ export function injectGrokPwaHead(html, ctx = {}) {
     host,
     documentTitle,
   );
-  let next = stripShareMetaTags(html);
+  let next = stripShareMetaTags(
+    html,
+    // A Vercel host is not a public card origin, so this injector emits no
+    // og:image of its own. Keep the page's image and URL — template shares
+    // point those at the template thumbnail and the template page.
+    resolvePublicHost(host)
+      ? []
+      : ["og:image", "og:image:width", "og:image:height", "og:url", "twitter:image"],
+  );
 
   const missing = grokPwaHeadTags(appName)
     .filter(([key]) => {

@@ -39,7 +39,7 @@ export function assertSameSiteRequest(): void {
   // Non-browser client (no header), the app's own origin, or a direct
   // (address-bar/bookmark) load are all fine.
   if (!site || site === "same-origin" || site === "none") return;
-  // A top-level GET navigation (e.g. the broker's OAuth callback redirect) is
+  // A top-level GET navigation (e.g. Google's OAuth callback redirect) is
   // fine even when it's cross-site; scripted requests never set navigate mode.
   const dest = h.get("sec-fetch-dest");
   const isTopLevelGet =
