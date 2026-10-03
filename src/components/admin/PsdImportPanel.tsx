@@ -373,9 +373,13 @@ export function PsdImportPanel() {
         <p className="mt-1 max-w-2xl text-[13px] font-semibold leading-6 text-muted">
           الملفات المدعومة تُحوَّل إلى مستند نَسَق قابل للتحرير: نص، جداول، صور وأشكال حيث يسمح الملف. ليس مطابقة كاملة لـ Word أو PowerPoint، وما لا يُستخرج يُذكر في التقرير ولا يُخفى.
         </p>
-        <p className="mt-2 text-[12px] font-extrabold tracking-wide text-ink" dir="ltr">
-          PSD · DOCX · PPTX · PDF · PNG · JPG · SVG
-        </p>
+        <ul className="mt-3 grid gap-1 text-[12px] font-semibold leading-5 text-muted">
+          <li>PSD / PSB: طبقات النص والصور والتسلسل والموضع، مع تقرير لما يبقى صورة.</li>
+          <li>DOCX: فقرات وعناوين وجداول بسيطة وصور وحجم الصفحة واتجاهها، بما في ذلك العربي المختلط. التنسيق المتقدم يبقى تقريبيًا.</li>
+          <li>PPTX: كل شريحة صفحة، مع النص والصور والأشكال والموضع الأساسي.</li>
+          <li>PDF: النص والصور المستخرجة عناصر قابلة للتحرير. الصفحة الممسوحة تبقى بحجمها وتُذكر كمحدودة.</li>
+          <li>PNG / JPG / SVG: صفحة واحدة وعنصر صورة أو رسم قابل للتحرير، لا إعادة بناء طبقات.</li>
+        </ul>
       </header>
 
       <div className="flex flex-wrap gap-1.5">

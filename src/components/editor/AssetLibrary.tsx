@@ -32,6 +32,8 @@ import {
   X,
 } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
+import { INSTITUTIONAL_FOLDER_ID, INSTITUTIONAL_FOLDER_NAME, applyInstitutionalBackground } from "@/lib/editor/institutional-backgrounds";
+import { useInstitutionalBackgrounds } from "@/lib/editor/use-institutional-backgrounds";
 import { pageSize } from "@/lib/editor/model";
 import { fitBoxToPage } from "@/lib/editor/fit-page";
 import { useIncrementalList } from "@/lib/editor/use-incremental-list";
@@ -159,6 +161,9 @@ export function AssetLibrary({
   const addAsset = useEditor((s) => s.addAsset);
   const selectAssets = useEditor((s) => s.selectAssets);
   const folders = useEditor((s) => s.assetFolders);
+  const institutional = useInstitutionalBackgrounds();
+  const setPageBackground = useEditor((s) => s.setPageBackground);
+  const activePageId = useEditor((s) => s.activePageId);
   const folderId = useEditor((s) => s.assetFolderId);
   const selectedAssetIds = useEditor((s) => s.selectedAssetIds);
   const setAssetFolder = useEditor((s) => s.setAssetFolder);
@@ -920,6 +925,17 @@ export function AssetLibrary({
         <div ref={categoriesRef} className="asset-library-categories" role="group" aria-label="مجلدات المكتبة">
         <button
           type="button"
+          onClick={() => setAssetFolder(INSTITUTIONAL_FOLDER_ID)}
+          aria-pressed={folderId === INSTITUTIONAL_FOLDER_ID}
+          className={cn(
+            "asset-library-chip inline-flex h-7 shrink-0 items-center gap-1 rounded-[6px] border px-2 text-[10px] font-bold",
+            folderId === INSTITUTIONAL_FOLDER_ID ? "border-navy bg-navy/10" : "border-line",
+          )}
+        >
+          <Folder className="size-3" /> {INSTITUTIONAL_FOLDER_NAME}
+        </button>
+        <button
+          type="button"
           onClick={() => setAssetFolder(null)}
           aria-pressed={!folderId}
           className={cn(
@@ -1097,7 +1113,30 @@ export function AssetLibrary({
         </div>
       )}
 
-      {assetsLoading ? (
+      {folderId === INSTITUTIONAL_FOLDER_ID ? (
+        <div className={cn("asset-media-grid", viewMode === "compact" && "is-compact")}>
+          {institutional.items.length === 0 ? (
+            <p className="text-[10px] leading-5 text-muted">لا خلفيات منشورة. يظهر هنا ما ينشره المالك في مجلد خلفيات مؤسسية.</p>
+          ) : institutional.items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="overflow-hidden rounded-[8px] border border-line text-right"
+              title={item.name}
+              onClick={() => {
+                if (!activePageId) return;
+                const page = useEditor.getState().pages.find((row) => row.id === activePageId);
+                if (!page || page.locked) return;
+                setPageBackground(page.id, applyInstitutionalBackground(page, item));
+                toast.success(`طُبقت خلفية «${item.name}» على الصفحة`);
+              }}
+            >
+              <img src={item.src} alt={item.name} className="h-16 w-full object-cover" />
+              <span className="block truncate px-1 py-1 text-[10px] font-bold">{item.name}</span>
+            </button>
+          ))}
+        </div>
+      ) : assetsLoading ? (
         <p className="text-[10px] text-muted">جارٍ تحميل المكتبة…</p>
       ) : visibleAssets.length === 0 ? (
         <div className="rounded-[8px] border border-dashed border-line p-3 text-center">

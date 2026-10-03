@@ -43,6 +43,7 @@ import {
 import AdminLicensePanel from "@/components/license/AdminLicensePanel";
 import { AdminTemplatesPanel } from "@/components/admin/AdminTemplatesPanel";
 import { PsdImportPanel } from "@/components/admin/PsdImportPanel";
+import { InstitutionalBackgroundsPanel } from "@/components/admin/InstitutionalBackgroundsPanel";
 import { TemplateStudio } from "@/components/admin/TemplateStudio";
 import { SiteImagesPanel } from "@/components/admin/SiteImagesPanel";
 import { cn } from "@/lib/utils";
@@ -172,7 +173,7 @@ export default function AdminDashboard() {
         <div hidden={tab !== "templates"}>
           <AdminTemplatesPanel />
         </div>
-        {tab === "psd" && <PsdImportPanel />}
+        {tab === "psd" && (<div className="grid gap-6"><PsdImportPanel /><InstitutionalBackgroundsPanel /></div>)}
         {tab === "studio" && <TemplateStudio />}
         <div hidden={tab !== "commercial"}>
           <SettingsTab kind="commercial" />

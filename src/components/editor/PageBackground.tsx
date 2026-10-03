@@ -2,6 +2,8 @@ import { ImagePlus, PaintBucket, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { pageSize, type Page } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
+import { applyInstitutionalBackground } from "@/lib/editor/institutional-backgrounds";
+import { useInstitutionalBackgrounds } from "@/lib/editor/use-institutional-backgrounds";
 import { FillEditor } from "./ui/FillField";
 
 /** Store the picked background as-is. Size is not reduced. */
@@ -21,6 +23,7 @@ async function pageImageDataUrl(file: File): Promise<string> {
 /** Page paint is metadata, not a selectable/transformable layer. */
 export function PageBackground({ page }: { page: Page }) {
   const setBackground = useEditor((s) => s.setPageBackground);
+  const institutional = useInstitutionalBackgrounds();
   const fileRef = useRef<HTMLInputElement>(null);
   const size = pageSize(page);
   const fit = page.bgImageFit === "contain" ? "contain" : "cover";
@@ -156,6 +159,27 @@ export function PageBackground({ page }: { page: Page }) {
             </div>
           </>
         )}
+        <div className="grid gap-1.5">
+          <p className="text-[11px] font-extrabold">خلفيات مؤسسية</p>
+          {institutional.items.length === 0 ? (
+            <p className="text-[10px] font-semibold text-muted">لا خلفيات منشورة في هذا المجلد.</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-1.5">
+              {institutional.items.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={page.locked}
+                  title={item.name}
+                  className="overflow-hidden rounded-[8px] border border-line"
+                  onClick={() => setBackground(page.id, applyInstitutionalBackground(page, item))}
+                >
+                  <img src={item.src} alt={item.name} className="h-12 w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <label className="flex items-start gap-2 text-[11px] font-bold">
           <input
             type="checkbox"
