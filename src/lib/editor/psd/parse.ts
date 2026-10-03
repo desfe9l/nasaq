@@ -216,6 +216,9 @@ function textOf(layer: Layer): PsdTextRun | null {
     : run?.fillColor && "r" in run.fillColor
       ? run.fillColor
       : undefined;
+  // PSD text layers embed ETX (\u0003) as a paragraph/field terminator; the
+  // strip is intentional, hence the control-regex allowance on this line only.
+  // eslint-disable-next-line no-control-regex
   const content = text.text.replace(/\r\n?/g, "\n").replace(/\u0003/g, "").replace(/\n+$/g, "");
   return {
     content,
