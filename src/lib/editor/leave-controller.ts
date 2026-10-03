@@ -17,6 +17,7 @@ type Choice = "save" | "discard" | "cancel";
 
 let bypassUntil = 0;
 let promptOpen = false;
+let activeRequest: Promise<boolean> | null = null;
 let waiters: Array<(choice: Choice) => void> = [];
 const listeners = new Set<() => void>();
 
@@ -29,15 +30,23 @@ export function subscribeLeavePrompt(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+export function hasLeaveGuard(): boolean {
+  return listeners.size > 0;
+}
+
 export function leavePromptOpen(): boolean {
   return promptOpen;
 }
 
-function armUnloadBypass() {
+export function armUnloadBypass(): void {
   bypassUntil = Date.now() + 2500;
 }
 
-function unloadBypassed(): boolean {
+export function disarmUnloadBypass(): void {
+  bypassUntil = 0;
+}
+
+export function unloadBypassed(): boolean {
   return Date.now() < bypassUntil;
 }
 
@@ -50,7 +59,8 @@ export function unloadShouldPrompt(): boolean {
    * beforeunload is synchronous: IndexedDB cannot be awaited here. Keep a
    * bounded recovery envelope instead of deleting the only durable copy. The
    * hydrate path compares its timestamp with the saved row, so a confirmed
-   * refresh can recover the latest edits while a successful save still wins.
+   * refresh or mobile tab eviction can recover the latest edits while a
+   * successful save still wins.
    */
   if (unsaved) writeDraftSnapshot();
   return unsaved;
@@ -63,30 +73,36 @@ export async function blockRouterLeave(): Promise<boolean> {
 }
 
 /** Resolves true when navigation or replacement may continue. */
-export async function requestLeave(): Promise<boolean> {
-  if (unloadBypassed()) return true;
+export function requestLeave(): Promise<boolean> {
+  if (unloadBypassed()) return Promise.resolve(true);
   const state = useEditor.getState();
-  if (state.showcase) return true;
-  if (state.saveState === "saving") await state.saveNow();
-  if (!hasUnsavedChanges(useEditor.getState().saveState)) return true;
-  useEditor.getState().pauseScheduledSave();
+  if (state.showcase) return Promise.resolve(true);
+  if (!hasUnsavedChanges(state.saveState)) return Promise.resolve(true);
+  if (activeRequest) return activeRequest;
+  activeRequest = runLeavePrompt().finally(() => {
+    activeRequest = null;
+  });
+  return activeRequest;
+}
+
+async function runLeavePrompt(): Promise<boolean> {
+  useEditor.getState().cancelPendingSaveTimer();
   const choice = await ask();
   if (choice === "cancel") {
-    useEditor.getState().resumeScheduledSave();
     return false;
   }
   if (choice === "discard") {
-    clearDraftSnapshot();
-    const id = useEditor.getState().id;
-    if (id) await useEditor.getState().openProject(id);
+    armUnloadBypass();
+    await useEditor.getState().discardUnsavedChanges();
     armUnloadBypass();
     return true;
   }
   await useEditor.getState().saveNow();
   const after = useEditor.getState().saveState;
   if (after !== "saved" && after !== "idle") {
-    toast.error("تعذر الحفظ — لم تتم المغادرة");
-    useEditor.getState().resumeScheduledSave();
+    toast.error("تعذر الحفظ — لم تتم المغادرة", {
+      id: "unsaved-leave-save-error",
+    });
     return false;
   }
   clearDraftSnapshot();

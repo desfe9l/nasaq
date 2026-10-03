@@ -219,7 +219,13 @@ import {
   type LeftTab,
   type RightTab,
 } from "@/lib/editor/store";
-import { requestLeave } from "@/lib/editor/leave-controller";
+import {
+  leavePromptOpen,
+  requestLeave,
+  unloadBypassed,
+  unloadShouldPrompt,
+} from "@/lib/editor/leave-controller";
+import { hasUnsavedChanges } from "@/lib/editor/unsaved-leave";
 import { LeaveGuard } from "@/components/editor/LeaveGuard";
 import { absoluteBounds, elementsBounds, pageSize } from "@/lib/editor/model";
 import { fitImageBox, prepareImage } from "@/lib/editor/images";
@@ -461,7 +467,15 @@ export function EditorApp() {
     return <EditorWorkspaceSkeleton />;
   }
 
-  const openFile = () => projectInput.current?.click();
+  const openFile = () => {
+    if (hasUnsavedChanges(useEditor.getState().saveState)) {
+      void requestLeave().then((ok) => {
+        if (ok) projectInput.current?.click();
+      });
+      return;
+    }
+    projectInput.current?.click();
+  };
   const upload = (kind: "image" | "logo" | "font" | "library") => {
     if (kind === "font") fontInput.current?.click();
     else {
@@ -1104,8 +1118,10 @@ function Studio({
    */
   useEffect(() => {
     const flush = () => {
+      unloadShouldPrompt();
+      if (unloadBypassed() || leavePromptOpen()) return;
       const state = useEditor.getState();
-      if (state.saveState === "dirty") void saveNow();
+      if (state.saveState === "dirty" && !state.isSavePaused()) void saveNow();
     };
     const onVisibility = () => {
       if (document.visibilityState === "hidden") flush();
@@ -1861,7 +1877,7 @@ function Studio({
     };
     window.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onOrientationChange);
-    screen?.orientation?.addEventListener?.("change", onOrientationChange);
+    window.screen?.orientation?.addEventListener?.("change", onOrientationChange);
     // iOS Safari keeps the visual viewport changing without firing `resize`
     // under some keyboard/rotation states; the second signal keeps dock
     // clamps honest during fullscreen and rotation.
@@ -1872,7 +1888,7 @@ function Studio({
     return () => {
       window.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onOrientationChange);
-      screen?.orientation?.removeEventListener?.("change", onOrientationChange);
+      window.screen?.orientation?.removeEventListener?.("change", onOrientationChange);
       window.visualViewport?.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("scroll", onResize);
       document.removeEventListener("fullscreenchange", onResize);

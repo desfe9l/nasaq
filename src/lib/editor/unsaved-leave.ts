@@ -7,8 +7,8 @@ export type TrackedSaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 
 export const LEAVE_TITLE = "لديك تغييرات غير محفوظة";
 export const LEAVE_BODY = "هل تريد حفظ المشروع قبل المغادرة؟";
-export const LEAVE_SAVE = "حفظ والمغادرة";
-export const LEAVE_DISCARD = "المغادرة دون حفظ";
+export const LEAVE_SAVE = "حفظ ومتابعة";
+export const LEAVE_DISCARD = "متابعة بدون حفظ";
 export const LEAVE_CANCEL = "إلغاء";
 
 /** Dirty work, a failed save, and an in-flight save all still need a warning. */
