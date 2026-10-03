@@ -6,6 +6,7 @@ import {
   Outlet,
   Scripts,
 } from "@tanstack/react-router";
+import { Analytics } from "@vercel/analytics/react";
 import { AuthProvider } from "@/lib/auth/provider";
 import { NsqFileLaunch } from "@/components/nsq/NsqFileLaunch";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
@@ -107,6 +108,7 @@ export const Route = createRootRoute({
           <Outlet />
         </AuthProvider>
         <AppUpdateNotice />
+        <Analytics />
         <Scripts />
       </body>
     </html>
