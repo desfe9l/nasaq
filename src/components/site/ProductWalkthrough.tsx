@@ -59,6 +59,9 @@ export function ProductWalkthrough() {
    */
   const { images } = useSiteSettings();
   const workspace = slotImage(images, "workspace");
+  const gallery = (images.gallery ?? []).filter(
+    (item) => item.enabled && item.src,
+  );
   return (
     <section className="border-b border-line/70 bg-surface-2 py-14 sm:py-18">
       <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
@@ -134,6 +137,41 @@ export function ProductWalkthrough() {
             </article>
           ))}
         </div>
+
+        {gallery.length > 0 && (
+          <section className="mt-8" aria-label="معرض صور المحرر">
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold tracking-[0.12em] text-brand">معرض المحرر</p>
+                <h3 className="mt-1 text-[17px] font-extrabold text-ink">لقطات إضافية من مساحة العمل</h3>
+              </div>
+              <span className="text-[11px] font-semibold text-muted">{gallery.length} صورة</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {gallery.map((item) => (
+                <figure
+                  key={item.id}
+                  className="group overflow-hidden rounded-[12px] border border-line bg-surface shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-card motion-reduce:transition-none"
+                >
+                  <div className="grid h-52 place-items-center overflow-hidden bg-surface-2 p-2">
+                    <img
+                      src={item.src}
+                      alt={item.alt || "لقطة من محرر نَسَق"}
+                      loading="lazy"
+                      decoding="async"
+                      className="max-h-full max-w-full object-contain transition-transform duration-300 group-hover:scale-[1.02] motion-reduce:transition-none"
+                    />
+                  </div>
+                  {item.alt && (
+                    <figcaption className="border-t border-line px-3 py-2 text-[11px] font-semibold text-muted">
+                      {item.alt}
+                    </figcaption>
+                  )}
+                </figure>
+              ))}
+            </div>
+          </section>
+        )}
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-[12px] border border-line bg-page px-4 py-3 sm:px-5">
           <p className="text-[12px] font-semibold text-ink">قوالب جاهزة، عناصر قابلة للتحرير، ومكتبة أصول ضمن مساحة العمل نفسها.</p>
