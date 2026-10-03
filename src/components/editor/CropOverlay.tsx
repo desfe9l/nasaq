@@ -6,7 +6,8 @@ import {
 import { mmToPx } from "@/lib/editor/render-units";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, Crop, X } from "lucide-react";
+import { Check, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { pageSize, findElement } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import {
@@ -15,7 +16,9 @@ import {
 } from "@/lib/editor/interaction-store";
 import { screenToDocument, type RectMm } from "@/lib/editor/document-space";
 import { canvasViewport } from "@/lib/editor/canvas-space";
-import { applyImageCrop } from "@/lib/editor/crop-session";
+import { applyImageCrop, cancelImageCrop } from "@/lib/editor/crop-session";
+import { ASPECT_RATIOS, aspectFitBox } from "@/lib/editor/marquee";
+import { useTools } from "@/lib/editor/tool-store";
 
 const corners = ["nw", "ne", "se", "sw"] as const;
 
@@ -55,7 +58,7 @@ export function CropOverlay({ session }: { session: CropSession }) {
   }, [activePageId, selectedId, el.id, session.pageId]);
   useEffect(() => () => cleanup.current?.(), []);
   useEffect(() => {
-    const cancel = () => useInteraction.getState().endCrop();
+    const cancel = () => cancelImageCrop();
     const keys = (event: KeyboardEvent) => {
       if (event.key === "Escape" || event.key === "Enter") {
         event.preventDefault();
@@ -264,6 +267,13 @@ export function CropOverlay({ session }: { session: CropSession }) {
     </>
   );
 }
+/**
+ * The ephemeral bubble of a live crop: confirm, cancel, and the small ratio
+ * row — nothing else, and nothing permanent. It positions itself INSIDE the
+ * viewport at the measured size of its own content (a fixed guess was how a
+ * bubble ended up half off-screen on a rotated tablet), flips below the image
+ * when there is no room above, and disappears the moment the frame closes.
+ */
 function CropActions({
   pageId,
   elementId,
@@ -272,6 +282,10 @@ function CropActions({
   elementId: string;
 }) {
   const zoom = useEditor((s) => s.zoom);
+  const box = useInteraction((s) => s.crop?.box ?? null);
+  const aspect = useTools((s) => s.cropAspect);
+  const setAspect = useTools((s) => s.setCropAspect);
+  const bubbleRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ left: -9999, top: -9999 });
   useLayoutEffect(() => {
     const place = () => {
@@ -285,16 +299,20 @@ function CropActions({
       if (!stage || !element) return;
       const v = canvasViewport(stage),
         r = element.getBoundingClientRect();
-      setPos({
-        left: Math.max(
-          v.left + 8,
-          Math.min(v.left + v.width - 224, r.left + r.width / 2 - 108),
-        ),
-        top:
-          r.top - 52 >= v.top + 8
-            ? r.top - 52
-            : Math.min(v.top + v.height - 48, r.bottom + 16),
-      });
+      const size = bubbleRef.current?.getBoundingClientRect();
+      const w = size?.width || 220,
+        h = size?.height || 44;
+      const margin = 8;
+      const left = Math.max(
+        v.left + margin,
+        Math.min(v.left + v.width - w - margin, r.left + r.width / 2 - w / 2),
+      );
+      const above = r.top - h - 8;
+      const top =
+        above >= v.top + margin
+          ? above
+          : Math.min(v.top + v.height - h - margin, r.bottom + 12);
+      setPos({ left, top });
     };
     place();
     window.addEventListener("scroll", place, true);
@@ -303,36 +321,66 @@ function CropActions({
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
-  }, [pageId, elementId, zoom]);
+  }, [pageId, elementId, zoom, box]);
+  /**
+   * A ratio chip re-fits the LIVE frame around its centre — the constraint
+   * belongs to the frame you are holding, not to some next gesture, which is
+   * why the crop ratio is not a modal and never occupies the main bar.
+   */
+  const applyAspect = (id: (typeof ASPECT_RATIOS)[number]["id"]) => {
+    setAspect(id);
+    const session = useInteraction.getState().crop;
+    if (!session) return;
+    const ratio = ASPECT_RATIOS.find((entry) => entry.id === id)?.ratio ?? null;
+    if (!ratio) return;
+    useInteraction
+      .getState()
+      .setCropBox(aspectFitBox(session.box, session.bounds, ratio));
+  };
   return createPortal(
     <div
+      ref={bubbleRef}
       className="floating-toolbar crop-actions"
-      style={pos}
+      style={{ ...pos, maxWidth: "calc(100vw - 16px)" }}
       dir="rtl"
       role="toolbar"
       aria-label="وضع قص الصورة"
       onPointerDown={(e) => e.stopPropagation()}
     >
-      <Crop className="size-4" />
-      <span>قص الصورة</span>
-      <button
-        type="button"
-        className="floating-toolbar-btn"
-        title="تطبيق القص · Enter"
-        aria-label="تطبيق القص"
-        onClick={applyImageCrop}
-      >
-        <Check />
-      </button>
-      <button
-        type="button"
-        className="floating-toolbar-btn"
-        title="إلغاء القص · Escape"
-        aria-label="إلغاء القص"
-        onClick={() => useInteraction.getState().endCrop()}
-      >
-        <X />
-      </button>
+      <div className="crop-actions-row">
+        <div className="tool-props-chips" role="group" aria-label="نسبة القص">
+          {ASPECT_RATIOS.map((ratio) => (
+            <button
+              key={ratio.id}
+              type="button"
+              className={cn("tool-props-chip", aspect === ratio.id && "is-active")}
+              aria-pressed={aspect === ratio.id}
+              title={`نسبة ${ratio.label}`}
+              onClick={() => applyAspect(ratio.id)}
+            >
+              {ratio.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          className="floating-toolbar-btn is-primary"
+          title="تطبيق القص · Enter"
+          aria-label="تطبيق القص"
+          onClick={applyImageCrop}
+        >
+          <Check />
+        </button>
+        <button
+          type="button"
+          className="floating-toolbar-btn"
+          title="إلغاء القص · Escape"
+          aria-label="إلغاء القص"
+          onClick={cancelImageCrop}
+        >
+          <X />
+        </button>
+      </div>
     </div>,
     document.body,
   );

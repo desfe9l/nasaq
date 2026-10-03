@@ -1,39 +1,25 @@
 import { memo, useState } from "react";
 import { Check, Crop, Eraser, Paintbrush, ScanLine, X } from "lucide-react";
-import { ASPECT_RATIOS, regionSizeLabel } from "@/lib/editor/marquee";
+import { regionSizeLabel } from "@/lib/editor/marquee";
+import { BRUSH_LIMITS, ERASER_LIMITS, useTools } from "@/lib/editor/tool-store";
+import { regionModeDef, toolDef } from "@/lib/editor/tools";
 import {
-  BRUSH_LIMITS,
-  ERASER_LIMITS,
-  useTools,
-} from "@/lib/editor/tool-store";
-import { toolDef } from "@/lib/editor/tools";
-import {
-  applyImageCrop,
-  beginImageCrop,
   cropSelectionToImage,
   extractRegionFromImage,
 } from "@/lib/editor/crop-session";
 import { useInteraction } from "@/lib/editor/interaction-store";
-import { useEditor } from "@/lib/editor/store";
-import { findElement } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
 
 /**
  * Contextual tool options — the properties of the LIVE tool, and nothing else.
  *
- * The editor used to hard-code three unrelated option clusters in the header:
- * a permanent eraser size slider that appeared for exactly one tool, a pair of
- * marquee-shape buttons that duplicated the tool identity, and a size stepper
- * with no label. That is the "fake settings" problem — controls that look like
- * options but do not describe the current tool.
- *
- * This bar renders from the tool table, so each tool shows exactly its own
- * settings and tools without options show nothing:
- *
- *   Select / pickers → the region readout and what can be done with it
- *   Crop             → aspect ratio + Apply/Cancel
- *   Brush            → size, hardness, opacity, smoothing, colour
- *   Eraser           → size, hardness, opacity
+ * This bar is the whole price of arming a tool: a small floating capsule over
+ * the canvas, never a reserved strip. It renders only when the live state has
+ * real settings to show (brush, eraser, or an armed region with a finished
+ * rectangle) and disappears the moment the operation ends — Apply, Cancel or
+ * Escape. While a crop frame session owns the box, the frame's own
+ * Apply/Cancel bubble is the single control surface, so this bar stands down;
+ * two copies of the same confirm/cancel is exactly the sprawl this replaced.
  */
 
 /** Compact labelled slider; every one is a real setting bound to the tool store. */
@@ -172,15 +158,23 @@ function EraserOptions() {
   );
 }
 
-/** Region actions: what the rectangle you just drew can be used for. */
-function RegionActions({ compact = false }: { compact?: boolean }) {
+/**
+ * The finished region and what it can become: «قص» is the Apply of the crop
+ * operation (non-destructive, one undo restores the full picture), «استخراج»
+ * copies the pixels into a new image, «إلغاء» drops the region. All three are
+ * icon-first with tooltips so the bar never grows with text.
+ */
+function RegionOptions() {
   const region = useTools((s) => s.region);
   const [busy, setBusy] = useState(false);
-  if (!region) return null;
   const run = (job: () => Promise<unknown>) => {
     setBusy(true);
     void job().finally(() => setBusy(false));
   };
+  if (!region)
+    return (
+      <span className="tool-props-hint">اسحب على اللوحة لبدء التحديد</span>
+    );
   return (
     <>
       <span className="tool-props-value" dir="ltr">
@@ -188,14 +182,15 @@ function RegionActions({ compact = false }: { compact?: boolean }) {
       </span>
       <button
         type="button"
-        className="tool-props-btn"
+        className="tool-props-btn is-primary"
         disabled={busy}
-        title="قص الصورة إلى منطقة التحديد — غير متلف ويمكن التراجع عنه"
+        title="تطبيق القص على الصورة داخل التحديد · Enter"
         aria-label="قص التحديد"
         onClick={() => run(() => cropSelectionToImage(region))}
       >
+        <Check className="size-3.5" />
         <Crop className="size-3.5" />
-        {compact ? null : "قص التحديد"}
+        قص
       </button>
       <button
         type="button"
@@ -206,7 +201,7 @@ function RegionActions({ compact = false }: { compact?: boolean }) {
         onClick={() => run(() => extractRegionFromImage(region))}
       >
         <ScanLine className="size-3.5" />
-        {compact ? null : "استخراج"}
+        استخراج
       </button>
       <button
         type="button"
@@ -216,92 +211,25 @@ function RegionActions({ compact = false }: { compact?: boolean }) {
         onClick={() => useTools.getState().setRegion(null)}
       >
         <X className="size-3.5" />
-        {compact ? null : "إلغاء"}
+        إلغاء
       </button>
-    </>
-  );
-}
-
-function CropOptions() {
-  const aspect = useTools((s) => s.cropAspect);
-  const setAspect = useTools((s) => s.setCropAspect);
-  const session = useInteraction((s) => s.crop);
-  const selectedId = useEditor((s) => s.selectedId);
-  const selectedIsImage = useEditor((s) => {
-    const page = s.pages.find((p) => p.id === s.activePageId);
-    const el =
-      page && s.selectedId ? findElement(page.elements, s.selectedId)?.el : null;
-    return el?.type === "image" || el?.type === "logo";
-  });
-  return (
-    <>
-      <span className="tool-props-title">
-        <Crop className="size-3.5" /> قص
-      </span>
-      <div className="tool-props-chips" role="group" aria-label="نسبة القص">
-        {ASPECT_RATIOS.map((ratio) => (
-          <button
-            key={ratio.id}
-            type="button"
-            className={cn("tool-props-chip", aspect === ratio.id && "is-active")}
-            aria-pressed={aspect === ratio.id}
-            onClick={() => setAspect(ratio.id)}
-          >
-            {ratio.label}
-          </button>
-        ))}
-      </div>
-      {session ? (
-        <>
-          <button
-            type="button"
-            className="tool-props-btn is-primary"
-            title="تطبيق القص · Enter"
-            onClick={applyImageCrop}
-          >
-            <Check className="size-3.5" />
-            تطبيق
-          </button>
-          <button
-            type="button"
-            className="tool-props-btn is-quiet"
-            title="إلغاء القص · Escape"
-            onClick={() => useInteraction.getState().endCrop()}
-          >
-            <X className="size-3.5" />
-            إلغاء
-          </button>
-        </>
-      ) : (
-        <button
-          type="button"
-          className="tool-props-btn"
-          disabled={!selectedIsImage}
-          title={
-            selectedIsImage
-              ? "ابدأ إطار القص على الصورة المحددة"
-              : "حدد صورة أولاً، أو اسحب منطقة فوق صورة"
-          }
-          onClick={() => selectedId && beginImageCrop(selectedId)}
-        >
-          <Crop className="size-3.5" />
-          قص الصورة المحددة
-        </button>
-      )}
-      <span className="tool-props-sep" aria-hidden />
-      <RegionActions compact />
     </>
   );
 }
 
 export const ToolPropertiesBar = memo(function ToolPropertiesBar() {
   const tool = useTools((s) => s.tool);
+  const regionMode = useTools((s) => s.regionMode);
   const painting = useTools((s) => s.painting);
-  const region = useTools((s) => s.region);
+  const cropActive = useInteraction((s) => s.crop !== null);
   const def = toolDef(tool);
+  // A live crop frame brings its own ephemeral Apply/Cancel bubble; a bar here
+  // too would be the same controls twice.
+  if (cropActive) return null;
+  const regionArmed = tool === "select" && regionMode !== "off";
   // Only tools with real settings get a bar — no hints dressed up as options.
-  if (def.family !== "raster" && def.family !== "crop" && def.family !== "marquee")
-    return null;
+  if (def.family !== "raster" && !regionArmed) return null;
+  const modeDef = regionModeDef(regionMode);
 
   return (
     <div
@@ -309,27 +237,18 @@ export const ToolPropertiesBar = memo(function ToolPropertiesBar() {
       className="tool-props"
       dir="rtl"
       role="toolbar"
-      aria-label={`خصائص ${def.label}`}
+      aria-label={def.family === "raster" ? `خصائص ${def.label}` : "خصائص التحديد والقص"}
       onPointerDown={(event) => event.stopPropagation()}
     >
       {def.family === "raster" && tool === "brush" && <BrushOptions />}
       {def.family === "raster" && tool === "eraser" && <EraserOptions />}
-      {def.family === "crop" && <CropOptions />}
-      {def.family === "marquee" && (
+      {regionArmed && (
         <>
-          <span className="tool-props-title">{def.label}</span>
-          {def.marquee === "lasso" ? (
-            <span className="tool-props-hint">ارسم الحدود بإصبعك أو القلم</span>
-          ) : def.square ? (
-            <span className="tool-props-hint">نسبة ثابتة 1:1</span>
-          ) : (
-            <span className="tool-props-hint">Shift = 1:1 · Alt = من المركز</span>
-          )}
-          {region ? (
-            <RegionActions />
-          ) : (
-            <span className="tool-props-hint">اسحب على اللوحة لبدء التحديد</span>
-          )}
+          <span className={cn("tool-props-title", "tool-props-title-region")}>
+            <Crop className="size-3.5" /> {modeDef.label}
+          </span>
+          <span className="tool-props-hint">{modeDef.hint}</span>
+          <RegionOptions />
         </>
       )}
       {painting && <span className="tool-props-hint is-live">جارٍ الرسم…</span>}

@@ -89,7 +89,6 @@ import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, SubGroup, useAccordionState } from "./ui/Accordion";
 import { FillField } from "./ui/FillField";
 import { PageBackground } from "./PageBackground";
-import { beginImageCrop } from "@/lib/editor/crop-session";
 import { ColorField } from "./ui/ColorField";
 import {
   getRecentColors,
@@ -1873,24 +1872,17 @@ export function PropertiesPanel({
                       onCommit={(v) => updateStyle(el.id, { objectY: v })}
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  {/*
+                   * No «قص» button here: cropping is a CONTEXTUAL action —
+                   * the selection bubble's «قص الصورة», the C key, or a region
+                   * the select tool drew over the artwork. The Properties
+                   * surface keeps only the style reset it owns.
+                   */}
+                  {el.style.crop && (
                     <button
                       type="button"
                       className="h-9 rounded-[8px] border border-line text-[11px] font-bold"
-                      disabled={
-                        el.locked ||
-                        el.resizeLocked ||
-                        el.widthLocked ||
-                        el.heightLocked
-                      }
-                      onClick={() => beginImageCrop(el.id)}
-                    >
-                      قص الصورة · Crop
-                    </button>
-                    <button
-                      type="button"
-                      className="h-9 rounded-[8px] border border-line text-[11px] font-bold"
-                      disabled={!el.style.crop || el.locked}
+                      disabled={el.locked}
                       onClick={() =>
                         updateStyle(el.id, {
                           crop: undefined,
@@ -1902,7 +1894,7 @@ export function PropertiesPanel({
                     >
                       إزالة القص
                     </button>
-                  </div>
+                  )}
                   <button
                     type="button"
                     onClick={() => onReplaceImage(el.id)}

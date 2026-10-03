@@ -4,8 +4,6 @@ import { stepZoom } from "@/lib/editor/document-space";
 import { canvasViewport } from "@/lib/editor/canvas-space";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  PanelBottom,
-  PanelBottomClose,
   AlignCenter,
   AlignEndHorizontal,
   AlignEndVertical,
@@ -13,11 +11,13 @@ import {
   AlignStartHorizontal,
   AlignStartVertical,
   AlignVerticalJustifyCenter,
+  Brush,
   ClipboardPaste,
   Contrast,
   Copy,
   CopyPlus,
   Download,
+  Eraser,
   Eye,
   FlipHorizontal2,
   FlipVertical2,
@@ -29,10 +29,12 @@ import {
   Lock,
   Maximize2,
   Move,
+  PanelBottom,
+  PanelBottomClose,
   PenLine,
   Redo2,
-  RotateCw,
   RotateCcw,
+  RotateCw,
   Scaling,
   Scissors,
   Search,
@@ -40,8 +42,8 @@ import {
   Square,
   Trash2,
   Type,
-  Ungroup,
   Undo2,
+  Ungroup,
   X,
   ZoomIn,
   ZoomOut,
@@ -61,6 +63,7 @@ import {
 } from "@/lib/editor/model";
 import { toCsv } from "@/lib/editor/tables";
 import { useTools } from "@/lib/editor/tool-store";
+import { toolDef } from "@/lib/editor/tools";
 import { cn, downloadText } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -99,11 +102,15 @@ const ACTIONS = [
   { id: "zoom-out", label: "تصغير", hint: "⌘ -", icon: ZoomOut },
   { id: "focus", label: "وضع التركيز", hint: "", icon: Focus },
   { id: "export", label: "تصدير", hint: "⌘ E", icon: Download },
-  { id: "tool-move", label: "أداة التحديد والتحريك", hint: "V", icon: Move },
-  { id: "tool-text", label: "أداة النص (ارسم صندوقًا)", hint: "T", icon: Type },
+  // One canonical name per tool, read from the tool table — a palette that
+  // renames a tool is a second source of truth.
+  { id: "tool-move", label: toolDef("select").label, hint: "V", icon: Move },
+  { id: "tool-brush", label: toolDef("brush").label, hint: "B", icon: Brush },
+  { id: "tool-eraser", label: toolDef("eraser").label, hint: "E", icon: Eraser },
+  { id: "tool-text", label: toolDef("text").label, hint: "T", icon: Type },
   {
     id: "tool-shape",
-    label: "أداة الأشكال (ارسم مستطيلًا)",
+    label: toolDef("shape").label,
     hint: "R",
     icon: Square,
   },
@@ -272,6 +279,12 @@ export function WorkspaceOverlays({
         break;
       case "tool-move":
         setTool("select");
+        break;
+      case "tool-brush":
+        setTool("brush");
+        break;
+      case "tool-eraser":
+        setTool("eraser");
         break;
       case "tool-text":
         setLeftTab("elements");
