@@ -72,6 +72,7 @@ export const OPEN_REPORT_TOOLS_EVENT = "nasaq:open-report-tools";
 import {
   Check,
   Download,
+  Eraser,
   Library,
   Minus,
   MousePointer2,
@@ -1073,6 +1074,7 @@ function Studio({
        *   V           أداة التحديد/التحريك — the tool every other one returns to
        *   T           أداة النص — drag a box, type straight away
        *   R           أداة الأشكال — drag a box, get a rectangle
+       *   E           أداة المسح — remove unlocked objects under the brush
        *   Space+drag  pan (owned by the canvas)
        *
        * The tool itself lives in the canvas (it owns the page geometry); the
@@ -1097,6 +1099,11 @@ function Studio({
         e.preventDefault();
         useEditor.getState().setLeftTab("shapes");
         armTool("rect");
+        return;
+      }
+      if (!typing && !meta && !e.altKey && key === "e") {
+        e.preventDefault();
+        armTool("erase");
         return;
       }
       if (meta && key === "j") {
@@ -1256,21 +1263,29 @@ function Studio({
    * the header cluster must never claim a tool the canvas already dropped
    * after drawing, so the canvas broadcasts every transition.
    */
-  const [activeTool, setActiveTool] = useState<"select" | "text" | "rect">(
-    "select",
-  );
-  const armTool = (tool: "text" | "rect" | null) => {
+  const [activeTool, setActiveTool] = useState<
+    "select" | "text" | "rect" | "erase"
+  >("select");
+  const [eraserSize, setEraserSize] = useState(10);
+  const armTool = (tool: "text" | "rect" | "erase" | null) => {
     setActiveTool(tool ?? "select");
     window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: tool }));
   };
   useEffect(() => {
     const onToolState = (event: Event) => {
-      const detail = (event as CustomEvent<"text" | "rect" | null>).detail;
+      const detail = (
+        event as CustomEvent<"text" | "rect" | "erase" | null>
+      ).detail;
       setActiveTool(detail ?? "select");
     };
     window.addEventListener("nasaq:tool-state", onToolState);
     return () => window.removeEventListener("nasaq:tool-state", onToolState);
   }, []);
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("nasaq:eraser-size", { detail: eraserSize }),
+    );
+  }, [eraserSize]);
 
   /**
    * Restore a collapsed desktop panel (optionally straight onto a tab) in one
@@ -2176,7 +2191,52 @@ function Studio({
                 armTool("rect");
               }}
             />
+            <IconButton
+              label="فرشاة المسح"
+              hint="اسحب فوق العناصر لإزالتها — يمكن التراجع عن المسح"
+              shortcut="E"
+              active={activeTool === "erase"}
+              icon={<Eraser className="size-4" strokeWidth={1.7} />}
+              onClick={() => armTool(activeTool === "erase" ? null : "erase")}
+            />
           </div>
+          {activeTool === "erase" && (
+            <div
+              className="flex h-8 items-center gap-1 rounded-lg border border-line bg-surface px-1"
+              role="group"
+              aria-label="حجم فرشاة المسح"
+            >
+              <button
+                type="button"
+                aria-label="تصغير فرشاة المسح"
+                className="grid size-7 place-items-center rounded text-muted hover:bg-surface-2 hover:text-ink"
+                onClick={() => setEraserSize((size) => Math.max(2, size - 2))}
+              >
+                −
+              </button>
+              <input
+                aria-label="حجم فرشاة المسح"
+                type="range"
+                min={2}
+                max={50}
+                step={1}
+                value={eraserSize}
+                onChange={(event) => setEraserSize(Number(event.target.value))}
+                className="w-20 accent-brand"
+              />
+              <button
+                type="button"
+                aria-label="تكبير فرشاة المسح"
+                className="grid size-7 place-items-center rounded text-muted hover:bg-surface-2 hover:text-ink"
+                onClick={() => setEraserSize((size) => Math.min(50, size + 2))}
+              >
+                +
+              </button>
+              <span className="min-w-8 text-center text-[10px] font-bold text-muted">
+                {eraserSize} مم
+              </span>
+            </div>
+          )}
           <span className="editor-header-sep" aria-hidden />
           <IconButton
             label="الخصائص"

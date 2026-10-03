@@ -125,6 +125,17 @@ function pointInRotatedBox(el: CanvasEl, px: number, py: number): boolean {
   return Math.abs(rx) <= el.w / 2 + tol && Math.abs(ry) <= el.h / 2 + tol;
 }
 
+function brushHitsElement(el: CanvasEl, x: number, y: number, radius: number): boolean {
+  const dx = x - (el.x + el.w / 2);
+  const dy = y - (el.y + el.h / 2);
+  const angle = (-(el.rotation || 0) * Math.PI) / 180;
+  const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+  const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+  const nearestX = clamp(localX, -el.w / 2, el.w / 2);
+  const nearestY = clamp(localY, -el.h / 2, el.h / 2);
+  return (localX - nearestX) ** 2 + (localY - nearestY) ** 2 <= radius ** 2;
+}
+
 /**
  * جميع العناصر الموجودة في نقطة معينة — مرتبة من الأعلى (z الأكبر) إلى الأسفل
  * تراعي حالة الدخول إلى مجموعة (enteredGroup)
@@ -229,7 +240,8 @@ export function CanvasStage({
   const setRotationHint = useInteraction((s) => s.setRotationHint);
   const setMarquee = useInteraction((s) => s.setMarquee);
   const [dropping, setDropping] = useState<"file" | "library" | null>(null);
-  const [drawTool, setDrawTool] = useState<"text" | "rect" | null>(null);
+  const [drawTool, setDrawTool] = useState<"text" | "rect" | "erase" | null>(null);
+  const eraseSizeRef = useRef(10);
   const drawArmed = drawTool !== null;
   /*
    * The header's tool cluster shows which tool is live. The tool state lives
@@ -239,7 +251,7 @@ export function CanvasStage({
    */
   useEffect(() => {
     window.dispatchEvent(
-      new CustomEvent<"text" | "rect" | null>("nasaq:tool-state", {
+      new CustomEvent<"text" | "rect" | "erase" | null>("nasaq:tool-state", {
         detail: drawTool,
       }),
     );
@@ -297,8 +309,14 @@ export function CanvasStage({
   useEffect(() => {
     const armText = () => setDrawTool("text");
     const onTool = (event: Event) => {
-      const detail = (event as CustomEvent<"text" | "rect" | null>).detail;
+      const detail = (
+        event as CustomEvent<"text" | "rect" | "erase" | null>
+      ).detail;
       setDrawTool(detail ?? null);
+    };
+    const onEraseSize = (event: Event) => {
+      const size = Number((event as CustomEvent<number>).detail);
+      if (Number.isFinite(size)) eraseSizeRef.current = clamp(size, 2, 50);
     };
     const disarm = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -308,10 +326,12 @@ export function CanvasStage({
     };
     window.addEventListener("nasaq:draw-text", armText);
     window.addEventListener("nasaq:tool", onTool);
+    window.addEventListener("nasaq:eraser-size", onEraseSize);
     window.addEventListener("keydown", disarm);
     return () => {
       window.removeEventListener("nasaq:draw-text", armText);
       window.removeEventListener("nasaq:tool", onTool);
+      window.removeEventListener("nasaq:eraser-size", onEraseSize);
       window.removeEventListener("keydown", disarm);
     };
   }, []);
@@ -567,6 +587,52 @@ export function CanvasStage({
       const fresh = useEditor.getState();
       if (e.shiftKey) toggleSelect(el.id);
       else if (!fresh.selectedIds.includes(el.id)) select(el.id);
+    };
+
+    const startErase = (e: React.PointerEvent, page: Page) => {
+      if (isPalmTouch(e) || e.button !== 0 || input.current!.busy) return;
+      if (page.locked || page.hidden) return;
+      e.preventDefault();
+      e.stopPropagation();
+      onCanvasTap?.();
+      setLayerPicker(null);
+      const state = useEditor.getState();
+      if (state.activePageId !== page.id) state.setActivePage(page.id);
+      const pageEl = pageRefs.current[page.id];
+      if (!pageEl) return;
+      const size = pageSize(page);
+      const toMm = (event: { clientX: number; clientY: number }) =>
+        pagePoint(pageEl.getBoundingClientRect(), size, event.clientX, event.clientY);
+      const erased = new Set<string>();
+      const collect = (event: { clientX: number; clientY: number }) => {
+        const point = toMm(event);
+        const current = useEditor.getState();
+        const group =
+          current.activePageId === page.id && current.enteredGroupId
+            ? findElement(page.elements, current.enteredGroupId)?.el
+            : null;
+        const candidates = group?.children ?? page.elements;
+        const offset = group ? { x: group.x, y: group.y } : { x: 0, y: 0 };
+        const radius = eraseSizeRef.current / 2;
+        for (const element of candidates) {
+          const absolute = offset.x || offset.y
+            ? { ...element, x: element.x + offset.x, y: element.y + offset.y }
+            : element;
+          if (!element.hidden && !element.locked && brushHitsElement(absolute, point.x, point.y, radius)) {
+            erased.add(element.id);
+          }
+        }
+      };
+      collect(e);
+      input.current!.claim(e, {
+        yieldable: e.pointerType === "touch",
+        move: collect,
+        end: (event) => {
+          collect(event);
+          if (erased.size) useEditor.getState().deleteElementsById([...erased]);
+        },
+        cancel: () => {},
+      });
     };
 
     const beginGesture = () => {
@@ -1307,6 +1373,7 @@ export function CanvasStage({
         dropping && "is-dropping",
         drawArmed && "draw-armed",
         drawTool === "rect" && "draw-rect",
+        drawTool === "erase" && "draw-erase",
       )}
       style={{ "--editor-zoom": zoom } as React.CSSProperties}
       dir="ltr"
@@ -1331,6 +1398,11 @@ export function CanvasStage({
           } catch {
             /* detached */
           }
+          return;
+        }
+        if (drawTool === "erase" && e.button === 0) {
+          const page = pageAtPoint(e.clientX, e.clientY);
+          if (page) startErase(e, page);
           return;
         }
         if (
