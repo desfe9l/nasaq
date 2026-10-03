@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   interactionState,
+  marqueeForPage,
   useInteraction,
   type TransientGeom,
 } from "./interaction-store.ts";
@@ -54,8 +55,16 @@ describe("interaction store", () => {
     assert.ok(useInteraction.getState().version > v0);
     interactionState().setGuides({ v: [5], h: [] });
     assert.ok(useInteraction.getState().version > v0 + 1);
-    interactionState().setMarquee({ x0: 0, y0: 0, x1: 5, y1: 5 });
+    interactionState().setMarquee({
+      pageId: "page-a",
+      x0: 0,
+      y0: 0,
+      x1: 5,
+      y1: 5,
+    });
     assert.ok(useInteraction.getState().version > v0 + 2);
+    assert.ok(marqueeForPage(useInteraction.getState().marquee, "page-a"));
+    assert.equal(marqueeForPage(useInteraction.getState().marquee, "page-b"), null);
     interactionState().endInteraction();
     // End also notifies (a follower gets the final clear).
     assert.ok(useInteraction.getState().version > v0 + 3);

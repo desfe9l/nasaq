@@ -50,12 +50,20 @@ export interface TransientGeom {
   rotation?: number;
 }
 
-/** Marquee rectangle in active-page mm. */
+/** Marquee rectangle in page mm; `pageId` scopes the transient overlay. */
 export interface MarqueeRect {
+  pageId: string;
   x0: number;
   y0: number;
   x1: number;
   y1: number;
+}
+
+export function marqueeForPage(
+  marquee: MarqueeRect | null,
+  pageId: string,
+): MarqueeRect | null {
+  return marquee?.pageId === pageId ? marquee : null;
 }
 
 export interface RotationHint {

@@ -31,7 +31,7 @@ import {
   resizeToPointer,
 } from "@/lib/editor/transform";
 import { useEditor } from "@/lib/editor/store";
-import { useInteraction } from "@/lib/editor/interaction-store";
+import { marqueeForPage, useInteraction } from "@/lib/editor/interaction-store";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
@@ -1153,6 +1153,7 @@ export function CanvasStage({
           h: Math.abs(cur.y - start.y),
         };
         setMarquee({
+          pageId,
           x0: box.x,
           y0: box.y,
           x1: box.x + box.w,
@@ -1914,7 +1915,7 @@ const ArtboardPage = memo(function ArtboardPage({
             settings={printGuides}
             zIndex={GUIDE_LAYER_Z}
           />
-          <MarqueeLayer />
+          <MarqueeLayer pageId={page.id} />
           {isActive && !isLocked && !isHidden && (
             <OverflowFlagLayer elements={page.elements} onFit={onFit} />
           )}
@@ -2041,8 +2042,8 @@ const EnteredChildNode = memo(function EnteredChildNode({
 });
 
 /** Marquee rectangle, driven by the transient interaction store. */
-function MarqueeLayer() {
-  const marquee = useInteraction((s) => s.marquee);
+function MarqueeLayer({ pageId }: { pageId: string }) {
+  const marquee = useInteraction((s) => marqueeForPage(s.marquee, pageId));
   if (!marquee) return null;
   return (
     <div

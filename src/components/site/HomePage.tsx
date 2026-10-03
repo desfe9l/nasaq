@@ -6,7 +6,6 @@ import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { ProjectCard } from "@/components/site/ProjectCard";
 import { PRODUCT_COPY } from "@/lib/product/copy";
 import { CARD_W, CARD_WRAP, SITE_CARD } from "@/components/site/cards";
-import { FullVersionModal } from "@/components/site/FullVersionModal";
 import { LiveEditorPreview } from "@/components/site/LiveEditorPreview";
 import {
   useSiteSettings,
@@ -36,7 +35,6 @@ export function HomePage() {
   const projectsLoading = useEditor((s) => s.projectsLoading);
   const hydrate = useEditor((s) => s.hydrate);
   const openProject = useEditor((s) => s.openProject);
-  const [modalOpen, setModalOpen] = useState(false);
   const [recentHidden, setRecentHidden] = useState(false);
   useEffect(() => {
     try {
@@ -262,7 +260,17 @@ export function HomePage() {
           <p className="mt-1 text-[13px] text-muted ">كل قالب ينشئ نسخة جديدة داخل مشروعك.</p>
           <div className={`mt-6 ${CARD_WRAP}`}>
             {PACKS.map((pack) => (
-              <button key={pack.id} type="button" onClick={() => pack.id === "blank" ? startBlank() : setModalOpen(true)} className={`flex flex-col rounded-[12px] border border-line/70 bg-surface p-5 text-right hover:border-inverse/20 ${CARD_W} ${SITE_CARD}`}>
+              <button
+                key={pack.id}
+                type="button"
+                onClick={() =>
+                  pack.id === "blank"
+                    ? startBlank()
+                    : window.location.assign("/templates")
+                }
+                aria-label={pack.id === "blank" ? "فتح صفحة فارغة" : `استعراض قوالب ${pack.title}`}
+                className={`flex flex-col rounded-[12px] border border-line/70 bg-surface p-5 text-right hover:border-inverse/20 ${CARD_W} ${SITE_CARD}`}
+              >
                 <div className="mb-3 flex items-center justify-between">
                   <span className="grid size-8 place-items-center rounded-[8px] bg-surface-2 text-ink">
                     <FileText className="size-4" />
@@ -274,7 +282,12 @@ export function HomePage() {
                   <span className="mt-auto pt-4">
                     {pack.id === "blank"
                       ? <LicenseBadge state="licensed" size="sm" label={workspace.licensed ? "مساحة العمل" : entry.ready && entry.direct ? "فتح المحرر" : "فتح العرض"} title={workspace.licensed ? "الدخول إلى مساحة العمل" : "فتح المحرر"} />
-                      : <LicenseBadge state="locked" size="sm" href="/purchase" title="هذا القالب متاح في النسخة الكاملة" />
+                      : <LicenseBadge
+                          state={workspace.licensed ? "licensed" : "locked"}
+                          size="sm"
+                          label={workspace.licensed ? "متاح بترخيصك" : "استعراض القوالب"}
+                          title="استعراض القوالب الحقيقية ومعاينتها وفق ترخيصك"
+                        />
                     }
                   </span>
               </button>
@@ -321,7 +334,6 @@ export function HomePage() {
         <PricingSection onStartFree={startFree} />
       </main>
       <SiteFooter />
-      <FullVersionModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </div>
   );
 }
