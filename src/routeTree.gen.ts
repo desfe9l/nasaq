@@ -23,6 +23,7 @@ import { Route as EditorRouteImport } from './routes/editor'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as LicenseRouteImport } from './routes/license'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as MyTemplatesRouteImport } from './routes/my-templates'
 import { Route as OpenRouteImport } from './routes/open'
 import { Route as OwnerVaultRouteImport } from './routes/owner-vault'
 import { Route as PricingRouteImport } from './routes/pricing'
@@ -44,6 +45,7 @@ import { Route as ApiLicenseValidateRouteImport } from './routes/api/license/val
 import { Route as ApiTemplatesThumbnailRouteImport } from './routes/api/templates/thumbnail'
 import { Route as ApiWebhooksGumroadRouteImport } from './routes/api/webhooks/gumroad'
 import { Route as ApiWebhooksKeygenRouteImport } from './routes/api/webhooks/keygen'
+import { Route as TemplatesShareTokenRouteImport } from './routes/templates/share/$token'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -113,6 +115,11 @@ const LicenseRoute = LicenseRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyTemplatesRoute = MyTemplatesRouteImport.update({
+  id: '/my-templates',
+  path: '/my-templates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OpenRoute = OpenRouteImport.update({
@@ -221,6 +228,11 @@ const ApiWebhooksKeygenRoute = ApiWebhooksKeygenRouteImport.update({
   path: '/api/webhooks/keygen',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TemplatesShareTokenRoute = TemplatesShareTokenRouteImport.update({
+  id: '/share/$token',
+  path: '/share/$token',
+  getParentRoute: () => TemplatesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -237,6 +249,7 @@ export interface FileRoutesByFullPath {
   '/home': typeof HomeRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/my-templates': typeof MyTemplatesRoute
   '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
@@ -258,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
+  '/templates/share/$token': typeof TemplatesShareTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -274,6 +288,7 @@ export interface FileRoutesByTo {
   '/home': typeof HomeRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/my-templates': typeof MyTemplatesRoute
   '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
@@ -294,6 +309,7 @@ export interface FileRoutesByTo {
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
+  '/templates/share/$token': typeof TemplatesShareTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -311,6 +327,7 @@ export interface FileRoutesById {
   '/home': typeof HomeRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
+  '/my-templates': typeof MyTemplatesRoute
   '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
@@ -332,6 +349,7 @@ export interface FileRoutesById {
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
+  '/templates/share/$token': typeof TemplatesShareTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -350,6 +368,7 @@ export interface FileRouteTypes {
     | '/home'
     | '/license'
     | '/login'
+    | '/my-templates'
     | '/open'
     | '/owner-vault'
     | '/pricing'
@@ -371,6 +390,7 @@ export interface FileRouteTypes {
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
+    | '/templates/share/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -387,6 +407,7 @@ export interface FileRouteTypes {
     | '/home'
     | '/license'
     | '/login'
+    | '/my-templates'
     | '/open'
     | '/owner-vault'
     | '/pricing'
@@ -407,6 +428,7 @@ export interface FileRouteTypes {
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
+    | '/templates/share/$token'
   id:
     | '__root__'
     | '/'
@@ -423,6 +445,7 @@ export interface FileRouteTypes {
     | '/home'
     | '/license'
     | '/login'
+    | '/my-templates'
     | '/open'
     | '/owner-vault'
     | '/pricing'
@@ -444,6 +467,7 @@ export interface FileRouteTypes {
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
+    | '/templates/share/$token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -461,6 +485,7 @@ export interface RootRouteChildren {
   HomeRoute: typeof HomeRoute
   LicenseRoute: typeof LicenseRoute
   LoginRoute: typeof LoginRoute
+  MyTemplatesRoute: typeof MyTemplatesRoute
   OpenRoute: typeof OpenRoute
   OwnerVaultRoute: typeof OwnerVaultRoute
   PricingRoute: typeof PricingRoute
@@ -580,6 +605,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my-templates': {
+      id: '/my-templates'
+      path: '/my-templates'
+      fullPath: '/my-templates'
+      preLoaderRoute: typeof MyTemplatesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/open': {
@@ -729,17 +761,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebhooksKeygenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/templates/share/$token': {
+      id: '/templates/share/$token'
+      path: '/share/$token'
+      fullPath: '/templates/share/$token'
+      preLoaderRoute: typeof TemplatesShareTokenRouteImport
+      parentRoute: typeof TemplatesRoute
+    }
   }
 }
 
 interface TemplatesRouteChildren {
   TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRoute
   TemplatesIndexRoute: typeof TemplatesIndexRoute
+  TemplatesShareTokenRoute: typeof TemplatesShareTokenRoute
 }
 
 const TemplatesRouteChildren: TemplatesRouteChildren = {
   TemplatesTemplateIdRoute: TemplatesTemplateIdRoute,
   TemplatesIndexRoute: TemplatesIndexRoute,
+  TemplatesShareTokenRoute: TemplatesShareTokenRoute,
 }
 
 const TemplatesRouteWithChildren = TemplatesRoute._addFileChildren(
@@ -761,6 +802,7 @@ const rootRouteChildren: RootRouteChildren = {
   HomeRoute: HomeRoute,
   LicenseRoute: LicenseRoute,
   LoginRoute: LoginRoute,
+  MyTemplatesRoute: MyTemplatesRoute,
   OpenRoute: OpenRoute,
   OwnerVaultRoute: OwnerVaultRoute,
   PricingRoute: PricingRoute,

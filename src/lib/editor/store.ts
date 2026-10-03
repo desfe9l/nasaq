@@ -492,6 +492,10 @@ interface EditorStore extends Project, Ui, History {
   /** Opens only when the current owner and entitlements permit this file. */
   openProject: (id: string) => Promise<boolean>;
   saveNow: () => Promise<void>;
+  /** Drop a debounced autosave that has not started. In-flight saves still finish. */
+  pauseScheduledSave: () => void;
+  /** Re-arm autosave after a cancelled leave prompt. */
+  resumeScheduledSave: () => void;
   renameProject: (id: string, name: string) => Promise<void>;
   /** Flip a document's star — persists on the row, independent of auto-save. */
   toggleProjectFavorite: (id: string) => Promise<void>;
@@ -2726,6 +2730,18 @@ export const useEditor = create<EditorStore>((set, get) => {
       const pending = saveQueue.then(save, save);
       saveQueue = pending;
       await pending;
+    },
+
+    pauseScheduledSave: () => {
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+    },
+
+    resumeScheduledSave: () => {
+      const state = get().saveState;
+      if (state === "dirty" || state === "error") scheduleSave(900);
     },
 
     renameProject: async (id, name) => {
@@ -5432,7 +5448,7 @@ function readDraftSnapshot(owner: string): DraftEnvelope | null {
   }
 }
 
-function clearDraftSnapshot(): void {
+export function clearDraftSnapshot(): void {
   try {
     localStorage.removeItem(DRAFT_KEY);
   } catch {

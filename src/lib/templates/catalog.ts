@@ -394,6 +394,8 @@ export interface EntryProjectSeed {
   pages: Page[];
   pack?: PackId;
   licensedTemplateId?: string;
+  transactionNo?: string;
+  embeddedFonts?: { family: string; dataUrl: string }[];
 }
 
 /**

@@ -4,6 +4,7 @@ import {
   sizeIdOf,
   type PackId,
   type Page,
+  type ThemeId,
 } from "@/lib/editor/model";
 import type { EntryProjectSeed } from "@/lib/templates/catalog";
 import { freshPages } from "@/lib/templates/custom-templates";
@@ -51,6 +52,24 @@ const PUBLISHED_PACK_IDS: ReadonlySet<string> = new Set([
   "slides",
 ]);
 
+function validThemeId(value: unknown): ThemeId {
+  return value === "official" || value === "eid" || value === "ministry" || value === "slate" || value === "sand"
+    ? value
+    : "official";
+}
+
+function validEmbeddedFonts(value: unknown): { family: string; dataUrl: string }[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const fonts = value.filter(
+    (font): font is { family: string; dataUrl: string } =>
+      !!font &&
+      typeof font === "object" &&
+      typeof (font as { family?: unknown }).family === "string" &&
+      typeof (font as { dataUrl?: unknown }).dataUrl === "string" &&
+      (font as { dataUrl: string }).dataUrl.startsWith("data:"),
+  );
+  return fonts.length ? fonts.slice(0, 24) : undefined;
+}
 function validPackId(value: unknown): PackId | undefined {
   return typeof value === "string" && PUBLISHED_PACK_IDS.has(value)
     ? (value as PackId)
@@ -113,22 +132,33 @@ export function publishedTemplateSeed(template: AdminTemplate): EntryProjectSeed
   if (!data || typeof data !== "object" || !Array.isArray((data as { pages?: unknown }).pages)) {
     throw new Error("Invalid template");
   }
-  const project = data as { pages: Page[]; pack?: unknown };
+  const project = data as {
+    pages: Page[];
+    pack?: unknown;
+    theme?: unknown;
+    orgName?: unknown;
+    transactionNo?: unknown;
+    embeddedFonts?: unknown;
+  };
   const pages = project.pages;
   if (!pages.length || pages.some((page) => !page || typeof page !== "object" || !Array.isArray(page.elements))) {
     throw new Error("Invalid template pages");
   }
   const fresh = freshPages(pages);
   const pack = validPackId(project.pack);
+  const fonts = validEmbeddedFonts(project.embeddedFonts);
+  const transactionNo = typeof project.transactionNo === "string" ? project.transactionNo.trim().slice(0, 80) : "";
   return {
     name: template.title,
-    theme: "official",
-    orgName: "",
+    theme: validThemeId(project.theme),
+    orgName: typeof project.orgName === "string" ? project.orgName.slice(0, 160) : "",
     defaultSize: sizeIdOf(pageSize(fresh[0])),
+    ...(transactionNo ? { transactionNo } : {}),
     ...(pack ? { pack } : {}),
     ...(template.tier === "licensed"
       ? { licensedTemplateId: template.id }
       : {}),
+    ...(fonts ? { embeddedFonts: fonts } : {}),
     pages: fresh,
   };
 }

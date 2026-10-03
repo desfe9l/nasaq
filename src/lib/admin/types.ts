@@ -196,6 +196,10 @@ export interface AdminTemplateInput {
   content: string;
   thumbnail?: string | null;
   sortOrder?: number;
+  /** Editor project this official template was saved from. Updates in place. */
+  originProjectId?: string | null;
+  /** When true, a new catalogue row is created even if this project was saved before. */
+  createNew?: boolean;
 }
 
 const HEX = /^#[0-9a-fA-F]{6}$/;

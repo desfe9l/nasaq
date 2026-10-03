@@ -26,6 +26,7 @@ import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { NewDocumentDialog } from "@/components/site/NewDocumentDialog";
 import { useEditor } from "@/lib/editor/store";
 import { configFromPage } from "@/lib/editor/new-document";
+import { requestLeave } from "@/lib/editor/leave-controller";
 
 /**
  * The editor's account area: who is signed in, and the door to their settings.
@@ -66,6 +67,16 @@ function AdminEditorLinks({ user }: { user: AppUser }) {
   );
 }
 
+function MyTemplatesLink({ user }: { user: AppUser }) {
+  const tier = useAccountTier(user);
+  if (tier !== "LICENSED" && tier !== "ADMIN") return null;
+  return (
+    <a href="/my-templates" role="menuitem" className={accountMenuItemClass}>
+      <FilePlus2 className="size-4 opacity-70" aria-hidden />
+      قوالبي
+    </a>
+  );
+}
 function NewDocumentMenuItem({ user, onRequest }: { user: AppUser; onRequest: () => void }) {
   const tier = useAccountTier(user);
   if (tier !== "LICENSED" && tier !== "ADMIN") return null;
@@ -202,8 +213,11 @@ export function EditorAccountMenu({
               <NewDocumentMenuItem
                 user={user}
                 onRequest={() => {
-                  closeMenu();
-                  setNewDocOpen(true);
+                  void requestLeave().then((ok) => {
+                    if (!ok) return;
+                    closeMenu();
+                    setNewDocOpen(true);
+                  });
                 }}
               />
               <button
@@ -233,6 +247,7 @@ export function EditorAccountMenu({
                 <UserRound className="size-4 opacity-70" aria-hidden />
                 حسابي والاشتراك
               </a>
+              <MyTemplatesLink user={user} />
               <AdminEditorLinks user={user} />
               <a href="/license" role="menuitem" className={accountMenuItemClass}>
                 <KeyRound className="size-4 opacity-70" aria-hidden />
@@ -243,8 +258,11 @@ export function EditorAccountMenu({
                 role="menuitem"
                 disabled={signingOut}
                 onClick={() => {
-                  setSigningOut(true);
-                  void signOut("/").catch(() => setSigningOut(false));
+                  void requestLeave().then((ok) => {
+                    if (!ok) return;
+                    setSigningOut(true);
+                    void signOut("/").catch(() => setSigningOut(false));
+                  });
                 }}
                 className={accountMenuItemMutedClass}
               >

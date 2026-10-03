@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Download, FilePlus2, FolderOpen, Save, SaveAll } from "lucide-react";
+import { Download, FilePlus2, FolderOpen, LayoutTemplate, Save, SaveAll } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
 import { canUseDemoExport } from "@/lib/product/product";
 import { authEnabled } from "@/lib/auth/client";
@@ -16,6 +16,10 @@ import { FullVersionModal } from "@/components/site/FullVersionModal";
 import { NewDocumentDialog } from "@/components/site/NewDocumentDialog";
 import { configFromPage, type NewDocumentConfig } from "@/lib/editor/new-document";
 import { cn } from "@/lib/utils";
+import { useAccountTier } from "@/components/site/AccountBadge";
+import { adminTemplatesAccessFn } from "@/lib/admin/functions";
+import { requestLeave } from "@/lib/editor/leave-controller";
+import { SaveAsTemplateDialog } from "@/components/editor/SaveAsTemplateDialog";
 
 const SignInRequiredModalLazy = lazy(() =>
   import("@/components/site/SignInRequiredModal").then((m) => ({
@@ -23,7 +27,7 @@ const SignInRequiredModalLazy = lazy(() =>
   })),
 );
 
-const MENU_W = 256;
+const MENU_W = 280;
 
 /** Keyboard shortcuts the editor keymap forwards to this menu's actions. */
 export const NSQ_SAVE_AS_EVENT = "nasaq:nsq-save-as";
@@ -46,9 +50,28 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
   const projectId = useEditor((s) => s.id);
   const entitlements = useEditor((s) => s.entitlements);
   const [docInitial, setDocInitial] = useState<Partial<NewDocumentConfig> | null>(null);
+  const [templateMode, setTemplateMode] = useState<"official" | "personal" | null>(null);
+  const [official, setOfficial] = useState(false);
   const { user, isPending } = useCurrentUserState();
+  const tier = useAccountTier(user);
+  const personal = tier === "LICENSED" || tier === "ADMIN";
   const guest = authEnabled && !isPending && !user;
   const linked = open ? linkedFileName(projectId) : null;
+
+  useEffect(() => {
+    if (!open || !user) return;
+    let alive = true;
+    void adminTemplatesAccessFn()
+      .then((result) => {
+        if (alive) setOfficial(result.ok === true);
+      })
+      .catch(() => {
+        if (alive) setOfficial(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, user]);
 
   const place = () => {
     const r = triggerRef.current?.getBoundingClientRect();
@@ -167,11 +190,14 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
               label="مشروع جديد"
               onClick={() => {
                 setOpen(false);
-                const state = useEditor.getState();
-                const page =
-                  state.pages.find((item) => item.id === state.activePageId) ??
-                  state.pages[0];
-                setDocInitial(configFromPage(page));
+                void requestLeave().then((ok) => {
+                  if (!ok) return;
+                  const state = useEditor.getState();
+                  const page =
+                    state.pages.find((item) => item.id === state.activePageId) ??
+                    state.pages[0];
+                  setDocInitial(configFromPage(page));
+                });
               }}
             />
             <Item
@@ -206,6 +232,41 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
               disabled={busy}
               onClick={() => runSave(downloadCurrentNsq)}
             />
+            {(official || personal) && (
+              <div className="my-1 border-t border-[var(--editor-border)]" />
+            )}
+            {official && (
+              <Item
+                icon={<LayoutTemplate className="size-4" />}
+                label="حفظ كقالب"
+                onClick={() => {
+                  setOpen(false);
+                  setTemplateMode("official");
+                }}
+              />
+            )}
+            {personal && (
+              <Item
+                icon={<Save className="size-4" />}
+                label="حفظ في قوالبي"
+                onClick={() => {
+                  setOpen(false);
+                  setTemplateMode("personal");
+                }}
+              />
+            )}
+            {personal && (
+              <Item
+                icon={<FolderOpen className="size-4" />}
+                label="قوالبي"
+                onClick={() => {
+                  setOpen(false);
+                  void requestLeave().then((ok) => {
+                    if (ok) window.location.assign("/my-templates");
+                  });
+                }}
+              />
+            )}
             <p className="px-2.5 pb-1 pt-1.5 text-[10px] leading-4 text-muted">
               ملف واحد يحفظ الصفحات والصور والخطوط والطبقات، ويُفتح قابلًا
               للتعديل على أي جهاز.
@@ -218,6 +279,11 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
             document.body,
         )}
 
+      {templateMode &&
+        createPortal(
+          <SaveAsTemplateDialog mode={templateMode} onClose={() => setTemplateMode(null)} />,
+          document.body,
+        )}
       {upgradeOpen && (
         <FullVersionModal open onClose={() => setUpgradeOpen(false)} />
       )}

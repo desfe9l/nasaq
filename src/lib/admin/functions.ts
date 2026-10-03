@@ -11,6 +11,7 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { publicTemplateContent } from "@/lib/templates/document-template";
 import { authMiddleware, optionalAuthMiddleware } from "@/lib/auth/middleware";
 import {
   DEFAULT_SITE_SETTINGS,
@@ -307,6 +308,14 @@ async function ensureUniqueSlug(
   return `${slug}-${randomUUID().slice(0, 6)}`;
 }
 
+function publicJsonContent(content: string): string {
+  const parsed = parseJson(content) as { format?: string; pages?: unknown } | null;
+  if (parsed?.format === "nasaq.template") {
+    const safe = publicTemplateContent(content);
+    if (safe) return safe;
+  }
+  return JSON.stringify({ pages: parsed?.pages });
+}
 function validThumbnail(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
   if (!/^data:image\/(png|jpe?g|webp|svg\+xml);base64,/i.test(value)) return null;
@@ -523,9 +532,7 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
       if (!allowed) return { ok: false as const, error: "هذا القالب متاح في النسخة الكاملة", locked: true };
     }
     const content = String(row.content);
-    const publicContent = row.kind === "json"
-      ? JSON.stringify({ pages: (parseJson(content) as { pages?: unknown } | null)?.pages })
-      : content;
+    const publicContent = row.kind === "json" ? publicJsonContent(content) : content;
     return { ok: true as const, template: { ...rowToSummary(row), content: publicContent } as AdminTemplate };
   });
 
@@ -574,7 +581,55 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
     const status: TemplateStatus = t.status === "published" || t.status === "archived" ? t.status : "draft";
     const title = String(t.title ?? "").trim().slice(0, 120);
     if (!title) return { ok: false as const, error: "العنوان مطلوب" };
+    const origin = String(t.originProjectId ?? "").trim().slice(0, 120);
     const db = await sql();
+    /*
+     * Saving the open document again updates the official template that came
+     * from it. A second click must not create a second catalogue row.
+     * «نسخة جديدة» opts out by leaving the origin empty.
+     */
+    if (!t.id && origin && t.createNew !== true && t.content) {
+      const content = String(t.content);
+      const contentError = validateContent(kind, content);
+      if (contentError) return { ok: false as const, error: contentError };
+      const { randomUUID } = await import("node:crypto");
+      const newId = `tpl_${randomUUID()}`;
+      const baseInput = t.slug ? sanitizeSlug(String(t.slug)) : slugifyTitle(title);
+      const slug = await ensureUniqueSlug(db, baseInput || newId);
+      const thumbnail = validThumbnail(t.thumbnail);
+      const rows = await db.query<{ id: string; slug: string | null }>(
+        `INSERT INTO admin_templates
+          (id, slug, title, description, category, tier, status, kind, content, thumbnail, sort_order, origin_project_id, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now(), now())
+         ON CONFLICT (origin_project_id) WHERE origin_project_id IS NOT NULL
+         DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description,
+           category = EXCLUDED.category, tier = EXCLUDED.tier, status = EXCLUDED.status,
+           kind = EXCLUDED.kind, content = EXCLUDED.content,
+           thumbnail = COALESCE(EXCLUDED.thumbnail, admin_templates.thumbnail),
+           updated_at = now()
+         RETURNING id, slug`,
+        [
+          newId,
+          slug,
+          title,
+          String(t.description ?? "").slice(0, 500),
+          String(t.category ?? "general").slice(0, 60) || "general",
+          tier,
+          status,
+          kind,
+          content,
+          thumbnail,
+          Number.isFinite(Number(t.sortOrder)) ? Math.trunc(Number(t.sortOrder)) : 0,
+          origin,
+        ],
+      );
+      const saved = rows[0];
+      if (!saved) return { ok: false as const, error: "تعذر حفظ القالب" };
+      if (status !== "published" || tier !== "free") {
+        await clearFeaturedTemplateReference(db, saved.id);
+      }
+      return { ok: true as const, id: saved.id, slug: saved.slug };
+    }
     const existing = t.id
       ? await db.query<{ content: string; kind: string; slug: string | null; thumbnail: string | null }>(
           `SELECT content, kind, slug, thumbnail FROM admin_templates WHERE id = $1`,

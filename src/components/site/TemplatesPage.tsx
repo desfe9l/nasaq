@@ -495,6 +495,14 @@ export function TemplatesPage() {
             <Plus className="size-4" />
             إضافة قالب جديد
           </button>
+          {entitlements.premium_templates && (
+            <a
+              href="/my-templates"
+              className="inline-flex h-11 items-center rounded-xl border border-line px-4 text-[13px] font-extrabold text-ink"
+            >
+              قوالبي
+            </a>
+          )}
         </div>
 
         {/* Search + filters */}

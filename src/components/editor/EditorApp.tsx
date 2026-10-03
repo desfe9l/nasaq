@@ -89,11 +89,12 @@ import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   useEditor,
   saveLabel,
-  writeDraftSnapshot,
   PAGES_PANEL_MIN,
   type LeftTab,
   type RightTab,
 } from "@/lib/editor/store";
+import { requestLeave } from "@/lib/editor/leave-controller";
+import { LeaveGuard } from "@/components/editor/LeaveGuard";
 import { absoluteBounds, elementsBounds, pageSize } from "@/lib/editor/model";
 import { fitImageBox, prepareImage } from "@/lib/editor/images";
 import { fitBoxToPage } from "@/lib/editor/fit-page";
@@ -373,6 +374,7 @@ export function EditorApp() {
   return (
     <div className="h-full min-h-0">
       <ThemedToaster position="top-center" richColors dir="rtl" />
+      <LeaveGuard />
       {activeTrial && (
         <div className="border-b border-emerald-700/15 bg-emerald-50 px-3 py-2 text-center text-[12px] font-bold text-emerald-950 dark:border-emerald-300/15 dark:bg-emerald-950/50 dark:text-emerald-100">
           التجربة المجانية سارية حتى {new Date(activeTrial.expiresAt).toLocaleDateString("ar-SA")}.
@@ -393,7 +395,9 @@ export function EditorApp() {
           const file = e.target.files?.[0];
           e.target.value = "";
           if (!file) return;
-          void receiveProjectFile(file, nsqSignedIn);
+          void requestLeave().then((ok) => {
+            if (ok) void receiveProjectFile(file, nsqSignedIn);
+          });
         }}
       />
 
@@ -936,45 +940,28 @@ function Studio({
       event.button !== 0
     )
       return;
-    const state = useEditor.getState();
-    if (state.saveState !== "dirty" && state.saveState !== "saving") return;
     event.preventDefault();
     const href = event.currentTarget.href;
-    void state.saveNow().finally(() => window.location.assign(href));
+    void requestLeave().then((ok) => {
+      if (ok) window.location.assign(href);
+    });
   };
 
   /*
-   * Flush pending work when the tab is hidden, closed or reloaded mid-edit.
-   *
-   * `beforeunload`/`pagehide` handlers cannot wait for promises: the async
-   * IndexedDB save may lose the race with the teardown. So the unload path
-   * ALSO writes a synchronous, owner-stamped draft of the open document; the
-   * next hydrate recovers it when it is newer than the stored row. That is
-   * what makes an accidental ⌘R non-destructive even inside the debounce
-   * window. `visibilitychange` (tab switch, iPad app switch) keeps the
-   * ordinary async flush for the common cases.
+   * Tab hide still flushes the debounced save. Refresh and close do not write
+   * the crash draft: the native prompt warns first, and a confirmed reload
+   * must reopen the last successful save rather than unsaved edits.
    */
   useEffect(() => {
     const flush = () => {
       const state = useEditor.getState();
       if (state.saveState === "dirty") void saveNow();
     };
-    const flushSync = () => {
-      const state = useEditor.getState();
-      if (state.saveState === "dirty" || state.saveState === "saving")
-        writeDraftSnapshot();
-      flush();
-    };
     const onVisibility = () => {
-      if (document.visibilityState === "hidden") flushSync();
+      if (document.visibilityState === "hidden") flush();
     };
-    window.addEventListener("beforeunload", flushSync);
-    window.addEventListener("pagehide", flushSync);
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      flushSync();
-      window.removeEventListener("beforeunload", flushSync);
-      window.removeEventListener("pagehide", flushSync);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [saveNow]);

@@ -9,6 +9,7 @@ import {
   receiveProjectFile,
   resumePending,
 } from "@/lib/nsq/intake";
+import { requestLeave } from "@/lib/editor/leave-controller";
 import { NsqAccountGate } from "@/components/nsq/NsqAccountGate";
 
 /** Session flag: the visitor chose «لاحقًا» for this particular file. */
@@ -107,7 +108,9 @@ export function NsqIntake() {
       // an `.nsq` is opened as a project, never mistaken for an image.
       e.preventDefault();
       e.stopPropagation();
-      void receiveProjectFile(file, signedInRef.current);
+      void requestLeave().then((ok) => {
+        if (ok) void receiveProjectFile(file, signedInRef.current);
+      });
     };
     const onDrop = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
