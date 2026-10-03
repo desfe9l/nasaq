@@ -2722,9 +2722,20 @@ export const useEditor = create<EditorStore>((set, get) => {
             saveState: changed ? "dirty" : "saved",
             savedAt: Date.now(),
           });
-          // The edits this save carried are now durable in IndexedDB — the
-          // reload safety draft has done its job.
-          clearDraftSnapshot();
+          if (changed) {
+            /*
+             * Edits made while IndexedDB was busy are intentionally not
+             * reported as saved. Preserve them for refresh protection and
+             * ensure a direct saveNow() call still schedules the follow-up
+             * transaction; the queued save will capture the newest store
+             * snapshot when it starts.
+             */
+            writeDraftSnapshot();
+            scheduleSave(900);
+          } else {
+            // Every field carried by this transaction is durable now.
+            clearDraftSnapshot();
+          }
           await setSetting("activeProjectId", saved.id);
           /*
            * Refresh the projects list WITHOUT re-reading every project from
