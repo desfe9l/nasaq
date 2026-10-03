@@ -1409,7 +1409,7 @@ export function FloatingToolbar({
           />
         </MenuGrid>
         {count > 1 && el.id === selectedId && (
-          <MenuGrid columns={1} label="دمج العناصر">
+          <MenuGrid columns={2} label="دمج العناصر">
             <MenuCell
               icon={<Layers2 />}
               label="دمج الطبقات المحددة في صورة واحدة — يتطلب طبقات متجاورة"
