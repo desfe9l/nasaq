@@ -13,10 +13,14 @@ import { grokPwaPlugin } from "./scripts/grok-pwa-plugin.mjs";
 import { appEnvPlugin } from "./scripts/app-env-plugin.mjs";
 // @ts-expect-error JS module alongside the TS vite config
 import { emitShareRasterAssets } from "./scripts/emit-share-raster-assets.mjs";
+// @ts-expect-error JS module alongside the TS vite config
+import { emitUpscaleModel } from "./scripts/emit-upscale-model.mjs";
 import { isMigrationFile } from "./scripts/migration-plan.mjs";
 
 // Before any plugin or server bundle reads the rasterizer. See the script.
 emitShareRasterAssets();
+// Vendor the ESRGAN ×4 weights into public/ for same-origin model loading.
+emitUpscaleModel();
 
 /**
  * Build identity for the stale-build guard (`src/lib/app-update.ts`).

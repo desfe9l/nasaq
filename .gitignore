@@ -50,3 +50,6 @@ screenshots/editor-focused/
 
 # Inlined at vite build from resvg.wasm + fonts. Not source.
 src/lib/og/share-raster-assets.generated.ts
+
+# Vendored at vite config load from @upscalerjs/esrgan-medium. Not source.
+public/models/

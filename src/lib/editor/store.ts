@@ -718,6 +718,20 @@ interface EditorStore extends Project, Ui, History {
   updateStyle: (id: string, patch: CanvasEl["style"], live?: boolean) => void;
   replaceElement: (el: CanvasEl, live?: boolean) => void;
   /**
+   * تعزيز الصور — patch one element of a SPECIFIC page as a single undo step.
+   * Unlike `updateElement` (which writes the active page), this targets the
+   * page captured when an async job started: image enhancement can finish
+   * after the author navigated elsewhere, and the result must still land on
+   * the element it was requested for. Returns false when the element is gone
+   * (deleted while processing) so the caller can report instead of silently
+   * dropping the work.
+   */
+  patchElementOnPage: (
+    pageId: string,
+    id: string,
+    patch: Partial<CanvasEl>,
+  ) => boolean;
+  /**
    * Commit a finished gesture: apply several COMPLETE elements of one page in a
    * single store write with ONE history entry.
    *
@@ -4393,6 +4407,25 @@ export const useEditor = create<EditorStore>((set, get) => {
       set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
       if (live) scheduleSave(600);
       else pushHistory();
+    },
+
+    patchElementOnPage: (pageId, id, patch) => {
+      const s = get();
+      const page = s.pages.find((p) => p.id === pageId);
+      if (!page) return false;
+      let found = false;
+      const next = mapElement(page, id, (el) => {
+        found = true;
+        return {
+          ...el,
+          ...patch,
+          style: { ...el.style, ...(patch.style || {}) },
+        };
+      });
+      if (!found) return false;
+      set({ pages: s.pages.map((p) => (p.id === page.id ? next : p)) });
+      pushHistory();
+      return true;
     },
 
     applyElements: (pageId, els, opts) => {
