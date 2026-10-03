@@ -5,12 +5,17 @@ import {
   type AspectId,
   type SelectionRegion,
 } from "./marquee";
-import { TOOLS, toolDef, type ToolId } from "./tools";
+import {
+  REGION_MODES,
+  type RegionMode,
+  type ToolActivation,
+  type ToolId,
+} from "./tools";
 import type { DocumentSize } from "./document-space";
 
 /**
- * The tool store — one source of truth for "which tool is live, with which
- * settings".
+ * The tool store — one source of truth for "which tool is live, in which mode,
+ * with which settings".
  *
  * Root cause this removes: the previous tool state was a `drawTool` string
  * inside `CanvasStage`, a `marqueeShape` ref, an `eraserSize` ref, a mirrored
@@ -22,6 +27,11 @@ import type { DocumentSize } from "./document-space";
  * Everything a tool needs is set BEFORE the gesture starts (the picker writes
  * here, the canvas only reads), which is why the first pointerdown after
  * choosing a tool now behaves exactly like the tenth.
+ *
+ * The select/crop family is ONE tool here: `tool === "select"` plus a
+ * `regionMode` ("off" is the plain pointer; a shape arms the region drag).
+ * Nine header buttons became one button and one compact dropdown, and no
+ * second surface can ever disagree about which region is being drawn.
  */
 
 export interface BrushSettings {
@@ -87,6 +97,8 @@ export interface RasterGesture {
 
 export interface ToolState {
   tool: ToolId;
+  /** The ONE select tool's region shape; "off" is the plain pointer. */
+  regionMode: RegionMode;
   /** Element the raster tools are currently allowed to touch (null = pick at press). */
   rasterTarget: RasterGesture | null;
   /** Set while a stroke is live, so the UI can lock conflicting controls. */
@@ -94,10 +106,14 @@ export interface ToolState {
   brush: BrushSettings;
   eraser: EraserSettings;
   cropAspect: AspectId;
-  /** Finished marquee region — editable, croppable, and the crop tool's input. */
+  /** Finished marquee region — editable, croppable, and the crop engine's input. */
   region: SelectionRegion | null;
   setTool: (tool: ToolId) => void;
-  /** Choosing a tool clears tools that must not inherit the previous region. */
+  /** Arm the select tool with a region shape (or "off" for the plain pointer). */
+  armSelect: (mode: RegionMode) => void;
+  /** One-shot activation, exactly what the keyboard and the palette produce. */
+  activate: (activation: ToolActivation) => void;
+  /** Back to the plain pointer: no region, no mode, no tool options in sight. */
   resetTool: () => void;
   setBrush: (patch: Partial<BrushSettings>) => void;
   setEraser: (patch: Partial<EraserSettings>) => void;
@@ -111,6 +127,7 @@ export interface ToolState {
 
 export const useTools = create<ToolState>((set) => ({
   tool: "select",
+  regionMode: "off",
   rasterTarget: null,
   painting: false,
   brush: { ...DEFAULT_BRUSH },
@@ -118,14 +135,52 @@ export const useTools = create<ToolState>((set) => ({
   cropAspect: "free",
   region: null,
   setTool: (tool) =>
-    set((state) => ({
+    set({
       tool,
-      region: tool === "select" ? null : state.region,
+      // Leaving the select tool ends the selection operation entirely; and
+      // returning to it through `setTool` means "plain pointer" — the region,
+      // the armed shape and any tool options disappear with it.
+      region: null,
+      regionMode: "off",
+      rasterTarget: null,
+      painting: false,
+    }),
+  armSelect: (mode) =>
+    set((state) => ({
+      tool: "select",
+      regionMode: REGION_MODES.some((entry) => entry.id === mode) ? mode : "off",
+      // Returning to the pointer is the moment the interface "returns to
+      // normal": the region and its ephemeral controls disappear with it.
+      region: mode === "off" ? null : state.region,
       rasterTarget: null,
       painting: false,
     })),
+  activate: ({ tool, regionMode }) =>
+    set((state) =>
+      tool === "select"
+        ? {
+            tool,
+            regionMode,
+            region: regionMode === "off" ? null : state.region,
+            rasterTarget: null,
+            painting: false,
+          }
+        : {
+            tool,
+            regionMode: "off",
+            region: null,
+            rasterTarget: null,
+            painting: false,
+          },
+    ),
   resetTool: () =>
-    set({ tool: "select", region: null, rasterTarget: null, painting: false }),
+    set({
+      tool: "select",
+      regionMode: "off",
+      region: null,
+      rasterTarget: null,
+      painting: false,
+    }),
   setBrush: (patch) =>
     set((state) => {
       const next = { ...state.brush, ...patch };
@@ -196,9 +251,7 @@ export function toolState() {
   return useTools.getState();
 }
 
-export const toolLabel = (id: ToolId) => TOOLS[id]?.label ?? toolDef(id).label;
-
-/** The aspect ratio the crop tool is currently constrained to. */
+/** The aspect ratio the crop frame is currently constrained to. */
 export function cropAspectRatio(id: AspectId): number | null {
   return ASPECT_RATIOS.find((aspect) => aspect.id === id)?.ratio ?? null;
 }

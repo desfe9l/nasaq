@@ -1683,9 +1683,29 @@ body.is-gesturing .artboard-cell:not(.is-active) {
 .crop-handle.ne { top: 0; left: 100%; cursor: nesw-resize; }
 .crop-handle.se { top: 100%; left: 100%; cursor: nwse-resize; }
 .crop-handle.sw { top: 100%; left: 0; cursor: nesw-resize; }
-.crop-actions { gap: 8px; font-size: 11px; min-width: 200px; }
+.crop-actions { gap: 6px 8px; font-size: 11px; max-width: calc(100vw - 16px); }
+.crop-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+/* Apply is the one filled verb in the bubble; everything else stays quiet. */
+.crop-actions .floating-toolbar-btn.is-primary {
+  background: var(--color-brand, #1d4ed8);
+  color: #fff;
+}
+.crop-actions .floating-toolbar-btn.is-primary:hover:not(:disabled) {
+  background: var(--color-brand-hover, var(--color-brand, #1d4ed8));
+}
+.crop-actions .tool-props-chip {
+  border-color: var(--editor-border, #dde2ea);
+}
 @media (pointer: coarse) {
   .crop-handle { width: calc(44px / var(--editor-zoom, 1)); height: calc(44px / var(--editor-zoom, 1)); }
+  /* On a finger the ratio row is a second line: the bubble grows down, never sideways. */
+  .crop-actions { flex-wrap: wrap; }
 }
 
 /* Paint editors reuse the existing colour picker, recent colours and steppers. */
@@ -3760,6 +3780,18 @@ body.is-resizing-panel .editor-dock-strip::before {
   .editor-ui .editor-header-library { display: none; }
   .editor-ui .editor-header-center { flex-shrink: 1; }
   .editor-ui .editor-doc-name { width: clamp(6ch, 14vw, 16ch); min-width: 6ch; }
+  /*
+   * Belt for the tightest desktop band: if a long document name plus the
+   * fixed clusters still exceed the row, the tools scroll INSIDE their zone
+   * — every control stays reachable, nothing overflows the viewport edge and
+   * nothing hides off-screen.
+   */
+  .editor-ui .editor-header-primary {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    overscroll-behavior-inline: contain;
+  }
 }
 
 /* The centre capsule keeps the document name and its view controls in one
@@ -5216,16 +5248,172 @@ button.license-badge-locked:focus-visible {
  * ============================================================================
  */
 
-/* The tool cluster: groups are separated by hairlines, never by labels. */
+/*
+ * The tool cluster: ONE select/crop cell + the paint and draw tools. Groups
+ * are separated by hairlines, never by labels, and the cluster never grows
+ * with the viewport: it is fixed-width content in a shrink-proof zone.
+ */
 .editor-tool-cluster {
   display: flex;
   align-items: center;
   gap: 2px;
+  flex: 0 0 auto;
 }
-.editor-tool-group {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+/*
+ * The select/crop cell reads as ONE control: the box arms the tool, a corner
+ * caret opens the region-mode dropdown. The caret overlays the button's own
+ * square instead of doubling its width — a toolbar that grows when a menu
+ * exists is a toolbar that steals canvas.
+ */
+.editor-tool-cell {
+  position: relative;
+  width: var(--ui-control, 34px);
+  height: var(--ui-control, 34px);
+  flex: 0 0 auto;
+  border-radius: 9px;
+}
+.editor-tool-cell > .editor-icon-btn,
+.editor-tool-cell .editor-tool-main {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+.editor-tool-cell:has(.is-active) {
+  background: color-mix(in srgb, var(--editor-text) 14%, var(--editor-toolbar, var(--editor-panel)));
+}
+.editor-tool-caret {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-start: 0;
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 0;
+  /* Logical corners: the caret hugs the cell's bottom-inline-start corner in
+     either reading direction. */
+  border-start-end-radius: 7px;
+  border-end-start-radius: 8px;
+  background: transparent;
+  color: var(--editor-text-secondary, #94a3b8);
+  cursor: pointer;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+.editor-tool-caret:hover,
+.editor-tool-caret[aria-expanded="true"] {
+  color: var(--editor-text);
+  background: color-mix(in srgb, var(--editor-text) 10%, transparent);
+}
+@media (any-pointer: coarse) {
+  /* A finger gets a real caret target; the main square shrinks to match. */
+  .editor-tool-caret {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+/*
+ * ── Responsive density, from the resolved surface (see ui-state
+ * `resolveEditorSurface`) — one scale for the whole chrome ────────────────
+ *
+ * The standard is NOT "big for touch": it is the best balance between finger
+ * room and workspace. Desktop stays compact, iPad is touch-friendly compact,
+ * mobile is maximal density with honest hit targets. Every control that
+ * participates reads `--ui-control` / `--ui-icon`, so a tool button can never
+ * disagree with the bar it lives in, and opening a dropdown or a panel changes
+ * nothing here — these tokens depend only on the viewport.
+ */
+.editor-ui {
+  --ui-control: 34px;
+  --ui-icon: 18px;
+  --ui-props-gap: 10px;
+  --ui-props-pad: 5px 10px;
+  --ui-props-slider: 92px;
+}
+.editor-ui[data-editor-surface^="tablet"] {
+  --ui-control: 38px;
+  --ui-icon: 18px;
+  --ui-props-gap: 9px;
+  --ui-props-pad: 6px 9px;
+  --ui-props-slider: 84px;
+}
+.editor-ui[data-editor-surface^="mobile"] {
+  --ui-control: 40px;
+  --ui-icon: 17px;
+  --ui-props-gap: 7px;
+  --ui-props-pad: 6px 8px;
+  --ui-props-slider: 64px;
+}
+/* Fallback before the shell has measured (SSR/first paint): the pointer media
+   queries keep the same scale the JS resolves. */
+@media (any-pointer: coarse) {
+  .editor-ui:not([data-editor-surface]) { --ui-control: 38px; }
+}
+.editor-ui .editor-icon-btn {
+  width: var(--ui-control, 34px);
+  height: var(--ui-control, 34px);
+}
+.editor-ui .editor-icon-glyph,
+.editor-ui .editor-icon-glyph svg {
+  width: var(--ui-icon, 18px);
+  height: var(--ui-icon, 18px);
+}
+
+/*
+ * Accidental zoom, app level, scoped to the editor chrome: one-finger
+ * panning stays, pinch and double-tap zoom over toolbars/docks/panels die.
+ *
+ * `touch-action` does not inherit, so the rule names the chrome SURFACES and
+ * their buttons. Every selector is wrapped in `:where()` — ZERO specificity —
+ * which makes this block strictly additive: any control that declares its own
+ * `touch-action` (every handle, brush surface and the canvas stage itself:
+ * `none`) still wins, so drawing, two-finger navigation and element gestures
+ * are untouched. Portalled chrome (floating toolbars, anchored menus,
+ * tooltips, the layer picker) hangs off `body`, so it is named there too.
+ * Marketing pages, site dialogs outside the editor and the browser's own zoom
+ * are unaffected.
+ */
+:where(body.is-editor .editor-ui),
+:where(body.is-editor .editor-ui .editor-toolbar),
+:where(body.is-editor .editor-ui .editor-toolbar button),
+:where(body.is-editor .editor-ui .editor-sidebar),
+:where(body.is-editor .editor-ui .editor-sidebar button),
+:where(body.is-editor .editor-ui .editor-page-rail),
+:where(body.is-editor .editor-ui .editor-page-rail button),
+:where(body.is-editor .editor-ui .editor-panel-tabs),
+:where(body.is-editor .editor-ui .tool-props),
+:where(body.is-editor .editor-ui .tool-props button),
+:where(body.is-editor :is(.floating-toolbar, .editor-anchor-menu, .editor-tip)),
+:where(body.is-editor :is(.floating-toolbar, .editor-anchor-menu) button),
+:where(body.is-editor .layer-picker-popup),
+:where(body.is-editor .layer-picker-popup button) {
+  touch-action: pan-x pan-y;
+}
+
+/*
+ * Fullscreen — the one place an interface loses its chrome is where users
+ * lose the editor. Safety rules stated once:
+ *  · the fullscreen root sizes itself and the shell to the screen, so the
+ *    header and the status bar can never collapse to zero height;
+ *  · the header keeps a measured, viewport-derived height (`--editor-header-h`),
+ *    so safe-area insets from a phone's fullscreen never clip it;
+ *  · portalled menus/tooltips live on `document.body`, which in fullscreen is
+ *    a descendant of the fullscreen element — their fixed positioning resolves
+ *    against the screen, and the shared placement maths clamps them inside it.
+ */
+:root:fullscreen,
+:root:-webkit-full-screen {
+  width: 100%;
+  height: 100%;
+}
+:root:fullscreen body.is-editor {
+  height: 100dvh;
+  overflow: hidden;
+}
+:root:fullscreen .editor-shell {
+  height: 100%;
+  min-height: 0;
 }
 
 /*
@@ -5359,7 +5547,10 @@ button.license-badge-locked:focus-visible {
 
 /*
  * Tool options bar — docked to the top of the canvas workspace, floating so it
- * never re-flows the artboard when a tool is picked or a region appears.
+ * never re-flows the artboard when a tool is picked or a region appears. It
+ * takes no layout space, sizes itself to the viewport (`min(100% − 24px)` and
+ * the density tokens), and scrolls its own overflow instead of pushing panel
+ * edges or stealing canvas height.
  */
 .tool-props {
   position: absolute;
@@ -5369,9 +5560,10 @@ button.license-badge-locked:focus-visible {
   z-index: var(--z-bubble, 60);
   display: flex;
   align-items: center;
-  gap: 10px;
-  max-width: calc(100% - 24px);
-  padding: 5px 10px;
+  gap: var(--ui-props-gap, 10px);
+  max-width: min(calc(100% - 24px), calc(100vw - 24px));
+  min-width: 0;
+  padding: var(--ui-props-pad, 5px 10px);
   border: 1px solid var(--editor-border, #dde2ea);
   border-radius: 10px;
   background: var(--editor-panel, #fff);
@@ -5379,7 +5571,11 @@ button.license-badge-locked:focus-visible {
   box-shadow: 0 8px 24px -12px rgba(15, 23, 42, 0.35);
   font-size: 11px;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: thin;
+}
+.tool-props > * {
+  flex: 0 0 auto;
 }
 .tool-props-title {
   display: inline-flex;
@@ -5406,7 +5602,8 @@ button.license-badge-locked:focus-visible {
   white-space: nowrap;
 }
 .tool-props-slider input[type="range"] {
-  width: 92px;
+  width: var(--ui-props-slider, 92px);
+  max-width: 16vw;
   min-height: 24px;
   margin: 0;
 }
