@@ -284,9 +284,11 @@ export async function snapshotSelection(
       for (const node of [layer, ...layer.querySelectorAll<HTMLElement>("*")])
         node.style.visibility = "hidden";
     }
-  doc.querySelectorAll<HTMLElement>(".page-bg-image").forEach((background) => {
+  doc
+    .querySelectorAll<HTMLElement>(".page-bg-image,.page-trim")
+    .forEach((background) => {
     background.style.visibility = "hidden";
-  });
+    });
   page.style.background = "transparent";
   const svg = new XMLSerializer().serializeToString(doc.documentElement);
   const canvas = await paintSnapshot({ ...snapshot, svg }, scale);
