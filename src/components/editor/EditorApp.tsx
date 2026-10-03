@@ -3,38 +3,122 @@ import { BrandLogo } from "@/components/site/SiteChrome";
 import { shortcutKey } from "@/lib/editor/keyboard";
 import { useTools } from "@/lib/editor/tool-store";
 import {
-  TOOL_GROUPS,
+  REGION_MODES,
   toolDef,
-  resolveToolShortcut,
+  regionModeDef,
+  resolveToolKey,
+  type RegionMode,
   type ToolId,
 } from "@/lib/editor/tools";
 import { ToolPropertiesBar } from "./ToolPropertiesBar";
+import { beginImageCrop, cropSelectionToImage } from "@/lib/editor/crop-session";
 
 /**
- * One glyph per tool, keyed by the tool id — the toolbar cannot render a tool
- * without an icon, and cannot render an icon for a tool that does not exist.
+ * One glyph per live state of the ONE select tool, keyed by region mode — the
+ * toolbar cannot render a mode without an icon, and cannot render an icon for
+ * a mode that does not exist. Nine selection buttons used to share this strip;
+ * now a single cell shows the armed shape and its caret opens the dropdown.
  */
-const TOOL_ICONS: Record<ToolId, typeof MousePointer2> = {
-  select: MousePointer2,
-  "marquee-rect": SquareDashed,
-  // A distinct glyph from «رسم مستطيل»: the toolbar must never show two
-  // different tools wearing the same icon.
-  "marquee-square": SquareDashedMousePointer,
-  "marquee-ellipse": Circle,
+const SELECT_MODE_ICONS: Record<RegionMode, typeof MousePointer2> = {
+  off: MousePointer2,
+  rect: SquareDashed,
+  // A distinct glyph from «مستطيل»: two different modes never wear one icon.
+  square: Square,
+  ellipse: Circle,
   lasso: Lasso,
-  "select-shape": Scan,
-  "select-image": ScanLine,
-  "select-layer": SlidersHorizontal,
-  crop: CropIcon,
+};
+
+/** The four non-selection tools — each one button, nothing else. */
+const PAINT_ICONS: Record<"brush" | "eraser" | "text" | "shape", typeof Brush> = {
   brush: Brush,
   eraser: Eraser,
   text: TypeIcon,
   shape: RectangleHorizontal,
 };
+
+/**
+ * The ONE «تحديد / قص» control: the button arms the plain pointer, and the
+ * caret opens the whole region vocabulary (pointer · rectangle · square ·
+ * ellipse · freeform) in a single compact dropdown. Picking a shape closes the
+ * menu and starts the drawing state immediately; nothing about this control
+ * reserves layout — the menu is a clamped portal, the tool options are a
+ * floating capsule, and the crop frame carries its own ephemeral Apply/Cancel.
+ */
+function SelectCropTool({
+  activeTool,
+  activeMode,
+}: {
+  activeTool: ToolId;
+  activeMode: RegionMode;
+}) {
+  const regionArmed = activeTool === "select" && activeMode !== "off";
+  const def = toolDef("select");
+  const modeDef = regionModeDef(regionArmed ? activeMode : "off");
+  const Glyph = SELECT_MODE_ICONS[regionArmed ? activeMode : "off"];
+  return (
+    <div className="editor-tool-cell">
+      <Tip
+        label={def.label}
+        hint={regionArmed ? modeDef.hint : def.hint}
+        shortcut={def.shortcut}
+        side="bottom"
+      >
+        <button
+          type="button"
+          className={cn("editor-icon-btn editor-tool-main", regionArmed && "is-active")}
+          aria-label={def.label}
+          aria-keyshortcuts={def.shortcut}
+          onClick={() => useTools.getState().armSelect("off")}
+        >
+          <span className="editor-icon-glyph" aria-hidden="true">
+            <Glyph className="size-4" strokeWidth={1.7} />
+          </span>
+        </button>
+      </Tip>
+      <AnchorMenu
+        label="أنواع التحديد والقص"
+        width={248}
+        side="bottom"
+        align="start"
+        trigger={({ ref, onClick, ...aria }) => (
+          <Tip label="نوع المنطقة" hint="الأساسي · مستطيل · مربع · بيضاوي · حر" side="bottom">
+            <button
+              ref={ref}
+              type="button"
+              onClick={onClick}
+              className={cn("editor-tool-caret", regionArmed && "is-active")}
+              aria-label="أنواع التحديد والقص"
+              {...aria}
+            >
+              <ChevronDown size={11} strokeWidth={2.4} aria-hidden="true" />
+            </button>
+          </Tip>
+        )}
+      >
+        {REGION_MODES.map((mode) => {
+          const ModeGlyph = SELECT_MODE_ICONS[mode.id];
+          return (
+            <MenuRow
+              key={mode.id}
+              icon={<ModeGlyph size={15} strokeWidth={1.8} />}
+              label={mode.label}
+              hint={mode.hint}
+              shortcut={mode.shortcut}
+              checked={activeTool === "select" && activeMode === mode.id}
+              onSelect={() => useTools.getState().armSelect(mode.id)}
+            />
+          );
+        })}
+      </AnchorMenu>
+    </div>
+  );
+}
 import { EditorSettingsDialog } from "./EditorSettingsDialog";
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { FloatingPanel } from "./ui/FloatingPanel";
 import { IconButton } from "./ui/IconButton";
+import { AnchorMenu, MenuRow } from "./ui/AnchorMenu";
+import { Tip } from "./ui/Tip";
 import { ViewMenu } from "./ViewMenu";
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -102,8 +186,8 @@ export const OPEN_REPORT_TOOLS_EVENT = "nasaq:open-report-tools";
 import {
   Brush,
   Check,
+  ChevronDown,
   Circle,
-  Crop as CropIcon,
   Download,
   Eraser,
   Lasso,
@@ -114,12 +198,10 @@ import {
   Redo2,
   Save,
   Scan,
-  ScanLine,
   SlidersHorizontal,
   RectangleHorizontal,
   Square,
   SquareDashed,
-  SquareDashedMousePointer,
   Type as TypeIcon,
   Undo2,
 } from "lucide-react";
@@ -166,10 +248,12 @@ import {
   OVERLAY_BREAKPOINT,
   DOCK_BREAKPOINT,
   isOverlayViewport,
+  resolveEditorSurface,
   clampDockSize,
   fitSideDockWidths,
   PAGES_RAIL_COLLAPSED,
   type DockSide,
+  type EditorSurface,
 } from "@/lib/editor/ui-state";
 import {
   defaultWorkspaceGroups,
@@ -697,6 +781,28 @@ function Studio({
       typeof window !== "undefined" &&
       window.matchMedia("(max-width: 600px)").matches,
   );
+  /**
+   * Coarse pointer (finger-first) detection. The responsive layout system
+   * resolves ONE surface from (viewport, pointer), publishes it as
+   * `data-editor-surface` on the shell, and every density decision — tool
+   * button size, options bar, drawer padding — reads the same answer, so the
+   * bar cannot grow on iPad and shrink on desktop from separate media queries
+   * that disagree.
+   */
+  const [coarsePointer, setCoarsePointer] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(any-pointer: coarse)").matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia("(any-pointer: coarse)");
+    const update = () => setCoarsePointer(media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+  /** The shell root: the surface attribute and the zoom guards live here. */
+  const shellRef = useRef<HTMLDivElement>(null);
   /** First load is what arms the auto-fit below. */
   const hydrated = useEditor((s) => s.hydrated);
   /** ?showcase=1: no walkthrough, no account menu in the product preview. */
@@ -1109,17 +1215,50 @@ function Studio({
       /*
        * Tool shortcuts, straight from the tool table (so a shortcut can never
        * point at a tool that no longer exists):
-       *   V select · M rectangle · ⇧M square · L lasso · C crop
-       *   B brush  · E eraser    · T text     · R rectangle shape
+       *   V pointer · M rectangle · ⇧M square · L lasso
+       *   B brush · E eraser · T text · R rectangle shape
+       * C is no longer a tool: it opens the crop frame on the selected image
+       * — «قص» is an action on artwork, not a mode of its own.
        * Space+drag stays pan (owned by the canvas).
        */
-      const shortcutTool = resolveToolShortcut(key, e.shiftKey);
-      if (!typing && !meta && !e.altKey && shortcutTool) {
+      const activation = resolveToolKey(key, e.shiftKey);
+      if (!typing && !meta && !e.altKey && activation) {
         e.preventDefault();
-        if (shortcutTool === "text") useEditor.getState().setLeftTab("elements");
-        if (shortcutTool === "shape") useEditor.getState().setLeftTab("shapes");
-        useTools.getState().setTool(shortcutTool);
+        if (activation.tool === "text") useEditor.getState().setLeftTab("elements");
+        if (activation.tool === "shape") useEditor.getState().setLeftTab("shapes");
+        useTools.getState().activate(activation);
         return;
+      }
+      if (!typing && !meta && !e.altKey && key === "c") {
+        const st = useEditor.getState();
+        const page = st.pages.find((p) => p.id === st.activePageId);
+        const el =
+          page && st.selectedId && !st.editingId
+            ? findElement(page.elements, st.selectedId)?.el
+            : null;
+        if (el && (el.type === "image" || el.type === "logo")) {
+          e.preventDefault();
+          beginImageCrop(el.id);
+        }
+        return;
+      }
+      /*
+       * Enter applies a finished region exactly where it would otherwise sit
+       * unused: the keyboard never needs a second confirm button.
+       */
+      if (!typing && !meta && !e.altKey && e.key === "Enter") {
+        const t = useTools.getState();
+        if (
+          t.tool === "select" &&
+          t.regionMode !== "off" &&
+          t.region &&
+          !useInteraction.getState().crop &&
+          !useEditor.getState().editingId
+        ) {
+          e.preventDefault();
+          void cropSelectionToImage(t.region);
+          return;
+        }
       }
       if (meta && key === "j") {
         if (typing) return;
@@ -1281,6 +1420,7 @@ function Studio({
    * the whole class of "the button looks armed but the canvas disagrees" bugs.
    */
   const activeTool = useTools((s) => s.tool);
+  const activeRegionMode = useTools((s) => s.regionMode);
   const armTool = (tool: ToolId | null) =>
     useTools.getState().setTool(tool ?? "select");
 
@@ -1648,7 +1788,61 @@ function Studio({
     const onResize = () =>
       setVp({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    // iOS Safari keeps the visual viewport changing without firing `resize`
+    // under some keyboard/rotation states; the second signal keeps dock
+    // clamps honest during fullscreen and rotation.
+    window.visualViewport?.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+      window.visualViewport?.removeEventListener("resize", onResize);
+    };
+  }, []);
+  /*
+   * The resolved surface — desktop / tablet / mobile, portrait or landscape —
+   * is the ONLY layout mode the shell and the CSS density scale share.
+   */
+  const surface: EditorSurface = resolveEditorSurface(
+    vp.w,
+    vp.h,
+    coarsePointer,
+  );
+  /*
+   * Accidental zoom is fixed at the APP level — once, here — not per tool.
+   *
+   * Three leaks used to let a stray pinch resize the whole interface:
+   *  · iOS `gesture*` events fired by Safari on any surface (the canvas stage
+   *    guarded them, the header and the docks did not),
+   *  · trackpad/pinch Ctrl+wheel landing on chrome, which the browser reads as
+   *    a page zoom (the canvas owns the INTENTIONAL zoom gesture and is left
+   *    alone; the shell-level wheel listener is `{ passive: false }` so the
+   *    chrome can call preventDefault without touching the document),
+   *  · double-tap zoom, killed by `touch-action` on `.editor-ui` in CSS.
+   * None of this reaches outside the editor: browser zoom stays fully
+   * available on every other page, and the shell's own scrollable panes keep
+   * one-finger scroll.
+   */
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    const claim = (event: Event) => event.preventDefault();
+    const GESTURE_EVENTS = ["gesturestart", "gesturechange", "gestureend"] as const;
+    for (const type of GESTURE_EVENTS)
+      shell.addEventListener(type, claim, { passive: false });
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      const target = event.target as HTMLElement | null;
+      // The canvas stage runs its own anchored zoom; chrome never zooms the app.
+      if (target?.closest(".editor-canvas-stage")) return;
+      event.preventDefault();
+    };
+    shell.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      for (const type of GESTURE_EVENTS)
+        shell.removeEventListener(type, claim);
+      shell.removeEventListener("wheel", onWheel);
+    };
   }, []);
 
   /*
@@ -2090,7 +2284,9 @@ function Studio({
      * where it folds to two deliberate rows of its own.
      */
     <div
+      ref={shellRef}
       dir="rtl"
+      data-editor-surface={surface}
       className={cn(
         "editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]",
         appearance === "light" ? "editor-light" : "editor-dark",
@@ -2148,42 +2344,58 @@ function Studio({
             onClick={redo}
             disabled={!futureDepth}
           />
-          {/* ①½ The tool cluster — one button per tool in the shared tool
-              table, grouped by what the tool does:
-                select / marquee · lasso · scope pickers · crop + paint · draw
-              The grouping is the ONLY difference between similar tools; every
-              button writes the single tool store, so the header and the canvas
-              can never disagree about what is armed. */}
+          {/* ①½ The tool cluster — ONE select/crop tool plus the paint and
+              draw tools. The region shape (rectangle, square, ellipse,
+              freeform) is a compact dropdown inside the select cell, never a
+              row of near-identical buttons; crop itself is not a tool at all,
+              only what an armed region does over an image, with an ephemeral
+              Apply/Cancel. Every button writes the single tool store, so the
+              header and the canvas can never disagree about what is armed. */}
           <span className="editor-header-sep" aria-hidden />
           <div
             className="editor-tool-cluster"
             role="group"
             aria-label="أدوات التحديد والرسم"
           >
-            {TOOL_GROUPS.map((group, index) => (
-              <div className="editor-tool-group" key={index}>
-                {index > 0 && <span className="editor-header-sep" aria-hidden />}
-                {group.map((id) => {
-                  const def = toolDef(id);
-                  const Glyph = TOOL_ICONS[id];
-                  return (
-                    <IconButton
-                      key={id}
-                      label={def.label}
-                      hint={def.hint}
-                      shortcut={def.shortcut}
-                      active={activeTool === id}
-                      icon={<Glyph className="size-4" strokeWidth={1.7} />}
-                      onClick={() => {
-                        if (id === "text") useEditor.getState().setLeftTab("elements");
-                        if (id === "shape") useEditor.getState().setLeftTab("shapes");
-                        useTools.getState().setTool(activeTool === id && id !== "select" ? "select" : id);
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            ))}
+            <SelectCropTool activeTool={activeTool} activeMode={activeRegionMode} />
+            <span className="editor-header-sep" aria-hidden />
+            {(["brush", "eraser"] as const).map((id) => {
+              const def = toolDef(id);
+              const Glyph = PAINT_ICONS[id];
+              return (
+                <IconButton
+                  key={id}
+                  label={def.label}
+                  hint={def.hint}
+                  shortcut={def.shortcut}
+                  active={activeTool === id}
+                  icon={<Glyph className="size-4" strokeWidth={1.7} />}
+                  onClick={() =>
+                    useTools.getState().setTool(activeTool === id ? "select" : id)
+                  }
+                />
+              );
+            })}
+            <span className="editor-header-sep" aria-hidden />
+            {(["text", "shape"] as const).map((id) => {
+              const def = toolDef(id);
+              const Glyph = PAINT_ICONS[id];
+              return (
+                <IconButton
+                  key={id}
+                  label={def.label}
+                  hint={def.hint}
+                  shortcut={def.shortcut}
+                  active={activeTool === id}
+                  icon={<Glyph className="size-4" strokeWidth={1.7} />}
+                  onClick={() => {
+                    if (id === "text") useEditor.getState().setLeftTab("elements");
+                    if (id === "shape") useEditor.getState().setLeftTab("shapes");
+                    useTools.getState().setTool(activeTool === id ? "select" : id);
+                  }}
+                />
+              );
+            })}
           </div>
           <span className="editor-header-sep" aria-hidden />
           <IconButton

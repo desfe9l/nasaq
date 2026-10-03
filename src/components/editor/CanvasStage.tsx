@@ -41,30 +41,24 @@ import {
   clampRegionBox,
   lassoPath,
   marqueeBox,
-  aspectBox,
   regionHitsBox,
   type SelectionRegion,
 } from "@/lib/editor/marquee";
 import {
   BRUSH_LIMITS,
-  cropAspectRatio,
   toolState,
   useTools,
 } from "@/lib/editor/tool-store";
 import {
-  isMarqueeTool,
+  isRegionArmed,
   isRasterElement,
   isRasterTool,
   ownsCanvas,
   resolveMarqueeMode,
   toolAccepts,
   toolDef,
-  type ToolId,
 } from "@/lib/editor/tools";
-import {
-  beginImageCropToBox,
-  cropSelectionToImage,
-} from "@/lib/editor/crop-session";
+import { beginImageCropToBox } from "@/lib/editor/crop-session";
 import {
   loadRasterSource,
   parseHexColor,
@@ -243,7 +237,9 @@ export function CanvasStage({
   const renamePage = useEditor((s) => s.renamePage);
 
   /** Tools that draw on the canvas: artwork becomes a surface, not a drag target. */
-  const toolOwnsCanvas = useTools((s) => ownsCanvas(s.tool));
+  const toolOwnsCanvas = useTools(
+    (s) => ownsCanvas(s.tool, s.regionMode),
+  );
   const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
 
   const opRef = useRef<Op>(null);
@@ -279,6 +275,7 @@ export function CanvasStage({
    * could disagree about what was armed.
    */
   const tool = useTools((s) => s.tool);
+  const regionMode = useTools((s) => s.regionMode);
   const rasterCursor = useRef<{
     show: (x: number, y: number, size: number) => void;
     hide: () => void;
@@ -286,10 +283,11 @@ export function CanvasStage({
   const strokeRef = useRef<RasterStroke | null>(null);
   const drawArmed = toolDef(tool).family === "draw";
   const rasterActive = isRasterTool(tool);
-  const pointerTool = tool === "select" || tool === "select-layer";
+  /** Only the plain pointer touches artwork; an armed region draws over it. */
+  const pointerTool = tool === "select" && regionMode === "off";
   /** Tools whose gesture is drawn, not dragged: the page shows a crosshair. */
   const crosshairTool =
-    rasterActive || drawArmed || tool === "crop" || isMarqueeTool(tool);
+    rasterActive || drawArmed || isRegionArmed(tool, regionMode);
   const pageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   /** The stage node, as state so the artboard IntersectionObservers (which are
@@ -388,11 +386,18 @@ export function CanvasStage({
         setLayerPicker(null);
         return;
       }
-      if (toolState().region) {
+      const live = toolState();
+      /*
+       * Escape steps out one layer at a time: first the finished region (the
+       * armed shape stays for the next draw), then the whole tool — a region
+       * mode of the select tool, or brush/eraser/text/shape.
+       */
+      if (live.region) {
         useTools.getState().setRegion(null);
         return;
       }
-      if (useTools.getState().tool !== "select") useTools.getState().resetTool();
+      if (live.tool !== "select" || live.regionMode !== "off")
+        useTools.getState().resetTool();
     };
     window.addEventListener("keydown", disarm);
     return () => window.removeEventListener("keydown", disarm);
@@ -740,80 +745,6 @@ export function CanvasStage({
     begin();
   };
 
-  /** The Crop tool: drag a region, then hand it to the non-destructive engine. */
-  const startCropDrag = (e: React.PointerEvent, page: Page) => {
-    const state = useEditor.getState();
-    if (state.activePageId !== page.id) state.setActivePage(page.id);
-    const pageEl = pageRefs.current[page.id];
-    if (!pageEl) return;
-    const size = pageSize(page);
-    const toMm = (event: { clientX: number; clientY: number }) =>
-      pagePoint(pageEl.getBoundingClientRect(), size, event.clientX, event.clientY);
-    const start = toMm(e);
-    const aspect = cropAspectRatio(toolState().cropAspect);
-    let live: ReturnType<typeof aspectBox> | null = null;
-    let moved = false;
-    const draw = (event: { clientX: number; clientY: number; shiftKey?: boolean; altKey?: boolean }) => {
-      const end = toMm(event);
-      const box = aspectBox(
-        {
-          startX: start.x,
-          startY: start.y,
-          endX: end.x,
-          endY: end.y,
-          square: Boolean(event.shiftKey),
-          fromCenter: Boolean(event.altKey),
-        },
-        aspect,
-      );
-      live = box;
-      setMarquee({
-        pageId: page.id,
-        x0: box.x,
-        y0: box.y,
-        x1: box.x + box.w,
-        y1: box.y + box.h,
-        shape: "rect",
-      });
-    };
-    input.current!.claim(e, {
-      yieldable: e.pointerType === "touch",
-      move: (ev) => {
-        if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < POINTER_SLOP)
-          return;
-        moved = true;
-        input.current!.lock(e.pointerId);
-        draw(ev);
-      },
-      end: (ev) => {
-        setMarquee(null);
-        const box = live;
-        if (!moved || !box) return;
-        const clamped = clampRegionBox(box, size);
-        if (!clamped) return;
-        const target = rasterTargetAt(
-          page,
-          { x: clamped.x + clamped.w / 2, y: clamped.y + clamped.h / 2 },
-          true,
-        );
-        if (!target) {
-          toast.message("اسحب منطقة فوق صورة لقصها");
-          return;
-        }
-        if (!beginImageCropToBox(target.id, clamped)) {
-          toast.message("انتظر اكتمال تحميل الصورة قبل القص");
-          return;
-        }
-        useTools.getState().setRegion({
-          pageId: page.id,
-          shape: "rect",
-          box: clamped,
-        });
-      },
-      cancel: () => setMarquee(null),
-    });
-  };
-
   const startOp = (
     e: React.PointerEvent,
     page: Page,
@@ -835,13 +766,15 @@ export function CanvasStage({
      * The capture-phase router claims the pointer for drawing tools before an
      * element can see it, but selection-frame handles are real buttons and are
      * deliberately skipped there. This guard is the second half of the same
-     * rule: a paint/crop/draw tool can never start an element gesture, and a
-     * marquee tool can move nothing — only resize/rotate its own frame.
+     * rule: a paint/draw tool can never start an element gesture, and a select
+     * tool with an armed region shape can move nothing — only resize/rotate
+     * its own frame or region.
      */
-    const activeFamily = toolDef(toolState().tool).family;
-    if (activeFamily === "raster" || activeFamily === "crop" || activeFamily === "draw")
+    const liveTool = toolState();
+    const activeFamily = toolDef(liveTool.tool).family;
+    if (activeFamily === "raster" || activeFamily === "draw") return;
+    if (isRegionArmed(liveTool.tool, liveTool.regionMode) && kind === "move")
       return;
-    if (activeFamily === "marquee" && kind === "move") return;
     onCanvasTap?.();
     setLayerPicker(null);
     if (el.locked) {
@@ -1462,11 +1395,18 @@ export function CanvasStage({
     /** Resolved at gesture time, like every other handler here: the node that
      *  started the gesture may belong to a page that has since been
      *  re-created by an undo, and virtualisation may have unmounted it. */
-    const gestureTool = toolState().tool;
+    const gestureState = toolState();
+    const gestureTool = gestureState.tool;
     const gestureDef = toolDef(gestureTool);
     const drawing = gestureDef.family === "draw";
-    const selecting = gestureDef.family === "marquee" || gestureDef.family === "pointer";
+    const selecting = gestureTool === "select";
     if (!drawing && !selecting) return;
+    /*
+     * ONE select tool with a region shape armed keeps the finished region
+     * (with its crop affordance); the plain pointer just rubber-bands a
+     * group selection and lets the rectangle vanish on release.
+     */
+    const keepRegion = selecting && gestureState.regionMode !== "off";
     const stateAtStart = useEditor.getState();
     const page = stateAtStart.pages.find((candidate) => candidate.id === pageId);
     if (!page || page.locked || page.hidden) return;
@@ -1496,19 +1436,21 @@ export function CanvasStage({
     const stage = stageRef.current!;
     const scroll = { x: stage.scrollLeft, y: stage.scrollTop };
     /*
-     * One-finger pan on blank canvas belongs to the SELECT tool only. A region
-     * tool must draw on the first finger, and a raster tool must paint: letting
-     * navigation steal those gestures is exactly what made them feel dead.
+     * One-finger pan on blank canvas belongs to the PLAIN POINTER only. A
+     * region tool must draw on the first finger, and a raster tool must paint:
+     * letting navigation steal those gestures is exactly what made them feel
+     * dead.
      */
     const pan =
       e.pointerType === "touch" &&
-      gestureDef.family === "pointer" &&
+      selecting &&
+      gestureState.regionMode === "off" &&
       !selectionForPage.length;
     const before = e.shiftKey ? [...selectionForPage] : [];
     const candidates = pickables(page, groupForPage).filter((item) =>
       toolAccepts(gestureTool, item.el),
     );
-    let mode = resolveMarqueeMode(gestureTool, {
+    let mode = resolveMarqueeMode(gestureTool, gestureState.regionMode, {
       shift: e.shiftKey,
       alt: e.altKey,
     });
@@ -1561,7 +1503,7 @@ export function CanvasStage({
           activated = true;
         }
         // Shift/Alt are read live, so the author can lock the ratio mid-drag.
-        mode = resolveMarqueeMode(gestureTool, {
+        mode = resolveMarqueeMode(gestureTool, gestureState.regionMode, {
           shift: ev.shiftKey,
           alt: ev.altKey,
         });
@@ -1645,24 +1587,16 @@ export function CanvasStage({
         }
         if (!moved) {
           /*
-           * A tap with a picker tool selects what is under the finger:
-           * Shape/Image restrict the hit list to their own kind, Layer picks
-           * the topmost object of any kind. This is what «تحديد الشكل»
-           * and «تحديد الطبقة» MEAN — a press that picks, not a drag.
+           * A press that never moved is a PICK, in every mode of the select
+           * tool: the topmost element under the finger is chosen, empty space
+           * clears the selection. What used to need three scope-picker tools
+           * is now one behaviour — the pointer and the region modes pick
+           * identically, so no artwork is ever "the wrong kind" to select.
            */
-          const picker =
-            gestureTool === "select-shape" ||
-            gestureTool === "select-image" ||
-            gestureTool === "select-layer";
-          if (picker) {
+          if (isRegionArmed(gestureTool, gestureState.regionMode)) {
             const point = toMm(ev);
-            const hits = elementsAtPoint(
-              page,
-              groupForPage,
-              point.x,
-              point.y,
-            ).filter((el) => !el.hidden && toolAccepts(gestureTool, el));
-            const hit = hits[0];
+            const hit = elementsAtPoint(page, groupForPage, point.x, point.y)
+              .find((el) => !el.hidden && toolAccepts(gestureTool, el));
             if (hit) select(hit.id);
             else if (!e.shiftKey) select(null);
             return;
@@ -1672,7 +1606,7 @@ export function CanvasStage({
         }
         // Keep the finished region: the handles make it editable, and
         // «قص التحديد» / «استخراج التحديد» consume exactly this geometry.
-        if (!gestureDef.keepRegion) return;
+        if (!keepRegion) return;
         const end = toMm(ev);
         const raw = marqueeBox({
           startX: start.x,
@@ -1695,7 +1629,32 @@ export function CanvasStage({
           box,
           points: mode.shape === "lasso" ? points : undefined,
         };
-        useTools.getState().setRegion(region);
+        /*
+         * A rectangular region drawn ON an image hands itself straight to the
+         * non-destructive crop frame — the region IS the crop draft, so the
+         * only controls the author needs now are the frame's handles and the
+         * ephemeral Apply/Cancel bubble. Freeform and ellipse regions stay
+         * selections (their geometry cannot survive a rectangular crop), with
+         * «قص» offered from the region bar for a one-shot apply.
+         */
+        let handedToCrop = false;
+        if (region.shape === "rect") {
+          const target = rasterTargetAt(
+            page,
+            { x: box.x + box.w / 2, y: box.y + box.h / 2 },
+            true,
+          );
+          /*
+           * A region that swallows the whole picture was a SELECTION, not a
+           * crop — only a region that leaves pixels outside opens the frame.
+           */
+          const cropsSomething =
+            target && box.w * box.h < target.w * target.h * 0.94;
+          if (target && cropsSomething) handedToCrop = beginImageCropToBox(target.id, box);
+        }
+        // One control surface at a time: while the crop frame owns the box,
+        // the kept region must not draw a second set of handles under it.
+        useTools.getState().setRegion(handedToCrop ? null : region);
       },
       cancel: finish,
     });
@@ -1832,10 +1791,12 @@ export function CanvasStage({
           return;
         }
         /*
-         * Raster and crop tools claim the pointer HERE, in capture, before any
-         * element handler can see it. That is what makes "the brush painted a
-         * stroke" and "the brush dragged the photo underneath it" mutually
-         * exclusive — no element can be moved by a drawing tool, ever.
+         * Raster tools claim the pointer HERE, in capture, before any element
+         * handler can see it. That is what makes "the brush painted a stroke"
+         * and "the brush dragged the photo underneath it" mutually
+         * exclusive — no element can be moved by a drawing tool, ever. The
+         * select tool's region modes go through the stage's own pointer-down
+         * (the marquee path), which is what routes them to the crop engine.
          */
         const liveTool = toolState().tool;
         if (e.button === 0 && isRasterTool(liveTool)) {
@@ -1843,14 +1804,6 @@ export function CanvasStage({
           if (page) {
             e.preventDefault();
             startRaster(e, page);
-          }
-          return;
-        }
-        if (e.button === 0 && liveTool === "crop") {
-          const page = pageAtPoint(e.clientX, e.clientY);
-          if (page) {
-            e.preventDefault();
-            startCropDrag(e, page);
           }
           return;
         }
@@ -1878,11 +1831,12 @@ export function CanvasStage({
         }
         // Handles keep first refusal. Geometry then resolves selected artwork
         // ahead of other elements, including overflow outside the page DOM box.
-        // A drawing/marquee tool never falls through to a move gesture: the
-        // element under the pointer is artwork to select, not to drag.
+        // A drawing tool — or the select tool with a region shape armed —
+        // never falls through to a move gesture: the element under the pointer
+        // is artwork to select or crop, not to drag.
         if (
           e.button === 0 &&
-          !ownsCanvas(liveTool) &&
+          !ownsCanvas(liveTool, toolState().regionMode) &&
           !target.closest(".handle, .rotate-handle")
         ) {
           if (e.altKey) e.preventDefault();

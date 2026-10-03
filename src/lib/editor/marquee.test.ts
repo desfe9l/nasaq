@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   appendRegionPoint,
   aspectBox,
+  aspectFitBox,
   boxIsUsable,
   clampRegionBox,
   lassoPath,
@@ -132,4 +133,29 @@ test("lasso selection survives an arbitrary number of points", () => {
     }),
     true,
   );
+});
+
+test("aspectFitBox keeps the ratio, the centre and the bounds", () => {
+  const bounds = { x: 0, y: 0, w: 100, h: 100 };
+  // A free ratio is a no-op — «حر» never mutates the frame the author set.
+  assert.deepEqual(aspectFitBox({ x: 10, y: 10, w: 40, h: 30 }, bounds, null), {
+    x: 10, y: 10, w: 40, h: 30,
+  });
+  const square = aspectFitBox({ x: 10, y: 10, w: 40, h: 30 }, bounds, 1);
+  assert.equal(Math.abs(square.w - square.h) < 1e-9, true, "1:1");
+  assert.equal(square.w, 30, "the smaller axis sets the size");
+  assert.equal(Math.abs(square.x + square.w / 2 - 30) < 1e-9, true, "centre kept");
+  // A box larger than the artwork is cut down to the ratio AND to the bounds.
+  const wide = aspectFitBox({ x: 0, y: 40, w: 200, h: 10 }, { x: 0, y: 0, w: 60, h: 200 }, 2);
+  assert.equal(wide.w, 20, "the height bound sets the ratio box (shrink to fit)");
+  assert.equal(wide.h, 10);
+  assert.ok(wide.x >= 0 && wide.x + wide.w <= 60, "kept inside the bounds");
+  // A tall ratio in a short bound yields the largest fitting ratio box.
+  const tight = aspectFitBox({ x: 0, y: 0, w: 200, h: 200 }, { x: 0, y: 0, w: 40, h: 10 }, 1 / 4);
+  assert.ok(tight.w <= 40 && tight.h <= 10, "never larger than the bounds");
+  assert.ok(Math.abs(tight.w / tight.h - 1 / 4) < 1e-9);
+  // A tall target near an edge is shifted back inside, never left dangling.
+  const tall = aspectFitBox({ x: 90, y: 0, w: 40, h: 80 }, bounds, 1 / 2);
+  assert.ok(tall.x >= 0 && tall.x + tall.w <= bounds.w, "inside horizontally");
+  assert.ok(Math.abs(tall.w / tall.h - 1 / 2) < 1e-9);
 });

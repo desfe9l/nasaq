@@ -123,6 +123,41 @@ export function aspectBox(input: DragBoxInput, aspect: number | null): RectMm {
 }
 
 /**
+ * Refit an existing box to a width:height ratio, then keep it inside bounds.
+ *
+ * This is what a crop-frame ratio chip does: the box centre stays where the
+ * author put it, the largest box with the requested ratio is cut from the
+ * current one, and the result is shifted back inside the artwork bounds. When
+ * the ratio cannot fit at all, the largest fitting ratio box is returned —
+ * never an out-of-range frame.
+ */
+export function aspectFitBox(
+  box: RectMm,
+  bounds: RectMm,
+  ratio: number | null,
+): RectMm {
+  if (!ratio || !(ratio > 0) || !Number.isFinite(ratio)) return box;
+  let w = Math.min(box.w, box.h * ratio);
+  let h = w / ratio;
+  // The ratio box must also live inside the artwork bounds.
+  if (w > bounds.w || h > bounds.h) {
+    w = Math.min(w, bounds.w);
+    h = w / ratio;
+    if (h > bounds.h) {
+      h = bounds.h;
+      w = h * ratio;
+    }
+  }
+  w = Math.max(2, Math.min(w, bounds.w));
+  h = Math.max(2, Math.min(h, bounds.h));
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
+  const x = Math.min(Math.max(cx - w / 2, bounds.x), bounds.x + bounds.w - w);
+  const y = Math.min(Math.max(cy - h / 2, bounds.y), bounds.y + bounds.h - h);
+  return { x, y, w, h };
+}
+
+/**
  * Keep a region inside its own page.
  *
  * A selection is page furniture: the marquee overlay lives inside the artboard

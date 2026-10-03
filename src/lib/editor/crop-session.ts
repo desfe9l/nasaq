@@ -208,7 +208,7 @@ export function applyImageCrop() {
       session.transform,
     )
   ) {
-    useInteraction.getState().endCrop();
+    cancelImageCrop();
     return;
   }
   const layout = imageLayout(
@@ -226,6 +226,19 @@ export function applyImageCrop() {
     ...frame,
     style: { ...el.style, crop, objectX: 50, objectY: 50 },
   });
+  // The crop operation is over — the interface returns to its normal state:
+  // no region, no armed shape, no ephemeral controls anywhere on screen.
+  useTools.getState().armSelect("off");
+}
+
+/**
+ * Cancel a live crop frame. The frame and the draft region it came from end
+ * together — one Escape never leaves an orphaned selection behind — but the
+ * armed region mode stays, so an immediate re-drag redraws the same shape.
+ */
+export function cancelImageCrop() {
+  useInteraction.getState().endCrop();
+  useTools.getState().setRegion(null);
 }
 
 /**
@@ -285,7 +298,9 @@ export async function cropSelectionToImage(region?: SelectionRegion | null) {
     ...plan.frame,
     style: { ...el.style, crop: plan.crop, objectX: 50, objectY: 50 },
   });
-  useTools.getState().setRegion(null);
+  // Apply ends the operation: the region, its controls and the armed shape
+  // all disappear, and the interface returns to its natural pointer state.
+  useTools.getState().armSelect("off");
   toast.success("تم قص الصورة إلى منطقة التحديد", { duration: 1600 });
   return true;
 }
