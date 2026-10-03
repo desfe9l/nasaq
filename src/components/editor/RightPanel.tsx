@@ -98,6 +98,7 @@ import {
 } from "@/lib/editor/recent-colors";
 import { ArabicTextTools } from "./ArabicTextTools";
 import { ImageAiTools } from "./ImageAiTools";
+import { ImageEnhanceTools } from "./ImageEnhanceTools";
 import { ScrubField, ScrubInput } from "./ui/ScrubInput";
 import { IMAGE_ADJUSTMENT_PRESETS } from "@/lib/editor/images";
 
@@ -1708,6 +1709,7 @@ export function PropertiesPanel({
               {["image", "logo"].includes(el.type) && (
                 <>
                   {page && <ImageAiTools el={el} pageId={page.id} />}
+                  {page && <ImageEnhanceTools el={el} pageId={page.id} />}
                   {/* «ملاءمة الصفحة»: one press takes the picture to the page's
                       own size — full bleed, or the largest size that stays
                       inside the sheet with the picture's proportions. */}
