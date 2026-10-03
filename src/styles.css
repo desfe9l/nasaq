@@ -1098,8 +1098,8 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
  * on the pasteboard around it — «move» over anything that can be dragged,
  * the default arrow over locked artwork, the text beam inside an editor.
  */
-.editor-ui .editor-canvas-stage:not(.draw-armed):not(.draw-rect) .canvas-el:not(.group-frame):not(.locked),
-.editor-ui .editor-canvas-stage:not(.draw-armed):not(.draw-rect) .selection-frame:not(.is-locked):not(.is-editing) {
+.editor-ui .editor-canvas-stage[data-pointer="true"] .canvas-el:not(.group-frame):not(.locked),
+.editor-ui .editor-canvas-stage[data-pointer="true"] .selection-frame:not(.is-locked):not(.is-editing) {
   cursor: move;
 }
 .editor-ui .canvas-el.locked,
@@ -1319,20 +1319,17 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 }
 
 /*
- * Draw-text mode: the whole canvas reads "crosshair" so the author knows the
- * next page drag draws a text box instead of selecting.
+ * Drawing mode: the whole canvas reads "crosshair" so the author knows the next
+ * drag draws (text, shape, a marquee region, a crop box or a brush stroke)
+ * instead of selecting. One rule for every tool that owns the gesture — the
+ * attribute is written by the same router that dispatches the pointer.
  */
-.editor-canvas-stage.draw-armed .report-page {
-  cursor: crosshair;
-}
-/* The shape tool shares the crosshair; only the draw gesture differs. */
-.editor-canvas-stage.draw-rect .report-page {
+.editor-canvas-stage[data-crosshair="true"] .report-page {
   cursor: crosshair;
 }
 
-.editor-canvas-stage.draw-armed .marquee {
+.editor-canvas-stage[data-crosshair="true"] .marquee {
   border-style: dashed;
-  border-color: rgba(0, 108, 53, 0.9);
 }
 
 /* Frame drawn around a group the author has stepped into. */
@@ -5212,3 +5209,317 @@ button.license-badge-locked:focus-visible {
 /* NASAQ mark in the editor header: fixed small box so the header height never changes. */
 .editor-brand-mark { display: inline-flex; align-items: center; flex-shrink: 0; }
 .editor-brand-mark img { width: 24px; height: 24px; }
+
+/*
+ * ============================================================================
+ * Tools: selection regions, brush/eraser cursor, stroke preview, options bar
+ * ============================================================================
+ */
+
+/* The tool cluster: groups are separated by hairlines, never by labels. */
+.editor-tool-cluster {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.editor-tool-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/*
+ * The finished marquee, kept on screen with handles.
+ *
+ * It lives INSIDE the artboard (page-millimetre geometry), so it is clipped by
+ * nothing and can never be dragged onto a neighbouring page by accident — the
+ * region belongs to one artboard by construction.
+ */
+.selection-region {
+  position: absolute;
+  z-index: 4995;
+  outline: calc(1.5px / var(--editor-zoom, 1)) solid rgba(37, 99, 235, 0.95);
+  background: rgba(37, 99, 235, 0.08);
+  touch-action: none;
+}
+.selection-region[data-region-shape="ellipse"] {
+  border-radius: 50%;
+}
+.selection-region[data-region-shape="lasso"] {
+  outline: none;
+  background: none;
+}
+.selection-region-move {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: move;
+  touch-action: none;
+}
+.selection-region-handle {
+  position: absolute;
+  width: calc(20px / var(--editor-zoom, 1));
+  height: calc(20px / var(--editor-zoom, 1));
+  translate: -50% -50%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  touch-action: none;
+}
+.selection-region-handle::after {
+  content: "";
+  position: absolute;
+  inset: 35%;
+  background: #fff;
+  border: calc(1px / var(--editor-zoom, 1)) solid #1d4ed8;
+  border-radius: calc(1px / var(--editor-zoom, 1));
+}
+.selection-region-handle.is-nw { top: 0; left: 0; cursor: nwse-resize; }
+.selection-region-handle.is-n  { top: 0; left: 50%; cursor: ns-resize; }
+.selection-region-handle.is-ne { top: 0; left: 100%; cursor: nesw-resize; }
+.selection-region-handle.is-e  { top: 50%; left: 100%; cursor: ew-resize; }
+.selection-region-handle.is-se { top: 100%; left: 100%; cursor: nwse-resize; }
+.selection-region-handle.is-s  { top: 100%; left: 50%; cursor: ns-resize; }
+.selection-region-handle.is-sw { top: 100%; left: 0; cursor: nesw-resize; }
+.selection-region-handle.is-w  { top: 50%; left: 0; cursor: ew-resize; }
+.selection-region-size {
+  position: absolute;
+  bottom: calc(100% + 4px / var(--editor-zoom, 1));
+  left: 50%;
+  translate: -50% 0;
+  padding: calc(2px / var(--editor-zoom, 1)) calc(6px / var(--editor-zoom, 1));
+  border-radius: calc(5px / var(--editor-zoom, 1));
+  background: var(--editor-panel, #1e293b);
+  color: var(--editor-text, #f8fafc);
+  font-size: calc(10px / var(--editor-zoom, 1));
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+}
+@media (pointer: coarse) {
+  /* Touch targets grow; the painted dot stays the same size. */
+  .selection-region-handle {
+    width: calc(44px / var(--editor-zoom, 1));
+    height: calc(44px / var(--editor-zoom, 1));
+  }
+}
+
+/* Freehand lasso path, authored in millimetres (viewBox = page size). */
+.marquee-lasso {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 61;
+}
+.marquee-lasso path {
+  fill: rgba(37, 99, 235, 0.1);
+  stroke: rgba(37, 99, 235, 0.9);
+  stroke-width: 0.4;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 4 3;
+}
+
+/*
+ * Live stroke preview.
+ *
+ * A brush or eraser stroke paints into an offscreen bitmap; this layer mirrors
+ * ONLY the pixels the stroke touched, so the author sees the real result while
+ * the document itself is untouched until pointerup.
+ */
+.raster-stroke-layer {
+  position: absolute;
+  z-index: 4600;
+  pointer-events: none;
+  border-radius: inherit;
+  overflow: hidden;
+}
+
+/* The live brush/eraser ring: size in real screen pixels, always under the tip. */
+.raster-cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  box-shadow:
+    0 0 0 calc(1px) rgba(15, 23, 42, 0.85),
+    inset 0 0 0 calc(1px) rgba(255, 255, 255, 0.95);
+}
+.raster-cursor-eraser {
+  box-shadow:
+    0 0 0 calc(1px) rgba(127, 29, 29, 0.9),
+    inset 0 0 0 calc(1px) rgba(255, 255, 255, 0.95);
+}
+
+/*
+ * Tool options bar — docked to the top of the canvas workspace, floating so it
+ * never re-flows the artboard when a tool is picked or a region appears.
+ */
+.tool-props {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  translate: -50% 0;
+  z-index: var(--z-bubble, 60);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 24px);
+  padding: 5px 10px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 10px;
+  background: var(--editor-panel, #fff);
+  color: var(--editor-text, #0f172a);
+  box-shadow: 0 8px 24px -12px rgba(15, 23, 42, 0.35);
+  font-size: 11px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.tool-props-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.tool-props-label {
+  color: var(--editor-muted, #64748b);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tool-props-value {
+  color: var(--editor-muted, #64748b);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tool-props-slider {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.tool-props-slider input[type="range"] {
+  width: 92px;
+  min-height: 24px;
+  margin: 0;
+}
+.tool-props-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tool-props-color input[type="color"] {
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+.tool-props-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tool-props-btn:hover:not(:disabled) {
+  background: rgba(37, 99, 235, 0.08);
+}
+.tool-props-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.tool-props-btn.is-primary {
+  border-color: transparent;
+  background: var(--color-brand, #1d4ed8);
+  color: #fff;
+}
+.tool-props-btn.is-quiet {
+  border-color: transparent;
+}
+.tool-props-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.tool-props-chip {
+  min-width: 34px;
+  min-height: 26px;
+  padding: 0 7px;
+  border: 1px solid var(--editor-border, #dde2ea);
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.tool-props-chip.is-active {
+  border-color: transparent;
+  background: var(--color-brand, #1d4ed8);
+  color: #fff;
+}
+.tool-props-hint {
+  color: var(--editor-muted, #64748b);
+  white-space: nowrap;
+}
+.tool-props-hint.is-live {
+  color: var(--color-brand, #1d4ed8);
+  font-weight: 700;
+}
+.tool-props-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--editor-border, #dde2ea);
+}
+.tool-props-close {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--editor-muted, #64748b);
+  cursor: pointer;
+}
+.tool-props-close:hover {
+  background: rgba(100, 116, 139, 0.14);
+  color: inherit;
+}
+@media (pointer: coarse) {
+  /* Touch needs bigger hit areas, not bigger text. */
+  .tool-props {
+    gap: 8px;
+    padding: 6px 8px;
+  }
+  .tool-props-slider input[type="range"] {
+    width: 76px;
+    min-height: 32px;
+  }
+  .tool-props-btn,
+  .tool-props-chip {
+    min-height: 34px;
+  }
+  .tool-props-close {
+    width: 34px;
+    height: 34px;
+  }
+}

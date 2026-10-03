@@ -36,6 +36,41 @@ import {
   marqueeHitsBox,
   useInteraction,
 } from "@/lib/editor/interaction-store";
+import {
+  appendRegionPoint,
+  clampRegionBox,
+  lassoPath,
+  marqueeBox,
+  aspectBox,
+  regionHitsBox,
+  type SelectionRegion,
+} from "@/lib/editor/marquee";
+import {
+  BRUSH_LIMITS,
+  cropAspectRatio,
+  toolState,
+  useTools,
+} from "@/lib/editor/tool-store";
+import {
+  isMarqueeTool,
+  isRasterElement,
+  isRasterTool,
+  ownsCanvas,
+  resolveMarqueeMode,
+  toolAccepts,
+  toolDef,
+  type ToolId,
+} from "@/lib/editor/tools";
+import {
+  beginImageCropToBox,
+  cropSelectionToImage,
+} from "@/lib/editor/crop-session";
+import {
+  loadRasterSource,
+  parseHexColor,
+  RasterStroke,
+} from "@/lib/editor/raster-session";
+import { cropSceneTransform } from "@/lib/editor/image-crop";
 import { prepareText } from "@/lib/editor/text-render";
 import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
@@ -129,16 +164,6 @@ function pointInRotatedBox(el: CanvasEl, px: number, py: number): boolean {
   return Math.abs(rx) <= el.w / 2 + tol && Math.abs(ry) <= el.h / 2 + tol;
 }
 
-function brushHitsElement(el: CanvasEl, x: number, y: number, radius: number): boolean {
-  const dx = x - (el.x + el.w / 2);
-  const dy = y - (el.y + el.h / 2);
-  const angle = (-(el.rotation || 0) * Math.PI) / 180;
-  const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
-  const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
-  const nearestX = clamp(localX, -el.w / 2, el.w / 2);
-  const nearestY = clamp(localY, -el.h / 2, el.h / 2);
-  return (localX - nearestX) ** 2 + (localY - nearestY) ** 2 <= radius ** 2;
-}
 
 /**
  * جميع العناصر الموجودة في نقطة معينة — مرتبة من الأعلى (z الأكبر) إلى الأسفل
@@ -217,6 +242,8 @@ export function CanvasStage({
   const artboardGridCols = useEditor((s) => s.artboardGridCols);
   const renamePage = useEditor((s) => s.renamePage);
 
+  /** Tools that draw on the canvas: artwork becomes a surface, not a drag target. */
+  const toolOwnsCanvas = useTools((s) => ownsCanvas(s.tool));
   const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
 
   const opRef = useRef<Op>(null);
@@ -244,23 +271,25 @@ export function CanvasStage({
   const setRotationHint = useInteraction((s) => s.setRotationHint);
   const setMarquee = useInteraction((s) => s.setMarquee);
   const [dropping, setDropping] = useState<"file" | "library" | null>(null);
-  const [drawTool, setDrawTool] = useState<"text" | "rect" | "erase" | null>(null);
-  const eraseSizeRef = useRef(10);
-  const marqueeShapeRef = useRef<"rect" | "ellipse">("rect");
-  const drawArmed = drawTool !== null;
   /*
-   * The header's tool cluster shows which tool is live. The tool state lives
-   * HERE (the canvas owns the gesture), so the canvas broadcasts every change
-   * — including the auto-disarm after drawing a box — and the buttons never
-   * claim a tool the canvas already dropped.
+   * The live tool comes from the ONE tool store. Reading `toolState()` inside a
+   * gesture (never a stale closure) is what makes the first press after picking
+   * a tool behave exactly like the tenth — the old code kept a local
+   * `drawTool` plus two refs fed by window events, so the canvas and the header
+   * could disagree about what was armed.
    */
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent<"text" | "rect" | "erase" | null>("nasaq:tool-state", {
-        detail: drawTool,
-      }),
-    );
-  }, [drawTool]);
+  const tool = useTools((s) => s.tool);
+  const rasterCursor = useRef<{
+    show: (x: number, y: number, size: number) => void;
+    hide: () => void;
+  } | null>(null);
+  const strokeRef = useRef<RasterStroke | null>(null);
+  const drawArmed = toolDef(tool).family === "draw";
+  const rasterActive = isRasterTool(tool);
+  const pointerTool = tool === "select" || tool === "select-layer";
+  /** Tools whose gesture is drawn, not dragged: the page shows a crosshair. */
+  const crosshairTool =
+    rasterActive || drawArmed || tool === "crop" || isMarqueeTool(tool);
   const pageRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   /** The stage node, as state so the artboard IntersectionObservers (which are
@@ -311,42 +340,78 @@ export function CanvasStage({
   }, []);
   const [layerPicker, setLayerPicker] = useState<LayerPickerState>(null);
 
+  /*
+   * Raster tools own a cursor ring; it is imperative DOM, not React state, so
+   * a hovering Pencil over the canvas never re-renders the editor. The ring is
+   * created once per tool change and destroyed on unmount — no leaked nodes.
+   */
   useEffect(() => {
-    const armText = () => setDrawTool("text");
-    const onTool = (event: Event) => {
-      const detail = (
-        event as CustomEvent<"text" | "rect" | "erase" | null>
-      ).detail;
-      setDrawTool(detail ?? null);
+    if (!rasterActive) {
+      rasterCursor.current?.hide();
+      rasterCursor.current = null;
+      return;
+    }
+    const node = document.createElement("div");
+    node.className = "raster-cursor";
+    node.setAttribute("aria-hidden", "true");
+    node.style.display = "none";
+    document.body.appendChild(node);
+    rasterCursor.current = {
+      show: (x, y, size) => {
+        node.style.display = "block";
+        node.style.width = `${size}px`;
+        node.style.height = `${size}px`;
+        node.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+      },
+      hide: () => {
+        node.style.display = "none";
+      },
     };
-    const onEraseSize = (event: Event) => {
-      const size = Number((event as CustomEvent<number>).detail);
-      if (Number.isFinite(size)) eraseSizeRef.current = clamp(size, 2, 50);
-    };
-    const onMarqueeShape = (event: Event) => {
-      const shape = (event as CustomEvent<"rect" | "ellipse">).detail;
-      if (shape === "rect" || shape === "ellipse")
-        marqueeShapeRef.current = shape;
-    };
-    const disarm = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setDrawTool(null);
-        setLayerPicker(null);
-      }
-    };
-    window.addEventListener("nasaq:draw-text", armText);
-    window.addEventListener("nasaq:tool", onTool);
-    window.addEventListener("nasaq:eraser-size", onEraseSize);
-    window.addEventListener("nasaq:marquee-shape", onMarqueeShape);
-    window.addEventListener("keydown", disarm);
     return () => {
-      window.removeEventListener("nasaq:draw-text", armText);
-      window.removeEventListener("nasaq:tool", onTool);
-      window.removeEventListener("nasaq:eraser-size", onEraseSize);
-      window.removeEventListener("nasaq:marquee-shape", onMarqueeShape);
-      window.removeEventListener("keydown", disarm);
+      node.remove();
+      rasterCursor.current = null;
     };
-  }, []);
+  }, [rasterActive]);
+
+  /** Escape drops the tool, then the region, then the picker — one layer each. */
+  useEffect(() => {
+    const disarm = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.isContentEditable ||
+          ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+      )
+        return;
+      if (layerPicker) {
+        setLayerPicker(null);
+        return;
+      }
+      if (toolState().region) {
+        useTools.getState().setRegion(null);
+        return;
+      }
+      if (useTools.getState().tool !== "select") useTools.getState().resetTool();
+    };
+    window.addEventListener("keydown", disarm);
+    return () => window.removeEventListener("keydown", disarm);
+  }, [layerPicker]);
+
+  /** A stroke must never outlive its component, a page switch or a tool swap. */
+  useEffect(
+    () => () => {
+      strokeRef.current?.cancel();
+      strokeRef.current = null;
+    },
+    [],
+  );
+  useEffect(() => {
+    if (!rasterActive) {
+      strokeRef.current?.cancel();
+      strokeRef.current = null;
+    }
+  }, [rasterActive]);
 
   useEffect(() => {
     const stage = stageRef.current;
@@ -484,13 +549,199 @@ export function CanvasStage({
     [pages, previewAll, activePageId],
   );
 
-  const startErase = (e: React.PointerEvent, page: Page) => {
-    if (isPalmTouch(e) || e.button !== 0 || input.current!.busy) return;
-    if (page.locked || page.hidden) return;
-    e.preventDefault();
-    e.stopPropagation();
-    onCanvasTap?.();
-    setLayerPicker(null);
+  /*
+   * ---------------------------------------------------------------- raster
+   *
+   * Brush and eraser are PIXEL tools. The gesture owns the pointer, paints
+   * into an offscreen bitmap through `RasterStroke`, mirrors only the touched
+   * rectangles into an overlay canvas, and writes to the document exactly once
+   * on pointerup — one undoable step, no re-render per frame, and no risk of a
+   * stroke landing on a neighbouring element: the dab is clipped to the target
+   * element's own visible artwork.
+   */
+  const rasterTargetAt = (
+    page: Page,
+    point: { x: number; y: number },
+    preferSelected: boolean,
+  ) => {
+    const state = useEditor.getState();
+    const group =
+      state.activePageId === page.id && state.enteredGroupId
+        ? findElement(page.elements, state.enteredGroupId)?.el
+        : null;
+    const candidates = (group?.children ?? page.elements).filter(
+      (el) => !el.hidden && !el.locked && isRasterElement(el),
+    );
+    const offset = group ? { x: group.x, y: group.y } : { x: 0, y: 0 };
+    const hits = candidates.filter((el) =>
+      pointInRotatedBox(
+        { ...el, x: el.x + offset.x, y: el.y + offset.y },
+        point.x,
+        point.y,
+      ),
+    );
+    if (!hits.length) return null;
+    hits.sort((a, b) => b.z - a.z);
+    if (preferSelected) {
+      const selected = hits.find((el) => state.selectedIds.includes(el.id));
+      if (selected) return selected;
+    }
+    return hits[0]!;
+  };
+
+  const startRaster = (e: React.PointerEvent, page: Page) => {
+    const state = useEditor.getState();
+    if (state.activePageId !== page.id) state.setActivePage(page.id);
+    const pageEl = pageRefs.current[page.id];
+    if (!pageEl) return;
+    const size = pageSize(page);
+    const rect = pageEl.getBoundingClientRect();
+    const toMm = (event: { clientX: number; clientY: number }) =>
+      pagePoint(rect, size, event.clientX, event.clientY);
+    const active = useTools.getState();
+    const strokeTool = toolState().tool === "eraser" ? "eraser" : "brush";
+    const settings =
+      strokeTool === "eraser" ? active.eraser : active.brush;
+    const point = toMm(e);
+    const target = rasterTargetAt(page, point, strokeTool === "eraser");
+    if (strokeTool === "eraser" && !target) {
+      toast.message("أداة المسح تعمل على الصور والطبقات النقطية — لا يوجد بكسل هنا");
+      return;
+    }
+    // Element-local → page mm (rotation, flips and ancestors included).
+    const transform = target
+      ? (cropSceneTransform(page.elements, target.id, state.enteredGroupId) ?? null)
+      : { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
+    if (!transform) return;
+    const pxPerMm = rect.width > 0 ? rect.width / size.w : mmToPx(1);
+    /*
+     * A decoded `<img>` is the common case and it is synchronous, so the first
+     * dab lands on the very first pointerdown. Anything that still needs a
+     * decode claims the pointer first and queues samples — the stroke is drawn
+     * as a continuous path when it arrives, never as a dotted line.
+     */
+    const node = target
+      ? pageEl.querySelector<HTMLImageElement>(
+          `.canvas-el[data-el-id="${CSS.escape(target.id)}"] img`,
+        )
+      : null;
+    const queued: { point: { x: number; y: number }; pressure?: number }[] = [];
+    const create = (image: CanvasImageSource | null, source: { w: number; h: number }) => {
+      const stroke = new RasterStroke({
+        pageId: page.id,
+        pageNode: pageEl,
+        pxPerMm,
+        mode: strokeTool,
+        sizeMm: settings.sizeMm,
+        hardness: settings.hardness,
+        opacity: settings.opacity,
+        smoothing: strokeTool === "brush" ? active.brush.smoothing : 0,
+        color:
+          strokeTool === "brush"
+            ? parseHexColor(active.brush.color)
+            : parseHexColor("#000000"),
+        target:
+          target && image ? { el: target, image, source } : null,
+        page: { w: size.w, h: size.h },
+        transform,
+      });
+      strokeRef.current = stroke;
+      useTools.getState().setPainting(true);
+      stroke.moveCursor(e.clientX, e.clientY);
+      for (const sample of queued) stroke.paint(sample.point, sample.pressure);
+      queued.length = 0;
+    };
+    const finish = (event?: PointerEvent) => {
+      const stroke = strokeRef.current;
+      strokeRef.current = null;
+      useTools.getState().setPainting(false);
+      if (!stroke) return;
+      stroke.hideCursor();
+      // The final position is included: some devices coalesce the last move
+      // into pointerup, and a stroke must end where the finger actually lifted.
+      if (event) stroke.paint(toMm(event), event.pressure || undefined);
+      let patch: ReturnType<RasterStroke["commit"]> = null;
+      try {
+        patch = stroke.commit();
+      } catch {
+        // Tainted canvas (a remote image without CORS): refuse loudly, leave
+        // the document untouched. Nothing was written, so nothing to undo.
+        toast.error("لا يمكن تعديل هذه الصورة — المصدر خارجي محمي");
+        return;
+      }
+      if (!patch) return;
+      const store = useEditor.getState();
+      if (patch.layer) {
+        store.addElementAt(
+          "image",
+          {
+            name: strokeTool === "eraser" ? "طبقة مسح" : "طبقة رسم",
+            src: patch.layer.src,
+            x: patch.layer.x,
+            y: patch.layer.y,
+            w: patch.layer.w,
+            h: patch.layer.h,
+            style: { objectFit: "fill", crop: undefined },
+          },
+          undefined,
+          page.id,
+        );
+        return;
+      }
+      if (!patch.src) return;
+      /*
+       * Geometry is NEVER part of this patch. Erasing or painting changes the
+       * pixels and nothing else, so a stroke cannot move an element, break its
+       * transform, or disturb its neighbours.
+       */
+      const elementPatch: Partial<CanvasEl> = { src: patch.src };
+      // A bitmap that had to be resampled carries its crop window along; an
+      // untouched crop stays exactly as the author left it.
+      if (patch.crop && target?.style.crop) elementPatch.style = { crop: patch.crop };
+      const elementId = stroke.elementId ?? target?.id;
+      if (elementId) store.patchElementOnPage(page.id, elementId, elementPatch);
+    };
+    const begin = () => {
+      const loadedSync =
+        target && node && node.complete && node.naturalWidth
+          ? {
+              image: node as CanvasImageSource,
+              source: {
+                w: target.style.crop?.sourceW || node.naturalWidth,
+                h: target.style.crop?.sourceH || node.naturalHeight,
+              },
+            }
+          : null;
+      if (target && !loadedSync) {
+        void loadRasterSource(target, node).then((loaded) => {
+          if (loaded) create(loaded.image, loaded.source);
+        });
+        return;
+      }
+      create(loadedSync?.image ?? null, loadedSync?.source ?? { w: size.w, h: size.h });
+    };
+    input.current!.claim(e, {
+      yieldable: e.pointerType === "touch",
+      move: (ev) => {
+        const stroke = strokeRef.current;
+        if (!stroke) {
+          const mm = toMm(ev);
+          if (ev.pressure) queued.push({ point: mm, pressure: ev.pressure });
+          else queued.push({ point: mm });
+          if (queued.length > 64) queued.shift();
+          return;
+        }
+        stroke.moveCursor(ev.clientX, ev.clientY);
+        stroke.paint(toMm(ev), ev.pressure || undefined);
+      },
+      end: (ev) => finish(ev),
+      cancel: () => finish(),
+    });
+    begin();
+  };
+
+  /** The Crop tool: drag a region, then hand it to the non-destructive engine. */
+  const startCropDrag = (e: React.PointerEvent, page: Page) => {
     const state = useEditor.getState();
     if (state.activePageId !== page.id) state.setActivePage(page.id);
     const pageEl = pageRefs.current[page.id];
@@ -498,40 +749,68 @@ export function CanvasStage({
     const size = pageSize(page);
     const toMm = (event: { clientX: number; clientY: number }) =>
       pagePoint(pageEl.getBoundingClientRect(), size, event.clientX, event.clientY);
-    const erased = new Set<string>();
-    const collect = (event: { clientX: number; clientY: number }) => {
-      const point = toMm(event);
-      const current = useEditor.getState();
-      const group =
-        current.activePageId === page.id && current.enteredGroupId
-          ? findElement(page.elements, current.enteredGroupId)?.el
-          : null;
-      const candidates = group?.children ?? page.elements;
-      const offset = group ? { x: group.x, y: group.y } : { x: 0, y: 0 };
-      const radius = eraseSizeRef.current / 2;
-      for (const element of candidates) {
-        const absolute =
-          offset.x || offset.y
-            ? { ...element, x: element.x + offset.x, y: element.y + offset.y }
-            : element;
-        if (
-          !element.hidden &&
-          !element.locked &&
-          brushHitsElement(absolute, point.x, point.y, radius)
-        ) {
-          erased.add(element.id);
-        }
-      }
+    const start = toMm(e);
+    const aspect = cropAspectRatio(toolState().cropAspect);
+    let live: ReturnType<typeof aspectBox> | null = null;
+    let moved = false;
+    const draw = (event: { clientX: number; clientY: number; shiftKey?: boolean; altKey?: boolean }) => {
+      const end = toMm(event);
+      const box = aspectBox(
+        {
+          startX: start.x,
+          startY: start.y,
+          endX: end.x,
+          endY: end.y,
+          square: Boolean(event.shiftKey),
+          fromCenter: Boolean(event.altKey),
+        },
+        aspect,
+      );
+      live = box;
+      setMarquee({
+        pageId: page.id,
+        x0: box.x,
+        y0: box.y,
+        x1: box.x + box.w,
+        y1: box.y + box.h,
+        shape: "rect",
+      });
     };
-    collect(e);
     input.current!.claim(e, {
       yieldable: e.pointerType === "touch",
-      move: collect,
-      end: (event) => {
-        collect(event);
-        if (erased.size) useEditor.getState().deleteElementsById([...erased]);
+      move: (ev) => {
+        if (!moved && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < POINTER_SLOP)
+          return;
+        moved = true;
+        input.current!.lock(e.pointerId);
+        draw(ev);
       },
-      cancel: () => {},
+      end: (ev) => {
+        setMarquee(null);
+        const box = live;
+        if (!moved || !box) return;
+        const clamped = clampRegionBox(box, size);
+        if (!clamped) return;
+        const target = rasterTargetAt(
+          page,
+          { x: clamped.x + clamped.w / 2, y: clamped.y + clamped.h / 2 },
+          true,
+        );
+        if (!target) {
+          toast.message("اسحب منطقة فوق صورة لقصها");
+          return;
+        }
+        if (!beginImageCropToBox(target.id, clamped)) {
+          toast.message("انتظر اكتمال تحميل الصورة قبل القص");
+          return;
+        }
+        useTools.getState().setRegion({
+          pageId: page.id,
+          shape: "rect",
+          box: clamped,
+        });
+      },
+      cancel: () => setMarquee(null),
     });
   };
 
@@ -550,6 +829,19 @@ export function CanvasStage({
     }
     if (e.button !== 0 || input.current!.busy || useInteraction.getState().crop)
       return;
+    /*
+     * Defence in depth for the shared interaction layer.
+     *
+     * The capture-phase router claims the pointer for drawing tools before an
+     * element can see it, but selection-frame handles are real buttons and are
+     * deliberately skipped there. This guard is the second half of the same
+     * rule: a paint/crop/draw tool can never start an element gesture, and a
+     * marquee tool can move nothing — only resize/rotate its own frame.
+     */
+    const activeFamily = toolDef(toolState().tool).family;
+    if (activeFamily === "raster" || activeFamily === "crop" || activeFamily === "draw")
+      return;
+    if (activeFamily === "marquee" && kind === "move") return;
     onCanvasTap?.();
     setLayerPicker(null);
     if (el.locked) {
@@ -1092,7 +1384,7 @@ export function CanvasStage({
   const pickables = (
     page: Page,
     groupId: string | null,
-  ): { id: string; box: Box }[] => {
+  ): { id: string; box: Box; el: CanvasEl }[] => {
     const entered = groupId
       ? findElement(page.elements, groupId)?.el || null
       : null;
@@ -1106,6 +1398,7 @@ export function CanvasStage({
         .filter((child) => !child.hidden)
         .map((child) => ({
           id: child.id,
+          el: child,
           box: elementAABB(
             { x: child.x, y: child.y, w: child.w, h: child.h },
             child.rotation || 0,
@@ -1120,6 +1413,7 @@ export function CanvasStage({
       .filter((el) => !el.hidden)
       .map((el) => ({
         id: el.id,
+        el,
         box: elementAABB(
           { x: el.x, y: el.y, w: el.w, h: el.h },
           el.rotation || 0,
@@ -1135,6 +1429,24 @@ export function CanvasStage({
     return found && !found.hidden ? found : null;
   })();
 
+  /**
+   * ONE region gesture for every selection tool.
+   *
+   * Rectangle, Square, Ellipse, Lasso and the Shape/Image/Layer pickers all run
+   * through this function, so they share one pointer lifecycle (claim → live
+   * preview → commit), one coordinate conversion, one hit-test and one
+   * page-clamping rule. Before this, the marquee shape lived in a ref fed by a
+   * window event and only two tools could use it, which is why choosing
+   * «تحديد بيضاوي» could look armed and still draw a rectangle — or nothing.
+   *
+   * Contract for the author:
+   *  · pointerdown starts the region immediately (no arm-then-drag),
+   *  · pointermove paints it live over the artwork,
+   *  · pointerup keeps it, with handles, using `data-region` chrome,
+   *  · Shift = 1:1, Alt = from the centre,
+   *  · the region is clamped to its own artboard, so it can never leak into
+   *    another page in multi-page view.
+   */
   const startMarquee = (
     e: React.PointerEvent,
     pageId: string,
@@ -1150,6 +1462,11 @@ export function CanvasStage({
     /** Resolved at gesture time, like every other handler here: the node that
      *  started the gesture may belong to a page that has since been
      *  re-created by an undo, and virtualisation may have unmounted it. */
+    const gestureTool = toolState().tool;
+    const gestureDef = toolDef(gestureTool);
+    const drawing = gestureDef.family === "draw";
+    const selecting = gestureDef.family === "marquee" || gestureDef.family === "pointer";
+    if (!drawing && !selecting) return;
     const stateAtStart = useEditor.getState();
     const page = stateAtStart.pages.find((candidate) => candidate.id === pageId);
     if (!page || page.locked || page.hidden) return;
@@ -1178,9 +1495,24 @@ export function CanvasStage({
     const start = toMm(e);
     const stage = stageRef.current!;
     const scroll = { x: stage.scrollLeft, y: stage.scrollTop };
-    const pan = e.pointerType === "touch" && !drawTool && !selectionForPage.length;
+    /*
+     * One-finger pan on blank canvas belongs to the SELECT tool only. A region
+     * tool must draw on the first finger, and a raster tool must paint: letting
+     * navigation steal those gestures is exactly what made them feel dead.
+     */
+    const pan =
+      e.pointerType === "touch" &&
+      gestureDef.family === "pointer" &&
+      !selectionForPage.length;
     const before = e.shiftKey ? [...selectionForPage] : [];
-    const candidates = pickables(page, groupForPage);
+    const candidates = pickables(page, groupForPage).filter((item) =>
+      toolAccepts(gestureTool, item.el),
+    );
+    let mode = resolveMarqueeMode(gestureTool, {
+      shift: e.shiftKey,
+      alt: e.altKey,
+    });
+    let points: { x: number; y: number }[] = [];
     let moved = false;
     let held = false;
     /** Last selection written by the marquee — a set-difference guard so a
@@ -1188,7 +1520,7 @@ export function CanvasStage({
      * every frame when the hit set has not actually changed. */
     let lastHitKey = "";
     const timer =
-      !drawTool && e.pointerType !== "mouse"
+      !drawing && e.pointerType !== "mouse"
         ? setTimeout(() => {
             held = true;
             input.current!.lock(e.pointerId);
@@ -1228,48 +1560,64 @@ export function CanvasStage({
           useEditor.getState().setActivePage(pageId);
           activated = true;
         }
-        const cur = toMm(ev);
-        const box = {
-          x: Math.min(start.x, cur.x),
-          y: Math.min(start.y, cur.y),
-          w: Math.abs(cur.x - start.x),
-          h: Math.abs(cur.y - start.y),
-        };
-        setMarquee({
-          pageId,
-          x0: box.x,
-          y0: box.y,
-          x1: box.x + box.w,
-          y1: box.y + box.h,
-          shape: marqueeShapeRef.current,
+        // Shift/Alt are read live, so the author can lock the ratio mid-drag.
+        mode = resolveMarqueeMode(gestureTool, {
+          shift: ev.shiftKey,
+          alt: ev.altKey,
         });
-        if (!drawTool) {
-          const hits = candidates
-            .filter((p) =>
-              marqueeHitsBox(
-                {
-                  x0: start.x,
-                  y0: start.y,
-                  x1: cur.x,
-                  y1: cur.y,
-                  shape: marqueeShapeRef.current,
-                },
-                p.box,
-              ),
-            )
-            .map((p) => p.id);
-          const merged = [...new Set([...before, ...hits])];
-          const key = merged.join("\\u0000");
-          if (key !== lastHitKey) {
-            lastHitKey = key;
-            selectMany(merged);
-          }
+        const cur = toMm(ev);
+        const box = marqueeBox({
+          startX: start.x,
+          startY: start.y,
+          endX: cur.x,
+          endY: cur.y,
+          square: mode.square,
+          fromCenter: mode.fromCenter,
+        });
+        if (mode.shape === "lasso") {
+          points = appendRegionPoint(points, cur);
+          setMarquee({
+            pageId,
+            x0: box.x,
+            y0: box.y,
+            x1: box.x + box.w,
+            y1: box.y + box.h,
+            shape: "lasso",
+            points,
+          });
+        } else {
+          setMarquee({
+            pageId,
+            x0: box.x,
+            y0: box.y,
+            x1: box.x + box.w,
+            y1: box.y + box.h,
+            shape: mode.shape === "ellipse" ? "ellipse" : "rect",
+          });
+        }
+        if (drawing) return;
+        const region = {
+          shape: (mode.shape === "lasso" ? "lasso" : mode.shape === "ellipse" ? "ellipse" : "rect") as
+            | "rect"
+            | "ellipse"
+            | "lasso",
+          box,
+          points: mode.shape === "lasso" ? points : undefined,
+        };
+        const hits = candidates
+          .filter((item) => regionHitsBox(region, item.box))
+          .map((item) => item.id);
+        const merged = [...new Set([...before, ...hits])];
+        const key = merged.join("\u0000");
+        if (key !== lastHitKey) {
+          lastHitKey = key;
+          selectMany(merged);
         }
       },
       end: (ev) => {
         finish();
         if (held) return;
-        if (drawTool) {
+        if (drawing) {
           const end = toMm(ev);
           const box = {
             x: Math.min(start.x, end.x),
@@ -1277,13 +1625,13 @@ export function CanvasStage({
             w: Math.max(MIN_SIZE, Math.abs(end.x - start.x)),
             h: Math.max(MIN_SIZE, Math.abs(end.y - start.y)),
           };
-          setDrawTool(null);
+          useTools.getState().setTool("select");
           /*
            * «Draw Square» paints a real filled rectangle SHAPE in the
            * interface's single blue — the author sketches the box and gets a
            * finished, rescalable design element, not a blank container.
            */
-          if (drawTool === "rect")
+          if (gestureTool === "shape")
             addElementAt("shape", {
               ...box,
               name: "مربع",
@@ -1293,7 +1641,61 @@ export function CanvasStage({
             const id = addTextAt(box, page.id);
             if (id) requestAnimationFrame(() => requestEdit(page.id, id));
           }
-        } else if (!moved && !e.shiftKey) select(null);
+          return;
+        }
+        if (!moved) {
+          /*
+           * A tap with a picker tool selects what is under the finger:
+           * Shape/Image restrict the hit list to their own kind, Layer picks
+           * the topmost object of any kind. This is what «تحديد الشكل»
+           * and «تحديد الطبقة» MEAN — a press that picks, not a drag.
+           */
+          const picker =
+            gestureTool === "select-shape" ||
+            gestureTool === "select-image" ||
+            gestureTool === "select-layer";
+          if (picker) {
+            const point = toMm(ev);
+            const hits = elementsAtPoint(
+              page,
+              groupForPage,
+              point.x,
+              point.y,
+            ).filter((el) => !el.hidden && toolAccepts(gestureTool, el));
+            const hit = hits[0];
+            if (hit) select(hit.id);
+            else if (!e.shiftKey) select(null);
+            return;
+          }
+          if (!e.shiftKey) select(null);
+          return;
+        }
+        // Keep the finished region: the handles make it editable, and
+        // «قص التحديد» / «استخراج التحديد» consume exactly this geometry.
+        if (!gestureDef.keepRegion) return;
+        const end = toMm(ev);
+        const raw = marqueeBox({
+          startX: start.x,
+          startY: start.y,
+          endX: end.x,
+          endY: end.y,
+          square: mode.square,
+          fromCenter: mode.fromCenter,
+        });
+        const box = clampRegionBox(raw, size);
+        if (!box) return;
+        const region: SelectionRegion = {
+          pageId,
+          shape:
+            mode.shape === "lasso"
+              ? "lasso"
+              : mode.shape === "ellipse"
+                ? "ellipse"
+                : "rect",
+          box,
+          points: mode.shape === "lasso" ? points : undefined,
+        };
+        useTools.getState().setRegion(region);
       },
       cancel: finish,
     });
@@ -1394,10 +1796,16 @@ export function CanvasStage({
       className={cn(
         "editor-canvas-stage studio-grid relative min-h-0 min-w-0 overflow-auto",
         dropping && "is-dropping",
-        drawArmed && "draw-armed",
-        drawTool === "rect" && "draw-rect",
-        drawTool === "erase" && "draw-erase",
       )}
+      /*
+       * The tool's family and identity are ON the stage element, so every
+       * cursor rule in CSS answers the same question the gesture layer does:
+       * one attribute instead of four event-driven class names that could
+       * disagree with the store.
+       */
+      data-tool={tool}
+      data-pointer={pointerTool ? "true" : "false"}
+      data-crosshair={crosshairTool ? "true" : "false"}
       style={{ "--editor-zoom": zoom } as React.CSSProperties}
       dir="ltr"
       onLostPointerCapture={(e) => input.current!.end(e.nativeEvent, true)}
@@ -1423,9 +1831,27 @@ export function CanvasStage({
           }
           return;
         }
-        if (drawTool === "erase" && e.button === 0) {
+        /*
+         * Raster and crop tools claim the pointer HERE, in capture, before any
+         * element handler can see it. That is what makes "the brush painted a
+         * stroke" and "the brush dragged the photo underneath it" mutually
+         * exclusive — no element can be moved by a drawing tool, ever.
+         */
+        const liveTool = toolState().tool;
+        if (e.button === 0 && isRasterTool(liveTool)) {
           const page = pageAtPoint(e.clientX, e.clientY);
-          if (page) startErase(e, page);
+          if (page) {
+            e.preventDefault();
+            startRaster(e, page);
+          }
+          return;
+        }
+        if (e.button === 0 && liveTool === "crop") {
+          const page = pageAtPoint(e.clientX, e.clientY);
+          if (page) {
+            e.preventDefault();
+            startCropDrag(e, page);
+          }
           return;
         }
         if (
@@ -1452,10 +1878,17 @@ export function CanvasStage({
         }
         // Handles keep first refusal. Geometry then resolves selected artwork
         // ahead of other elements, including overflow outside the page DOM box.
-        if (e.button === 0 && !target.closest(".handle, .rotate-handle")) {
+        // A drawing/marquee tool never falls through to a move gesture: the
+        // element under the pointer is artwork to select, not to drag.
+        if (
+          e.button === 0 &&
+          !ownsCanvas(liveTool) &&
+          !target.closest(".handle, .rotate-handle")
+        ) {
           if (e.altKey) e.preventDefault();
           const hit = workspaceHit(e.clientX, e.clientY, e.altKey);
-          if (hit) startOp(e, hit.page, hit.el, "move", undefined, hit.parent);
+          if (hit && toolAccepts(liveTool, hit.el))
+            startOp(e, hit.page, hit.el, "move", undefined, hit.parent);
         }
       }}
       onPointerDown={(e) => {
@@ -1606,6 +2039,7 @@ export function CanvasStage({
               enteredGroupId={page.id === activePageId ? enteredGroupId : null}
               showGrid={showGrid}
               printGuides={printGuides}
+              toolOwnsCanvas={toolOwnsCanvas}
               onElementGesture={onElementGesture}
               onEnterGroup={enterGroup}
               onMarquee={startMarquee}
@@ -1707,6 +2141,7 @@ const ArtboardPage = memo(function ArtboardPage({
   enteredGroupId,
   showGrid,
   printGuides,
+  toolOwnsCanvas,
   onElementGesture,
   onEnterGroup,
   onMarquee,
@@ -1730,6 +2165,8 @@ const ArtboardPage = memo(function ArtboardPage({
   enteredGroupId: string | null;
   showGrid: boolean;
   printGuides: PrintGuideSettings | undefined;
+  /** A drawing/region tool owns the canvas: the artwork is a surface, not a target. */
+  toolOwnsCanvas: boolean;
   onElementGesture: ElementGestureHandler;
   onEnterGroup: (id: string) => void;
   onMarquee: (e: React.PointerEvent, pageId: string) => void;
@@ -1856,6 +2293,14 @@ const ArtboardPage = memo(function ArtboardPage({
     );
   }
 
+  /**
+   * While a drawing tool owns the canvas the artwork is a SURFACE, not a
+   * target: no hover outlines, no element drag, no double-click editing. The
+   * capture-phase router claims the gesture anyway; this makes the promise
+   * visible and removes a whole class of "the tool did nothing because the
+   * element under it swallowed the press" bugs.
+   */
+  const live = !isLocked && !isHidden && !toolOwnsCanvas;
   const entered = enteredGroupId
     ? findElement(page.elements, enteredGroupId)?.el || null
     : null;
@@ -1980,7 +2425,7 @@ const ArtboardPage = memo(function ArtboardPage({
                           pageNo={pageNo}
                           pageCount={pageCount}
                           siblings={enteredKids}
-                          interactive={!isLocked && !isHidden}
+                          interactive={live}
                           onGesture={onElementGesture}
                           pageId={page.id}
                           offX={entered.x}
@@ -1998,7 +2443,7 @@ const ArtboardPage = memo(function ArtboardPage({
                   pageNo={pageNo}
                   pageCount={pageCount}
                   siblings={page.elements}
-                  interactive={!isLocked && !isHidden}
+                  interactive={live}
                   onEnterGroup={el.type === "group" ? onEnterGroup : undefined}
                   pageId={page.id}
                   onGesture={onElementGesture}
@@ -2010,7 +2455,8 @@ const ArtboardPage = memo(function ArtboardPage({
             settings={printGuides}
             zIndex={GUIDE_LAYER_Z}
           />
-          <MarqueeLayer pageId={page.id} />
+          <MarqueeLayer pageId={page.id} size={size} />
+          {isActive && !isLocked && <SelectionRegionLayer pageId={page.id} />}
           {isActive && !isLocked && !isHidden && (
             <OverflowFlagLayer elements={page.elements} onFit={onFit} />
           )}
@@ -2136,10 +2582,34 @@ const EnteredChildNode = memo(function EnteredChildNode({
   );
 });
 
-/** Page-scoped rectangle or ellipse marquee from the transient interaction store. */
-function MarqueeLayer({ pageId }: { pageId: string }) {
+/** Page-scoped marquee from the transient interaction store: rect, ellipse or lasso. */
+function MarqueeLayer({
+  pageId,
+  size,
+}: {
+  pageId: string;
+  size: { w: number; h: number };
+}) {
   const marquee = useInteraction((s) => marqueeForPage(s.marquee, pageId));
   if (!marquee) return null;
+  if (marquee.shape === "lasso" && marquee.points?.length) {
+    /*
+     * The path is authored in page millimetres, so the viewBox is the page in
+     * millimetres too: one SVG user unit is one millimetre, and the lasso lands
+     * exactly under the pointer at every zoom instead of at an arbitrary px
+     * scale.
+     */
+    return (
+      <svg
+        className="marquee-lasso"
+        viewBox={`0 0 ${size.w} ${size.h}`}
+        preserveAspectRatio="none"
+        aria-hidden
+      >
+        <path d={lassoPath(marquee.points)} />
+      </svg>
+    );
+  }
   return (
     <div
       className={cn("marquee", marquee.shape === "ellipse" && "marquee-ellipse")}
@@ -2150,6 +2620,122 @@ function MarqueeLayer({ pageId }: { pageId: string }) {
         height: `${Math.abs(marquee.y1 - marquee.y0)}mm`,
       }}
     />
+  );
+}
+
+/**
+ * The finished region, with handles.
+ *
+ * A selection the author cannot adjust is a one-shot gesture; this overlay
+ * keeps the region alive so it can be nudged, reshaped, cropped or extracted.
+ * Handles are real buttons (so the canvas gesture router leaves them alone) and
+ * dragging one writes only to the tool store — the document is never touched.
+ */
+function SelectionRegionLayer({ pageId }: { pageId: string }) {
+  const region = useTools((s) => s.region);
+  const pages = useEditor((s) => s.pages);
+  const activePageId = useEditor((s) => s.activePageId);
+  // A fresh object per render would re-render forever under `Object.is`.
+  const size = useMemo(() => {
+    const page = pages.find((p) => p.id === activePageId);
+    return page ? pageSize(page) : { w: 210, h: 297 };
+  }, [pages, activePageId]);
+  const cleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => cleanup.current?.(), []);
+  if (!region || region.pageId !== pageId) return null;
+  const { box } = region;
+
+  const start = (event: React.PointerEvent, handle: string) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const origin = { ...useTools.getState().region!.box };
+    const node = event.currentTarget as HTMLElement;
+    const pageNode = node.closest<HTMLElement>("[data-page-id]");
+    if (!pageNode) return;
+    const rect = pageNode.getBoundingClientRect();
+    node.setPointerCapture(event.pointerId);
+    const pointerId = event.pointerId;
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      const dx = rect.width > 0 ? ((ev.clientX - event.clientX) * size.w) / rect.width : 0;
+      const dy = rect.height > 0 ? ((ev.clientY - event.clientY) * size.h) / rect.height : 0;
+      if (!moved && Math.hypot(dx, dy) < 0.2) return;
+      moved = true;
+      const next = { ...origin };
+      if (handle === "move") {
+        next.x = origin.x + dx;
+        next.y = origin.y + dy;
+      } else {
+        if (handle.includes("w")) {
+          next.x = origin.x + dx;
+          next.w = origin.w - dx;
+        }
+        if (handle.includes("e")) next.w = origin.w + dx;
+        if (handle.includes("n")) {
+          next.y = origin.y + dy;
+          next.h = origin.h - dy;
+        }
+        if (handle.includes("s")) next.h = origin.h + dy;
+      }
+      if (next.w < 0) {
+        next.x += next.w;
+        next.w = Math.abs(next.w);
+      }
+      if (next.h < 0) {
+        next.y += next.h;
+        next.h = Math.abs(next.h);
+      }
+      const clamped = clampRegionBox(next, size);
+      if (clamped) useTools.getState().setRegion({ ...region, box: clamped });
+    };
+    const end = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      cleanup.current?.();
+    };
+    cleanup.current = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", end);
+      window.removeEventListener("pointercancel", end);
+      if (node.hasPointerCapture(pointerId)) node.releasePointerCapture(pointerId);
+      cleanup.current = null;
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", end);
+    window.addEventListener("pointercancel", end);
+  };
+
+  return (
+    <div
+      className="selection-region"
+      style={{
+        left: `${box.x}mm`,
+        top: `${box.y}mm`,
+        width: `${box.w}mm`,
+        height: `${box.h}mm`,
+      }}
+      data-region-shape={region.shape}
+    >
+      <button
+        type="button"
+        className="selection-region-move"
+        aria-label="تحريك منطقة التحديد"
+        onPointerDown={(e) => start(e, "move")}
+      />
+      {["nw", "n", "ne", "e", "se", "s", "sw", "w"].map((handle) => (
+        <button
+          key={handle}
+          type="button"
+          aria-label={`تعديل منطقة التحديد ${handle}`}
+          className={`selection-region-handle is-${handle}`}
+          onPointerDown={(e) => start(e, handle)}
+        />
+      ))}
+      <span className="selection-region-size" dir="ltr">
+        {round(box.w)} × {round(box.h)} مم
+      </span>
+    </div>
   );
 }
 

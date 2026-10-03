@@ -60,6 +60,7 @@ import {
   type CanvasEl,
 } from "@/lib/editor/model";
 import { toCsv } from "@/lib/editor/tables";
+import { useTools } from "@/lib/editor/tool-store";
 import { cn, downloadText } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -198,6 +199,7 @@ export function WorkspaceOverlays({
   const selectedCount = useEditor((s) => s.selectedIds.length);
   const selectedElements = useEditor((s) => s.selectedElements);
   const clipboard = useEditor((s) => s.clipboard);
+  const setTool = useTools((s) => s.setTool);
 
   const filtered = useMemo(
     () =>
@@ -269,15 +271,15 @@ export function WorkspaceOverlays({
         fitToScreen();
         break;
       case "tool-move":
-        window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: null }));
+        setTool("select");
         break;
       case "tool-text":
         setLeftTab("elements");
-        window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: "text" }));
+        setTool("text");
         break;
       case "tool-shape":
         setLeftTab("shapes");
-        window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: "rect" }));
+        setTool("shape");
         break;
       case "zoom-in":
         setZoom(stepZoom(useEditor.getState().zoom, 1));

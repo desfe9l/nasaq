@@ -182,3 +182,96 @@ export function cropSceneTransform(
     : undefined;
   return imageCropTransform(elements, id, IDENTITY, isolated);
 }
+
+/** Smallest croppable region, in mm. Below this the crop is refused rather
+ *  than producing a one-pixel sliver nobody asked for. */
+export const MIN_CROP_MM = 0.5;
+
+export interface CropPlan {
+  /** Region in the element's own (unrotated, unflipped) mm frame. */
+  box: RectMm;
+  /** Non-destructive source window to store on the element. */
+  crop: ImageCrop;
+  /** The element's new page-space frame; the visual centre is preserved. */
+  frame: RectMm;
+}
+
+/**
+ * Turn "a region on the page" into a crop for one image element.
+ *
+ * This is the shared maths behind BOTH crop entry points: the Crop tool's drag
+ * and «قص التحديد» from a marquee. It is deliberately defensive, because the
+ * region comes from a user's hand:
+ *
+ *  · the region is mapped through the element's real affine transform, so a
+ *    rotated, flipped or grouped image crops where the author drew;
+ *  · it is then intersected with the part of the artwork actually visible in
+ *    the frame — a region hanging off the edge crops the visible overlap
+ *    instead of stretching or blanking the bitmap;
+ *  · an empty or sub-pixel overlap returns null, so the caller can refuse
+ *    cleanly and the document never receives a corrupt crop.
+ */
+export function planRegionCrop(args: {
+  el: { x: number; y: number; w: number; h: number; rotation?: number };
+  source: { w: number; h: number };
+  crop?: ImageCrop;
+  fit?: "cover" | "contain" | "fill";
+  objectX?: number;
+  objectY?: number;
+  flipX?: boolean;
+  flipY?: boolean;
+  /** Region in page mm. */
+  region: RectMm;
+  transform: CropTransform;
+}): CropPlan | null {
+  const { el, source, transform, region } = args;
+  if (source.w <= 0 || source.h <= 0) return null;
+  // All four corners: the region is a page-axis-aligned rectangle, so once it is
+  // mapped into a rotated element's frame it is a rotated quad and its extent is
+  // only correct when every corner is considered — two opposite corners would
+  // crop away part of what the author selected.
+  const corners = [
+    { x: region.x, y: region.y },
+    { x: region.x + region.w, y: region.y },
+    { x: region.x, y: region.y + region.h },
+    { x: region.x + region.w, y: region.y + region.h },
+  ].map((corner) => cropLocalPoint(transform, corner));
+  const xs = corners.map((corner) => corner.x);
+  const ys = corners.map((corner) => corner.y);
+  const local: RectMm = {
+    x: Math.min(...xs),
+    y: Math.min(...ys),
+    w: Math.max(...xs) - Math.min(...xs),
+    h: Math.max(...ys) - Math.min(...ys),
+  };
+  const layout = imageLayout(
+    el,
+    source,
+    args.crop,
+    args.fit || "cover",
+    args.objectX,
+    args.objectY,
+  );
+  // Visible artwork = the placed source window ∩ the element frame.
+  const visible: RectMm = {
+    x: Math.max(0, layout.x),
+    y: Math.max(0, layout.y),
+    w: Math.min(el.w, layout.x + layout.w) - Math.max(0, layout.x),
+    h: Math.min(el.h, layout.y + layout.h) - Math.max(0, layout.y),
+  };
+  if (visible.w <= 0 || visible.h <= 0) return null;
+  const left = Math.max(local.x, visible.x);
+  const top = Math.max(local.y, visible.y);
+  const right = Math.min(local.x + local.w, visible.x + visible.w);
+  const bottom = Math.min(local.y + local.h, visible.y + visible.h);
+  if (right - left < MIN_CROP_MM || bottom - top < MIN_CROP_MM) return null;
+  const box: RectMm = { x: left, y: top, w: right - left, h: bottom - top };
+  const crop = cropFromLocalBox(box, layout);
+  const frame = croppedFrame(
+    { ...el, rotation: el.rotation || 0 },
+    box,
+    args.flipX,
+    args.flipY,
+  );
+  return { box, crop, frame };
+}

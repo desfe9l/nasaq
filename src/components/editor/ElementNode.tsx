@@ -322,7 +322,12 @@ export const ElementNode = memo(function ElementNode({
             : undefined,
         zIndex: view.z,
         boxShadow: view.style?.shadow || undefined,
-        cursor: view.locked ? "not-allowed" : interactive ? "move" : "default",
+        /*
+         * When the node is not interactive (a drawing tool owns the canvas) the
+         * cursor is left to CSS: the stage sets the crosshair for the tool, and
+         * an inline `default` here would override it on every element.
+         */
+        cursor: view.locked ? "not-allowed" : interactive ? "move" : undefined,
         clipPath,
       }}
       onPointerDown={(e) => {
