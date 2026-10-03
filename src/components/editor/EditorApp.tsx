@@ -1,6 +1,36 @@
 import { subscribeTheme } from "@/lib/theme";
 import { BrandLogo } from "@/components/site/SiteChrome";
 import { shortcutKey } from "@/lib/editor/keyboard";
+import { useTools } from "@/lib/editor/tool-store";
+import {
+  TOOL_GROUPS,
+  toolDef,
+  resolveToolShortcut,
+  type ToolId,
+} from "@/lib/editor/tools";
+import { ToolPropertiesBar } from "./ToolPropertiesBar";
+
+/**
+ * One glyph per tool, keyed by the tool id — the toolbar cannot render a tool
+ * without an icon, and cannot render an icon for a tool that does not exist.
+ */
+const TOOL_ICONS: Record<ToolId, typeof MousePointer2> = {
+  select: MousePointer2,
+  "marquee-rect": SquareDashed,
+  // A distinct glyph from «رسم مستطيل»: the toolbar must never show two
+  // different tools wearing the same icon.
+  "marquee-square": SquareDashedMousePointer,
+  "marquee-ellipse": Circle,
+  lasso: Lasso,
+  "select-shape": Scan,
+  "select-image": ScanLine,
+  "select-layer": SlidersHorizontal,
+  crop: CropIcon,
+  brush: Brush,
+  eraser: Eraser,
+  text: TypeIcon,
+  shape: RectangleHorizontal,
+};
 import { EditorSettingsDialog } from "./EditorSettingsDialog";
 import { OPEN_EDITOR_SETTINGS_EVENT } from "@/lib/editor/ui-state";
 import { FloatingPanel } from "./ui/FloatingPanel";
@@ -70,10 +100,13 @@ function sanitizeDockSides(
  */
 export const OPEN_REPORT_TOOLS_EVENT = "nasaq:open-report-tools";
 import {
+  Brush,
   Check,
   Circle,
+  Crop as CropIcon,
   Download,
   Eraser,
+  Lasso,
   Library,
   Minus,
   MousePointer2,
@@ -81,8 +114,12 @@ import {
   Redo2,
   Save,
   Scan,
+  ScanLine,
   SlidersHorizontal,
+  RectangleHorizontal,
   Square,
+  SquareDashed,
+  SquareDashedMousePointer,
   Type as TypeIcon,
   Undo2,
 } from "lucide-react";
@@ -1070,41 +1107,18 @@ function Studio({
         return;
       }
       /*
-       * Photoshop muscle memory (step 9).
-       *
-       *   V           أداة التحديد/التحريك — the tool every other one returns to
-       *   T           أداة النص — drag a box, type straight away
-       *   R           أداة الأشكال — drag a box, get a rectangle
-       *   E           أداة المسح — remove unlocked objects under the brush
-       *   Space+drag  pan (owned by the canvas)
-       *
-       * The tool itself lives in the canvas (it owns the page geometry); the
-       * shortcut only broadcasts, exactly like the «نص بالرسم» toolbar button,
-       * so there is one implementation of "arm the tool" and it is never
-       * duplicated in the shell.
+       * Tool shortcuts, straight from the tool table (so a shortcut can never
+       * point at a tool that no longer exists):
+       *   V select · M rectangle · ⇧M square · L lasso · C crop
+       *   B brush  · E eraser    · T text     · R rectangle shape
+       * Space+drag stays pan (owned by the canvas).
        */
-      if (!typing && !meta && !e.altKey && key === "v") {
+      const shortcutTool = resolveToolShortcut(key, e.shiftKey);
+      if (!typing && !meta && !e.altKey && shortcutTool) {
         e.preventDefault();
-        armTool(null);
-        return;
-      }
-      if (!typing && !meta && !e.altKey && key === "t") {
-        e.preventDefault();
-        // Both halves of "text tool": show the text tab and arm the drag-to-draw
-        // gesture, so a press on the artboard starts typing.
-        useEditor.getState().setLeftTab("elements");
-        armTool("text");
-        return;
-      }
-      if (!typing && !meta && !e.altKey && key === "r") {
-        e.preventDefault();
-        useEditor.getState().setLeftTab("shapes");
-        armTool("rect");
-        return;
-      }
-      if (!typing && !meta && !e.altKey && key === "e") {
-        e.preventDefault();
-        armTool("erase");
+        if (shortcutTool === "text") useEditor.getState().setLeftTab("elements");
+        if (shortcutTool === "shape") useEditor.getState().setLeftTab("shapes");
+        useTools.getState().setTool(shortcutTool);
         return;
       }
       if (meta && key === "j") {
@@ -1260,39 +1274,15 @@ function Studio({
    * second source of truth.
    */
   /*
-   * The live tool, mirrored from the canvas (the single source of truth):
-   * the header cluster must never claim a tool the canvas already dropped
-   * after drawing, so the canvas broadcasts every transition.
+   * The live tool — read from the tool store, never mirrored.
+   *
+   * The header used to keep its own `activeTool` copy, kept in sync by two
+   * window events, and the canvas kept a third copy. The single store removes
+   * the whole class of "the button looks armed but the canvas disagrees" bugs.
    */
-  const [activeTool, setActiveTool] = useState<
-    "select" | "text" | "rect" | "erase"
-  >("select");
-  const [marqueeShape, setMarqueeShape] = useState<"rect" | "ellipse">("rect");
-  const [eraserSize, setEraserSize] = useState(10);
-  const armTool = (tool: "text" | "rect" | "erase" | null) => {
-    setActiveTool(tool ?? "select");
-    window.dispatchEvent(new CustomEvent("nasaq:tool", { detail: tool }));
-  };
-  useEffect(() => {
-    const onToolState = (event: Event) => {
-      const detail = (
-        event as CustomEvent<"text" | "rect" | "erase" | null>
-      ).detail;
-      setActiveTool(detail ?? "select");
-    };
-    window.addEventListener("nasaq:tool-state", onToolState);
-    return () => window.removeEventListener("nasaq:tool-state", onToolState);
-  }, []);
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent("nasaq:eraser-size", { detail: eraserSize }),
-    );
-  }, [eraserSize]);
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent("nasaq:marquee-shape", { detail: marqueeShape }),
-    );
-  }, [marqueeShape]);
+  const activeTool = useTools((s) => s.tool);
+  const armTool = (tool: ToolId | null) =>
+    useTools.getState().setTool(tool ?? "select");
 
   /**
    * Restore a collapsed desktop panel (optionally straight onto a tab) in one
@@ -2158,112 +2148,43 @@ function Studio({
             onClick={redo}
             disabled={!futureDepth}
           />
-          {/* ①½ The tool cluster — the pointer tool is ALWAYS visible here.
-              It used to live only in a keyboard shortcut and a command row,
-              which read as "the mouse tool disappeared"; one permanent,
-              labelled button per tool fixes that at every width. */}
+          {/* ①½ The tool cluster — one button per tool in the shared tool
+              table, grouped by what the tool does:
+                select / marquee · lasso · scope pickers · crop + paint · draw
+              The grouping is the ONLY difference between similar tools; every
+              button writes the single tool store, so the header and the canvas
+              can never disagree about what is armed. */}
           <span className="editor-header-sep" aria-hidden />
           <div
-            className="flex items-center gap-0.5"
+            className="editor-tool-cluster"
             role="group"
             aria-label="أدوات التحديد والرسم"
           >
-            <IconButton
-              label="أداة المؤشر والتحديد"
-              hint="تحديد وتحريك العناصر — انقر مساحة فارغة لإلغاء التحديد"
-              shortcut="V"
-              active={activeTool === "select"}
-              icon={<MousePointer2 className="size-4" strokeWidth={1.7} />}
-              onClick={() => armTool(null)}
-            />
-            <IconButton
-              label="تحديد مستطيل"
-              hint="اسحب لتحديد العناصر المتقاطعة مع المستطيل"
-              active={activeTool === "select" && marqueeShape === "rect"}
-              icon={<Square className="size-4" strokeWidth={1.7} />}
-              onClick={() => {
-                setMarqueeShape("rect");
-                armTool(null);
-              }}
-            />
-            <IconButton
-              label="تحديد دائري أو بيضاوي"
-              hint="اسحب لتحديد العناصر المتقاطعة مع المنطقة البيضاوية"
-              active={activeTool === "select" && marqueeShape === "ellipse"}
-              icon={<Circle className="size-4" strokeWidth={1.7} />}
-              onClick={() => {
-                setMarqueeShape("ellipse");
-                armTool(null);
-              }}
-            />
-            <IconButton
-              label="نص بالرسم"
-              hint="اسحب على اللوحة ثم اكتب"
-              shortcut="T"
-              active={activeTool === "text"}
-              icon={<TypeIcon className="size-4" strokeWidth={1.7} />}
-              onClick={() => {
-                useEditor.getState().setLeftTab("elements");
-                armTool("text");
-              }}
-            />
-            <IconButton
-              label="رسم مربع وأشكال"
-              hint="اسحب على اللوحة لرسم شكل"
-              shortcut="R"
-              active={activeTool === "rect"}
-              icon={<Square className="size-4" strokeWidth={1.7} />}
-              onClick={() => {
-                useEditor.getState().setLeftTab("shapes");
-                armTool("rect");
-              }}
-            />
-            <IconButton
-              label="فرشاة المسح"
-              hint="اسحب فوق العناصر لإزالتها — يمكن التراجع عن المسح"
-              shortcut="E"
-              active={activeTool === "erase"}
-              icon={<Eraser className="size-4" strokeWidth={1.7} />}
-              onClick={() => armTool(activeTool === "erase" ? null : "erase")}
-            />
+            {TOOL_GROUPS.map((group, index) => (
+              <div className="editor-tool-group" key={index}>
+                {index > 0 && <span className="editor-header-sep" aria-hidden />}
+                {group.map((id) => {
+                  const def = toolDef(id);
+                  const Glyph = TOOL_ICONS[id];
+                  return (
+                    <IconButton
+                      key={id}
+                      label={def.label}
+                      hint={def.hint}
+                      shortcut={def.shortcut}
+                      active={activeTool === id}
+                      icon={<Glyph className="size-4" strokeWidth={1.7} />}
+                      onClick={() => {
+                        if (id === "text") useEditor.getState().setLeftTab("elements");
+                        if (id === "shape") useEditor.getState().setLeftTab("shapes");
+                        useTools.getState().setTool(activeTool === id && id !== "select" ? "select" : id);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            ))}
           </div>
-          {activeTool === "erase" && (
-            <div
-              className="flex h-8 items-center gap-1 rounded-lg border border-line bg-surface px-1"
-              role="group"
-              aria-label="حجم فرشاة المسح"
-            >
-              <button
-                type="button"
-                aria-label="تصغير فرشاة المسح"
-                className="grid size-7 place-items-center rounded text-muted hover:bg-surface-2 hover:text-ink"
-                onClick={() => setEraserSize((size) => Math.max(2, size - 2))}
-              >
-                −
-              </button>
-              <input
-                aria-label="حجم فرشاة المسح"
-                type="range"
-                min={2}
-                max={50}
-                step={1}
-                value={eraserSize}
-                onChange={(event) => setEraserSize(Number(event.target.value))}
-                className="w-20 accent-brand"
-              />
-              <button
-                type="button"
-                aria-label="تكبير فرشاة المسح"
-                className="grid size-7 place-items-center rounded text-muted hover:bg-surface-2 hover:text-ink"
-                onClick={() => setEraserSize((size) => Math.min(50, size + 2))}
-              >
-                +
-              </button>
-              <span className="min-w-8 text-center text-[10px] font-bold text-muted">
-                {eraserSize} مم
-              </span>
-            </div>
-          )}
           <span className="editor-header-sep" aria-hidden />
           <IconButton
             label="الخصائص"
@@ -2440,6 +2361,9 @@ function Studio({
         >
           {/* Non-modal drawers leave direct canvas manipulation available. */}
           <CanvasStage onDropImage={onDropImage} />
+          {/* Properties of the live tool, docked to the canvas — never a second
+              copy of the same setting, and never shown for a tool that has none. */}
+          <ToolPropertiesBar />
           {!pagesRailHidden && (
             <div
               data-editor-obstacle="page-rail-resizer"

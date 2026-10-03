@@ -57,7 +57,9 @@ export interface MarqueeRect {
   y0: number;
   x1: number;
   y1: number;
-  shape?: "rect" | "ellipse";
+  shape?: "rect" | "ellipse" | "lasso";
+  /** Freehand path in page mm — present for `lasso` only. */
+  points?: { x: number; y: number }[];
 }
 
 export function marqueeHitsBox(
