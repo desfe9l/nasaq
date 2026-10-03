@@ -812,7 +812,7 @@ interface EditorStore extends Project, Ui, History {
     y: number;
     w: number;
     h: number;
-  }) => void;
+  }) => boolean;
   movePage: (dir: -1 | 1) => void;
   movePageById: (id: string, dir: -1 | 1) => void;
   reorderPages: (from: number, to: number) => void;
@@ -4614,7 +4614,8 @@ export const useEditor = create<EditorStore>((set, get) => {
     mergeSelection: (image) => {
       const s = get();
       const page = activePageOf(s);
-      if (!page || s.selectedIds.length < 2 || !safeImageSrc(image.src)) return;
+      if (!page || s.selectedIds.length < 2 || !safeImageSrc(image.src))
+        return false;
       const ids = new Set(s.selectedIds);
       const selected = page.elements.filter((el) => ids.has(el.id));
       if (
@@ -4622,7 +4623,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selected.some((el) => el.locked || el.hidden)
       ) {
         toast.error("يتطلب الدمج عناصر ظاهرة وغير مقفلة من الصفحة الحالية");
-        return;
+        return false;
       }
       const ordered = page.elements.slice().sort((a, b) => a.z - b.z);
       const positions = ordered
@@ -4630,14 +4631,14 @@ export const useEditor = create<EditorStore>((set, get) => {
         .filter((index) => index >= 0);
       if (positions.some((position, index) => position !== positions[0] + index)) {
         toast.error("يجب أن تكون الطبقات المحددة متجاورة للحفاظ على مظهر الصفحة");
-        return;
+        return false;
       }
       if (
         ![image.x, image.y, image.w, image.h].every(Number.isFinite) ||
         image.w <= 0 ||
         image.h <= 0
       )
-        return;
+        return false;
       const firstIndex = positions[0];
       const merged: CanvasEl = {
         id: uid("el"),
@@ -4653,7 +4654,13 @@ export const useEditor = create<EditorStore>((set, get) => {
         src: image.src,
         style: { objectFit: "fill", objectX: 50, objectY: 50 },
       };
-      const elements = ordered.filter((el) => !ids.has(el.id));
+      const elements = ordered
+        .filter((el) => !ids.has(el.id))
+        .map((el) =>
+          el.clippedBy && ids.has(el.clippedBy)
+            ? { ...el, clippedBy: undefined }
+            : el,
+        );
       elements.splice(firstIndex, 0, merged);
       const next = { ...page, elements };
       normalizeZ(next);
@@ -4665,6 +4672,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         selectedIds: [merged.id],
       });
       pushHistory();
+      return true;
     },
     deleteSelected: () => {
       const s = get();

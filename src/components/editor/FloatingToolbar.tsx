@@ -242,8 +242,8 @@ export function FloatingToolbar({
         current.selectedIds.some((id) => !state.selectedIds.includes(id))
       )
         throw new Error("تغير التحديد أثناء تجهيز الدمج؛ أعد المحاولة");
-      mergeSelection(image);
-      toast.success("دُمجت العناصر في طبقة صورة واحدة");
+      if (mergeSelection(image))
+        toast.success("دُمجت العناصر في طبقة صورة واحدة");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "تعذر دمج العناصر المحددة",
