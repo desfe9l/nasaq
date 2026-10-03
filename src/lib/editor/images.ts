@@ -23,6 +23,37 @@ export const IMAGE_LIMITS: ImageLimits = {
   maxBytes: Number.POSITIVE_INFINITY,
 };
 
+export const IMAGE_ADJUSTMENT_PRESETS = {
+  original: {
+    label: "الأصلية",
+    brightness: 100,
+    contrast: 100,
+    saturation: 100,
+    sharpness: 0,
+  },
+  natural: {
+    label: "طبيعي",
+    brightness: 104,
+    contrast: 104,
+    saturation: 96,
+    sharpness: 12,
+  },
+  vivid: {
+    label: "حيوي",
+    brightness: 103,
+    contrast: 112,
+    saturation: 128,
+    sharpness: 24,
+  },
+  document: {
+    label: "مستند",
+    brightness: 108,
+    contrast: 128,
+    saturation: 0,
+    sharpness: 20,
+  },
+} as const;
+
 export function isAcceptedImage(file: File): boolean {
   return ACCEPTED.test(file.type);
 }
@@ -122,9 +153,14 @@ export async function prepareImage(
   };
 }
 
-/** CSS filter for تفتيح / حدة. `100` brightness and `0` sharpness are identity. */
+/** CSS image adjustments. Defaults are identity values. */
 export function imageAdjustCss(
-  style: { brightness?: number; sharpness?: number },
+  style: {
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+    sharpness?: number;
+  },
   sharpFilterId?: string,
 ): string | undefined {
   const parts: string[] = [];
@@ -135,6 +171,18 @@ export function imageAdjustCss(
   if (sharp > 0 && sharpFilterId) parts.push(`url(#${sharpFilterId})`);
   else if (sharp > 0)
     parts.push(`contrast(${(1 + (sharp / 100) * 0.55).toFixed(3)})`);
+  const contrast = Number(style.contrast);
+  if (Number.isFinite(contrast) && Math.abs(contrast - 100) > 0.01) {
+    parts.push(
+      `contrast(${(Math.max(0, Math.min(200, contrast)) / 100).toFixed(3)})`,
+    );
+  }
+  const saturation = Number(style.saturation);
+  if (Number.isFinite(saturation) && Math.abs(saturation - 100) > 0.01) {
+    parts.push(
+      `saturate(${(Math.max(0, Math.min(200, saturation)) / 100).toFixed(3)})`,
+    );
+  }
   const brightness = Number(style.brightness);
   if (Number.isFinite(brightness) && Math.abs(brightness - 100) > 0.01) {
     parts.push(

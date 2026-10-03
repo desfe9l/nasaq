@@ -805,6 +805,14 @@ interface EditorStore extends Project, Ui, History {
    * dialog must not have to change to clean up after itself.
    */
   deleteElementsById: (ids: string[]) => void;
+  /** Replace contiguous, unlocked top-level layers with their merged raster. */
+  mergeSelection: (image: {
+    src: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  }) => void;
   movePage: (dir: -1 | 1) => void;
   movePageById: (id: string, dir: -1 | 1) => void;
   reorderPages: (from: number, to: number) => void;
@@ -4603,7 +4611,61 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
       pushHistory();
     },
-
+    mergeSelection: (image) => {
+      const s = get();
+      const page = activePageOf(s);
+      if (!page || s.selectedIds.length < 2 || !safeImageSrc(image.src)) return;
+      const ids = new Set(s.selectedIds);
+      const selected = page.elements.filter((el) => ids.has(el.id));
+      if (
+        selected.length !== ids.size ||
+        selected.some((el) => el.locked || el.hidden)
+      ) {
+        toast.error("يتطلب الدمج عناصر ظاهرة وغير مقفلة من الصفحة الحالية");
+        return;
+      }
+      const ordered = page.elements.slice().sort((a, b) => a.z - b.z);
+      const positions = ordered
+        .map((el, index) => (ids.has(el.id) ? index : -1))
+        .filter((index) => index >= 0);
+      if (positions.some((position, index) => position !== positions[0] + index)) {
+        toast.error("يجب أن تكون الطبقات المحددة متجاورة للحفاظ على مظهر الصفحة");
+        return;
+      }
+      if (
+        ![image.x, image.y, image.w, image.h].every(Number.isFinite) ||
+        image.w <= 0 ||
+        image.h <= 0
+      )
+        return;
+      const firstIndex = positions[0];
+      const merged: CanvasEl = {
+        id: uid("el"),
+        type: "image",
+        name: "عناصر مدمجة",
+        x: image.x,
+        y: image.y,
+        w: image.w,
+        h: image.h,
+        rotation: 0,
+        opacity: 1,
+        z: 0,
+        src: image.src,
+        style: { objectFit: "fill", objectX: 50, objectY: 50 },
+      };
+      const elements = ordered.filter((el) => !ids.has(el.id));
+      elements.splice(firstIndex, 0, merged);
+      const next = { ...page, elements };
+      normalizeZ(next);
+      set({
+        pages: s.pages.map((candidate) =>
+          candidate.id === page.id ? next : candidate,
+        ),
+        selectedId: merged.id,
+        selectedIds: [merged.id],
+      });
+      pushHistory();
+    },
     deleteSelected: () => {
       const s = get();
       const page = activePageOf(s);

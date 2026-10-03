@@ -260,6 +260,43 @@ export async function snapshotLayer(
   }
 }
 
+/** Rasterise selected top-level layers together, preserving their page-space placement. */
+export async function snapshotSelection(
+  snapshot: RenderSnapshot,
+  elementIds: string[],
+  scale = 2,
+): Promise<SceneImage | null> {
+  const ids = new Set(elementIds);
+  if (ids.size < 2) throw new Error("حدد عنصرين على الأقل للدمج");
+  const doc = new DOMParser().parseFromString(snapshot.svg, "image/svg+xml");
+  const page = doc.querySelector("[data-export-page]") as HTMLElement | null;
+  if (!page) throw new Error("تعذر العثور على لوحة التصدير");
+  const layers = [...page.children].filter((el) =>
+    el.hasAttribute("data-el-id"),
+  ) as HTMLElement[];
+  const selected = layers.filter((layer) =>
+    ids.has(layer.getAttribute("data-el-id") || ""),
+  );
+  if (selected.length !== ids.size)
+    throw new Error("ادمج عناصر الصفحة الحالية فقط ومن المستوى نفسه");
+  for (const layer of layers)
+    if (!ids.has(layer.getAttribute("data-el-id") || "")) {
+      for (const node of [layer, ...layer.querySelectorAll<HTMLElement>("*")])
+        node.style.visibility = "hidden";
+    }
+  doc.querySelectorAll<HTMLElement>(".page-bg-image").forEach((background) => {
+    background.style.visibility = "hidden";
+  });
+  page.style.background = "transparent";
+  const svg = new XMLSerializer().serializeToString(doc.documentElement);
+  const canvas = await paintSnapshot({ ...snapshot, svg }, scale);
+  try {
+    return trimLayer(canvas, scale, "عناصر مدمجة");
+  } finally {
+    canvas.width = canvas.height = 0;
+  }
+}
+
 /**
  * Top-level objects stay separate and in paint order; groups remain atomic to
  * preserve group opacity/transform compositing. All text is shaped by the same
