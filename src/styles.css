@@ -5324,26 +5324,55 @@ button.license-badge-locked:focus-visible {
  * disagree with the bar it lives in, and opening a dropdown or a panel changes
  * nothing here — these tokens depend only on the viewport.
  */
-.editor-ui {
+.editor-ui,
+.editor-ui[data-editor-surface="desktop"] {
   --ui-control: 34px;
   --ui-icon: 18px;
   --ui-props-gap: 10px;
   --ui-props-pad: 5px 10px;
   --ui-props-slider: 92px;
 }
-.editor-ui[data-editor-surface^="tablet"] {
+.editor-ui[data-editor-surface="tablet-landscape"],
+.editor-ui[data-device-surface="tablet-landscape"][data-editor-surface="fullscreen"] {
   --ui-control: 38px;
   --ui-icon: 18px;
   --ui-props-gap: 9px;
   --ui-props-pad: 6px 9px;
   --ui-props-slider: 84px;
 }
-.editor-ui[data-editor-surface^="mobile"] {
-  --ui-control: 40px;
+.editor-ui[data-editor-surface="tablet-portrait"],
+.editor-ui[data-device-surface="tablet-portrait"][data-editor-surface="fullscreen"] {
+  --ui-control: 36px;
+  --ui-icon: 18px;
+  --ui-props-gap: 8px;
+  --ui-props-pad: 5px 8px;
+  --ui-props-slider: 78px;
+}
+.editor-ui[data-editor-surface="mobile-portrait"],
+.editor-ui[data-device-surface="mobile-portrait"][data-editor-surface="fullscreen"] {
+  --ui-control: 38px;
   --ui-icon: 17px;
   --ui-props-gap: 7px;
-  --ui-props-pad: 6px 8px;
+  --ui-props-pad: 5px 8px;
   --ui-props-slider: 64px;
+}
+.editor-ui[data-editor-surface="mobile-landscape"],
+.editor-ui[data-device-surface="mobile-landscape"][data-editor-surface="fullscreen"] {
+  --ui-control: 34px;
+  --ui-icon: 16px;
+  --ui-props-gap: 6px;
+  --ui-props-pad: 4px 8px;
+  --ui-props-slider: 60px;
+}
+.editor-ui[data-editor-surface="mobile-landscape"] .editor-toolbar {
+  padding-block: 3px;
+}
+.editor-ui[data-editor-surface="mobile-landscape"] .editor-status-bar {
+  height: 24px;
+  min-height: 24px;
+}
+.editor-ui[data-editor-surface="fullscreen"] .tool-props {
+  top: max(10px, env(safe-area-inset-top, 10px));
 }
 /* Fallback before the shell has measured (SSR/first paint): the pointer media
    queries keep the same scale the JS resolves. */

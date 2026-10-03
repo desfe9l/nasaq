@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { useBlocker } from "@tanstack/react-router";
+import { useBlocker, useRouter } from "@tanstack/react-router";
 import {
   LEAVE_BODY,
   LEAVE_CANCEL,
@@ -16,17 +16,34 @@ import {
   unloadShouldPrompt,
 } from "@/lib/editor/leave-controller";
 
+function RouterLeaveBlocker() {
+  useBlocker({
+    shouldBlockFn: blockRouterLeave,
+    enableBeforeUnload: unloadShouldPrompt,
+    withResolver: false,
+  });
+  return null;
+}
+
 /**
  * Arabic confirmation for in-app leave, and the browser's own prompt for
  * refresh and close. Mounted once by the editor shell.
  */
 export function LeaveGuard() {
   const open = useSyncExternalStore(subscribeLeavePrompt, leavePromptOpen, () => false);
-  useBlocker({
-    shouldBlockFn: blockRouterLeave,
-    enableBeforeUnload: unloadShouldPrompt,
-    withResolver: false,
-  });
+  const router = useRouter({ warn: false });
+  const hasRouter = Boolean(router?.history);
+
+  useEffect(() => {
+    if (hasRouter) return;
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!unloadShouldPrompt()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [hasRouter]);
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
@@ -64,13 +81,15 @@ export function LeaveGuard() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  if (!open) return null;
+  if (!open) return hasRouter ? <RouterLeaveBlocker /> : null;
   return (
-    <div
-      className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/55 p-4"
-      dir="rtl"
-      role="presentation"
-    >
+    <>
+      {hasRouter ? <RouterLeaveBlocker /> : null}
+      <div
+        className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/55 p-4"
+        dir="rtl"
+        role="presentation"
+      >
       <div
         role="dialog"
         aria-modal="true"
@@ -106,5 +125,6 @@ export function LeaveGuard() {
         </div>
       </div>
     </div>
+    </>
   );
 }

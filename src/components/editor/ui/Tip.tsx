@@ -11,6 +11,11 @@ import {
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { tipPlacement, type TooltipState } from "@/lib/editor/ui-state";
+import {
+  TOOLTIP_LONG_PRESS_MS,
+  startLongPressTimer,
+  type LongPressHandle,
+} from "@/lib/editor/keyboard";
 
 /**
  * ONE tooltip for the whole studio.
@@ -36,7 +41,7 @@ import { tipPlacement, type TooltipState } from "@/lib/editor/ui-state";
 const HOVER_DELAY = 140;
 const LEAVE_DELAY = 60;
 /** Press-and-hold duration that opens a tooltip where hover does not exist. */
-const HOLD_DELAY = 420;
+const HOLD_DELAY = TOOLTIP_LONG_PRESS_MS;
 /** Estimate used before the bubble has been measured once. */
 const ESTIMATE = { width: 168, height: 40 };
 
@@ -57,6 +62,7 @@ export function Tip({ label, hint, shortcut, side = "bottom", children }: TipPro
   const anchorRef = useRef<HTMLElement | null>(null);
   const bubbleRef = useRef<HTMLDivElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdRef = useRef<LongPressHandle | null>(null);
   const held = useRef(false);
   const measured = useRef(false);
   const id = useId();
@@ -64,6 +70,8 @@ export function Tip({ label, hint, shortcut, side = "bottom", children }: TipPro
   const clear = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     timer.current = null;
+    holdRef.current?.cancel();
+    holdRef.current = null;
   }, []);
 
   const hide = useCallback(
@@ -162,10 +170,18 @@ export function Tip({ label, hint, shortcut, side = "bottom", children }: TipPro
       if (event.pointerType === "mouse") return;
       clear();
       held.current = false;
-      timer.current = setTimeout(() => {
-        held.current = true;
-        show();
-      }, HOLD_DELAY);
+      holdRef.current = startLongPressTimer({
+        startX: event.clientX,
+        startY: event.clientY,
+        delayMs: HOLD_DELAY,
+        onTrigger: () => {
+          held.current = true;
+          show();
+        },
+      });
+    },
+    onPointerMove: (event: React.PointerEvent) => {
+      holdRef.current?.move(event.clientX, event.clientY);
     },
     onPointerUp: () => clear(),
     onPointerCancel: () => {

@@ -298,3 +298,43 @@ test("a stroke is one undoable document write", { skip }, async () => {
   useEditor.getState().redo();
   assert.equal(useEditor.getState().pages[0].elements[0].src, painted, "redo");
 });
+
+test("cropped image maps pointer coordinates to the exact cropped pixel window", { skip }, async () => {
+  // 200x200 source cropped to x:50..150, y:50..150 inside a 50x50 mm frame (2 px/mm).
+  const el = imageElement({
+    x: 40,
+    y: 60,
+    w: 50,
+    h: 50,
+    style: {
+      objectFit: "fill",
+      crop: { sourceW: 200, sourceH: 200, x: 50, y: 50, w: 100, h: 100 },
+    },
+  });
+  const { stroke } = await strokeFor("eraser", el);
+  // Page point (50, 70) is local (10mm, 10mm) inside the 50x50mm frame,
+  // which maps to source pixel (50 + 10*2 = 70, 50 + 10*2 = 70).
+  assert.equal(stroke.paint({ x: 50, y: 70 }), true);
+  const patch = stroke.commit()!;
+  const pixels = await harness!.pixelsOf(patch.src!, 200, 200);
+  assert.equal(pixels.at(70, 70)[3], 0, "cropped pixel under pointer is erased");
+  assert.equal(pixels.at(20, 20)[3], 255, "pixels outside crop window remain untouched");
+});
+
+test("deferred batch paint flushes once per animation frame and updates live preview at non-zero offset", { skip }, async () => {
+  const el = imageElement({ x: 80, y: 90, w: 50, h: 50 });
+  const { stroke } = await strokeFor("brush", el);
+  assert.equal(stroke.paint({ x: 105, y: 115 }, 0.8, true), true);
+  assert.equal(stroke.paint({ x: 110, y: 115 }, 0.9, true), true);
+  // Before flush(), no preview layer is mounted yet.
+  assert.equal(document.querySelector(".raster-stroke-layer"), null);
+  stroke.flush();
+  const host = document.querySelector<HTMLElement>(".raster-stroke-layer");
+  assert.ok(host, "flush mounts and updates the preview overlay");
+  assert.equal(host!.style.left, "80mm");
+  assert.equal(host!.style.top, "90mm");
+  const patch = stroke.commit()!;
+  const pixels = await harness!.pixelsOf(patch.src!, 200, 200);
+  assert.ok(pixels.at(100, 100)[2]! > 200, "deferred samples committed accurately");
+});
+

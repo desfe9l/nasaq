@@ -667,7 +667,13 @@ describe("resolveEditorSurface — one responsive system, not a pile of queries"
   it("phones resolve by orientation, portrait and landscape alike", () => {
     assert.equal(resolveEditorSurface(390, 844, true), "mobile-portrait");
     assert.equal(resolveEditorSurface(844, 390, true), "mobile-landscape");
+    assert.equal(resolveEditorSurface(844, 390, false), "mobile-landscape");
     assert.equal(resolveEditorSurface(360, 640, false), "mobile-portrait");
+  });
+  it("fullscreen mode takes precedence across every device size", () => {
+    assert.equal(resolveEditorSurface(1920, 1080, false, true), "fullscreen");
+    assert.equal(resolveEditorSurface(1024, 768, true, true), "fullscreen");
+    assert.equal(resolveEditorSurface(390, 844, true, true), "fullscreen");
   });
   it("garbage geometry falls back to the smallest surface, never crashes", () => {
     assert.equal(resolveEditorSurface(Number.NaN, Number.NaN, false), "mobile-portrait");
