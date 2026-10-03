@@ -173,6 +173,7 @@ export function FloatingPanel({
         next: PanelRect;
         frame: number;
         mode: GestureMode;
+        detachOnFinish: boolean;
       }
     | null
   >(null);
@@ -429,9 +430,10 @@ export function FloatingPanel({
     mode: GestureMode,
   ) => {
     let current = latest.current;
+    const detachOnFinish = Boolean(dockSide);
     if (dockSide) {
-      // Dragging a docked panel detaches it: the same gesture that positions a
-      // floating panel is how you leave the fixed layout.
+      // Keep the docked tree mounted until pointerup; changing parents mid-drag
+      // loses pointer capture before the floating position can be committed.
       const node = target.closest<HTMLElement>(".editor-floating-panel");
       const measured = node?.getBoundingClientRect();
       const row = sectionRef.current?.offsetParent as HTMLElement | null;
@@ -441,13 +443,11 @@ export function FloatingPanel({
           left: measured.left - rowRect.left,
           top: measured.top - rowRect.top,
           width: measured.width,
-          height: measured.height,
+          height: Math.min(measured.height, defaultSize.height),
         };
         latest.current = current;
-        persist();
       }
       apply(current);
-      onDockSideChange?.(null);
     }
     gesture.current = {
       id: pointerId,
@@ -457,6 +457,7 @@ export function FloatingPanel({
       next: current,
       frame: 0,
       mode,
+      detachOnFinish,
     };
     try {
       target.setPointerCapture(pointerId);
@@ -494,6 +495,7 @@ export function FloatingPanel({
     gesture.current = null;
     setDragging(false);
     persist();
+    if (g.detachOnFinish) onDockSideChange?.(null);
   };
 
   /** Arrow keys nudge or resize in 16px steps — a keyboard path for both. */

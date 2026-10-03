@@ -41,6 +41,17 @@ try {
     const page = await context.newPage();
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(`${base}/editor`, { waitUntil: "networkidle" });
+    const tour = page.getByRole("dialog", {
+      name: "جولة تعريفية",
+      exact: true,
+    });
+    if (await tour.isVisible()) {
+      await tour
+        .getByRole("button", { name: "تخطي الجولة", exact: true })
+        .click();
+    }
+    await tour.waitFor({ state: "hidden" });
+    assert.equal(await tour.isVisible(), false);
     await page.locator(".editor-canvas-stage").waitFor();
     await page.evaluate(async () => {
       window.store = (
@@ -227,12 +238,12 @@ try {
     await page.screenshot({ path: `${output}/editor-${width}.png` });
     await page.evaluate(() => window.store.setState({ rightOpen: true }));
     const panel = page.getByRole("region", {
-      name: "الخصائص والطبقات",
+      name: "الخصائص",
       exact: true,
     });
     await page.waitForTimeout(250);
     const grip = page.getByRole("button", {
-      name: "تحريك الخصائص والطبقات",
+      name: "تحريك الخصائص — اضغط مطولًا ثم اسحب",
       exact: true,
     });
     const origin = await panel.boundingBox();
@@ -243,6 +254,7 @@ try {
         type: "touchStart",
         touchPoints: [{ x: g.x + 35, y: g.y + 16 }],
       });
+      await page.waitForTimeout(400);
       await cdp.send("Input.dispatchTouchEvent", {
         type: "touchMove",
         touchPoints: [{ x: g.x + 65, y: g.y + 80 }],
@@ -255,25 +267,40 @@ try {
     } else {
       await page.mouse.move(g.x + 35, g.y + 16);
       await page.mouse.down();
+      await page.waitForTimeout(400);
       await page.mouse.move(g.x + 65, g.y + 80, { steps: 8 });
       await page.mouse.up();
     }
     const moved = await panel.boundingBox();
-    assert.ok(Math.abs(moved.y - origin.y) > 20);
+    assert.ok(
+      Math.abs(moved.y - origin.y) > 20,
+      JSON.stringify({
+        origin,
+        moved,
+        dockSide: await panel.getAttribute("data-dock-side"),
+        grip: g,
+      }),
+    );
     assert.ok(inside(moved, width, height));
     const resizer = page.getByRole("button", {
-      name: "تغيير حجم الخصائص والطبقات",
+      name: "تغيير حجم الخصائص من الركن se",
       exact: true,
     });
     await resizer.focus();
     await resizer.press("ArrowDown");
     assert.ok((await panel.boundingBox()).height > moved.height);
-    await page.getByRole("tab", { name: "طبقات", exact: true }).click();
+    await page.evaluate(() => window.store.setState({ layersOpen: true }));
+    const layers = page.getByRole("region", {
+      name: "الطبقات",
+      exact: true,
+    });
+    await layers.waitFor({ state: "visible" });
+    assert.ok(inside(await layers.boundingBox(), width, height));
     await page.screenshot({ path: `${output}/layers-${width}.png` });
-    record(`${width}: panels drag, resize, layers and boundaries`);
-    await page
-      .getByRole("button", { name: "إغلاق الخصائص والطبقات", exact: true })
-      .click();
+    record(`${width}: properties drag/resize and independent layers window`);
+    await page.evaluate(() =>
+      window.store.setState({ rightOpen: false, layersOpen: false }),
+    );
     await page.evaluate(() =>
       window.store.setState({ leftOpen: true, leftCollapsed: false }),
     );
@@ -298,8 +325,26 @@ try {
     const sourceBox = await source.boundingBox();
     const target = page.locator(".editor-canvas-stage [data-page-id]").first();
     const targetBox = await target.boundingBox();
-    const targetX = targetBox.x + targetBox.width / 2;
-    const targetY = targetBox.y + targetBox.height * 0.5;
+    const dropPoint = await target.evaluate((node) => {
+      const rect = node.getBoundingClientRect();
+      const stage = document.querySelector(".editor-canvas-stage");
+      for (const y of [0.5, 0.7, 0.3, 0.85, 0.15]) {
+        for (const x of [0.5, 0.75, 0.25, 0.9, 0.1]) {
+          const point = {
+            x: rect.left + rect.width * x,
+            y: rect.top + rect.height * y,
+          };
+          const hit = document.elementFromPoint(point.x, point.y);
+          if (stage?.contains(hit)) return point;
+        }
+      }
+      if (window.innerWidth < 768)
+        return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      return null;
+    });
+    assert.ok(dropPoint, "the page must have an unobstructed drop location");
+    const targetX = dropPoint.x;
+    const targetY = dropPoint.y;
     const beforeDrop = await page.evaluate(
       () => window.store.getState().pages[0].elements.length,
     );
@@ -331,12 +376,20 @@ try {
         targetPosition: { x: targetX - targetBox.x, y: targetY - targetBox.y },
       });
     }
-    assert.equal(
-      await page.evaluate(
-        () => window.store.getState().pages[0].elements.length,
-      ),
-      beforeDrop + 1,
+    const afterDrop = await page.evaluate(
+      () => window.store.getState().pages[0].elements.length,
     );
+    if (afterDrop !== beforeDrop + 1) {
+      assert.equal(afterDrop, beforeDrop + 1, JSON.stringify({
+        width,
+        beforeDrop,
+        afterDrop,
+        source: await source.innerText().catch(() => "<detached>"),
+        draggable: await source.getAttribute("draggable"),
+        sourceBox,
+        targetBox,
+      }));
+    }
     await page.evaluate(() => window.store.getState().undo());
     record(
       `${width}: native ${width < 1100 ? "touch" : "mouse"} library drag creates exactly one object`,
@@ -448,8 +501,23 @@ try {
     );
     if (width === 1920) {
       mkdirSync(".cache/editor-quality", { recursive: true });
+      const exportAccess = await page.evaluate(async () => {
+        const storeModule = await import(
+          performance
+            .getEntriesByType("resource")
+            .find((e) => /\/editor\/store\.ts(?:\?|$)/.test(e.name)).name
+        );
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        return {
+          resolved: storeModule.editorAccessResolved(),
+          basic: storeModule.useEditor.getState().entitlements.basic_export,
+        };
+      });
+      assert.equal(exportAccess.resolved, true);
       for (const format of ["png", "pdf"]) {
-        const downloadPromise = page.waitForEvent("download");
+        const downloadPromise = exportAccess.basic
+          ? page.waitForEvent("download")
+          : null;
         await page.evaluate(async (format) => {
           const { capturePages, runExport } =
             await import("/src/lib/editor/export.ts");
@@ -492,6 +560,16 @@ try {
           );
           useEditor.setState({ exportOpen: false });
         }, format);
+        if (!exportAccess.basic) {
+          const gatedToast = page
+            .getByText("لا يمكن حفظ أي صيغة قبل شراء الترخيص", {
+              exact: true,
+            })
+            .last();
+          await gatedToast.waitFor({ state: "visible" });
+          assert.equal(await gatedToast.textContent(), "لا يمكن حفظ أي صيغة قبل شراء الترخيص");
+          continue;
+        }
         const download = await downloadPromise;
         const path = `.cache/editor-quality/export.${format}`;
         await download.saveAs(path);

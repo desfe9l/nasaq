@@ -27,6 +27,7 @@ export function startPointerLibraryDrag(
 
   let ghost: HTMLDivElement | null = null;
   let moved = false;
+  let overlayPanel: { node: HTMLElement; pointerEvents: string } | null = null;
 
   const createGhost = () => {
     ghost = document.createElement("div");
@@ -59,6 +60,10 @@ export function startPointerLibraryDrag(
       ghost.remove();
       ghost = null;
     }
+    if (overlayPanel) {
+      overlayPanel.node.style.pointerEvents = overlayPanel.pointerEvents;
+      overlayPanel = null;
+    }
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("pointercancel", onCancel);
@@ -75,10 +80,13 @@ export function startPointerLibraryDrag(
     const dy = ev.clientY - startY;
     const dist = Math.hypot(dx, dy);
     if (dist > 8) {
-      // A phone drawer covers most of the page. Once the drag owns the pointer,
-      // reveal the canvas without unmounting the captured source element.
-      if (!moved && isOverlayViewport())
-        useEditor.getState().closeFloatingPanels();
+      if (!moved && isOverlayViewport()) {
+        const panel = target.closest<HTMLElement>(".editor-floating-panel");
+        if (panel) {
+          overlayPanel = { node: panel, pointerEvents: panel.style.pointerEvents };
+          panel.style.pointerEvents = "none";
+        }
+      }
       moved = true;
       if (!ghost) createGhost();
       moveGhost(ev.clientX, ev.clientY);
@@ -89,6 +97,14 @@ export function startPointerLibraryDrag(
 
   const onUp = (ev: PointerEvent) => {
     if (ev.pointerId !== pointerId) return;
+    const drop = moved
+      ? canvasDropPoint(
+          document.querySelector<HTMLElement>(".editor-canvas-stage"),
+          useEditor.getState().pages,
+          ev.clientX,
+          ev.clientY,
+        )
+      : null;
     cleanup();
     if (!moved) return;
     const stopClick = (click: MouseEvent) => {
@@ -100,15 +116,12 @@ export function startPointerLibraryDrag(
       () => target.removeEventListener("click", stopClick, true),
       500,
     );
-    const drop = canvasDropPoint(
-      document.querySelector<HTMLElement>(".editor-canvas-stage"),
-      useEditor.getState().pages,
-      ev.clientX,
-      ev.clientY,
-    );
     if (!drop) return;
     const store = useEditor.getState();
     store.insertLibraryElements(payload, drop, drop.pageId);
+    // Keep the captured source mounted until the drop completes. Closing it
+    // after insertion still reveals the canvas on an overlay viewport.
+    if (isOverlayViewport()) useEditor.getState().closeFloatingPanels();
   };
 
   const onCancel = () => {

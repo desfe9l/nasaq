@@ -47,7 +47,10 @@ function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile"
   const { entry } = useEditorEntry();
   const workspace = useWorkspaceEntry();
   const pathname = useLocation({ select: location => location.pathname });
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   if (["/editor", "/workspace", WORKSPACE_HOME_PATH].includes(pathname)) return null;
+  if (!hydrated) return null;
   // Nothing until the session resolves, exactly like `HeaderAccount`: a
   // signed-in author must never see the demo wording flash first.
   if (!entry.ready) return null;
@@ -128,6 +131,8 @@ function NewDocumentForUser({
  */
 function HeaderAccount() {
   const { user, isPending } = useCurrentUserState();
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => setHydrated(true), []);
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -157,7 +162,7 @@ function HeaderAccount() {
     };
   }, [open, closeMenu]);
 
-  if (!authEnabled || isPending) return null;
+  if (!hydrated || !authEnabled || isPending) return null;
 
   if (!user) {
     return (
