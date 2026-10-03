@@ -6,7 +6,11 @@
  */
 
 import { toast } from "sonner";
-import { clearDraftSnapshot, useEditor } from "@/lib/editor/store";
+import {
+  clearDraftSnapshot,
+  useEditor,
+  writeDraftSnapshot,
+} from "@/lib/editor/store";
 import { hasUnsavedChanges } from "@/lib/editor/unsaved-leave";
 
 type Choice = "save" | "discard" | "cancel";
@@ -42,7 +46,13 @@ export function unloadShouldPrompt(): boolean {
   const state = useEditor.getState();
   if (state.showcase) return false;
   const unsaved = hasUnsavedChanges(state.saveState);
-  if (unsaved) clearDraftSnapshot();
+  /*
+   * beforeunload is synchronous: IndexedDB cannot be awaited here. Keep a
+   * bounded recovery envelope instead of deleting the only durable copy. The
+   * hydrate path compares its timestamp with the saved row, so a confirmed
+   * refresh can recover the latest edits while a successful save still wins.
+   */
+  if (unsaved) writeDraftSnapshot();
   return unsaved;
 }
 

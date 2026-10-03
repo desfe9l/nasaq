@@ -45,6 +45,19 @@ export function LeaveGuard() {
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [hasRouter]);
 
+  /*
+   * Mobile Safari may omit beforeunload when a tab is backgrounded or evicted.
+   * pagehide cannot show UI, but it can preserve the same bounded recovery
+   * envelope without introducing a second prompt or persistence path.
+   */
+  useEffect(() => {
+    const onPageHide = () => {
+      unloadShouldPrompt();
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
+
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0) return;
