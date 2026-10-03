@@ -139,8 +139,11 @@ describe("Homepage pricing cards", () => {
     const plan = CENTRAL_PLANS["team-annual"];
     assert.equal(card.kind, "contact");
     assert.equal(card.id, "team-annual");
-    assert.equal(card.amount, plan.amount);
-    assert.equal(card.formattedAmount, plan.amount.toLocaleString("en-US"));
+    assert.equal(card.amount, 0);
+    assert.equal(card.formattedAmount, "تواصل معنا عبر WhatsApp");
+    assert.equal(card.formattedAmount.includes(plan.amount.toLocaleString("en-US")), false);
+    assert.equal(card.hasSavings, false);
+    assert.equal(card.ctaLabel, "تواصل معنا عبر WhatsApp");
     assert.equal(card.name, "جهات — سنوي");
     assert.equal(checkoutKeyFor(card), null);
     assert.equal(HOME_BILLING_PERIODS.includes("annual" as never), false);

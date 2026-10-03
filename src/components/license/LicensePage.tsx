@@ -149,6 +149,13 @@ export default function LicensePage() {
         )}
         {/* Actions */}
         <div className="mt-4 flex flex-wrap gap-2">
+          <a
+            href="/purchase"
+            className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-bold hover:bg-accent"
+          >
+            <Shield className="size-4" />
+            عرض الخطط والأسعار
+          </a>
           {!hasLicense && !isSuspended && (
             <button
               type="button"
