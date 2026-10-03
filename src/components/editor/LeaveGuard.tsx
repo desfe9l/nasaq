@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useBlocker, useRouter } from "@tanstack/react-router";
 import {
   LEAVE_BODY,
@@ -6,6 +6,7 @@ import {
   LEAVE_DISCARD,
   LEAVE_SAVE,
   LEAVE_TITLE,
+  hasUnsavedChanges,
 } from "@/lib/editor/unsaved-leave";
 import {
   blockRouterLeave,
@@ -13,8 +14,10 @@ import {
   leavePromptOpen,
   requestLeave,
   subscribeLeavePrompt,
+  unloadBypassed,
   unloadShouldPrompt,
 } from "@/lib/editor/leave-controller";
+import { useEditor } from "@/lib/editor/store";
 
 function RouterLeaveBlocker() {
   useBlocker({
@@ -31,8 +34,79 @@ function RouterLeaveBlocker() {
  */
 export function LeaveGuard() {
   const open = useSyncExternalStore(subscribeLeavePrompt, leavePromptOpen, () => false);
+  const saveState = useEditor((s) => s.saveState);
+  const showcase = useEditor((s) => s.showcase);
   const router = useRouter({ warn: false });
   const hasRouter = Boolean(router?.history);
+  const backGuardArmedRef = useRef(false);
+  const hadPriorHistoryRef = useRef(false);
+
+  useEffect(() => {
+    if (showcase || !hasUnsavedChanges(saveState)) return;
+    if (backGuardArmedRef.current) return;
+    const tsrIndex = (window.history.state as { __TSR_index?: number } | null)?.__TSR_index ?? 0;
+    if (tsrIndex > 0) return;
+    hadPriorHistoryRef.current = window.history.length > 1;
+    try {
+      const pushState =
+        window.History?.prototype?.pushState ?? window.history.pushState;
+      pushState.call(
+        window.history,
+        { ...(window.history.state ?? {}), __nasaqBackGuard: true },
+        "",
+        window.location.href,
+      );
+      backGuardArmedRef.current = true;
+    } catch {
+      /* history push blocked */
+    }
+  }, [saveState, showcase]);
+
+  useEffect(() => {
+    const onPopState = (event: PopStateEvent) => {
+      if (!backGuardArmedRef.current) return;
+      const poppedState = (
+        event.state !== undefined ? event.state : window.history.state
+      ) as { __nasaqBackGuard?: boolean } | null;
+      if (poppedState?.__nasaqBackGuard) {
+        return;
+      }
+      backGuardArmedRef.current = false;
+      event.stopImmediatePropagation();
+      if (unloadBypassed()) return;
+      const state = useEditor.getState();
+      if (state.showcase || !hasUnsavedChanges(state.saveState)) {
+        if (hadPriorHistoryRef.current) {
+          window.history.back();
+        }
+        return;
+      }
+      try {
+        const pushState =
+          window.History?.prototype?.pushState ?? window.history.pushState;
+        pushState.call(
+          window.history,
+          { ...(window.history.state ?? {}), __nasaqBackGuard: true },
+          "",
+          window.location.href,
+        );
+        backGuardArmedRef.current = true;
+      } catch {
+        /* ignore */
+      }
+      void requestLeave().then((ok) => {
+        if (!ok) return;
+        backGuardArmedRef.current = false;
+        if (hadPriorHistoryRef.current && window.history.length > 2) {
+          window.history.go(-2);
+        } else {
+          window.location.assign("/home");
+        }
+      });
+    };
+    window.addEventListener("popstate", onPopState, true);
+    return () => window.removeEventListener("popstate", onPopState, true);
+  }, []);
 
   useEffect(() => {
     if (hasRouter) return;
@@ -103,41 +177,41 @@ export function LeaveGuard() {
         dir="rtl"
         role="presentation"
       >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="unsaved-leave-title"
-        className="editor-dropdown-panel w-full max-w-sm rounded-[14px] border p-4 shadow-2xl"
-      >
-        <h2 id="unsaved-leave-title" className="text-[15px] font-extrabold text-ink">
-          {LEAVE_TITLE}
-        </h2>
-        <p className="mt-2 text-[13px] leading-6 text-muted">{LEAVE_BODY}</p>
-        <div className="mt-4 grid gap-2">
-          <button
-            type="button"
-            onClick={() => chooseLeave("save")}
-            className="inline-flex h-10 items-center justify-center rounded-[10px] bg-navy px-3 text-[13px] font-extrabold text-on-brand"
-          >
-            {LEAVE_SAVE}
-          </button>
-          <button
-            type="button"
-            onClick={() => chooseLeave("discard")}
-            className="inline-flex h-10 items-center justify-center rounded-[10px] border border-[var(--editor-border)] px-3 text-[13px] font-bold"
-          >
-            {LEAVE_DISCARD}
-          </button>
-          <button
-            type="button"
-            onClick={() => chooseLeave("cancel")}
-            className="inline-flex h-10 items-center justify-center rounded-[10px] px-3 text-[13px] font-bold text-muted"
-          >
-            {LEAVE_CANCEL}
-          </button>
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="unsaved-leave-title"
+          className="editor-dropdown-panel w-full max-w-sm rounded-[14px] border p-4 shadow-2xl"
+        >
+          <h2 id="unsaved-leave-title" className="text-[15px] font-extrabold text-ink">
+            {LEAVE_TITLE}
+          </h2>
+          <p className="mt-2 text-[13px] leading-6 text-muted">{LEAVE_BODY}</p>
+          <div className="mt-4 grid gap-2">
+            <button
+              type="button"
+              onClick={() => chooseLeave("save")}
+              className="inline-flex h-10 items-center justify-center rounded-[10px] bg-navy px-3 text-[13px] font-extrabold text-on-brand"
+            >
+              {LEAVE_SAVE}
+            </button>
+            <button
+              type="button"
+              onClick={() => chooseLeave("discard")}
+              className="inline-flex h-10 items-center justify-center rounded-[10px] border border-[var(--editor-border)] px-3 text-[13px] font-bold"
+            >
+              {LEAVE_DISCARD}
+            </button>
+            <button
+              type="button"
+              onClick={() => chooseLeave("cancel")}
+              className="inline-flex h-10 items-center justify-center rounded-[10px] px-3 text-[13px] font-bold text-muted"
+            >
+              {LEAVE_CANCEL}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
     </>
   );
 }

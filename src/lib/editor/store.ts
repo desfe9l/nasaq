@@ -138,6 +138,12 @@ import {
   isOverlayViewport,
 } from "./ui-state";
 import { nudgeStack, restack, type LayerDropSide } from "./layers";
+import {
+  disarmUnloadBypass,
+  hasLeaveGuard,
+  requestLeave,
+} from "./leave-controller";
+import { hasUnsavedChanges } from "./unsaved-leave";
 
 /*
  * The shell's pure layout/import helpers live in `ui-state.ts` (alias-free and
@@ -492,10 +498,16 @@ interface EditorStore extends Project, Ui, History {
   /** Opens only when the current owner and entitlements permit this file. */
   openProject: (id: string) => Promise<boolean>;
   saveNow: () => Promise<void>;
+  /** Cancel a pending debounced save timer without locking future edits. */
+  cancelPendingSaveTimer: () => void;
   /** Drop a debounced autosave that has not started. In-flight saves still finish. */
   pauseScheduledSave: () => void;
   /** Re-arm autosave after a cancelled leave prompt. */
   resumeScheduledSave: () => void;
+  /** True while scheduled autosave is explicitly paused. */
+  isSavePaused: () => boolean;
+  /** Explicitly discard unsaved changes and restore the last persisted/clean state. */
+  discardUnsavedChanges: () => Promise<void>;
   renameProject: (id: string, name: string) => Promise<void>;
   /** Flip a document's star — persists on the row, independent of auto-save. */
   toggleProjectFavorite: (id: string) => Promise<void>;
@@ -1201,7 +1213,11 @@ async function rememberLibraryRemoval(key: "libraryRemovedAssets" | "libraryRemo
 
 export const useEditor = create<EditorStore>((set, get) => {
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
-  let saveQueue: Promise<void> = Promise.resolve();
+  let savePaused = false;
+  let activeSave: Promise<void> | null = null;
+  let activeSaveGen = -1;
+  let saveSessionGen = 0;
+  let cleanSnapshot: ProjectSnapshot = projectSlice(blank);
 
   /** Debounced autosave. Kept off the render path: no store writes until it fires. */
   const scheduleSave = (delay = 900) => {
@@ -1209,44 +1225,30 @@ export const useEditor = create<EditorStore>((set, get) => {
     if (typeof window === "undefined") return;
     if (get().showcase) return; // showcase boot: the document never persists
     if (!hasResolvedEditorAccess(get(), getStorageOwner())) return;
-    if (saveTimer) clearTimeout(saveTimer);
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    disarmUnloadBypass();
     if (get().saveState !== "saving") set({ saveState: "dirty" });
+    writeDraftSnapshot();
+    if (savePaused) return;
     saveTimer = setTimeout(() => {
+      saveTimer = null;
       void get().saveNow();
     }, delay);
   };
 
-  /*
-   * WHY STRUCTURAL SNAPSHOTS (the single biggest editor cost on a long
-   * document)
-   *
-   * History used to hold `JSON.stringify(projectSlice(...))`. Every commit —
-   * one per drag release, one per typed character pause, one per style tick —
-   * therefore serialised ALL pages, including every embedded image as base64,
-   * and kept up to 60 of those strings alive. On a 10–30 page report that is
-   * tens of megabytes stringified per edit and hundreds of megabytes retained:
-   * the editor stuttered on desktop and crawled on an iPad, and nothing about
-   * the drag itself was slow.
-   *
-   * The store updates immutably (`pages.map(...)`), so a snapshot of the
-   * project slice is already a valid immutable history entry: unchanged pages
-   * are SHARED with the live state, and one entry costs one page, not the whole
-   * document. `undo`/`redo` clone before handing the entry to `applyProject`
-   * (which normalises in place), so history entries are never mutated.
-   */
   const HISTORY_LIMIT = 60;
 
-  /** Structural equality between two snapshots, using the store's own immutability. */
-  const sameSnapshot = (a: ProjectSnapshot, b: ProjectSnapshot) =>
+  /** Document content equality (ignores UI-only activePageId/id metadata). */
+  const sameDocumentContent = (a: ProjectSnapshot, b: ProjectSnapshot) =>
     a.pages === b.pages &&
     a.name === b.name &&
     a.theme === b.theme &&
     a.orgName === b.orgName &&
     a.editorSettings === b.editorSettings &&
     a.transactionNo === b.transactionNo &&
-    a.activePageId === b.activePageId &&
-    a.id === b.id &&
-    a.createdAt === b.createdAt &&
     a.defaultSize === b.defaultSize &&
     a.pack === b.pack &&
     a.licensedTemplateId === b.licensedTemplateId;
@@ -1258,12 +1260,9 @@ export const useEditor = create<EditorStore>((set, get) => {
     const { past } = get();
     // Dedupe WITHOUT serialising: a commit that changes nothing (a blur after a
     // live edit already recorded its state, a double `commit()` after
-    // `updateStyle`) must not push a second identical entry — the first Undo
-    // would look dead. Identity comparison is exact here because every write
-    // replaces the objects it touches. The future stack is only discarded by a
-    // REAL change (see `set` below), so Redo survives a no-op commit after Undo.
-    if (past.length && sameSnapshot(past[past.length - 1], snapshot)) {
-      scheduleSave();
+    // `updateStyle`, or UI focus without content change) must not push a second
+    // identical entry or mark a clean project dirty.
+    if (past.length && sameDocumentContent(past[past.length - 1], snapshot)) {
       return;
     }
     const nextPast = [...past, snapshot];
@@ -1461,14 +1460,19 @@ export const useEditor = create<EditorStore>((set, get) => {
       // saved project row available for a later re-licence, but remove its
       // contents and history from the live editor instead of leaving a writable
       // canvas whose next save would be refused.
+      saveSessionGen += 1;
+      activeSave = null;
+      savePaused = false;
       if (saveTimer) {
         clearTimeout(saveTimer);
         saveTimer = null;
       }
       clearDraftSnapshot();
       applyProject(createProject("blank", current.theme), { zoom: current.zoom });
+      const snap = projectSlice(get());
+      cleanSnapshot = snap;
       set({
-        past: [projectSlice(get())],
+        past: [snap],
         future: [],
         saveState: "saved",
         savedAt: Date.now(),
@@ -1534,6 +1538,9 @@ export const useEditor = create<EditorStore>((set, get) => {
 
     resetUserScopedState: () => {
       clearUploadedFonts();
+      saveSessionGen += 1;
+      activeSave = null;
+      savePaused = false;
       // Cancel any pending autosave first — it must not fire mid-reset and
       // write the outgoing session's document under the new owner.
       if (saveTimer) {
@@ -1544,6 +1551,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       // here now (the editor is open to visitors); the previous account's
       // pages, library list, asset shelf and custom vectors are all dropped.
       applyProject(createProject("official"), { zoom: get().zoom });
+      cleanSnapshot = projectSlice(get());
       set({
         hydrated: false,
         sessionOwner: null,
@@ -1732,24 +1740,38 @@ export const useEditor = create<EditorStore>((set, get) => {
         const draft = readDraftSnapshot(owner);
         let restoredFromDraft = false;
         let restoredUnsavedDraft = false;
+        let preDraftSnapshot: ProjectSnapshot | null = null;
+        if (draft?.projectId && (!active || active.id !== draft.projectId)) {
+          const byDraftId = await getProject(draft.projectId);
+          if (byDraftId) active = byDraftId;
+        }
         if (
           draft &&
           active &&
           draft.projectId === active.id &&
-          draft.savedAt > (active.updatedAt ?? 0)
+          draft.savedAt >= (active.updatedAt ?? 0)
         ) {
+          preDraftSnapshot = clone(active);
           const merged: ProjectSnapshot = { ...active, ...draft.project };
           merged.activePageId =
             draft.activePageId || draft.project.activePageId;
           active = merged;
           restoredFromDraft = true;
-        } else if (!active && draft && !draft.projectId) {
+        } else if (
+          draft &&
+          !draft.projectId &&
+          draft.savedAt >= (active?.updatedAt ?? 0)
+        ) {
+          preDraftSnapshot = active ? clone(active) : projectSlice(blank);
           active = {
             ...draft.project,
             activePageId: draft.activePageId || draft.project.activePageId,
           };
           restoredFromDraft = true;
           restoredUnsavedDraft = true;
+        }
+        if (preDraftSnapshot) {
+          cleanSnapshot = preDraftSnapshot;
         }
         const activeBlock = active
           ? projectAccessBlock(active, get().entitlements)
@@ -1882,9 +1904,13 @@ export const useEditor = create<EditorStore>((set, get) => {
       document.documentElement.lang = "ar";
       document.documentElement.dir = "rtl";
       const recoveredDirty = get().saveState === "dirty";
+      const snap = projectSlice(get());
+      if (!recoveredDirty) {
+        cleanSnapshot = snap;
+      }
       set({
         hydrated: true,
-        past: [projectSlice(get())],
+        past: [snap],
         future: [],
         saveState: recoveredDirty ? "dirty" : "saved",
         savedAt: Date.now(),
@@ -2370,8 +2396,22 @@ export const useEditor = create<EditorStore>((set, get) => {
       }
       const owner = getStorageOwner();
       const sessionOwner = initial.sessionOwner;
-      let savedProjects = initial.projects;
-      if (!initial.showcase && !initial.entitlements.unlimited_projects) {
+      if (
+        hasLeaveGuard() &&
+        !initial.showcase &&
+        hasUnsavedChanges(get().saveState)
+      ) {
+        const allowed = await requestLeave();
+        if (
+          !allowed ||
+          getStorageOwner() !== owner ||
+          get().sessionOwner !== sessionOwner ||
+          !editorAccessReady()
+        )
+          return false;
+      }
+      let savedProjects = get().projects;
+      if (!get().showcase && !get().entitlements.unlimited_projects) {
         try {
           savedProjects = await listProjects();
         } catch {
@@ -2439,9 +2479,19 @@ export const useEditor = create<EditorStore>((set, get) => {
         );
         return false;
       }
+      saveSessionGen += 1;
+      activeSave = null;
+      savePaused = false;
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      clearDraftSnapshot();
       applyProject(saved, { zoom: 0.82 });
+      const snap = projectSlice(get());
+      cleanSnapshot = snap;
       set({
-        past: [projectSlice(get())],
+        past: [snap],
         future: [],
         saveState: "saved",
         savedAt: Date.now(),
@@ -2481,9 +2531,24 @@ export const useEditor = create<EditorStore>((set, get) => {
       };
       if (!validateProjectAccess()) return false;
 
+      if (
+        hasLeaveGuard() &&
+        !initial.showcase &&
+        hasUnsavedChanges(get().saveState)
+      ) {
+        const allowed = await requestLeave();
+        if (
+          !allowed ||
+          getStorageOwner() !== requestOwner ||
+          get().sessionOwner !== requestSessionOwner ||
+          !editorAccessReady()
+        )
+          return false;
+      }
+
       // Preserve pending edits before counting the library or replacing the
-      // current document. A failed/denied save must not silently lose them.
-      if (initial.saveState === "dirty" || initial.saveState === "saving") {
+      // current document when invoked outside the interactive leave guard.
+      if (get().saveState === "dirty" || get().saveState === "saving") {
         await get().saveNow();
         if (
           get().saveState !== "saved" ||
@@ -2561,9 +2626,19 @@ export const useEditor = create<EditorStore>((set, get) => {
         );
         return false;
       }
+      saveSessionGen += 1;
+      activeSave = null;
+      savePaused = false;
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      clearDraftSnapshot();
       applyProject(saved, { zoom: get().zoom || 0.82 });
+      const snap = projectSlice(get());
+      cleanSnapshot = snap;
       set({
-        past: [projectSlice(get())],
+        past: [snap],
         future: [],
         saveState: "saved",
         savedAt: Date.now(),
@@ -2611,11 +2686,29 @@ export const useEditor = create<EditorStore>((set, get) => {
         return true;
       };
       if (denyBlockedProject()) return false;
+      if (
+        hasLeaveGuard() &&
+        !get().showcase &&
+        hasUnsavedChanges(get().saveState)
+      ) {
+        const allowed = await requestLeave();
+        if (!allowed || !sameOwner() || denyBlockedProject()) return false;
+      }
       await restoreFonts(project);
       if (!sameOwner() || denyBlockedProject()) return false;
+      saveSessionGen += 1;
+      activeSave = null;
+      savePaused = false;
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      clearDraftSnapshot();
       applyProject(project, { zoom: get().zoom || 0.82 });
+      const snap = projectSlice(get());
+      cleanSnapshot = snap;
       set({
-        past: [projectSlice(get())],
+        past: [snap],
         future: [],
         saveState: "saved",
         savedAt: Date.now(),
@@ -2630,142 +2723,174 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     saveNow: async () => {
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
       if (get().showcase || !editorAccessReady()) return;
-      const requestOwner = getStorageOwner(),
-        requestId = get().id;
-      const save = async () => {
-        if (getStorageOwner() !== requestOwner || get().id !== requestId)
-          return;
-        const s = get();
-        if (!s.pages?.length) return;
-        const entitlements = s.entitlements;
-        if (exceedsProjectPageLimit(s.pages.length, entitlements)) {
-          set({ saveState: "error" });
-          toast.error("لا يمكن حفظ مستند يتجاوز حد الصفحات في خطتك", {
-            id: "editor-access-save-limit",
-          });
-          return;
-        }
-        if (
-          requiresPremiumPack(s.pack, entitlements) ||
-          requiresLicensedTemplate(s.licensedTemplateId, entitlements)
-        ) {
-          set({ saveState: "error" });
-          toast.error("يتطلب حفظ هذا المستند ترخيصًا مناسبًا", {
-            id: "editor-access-save-template",
-          });
-          return;
-        }
-        const owner = getStorageOwner();
-        set({ saveState: "saving" });
-        try {
-          // Page-1 thumbnail: throttle-safe (`null` → keep whatever the row has)
-          // and merged from the projects meta so an in-flight favorite flip or a
-          // previous capture is never wiped by a later auto-save.
-          const meta = s.projects.find((p) => p.id === s.id);
-          let captured: string | null = null;
-          if (thumbnailCaptureDue()) {
-            // The capture DOM (`#export-root`) is mounted on demand — arming
-            // the flag lets CanvasStage render it, then we yield two frames so
-            // React has painted it before html2canvas reads it.
-            set({ captureArmed: true });
-            await nextPaint();
-            try {
-              captured = await captureThumbnail();
-            } finally {
-              // Always disarm, including the owner-changed bail-outs below —
-              // a stuck flag would keep the capture DOM mounted forever.
-              set({ captureArmed: false });
-            }
-            if (getStorageOwner() !== owner || get().id !== s.id) return;
-          }
-          const { uploadedFontSources } = await import("../nsq/fonts");
-          const { collectFontFamilies } = await import("../nsq/format");
-          const families = new Set(collectFontFamilies(s.pages));
-          const embeddedFonts = [
-            ...new Map(
-              [...(s.embeddedFonts || []), ...uploadedFontSources()]
-                .filter((f) => families.has(f.family))
-                .map((f) => [f.family, f]),
-            ).values(),
-          ];
-          if (getStorageOwner() !== owner || get().id !== s.id) return;
-          const saved = await saveProject({
-            ...projectSlice(s),
-            embeddedFonts,
-            editorSettings: {
-              printGuides: s.printGuides,
-              showGrid: s.showGrid,
-              snapGrid: s.snapGrid,
-              snapElements: s.snapElements,
-              clipExport: s.clipExport !== false,
-            },
-            version: s.version,
-            updatedAt: Date.now(),
-            pack: s.pack ?? meta?.pack,
-            favorite: meta?.favorite ?? s.favorite ?? false,
-            thumbnail: captured ?? s.thumbnail ?? meta?.thumbnail,
-            nsqOrigin: s.nsqOrigin,
-          });
-          if (getStorageOwner() !== owner || get().id !== s.id) return;
-          const changed =
-            get().pages !== s.pages ||
-            get().name !== s.name ||
-            get().orgName !== s.orgName ||
-            get().theme !== s.theme ||
-            get().transactionNo !== s.transactionNo ||
-            get().editorSettings !== s.editorSettings;
-          set({
-            embeddedFonts,
-            id: saved.id,
-            createdAt: saved.createdAt,
-            saveState: changed ? "dirty" : "saved",
-            savedAt: Date.now(),
-          });
-          if (changed) {
-            /*
-             * Edits made while IndexedDB was busy are intentionally not
-             * reported as saved. Preserve them for refresh protection and
-             * ensure a direct saveNow() call still schedules the follow-up
-             * transaction; the queued save will capture the newest store
-             * snapshot when it starts.
-             */
-            writeDraftSnapshot();
-            scheduleSave(900);
-          } else {
-            // Every field carried by this transaction is durable now.
-            clearDraftSnapshot();
-          }
-          await setSetting("activeProjectId", saved.id);
-          /*
-           * Refresh the projects list WITHOUT re-reading every project from
-           * IndexedDB. `refreshProjects()` deserialises the whole library on
-           * every auto-save — with a shelf of multi-megabyte reports that was
-           * the single most expensive thing the old save path did. The saved
-           * row's meta is merged in place; a full refresh still happens on
-           * real library events (create, delete, import, open).
-           */
-          set((state) => {
-            const nextMeta = projectMeta(saved);
-            const exists = state.projects.some((p) => p.id === saved.id);
-            return {
-              projects: exists
-                ? state.projects.map((p) => (p.id === saved.id ? nextMeta : p))
-                : [nextMeta, ...state.projects],
-            };
-          });
-        } catch (err) {
-          console.error("[editor] autosave failed", err);
-          if (getStorageOwner() === owner && get().id === s.id)
+      if (activeSave && activeSaveGen === saveSessionGen) {
+        await activeSave;
+        return;
+      }
+      const gen = saveSessionGen;
+      const requestOwner = getStorageOwner();
+      const runSave = async () => {
+        while (gen === saveSessionGen && getStorageOwner() === requestOwner) {
+          const initial = get();
+          if (!initial.pages?.length) return;
+          const entitlements = initial.entitlements;
+          if (exceedsProjectPageLimit(initial.pages.length, entitlements)) {
             set({ saveState: "error" });
+            toast.error("لا يمكن حفظ مستند يتجاوز حد الصفحات في خطتك", {
+              id: "editor-access-save-limit",
+            });
+            return;
+          }
+          if (
+            requiresPremiumPack(initial.pack, entitlements) ||
+            requiresLicensedTemplate(initial.licensedTemplateId, entitlements)
+          ) {
+            set({ saveState: "error" });
+            toast.error("يتطلب حفظ هذا المستند ترخيصًا مناسبًا", {
+              id: "editor-access-save-template",
+            });
+            return;
+          }
+          set({ saveState: "saving" });
+          try {
+            let captured: string | null = null;
+            if (thumbnailCaptureDue()) {
+              set({ captureArmed: true });
+              await nextPaint();
+              try {
+                captured = await captureThumbnail();
+              } finally {
+                set({ captureArmed: false });
+              }
+              if (gen !== saveSessionGen || getStorageOwner() !== requestOwner)
+                return;
+            }
+            const { uploadedFontSources } = await import("../nsq/fonts");
+            const { collectFontFamilies } = await import("../nsq/format");
+            if (gen !== saveSessionGen || getStorageOwner() !== requestOwner)
+              return;
+            const s = get();
+            if (!s.pages?.length) return;
+            if (exceedsProjectPageLimit(s.pages.length, s.entitlements)) {
+              set({ saveState: "error" });
+              toast.error("لا يمكن حفظ مستند يتجاوز حد الصفحات في خطتك", {
+                id: "editor-access-save-limit",
+              });
+              return;
+            }
+            if (
+              requiresPremiumPack(s.pack, s.entitlements) ||
+              requiresLicensedTemplate(s.licensedTemplateId, s.entitlements)
+            ) {
+              set({ saveState: "error" });
+              toast.error("يتطلب حفظ هذا المستند ترخيصًا مناسبًا", {
+                id: "editor-access-save-template",
+              });
+              return;
+            }
+            const meta = s.projects.find((p) => p.id === s.id);
+            const families = new Set(collectFontFamilies(s.pages));
+            const embeddedFonts = [
+              ...new Map(
+                [...(s.embeddedFonts || []), ...uploadedFontSources()]
+                  .filter((f) => families.has(f.family))
+                  .map((f) => [f.family, f]),
+              ).values(),
+            ];
+            const saved = await saveProject({
+              ...projectSlice(s),
+              embeddedFonts,
+              editorSettings: {
+                printGuides: s.printGuides,
+                showGrid: s.showGrid,
+                snapGrid: s.snapGrid,
+                snapElements: s.snapElements,
+                clipExport: s.clipExport !== false,
+              },
+              version: s.version,
+              updatedAt: Date.now(),
+              pack: s.pack ?? meta?.pack,
+              favorite: meta?.favorite ?? s.favorite ?? false,
+              thumbnail: captured ?? s.thumbnail ?? meta?.thumbnail,
+              nsqOrigin: s.nsqOrigin,
+            });
+            if (gen !== saveSessionGen || getStorageOwner() !== requestOwner)
+              return;
+            const live = get();
+            const changed =
+              live.pages !== s.pages ||
+              live.name !== s.name ||
+              live.orgName !== s.orgName ||
+              live.theme !== s.theme ||
+              live.transactionNo !== s.transactionNo ||
+              live.editorSettings !== s.editorSettings ||
+              live.defaultSize !== s.defaultSize ||
+              live.pack !== s.pack ||
+              live.licensedTemplateId !== s.licensedTemplateId;
+            await setSetting("activeProjectId", saved.id);
+            if (gen !== saveSessionGen || getStorageOwner() !== requestOwner)
+              return;
+            set((state) => {
+              const nextMeta = projectMeta(saved);
+              const exists = state.projects.some((p) => p.id === saved.id);
+              return {
+                embeddedFonts,
+                id: saved.id,
+                createdAt: saved.createdAt,
+                projects: exists
+                  ? state.projects.map((p) =>
+                      p.id === saved.id ? nextMeta : p,
+                    )
+                  : [nextMeta, ...state.projects],
+              };
+            });
+            if (changed) {
+              writeDraftSnapshot();
+              continue;
+            }
+            cleanSnapshot = projectSlice(get());
+            set({
+              saveState: "saved",
+              savedAt: Date.now(),
+            });
+            clearDraftSnapshot();
+            return;
+          } catch (err) {
+            console.error("[editor] autosave failed", err);
+            if (gen === saveSessionGen && getStorageOwner() === requestOwner) {
+              set({ saveState: "error" });
+              toast.error("تعذر حفظ المشروع — تحقق من مساحة التخزين", {
+                id: "editor-save-error",
+              });
+            }
+            return;
+          }
         }
       };
-      const pending = saveQueue.then(save, save);
-      saveQueue = pending;
+      activeSaveGen = gen;
+      const pending = runSave().finally(() => {
+        if (activeSave === pending) {
+          activeSave = null;
+        }
+      });
+      activeSave = pending;
       await pending;
     },
 
+    cancelPendingSaveTimer: () => {
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+    },
+
     pauseScheduledSave: () => {
+      savePaused = true;
       if (saveTimer) {
         clearTimeout(saveTimer);
         saveTimer = null;
@@ -2773,8 +2898,53 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     resumeScheduledSave: () => {
+      savePaused = false;
       const state = get().saveState;
       if (state === "dirty" || state === "error") scheduleSave(900);
+    },
+
+    isSavePaused: () => savePaused,
+
+    discardUnsavedChanges: async () => {
+      saveSessionGen += 1;
+      activeSave = null;
+      savePaused = false;
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      clearDraftSnapshot();
+      const current = get();
+      const owner = getStorageOwner();
+      const sessionOwner = current.sessionOwner;
+      let persisted: Project | null = null;
+      if (current.id) {
+        try {
+          persisted = await getProject(current.id);
+        } catch {
+          persisted = null;
+        }
+      }
+      if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+        return;
+      const target = persisted ? clone(persisted) : clone(cleanSnapshot);
+      if (persisted) {
+        await restoreFonts(persisted);
+        if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+          return;
+      }
+      applyProject(target, {
+        zoom: get().zoom || 0.82,
+        id: persisted ? persisted.id : target.id,
+      });
+      const snap = projectSlice(get());
+      cleanSnapshot = snap;
+      set({
+        past: [snap],
+        future: [],
+        saveState: "saved",
+        savedAt: persisted?.updatedAt ?? Date.now(),
+      });
     },
 
     renameProject: async (id, name) => {
@@ -2924,7 +3094,23 @@ export const useEditor = create<EditorStore>((set, get) => {
         return;
       const s = get();
       if (s.id === id) {
+        saveSessionGen += 1;
+        activeSave = null;
+        savePaused = false;
+        if (saveTimer) {
+          clearTimeout(saveTimer);
+          saveTimer = null;
+        }
+        clearDraftSnapshot();
         applyProject(createProject("blank", s.theme), { selectedId: null });
+        const snap = projectSlice(get());
+        cleanSnapshot = snap;
+        set({
+          past: [snap],
+          future: [],
+          saveState: "saved",
+          savedAt: Date.now(),
+        });
         await setSetting("activeProjectId", null);
       }
       await get().refreshProjects();
@@ -2957,6 +3143,15 @@ export const useEditor = create<EditorStore>((set, get) => {
         getStorageOwner() === owner &&
         (!opts.expectedOwner || get().sessionOwner === owner);
       if (!sameOwner()) return false;
+      if (
+        hasLeaveGuard() &&
+        !opts.expectedOwner &&
+        !get().showcase &&
+        hasUnsavedChanges(get().saveState)
+      ) {
+        const allowed = await requestLeave();
+        if (!allowed || !sameOwner()) return false;
+      }
       let current = get();
       const sameContent = () =>
         get().pages === current.pages &&
@@ -3091,12 +3286,22 @@ export const useEditor = create<EditorStore>((set, get) => {
       }
       await restoreFonts(saved);
       if (!sameOwner() || !sameDocument() || !editorAccessReady()) return false;
+      saveSessionGen += 1;
+      activeSave = null;
+      savePaused = false;
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      clearDraftSnapshot();
       const pageIndex = opts.activePageIndex ?? 0;
       applyProject(saved, {
         activePageId: saved.pages[pageIndex]?.id || saved.pages[0]?.id,
       });
+      const snap = projectSlice(get());
+      cleanSnapshot = snap;
       set({
-        past: [projectSlice(get())],
+        past: [snap],
         future: [],
         saveState: "saved",
         savedAt: Date.now(),
@@ -3356,14 +3561,17 @@ export const useEditor = create<EditorStore>((set, get) => {
       queueLibrarySync();
     },
     setTheme: (theme) => {
+      if (get().theme === theme) return;
       set({ theme });
       pushHistory();
     },
     setName: (name) => {
+      if (get().name === name) return;
       set({ name });
       scheduleSave(500);
     },
     setOrg: (orgName) => {
+      if (get().orgName === orgName) return;
       set({ orgName });
       scheduleSave(500);
     },
@@ -3396,6 +3604,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
     closeTablePicker: () => set({ tablePickerOpen: false }),
     setTransactionNo: (transactionNo) => {
+      if (get().transactionNo === transactionNo) return;
       set({ transactionNo });
       scheduleSave(500);
     },
@@ -5328,6 +5537,8 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     renamePage: (id, name) => {
+      const target = get().pages.find((p) => p.id === id);
+      if (!target || target.name === name) return;
       set({
         pages: get().pages.map((p) => (p.id === id ? { ...p, name } : p)),
       });
@@ -5358,6 +5569,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     setClipExport: (on) => {
+      if (get().clipExport === on) return;
       set({
         clipExport: on,
         editorSettings: { ...get().editorSettings, clipExport: on },
@@ -5608,6 +5820,9 @@ let pagesUiWriteTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Resolve after the next two animation frames — enough for React to paint. */
 function nextPaint(): Promise<void> {
+  if (typeof requestAnimationFrame !== "function") {
+    return Promise.resolve();
+  }
   return new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });

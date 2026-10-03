@@ -280,11 +280,11 @@ export const ElementNode = memo(function ElementNode({
     // Live update + ONE commit: writing through the non-live path here and
     // then committing would record the same text edit twice (the first Undo
     // would appear to do nothing).
-    if (changed) updateElement(el.id, { content: next }, true);
-    // Re-measure after committing: an auto-height box has to grow now, not on
-    // the next unrelated render, or the author sees their text cut mid-typing.
-    if (changed) fitTextBox(el.id);
-    commit();
+    if (changed) {
+      updateElement(el.id, { content: next }, true);
+      fitTextBox(el.id);
+      commit();
+    }
   };
 
   const handleEditKey = (e: React.KeyboardEvent<HTMLElement>) => {

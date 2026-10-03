@@ -12,6 +12,8 @@
 
 import { toast } from "sonner";
 import { useEditor } from "@/lib/editor/store";
+import { hasLeaveGuard, requestLeave } from "@/lib/editor/leave-controller";
+import { hasUnsavedChanges } from "@/lib/editor/unsaved-leave";
 import { isNsqFileName, nsqErrorMessage } from "./format";
 import type { NsqReadResult } from "./package";
 import {
@@ -94,6 +96,10 @@ export async function receiveProjectFile(
   file: File,
   signedIn: boolean,
 ): Promise<ReceiveOutcome> {
+  if (hasLeaveGuard() && hasUnsavedChanges(useEditor.getState().saveState)) {
+    const allowed = await requestLeave();
+    if (!allowed) return "failed";
+  }
   const preserved = await preserveNsq(file, signedIn);
   if (!preserved) return "failed";
   if (signedIn) {
@@ -111,6 +117,10 @@ export async function receiveProjectFile(
 
 /** Projects page / `/open`: preserve the file, then continue in the editor. */
 export async function receiveAndContinueInEditor(file: File): Promise<boolean> {
+  if (hasLeaveGuard() && hasUnsavedChanges(useEditor.getState().saveState)) {
+    const allowed = await requestLeave();
+    if (!allowed) return false;
+  }
   if (!(await preserveNsq(file))) return false;
   window.location.assign(NSQ_RESUME_URL);
   return true;
