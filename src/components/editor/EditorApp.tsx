@@ -370,7 +370,6 @@ export function EditorApp() {
   const ingestImage = async (
     file: File,
     at?: { x: number; y: number; pageId: string },
-    sequence = 0,
     intentOverride = imageIntent.current,
   ) => {
     const api = useEditor.getState();
@@ -415,7 +414,7 @@ export function EditorApp() {
           size,
           {
             intent: kind,
-            sequence: imageCount + sequence,
+            sequence: imageCount,
             ...(at ? { at } : {}),
           },
         );
@@ -548,8 +547,8 @@ export function EditorApp() {
           const unique = uniqueImageFiles(files);
           const selected = intent.type === "replace" ? unique.slice(0, 1) : unique;
           void (async () => {
-            for (const [index, file] of selected.entries()) {
-              await ingestImage(file, undefined, index, intent);
+            for (const file of selected) {
+              await ingestImage(file, undefined, intent);
             }
           })();
         }}

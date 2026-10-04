@@ -238,7 +238,7 @@ export interface ImagePlacementPage {
 }
 
 export interface ImagePlacementOptions {
-  /** Picker sequence on this page; zero is centered, later values are offset. */
+  /** Insertion order on this page; zero is centered and later items are spread out. */
   sequence?: number;
   /** Exact page-space centre for a drop. Drop placement does not receive an offset. */
   at?: { x: number; y: number };
@@ -251,6 +251,18 @@ export interface PlacedImageBox {
   y: number;
   w: number;
   h: number;
+}
+
+function halton(index: number, base: number): number {
+  let fraction = 1 / base;
+  let result = 0;
+  let value = index;
+  while (value > 0) {
+    result += fraction * (value % base);
+    value = Math.floor(value / base);
+    fraction /= base;
+  }
+  return result;
 }
 
 /** Pick a professional initial frame while keeping the whole image inside its page. */
@@ -266,22 +278,33 @@ export function placeImageBox(
     w: Math.min(pageW, maxEdge),
     h: Math.min(pageH, maxEdge),
   });
-  const sequence = Math.max(0, Math.floor(Number(options.sequence) || 0));
-  const offset = sequence === 0
-    ? { x: 0, y: 0 }
-    : {
-        x: (((sequence * 3) % 5) - 2) * 8,
-        y: (((sequence * 2) % 5) - 2) * 8,
-      };
-  const centre = options.at ?? {
-    x: pageW / 2 + offset.x,
-    y: pageH / 2 + offset.y,
-  };
+  const rawSequence = Number(options.sequence);
+  const sequence = Number.isFinite(rawSequence)
+    ? Math.max(0, Math.floor(rawSequence))
+    : 0;
+  const halfW = box.w / 2;
+  const halfH = box.h / 2;
+  const maxX = Math.max(0, pageW - box.w);
+  const maxY = Math.max(0, pageH - box.h);
+  const pickerCentres = [
+    { x: pageW / 2, y: pageH / 2 },
+    { x: halfW, y: halfH },
+    { x: pageW - halfW, y: halfH },
+    { x: halfW, y: pageH - halfH },
+    { x: pageW - halfW, y: pageH - halfH },
+    { x: pageW / 2, y: halfH },
+    { x: pageW / 2, y: pageH - halfH },
+  ];
+  const centre = options.at ??
+    pickerCentres[sequence] ?? {
+      x: halfW + halton(sequence - pickerCentres.length + 1, 2) * maxX,
+      y: halfH + halton(sequence - pickerCentres.length + 1, 3) * maxY,
+    };
   const clamp = (value: number, min: number, max: number) =>
     Math.min(Math.max(value, min), Math.max(min, max));
   return {
-    x: Math.round(clamp(centre.x - box.w / 2, 0, pageW - box.w) * 100) / 100,
-    y: Math.round(clamp(centre.y - box.h / 2, 0, pageH - box.h) * 100) / 100,
+    x: Math.round(clamp(centre.x - halfW, 0, maxX) * 100) / 100,
+    y: Math.round(clamp(centre.y - halfH, 0, maxY) * 100) / 100,
     w: box.w,
     h: box.h,
   };
