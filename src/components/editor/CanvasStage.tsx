@@ -77,6 +77,7 @@ import { clamp, cn, round } from "@/lib/utils";
 import { ElementNode } from "./ElementNode";
 import { PrintGuides } from "./PrintGuides";
 import type { PrintGuideSettings } from "@/lib/editor/print-guides";
+import { pageClipClass } from "@/lib/editor/page-visibility";
 import { FloatingToolbar } from "./FloatingToolbar";
 import { toast } from "sonner";
 import { beginCanvasNavigation, zoomAnchoredAt } from "@/lib/editor/viewport";
@@ -227,6 +228,7 @@ export function CanvasStage({
   const zoom = useEditor((s) => s.zoom);
   const previewAll = useEditor((s) => s.previewAll);
   const showGrid = useEditor((s) => s.showGrid);
+  const showOutsidePage = useEditor((s) => s.showOutsidePage);
   const printGuides = useEditor((s) => s.printGuides);
   const snapGrid = useEditor((s) => s.snapGrid);
   const snapElements = useEditor((s) => s.snapElements);
@@ -2227,6 +2229,7 @@ export function CanvasStage({
               editingId={page.id === activePageId ? editingId : null}
               enteredGroupId={page.id === activePageId ? enteredGroupId : null}
               showGrid={showGrid}
+              showOutsidePage={showOutsidePage}
               printGuides={printGuides}
               toolOwnsCanvas={toolOwnsCanvas}
               onElementGesture={onElementGesture}
@@ -2329,6 +2332,7 @@ const ArtboardPage = memo(function ArtboardPage({
   editingId,
   enteredGroupId,
   showGrid,
+  showOutsidePage,
   printGuides,
   toolOwnsCanvas,
   onElementGesture,
@@ -2353,6 +2357,11 @@ const ArtboardPage = memo(function ArtboardPage({
   editingId: string | null;
   enteredGroupId: string | null;
   showGrid: boolean;
+  /**
+   * Workspace preference «إظهار العناصر خارج الصفحة»: when false the artboard
+   * clips its own overflow. Paint only — the page keeps every element.
+   */
+  showOutsidePage: boolean;
   printGuides: PrintGuideSettings | undefined;
   /** A drawing/region tool owns the canvas: the artwork is a surface, not a target. */
   toolOwnsCanvas: boolean;
@@ -2549,7 +2558,7 @@ const ArtboardPage = memo(function ArtboardPage({
           className={`report-page ${showGrid ? "show-grid" : ""} ${
             isActive ? "artboard-active-outline" : ""
           } ${isLocked ? "artboard-locked" : ""} ${isHidden ? "artboard-hidden-content" : ""} ${
-            page.clipContent ? "is-clip-view" : ""
+            pageClipClass(page, showOutsidePage)
           }`}
           style={{
             width: `${mmToPx(size.w)}px`,

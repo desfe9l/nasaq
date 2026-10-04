@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Stamp,
   Table2,
+  Images,
 } from "lucide-react";
 import { THEMES } from "@/lib/editor/model";
 import { KPI_CARDS, type KpiKind } from "@/lib/editor/report-tools";
@@ -21,6 +22,7 @@ import {
   GRAPHIC_HEADINGS,
   type GraphicHeadingId,
 } from "@/lib/editor/graphic-headings";
+import { ImageFrameGallery } from "./ImageFrameGallery";
 import { runPreflight, preflightSummary } from "@/lib/editor/preflight";
 import {
   DEFAULT_PRINT_GUIDES,
@@ -71,6 +73,7 @@ export function ReportToolsPanel() {
   const insertKpiCard = useEditor((s) => s.insertKpiCard);
   const insertReportBlock = useEditor((s) => s.insertReportBlock);
   const insertGraphicHeading = useEditor((s) => s.insertGraphicHeading);
+  const insertImageFrame = useEditor((s) => s.insertImageFrame);
   const applyHeaderFooter = useEditor((s) => s.applyHeaderFooter);
   const removeHeaderFooter = useEditor((s) => s.removeHeaderFooter);
   const addPageNumbers = useEditor((s) => s.addPageNumbers);
@@ -244,6 +247,29 @@ export function ReportToolsPanel() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* ── Image shapes / frames — أشكال و إطارات الصور ─────────────────── */}
+      <div className="editor-subgroup">
+        <h4 className="editor-subgroup-title">
+          <span className="inline-flex items-center gap-1.5">
+            <Images className="size-3.5 text-brand-hover" />
+            أشكال و إطارات الصور
+          </span>
+          <span className="ms-auto rounded-full bg-navy-2/10 px-2 py-0.5 text-[9px] font-bold text-brand-hover">
+            نقرة = صورة
+          </span>
+        </h4>
+        <p className="text-[10px] leading-4 text-muted">
+          اضغط شكلًا ليُضاف فورًا كصورة داخله: استبدل الصورة، قصّها وحرّكها، غيّر
+          القياس والدوران — يبقى الشكل كما اخترته.
+        </p>
+        <ImageFrameGallery
+          mode="insert"
+          onPick={(frameId) => {
+            if (frameId) insertImageFrame(frameId);
+          }}
+        />
       </div>
 
       {/* ── KPI / progress cards ───────────────────────────────────────── */}

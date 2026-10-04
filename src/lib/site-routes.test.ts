@@ -14,6 +14,9 @@ import {
   templatePathFor,
   templatePreviewPathFor,
   templateSharePathFor,
+  templateShortPathFor,
+  sharedShortPathFor,
+  sharedTemplatePathFor,
 } from "./site-routes.ts";
 
 test("homepage Templates actions target the canonical Templates path (no trailing-slash redirect)", () => {
@@ -77,4 +80,15 @@ test("legacy addresses resolve to a canonical surface, never to the editor", () 
   for (const target of Object.values(LEGACY_ROUTE_REDIRECTS)) {
     assert.notEqual(target, EDITOR_ROUTE);
   }
+});
+
+test("short share links are real addresses, and the legacy shared path is not a 404", () => {
+  assert.equal(templateShortPathFor("k7m2p9q"), "/t/k7m2p9q");
+  assert.equal(sharedShortPathFor("k7m2p9q"), "/s/k7m2p9q");
+  /* A code is never wrapped in a path that could escape it. */
+  assert.equal(templateShortPathFor("../../admin"), null);
+  assert.equal(sharedShortPathFor("k7m2p9q?x=1"), null);
+  /* `/share/<token>` never existed as a route: the real one is under /templates. */
+  assert.equal(sharedTemplatePathFor("abcdefghijklmnopqrstuv"), "/templates/share/abcdefghijklmnopqrstuv");
+  assert.ok(!sharedTemplatePathFor("abcdefghijklmnopqrstuv").startsWith("/share/"));
 });

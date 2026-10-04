@@ -340,6 +340,8 @@ function EditorSection() {
   const showGrid = useEditor((s) => s.showGrid);
   const snapGrid = useEditor((s) => s.snapGrid);
   const snapElements = useEditor((s) => s.snapElements);
+  const showOutsidePage = useEditor((s) => s.showOutsidePage);
+  const setShowOutsidePage = useEditor((s) => s.setShowOutsidePage);
   const bubbleEnabled = useEditor((s) => s.bubbleEnabled);
   const artboardGridCols = useEditor((s) => s.artboardGridCols);
   const setArtboardGridCols = useEditor((s) => s.setArtboardGridCols);
@@ -407,6 +409,12 @@ function EditorSection() {
             hint="محاذاة العنصر إلى حواف العناصر المجاورة"
             checked={snapElements}
             onChange={() => toggle("snapElements")}
+          />
+          <PrefSwitch
+            label="إظهار العناصر خارج الصفحة"
+            hint="العناصر التي تتجاوز حدّ الصفحة تبقى مرئية أثناء التحرير. الإخفاء يقصّ العرض فقط — لا يحذف عنصرًا ولا يغيّر موضعه أو قياسه."
+            checked={showOutsidePage !== false}
+            onChange={() => setShowOutsidePage(showOutsidePage === false)}
           />
           <div className="flex items-center justify-between gap-2 py-2.5">
             <span className="text-[11px] font-bold text-ink">إصدار المحرر</span>

@@ -119,20 +119,71 @@ function createNeonSql(): Promise<Sql> {
   return globalRef.__pgSqlPromise__;
 }
 
+/**
+ * Where the embedded database keeps its files.
+ *
+ * THE BUG THIS FIXES: PGLite used to open **in memory**, so every template,
+ * licence, payment and setting written in a preview died with the process. A
+ * dev-server restart (or a serverless cold start) silently rolled the catalogue
+ * back to its seeds — which reads to the owner exactly as "the save failed" or
+ * "my edit disappeared after refresh", even though the write itself succeeded.
+ *
+ * So on any host with a writable filesystem the database is a real directory
+ * and survives restarts. Set `NASAQ_PGDATA=memory` to opt back into a throwaway
+ * database (useful in tests); `VERCEL=1` never gets a directory, because a
+ * serverless filesystem is read-only and per-invocation — that deployment must
+ * set `DATABASE_URL` (the guard in `createSql` says so loudly).
+ */
+function pgliteDataDir(): string | undefined {
+  if (typeof process === "undefined") return undefined;
+  const env = process.env ?? {};
+  if (env.VERCEL === "1") return undefined;
+  const explicit = String(env.NASAQ_PGDATA ?? env.PGDATA ?? "").trim();
+  if (explicit) return explicit === "memory" ? undefined : explicit;
+  const cwd = typeof process.cwd === "function" ? process.cwd() : "";
+  if (!cwd) return undefined;
+  return `${cwd.replace(/\/+$/, "")}/.pglite-data`;
+}
+
 async function createPgliteSql(): Promise<Sql> {
   // Embedded Postgres, imported on demand so it never loads on the Neon path.
-  // One in-memory instance per process, shared across HMR module instances, so
-  // data survives source edits (it resets on dev-server restart).
+  // One instance per process, shared across HMR module instances, persisted to
+  // `pgliteDataDir()` so data survives source edits AND server restarts.
   globalRef.__pgliteInstance__ ??= (async () => {
     const { PGlite } = await import("@electric-sql/pglite");
-    const pg = new PGlite({
-      parsers: {
-        [OID_INT8]: Number,
-        [OID_DATE]: identity,
-        [OID_INTERVAL]: identity,
-      },
-    });
-    await pg.waitReady;
+    const parsers = {
+      [OID_INT8]: Number,
+      [OID_DATE]: identity,
+      [OID_INTERVAL]: identity,
+    };
+    const dataDir = pgliteDataDir();
+    let pg: import("@electric-sql/pglite").PGlite;
+    if (dataDir) {
+      try {
+        const { mkdir } = await import("node:fs/promises");
+        await mkdir(dataDir, { recursive: true });
+        pg = new PGlite({ dataDir, parsers });
+        await pg.waitReady;
+      } catch (err) {
+        /*
+         * A read-only or unavailable directory must not take the whole preview
+         * down: fall back to memory and say so once, loudly, in the log. Data
+         * then lasts only as long as the process — which is exactly what the
+         * message tells the operator.
+         */
+        console.warn(
+          `[db] PGLite could not use ${dataDir} — falling back to an in-memory ` +
+            "database (writes are lost on restart). Set NASAQ_PGDATA to a " +
+            "writable path, or DATABASE_URL for a managed Postgres.",
+          err,
+        );
+        pg = new PGlite({ parsers });
+        await pg.waitReady;
+      }
+    } else {
+      pg = new PGlite({ parsers });
+      await pg.waitReady;
+    }
     await pg.exec(
       "create table if not exists _migrations (name text primary key, applied_at timestamptz not null default now())",
     );

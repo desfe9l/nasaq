@@ -188,6 +188,8 @@ export interface AdminTemplateSummary {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+  /** Short public address: `/t/<code>`. Minted once, never rotated. */
+  shortCode?: string | null;
 }
 
 export interface AdminTemplate extends AdminTemplateSummary {

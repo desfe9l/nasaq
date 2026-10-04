@@ -58,6 +58,7 @@ const poly = (points: string): ShapePart => ({ k: "poly", points });
 export const SHAPE_GROUPS = [
   "أساسية",
   "متعددة الأضلاع",
+  "عضوية",
   "زخرفة إسلامية",
   "أسهم",
   "شارات وفقاعات",
@@ -149,6 +150,98 @@ export const SHAPES: ShapeDef[] = [
     label: "شبه منحرف",
     group: "أساسية",
     parts: [poly("20,2 80,2 100,98 0,98")],
+  },
+
+  /*
+   * إطارات الصور — silhouettes used both as ordinary shapes and as the cut of
+   * an image frame (`image-frames.ts`). They live here, in the one geometry
+   * source, so a frame on the canvas, in a public preview and in an export is
+   * always the same curve.
+   */
+  {
+    id: "pill",
+    label: "كبسولة",
+    group: "أساسية",
+    // rx is clamped to half the shorter side by the renderer, so a wide box
+    // becomes a stadium and a tall one a vertical capsule — one definition.
+    parts: [{ k: "rect", x: 0, y: 0, w: 100, h: 100, rx: 50, ry: 50 }],
+  },
+  {
+    id: "squircle",
+    label: "مربع ناعم",
+    group: "أساسية",
+    parts: [
+      {
+        k: "path",
+        d: "M50 0C79 0 92 5 96 15C99 24 100 36 100 50C100 64 99 76 96 85C92 95 79 100 50 100C21 100 8 95 4 85C1 76 0 64 0 50C0 36 1 24 4 15C8 5 21 0 50 0Z",
+      },
+    ],
+  },
+  {
+    id: "chamfer",
+    label: "مستطيل مشطوف",
+    group: "أساسية",
+    parts: [poly("14,0 86,0 100,14 100,86 86,100 14,100 0,86 0,14")],
+  },
+  {
+    id: "eye",
+    label: "لوزة",
+    group: "أساسية",
+    parts: [
+      { k: "path", d: "M0 50C18 20 82 20 100 50C82 80 18 80 0 50Z" },
+    ],
+  },
+  {
+    id: "half-round",
+    label: "نصف استدارة",
+    group: "أساسية",
+    parts: [{ k: "path", d: "M0 100V50A50 50 0 0 1 100 50V100Z" }],
+  },
+  {
+    id: "ticket",
+    label: "تذكرة",
+    group: "أساسية",
+    parts: [
+      {
+        k: "path",
+        d: "M0 0H100V38C91 41 91 59 100 62V100H0V62C9 59 9 41 0 38Z",
+      },
+    ],
+  },
+
+  // ── عضوية ──────────────────────────────────────────────────────────────
+  {
+    id: "blob",
+    label: "شكل عضوي",
+    group: "عضوية",
+    parts: [
+      {
+        k: "path",
+        d: "M84 18C96 30 100 48 96 64C92 81 78 94 60 98C42 102 24 96 13 83C2 70 0 51 7 35C14 19 30 6 48 3C63 1 74 8 84 18Z",
+      },
+    ],
+  },
+  {
+    id: "blob-leaf",
+    label: "ورقة",
+    group: "عضوية",
+    parts: [
+      {
+        k: "path",
+        d: "M96 4C96 52 62 96 8 96C8 48 42 4 96 4Z",
+      },
+    ],
+  },
+  {
+    id: "blob-pebble",
+    label: "حصاة",
+    group: "عضوية",
+    parts: [
+      {
+        k: "path",
+        d: "M28 8C52 2 78 8 90 26C100 43 97 68 84 82C69 97 44 100 26 92C9 84 1 63 4 43C7 23 13 12 28 8Z",
+      },
+    ],
   },
 
   // ── متعددة الأضلاع ─────────────────────────────────────────────────────

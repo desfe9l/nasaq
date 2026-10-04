@@ -1621,6 +1621,73 @@ body.is-resizing-panel .editor-panel-resize-handle .editor-panel-resize-grip {
 .guide-v { translate: -50% 0; }
 .guide-h { translate: 0 -50%; }
 .report-page.is-clip-view { overflow: hidden; }
+
+/*
+ * «أشكال الصور» — the compact image-frame gallery.
+ *
+ * Shared by Report Tools (a click inserts a framed picture) and the picture
+ * properties (a click reframes the selected picture). The silhouette is the
+ * label: tiles stay icon-sized so a dense panel still reads as a gallery.
+ */
+.image-frame-gallery { display: grid; gap: 6px; }
+.image-frame-group { display: grid; gap: 4px; }
+.image-frame-group-title {
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1.4;
+  color: var(--color-muted);
+}
+.image-frame-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  gap: 4px;
+}
+.image-frame-tile {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 5px;
+  border-radius: 8px;
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  color: var(--color-muted);
+  transition:
+    border-color 0.12s ease,
+    color 0.12s ease,
+    background 0.12s ease;
+}
+.image-frame-tile:hover:not(:disabled) {
+  color: var(--color-brand-hover);
+  border-color: var(--color-navy-2);
+}
+.image-frame-tile.is-active {
+  color: var(--color-on-brand);
+  background: var(--color-navy-2);
+  border-color: var(--color-navy-2);
+}
+.image-frame-tile:disabled { opacity: 0.45; cursor: not-allowed; }
+.image-frame-none {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+  border: 1px dashed currentColor;
+}
+.image-frame-none::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to top left,
+    transparent calc(50% - 0.6px),
+    currentColor calc(50% - 0.6px),
+    currentColor calc(50% + 0.6px),
+    transparent calc(50% + 0.6px)
+  );
+}
+/* The framed picture itself: the clip owns the silhouette, so the artwork box
+   stays a plain rectangle and the fade overlay follows the frame. */
+.image-frame-clip { isolation: isolate; }
 .page-bg-image {
   position: absolute;
   inset: 0;
