@@ -35,7 +35,6 @@ export function HomePage() {
   const projects = useEditor((s) => s.projects);
   const projectsLoading = useEditor((s) => s.projectsLoading);
   const hydrate = useEditor((s) => s.hydrate);
-  const openProject = useEditor((s) => s.openProject);
   const [recentHidden, setRecentHidden] = useState(false);
   useEffect(() => {
     try {
@@ -102,8 +101,8 @@ export function HomePage() {
 
   const recent = projects.slice(0, 3);
 
-  const openEditor = async (id: string) => {
-    if (await openProject(id)) window.location.assign(editorPathFor(id));
+  const openEditor = (id: string) => {
+    window.location.assign(editorPathFor(id));
   };
 
   return (

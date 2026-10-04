@@ -5,13 +5,12 @@ import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import type { ProjectMeta } from "@/lib/editor/model";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
-import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 import { ProjectCard } from "@/components/site/ProjectCard";
 import { cn } from "@/lib/utils";
 import { NSQ_ACCEPT, isNsqFileName } from "@/lib/nsq/format";
 import { downloadLibraryFile } from "@/lib/editor/library-export";
 import { hasSignedInOwner } from "@/lib/editor/storage-owner";
-import { CREATE_ROUTE, editorPathFor, projectPathFor } from "@/lib/site-routes";
+import { CREATE_ROUTE, editorPathFor } from "@/lib/site-routes";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
 import { useLicense } from "@/lib/license/client";
@@ -48,7 +47,6 @@ export function ProjectsPage() {
   const projects = useEditor((s) => s.projects);
   const projectsLoading = useEditor((s) => s.projectsLoading);
   const refreshProjects = useEditor((s) => s.refreshProjects);
-  const openProject = useEditor((s) => s.openProject);
   const importProject = useEditor((s) => s.importProject);
   const storage = useEditor((s) => s.storage);
   const assets = useEditor((s) => s.assets);
@@ -105,20 +103,18 @@ export function ProjectsPage() {
     });
 
   /*
-   * Opening a project means opening its PAGE (`/projects/<id>`): the shelf is
-   * an index, and the document itself decides where it is edited. Creating
-   * goes through the creation screen, so a new design always starts from a
-   * chosen format rather than a silent blank page.
+   * A project card's Open/Edit action enters the editor at that exact saved
+   * document. The editor route resolves the full record before mounting the
+   * canvas; it never opens the generic editor entry or substitutes another
+   * project. New documents still go through the creation screen below.
    */
   const open = (id: string) => {
-    window.location.assign(projectPathFor(id));
+    window.location.assign(editorPathFor(id));
   };
 
   const startNew = () => {
     window.location.assign(CREATE_ROUTE);
   };
-  const { entry } = useEditorEntry();
-
   /** Pinned first cell: the dashed «create document» tile every view starts with. */
   const createCard = (
     <button
