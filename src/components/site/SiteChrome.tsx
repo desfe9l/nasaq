@@ -25,6 +25,7 @@ import {
   useWorkspaceEntry,
 } from "@/lib/auth/use-workspace-entry";
 import { AccountControlContent } from "./AccountControlContent";
+import { WorkspaceMark } from "./WorkspaceMark";
 import { useAccountTier } from "./AccountBadge";
 import {
   AccountMenuPanel,
@@ -46,6 +47,12 @@ const APPEARANCE_CONTROL_CLASS =
  * link that leads there, so nobody with an account is asked to "try" a product
  * they already signed up for. Only a visitor with no session is routed through
  * the limited `/demo` page.
+ *
+ * The control carries `WorkspaceMark` — one glyph for both doors it can be
+ * (the licensed workspace and the editor experience), leading the label exactly
+ * where the chrome's other icons lead theirs. Only the visual treatment changed:
+ * the sizes, the padding, the slot in the header, the destination and the labels
+ * are the ones this link always had.
  */
 function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile" }) {
   const { entry } = useEditorEntry();
@@ -68,10 +75,11 @@ function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile"
       href={href}
       className={cn(
         variant === "header"
-          ? "hidden h-9 items-center whitespace-nowrap rounded-[8px] border border-brand px-3 text-[12px] font-extrabold text-brand lg:inline-flex"
-          : "block rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted lg:hidden",
+          ? "hidden h-9 items-center gap-1.5 whitespace-nowrap rounded-[8px] border border-brand px-3 text-[12px] font-extrabold text-brand transition-[background-color,border-color,color,transform,scale] duration-150 hover:border-brand/60 hover:bg-navy/10 hover:text-brand-hover active:scale-[0.98] active:bg-navy/15 active:text-brand-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand lg:inline-flex"
+          : "flex items-center gap-2 rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted transition-colors duration-150 hover:bg-line-2 hover:text-ink active:bg-line-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand lg:hidden",
       )}
     >
+      <WorkspaceMark className="size-4" />
       {label}
     </a>
   );
