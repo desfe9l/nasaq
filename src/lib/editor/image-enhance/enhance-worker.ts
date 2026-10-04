@@ -55,7 +55,7 @@ type ErrorMsg = {
 
 const scope = self as unknown as {
   onmessage: ((ev: MessageEvent) => void) | null;
-  postMessage: (msg: ProgressMsg | DoneMsg | ErrorMsg, transfer?: Transferable[]) => void;
+  postMessage: (msg: ProgressMsg | DoneMsg | ErrorMsg) => void;
 };
 
 /* ------------------------------------------------------------------ */
@@ -187,7 +187,9 @@ scope.onmessage = (ev: MessageEvent) => {
     try {
       const done =
         msg.op === "background" ? await runBackground(msg) : await runDenoise(msg);
-      scope.postMessage(done, [done.blob]);
+      // Blobs are cloned by reference; they are not transferable, and listing
+      // one in a transfer array throws a DataCloneError.
+      scope.postMessage(done);
     } catch (err) {
       let code: ErrorMsg["code"] = "engine_failed";
       let message = "فشلت المعالجة، حاول مرة أخرى";

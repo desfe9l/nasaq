@@ -58,6 +58,7 @@ import {
   type TemplateFormValues,
 } from "@/components/site/TemplateDialogs";
 import { useCatalogEntries, useCustomTemplates, useTemplateDraft } from "@/components/site/useCatalog";
+import { commitTemplateDraft } from "@/lib/templates/draft-commit";
 import {
   mergePublishedTemplateContext,
   publishedTemplateSeed,
@@ -176,22 +177,32 @@ export function TemplatesPage() {
 
   /** Managed legacy content is fetched through the existing server license gate. */
   const projectSeedForEntry = async (entry: CatalogEntry) => {
-    if (!entry.managedTemplate) return entryProjectSeed(entry, { themeId: theme, orgName });
-    const result = await getPublishedTemplateFn({
-      data: { id: templateDisplaySlug(entry.managedTemplate) },
-    });
-    if (!result.ok) {
-      if ("locked" in result && result.locked) {
-        window.location.assign("/license");
-      } else {
-        toast.error(result.error || "القالب غير متاح");
+    try {
+      if (!entry.managedTemplate) return entryProjectSeed(entry, { themeId: theme, orgName });
+      const result = await getPublishedTemplateFn({
+        data: { id: templateDisplaySlug(entry.managedTemplate) },
+      });
+      if (!result.ok) {
+        if ("locked" in result && result.locked) {
+          window.location.assign("/license");
+        } else {
+          toast.error(result.error || "القالب غير متاح");
+        }
+        return null;
       }
+      return mergePublishedTemplateContext(
+        publishedTemplateSeed(result.template),
+        entryProjectSeed(entry, { themeId: theme, orgName }),
+      );
+    } catch (error) {
+      // Network failure or an unreadable payload: say so instead of leaving
+      // «استخدام» / «تعديل» / «تكرار» silently doing nothing.
+      console.error(error);
+      toast.error("تعذر تحميل محتوى القالب", {
+        description: "تحقق من الاتصال ثم أعد المحاولة.",
+      });
       return null;
     }
-    return mergePublishedTemplateContext(
-      publishedTemplateSeed(result.template),
-      entryProjectSeed(entry, { themeId: theme, orgName }),
-    );
   };
 
   /* ── actions ─────────────────────────────────────────────────────────── */
@@ -224,6 +235,14 @@ export function TemplatesPage() {
       return;
     }
     await hydrate();
+    // Re-opening a template that already has a working copy continues THAT
+    // copy: starting over from the source would silently orphan the saved
+    // edits and re-point the draft at a fresh, unedited project.
+    if (draft?.entryId === entry.id && (await getProject(draft.projectId))?.pages?.length) {
+      setQuickViewId(null);
+      if (await openProject(draft.projectId)) window.location.assign("/editor");
+      return;
+    }
     const seed = await projectSeedForEntry(entry);
     if (!seed) return;
     if (demoBlocked(seed.pages.length)) return;
@@ -388,75 +407,33 @@ export function TemplatesPage() {
     }
   };
 
-  /** Write the edited draft project back into the library. */
+  /** Write the edited draft project back into the library (shared with the editor). */
   const commitDraft = async () => {
     if (!draft) return;
     try {
-      const project = await getProject(draft.projectId);
-      if (!project?.pages?.length) {
-        clearDraft();
+      const result = await commitTemplateDraft(draft, {
+        entries,
+        entitlements,
+        readProject: getProject,
+      });
+      if (result.status === "missing") {
         toast.error("تعذّر قراءة مسودة القالب — حُذف المشروع أو لم يعد موجودًا");
         return;
       }
-      const target = entries.find((e) => e.id === draft.entryId);
-      const pack =
-        project.pack ??
-        target?.custom?.pack ??
-        (!target?.managedTemplate && target?.kind === "pack"
-          ? (target.sourceId as PackId)
-          : undefined);
-      const licensedTemplateId =
-        project.licensedTemplateId ??
-        target?.custom?.licensedTemplateId ??
-        (target?.managedTemplate?.tier === "licensed"
-          ? target.managedTemplate.id
-          : undefined);
-      if (
-        !ensureProjectAccess(
-          { ...project, pack, licensedTemplateId },
-          "حفظ تعديلات",
-        )
-      )
+      if (result.status === "blocked") {
+        toast.error(
+          result.block === "premium-template"
+            ? "يتطلب حفظ تعديلات ترخيصًا مناسبًا لهذا القالب."
+            : "يتجاوز هذا المستند حد الصفحات في خطتك الحالية.",
+        );
         return;
-
-      const saved =
-        draft.kind === "custom" && target?.custom
-          ? saveCustomTemplate(
-              {
-                id: target.custom.id,
-                title: target.custom.title,
-                desc: target.custom.desc,
-                category: target.custom.category,
-                pills: target.custom.pills,
-                tags: target.custom.tags,
-                pack,
-                licensedTemplateId,
-                pages: project.pages,
-              },
-              entitlements,
-            )
-          : saveCustomTemplate(
-              {
-                title: draft.title,
-                desc: `مُشتق من «${draft.title}» بعد التعديل.`,
-                category: target?.category || "editorial",
-                pills:
-                  target?.pills.filter((p) => p !== "all" && p !== "custom") ?? [],
-                tags: target?.tags ?? [],
-                derivedFrom: draft.entryId,
-                pack,
-                licensedTemplateId,
-                pages: project.pages,
-              },
-              entitlements,
-            );
+      }
       toast.success(
-        draft.kind === "custom" && target?.custom
-          ? `تم تحديث «${saved.title}» بتعديلاتك`
-          : `تم حفظ «${saved.title}» كقالب جديد`,
+        result.updated
+          ? `تم تحديث «${result.template.title}» بتعديلاتك`
+          : `تم حفظ «${result.template.title}» كقالب جديد`,
       );
-      setJustSaved(`custom:${saved.id}`);
-      clearDraft();
+      setJustSaved(`custom:${result.template.id}`);
       setPill("custom");
       setQuery("");
     } catch (err) {

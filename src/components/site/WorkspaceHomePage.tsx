@@ -380,6 +380,13 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
         { autoName: true },
       );
       if (created) window.location.assign("/editor");
+    } catch (error) {
+      // A failed fetch or an unreadable template payload must never leave the
+      // click without an answer.
+      console.error(error);
+      toast.error("تعذر فتح القالب", {
+        description: "تحقق من الاتصال ثم أعد المحاولة.",
+      });
     } finally {
       busy.current = false;
     }

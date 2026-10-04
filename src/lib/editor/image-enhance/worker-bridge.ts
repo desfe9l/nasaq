@@ -125,6 +125,20 @@ export function runInWorker(
       height: input.height,
       mime: input.mime,
     };
-    w.postMessage(request, [input.blob]);
+    // A Blob is NOT a transferable object: listing it in the transfer array
+    // makes `postMessage` throw a DataCloneError before the job ever reaches
+    // the worker. Blobs are immutable and structured-clone by reference, so
+    // posting it plainly costs no copy.
+    try {
+      w.postMessage(request);
+    } catch (err) {
+      pending.delete(id);
+      reject(
+        new EnhanceError(
+          "engine_failed",
+          err instanceof Error ? err.message : "تعذر إرسال الصورة إلى خدمة المعالجة",
+        ),
+      );
+    }
   });
 }
