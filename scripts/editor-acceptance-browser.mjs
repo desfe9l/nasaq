@@ -72,8 +72,8 @@ try {
     );
     await page.waitForTimeout(80);
   };
-  const geometry = async (type) => {
-    const result = await page.evaluate((type) => {
+  const measure = (type) =>
+    page.evaluate((type) => {
       const id = window.ids[type];
       const node = document.querySelector(
         `.editor-canvas-stage .canvas-el[data-el-id="${id}"]`,
@@ -104,6 +104,14 @@ try {
         background: getComputedStyle(frame).backgroundImage,
       };
     }, type);
+  const geometry = async (type) => {
+    let result;
+    // Frame and node settle after pointer-up; poll rather than sample once.
+    for (let attempt = 0; attempt < 12; attempt++) {
+      result = await measure(type);
+      if (result.delta.every((v) => v < 0.2)) break;
+      await page.waitForTimeout(100);
+    }
     assert.ok(
       result.delta.every((v) => v < 0.2),
       JSON.stringify(result),

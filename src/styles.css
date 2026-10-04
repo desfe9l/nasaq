@@ -3751,6 +3751,9 @@ body.is-resizing-panel .editor-dock-strip::before {
   align-items: stretch;
   flex-wrap: nowrap;
   gap: 2px;
+  /* A grid item defaults to min-content width; without this the header grows past the viewport. */
+  min-width: 0;
+  max-width: 100%;
 }
 .editor-ui .editor-toolbar-main {
   display: flex;
@@ -3801,6 +3804,7 @@ body.is-resizing-panel .editor-dock-strip::before {
    * nothing hides off-screen.
    */
   .editor-ui .editor-header-primary {
+    flex-shrink: 1;
     min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
@@ -5860,7 +5864,7 @@ button.license-badge-locked:focus-visible {
   flex: none;
   width: 100%;
   border-top: 1px solid var(--editor-border);
-  padding-top: 2px;
+  padding-top: 0;
   padding-inline: 4px;
 }
 
@@ -5885,6 +5889,16 @@ button.license-badge-locked:focus-visible {
 @media (any-pointer: coarse) {
   .product-nav-tab {
     min-height: 44px;
+  }
+}
+
+/* Mouse-only desktops reclaim canvas height; touch keeps 44px targets. */
+@media (any-pointer: fine) and (not (any-pointer: coarse)) {
+  .editor-ui .editor-surface-nav .product-nav-scroll {
+    min-height: 32px;
+  }
+  .editor-ui .editor-surface-nav .product-nav-tab {
+    min-height: 30px;
   }
 }
 

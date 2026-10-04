@@ -117,7 +117,7 @@ function ResultPreview({ project, composite }: { project: Project; composite?: s
     });
   return (
     <div className="grid gap-3 lg:grid-cols-2">
-      <figure className="rounded-xl border border-line bg-[#e7e2d8] p-3">
+      <figure className="rounded-xl border border-line bg-surface-2 p-3">
         <figcaption className="mb-2 text-[11px] font-extrabold text-muted">المرجع البصري</figcaption>
         {composite ? (
           <img alt="معاينة ملف PSD" src={composite} className="w-full bg-white shadow-sm" />
@@ -125,7 +125,7 @@ function ResultPreview({ project, composite }: { project: Project; composite?: s
           <p className="grid h-40 place-items-center text-[12px] font-bold text-muted">المعاينة المسطحة غير متاحة لهذا الحجم — العناصر أدناه هي نتيجة التحويل.</p>
         )}
       </figure>
-      <figure className="rounded-xl border border-line bg-[#e7e2d8] p-3">
+      <figure className="rounded-xl border border-line bg-surface-2 p-3">
         <figcaption className="mb-2 text-[11px] font-extrabold text-muted">عناصر نَسَق</figcaption>
         <div className="relative w-full bg-white shadow-sm" style={{ aspectRatio: `${page.w} / ${page.h}`, containerType: "inline-size" }}>
           {paint(page.elements, 0, 0)}
@@ -427,7 +427,7 @@ export function PsdImportPanel() {
       </div>
 
       {error && (
-        <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] font-bold text-red-700">{error}</p>
+        <p className="rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-[12px] font-bold text-ink">{error}</p>
       )}
 
       <div className="flex flex-wrap gap-2">
@@ -544,7 +544,7 @@ export function PsdImportPanel() {
                     {font.status === "library" ? (
                       <span className="inline-flex items-center gap-1 text-[11px] font-extrabold text-success"><CheckCircle2 className="size-3.5" /> من مكتبة نَسَق</span>
                     ) : (
-                      <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-extrabold text-amber-700">
+                      <label className="inline-flex cursor-pointer items-center gap-1 text-[11px] font-extrabold text-warning">
                         <AlertTriangle className="size-3.5" />
                         {fonts[font.family] ? "تم إرفاق الخط" : "ارفع الخط"}
                         <input
@@ -659,7 +659,7 @@ export function PsdImportPanel() {
             {result.validation.issues.length > 0 && (
               <ul className="mt-3 grid gap-1">
                 {result.validation.issues.slice(0, 12).map((issue, index) => (
-                  <li key={index} className={cn("text-[11px] font-bold", issue.severity === "error" ? "text-red-700" : "text-muted")}>
+                  <li key={index} className={cn("text-[11px] font-bold", issue.severity === "error" ? "text-danger" : "text-muted")}>
                     {issue.message}
                   </li>
                 ))}

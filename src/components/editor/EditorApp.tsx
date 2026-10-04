@@ -509,7 +509,7 @@ export function EditorApp() {
       <ThemedToaster position="top-center" richColors dir="rtl" />
       <LeaveGuard />
       {activeTrial && (
-        <div className="border-b border-emerald-700/15 bg-emerald-50 px-3 py-2 text-center text-[12px] font-bold text-emerald-950 dark:border-emerald-300/15 dark:bg-emerald-950/50 dark:text-emerald-100">
+        <div className="border-b border-brand/15 bg-brand/10 px-3 py-2 text-center text-[12px] font-bold text-ink">
           التجربة المجانية سارية حتى {new Date(activeTrial.expiresAt).toLocaleDateString("ar-SA")}.
           <a href="/license" className="ms-1 underline underline-offset-2">عرض حالة الاشتراك</a>
         </div>

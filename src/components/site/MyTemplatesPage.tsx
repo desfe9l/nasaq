@@ -122,7 +122,7 @@ function LicensedTemplates({ user }: { user: AppUser }) {
       <p className="mt-2 max-w-2xl text-[14px] leading-7 text-muted">
         قوالبك الخاصة. تبقى مخفية عن الآخرين إلا إذا فعّلت المشاركة بنفسك.
       </p>
-      {error && <p className="mt-4 text-[13px] font-bold text-red-700">{error}</p>}
+      {error && <p className="mt-4 text-[13px] font-bold text-danger">{error}</p>}
       {rows.length === 0 ? (
         <p className="mt-8 text-muted">لا توجد قوالب بعد. احفظ مستندًا من المحرر عبر «حفظ في قوالبي».</p>
       ) : (
