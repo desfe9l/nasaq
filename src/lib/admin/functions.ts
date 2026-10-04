@@ -12,6 +12,7 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { publicTemplateContent } from "@/lib/templates/document-template";
+import { applyTemplateNameToContent, resolveTemplateName } from "@/lib/templates/naming";
 import { authMiddleware, optionalAuthMiddleware } from "@/lib/auth/middleware";
 import {
   DEFAULT_SITE_SETTINGS,
@@ -579,8 +580,18 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
     const kind: TemplateKind = t.kind === "svg" ? "svg" : "json";
     const tier: TemplateTier = t.tier === "licensed" ? "licensed" : "free";
     const status: TemplateStatus = t.status === "published" || t.status === "archived" ? t.status : "draft";
-    const title = String(t.title ?? "").trim().slice(0, 120);
-    if (!title) return { ok: false as const, error: "العنوان مطلوب" };
+    const title = resolveTemplateName({
+      title: t.title,
+      titleIsManual: t.titleIsManual,
+      sourceName: t.sourceName,
+      description: t.description,
+      category: t.category,
+      kind,
+      format: t.format,
+      content: t.content,
+    });
+    const category = String(t.category ?? "general").slice(0, 60) || "general";
+    const description = String(t.description ?? "").slice(0, 500);
     const origin = String(t.originProjectId ?? "").trim().slice(0, 120);
     const db = await sql();
     /*
@@ -589,7 +600,8 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
      * «نسخة جديدة» opts out by leaving the origin empty.
      */
     if (!t.id && origin && t.createNew !== true && t.content) {
-      const content = String(t.content);
+      const rawContent = String(t.content);
+      const content = kind === "json" ? applyTemplateNameToContent(rawContent, title) : rawContent;
       const contentError = validateContent(kind, content);
       if (contentError) return { ok: false as const, error: contentError };
       const { randomUUID } = await import("node:crypto");
@@ -612,8 +624,8 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
           newId,
           slug,
           title,
-          String(t.description ?? "").slice(0, 500),
-          String(t.category ?? "general").slice(0, 60) || "general",
+          description,
+          category,
           tier,
           status,
           kind,
@@ -628,7 +640,7 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
       if (status !== "published" || tier !== "free") {
         await clearFeaturedTemplateReference(db, saved.id);
       }
-      return { ok: true as const, id: saved.id, slug: saved.slug };
+      return { ok: true as const, id: saved.id, slug: saved.slug, title };
     }
     const existing = t.id
       ? await db.query<{ content: string; kind: string; slug: string | null; thumbnail: string | null }>(
@@ -637,7 +649,8 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
         )
       : [];
     const replacingContent = Boolean(t.content);
-    const content = replacingContent ? String(t.content) : existing[0]?.content ?? "";
+    const rawContent = replacingContent ? String(t.content) : existing[0]?.content ?? "";
+    const content = kind === "json" ? applyTemplateNameToContent(rawContent, title) : rawContent;
     /* Only NEW content is validated. An EDIT that leaves the payload alone
      * keeps whatever is stored: re-validating a template that was accepted
      * before a rule changed (or that arrived from an older export) would make
@@ -695,8 +708,8 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
         id,
         slug,
         title,
-        String(t.description ?? "").slice(0, 500),
-        String(t.category ?? "general").slice(0, 60) || "general",
+        description,
+        category,
         tier,
         status,
         kind,
@@ -708,7 +721,7 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
     if (status !== "published" || tier !== "free") {
       await clearFeaturedTemplateReference(db, id);
     }
-    return { ok: true as const, id, slug };
+    return { ok: true as const, id, slug, title };
   });
 
 export const adminSetTemplateStatusFn = createServerFn({ method: "POST" })

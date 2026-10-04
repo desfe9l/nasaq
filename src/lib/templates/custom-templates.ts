@@ -31,6 +31,7 @@ import {
 import { projectAccessBlock, type EditorAccessEntitlements } from "@/lib/editor/access-limits";
 import type { TemplateCategoryId } from "@/lib/editor/templates";
 import { uid } from "@/lib/utils";
+import { resolveTemplateName } from "@/lib/templates/naming";
 
 /** Legacy localStorage keys; new template and draft data never writes here. */
 export const LEGACY_CUSTOM_TEMPLATES_KEY = "nasaq.templates.custom.v1";
@@ -563,11 +564,18 @@ export async function saveCustomTemplate(
   if (block) throw new TemplateAccessError(block);
 
   const size = pageSize(input.pages[0]);
+  const category = (input.category || existing?.category || "editorial") as TemplateCategoryId;
+  const title = resolveTemplateName({
+    title: input.title || existing?.title,
+    description: input.desc ?? existing?.desc,
+    category,
+    content: input.pages,
+  }).slice(0, MAX_TITLE);
   const record: CustomTemplate = {
     id: existing?.id || uid("tpl"),
-    title: asString(input.title, MAX_TITLE) || existing?.title || "قالب جديد",
+    title,
     desc: asString(input.desc ?? existing?.desc ?? "", MAX_DESC),
-    category: (input.category || existing?.category || "editorial") as TemplateCategoryId,
+    category,
     pills: (input.pills ?? existing?.pills ?? []).filter((pill) => pill !== "all" && pill !== "custom"),
     tags: (input.tags ?? existing?.tags ?? [])
       .map((tag) => asString(tag, MAX_TAG))

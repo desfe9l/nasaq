@@ -210,6 +210,12 @@ export interface AdminTemplateInput {
   originProjectId?: string | null;
   /** When true, a new catalogue row is created even if this project was saved before. */
   createNew?: boolean;
+  /** Original import/upload filename, used only to derive a clean default name. */
+  sourceName?: string;
+  /** The title field was explicitly edited; do not rewrite a meaningful name. */
+  titleIsManual?: boolean;
+  /** Original format, when it is more specific than the JSON/SVG storage kind. */
+  format?: string;
 }
 
 const HEX = /^#[0-9a-fA-F]{6}$/;

@@ -51,6 +51,7 @@ import { Route as EditorProjectIdRouteImport } from './routes/editor/$projectId'
 import { Route as PaymentCancelRouteImport } from './routes/payment/cancel'
 import { Route as PaymentSuccessRouteImport } from './routes/payment/success'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
+import { Route as TTokenRouteImport } from './routes/t/$token'
 import { Route as TemplatesIndexRouteImport } from './routes/templates/index'
 import { Route as TemplatesTemplateIdRouteImport } from './routes/templates/$templateId'
 import { Route as AdminLicensesIndexRouteImport } from './routes/admin/licenses/index'
@@ -276,6 +277,11 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/$projectId',
   getParentRoute: () => ProjectsRoute,
 } as any)
+const TTokenRoute = TTokenRouteImport.update({
+  id: '/t/$token',
+  path: '/t/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TemplatesIndexRoute = TemplatesIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -385,6 +391,7 @@ export interface FileRoutesByFullPath {
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/t/$token': typeof TTokenRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/editor/': typeof EditorIndexRoute
@@ -440,6 +447,7 @@ export interface FileRoutesByTo {
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/t/$token': typeof TTokenRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
   '/admin': typeof AdminIndexRoute
   '/editor': typeof EditorIndexRoute
@@ -498,6 +506,7 @@ export interface FileRoutesById {
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/t/$token': typeof TTokenRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/editor/': typeof EditorIndexRoute
@@ -557,6 +566,7 @@ export interface FileRouteTypes {
     | '/payment/cancel'
     | '/payment/success'
     | '/projects/$projectId'
+    | '/t/$token'
     | '/templates/$templateId'
     | '/admin/'
     | '/editor/'
@@ -612,6 +622,7 @@ export interface FileRouteTypes {
     | '/payment/cancel'
     | '/payment/success'
     | '/projects/$projectId'
+    | '/t/$token'
     | '/templates/$templateId'
     | '/admin'
     | '/editor'
@@ -669,6 +680,7 @@ export interface FileRouteTypes {
     | '/payment/cancel'
     | '/payment/success'
     | '/projects/$projectId'
+    | '/t/$token'
     | '/templates/$templateId'
     | '/admin/'
     | '/editor/'
@@ -715,6 +727,7 @@ export interface RootRouteChildren {
   EditorProjectIdRoute: typeof EditorProjectIdRoute
   PaymentCancelRoute: typeof PaymentCancelRoute
   PaymentSuccessRoute: typeof PaymentSuccessRoute
+  TTokenRoute: typeof TTokenRoute
   EditorIndexRoute: typeof EditorIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
@@ -1021,6 +1034,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof ProjectsRoute
     }
+    '/t/$token': {
+      id: '/t/$token'
+      path: '/t/$token'
+      fullPath: '/t/$token'
+      preLoaderRoute: typeof TTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/templates/': {
       id: '/templates/'
       path: '/'
@@ -1220,6 +1240,7 @@ const rootRouteChildren: RootRouteChildren = {
   EditorProjectIdRoute: EditorProjectIdRoute,
   PaymentCancelRoute: PaymentCancelRoute,
   PaymentSuccessRoute: PaymentSuccessRoute,
+  TTokenRoute: TTokenRoute,
   EditorIndexRoute: EditorIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,

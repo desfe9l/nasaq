@@ -49,6 +49,7 @@ import { magicHexOf } from "@/lib/editor/psd/security";
 import { getProject, listProjects } from "@/lib/editor/storage";
 import type { ProjectMeta } from "@/lib/editor/model";
 import { BRAND } from "@/lib/brand";
+import { generateTemplateName, resolveTemplateName } from "@/lib/templates/naming";
 import { cn } from "@/lib/utils";
 import { WORKSPACE_ROUTE } from "@/lib/site-routes";
 import { DocumentPreview } from "./PagePreview";
@@ -209,6 +210,7 @@ function ServiceWorkspace() {
   const [busy, setBusy] = useState<"repair" | "open" | "save" | "template" | "reprocess" | null>(null);
   const [fonts, setFonts] = useState<AttachedFonts>({});
   const [title, setTitle] = useState("");
+  const [titleIsManual, setTitleIsManual] = useState(false);
   const [showFixes, setShowFixes] = useState(false);
   const [trustOrigin, setTrustOrigin] = useState(true);
 
@@ -216,6 +218,8 @@ function ServiceWorkspace() {
     setError(null);
     setFile(null);
     setSourceBytes(null);
+    setTitle("");
+    setTitleIsManual(false);
     if (!next) return;
     const name = next.name.toLowerCase();
     if (!/\.(psd|psb|docx|pptx|pdf|png|jpe?g|svg)$/i.test(name)) {
@@ -264,14 +268,32 @@ function ServiceWorkspace() {
         );
         setImported({ kind: "psd", result });
         setWorking(result.project);
-        setTitle(result.project.name);
+        setTitle(generateTemplateName({
+          title: result.project.name,
+          titleIsManual: false,
+          sourceName: gate.fileName,
+          format: classified.format,
+          category: "psd",
+          kind: "json",
+          content: result.project,
+        }));
+        setTitleIsManual(false);
       } else {
         const { importTemplateBytes } = await import("@/lib/editor/import/run");
         setProgress({ stage: "تحويل الملف", percent: 25, detail: classified.format.toUpperCase() });
         const built = await importTemplateBytes(bytes, gate.fileName);
         setImported({ kind: "office", built });
         setWorking(built.project);
-        setTitle(built.project.name);
+        setTitle(generateTemplateName({
+          title: built.project.name,
+          titleIsManual: false,
+          sourceName: gate.fileName,
+          format: classified.format,
+          category: classified.format === "pptx" ? "slides" : "import",
+          kind: "json",
+          content: built.project,
+        }));
+        setTitleIsManual(false);
         setProgress({ stage: "اكتمل", percent: 100, detail: "" });
       }
       setTrustOrigin(true);
@@ -294,6 +316,7 @@ function ServiceWorkspace() {
       setImported({ kind: "saved", project, id });
       setWorking(project);
       setTitle(project.name);
+      setTitleIsManual(true);
       setRepair(null);
       setCompare(false);
       setPageIndex(0);
@@ -351,11 +374,25 @@ function ServiceWorkspace() {
 
   const commitProject = async (): Promise<Project> => {
     if (!imported || !working) throw new Error("لا توجد نتيجة تحويل");
-    if (imported.kind === "saved") return working;
+    if (imported.kind === "saved") {
+      return {
+        ...working,
+        name: resolveTemplateName({ title, titleIsManual, kind: "json", content: working }),
+      };
+    }
     const psd = imported.kind === "psd" ? { project: working, assets: imported.result.report.assets } : null;
     const officeThumb = imported.kind === "office" ? imported.built.previewDataUrl : null;
     const composite = imported.kind === "psd" ? imported.result.compositeDataUrl : null;
-    const final = await buildFinalProject({ title, project: working, psd, fonts });
+    const format = imported.kind === "psd" ? "psd" : imported.built.format;
+    const final = await buildFinalProject({
+      title,
+      titleIsManual,
+      sourceName: file?.name,
+      format,
+      project: working,
+      psd,
+      fonts,
+    });
     const thumb =
       (composite && composite.length < 1_800_000 ? composite : null) ||
       officeThumb ||
@@ -405,7 +442,7 @@ function ServiceWorkspace() {
       const format = imported?.kind === "psd" ? "psd" : imported?.kind === "office" ? imported.built.format : "import";
       const description = `محوّل عبر استوديو الاستيراد إلى عناصر ${BRAND.platform} قابلة للتحرير. ${stats.length} خط.`;
       const thumb = project.thumbnail || null;
-      const outcome = await saveImportedTemplate(project, format, description, thumb);
+      const outcome = await saveImportedTemplate(project, format, description, thumb, file?.name || "", titleIsManual);
       if (!outcome.ok) throw new Error(outcome.error);
       toast.success("حُفظ كقالب مسودة. يمكن تعديله لاحقًا من إدارة القوالب");
     } catch (err) {
@@ -590,7 +627,10 @@ function ServiceWorkspace() {
                 <input
                   className="h-10 rounded-lg border border-line bg-paper px-3 text-[13px] font-bold text-ink"
                   value={title}
-                  onChange={(event) => setTitle(event.target.value)}
+                  onChange={(event) => {
+                    setTitle(event.target.value);
+                    setTitleIsManual(true);
+                  }}
                   aria-label="اسم المشروع أو القالب"
                   placeholder="اسم المستند"
                 />
