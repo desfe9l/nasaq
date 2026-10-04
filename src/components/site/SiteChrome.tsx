@@ -14,7 +14,7 @@ import { readStoredTheme, writeStoredTheme, subscribeTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import { adminTemplatesAccessFn } from "@/lib/admin/functions";
-import { IMPORT_ROUTE } from "@/lib/site-routes";
+import { CREATE_ROUTE, EDITOR_ROUTE, IMPORT_ROUTE } from "@/lib/site-routes";
 import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
@@ -62,7 +62,7 @@ function EditorEntryLink() {
   const pathname = useLocation({ select: location => location.pathname });
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => setHydrated(true), []);
-  if (["/editor", "/workspace", WORKSPACE_HOME_PATH].includes(pathname)) return null;
+  if ([EDITOR_ROUTE, WORKSPACE_HOME_PATH, CREATE_ROUTE].includes(pathname)) return null;
   if (!hydrated) return null;
   // Nothing until the session resolves, exactly like `HeaderAccount`: a
   // signed-in author must never see the demo wording flash first.
@@ -70,8 +70,21 @@ function EditorEntryLink() {
   // A licensed account starts from its Home (`/home`), so the door waits for
   // the server's licence answer instead of flashing «افتح المحرر» first.
   if (entry.direct && !workspace.ready) return null;
-  const href = workspace.licensed ? WORKSPACE_HOME_PATH : entry.href;
-  const label = workspace.licensed ? "مساحة العمل" : entry.label;
+  /*
+   * The door is the destination. A licensed account goes to its workspace, a
+   * signed-in account to the creation screen (where a document is configured
+   * before the editor opens), and a visitor to the limited demo.
+   */
+  const href = workspace.licensed
+    ? WORKSPACE_HOME_PATH
+    : entry.direct
+      ? CREATE_ROUTE
+      : entry.href;
+  const label = workspace.licensed
+    ? "مساحة العمل"
+    : entry.direct
+      ? "إنشاء تصميم"
+      : entry.label;
   return (
     <a
       href={href}

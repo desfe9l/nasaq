@@ -7,6 +7,7 @@ import { useAccountTier } from "@/components/site/AccountBadge";
 import { useLicense } from "@/lib/license/client";
 import { useEditor } from "@/lib/editor/store";
 import { projectAccessBlock } from "@/lib/editor/access-limits";
+import { editorPathFor } from "@/lib/site-routes";
 import { templateToProjectSeed } from "@/lib/templates/document-template";
 import { personalShareAbsoluteUrl } from "@/lib/templates/personal";
 import {
@@ -100,7 +101,8 @@ function LicensedTemplates({ user }: { user: AppUser }) {
       toast.error("تعذر إنشاء مستند من القالب");
       return;
     }
-    window.location.assign("/editor");
+    const projectId = useEditor.getState().id;
+    window.location.assign(projectId ? editorPathFor(projectId) : "/create");
   };
 
   if (tier === "LOADING" || rows === null) {

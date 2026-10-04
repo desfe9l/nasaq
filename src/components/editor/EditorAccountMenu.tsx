@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import {
   ChevronDown,
   FilePlus2,
+  Files,
+  FolderOpen,
   House,
   KeyRound,
   LogIn,
@@ -15,6 +17,13 @@ import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
 import { AccountControlContent } from "@/components/site/AccountControlContent";
 import { useAccountTier } from "@/components/site/AccountBadge";
+import {
+  ADMIN_ROUTES,
+  OWNER_VAULT_ROUTE,
+  PROJECTS_ROUTE,
+  projectPathFor,
+  templatesFilterPathFor,
+} from "@/lib/site-routes";
 import {
   AccountMenuPanel,
   accountMenuItemClass,
@@ -59,10 +68,10 @@ function AdminEditorLinks({ user }: { user: AppUser }) {
   if (tier !== "ADMIN") return null;
   return (
     <>
-      <a href="/admin" role="menuitem" className={accountMenuItemClass}>لوحة الإدارة</a>
-      <a href="/admin-dashboard" role="menuitem" className={accountMenuItemClass}>القوالب ومحتوى الموقع</a>
-      <a href="/admin-licenses" role="menuitem" className={accountMenuItemClass}>إدارة التراخيص</a>
-      <a href="/owner-vault" role="menuitem" className={accountMenuItemClass}>إعدادات المالك</a>
+      <a href={ADMIN_ROUTES.dashboard} role="menuitem" className={accountMenuItemClass}>لوحة الإدارة</a>
+      <a href={ADMIN_ROUTES.templates} role="menuitem" className={accountMenuItemClass}>إدارة القوالب</a>
+      <a href={ADMIN_ROUTES.licenses} role="menuitem" className={accountMenuItemClass}>إدارة التراخيص</a>
+      <a href={OWNER_VAULT_ROUTE} role="menuitem" className={accountMenuItemClass}>إعدادات المالك</a>
     </>
   );
 }
@@ -71,7 +80,7 @@ function MyTemplatesLink({ user }: { user: AppUser }) {
   const tier = useAccountTier(user);
   if (tier !== "LICENSED" && tier !== "ADMIN") return null;
   return (
-    <a href="/my-templates" role="menuitem" className={accountMenuItemClass}>
+    <a href={templatesFilterPathFor({ pill: "custom" })} role="menuitem" className={accountMenuItemClass}>
       <FilePlus2 className="size-4 opacity-70" aria-hidden />
       قوالبي
     </a>
@@ -98,6 +107,8 @@ export function EditorAccountMenu({
   onNavigateHome: (event: React.MouseEvent<HTMLAnchorElement>) => void;
 }) {
   const { user, isPending } = useCurrentUserState();
+  /* The open document, so its own page is one click away from inside it. */
+  const openProjectId = useEditor((s) => s.id);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [newDocOpen, setNewDocOpen] = useState(false);
@@ -242,6 +253,20 @@ export function EditorAccountMenu({
               >
                 <House className="size-4 opacity-70" aria-hidden />
                 مساحة العمل
+              </a>
+              {openProjectId && (
+                <a
+                  href={projectPathFor(openProjectId)}
+                  role="menuitem"
+                  className={accountMenuItemClass}
+                >
+                  <FolderOpen className="size-4 opacity-70" aria-hidden />
+                  صفحة المشروع
+                </a>
+              )}
+              <a href={PROJECTS_ROUTE} role="menuitem" className={accountMenuItemClass}>
+                <Files className="size-4 opacity-70" aria-hidden />
+                المشاريع
               </a>
               <a href="/account" role="menuitem" className={accountMenuItemClass}>
                 <UserRound className="size-4 opacity-70" aria-hidden />

@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { CheckCircle2, Loader2, ShieldCheck } from "lucide-react";
 import { getMyAccountPage } from "@/lib/commercial/functions";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
+import { CREATE_ROUTE } from "@/lib/site-routes";
 
 type ReturnState = "WAITING" | "ACTIVE" | "FAILED";
 
@@ -72,7 +73,7 @@ export default function PaymentSuccessPage() {
                 {expiresAt ? <> سارية حتى <span className="font-extrabold" dir="ltr">{new Date(expiresAt).toLocaleDateString("ar-SA")}</span>.</> : null}
               </p>
               <div className="mt-6 flex flex-wrap justify-center gap-2">
-                <a href="/editor" className="inline-flex h-11 items-center justify-center rounded-xl bg-navy px-6 text-sm font-extrabold text-on-brand">افتح المحرر</a>
+                <a href={CREATE_ROUTE} className="inline-flex h-11 items-center justify-center rounded-xl bg-navy px-6 text-sm font-extrabold text-on-brand">أنشئ تصميمك الأول</a>
                 <a href="/account" className="inline-flex h-11 items-center justify-center rounded-xl border border-line px-6 text-sm font-extrabold">حسابي</a>
               </div>
             </>

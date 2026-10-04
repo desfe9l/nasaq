@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { TemplatePreview } from "./TemplatePreview";
 import { buildIdentityDocument } from "@/lib/editor/identity-document";
 import { useEditor } from "@/lib/editor/store";
+import { editorPathFor } from "@/lib/site-routes";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { toast } from "sonner";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
@@ -289,7 +290,9 @@ export function BrandKitPage() {
     setCreating(true);
     try {
       await useEditor.getState().hydrate();
-      if (await useEditor.getState().createDocument(identityDocument)) window.location.assign("/editor");
+      const created = await useEditor.getState().createDocument(identityDocument);
+      const projectId = useEditor.getState().id;
+      if (created && projectId) window.location.assign(editorPathFor(projectId));
     } catch { toast.error("تعذر إنشاء المستند — تحقق من مساحة تخزين المتصفح"); }
     finally { setCreating(false); }
   };

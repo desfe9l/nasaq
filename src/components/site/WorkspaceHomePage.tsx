@@ -31,6 +31,14 @@ import {
 import { THEMES, type ProjectMeta } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import {
+  CREATE_ROUTE,
+  WORKSPACE_ROUTE,
+  editorPathFor,
+  projectPathFor,
+  templatePathFor,
+} from "@/lib/site-routes";
+import { entrySlug } from "@/lib/templates/entry-slug";
+import {
   docKind,
   type DocKindId,
   type NewDocumentConfig,
@@ -235,7 +243,6 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
   const hydrated = useEditor((s) => s.hydrated);
   const projects = useEditor((s) => s.projects);
   const projectsLoading = useEditor((s) => s.projectsLoading);
-  const openProject = useEditor((s) => s.openProject);
   const createDocument = useEditor((s) => s.createDocument);
   const setEntitlements = useEditor((s) => s.setEntitlements);
   const storeOrg = useEditor((s) => s.orgName);
@@ -349,8 +356,13 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
 
   /* ── actions ───────────────────────────────────────────────────────── */
 
-  const open = async (id: string) => {
-    if (await openProject(id)) window.location.assign("/editor");
+  /**
+   * A project card is a destination: it opens the project's own page, where the
+   * document is previewed and «فتح في المحرر» starts the session. The same card
+   * behaves the same way in «المشاريع» — no surface opens the editor directly.
+   */
+  const open = (id: string) => {
+    window.location.assign(projectPathFor(id));
   };
 
   /** «استخدام القالب» — a NEW editable document; the template stays as it is. */
@@ -395,7 +407,8 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
         },
         { autoName: true },
       );
-      if (created) window.location.assign("/editor");
+      const newId = useEditor.getState().id;
+      if (created && newId) window.location.assign(editorPathFor(newId));
     } catch (error) {
       // A failed fetch or an unreadable template payload must never leave the
       // click without an answer.
@@ -415,7 +428,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
 
   return (
     <div className="min-h-full bg-paper">
-      <SiteHeader current="/home" />
+      <SiteHeader current={WORKSPACE_ROUTE} />
 
       <main className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-8 sm:px-6 md:gap-12 md:py-12">
         {/* ── 1. NASAQ introduction ─────────────────────────────────────── */}
@@ -843,6 +856,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
                   <div key={entry.id} className={cn("flex", CARD_W)}>
                     <TemplateCard
                       entry={entry}
+                      href={templatePathFor(entrySlug(entry))}
                       locked={packLocked(entry)}
                       available={!packLocked(entry)}
                       actions={{
@@ -877,7 +891,11 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
         <NewDocumentDialog
           initial={newDoc}
           onClose={() => setNewDoc(null)}
-          onCreated={() => window.location.assign("/editor")}
+          onCreated={() => {
+            /* The dialog created the document; its own address opens it. */
+            const id = useEditor.getState().id;
+            window.location.assign(id ? editorPathFor(id) : CREATE_ROUTE);
+          }}
         />
       )}
 
@@ -916,6 +934,6 @@ export function LicensedWorkspaceHome() {
   }
   const licensed =
     !license.isSuspended && (license.hasLicense || license.isAdmin);
-  if (!licensed) return <Navigate to="/editor" replace />;
+  if (!licensed) return <Navigate to={CREATE_ROUTE} replace />;
   return <WorkspaceHomePage license={license} />;
 }

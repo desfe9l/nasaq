@@ -19,6 +19,8 @@ import {
 } from "@/lib/templates/personal-functions";
 import { personalShareAbsoluteUrl } from "@/lib/templates/personal";
 import { publishedTemplateAbsoluteUrl } from "@/lib/templates/published";
+import { templatesFilterPathFor } from "@/lib/site-routes";
+import { ADMIN_ROUTES } from "@/lib/site-routes";
 
 type Mode = "official" | "personal";
 
@@ -331,12 +333,12 @@ function SavedShare({
       )}
       <div className="flex gap-2">
         {saved.personal && (
-          <a href="/my-templates" className="inline-flex h-10 flex-1 items-center justify-center rounded-[10px] border border-[var(--editor-border)] text-[12px] font-bold">
+          <a href={templatesFilterPathFor({ pill: "custom" })} className="inline-flex h-10 flex-1 items-center justify-center rounded-[10px] border border-[var(--editor-border)] text-[12px] font-bold">
             قوالبي
           </a>
         )}
         {!saved.personal && (
-          <a href="/admin-dashboard" className="inline-flex h-10 flex-1 items-center justify-center rounded-[10px] border border-[var(--editor-border)] text-[12px] font-bold">
+          <a href={ADMIN_ROUTES.templates} className="inline-flex h-10 flex-1 items-center justify-center rounded-[10px] border border-[var(--editor-border)] text-[12px] font-bold">
             استوديو القوالب
           </a>
         )}

@@ -4,6 +4,7 @@ import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { useEditor } from "@/lib/editor/store";
 import { useLicense } from "@/lib/license/client";
 import { projectAccessBlock } from "@/lib/editor/access-limits";
+import { editorPathFor } from "@/lib/site-routes";
 import { templateToProjectSeed } from "@/lib/templates/document-template";
 import { getSharedPersonalTemplateFn } from "@/lib/templates/personal-functions";
 
@@ -59,7 +60,8 @@ export function SharedPersonalTemplatePage({
         return;
       }
       toast.success(`تم إنشاء نسخة من «${template.title}»`);
-      window.location.assign("/editor");
+      const projectId = useEditor.getState().id;
+      window.location.assign(projectId ? editorPathFor(projectId) : "/create");
     } catch {
       toast.error("تعذر فتح القالب");
     } finally {

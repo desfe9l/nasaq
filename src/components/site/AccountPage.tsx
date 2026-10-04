@@ -24,6 +24,7 @@ import type {
 } from "@/lib/commercial/types";
 import { cn } from "@/lib/utils";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
+import { ADMIN_ROUTES } from "@/lib/site-routes";
 
 type AccountData = {
   account: CustomerAccount;
@@ -167,13 +168,13 @@ function AdminAccessCard() {
           لوحة الإدارة
         </a>
         <a
-          href="/admin-dashboard"
+          href={ADMIN_ROUTES.templates}
           className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold"
         >
           القوالب ومحتوى الموقع
         </a>
         <a
-          href="/admin-licenses"
+          href={ADMIN_ROUTES.licenses}
           className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold"
         >
           إدارة التراخيص

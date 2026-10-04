@@ -4,6 +4,7 @@ import {
   createRootRoute,
   HeadContent,
   Outlet,
+  redirect,
   Scripts,
 } from "@tanstack/react-router";
 import { Analytics } from "@vercel/analytics/react";
@@ -17,6 +18,7 @@ import { initInstallPrompt } from "@/lib/app-install";
 // <html> before any route renders, so every page starts on the same mode.
 import "@/lib/theme";
 import { BRAND } from "@/lib/brand";
+import { legacyRedirectFor } from "@/lib/site-routes";
 import {
   SITE_ORIGIN,
   SITE_OG_IMAGE,
@@ -32,6 +34,25 @@ const DESCRIPTION =
   "منصة نَسَق (NASAQ) - المحرر المؤسسي الذكي لإعداد وتصميم التقارير، الإحصائيات، والمخرجات البصرية بجودة طباعية عالية ومعالجة محلية 100%.";
 
 export const Route = createRootRoute({
+  /**
+   * Legacy addresses, resolved ONCE for the whole app: the old workspace
+   * (`/home`), the retired admin consoles (`/admin-dashboard`,
+   * `/admin-licenses`) and the brand-kit page (`/brand-kit`) are permanent
+   * redirects to their canonical destinations, so an old bookmark, a link in a
+   * received file, or the installed app's saved start URL still lands on the
+   * right page — server-side (301 + `Location`) and in the client.
+   */
+  beforeLoad: ({ location }) => {
+    const target = legacyRedirectFor(location.pathname);
+    if (!target) return;
+    /*
+     * `Location` is an HTTP header, so it must be ASCII: the brand-kit
+     * destination contains Arabic, and an unencoded header throws inside the
+     * server runtime (500 instead of a redirect). Encoding here keeps both the
+     * header and the browser's follow-up request correct.
+     */
+    throw redirect({ href: encodeURI(target), replace: true, statusCode: 301 });
+  },
   head: () => ({
     meta: [
       { charSet: "utf-8" },

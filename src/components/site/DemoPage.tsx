@@ -18,9 +18,13 @@ export function DemoPage() {
   const direct = entry.ready && entry.direct;
   const { label } = accountIdentity(user);
 
-  const startDemo = async () => {
-    const created = await createProject("blank");
-    if (created) window.location.assign("/editor");
+  /*
+   * A demo session begins from the creation screen: the visitor still chooses
+   * the format and sees the page size, and the trial ceilings apply to the
+   * document they configure.
+   */
+  const startDemo = () => {
+    window.location.assign("/create");
   };
 
   return (

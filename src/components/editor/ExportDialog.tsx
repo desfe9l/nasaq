@@ -727,7 +727,7 @@ export function ExportDialog() {
               open={signInOpen}
               onClose={() => setSignInOpen(false)}
               intent="تنزيل الملف"
-              callbackURL="/editor"
+              callbackURL={typeof window === "undefined" ? undefined : window.location.href}
             />
           </Suspense>
         )}

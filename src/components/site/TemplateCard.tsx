@@ -142,12 +142,19 @@ function ActionMenu({ items }: { items: { label: string; icon: LucideIcon; onCli
 export function TemplateCard({
   entry,
   actions,
+  href,
   locked = false,
   highlight = false,
   available = false,
 }: {
   entry: CatalogEntry;
   actions: TemplateCardActions;
+  /**
+   * The template's own page. A card is a destination, so the preview and the
+   * title are real links — middle-click, copy-link and open-in-new-tab work
+   * exactly as they should, and the editor is never the target.
+   */
+  href?: string;
   /** Premium pack outside the demo allowance — «استخدام القالب» opens /license. */
   locked?: boolean;
   /** Marks the card just added/updated by the author. */
@@ -191,8 +198,13 @@ export function TemplateCard({
          * whichever keeps the page's own ratio. No clipping for A4 landscape,
          * no letterboxing for slides, no JavaScript measurement.
          */}
-        <div
-          className="relative grid place-items-center p-4 [container-type:size]"
+        <a
+          href={href}
+          aria-label={href ? `صفحة القالب ${entry.title}` : undefined}
+          className={cn(
+            "relative grid place-items-center p-4 [container-type:size]",
+            href && "cursor-pointer",
+          )}
           style={{ height: PREVIEW_BOX }}
         >
           {entry.thumbnail ? (
@@ -211,7 +223,7 @@ export function TemplateCard({
               className="rounded-[3px] border border-line shadow-md transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-xl"
             />
           )}
-        </div>
+        </a>
 
         <div className="pointer-events-none absolute right-3 top-3 flex max-w-[80%] flex-wrap justify-end gap-1">
           {entry.badges.map((badge) => (
@@ -241,7 +253,15 @@ export function TemplateCard({
       {/* ── body ────────────────────────────────────────────────────────── */}
       <div className="flex flex-1 flex-col p-5 text-right">
         <div className="flex items-start justify-between gap-3">
-          <h3 className="text-[15px] font-extrabold leading-6 text-ink">{entry.title}</h3>
+          <h3 className="text-[15px] font-extrabold leading-6 text-ink">
+            {href ? (
+              <a href={href} className="transition hover:text-brand-hover">
+                {entry.title}
+              </a>
+            ) : (
+              entry.title
+            )}
+          </h3>
           <span className="shrink-0 rounded-full bg-line-2 px-2 py-0.5 text-[10px] font-bold text-muted">
             {entry.kindLabel}
           </span>
@@ -280,14 +300,24 @@ export function TemplateCard({
             <Plus className="size-4" />
             استخدام القالب
           </button>
-          <button
-            type="button"
-            onClick={actions.onQuickView}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2"
-          >
-            <Eye className="size-4" />
-            معاينة سريعة
-          </button>
+          {href ? (
+            <a
+              href={href}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2"
+            >
+              <Eye className="size-4" />
+              التفاصيل
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={actions.onQuickView}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-line px-3 text-[12px] font-bold text-ink transition hover:bg-line-2"
+            >
+              <Eye className="size-4" />
+              معاينة سريعة
+            </button>
+          )}
           {managed && <ActionMenu items={menuItems} />}
         </div>
       </div>

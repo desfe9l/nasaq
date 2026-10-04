@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { useAccountTier } from "@/components/site/AccountBadge";
 import { adminTemplatesAccessFn } from "@/lib/admin/functions";
 import { requestLeave } from "@/lib/editor/leave-controller";
+import { templatesFilterPathFor } from "@/lib/site-routes";
 import { SaveAsTemplateDialog } from "@/components/editor/SaveAsTemplateDialog";
 
 const SignInRequiredModalLazy = lazy(() =>
@@ -262,7 +263,7 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
                 onClick={() => {
                   setOpen(false);
                   void requestLeave().then((ok) => {
-                    if (ok) window.location.assign("/my-templates");
+                    if (ok) window.location.assign(templatesFilterPathFor({ pill: "custom" }));
                   });
                 }}
               />

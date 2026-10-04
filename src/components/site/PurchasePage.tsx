@@ -19,6 +19,7 @@ import {
   type SwitchablePeriod,
 } from "@/lib/commercial/plan-cards";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
+import { CREATE_ROUTE } from "@/lib/site-routes";
 import { cardClass } from "@/components/site/cards";
 import { whatsappHref } from "@/lib/brand";
 
@@ -291,7 +292,7 @@ export function PurchasePage() {
                 </ul>
               </div>
             </div>
-            <a href="/editor" className="mt-5 inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-line bg-surface text-[13px] font-bold text-ink hover:bg-surface-2">ابدأ مجانًا</a>
+            <a href={CREATE_ROUTE} className="mt-5 inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-line bg-surface text-[13px] font-bold text-ink hover:bg-surface-2">ابدأ مجانًا</a>
           </div>
 
           {paidPlans.map(({ family, planKey, plan }) => {

@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Navigate } from "@tanstack/react-router";
+import { Navigate, useLocation } from "@tanstack/react-router";
 import { GOOGLE_PROVIDER_ID, authEnabled, signIn, signOut } from "./client";
 import { hasGateSessionMarker } from "./gate-session-marker";
 import { resolveSignInGateState } from "./sign-in-gate";
@@ -46,7 +46,15 @@ export function SignedOut({ children }: { children: ReactNode }) {
  * render this.
  */
 export function RedirectToSignIn({ to = SIGN_IN_PATH }: { to?: string }) {
-  return <Navigate to={to} />;
+  /*
+   * The guarded address travels with the visitor: signing in returns them to
+   * the page a shared link (or a bookmark) named, never to a generic landing.
+   */
+  const from = useLocation({
+    select: (location) => `${location.pathname}${location.searchStr ?? ""}`,
+  });
+  const safe = from && from !== to ? from : undefined;
+  return <Navigate to={to} search={safe ? { redirect: safe } : undefined} replace />;
 }
 
 export function RequireSignedIn({ children }: { children: ReactNode }) {

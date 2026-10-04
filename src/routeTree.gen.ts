@@ -13,18 +13,15 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AdminRouteImport } from './routes/admin'
-import { Route as AdminDashboardRouteImport } from './routes/admin-dashboard'
-import { Route as AdminLicensesRouteImport } from './routes/admin-licenses'
 import { Route as BrandKitRouteImport } from './routes/brand-kit'
 import { Route as ContactRouteImport } from './routes/contact'
+import { Route as CreateRouteImport } from './routes/create'
 import { Route as CustomDesignRouteImport } from './routes/custom-design'
 import { Route as DemoRouteImport } from './routes/demo'
-import { Route as EditorRouteImport } from './routes/editor'
-import { Route as HomeRouteImport } from './routes/home'
 import { Route as ImportRouteImport } from './routes/import'
+import { Route as LibraryRouteImport } from './routes/library'
 import { Route as LicenseRouteImport } from './routes/license'
 import { Route as LoginRouteImport } from './routes/login'
-import { Route as MyTemplatesRouteImport } from './routes/my-templates'
 import { Route as OpenRouteImport } from './routes/open'
 import { Route as OwnerVaultRouteImport } from './routes/owner-vault'
 import { Route as PricingRouteImport } from './routes/pricing'
@@ -33,12 +30,29 @@ import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PurchaseRouteImport } from './routes/purchase'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as Char1575Char1604Char1607Char1608Char1610Char1577RouteImport } from './routes/الهوية'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAssetsRouteImport } from './routes/admin/assets'
+import { Route as AdminAuditRouteImport } from './routes/admin/audit'
+import { Route as AdminBrandingRouteImport } from './routes/admin/branding'
+import { Route as AdminContentRouteImport } from './routes/admin/content'
+import { Route as AdminImportRouteImport } from './routes/admin/import'
+import { Route as AdminPaymentsRouteImport } from './routes/admin/payments'
+import { Route as AdminPlansRouteImport } from './routes/admin/plans'
+import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminStudioRouteImport } from './routes/admin/studio'
+import { Route as AdminTemplatesRouteImport } from './routes/admin/templates'
+import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as ApiAppVersionRouteImport } from './routes/api/app-version'
+import { Route as EditorIndexRouteImport } from './routes/editor/index'
+import { Route as EditorProjectIdRouteImport } from './routes/editor/$projectId'
 import { Route as PaymentCancelRouteImport } from './routes/payment/cancel'
 import { Route as PaymentSuccessRouteImport } from './routes/payment/success'
+import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
 import { Route as TemplatesIndexRouteImport } from './routes/templates/index'
 import { Route as TemplatesTemplateIdRouteImport } from './routes/templates/$templateId'
+import { Route as AdminLicensesIndexRouteImport } from './routes/admin/licenses/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiLicenseActivateRouteImport } from './routes/api/license/activate'
 import { Route as ApiLicenseDeactivateRouteImport } from './routes/api/license/deactivate'
@@ -46,6 +60,8 @@ import { Route as ApiLicenseValidateRouteImport } from './routes/api/license/val
 import { Route as ApiTemplatesThumbnailRouteImport } from './routes/api/templates/thumbnail'
 import { Route as ApiWebhooksGumroadRouteImport } from './routes/api/webhooks/gumroad'
 import { Route as ApiWebhooksKeygenRouteImport } from './routes/api/webhooks/keygen'
+import { Route as TemplatesTemplateIdPreviewRouteImport } from './routes/templates/$templateId.preview'
+import { Route as TemplatesTemplateIdShareRouteImport } from './routes/templates/$templateId.share'
 import { Route as TemplatesShareTokenRouteImport } from './routes/templates/share/$token'
 
 const IndexRoute = IndexRouteImport.update({
@@ -68,16 +84,6 @@ const AdminRoute = AdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminDashboardRoute = AdminDashboardRouteImport.update({
-  id: '/admin-dashboard',
-  path: '/admin-dashboard',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AdminLicensesRoute = AdminLicensesRouteImport.update({
-  id: '/admin-licenses',
-  path: '/admin-licenses',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const BrandKitRoute = BrandKitRouteImport.update({
   id: '/brand-kit',
   path: '/brand-kit',
@@ -86,6 +92,11 @@ const BrandKitRoute = BrandKitRouteImport.update({
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CreateRoute = CreateRouteImport.update({
+  id: '/create',
+  path: '/create',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CustomDesignRoute = CustomDesignRouteImport.update({
@@ -98,19 +109,14 @@ const DemoRoute = DemoRouteImport.update({
   path: '/demo',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EditorRoute = EditorRouteImport.update({
-  id: '/editor',
-  path: '/editor',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const HomeRoute = HomeRouteImport.update({
-  id: '/home',
-  path: '/home',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ImportRoute = ImportRouteImport.update({
   id: '/import',
   path: '/import',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LibraryRoute = LibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LicenseRoute = LicenseRouteImport.update({
@@ -121,11 +127,6 @@ const LicenseRoute = LicenseRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const MyTemplatesRoute = MyTemplatesRouteImport.update({
-  id: '/my-templates',
-  path: '/my-templates',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OpenRoute = OpenRouteImport.update({
@@ -168,15 +169,90 @@ const TermsRoute = TermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkspaceRoute = WorkspaceRouteImport.update({
+  id: '/workspace',
+  path: '/workspace',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const Char1575Char1604Char1607Char1608Char1610Char1577Route =
   Char1575Char1604Char1607Char1608Char1610Char1577RouteImport.update({
     id: '/الهوية',
     path: '/الهوية',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAssetsRoute = AdminAssetsRouteImport.update({
+  id: '/assets',
+  path: '/assets',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAuditRoute = AdminAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminBrandingRoute = AdminBrandingRouteImport.update({
+  id: '/branding',
+  path: '/branding',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminContentRoute = AdminContentRouteImport.update({
+  id: '/content',
+  path: '/content',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminImportRoute = AdminImportRouteImport.update({
+  id: '/import',
+  path: '/import',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPaymentsRoute = AdminPaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPlansRoute = AdminPlansRouteImport.update({
+  id: '/plans',
+  path: '/plans',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminStudioRoute = AdminStudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminTemplatesRoute = AdminTemplatesRouteImport.update({
+  id: '/templates',
+  path: '/templates',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
 const ApiAppVersionRoute = ApiAppVersionRouteImport.update({
   id: '/api/app-version',
   path: '/api/app-version',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditorIndexRoute = EditorIndexRouteImport.update({
+  id: '/editor/',
+  path: '/editor/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EditorProjectIdRoute = EditorProjectIdRouteImport.update({
+  id: '/editor/$projectId',
+  path: '/editor/$projectId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PaymentCancelRoute = PaymentCancelRouteImport.update({
@@ -189,6 +265,11 @@ const PaymentSuccessRoute = PaymentSuccessRouteImport.update({
   path: '/payment/success',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
+  id: '/$projectId',
+  path: '/$projectId',
+  getParentRoute: () => ProjectsRoute,
+} as any)
 const TemplatesIndexRoute = TemplatesIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -198,6 +279,11 @@ const TemplatesTemplateIdRoute = TemplatesTemplateIdRouteImport.update({
   id: '/$templateId',
   path: '/$templateId',
   getParentRoute: () => TemplatesRoute,
+} as any)
+const AdminLicensesIndexRoute = AdminLicensesIndexRouteImport.update({
+  id: '/licenses/',
+  path: '/licenses/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
@@ -234,6 +320,18 @@ const ApiWebhooksKeygenRoute = ApiWebhooksKeygenRouteImport.update({
   path: '/api/webhooks/keygen',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TemplatesTemplateIdPreviewRoute =
+  TemplatesTemplateIdPreviewRouteImport.update({
+    id: '/preview',
+    path: '/preview',
+    getParentRoute: () => TemplatesTemplateIdRoute,
+  } as any)
+const TemplatesTemplateIdShareRoute =
+  TemplatesTemplateIdShareRouteImport.update({
+    id: '/share',
+    path: '/share',
+    getParentRoute: () => TemplatesTemplateIdRoute,
+  } as any)
 const TemplatesShareTokenRoute = TemplatesShareTokenRouteImport.update({
   id: '/share/$token',
   path: '/share/$token',
@@ -244,32 +342,45 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
-  '/admin': typeof AdminRoute
-  '/admin-dashboard': typeof AdminDashboardRoute
-  '/admin-licenses': typeof AdminLicensesRoute
+  '/admin': typeof AdminRouteWithChildren
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
+  '/create': typeof CreateRoute
   '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
-  '/editor': typeof EditorRoute
-  '/home': typeof HomeRoute
   '/import': typeof ImportRoute
+  '/library': typeof LibraryRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
-  '/my-templates': typeof MyTemplatesRoute
   '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
-  '/projects': typeof ProjectsRoute
+  '/projects': typeof ProjectsRouteWithChildren
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/terms': typeof TermsRoute
+  '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/admin/assets': typeof AdminAssetsRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/branding': typeof AdminBrandingRoute
+  '/admin/content': typeof AdminContentRoute
+  '/admin/import': typeof AdminImportRoute
+  '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/plans': typeof AdminPlansRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/studio': typeof AdminStudioRoute
+  '/admin/templates': typeof AdminTemplatesRoute
+  '/admin/users': typeof AdminUsersRoute
   '/api/app-version': typeof ApiAppVersionRoute
+  '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
-  '/templates/$templateId': typeof TemplatesTemplateIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
+  '/admin/': typeof AdminIndexRoute
+  '/editor/': typeof EditorIndexRoute
   '/templates/': typeof TemplatesIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
@@ -278,37 +389,52 @@ export interface FileRoutesByFullPath {
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
+  '/templates/$templateId/preview': typeof TemplatesTemplateIdPreviewRoute
+  '/templates/$templateId/share': typeof TemplatesTemplateIdShareRoute
   '/templates/share/$token': typeof TemplatesShareTokenRoute
+  '/admin/licenses/': typeof AdminLicensesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
-  '/admin': typeof AdminRoute
-  '/admin-dashboard': typeof AdminDashboardRoute
-  '/admin-licenses': typeof AdminLicensesRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
+  '/create': typeof CreateRoute
   '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
-  '/editor': typeof EditorRoute
-  '/home': typeof HomeRoute
   '/import': typeof ImportRoute
+  '/library': typeof LibraryRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
-  '/my-templates': typeof MyTemplatesRoute
   '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
-  '/projects': typeof ProjectsRoute
+  '/projects': typeof ProjectsRouteWithChildren
   '/purchase': typeof PurchaseRoute
   '/terms': typeof TermsRoute
+  '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/admin/assets': typeof AdminAssetsRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/branding': typeof AdminBrandingRoute
+  '/admin/content': typeof AdminContentRoute
+  '/admin/import': typeof AdminImportRoute
+  '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/plans': typeof AdminPlansRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/studio': typeof AdminStudioRoute
+  '/admin/templates': typeof AdminTemplatesRoute
+  '/admin/users': typeof AdminUsersRoute
   '/api/app-version': typeof ApiAppVersionRoute
+  '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
-  '/templates/$templateId': typeof TemplatesTemplateIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
+  '/admin': typeof AdminIndexRoute
+  '/editor': typeof EditorIndexRoute
   '/templates': typeof TemplatesIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
@@ -317,39 +443,55 @@ export interface FileRoutesByTo {
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
+  '/templates/$templateId/preview': typeof TemplatesTemplateIdPreviewRoute
+  '/templates/$templateId/share': typeof TemplatesTemplateIdShareRoute
   '/templates/share/$token': typeof TemplatesShareTokenRoute
+  '/admin/licenses': typeof AdminLicensesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
-  '/admin': typeof AdminRoute
-  '/admin-dashboard': typeof AdminDashboardRoute
-  '/admin-licenses': typeof AdminLicensesRoute
+  '/admin': typeof AdminRouteWithChildren
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
+  '/create': typeof CreateRoute
   '/custom-design': typeof CustomDesignRoute
   '/demo': typeof DemoRoute
-  '/editor': typeof EditorRoute
-  '/home': typeof HomeRoute
   '/import': typeof ImportRoute
+  '/library': typeof LibraryRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
-  '/my-templates': typeof MyTemplatesRoute
   '/open': typeof OpenRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
-  '/projects': typeof ProjectsRoute
+  '/projects': typeof ProjectsRouteWithChildren
   '/purchase': typeof PurchaseRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/terms': typeof TermsRoute
+  '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/admin/assets': typeof AdminAssetsRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/branding': typeof AdminBrandingRoute
+  '/admin/content': typeof AdminContentRoute
+  '/admin/import': typeof AdminImportRoute
+  '/admin/payments': typeof AdminPaymentsRoute
+  '/admin/plans': typeof AdminPlansRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/studio': typeof AdminStudioRoute
+  '/admin/templates': typeof AdminTemplatesRoute
+  '/admin/users': typeof AdminUsersRoute
   '/api/app-version': typeof ApiAppVersionRoute
+  '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
-  '/templates/$templateId': typeof TemplatesTemplateIdRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
+  '/admin/': typeof AdminIndexRoute
+  '/editor/': typeof EditorIndexRoute
   '/templates/': typeof TemplatesIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/license/activate': typeof ApiLicenseActivateRoute
@@ -358,7 +500,10 @@ export interface FileRoutesById {
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
+  '/templates/$templateId/preview': typeof TemplatesTemplateIdPreviewRoute
+  '/templates/$templateId/share': typeof TemplatesTemplateIdShareRoute
   '/templates/share/$token': typeof TemplatesShareTokenRoute
+  '/admin/licenses/': typeof AdminLicensesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -367,18 +512,15 @@ export interface FileRouteTypes {
     | '/about'
     | '/account'
     | '/admin'
-    | '/admin-dashboard'
-    | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
+    | '/create'
     | '/custom-design'
     | '/demo'
-    | '/editor'
-    | '/home'
     | '/import'
+    | '/library'
     | '/license'
     | '/login'
-    | '/my-templates'
     | '/open'
     | '/owner-vault'
     | '/pricing'
@@ -387,11 +529,27 @@ export interface FileRouteTypes {
     | '/purchase'
     | '/templates'
     | '/terms'
+    | '/workspace'
     | '/الهوية'
+    | '/admin/assets'
+    | '/admin/audit'
+    | '/admin/branding'
+    | '/admin/content'
+    | '/admin/import'
+    | '/admin/payments'
+    | '/admin/plans'
+    | '/admin/settings'
+    | '/admin/studio'
+    | '/admin/templates'
+    | '/admin/users'
     | '/api/app-version'
+    | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
+    | '/projects/$projectId'
     | '/templates/$templateId'
+    | '/admin/'
+    | '/editor/'
     | '/templates/'
     | '/api/auth/$'
     | '/api/license/activate'
@@ -400,25 +558,24 @@ export interface FileRouteTypes {
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
+    | '/templates/$templateId/preview'
+    | '/templates/$templateId/share'
     | '/templates/share/$token'
+    | '/admin/licenses/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
     | '/account'
-    | '/admin'
-    | '/admin-dashboard'
-    | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
+    | '/create'
     | '/custom-design'
     | '/demo'
-    | '/editor'
-    | '/home'
     | '/import'
+    | '/library'
     | '/license'
     | '/login'
-    | '/my-templates'
     | '/open'
     | '/owner-vault'
     | '/pricing'
@@ -426,11 +583,27 @@ export interface FileRouteTypes {
     | '/projects'
     | '/purchase'
     | '/terms'
+    | '/workspace'
     | '/الهوية'
+    | '/admin/assets'
+    | '/admin/audit'
+    | '/admin/branding'
+    | '/admin/content'
+    | '/admin/import'
+    | '/admin/payments'
+    | '/admin/plans'
+    | '/admin/settings'
+    | '/admin/studio'
+    | '/admin/templates'
+    | '/admin/users'
     | '/api/app-version'
+    | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
+    | '/projects/$projectId'
     | '/templates/$templateId'
+    | '/admin'
+    | '/editor'
     | '/templates'
     | '/api/auth/$'
     | '/api/license/activate'
@@ -439,25 +612,25 @@ export interface FileRouteTypes {
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
+    | '/templates/$templateId/preview'
+    | '/templates/$templateId/share'
     | '/templates/share/$token'
+    | '/admin/licenses'
   id:
     | '__root__'
     | '/'
     | '/about'
     | '/account'
     | '/admin'
-    | '/admin-dashboard'
-    | '/admin-licenses'
     | '/brand-kit'
     | '/contact'
+    | '/create'
     | '/custom-design'
     | '/demo'
-    | '/editor'
-    | '/home'
     | '/import'
+    | '/library'
     | '/license'
     | '/login'
-    | '/my-templates'
     | '/open'
     | '/owner-vault'
     | '/pricing'
@@ -466,11 +639,27 @@ export interface FileRouteTypes {
     | '/purchase'
     | '/templates'
     | '/terms'
+    | '/workspace'
     | '/الهوية'
+    | '/admin/assets'
+    | '/admin/audit'
+    | '/admin/branding'
+    | '/admin/content'
+    | '/admin/import'
+    | '/admin/payments'
+    | '/admin/plans'
+    | '/admin/settings'
+    | '/admin/studio'
+    | '/admin/templates'
+    | '/admin/users'
     | '/api/app-version'
+    | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
+    | '/projects/$projectId'
     | '/templates/$templateId'
+    | '/admin/'
+    | '/editor/'
     | '/templates/'
     | '/api/auth/$'
     | '/api/license/activate'
@@ -479,38 +668,41 @@ export interface FileRouteTypes {
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
+    | '/templates/$templateId/preview'
+    | '/templates/$templateId/share'
     | '/templates/share/$token'
+    | '/admin/licenses/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   AccountRoute: typeof AccountRoute
-  AdminRoute: typeof AdminRoute
-  AdminDashboardRoute: typeof AdminDashboardRoute
-  AdminLicensesRoute: typeof AdminLicensesRoute
+  AdminRoute: typeof AdminRouteWithChildren
   BrandKitRoute: typeof BrandKitRoute
   ContactRoute: typeof ContactRoute
+  CreateRoute: typeof CreateRoute
   CustomDesignRoute: typeof CustomDesignRoute
   DemoRoute: typeof DemoRoute
-  EditorRoute: typeof EditorRoute
-  HomeRoute: typeof HomeRoute
   ImportRoute: typeof ImportRoute
+  LibraryRoute: typeof LibraryRoute
   LicenseRoute: typeof LicenseRoute
   LoginRoute: typeof LoginRoute
-  MyTemplatesRoute: typeof MyTemplatesRoute
   OpenRoute: typeof OpenRoute
   OwnerVaultRoute: typeof OwnerVaultRoute
   PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
-  ProjectsRoute: typeof ProjectsRoute
+  ProjectsRoute: typeof ProjectsRouteWithChildren
   PurchaseRoute: typeof PurchaseRoute
   TemplatesRoute: typeof TemplatesRouteWithChildren
   TermsRoute: typeof TermsRoute
+  WorkspaceRoute: typeof WorkspaceRoute
   Char1575Char1604Char1607Char1608Char1610Char1577Route: typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   ApiAppVersionRoute: typeof ApiAppVersionRoute
+  EditorProjectIdRoute: typeof EditorProjectIdRoute
   PaymentCancelRoute: typeof PaymentCancelRoute
   PaymentSuccessRoute: typeof PaymentSuccessRoute
+  EditorIndexRoute: typeof EditorIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
@@ -550,20 +742,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin-dashboard': {
-      id: '/admin-dashboard'
-      path: '/admin-dashboard'
-      fullPath: '/admin-dashboard'
-      preLoaderRoute: typeof AdminDashboardRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/admin-licenses': {
-      id: '/admin-licenses'
-      path: '/admin-licenses'
-      fullPath: '/admin-licenses'
-      preLoaderRoute: typeof AdminLicensesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/brand-kit': {
       id: '/brand-kit'
       path: '/brand-kit'
@@ -576,6 +754,13 @@ declare module '@tanstack/react-router' {
       path: '/contact'
       fullPath: '/contact'
       preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/create': {
+      id: '/create'
+      path: '/create'
+      fullPath: '/create'
+      preLoaderRoute: typeof CreateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/custom-design': {
@@ -592,25 +777,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/editor': {
-      id: '/editor'
-      path: '/editor'
-      fullPath: '/editor'
-      preLoaderRoute: typeof EditorRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/home': {
-      id: '/home'
-      path: '/home'
-      fullPath: '/home'
-      preLoaderRoute: typeof HomeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/import': {
       id: '/import'
       path: '/import'
       fullPath: '/import'
       preLoaderRoute: typeof ImportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/library': {
+      id: '/library'
+      path: '/library'
+      fullPath: '/library'
+      preLoaderRoute: typeof LibraryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/license': {
@@ -625,13 +803,6 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/my-templates': {
-      id: '/my-templates'
-      path: '/my-templates'
-      fullPath: '/my-templates'
-      preLoaderRoute: typeof MyTemplatesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/open': {
@@ -690,6 +861,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workspace': {
+      id: '/workspace'
+      path: '/workspace'
+      fullPath: '/workspace'
+      preLoaderRoute: typeof WorkspaceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/الهوية': {
       id: '/الهوية'
       path: '/الهوية'
@@ -697,11 +875,109 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char1575Char1604Char1607Char1608Char1610Char1577RouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/assets': {
+      id: '/admin/assets'
+      path: '/assets'
+      fullPath: '/admin/assets'
+      preLoaderRoute: typeof AdminAssetsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/audit': {
+      id: '/admin/audit'
+      path: '/audit'
+      fullPath: '/admin/audit'
+      preLoaderRoute: typeof AdminAuditRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/branding': {
+      id: '/admin/branding'
+      path: '/branding'
+      fullPath: '/admin/branding'
+      preLoaderRoute: typeof AdminBrandingRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/content': {
+      id: '/admin/content'
+      path: '/content'
+      fullPath: '/admin/content'
+      preLoaderRoute: typeof AdminContentRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/import': {
+      id: '/admin/import'
+      path: '/import'
+      fullPath: '/admin/import'
+      preLoaderRoute: typeof AdminImportRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/payments': {
+      id: '/admin/payments'
+      path: '/payments'
+      fullPath: '/admin/payments'
+      preLoaderRoute: typeof AdminPaymentsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/plans': {
+      id: '/admin/plans'
+      path: '/plans'
+      fullPath: '/admin/plans'
+      preLoaderRoute: typeof AdminPlansRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/studio': {
+      id: '/admin/studio'
+      path: '/studio'
+      fullPath: '/admin/studio'
+      preLoaderRoute: typeof AdminStudioRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/templates': {
+      id: '/admin/templates'
+      path: '/templates'
+      fullPath: '/admin/templates'
+      preLoaderRoute: typeof AdminTemplatesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/api/app-version': {
       id: '/api/app-version'
       path: '/api/app-version'
       fullPath: '/api/app-version'
       preLoaderRoute: typeof ApiAppVersionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editor/': {
+      id: '/editor/'
+      path: '/editor'
+      fullPath: '/editor/'
+      preLoaderRoute: typeof EditorIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/editor/$projectId': {
+      id: '/editor/$projectId'
+      path: '/editor/$projectId'
+      fullPath: '/editor/$projectId'
+      preLoaderRoute: typeof EditorProjectIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/payment/cancel': {
@@ -718,6 +994,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PaymentSuccessRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/projects/$projectId': {
+      id: '/projects/$projectId'
+      path: '/$projectId'
+      fullPath: '/projects/$projectId'
+      preLoaderRoute: typeof ProjectsProjectIdRouteImport
+      parentRoute: typeof ProjectsRoute
+    }
     '/templates/': {
       id: '/templates/'
       path: '/'
@@ -731,6 +1014,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/templates/$templateId'
       preLoaderRoute: typeof TemplatesTemplateIdRouteImport
       parentRoute: typeof TemplatesRoute
+    }
+    '/admin/licenses/': {
+      id: '/admin/licenses/'
+      path: '/licenses'
+      fullPath: '/admin/licenses/'
+      preLoaderRoute: typeof AdminLicensesIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/api/auth/$': {
       id: '/api/auth/$'
@@ -781,6 +1071,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiWebhooksKeygenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/templates/$templateId/preview': {
+      id: '/templates/$templateId/preview'
+      path: '/preview'
+      fullPath: '/templates/$templateId/preview'
+      preLoaderRoute: typeof TemplatesTemplateIdPreviewRouteImport
+      parentRoute: typeof TemplatesTemplateIdRoute
+    }
+    '/templates/$templateId/share': {
+      id: '/templates/$templateId/share'
+      path: '/share'
+      fullPath: '/templates/$templateId/share'
+      preLoaderRoute: typeof TemplatesTemplateIdShareRouteImport
+      parentRoute: typeof TemplatesTemplateIdRoute
+    }
     '/templates/share/$token': {
       id: '/templates/share/$token'
       path: '/share/$token'
@@ -791,14 +1095,73 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AdminRouteChildren {
+  AdminAssetsRoute: typeof AdminAssetsRoute
+  AdminAuditRoute: typeof AdminAuditRoute
+  AdminBrandingRoute: typeof AdminBrandingRoute
+  AdminContentRoute: typeof AdminContentRoute
+  AdminImportRoute: typeof AdminImportRoute
+  AdminPaymentsRoute: typeof AdminPaymentsRoute
+  AdminPlansRoute: typeof AdminPlansRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminStudioRoute: typeof AdminStudioRoute
+  AdminTemplatesRoute: typeof AdminTemplatesRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+  AdminLicensesIndexRoute: typeof AdminLicensesIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAssetsRoute: AdminAssetsRoute,
+  AdminAuditRoute: AdminAuditRoute,
+  AdminBrandingRoute: AdminBrandingRoute,
+  AdminContentRoute: AdminContentRoute,
+  AdminImportRoute: AdminImportRoute,
+  AdminPaymentsRoute: AdminPaymentsRoute,
+  AdminPlansRoute: AdminPlansRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
+  AdminStudioRoute: AdminStudioRoute,
+  AdminTemplatesRoute: AdminTemplatesRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+  AdminLicensesIndexRoute: AdminLicensesIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface ProjectsRouteChildren {
+  ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
+}
+
+const ProjectsRouteChildren: ProjectsRouteChildren = {
+  ProjectsProjectIdRoute: ProjectsProjectIdRoute,
+}
+
+const ProjectsRouteWithChildren = ProjectsRoute._addFileChildren(
+  ProjectsRouteChildren,
+)
+
+interface TemplatesTemplateIdRouteChildren {
+  TemplatesTemplateIdPreviewRoute: typeof TemplatesTemplateIdPreviewRoute
+  TemplatesTemplateIdShareRoute: typeof TemplatesTemplateIdShareRoute
+}
+
+const TemplatesTemplateIdRouteChildren: TemplatesTemplateIdRouteChildren = {
+  TemplatesTemplateIdPreviewRoute: TemplatesTemplateIdPreviewRoute,
+  TemplatesTemplateIdShareRoute: TemplatesTemplateIdShareRoute,
+}
+
+const TemplatesTemplateIdRouteWithChildren =
+  TemplatesTemplateIdRoute._addFileChildren(TemplatesTemplateIdRouteChildren)
+
 interface TemplatesRouteChildren {
-  TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRoute
+  TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRouteWithChildren
   TemplatesIndexRoute: typeof TemplatesIndexRoute
   TemplatesShareTokenRoute: typeof TemplatesShareTokenRoute
 }
 
 const TemplatesRouteChildren: TemplatesRouteChildren = {
-  TemplatesTemplateIdRoute: TemplatesTemplateIdRoute,
+  TemplatesTemplateIdRoute: TemplatesTemplateIdRouteWithChildren,
   TemplatesIndexRoute: TemplatesIndexRoute,
   TemplatesShareTokenRoute: TemplatesShareTokenRoute,
 }
@@ -811,32 +1174,32 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   AccountRoute: AccountRoute,
-  AdminRoute: AdminRoute,
-  AdminDashboardRoute: AdminDashboardRoute,
-  AdminLicensesRoute: AdminLicensesRoute,
+  AdminRoute: AdminRouteWithChildren,
   BrandKitRoute: BrandKitRoute,
   ContactRoute: ContactRoute,
+  CreateRoute: CreateRoute,
   CustomDesignRoute: CustomDesignRoute,
   DemoRoute: DemoRoute,
-  EditorRoute: EditorRoute,
-  HomeRoute: HomeRoute,
   ImportRoute: ImportRoute,
+  LibraryRoute: LibraryRoute,
   LicenseRoute: LicenseRoute,
   LoginRoute: LoginRoute,
-  MyTemplatesRoute: MyTemplatesRoute,
   OpenRoute: OpenRoute,
   OwnerVaultRoute: OwnerVaultRoute,
   PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,
-  ProjectsRoute: ProjectsRoute,
+  ProjectsRoute: ProjectsRouteWithChildren,
   PurchaseRoute: PurchaseRoute,
   TemplatesRoute: TemplatesRouteWithChildren,
   TermsRoute: TermsRoute,
+  WorkspaceRoute: WorkspaceRoute,
   Char1575Char1604Char1607Char1608Char1610Char1577Route:
     Char1575Char1604Char1607Char1608Char1610Char1577Route,
   ApiAppVersionRoute: ApiAppVersionRoute,
+  EditorProjectIdRoute: EditorProjectIdRoute,
   PaymentCancelRoute: PaymentCancelRoute,
   PaymentSuccessRoute: PaymentSuccessRoute,
+  EditorIndexRoute: EditorIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,
   ApiLicenseDeactivateRoute: ApiLicenseDeactivateRoute,

@@ -18,7 +18,7 @@ export function SignInRequiredModal({
   open,
   onClose,
   intent = "تصدير التصميم",
-  callbackURL = "/editor",
+  callbackURL,
   onBrowseOptions,
 }: {
   open: boolean;

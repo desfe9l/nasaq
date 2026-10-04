@@ -11,6 +11,7 @@ import { useEditor } from "@/lib/editor/store";
 import { DEMO_LICENSE, canCreateDemoProject } from "@/lib/product/product";
 import { publishedTemplateSeed } from "@/lib/templates/published";
 import type { AdminTemplateSummary } from "@/lib/admin/types";
+import { CREATE_ROUTE, editorPathFor } from "@/lib/site-routes";
 
 interface Props {
   initialTemplate?: AdminTemplateSummary | null;
@@ -125,10 +126,12 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
         return;
       }
       const imported = await current.importProject(seed, { successMessage: null });
-      if (imported) {
+      const projectId = useEditor.getState().id;
+      if (imported && projectId) {
         opened.current = template.id;
         toast.success(`تم إنشاء نسخة من «${template.title}»`);
-        window.location.assign("/editor");
+        /* The editor opens AT the document that was just created. */
+        window.location.assign(editorPathFor(projectId));
       } else {
         toast.error("تعذر فتح القالب في المحرر");
       }
@@ -409,8 +412,8 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
                 <a href="/purchase" className="inline-flex h-9 items-center rounded-lg bg-white px-4 text-[12px] font-bold text-navy">
                   الخطط والأسعار
                 </a>
-                <a href="/editor" className="inline-flex h-9 items-center rounded-lg border border-white/20 px-4 text-[12px] font-bold">
-                  فتح المحرر
+                <a href={CREATE_ROUTE} className="inline-flex h-9 items-center rounded-lg border border-white/20 px-4 text-[12px] font-bold">
+                  إنشاء تصميم جديد
                 </a>
               </div>
             </div>
