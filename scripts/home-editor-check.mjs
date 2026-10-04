@@ -41,6 +41,23 @@ const context = await browser.newContext(
     ? { ...devices[DEVICE], locale: "ar" }
     : { viewport: { width: 1440, height: 950 }, locale: "ar" },
 );
+await context.addInitScript(() => {
+  // Gesture listeners live on `window`; count them so a remount that forgets
+  // to clean up shows as growth instead of a slow leak nobody notices.
+  const counts = {};
+  const add = window.addEventListener.bind(window);
+  const remove = window.removeEventListener.bind(window);
+  window.addEventListener = (type, ...rest) => {
+    counts[type] = (counts[type] || 0) + 1;
+    return add(type, ...rest);
+  };
+  window.removeEventListener = (type, ...rest) => {
+    counts[type] = (counts[type] || 0) - 1;
+    return remove(type, ...rest);
+  };
+  Object.defineProperty(window, "__listenerCounts", { get: () => counts });
+});
+
 const page = await context.newPage();
 const errors = [];
 page.on("pageerror", (err) => errors.push(`pageerror: ${err.message}`));
@@ -429,6 +446,59 @@ check(
 // Navigation still works from the hero section.
 const navCount = await page.locator('a[href="/templates"]').count();
 check("homepage navigation is intact", navCount > 0, `links=${navCount}`);
+
+// ── leaving and returning must not duplicate or leak the editor ───────────
+const listeners = () =>
+  page.evaluate(() => ({
+    move: window.__listenerCounts?.pointermove ?? 0,
+    up: window.__listenerCounts?.pointerup ?? 0,
+  }));
+const beforeTrip = await listeners();
+await page.locator('a[href="/templates"]').first().click();
+await page.waitForURL("**/templates", { timeout: TIMEOUT });
+await page.waitForTimeout(600);
+await page.goBack();
+await page.locator("[data-home-editor-paper]").waitFor({ timeout: TIMEOUT });
+await page.locator("[data-home-editor-stage]").scrollIntoViewIfNeeded();
+await page.waitForTimeout(500);
+const afterTrip = await listeners();
+check(
+  "the editor mounts once after a round trip",
+  (await surface.count()) === 1,
+  `surfaces=${await surface.count()}`,
+);
+check(
+  "the gesture listeners are released on unmount",
+  afterTrip.move <= beforeTrip.move && afterTrip.up <= beforeTrip.up,
+  `pointermove ${beforeTrip.move} → ${afterTrip.move}, pointerup ${beforeTrip.up} → ${afterTrip.up}`,
+);
+
+const revived = page.locator("[data-home-el]").nth(index);
+const revivedId = await revived.getAttribute("data-home-el");
+const rb = await revived.boundingBox();
+await page.mouse.move(rb.x + rb.width / 2, rb.y + rb.height / 2);
+await page.mouse.down();
+await page.mouse.move(rb.x + rb.width / 2 - 20, rb.y + rb.height / 2 + 16);
+await page.mouse.up();
+await page.waitForTimeout(250);
+const revivedGeom = await geom(revivedId);
+check(
+  "the returning editor is still interactive",
+  !!revivedGeom && revivedGeom.selected,
+  `selected=${revivedGeom?.selected}`,
+);
+
+// ── an Admin catalog change must not strand the hero ──────────────────────
+await page.evaluate(() =>
+  window.dispatchEvent(new Event("nasaq:published-templates-changed")),
+);
+await page.waitForTimeout(800);
+check(
+  "a catalog refresh keeps exactly one live editor",
+  (await surface.count()) === 1 &&
+    (await page.locator("[data-home-el]").count()) > 0,
+  `surfaces=${await surface.count()} elements=${await page.locator("[data-home-el]").count()}`,
+);
 
 // ── no runtime noise ──────────────────────────────────────────────────────
 const realErrors = errors.filter(
