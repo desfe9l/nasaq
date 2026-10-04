@@ -1,4 +1,4 @@
-import { Eye, Printer, ZoomIn, ZoomOut } from "lucide-react";
+import { Eye, Moon, Printer, Sun, SunDim, ZoomIn, ZoomOut } from "lucide-react";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { useEditor } from "@/lib/editor/store";
 import { AnchorMenu, MenuGroup, MenuRow } from "./ui/AnchorMenu";
@@ -11,9 +11,9 @@ import {
 } from "@/lib/editor/workspace-dock";
 
 const APPEARANCE_MODES = [
-  { id: "light", label: "فاتح" },
-  { id: "dim", label: "متوسط" },
-  { id: "dark", label: "داكن" },
+  { id: "light", label: "فاتح", Icon: Sun },
+  { id: "dim", label: "متوسط", Icon: SunDim },
+  { id: "dark", label: "داكن", Icon: Moon },
 ] as const;
 
 /**
@@ -224,6 +224,7 @@ export function ViewMenu({
       {APPEARANCE_MODES.map((mode) => (
         <MenuRow
           key={mode.id}
+          icon={<mode.Icon className="size-4" />}
           label={mode.id === "dim" ? "متوسط / خافت" : mode.label}
           checked={appearance === mode.id}
           onSelect={() => setAppearance(mode.id)}

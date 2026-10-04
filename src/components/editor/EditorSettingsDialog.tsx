@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   Check,
-  Contrast,
   KeyRound,
   Loader2,
   Moon,
   Sun,
+  SunDim,
   UserRound,
   X,
 } from "lucide-react";
@@ -360,7 +360,7 @@ function EditorSection() {
           {(
             [
               { value: "light" as const, label: "فاتح", Icon: Sun },
-              { value: "dim" as const, label: "خافت", Icon: Contrast },
+              { value: "dim" as const, label: "خافت", Icon: SunDim },
               { value: "dark" as const, label: "داكن", Icon: Moon },
             ] as const
           ).map(({ value, label, Icon }) => (
