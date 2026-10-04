@@ -67,6 +67,7 @@ import {
 } from "@/lib/templates/published";
 import { CARD_W, CARD_WRAP } from "./cards";
 import { ProjectFileButton } from "./ProjectFileButton";
+import { TEMPLATES_ROUTE } from "@/lib/site-routes";
 
 type FeaturedPill = "featured" | CatalogPillId;
 
@@ -720,7 +721,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
             desc="قوالب مؤسسية جاهزة ضمن ترخيصك — «استخدام القالب» ينشئ مستندًا جديدًا قابلًا للتحرير ويبقى القالب الأصلي كما هو."
             action={
               <a
-                href="/templates"
+                href={TEMPLATES_ROUTE}
                 className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-[12px] font-extrabold text-ink transition hover:bg-line-2"
               >
                 <LayoutTemplate className="size-4" />
@@ -788,7 +789,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
                 من أحد مستنداتك.
               </p>
               <a
-                href="/templates"
+                href={TEMPLATES_ROUTE}
                 className="mt-5 inline-flex h-10 items-center gap-2 rounded-xl border border-line px-4 text-[12px] font-bold text-ink transition hover:bg-line-2"
               >
                 مكتبة القوالب
@@ -814,7 +815,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
               {shown.length > HOME_TEMPLATE_LIMIT && (
                 <div className="flex justify-center">
                   <a
-                    href="/templates"
+                    href={TEMPLATES_ROUTE}
                     className="inline-flex h-10 items-center gap-2 rounded-xl border border-line bg-surface px-4 text-[12px] font-extrabold text-ink transition hover:bg-line-2"
                   >
                     عرض كل القوالب ({shown.length})

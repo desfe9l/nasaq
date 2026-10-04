@@ -4,8 +4,10 @@ import {
   fitImageBox,
   imageAdjustCss,
   isAcceptedImage,
+  placeImageBox,
   safeImageSrc,
   sharpnessKernel,
+  uniqueImageFiles,
 } from "./images.ts";
 
 describe("isAcceptedImage", () => {
@@ -58,6 +60,57 @@ describe("fitImageBox", () => {
   it("keeps a square image square", () => {
     const box = fitImageBox({ width: 500, height: 500 }, { w: 40, h: 40 });
     assert.equal(box.w, box.h);
+  });
+});
+
+describe("placeImageBox", () => {
+  const page = { w: 210, h: 297 };
+
+  it("uses a sensible contained size and preserves aspect ratio", () => {
+    const box = placeImageBox({ width: 1600, height: 800 }, page);
+    assert.equal(box.w, 80);
+    assert.equal(box.h, 40);
+    assert.equal(box.x, 65);
+    assert.equal(box.y, 128.5);
+  });
+
+  it("gives repeated picker insertions deterministic, distinct positions", () => {
+    const first = placeImageBox({ width: 800, height: 800 }, page, { sequence: 0 });
+    const second = placeImageBox({ width: 800, height: 800 }, page, { sequence: 1 });
+    assert.notDeepEqual(first, second);
+    assert.ok(second.x >= 0 && second.y >= 0);
+    assert.ok(second.x + second.w <= page.w);
+    assert.ok(second.y + second.h <= page.h);
+  });
+
+  it("honors the drop point without an artificial offset and clamps to the page", () => {
+    const box = placeImageBox({ width: 1200, height: 600 }, page, {
+      at: { x: 2, y: 296 },
+    });
+    assert.equal(box.x, 0);
+    assert.equal(box.y, 257);
+    assert.equal(box.w, 80);
+    assert.equal(box.h, 40);
+  });
+
+  it("uses the smaller logo cap on arbitrary page sizes", () => {
+    const box = placeImageBox({ width: 100, height: 50 }, { w: 30, h: 20 }, { intent: "logo" });
+    assert.ok(box.w <= 30);
+    assert.ok(box.h <= 20);
+    assert.equal(box.w / box.h, 2);
+  });
+});
+
+describe("uniqueImageFiles", () => {
+  it("keeps every distinct selected image and drops duplicate browser entries", () => {
+    const make = (name: string, size: number, lastModified: number) =>
+      ({ name, size, lastModified, type: "image/png" }) as File;
+    const files = uniqueImageFiles([
+      make("one.png", 10, 1),
+      make("two.png", 20, 2),
+      make("one.png", 10, 1),
+    ]);
+    assert.deepEqual(files.map((file) => file.name), ["one.png", "two.png"]);
   });
 });
 
