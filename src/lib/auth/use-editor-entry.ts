@@ -11,6 +11,7 @@
 import { useCallback } from "react";
 import { useCurrentUserState } from "./use-current-user";
 import { editorEntryFor, type EditorEntry } from "./editor-entry";
+import { CREATE_ROUTE } from "@/lib/site-routes";
 
 export function useEditorEntry(): {
   entry: EditorEntry;
@@ -27,22 +28,18 @@ export function useEditorEntry(): {
     window.location.assign(entry.href);
   }, [entry]);
 
+  /**
+   * «إنشاء مستند جديد» — always through the creation screen.
+   *
+   * Nobody is dropped into an empty canvas: the screen asks for the document
+   * type, the page size and the orientation, shows the resulting dimensions,
+   * and only then creates the document and opens the editor at its own
+   * address. The signed-out visitor gets the same screen with the trial
+   * ceilings applied — never a blank project created on their behalf.
+   */
   const openNewDocument = useCallback(async () => {
     if (!entry.ready) return;
-    if (!entry.direct) {
-      window.location.assign(entry.href);
-      return;
-    }
-    // Imported lazily: the site chrome renders on pages that never touch the
-    // editor store, and this hook is mounted there.
-    const { useEditor } = await import("@/lib/editor/store");
-    // A refused create (the free/unlicensed project ceiling) still enters the
-    // editor — access is never gated on creating another file.
-    await useEditor
-      .getState()
-      .createProject("blank")
-      .catch(() => false);
-    window.location.assign("/editor");
+    window.location.assign(CREATE_ROUTE);
   }, [entry]);
 
   return { entry, openEditor, openNewDocument };

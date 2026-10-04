@@ -28,6 +28,14 @@ import { getProject } from "@/lib/editor/storage";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { PublishedTemplates } from "@/components/site/PublishedTemplates";
 import { CARD_W, CARD_WRAP } from "@/components/site/cards";
+import { entrySlug } from "@/lib/templates/entry-slug";
+import {
+  CREATE_ROUTE,
+  TEMPLATES_ROUTE,
+  editorPathFor,
+  templatePathFor,
+  templatesFilterPathFor,
+} from "@/lib/site-routes";
 import { cn } from "@/lib/utils";
 import { DEMO_LICENSE, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
 import { projectAccessBlock } from "@/lib/editor/access-limits";
@@ -77,7 +85,15 @@ function reportError(err: unknown, fallback: string) {
   );
 }
 
-export function TemplatesPage() {
+export function TemplatesPage({
+  initialPill,
+  initialQuery,
+}: {
+  /** `?pill=` — the gallery filter, so a filtered view is addressable. */
+  initialPill?: string;
+  /** `?q=` — the gallery search term. */
+  initialQuery?: string;
+} = {}) {
   const hydrate = useEditor((s) => s.hydrate);
   const importProject = useEditor((s) => s.importProject);
   const openProject = useEditor((s) => s.openProject);
@@ -88,8 +104,12 @@ export function TemplatesPage() {
   const { entitlements } = useLicense();
 
   const [theme, setTheme] = useState<ThemeId>("official");
-  const [pill, setPill] = useState<CatalogPillId>("all");
-  const [query, setQuery] = useState("");
+  const [pill, setPill] = useState<CatalogPillId>(() =>
+    CATALOG_PILLS.some((option) => option.id === initialPill)
+      ? (initialPill as CatalogPillId)
+      : "all",
+  );
+  const [query, setQuery] = useState(() => initialQuery ?? "");
   const [quickViewId, setQuickViewId] = useState<string | null>(null);
   const [form, setForm] = useState<{ mode: "create" | "edit"; entryId?: string } | null>(null);
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -102,6 +122,22 @@ export function TemplatesPage() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  /*
+   * The filter is part of the address: changing a pill or typing a query
+   * rewrites `/templates?pill=…&q=…` (replacing the entry, so Back leaves the
+   * gallery instead of walking through every keystroke).
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const search = new URLSearchParams();
+    if (pill !== "all") search.set("pill", pill);
+    if (query.trim()) search.set("q", query.trim());
+    const next = `${TEMPLATES_ROUTE}${search.toString() ? `?${search}` : ""}`;
+    if (`${window.location.pathname}${window.location.search}` !== next) {
+      window.history.replaceState(null, "", next);
+    }
+  }, [pill, query]);
 
   const filtered = useMemo(() => filterCatalog(entries, { pill, query }), [entries, pill, query]);
   const counts = useMemo(() => {
@@ -221,7 +257,8 @@ export function TemplatesPage() {
     setQuickViewId(null);
     const imported = await importProject(seed);
     if (!imported) return;
-    window.location.assign("/editor");
+    const projectId = useEditor.getState().id;
+    window.location.assign(projectId ? editorPathFor(projectId) : CREATE_ROUTE);
   };
 
   /**
@@ -240,7 +277,8 @@ export function TemplatesPage() {
     // edits and re-point the draft at a fresh, unedited project.
     if (draft?.entryId === entry.id && (await getProject(draft.projectId))?.pages?.length) {
       setQuickViewId(null);
-      if (await openProject(draft.projectId)) window.location.assign("/editor");
+      if (await openProject(draft.projectId))
+        window.location.assign(editorPathFor(draft.projectId));
       return;
     }
     const seed = await projectSeedForEntry(entry);
@@ -266,7 +304,8 @@ export function TemplatesPage() {
         reportError(err, "تعذّر تذكّر مسودة التعديل");
       }
     }
-    window.location.assign("/editor");
+    const copyId = useEditor.getState().id;
+    window.location.assign(copyId ? editorPathFor(copyId) : CREATE_ROUTE);
   };
 
   /** «تكرار» — the copy is always a custom template, whatever the source was. */
@@ -451,7 +490,8 @@ export function TemplatesPage() {
 
   const resumeDraft = async () => {
     if (!draft) return;
-    if (await openProject(draft.projectId)) window.location.assign("/editor");
+    if (await openProject(draft.projectId))
+      window.location.assign(editorPathFor(draft.projectId));
   };
 
   /* ── render ──────────────────────────────────────────────────────────── */
@@ -482,7 +522,7 @@ export function TemplatesPage() {
           </button>
           {entitlements.premium_templates && (
             <a
-              href="/my-templates"
+              href={templatesFilterPathFor({ pill: "custom" })}
               className="inline-flex h-11 items-center rounded-xl border border-line px-4 text-[13px] font-extrabold text-ink"
             >
               قوالبي
@@ -684,6 +724,7 @@ export function TemplatesPage() {
               <div key={entry.id} className={cn("flex", CARD_W)}>
                 <TemplateCard
                   entry={entry}
+                  href={templatePathFor(entrySlug(entry))}
                   locked={packLocked(entry)}
                   highlight={justSaved === entry.id}
                   actions={{
@@ -709,10 +750,10 @@ export function TemplatesPage() {
         <PublishedTemplates />
 
         <a
-          href="/editor"
+          href={CREATE_ROUTE}
           className="mt-6 inline-flex h-11 items-center gap-2 rounded-xl bg-navy px-4 text-[13px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
         >
-          اذهب إلى المحرر لإدراج القوالب
+          أنشئ تصميمًا جديدًا
         </a>
       </main>
 

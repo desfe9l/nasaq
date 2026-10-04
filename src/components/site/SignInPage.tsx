@@ -13,7 +13,8 @@ import { SiteFooter, SiteHeader } from "./SiteChrome";
  * the session is still resolving would bounce an already-signed-in visitor back
  * here on every hard reload.
  */
-export function SignInPage() {
+export function SignInPage({ redirect }: { redirect?: string } = {}) {
+  const destination = redirect && redirect.startsWith("/") ? redirect : "/account";
   const { user, isPending } = useCurrentUserState();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -29,7 +30,15 @@ export function SignInPage() {
     );
   }
 
-  if (user) return <Navigate to="/account" />;
+  if (user) {
+    /* Already signed in: the guarded destination is where the visitor wanted
+       to be — honour it with a full navigation, or the account page otherwise. */
+    if (redirect) {
+      if (typeof window !== "undefined") window.location.replace(redirect);
+      return null;
+    }
+    return <Navigate to="/account" />;
+  }
 
   return (
     <div className="min-h-screen bg-paper">
@@ -55,7 +64,7 @@ export function SignInPage() {
                   onClick={() => {
                     setError(null);
                     setBusy(provider.providerId);
-                    void signIn(provider.providerId as "google", { callbackURL: "/account" }).catch(
+                    void signIn(provider.providerId as "google", { callbackURL: destination }).catch(
                       (err: unknown) => {
                         setBusy(null);
                         setError(

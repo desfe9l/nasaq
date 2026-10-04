@@ -7,6 +7,7 @@
 
 import { adminUpsertTemplateFn } from "@/lib/admin/functions";
 import type { Project } from "@/lib/editor/model";
+import { editorPathFor } from "@/lib/site-routes";
 import type { AssetFinding } from "@/lib/editor/psd/types";
 import type { AssetDecision } from "@/lib/editor/psd/pipeline";
 import { applyAssetDecisions } from "@/lib/editor/psd/pipeline";
@@ -113,7 +114,7 @@ export async function updateImportedDocument(project: Project): Promise<SaveOutc
 /** Point the editor at the saved document and open it. */
 export async function openSavedInEditor(id: string): Promise<void> {
   await setSetting("activeProjectId", id);
-  window.location.assign("/editor");
+  window.location.assign(editorPathFor(id));
 }
 
 export interface TemplateOutcome {

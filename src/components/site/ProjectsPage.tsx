@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { NSQ_ACCEPT, isNsqFileName } from "@/lib/nsq/format";
 import { downloadLibraryFile } from "@/lib/editor/library-export";
 import { hasSignedInOwner } from "@/lib/editor/storage-owner";
+import { CREATE_ROUTE, editorPathFor, projectPathFor } from "@/lib/site-routes";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
 import { useLicense } from "@/lib/license/client";
@@ -48,7 +49,6 @@ export function ProjectsPage() {
   const projectsLoading = useEditor((s) => s.projectsLoading);
   const refreshProjects = useEditor((s) => s.refreshProjects);
   const openProject = useEditor((s) => s.openProject);
-  const createProject = useEditor((s) => s.createProject);
   const importProject = useEditor((s) => s.importProject);
   const storage = useEditor((s) => s.storage);
   const assets = useEditor((s) => s.assets);
@@ -104,13 +104,18 @@ export function ProjectsPage() {
       return b.updatedAt - a.updatedAt;
     });
 
-  const open = async (id: string) => {
-    if (await openProject(id)) window.location.assign("/editor");
+  /*
+   * Opening a project means opening its PAGE (`/projects/<id>`): the shelf is
+   * an index, and the document itself decides where it is edited. Creating
+   * goes through the creation screen, so a new design always starts from a
+   * chosen format rather than a silent blank page.
+   */
+  const open = (id: string) => {
+    window.location.assign(projectPathFor(id));
   };
 
-  const startNew = async () => {
-    const created = await createProject("blank");
-    if (created) window.location.assign("/editor");
+  const startNew = () => {
+    window.location.assign(CREATE_ROUTE);
   };
   const { entry } = useEditorEntry();
 
@@ -154,8 +159,7 @@ export function ProjectsPage() {
                 }
                 // A signed-in account starts a real document in the editor;
                 // only a visitor with no session is sent to the demo page.
-                if (entry.ready && entry.direct) void startNew();
-                else window.location.assign("/demo");
+                void startNew();
               }}
               className="rounded-[8px] border border-line px-3 py-2 text-[12px] font-bold"
             >
@@ -296,7 +300,10 @@ export function ProjectsPage() {
             const reader = new FileReader();
             reader.onload = () => {
               try {
-                void importProject(JSON.parse(String(reader.result))).then(() => window.location.assign("/editor"));
+                void importProject(JSON.parse(String(reader.result))).then(() => {
+                  const id = useEditor.getState().id;
+                  if (id) window.location.assign(editorPathFor(id));
+                });
               } catch {
                 void import("sonner").then(({ toast }) =>
                   toast.error("تعذر قراءة الملف — تأكد أنه ملف مشروع بصيغة JSON"),

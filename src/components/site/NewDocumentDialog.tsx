@@ -32,6 +32,7 @@ import {
   MAX_NEW_PAGES,
   MIN_CUSTOM_MM,
   PAGE_SIZES,
+  PRESET_ORIENTATION,
   STARTER_PACKS,
   blankBackground,
   buildNewDocument,
@@ -42,6 +43,7 @@ import {
   docKind,
   pageDimensions,
   pagesText,
+  presetIsSquare,
   type BlankContent,
   type NewDocumentConfig,
   type Orientation,
@@ -204,18 +206,29 @@ function SheetGlyph({
   );
 }
 
-export function NewDocumentDialog({
+/**
+ * The configuration step itself.
+ *
+ * `variant="dialog"` is the in-place modal the licensed Home and the editor's
+ * account menu open; `variant="page"` is the same form as the body of the
+ * `/create` screen. One implementation, so the creation screen and the dialog
+ * can never disagree about a preset, a limit, or what the preview shows.
+ */
+export function NewDocumentForm({
+  variant = "dialog",
   onClose,
   onCreated,
   initial,
   submitLabel = "إنشاء وفتح المحرر",
 }: {
-  onClose: () => void;
-  /** Called once the document exists and is the store's active project. */
-  onCreated: () => void;
+  variant?: "dialog" | "page";
+  onClose?: () => void;
+  /** Called with the id of the document that was created and is now active. */
+  onCreated: (projectId: string | null) => void;
   initial?: Partial<NewDocumentConfig>;
   submitLabel?: string;
 }) {
+  const isDialog = variant === "dialog";
   const createDocument = useEditor((s) => s.createDocument);
   const entitlements = useEditor((s) => s.entitlements);
   const storeOrg = useEditor((s) => s.orgName);
@@ -273,34 +286,37 @@ export function NewDocumentDialog({
       const created = await createDocument(project, {
         autoName: !config.name.trim(),
       });
-      if (created) onCreated();
+      if (created) onCreated(useEditor.getState().id ?? null);
     } finally {
       setBusy(false);
     }
   };
 
+  /*
+   * Rotating a square sheet changes nothing — the control says so instead of
+   * pretending to work. True for the square preset and for a square custom
+   * size alike.
+   */
   const orientationDisabled =
     !isTemplate &&
-    config.size === "custom" &&
-    config.custom.w === config.custom.h;
+    (config.size === "custom"
+      ? config.custom.w === config.custom.h
+      : presetIsSquare(config.size));
 
-  return (
-    <Modal
-      label="إنشاء مستند جديد"
-      onClose={busy ? () => undefined : onClose}
-      className="max-w-5xl"
+  const body = (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
     >
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
-        }}
-      >
+      {isDialog && (
         <DialogHeader
           title="إنشاء مستند جديد"
           subtitle="الإعدادات الافتراضية جاهزة — أنشئ مباشرةً، أو خصّص المقاس والاتجاه والصفحات قبل الدخول إلى المحرر."
-          onClose={onClose}
+          onClose={() => onClose?.()}
         />
+      )}
 
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
           {/* ── configuration ─────────────────────────────────────────── */}
@@ -457,13 +473,13 @@ export function NewDocumentDialog({
                             key={size.id}
                             active={active}
                             onClick={() => {
-                              // A slide is wide by nature; leaving it puts paper upright.
+                              // A slide is wide and a story is tall by nature;
+                              // leaving one restores upright paper.
                               const orientation: Orientation =
-                                size.id === "slide"
-                                  ? "landscape"
-                                  : config.size === "slide"
-                                    ? "portrait"
-                                    : config.orientation;
+                                PRESET_ORIENTATION[size.id as PageSizeId] ??
+                                (PRESET_ORIENTATION[config.size]
+                                  ? "portrait"
+                                  : config.orientation);
                               // Entering «مخصص»: start from the sheet the author
                               // was looking at, laid out in the current orientation,
                               // so the fields never contradict the preview.
@@ -837,21 +853,41 @@ export function NewDocumentDialog({
           </aside>
         </div>
 
-        {/* Pinned to the dialog's bottom edge, so «إنشاء» never scrolls out of reach on a tablet. */}
-        <div className="sticky -bottom-5 z-10 -mx-5 mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface px-5 pt-4 pb-5">
+      {/* Pinned to the dialog's bottom edge, so «إنشاء» never scrolls out of reach on a tablet. */}
+      <div
+        className={cn(
+          "flex flex-wrap items-center justify-between gap-3 border-t border-line bg-surface",
+          isDialog
+            ? "sticky -bottom-5 z-10 -mx-5 mt-6 px-5 pt-4 pb-5"
+            : "mt-6 rounded-b-2xl px-4 py-4",
+        )}
+      >
           <p className="text-[11px] font-semibold text-muted">
             يُحفظ المستند في مشاريعك تلقائيًا، ويمكن تغيير كل إعداد لاحقًا من
             المحرر.
           </p>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={busy}
-              className={GHOST_BTN}
-            >
-              إلغاء
-            </button>
+            {isDialog ? (
+              <button
+                type="button"
+                onClick={() => onClose?.()}
+                disabled={busy}
+                className={GHOST_BTN}
+              >
+                إلغاء
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  window.location.assign("/templates");
+                }}
+                disabled={busy}
+                className={GHOST_BTN}
+              >
+                ابدأ من قالب جاهز
+              </button>
+            )}
             <button
               type="submit"
               disabled={busy}
@@ -867,7 +903,44 @@ export function NewDocumentDialog({
             </button>
           </div>
         </div>
-      </form>
+    </form>
+  );
+
+  if (!isDialog) return body;
+  return (
+    <Modal
+      label="إنشاء مستند جديد"
+      onClose={busy ? () => undefined : () => onClose?.()}
+      className="max-w-5xl"
+    >
+      {body}
     </Modal>
+  );
+}
+
+/**
+ * The modal wrapper kept for the surfaces that configure a document in place
+ * (the licensed Home). `/create` renders `NewDocumentForm` directly.
+ */
+export function NewDocumentDialog({
+  onClose,
+  onCreated,
+  initial,
+  submitLabel = "إنشاء وفتح المحرر",
+}: {
+  onClose: () => void;
+  /** Called once the document exists and is the store's active project. */
+  onCreated: () => void;
+  initial?: Partial<NewDocumentConfig>;
+  submitLabel?: string;
+}) {
+  return (
+    <NewDocumentForm
+      variant="dialog"
+      onClose={onClose}
+      onCreated={() => onCreated()}
+      initial={initial}
+      submitLabel={submitLabel}
+    />
   );
 }

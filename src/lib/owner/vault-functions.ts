@@ -515,8 +515,8 @@ const ENV_SPECS: EnvSpec[] = [
 
 const ROUTES: OwnerRouteInfo[] = [
   { label: "لوحة الإدارة", path: "/admin", status: "active", purpose: "إدارة العملاء والمدفوعات والباقات وسجل الإجراءات." },
-  { label: "القوالب ومحتوى الموقع", path: "/admin-dashboard", status: "active", purpose: "إدارة القوالب المدفوعة ومحتوى الموقع وصوره." },
-  { label: "إدارة التراخيص", path: "/admin-licenses", status: "active", purpose: "إصدار التراخيص ومراجعتها." },
+  { label: "القوالب ومحتوى الموقع", path: "/admin/templates", status: "active", purpose: "إدارة القوالب المدفوعة ومحتوى الموقع وصوره." },
+  { label: "إدارة التراخيص", path: "/admin/licenses", status: "active", purpose: "إصدار التراخيص ومراجعتها." },
   { label: "NASAQ Owner Vault", path: "/owner-vault", status: "active", purpose: "جرد المالك والبيانات الحساسة وإرشادات التغيير." },
   { label: "تسجيل الدخول", path: "/login", status: "active", purpose: "مصادقة Better Auth / Grok." },
   { label: "المحرر", path: "/editor", status: "active", purpose: "إنشاء التقارير والتصاميم." },

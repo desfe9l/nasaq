@@ -29,6 +29,7 @@ import {
   setSetting,
   type AssetFolder,
 } from "@/lib/editor/storage";
+import { editorPathFor } from "@/lib/site-routes";
 import type { AssetDecision, AssetDisposition, PsdImportResult } from "@/lib/editor/psd/pipeline";
 import { classifyImport } from "@/lib/editor/import/detect";
 import type { BuiltImport, ImportKind } from "@/lib/editor/import/shared";
@@ -337,7 +338,7 @@ export function PsdImportPanel() {
       const project = await commitProject();
       const saved = await saveProject(project);
       await setSetting("activeProjectId", saved.id || null);
-      window.location.assign("/editor");
+      if (saved.id) window.location.assign(editorPathFor(saved.id));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "تعذر فتح المستند");
       setBusy(null);

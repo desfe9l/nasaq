@@ -1,12 +1,33 @@
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { PublicTemplatePage } from "@/components/site/PublicTemplatePage";
+import { TemplateDetailPage } from "@/components/site/TemplateDetailPage";
+import { useCatalogEntries } from "@/components/site/useCatalog";
+import { useEditor } from "@/lib/editor/store";
+import { findEntryBySlug } from "@/lib/templates/entry-slug";
+import { hydrateCustomTemplateStore } from "@/lib/templates/custom-templates";
 import { getPublishedTemplateMetaFn } from "@/lib/admin/functions";
 import { publishedTemplateAbsoluteUrl, templateDisplaySlug } from "@/lib/templates/published";
 import { templateShareImage } from "@/lib/templates/share-image";
+import { PageSkeleton } from "@/components/ui/Skeleton";
 
+/**
+ * `/templates/<idOrSlug>` — a template's OWN page.
+ *
+ * Two kinds of template answer to this address and both are real destinations:
+ *
+ *   · a published record from the platform catalogue (SSR-resolved below, so
+ *     search engines and social previews see the real title, description and
+ *     image), rendered by `PublicTemplatePage`;
+ *   · an entry of the local catalogue (starter packs, single pages, the
+ *     author's own templates), rendered by `TemplateDetailPage`.
+ *
+ * Neither opens the editor on arrival. The editor is entered only through
+ * «استخدام القالب» / «تعديل القالب», and it then opens the project those
+ * actions created — nowhere else.
+ */
 export const Route = createFileRoute("/templates/$templateId")({
   ssr: true,
-  // SSR enabled for SEO/social preview
   loader: async ({ params }) => {
     const idOrSlug = params.templateId;
     try {
@@ -68,5 +89,80 @@ export const Route = createFileRoute("/templates/$templateId")({
 function TemplateRouteComponent() {
   const { templateId } = Route.useParams();
   const loaderData = Route.useLoaderData() as { template: any } | undefined;
-  return <PublicTemplatePage templateId={templateId} initialTemplate={loaderData?.template ?? null} />;
+  const published = loaderData?.template ?? null;
+  if (published) {
+    return <PublicTemplatePage templateId={templateId} initialTemplate={published} />;
+  }
+  return <LocalCatalogueTemplate templateId={templateId} />;
+}
+
+/**
+ * The client-side half: resolve the local catalogue (which is browser state, not
+ * server state) and render the template's page. Only when NEITHER kind of
+ * template answers does the visitor see the «not available» screen — and that
+ * screen never opens an editor either.
+ */
+function LocalCatalogueTemplate({ templateId }: { templateId: string }) {
+  const hydrate = useEditor((s) => s.hydrate);
+  const orgName = useEditor((s) => s.orgName);
+  const theme = useEditor((s) => s.theme);
+  const entries = useCatalogEntries(theme ?? "official", orgName);
+  const [catalogueReady, setCatalogueReady] = useState(false);
+  const [publishedFallback, setPublishedFallback] = useState<
+    null | "missing" | "found"
+  >(null);
+
+  useEffect(() => {
+    void hydrate();
+  }, [hydrate]);
+
+  useEffect(() => {
+    let alive = true;
+    // The local catalogue is durable storage: wait for it before deciding the
+    // template is gone, or a refresh would flash «غير متاح» for a saved design.
+    void hydrateCustomTemplateStore()
+      .catch(() => undefined)
+      .finally(() => {
+        if (alive) setCatalogueReady(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const entry = useMemo(() => findEntryBySlug(entries, templateId), [entries, templateId]);
+
+  useEffect(() => {
+    if (entry || !catalogueReady) return;
+    let alive = true;
+    void getPublishedTemplateMetaFn({ data: { idOrSlug: templateId } })
+      .then((result) => {
+        if (!alive) return;
+        setPublishedFallback(result.ok && result.template ? "found" : "missing");
+      })
+      .catch(() => {
+        if (alive) setPublishedFallback("missing");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [entry, catalogueReady, templateId]);
+
+  if (entry) return <TemplateDetailPage slug={templateId} />;
+
+  if (!catalogueReady || publishedFallback === "found") {
+    return (
+      <div className="min-h-screen bg-paper">
+        <PageSkeleton />
+      </div>
+    );
+  }
+  if (publishedFallback === null) {
+    return (
+      <div className="min-h-screen bg-paper">
+        <PageSkeleton />
+      </div>
+    );
+  }
+  return <PublicTemplatePage templateId={templateId} initialTemplate={null} />;
 }

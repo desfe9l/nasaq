@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { saveProject, setSetting } from "@/lib/editor/storage";
+import { editorPathFor } from "@/lib/site-routes";
 import { uid } from "@/lib/utils";
 import { saveCustomTemplate } from "@/lib/templates/custom-templates";
 import {
@@ -77,7 +78,7 @@ export function TemplateStudio() {
         projectId: saved.id,
         referenceId: path === "improve" ? selected : undefined,
       });
-      window.location.assign("/editor");
+      if (saved.id) window.location.assign(editorPathFor(saved.id));
     } catch (error) {
       const message = error instanceof Error ? error.message : "تعذر حفظ القالب";
       toast.error(message);

@@ -50,6 +50,7 @@ import { getProject, listProjects } from "@/lib/editor/storage";
 import type { ProjectMeta } from "@/lib/editor/model";
 import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
+import { WORKSPACE_ROUTE } from "@/lib/site-routes";
 import { DocumentPreview } from "./PagePreview";
 import { RepairCard } from "./RepairCard";
 import { btn, ghost, goldBtn } from "./buttons";
@@ -183,8 +184,8 @@ function AccessDenied({ kind }: { kind: "signin" | "forbidden" }) {
             تسجيل الدخول
           </a>
         ) : null}
-        <a href="/home" className={cn(ghost, "h-10")}>
-          العودة إلى الرئيسية
+        <a href={WORKSPACE_ROUTE} className={cn(ghost, "h-10")}>
+          العودة إلى مساحة العمل
         </a>
       </div>
     </section>

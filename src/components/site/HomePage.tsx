@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { ArrowLeft, ChevronDown, Briefcase, FileText, LayoutTemplate, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, FolderOpen, Layers, Shapes } from "lucide-react";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
+import { editorPathFor } from "@/lib/site-routes";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { ProjectCard } from "@/components/site/ProjectCard";
 import { PRODUCT_COPY } from "@/lib/product/copy";
@@ -95,7 +96,7 @@ export function HomePage() {
   const recent = projects.slice(0, 3);
 
   const openEditor = async (id: string) => {
-    if (await openProject(id)) window.location.assign("/editor");
+    if (await openProject(id)) window.location.assign(editorPathFor(id));
   };
 
   return (

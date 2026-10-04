@@ -12,8 +12,10 @@
 
 import { useCurrentUserState } from "./use-current-user";
 import { useLicense } from "@/lib/license/client";
+import { CREATE_ROUTE, WORKSPACE_ROUTE } from "@/lib/site-routes";
 
-export const WORKSPACE_HOME_PATH = "/home";
+/** Canonical workspace address; kept under its historical name for callers. */
+export const WORKSPACE_HOME_PATH = WORKSPACE_ROUTE;
 
 /** Fired on the Home page to open the new-document dialog without a reload. */
 export const OPEN_NEW_DOCUMENT_EVENT = "nasaq:new-document";
@@ -38,9 +40,12 @@ export function useWorkspaceEntry(): WorkspaceEntry {
 }
 
 /**
- * «إنشاء مستند جديد» for a licensed account — always through the configuration
- * dialog on Home. On Home itself the dialog opens in place; anywhere else the
- * Home opens with the dialog already up.
+ * «إنشاء مستند جديد» — always through the creation screen.
+ *
+ * On the workspace itself the configuration opens in place (the workspace owns
+ * the same form); anywhere else the author is sent to `/create`, the screen
+ * where document type, size and orientation are chosen and shown BEFORE any
+ * document exists. No path here creates a blank document silently.
  */
 export function openNewDocumentFlow(): void {
   if (typeof window === "undefined") return;
@@ -48,5 +53,5 @@ export function openNewDocumentFlow(): void {
     window.dispatchEvent(new CustomEvent(OPEN_NEW_DOCUMENT_EVENT));
     return;
   }
-  window.location.assign(`${WORKSPACE_HOME_PATH}?new=1`);
+  window.location.assign(CREATE_ROUTE);
 }

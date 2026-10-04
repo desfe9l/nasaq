@@ -1,7 +1,12 @@
+/*
+ * The commercial console’s sections — one exported component per URL.
+ *
+ * They were the tabs of one `/admin` page; the console is now a nested route
+ * tree, so each section is imported by its own route and the shell
+ * (`AdminConsole`) owns the navigation, the access probe and the masthead.
+ */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { IMPORT_ROUTE } from "@/lib/site-routes";
-import { RedirectToSignIn } from "@/lib/auth/gates";
-import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { ADMIN_ROUTES, IMPORT_ROUTE } from "@/lib/site-routes";
 import {
   adminActivateCustomer,
   adminApprovePayment,
@@ -35,20 +40,9 @@ import type {
   Plan,
 } from "@/lib/commercial/types";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import {
-  KeyRound,
-  LayoutDashboard,
-  Package,
-  ReceiptText,
   RefreshCw,
-  ScrollText,
-  Settings,
-  ShieldCheck,
-  Users,
 } from "lucide-react";
-import { SiteFooter, SiteHeader } from "./SiteChrome";
-import { GUMROAD_PING_PATH } from "@/lib/gumroad/mapping";
 
 
 /** Compact KPI card used by the dashboard header. */
@@ -77,17 +71,6 @@ function StatCard({
   );
 }
 
-type Tab = "dashboard" | "requests" | "customers" | "plans" | "settings" | "audit";
-
-const TABS: Array<{ id: Tab; label: string; icon: typeof Users }> = [
-  { id: "dashboard", label: "لوحة القيادة", icon: LayoutDashboard },
-  { id: "customers", label: "المستخدمون / الحسابات", icon: Users },
-  { id: "requests", label: "طلبات الدفع اليدوية", icon: ReceiptText },
-  { id: "plans", label: "الباقات والاشتراكات", icon: Package },
-  { id: "settings", label: "إعدادات النظام", icon: Settings },
-  { id: "audit", label: "سجل الإجراءات", icon: ScrollText },
-];
-
 /**
  * Administrative dashboard.
  *
@@ -97,7 +80,7 @@ const TABS: Array<{ id: Tab; label: string; icon: typeof Users }> = [
  * customer who calls an admin server function directly gets a 403 — the UI is
  * never the thing standing between them and customer data.
  */
-function DashboardTab() {
+export function AdminDashboardSection() {
   const [customers, setCustomers] = useState<AdminCustomer[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [requests, setRequests] = useState<AdminPaymentRequest[]>([]);
@@ -215,189 +198,6 @@ function DashboardTab() {
   );
 }
 
-export function AdminPage() {
-  const { user, isPending } = useCurrentUserState();
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [tab, setTab] = useState<Tab>("dashboard");
-
-  useEffect(() => {
-    if (isPending || !user) return;
-    void amIAdmin()
-      .then((result) => setAllowed(result.isAdmin))
-      .catch(() => setAllowed(false));
-  }, [isPending, user]);
-
-  if (isPending || allowed === null) {
-    return (
-      <div className="min-h-screen bg-paper">
-        <SiteHeader current="/admin" />
-        <main className="mx-auto w-full max-w-6xl px-4 py-24">
-          <p className="text-[13px] text-muted">جارٍ التحقق من الصلاحيات…</p>
-        </main>
-      </div>
-    );
-  }
-
-  if (!user) return <RedirectToSignIn />;
-
-  if (!allowed) {
-    return (
-      <div className="min-h-screen bg-paper">
-        <SiteHeader current="/admin" />
-        <main className="mx-auto w-full max-w-2xl px-4 py-24">
-          <div className="rounded-[14px] border border-danger/30 bg-danger/5 p-6">
-            <h1 className="text-lg font-extrabold text-error">لا تملك صلاحية الوصول</h1>
-            <p className="mt-2 text-[13px] leading-6">
-              هذه الصفحة مخصّصة لإدارة المنصة فقط. إذا كنت تعتقد أن هذا خطأ، تواصل مع
-              الإدارة. إذا كانت قاعدة البيانات جديدة ولا يوجد مسؤول بعد، يمكنك تفعيل حسابك كأول مسؤول.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <a
-                href="/account"
-                className="inline-flex h-9 items-center rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold"
-              >
-                العودة إلى حسابي
-              </a>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    const { adminBootstrapFirst } = await import("@/lib/commercial/admin-functions");
-                    const res = await adminBootstrapFirst();
-                    if (res.ok) {
-                      toast.success("تم تفعيل حسابك كمسؤول أول — جارٍ التحديث…");
-                      setTimeout(() => window.location.reload(), 800);
-                    } else {
-                      toast.error(res.wasEmpty ? "فشل التفعيل" : "يوجد مسؤول بالفعل — لا يمكن التفعيل التلقائي");
-                    }
-                  } catch (e) {
-                    toast.error(e instanceof Error ? e.message : "تعذر التفعيل");
-                  }
-                }}
-                className="inline-flex h-9 items-center rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-on-brand"
-              >
-                تفعيل كأول مسؤول
-              </button>
-            </div>
-          </div>
-        </main>
-        <SiteFooter />
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-paper">
-      <SiteHeader current="/admin" />
-      <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
-        {/*
-         * Institutional masthead.
-         *
-         * An operations console should open by stating where you are and who is
-         * signed in — the two facts an operator needs before approving anything
-         * that spends the company's money. The licence console is a separate
-         * route because minting a licence is a different authority from
-         * approving a payment, and the two must never share a tab bar by
-         * accident.
-         */}
-        <header className="overflow-hidden rounded-[14px] border border-line bg-surface">
-          <div className="flex flex-wrap items-center justify-between gap-4 p-5">
-            <div className="flex items-center gap-3">
-              <span className="grid size-11 place-items-center rounded-[10px] bg-navy/10 text-brand">
-                <LayoutDashboard className="size-5" aria-hidden />
-              </span>
-              <div>
-                <p className="text-[10px] font-extrabold tracking-[0.18em] text-muted">
-                  NASAQ · CONSOLE
-                </p>
-                <h1 className="text-[19px] font-extrabold">لوحة التحكم المؤسسية</h1>
-                <p className="mt-0.5 text-[11px] text-muted">
-                  مراجعة المدفوعات، إدارة العملاء والباقات، وسجل الإجراءات.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex max-w-[240px] items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[10px] font-bold text-muted">
-                <ShieldCheck className="size-3 text-brand" aria-hidden />
-                <span className="truncate" dir="ltr">
-                  {user.primaryEmail || user.displayName || user.id}
-                </span>
-              </span>
-              <a
-                href="/admin-dashboard"
-                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-line px-3 text-[12px] font-extrabold"
-              >
-                القوالب والمحتوى
-              </a>
-              <a
-                href="/owner-vault"
-                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-line px-3 text-[12px] font-extrabold"
-              >
-                إعدادات المالك
-              </a>
-              <a
-                href="/admin-licenses"
-                className="inline-flex h-9 items-center gap-1.5 rounded-[9px] bg-navy px-3 text-[12px] font-extrabold text-on-brand"
-              >
-                <KeyRound className="size-3.5" aria-hidden />
-                إدارة التراخيص
-              </a>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t border-line bg-paper/60 px-5 py-2 text-[10px] text-muted">
-            <span>
-              مزوّد الدفع: <strong className="font-extrabold text-ink">Gumroad</strong>
-            </span>
-            <span>
-              Webhook:{" "}
-              <code dir="ltr" className="font-bold">
-                {GUMROAD_PING_PATH}
-              </code>
-            </span>
-            <span>
-              جهة إصدار التراخيص:{" "}
-              <strong className="font-extrabold text-ink">Keygen</strong>
-            </span>
-          </div>
-        </header>
-
-        <nav className="mt-5 flex flex-wrap gap-2 border-b border-line pb-3">
-          {TABS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setTab(item.id)}
-                aria-current={tab === item.id}
-                className={cn(
-                  "inline-flex h-9 items-center gap-1.5 rounded-[8px] px-3 text-[12px] font-extrabold transition",
-                  tab === item.id
-                    ? "bg-navy text-on-brand"
-                    : "text-muted hover:bg-line-2",
-                )}
-              >
-                <Icon className="size-3.5" aria-hidden />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div className="mt-5">
-          {tab === "dashboard" && <DashboardTab />}
-          {tab === "customers" && <CustomersTab />}
-          {tab === "requests" && <RequestsTab />}
-          {tab === "plans" && <PlansTab />}
-          {tab === "settings" && <SettingsTab />}
-          {tab === "audit" && <AuditTab />}
-        </div>
-      </main>
-      <SiteFooter />
-    </div>
-  );
-}
-
 function Panel({
   title,
   children,
@@ -441,7 +241,7 @@ function Notice({ error, ok }: { error?: string | null; ok?: string | null }) {
 
 // ── Requests ────────────────────────────────────────────────────────────────
 
-function RequestsTab() {
+export function AdminPaymentsSection() {
   const [status, setStatus] = useState<PaymentRequestStatus | "ALL">("PENDING");
   const [rows, setRows] = useState<AdminPaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -625,7 +425,7 @@ function Cell({ label, value }: { label: string; value: string }) {
 
 // ── Customers ───────────────────────────────────────────────────────────────
 
-function CustomersTab() {
+export function AdminUsersSection() {
   const [rows, setRows] = useState<AdminCustomer[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -886,7 +686,7 @@ function CustomersTab() {
 
 // ── Plans ───────────────────────────────────────────────────────────────────
 
-function PlansTab() {
+export function AdminPlansSection() {
   const [rows, setRows] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -1037,7 +837,7 @@ function PlansTab() {
 
 // ── Payment settings ────────────────────────────────────────────────────────
 
-function SettingsTab() {
+export function AdminSettingsSection() {
   const [form, setForm] = useState<PaymentInstructions | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -1148,18 +948,18 @@ function SettingsTab() {
           <a href={IMPORT_ROUTE} className="rounded-[10px] border border-gold/50 bg-gold/[0.06] p-3 text-[12px] font-bold hover:bg-gold/[0.12]">
             خدمة استيراد القوالب — رفع، فحص، إصلاح العناصر، وفتح في المحرر
           </a>
-          <a href="/admin-licenses" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
+          <a href={ADMIN_ROUTES.licenses} className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
             إدارة التراخيص — Gumroad وKeygen
           </a>
           <a href="/owner-vault" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
             خزنة المالك — مفاتيح API
           </a>
-          <a href="/admin-dashboard" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
+          <a href={ADMIN_ROUTES.content} className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
             محتوى الموقع والقوالب — عبر لوحة الإدارة
           </a>
           <div className="rounded-[10px] border border-line p-3 text-[11px] leading-5 text-muted">
             <strong className="block text-[12px] text-ink">الحماية</strong>
-            جميع مسارات /admin و /admin-licenses محمية خادمياً عبر requireAdmin — العميل العادي يحصل على 403 حتى لو استدعى الـAPI مباشرة.
+            جميع مسارات /admin محمية خادمياً عبر requireAdmin — العميل العادي يحصل على 403 حتى لو استدعى الـAPI مباشرة.
           </div>
         </div>
       </Panel>
@@ -1169,7 +969,7 @@ function SettingsTab() {
 
 // ── Audit log ───────────────────────────────────────────────────────────────
 
-function AuditTab() {
+export function AdminAuditSection() {
   const [rows, setRows] = useState<AdminAuditEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
 

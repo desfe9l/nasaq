@@ -20,7 +20,16 @@ import {
 } from "./model";
 import { blankPages, createProject, plainPages } from "./templates";
 
-export type PageSizeId = "a4" | "a3" | "letter" | "legal" | "slide" | "custom";
+export type PageSizeId =
+  | "a4"
+  | "a3"
+  | "letter"
+  | "legal"
+  | "slide"
+  | "slide43"
+  | "post"
+  | "story"
+  | "custom";
 export type Orientation = "portrait" | "landscape";
 export type DocKindId =
   | "report"
@@ -61,7 +70,46 @@ export const PAGE_SIZES: {
     w: 338.7,
     h: 190.5,
   },
+  {
+    /* The other presentation ratio institutions still ask for (projectors and
+       older screens): 254 × 190.5 مم = 4:3. */
+    id: "slide43",
+    name: "عرض 4:3",
+    desc: "254 × 190.5 مم",
+    w: 254,
+    h: 190.5,
+  },
+  {
+    /* Social/document formats that the platform already supports as real
+       pages: a square post and a vertical story, in the millimetres the
+       document model stores. */
+    id: "post",
+    name: "منشور مربّع 1:1",
+    desc: "210 × 210 مم",
+    w: 210,
+    h: 210,
+  },
+  {
+    id: "story",
+    name: "قصة 9:16",
+    desc: "108 × 192 مم",
+    w: 108,
+    h: 192,
+  },
   { id: "custom", name: "مخصص", desc: "بالمليمتر", w: 210, h: 297 },
+];
+
+/** Presets shown in the creation screen, in the order they are offered. */
+export const PRESET_SIZE_IDS: PageSizeId[] = [
+  "a4",
+  "a3",
+  "slide",
+  "slide43",
+  "letter",
+  "legal",
+  "post",
+  "story",
+  "custom",
 ];
 
 /**
@@ -146,6 +194,24 @@ export const DOC_KINDS: {
     name: "لوحة إعلانية",
   },
 ];
+
+/**
+ * Presets whose shape implies an orientation: a slide is wide, a story is tall.
+ * Choosing one sets the orientation with it, and leaving one restores upright
+ * paper — the author's own choice is never silently kept against the shape.
+ */
+export const PRESET_ORIENTATION: Partial<Record<PageSizeId, Orientation>> = {
+  slide: "landscape",
+  slide43: "landscape",
+  story: "portrait",
+};
+
+/** True when a preset is square — rotating it changes nothing. */
+export function presetIsSquare(sizeId: PageSizeId): boolean {
+  const size = PAGE_SIZES.find((entry) => entry.id === sizeId);
+  if (!size) return false;
+  return Math.abs(size.w - size.h) < 0.5;
+}
 
 /** Starter packs offered as a template start (the blank pack IS the blank start). */
 export const STARTER_PACKS: PackId[] = [

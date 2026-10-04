@@ -1,3 +1,4 @@
+import { useNavigate } from "@tanstack/react-router";
 import { subscribeTheme } from "@/lib/theme";
 import { BrandLogo } from "@/components/site/SiteChrome";
 import {
@@ -310,7 +311,7 @@ import { rememberUploadedFont } from "@/lib/nsq/fonts";
  * component owns the editor chrome, the hidden file inputs the panels drive,
  * and the global keyboard map.
  */
-export function EditorApp() {
+export function EditorApp({ projectId }: { projectId?: string } = {}) {
   const hydrate = useEditor((s) => s.hydrate);
   const hydrated = useEditor((s) => s.hydrated);
   /** ?showcase=1 (live product preview on the site): hide the account surface. */
@@ -347,6 +348,31 @@ export function EditorApp() {
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
+
+  /*
+   * One document, one address. When the author switches documents INSIDE the
+   * studio (the project menu, a template, a fresh document), the address bar
+   * follows the document that is actually open — so a refresh, a bookmark or a
+   * shared link re-opens the same design, never "whatever was last touched".
+   * The replace keeps Back meaning "leave the editor", not "walk the history of
+   * documents I glanced at".
+   */
+  const openProjectId = useEditor((s) => s.id);
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!projectId || !openProjectId || openProjectId === projectId) return;
+    void navigate({
+      to: "/editor/$projectId",
+      params: { projectId: openProjectId },
+      replace: true,
+      /*
+       * The store already decided the document (and any leave prompt was
+       * resolved before it did), so the address follows it silently — a router
+       * blocker here would ask the author to confirm a switch they just made.
+       */
+      ignoreBlocker: true,
+    });
+  }, [openProjectId, projectId, navigate]);
 
   // Keep editor-side limits in sync with the same server-derived entitlements
   // used by the license and export surfaces.

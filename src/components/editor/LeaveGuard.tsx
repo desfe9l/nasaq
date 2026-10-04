@@ -18,6 +18,7 @@ import {
   unloadShouldPrompt,
 } from "@/lib/editor/leave-controller";
 import { useEditor } from "@/lib/editor/store";
+import { WORKSPACE_ROUTE } from "@/lib/site-routes";
 
 function RouterLeaveBlocker() {
   useBlocker({
@@ -100,7 +101,7 @@ export function LeaveGuard() {
         if (hadPriorHistoryRef.current && window.history.length > 2) {
           window.history.go(-2);
         } else {
-          window.location.assign("/home");
+          window.location.assign(WORKSPACE_ROUTE);
         }
       });
     };
