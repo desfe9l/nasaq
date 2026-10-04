@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { createPortal } from "react-dom";
-import { ChevronDown, Contrast, FilePlus2, KeyRound, LogIn, LogOut, Menu, Moon, Sun, UserRound, X } from "lucide-react";
+import { ChevronDown, FilePlus2, KeyRound, LogIn, LogOut, Menu, Palette, UserRound, X } from "lucide-react";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   BRAND,
@@ -32,6 +32,10 @@ import {
   accountMenuItemMutedClass,
   useAccountMenuPlacement,
 } from "./AccountMenuPanel";
+
+/** The site-header counterpart of the editor's compact icon controls. */
+const APPEARANCE_CONTROL_CLASS =
+  "grid size-[34px] shrink-0 place-items-center rounded-[9px] border border-line bg-transparent text-muted transition-[background-color,border-color,color,transform] duration-150 hover:border-brand/60 hover:bg-navy/10 hover:text-brand active:scale-[0.96] active:bg-navy/15 active:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
 /**
  * The editor call-to-action in the site chrome.
@@ -322,8 +326,6 @@ export function SiteHeader({ current }: { current: string }) {
 
   const appearanceLabel =
     appearance === "light" ? "فاتح" : appearance === "dim" ? "خافت" : "داكن";
-  const AppearanceIcon =
-    appearance === "light" ? Sun : appearance === "dim" ? Contrast : Moon;
   const toggleTheme = () => {
     const next =
       appearance === "light"
@@ -414,15 +416,15 @@ export function SiteHeader({ current }: { current: string }) {
         </nav>
 
         <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
-          {/* Cycle the one persisted appearance preference across the site. */}
+          {/* One compact palette control cycles the shared site/editor appearance. */}
           <button
             type="button"
             onClick={toggleTheme}
-            aria-label={`المظهر الحالي: ${appearanceLabel}، انقر للتغيير`}
-            title={`المظهر الحالي: ${appearanceLabel}`}
-            className="grid size-9 shrink-0 place-items-center rounded-[8px] border border-line"
+            aria-label={`تغيير مظهر مساحة العمل (الحالي: ${appearanceLabel})`}
+            title={`مظهر مساحة العمل: ${appearanceLabel}`}
+            className={APPEARANCE_CONTROL_CLASS}
           >
-            <AppearanceIcon className="size-4" />
+            <Palette className="size-4" strokeWidth={1.75} aria-hidden="true" />
           </button>
           <a
             href={whatsappHref(WHATSAPP_MESSAGES.support)}
@@ -466,11 +468,11 @@ export function SiteHeader({ current }: { current: string }) {
           <button
             type="button"
             onClick={toggleTheme}
-            aria-label={`المظهر الحالي: ${appearanceLabel}، انقر للتغيير`}
-            className="mt-1 flex min-h-11 w-full items-center gap-2 rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted"
+            aria-label={`تغيير مظهر مساحة العمل (الحالي: ${appearanceLabel})`}
+            title={`مظهر مساحة العمل: ${appearanceLabel}`}
+            className={cn(APPEARANCE_CONTROL_CLASS, "mt-1")}
           >
-            <AppearanceIcon className="size-4" />
-            المظهر الحالي: {appearanceLabel}
+            <Palette className="size-4" strokeWidth={1.75} aria-hidden="true" />
           </button>
           {/* The account trigger above is shared across all breakpoints. */}
         </nav>
