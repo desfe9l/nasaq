@@ -69,7 +69,7 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
         errorCallbackURL: `${back}&error=1`,
       },
       // Forward the preview host so Better Auth derives the correct baseURL /
-      // redirect_uri for the dynamic `*.grok-sandbox.com` origin.
+      // redirect_uri for the dynamic Arena or legacy Grok preview origin.
       headers: request.headers,
       asResponse: true,
     });

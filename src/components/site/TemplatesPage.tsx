@@ -14,9 +14,9 @@
  *     enforces), so nothing here widens what a demo licence can do;
  *   • opening a project stays `importProject` + `/editor`.
  *
- * Everything the catalog manages lives in one localStorage slot
- * (`lib/templates/custom-templates.ts`) surfaced through `useSyncExternalStore`:
- * edits appear immediately, across reloads and other tabs, with no rebuild.
+ * Personal catalog data lives in the same owner-scoped IndexedDB database as
+ * editor projects and assets. The asynchronous store feeds `useSyncExternalStore`
+ * snapshots for live updates without creating another persistence system.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -255,7 +255,7 @@ export function TemplatesPage() {
     const projectId = useEditor.getState().id;
     if (projectId) {
       try {
-        saveDraft({
+        await saveDraft({
           entryId: entry.id,
           title: entry.title,
           projectId,
@@ -278,11 +278,15 @@ export function TemplatesPage() {
     }
     try {
       if (entry.kind === "custom") {
-        duplicateCustomTemplate(entry.sourceId, entitlements);
+        const copy = await duplicateCustomTemplate(entry.sourceId, entitlements);
+        if (!copy) {
+          toast.error("لم يعد القالب موجودًا — أعد تحميل الكتالوج");
+          return;
+        }
       } else {
         const seed = await projectSeedForEntry(entry);
         if (!seed || !ensureProjectAccess(seed, "تكرار")) return;
-        saveCustomTemplate(
+        await saveCustomTemplate(
           {
             title: `${entry.title} — نسخة`,
             desc: entry.desc,
@@ -306,9 +310,13 @@ export function TemplatesPage() {
     }
   };
 
-  const removeEntry = (entry: CatalogEntry) => {
+  const removeEntry = async (entry: CatalogEntry) => {
     try {
-      deleteCustomTemplate(entry.sourceId);
+      const deleted = await deleteCustomTemplate(entry.sourceId);
+      if (!deleted) {
+        toast.error("لم يعد القالب موجودًا — أعد تحميل الكتالوج");
+        return;
+      }
       toast.success(`تم حذف «${entry.title}»`);
       setConfirmId(null);
       setQuickViewId(null);
@@ -358,7 +366,7 @@ export function TemplatesPage() {
         toast.error("لا توجد صفحات لهذا القالب");
         return;
       }
-      const saved = saveCustomTemplate(
+      const saved = await saveCustomTemplate(
         {
           title: values.title,
           desc: values.desc,
@@ -382,10 +390,10 @@ export function TemplatesPage() {
   };
 
   /** Metadata-only edit: name, description, category, tags and catalog filters. */
-  const saveMeta = (values: TemplateFormValues) => {
+  const saveMeta = async (values: TemplateFormValues) => {
     if (!formEntry?.custom) return;
     try {
-      const saved = saveCustomTemplate(
+      const saved = await saveCustomTemplate(
         {
           id: formEntry.custom.id,
           title: values.title,
@@ -607,7 +615,9 @@ export function TemplatesPage() {
               </button>
               <button
                 type="button"
-                onClick={() => clearDraft()}
+                onClick={() => {
+                  void clearDraft().catch((error) => reportError(error, "تعذّر تجاهل المسودة"));
+                }}
                 className="inline-flex h-9 items-center rounded-xl border border-line px-3 text-[12px] font-bold text-muted transition hover:bg-line-2"
               >
                 تجاهل
@@ -680,7 +690,7 @@ export function TemplatesPage() {
                     onUse: () => void startFromEntry(entry),
                     onQuickView: () => setQuickViewId(entry.id),
                     onEdit: () => void editEntry(entry),
-                    onDuplicate: () => duplicateEntry(entry),
+                    onDuplicate: () => void duplicateEntry(entry),
                     onEditMeta: () => setForm({ mode: "edit", entryId: entry.id }),
                     onDelete: () => setConfirmId(entry.id),
                   }}
@@ -692,7 +702,7 @@ export function TemplatesPage() {
 
         <p className="mt-10 flex items-start gap-2 text-[12px] leading-6 text-muted">
           <Database className="mt-0.5 size-4 shrink-0 text-success" />
-          القوالب المخصصة تُحفظ في متصفحك (localStorage) وتظهر مباشرةً في الكتالوج بلا إعادة بناء، ويفتح أي
+          القوالب المخصصة تُحفظ في مساحة IndexedDB المرتبطة بحسابك على هذا المتصفح، وتظهر مباشرةً في الكتالوج؛ يفتح أي
           منها في المحرر بزر «استخدام القالب». القوالب الجاهزة تبقى كما هي، وأي تعديل عليها يُحفظ كنسخة خاصة بك.
         </p>
 
@@ -727,7 +737,7 @@ export function TemplatesPage() {
           onClose={() => setQuickViewId(null)}
           onUse={() => void startFromEntry(quickEntry)}
           onEdit={() => void editEntry(quickEntry)}
-          onDuplicate={() => duplicateEntry(quickEntry)}
+          onDuplicate={() => void duplicateEntry(quickEntry)}
           onEditMeta={() => {
             setQuickViewId(null);
             setForm({ mode: "edit", entryId: quickEntry.id });
@@ -759,7 +769,7 @@ export function TemplatesPage() {
           onClose={() => setForm(null)}
           onSubmit={(values) => {
             if (form.mode === "create") void createFrom(values);
-            else saveMeta(values);
+            else void saveMeta(values);
           }}
         />
       )}
@@ -769,7 +779,7 @@ export function TemplatesPage() {
           title={`حذف «${confirmEntry.title}»؟`}
           body="سيُحذف القالب المخصص نهائيًا من الكتالوج. المشاريع التي أنشأتها منه لا تتأثر."
           confirmLabel="حذف القالب"
-          onConfirm={() => removeEntry(confirmEntry)}
+          onConfirm={() => void removeEntry(confirmEntry)}
           onClose={() => setConfirmId(null)}
         />
       )}

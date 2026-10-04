@@ -39,10 +39,11 @@ const LEGACY_DB_NAME = "faisal-reports";
  * already holds, so an unchanged version silently leaves existing installs
  * without the new store.
  */
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 const PROJECTS = "projects";
 const SETTINGS = "settings";
 const ASSETS = "assets";
+const CUSTOM_TEMPLATES = "customTemplates";
 const LS_PROJECTS = "nasaq-projects-v1";
 const LS_SETTINGS = "nasaq-settings-v1";
 const LS_ASSETS = "nasaq-assets-v1";
@@ -130,6 +131,7 @@ export interface AssetFolder {
 
 export type SettingsKey =
   | "activeProjectId"
+  | "templateDraft"
   | "activePageId"
   | "dark"
   | "zoom"
@@ -278,6 +280,10 @@ function openDb(): Promise<IDBDatabase | null> {
       if (!db.objectStoreNames.contains(ASSETS)) {
         const store = db.createObjectStore(ASSETS, { keyPath: "id" });
         store.createIndex("addedAt", "addedAt");
+      }
+      if (!db.objectStoreNames.contains(CUSTOM_TEMPLATES)) {
+        const store = db.createObjectStore(CUSTOM_TEMPLATES, { keyPath: "id" });
+        store.createIndex("updatedAt", "updatedAt");
       }
     };
     req.onsuccess = () => {
@@ -500,6 +506,7 @@ export async function duplicateProject(id: string): Promise<Project | null> {
 const OWNER_SCOPED_SETTINGS = new Set<string>([
   "brandProfiles",
   "activeProjectId",
+  "templateDraft",
   "activePageId",
   "assetFolders",
   "customLibrary",
@@ -521,8 +528,9 @@ function adoptableSettingKeys(
   key: SettingsKey,
 ): { from: string; remove: boolean }[] {
   if (!OWNER_SCOPED_SETTINGS.has(key) || !hasSignedInOwner()) return [];
-  // Identity images are personal, not a shared signed-out template library.
-  if (key === "brandProfiles") return [];
+  // These stores have their own explicit migrations; never claim their
+  // unscoped settings keys through the generic best-effort preference path.
+  if (key === "brandProfiles" || key === "templateDraft") return [];
   return [
     { from: key, remove: true },
     { from: `${key}::${ANON_OWNER}`, remove: false },
@@ -536,6 +544,7 @@ export async function getSetting<T = unknown>(
 ): Promise<T | null> {
   const db = await openDb();
   if (!db) {
+    if (key === "templateDraft") return null;
     try {
       const raw =
         localStorage.getItem(LS_SETTINGS) ??
@@ -580,7 +589,8 @@ export async function getSetting<T = unknown>(
       }
     }
     return (row?.value ?? null) as T | null;
-  } catch {
+  } catch (error) {
+    if (key === "templateDraft") throw error;
     return null;
   }
 }
@@ -592,7 +602,9 @@ export async function setSetting(
   const rowKey = scopedSettingKey(key);
   const db = await openDb();
   if (rowKey !== scopedSettingKey(key)) throw new Error("Storage owner changed during save");
-  if (!db && key === "brandProfiles") throw new Error("يتطلب حفظ الهوية تفعيل تخزين المتصفح IndexedDB");
+  if (!db && (key === "brandProfiles" || key === "templateDraft")) {
+    throw new Error("يتطلب حفظ البيانات الشخصية تفعيل تخزين المتصفح IndexedDB");
+  }
   if (!db) {
     let parsed: Record<string, unknown> = {};
     try {
@@ -613,9 +625,210 @@ export async function setSetting(
     await tx(db, SETTINGS, "readwrite", (t) =>
       request(t.objectStore(SETTINGS).put({ key: rowKey, value })),
     );
-  } catch {
-    /* settings are best-effort; losing one must not break the editor */
+  } catch (error) {
+    if (key === "templateDraft") throw error;
+    /* other settings are best-effort; losing one must not break the editor */
   }
+}
+
+/** Raised by the atomic custom-template write when the owner's limit is full. */
+export class CustomTemplateRowLimitError extends Error {
+  constructor() {
+    super("Custom template limit reached");
+    this.name = "CustomTemplateRowLimitError";
+  }
+}
+
+const TEMPLATE_DRAFT_SETTING_KEY = "templateDraft";
+const LEGACY_TEMPLATE_DATA_MIGRATION_KEY = "legacyCustomTemplateDataMigratedV1";
+
+type OwnedTemplateRow<T> = T & { id: string; ownerId?: string | null };
+
+function requireTemplateDatabase(db: IDBDatabase | null): IDBDatabase {
+  if (!db) {
+    throw new Error("IndexedDB is required for personal templates and template drafts");
+  }
+  return db;
+}
+
+/** Read only the current owner's templates from the shared editor database. */
+export async function listCustomTemplateRows<T extends { id: string }>(): Promise<T[]> {
+  const ownerId = getStorageOwner();
+  const db = requireTemplateDatabase(await openDb());
+  const rows = (await tx(db, CUSTOM_TEMPLATES, "readonly", (t) =>
+    request(t.objectStore(CUSTOM_TEMPLATES).getAll()),
+  )) as OwnedTemplateRow<T>[];
+  if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template read");
+  const { visible, adopted } = partitionOwned(rows);
+  if (adopted.length) {
+    await tx(db, CUSTOM_TEMPLATES, "readwrite", async (t) => {
+      const store = t.objectStore(CUSTOM_TEMPLATES);
+      for (const row of adopted) {
+        if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template adoption");
+        const current = (await request(store.get(row.id))) as OwnedTemplateRow<T> | undefined;
+        if (!current || rowOwnership(current) === "foreign") continue;
+        await request(store.put({ ...current, ownerId }));
+      }
+    });
+  }
+  if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template read");
+  return visible.map(strip);
+}
+
+/**
+ * Save or replace one template. The limit check and ownership check share the
+ * same IndexedDB transaction as the write, so racing tabs cannot exceed the
+ * per-owner limit or overwrite another account's row.
+ */
+export async function saveCustomTemplateRow<T extends { id: string }>(
+  row: T,
+  maxItems: number,
+): Promise<void> {
+  if (!row.id) throw new Error("A custom template needs an id");
+  const ownerId = getStorageOwner();
+  const db = requireTemplateDatabase(await openDb());
+  await tx(db, CUSTOM_TEMPLATES, "readwrite", async (t) => {
+    const store = t.objectStore(CUSTOM_TEMPLATES);
+    const rows = (await request(store.getAll())) as OwnedTemplateRow<T>[];
+    if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template save");
+    const existing = rows.find((candidate) => candidate.id === row.id);
+    if (existing && !canRead(existing)) {
+      throw new Error("Cannot replace another owner's custom template");
+    }
+    const visibleCount = rows.filter((candidate) => rowOwnership(candidate) !== "foreign").length;
+    if (!existing && visibleCount >= maxItems) throw new CustomTemplateRowLimitError();
+    for (const candidate of rows) {
+      if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template save");
+      if (rowOwnership(candidate) === "adoptable") {
+        await request(store.put({ ...candidate, ownerId }));
+      }
+    }
+    if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template save");
+    await request(store.put({ ...clone(row), ownerId }));
+  });
+  if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template save");
+}
+
+/** Delete a template only when the current owner can read its row. */
+export async function deleteCustomTemplateRow(id: string): Promise<boolean> {
+  const ownerId = getStorageOwner();
+  const db = requireTemplateDatabase(await openDb());
+  return tx(db, CUSTOM_TEMPLATES, "readwrite", async (t) => {
+    const store = t.objectStore(CUSTOM_TEMPLATES);
+    const row = (await request(store.get(id))) as OwnedTemplateRow<{ id: string }> | undefined;
+    if (!row || !canRead(row)) return false;
+    if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template delete");
+    await request(store.delete(id));
+    return true;
+  });
+}
+
+/** Owner-scoped, IndexedDB-only access to the edit-draft setting. */
+export async function getCustomTemplateDraft<T>(): Promise<T | null> {
+  const ownerId = getStorageOwner();
+  const db = requireTemplateDatabase(await openDb());
+  const rowKey = `${TEMPLATE_DRAFT_SETTING_KEY}::${ownerId}`;
+  const row = (await tx(db, SETTINGS, "readonly", (t) =>
+    request(t.objectStore(SETTINGS).get(rowKey)),
+  )) as SettingRow | undefined;
+  if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during draft read");
+  return (row?.value ?? null) as T | null;
+}
+
+export async function setCustomTemplateDraft(value: unknown): Promise<void> {
+  const ownerId = getStorageOwner();
+  const db = requireTemplateDatabase(await openDb());
+  const rowKey = `${TEMPLATE_DRAFT_SETTING_KEY}::${ownerId}`;
+  await tx(db, SETTINGS, "readwrite", (t) => {
+    if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during draft save");
+    return request(t.objectStore(SETTINGS).put({ key: rowKey, value: clone(value) }));
+  });
+  if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during draft save");
+}
+
+export async function deleteCustomTemplateDraft(): Promise<void> {
+  const ownerId = getStorageOwner();
+  const db = requireTemplateDatabase(await openDb());
+  const rowKey = `${TEMPLATE_DRAFT_SETTING_KEY}::${ownerId}`;
+  await tx(db, SETTINGS, "readwrite", (t) => {
+    if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during draft delete");
+    return request(t.objectStore(SETTINGS).delete(rowKey));
+  });
+  if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during draft delete");
+}
+
+/**
+ * One-time, atomic migration of the old unscoped localStorage catalog and its
+ * edit draft into this owner's existing IndexedDB database. The caller removes
+ * the legacy keys only after this transaction commits.
+ */
+export async function migrateLegacyCustomTemplateData<
+  T extends { id: string },
+  D,
+>(
+  templates: T[],
+  draft: D | null,
+  sourceFingerprints: { templates: string | null; draft: string | null },
+): Promise<{ complete: boolean; alreadyMigrated: boolean; imported: number }> {
+  if (!hasSignedInOwner()) {
+    return { complete: false, alreadyMigrated: false, imported: 0 };
+  }
+  if (sourceFingerprints.templates === null && sourceFingerprints.draft === null) {
+    return { complete: false, alreadyMigrated: false, imported: 0 };
+  }
+  const ownerId = getStorageOwner();
+  const db = requireTemplateDatabase(await openDb());
+  return tx(db, [CUSTOM_TEMPLATES, SETTINGS], "readwrite", async (t) => {
+    const settings = t.objectStore(SETTINGS);
+    const marker = (await request(settings.get(LEGACY_TEMPLATE_DATA_MIGRATION_KEY))) as SettingRow | undefined;
+    if (marker) {
+      const previous = (marker.value as {
+        sourceFingerprints?: { templates?: unknown; draft?: unknown };
+      } | null)?.sourceFingerprints;
+      const unchanged = previous &&
+        (sourceFingerprints.templates === null || sourceFingerprints.templates === previous.templates) &&
+        (sourceFingerprints.draft === null || sourceFingerprints.draft === previous.draft);
+      if (!unchanged) {
+        throw new Error("Legacy template data changed after its durable migration; source keys were retained");
+      }
+      return { complete: true, alreadyMigrated: true, imported: 0 };
+    }
+    if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template migration");
+
+    const store = t.objectStore(CUSTOM_TEMPLATES);
+    const existingRows = (await request(store.getAll())) as OwnedTemplateRow<T>[];
+    let imported = 0;
+    for (const legacy of templates) {
+      if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template migration");
+      if (!legacy?.id || typeof legacy.id !== "string") {
+        throw new Error("Legacy template data is invalid; migration was not committed");
+      }
+      const existing = existingRows.find((row) => row.id === legacy.id);
+      if (existing) {
+        if (rowOwnership(existing) === "foreign") {
+          throw new Error("Legacy template id conflicts with another owner's row");
+        }
+        throw new Error("Legacy template id conflicts with an existing owner's row; source keys were retained");
+      }
+      await request(store.put({ ...clone(legacy), ownerId }));
+      imported += 1;
+    }
+
+    if (draft !== null) {
+      if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template migration");
+      const draftKey = `${TEMPLATE_DRAFT_SETTING_KEY}::${ownerId}`;
+      const existingDraft = await request(settings.get(draftKey));
+      if (!existingDraft) await request(settings.put({ key: draftKey, value: clone(draft) }));
+    }
+    if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during template migration");
+    await request(
+      settings.put({
+        key: LEGACY_TEMPLATE_DATA_MIGRATION_KEY,
+        value: { ownerId, migratedAt: Date.now(), imported, draft: draft !== null, sourceFingerprints },
+      }),
+    );
+    return { complete: true, alreadyMigrated: false, imported };
+  });
 }
 
 /**

@@ -18,6 +18,12 @@ const execFileAsync = promisify(execFile);
 const WRAPPER = join(projectRoot(), "scripts/with-app-env.mjs");
 const PRINT_FLAG = "process.stdout.write(String(process.env.VITE_AUTH_ENABLED));";
 
+function envWithoutAuthOverride() {
+  const env = { ...process.env };
+  delete env.VITE_AUTH_ENABLED;
+  return env;
+}
+
 function makeWorkspace(appEnvJson) {
   const root = mkdtempSync(join(tmpdir(), "app-env-"));
   if (appEnvJson !== undefined) {
@@ -69,8 +75,9 @@ test("Vite preview emulates Vercel unless the runtime is explicitly set", () => 
   assert.equal(environmentForCommand("vite", ["build"], {}, {}).VERCEL, undefined);
 });
 
-test("the template ships auth off", () => {
-  assert.deepEqual(readAppEnv(projectRoot()), { VITE_AUTH_ENABLED: "false" });
+test("the NASAQ project does not resolve its app-env flag to auth off", () => {
+  const env = readAppEnv(projectRoot());
+  assert.notEqual(env.VITE_AUTH_ENABLED, "false");
 });
 
 test("vite loadEnv resolves the wrapped value", () => {
@@ -83,14 +90,13 @@ test("vite loadEnv resolves the wrapped value", () => {
   assert.equal(merged.VITE_AUTH_ENABLED, "false");
 });
 
-test("the wrapped command runs with the app env applied", async () => {
-  const { stdout } = await execFileAsync(process.execPath, [
-    WRAPPER,
+test("the wrapped command applies the configured app env", async () => {
+  const { stdout } = await execFileAsync(
     process.execPath,
-    "-e",
-    PRINT_FLAG,
-  ]);
-  assert.equal(stdout, "false");
+    [WRAPPER, process.execPath, "-e", PRINT_FLAG],
+    { env: envWithoutAuthOverride() },
+  );
+  assert.equal(stdout, readAppEnv(projectRoot()).VITE_AUTH_ENABLED ?? "undefined");
 });
 
 test("the wrapped command sees an explicit override, not the file value", async () => {
@@ -123,16 +129,15 @@ test("a signal-killed command is never reported as success", async () => {
   );
 });
 
-test("the CLI still runs when invoked through a symlinked path", async () => {
+test("the CLI still applies its configured env through a symlink", async () => {
   // node realpaths import.meta.url but not process.argv[1], so a raw comparison
   // turns the wrapper into a no-op that exits 0 without starting anything.
   const link = join(mkdtempSync(join(tmpdir(), "app-env-link-")), "scripts");
   symlinkSync(join(projectRoot(), "scripts"), link);
-  const { stdout } = await execFileAsync(process.execPath, [
-    join(link, "with-app-env.mjs"),
+  const { stdout } = await execFileAsync(
     process.execPath,
-    "-e",
-    PRINT_FLAG,
-  ]);
-  assert.equal(stdout, "false");
+    [join(link, "with-app-env.mjs"), process.execPath, "-e", PRINT_FLAG],
+    { env: envWithoutAuthOverride() },
+  );
+  assert.equal(stdout, readAppEnv(projectRoot()).VITE_AUTH_ENABLED ?? "undefined");
 });

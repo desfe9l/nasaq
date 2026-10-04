@@ -6,6 +6,7 @@ import {
   hasSignedInOwner,
   rowOwnership,
   setStorageOwner,
+  subscribeStorageOwner,
 } from "./storage-owner";
 
 /** Restore the signed-out default so tests never leak state into each other. */
@@ -26,6 +27,19 @@ describe("storage owner registry", () => {
     assert.equal(setStorageOwner("   "), ANON_OWNER);
     assert.equal(setStorageOwner(undefined), ANON_OWNER);
     assert.equal(setStorageOwner(null), ANON_OWNER);
+    signedOut();
+  });
+
+  it("notifies cache observers only when the effective owner changes", () => {
+    signedOut();
+    const seen: string[] = [];
+    const unsubscribe = subscribeStorageOwner((ownerId) => seen.push(ownerId));
+    setStorageOwner("user-a");
+    setStorageOwner(" user-a ");
+    setStorageOwner(null);
+    unsubscribe();
+    setStorageOwner("user-b");
+    assert.deepEqual(seen, ["user-a", ANON_OWNER]);
     signedOut();
   });
 });

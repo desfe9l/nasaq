@@ -365,8 +365,8 @@ test("small artboards centre the final constrained frame at the explicit drop", 
 });
 
 test("multi-part library clicks rebase preset XY and create one undo step", () => {
-  const page = resetEditor(),
-    before = useEditor.getState().past.length;
+  resetEditor();
+  const before = useEditor.getState().past.length;
   const ids = useEditor.getState().insertLibraryElements({
     items: [
       { type: "shape", over: { x: 999, y: 999, w: 20, h: 20 } },

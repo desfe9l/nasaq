@@ -20,10 +20,19 @@
 export const ANON_OWNER = "__anon__";
 
 let currentOwner: string = ANON_OWNER;
+const ownerListeners = new Set<(ownerId: string) => void>();
 
 /** The owner every storage read/write is scoped to right now. */
 export function getStorageOwner(): string {
   return currentOwner;
+}
+
+/** Observe identity boundaries so client-side caches can drop stale rows. */
+export function subscribeStorageOwner(
+  listener: (ownerId: string) => void,
+): () => void {
+  ownerListeners.add(listener);
+  return () => ownerListeners.delete(listener);
 }
 
 /**
@@ -32,7 +41,16 @@ export function getStorageOwner(): string {
  */
 export function setStorageOwner(ownerId: string | null | undefined): string {
   const id = typeof ownerId === "string" ? ownerId.trim() : "";
-  currentOwner = id || ANON_OWNER;
+  const nextOwner = id || ANON_OWNER;
+  if (nextOwner === currentOwner) return currentOwner;
+  currentOwner = nextOwner;
+  for (const listener of ownerListeners) {
+    try {
+      listener(currentOwner);
+    } catch {
+      // An observer must never interrupt an authentication boundary.
+    }
+  }
   return currentOwner;
 }
 

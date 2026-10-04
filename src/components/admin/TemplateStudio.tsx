@@ -58,7 +58,7 @@ export function TemplateStudio() {
     try {
       const saved = await saveProject({ ...project, id: project.id || uid("proj") });
       await setSetting("activeProjectId", saved.id);
-      saveCustomTemplate(
+      await saveCustomTemplate(
         {
           title: label.slice(0, 80),
           desc: path === "improve" ? "نسخة مطورة من مرجع مقيس" : "قالب أصلي من لغة التصميم",
