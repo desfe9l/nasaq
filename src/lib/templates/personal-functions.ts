@@ -15,6 +15,7 @@ import {
   validateTemplateDocument,
 } from "@/lib/templates/document-template";
 import { freshPages } from "@/lib/templates/custom-templates";
+import { applyTemplateNameToContent, resolveTemplateName } from "@/lib/templates/naming";
 
 const MAX_ITEMS = 80;
 const TOKEN_RE = /^[a-zA-Z0-9_-]{16,80}$/;
@@ -106,6 +107,7 @@ export const savePersonalTemplateFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: {
     title: string;
+    titleIsManual?: boolean;
     description?: string;
     category?: string;
     content: string;
@@ -117,11 +119,20 @@ export const savePersonalTemplateFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const gate = await gatePersonal(context);
     if (!gate.ok) return { ok: false as const, error: gate.error };
-    const title = cleanTitle(data.title);
-    if (!title) return { ok: false as const, error: "اسم القالب مطلوب" };
-    const contentError = validateTemplateDocument(data.content);
+    const description = cleanText(data.description, 500);
+    const category = cleanText(data.category, 60) || "general";
+    const title = resolveTemplateName({
+      title: data.title,
+      titleIsManual: data.titleIsManual,
+      description,
+      category,
+      kind: "json",
+      content: data.content,
+    });
+    const namedContent = applyTemplateNameToContent(data.content, title);
+    const contentError = validateTemplateDocument(namedContent);
     if (contentError) return { ok: false as const, error: contentError };
-    const safe = publicTemplateContent(data.content);
+    const safe = publicTemplateContent(namedContent);
     if (!safe) return { ok: false as const, error: "تعذر حفظ القالب" };
     const summary = templateDocumentSummary(safe);
     if (!summary) return { ok: false as const, error: "صفحات القالب غير صالحة" };
@@ -163,7 +174,7 @@ export const savePersonalTemplateFn = createServerFn({ method: "POST" })
            page_count = $9, page_w = $10, page_h = $11, updated_at = now()
          WHERE id = $1 AND user_id = $12`,
         [
-          id, title, cleanText(data.description, 500), cleanText(data.category, 60) || "general",
+          id, title, description, category,
           safe, thumb, nextVisibility, nextVisibility === "shared" ? nextToken : null,
           summary.pageCount, summary.w, summary.h, gate.userId,
         ],
@@ -175,8 +186,8 @@ export const savePersonalTemplateFn = createServerFn({ method: "POST" })
            visibility, share_token, page_count, page_w, page_h, created_at, updated_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now(), now())`,
         [
-          id, gate.userId, data.createNew ? null : origin || null, title, cleanText(data.description, 500),
-          cleanText(data.category, 60) || "general", safe, thumb, nextVisibility,
+          id, gate.userId, data.createNew ? null : origin || null, title, description,
+          category, safe, thumb, nextVisibility,
           nextVisibility === "shared" ? nextToken : null, summary.pageCount, summary.w, summary.h,
         ],
       );

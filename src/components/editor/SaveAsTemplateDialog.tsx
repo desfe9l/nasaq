@@ -74,7 +74,7 @@ export function SaveAsTemplateDialog({
         const result = await adminUpsertTemplateFn({
           data: {
             template: {
-              title: title.trim(),
+              title,
               description,
               category,
               tier,
@@ -93,13 +93,13 @@ export function SaveAsTemplateDialog({
         }
         const shareKey = result.slug || result.id;
         const url = status === "published" ? publishedTemplateAbsoluteUrl(shareKey) : null;
-        setSaved({ id: result.id, slug: result.slug ?? null, title: title.trim(), url, personal: false });
+        setSaved({ id: result.id, slug: result.slug ?? null, title: result.title, url, personal: false });
         toast.success("تم حفظ القالب في استوديو القوالب");
         return;
       }
       const result = await savePersonalTemplateFn({
         data: {
-          title: title.trim(),
+          title,
           description,
           category,
           content,

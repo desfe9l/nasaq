@@ -23,7 +23,10 @@ function svgOpening(dataUrl: string): string {
   const body = dataUrl.slice(comma + 1, comma + 1 + 1200);
   try {
     const pad = body.length % 4 === 0 ? body : body.slice(0, body.length - (body.length % 4));
-    return Buffer.from(pad, "base64").toString("utf8");
+    if (typeof Buffer !== "undefined") return Buffer.from(pad, "base64").toString("utf8");
+    const binary = globalThis.atob(pad);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
   } catch {
     return "";
   }

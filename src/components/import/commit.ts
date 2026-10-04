@@ -20,6 +20,7 @@ import {
   setSetting,
 } from "@/lib/editor/storage";
 import { syncStorageOwner } from "@/lib/auth/storage-owner-sync";
+import { resolveTemplateName } from "@/lib/templates/naming";
 
 export const IMPORT_HISTORY_KEY = "importServiceHistory";
 const HISTORY_LIMIT = 24;
@@ -36,6 +37,9 @@ export type AttachedFonts = Record<string, string>;
 
 export interface CommitInput {
   title: string;
+  titleIsManual?: boolean;
+  sourceName?: string;
+  format?: string;
   /** Office / PDF / raster import result (project already final). */
   project: Project;
   /** PSD conversion, for asset decisions. */
@@ -58,9 +62,18 @@ export async function buildFinalProject(input: CommitInput): Promise<Project> {
     rememberUploadedFont(family, dataUrl);
     return { family, dataUrl };
   });
+  const name = resolveTemplateName({
+    title: input.title,
+    titleIsManual: input.titleIsManual,
+    sourceName: input.sourceName,
+    kind: "json",
+    format: input.format,
+    category: input.format === "pptx" ? "slides" : "import",
+    content: project,
+  });
   return {
     ...project,
-    name: input.title.trim() || project.name,
+    name,
     embeddedFonts: embedded.length ? embedded : project.embeddedFonts,
   };
 }
@@ -128,6 +141,8 @@ export async function saveImportedTemplate(
   format: string,
   description: string,
   thumbnail: string | null,
+  sourceName = "",
+  titleIsManual = false,
 ): Promise<TemplateOutcome> {
   const content = JSON.stringify(project);
   if (content.length > 4 * 1024 * 1024) {
@@ -140,8 +155,11 @@ export async function saveImportedTemplate(
     data: {
       template: {
         title: project.name,
+        titleIsManual,
+        sourceName,
+        format,
         description: description.slice(0, 500),
-        category: format === "psd" || format === "psb" ? "psd" : "import",
+        category: format === "psd" || format === "psb" ? "psd" : format === "pptx" ? "slides" : "import",
         tier: "free",
         status: "draft",
         kind: "json",

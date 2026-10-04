@@ -20,7 +20,9 @@ import {
   Trash2,
   Unlock,
   Upload,
-  Share2,
+  Send,
+  Bookmark,
+  Copy,
   X,
   Link2,
   RefreshCw,
@@ -44,8 +46,15 @@ import { getProject, listProjects } from "@/lib/editor/storage";
 import { syncStorageOwner } from "@/lib/auth/storage-owner-sync";
 import type { ProjectMeta } from "@/lib/editor/model";
 import { cn } from "@/lib/utils";
-import { publishedTemplatePath, templateDisplaySlug, publishedTemplateAbsoluteUrl } from "@/lib/templates/published";
+import {
+  publishedTemplatePath,
+  templateDisplaySlug,
+  publishedTemplateAbsoluteUrl,
+  shortPublishedTemplateAbsoluteUrl,
+} from "@/lib/templates/published";
 import { prepareTemplateThumbnail } from "@/lib/templates/thumbnail";
+import { generateTemplateName } from "@/lib/templates/naming";
+import { buildTemplateShareCopy, ensureTemplateShareUrl } from "@/lib/templates/sharing-copy";
 import { invalidateAdminPublicContent } from "@/lib/admin/use-site-settings";
 
 interface Draft {
@@ -59,9 +68,21 @@ interface Draft {
   content: string;
   contentChanged: boolean;
   fileName: string;
+  titleIsManual: boolean;
   thumbnail: string | null;
   sortOrder: number;
   slug?: string | null;
+}
+
+interface ShareDraft {
+  kind: "x" | "pinterest";
+  templateTitle: string;
+  category: string;
+  url: string;
+  mediaUrl: string;
+  text: string;
+  pinterestTitle: string;
+  pinterestDescription: string;
 }
 
 const EMPTY_DRAFT: Draft = {
@@ -74,6 +95,7 @@ const EMPTY_DRAFT: Draft = {
   content: "",
   contentChanged: false,
   fileName: "",
+  titleIsManual: false,
   thumbnail: null,
   sortOrder: 0,
   slug: "",
@@ -146,6 +168,8 @@ export function AdminTemplatesPanel() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [preview, setPreview] = useState<{ item: AdminTemplateSummary; content: string } | null>(null);
+  const [shareDraft, setShareDraft] = useState<ShareDraft | null>(null);
+  const [sharingId, setSharingId] = useState<string | null>(null);
   const [localProjects, setLocalProjects] = useState<ProjectMeta[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const thumbRef = useRef<HTMLInputElement>(null);
@@ -169,6 +193,7 @@ export function AdminTemplatesPanel() {
       content: result.template.content,
       contentChanged: false,
       fileName: "",
+      titleIsManual: true,
       thumbnail: result.template.thumbnail,
       slug: result.template.slug || "",
     });
@@ -204,7 +229,8 @@ export function AdminTemplatesPanel() {
           content,
           contentChanged: true,
           fileName: file.name,
-          title: d?.title || parsed.name || file.name.replace(/\.json$/i, ""),
+          title: d?.titleIsManual ? d.title : "",
+          titleIsManual: d?.titleIsManual ?? false,
           thumbnail:
             d?.thumbnail ||
             (typeof parsed.thumbnail === "string" && parsed.thumbnail.startsWith("data:image/")
@@ -223,7 +249,8 @@ export function AdminTemplatesPanel() {
       content,
       contentChanged: true,
       fileName: file.name,
-      title: d?.title || file.name.replace(/\.svg$/i, ""),
+      title: d?.titleIsManual ? d.title : "",
+      titleIsManual: d?.titleIsManual ?? false,
       thumbnail: d?.thumbnail || (thumb.length < 600_000 ? thumb : null),
     }));
   };
@@ -246,15 +273,15 @@ export function AdminTemplatesPanel() {
         ...(project.pack ? { pack: project.pack } : {}),
       }),
       contentChanged: true,
-      fileName: `${project.name}.json`,
-      title: d?.title || project.name,
+      fileName: "",
+      title: d?.titleIsManual ? d.title : "",
+      titleIsManual: d?.titleIsManual ?? false,
     }));
     toast.success("تم تحميل المشروع في نموذج القالب");
   };
 
   const save = async () => {
     if (!draft) return;
-    if (!draft.title.trim()) return toast.error("العنوان مطلوب");
     if (!draft.id && !draft.content) return toast.error("ارفع ملف JSON أو SVG، أو اختر مشروعًا محليًا");
     setSaving(true);
     const res = await adminUpsertTemplateFn({
@@ -262,7 +289,10 @@ export function AdminTemplatesPanel() {
         template: {
           id: draft.id,
           slug: draft.slug?.trim() ? draft.slug.trim() : undefined,
-          title: draft.title,
+          title: draft.titleIsManual ? draft.title : "",
+          titleIsManual: draft.titleIsManual,
+          sourceName: draft.fileName,
+          format: draft.fileName.split(".").pop() || draft.kind,
           description: draft.description,
           category: draft.category,
           tier: draft.tier,
@@ -276,7 +306,7 @@ export function AdminTemplatesPanel() {
     });
     setSaving(false);
     if (!res.ok) return toast.error(res.error);
-    toast.success(draft.id ? "تم تحديث القالب" : "تم إضافة القالب");
+    toast.success(draft.id ? `تم تحديث «${res.title}»` : `تم إضافة «${res.title}»`);
     invalidateAdminPublicContent();
     setDraft(null);
     void load();
@@ -364,6 +394,64 @@ export function AdminTemplatesPanel() {
     toast.success(`تم حذف «${t.title}»`);
   };
 
+  const copyShortLink = async (template: AdminTemplateSummary) => {
+    const url = shortPublishedTemplateAbsoluteUrl(template);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("تم نسخ رابط القالب المختصر");
+    } catch {
+      toast.error("تعذر نسخ الرابط المختصر");
+    }
+  };
+
+  const prepareShare = async (item: AdminTemplateSummary, kind: ShareDraft["kind"]) => {
+    setSharingId(item.id);
+    try {
+      const result = await adminGetTemplateFn({ data: { id: item.id } });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      const copy = buildTemplateShareCopy(result.template);
+      setShareDraft({
+        kind,
+        templateTitle: result.template.title,
+        category: copy.category,
+        url: copy.url,
+        mediaUrl: copy.mediaUrl,
+        text: copy.tweet,
+        pinterestTitle: copy.pinterestTitle,
+        pinterestDescription: copy.pinterestDescription,
+      });
+    } catch {
+      toast.error("تعذر تجهيز محتوى المشاركة");
+    } finally {
+      setSharingId(null);
+    }
+  };
+
+  const openXIntent = () => {
+    if (!shareDraft || shareDraft.kind !== "x") return;
+    const intent = new URL("https://twitter.com/intent/tweet");
+    intent.searchParams.set("text", ensureTemplateShareUrl(shareDraft.text, shareDraft.url));
+    window.open(intent.toString(), "_blank", "noopener,noreferrer");
+    setShareDraft(null);
+  };
+
+  const openPinterestIntent = () => {
+    if (!shareDraft || shareDraft.kind !== "pinterest") return;
+    const description = shareDraft.pinterestDescription.includes(shareDraft.url)
+      ? shareDraft.pinterestDescription
+      : `${shareDraft.pinterestDescription.trim()}\n${shareDraft.url}`;
+    const intent = new URL("https://www.pinterest.com/pin/create/button/");
+    intent.searchParams.set("url", shareDraft.url);
+    intent.searchParams.set("media", shareDraft.mediaUrl);
+    intent.searchParams.set("title", shareDraft.pinterestTitle);
+    intent.searchParams.set("description", description);
+    window.open(intent.toString(), "_blank", "noopener,noreferrer");
+    setShareDraft(null);
+  };
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return items.filter((t) => {
@@ -382,6 +470,16 @@ export function AdminTemplatesPanel() {
     }),
     [items],
   );
+  const suggestedTitle = draft
+    ? generateTemplateName({
+        sourceName: draft.fileName,
+        description: draft.description,
+        category: draft.category,
+        kind: draft.kind,
+        format: draft.fileName.split(".").pop() || draft.kind,
+        content: draft.content,
+      })
+    : "";
 
   return (
     <div className="grid gap-5">
@@ -418,9 +516,14 @@ export function AdminTemplatesPanel() {
               العنوان
               <input
                 className={input}
+                maxLength={120}
                 value={draft.title}
-                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+                placeholder={suggestedTitle}
+                onChange={(e) => setDraft({ ...draft, title: e.target.value, titleIsManual: true })}
               />
+              {!draft.titleIsManual && (
+                <span className="text-[10px] font-semibold text-muted">الاسم الافتراضي المقترح: {suggestedTitle}</span>
+              )}
             </label>
             <label className={label}>
               رابط المشاركة (slug)
@@ -702,7 +805,7 @@ export function AdminTemplatesPanel() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((t) => {
             const displaySlug = templateDisplaySlug(t);
-            const publicUrl = publishedTemplateAbsoluteUrl(displaySlug);
+            const publicUrl = shortPublishedTemplateAbsoluteUrl(t);
             return (
               <article
                 key={t.id}
@@ -803,20 +906,35 @@ export function AdminTemplatesPanel() {
                         <button
                           type="button"
                           className={ghostBtn}
-                          onClick={() => {
-                            const url = new URL(publishedTemplatePath(displaySlug), window.location.origin).href;
-                            void navigator.clipboard.writeText(url)
-                              .then(() => toast.success("تم نسخ رابط القالب"))
-                              .catch(() => toast.error("تعذر نسخ الرابط"));
-                          }}
-                          title="نسخ الرابط العام"
+                          onClick={() => void copyShortLink(t)}
+                          title="نسخ رابط القالب المختصر"
                         >
-                          <Share2 className="size-3.5" /> نسخ الرابط
+                          <Copy className="size-3.5" /> نسخ الرابط المختصر
+                        </button>
+                        <button
+                          type="button"
+                          disabled={sharingId === t.id}
+                          className={ghostBtn}
+                          onClick={() => void prepareShare(t, "x")}
+                          title="مراجعة نص المنشور قبل فتح X"
+                        >
+                          {sharingId === t.id ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                          مشاركة على X
+                        </button>
+                        <button
+                          type="button"
+                          disabled={sharingId === t.id}
+                          className={ghostBtn}
+                          onClick={() => void prepareShare(t, "pinterest")}
+                          title="تجهيز عنوان ووصف وصورة القالب على Pinterest"
+                        >
+                          {sharingId === t.id ? <Loader2 className="size-3.5 animate-spin" /> : <Bookmark className="size-3.5" />}
+                          مشاركة على Pinterest
                         </button>
                         <a
                           href={publishedTemplatePath(displaySlug)}
                           target="_blank"
-                          rel="noopener"
+                          rel="noopener noreferrer"
                           className={cn(ghostBtn, "inline-flex")}
                           title="فتح صفحة القالب العامة"
                         >
@@ -879,6 +997,115 @@ export function AdminTemplatesPanel() {
           })}
         </div>
         </>
+      )}
+
+      {shareDraft && (
+        <div
+          className="fixed inset-0 z-[var(--z-dialog)] grid place-items-center bg-navy/55 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={shareDraft.kind === "x" ? "مراجعة منشور X" : "مراجعة محتوى Pinterest"}
+          onClick={() => setShareDraft(null)}
+        >
+          <section
+            className="grid max-h-[92vh] w-full max-w-xl gap-4 overflow-auto rounded-2xl border border-line bg-surface p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <header className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-[16px] font-black">
+                  {shareDraft.kind === "x" ? "مراجعة المنشور على X" : "محتوى القالب على Pinterest"}
+                </h3>
+                <p className="mt-1 text-[12px] text-muted">
+                  {shareDraft.templateTitle} · {shareDraft.category}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShareDraft(null)}
+                className="grid size-8 shrink-0 place-items-center rounded-lg border border-line"
+                aria-label="إغلاق المشاركة"
+              >
+                <X className="size-4" />
+              </button>
+            </header>
+
+            <div className="rounded-lg border border-line bg-surface-2 px-3 py-2 text-[11px]">
+              <span className="font-bold text-muted">رابط القالب المختصر</span>
+              <a href={shareDraft.url} target="_blank" rel="noopener noreferrer" className="mt-1 block break-all font-mono text-brand underline" dir="ltr">
+                {shareDraft.url}
+              </a>
+            </div>
+
+            {shareDraft.kind === "x" ? (
+              <label className={label}>
+                نص جاهز للنشر — يمكنك مراجعته وتعديله
+                <textarea
+                  className="min-h-40 w-full resize-y rounded-lg border border-line bg-surface px-3 py-2 text-[13px] font-semibold leading-6 text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand/40"
+                  value={shareDraft.text}
+                  onChange={(event) => setShareDraft({ ...shareDraft, text: event.target.value })}
+                  dir="auto"
+                />
+                <span className="text-[10px] font-semibold text-muted">{shareDraft.text.length} حرفًا · يتضمن الرابط المختصر تلقائيًا</span>
+              </label>
+            ) : (
+              <>
+                <div className="grid gap-3 sm:grid-cols-[96px_1fr]">
+                  <img src={shareDraft.mediaUrl} alt="معاينة القالب" className="h-28 w-24 rounded-lg border border-line bg-surface-2 object-contain" />
+                  <label className={label}>
+                    عنوان Pin
+                    <input
+                      className={input}
+                      maxLength={100}
+                      value={shareDraft.pinterestTitle}
+                      onChange={(event) => setShareDraft({ ...shareDraft, pinterestTitle: event.target.value })}
+                      dir="auto"
+                    />
+                  </label>
+                </div>
+                <label className={label}>
+                  الوصف والمحتوى
+                  <textarea
+                    className="min-h-32 w-full resize-y rounded-lg border border-line bg-surface px-3 py-2 text-[13px] font-semibold leading-6 text-ink outline-none focus:border-brand focus:ring-1 focus:ring-brand/40"
+                    value={shareDraft.pinterestDescription}
+                    onChange={(event) => setShareDraft({ ...shareDraft, pinterestDescription: event.target.value })}
+                    dir="auto"
+                  />
+                  <span className="text-[10px] font-semibold text-muted">يتضمن الرابط المختصر للقالب في الوصف.</span>
+                </label>
+              </>
+            )}
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-line pt-3">
+              <button type="button" className={ghostBtn} onClick={() => setShareDraft(null)}>
+                إلغاء
+              </button>
+              <button
+                type="button"
+                className={ghostBtn}
+                onClick={() => {
+                  const value = shareDraft.kind === "x"
+                    ? shareDraft.text
+                    : `${shareDraft.pinterestTitle}\n${shareDraft.pinterestDescription}`;
+                  void navigator.clipboard.writeText(value)
+                    .then(() => toast.success("تم نسخ محتوى المشاركة"))
+                    .catch(() => toast.error("تعذر نسخ محتوى المشاركة"));
+                }}
+              >
+                <Copy className="size-3.5" /> نسخ المحتوى
+              </button>
+              <button
+                type="button"
+                className={primaryBtn}
+                disabled={shareDraft.kind === "x" ? !shareDraft.text.trim() : !shareDraft.pinterestTitle.trim()}
+                onClick={shareDraft.kind === "x" ? openXIntent : openPinterestIntent}
+              >
+                {shareDraft.kind === "x" ? <Send className="size-3.5" /> : <Bookmark className="size-3.5" />}
+                {shareDraft.kind === "x" ? "فتح X" : "فتح Pinterest"}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       {preview && (

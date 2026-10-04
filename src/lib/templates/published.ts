@@ -18,12 +18,55 @@ export function templateDisplaySlug(template: { slug?: string | null; id: string
   return template.slug && template.slug.trim() ? template.slug : template.id;
 }
 
+/** Compact, reversible share token for catalogue ids minted by Admin. */
+export function shortTemplateToken(id: string): string | null {
+  const match = /^tpl_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(id);
+  if (!match) return null;
+  const hex = match[1].replace(/-/g, "");
+  const bytes = hex.match(/[0-9a-f]{2}/gi)?.map((part) => Number.parseInt(part, 16));
+  if (!bytes || bytes.length !== 16) return null;
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return globalThis.btoa(binary).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+/** Expand a short share token back into its canonical Admin template id. */
+export function templateIdFromShortToken(token: string): string | null {
+  if (!/^[A-Za-z0-9_-]{22}$/.test(token)) return null;
+  try {
+    const normalized = token.replace(/-/g, "+").replace(/_/g, "/");
+    const binary = globalThis.atob(`${normalized}==`);
+    if (binary.length !== 16) return null;
+    const hex = Array.from(binary, (char) => char.charCodeAt(0).toString(16).padStart(2, "0")).join("");
+    const uuid = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    return `tpl_${uuid}`;
+  } catch {
+    return null;
+  }
+}
+
+/** A concise public URL, reversible without adding another database column. */
+export function shortPublishedTemplatePath(template: { id: string; slug?: string | null }): string {
+  const token = shortTemplateToken(template.id);
+  return token
+    ? `/t/${token}`
+    : publishedTemplatePath(templateDisplaySlug(template));
+}
+
 /** Stable absolute URL for SEO / social sharing */
 import { SITE_ORIGIN } from "@/lib/og/share";
 
 export function publishedTemplateAbsoluteUrl(idOrSlug: string, origin?: string): string {
   const base = origin || SITE_ORIGIN;
   return `${base.replace(/\/$/, "")}${publishedTemplatePath(idOrSlug)}`;
+}
+
+export function shortPublishedTemplateAbsoluteUrl(
+  template: { id: string; slug?: string | null },
+  origin?: string,
+): string {
+  const base = (origin || SITE_ORIGIN).replace(/\/$/, "");
+  return `${base}${shortPublishedTemplatePath(template)}`;
 }
 
 /**

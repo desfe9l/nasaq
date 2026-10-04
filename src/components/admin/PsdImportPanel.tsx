@@ -35,6 +35,7 @@ import { classifyImport } from "@/lib/editor/import/detect";
 import type { BuiltImport, ImportKind } from "@/lib/editor/import/shared";
 import { repairBreakdown, repairProject, type RepairCounts, type RepairFix } from "@/lib/editor/import/repair";
 import { magicHexOf } from "@/lib/editor/psd/security";
+import { generateTemplateName, resolveTemplateName } from "@/lib/templates/naming";
 import { rememberUploadedFont } from "@/lib/nsq/fonts";
 import { cn, uid } from "@/lib/utils";
 
@@ -152,6 +153,7 @@ export function PsdImportPanel() {
   const [folderId, setFolderId] = useState("");
   const [newFolder, setNewFolder] = useState("");
   const [title, setTitle] = useState("");
+  const [titleIsManual, setTitleIsManual] = useState(false);
   const [decisions, setDecisions] = useState<Record<string, AssetDisposition>>({});
   const [replacements, setReplacements] = useState<Record<string, string>>({});
   const [fonts, setFonts] = useState<Record<string, string>>({});
@@ -167,6 +169,8 @@ export function PsdImportPanel() {
     setFonts({});
     setRepair(null);
     setRepairedProject(null);
+    setTitle("");
+    setTitleIsManual(false);
     if (!next) {
       setFile(null);
       return;
@@ -186,7 +190,6 @@ export function PsdImportPanel() {
       }
     }
     setFile(next);
-    setTitle(next.name.replace(/\.[^.]+$/, ""));
   };
 
   const convert = async () => {
@@ -232,13 +235,31 @@ export function PsdImportPanel() {
         for (const asset of imported.report.assets) initial[asset.hash] = "design";
         setDecisions(initial);
         setResult(imported);
-        setTitle(imported.project.name);
+        setTitle(generateTemplateName({
+          title: imported.project.name,
+          titleIsManual: false,
+          sourceName: gate.fileName,
+          format: classified.format,
+          category: "psd",
+          kind: "json",
+          content: imported.project,
+        }));
+        setTitleIsManual(false);
       } else {
         const { importTemplateBytes } = await import("@/lib/editor/import/run");
         setProgress({ stage: "تحويل الملف", percent: 20, detail: classified.format.toUpperCase() });
         const imported = await importTemplateBytes(bytes, gate.fileName);
         setOffice(imported);
-        setTitle(imported.project.name);
+        setTitle(generateTemplateName({
+          title: imported.project.name,
+          titleIsManual: false,
+          sourceName: gate.fileName,
+          format: classified.format,
+          category: classified.format === "pptx" ? "slides" : "import",
+          kind: "json",
+          content: imported.project,
+        }));
+        setTitleIsManual(false);
         setProgress({ stage: "اكتمل", percent: 100, detail: "" });
       }
       setPhase("ready");
@@ -289,7 +310,15 @@ export function PsdImportPanel() {
       await syncStorageOwner();
       return {
         ...office.project,
-        name: title.trim() || office.project.name,
+        name: resolveTemplateName({
+          title,
+          titleIsManual,
+          sourceName: file?.name,
+          format: office.format,
+          category: office.format === "pptx" ? "slides" : "import",
+          kind: "json",
+          content: office.project,
+        }),
         thumbnail: office.previewDataUrl || office.project.thumbnail,
       };
     }
@@ -327,7 +356,15 @@ export function PsdImportPanel() {
     });
     return {
       ...applied.project,
-      name: title.trim() || applied.project.name,
+      name: resolveTemplateName({
+        title,
+        titleIsManual,
+        sourceName: file?.name,
+        format: file?.name.split(".").pop() || "psd",
+        category: "psd",
+        kind: "json",
+        content: applied.project,
+      }),
       embeddedFonts: embedded.length ? embedded : applied.project.embeddedFonts,
     };
   };
@@ -379,8 +416,11 @@ export function PsdImportPanel() {
         data: {
           template: {
             title: project.name,
+            titleIsManual,
+            sourceName: file?.name || "",
+            format: office?.format || file?.name.split(".").pop() || "psd",
             description,
-            category: office ? "import" : "psd",
+            category: office?.format === "pptx" ? "slides" : office ? "import" : "psd",
             tier: "free",
             status: "draft",
             kind: "json",
@@ -521,7 +561,10 @@ export function PsdImportPanel() {
             <input
               className="h-10 min-w-56 flex-1 rounded-lg border border-line bg-surface px-3 text-[13px] font-bold"
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setTitleIsManual(true);
+              }}
               aria-label="اسم المشروع أو القالب"
             />
             <button type="button" className={btn} disabled={!!busy} onClick={() => void openInEditor()}>
@@ -748,7 +791,10 @@ export function PsdImportPanel() {
             <input
               className="h-10 min-w-56 flex-1 rounded-lg border border-line bg-surface px-3 text-[13px] font-bold"
               value={title}
-              onChange={(event) => setTitle(event.target.value)}
+              onChange={(event) => {
+                setTitle(event.target.value);
+                setTitleIsManual(true);
+              }}
               aria-label="اسم المشروع أو القالب"
             />
             <button type="button" className={btn} disabled={!!busy} onClick={() => void openInEditor()}>

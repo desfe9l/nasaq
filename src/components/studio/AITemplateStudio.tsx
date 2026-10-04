@@ -22,6 +22,7 @@ import { saveProject, setSetting } from "@/lib/editor/storage";
 import { editorPathFor } from "@/lib/site-routes";
 import { uid, cn } from "@/lib/utils";
 import { saveCustomTemplate } from "@/lib/templates/custom-templates";
+import { resolveTemplateName } from "@/lib/templates/naming";
 import { TemplatePreview } from "@/components/site/TemplatePreview";
 import {
   generateDesignFromPrompt,
@@ -139,10 +140,16 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
   const openInEditor = async () => {
     if (!activeProject) return;
     try {
+      const name = resolveTemplateName({
+        title: activeProject.name || result?.intent.title || "",
+        category: result?.intent.docType === "presentation" ? "slides" : "reports",
+        kind: "json",
+        content: activeProject,
+      });
       const saved = await saveProject({
         ...activeProject,
         id: uid("proj"),
-        name: activeProject.name || result?.intent.title || "تصميم نَسَق المولد",
+        name,
       });
       await setSetting("activeProjectId", saved.id);
       await saveCustomTemplate(
@@ -400,7 +407,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
                         />
                         {v.name}
                       </span>
-                      <span className="rounded bg-navy/10 px-1.5 py-0.5 text-[9px] font-bold text-navy">
+                      <span className="rounded bg-navy/10 px-1.5 py-0.5 text-[9px] font-bold text-ink">
                         {v.badge}
                       </span>
                     </div>
