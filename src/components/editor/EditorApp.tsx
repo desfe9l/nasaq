@@ -126,6 +126,7 @@ import { IconButton } from "./ui/IconButton";
 import { AnchorMenu, MenuRow } from "./ui/AnchorMenu";
 import { Tip } from "./ui/Tip";
 import { ViewMenu } from "./ViewMenu";
+import { AppearanceMenu } from "./AppearanceMenu";
 import { ProductNav } from "@/components/nav/ProductNav";
 import { EDITOR_SURFACE_NAV } from "@/lib/nav/surface-nav";
 
@@ -2674,6 +2675,10 @@ function Studio({
             dockPref={dockPref}
             onDockPref={changeDockPref}
           />
+          {/* The appearance switch holds a permanent single-icon cell: always
+              reachable while designing, never widening the bar beyond one
+              standard IconButton slot. */}
+          <AppearanceMenu />
           <SaveBadge onClick={() => void saveNow()} />
           <ProjectFileMenu onOpenFile={onOpenFile} />
           <IconButton
