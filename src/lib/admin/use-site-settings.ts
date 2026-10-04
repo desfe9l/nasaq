@@ -42,7 +42,9 @@ export function invalidateSiteSettings(): void {
 }
 
 export function useSiteSettings(): PublicSiteSettings {
-  const [settings, setSettings] = useState<PublicSiteSettings>(DEFAULT_SITE_SETTINGS);
+  const [settings, setSettings] = useState<PublicSiteSettings>(
+    DEFAULT_SITE_SETTINGS,
+  );
   useEffect(() => {
     let alive = true;
     const refresh = () => {
@@ -90,14 +92,30 @@ export function invalidateAdminPublicContent(): void {
   invalidatePublishedTemplates();
 }
 
-export function usePublishedTemplates(): AdminTemplateSummary[] {
-  const [items, setItems] = useState<AdminTemplateSummary[]>([]);
+/**
+ * The published catalog plus whether the answer has arrived.
+ *
+ * An empty list means two very different things before and after the fetch
+ * resolves ("nothing published" vs "not asked yet"). A consumer that boots
+ * something from the catalog — the homepage hero editor — must wait for the
+ * real answer instead of booting twice, so the loading flag is exposed.
+ */
+export function usePublishedTemplatesState(): {
+  items: AdminTemplateSummary[];
+  loading: boolean;
+} {
+  const [state, setState] = useState<{
+    items: AdminTemplateSummary[];
+    loading: boolean;
+  }>({ items: [], loading: true });
   useEffect(() => {
     let alive = true;
     const refresh = () => {
       const revision = publishedTemplatesRevision;
+      setState((prev) => (prev.loading ? prev : { ...prev, loading: true }));
       void loadPublishedTemplates().then((list) => {
-        if (alive && revision === publishedTemplatesRevision) setItems(list);
+        if (alive && revision === publishedTemplatesRevision)
+          setState({ items: list, loading: false });
       });
     };
     refresh();
@@ -107,7 +125,11 @@ export function usePublishedTemplates(): AdminTemplateSummary[] {
       window.removeEventListener(ADMIN_TEMPLATES_CHANGED_EVENT, refresh);
     };
   }, []);
-  return items;
+  return state;
+}
+
+export function usePublishedTemplates(): AdminTemplateSummary[] {
+  return usePublishedTemplatesState().items;
 }
 
 /** Stable built-in IDs plus visibility only; template content stays server-side. */

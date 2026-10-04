@@ -9,7 +9,7 @@ import { CARD_W, CARD_WRAP, SITE_CARD } from "@/components/site/cards";
 import { LiveEditorPreview } from "@/components/site/LiveEditorPreview";
 import {
   useSiteSettings,
-  usePublishedTemplates,
+  usePublishedTemplatesState,
 } from "@/lib/admin/use-site-settings";
 import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 import { WORKSPACE_HOME_PATH, openNewDocumentFlow, useWorkspaceEntry } from "@/lib/auth/use-workspace-entry";
@@ -80,7 +80,14 @@ export function HomePage() {
     else window.location.assign(entry.href);
   };
   const { texts } = useSiteSettings();
-  const publishedTemplates = usePublishedTemplates();
+  const { items: publishedTemplates, loading: templatesLoading } =
+    usePublishedTemplatesState();
+  /**
+   * The hero editor runs the Admin-featured catalog record when there is one.
+   * When that selection is empty — or the record stopped being public — the
+   * hero falls back to the bundled document instead of disappearing: the live
+   * editor is part of the hero's design, not an optional extra.
+   */
   const featuredDocument = publishedTemplates.find(
     (item) =>
       item.id === texts.featuredTemplateId &&
@@ -105,9 +112,7 @@ export function HomePage() {
         {/* Hero — مؤسسي رسمي هادئ */}
         <section className="border-b border-line/70 bg-page">
           <div
-            className={`mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-14 sm:px-6 ${
-              featuredDocument ? "lg:grid-cols-[1.05fr_0.95fr]" : "lg:grid-cols-1"
-            } lg:items-center lg:py-20`}
+            className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-20"
           >
             <div>
               <div className="mb-5 inline-flex items-center rounded-full border border-brand/15 bg-navy/5 px-3.5 py-1.5 text-[11px] font-bold tracking-wide text-ink">
@@ -157,9 +162,10 @@ export function HomePage() {
               </div>
             </div>
 
-            {featuredDocument && (
-              <LiveEditorPreview document={featuredDocument} />
-            )}
+            <LiveEditorPreview
+              document={featuredDocument}
+              pending={templatesLoading}
+            />
           </div>
         </section>
 
