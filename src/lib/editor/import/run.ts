@@ -10,12 +10,43 @@ import { importImageBytes } from "./raster";
 import { importPdfBytes } from "./pdf";
 import { importPptxBytes } from "./pptx";
 import { type BuiltImport, type ImportKind, type ImportNote } from "./shared";
+import { countProjectElements, normalizeProjectFile } from "../../nsq/normalize";
 
 export interface TemplateImport extends BuiltImport {
   psd?: PsdImportResult;
 }
 
 const OFFICE_MAX = 80 * 1024 * 1024;
+
+function mapNormalized(
+  format: "nsq" | "json",
+  fileName: string,
+  normalized: Awaited<ReturnType<typeof normalizeProjectFile>>,
+): TemplateImport {
+  const counts = countProjectElements(normalized.project.pages);
+  const notes: ImportNote[] = normalized.warnings.map((reason) => ({
+    name: fileName,
+    mode: "partial",
+    reason,
+  }));
+  return {
+    format,
+    project: normalized.project,
+    notes,
+    stats: {
+      pages: normalized.project.pages.length,
+      texts: counts.texts,
+      images: counts.images,
+      shapes: counts.shapes,
+      tables: counts.tables,
+      editable: counts.total,
+      partial: notes.length,
+      flattened: 0,
+      skipped: 0,
+    },
+    previewDataUrl: normalized.thumbnail || null,
+  };
+}
 
 function mapPsd(fileName: string, result: PsdImportResult): TemplateImport {
   const notes: ImportNote[] = result.report.fallbacks.map((item) => ({
@@ -58,6 +89,9 @@ export async function importTemplateBytes(
   if (format === "psd" || format === "psb") {
     const { importPsdBytes } = await import("../psd/pipeline");
     return mapPsd(fileName, await importPsdBytes(bytes, fileName));
+  }
+  if (format === "nsq" || format === "json") {
+    return mapNormalized(format, fileName, await normalizeProjectFile(bytes, fileName));
   }
   if (format === "docx") return importDocxBytes(bytes, fileName, ids);
   if (format === "pptx") return importPptxBytes(bytes, fileName, ids);

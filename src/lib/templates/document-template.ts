@@ -21,6 +21,20 @@ export interface TemplateFont {
 export interface TemplateDocument {
   format: typeof TEMPLATE_DOCUMENT_FORMAT;
   version: typeof TEMPLATE_DOCUMENT_VERSION;
+  /** Canonical JSON metadata shared with the native `.nsq` document model. */
+  nsqVersion: 2;
+  schemaVersion: 2;
+  documentVersion: 2;
+  schema: "nasaq.document";
+  project: {
+    name: string;
+    theme: string;
+    orgName: string;
+    defaultSize: string;
+    transactionNo?: string;
+    licensedTemplateId?: string;
+    pack?: string;
+  };
   name: string;
   theme: string;
   orgName: string;
@@ -62,6 +76,16 @@ export function buildTemplateDocument(input: TemplateDocumentInput): TemplateDoc
   const doc: TemplateDocument = {
     format: TEMPLATE_DOCUMENT_FORMAT,
     version: TEMPLATE_DOCUMENT_VERSION,
+    nsqVersion: 2,
+    schemaVersion: 2,
+    documentVersion: 2,
+    schema: "nasaq.document",
+    project: {
+      name: String(input.name || "قالب").slice(0, 120),
+      theme: String(input.theme || "official").slice(0, 40),
+      orgName: String(input.orgName || "").slice(0, 160),
+      defaultSize: String(input.defaultSize || "a4-portrait").slice(0, 40),
+    },
     name: String(input.name || "قالب").slice(0, 120),
     theme: String(input.theme || "official").slice(0, 40),
     orgName: String(input.orgName || "").slice(0, 160),
@@ -70,11 +94,20 @@ export function buildTemplateDocument(input: TemplateDocumentInput): TemplateDoc
     pages,
   };
   const transactionNo = String(input.transactionNo || "").trim();
-  if (transactionNo) doc.transactionNo = transactionNo.slice(0, 80);
+  if (transactionNo) {
+    doc.transactionNo = transactionNo.slice(0, 80);
+    doc.project.transactionNo = doc.transactionNo;
+  }
   const licensed = String(input.licensedTemplateId || "").trim();
-  if (licensed) doc.licensedTemplateId = licensed.slice(0, 120);
+  if (licensed) {
+    doc.licensedTemplateId = licensed.slice(0, 120);
+    doc.project.licensedTemplateId = doc.licensedTemplateId;
+  }
   const pack = String(input.pack || "").trim();
-  if (pack) doc.pack = pack.slice(0, 40);
+  if (pack) {
+    doc.pack = pack.slice(0, 40);
+    doc.project.pack = doc.pack;
+  }
   const fonts = (input.embeddedFonts || []).filter(
     (font) =>
       font &&

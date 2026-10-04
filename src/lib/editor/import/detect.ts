@@ -57,6 +57,13 @@ export function classifyImport(fileName: string, bytes: Uint8Array): ClassifiedF
   if (!bytes.byteLength) return { error: "الملف فارغ." };
   const kind = ext(fileName);
   const signature = hex(bytes);
+  if (kind === "nsq") {
+    if (!signature.startsWith(ZIP)) return { error: "الملف ليس حزمة نَسَق (.nsq) صالحة." };
+    return { format: "nsq" };
+  }
+  if (kind === "json" || signature.startsWith("7b") || signature.startsWith("5b")) {
+    return { format: "json" };
+  }
   if (kind === "doc" || (signature.startsWith(OLE) && kind !== "ppt")) {
     if (kind === "doc" || kind === "xls") {
       return { error: "صيغة Office القديمة غير مدعومة. احفظ الملف كـ DOCX أو PPTX ثم أعد المحاولة." };

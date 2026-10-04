@@ -59,6 +59,23 @@ snapshot renderer captures page **one**, not the active page. A changed live
 scene, failed capture or five-second optional-preview deadline results in a valid
 editable package without a thumbnail, never a generic/stale logo replacement.
 
+## Unified intake and web/template JSON
+
+All project-like entry points use the centralized normalizer in
+`src/lib/nsq/normalize.ts`:
+
+```text
+External file → detect → NSQ/JSON parser → recovery/normalization → Project JSON → Editor
+```
+
+Native `.nsq` files are decoded by the package reader. Legacy or standalone JSON
+is treated as a compatibility input, migrated into the same document model, and
+passed through tolerant page validation. Unsupported or malformed elements are
+isolated with warnings where possible; the remaining pages continue into the
+editor. Template JSON carries the same `schema`, `nsqVersion`, `schemaVersion`,
+and `documentVersion` metadata, so web previews and create-from-template flows
+consume the same canonical model rather than a second design representation.
+
 Compression and read-back validation finish **before** `createWritable()`.
 File System Access writes commit on `close()`; write/close failures attempt
 `abort()`, leaving the previous destination intact under the browser's API
