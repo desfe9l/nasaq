@@ -17,14 +17,12 @@ const APPEARANCE_MODES = [
 ] as const;
 
 /**
- * «عرض» — the view options, behind one icon.
+ * «عرض» — workspace controls behind one compact icon.
  *
- * Grid, snapping, page preview, artboard columns, print guides, full screen and
- * the workspace appearance used to be permanent header switches and status-bar
- * text buttons competing with the document for attention. They are all
- * still here, still one click away, and none of them now holds a slot in the
- * bar: view state is something the author changes, not something they look at
- * all day.
+ * Appearance has its own permanent icon-first toolbar control; the same three
+ * choices remain mirrored here alongside grid, snapping, page preview,
+ * artboard columns, print guides, full screen and panel settings. The menu is a
+ * portal, so none of it takes space from the canvas.
  */
 export function ViewMenu({
   fitToScreen,

@@ -2464,9 +2464,10 @@ function Studio({
        * DOCUMENT: history, the scaling cluster, the document name, and the
        * document actions (view options, save, project file, export, account).
        *
-       * Insert actions stay in «إضافة»; zoom, appearance and panel controls are
-       * in «عرض». Selection-only actions stay in the contextual toolbar and
-       * context menu, not in permanent Properties rows.
+       * Insert actions stay in «إضافة»; appearance has its own permanent
+       * icon-first control, while «عرض» keeps zoom, workspace and panel options.
+       * Selection-only actions stay in the contextual toolbar and context menu,
+       * not in permanent Properties rows.
        *
        * Every control is an `IconButton`: same box, same icon size, same
        * tooltip (hover on pointer devices, long-press on touch), no labels to
