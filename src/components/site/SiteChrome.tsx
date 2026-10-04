@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { createPortal } from "react-dom";
-import { ChevronDown, FilePlus2, KeyRound, LogIn, LogOut, Palette, UserRound } from "lucide-react";
+import { ChevronDown, FilePlus2, KeyRound, Layers, LogIn, LogOut, Palette, UserRound } from "lucide-react";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   BRAND,
@@ -13,6 +13,8 @@ import { SocialLinks } from "@/components/site/SocialLinks";
 import { readStoredTheme, writeStoredTheme, subscribeTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
+import { adminTemplatesAccessFn } from "@/lib/admin/functions";
+import { IMPORT_ROUTE } from "@/lib/site-routes";
 import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
@@ -131,6 +133,23 @@ function NewDocumentForUser({ user }: { user: AppUser }) {
 function HeaderAccount() {
   const { user, isPending } = useCurrentUserState();
   const [hydrated, setHydrated] = useState(false);
+  /*
+   * «استيراد القوالب» reaches the /import service; it is a template-manager
+   * entitlement, so the menu item appears only for accounts that hold it
+   * (the same probe the service page itself uses — never the security
+   * boundary, which the server re-checks per call).
+   */
+  const [canImport, setCanImport] = useState(false);
+  useEffect(() => {
+    if (!user) return;
+    let alive = true;
+    void adminTemplatesAccessFn()
+      .then((access) => alive && setCanImport(access.ok))
+      .catch(() => alive && setCanImport(false));
+    return () => {
+      alive = false;
+    };
+  }, [user]);
   useEffect(() => setHydrated(true), []);
   const [open, setOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
@@ -194,6 +213,12 @@ function HeaderAccount() {
    */
   const items = (
     <>
+      {canImport && (
+        <a href={IMPORT_ROUTE} role="menuitem" className={accountMenuItemClass}>
+          <Layers className="size-4 opacity-70" aria-hidden />
+          استيراد القوالب
+        </a>
+      )}
       <a href="/account#settings" role="menuitem" className={accountMenuItemClass}>
         <UserRound className="size-4 opacity-70" aria-hidden />
         الحساب والإعدادات

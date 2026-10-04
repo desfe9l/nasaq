@@ -142,6 +142,8 @@ export interface ConversionReport {
   heightPx: number;
   widthMm: number;
   heightMm: number;
+  /** Source page sizes in mm (pixels ÷ dpi), page by page — the repair truth. */
+  pageSizesMm: { w: number; h: number }[];
   pageCount: number;
   layerCount: number;
   groupCount: number;

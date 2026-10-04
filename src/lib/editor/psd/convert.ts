@@ -9,6 +9,7 @@
 
 import { uid } from "../../utils";
 import type { CanvasEl, ElStyle, Page, Project } from "../model";
+import { stampAssetPx } from "../import/origin";
 import { resolvePsdFont } from "./fonts";
 import type {
   AssetFinding,
@@ -115,6 +116,23 @@ function placeBox(node: PsdNode, dpi: number): { x: number; y: number; w: number
   };
 }
 
+/**
+ * Record the source layer's own geometry (in mm) as the element's repair
+ * origin. This is the PSD file's truth, not a copy of whatever the converter
+ * later does to the element — so «إصلاح العناصر» can detect drift introduced
+ * by any later stage of the pipeline.
+ */
+function stampOrigin(el: CanvasEl, box: { x: number; y: number; w: number; h: number }, node: PsdNode): void {
+  if (!el.source) return;
+  el.source.origin = {
+    x: box.x,
+    y: box.y,
+    w: box.w,
+    h: box.h,
+    ...(node.rotation ? { rot: node.rotation } : {}),
+  };
+}
+
 function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
   acc.layerCount += 1;
   if (node.kind === "group") {
@@ -139,6 +157,13 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
     for (const child of children) {
       child.x = Math.round((child.x - minX) * 100) / 100;
       child.y = Math.round((child.y - minY) * 100) / 100;
+      // The children moved into group space; their repair origins must move
+      // with them or every member would look «displaced» to the repair engine.
+      const origin = child.source?.origin;
+      if (origin) {
+        origin.x = Math.round((origin.x - minX) * 100) / 100;
+        origin.y = Math.round((origin.y - minY) * 100) / 100;
+      }
     }
     const el = elementBase(acc, node, "group", node.issues.length > 0);
     el.x = Math.round(minX * 100) / 100;
@@ -146,6 +171,7 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
     el.w = Math.max(0.4, Math.round((maxX - minX) * 100) / 100);
     el.h = Math.max(0.4, Math.round((maxY - minY) * 100) / 100);
     el.children = children;
+    stampOrigin(el, el, node);
     applyCommonStyle(el, node);
     if (node.blendMode === "pass through") {
       el.source = { ...el.source!, reason: el.source?.reason };
@@ -173,6 +199,7 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
     el.y = box.y;
     el.w = box.w;
     el.h = box.h;
+    stampOrigin(el, box, node);
     el.content = node.text.content;
     el.style = {
       fontFamily: font.family,
@@ -206,6 +233,7 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
     el.y = box.y;
     el.w = box.w;
     el.h = box.h;
+    stampOrigin(el, box, node);
     const radiusMm = pxToMm(node.shape.radiusPx, acc.dpi);
     el.style = {
       fill: node.shape.fill,
@@ -230,6 +258,7 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
     el.y = box.y;
     el.w = box.w;
     el.h = box.h;
+    stampOrigin(el, box, node);
     el.src = node.image.dataUrl;
     el.style = {
       objectFit: "fill",
@@ -356,6 +385,13 @@ function convertPage(page: PsdPage, acc: Acc, index: number): Page {
         el.y = Math.round(el.y * boost * 100) / 100;
         el.w = Math.round(el.w * boost * 100) / 100;
         el.h = Math.round(el.h * boost * 100) / 100;
+        const origin = el.source?.origin;
+        if (origin) {
+          origin.x = Math.round(origin.x * boost * 100) / 100;
+          origin.y = Math.round(origin.y * boost * 100) / 100;
+          origin.w = Math.round(origin.w * boost * 100) / 100;
+          origin.h = Math.round(origin.h * boost * 100) / 100;
+        }
         if (el.children) scaleTree(el.children);
       }
     };
@@ -410,6 +446,13 @@ export function convertPsdDocument(doc: PsdDocument, options: ConvertOptions = {
       firstSavedAt: options.now || Date.now(),
     },
   };
+  // Image pixel sizes come from the parsed layer buffers — no bitmap decode
+  // needed later. Origins were already stamped from the source layer bounds.
+  const pxByElement = new Map(acc.assets.map((asset) => [asset.elementId, asset]));
+  stampAssetPx(project, (el) => {
+    const asset = pxByElement.get(el.id);
+    return asset ? { w: asset.width, h: asset.height } : null;
+  });
   const completion = Math.round((acc.native / Math.max(1, acc.layerCount)) * 100);
   const first = pages[0];
   const report: ConversionReport = {
@@ -419,6 +462,10 @@ export function convertPsdDocument(doc: PsdDocument, options: ConvertOptions = {
     heightPx: doc.heightPx,
     widthMm: first?.w || 0,
     heightMm: first?.h || 0,
+    pageSizesMm: doc.pages.map((page) => ({
+      w: pxToMm(page.widthPx, acc.dpi),
+      h: pxToMm(page.heightPx, acc.dpi),
+    })),
     pageCount: pages.length,
     layerCount: acc.layerCount,
     groupCount: acc.groupCount,

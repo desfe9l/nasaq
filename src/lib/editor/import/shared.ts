@@ -10,6 +10,7 @@ import type { CanvasEl, ElStyle, ElementSourceKind, Page, Project, SizeId } from
 import { sizeIdOf } from "../model";
 import { serializeTable } from "../tables";
 import { uid } from "../../utils";
+import { intrinsicPxOf, stampImportOrigins } from "./origin";
 
 export type ImportKind = "nsq" | "json" | "psd" | "psb" | "docx" | "pptx" | "pdf" | "png" | "jpg" | "svg";
 
@@ -311,6 +312,9 @@ export class ImportBuilder {
       pages: this.pages,
       ...(preview ? { thumbnail: preview } : {}),
     };
+    // Stamp the as-converted geometry so «إصلاح العناصر» can compare against
+    // it; image pixel sizes are read from the data-URL header, never decoded.
+    stampImportOrigins(project, intrinsicPxOf);
     return {
       format: this.format,
       project,

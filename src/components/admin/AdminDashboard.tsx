@@ -6,6 +6,7 @@
  * site_settings / admin_templates.
  */
 import { useEffect, useState } from "react";
+import { IMPORT_ROUTE } from "@/lib/site-routes";
 import {
   Shield,
   LayoutTemplate,
@@ -173,7 +174,29 @@ export default function AdminDashboard() {
         <div hidden={tab !== "templates"}>
           <AdminTemplatesPanel />
         </div>
-        {tab === "psd" && (<div className="grid gap-6"><PsdImportPanel /><InstitutionalBackgroundsPanel /></div>)}
+        {tab === "psd" && (
+          <div className="grid gap-6">
+            {/*
+             * The dedicated /import service is the primary flow; this console
+             * panel stays for its library-routing decisions (asset-by-asset
+             * dispositions) which the service deliberately leaves out.
+             */}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gold/50 bg-gold/[0.06] px-4 py-3">
+              <p className="text-[12.5px] font-bold leading-6 text-ink">
+                خدمة الاستيراد الكاملة — رفع، فحص ذكي، إصلاح العناصر، ومقارنة قبل/بعد — متاحة الآن في مسارها الخاص.
+              </p>
+              <a
+                href={IMPORT_ROUTE}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-navy px-3 text-[12px] font-extrabold text-on-brand transition hover:bg-ok"
+              >
+                <Layers className="size-3.5" aria-hidden />
+                فتح خدمة الاستيراد
+              </a>
+            </div>
+            <PsdImportPanel />
+            <InstitutionalBackgroundsPanel />
+          </div>
+        )}
         {tab === "studio" && <TemplateStudio />}
         <div hidden={tab !== "commercial"}>
           <SettingsTab kind="commercial" />

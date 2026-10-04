@@ -6,3 +6,12 @@
  * so links must use the canonical form to open the library in one request.
  */
 export const TEMPLATES_ROUTE = "/templates";
+/**
+ * Canonical URL of the template-import service (`src/routes/import.tsx`).
+ *
+ * A file route (not a directory route), so the public path is exactly
+ * `/import` with no trailing-slash redirect — links use the constant so the
+ * service has one spelling everywhere (header account menu, workspace Home,
+ * admin surfaces).
+ */
+export const IMPORT_ROUTE = "/import";

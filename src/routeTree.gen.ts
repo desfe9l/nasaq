@@ -21,6 +21,7 @@ import { Route as CustomDesignRouteImport } from './routes/custom-design'
 import { Route as DemoRouteImport } from './routes/demo'
 import { Route as EditorRouteImport } from './routes/editor'
 import { Route as HomeRouteImport } from './routes/home'
+import { Route as ImportRouteImport } from './routes/import'
 import { Route as LicenseRouteImport } from './routes/license'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MyTemplatesRouteImport } from './routes/my-templates'
@@ -105,6 +106,11 @@ const EditorRoute = EditorRouteImport.update({
 const HomeRoute = HomeRouteImport.update({
   id: '/home',
   path: '/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ImportRoute = ImportRouteImport.update({
+  id: '/import',
+  path: '/import',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LicenseRoute = LicenseRouteImport.update({
@@ -247,6 +253,7 @@ export interface FileRoutesByFullPath {
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
   '/home': typeof HomeRoute
+  '/import': typeof ImportRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/my-templates': typeof MyTemplatesRoute
@@ -286,6 +293,7 @@ export interface FileRoutesByTo {
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
   '/home': typeof HomeRoute
+  '/import': typeof ImportRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/my-templates': typeof MyTemplatesRoute
@@ -325,6 +333,7 @@ export interface FileRoutesById {
   '/demo': typeof DemoRoute
   '/editor': typeof EditorRoute
   '/home': typeof HomeRoute
+  '/import': typeof ImportRoute
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/my-templates': typeof MyTemplatesRoute
@@ -366,6 +375,7 @@ export interface FileRouteTypes {
     | '/demo'
     | '/editor'
     | '/home'
+    | '/import'
     | '/license'
     | '/login'
     | '/my-templates'
@@ -405,6 +415,7 @@ export interface FileRouteTypes {
     | '/demo'
     | '/editor'
     | '/home'
+    | '/import'
     | '/license'
     | '/login'
     | '/my-templates'
@@ -443,6 +454,7 @@ export interface FileRouteTypes {
     | '/demo'
     | '/editor'
     | '/home'
+    | '/import'
     | '/license'
     | '/login'
     | '/my-templates'
@@ -483,6 +495,7 @@ export interface RootRouteChildren {
   DemoRoute: typeof DemoRoute
   EditorRoute: typeof EditorRoute
   HomeRoute: typeof HomeRoute
+  ImportRoute: typeof ImportRoute
   LicenseRoute: typeof LicenseRoute
   LoginRoute: typeof LoginRoute
   MyTemplatesRoute: typeof MyTemplatesRoute
@@ -591,6 +604,13 @@ declare module '@tanstack/react-router' {
       path: '/home'
       fullPath: '/home'
       preLoaderRoute: typeof HomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/import': {
+      id: '/import'
+      path: '/import'
+      fullPath: '/import'
+      preLoaderRoute: typeof ImportRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/license': {
@@ -800,6 +820,7 @@ const rootRouteChildren: RootRouteChildren = {
   DemoRoute: DemoRoute,
   EditorRoute: EditorRoute,
   HomeRoute: HomeRoute,
+  ImportRoute: ImportRoute,
   LicenseRoute: LicenseRoute,
   LoginRoute: LoginRoute,
   MyTemplatesRoute: MyTemplatesRoute,

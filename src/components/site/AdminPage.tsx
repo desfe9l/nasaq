@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { IMPORT_ROUTE } from "@/lib/site-routes";
 import { RedirectToSignIn } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import {
@@ -1144,6 +1145,9 @@ function SettingsTab() {
 
       <Panel title="إعدادات النظام">
         <div className="grid gap-3 sm:grid-cols-2">
+          <a href={IMPORT_ROUTE} className="rounded-[10px] border border-gold/50 bg-gold/[0.06] p-3 text-[12px] font-bold hover:bg-gold/[0.12]">
+            خدمة استيراد القوالب — رفع، فحص، إصلاح العناصر، وفتح في المحرر
+          </a>
           <a href="/admin-licenses" className="rounded-[10px] border border-line p-3 text-[12px] font-bold hover:bg-line-2">
             إدارة التراخيص — Gumroad وKeygen
           </a>

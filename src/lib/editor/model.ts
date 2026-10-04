@@ -379,7 +379,38 @@ export interface CanvasEl {
     layerName: string;
     fallback?: "raster" | "partial";
     reason?: string;
+    /**
+     * الهندسة كما خرجت من التحويل — مرجع «إصلاح العناصر».
+     *
+     * Millimetres, in the same parent space as the element's own `x/y/w/h`
+     * (page space for roots, group space for children). Stamped once at the
+     * end of conversion, after every scaling pass, so it is exactly what a
+     * correct conversion produced. The repair engine compares live geometry
+     * against it to detect — and conservatively undo — conversion drift,
+     * never authorial edits made later in the editor.
+     */
+    origin?: ElementOrigin;
+    /**
+     * Intrinsic raster size of the embedded asset, in pixels. Aspect-ratio
+     * checks use it to catch stretched image frames without loading the
+     * bitmap: the numbers come from the source file (PSD layer buffers) or
+     * from a header-only read of the data URL.
+     */
+    px?: { w: number; h: number };
   };
+}
+
+/**
+ * The as-converted geometry of an imported element, kept next to the element
+ * so the repair engine can restore it after a broken conversion.
+ */
+export interface ElementOrigin {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Rotation in degrees as converted. */
+  rot?: number;
 }
 
 export interface Page {

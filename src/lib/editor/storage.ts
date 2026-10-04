@@ -144,6 +144,8 @@ export type SettingsKey =
   /** SVG icons/dividers the author added to the smart library. */
   | "customLibrary"
   | "brandProfiles"
+  /** Documents saved by the /import service, newest first (service history). */
+  | "importServiceHistory"
   /** Account-library deletions so a later sync does not restore them. */
   | "libraryRemovedAssets"
   | "libraryRemovedFolders";

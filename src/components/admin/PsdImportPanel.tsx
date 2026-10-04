@@ -14,6 +14,7 @@ import {
   FolderOpen,
   Loader2,
   Type,
+  Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { adminUpsertTemplateFn } from "@/lib/admin/functions";
@@ -31,6 +32,7 @@ import {
 import type { AssetDecision, AssetDisposition, PsdImportResult } from "@/lib/editor/psd/pipeline";
 import { classifyImport } from "@/lib/editor/import/detect";
 import type { BuiltImport, ImportKind } from "@/lib/editor/import/shared";
+import { repairBreakdown, repairProject, type RepairCounts, type RepairFix } from "@/lib/editor/import/repair";
 import { magicHexOf } from "@/lib/editor/psd/security";
 import { rememberUploadedFont } from "@/lib/nsq/fonts";
 import { cn, uid } from "@/lib/utils";
@@ -152,7 +154,9 @@ export function PsdImportPanel() {
   const [decisions, setDecisions] = useState<Record<string, AssetDisposition>>({});
   const [replacements, setReplacements] = useState<Record<string, string>>({});
   const [fonts, setFonts] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState<"editor" | "document" | "template" | null>(null);
+  const [busy, setBusy] = useState<"editor" | "document" | "template" | "repair" | null>(null);
+  const [repair, setRepair] = useState<{ counts: RepairCounts; fixes: RepairFix[] } | null>(null);
+  const [repairedProject, setRepairedProject] = useState<Project | null>(null);
 
   const take = (next: File | null) => {
     setError(null);
@@ -160,6 +164,8 @@ export function PsdImportPanel() {
     setOffice(null);
     setPhase("idle");
     setFonts({});
+    setRepair(null);
+    setRepairedProject(null);
     if (!next) {
       setFile(null);
       return;
@@ -188,6 +194,8 @@ export function PsdImportPanel() {
     setError(null);
     setResult(null);
     setOffice(null);
+    setRepair(null);
+    setRepairedProject(null);
     try {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const classified = classifyImport(file.name, bytes);
@@ -249,6 +257,32 @@ export function PsdImportPanel() {
     })) satisfies AssetDecision[];
   }, [result, decisions, replacements, folderId]);
 
+  /** «إصلاح العناصر» — conservative geometry repair against the PSD's own bounds. */
+  const repairNow = async () => {
+    if (!result) return;
+    setBusy("repair");
+    try {
+      const outcome = await repairProject(result.project, {
+        pageSizes: result.report.pageSizesMm,
+      });
+      setRepair({ counts: outcome.counts, fixes: outcome.fixes });
+      setRepairedProject(outcome.project);
+      if (outcome.counts.total === 0) {
+        toast.success("فحصنا المستند — لا يحتاج إلى أي إصلاح");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "تعذر تنفيذ الإصلاح");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const undoRepair = () => {
+    setRepair(null);
+    setRepairedProject(null);
+    toast.success("أُلغي الإصلاح وعاد المستند إلى نسخته الأصلية");
+  };
+
   const commitProject = async (): Promise<Project> => {
     if (office) {
       await syncStorageOwner();
@@ -261,7 +295,7 @@ export function PsdImportPanel() {
     if (!result || !prepared) throw new Error("لا توجد نتيجة تحويل");
     const { applyAssetDecisions } = await import("@/lib/editor/psd/pipeline");
     const src = new Map(library.map((asset) => [asset.id, asset.src]));
-    const applied = applyAssetDecisions(result.project, result.report.assets, prepared, src);
+    const applied = applyAssetDecisions(repairedProject || result.project, result.report.assets, prepared, src);
     await syncStorageOwner();
     let targetFolder = folderId || null;
     if (!targetFolder && newFolder.trim() && applied.saves.length) {
@@ -364,7 +398,7 @@ export function PsdImportPanel() {
   };
 
   const report = result?.report;
-  const layers = result ? flatten(result.project.pages[0]?.elements || []) : [];
+  const layers = result ? flatten((repairedProject || result.project).pages[0]?.elements || []) : [];
 
   return (
     <section className="grid gap-5">
@@ -507,6 +541,48 @@ export function PsdImportPanel() {
 
       {report && result && (
         <>
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-gold/50 bg-gold/[0.06] px-4 py-3">
+            <div className="min-w-0">
+              <p className="flex items-center gap-1.5 text-[13px] font-black text-ink">
+                <Wrench className="size-4 text-gold" aria-hidden />
+                إصلاح العناصر
+              </p>
+              {repair ? (
+                repair.counts.total > 0 ? (
+                  <>
+                    <p className="mt-1 text-[12px] font-extrabold text-success">
+                      تم إصلاح {repair.counts.total} عنصرًا
+                    </p>
+                    <ul className="mt-1 flex flex-wrap gap-1.5">
+                      {repairBreakdown(repair.counts).map((row) => (
+                        <li key={row.kind} className="rounded-full border border-line bg-surface px-2 py-0.5 text-[11px] font-extrabold text-ink">
+                          <span className="tabular-nums">{row.count}</span> {row.label}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="mt-1 text-[12px] font-extrabold text-success">المستند سليم — لم يحتج أي إصلاح</p>
+                )
+              ) : (
+                <p className="mt-1 max-w-xl text-[12px] font-semibold leading-5 text-muted">
+                  يفحص الناتج مقابل هندسة ملف PSD الأصلي وأبعاد الصفحة، ويصلح ما انحرف فقط — دون المساس بما هو سليم.
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={btn} disabled={busy === "repair"} onClick={() => void repairNow()}>
+                {busy === "repair" ? <Loader2 className="size-4 animate-spin" /> : <Wrench className="size-4" aria-hidden />}
+                {repair ? "إعادة الإصلاح" : "إصلاح العناصر"}
+              </button>
+              {repair && repairedProject && (
+                <button type="button" className={ghost} onClick={undoRepair}>
+                  تراجع عن الإصلاح
+                </button>
+              )}
+            </div>
+          </section>
+
           <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
             {[
               ["الأبعاد", `${report.widthPx}×${report.heightPx}px`],
@@ -529,7 +605,7 @@ export function PsdImportPanel() {
             ))}
           </dl>
 
-          <ResultPreview project={result.project} composite={result.compositeDataUrl} />
+          <ResultPreview project={repairedProject || result.project} composite={result.compositeDataUrl} />
 
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="rounded-xl border border-line p-4">
