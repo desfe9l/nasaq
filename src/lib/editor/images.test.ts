@@ -83,6 +83,26 @@ describe("placeImageBox", () => {
     assert.ok(second.y + second.h <= page.h);
   });
 
+  it("does not repeat placements in larger batches or when the page already has images", () => {
+    const image = { width: 800, height: 800 };
+    const placements = Array.from({ length: 24 }, (_, sequence) =>
+      placeImageBox(image, page, { sequence }),
+    );
+    const keys = placements.map((box) => `${box.x},${box.y}`);
+    assert.equal(new Set(keys).size, placements.length);
+
+    // Regression: the former five-offset cycle placed sequence 12 on top of 2.
+    assert.notDeepEqual(
+      placeImageBox(image, page, { sequence: 2 }),
+      placeImageBox(image, page, { sequence: 12 }),
+    );
+    for (const box of placements) {
+      assert.ok(box.x >= 0 && box.y >= 0);
+      assert.ok(box.x + box.w <= page.w);
+      assert.ok(box.y + box.h <= page.h);
+    }
+  });
+
   it("honors the drop point without an artificial offset and clamps to the page", () => {
     const box = placeImageBox({ width: 1200, height: 600 }, page, {
       at: { x: 2, y: 296 },
