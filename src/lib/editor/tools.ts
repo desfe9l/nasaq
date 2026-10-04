@@ -1,49 +1,33 @@
 import type { CanvasEl } from "./model";
 
 /**
- * The editor's tool model — ONE table.
+ * The editor's tool model — ONE table, ONE selection tool.
  *
- * WHY THIS EXISTS (the root cause it fixes):
+ * WHY THIS EXISTS (the root cause this fixes):
  *
- * Tool state used to be split three ways: a `drawTool` string in the canvas,
- * a `marqueeShape` ref fed by a `nasaq:marquee-shape` window event, and an
- * `eraserSize` ref fed by a `nasaq:eraser-size` event, mirrored back into the
- * shell through `nasaq:tool-state`. Nothing was the source of truth, the
- * ordering of those events decided whether a tool had its settings at the
- * first pointerdown, and "the same tool" existed twice with different names
- * (the header's «تحديد مستطيل» button and the canvas's marquee shape were two
- * independent states). That is why rectangle/ellipse/eraser tools could look
- * armed and still do nothing on the first gesture.
+ * The selection/crop family used to be nine near-identical tools — select,
+ * marquee-rect, marquee-square, marquee-ellipse, lasso, select-shape,
+ * select-image, select-layer and crop — nine header buttons drawing the same
+ * rubber band, four of which ended in the same crop engine. Tool state had
+ * also once been split three ways (a `drawTool` string in the canvas, refs fed
+ * by window events, a mirrored `activeTool` in the header), so the header and
+ * the canvas could disagree about what was armed.
  *
- * Now every tool is a row in this table and a field in the tool store
- * (`tool-store.ts`); the header reads it, the canvas reads it, the properties
- * bar reads it, and the keyboard writes it. There is exactly one answer to
- * "which tool is live, and with which settings".
+ * Now there is exactly ONE «تحديد / قص» tool. The shape of the region
+ * (rectangle, square, ellipse, freeform) is a MODE of that tool — a compact
+ * dropdown next to its button — not a tool of its own. Crop is not a tool at
+ * all: it is what a region does when it lands on an image, with an ephemeral
+ * Apply/Cancel that disappears the moment the operation ends. Brush, eraser,
+ * text and shape remain because they are not selection verbs.
  *
- * Everything here is pure and dependency-free so the routing rules — family,
- * marquee shape, target scope, 1:1 constraint — are unit-testable without a
+ * Everything here is pure and dependency-free so the routing rules — region
+ * mode, 1:1 constraint, target scope, shortcuts — are unit-testable without a
  * DOM.
  */
 
 export type ToolId =
-  /** Pointer: click selects, drag moves, empty-space drag marquees. */
+  /** The ONE pointer tool: click selects, drag moves, empty drag marquee-selects. */
   | "select"
-  /** Rubber-band rectangle over the artboard. */
-  | "marquee-rect"
-  /** Rubber-band rectangle locked to 1:1. */
-  | "marquee-square"
-  /** Rubber-band ellipse. */
-  | "marquee-ellipse"
-  /** Freehand lasso. */
-  | "lasso"
-  /** Pick / marquee restricted to vector shapes. */
-  | "select-shape"
-  /** Pick / marquee restricted to raster artwork (images, logos, QR). */
-  | "select-image"
-  /** Pick the topmost object under the pointer — the layer stack. */
-  | "select-layer"
-  /** Draw a constrained region and crop the image under it. */
-  | "crop"
   /** Paint into a raster layer. */
   | "brush"
   /** Erase pixels (alpha) from raster artwork. */
@@ -53,10 +37,21 @@ export type ToolId =
   /** Drag a rectangle shape. */
   | "shape";
 
-export type ToolFamily = "pointer" | "marquee" | "raster" | "crop" | "draw";
+/**
+ * Region shape the ONE select tool draws.
+ *
+ * `off` is the plain pointer: a drag on empty space rubber-band-selects
+ * elements and vanishes on release. Any other mode keeps the finished region
+ * alive with editable handles, and «قص» becomes available the moment the
+ * region lands on an image — the crop affordance belongs to the region, never
+ * to a permanent toolbar.
+ */
+export type RegionMode = "off" | "rect" | "square" | "ellipse" | "lasso";
+
+export type ToolFamily = "pointer" | "raster" | "draw";
 
 /** Which elements a tool may touch. `layer` means "any element, topmost first". */
-export type ToolTarget = "layer" | "shape" | "image";
+export type ToolTarget = "layer" | "image";
 
 export interface ToolDef {
   id: ToolId;
@@ -68,116 +63,20 @@ export interface ToolDef {
   shortcut?: string;
   /** Elements a pick or marquee from this tool is allowed to hit. */
   target: ToolTarget;
-  /** Region the drag paints. `null` means the tool never draws a region. */
-  marquee: "rect" | "ellipse" | "lasso" | null;
-  /** 1:1 while dragging (Shift forces it for every region tool as well). */
-  square?: boolean;
-  /** Keep the finished region on screen, with editable handles. */
-  keepRegion?: boolean;
-  /** Element types this tool's pick filter accepts, when not `layer`. */
-  types?: CanvasEl["type"][];
+  /** Region the drag paints for `draw` tools. `select` paints its region mode. */
+  marquee: "rect" | null;
 }
 
-const VECTOR_TYPES: CanvasEl["type"][] = [
-  "shape",
-  "line",
-  "divider",
-  "box",
-  "stat",
-  "progress",
-  "svg",
-  "icon",
-];
 const IMAGE_TYPES: CanvasEl["type"][] = ["image", "logo", "qr"];
 
 export const TOOLS: Record<ToolId, ToolDef> = {
   select: {
     id: "select",
     family: "pointer",
-    label: "تحديد وتحريك",
-    hint: "انقر لتحديد عنصر، اسحب لتحريكه، واسحب مساحة فارغة لتحديد منطقة",
+    label: "تحديد / قص",
+    hint: "انقر لتحديد عنصر، اسحب لتحريكه، واسحب منطقةً فوق صورة لقصّها",
     shortcut: "V",
     target: "layer",
-    marquee: "rect",
-    keepRegion: false,
-  },
-  "marquee-rect": {
-    id: "marquee-rect",
-    family: "marquee",
-    label: "تحديد مستطيل",
-    hint: "اسحب مستطيلاً حر الأبعاد — Shift لتفعيل 1:1، Alt للرسم من المركز",
-    shortcut: "M",
-    target: "layer",
-    marquee: "rect",
-    keepRegion: true,
-  },
-  "marquee-square": {
-    id: "marquee-square",
-    family: "marquee",
-    label: "تحديد مربع",
-    hint: "اسحب مربعاً بنسبة 1:1 — Alt للرسم من المركز",
-    shortcut: "⇧M",
-    target: "layer",
-    marquee: "rect",
-    square: true,
-    keepRegion: true,
-  },
-  "marquee-ellipse": {
-    id: "marquee-ellipse",
-    family: "marquee",
-    label: "تحديد بيضاوي",
-    hint: "اسحب منطقة بيضاوية — Shift لدائرة، Alt للرسم من المركز",
-    target: "layer",
-    marquee: "ellipse",
-    keepRegion: true,
-  },
-  lasso: {
-    id: "lasso",
-    family: "marquee",
-    label: "تحديد حر",
-    hint: "ارسم حدوداً حرة بإصبعك أو القلم لتحديد ما داخلها",
-    shortcut: "L",
-    target: "layer",
-    marquee: "lasso",
-    keepRegion: true,
-  },
-  "select-shape": {
-    id: "select-shape",
-    family: "marquee",
-    label: "تحديد شكل",
-    hint: "يحدد الأشكال المتجهية فقط — انقر شكلاً أو اسحب مستطيلاً",
-    target: "shape",
-    types: VECTOR_TYPES,
-    marquee: "rect",
-    keepRegion: true,
-  },
-  "select-image": {
-    id: "select-image",
-    family: "marquee",
-    label: "تحديد صورة",
-    hint: "يحدد الصور والشعارات فقط — انقر صورة أو اسحب مستطيلاً",
-    target: "image",
-    types: IMAGE_TYPES,
-    marquee: "rect",
-    keepRegion: true,
-  },
-  "select-layer": {
-    id: "select-layer",
-    family: "marquee",
-    label: "تحديد طبقة",
-    hint: "انقر لتحديد العنصر الأعلى في الموضع، بغض النظر عن التحديد السابق",
-    target: "layer",
-    marquee: "rect",
-    keepRegion: true,
-  },
-  crop: {
-    id: "crop",
-    family: "crop",
-    label: "قص الصورة",
-    hint: "اسحب منطقة فوق الصورة ثم «تطبيق القص» — القص غير متلف ويمكن التراجع عنه",
-    shortcut: "C",
-    target: "image",
-    types: IMAGE_TYPES,
     marquee: "rect",
   },
   brush: {
@@ -187,7 +86,6 @@ export const TOOLS: Record<ToolId, ToolDef> = {
     hint: "ارسم على الصور والطبقات النقطية — ضغط القلم يتحكم في سماكة الخط",
     shortcut: "B",
     target: "image",
-    types: IMAGE_TYPES,
     marquee: null,
   },
   eraser: {
@@ -197,7 +95,6 @@ export const TOOLS: Record<ToolId, ToolDef> = {
     hint: "امسح بكسل الصورة بشفافية حقيقية — لا يمس عنصراً آخر",
     shortcut: "E",
     target: "image",
-    types: IMAGE_TYPES,
     marquee: null,
   },
   text: {
@@ -220,99 +117,188 @@ export const TOOLS: Record<ToolId, ToolDef> = {
   },
 };
 
-/** Toolbar order: groups are separated by a hairline in the UI. */
-export const TOOL_GROUPS: ToolId[][] = [
-  ["select", "marquee-rect", "marquee-square"],
-  ["marquee-ellipse", "lasso"],
-  ["select-shape", "select-image", "select-layer"],
-  ["crop", "brush", "eraser"],
-  ["text", "shape"],
+/**
+ * The region picker's whole vocabulary — what the ONE dropdown next to the
+ * select tool offers. Four region shapes plus the pointer mode to step back
+ * to; nothing else. Labels stay inside the dropdown: the bar itself is an
+ * icon, so no long tool name ever occupies the toolbar.
+ */
+export interface RegionModeDef {
+  id: RegionMode;
+  label: string;
+  hint: string;
+  /** Key hint for the menu; the binding itself resolves in `resolveToolKey`. */
+  shortcut?: string;
+  /** Rubber-band shape this mode paints. */
+  shape: "rect" | "ellipse" | "lasso";
+  /** The shape is locked 1:1 while dragging. */
+  square?: boolean;
+}
+
+export const REGION_MODES: RegionModeDef[] = [
+  {
+    id: "off",
+    label: "مؤشر — تحديد ونقر",
+    hint: "انقر عنصراً أو اسحب للتحريك؛ السحب على فراغ يحدد مجموعة",
+    shortcut: "V",
+    shape: "rect",
+  },
+  {
+    id: "rect",
+    label: "مستطيل",
+    hint: "اسحب منطقة حرة الأبعاد — Shift لنسبة 1:1 وAlt من المركز",
+    shortcut: "M",
+    shape: "rect",
+  },
+  {
+    id: "square",
+    label: "مربع 1:1",
+    hint: "منطقة مربعة بنسبة ثابتة — Alt للرسم من المركز",
+    shortcut: "⇧M",
+    shape: "rect",
+    square: true,
+  },
+  {
+    id: "ellipse",
+    label: "بيضاوي",
+    hint: "اسحب منطقة بيضاوية — Shift لدائرة",
+    shape: "ellipse",
+  },
+  {
+    id: "lasso",
+    label: "تحديد حر",
+    hint: "ارسم الحدود بإصبعك أو القلم لتحديد ما داخلها",
+    shortcut: "L",
+    shape: "lasso",
+  },
 ];
 
-export const TOOL_ORDER: ToolId[] = TOOL_GROUPS.flat();
+export const regionModeDef = (mode: RegionMode): RegionModeDef =>
+  REGION_MODES.find((entry) => entry.id === mode) ?? REGION_MODES[0]!;
+
+/** True when the select tool is armed to DRAW a region (not plain pointer). */
+export const isRegionArmed = (
+  tool: ToolId,
+  mode: RegionMode,
+): boolean => tool === "select" && mode !== "off";
+
+/** The finished region survives the gesture in every region mode. */
+export const regionKeeps = (tool: ToolId, mode: RegionMode): boolean =>
+  isRegionArmed(tool, mode);
 
 export const toolDef = (id: ToolId): ToolDef => TOOLS[id] ?? TOOLS.select;
 
-export const isMarqueeTool = (id: ToolId): boolean =>
-  toolDef(id).family === "marquee";
 export const isRasterTool = (id: ToolId): boolean =>
   toolDef(id).family === "raster";
-export const isRegionTool = (id: ToolId): boolean => toolDef(id).marquee !== null;
-/** Tools that own the canvas gesture, so element drag must stand down. */
-export const ownsCanvas = (id: ToolId): boolean =>
-  id !== "select" && id !== "select-layer";
+
+/**
+ * Does this live tool own the canvas gesture, so element drag must stand down?
+ *
+ * Plain pointer select is the ONLY state that may move artwork. A region mode
+ * draws on the first finger (a press that picks an element is still allowed,
+ * but a press that moves one is not), and every other tool owns the surface.
+ */
+export const ownsCanvas = (tool: ToolId, mode: RegionMode): boolean =>
+  tool !== "select" || mode !== "off";
 
 /** Does this tool accept the element? `layer` accepts every element. */
 export function toolAccepts(id: ToolId, el: Pick<CanvasEl, "type">): boolean {
   const def = toolDef(id);
   if (def.target === "layer") return true;
-  return (def.types || []).includes(el.type);
+  return IMAGE_TYPES.includes(el.type);
 }
 
-/** Element types the crop tool can actually operate on. */
+/** Element types the crop engine can actually operate on. */
 export function isRasterElement(el: Pick<CanvasEl, "type">): boolean {
   return IMAGE_TYPES.includes(el.type);
 }
 
 /**
- * Resolve the marquee geometry for a tool + live modifiers.
+ * Resolve the marquee geometry for the live state + modifiers.
  *
- * Shift means "1:1" for every region tool (not only the square one), and Alt
- * means "draw from the centre" — the two conventions every design tool shares,
- * resolved in one place so no tool re-implements them.
+ * Shift means "1:1" for every rectangular region (not only the square mode),
+ * and Alt means "draw from the centre" — the two conventions every design tool
+ * shares, resolved in one place so no gesture re-implements them. Draw tools
+ * always rubber-band a rect regardless of the select tool's region mode.
  */
 export function resolveMarqueeMode(
-  id: ToolId,
+  tool: ToolId,
+  mode: RegionMode,
   modifiers: { shift?: boolean; alt?: boolean } = {},
-): { shape: "rect" | "ellipse" | "lasso" | null; square: boolean; fromCenter: boolean } {
-  const def = toolDef(id);
+): {
+  shape: "rect" | "ellipse" | "lasso" | null;
+  square: boolean;
+  fromCenter: boolean;
+} {
+  if (tool !== "select") {
+    return {
+      shape: toolDef(tool).marquee,
+      square: false,
+      fromCenter: Boolean(modifiers.alt),
+    };
+  }
+  const def = regionModeDef(mode);
   return {
-    shape: def.marquee,
+    shape: def.id === "off" ? "rect" : def.shape,
     square: Boolean(def.square) || Boolean(modifiers.shift),
     fromCenter: Boolean(modifiers.alt),
   };
 }
 
-/** Tools whose finished region can be turned into a crop. */
-export const regionCanCrop = (id: ToolId): boolean =>
-  toolDef(id).keepRegion === true;
-
 /**
- * Physical key → tool, derived from the table above.
- *
- * `shortcut` is the single place a tool declares its key, so the header tooltip
- * and the keyboard handler can never drift apart — and `⇧M` is resolved as
- * "shift + M" rather than a second, hidden binding.
+ * A tool activation — the whole answer to "which tool is live and in which
+ * mode". The header, the keyboard and the command palette all produce one of
+ * these and write it through the tool store, so no two entry points can arm a
+ * different combination.
  */
-interface ShortcutEntry {
-  key: string;
-  shift: boolean;
-  id: ToolId;
+export interface ToolActivation {
+  tool: ToolId;
+  regionMode: RegionMode;
 }
 
-const SHORTCUT_INDEX: ShortcutEntry[] = TOOL_ORDER.flatMap<ShortcutEntry>((id) => {
-  const shortcut = TOOLS[id].shortcut;
-  if (!shortcut) return [];
-  if (shortcut.startsWith("⇧")) {
-    const key = shortcut.slice(1).toLowerCase();
-    return key.length === 1 ? [{ key, shift: true, id }] : [];
-  }
-  return shortcut.length === 1
-    ? [{ key: shortcut.toLowerCase(), shift: false, id }]
-    : [];
-});
+/**
+ * Physical key → activation, derived from the tables above.
+ *
+ * `shortcut` is the single place a tool or mode declares its key, so tooltips
+ * and the keyboard handler can never drift apart, and `⇧M` resolves as
+ * "shift + M" rather than a second, hidden binding.
+ */
+const KEY_INDEX: Array<{ key: string; shift: boolean; at: ToolActivation }> = [
+  ...REGION_MODES.flatMap<{ key: string; shift: boolean; at: ToolActivation }>(
+    (mode) => {
+      const shortcut = mode.shortcut;
+      if (!shortcut) return [];
+      if (shortcut.startsWith("⇧")) {
+        const key = shortcut.slice(1).toLowerCase();
+        return key.length === 1
+          ? [{ key, shift: true, at: { tool: "select", regionMode: mode.id } }]
+          : [];
+      }
+      return shortcut.length === 1
+        ? [{ key: shortcut.toLowerCase(), shift: false, at: { tool: "select", regionMode: mode.id } }]
+        : [];
+    },
+  ),
+  ...(Object.values(TOOLS) as ToolDef[])
+    .filter((def) => def.id !== "select")
+    .flatMap<{ key: string; shift: boolean; at: ToolActivation }>((def) =>
+      def.shortcut && def.shortcut.length === 1
+        ? [{ key: def.shortcut.toLowerCase(), shift: false, at: { tool: def.id, regionMode: "off" } }]
+        : [],
+    ),
+];
 
-export function resolveToolShortcut(
+export function resolveToolKey(
   key: string,
   shift = false,
-): ToolId | null {
+): ToolActivation | null {
   const lower = key.toLowerCase();
-  const exact = SHORTCUT_INDEX.find(
+  const exact = KEY_INDEX.find(
     (entry) => entry.key === lower && entry.shift === shift,
   );
-  if (exact) return exact.id;
+  if (exact) return exact.at;
   // A shift-only variant (⇧M) also answers for plain Shift held by accident
   // only when no plain binding exists for the same key.
   if (!shift) return null;
-  return SHORTCUT_INDEX.find((entry) => entry.key === lower)?.id ?? null;
+  return KEY_INDEX.find((entry) => entry.key === lower)?.at ?? null;
 }

@@ -32,6 +32,64 @@ export function isOverlayViewport(): boolean {
 }
 
 /**
+ * ── The responsive layout system, stated ONCE ───────────────────────────────
+ *
+ * Not a pile of media queries: one pure function answers "which surface is
+ * this?" from (width, height, coarse pointer), the shell puts the answer on the
+ * root as `data-editor-surface`, and CSS carries a density scale from it.
+ * Every size decision — toolbar buttons, options bar, drawers — reads the same
+ * resolved surface, so a control can be compact on a 1366px laptop,
+ * touch-friendly-compact on an iPad, and maximally dense-but-hittable on a
+ * phone, from ONE rule set that never contradicts another.
+ */
+export type EditorSurface =
+  | "desktop"
+  | "tablet-landscape"
+  | "tablet-portrait"
+  | "mobile-landscape"
+  | "mobile-portrait";
+
+/**
+ * Resolve the editor surface from raw geometry.
+ *
+ * Bands (width):
+ *   ≥ DOCK_BREAKPOINT and fine pointer → desktop (compact, docked panels)
+ *   ≥ DOCK_BREAKPOINT with any coarse pointer → tablet (dockable, touch-first;
+ *     an iPad Pro landscape is wide, but it is still a finger)
+ *   OVERLAY_BREAKPOINT..DOCK_BREAKPOINT → tablet (full workspace, floating
+ *     windows when the two docks cannot both fit)
+ *   < OVERLAY_BREAKPOINT → mobile (either orientation)
+ *
+ * Orientation is the tie-breaker inside a band: a portrait phone gets the
+ * widest touch targets, a landscape phone keeps the bar shorter because its
+ * problem is width, not finger room. Pure and DOM-free so tests and the shell
+ * can never disagree.
+ */
+const MOBILE_SHORT_EDGE = 600;
+
+export function resolveEditorSurface(
+  width: number,
+  height: number,
+  coarse: boolean,
+): EditorSurface {
+  const w = Number.isFinite(width) ? width : 0;
+  const h = Number.isFinite(height) ? height : 0;
+  const landscape = w > h;
+  /*
+   * A finger-driven device is a phone the moment its SHORT edge cannot hold
+   * a comfortable two-row bar — an 844×390 landscape phone is still a phone
+   * even though its width crosses the tablet band. Fine pointers resolve by
+   * width alone, so a resized desktop window never re-skins itself as mobile.
+   */
+  if (w < OVERLAY_BREAKPOINT || (coarse && Math.min(w, h) < MOBILE_SHORT_EDGE))
+    return landscape ? "mobile-landscape" : "mobile-portrait";
+  if (w < DOCK_BREAKPOINT)
+    return landscape ? "tablet-landscape" : "tablet-portrait";
+  if (coarse) return landscape ? "tablet-landscape" : "tablet-portrait";
+  return "desktop";
+}
+
+/**
  * Bottom pages panel (الصفحات) height bounds.
  *
  * The panel carries page thumbnails, so it must be tall enough for one row plus

@@ -16,6 +16,7 @@ import {
   isOverlayViewport,
   measuredSelectionBox,
   panelSpawnRect,
+  resolveEditorSurface,
   parseStoredPoint,
   placeFloatingToolbar,
   fitSideDockWidths,
@@ -642,5 +643,34 @@ describe("parked floating drawers", () => {
     );
     // Horizontally pinned to the margin; vertically it still fits, so it stays.
     assert.deepEqual(at, { x: 8, y: 40 });
+  });
+});
+
+describe("resolveEditorSurface — one responsive system, not a pile of queries", () => {
+  const fine = false;
+  it("desktop at every shipped desktop width", () => {
+    assert.equal(resolveEditorSurface(1366, 768, fine), "desktop");
+    assert.equal(resolveEditorSurface(1440, 900, fine), "desktop");
+    assert.equal(resolveEditorSurface(1920, 1080, fine), "desktop");
+  });
+  it("iPad portrait gets the tablet band, not the phone band", () => {
+    assert.equal(resolveEditorSurface(768, 1024, true), "tablet-portrait");
+    assert.equal(resolveEditorSurface(810, 1080, true), "tablet-portrait");
+    assert.equal(resolveEditorSurface(834, 1112, true), "tablet-portrait");
+    assert.equal(resolveEditorSurface(1024, 1366, true), "tablet-portrait");
+  });
+  it("iPad landscape docks like a desktop but keeps touch density", () => {
+    assert.equal(resolveEditorSurface(1180, 820, true), "tablet-landscape");
+    assert.equal(resolveEditorSurface(1366, 1024, true), "tablet-landscape");
+    assert.equal(resolveEditorSurface(1024, 768, false), "tablet-landscape");
+  });
+  it("phones resolve by orientation, portrait and landscape alike", () => {
+    assert.equal(resolveEditorSurface(390, 844, true), "mobile-portrait");
+    assert.equal(resolveEditorSurface(844, 390, true), "mobile-landscape");
+    assert.equal(resolveEditorSurface(360, 640, false), "mobile-portrait");
+  });
+  it("garbage geometry falls back to the smallest surface, never crashes", () => {
+    assert.equal(resolveEditorSurface(Number.NaN, Number.NaN, false), "mobile-portrait");
+    assert.equal(resolveEditorSurface(-100, -50, false), "mobile-portrait");
   });
 });
