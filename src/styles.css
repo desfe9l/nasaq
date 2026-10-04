@@ -3743,7 +3743,23 @@ body.is-resizing-panel .editor-dock-strip::before {
   min-height: 26px;
 }
 
-/* ---------- Header: three zones, one line ---------- */
+/* ---------- Header: three zones, one line, plus the surface strip ---------- */
+
+.editor-ui .editor-toolbar.editor-toolbar-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+.editor-ui .editor-toolbar-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+  width: 100%;
+}
 
 .editor-header-zone {
   display: flex;
@@ -3754,15 +3770,13 @@ body.is-resizing-panel .editor-dock-strip::before {
 }
 
 /*
- * Desktop: the header is ONE line, always.
- *
- * Nothing in it shrinks and the bar never wraps, so the canvas below keeps the
- * same height at every desktop width — a toolbar that grows a row when a panel
- * opens is a toolbar that steals the artboard. The document name is the only
- * flexible part, and it is capped.
+ * Desktop: the tool row stays one line. The surface strip under it is a
+ * second row on purpose, so panel navigation stays on screen on iPad without
+ * an edge menu or a hamburger. The document name is the only flexible part
+ * of the tool row, and it is capped.
  */
 @media (min-width: 768px) {
-  .editor-ui .editor-toolbar { flex-wrap: nowrap; }
+  .editor-ui .editor-toolbar-main { flex-wrap: nowrap; }
   .editor-ui .editor-header-primary > *,
   .editor-ui .editor-header-actions > * { flex-shrink: 0; }
   .editor-ui .editor-doc-capsule { min-width: 0; flex: 0 1 auto; }
@@ -4173,9 +4187,12 @@ body.is-resizing-panel .editor-dock-strip::before {
  */
 @media (max-width: 767px) {
   .editor-ui .editor-toolbar {
+    gap: 2px;
+    padding: 4px 8px;
+  }
+  .editor-ui .editor-toolbar-main {
     flex-wrap: nowrap;
     gap: 4px;
-    padding: 4px 8px;
   }
   .editor-ui .editor-header-zone { flex-wrap: nowrap; min-width: 0; gap: 3px; }
   .editor-header-primary > *,
@@ -4191,7 +4208,7 @@ body.is-resizing-panel .editor-dock-strip::before {
  * and account controls off screen.
  */
 @media (max-width: 600px) {
-  .editor-ui .editor-toolbar {
+  .editor-ui .editor-toolbar-main {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 4px 8px;
@@ -5748,4 +5765,161 @@ button.license-badge-locked:focus-visible {
     width: 34px;
     height: 34px;
   }
+}
+
+/* =====================================================================
+ * Product navigation — site header and editor surface strip.
+ *
+ * One interaction: a horizontal strip inside the product, inset from the
+ * physical screen edge. It scrolls when the row is narrow. It does not use
+ * a hamburger, an edge swipe, or a global touch preventDefault. Vertical
+ * scrolling of the page stays with the browser (`pan-x pan-y`).
+ * ===================================================================== */
+
+.site-header {
+  container: site-header / inline-size;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  background: var(--color-page, var(--color-surface));
+}
+
+.product-nav {
+  container: product-nav / inline-size;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.product-nav-scroll {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 44px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  /* Both axes: a vertical flick keeps scrolling the page. */
+  touch-action: pan-x pan-y;
+  scroll-padding-inline: 8px;
+  padding-inline: 2px;
+}
+
+.product-nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.product-nav-tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.product-nav-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+}
+
+.site-header .product-nav-tab:hover {
+  background: var(--color-line-2);
+  color: var(--color-ink);
+}
+
+.site-header .product-nav-tab.is-active {
+  background: var(--color-navy);
+  color: var(--color-on-brand);
+}
+
+.site-header .product-nav-tab:focus-visible,
+.editor-ui .product-nav-tab:focus-visible {
+  outline: 2px solid var(--color-brand, var(--editor-accent));
+  outline-offset: 2px;
+}
+
+/* Editor strip sits under the document toolbar, still inside the header,
+   clear of the browser's top and bottom chrome. */
+.editor-ui .editor-surface-nav {
+  flex: none;
+  width: 100%;
+  border-top: 1px solid var(--editor-border);
+  padding-top: 2px;
+  padding-inline: 4px;
+}
+
+.editor-ui .editor-toolbar .product-nav-tab {
+  border: 0;
+  background: transparent;
+  color: var(--editor-text-secondary, var(--editor-muted));
+  box-shadow: none;
+}
+
+.editor-ui .editor-toolbar .product-nav-tab:hover:not(:disabled) {
+  background: var(--editor-hover);
+  color: var(--editor-text);
+}
+
+.editor-ui .editor-toolbar .product-nav-tab[aria-pressed="true"] {
+  background: var(--editor-accent-soft) !important;
+  color: var(--editor-text) !important;
+  box-shadow: inset 0 -2px 0 var(--editor-accent);
+}
+
+@media (any-pointer: coarse) {
+  .product-nav-tab {
+    min-height: 44px;
+  }
+}
+
+/* Phone: the strip takes its own row so actions cannot crush it, and the
+   long action labels yield to the icon. The tabs themselves keep their text. */
+@container site-header (max-width: 640px) {
+  .site-header-bar {
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .site-header-bar .product-nav {
+    order: 3;
+    flex: 1 0 100%;
+    border-top: 1px solid var(--color-line);
+    margin-top: 2px;
+    padding-top: 2px;
+    padding-bottom: max(2px, env(safe-area-inset-bottom, 0px));
+  }
+  .site-header-action-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+.site-header-action {
+  position: relative;
+}
+
+.site-header-actions .account-control {
+  min-height: 44px;
 }

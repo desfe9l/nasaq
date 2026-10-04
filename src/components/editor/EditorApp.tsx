@@ -125,6 +125,8 @@ import { IconButton } from "./ui/IconButton";
 import { AnchorMenu, MenuRow } from "./ui/AnchorMenu";
 import { Tip } from "./ui/Tip";
 import { ViewMenu } from "./ViewMenu";
+import { ProductNav } from "@/components/nav/ProductNav";
+import { EDITOR_SURFACE_NAV } from "@/lib/nav/surface-nav";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -750,6 +752,7 @@ function Studio({
   const libraryOpenFlag = useEditor((s) => s.libraryOpen);
   const toolsOpenFlag = useEditor((s) => s.toolsOpen);
   const pagesRailHidden = useEditor((s) => s.pagesRailHidden);
+  const leftTab = useEditor((s) => s.leftTab);
   const leftOpenFlag = leftOpen;
   const rightOpenFlag = rightOpen;
   const closeFloatingPanels = useEditor((s) => s.closeFloatingPanels);
@@ -2270,6 +2273,30 @@ function Studio({
     }
     expandPanel("left", tab);
   };
+
+  /**
+   * Explicit surface navigation. Same strip as the site: a press opens or
+   * closes a window. It never depends on an edge swipe or a hamburger.
+   * «الصفحات» reveals the pages tab inside لوحة العناصر and the page rail.
+   */
+  const onSurfaceNav = (id: string) => {
+    if (id === "pages") {
+      const state = useEditor.getState();
+      const pagesVisible =
+        state.leftTab === "pages" && panelChecked.elements && !state.focusMode;
+      if (pagesVisible) {
+        togglePanelWindow("elements");
+        return;
+      }
+      openLeftTab("pages");
+      if (useEditor.getState().pagesRailHidden)
+        useEditor.getState().togglePagesRailHidden();
+      return;
+    }
+    if (useEditor.getState().focusMode) toggle("focusMode");
+    if ((PANEL_IDS as readonly string[]).includes(id))
+      togglePanelWindow(id as PanelId);
+  };
   const requestLibraryFolder = () => {
     openLeftTab("library");
     setLibraryFolderRequest((request) => request + 1);
@@ -2427,8 +2454,9 @@ function Studio({
       <header
         ref={headerRef}
         data-editor-obstacle="header"
-        className="editor-toolbar z-[var(--z-bubble)] flex flex-wrap items-center gap-x-2 gap-y-1.5 border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]"
+        className="editor-toolbar editor-toolbar-stack z-[var(--z-bubble)] border-b px-3 py-1.5 pr-[max(0.75rem,var(--safe-right))] pl-[max(0.75rem,var(--safe-left))] pt-[max(0.375rem,var(--safe-top))]"
       >
+        <div className="editor-toolbar-main">
         {/* ① History and the single scaling cluster. */}
         <div className="editor-header-zone editor-header-primary">
           <span className="editor-brand-mark" title="نَسَق | NASAQ">
@@ -2636,6 +2664,18 @@ function Studio({
             />
           )}
         </div>
+        </div>
+        <ProductNav
+          className="editor-surface-nav"
+          label="أسطح المحرر"
+          items={EDITOR_SURFACE_NAV}
+          isActive={(id) =>
+            id === "pages"
+              ? leftTab === "pages" && panelChecked.elements && !focusMode
+              : Boolean(panelChecked[id as PanelId]) && !focusMode
+          }
+          onSelect={onSurfaceNav}
+        />
       </header>
 
       {/*

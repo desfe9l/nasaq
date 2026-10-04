@@ -148,12 +148,12 @@ export const NAV_ITEMS: NavItem[] = [
 ];
 /*
  * «حسابي» is deliberately NOT in the main navigation: the header's account
- * menu already owns that destination (settings, licence, sign-out), and two
- * entries pointing at /account made the nav row ambiguous. The mobile drawer
- * keeps the single account entry it renders beside the avatar.
+ * menu already owns that destination (settings, licence, sign-out).
+ * Every `NAV_ITEMS` entry is an explicit item in the site strip — there is
+ * no hamburger and no edge drawer.
  */
 
-/** Core navigation stays on one line; supporting links move into More. */
+/** Kept for existing imports. The header strip shows every item; nothing is tucked into «المزيد». */
 export const PRIMARY_NAV_ITEMS: NavItem[] = NAV_ITEMS.slice(0, 4);
 export const SECONDARY_NAV_ITEMS: NavItem[] = NAV_ITEMS.slice(4);
 
