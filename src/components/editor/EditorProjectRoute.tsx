@@ -18,27 +18,43 @@ import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { useEditor } from "@/lib/editor/store";
 import { CREATE_ROUTE, PROJECTS_ROUTE } from "@/lib/site-routes";
 
-type Resolution = "resolving" | "ready" | "missing";
+type Resolution = {
+  projectId: string;
+  status: "resolving" | "ready" | "missing";
+};
 
 export function EditorProjectRoute({ projectId }: { projectId: string }) {
   const hydrate = useEditor((s) => s.hydrate);
-  const [resolution, setResolution] = useState<Resolution>("resolving");
+  const [resolution, setResolution] = useState<Resolution>(() => ({
+    projectId,
+    status: "resolving",
+  }));
 
   useEffect(() => {
     let alive = true;
-    setResolution("resolving");
+    setResolution({ projectId, status: "resolving" });
     void (async () => {
       try {
         await hydrate();
-        const store = useEditor.getState();
-        if (store.id === projectId && store.hydrated) {
-          if (alive) setResolution("ready");
-          return;
-        }
-        const opened = await store.openProject(projectId);
-        if (alive) setResolution(opened ? "ready" : "missing");
+        const current = useEditor.getState();
+        const alreadyOpen = current.id === projectId && current.hydrated;
+        const opened = alreadyOpen || (await current.openProject(projectId));
+        if (!alive) return;
+
+        // Do not mount the generic editor (or whatever project hydration last
+        // restored) unless the requested record itself is now in the store.
+        // `openProject` applies the saved project pages, dimensions and content;
+        // this identity check makes the URL and the visible document agree.
+        const resolved = useEditor.getState();
+        setResolution({
+          projectId,
+          status:
+            opened && resolved.hydrated && resolved.id === projectId
+              ? "ready"
+              : "missing",
+        });
       } catch {
-        if (alive) setResolution("missing");
+        if (alive) setResolution({ projectId, status: "missing" });
       }
     })();
     return () => {
@@ -46,9 +62,11 @@ export function EditorProjectRoute({ projectId }: { projectId: string }) {
     };
   }, [hydrate, projectId]);
 
-  if (resolution === "ready") return <EditorApp projectId={projectId} />;
+  if (resolution.projectId === projectId && resolution.status === "ready") {
+    return <EditorApp projectId={projectId} />;
+  }
 
-  if (resolution === "resolving") {
+  if (resolution.projectId !== projectId || resolution.status === "resolving") {
     return (
       <div className="grid min-h-screen place-items-center bg-paper" dir="rtl">
         <p className="text-[13px] text-muted">جارٍ فتح المستند…</p>

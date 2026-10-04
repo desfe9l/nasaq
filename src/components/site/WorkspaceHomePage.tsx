@@ -4,8 +4,8 @@
  * Hierarchy, top to bottom: what NASAQ is → «إنشاء مستند جديد» → recent work
  * → the licensed templates. Everything here is a view over systems that
  * already exist:
- *   • documents/projects — the editor store's project library (`projects`,
- *     `openProject`), the same IndexedDB rows /projects lists;
+ *   • documents/projects — the editor store's project library (`projects`),
+ *     the same IndexedDB rows `/projects` lists and `/editor/<id>` opens;
  *   • templates — the catalog (`useCatalogEntries` → packs, page templates and
  *     the author's own templates) plus the admin-published library;
  *   • creation — `createDocument`, which saves a NEW project (fresh id, fresh
@@ -34,7 +34,6 @@ import {
   CREATE_ROUTE,
   WORKSPACE_ROUTE,
   editorPathFor,
-  projectPathFor,
   templatePathFor,
 } from "@/lib/site-routes";
 import { entrySlug } from "@/lib/templates/entry-slug";
@@ -356,13 +355,9 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
 
   /* ── actions ───────────────────────────────────────────────────────── */
 
-  /**
-   * A project card is a destination: it opens the project's own page, where the
-   * document is previewed and «فتح في المحرر» starts the session. The same card
-   * behaves the same way in «المشاريع» — no surface opens the editor directly.
-   */
+  /** Open the selected saved document directly at its durable editor URL. */
   const open = (id: string) => {
-    window.location.assign(projectPathFor(id));
+    window.location.assign(editorPathFor(id));
   };
 
   /** «استخدام القالب» — a NEW editable document; the template stays as it is. */
