@@ -10,6 +10,7 @@
  *   node scripts/home-editor-check.mjs            # desktop
  *   TOUCH=1 node scripts/home-editor-check.mjs    # iPad-sized touch layout
  *   OFFLINE=1 node scripts/home-editor-check.mjs  # catalog unreachable
+ *   DEVICE="iPhone 13" node scripts/home-editor-check.mjs   # any Playwright device
  *
  * OFFLINE mode blocks the published-catalog server function: the hero must
  * still boot the bundled document (and that one is multi-page, so the page
@@ -30,9 +31,14 @@ const check = (name, ok, detail = "") => {
 const browser = await chromium.launch({
   args: ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"],
 });
+const DEVICE = process.env.DEVICE || (TOUCH ? "iPad (gen 7) landscape" : "");
+if (DEVICE && !devices[DEVICE]) {
+  console.error(`unknown DEVICE "${DEVICE}"`);
+  process.exit(2);
+}
 const context = await browser.newContext(
-  TOUCH
-    ? { ...devices["iPad (gen 7) landscape"], locale: "ar" }
+  DEVICE
+    ? { ...devices[DEVICE], locale: "ar" }
     : { viewport: { width: 1440, height: 950 }, locale: "ar" },
 );
 const page = await context.newPage();
@@ -96,6 +102,9 @@ check(
     ? `${Math.round(paperBox.width)}×${Math.round(paperBox.height)}`
     : "none",
 );
+
+await page.locator("[data-home-editor-stage]").scrollIntoViewIfNeeded();
+await page.waitForTimeout(300);
 
 const els = page.locator("[data-home-el]");
 const elCount = await els.count();
@@ -398,6 +407,7 @@ check(
 );
 
 // ── the hero must never trap the homepage scroll ──────────────────────────
+// (a finger-only device has no wheel; `touch-action` is asserted above)
 await page.evaluate(() => window.scrollTo(0, 0));
 await page.waitForTimeout(200);
 const stageBox = await page.locator("[data-home-editor-stage]").boundingBox();
@@ -434,8 +444,9 @@ check(
   realErrors.slice(0, 3).join(" | "),
 );
 
+const label = `${DEVICE || "desktop"}${OFFLINE ? ", catalog offline" : ""}`;
 await page.screenshot({
-  path: `/tmp/home-editor-${TOUCH ? "touch" : "desktop"}${OFFLINE ? "-offline" : ""}.png`,
+  path: `/tmp/home-editor-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.png`,
 });
 await browser.close();
 
@@ -444,6 +455,4 @@ if (failures.length) {
   log(`FAILED (${failures.length}): ${failures.join(", ")}`);
   process.exit(1);
 }
-log(
-  `ALL CHECKS PASSED (${TOUCH ? "touch/iPad" : "desktop"}${OFFLINE ? ", catalog offline" : ""})`,
-);
+log(`ALL CHECKS PASSED (${label})`);
