@@ -19,9 +19,14 @@ import { clamp, cn } from "@/lib/utils";
 export function PageRail({
   height = 112,
   minHeight = 96,
+  collapsed: collapsedProp,
+  onToggleCollapsed,
 }: {
   height?: number;
   minHeight?: number;
+  /** Responsive shell override; omitted callers retain the saved preference. */
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
 }) {
   const pages = useEditor((s) => s.pages);
   const activePageId = useEditor((s) => s.activePageId);
@@ -31,8 +36,10 @@ export function PageRail({
   const deletePage = useEditor((s) => s.deletePage);
   const reorderPages = useEditor((s) => s.reorderPages);
   const renamePage = useEditor((s) => s.renamePage);
-  const collapsed = useEditor((s) => s.pagesRailCollapsed);
-  const togglePagesRail = useEditor((s) => s.togglePagesRail);
+  const storedCollapsed = useEditor((s) => s.pagesRailCollapsed);
+  const storedTogglePagesRail = useEditor((s) => s.togglePagesRail);
+  const collapsed = collapsedProp ?? storedCollapsed;
+  const togglePagesRail = onToggleCollapsed ?? storedTogglePagesRail;
 
   const activeIndex = pages.findIndex((p) => p.id === activePageId);
   const scrollStageToPage = (pageId: string, center = false) => {

@@ -270,6 +270,7 @@ import {
   resolveEditorSurface,
   clampDockSize,
   fitSideDockWidths,
+  workspaceFitZoom,
   PAGES_RAIL_COLLAPSED,
   type DockSide,
   type EditorSurface,
@@ -840,11 +841,15 @@ function Studio({
   const [coarsePointer, setCoarsePointer] = useState(
     () =>
       typeof window !== "undefined" &&
-      window.matchMedia("(any-pointer: coarse)").matches,
+      (window.matchMedia("(any-pointer: coarse)").matches ||
+        navigator.maxTouchPoints > 0),
   );
   useEffect(() => {
     const media = window.matchMedia("(any-pointer: coarse)");
-    const update = () => setCoarsePointer(media.matches);
+    // iPadOS with a trackpad can advertise a fine primary pointer while touch
+    // and Pencil remain available. maxTouchPoints keeps the layout touch-first.
+    const update = () =>
+      setCoarsePointer(media.matches || navigator.maxTouchPoints > 0);
     update();
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
@@ -866,9 +871,6 @@ function Studio({
   const [tourOpen, setTourOpen] = useState(
     () => typeof window !== "undefined" && !hasSeenTour(),
   );
-  /** Only the very first fit may be skipped when the saved zoom already fits. */
-  const firstFitRef = useRef(true);
-
   useEffect(() => {
     const compact = window.matchMedia("(max-width: 600px)");
     const onCompact = () => setIsCompact(compact.matches);
@@ -969,52 +971,84 @@ function Studio({
   const nudgePagesHeight = (delta: number) =>
     setPagesPanelHeight(pagesPanelHeight + delta);
 
-  /** Latest `fitToScreen`, for the layout effect that must not re-subscribe. */
+  /** Latest `fitToScreen`, for layout effects that must not re-subscribe. */
   const fitRef = useRef<() => void>(() => {});
+  /** Invalidates an older post-render centring loop when a newer fit wins. */
+  const fitSequenceRef = useRef(0);
 
   /**
-   * ملاءمة الصفحة / عرض الصفحة بالكامل: pick a zoom that fits the WHOLE
-   * artboard (all four edges inside the viewport) and then centre it, so Fit
-   * never lands on a smaller view of wherever the author had scrolled to.
+   * ملاءمة الصفحة / عرض الصفحة بالكامل: choose the largest undistorted camera
+   * scale for the current device and unobscured canvas lane, then centre the
+   * ACTIVE artboard after React has painted that exact zoom.
    */
   const fitToScreen = useCallback(() => {
-    // Read the LIVE document, never a render-time snapshot: fits can be
-    // triggered by effects and events that outlive the last render.
+    // Read the LIVE document, never a render-time snapshot: opens, imports and
+    // responsive layout effects can all outlive the render that scheduled them.
     const state = useEditor.getState();
     const activePage =
       state.pages.find((p) => p.id === state.activePageId) || state.pages[0];
     if (!activePage) return setZoom(0.82);
     const activeSize = pageSize(activePage);
-    const el = document.querySelector<HTMLElement>(".editor-canvas-stage");
-    if (!el) return setZoom(0.82);
-    const rect = canvasViewport(el, activeSize);
-    // Measure the ACTIVE artboard, not whichever page happens to be first in
-    // the all-pages preview — the fit must always bring the page being edited
-    // into view, and pages may carry different sizes.
-    const pageEl = document.querySelector<HTMLElement>(
-      `.editor-canvas-stage [data-page-id="${CSS.escape(activePage.id)}"]`,
+    const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
+    if (!stage) return setZoom(0.82);
+    const viewport = canvasViewport(stage, activeSize);
+    const shell = stage.closest<HTMLElement>(".editor-ui");
+    const device =
+      (shell?.dataset.deviceSurface as EditorSurface | undefined) ?? "desktop";
+    const next = clampZoom(
+      workspaceFitZoom(
+        { width: viewport.width, height: viewport.height },
+        { width: mmToPx(activeSize.w), height: mmToPx(activeSize.h) },
+        device,
+      ),
     );
-    const pagePxW = mmToPx(activeSize.w);
-    const pagePxH = mmToPx(activeSize.h);
-    const padding = 16;
-    const next = Math.min(
-      Math.max(0, rect.width - padding * 2) / pagePxW,
-      Math.max(0, rect.height - padding * 2 - 36) / pagePxH,
-    );
-    setZoom(clampZoom(next));
-    requestAnimationFrame(() => {
-      const stage = document.querySelector<HTMLElement>(".editor-canvas-stage");
-      const pageEl2 = stage?.querySelector<HTMLElement>(
+    const sequence = ++fitSequenceRef.current;
+    setZoom(next);
+
+    /*
+     * A state write and a CSS transform do not necessarily paint in the same
+     * frame (especially while an iPad rotates). Wait until the measured page
+     * carries the target zoom, then correct the scroll twice at most. This
+     * removes the old opening race that left a correctly scaled page far from
+     * the user because centring ran against its previous size.
+     */
+    let paintAttempts = 0;
+    let centrePass = 0;
+    const land = () => {
+      if (
+        sequence !== fitSequenceRef.current ||
+        useEditor.getState().zoom !== next
+      )
+        return;
+      const liveStage = document.querySelector<HTMLElement>(
+        ".editor-canvas-stage",
+      );
+      const page = liveStage?.querySelector<HTMLElement>(
         `[data-page-id="${CSS.escape(activePage.id)}"]`,
       );
-      if (!stage || !pageEl2) return;
-      const sr = canvasViewport(stage, activeSize);
-      const pr = (
-        pageEl2.closest(".artboard-cell") ?? pageEl2
-      ).getBoundingClientRect();
-      stage.scrollLeft += pr.left + pr.width / 2 - (sr.left + sr.width / 2);
-      stage.scrollTop += pr.top + pr.height / 2 - (sr.top + sr.height / 2);
-    });
+      if (!liveStage || !page || !page.isConnected) return;
+      const pageRect = page.getBoundingClientRect();
+      const baseWidth = mmToPx(activeSize.w);
+      const paintedZoom = baseWidth > 0 ? pageRect.width / baseWidth : next;
+      if (
+        Math.abs(paintedZoom - next) > 0.01 &&
+        paintAttempts++ < 12
+      ) {
+        requestAnimationFrame(land);
+        return;
+      }
+      const lane = canvasViewport(liveStage, activeSize);
+      const cell = page.closest<HTMLElement>(".artboard-cell") ?? page;
+      const bounds = cell.getBoundingClientRect();
+      liveStage.scrollLeft +=
+        bounds.left + bounds.width / 2 - (lane.left + lane.width / 2);
+      liveStage.scrollTop +=
+        bounds.top + bounds.height / 2 - (lane.top + lane.height / 2);
+      // Layout/scroll clamping can settle one frame later on Safari. A second
+      // pass is idempotent and keeps the page mathematically centred.
+      if (centrePass++ < 1) requestAnimationFrame(land);
+    };
+    requestAnimationFrame(land);
   }, [setZoom]);
   fitRef.current = fitToScreen;
 
@@ -1056,34 +1090,17 @@ function Studio({
   }, [onReplaceImage]);
 
   /*
-   * Safe auto-fit whenever a DIFFERENT document is loaded (opening a project,
-   * creating a new one, importing a file). Keyed on the project id so plain
-   * edits never move the author's view.
+   * Every true document replacement emits one transient revision from the
+   * store. Unlike an id heuristic this also covers unsaved blanks, duplicated
+   * templates and imported documents that reuse an id, while normal edits and
+   * first autosave never disturb the camera.
    */
-  const projectId = useEditor((s) => s.id);
-  const lastFitProjectRef = useRef<string | undefined>(undefined);
-  const lastFitFirstPageRef = useRef<string | undefined>(undefined);
+  const documentRevision = useEditor((s) => s.documentRevision);
   useEffect(() => {
     if (!hydrated) return;
-    const firstPageId = useEditor.getState().pages[0]?.id;
-    if (lastFitProjectRef.current === undefined) {
-      // First load is owned by the shell-shape effect above.
-      lastFitProjectRef.current = projectId ?? "";
-      lastFitFirstPageRef.current = firstPageId;
-      return;
-    }
-    if (lastFitProjectRef.current === (projectId ?? "")) return;
-    // First autosave assigns an id to the SAME document. Do not interpret a
-    // drag's save as opening a project and reset the author's current zoom.
-    const assignedId =
-      lastFitProjectRef.current === "" &&
-      lastFitFirstPageRef.current === firstPageId;
-    lastFitProjectRef.current = projectId ?? "";
-    lastFitFirstPageRef.current = firstPageId;
-    if (assignedId) return;
-    const timer = setTimeout(() => fitRef.current(), 90);
-    return () => clearTimeout(timer);
-  }, [projectId, hydrated]);
+    const timer = window.setTimeout(() => fitRef.current(), 80);
+    return () => window.clearTimeout(timer);
+  }, [documentRevision, hydrated]);
 
   /**
    * Toolbar/keyboard zoom keeps the middle of the current view stable. With a
@@ -1596,6 +1613,19 @@ function Studio({
     layers: layersOpenFlag,
     report: reportOpenFlag,
   };
+  /** Close the six shared window hosts without rewriting desktop preferences. */
+  const closePanelHosts = useCallback(
+    () =>
+      useEditor.setState({
+        leftOpen: false,
+        rightOpen: false,
+        layersOpen: false,
+        reportToolsOpen: false,
+        libraryOpen: false,
+        toolsOpen: false,
+      }),
+    [],
+  );
 
   /* ── Grouped windows (one window, several panels as tabs) ───────────────
    * The six windows stay independent by default; an author who wants
@@ -1620,6 +1650,10 @@ function Studio({
   /** Raise the window that holds `id`, on that tab. */
   const revealPanel = (id: PanelId) => {
     const host = hostOf(groupState, id);
+    // Desktop windows remain independently composable. On touch/overlay
+    // surfaces a single shared window is deliberate: it maximises artboard
+    // visibility and makes every new dock press an unambiguous replacement.
+    if (coarsePointer || !canDock) closePanelHosts();
     setGroupState((s) =>
       s.tabs[host] === id ? s : { ...s, tabs: { ...s.tabs, [host]: id } },
     );
@@ -1714,6 +1748,46 @@ function Studio({
     }
   };
 
+  /*
+   * Enforce the compact-surface invariant even for legacy/store commands that
+   * set a window flag directly instead of going through `revealPanel`. The
+   * newest host wins; desktop deliberately keeps its independent windows.
+   */
+  const previousPanelOpenRef = useRef<Record<PanelId, boolean>>(panelOpen);
+  useEffect(() => {
+    if (!coarsePointer && canDock) {
+      previousPanelOpenRef.current = panelOpen;
+      return;
+    }
+    const openHosts = hosts.filter((id) => panelOpen[id]);
+    if (openHosts.length <= 1) {
+      previousPanelOpenRef.current = panelOpen;
+      return;
+    }
+    const newlyOpened = openHosts.filter(
+      (id) => !previousPanelOpenRef.current[id],
+    );
+    const keep = newlyOpened.at(-1) ?? openHosts.at(-1);
+    if (!keep) return;
+    for (const id of openHosts) {
+      if (id !== keep) setPanelOpenFlag(id, false);
+    }
+    previousPanelOpenRef.current = PANEL_IDS.reduce(
+      (next, id) => ({ ...next, [id]: id === keep }),
+      {} as Record<PanelId, boolean>,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    canDock,
+    coarsePointer,
+    panelOpen.library,
+    panelOpen.tools,
+    panelOpen.elements,
+    panelOpen.properties,
+    panelOpen.layers,
+    panelOpen.report,
+  ]);
+
   /* ── Docking (per-window, per-edge) ─────────────────────────────────────
    * One window per screen edge. Docking reserves a grid track (the canvas
    * shrinks, never gets covered); undocking gives the space back. The dock
@@ -1770,8 +1844,14 @@ function Studio({
         /* session state already reset */
       }
       for (const id of PANEL_IDS) setPanelOpenFlag(id, false);
-      setPanelOpenFlag(WORKSPACE_RIGHT_GROUP[0], true);
-      setPanelOpenFlag(WORKSPACE_LEFT_GROUP[0], true);
+      const touchOrOverlay =
+        window.innerWidth < DOCK_BREAKPOINT ||
+        window.matchMedia("(any-pointer: coarse)").matches ||
+        navigator.maxTouchPoints > 0;
+      if (!touchOrOverlay) {
+        setPanelOpenFlag(WORKSPACE_RIGHT_GROUP[0], true);
+        setPanelOpenFlag(WORKSPACE_LEFT_GROUP[0], true);
+      }
     };
     window.addEventListener("nasaq:reset-workspace", reset);
     return () => window.removeEventListener("nasaq:reset-workspace", reset);
@@ -1872,18 +1952,42 @@ function Studio({
     setDockSides(next);
   };
 
-  /** Viewport size and fullscreen state, re-rendered on resize/orientation/fullscreen. */
+  /**
+   * Two viewport rectangles, each used for the job it can answer correctly.
+   * Layout dimensions classify the stable physical surface/orientation, while
+   * visual dimensions keep windows inside the actually visible area. A soft
+   * keyboard can therefore shrink panel bounds without pretending an iPad
+   * portrait workspace has rotated into phone landscape.
+   */
   const readLiveViewport = () => {
     if (typeof window === "undefined") {
-      return { w: 1440, h: 900, fullscreen: false };
+      return {
+        w: 1440,
+        h: 900,
+        layoutW: 1440,
+        layoutH: 900,
+        fullscreen: false,
+      };
     }
     const vv = window.visualViewport;
-    const useVv = Boolean(vv && (!vv.scale || vv.scale <= 1.01) && vv.width > 0 && vv.height > 0);
-    const w = Math.round(useVv ? vv!.width : window.innerWidth);
-    const h = Math.round(useVv ? vv!.height : window.innerHeight);
-    const doc = typeof document !== "undefined" ? (document as Document & { webkitFullscreenElement?: Element | null }) : null;
-    const fullscreen = Boolean(doc?.fullscreenElement || doc?.webkitFullscreenElement);
-    return { w, h, fullscreen };
+    const useVv = Boolean(
+      vv && (!vv.scale || vv.scale <= 1.01) && vv.width > 0 && vv.height > 0,
+    );
+    const doc =
+      typeof document !== "undefined"
+        ? (document as Document & {
+            webkitFullscreenElement?: Element | null;
+          })
+        : null;
+    return {
+      w: Math.round(useVv ? vv!.width : window.innerWidth),
+      h: Math.round(useVv ? vv!.height : window.innerHeight),
+      layoutW: Math.round(window.innerWidth),
+      layoutH: Math.round(window.innerHeight),
+      fullscreen: Boolean(
+        doc?.fullscreenElement || doc?.webkitFullscreenElement,
+      ),
+    };
   };
   const [vp, setVp] = useState(readLiveViewport);
   useEffect(() => {
@@ -1892,13 +1996,15 @@ function Studio({
       setVp((prev) =>
         prev.w === next.w &&
         prev.h === next.h &&
+        prev.layoutW === next.layoutW &&
+        prev.layoutH === next.layoutH &&
         prev.fullscreen === next.fullscreen
           ? prev
           : next,
       );
-      setIsDesktop(next.w >= OVERLAY_BREAKPOINT);
-      setCanDock(next.w >= DOCK_BREAKPOINT);
-      setIsCompact(next.w <= 600);
+      setIsDesktop(next.layoutW >= OVERLAY_BREAKPOINT);
+      setCanDock(next.layoutW >= DOCK_BREAKPOINT);
+      setIsCompact(next.layoutW <= 600);
     };
     const onOrientationChange = () => {
       onResize();
@@ -1931,21 +2037,51 @@ function Studio({
    */
   const isFullscreenMode = Boolean(focusMode || vp.fullscreen);
   const deviceSurface: EditorSurface = resolveEditorSurface(
-    vp.w,
-    vp.h,
+    vp.layoutW,
+    vp.layoutH,
     coarsePointer,
     false,
   );
   const surface: EditorSurface = resolveEditorSurface(
-    vp.w,
-    vp.h,
+    vp.layoutW,
+    vp.layoutH,
     coarsePointer,
     isFullscreenMode,
   );
-  const effectiveRailHeight =
-    deviceSurface === "mobile-landscape"
+  const isMobileSurface =
+    deviceSurface === "mobile-portrait" ||
+    deviceSurface === "mobile-landscape";
+  const [mobileRailExpanded, setMobileRailExpanded] = useState(false);
+  useEffect(() => {
+    // Each mobile opening starts artboard-first. Expansion stays available for
+    // this document without rewriting the author's desktop rail preference.
+    setMobileRailExpanded(false);
+  }, [deviceSurface, documentRevision]);
+  const effectivePagesRailHidden =
+    pagesRailHidden ||
+    deviceSurface === "mobile-landscape" ||
+    isFullscreenMode;
+  const effectivePagesRailCollapsed =
+    pagesRailCollapsed || (isMobileSurface && !mobileRailExpanded);
+  const collapsedRailHeight = coarsePointer ? 44 : PAGES_RAIL_COLLAPSED;
+  const effectiveRailHeight = effectivePagesRailCollapsed
+    ? collapsedRailHeight
+    : deviceSurface === "mobile-landscape"
       ? Math.min(pagesPanelHeight, 76)
       : pagesPanelHeight;
+  const toggleEffectivePagesRail = useCallback(() => {
+    if (!isMobileSurface) {
+      useEditor.getState().togglePagesRail();
+      return;
+    }
+    if (effectivePagesRailCollapsed) {
+      if (useEditor.getState().pagesRailCollapsed)
+        useEditor.getState().togglePagesRail();
+      setMobileRailExpanded(true);
+    } else {
+      setMobileRailExpanded(false);
+    }
+  }, [effectivePagesRailCollapsed, isMobileSurface]);
   /*
    * Accidental zoom is fixed at the APP level — once, here — not per tool.
    *
@@ -1990,7 +2126,10 @@ function Studio({
    * After that, the saved layout is theirs again.
    */
   useEffect(() => {
-    if (!hydrated) return;
+    // The shipped two-window arrangement belongs only to a real desktop. Do
+    // not consume its one-time migration key while the same account is opening
+    // on a phone/tablet; those surfaces are transiently artboard-first below.
+    if (!hydrated || deviceSurface !== "desktop") return;
     try {
       if (localStorage.getItem(LAYOUT_APPLIED_KEY)) return;
       localStorage.setItem(LAYOUT_APPLIED_KEY, "1");
@@ -2003,8 +2142,43 @@ function Studio({
     for (const id of PANEL_IDS) setPanelOpenFlag(id, false);
     setPanelOpenFlag(WORKSPACE_RIGHT_GROUP[0], true);
     setPanelOpenFlag(WORKSPACE_LEFT_GROUP[0], true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated]);
+  }, [hydrated, deviceSurface]);
+
+  const widePanelLayoutRef = useRef<
+    | {
+        leftOpen: boolean;
+        rightOpen: boolean;
+        layersOpen: boolean;
+        reportToolsOpen: boolean;
+        libraryOpen: boolean;
+        toolsOpen: boolean;
+      }
+    | undefined
+  >(undefined);
+  useEffect(() => {
+    if (!hydrated) return;
+    if (deviceSurface === "desktop") {
+      if (widePanelLayoutRef.current) {
+        useEditor.setState(widePanelLayoutRef.current);
+        widePanelLayoutRef.current = undefined;
+      }
+      return;
+    }
+    // A compact opening is canvas-first, but this is intentionally transient:
+    // visiting the same project on a phone must not erase its desktop layout.
+    if (!widePanelLayoutRef.current) {
+      const state = useEditor.getState();
+      widePanelLayoutRef.current = {
+        leftOpen: state.leftOpen,
+        rightOpen: state.rightOpen,
+        layersOpen: state.layersOpen,
+        reportToolsOpen: state.reportToolsOpen,
+        libraryOpen: state.libraryOpen,
+        toolsOpen: state.toolsOpen,
+      };
+    }
+    closePanelHosts();
+  }, [closePanelHosts, deviceSurface, documentRevision, hydrated]);
 
   /** Which window (if any) currently occupies each screen edge. */
   const dockW = (id: PanelId) =>
@@ -2279,6 +2453,7 @@ function Studio({
     side: "left" | "right",
     tab?: LeftTab | RightTab,
   ) => {
+    if (coarsePointer || !canDock) closePanelHosts();
     const state = useEditor.getState();
     if (side === "left") {
       if (tab) state.setLeftTab(tab as LeftTab);
@@ -2396,46 +2571,34 @@ function Studio({
    */
   useEffect(() => {
     if (!hydrated) return;
-    const timer = setTimeout(() => {
-      /*
-       * First load respects a zoom the author saved — unless that zoom does not
-       * fit, which is precisely the case that produces a horizontal scrollbar on
-       * a tablet. Later runs are layout changes, where re-fitting is the point.
-       */
-      if (firstFitRef.current) {
-        firstFitRef.current = false;
-        const stage = document.querySelector<HTMLElement>(
-          ".editor-canvas-stage",
-        );
-        const activeId = useEditor.getState().activePageId;
-        const page = stage?.querySelector<HTMLElement>(
-          `[data-page-id="${CSS.escape(activeId ?? "")}"]`,
-        );
-        if (stage && page) {
-          const viewport = canvasViewport(stage);
-          const bounds = (
-            page.closest(".artboard-cell") ?? page
-          ).getBoundingClientRect();
-          if (
-            bounds.width <= viewport.width - 32 &&
-            bounds.height <= viewport.height - 32
-          ) {
-            stage.scrollLeft +=
-              bounds.left +
-              bounds.width / 2 -
-              (viewport.left + viewport.width / 2);
-            stage.scrollTop +=
-              bounds.top +
-              bounds.height / 2 -
-              (viewport.top + viewport.height / 2);
-            return;
-          }
-        }
-      }
-      fitRef.current();
-    }, 60);
-    return () => clearTimeout(timer);
-  }, [isDesktop, canDock, hydrated, dockSignature, surface]);
+    // Always establish the designed opening camera. Persisted zoom is useful
+    // while staying in a document, but is not a safe default for a different
+    // page shape, device, orientation or newly available canvas lane.
+    const timer = window.setTimeout(() => fitRef.current(), 70);
+    return () => window.clearTimeout(timer);
+  }, [
+    isDesktop,
+    canDock,
+    hydrated,
+    dockSignature,
+    surface,
+    vp.layoutW,
+    vp.layoutH,
+  ]);
+
+  // Exactly one shared View gateway: desktop keeps it with document actions;
+  // mobile moves that same gateway beside the thumb tools so zoom/fit never
+  // requires reaching to the top edge.
+  const workspaceViewMenu = (
+    <ViewMenu
+      fitToScreen={fitToScreen}
+      fitToSelection={fitToSelection}
+      panelChecked={panelChecked}
+      onTogglePanel={togglePanelWindow}
+      dockPref={dockPref}
+      onDockPref={changeDockPref}
+    />
+  );
 
   return (
     /*
@@ -2488,11 +2651,18 @@ function Studio({
       >
         <div className="editor-toolbar-main">
         {/* ① History and the single scaling cluster. */}
-        <div className="editor-header-zone editor-header-primary">
-          <span className="editor-brand-mark" title="نَسَق | NASAQ">
-            <BrandLogo compact markOnly />
-          </span>
-          <span className="editor-header-sep" aria-hidden />
+        <div
+          className="editor-header-zone editor-header-primary editor-mobile-tools"
+          data-editor-mobile-dock="tools"
+        >
+          {!isMobileSurface && (
+            <>
+              <span className="editor-brand-mark" title="نَسَق | NASAQ">
+                <BrandLogo compact markOnly />
+              </span>
+              <span className="editor-header-sep" aria-hidden />
+            </>
+          )}
           <IconButton
             label="تراجع"
             hint="العودة إلى التغيير السابق"
@@ -2562,21 +2732,27 @@ function Studio({
               );
             })}
           </div>
-          <span className="editor-header-sep" aria-hidden />
-          <IconButton
-            label="الخصائص"
-            hint="فتح خصائص العنصر المحدد"
-            active={panelChecked.properties && !focusMode && !cropActive}
-            icon={<SlidersHorizontal className="size-4" strokeWidth={1.7} />}
-            onClick={() => togglePanelWindow("properties")}
-          />
-          {/* ①¾ Paint: fill / gradient / border of the selection, or the page
-              background when nothing is selected — right beside the tools. */}
-          <span className="editor-header-sep" aria-hidden />
-          <HeaderPaint />
+          {!isMobileSurface && (
+            <>
+              <span className="editor-header-sep" aria-hidden />
+              <IconButton
+                label="الخصائص"
+                hint="فتح خصائص العنصر المحدد"
+                active={panelChecked.properties && !focusMode && !cropActive}
+                icon={
+                  <SlidersHorizontal className="size-4" strokeWidth={1.7} />
+                }
+                onClick={() => togglePanelWindow("properties")}
+              />
+              {/* Paint: selection fill/border or the page background. Mobile
+                  keeps the same controls in the Properties surface. */}
+              <span className="editor-header-sep" aria-hidden />
+              <HeaderPaint />
+            </>
+          )}
           {/* On a phone the stepper gives way to «عرض», which carries the same
               commands, so history and export are never pushed off screen. */}
-          {!isCompact && (
+          {!isCompact && !isMobileSurface && (
             <>
               <span className="editor-header-sep" aria-hidden />
               <div
@@ -2618,6 +2794,12 @@ function Studio({
               </div>
             </>
           )}
+          {isMobileSurface && (
+            <>
+              <span className="editor-header-sep" aria-hidden />
+              {workspaceViewMenu}
+            </>
+          )}
         </div>
 
         {/* ② The document itself — its name, centred, editable in place. */}
@@ -2638,7 +2820,7 @@ function Studio({
         <div className="editor-header-zone editor-header-actions ms-auto">
           {/* Keep the frequently used library door on wide layouts; on phones,
               «إضافة» includes the same route without spending another toolbar cell. */}
-          {!isCompact && (
+          {!isCompact && !isMobileSurface && (
             <IconButton
               label="المكتبة"
               hint="صورك، شعاراتك وملفات SVG المحفوظة"
@@ -2668,17 +2850,8 @@ function Studio({
             }}
             onOpenLeft={openLeftTab}
           />
-          <ViewMenu
-            fitToScreen={fitToScreen}
-            fitToSelection={fitToSelection}
-            panelChecked={panelChecked}
-            onTogglePanel={togglePanelWindow}
-            dockPref={dockPref}
-            onDockPref={changeDockPref}
-          />
-          {/* The appearance switch holds a permanent single-icon cell: always
-              reachable while designing, never widening the bar beyond one
-              standard IconButton slot. */}
+          {!isMobileSurface && workspaceViewMenu}
+          {/* Permanent icon-first appearance gateway on every surface. */}
           <AppearanceMenu />
           <SaveBadge onClick={() => void saveNow()} />
           <ProjectFileMenu onOpenFile={onOpenFile} />
@@ -2700,7 +2873,7 @@ function Studio({
         </div>
         </div>
         <ProductNav
-          className="editor-surface-nav"
+          className="editor-surface-nav editor-mobile-surface-dock"
           label="أسطح المحرر"
           items={EDITOR_SURFACE_NAV}
           isActive={(id) =>
@@ -2752,12 +2925,18 @@ function Studio({
           className="editor-canvas-workspace relative grid min-w-0 min-h-0 grid-rows-[minmax(0,1fr)_auto_auto_auto] overflow-hidden"
           style={centerArea}
         >
-          {/* Non-modal drawers leave direct canvas manipulation available. */}
-          <CanvasStage onDropImage={onDropImage} />
+          {/* A blank-canvas tap dismisses the one touch drawer; owned element,
+              Pencil and transform gestures remain entirely inside CanvasStage. */}
+          <CanvasStage
+            onDropImage={onDropImage}
+            onCanvasTap={
+              coarsePointer || !canDock ? closePanelHosts : undefined
+            }
+          />
           {/* Properties of the live tool, docked to the canvas — never a second
               copy of the same setting, and never shown for a tool that has none. */}
           <ToolPropertiesBar />
-          {!pagesRailHidden && (
+          {!effectivePagesRailHidden && !effectivePagesRailCollapsed && (
             <div
               data-editor-obstacle="page-rail-resizer"
               className="editor-page-rail-resizer"
@@ -2788,21 +2967,19 @@ function Studio({
             data-editor-obstacle="page-rail"
             className="min-h-0 min-w-0"
             style={{
-              height: pagesRailHidden
-                ? 0
-                : pagesRailCollapsed
-                  ? PAGES_RAIL_COLLAPSED
-                  : effectiveRailHeight,
+              height: effectivePagesRailHidden ? 0 : effectiveRailHeight,
             }}
           >
-            {!pagesRailHidden && (
+            {!effectivePagesRailHidden && (
               <PageRail
-                height={pagesRailCollapsed ? PAGES_RAIL_COLLAPSED : effectiveRailHeight}
-                minHeight={deviceSurface === "mobile-landscape" ? 68 : PAGES_PANEL_MIN}
+                height={effectiveRailHeight}
+                minHeight={PAGES_PANEL_MIN}
+                collapsed={effectivePagesRailCollapsed}
+                onToggleCollapsed={toggleEffectivePagesRail}
               />
             )}
           </div>
-          <WorkspaceStatusBar />
+          {deviceSurface !== "mobile-landscape" && <WorkspaceStatusBar />}
         </div>
         {dockedBySide.left && renderDockedWindow(dockedBySide.left, "left")}
         {dockedBySide.right && renderDockedWindow(dockedBySide.right, "right")}

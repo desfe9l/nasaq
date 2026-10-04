@@ -100,6 +100,75 @@ export function resolveEditorSurface(
 }
 
 /**
+ * Device-specific breathing room around a freshly opened artboard.
+ *
+ * These are screen pixels, not document units: the page dimensions stay
+ * untouched and only the camera zoom changes. Phones spend less room on the
+ * pasteboard, tablets leave enough clearance for Pencil handles, and desktop
+ * keeps the spacious professional canvas.
+ */
+export interface WorkspaceFitInsets {
+  inline: number;
+  block: number;
+  /** Unscaled page-name row above every artboard cell. */
+  caption: number;
+}
+
+export function workspaceFitInsets(surface: EditorSurface): WorkspaceFitInsets {
+  switch (surface) {
+    case "mobile-landscape":
+      return { inline: 10, block: 8, caption: 22 };
+    case "mobile-portrait":
+      return { inline: 12, block: 12, caption: 22 };
+    case "tablet-landscape":
+      return { inline: 22, block: 18, caption: 22 };
+    case "tablet-portrait":
+      return { inline: 20, block: 20, caption: 22 };
+    case "fullscreen":
+      return { inline: 16, block: 14, caption: 22 };
+    default:
+      return { inline: 32, block: 28, caption: 22 };
+  }
+}
+
+/**
+ * Initial camera zoom for one real page inside the unobscured canvas lane.
+ *
+ * The same contain calculation serves every document shape: no width/height is
+ * written back to the model and no axis gets a different scale. Returning the
+ * largest zoom that keeps the whole artboard cell visible prevents both the
+ * old tiny saved-zoom opening state and accidental clipping behind chrome.
+ */
+export function workspaceFitZoom(
+  viewport: { width: number; height: number },
+  pagePx: { width: number; height: number },
+  surface: EditorSurface,
+): number {
+  const width = Number.isFinite(viewport.width) ? Math.max(1, viewport.width) : 1;
+  const height = Number.isFinite(viewport.height) ? Math.max(1, viewport.height) : 1;
+  const pageWidth = Number.isFinite(pagePx.width) ? Math.max(1, pagePx.width) : 1;
+  const pageHeight = Number.isFinite(pagePx.height) ? Math.max(1, pagePx.height) : 1;
+  const inset = workspaceFitInsets(surface);
+  const availableWidth = Math.max(1, width - inset.inline * 2);
+  const availableHeight = Math.max(
+    1,
+    height - inset.block * 2 - inset.caption,
+  );
+  // Match document-space's practical camera limits without importing the
+  // browser-facing store into this pure geometry module.
+  return Math.min(
+    16,
+    Math.max(
+      0.01,
+      Math.round(
+        Math.min(availableWidth / pageWidth, availableHeight / pageHeight) *
+          10000,
+      ) / 10000,
+    ),
+  );
+}
+
+/**
  * Bottom pages panel (الصفحات) height bounds.
  *
  * The panel carries page thumbnails, so it must be tall enough for one row plus

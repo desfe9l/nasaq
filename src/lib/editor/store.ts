@@ -245,6 +245,13 @@ function mergeFontChoices(
 
 interface Ui {
   activePageId: string;
+  /**
+   * Monotonic camera-reset signal. It changes only when a different document
+   * is placed in the editor (open, create, template, import, blank reset), not
+   * for edits or undo/redo, so the shell can establish a fresh device-specific
+   * viewport exactly once per opening.
+   */
+  documentRevision: number;
   /** Primary selection: the element whose properties the panel shows. */
   selectedId: string | null;
   /** Full selection, primary first. Contains `selectedId` when it is non-null. */
@@ -1304,6 +1311,21 @@ export const useEditor = create<EditorStore>((set, get) => {
     });
   };
 
+  /**
+   * Replace the live document and announce a genuine opening to the workspace
+   * camera. `applyProject` itself also serves undo/redo and therefore must stay
+   * viewport-neutral; every create/open/import/reset path goes through this
+   * wrapper instead.
+   */
+  const openProjectState = (
+    incoming: ProjectSnapshot,
+    extra: Partial<EditorStore> = {},
+  ) =>
+    applyProject(incoming, {
+      ...extra,
+      documentRevision: get().documentRevision + 1,
+    });
+
   const restoreFonts = async (project: Project) => {
     if (!project.embeddedFonts?.length) return;
     const owner = getStorageOwner();
@@ -1394,6 +1416,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     ...blank,
     transactionNo: blank.transactionNo ?? "",
     activePageId: blank.pages[0].id,
+    documentRevision: 0,
     selectedId: null,
     selectedIds: [],
     enteredGroupId: null,
@@ -1471,7 +1494,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         saveTimer = null;
       }
       clearDraftSnapshot();
-      applyProject(createProject("blank", current.theme), { zoom: current.zoom });
+      openProjectState(createProject("blank", current.theme), { zoom: current.zoom });
       const snap = projectSlice(get());
       cleanSnapshot = snap;
       set({
@@ -1553,7 +1576,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       // A fresh document keeps the editor shell functional for whoever is
       // here now (the editor is open to visitors); the previous account's
       // pages, library list, asset shelf and custom vectors are all dropped.
-      applyProject(createProject("official"), { zoom: get().zoom });
+      openProjectState(createProject("official"), { zoom: get().zoom });
       cleanSnapshot = projectSlice(get());
       set({
         hydrated: false,
@@ -1629,14 +1652,14 @@ export const useEditor = create<EditorStore>((set, get) => {
             );
           }
           await restoreFonts(project);
-          applyProject(project, { zoom });
+          openProjectState(project, { zoom });
         } catch (error) {
           if (BOOT_ADMIN_TEMPLATE) {
             // Never substitute a different showcase document when a catalog
             // record is missing, unpublished or unavailable to the visitor.
             const empty = createProject("blank");
             await restoreFonts(empty);
-            applyProject(empty, { zoom });
+            openProjectState(empty, { zoom });
             toast.error("تعذر تحميل المستند المميز من سجل القوالب المنشور");
             console.error("[editor] homepage catalog preview failed", error);
           }
@@ -1854,7 +1877,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         if (active) {
           await restoreFonts(active);
           if (getStorageOwner() === owner && get().sessionOwner === owner)
-            applyProject(active, {
+            openProjectState(active, {
               zoom: get().zoom,
               ...(restoredUnsavedDraft ? { id: undefined } : {}),
               ...(activePageSetting && !restoredFromDraft
@@ -2490,7 +2513,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         saveTimer = null;
       }
       clearDraftSnapshot();
-      applyProject(saved, { zoom: 0.82 });
+      openProjectState(saved, { zoom: 0.82 });
       const snap = projectSlice(get());
       cleanSnapshot = snap;
       set({
@@ -2637,7 +2660,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         saveTimer = null;
       }
       clearDraftSnapshot();
-      applyProject(saved, { zoom: get().zoom || 0.82 });
+      openProjectState(saved, { zoom: get().zoom || 0.82 });
       const snap = projectSlice(get());
       cleanSnapshot = snap;
       set({
@@ -2707,7 +2730,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         saveTimer = null;
       }
       clearDraftSnapshot();
-      applyProject(project, { zoom: get().zoom || 0.82 });
+      openProjectState(project, { zoom: get().zoom || 0.82 });
       const snap = projectSlice(get());
       cleanSnapshot = snap;
       set({
@@ -3105,7 +3128,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           saveTimer = null;
         }
         clearDraftSnapshot();
-        applyProject(createProject("blank", s.theme), { selectedId: null });
+        openProjectState(createProject("blank", s.theme), { selectedId: null });
         const snap = projectSlice(get());
         cleanSnapshot = snap;
         set({
@@ -3298,7 +3321,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       }
       clearDraftSnapshot();
       const pageIndex = opts.activePageIndex ?? 0;
-      applyProject(saved, {
+      openProjectState(saved, {
         activePageId: saved.pages[pageIndex]?.id || saved.pages[0]?.id,
       });
       const snap = projectSlice(get());

@@ -5937,3 +5937,234 @@ button.license-badge-locked:focus-visible {
 .site-header-actions .account-control {
   min-height: 44px;
 }
+
+/* =====================================================================
+ * Device-adaptive editor workspace
+ *
+ * Phones keep document actions at the top and move the two high-frequency
+ * control groups to fixed, thumb-reachable bottom docks. They are the same
+ * shared tools and panel routes used on desktop — only their placement changes.
+ * The workspace reserves their exact height, so neither an artboard nor a
+ * floating panel can disappear behind browser-safe-area chrome.
+ * ===================================================================== */
+.editor-ui[data-device-surface^="mobile-"] {
+  --mobile-tools-h: 44px;
+  --mobile-surfaces-h: 48px;
+  --mobile-bottom-dock-h: calc(
+    var(--mobile-tools-h) + var(--mobile-surfaces-h) + var(--safe-bottom)
+  );
+  --ui-control: 40px;
+  --ui-icon: 18px;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-toolbar {
+  position: relative;
+  min-height: 48px;
+  gap: 0;
+  padding-block: max(4px, var(--safe-top)) 4px;
+  padding-inline: max(6px, var(--safe-left)) max(6px, var(--safe-right));
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-toolbar-main {
+  display: grid;
+  grid-template-columns: minmax(52px, 1fr) auto;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-header-center {
+  grid-row: 1;
+  grid-column: 1;
+  min-width: 0;
+  justify-content: stretch;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-doc-capsule {
+  width: 100%;
+  min-width: 0;
+  padding: 2px;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-doc-name {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  padding-inline: 5px;
+  font-size: 11px;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-header-actions {
+  grid-row: 1;
+  grid-column: 2;
+  min-width: 0;
+  margin: 0;
+  gap: 1px;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-header-actions .editor-header-sep {
+  margin-inline: 0;
+}
+
+/* Account stays fully accessible through its labelled avatar button, while the
+   name, tier and caret move into the opened card instead of overflowing 320px. */
+.editor-ui[data-device-surface^="mobile-"] .editor-header-actions .account-control {
+  width: var(--ui-control);
+  height: var(--ui-control);
+  min-height: var(--ui-control);
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+.editor-ui[data-device-surface^="mobile-"] .account-control-content {
+  display: block;
+}
+.editor-ui[data-device-surface^="mobile-"] .account-control-identity {
+  max-width: none;
+}
+.editor-ui[data-device-surface^="mobile-"] .account-control-name,
+.editor-ui[data-device-surface^="mobile-"] .account-control-content > :not(.account-control-identity),
+.editor-ui[data-device-surface^="mobile-"] .account-control > svg {
+  display: none;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-mobile-tools,
+.editor-ui[data-device-surface^="mobile-"] .editor-mobile-surface-dock {
+  position: fixed !important;
+  z-index: var(--z-bubble);
+  box-sizing: border-box;
+  margin: 0;
+  border-top: 1px solid var(--editor-border);
+  background: color-mix(in srgb, var(--editor-toolbar) 97%, transparent);
+  box-shadow: 0 -4px 16px rgba(15, 30, 45, 0.13);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+.editor-ui[data-device-surface="mobile-portrait"] .editor-mobile-tools {
+  right: 0;
+  bottom: calc(var(--mobile-surfaces-h) + var(--safe-bottom));
+  left: 0;
+  height: var(--mobile-tools-h);
+  justify-content: safe center;
+  gap: 2px;
+  padding-inline: max(3px, var(--safe-left)) max(3px, var(--safe-right));
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.editor-ui[data-device-surface="mobile-portrait"] .editor-mobile-surface-dock {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: calc(var(--mobile-surfaces-h) + var(--safe-bottom));
+  padding: 0 max(2px, var(--safe-right)) var(--safe-bottom)
+    max(2px, var(--safe-left));
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-mobile-surface-dock .product-nav-scroll {
+  height: 100%;
+  min-height: 0;
+  justify-content: center;
+  gap: 2px;
+  padding: 0;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-mobile-surface-dock .product-nav-tab {
+  width: 42px;
+  min-width: 42px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 9px;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-mobile-surface-dock .product-nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-workspace-row {
+  box-sizing: border-box;
+  padding-bottom: var(--mobile-bottom-dock-h);
+}
+
+.editor-ui[data-device-surface="mobile-portrait"] .editor-status-bar {
+  height: 28px;
+  min-height: 28px;
+}
+
+/* A landscape phone uses one shared bottom row: tools on the physical left,
+   panel surfaces on the right. This recovers a complete row of artboard height. */
+.editor-ui[data-device-surface="mobile-landscape"] {
+  --mobile-tools-h: 44px;
+  --mobile-surfaces-h: 44px;
+  --mobile-bottom-dock-h: calc(44px + var(--safe-bottom));
+  --ui-control: 38px;
+  --ui-icon: 17px;
+}
+
+.editor-ui[data-device-surface="mobile-landscape"] .editor-mobile-tools {
+  right: 52%;
+  bottom: 0;
+  left: 0;
+  height: calc(44px + var(--safe-bottom));
+  justify-content: safe center;
+  gap: 1px;
+  padding: 0 3px var(--safe-bottom) max(3px, var(--safe-left));
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.editor-ui[data-device-surface="mobile-landscape"] .editor-mobile-surface-dock {
+  right: 0;
+  bottom: 0;
+  left: 48%;
+  width: auto;
+  height: calc(44px + var(--safe-bottom));
+  padding: 0 max(2px, var(--safe-right)) var(--safe-bottom) 2px;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .editor-mobile-tools::-webkit-scrollbar {
+  display: none;
+}
+
+.editor-ui[data-device-surface^="mobile-"] .tool-props {
+  right: max(8px, var(--safe-right));
+  left: max(8px, var(--safe-left));
+  max-width: none;
+  overflow-x: auto;
+}
+
+/* Pencil/finger targets remain stable screen sizes after the scaled page
+   transform, while visible handles become large enough to acquire precisely. */
+.editor-ui:is(
+    [data-device-surface^="tablet-"],
+    [data-device-surface^="mobile-"]
+  ) .selection-frame {
+  --handle-size: calc(9px / var(--editor-zoom, 1));
+  --handle-hit-size: calc(40px / var(--editor-zoom, 1));
+  --rotate-hit-size: calc(44px / var(--editor-zoom, 1));
+  --rotate-gap: calc(42px / var(--editor-zoom, 1));
+}
+
+@media (max-width: 350px) {
+  .editor-ui[data-device-surface="mobile-portrait"] {
+    --ui-control: 38px;
+  }
+  .editor-ui[data-device-surface="mobile-portrait"] .editor-doc-capsule {
+    max-width: 54px;
+  }
+  .editor-ui[data-device-surface^="mobile-"] .editor-mobile-surface-dock .product-nav-tab {
+    width: 40px;
+    min-width: 40px;
+  }
+}
