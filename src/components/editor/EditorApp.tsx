@@ -228,8 +228,11 @@ import {
 import { hasUnsavedChanges } from "@/lib/editor/unsaved-leave";
 import { LeaveGuard } from "@/components/editor/LeaveGuard";
 import { absoluteBounds, elementsBounds, pageSize } from "@/lib/editor/model";
-import { fitImageBox, prepareImage } from "@/lib/editor/images";
-import { fitBoxToPage } from "@/lib/editor/fit-page";
+import {
+  placeImageBox,
+  prepareImage,
+  uniqueImageFiles,
+} from "@/lib/editor/images";
 import { zoomAnchoredAt } from "@/lib/editor/viewport";
 import { clampZoom, stepZoom } from "@/lib/editor/document-space";
 import {
@@ -367,9 +370,11 @@ export function EditorApp() {
   const ingestImage = async (
     file: File,
     at?: { x: number; y: number; pageId: string },
+    sequence = 0,
+    intentOverride = imageIntent.current,
   ) => {
     const api = useEditor.getState();
-    const intent = at ? { type: "image" as const } : imageIntent.current;
+    const intent = at ? { type: "image" as const } : intentOverride;
     const requestedPage = at?.pageId || ("pageId" in intent && intent.pageId);
     const targetPage = requestedPage
       ? api.pages.find((page) => page.id === requestedPage)
@@ -380,18 +385,7 @@ export function EditorApp() {
         );
     if (!targetPage) return;
     const pageId = targetPage.id;
-    const visible = targetPage
-      ? visiblePageRect(
-          document.querySelector<HTMLElement>(".editor-canvas-stage"),
-          targetPage,
-        )
-      : null;
     const size = pageSize(targetPage);
-    const center =
-      at ||
-      (visible
-        ? { x: visible.x + visible.w / 2, y: visible.y + visible.h / 2 }
-        : { x: size.w / 2, y: size.h / 2 });
     try {
       const img = await prepareImage(file);
       const kind = intent.type === "logo" ? "logo" : "image";
@@ -413,40 +407,35 @@ export function EditorApp() {
         });
         toast.success("تمت إضافة العنصر إلى المكتبة");
       } else {
-        const fitted =
-          kind === "image"
-            ? fitBoxToPage(
-                { w: Math.max(1, img.width), h: Math.max(1, img.height) },
-                size,
-                "fit",
-              )
-            : null;
-        const max = { w: 40, h: 40 };
-        const box = fitted ?? fitImageBox(img, {
-          w: Math.min(max.w, size.w),
-          h: Math.min(max.h, size.h),
-        });
+        const imageCount = targetPage.elements.filter(
+          (element) => element.type === "image" || element.type === "logo",
+        ).length;
+        const box = placeImageBox(
+          { width: Math.max(1, img.width), height: Math.max(1, img.height) },
+          size,
+          {
+            intent: kind,
+            sequence: imageCount + sequence,
+            ...(at ? { at } : {}),
+          },
+        );
         api.addElementAt(
           kind,
           {
             src: img.src,
             name: kind === "logo" ? "شعار" : "صورة",
-            ...(fitted
-              ? {
-                  x: fitted.x,
-                  y: fitted.y,
-                  w: fitted.w,
-                  h: fitted.h,
-                  style: {
-                    objectFit: "contain",
-                    objectX: 50,
-                    objectY: 50,
-                    aspectLock: true,
-                  },
-                }
-              : { w: box.w, h: box.h }),
+            x: box.x,
+            y: box.y,
+            w: box.w,
+            h: box.h,
+            style: {
+              objectFit: "contain",
+              objectX: 50,
+              objectY: 50,
+              aspectLock: true,
+            },
           },
-          fitted ? undefined : center,
+          undefined,
           pageId,
         );
       }
@@ -549,11 +538,20 @@ export function EditorApp() {
         ref={imageInput}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
         onChange={(e) => {
-          const file = e.target.files?.[0];
+          const files = Array.from(e.target.files || []);
+          const intent = imageIntent.current;
           e.target.value = "";
-          if (file) void ingestImage(file);
+          if (!files.length) return;
+          const unique = uniqueImageFiles(files);
+          const selected = intent.type === "replace" ? unique.slice(0, 1) : unique;
+          void (async () => {
+            for (const [index, file] of selected.entries()) {
+              await ingestImage(file, undefined, index, intent);
+            }
+          })();
         }}
       />
 

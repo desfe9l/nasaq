@@ -58,6 +58,19 @@ export function isAcceptedImage(file: File): boolean {
   return ACCEPTED.test(file.type);
 }
 
+/** Keep every distinct selected file while removing browser duplicate entries. */
+export function uniqueImageFiles(files: readonly File[]): File[] {
+  return files.filter(
+    (file, index, all) =>
+      all.findIndex(
+        (candidate) =>
+          candidate.name === file.name &&
+          candidate.size === file.size &&
+          candidate.lastModified === file.lastModified,
+      ) === index,
+  );
+}
+
 /**
  * Allow only image sources that cannot execute script.
  */
@@ -217,6 +230,61 @@ export function fitImageBox(
     w = h * ratio;
   }
   return { w: Math.round(w * 10) / 10, h: Math.round(h * 10) / 10 };
+}
+
+export interface ImagePlacementPage {
+  w: number;
+  h: number;
+}
+
+export interface ImagePlacementOptions {
+  /** Picker sequence on this page; zero is centered, later values are offset. */
+  sequence?: number;
+  /** Exact page-space centre for a drop. Drop placement does not receive an offset. */
+  at?: { x: number; y: number };
+  /** Logo intent uses the smaller 40mm cap instead of the normal 80mm cap. */
+  intent?: "image" | "logo";
+}
+
+export interface PlacedImageBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** Pick a professional initial frame while keeping the whole image inside its page. */
+export function placeImageBox(
+  image: { width: number; height: number },
+  page: ImagePlacementPage,
+  options: ImagePlacementOptions = {},
+): PlacedImageBox {
+  const pageW = Math.max(1, Number(page.w) || 1);
+  const pageH = Math.max(1, Number(page.h) || 1);
+  const maxEdge = options.intent === "logo" ? 40 : 80;
+  const box = fitImageBox(image, {
+    w: Math.min(pageW, maxEdge),
+    h: Math.min(pageH, maxEdge),
+  });
+  const sequence = Math.max(0, Math.floor(Number(options.sequence) || 0));
+  const offset = sequence === 0
+    ? { x: 0, y: 0 }
+    : {
+        x: (((sequence * 3) % 5) - 2) * 8,
+        y: (((sequence * 2) % 5) - 2) * 8,
+      };
+  const centre = options.at ?? {
+    x: pageW / 2 + offset.x,
+    y: pageH / 2 + offset.y,
+  };
+  const clamp = (value: number, min: number, max: number) =>
+    Math.min(Math.max(value, min), Math.max(min, max));
+  return {
+    x: Math.round(clamp(centre.x - box.w / 2, 0, pageW - box.w) * 100) / 100,
+    y: Math.round(clamp(centre.y - box.h / 2, 0, pageH - box.h) * 100) / 100,
+    w: box.w,
+    h: box.h,
+  };
 }
 
 /**
