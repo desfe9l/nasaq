@@ -227,6 +227,7 @@ import {
 } from "@/lib/editor/leave-controller";
 import { hasUnsavedChanges } from "@/lib/editor/unsaved-leave";
 import { LeaveGuard } from "@/components/editor/LeaveGuard";
+import { TemplateDraftBar } from "./TemplateDraftBar";
 import { absoluteBounds, elementsBounds, pageSize } from "@/lib/editor/model";
 import {
   placeImageBox,
@@ -511,6 +512,7 @@ export function EditorApp() {
           <a href="/license" className="ms-1 underline underline-offset-2">عرض حالة الاشتراك</a>
         </div>
       )}
+      {!showcase && <TemplateDraftBar />}
 
       {/*
        * Project files: native `.nsq` packages plus legacy JSON backups. Both go
