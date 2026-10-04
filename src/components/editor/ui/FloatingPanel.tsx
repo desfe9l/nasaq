@@ -195,18 +195,70 @@ export function FloatingPanel({
       if (!rowRect) {
         return clampPanel(next, { width: window.innerWidth, height: window.innerHeight }, 0);
       }
-      const rail = document.querySelector(".editor-page-rail");
-      const railTop = rail
-        ? rail.getBoundingClientRect().top - rowRect.top
-        : Infinity;
-      const bottom = Math.min(rowRect.height, railTop) - 8;
-      return clampPanel(
-        next,
-        { width: rowRect.width, height: Math.max(bottom + minSize.height, rowRect.height) },
+      const visual = window.visualViewport;
+      const useVisual = Boolean(
+        visual &&
+          (!visual.scale || visual.scale <= 1.01) &&
+          visual.width > 0 &&
+          visual.height > 0,
+      );
+      const visibleLeft = Math.max(
+        rowRect.left,
+        useVisual ? visual!.offsetLeft : 0,
+      );
+      const visibleTop = Math.max(
+        rowRect.top,
+        useVisual ? visual!.offsetTop : 0,
+      );
+      const visibleRight = Math.min(
+        rowRect.right,
+        useVisual
+          ? visual!.offsetLeft + visual!.width
+          : window.innerWidth,
+      );
+      const visualBottom = useVisual
+        ? visual!.offsetTop + visual!.height
+        : window.innerHeight;
+      const blockerTops = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          ".editor-page-rail, .editor-status-bar, .editor-mobile-tools, .editor-mobile-surface-dock",
+        ),
+      )
+        .map((node) => node.getBoundingClientRect())
+        .filter(
+          (blocker) =>
+            blocker.width > 0 &&
+            blocker.height > 0 &&
+            blocker.top > visibleTop &&
+            blocker.top < Math.min(rowRect.bottom, visualBottom),
+        )
+        .map((blocker) => blocker.top - 8);
+      const visibleBottom = Math.min(
+        rowRect.bottom,
+        visualBottom,
+        ...blockerTops,
+      );
+      const originX = Math.max(0, visibleLeft - rowRect.left);
+      const originY = Math.max(0, visibleTop - rowRect.top);
+      const safe = clampPanel(
+        {
+          ...next,
+          left: next.left - originX,
+          top: next.top - originY,
+        },
+        {
+          width: Math.max(80, visibleRight - visibleLeft),
+          height: Math.max(80, visibleBottom - visibleTop),
+        },
         0,
       );
+      return {
+        ...safe,
+        left: safe.left + originX,
+        top: safe.top + originY,
+      };
     },
-    [minSize.height],
+    [],
   );
 
   const apply = useCallback(
@@ -261,9 +313,22 @@ export function FloatingPanel({
        * default card, so a full-height panel would be pinned in place — it
        * would open, but it would not move. Keep a strip of travel free.
        */
-      const rail = document.querySelector(".editor-page-rail")?.getBoundingClientRect();
       const bandTop = (rowRect?.top ?? 52) + 16;
-      const bandBottom = (rail?.top ?? window.innerHeight) - 16;
+      const blockerTops = Array.from(
+        document.querySelectorAll<HTMLElement>(
+          ".editor-page-rail, .editor-status-bar, .editor-mobile-tools, .editor-mobile-surface-dock",
+        ),
+      )
+        .map((node) => node.getBoundingClientRect())
+        .filter(
+          (blocker) =>
+            blocker.width > 0 &&
+            blocker.height > 0 &&
+            blocker.top > bandTop,
+        )
+        .map((blocker) => blocker.top);
+      const bandBottom =
+        Math.min(window.innerHeight, ...blockerTops) - 16;
       const height = Math.min(
         defaultSize.height,
         Math.max(minSize.height, bandBottom - bandTop - PANEL_TRAVEL),
@@ -310,14 +375,20 @@ export function FloatingPanel({
     const resize = () => reclamp();
     const observer = new ResizeObserver(resize);
     document
-      .querySelectorAll(".editor-toolbar, .editor-canvas-stage, .editor-page-rail, .editor-workspace-row")
+      .querySelectorAll(
+        ".editor-toolbar, .editor-canvas-stage, .editor-page-rail, .editor-workspace-row, .editor-mobile-tools, .editor-mobile-surface-dock",
+      )
       .forEach((node) => observer.observe(node));
     window.addEventListener("resize", resize);
     window.addEventListener("orientationchange", resize);
+    window.visualViewport?.addEventListener("resize", resize);
+    window.visualViewport?.addEventListener("scroll", resize);
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", resize);
       window.removeEventListener("orientationchange", resize);
+      window.visualViewport?.removeEventListener("resize", resize);
+      window.visualViewport?.removeEventListener("scroll", resize);
     };
     // The opening rectangle is a one-off: later moves are the user's own.
     // eslint-disable-next-line react-hooks/exhaustive-deps

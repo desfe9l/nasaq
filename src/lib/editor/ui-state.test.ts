@@ -20,6 +20,8 @@ import {
   parseStoredPoint,
   placeFloatingToolbar,
   fitSideDockWidths,
+  workspaceFitInsets,
+  workspaceFitZoom,
   tipPlacement,
   type ScreenBox,
 } from "./ui-state.ts";
@@ -678,5 +680,60 @@ describe("resolveEditorSurface — one responsive system, not a pile of queries"
   it("garbage geometry falls back to the smallest surface, never crashes", () => {
     assert.equal(resolveEditorSurface(Number.NaN, Number.NaN, false), "mobile-portrait");
     assert.equal(resolveEditorSurface(-100, -50, false), "mobile-portrait");
+  });
+});
+
+describe("workspaceFitZoom — device-adaptive opening camera", () => {
+  const a4 = { width: (210 * 96) / 25.4, height: (297 * 96) / 25.4 };
+
+  it("uses almost all phone width while keeping the complete page visible", () => {
+    const viewport = { width: 390, height: 650 };
+    const zoom = workspaceFitZoom(viewport, a4, "mobile-portrait");
+    const inset = workspaceFitInsets("mobile-portrait");
+    assert.ok(a4.width * zoom >= viewport.width * 0.9);
+    assert.ok(a4.width * zoom <= viewport.width - inset.inline * 2 + 0.1);
+    assert.ok(
+      a4.height * zoom + inset.caption <=
+        viewport.height - inset.block * 2 + 0.1,
+    );
+  });
+
+  it("keeps desktop and iPad breathing room without wasting the lane", () => {
+    for (const [surface, viewport] of [
+      ["desktop", { width: 980, height: 720 }],
+      ["tablet-landscape", { width: 1024, height: 610 }],
+      ["tablet-portrait", { width: 768, height: 820 }],
+    ] as const) {
+      const zoom = workspaceFitZoom(viewport, a4, surface);
+      const inset = workspaceFitInsets(surface);
+      const remainingInline = viewport.width - a4.width * zoom;
+      const remainingBlock = viewport.height - (a4.height * zoom + inset.caption);
+      assert.ok(remainingInline >= inset.inline * 2 - 0.2);
+      assert.ok(remainingBlock >= inset.block * 2 - 0.2);
+      assert.ok(
+        remainingInline < inset.inline * 2 + 260 ||
+          remainingBlock < inset.block * 2 + 260,
+        `${surface} should constrain on at least one useful axis`,
+      );
+    }
+  });
+
+  it("preserves proportions and safely handles malformed measurements", () => {
+    const zoom = workspaceFitZoom(
+      { width: 844, height: 280 },
+      a4,
+      "mobile-landscape",
+    );
+    assert.equal(
+      Math.round(((a4.width * zoom) / (a4.height * zoom)) * 10000),
+      Math.round((a4.width / a4.height) * 10000),
+    );
+    const fallback = workspaceFitZoom(
+      { width: Number.NaN, height: -1 },
+      { width: 0, height: Number.NaN },
+      "mobile-portrait",
+    );
+    assert.ok(Number.isFinite(fallback));
+    assert.ok(fallback >= 0.01 && fallback <= 16);
   });
 });

@@ -70,6 +70,81 @@ try {
       project.pages[0].elements = [];
       if (!(await window.store.getState().createDocument(project)))
         throw new Error("Document creation refused");
+    });
+    await page.waitForTimeout(400);
+
+    // Every true document opening owns a deterministic camera: the complete
+    // real-proportion artboard is visible, useful on at least one axis and
+    // centred in the live stage. Compact surfaces also start canvas-first.
+    const opening = await page.evaluate(() => {
+      const shell = document.querySelector(".editor-ui");
+      const stage = document.querySelector(".editor-canvas-stage");
+      const activeId = window.store.getState().activePageId;
+      const page = stage?.querySelector(`[data-page-id="${CSS.escape(activeId)}"]`);
+      const cell = page?.closest(".artboard-cell");
+      if (!shell || !stage || !page || !cell) return null;
+      const sr = stage.getBoundingClientRect();
+      const cr = cell.getBoundingClientRect();
+      const tools = document.querySelector(".editor-mobile-tools")?.getBoundingClientRect();
+      const surfaces = document
+        .querySelector(".editor-mobile-surface-dock")
+        ?.getBoundingClientRect();
+      const visiblePanels = Array.from(
+        document.querySelectorAll(".editor-floating-panel"),
+      ).filter((node) => {
+        const rect = node.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      }).length;
+      return {
+        surface: shell.getAttribute("data-device-surface"),
+        whole:
+          cr.left >= sr.left - 2 &&
+          cr.top >= sr.top - 2 &&
+          cr.right <= sr.right + 2 &&
+          cr.bottom <= sr.bottom + 2,
+        dx: cr.left + cr.width / 2 - (sr.left + sr.width / 2),
+        dy: cr.top + cr.height / 2 - (sr.top + sr.height / 2),
+        occupancy: Math.max(cr.width / sr.width, cr.height / sr.height),
+        rootOverflow: document.documentElement.scrollWidth - innerWidth,
+        visiblePanels,
+        tools: tools && {
+          left: tools.left,
+          right: tools.right,
+          top: tools.top,
+          bottom: tools.bottom,
+        },
+        surfaces: surfaces && {
+          left: surfaces.left,
+          right: surfaces.right,
+          top: surfaces.top,
+          bottom: surfaces.bottom,
+        },
+        collapsedRail: Boolean(
+          document.querySelector(".editor-page-rail-collapsed"),
+        ),
+      };
+    });
+    assert.ok(opening, "opening geometry must be measurable");
+    assert.equal(opening.whole, true, JSON.stringify(opening));
+    assert.ok(Math.abs(opening.dx) <= 28, JSON.stringify(opening));
+    assert.ok(Math.abs(opening.dy) <= 28, JSON.stringify(opening));
+    assert.ok(opening.occupancy >= 0.72, JSON.stringify(opening));
+    assert.ok(opening.rootOverflow <= 1, JSON.stringify(opening));
+    if (width < 1100) assert.equal(opening.visiblePanels, 0);
+    if (width < 500) {
+      assert.equal(opening.surface, "mobile-portrait");
+      assert.equal(opening.collapsedRail, true);
+      assert.ok(opening.tools && opening.surfaces, JSON.stringify(opening));
+      assert.ok(opening.tools.left >= -1 && opening.tools.right <= width + 1);
+      assert.ok(
+        opening.surfaces.left >= -1 && opening.surfaces.right <= width + 1,
+      );
+      assert.ok(opening.tools.bottom <= opening.surfaces.top + 1);
+      assert.ok(Math.abs(opening.surfaces.bottom - height) <= 1);
+    }
+    record(`${width}: opening artboard fit, centre and compact chrome`);
+
+    await page.evaluate(() => {
       window.store.setState({
         previewAll: false,
         rightOpen: false,
@@ -86,7 +161,7 @@ try {
         { x: 105, y: 130 },
       );
     });
-    await page.waitForTimeout(400);
+    await page.waitForTimeout(250);
     const bar = page.locator(".floating-toolbar");
     assert.ok(inside(await bar.boundingBox(), width, height));
     // One row on a desktop/tablet lane; on a phone the bar wraps rather than
@@ -296,8 +371,21 @@ try {
     });
     await layers.waitFor({ state: "visible" });
     assert.ok(inside(await layers.boundingBox(), width, height));
+    if (width < 1100) {
+      await panel.waitFor({ state: "hidden" });
+      assert.equal(
+        await page.locator(".editor-floating-panel:visible").count(),
+        1,
+      );
+    } else {
+      assert.equal(await panel.isVisible(), true);
+    }
     await page.screenshot({ path: `${output}/layers-${width}.png` });
-    record(`${width}: properties drag/resize and independent layers window`);
+    record(
+      `${width}: properties drag/resize and ${
+        width < 1100 ? "exclusive touch" : "independent desktop"
+      } layers window`,
+    );
     await page.evaluate(() =>
       window.store.setState({ rightOpen: false, layersOpen: false }),
     );
@@ -395,14 +483,17 @@ try {
       `${width}: native ${width < 1100 ? "touch" : "mouse"} library drag creates exactly one object`,
     );
 
-    if (
-      await page
-        .getByRole("button", { name: "إغلاق لوحة العناصر", exact: true })
-        .isVisible()
-    )
-      await page
-        .getByRole("button", { name: "إغلاق لوحة العناصر", exact: true })
-        .click();
+    const closeElements = page.getByRole("button", {
+      name: "إغلاق لوحة العناصر",
+      exact: true,
+    });
+    if (width < 1100 && (await closeElements.isVisible())) {
+      await page.mouse.click(targetX, targetY);
+      await library.waitFor({ state: "hidden" });
+      record(`${width}: canvas tap dismisses the compact panel`);
+    } else if (await closeElements.isVisible()) {
+      await closeElements.click();
+    }
     // Real HTML5 drop transport into the active page at measured zoom/pan coordinates.
     const dropResult = await page.evaluate(async () => {
       const state = window.store.getState();
@@ -635,6 +726,75 @@ try {
     );
     await context.close();
   }
+
+  // A phone stays a phone in landscape: both shared control groups occupy one
+  // bottom row and the complete artboard uses the recovered vertical space.
+  {
+    const width = 844;
+    const height = 390;
+    const context = await browser.newContext({
+      viewport: { width, height },
+      hasTouch: true,
+      isMobile: true,
+    });
+    await context.addInitScript(() => {
+      localStorage.setItem("nasaq.onboarding.v1", "done");
+    });
+    const page = await context.newPage();
+    page.on("pageerror", (error) => errors.push(error.message));
+    await page.goto(`${base}/editor`, { waitUntil: "networkidle" });
+    await page.locator(".editor-canvas-stage").waitFor();
+    await page.waitForTimeout(500);
+    const geometry = await page.evaluate(() => {
+      const shell = document.querySelector(".editor-ui");
+      const stage = document.querySelector(".editor-canvas-stage");
+      const cell = stage?.querySelector(".artboard-cell.is-active");
+      const tools = document.querySelector(".editor-mobile-tools");
+      const surfaces = document.querySelector(".editor-mobile-surface-dock");
+      if (!shell || !stage || !cell || !tools || !surfaces) return null;
+      const sr = stage.getBoundingClientRect();
+      const cr = cell.getBoundingClientRect();
+      const tr = tools.getBoundingClientRect();
+      const nr = surfaces.getBoundingClientRect();
+      return {
+        surface: shell.getAttribute("data-device-surface"),
+        whole:
+          cr.left >= sr.left - 2 &&
+          cr.top >= sr.top - 2 &&
+          cr.right <= sr.right + 2 &&
+          cr.bottom <= sr.bottom + 2,
+        centred:
+          Math.abs(cr.left + cr.width / 2 - (sr.left + sr.width / 2)) <= 28 &&
+          Math.abs(cr.top + cr.height / 2 - (sr.top + sr.height / 2)) <= 28,
+        occupancy: Math.max(cr.width / sr.width, cr.height / sr.height),
+        sameRow: Math.abs(tr.top - nr.top) <= 1 && Math.abs(tr.bottom - nr.bottom) <= 1,
+        joined: Math.abs(tr.right - nr.left) <= 1,
+        bottom: nr.bottom,
+        rail: Boolean(document.querySelector(".editor-page-rail")),
+        status: Boolean(document.querySelector(".editor-status-bar")),
+        panels: Array.from(
+          document.querySelectorAll(".editor-floating-panel"),
+        ).filter((node) => node.getBoundingClientRect().width > 0).length,
+        overflow: document.documentElement.scrollWidth - innerWidth,
+      };
+    });
+    assert.ok(geometry, "landscape opening geometry must be measurable");
+    assert.equal(geometry.surface, "mobile-landscape");
+    assert.equal(geometry.whole, true, JSON.stringify(geometry));
+    assert.equal(geometry.centred, true, JSON.stringify(geometry));
+    assert.ok(geometry.occupancy >= 0.78, JSON.stringify(geometry));
+    assert.equal(geometry.sameRow, true, JSON.stringify(geometry));
+    assert.equal(geometry.joined, true, JSON.stringify(geometry));
+    assert.ok(Math.abs(geometry.bottom - height) <= 1, JSON.stringify(geometry));
+    assert.equal(geometry.rail, false);
+    assert.equal(geometry.status, false);
+    assert.equal(geometry.panels, 0);
+    assert.ok(geometry.overflow <= 1, JSON.stringify(geometry));
+    await page.screenshot({ path: `${output}/editor-mobile-landscape.png` });
+    record("844×390: artboard-first landscape and one-row thumb chrome");
+    await context.close();
+  }
+
   for (const orientation of ["a4-portrait", "a4-landscape"]) {
     const context = await browser.newContext({
       viewport: { width: 768, height: 1024 },
