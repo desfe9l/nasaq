@@ -9,15 +9,15 @@
  * directly; the Google OAuth client secret is read from server-only environment
  * variables and never shipped to the browser.
  *
- * Tri-mode:
- *   - Deployed: inject `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`,
- *     `BETTER_AUTH_URL`, and `DATABASE_URL`; sessions persist in Postgres.
- *   - Sandbox live preview: auth is normally disabled by the platform flag. If
- *     enabled with Google credentials, sessions persist in embedded PGLite.
- *     Live-preview iframe clients use a bearer token (partitioned cookies).
- *   - Off (`VITE_AUTH_ENABLED=false`, the shipped default): no providers;
- *     `requireUserId` resolves a dev user with no database configured, and
- *     throws fail-closed once `DATABASE_URL` is set (see `verify.server.ts`).
+ * Runtime modes:
+ *   - Deployed: inject real Google OAuth credentials, `BETTER_AUTH_URL`, and
+ *     `DATABASE_URL`; sessions persist in Postgres.
+ *   - Sandbox live preview: with real Google credentials and auth not explicitly
+ *     disabled, sessions use the app's embedded PGLite database. Iframe clients
+ *     use a bearer token when browser cookie partitioning prevents session reads.
+ *   - Explicit local-only opt-out (`VITE_AUTH_ENABLED=false`): no auth providers;
+ *     the dev-user fallback is unavailable once `DATABASE_URL` is configured
+ *     (see `verify.server.ts`).
  *
  * NEVER import this from client code — it pulls in `pg` + server-only secrets +
  * server-only Better Auth internals. The client uses `@/lib/auth/client`;
@@ -38,6 +38,10 @@ import {
   GOOGLE_PROVIDER_ID,
 } from "./providers";
 import { pgliteDialect } from "./pglite-dialect";
+import {
+  LIVE_PREVIEW_ALLOWED_HOSTS,
+  LIVE_PREVIEW_TRUSTED_ORIGINS,
+} from "./preview-host";
 
 // Kick (and share) PGLite bootstrap as soon as the auth server module loads.
 void ensureDbReady();
@@ -62,8 +66,9 @@ const env = (key: string): string | undefined => {
   return value ? value : undefined;
 };
 
-// Explicit off-switch. The deployer sets `VITE_AUTH_ENABLED=true` when it
-// provisions auth; set it to "false" to force auth off everywhere (dev user).
+// Explicit local-only off-switch. NASAQ's production environment must set
+// `VITE_AUTH_ENABLED=true` and provision real credentials; never use the dev
+// fallback for a configured production database.
 const authDisabled = env("VITE_AUTH_ENABLED") === "false";
 
 const googleClientId = env("GOOGLE_CLIENT_ID");
@@ -74,14 +79,15 @@ export const authConfigured =
   !authDisabled && Boolean(googleClientId && googleClientSecret);
 
 // This app's own Better Auth origin. When deployed the deployer injects the
-// public URL. In the sandbox live preview there's no fixed URL (each preview gets
-// a dynamic `*.grok-sandbox.com` host), so we hand Better Auth a dynamic baseURL:
+// public URL. In a live preview there is no fixed URL (Arena uses a dynamic
+// `*.e2b.app` host; older Grok previews use `*.grok-sandbox.com`), so Better
+// Auth derives its baseURL from the per-request preview host:
 // it derives the origin per-request from the (proxied) host, validated against the
 // preview allowlist.
 const explicitBaseURL = env("BETTER_AUTH_URL");
 // Explicit `string[]` (not a readonly tuple) — Better Auth's DynamicBaseURLConfig
 // requires a mutable `allowedHosts: string[]`.
-const previewAllowedHosts: string[] = ["*.grok-sandbox.com"];
+const previewAllowedHosts: string[] = [...LIVE_PREVIEW_ALLOWED_HOSTS];
 // Local `npm run dev` (port 8080 contract). Browsers may send Origin as any of
 // these for the same server — trusting only `localhost` rejects `127.0.0.1` and
 // breaks email/password with "Invalid origin".
@@ -105,10 +111,7 @@ const baseURL = explicitBaseURL ?? {
 const trustedOrigins: string[] = explicitBaseURL
   ? [explicitBaseURL, ...LOCAL_DEV_ORIGINS]
   : [
-      // Host wildcards (matched against Origin's host)
-      ...previewAllowedHosts,
-      // Full-origin wildcards (matched against Origin)
-      ...previewAllowedHosts.flatMap((host) => [`https://${host}`, `http://${host}`]),
+      ...LIVE_PREVIEW_TRUSTED_ORIGINS,
       ...LOCAL_DEV_ORIGINS,
     ];
 

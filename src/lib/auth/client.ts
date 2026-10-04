@@ -1,6 +1,7 @@
 import { createAuthClient } from "better-auth/react";
 import { runPreSignInSignOut, runSignOut } from "../../../scripts/sign-out-plan.mjs";
 import { GOOGLE_PROVIDER_ID, SOCIAL_PROVIDERS } from "./providers";
+import { isLivePreviewHost } from "./preview-host";
 
 /**
  * Better Auth client for this React SPA (browser-side).
@@ -28,10 +29,9 @@ export const authClient = createAuthClient({
 
 /**
  * True when sign-in UI should be shown — i.e. whenever `VITE_AUTH_ENABLED` is
- * not `"false"`. The shipped template sets it to `"false"`
- * (`.grok/app-env.json`), which selects the dev user (see `use-current-user`);
- * with the key removed, sign-in is real in preview (baked preview client) and
- * when deployed (injected per-app client).
+ * not explicitly `"false"`. NASAQ's production configuration enables the real
+ * Better Auth flow; local-only fallback behavior must never be treated as a
+ * production account or persistence check.
  */
 export const authEnabled = import.meta.env.VITE_AUTH_ENABLED !== "false";
 
@@ -67,14 +67,14 @@ function setBearerToken(token: string | null): void {
 }
 
 /**
- * The sandbox live preview runs this app inside an iframe on a `*.grok-sandbox.com`
- * host, where a full-page redirect to Google can't work — so sign-in uses a
- * popup there and a normal redirect everywhere else.
+ * Live previews run inside an iframe on Arena's `*.e2b.app` hosts (and older
+ * `*.grok-sandbox.com` hosts). A full-page redirect to Google cannot complete
+ * safely from that embedded context, so preview sign-in uses the popup flow.
  */
 function inLivePreview(): boolean {
   return (
     typeof window !== "undefined" &&
-    window.location.hostname.endsWith(".grok-sandbox.com")
+    isLivePreviewHost(window.location.hostname)
   );
 }
 
@@ -84,8 +84,8 @@ type PopupMessage = { source: "grok-auth-popup"; token: string | null; error?: s
 /**
  * Start direct Google sign-in with Better Auth.
  *
- * - **Live preview** (`*.grok-sandbox.com` iframe): opens a popup to the
- *   template handler and returns the session bearer token to the iframe.
+ * - **Live preview** (`*.e2b.app` / legacy `*.grok-sandbox.com` iframe): opens
+ *   a popup to the preview handler and returns the session bearer token.
  * - **Deployed** (and local non-iframe): a normal full-page redirect to Google.
  *
  * Either way it clears any existing local session FIRST so switching providers

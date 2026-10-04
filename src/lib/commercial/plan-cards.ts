@@ -183,7 +183,7 @@ function paidCard(
     featured: family === FEATURED_FAMILY,
     kind: "paid",
     ctaLabel: "اشترك الآن",
-    ctaHint: "الدفع عبر Gumroad · ترخيص بعد التحقق"
+    ctaHint: "الدفع عبر صفحة آمنة · ترخيص بعد التحقق"
   };
 }
 

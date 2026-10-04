@@ -16,6 +16,7 @@
  */
 
 import type { PackId, Page } from "@/lib/editor/model";
+import { getStorageOwner } from "@/lib/editor/storage-owner";
 import {
   projectAccessBlock,
   type EditorAccessEntitlements,
@@ -56,9 +57,12 @@ export async function commitTemplateDraft(
     readProject: (id: string) => Promise<DraftProject | null | undefined>;
   },
 ): Promise<DraftCommitResult> {
+  const ownerId = getStorageOwner();
+  if (draft.ownerId && draft.ownerId !== ownerId) return { status: "missing" };
   const project = await options.readProject(draft.projectId);
+  if (ownerId !== getStorageOwner()) return { status: "missing" };
   if (!project?.pages?.length) {
-    clearDraft();
+    await clearDraft(ownerId);
     return { status: "missing" };
   }
   const target = options.entries.find((e) => e.id === draft.entryId);
@@ -82,7 +86,7 @@ export async function commitTemplateDraft(
   const updated = draft.kind === "custom" && Boolean(target?.custom);
   const template =
     updated && target?.custom
-      ? saveCustomTemplate(
+      ? await saveCustomTemplate(
           {
             id: target.custom.id,
             title: target.custom.title,
@@ -97,7 +101,7 @@ export async function commitTemplateDraft(
           },
           options.entitlements,
         )
-      : saveCustomTemplate(
+      : await saveCustomTemplate(
           {
             title: draft.title,
             desc: `مُشتق من «${draft.title}» بعد التعديل.`,
@@ -111,6 +115,7 @@ export async function commitTemplateDraft(
           },
           options.entitlements,
         );
-  clearDraft();
+  if (ownerId !== getStorageOwner()) return { status: "missing" };
+  await clearDraft(ownerId);
   return { status: "saved", template, updated };
 }

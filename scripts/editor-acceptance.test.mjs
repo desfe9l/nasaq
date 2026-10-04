@@ -45,6 +45,12 @@ test("customer-facing subscription, success, landing and licensing copy hides pr
   }
 });
 
+test("catalog resolves the auth owner before loading personal template data", () => {
+  const catalogStore = read("src/components/site/useCatalog.ts");
+  assert.match(catalogStore, /syncStorageOwner\(\)[\s\S]*?hydrateCustomTemplateStore\(\)/);
+  assert.match(catalogStore, /subscribeStorageOwner\(load\)/);
+});
+
 test("Template Hub keeps the paid catalog title and neutral share header", () => {
   const catalog = read("src/components/site/PublishedTemplates.tsx");
   assert.match(catalog, /<h2[^>]*>قوالب مدفوعة<\/h2>/);
@@ -56,16 +62,28 @@ test("Template Hub keeps the paid catalog title and neutral share header", () =>
   );
 });
 
+test("Pinterest label and destination match the authoritative brand config", () => {
+  const brand = read("src/lib/brand.ts");
+  const pinterest = brand.match(/\{\s*id: "pinterest",[\s\S]*?\n\s{2}\},/);
+  assert.ok(pinterest, "Pinterest remains in the official social-account list");
+  assert.match(pinterest[0], /handle: "@nasaq_ar"/);
+  assert.match(pinterest[0], /href: "https:\/\/www\.pinterest\.com\/nasaqdocs"/);
+});
+
 test("selection and panel rendering have one owner", () => {
   const app = read("src/components/editor/EditorApp.tsx");
-  assert.equal((app.match(/<RightPanel\b/g) || []).length, 1);
-  assert.equal((app.match(/<LeftPanel\b/g) || []).length, 1);
-  // Both drawers now share the same floating mechanism; each content tree
-  // must still be mounted once, never duplicated for mobile/desktop.
+  // Docked and floating windows use the same renderer. Concrete panel content
+  // is selected in one switch, not cloned for separate viewport variants.
   assert.equal((app.match(/<FloatingPanel\b/g) || []).length, 2);
-  assert.match(app, /side="left"/);
-  assert.match(app, /open=\{rightOpen && !focusMode\}/);
-  assert.doesNotMatch(app, /<CollapsedPanelDock|className="editor-wand-btn"/);
+  assert.equal((app.match(/const renderDockedWindow = /g) || []).length, 1);
+  assert.equal((app.match(/const renderPanelContent = /g) || []).length, 1);
+  assert.equal((app.match(/const renderPanelBody = /g) || []).length, 1);
+  assert.equal((app.match(/<LeftPanel\b/g) || []).length, 1);
+  assert.equal((app.match(/<PropertiesPanel\b/g) || []).length, 1);
+  assert.equal((app.match(/<LayersPanel\b/g) || []).length, 1);
+  assert.match(app, /dockedBySide\.left && renderDockedWindow\(dockedBySide\.left, "left"\)/);
+  assert.match(app, /hosts\.filter\(\(id\) => !visibleDock\(id\)\)\.map/);
+  assert.match(app, /open=\{panelOpen\[id\] && !cropActive && !focusMode\}/);
   const canvas = read("src/components/editor/CanvasStage.tsx");
   assert.doesNotMatch(canvas, /<SelectionActions/);
   assert.match(canvas, /const ROTATE_HANDLES = \["n"\]/);
