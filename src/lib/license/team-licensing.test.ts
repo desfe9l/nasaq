@@ -197,7 +197,7 @@ describe("no licence, no team features", () => {
     assert.equal(access.entitlements.collaboration, false);
     assert.equal(access.entitlements.core_editor, true, "the free editor must stay usable");
     assert.throws(() => requireFeature(access, "team_features"));
-    assert.throws(() => requireFeature(access, "ai_report"));
+    assert.throws(() => requireFeature(access, "multi_user_activation"));
   });
 });
 
@@ -239,15 +239,17 @@ describe("Keygen entitlement codes decide a Keygen licence", () => {
     assert.equal(codes.core_editor, true, "the free editor still works");
   });
 
-  it("never trusts a cached Keygen row without provider verification", async () => {
-    // Fail-closed: with KEYGEN_API_TOKEN absent (or the provider unreachable)
-    // a keygen-sourced row grants NOTHING, even while the local row says
-    // ACTIVE. Only a user-scoped provider validation unlocks it.
+  it("honours a user-scoped Keygen row when the provider is unreachable, never an unscoped one", async () => {
+    // A row already verified for this user is kept while Keygen is unreachable
+    // (see getAuthorizationContext); a row not scoped to the user grants nothing.
     await sql`delete from licenses where user_id = ${SOLO_USER}`;
-    await giveLicense({ userId: SOLO_USER, plan: "team-monthly", source: "keygen" });
-    const access = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com" });
-    assert.equal(access.license, null);
-    assert.equal(access.entitlements.team_features, false);
+    const id = await giveLicense({ userId: SOLO_USER, plan: "team-monthly", source: "keygen" });
+    const scoped = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com" });
+    assert.equal(scoped.license?.id, id);
+    await sql`update licenses set metadata = metadata - 'userScopeVerified' where id = ${id}`;
+    const unscoped = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com" });
+    assert.equal(unscoped.license, null);
+    assert.equal(unscoped.entitlements.team_features, false);
     await sql`delete from licenses where user_id = ${SOLO_USER}`;
   });
 });

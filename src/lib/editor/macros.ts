@@ -128,9 +128,11 @@ const GREGORIAN_AR_MONTHS = [
  * a document must never print a blank date.
  */
 export function hijriFromDate(date: Date): { y: number; m: number; d: number } {
+  // Local civil day, matching formatGregorianDate and Intl's local-time output.
   const jd =
-    Math.floor((date.getTime() + date.getTimezoneOffset() * 60000) / 86400000) +
-    2440588;
+    Math.floor(
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000,
+    ) + 2440588;
   const l = jd - 1948440 + 10632;
   const n = Math.floor((l - 1) / 10631);
   let l2 = l - 10631 * n + 354;
