@@ -386,4 +386,112 @@ describe("PSD → NASAQ", () => {
     assert.equal(scaled?.style.overflowVisible, true);
     assert.equal(scaled?.style.textBoxMode, "fixed");
   });
+
+  it("stamps the source geometry as the repair origin and repairs drift from it", async () => {
+    const bytes = sampleFile();
+    const result = await importPsdBytes(bytes, "repair.psd");
+    const page = result.project.pages[0]!;
+
+    // The report carries the source page size for the page-size check.
+    assert.ok(Math.abs(result.report.pageSizesMm[0]!.w - 282.22) < 0.05);
+    assert.ok(Math.abs(result.report.pageSizesMm[0]!.h - 211.67) < 0.05);
+
+    const elements = flat(page.elements);
+    const photo = elements.find((el) => el.name === "Photo");
+    const backdrop = elements.find((el) => el.name === "Backdrop");
+    const group = page.elements.find((el) => el.type === "group");
+    // Every converted element knows where the file placed it — leaves in page
+    // space, group members in group space, matching their own coordinates.
+    assert.ok(photo?.source?.origin);
+    assert.ok(photo.source?.px, "the raster layer's pixel size travels with it");
+    assert.equal(photo.source!.px!.w, 160);
+    assert.ok(group?.source?.origin);
+    const rawPhoto = group?.children?.find((el) => el.name === "Photo");
+    assert.ok(rawPhoto?.source?.origin);
+    assert.ok(Math.abs(rawPhoto.source!.origin!.x - rawPhoto.x) < 0.02);
+    assert.ok(Math.abs(rawPhoto.source!.origin!.y - rawPhoto.y) < 0.02);
+    // A solid backdrop has an origin too even without pixels.
+    assert.ok(backdrop?.source?.origin);
+
+    // A clean import repairs to nothing…
+    const { repairProject } = await import("../import/repair.ts");
+    const clean = await repairProject(result.project, {
+      pageSizes: result.report.pageSizesMm,
+    });
+    assert.equal(clean.fixes.length, 0);
+
+    // …and a downstream geometry bug is detected and undone from the origin.
+    const corrupted = structuredClone(result.project);
+    const corruptedGroup = corrupted.pages[0]!.elements.find((el) => el.type === "group");
+    const victim = corruptedGroup?.children?.find((el) => el.name === "Photo");
+    assert.ok(victim);
+    victim.x = 500;
+    victim.y = -300;
+    victim.w = 12;
+    victim.h = 260;
+    const repaired = await repairProject(corrupted, {
+      pageSizes: result.report.pageSizesMm,
+    });
+    const fixedGroup = repaired.project.pages[0]!.elements.find((el) => el.type === "group");
+    const fixed = fixedGroup?.children?.find((el) => el.name === "Photo");
+    assert.ok(fixed);
+    assert.ok(Math.abs(fixed.x - (victim.source?.origin?.x ?? -1)) < 0.02);
+    assert.ok(Math.abs(fixed.w - (victim.source?.origin?.w ?? -1)) < 0.02);
+    assert.ok(repaired.fixes.some((fix) => fix.kind === "position" || fix.kind === "bounds"));
+    assert.ok(repaired.fixes.some((fix) => fix.kind === "image"));
+    // The corrupted input is never mutated.
+    assert.equal(victim.x, 500);
+  });
+
+  it("rescales a page whose conversion lost the document size", async () => {
+    const bytes = sampleFile();
+    const result = await importPsdBytes(bytes, "size.psd");
+    const { repairProject } = await import("../import/repair.ts");
+
+    // Page dimensions alone were lost: the content already sits at the right
+    // absolute size, so only the page is corrected and elements stay put.
+    const lost = structuredClone(result.project);
+    lost.pages[0]!.w = 141.11;
+    lost.pages[0]!.h = 105.84;
+    const fixedPage = await repairProject(lost, { pageSizes: result.report.pageSizesMm });
+    assert.ok(fixedPage.fixes.some((fix) => fix.kind === "page"));
+    assert.ok(Math.abs((fixedPage.project.pages[0]!.w || 0) - 282.22) < 0.05);
+    const backdropBefore = flat(lost.pages[0]!.elements).find((el) => el.name === "Backdrop");
+    const backdropAfter = flat(fixedPage.project.pages[0]!.elements).find((el) => el.name === "Backdrop");
+    assert.equal(backdropAfter?.w, backdropBefore?.w);
+    const steady = await repairProject(fixedPage.project, { pageSizes: result.report.pageSizesMm });
+    assert.equal(steady.fixes.length, 0);
+
+    // The dpi mix-up: page AND content (and its stamped origins — the wrong
+    // unit was applied consistently) were laid out for the wrong size, so
+    // both rescale together and the composition survives.
+    const dpiBug = structuredClone(result.project);
+    const halve = (els: CanvasEl[]): void => {
+      for (const el of els) {
+        el.x = Math.round((el.x / 2) * 100) / 100;
+        el.y = Math.round((el.y / 2) * 100) / 100;
+        el.w = Math.round((el.w / 2) * 100) / 100;
+        el.h = Math.round((el.h / 2) * 100) / 100;
+        const origin = el.source?.origin;
+        if (origin) {
+          origin.x = Math.round((origin.x / 2) * 100) / 100;
+          origin.y = Math.round((origin.y / 2) * 100) / 100;
+          origin.w = Math.round((origin.w / 2) * 100) / 100;
+          origin.h = Math.round((origin.h / 2) * 100) / 100;
+        }
+        if (el.children) halve(el.children);
+      }
+    };
+    dpiBug.pages[0]!.w = 141.11;
+    dpiBug.pages[0]!.h = 105.84;
+    halve(dpiBug.pages[0]!.elements);
+    const rescaled = await repairProject(dpiBug, { pageSizes: result.report.pageSizesMm });
+    assert.ok(rescaled.fixes.some((fix) => fix.kind === "page"));
+    assert.ok(Math.abs((rescaled.project.pages[0]!.w || 0) - 282.22) < 0.05);
+    const restoredBackdrop = flat(rescaled.project.pages[0]!.elements).find((el) => el.name === "Backdrop");
+    const originalBackdrop = flat(result.project.pages[0]!.elements).find((el) => el.name === "Backdrop");
+    assert.ok(Math.abs((restoredBackdrop?.w || 0) - (originalBackdrop?.w || 0)) < 0.15);
+    const settled = await repairProject(rescaled.project, { pageSizes: result.report.pageSizesMm });
+    assert.equal(settled.fixes.length, 0);
+  });
 });

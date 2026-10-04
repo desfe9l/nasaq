@@ -67,7 +67,7 @@ import {
 } from "@/lib/templates/published";
 import { CARD_W, CARD_WRAP } from "./cards";
 import { ProjectFileButton } from "./ProjectFileButton";
-import { TEMPLATES_ROUTE } from "@/lib/site-routes";
+import { IMPORT_ROUTE, TEMPLATES_ROUTE } from "@/lib/site-routes";
 
 type FeaturedPill = "featured" | CatalogPillId;
 
@@ -240,6 +240,22 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
   const setEntitlements = useEditor((s) => s.setEntitlements);
   const storeOrg = useEditor((s) => s.orgName);
   const entitlements = license.entitlements;
+  /*
+   * استوديو الاستيراد (/import) is a template-manager entitlement. The card
+   * only appears for accounts that hold it — a visitor without the right sees
+   * no dead-end link, exactly like every other entitlement-scoped surface.
+   */
+  const [canImport, setCanImport] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void import("@/lib/admin/functions")
+      .then(({ adminTemplatesAccessFn }) => adminTemplatesAccessFn())
+      .then((access) => alive && setCanImport(access.ok))
+      .catch(() => alive && setCanImport(false));
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const [newDoc, setNewDoc] = useState<Partial<NewDocumentConfig> | null>(null);
   const [pill, setPill] = useState<FeaturedPill>("featured");
@@ -612,6 +628,24 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
           </div>
           <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-line bg-surface-2 px-4 py-3">
             <ProjectFileButton />
+            {canImport && (
+              <a
+                href={IMPORT_ROUTE}
+                className="shadow-card group inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3.5 py-2.5 text-right transition-all duration-200 hover:-translate-y-0.5 hover:border-gold/60 hover:shadow-card-hover"
+              >
+                <span className="grid size-8 place-items-center rounded-lg bg-gold/20 text-ink">
+                  <LayoutTemplate className="size-4" aria-hidden />
+                </span>
+                <span>
+                  <span className="block text-[12px] font-extrabold text-ink">
+                    استيراد قالب — PSD وWord وPowerPoint وPDF
+                  </span>
+                  <span className="block text-[10.5px] font-bold text-muted">
+                    تحويل إلى مستند قابل للتحرير مع فحص وإصلاح تلقائي للعناصر
+                  </span>
+                </span>
+              </a>
+            )}
             <span className="text-[11px] font-semibold text-muted">
               لديك مشروع محفوظ؟ افتح ملف ‎.nsq‎ أو نسخة JSON لمتابعة العمل.
             </span>
