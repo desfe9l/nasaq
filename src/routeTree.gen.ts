@@ -28,6 +28,7 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PurchaseRouteImport } from './routes/purchase'
+import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
@@ -157,6 +158,11 @@ const ProjectsRoute = ProjectsRouteImport.update({
 const PurchaseRoute = PurchaseRouteImport.update({
   id: '/purchase',
   path: '/purchase',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudioRoute = StudioRouteImport.update({
+  id: '/studio',
+  path: '/studio',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TemplatesRoute = TemplatesRouteImport.update({
@@ -358,6 +364,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/purchase': typeof PurchaseRoute
+  '/studio': typeof StudioRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/terms': typeof TermsRoute
   '/workspace': typeof WorkspaceRoute
@@ -413,6 +420,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/purchase': typeof PurchaseRoute
+  '/studio': typeof StudioRoute
   '/terms': typeof TermsRoute
   '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
@@ -469,6 +477,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/purchase': typeof PurchaseRoute
+  '/studio': typeof StudioRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/terms': typeof TermsRoute
   '/workspace': typeof WorkspaceRoute
@@ -527,6 +536,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/projects'
     | '/purchase'
+    | '/studio'
     | '/templates'
     | '/terms'
     | '/workspace'
@@ -582,6 +592,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/projects'
     | '/purchase'
+    | '/studio'
     | '/terms'
     | '/workspace'
     | '/الهوية'
@@ -637,6 +648,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/projects'
     | '/purchase'
+    | '/studio'
     | '/templates'
     | '/terms'
     | '/workspace'
@@ -694,6 +706,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
   PurchaseRoute: typeof PurchaseRoute
+  StudioRoute: typeof StudioRoute
   TemplatesRoute: typeof TemplatesRouteWithChildren
   TermsRoute: typeof TermsRoute
   WorkspaceRoute: typeof WorkspaceRoute
@@ -845,6 +858,13 @@ declare module '@tanstack/react-router' {
       path: '/purchase'
       fullPath: '/purchase'
       preLoaderRoute: typeof PurchaseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/studio': {
+      id: '/studio'
+      path: '/studio'
+      fullPath: '/studio'
+      preLoaderRoute: typeof StudioRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/templates': {
@@ -1190,6 +1210,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
   PurchaseRoute: PurchaseRoute,
+  StudioRoute: StudioRoute,
   TemplatesRoute: TemplatesRouteWithChildren,
   TermsRoute: TermsRoute,
   WorkspaceRoute: WorkspaceRoute,

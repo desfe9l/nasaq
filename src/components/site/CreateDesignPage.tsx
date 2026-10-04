@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect } from "react";
-import { ArrowRight, FilePlus2, LayoutTemplate, ShieldCheck } from "lucide-react";
+import { ArrowRight, FilePlus2, LayoutTemplate, ShieldCheck, Sparkles } from "lucide-react";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { NewDocumentForm } from "@/components/site/NewDocumentDialog";
 import { useEditor } from "@/lib/editor/store";
@@ -89,6 +89,13 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <a
+              href="/studio"
+              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-navy px-3.5 text-[12.5px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
+            >
+              <Sparkles className="size-4 text-gold" aria-hidden />
+              استوديو التوليد بالذكاء الاصطناعي
+            </a>
             <a
               href={PROJECTS_ROUTE}
               className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-line bg-surface px-3.5 text-[12.5px] font-bold text-ink transition hover:border-brand"

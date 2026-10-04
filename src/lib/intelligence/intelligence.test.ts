@@ -193,3 +193,58 @@ test("editorial composition is not the same cover as the institutional report", 
   assert.equal(editorial.project.pages[0].elements.some((el) => el.name === "حقل الغلاف"), false);
   assert.deepEqual(validateProject(editorial.project), []);
 });
+
+import { parsePrompt } from "./prompt-analyzer";
+import { generateDesignFromPrompt } from "./pipeline";
+import { generateVariations } from "./variations";
+
+test("prompt analyzer correctly parses prompt intent, docType, and page count", () => {
+  const cyber = parsePrompt("صمم تقريرًا رسميًا عن الأمن السيبراني");
+  assert.equal(cyber.docType, "official_report");
+  assert.ok(cyber.title.includes("السيبراني"));
+  assert.equal(cyber.format, "a4-book");
+
+  const govCover = parsePrompt("صمم غلاف تقرير سنوي لجهة حكومية");
+  assert.equal(govCover.docType, "cover");
+  assert.equal(govCover.pages, 1);
+  assert.ok(govCover.title.includes("التقرير السنوي"));
+
+  const presentation8 = parsePrompt("صمم عرضًا قياديًا من 8 صفحات");
+  assert.equal(presentation8.docType, "presentation");
+  assert.equal(presentation8.pages, 8);
+  assert.equal(presentation8.format, "wide-slide");
+  assert.equal(presentation8.orientation, "landscape");
+
+  const companyProfile = parsePrompt("صمم صفحة تعريفية احترافية لشركة");
+  assert.equal(companyProfile.docType, "company_profile");
+  assert.ok(companyProfile.pages >= 1);
+});
+
+test("generateDesignFromPrompt creates production-ready editable NASAQ project with variations", () => {
+  const result = generateDesignFromPrompt("صمم تقريرًا رسميًا عن الأمن السيبراني");
+  assert.ok(result.primaryResult.project);
+  assert.ok(result.primaryResult.project.pages.length >= 4);
+  assert.deepEqual(validateProject(result.primaryResult.project), []);
+
+  // Assert all elements are real NASAQ elements
+  const allElements = result.primaryResult.project.pages.flatMap((p) => p.elements);
+  assert.ok(allElements.length > 15);
+  assert.ok(allElements.some((el) => el.type === "text"));
+  assert.ok(allElements.some((el) => el.type === "shape"));
+  assert.ok(allElements.some((el) => el.type === "table"));
+
+  // Check variations
+  assert.equal(result.variations.length, 4);
+  for (const variation of result.variations) {
+    assert.ok(variation.id);
+    assert.ok(variation.name);
+    assert.ok(variation.project.pages.length >= 4);
+    assert.deepEqual(validateProject(variation.project), []);
+    assert.ok(variation.score >= 80);
+  }
+
+  // Ensure filenames are not in user visible content
+  const stringified = JSON.stringify(result.primaryResult.project);
+  assert.equal(stringified.includes(".pdf"), false);
+  assert.equal(stringified.includes("ref-"), false);
+});

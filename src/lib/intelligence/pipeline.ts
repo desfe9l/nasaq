@@ -6,6 +6,9 @@ import { buildDesignDna } from "./dna";
 import { composeReference, generateOriginal, literalDraft } from "./layout";
 import type { DesignAnalysis, DesignBrief, DesignDna, PipelineResult } from "./schema";
 import { INTELLIGENCE_SCHEMA_VERSION } from "./schema";
+import { parsePrompt, type PromptAnalysis } from "./prompt-analyzer";
+import { generateFromIntent } from "./design-generator";
+import { generateVariations, type DesignVariation } from "./variations";
 
 /** Two correction passes, then a final critique. Not an open loop. */
 export const MAX_APPLY_ROUNDS = 2;
@@ -61,6 +64,36 @@ function runLoop(project: Project, label: string, path: PipelineResult["path"]):
 
 export function generateTemplate(brief: DesignBrief): PipelineResult & { project: Project } {
   return runLoop(generateOriginal(brief), brief.title, "generate");
+}
+
+export interface StudioGenerationResult {
+  intent: PromptAnalysis;
+  primaryResult: PipelineResult & { project: Project };
+  variations: DesignVariation[];
+}
+
+/**
+ * Primary Natural-Language Prompt -> Production-Ready NASAQ Design
+ */
+export function generateDesignFromPrompt(
+  prompt: string,
+  overrides?: Partial<PromptAnalysis>,
+): StudioGenerationResult {
+  const parsed = parsePrompt(prompt);
+  const intent: PromptAnalysis = {
+    ...parsed,
+    ...(overrides || {}),
+  };
+
+  const initialProject = generateFromIntent(intent);
+  const primaryResult = runLoop(initialProject, intent.title, "generate");
+  const variations = generateVariations(intent);
+
+  return {
+    intent,
+    primaryResult,
+    variations,
+  };
 }
 
 /**

@@ -35,6 +35,9 @@ export const WORKSPACE_ROUTE = "/workspace";
 /** The professional creation screen: choose format, size and orientation. */
 export const CREATE_ROUTE = "/create";
 
+/** The AI design generation studio. */
+export const STUDIO_ROUTE = "/studio";
+
 /** The editor. Bare `/editor` is an ENTRY, never a blank canvas — see routes. */
 export const EDITOR_ROUTE = "/editor";
 
