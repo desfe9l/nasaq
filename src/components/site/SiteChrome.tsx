@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { createPortal } from "react-dom";
-import { ChevronDown, FilePlus2, KeyRound, LogIn, LogOut, Menu, Palette, UserRound, X } from "lucide-react";
+import { ChevronDown, FilePlus2, KeyRound, LogIn, LogOut, Palette, UserRound } from "lucide-react";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   BRAND,
   NAV_ITEMS,
-  PRIMARY_NAV_ITEMS,
-  SECONDARY_NAV_ITEMS,
   WHATSAPP_MESSAGES,
   whatsappHref,
 } from "@/lib/brand";
@@ -24,7 +22,10 @@ import {
   openNewDocumentFlow,
   useWorkspaceEntry,
 } from "@/lib/auth/use-workspace-entry";
+import { ProductNav } from "@/components/nav/ProductNav";
+import { SITE_SURFACE_NAV } from "@/lib/nav/surface-nav";
 import { AccountControlContent } from "./AccountControlContent";
+import { WorkspaceMark } from "./WorkspaceMark";
 import { useAccountTier } from "./AccountBadge";
 import {
   AccountMenuPanel,
@@ -35,7 +36,7 @@ import {
 
 /** The site-header counterpart of the editor's compact icon controls. */
 const APPEARANCE_CONTROL_CLASS =
-  "grid size-[34px] shrink-0 place-items-center rounded-[9px] border border-line bg-transparent text-muted transition-[background-color,border-color,color,transform] duration-150 hover:border-brand/60 hover:bg-navy/10 hover:text-brand active:scale-[0.96] active:bg-navy/15 active:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+  "site-header-action grid size-11 shrink-0 place-items-center rounded-[9px] border border-line bg-transparent text-muted transition-[background-color,border-color,color,transform] duration-150 hover:border-brand/60 hover:bg-navy/10 hover:text-brand active:scale-[0.96] active:bg-navy/15 active:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
 
 /**
  * The editor call-to-action in the site chrome.
@@ -46,8 +47,14 @@ const APPEARANCE_CONTROL_CLASS =
  * link that leads there, so nobody with an account is asked to "try" a product
  * they already signed up for. Only a visitor with no session is routed through
  * the limited `/demo` page.
+ *
+ * The control carries `WorkspaceMark` — one glyph for both doors it can be
+ * (the licensed workspace and the editor experience), leading the label exactly
+ * where the chrome's other icons lead theirs. Only the visual treatment changed:
+ * the sizes, the padding, the slot in the header, the destination and the labels
+ * are the ones this link always had.
  */
-function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile" }) {
+function EditorEntryLink() {
   const { entry } = useEditorEntry();
   const workspace = useWorkspaceEntry();
   const pathname = useLocation({ select: location => location.pathname });
@@ -66,13 +73,11 @@ function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile"
   return (
     <a
       href={href}
-      className={cn(
-        variant === "header"
-          ? "hidden h-9 items-center whitespace-nowrap rounded-[8px] border border-brand px-3 text-[12px] font-extrabold text-brand lg:inline-flex"
-          : "block rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted lg:hidden",
-      )}
+      title={label}
+      className="site-header-action inline-flex h-11 min-w-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-[8px] border border-brand px-2.5 text-[12px] font-extrabold text-brand transition-[background-color,border-color,color,transform] duration-150 hover:border-brand/60 hover:bg-navy/10 hover:text-brand-hover active:scale-[0.98] active:bg-navy/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
     >
-      {label}
+      <WorkspaceMark className="size-4 shrink-0" />
+      <span className="site-header-action-label">{label}</span>
     </a>
   );
 }
@@ -87,20 +92,14 @@ function EditorEntryLink({ variant = "header" }: { variant?: "header" | "mobile"
  * Registered accounts without a licence keep «افتح المحرر» and the free-tier
  * restrictions; this shortcut simply does not appear for them.
  */
-function NewDocumentButton({ variant = "header" }: { variant?: "header" | "mobile" }) {
+function NewDocumentButton() {
   const { user, isPending } = useCurrentUserState();
   if (!authEnabled || isPending || !user) return null;
-  return <NewDocumentForUser user={user} variant={variant} />;
+  return <NewDocumentForUser user={user} />;
 }
 
 /** Own component so `useAccountTier` only mounts for a real signed-in session. */
-function NewDocumentForUser({
-  user,
-  variant,
-}: {
-  user: AppUser;
-  variant: "header" | "mobile";
-}) {
+function NewDocumentForUser({ user }: { user: AppUser }) {
   const tier = useAccountTier(user);
   const { entry } = useEditorEntry();
   // Nothing until the session AND the licence state resolve — exactly like
@@ -113,14 +112,10 @@ function NewDocumentForUser({
       // Always through the configuration step on Home — never a silent blank.
       onClick={() => openNewDocumentFlow()}
       title="مستند جديد"
-      className={cn(
-        variant === "header"
-          ? "hidden h-9 items-center gap-1.5 whitespace-nowrap rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-on-brand transition hover:bg-navy-2 lg:inline-flex"
-          : "mt-1 flex w-full items-center gap-2 rounded-[8px] px-3 py-2.5 text-[13px] font-bold text-muted lg:hidden",
-      )}
+      className="site-header-action inline-flex h-11 min-w-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-[8px] bg-navy px-2.5 text-[12px] font-extrabold text-on-brand transition hover:bg-navy-2"
     >
-      <FilePlus2 className="size-4" aria-hidden />
-      مستند جديد
+      <FilePlus2 className="size-4 shrink-0" aria-hidden />
+      <span className="site-header-action-label">مستند جديد</span>
     </button>
   );
 }
@@ -172,13 +167,10 @@ function HeaderAccount() {
     return (
       <a
         href="/login"
-        className={cn(
-          "items-center gap-1.5 rounded-[8px] border border-line px-3 font-bold text-ink transition hover:border-brand hover:text-brand-hover",
-          "inline-flex h-9 max-w-[150px] px-2 text-[11px] sm:px-3 sm:text-[12px]",
-        )}
+        className="site-header-action inline-flex h-11 min-w-11 max-w-[168px] items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-bold text-ink transition hover:border-brand hover:text-brand-hover"
       >
-        <LogIn className="size-4" aria-hidden />
-        <span className="truncate">
+        <LogIn className="size-4 shrink-0" aria-hidden />
+        <span className="site-header-action-label truncate">
           تسجيل الدخول / إنشاء حساب
         </span>
       </a>
@@ -304,25 +296,11 @@ function AnnouncementBar() {
 }
 
 export function SiteHeader({ current }: { current: string }) {
-  const [open, setOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
   // The root-level theme module applies the saved mode before routes render.
   const [appearance, setAppearance] = useState(
     () => readStoredTheme() ?? "light",
   );
   useEffect(() => subscribeTheme(setAppearance), []);
-
-  useEffect(() => {
-    setOpen(false);
-    setMoreOpen(false);
-  }, [current]);
-
-  useEffect(() => {
-    if (!moreOpen) return;
-    const close = () => setMoreOpen(false);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [moreOpen]);
 
   const appearanceLabel =
     appearance === "light" ? "فاتح" : appearance === "dim" ? "خافت" : "داكن";
@@ -348,74 +326,24 @@ export function SiteHeader({ current }: { current: string }) {
     <ThemedToaster position="top-center" richColors dir="rtl" />
     <AnnouncementBar />
     {/*
-     * Glassmorphic sticky nav.
-     *
-     * `backdrop-filter: blur(12px)` over a translucent surface keeps the page
-     * visible through the bar as it scrolls, while the hairline bottom border +
-     * `shadow-sm` keep a crisp edge against the content underneath (without them
-     * a blurred bar smears into the page it is floating over).
+     * Product navigation, not browser chrome. The strip stays in normal
+     * flow, inset from the screen edge and the safe area, so iPadOS Safari
+     * gestures and toolbars never own it. Every route is a visible tab;
+     * a narrow width scrolls the strip instead of hiding it behind a menu.
      */}
-    <header className="sticky top-0 z-40 border-b border-line bg-page">
-      <div className="mx-auto grid min-h-16 w-full max-w-7xl grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 px-4 sm:gap-x-4 sm:px-6 lg:flex">
+    <header className="site-header sticky top-0 z-40 border-b border-line bg-page">
+      <div className="site-header-bar mx-auto flex min-h-16 w-full max-w-7xl items-center gap-2 px-3 sm:px-4">
         <a href="/" className="flex shrink-0 items-center gap-2.5">
           <BrandLogo />
         </a>
 
-        <nav className="hidden min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex" aria-label="الروابط الرئيسية">
-          {PRIMARY_NAV_ITEMS.map((item) => (
-            <a
-              key={item.to}
-              href={item.to}
-              className={cn(
- "whitespace-nowrap rounded-[8px] px-2.5 py-2 text-[12px] font-bold transition xl:text-[13px]",
-                current === item.to
-                  ? "bg-navy text-on-brand"
-                  : "text-muted hover:bg-line-2 hover:text-ink",
-              )}
-            >
-              {item.label}
-            </a>
-          ))}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                setMoreOpen((value) => !value);
-              }}
-              aria-expanded={moreOpen}
-              aria-haspopup="menu"
-              className="flex h-9 items-center gap-1 whitespace-nowrap rounded-[8px] px-2.5 text-[12px] font-bold text-muted transition hover:bg-line-2 hover:text-ink xl:text-[13px]"
-            >
-              المزيد
-              <ChevronDown className={cn("size-3.5 transition", moreOpen && "rotate-180")} aria-hidden />
-            </button>
-            {moreOpen && (
-              <div
-                role="menu"
-                className="absolute end-0 top-11 z-50 grid w-52 gap-1 rounded-[10px] border border-line bg-surface p-1.5 shadow-xl"
-              >
-                {SECONDARY_NAV_ITEMS.map((item) => (
-                  <a
-                    key={item.to}
-                    href={item.to}
-                    role="menuitem"
-                    className={cn(
- "whitespace-nowrap rounded-[8px] px-3 py-2.5 text-[12px] font-bold transition",
-                      current === item.to
-                        ? "bg-navy text-on-brand"
-                        : "text-muted hover:bg-line-2 hover:text-ink",
-                    )}
-                  >
-                    {item.label}
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        </nav>
+        <ProductNav
+          label="الروابط الرئيسية"
+          items={SITE_SURFACE_NAV}
+          activeId={current}
+        />
 
-        <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-2">
+        <div className="site-header-actions flex shrink-0 items-center gap-1.5">
           {/* One compact palette control cycles the shared site/editor appearance. */}
           <button
             type="button"
@@ -437,46 +365,8 @@ export function SiteHeader({ current }: { current: string }) {
           <NewDocumentButton />
           <EditorEntryLink />
           <HeaderAccount />
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            aria-expanded={open}
-            aria-label="القائمة"
-            className="grid size-9 shrink-0 place-items-center rounded-[8px] border border-line lg:hidden"
-          >
-            {open ? <X className="size-4" /> : <Menu className="size-4" />}
-          </button>
         </div>
       </div>
-
-      {open && (
-        <nav className="border-t border-line px-4 pb-3 lg:hidden">
-          {NAV_ITEMS.map((item) => (
-            <a
-              key={item.to}
-              href={item.to}
-              className={cn(
- "block rounded-[8px] px-3 py-2.5 text-[13px] font-bold",
-                current === item.to ? "bg-navy text-on-brand" : "text-muted",
-              )}
-            >
-              {item.label}
-            </a>
-          ))}
-          <EditorEntryLink variant="mobile" />
-          <NewDocumentButton variant="mobile" />
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={`تغيير مظهر مساحة العمل (الحالي: ${appearanceLabel})`}
-            title={`مظهر مساحة العمل: ${appearanceLabel}`}
-            className={cn(APPEARANCE_CONTROL_CLASS, "mt-1")}
-          >
-            <Palette className="size-4" strokeWidth={1.75} aria-hidden="true" />
-          </button>
-          {/* The account trigger above is shared across all breakpoints. */}
-        </nav>
-      )}
     </header>
     </>
   );
