@@ -185,7 +185,7 @@ export function PageBackground({ page }: { page: Page }) {
             type="checkbox"
             className="mt-0.5"
             disabled={page.locked}
-            checked={Boolean(page.clipContent)}
+            checked={page.clipContent !== false}
             onChange={(event) =>
               setBackground(page.id, { clipContent: event.target.checked })
             }

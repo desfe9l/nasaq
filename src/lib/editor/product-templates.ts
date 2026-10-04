@@ -36,7 +36,15 @@ const LINE = "#dce5df";
 const PAPER = "#ffffff";
 
 function page(name: string, w = 210, h = 297): Page {
-  return { id: uid("page"), name, w, h, bg: PAPER, elements: [] };
+  return {
+    id: uid("page"),
+    name,
+    w,
+    h,
+    bg: PAPER,
+    elements: [],
+    clipContent: true,
+  };
 }
 
 function add(

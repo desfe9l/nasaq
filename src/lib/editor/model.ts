@@ -9,15 +9,8 @@ export const A4 = { w: 210, h: 297 } as const;
 
 export const MIN_SIZE = 4;
 export const GRID = 5;
-/**
- * How far an element may travel beyond the artboard edges (mm, page space).
- *
- * The stage's scroll surface pads each artboard by exactly this amount, so
- * every position the drag clamp allows is also visible and reachable — an
- * element dragged off the sheet can always be grabbed again and dragged back
- * in, with mouse, touch or Pencil.
- */
-export const WORKSPACE_MARGIN_MM = 120;
+/** Extra size allowed during resize before the interaction safety cap (mm). */
+export const RESIZE_OVERFLOW_MM = 120;
 /**
  * Legacy single-project autosave slot, migrated into the library on first run.
  *
@@ -429,7 +422,7 @@ export interface Page {
   /** Normalized background-image focal point, from 0 to 100 percent. */
   bgImageX?: number;
   bgImageY?: number;
-  /** While editing, clip paint that sits outside this page. Elements stay in the file. */
+  /** While editing, clip paint outside this page (default true). Elements stay in the file. */
   clipContent?: boolean;
   /** Page width in mm; omitted means A4 portrait width. */
   w?: number;
@@ -1062,11 +1055,12 @@ export function createElement(
  * Sanitises an element's geometry — NOT a page-bounds clamp.
  *
  * Editing is free: an element may sit fully inside the page, straddle its
- * edge, or move entirely outside it (see WORKSPACE_MARGIN in CanvasStage).
- * Only export clips content to the page rectangle. This function's only job
- * is to guard against corrupt/non-finite values (a bad paste, an old file,
- * a manual edit) — it must never pull a legitimately off-page element back
- * onto the page, or every drag/reload would silently undo itself.
+ * edge, or move entirely outside it. Interactive movement has no page-edge
+ * clamp; this function only guards against corrupt/non-finite coordinates.
+ * The page's editing and export preferences affect paint only. This function
+ * guards against corrupt/non-finite values (a bad paste, an old file, a manual
+ * edit) — it must never pull a legitimately off-page element back onto the
+ * page, or every drag/reload would silently undo itself.
  *
  * `size` (the page size) is still used to size the sanity ceiling: large
  * enough that any real design fits, small enough that garbage data can't

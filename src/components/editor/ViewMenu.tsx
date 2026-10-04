@@ -247,12 +247,12 @@ export function ViewMenu({
       />
       <MenuRow
         label="إخفاء العناصر خارج الصفحة"
-        checked={Boolean(activePage?.clipContent)}
+        checked={Boolean(activePage && activePage.clipContent !== false)}
         hint="يقص الظهور فقط — العناصر تبقى في الملف"
         onSelect={() => {
           if (!activePage) return;
           setPageBackground(activePage.id, {
-            clipContent: !activePage.clipContent,
+            clipContent: activePage.clipContent === false,
           });
         }}
       />

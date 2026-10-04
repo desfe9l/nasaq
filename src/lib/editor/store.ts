@@ -1119,6 +1119,9 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
   incoming.transactionNo ||= "";
   pages.forEach((p) => {
     p.elements ||= [];
+    // Projects saved before the editing-clip preference existed inherit the
+    // new default; an explicit false remains the author's saved choice.
+    p.clipContent ??= true;
     if (p.bgGradient !== undefined)
       p.bgGradient = normalizeGradient(p.bgGradient);
     p.w = pageSize(p).w;
@@ -5268,6 +5271,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         id: uid("page"),
         name: `صفحة ${s.pages.length + 1}`,
         elements: [],
+        clipContent: true,
         bg: THEMES[s.theme].paper,
         w: preset.w,
         h: preset.h,

@@ -667,6 +667,7 @@ export function validatePages(
         typeof rawPage.name === "string"
           ? rawPage.name.slice(0, 200)
           : `صفحة ${index + 1}`,
+      clipContent: rawPage.clipContent !== false,
       elements: rawEls
         .map((e) => cleanEl(e, 0))
         .filter((e): e is CanvasEl => e !== null),
