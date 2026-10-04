@@ -51,6 +51,7 @@ function sampleProject(): NsqProjectInput {
         bgImageFit: "cover",
         bgImageX: 24,
         bgImageY: 76,
+        clipContent: false,
         elements: [
           {
             id: "t1",
@@ -287,6 +288,8 @@ describe("nsq package round trip", () => {
     assert.equal(p.pages![0].bgImageFit, "cover");
     assert.equal(p.pages![0].bgImageX, 24);
     assert.equal(p.pages![0].bgImageY, 76);
+    assert.equal(p.pages![0].clipContent, false, "saved show-overflow preference survives");
+    assert.equal(p.pages![1].clipContent, true, "missing legacy preference defaults to clipping");
     const [text, image, shape, group] = p.pages![0].elements;
     assert.deepEqual(text, original.pages[0].elements[0]);
     assert.equal(image.src, PNG);

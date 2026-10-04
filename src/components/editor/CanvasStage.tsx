@@ -16,7 +16,7 @@ import {
 import {
   findElement,
   MIN_SIZE,
-  WORKSPACE_MARGIN_MM,
+  RESIZE_OVERFLOW_MM,
   pageSize,
   type Box,
   type CanvasEl,
@@ -1308,19 +1308,11 @@ export function CanvasStage({
           y: ev.clientY,
         });
       }
-      const workspaceW = size.w + WORKSPACE_MARGIN_MM * 2;
-      const workspaceH = size.h + WORKSPACE_MARGIN_MM * 2;
-      next.w = Math.max(clamp(next.w, MIN_SIZE, workspaceW), MIN_SIZE);
-      next.h = Math.max(clamp(next.h, MIN_SIZE, workspaceH), MIN_SIZE);
-      next.x = Math.max(
-        -WORKSPACE_MARGIN_MM,
-        Math.min(next.x, size.w + WORKSPACE_MARGIN_MM - next.w),
-      );
-      next.y = Math.max(
-        -WORKSPACE_MARGIN_MM,
-        Math.min(next.y, size.h + WORKSPACE_MARGIN_MM - next.h),
-      );
-
+      // Only resize dimensions have a safety cap; x/y stay free in page space.
+      const maxWidth = size.w + RESIZE_OVERFLOW_MM * 2;
+      const maxHeight = size.h + RESIZE_OVERFLOW_MM * 2;
+      next.w = Math.max(clamp(next.w, MIN_SIZE, maxWidth), MIN_SIZE);
+      next.h = Math.max(clamp(next.h, MIN_SIZE, maxHeight), MIN_SIZE);
       /*
        * Publish the frame. `next` (and the sibling maths below) are in
        * ABSOLUTE page mm — the coordinate space the element nodes render in.
@@ -1607,10 +1599,9 @@ export function CanvasStage({
     const page = stateAtStart.pages.find((candidate) => candidate.id === pageId);
     if (!page || page.locked || page.hidden) return;
     /*
-     * A marquee that STARTS on the pasteboard (outside every artboard) must
-     * not hijack the active page on a mere click — the author may only want
-     * the selection cleared. Those gestures activate their page on the first
-     * real movement instead.
+     * A marquee that starts on the pasteboard is scoped to the already-active
+     * page. It may clear or change artwork selection, but never activates the
+     * nearest artboard just because a gesture began in empty workspace.
      */
     let activated = stateAtStart.activePageId === pageId;
     if (!activated && activate === "always") {
@@ -1643,9 +1634,17 @@ export function CanvasStage({
       selecting &&
       gestureState.regionMode === "off";
     const before = e.shiftKey ? [...selectionForPage] : [];
-    const candidates = pickables(page, groupForPage).filter((item) =>
-      toolAccepts(gestureTool, item.el),
-    );
+    const candidates = pickables(page, groupForPage).flatMap((item) => {
+      if (!toolAccepts(gestureTool, item.el)) return [];
+      if (page.clipContent === false) return [item];
+      const x = Math.max(0, item.box.x);
+      const y = Math.max(0, item.box.y);
+      const right = Math.min(size.w, item.box.x + item.box.w);
+      const bottom = Math.min(size.h, item.box.y + item.box.h);
+      return right > x && bottom > y
+        ? [{ ...item, box: { x, y, w: right - x, h: bottom - y } }]
+        : [];
+    });
     let mode = resolveMarqueeMode(gestureTool, gestureState.regionMode, {
       shift: e.shiftKey,
       alt: e.altKey,
@@ -1803,8 +1802,17 @@ export function CanvasStage({
            */
           if (isRegionArmed(gestureTool, gestureState.regionMode)) {
             const point = toMm(ev);
-            const hit = elementsAtPoint(page, groupForPage, point.x, point.y)
-              .find((el) => !el.hidden && toolAccepts(gestureTool, el));
+            const outsideClippedPage =
+              page.clipContent !== false &&
+              (point.x < 0 ||
+                point.y < 0 ||
+                point.x > size.w ||
+                point.y > size.h);
+            const hit = outsideClippedPage
+              ? undefined
+              : elementsAtPoint(page, groupForPage, point.x, point.y).find(
+                  (el) => !el.hidden && toolAccepts(gestureTool, el),
+                );
             if (hit) select(hit.id);
             else if (!e.shiftKey) select(null);
             return;
@@ -1880,35 +1888,6 @@ export function CanvasStage({
     return null;
   };
 
-  /**
-   * The visible artboard NEAREST a pasteboard point.
-   *
-   * Selection is a workspace gesture, not an artboard-only one: pressing the
-   * grey canvas beside a page and sweeping across it must marquee-select, and
-   * a plain click there must clear the selection — exactly like clicking empty
-   * space inside the page. The active page wins ties, then proximity.
-   */
-  const nearestPageToPoint = (x: number, y: number): Page | null => {
-    const activeId = useEditor.getState().activePageId;
-    let best: Page | null = null;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (const page of visible) {
-      if (page.locked || page.hidden) continue;
-      const node = pageRefs.current[page.id];
-      if (!node) continue;
-      const rect = node.getBoundingClientRect();
-      const dx = Math.max(rect.left - x, 0, x - rect.right);
-      const dy = Math.max(rect.top - y, 0, y - rect.bottom);
-      const dist =
-        Math.hypot(dx, dy) - (page.id === activeId ? Number.MIN_VALUE : 0);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = page;
-      }
-    }
-    return best;
-  };
-
   // Geometry is relative to each artboard, NOT bounded by it. Rendering and
   // export clipping stay unchanged; visible workspace overflow remains usable.
   /**
@@ -1927,6 +1906,14 @@ export function CanvasStage({
         x,
         y,
       );
+      const size = pageSize(page);
+      // Hidden overflow is not a hit target. Once the author turns clipping
+      // off, the same workspace geometry remains directly selectable.
+      if (
+        page.clipContent !== false &&
+        (point.x < 0 || point.y < 0 || point.x > size.w || point.y > size.h)
+      )
+        continue;
       const pageIsActive = page.id === activePageId;
       const pageSelection = pageIsActive ? selectedSet : EMPTY_SELECTION;
       const pageEnteredGroupId = pageIsActive ? enteredGroupId : null;
@@ -2095,12 +2082,28 @@ export function CanvasStage({
         let page = pageAtPoint(e.clientX, e.clientY);
         let activate: "always" | "onmove" = "always";
         if (!page) {
-          // Pasteboard press: selection starts OUTSIDE the artboard too — a
-          // drag marquees on the nearest page, a plain click deselects.
-          page = nearestPageToPoint(e.clientX, e.clientY);
+          // Empty pasteboard space never selects or activates a neighboring
+          // artboard. Keep a select-tool marquee on the current page only.
+          const state = useEditor.getState();
+          const activePage = state.pages.find(
+            (candidate) => candidate.id === state.activePageId,
+          );
+          if (
+            toolState().tool !== "select" ||
+            !activePage ||
+            activePage.locked ||
+            activePage.hidden
+          ) {
+            if (!e.shiftKey) state.select(null);
+            return;
+          }
+          page = activePage;
           activate = "onmove";
         }
-        if (!page || page.locked || page.hidden) return;
+        if (!page || page.locked || page.hidden) {
+          if (!e.shiftKey) useEditor.getState().select(null);
+          return;
+        }
         startMarquee(e, page.id, activate);
       }}
       onContextMenu={(e) => {
@@ -2549,7 +2552,7 @@ const ArtboardPage = memo(function ArtboardPage({
           className={`report-page ${showGrid ? "show-grid" : ""} ${
             isActive ? "artboard-active-outline" : ""
           } ${isLocked ? "artboard-locked" : ""} ${isHidden ? "artboard-hidden-content" : ""} ${
-            page.clipContent ? "is-clip-view" : ""
+            page.clipContent !== false ? "is-clip-view" : ""
           }`}
           style={{
             width: `${mmToPx(size.w)}px`,
