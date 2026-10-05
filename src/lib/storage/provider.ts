@@ -50,9 +50,21 @@ export const STORAGE_MAX_OBJECT_BYTES = Math.max(
   ...Object.values(STORAGE_MAX_OBJECT_BYTES_BY_KIND),
 );
 
-/** The ceiling for one kind, falling back to the strictest known limit. */
+/**
+ * The ceiling for one kind.
+ *
+ * An unrecognised kind falls back to the STRICTEST known limit, never the
+ * loosest: a size check must fail closed, so a caller that ever reaches this
+ * with a value outside `STORAGE_ASSET_KINDS` gets the smallest budget rather
+ * than the biggest one. (`uploadEditorAsset` validates the kind first, so in
+ * practice the fallback is unreachable — it is here so it cannot become a
+ * fail-open path later.)
+ */
 export function storageMaxBytesForKind(kind: StorageAssetKind): number {
-  return STORAGE_MAX_OBJECT_BYTES_BY_KIND[kind] ?? STORAGE_MAX_OBJECT_BYTES;
+  return (
+    STORAGE_MAX_OBJECT_BYTES_BY_KIND[kind] ??
+    Math.min(...Object.values(STORAGE_MAX_OBJECT_BYTES_BY_KIND))
+  );
 }
 
 /**

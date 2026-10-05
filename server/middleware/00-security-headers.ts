@@ -21,7 +21,9 @@
  *    is allowed and why. Appended (never replacing a route's own stricter CSP,
  *    e.g. `/api/templates/thumbnail`); browsers enforce every CSP header they
  *    receive, so the result is the intersection — strictest wins.
- *  - HSTS in production only — dev runs plain HTTP on localhost.
+ *  - HSTS — production builds only, and only for a host this deployment owns
+ *    (see `hstsAppliesTo`): a preview or sandbox domain must not pin a zone it
+ *    does not control for a year.
  */
 
 interface SecurityEvent {
@@ -29,7 +31,14 @@ interface SecurityEvent {
   url?: URL;
 }
 
-const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+/**
+ * A production runtime? Read per request rather than memoised at module load so
+ * the HSTS decision below stays testable and cannot be pinned to whatever the
+ * process happened to see first.
+ */
+function isProductionRuntime(): boolean {
+  return process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
+}
 
 /* ── Framing ─────────────────────────────────────────────────────────────── */
 
@@ -72,18 +81,58 @@ function requestHost(event: SecurityEvent): string {
     .toLowerCase() ?? "";
 }
 
-function endsWithAny(host: string, suffixes: readonly string[]): boolean {
-  return suffixes.some((suffix) => host.endsWith(suffix));
+/**
+ * Does `host` belong to one of these zones?
+ *
+ * Matches the APEX as well as its subdomains: `"grok.com".endsWith(".grok.com")`
+ * is false, and getting that wrong is not cosmetic — an apex treated as a
+ * foreign host would be sent `includeSubDomains` HSTS for a zone this app does
+ * not own, and would lose the framing allowance the platform shell needs.
+ */
+function inAnyZone(host: string, suffixes: readonly string[]): boolean {
+  return suffixes.some((suffix) => host === suffix.slice(1) || host.endsWith(suffix));
 }
 
-/** `frame-ancestors` for this request, plus the matching legacy XFO value. */
-function frameProtection(host: string): { ancestors: string; xfo: string } {
+/**
+ * `frame-ancestors` for this request, plus the matching legacy XFO value.
+ *
+ * `embedded` is returned too because it is also the HSTS gate: it identifies a
+ * host this deployment does not own (a sandbox preview or the platform shell).
+ */
+function frameProtection(host: string): {
+  ancestors: string;
+  xfo: string;
+  embedded: boolean;
+} {
   const embedded =
-    endsWithAny(host, PREVIEW_HOST_SUFFIXES) || endsWithAny(host, PLATFORM_HOST_SUFFIXES);
+    inAnyZone(host, PREVIEW_HOST_SUFFIXES) || inAnyZone(host, PLATFORM_HOST_SUFFIXES);
   const ancestors = embedded
     ? ["'self'", ...PLATFORM_FRAME_ANCESTORS, ...PREVIEW_FRAME_ANCESTORS].join(" ")
     : ["'self'", ...PLATFORM_FRAME_ANCESTORS].join(" ");
-  return { ancestors, xfo: embedded ? "SAMEORIGIN" : "DENY" };
+  return { ancestors, xfo: embedded ? "SAMEORIGIN" : "DENY", embedded };
+}
+
+/**
+ * Whether HSTS may be sent for THIS host.
+ *
+ * `includeSubDomains` is a zone-wide, year-long, unrevocable instruction, so it
+ * is only honest on a domain this deployment owns and will always serve over
+ * HTTPS. That excludes two cases a plain `NODE_ENV === "production"` test gets
+ * wrong:
+ *
+ *  - a Vercel **preview** deployment (`VERCEL_ENV=preview`, served from
+ *    `*.vercel.app`) — pinning it would pin the whole `vercel.app` zone in the
+ *    visitor's browser, i.e. every other project's preview URL;
+ *  - a **sandbox/platform** host (`.e2b.app`, `.grok-*`) — same problem for a
+ *    zone this app has no relationship with.
+ *
+ * The real production deployment (`VERCEL_ENV=production`, its own domain) gets
+ * HSTS, and so does a local production build, where the browser ignores it for
+ * an IP literal anyway.
+ */
+function hstsAppliesTo(host: string, embedded: boolean): boolean {
+  if (!isProductionRuntime() || embedded) return false;
+  return process.env.VERCEL_ENV ? process.env.VERCEL_ENV === "production" : true;
 }
 
 /* ── Content Security Policy ─────────────────────────────────────────────── */
@@ -184,8 +233,10 @@ const STATIC_HEADERS: Record<string, string> = {
   "x-content-type-options": "nosniff",
   "referrer-policy": "strict-origin-when-cross-origin",
   "permissions-policy": "camera=(), microphone=(), geolocation=()",
-  ...(isProd ? { "strict-transport-security": "max-age=31536000; includeSubDomains" } : {}),
 };
+
+/** Sent only for a host this deployment owns — see `hstsAppliesTo`. */
+const HSTS_HEADER = "max-age=31536000; includeSubDomains";
 
 export default async function securityHeadersMiddleware(
   event: SecurityEvent,
@@ -194,10 +245,18 @@ export default async function securityHeadersMiddleware(
   const result = await next();
   if (result instanceof Response) {
     const host = requestHost(event);
+    const framing = frameProtection(host);
     for (const [name, value] of Object.entries(STATIC_HEADERS)) {
       result.headers.set(name, value);
     }
-    result.headers.set("x-frame-options", frameProtection(host).xfo);
+    if (hstsAppliesTo(host, framing.embedded)) {
+      result.headers.set("strict-transport-security", HSTS_HEADER);
+    } else {
+      // A preview/sandbox host must never inherit an HSTS header set by an
+      // upstream layer or left over from a previous response object.
+      result.headers.delete("strict-transport-security");
+    }
+    result.headers.set("x-frame-options", framing.xfo);
     // APPEND, not set: a route may already ship a stricter policy of its own
     // (`/api/templates/thumbnail` answers `default-src 'none'; sandbox`).
     // Multiple CSP headers are enforced together, so the intersection applies

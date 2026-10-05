@@ -11,8 +11,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import securityHeadersMiddleware from "../../../server/middleware/00-security-headers.ts";
 
-const isProd = process.env.NODE_ENV === "production" || process.env.VERCEL === "1";
-
 async function headersFor(
   host: string,
   init: { forwarded?: string; existing?: Record<string, string> } = {},
@@ -47,7 +45,52 @@ test("the baseline headers are always present", async () => {
   assert.equal(h.get("x-content-type-options"), "nosniff");
   assert.equal(h.get("referrer-policy"), "strict-origin-when-cross-origin");
   assert.match(h.get("permissions-policy") ?? "", /camera=\(\)/);
-  assert.equal(h.get("strict-transport-security") !== null, isProd);
+});
+
+/**
+ * HSTS carries `includeSubDomains` for a year and cannot be revoked, so it is
+ * only honest on a domain this deployment owns. The two cases a naive
+ * `NODE_ENV === "production"` test gets wrong are asserted explicitly.
+ */
+test("HSTS is sent for an owned production domain, never for a shared zone", async () => {
+  const saved = { node: process.env.NODE_ENV, vercel: process.env.VERCEL, stage: process.env.VERCEL_ENV };
+  try {
+    process.env.NODE_ENV = "production";
+    process.env.VERCEL = "1";
+
+    process.env.VERCEL_ENV = "production";
+    assert.match(
+      (await headersFor("nasaq-sa.vercel.app")).get("strict-transport-security") ?? "",
+      /max-age=31536000; includeSubDomains/,
+    );
+
+    // A Vercel PREVIEW deployment: *.vercel.app hosts every project's previews,
+    // so pinning it would pin other people's zones in this visitor's browser.
+    process.env.VERCEL_ENV = "preview";
+    assert.equal(
+      (await headersFor("nasaq-git-branch.vercel.app")).get("strict-transport-security"),
+      null,
+    );
+
+    // A sandbox/platform host, whatever the deployment stage.
+    process.env.VERCEL_ENV = "production";
+    for (const host of ["8080-abc123.e2b.app", "app.preview.grok-sandbox.com", "grok.com"]) {
+      assert.equal((await headersFor(host)).get("strict-transport-security"), null, host);
+    }
+
+    // A non-production runtime (dev over plain HTTP) never sends it.
+    delete process.env.VERCEL;
+    process.env.NODE_ENV = "development";
+    assert.equal(
+      (await headersFor("nasaq-sa.vercel.app")).get("strict-transport-security"),
+      null,
+    );
+  } finally {
+    for (const [key, value] of Object.entries({ NODE_ENV: saved.node, VERCEL: saved.vercel, VERCEL_ENV: saved.stage })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });
 
 test("a CSP is attached and locks the dangerous defaults", async () => {

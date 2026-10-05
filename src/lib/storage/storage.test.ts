@@ -7,6 +7,7 @@ import {
   isSafeKeySegment,
   sanitizeFileName,
   STORAGE_MAX_OBJECT_BYTES,
+  STORAGE_MAX_OBJECT_BYTES_BY_KIND,
   storageIdentitySegment,
   storageMaxBase64Length,
   storageMaxBytesForKind,
@@ -180,6 +181,19 @@ test("ceilings stay far above what the editor legitimately produces", () => {
   assert.ok(storageMaxBytesForKind("project-file") >= 32 * 1024 * 1024);
   // An SVG is markup: it must not be a smuggling route for a huge object.
   assert.ok(storageMaxBytesForKind("svg") < storageMaxBytesForKind("project-file"));
+});
+
+test("an unrecognised kind falls back to the STRICTEST ceiling, not the loosest", () => {
+  /*
+   * A size check must fail closed. `uploadEditorAsset` validates the kind before
+   * it ever reaches here, so this is unreachable today — the assertion exists so
+   * it cannot silently become a fail-open path if a caller is added later.
+   */
+  const loosest = Math.max(...Object.values(STORAGE_MAX_OBJECT_BYTES_BY_KIND));
+  const strictest = Math.min(...Object.values(STORAGE_MAX_OBJECT_BYTES_BY_KIND));
+  assert.equal(storageMaxBytesForKind("not-a-kind" as never), strictest);
+  assert.ok(strictest < loosest, "the fallback must be a real restriction");
+  assert.equal(storageMaxBase64Length("not-a-kind" as never), Math.ceil((strictest * 4) / 3) + 1024);
 });
 
 test("the base64 pre-check bounds the payload BEFORE a buffer is allocated", () => {
