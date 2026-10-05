@@ -85,7 +85,21 @@ function sampleProject(): NsqProjectInput {
             z: 1,
             src: PNG,
             clippedBy: "s1",
-            style: { objectFit: "cover", flipX: true },
+            style: {
+              objectFit: "cover",
+              flipX: true,
+              gradientBlendMode: "screen",
+              gradient: {
+                type: "linear",
+                angle: 45,
+                cx: 50,
+                cy: 50,
+                stops: [
+                  { id: "start", offset: 0, color: "#071d3d", opacity: 0.7 },
+                  { id: "end", offset: 1, color: "#c6a05a", opacity: 1 },
+                ],
+              },
+            },
           },
           {
             id: "s1",
@@ -299,6 +313,8 @@ describe("nsq package round trip", () => {
     assert.equal(image.src, PNG);
     assert.equal(image.clippedBy, "s1");
     assert.equal(image.style.flipX, true);
+    assert.equal(image.style.gradientBlendMode, "screen");
+    assert.deepEqual(image.style.gradient?.stops[1], { id: "end", offset: 1, color: "#c6a05a", opacity: 1 });
     assert.deepEqual(shape, original.pages[0].elements[2]);
     assert.equal(group.children!.length, 2);
     assert.equal(group.children![0].src, PNG);

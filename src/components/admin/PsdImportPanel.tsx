@@ -176,8 +176,8 @@ export function PsdImportPanel() {
       return;
     }
     const name = next.name.toLowerCase();
-    if (!/\.(psd|psb|docx|pptx|pdf|png|jpe?g|svg)$/i.test(name)) {
-      setError("صيغة غير مدعومة. المقبول: PSD وDOCX وPPTX وPDF وPNG وJPG وSVG.");
+    if (!/\.(psd|psb|docx|pptx|xlsx|pdf|png|jpe?g|svg)$/i.test(name)) {
+      setError("صيغة غير مدعومة. المقبول: PSD وDOCX وPPTX وXLSX وPDF وPNG وJPG وSVG.");
       setFile(null);
       return;
     }

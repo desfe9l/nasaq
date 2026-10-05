@@ -269,12 +269,23 @@ export function readWorkbookRelations(
     const id = /Id="([^"]+)"/.exec(attrs)?.[1];
     const target = /Target="([^"]+)"/.exec(attrs)?.[1];
     const type = /Type="([^"]+)"/.exec(attrs)?.[1] ?? "";
-    // Charts/styles are relationships too — only worksheets carry cells.
-    if (id && target && (type === "" || /worksheet/i.test(type))) {
-      map[id] = target.replace(/^\/?xl\//, "").replace(/^\.\//, "");
+    const external = /TargetMode="External"/i.test(attrs);
+    // Charts/styles and external targets are not worksheet data.
+    if (id && target && !external && (type === "" || /worksheet/i.test(type))) {
+      map[id] = decodeXmlEntities(target);
     }
   }
   return map;
+}
+
+function worksheetPath(target: string): string {
+  const parts = target.startsWith("/") ? [] : ["xl"];
+  for (const part of target.replace(/^\/+/, "").split("/")) {
+    if (!part || part === ".") continue;
+    if (part === "..") parts.pop();
+    else parts.push(part);
+  }
+  return parts.join("/");
 }
 
 /** `[name, partPath]` of the first worksheet in reading order. */
@@ -292,7 +303,7 @@ export function firstSheet(
   if (!target) return null;
   return {
     name: decodeXmlEntities(name),
-    path: `xl/${target.replace(/^\/?xl\//, "")}`,
+    path: worksheetPath(target),
   };
 }
 
@@ -302,34 +313,64 @@ export function firstSheet(
  * Throws a human, Arabic message when the file is not a workbook at all, so the
  * panel can show the reason instead of an empty table.
  */
-export async function parseXlsx(
-  buffer: ArrayBuffer,
+export interface ImportedWorkbookSheet extends ImportedTable {
+  hidden?: boolean;
+}
+
+/**
+ * Read every worksheet in workbook order for document-level import.
+ *
+ * The table builder still deliberately imports only the active/first sheet;
+ * file interoperability keeps every sheet as its own editable NASAQ page.
+ */
+export async function parseXlsxWorkbook(
+  input: Uint8Array | ArrayBuffer,
   fileName = "",
-): Promise<ImportedTable> {
-  const zip = await JSZip.loadAsync(buffer);
+): Promise<ImportedWorkbookSheet[]> {
+  const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+  const zip = await JSZip.loadAsync(bytes);
   const readOptional = async (path: string) => {
     const file = zip.file(path);
     return file ? file.async("string") : undefined;
   };
   const workbookXml = await readOptional("xl/workbook.xml");
-  const rels = readWorkbookRelations(
-    await readOptional("xl/_rels/workbook.xml.rels"),
-  );
-  const sheet = firstSheet(workbookXml, rels);
-  const path = sheet?.path ?? "xl/worksheets/sheet1.xml";
-  const sheetXml = await readOptional(path);
-  if (!sheetXml) {
+  if (!workbookXml?.includes("<workbook")) {
     throw new Error("تعذر قراءة الملف — هل هو ملف Excel (xlsx) صالح؟");
   }
+  const rels = readWorkbookRelations(await readOptional("xl/_rels/workbook.xml.rels"));
   const shared = readSharedStrings(await readOptional("xl/sharedStrings.xml"));
-  const rows = buildMatrix(readSheetCells(sheetXml, shared));
-  return {
-    rows,
-    cols: rows[0]?.length ?? 0,
-    rowCount: rows.length,
-    source: "xlsx",
-    label: sheet?.name || fileName || "ورقة 1",
-  };
+  const sheetTags = [...workbookXml.matchAll(/<sheet\b([^>]*)\/?\s*>/g)].slice(0, 200);
+  if (!sheetTags.length) throw new Error("ملف Excel لا يحتوي أوراق عمل.");
+  const sheets: ImportedWorkbookSheet[] = [];
+  for (let index = 0; index < sheetTags.length; index += 1) {
+    const attrs = sheetTags[index]![1];
+    const nameRaw = /(?:^|\s)name="([^"]*)"/.exec(attrs)?.[1] || "";
+    const name = decodeXmlEntities(nameRaw) || `ورقة ${index + 1}`;
+    const rid = /(?:^|\s)r:id="([^"]+)"/.exec(attrs)?.[1];
+    const target = rid ? rels[rid] : undefined;
+    const path = target ? worksheetPath(target) : index === 0 ? "xl/worksheets/sheet1.xml" : "";
+    const xml = path ? await readOptional(path) : undefined;
+    if (!xml) continue;
+    const rows = buildMatrix(readSheetCells(xml, shared));
+    sheets.push({
+      rows,
+      cols: rows[0]?.length ?? 0,
+      rowCount: rows.length,
+      source: "xlsx",
+      label: name || fileName || `ورقة ${index + 1}`,
+      hidden: /(?:^|\s)state="(?:hidden|veryHidden)"/i.test(attrs),
+    });
+  }
+  if (!sheets.length) throw new Error("تعذر قراءة أوراق العمل في ملف Excel.");
+  return sheets;
+}
+
+export async function parseXlsx(
+  buffer: ArrayBuffer,
+  fileName = "",
+): Promise<ImportedTable> {
+  const [sheet] = await parseXlsxWorkbook(buffer, fileName);
+  return sheet;
 }
 
 /** True for the file names the builder accepts. */

@@ -69,7 +69,7 @@ import {
   type ImportHistoryEntry,
 } from "./commit";
 
-const ACCEPT = ".psd,.psb,.docx,.pptx,.pdf,.png,.jpg,.jpeg,.svg";
+const ACCEPT = ".psd,.psb,.docx,.pptx,.xlsx,.pdf,.png,.jpg,.jpeg,.svg";
 const MAX_HINT = "PSD حتى ٢٠٠ ميغابايت · ملفات Office وPDF حتى ٨٠ ميغابايت";
 
 

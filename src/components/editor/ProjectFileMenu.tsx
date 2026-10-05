@@ -160,7 +160,7 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
           if (!open) place();
           setOpen(!open);
         }}
-        title="ملف المشروع — فتح وحفظ ملفات نَسَق (.nsq)"
+        title="ملف المشروع — فتح نَسَق أو استيراد PSD وPDF وOffice"
         aria-label="ملف المشروع"
         aria-haspopup="menu"
         aria-expanded={open}
@@ -204,7 +204,7 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
             />
             <Item
               icon={<FolderOpen className="size-4" />}
-              label="فتح ملف نَسَق…"
+              label="فتح مشروع أو استيراد ملف…"
               hint="⌘O"
               onClick={() => {
                 setOpen(false);

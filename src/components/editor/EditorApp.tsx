@@ -228,7 +228,6 @@ import {
   unloadBypassed,
   unloadShouldPrompt,
 } from "@/lib/editor/leave-controller";
-import { hasUnsavedChanges } from "@/lib/editor/unsaved-leave";
 import { LeaveGuard } from "@/components/editor/LeaveGuard";
 import { TemplateDraftBar } from "./TemplateDraftBar";
 import { absoluteBounds, elementsBounds, pageSize } from "@/lib/editor/model";
@@ -246,7 +245,7 @@ import {
 } from "@/lib/editor/canvas-space";
 import { mmToPx } from "@/lib/editor/render-units";
 import { useInteraction } from "@/lib/editor/interaction-store";
-import { findElement } from "@/lib/editor/model";
+import { findElement, type Project } from "@/lib/editor/model";
 import { LeftPanel, ElementToolsWindow } from "./LeftPanel";
 import { PropertiesPanel, LayersPanel } from "./RightPanel";
 import { AssetLibrary } from "./AssetLibrary";
@@ -308,6 +307,7 @@ import { ProjectFileMenu, NSQ_SAVE_AS_EVENT } from "./ProjectFileMenu";
 import { NSQ_ACCEPT } from "@/lib/nsq/format";
 import { receiveProjectFile } from "@/lib/nsq/intake";
 import { rememberUploadedFont } from "@/lib/nsq/fonts";
+import { classifyImport } from "@/lib/editor/import/detect";
 
 /**
  * The studio shell.
@@ -489,15 +489,68 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
     return <EditorWorkspaceSkeleton />;
   }
 
-  const openFile = () => {
-    if (hasUnsavedChanges(useEditor.getState().saveState)) {
-      void requestLeave().then((ok) => {
-        if (ok) projectInput.current?.click();
+  const openFile = () => projectInput.current?.click();
+
+  /**
+   * All non-native formats enter through the same ImportBuilder → Project →
+   * importProject path. The editor therefore opens PSD/PDF/Office content as
+   * ordinary pages and objects; there is no format-specific canvas or mode.
+   */
+  const openSelectedFile = async (file: File) => {
+    if (!(await requestLeave())) return;
+    const loadingId = toast.loading("جارٍ استيراد الملف إلى المحرر…");
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const classified = classifyImport(file.name, bytes);
+      if (!classified.format) throw new Error(classified.error || "صيغة غير مدعومة.");
+      if (classified.format === "nsq" || classified.format === "json") {
+        toast.dismiss(loadingId);
+        await receiveProjectFile(file, nsqSignedIn);
+        return;
+      }
+
+      let project: Project;
+      let notes: { name: string; mode: string; reason: string }[] = [];
+      if (classified.format === "psd" || classified.format === "psb") {
+        if (bytes.byteLength > 200 * 1024 * 1024) throw new Error("حجم ملف PSD/PSB أكبر من ٢٠٠ ميغابايت.");
+        const [{ listAssets }, { fingerprintAssets }, { runPsdImport }] = await Promise.all([
+          import("@/lib/editor/storage"),
+          import("@/lib/editor/psd/pipeline"),
+          import("@/lib/editor/psd/run"),
+        ]);
+        const assets = await listAssets();
+        const library = await fingerprintAssets(assets);
+        const result = await runPsdImport(bytes, file.name, library);
+        project = result.project;
+        notes = result.report.fallbacks.map((item) => ({ name: item.layerName, mode: item.mode, reason: item.reason }));
+      } else {
+        if (bytes.byteLength > 80 * 1024 * 1024) throw new Error("حجم الملف أكبر من ٨٠ ميغابايت.");
+        const { importTemplateBytes } = await import("@/lib/editor/import/run");
+        const result = await importTemplateBytes(bytes, file.name);
+        project = result.project;
+        notes = result.notes;
+      }
+
+      const opened = await useEditor.getState().importProject(project, { successMessage: null });
+      if (!opened) {
+        toast.dismiss(loadingId);
+        return;
+      }
+      const partialCount = notes.filter((note) => note.mode === "partial" || note.mode === "raster" || note.mode === "flattened" || note.mode === "skipped").length;
+      const notePreview = notes
+        .filter((note) => note.mode === "partial" || note.mode === "raster" || note.mode === "flattened" || note.mode === "skipped")
+        .slice(0, 2)
+        .map((note) => `${note.name}: ${note.reason}`)
+        .join(" · ");
+      toast.success("تم الاستيراد — افتُتح المستند في محرر نَسَق", {
+        id: loadingId,
+        description: partialCount ? `${partialCount} ملاحظة تحويل. ${notePreview}` : undefined,
       });
-      return;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "تعذر استيراد الملف", { id: loadingId });
     }
-    projectInput.current?.click();
   };
+
   const upload = (kind: "image" | "logo" | "font" | "library") => {
     if (kind === "font") fontInput.current?.click();
     else {
@@ -547,22 +600,17 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
       )}
       {!showcase && <TemplateDraftBar />}
 
-      {/*
-       * Project files: native `.nsq` packages plus legacy JSON backups. Both go
-       * through the validated `.nsq` intake — nothing is imported unchecked.
-       */}
+      {/* One open door for native NASAQ projects and interoperable design files. */}
       <input
         ref={projectInput}
         type="file"
-        accept={NSQ_ACCEPT}
+        accept={`${NSQ_ACCEPT},.psd,.psb,.docx,.pptx,.xlsx,.pdf,.png,.jpg,.jpeg,.svg`}
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];
           e.target.value = "";
           if (!file) return;
-          void requestLeave().then((ok) => {
-            if (ok) void receiveProjectFile(file, nsqSignedIn);
-          });
+          void openSelectedFile(file);
         }}
       />
 

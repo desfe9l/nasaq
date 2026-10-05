@@ -592,6 +592,7 @@ export function validatePages(
         raw.source.kind === "docx" ||
         raw.source.kind === "pptx" ||
         raw.source.kind === "pdf" ||
+        raw.source.kind === "xlsx" ||
         raw.source.kind === "image") &&
       typeof raw.source.layerId === "string" &&
       raw.source.layerId
@@ -610,6 +611,25 @@ export function validatePages(
           ? { reason: raw.source.reason.slice(0, 240) }
           : {}),
       };
+      const origin = raw.source.origin;
+      if (
+        isRecord(origin) &&
+        finite(origin.x) && finite(origin.y) && finite(origin.w) && finite(origin.h) &&
+        Math.abs(origin.x) <= 1e6 && Math.abs(origin.y) <= 1e6 &&
+        Math.abs(origin.w) <= 1e6 && Math.abs(origin.h) <= 1e6
+      ) {
+        el.source.origin = {
+          x: origin.x,
+          y: origin.y,
+          w: origin.w,
+          h: origin.h,
+          ...(finite(origin.rot) && Math.abs(origin.rot) <= 3600 ? { rot: origin.rot } : {}),
+        };
+      }
+      const px = raw.source.px;
+      if (isRecord(px) && finite(px.w) && finite(px.h) && px.w > 0 && px.h > 0) {
+        el.source.px = { w: Math.min(px.w, 1e7), h: Math.min(px.h, 1e7) };
+      }
     }
     if (typeof raw.content === "string") el.content = raw.content;
     if (typeof raw.src === "string") el.src = raw.src;

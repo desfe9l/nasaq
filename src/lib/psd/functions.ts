@@ -5,7 +5,7 @@ import type { ImportKind } from "@/lib/editor/import/shared";
 import { PSD_MAX_BYTES, magicHexOk, sanitizeFileName } from "@/lib/editor/psd/security";
 
 const OFFICE_MAX_BYTES = 80 * 1024 * 1024;
-const IMPORT_FORMATS = new Set<ImportKind>(["psd", "psb", "docx", "pptx", "pdf", "png", "jpg", "svg"]);
+const IMPORT_FORMATS = new Set<ImportKind>(["psd", "psb", "docx", "pptx", "xlsx", "pdf", "png", "jpg", "svg"]);
 
 async function ownerGate(context: { userId: string | null; userEmail?: string | null }) {
   const { verifyTemplateManager } = await import("@/lib/admin/owner-gate.server");

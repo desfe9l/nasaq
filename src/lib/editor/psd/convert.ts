@@ -105,6 +105,12 @@ function applyCommonStyle(el: CanvasEl, node: PsdNode): void {
     el.style.blendMode = node.cssBlend as ElStyle["blendMode"];
   }
   if (node.effects.shadow) el.style.shadow = node.effects.shadow;
+  if (node.effects.gradient && (!node.effects.gradientOverlay || el.type === "image" || el.type === "shape")) {
+    el.style.gradient = node.effects.gradient;
+    if (node.effects.gradientOverlay && el.type === "image" && node.effects.gradientBlendMode) {
+      el.style.gradientBlendMode = node.effects.gradientBlendMode as ElStyle["blendMode"];
+    }
+  }
 }
 
 function placeBox(node: PsdNode, dpi: number): { x: number; y: number; w: number; h: number } {
@@ -226,6 +232,26 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
     return el;
   }
 
+  if (node.kind === "vector" && node.vector) {
+    const box = placeBox(node, acc.dpi);
+    const el = elementBase(acc, node, "svg", node.issues.length > 0);
+    el.x = box.x;
+    el.y = box.y;
+    el.w = box.w;
+    el.h = box.h;
+    stampOrigin(el, box, node);
+    el.content = node.vector.content;
+    if (node.effects.strokeColor && node.effects.strokeWidthMm) {
+      el.style.svgStroke = node.effects.strokeColor;
+      el.style.svgStrokeWidth = Math.max(0.1, (node.effects.strokeWidthMm * acc.dpi) / 25.4);
+    }
+    applyCommonStyle(el, node);
+    acc.shapeCount += 1;
+    acc.native += 1;
+    if (node.issues.length) noteFallback(acc, node, "partial", node.issues.join(" · "));
+    return el;
+  }
+
   if (node.kind === "shape" && node.shape) {
     const box = placeBox(node, acc.dpi);
     const el = elementBase(acc, node, "shape", node.issues.length > 0);
@@ -242,6 +268,7 @@ function convertNode(node: PsdNode, acc: Acc): CanvasEl | null {
       radius: node.shape.kind === "circle" ? Math.min(el.w, el.h) / 2 : radiusMm,
       shape: node.shape.kind === "circle" ? "circle" : node.shape.kind === "rounded" ? "rounded" : "rect",
       shapeId: node.shape.kind === "circle" ? "circle" : node.shape.kind === "rounded" ? "rounded" : "rect",
+      gradient: node.shape.gradient,
     };
     applyCommonStyle(el, node);
     acc.shapeCount += 1;

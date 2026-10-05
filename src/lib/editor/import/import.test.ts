@@ -5,6 +5,7 @@ import { jsPDF } from "jspdf";
 
 import { classifyImport, magicMatches } from "./detect.ts";
 import { importTemplateBytes } from "./run.ts";
+import { rasterPageFallback } from "./pdf.ts";
 import { previewCacheKey } from "./shared.ts";
 import type { CanvasEl } from "../model.ts";
 
@@ -184,6 +185,28 @@ describe("DOCX → NASAQ", () => {
   });
 });
 
+describe("XLSX → NASAQ", () => {
+  it("opens every workbook sheet as an editable table page and keeps hidden state", async () => {
+    const zip = new JSZip();
+    zip.file("xl/workbook.xml", '<workbook><sheets><sheet name="Summary" sheetId="1" r:id="rId1"/><sheet name="Archive" sheetId="2" state="hidden" r:id="rId2"/></sheets></workbook>');
+    zip.file("xl/_rels/workbook.xml.rels", '<Relationships><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/archived.xml"/></Relationships>');
+    zip.file("xl/sharedStrings.xml", '<sst><si><t>Title</t></si><si><t>Quarterly</t></si><si><t>Note</t></si><si><t>Retained</t></si></sst>');
+    zip.file("xl/worksheets/sheet1.xml", '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>0</v></c></row><row r="2"><c r="A2" t="s"><v>1</v></c></row></sheetData></worksheet>');
+    zip.file("xl/worksheets/archived.xml", '<worksheet><sheetData><row r="1"><c r="A1" t="s"><v>2</v></c><c r="B1" t="s"><v>3</v></c></row></sheetData></worksheet>');
+    const imported = await importTemplateBytes(await zip.generateAsync({ type: "uint8array" }), "workbook.xlsx");
+    assert.equal(imported.project.pages.length, 2);
+    assert.equal(imported.project.pages[0]?.name, "Summary");
+    assert.equal(imported.project.pages[1]?.name, "Archive");
+    assert.equal(imported.project.pages[1]?.hidden, true);
+    const firstTable = imported.project.pages[0]?.elements.find((el) => el.type === "table");
+    const secondTable = imported.project.pages[1]?.elements.find((el) => el.type === "table");
+    assert.equal(firstTable?.source?.kind, "xlsx");
+    assert.match(firstTable?.content || "", /Quarterly/);
+    assert.match(secondTable?.content || "", /Retained/);
+    assert.ok(imported.notes.some((note) => /صيغ الحسابات/.test(note.reason)));
+  });
+});
+
 describe("PPTX → NASAQ", () => {
   it("turns each slide into a page with text, shape and image", async () => {
     const imported = await importTemplateBytes(await pptxBytes(), "عرض.pptx");
@@ -206,6 +229,11 @@ describe("PDF → NASAQ", () => {
     const pdf = new jsPDF({ unit: "mm", format: "a4" });
     pdf.setFontSize(16);
     pdf.text("Editable line", 20, 30);
+    pdf.setFillColor(7, 29, 61);
+    pdf.rect(70, 42, 35, 20, "F");
+    pdf.setDrawColor(198, 160, 90);
+    pdf.setLineWidth(1);
+    pdf.line(70, 70, 105, 83);
     pdf.addImage(
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
       "PNG",
@@ -214,8 +242,12 @@ describe("PDF → NASAQ", () => {
       30,
       20,
     );
+    pdf.addPage();
+    pdf.text("Second page", 20, 30);
     const bytes = new Uint8Array(pdf.output("arraybuffer"));
     const imported = await importTemplateBytes(bytes, "ورقة.pdf");
+    assert.equal(imported.project.pages.length, 2);
+    assert.ok(texts(imported.project.pages[1]!.elements).some((el) => el.content?.includes("Second page")));
     const page = imported.project.pages[0];
     assert.ok(Math.abs((page.w || 0) - 210) < 1);
     assert.ok(Math.abs((page.h || 0) - 297) < 1);
@@ -228,8 +260,47 @@ describe("PDF → NASAQ", () => {
     assert.ok(Math.abs(image.x - 20) < 2);
     assert.ok(Math.abs(image.y - 40) < 2);
     assert.ok(Math.abs(image.w - 30) < 2);
+    const vector = page.elements.find((el) => el.type === "svg");
+    assert.ok(vector, "PDF path commands should stay as vector artwork rather than a raster snapshot");
+    assert.match(vector.content || "", /<path[^>]+d="[MLCZ]/);
+    assert.equal(vector.source?.kind, "pdf");
+    assert.match(vector.content || "", /fill="#081c3d"/i);
+    assert.ok(Math.abs(vector.x - 70) < 2);
+    assert.ok(Math.abs(vector.y - 42) < 2);
     assert.ok(imported.notes.some((note) => note.mode === "partial"));
     assert.ok(!imported.notes.some((note) => note.mode === "flattened"));
+  });
+});
+
+describe("PDF fallback rendering", () => {
+  it("keeps unsupported PDF-only pages visible as a bounded raster fallback", async () => {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, "document");
+    let renderCalled = false;
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ({}),
+      toDataURL: () => "data:image/png;base64,QQ==",
+    };
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: { createElement: () => canvas },
+    });
+    try {
+      const fallback = await rasterPageFallback({
+        getViewport: ({ scale }: { scale: number }) => ({ width: 612 * scale, height: 792 * scale }),
+        render: ({ viewport }: { viewport: { width: number; height: number } }) => {
+          renderCalled = viewport.width <= 2048 && viewport.height <= 2048;
+          return { promise: Promise.resolve() };
+        },
+      } as never, 612, 792);
+      assert.equal(renderCalled, true);
+      assert.equal(fallback, "data:image/png;base64,QQ==");
+      assert.ok(canvas.width <= 2048 && canvas.height <= 2048);
+    } finally {
+      if (previous) Object.defineProperty(globalThis, "document", previous);
+      else Reflect.deleteProperty(globalThis, "document");
+    }
   });
 });
 
