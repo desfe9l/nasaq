@@ -1,206 +1,369 @@
 #!/usr/bin/env node
 /**
- * App-icon pass: derives the PWA icon set (192 / 512 / maskable 512) from the
- * existing 180px brand tile — no browser, no image dependency.
+ * NASAQ Dedicated Application Icon Generator
  *
- * The tile (`public/__grok/icon-180.png`, RGB8) is decoded by hand (zlib
- * inflate + PNG unfiltering), resampled with bilinear interpolation, and
- * re-encoded. The maskable variant re-centres the tile inside the brand
- * emerald at 80% so launcher masks never clip the glyph.
+ * Generates the complete NASAQ app-icon suite for desktop, PWA, iOS/iPadOS,
+ * and Android launchers, preserving the original NASAQ logo geometry and brand colors.
  *
- * Run: node scripts/generate-app-icons.mjs
+ * Output assets:
+ *  - public/icons/nasaq-app-icon.svg (Adaptive / responsive SVG icon with light/dark support)
+ *  - public/icons/nasaq-app-icon-light.svg (Dedicated light mode SVG icon)
+ *  - public/icons/nasaq-app-icon-dark.svg (Dedicated dark mode SVG icon)
+ *  - public/icons/nasaq-16.png (16x16 raster)
+ *  - public/icons/nasaq-32.png (32x32 raster)
+ *  - public/icons/nasaq-48.png (48x48 raster)
+ *  - public/icons/nasaq-96.png (96x96 raster)
+ *  - public/icons/nasaq-128.png (128x128 raster)
+ *  - public/icons/nasaq-180.png (180x180 iOS/iPadOS Apple Touch Icon)
+ *  - public/icons/nasaq-192.png (192x192 PWA standard launcher icon)
+ *  - public/icons/nasaq-384.png (384x384 PWA icon)
+ *  - public/icons/nasaq-512.png (512x512 PWA desktop/mobile high-res icon)
+ *  - public/icons/nasaq-maskable-512.png (512x512 maskable adaptive launcher icon)
+ *  - public/icons/nasaq-light-192.png / nasaq-light-512.png (Light mode rasters)
+ *  - public/icons/nasaq-dark-192.png / nasaq-dark-512.png (Dark mode rasters)
+ *  - public/favicon.svg (Vector favicon with light/dark mode support)
+ *  - public/__grok/icon-180.png (Platform 180px tile)
  */
-import { deflateSync, inflateSync } from "node:zlib";
+
+import { Resvg, initWasm } from "@resvg/resvg-wasm";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const SOURCE = join(ROOT, "public/__grok/icon-180.png");
-const OUT = join(ROOT, "public/icons");
-mkdirSync(OUT, { recursive: true });
+const OUT_ICONS = join(ROOT, "public/icons");
+const OUT_PUBLIC = join(ROOT, "public");
+const OUT_GROK = join(ROOT, "public/__grok");
 
-/* ── PNG decode (8-bit, non-interlaced, any colour type we ship) ────────── */
-function decodePng(buf) {
-  let pos = 8;
-  let width = 0;
-  let height = 0;
-  let colorType = 0;
-  let bitDepth = 0;
-  const idat = [];
-  while (pos < buf.length) {
-    const len = buf.readUInt32BE(pos);
-    const type = buf.toString("ascii", pos + 4, pos + 8);
-    const data = buf.subarray(pos + 8, pos + 8 + len);
-    if (type === "IHDR") {
-      width = data.readUInt32BE(0);
-      height = data.readUInt32BE(4);
-      bitDepth = data[8];
-      colorType = data[9];
-      if (data[12] !== 0) throw new Error("interlaced PNG unsupported");
-    } else if (type === "IDAT") idat.push(data);
-    else if (type === "IEND") break;
-    pos += 12 + len;
-  }
-  if (bitDepth !== 8) throw new Error(`bit depth ${bitDepth} unsupported`);
-  const channels = { 0: 1, 2: 3, 4: 2, 6: 4 }[colorType];
-  if (!channels) throw new Error(`colour type ${colorType} unsupported`);
-  const raw = Buffer.concat(idat);
-  const inflated = inflateSync(raw);
-  const stride = width * channels;
-  const out = Buffer.alloc(height * stride);
-  let prev = Buffer.alloc(stride);
-  for (let y = 0; y < height; y++) {
-    const filter = inflated[y * (stride + 1)];
-    const line = inflated.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
-    const cur = out.subarray(y * stride, (y + 1) * stride);
-    unfilter(filter, line, prev, cur, channels);
-    prev = cur;
-  }
-  return { width, height, channels, pixels: out };
+mkdirSync(OUT_ICONS, { recursive: true });
+mkdirSync(OUT_GROK, { recursive: true });
+
+// Initialize Resvg WASM
+const wasmBytes = readFileSync(join(ROOT, "src/lib/og/resvg.wasm"));
+await initWasm(wasmBytes);
+
+// Read the original NASAQ mark geometry from public/nasaq-mark.svg
+const markSvg = readFileSync(join(ROOT, "public/nasaq-mark.svg"), "utf8");
+const markPaths = [...markSvg.matchAll(/<path\s+class="(cls-\d)"\s+d="([^"]+)"/g)].map(
+  ([, cls, d]) => ({ cls, d })
+);
+
+if (markPaths.length !== 4) {
+  throw new Error(`Expected 4 paths in public/nasaq-mark.svg, found ${markPaths.length}`);
 }
 
-function unfilter(filter, line, prev, cur, channels) {
-  for (let x = 0; x < line.length; x++) {
-    const a = x >= channels ? cur[x - channels] : 0;
-    const b = prev[x];
-    const c = x >= channels ? prev[x - channels] : 0;
-    let value = line[x];
-    switch (filter) {
-      case 1:
-        value += a;
-        break;
-      case 2:
-        value += b;
-        break;
-      case 3:
-        value += (a + b) >> 1;
-        break;
-      case 4: {
-        const p = a + b - c;
-        const pa = Math.abs(p - a);
-        const pb = Math.abs(p - b);
-        const pc = Math.abs(p - c);
-        value += pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
-        break;
+// Color palettes for variants
+const PALETTES = {
+  emerald: {
+    // Standard Brand Emerald
+    body: "#f5f1e6",
+    accent: "#d9b45b",
+    depth: "#e8e2d2",
+    bgStart: "#007a3c",
+    bgMid: "#006c35",
+    bgEnd: "#004522",
+    border: "rgba(255, 255, 255, 0.22)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.36,
+  },
+  light: {
+    // Light Institutional Mode
+    body: "#063b35",
+    accent: "#a48446",
+    depth: "#1a1a1a",
+    bgStart: "#ffffff",
+    bgMid: "#faf7f0",
+    bgEnd: "#eee7d8",
+    border: "rgba(0, 108, 53, 0.18)",
+    shadowColor: "#063b35",
+    shadowOpacity: 0.16,
+  },
+  dark: {
+    // Dark Obsidian Mode
+    body: "#f5f1e6",
+    accent: "#d9b45b",
+    depth: "#e8e2d2",
+    bgStart: "#0d221b",
+    bgMid: "#071711",
+    bgEnd: "#020906",
+    border: "rgba(217, 180, 91, 0.3)",
+    shadowColor: "#000000",
+    shadowOpacity: 0.55,
+  },
+  maskable: {
+    // Full-bleed Brand Emerald for Android Adaptive Icon
+    body: "#f5f1e6",
+    accent: "#d9b45b",
+    depth: "#e8e2d2",
+    bgStart: "#007a3c",
+    bgMid: "#006c35",
+    bgEnd: "#004d26",
+    border: "none",
+    shadowColor: "#000000",
+    shadowOpacity: 0.3,
+  },
+};
+
+/**
+ * Generate SVG for a specific theme and style
+ */
+function buildAppIconSvg({
+  theme = "emerald",
+  rounded = true,
+  rx = 112,
+  size = 512,
+  includeTopSheen = true,
+} = {}) {
+  const p = PALETTES[theme] || PALETTES.emerald;
+  const isMaskable = theme === "maskable";
+  
+  // Mark geometry scaling (Original viewBox is 141.11 x 210.14)
+  // Standard mark height: 330px on 512px canvas (64.5% height)
+  // Maskable mark height: 282px on 512px canvas (fits strictly inside 80% safe zone = 409.6px circle)
+  const markTargetHeight = isMaskable ? 282 : 330;
+  const scale = (markTargetHeight / 210.14) * (size / 512);
+  const markW = 141.11 * scale;
+  const markH = 210.14 * scale;
+  const tx = (size - markW) / 2;
+  const ty = (size - markH) / 2;
+  const actualRx = rounded ? (rx * size) / 512 : 0;
+
+  const pathsSvg = markPaths
+    .map((item) => {
+      let fill = p.body;
+      if (item.cls === "cls-1") fill = p.accent;
+      else if (item.cls === "cls-3") fill = p.depth;
+      return `<path fill="${fill}" d="${item.d}"/>`;
+    })
+    .join("\n      ");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${p.bgStart}"/>
+      <stop offset="48%" stop-color="${p.bgMid}"/>
+      <stop offset="100%" stop-color="${p.bgEnd}"/>
+    </linearGradient>
+    ${
+      includeTopSheen && theme === "emerald"
+        ? `<radialGradient id="topSheen" cx="50%" cy="8%" r="70%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>`
+        : ""
+    }
+    <filter id="markShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="${(8 * size) / 512}" stdDeviation="${(12 * size) / 512}" flood-color="${p.shadowColor}" flood-opacity="${p.shadowOpacity}"/>
+    </filter>
+  </defs>
+  
+  <!-- App Container Background -->
+  <rect width="${size}" height="${size}" rx="${actualRx}" fill="url(#bgGrad)"/>
+  ${
+    includeTopSheen && theme === "emerald"
+      ? `<rect width="${size}" height="${size}" rx="${actualRx}" fill="url(#topSheen)"/>`
+      : ""
+  }
+  ${
+    p.border !== "none" && actualRx > 0
+      ? `<rect x="${size >= 64 ? 1 : 0.5}" y="${size >= 64 ? 1 : 0.5}" width="${size - (size >= 64 ? 2 : 1)}" height="${size - (size >= 64 ? 2 : 1)}" rx="${Math.max(0, actualRx - 1)}" fill="none" stroke="${p.border}" stroke-width="${size >= 128 ? 2 : 1}"/>`
+      : ""
+  }
+  
+  <!-- NASAQ Brand Mark -->
+  <g transform="translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${scale.toFixed(5)})" filter="url(#markShadow)">
+    ${pathsSvg}
+  </g>
+</svg>`;
+}
+
+/**
+ * Generate Adaptive Responsive SVG App Icon with media query support
+ */
+function buildAdaptiveAppIconSvg() {
+  const size = 512;
+  const scale = (330 / 210.14) * (size / 512);
+  const markW = 141.11 * scale;
+  const markH = 210.14 * scale;
+  const tx = (size - markW) / 2;
+  const ty = (size - markH) / 2;
+  const rx = 112;
+
+  const path1_a = markPaths.find((p, i) => i === 1)?.d || "";
+  const path1_b = markPaths.find((p, i) => i === 2)?.d || "";
+  const path2 = markPaths.find((p, i) => i === 0)?.d || "";
+  const path3 = markPaths.find((p, i) => i === 3)?.d || "";
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Brand Emerald Gradient (Default / Dark) -->
+    <linearGradient id="bgEmerald" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#007a3c"/>
+      <stop offset="48%" stop-color="#006c35"/>
+      <stop offset="100%" stop-color="#004522"/>
+    </linearGradient>
+    <radialGradient id="topSheen" cx="50%" cy="8%" r="70%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    
+    <!-- Light Mode Gradient -->
+    <linearGradient id="bgLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="48%" stop-color="#faf7f0"/>
+      <stop offset="100%" stop-color="#eee7d8"/>
+    </linearGradient>
+
+    <!-- Dark Obsidian Gradient -->
+    <linearGradient id="bgDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0d221b"/>
+      <stop offset="48%" stop-color="#071711"/>
+      <stop offset="100%" stop-color="#020906"/>
+    </linearGradient>
+
+    <filter id="markShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.36"/>
+    </filter>
+
+    <style>
+      .app-bg { fill: url(#bgEmerald); }
+      .app-sheen { display: block; }
+      .app-border { stroke: rgba(255, 255, 255, 0.22); }
+      .mark-body { fill: #f5f1e6; }
+      .mark-accent { fill: #d9b45b; }
+      .mark-depth { fill: #e8e2d2; }
+      
+      @media (prefers-color-scheme: light) {
+        .app-bg { fill: url(#bgEmerald); }
+        .app-sheen { display: block; }
+        .app-border { stroke: rgba(255, 255, 255, 0.22); }
+        .mark-body { fill: #f5f1e6; }
+        .mark-accent { fill: #d9b45b; }
+        .mark-depth { fill: #e8e2d2; }
       }
-      default:
-        break;
-    }
-    cur[x] = value & 0xff;
-  }
-}
-
-/* ── resample + encode ──────────────────────────────────────────────────── */
-function sample(pixels, width, height, channels, x, y) {
-  const cx = Math.min(width - 1, Math.max(0, x));
-  const cy = Math.min(height - 1, Math.max(0, y));
-  const i = (cy * width + cx) * channels;
-  return [pixels[i], pixels[i + 1], pixels[i + 2]];
-}
-
-function resize(src, target) {
-  const { width, height, channels, pixels } = src;
-  const out = Buffer.alloc(target * target * 3);
-  for (let y = 0; y < target; y++) {
-    for (let x = 0; x < target; x++) {
-      const sx = ((x + 0.5) * width) / target - 0.5;
-      const sy = ((y + 0.5) * height) / target - 0.5;
-      const x0 = Math.floor(sx);
-      const y0 = Math.floor(sy);
-      const fx = sx - x0;
-      const fy = sy - y0;
-      const p00 = sample(pixels, width, height, channels, x0, y0);
-      const p10 = sample(pixels, width, height, channels, x0 + 1, y0);
-      const p01 = sample(pixels, width, height, channels, x0, y0 + 1);
-      const p11 = sample(pixels, width, height, channels, x0 + 1, y0 + 1);
-      const o = (y * target + x) * 3;
-      for (let c = 0; c < 3; c++) {
-        const top = p00[c] + (p10[c] - p00[c]) * fx;
-        const bottom = p01[c] + (p11[c] - p01[c]) * fx;
-        out[o + c] = Math.round(top + (bottom - top) * fy);
+      
+      @media (prefers-color-scheme: dark) {
+        .app-bg { fill: url(#bgDark); }
+        .app-sheen { display: none; }
+        .app-border { stroke: rgba(217, 180, 91, 0.3); }
+        .mark-body { fill: #f5f1e6; }
+        .mark-accent { fill: #d9b45b; }
+        .mark-depth { fill: #e8e2d2; }
       }
-    }
-  }
-  return out;
+    </style>
+  </defs>
+
+  <!-- Container -->
+  <rect class="app-bg" width="512" height="512" rx="${rx}"/>
+  <rect class="app-sheen" width="512" height="512" rx="${rx}" fill="url(#topSheen)"/>
+  <rect class="app-border" x="1" y="1" width="510" height="510" rx="${rx - 1}" fill="none" stroke-width="2"/>
+
+  <!-- NASAQ Mark -->
+  <g transform="translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${scale.toFixed(5)})" filter="url(#markShadow)">
+    <path class="mark-body" d="${path2}"/>
+    <path class="mark-accent" d="${path1_a}"/>
+    <path class="mark-accent" d="${path1_b}"/>
+    <path class="mark-depth" d="${path3}"/>
+  </g>
+</svg>`;
 }
 
-/** Maskable: brand emerald field, the full tile scaled into the 80% safe zone. */
-function maskable(rgb, size) {
-  const field = Buffer.alloc(size * size * 3);
-  const inner = Math.round(size * 0.8);
-  const offset = Math.round((size - inner) / 2);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const o = (y * size + x) * 3;
-      field[o] = 0x00;
-      field[o + 1] = 0x6c;
-      field[o + 2] = 0x35;
-      const ix = x - offset;
-      const iy = y - offset;
-      if (ix >= 0 && iy >= 0 && ix < inner && iy < inner) {
-        const sx = Math.min(size - 1, Math.round(((ix + 0.5) * size) / inner - 0.5));
-        const sy = Math.min(size - 1, Math.round(((iy + 0.5) * size) / inner - 0.5));
-        const s = (sy * size + sx) * 3;
-        field[o] = rgb[s];
-        field[o + 1] = rgb[s + 1];
-        field[o + 2] = rgb[s + 2];
-      }
-    }
-  }
-  return field;
+/**
+ * Generate Favicon SVG (crisp 32x32 vector container)
+ */
+function buildFaviconSvg() {
+  const size = 32;
+  const scale = (20.5 / 210.14);
+  const markW = 141.11 * scale;
+  const markH = 210.14 * scale;
+  const tx = (size - markW) / 2;
+  const ty = (size - markH) / 2;
+  const rx = 7;
+
+  const path1_a = markPaths.find((p, i) => i === 1)?.d || "";
+  const path1_b = markPaths.find((p, i) => i === 2)?.d || "";
+  const path2 = markPaths.find((p, i) => i === 0)?.d || "";
+  const path3 = markPaths.find((p, i) => i === 3)?.d || "";
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <linearGradient id="favBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#007a3c"/>
+      <stop offset="100%" stop-color="#004822"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="${rx}" fill="url(#favBg)"/>
+  <rect x="0.5" y="0.5" width="31" height="31" rx="${rx - 0.5}" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="1"/>
+  <g transform="translate(${tx.toFixed(2)}, ${ty.toFixed(2)}) scale(${scale.toFixed(5)})">
+    <path fill="#f5f1e6" d="${path2}"/>
+    <path fill="#d9b45b" d="${path1_a}"/>
+    <path fill="#d9b45b" d="${path1_b}"/>
+    <path fill="#e8e2d2" d="${path3}"/>
+  </g>
+</svg>`;
 }
 
-function crc32(buf) {
-  let table = crc32.table;
-  if (!table) {
-    table = crc32.table = new Int32Array(256);
-    for (let n = 0; n < 256; n++) {
-      let c = n;
-      for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-      table[n] = c;
-    }
-  }
-  let crc = -1;
-  for (let i = 0; i < buf.length; i++)
-    crc = (crc >>> 8) ^ table[(crc ^ buf[i]) & 0xff];
-  return (crc ^ -1) >>> 0;
+/**
+ * Render SVG string to PNG Buffer at target size
+ */
+function renderPng(svgStr, targetSize) {
+  const resvg = new Resvg(svgStr, {
+    fitTo: { mode: "width", value: targetSize },
+    shapeRendering: 2, // geometricPrecision
+    imageRendering: 0, // optimizeQuality
+  });
+  return resvg.render().asPng();
 }
 
-function chunk(type, data) {
-  const out = Buffer.alloc(12 + data.length);
-  out.writeUInt32BE(data.length, 0);
-  out.write(type, 4, "ascii");
-  data.copy(out, 8);
-  out.writeUInt32BE(crc32(out.subarray(4, 8 + data.length)), 8 + data.length);
-  return out;
+console.log("Generating NASAQ Application Icon suite...");
+
+// 1. Emit SVG App Icons
+const adaptiveSvg = buildAdaptiveAppIconSvg();
+writeFileSync(join(OUT_ICONS, "nasaq-app-icon.svg"), adaptiveSvg);
+
+const lightSvg = buildAppIconSvg({ theme: "light", rounded: true, size: 512 });
+writeFileSync(join(OUT_ICONS, "nasaq-app-icon-light.svg"), lightSvg);
+
+const darkSvg = buildAppIconSvg({ theme: "dark", rounded: true, size: 512 });
+writeFileSync(join(OUT_ICONS, "nasaq-app-icon-dark.svg"), darkSvg);
+
+const faviconSvg = buildFaviconSvg();
+writeFileSync(join(OUT_PUBLIC, "favicon.svg"), faviconSvg);
+
+// 2. Base SVGs for Rasterization
+const emeraldRoundedSvg = buildAppIconSvg({ theme: "emerald", rounded: true, size: 512 });
+const emeraldSquareSvg = buildAppIconSvg({ theme: "emerald", rounded: false, size: 512 });
+const maskableSvg = buildAppIconSvg({ theme: "maskable", rounded: false, size: 512 });
+const lightRoundedSvg = buildAppIconSvg({ theme: "light", rounded: true, size: 512 });
+const darkRoundedSvg = buildAppIconSvg({ theme: "dark", rounded: true, size: 512 });
+
+// 3. Emit Standard PWA / Desktop Icons
+const standardSizes = [16, 32, 48, 96, 128, 192, 384, 512];
+for (const size of standardSizes) {
+  const pngBuf = renderPng(emeraldRoundedSvg, size);
+  writeFileSync(join(OUT_ICONS, `nasaq-${size}.png`), pngBuf);
+  console.log(`  ✓ public/icons/nasaq-${size}.png (${size}x${size}, ${(pngBuf.length / 1024).toFixed(1)} KB)`);
 }
 
-function encodePng(rgb, size) {
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(size, 0);
-  ihdr.writeUInt32BE(size, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 2; // truecolour
-  const stride = size * 3;
-  const raw = Buffer.alloc((stride + 1) * size);
-  for (let y = 0; y < size; y++) {
-    raw[y * (stride + 1)] = 0; // no filter
-    rgb.copy(raw, y * (stride + 1) + 1, y * stride, (y + 1) * stride);
-  }
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    chunk("IHDR", ihdr),
-    chunk("IDAT", deflateSync(raw, { level: 9 })),
-    chunk("IEND", Buffer.alloc(0)),
-  ]);
-}
+// 4. Emit iOS / iPadOS Apple Touch Icon (Square edge-to-edge for native iOS squircle mask)
+const ios180 = renderPng(emeraldSquareSvg, 180);
+writeFileSync(join(OUT_ICONS, "nasaq-180.png"), ios180);
+console.log(`  ✓ public/icons/nasaq-180.png (180x180 iOS Apple Touch Icon)`);
 
-const source = decodePng(readFileSync(SOURCE));
-for (const size of [192, 512]) {
-  const rgb = resize(source, size);
-  writeFileSync(join(OUT, `nasaq-${size}.png`), encodePng(rgb, size));
-}
-const mask = maskable(resize(source, 512), 512);
-writeFileSync(join(OUT, "nasaq-maskable-512.png"), encodePng(mask, 512));
-console.log("icons written to public/icons");
+// Also update public/__grok/icon-180.png
+writeFileSync(join(OUT_GROK, "icon-180.png"), ios180);
+console.log(`  ✓ public/__grok/icon-180.png (180x180 Platform Tile)`);
+
+// 5. Emit Android Maskable Adaptive Icon
+const maskable512 = renderPng(maskableSvg, 512);
+writeFileSync(join(OUT_ICONS, "nasaq-maskable-512.png"), maskable512);
+console.log(`  ✓ public/icons/nasaq-maskable-512.png (512x512 Maskable Icon)`);
+
+// 6. Emit Light & Dark Mode Rasters
+writeFileSync(join(OUT_ICONS, "nasaq-light-192.png"), renderPng(lightRoundedSvg, 192));
+writeFileSync(join(OUT_ICONS, "nasaq-light-512.png"), renderPng(lightRoundedSvg, 512));
+writeFileSync(join(OUT_ICONS, "nasaq-dark-192.png"), renderPng(darkRoundedSvg, 192));
+writeFileSync(join(OUT_ICONS, "nasaq-dark-512.png"), renderPng(darkRoundedSvg, 512));
+console.log(`  ✓ public/icons/nasaq-light-* & nasaq-dark-* (192 & 512)`);
+
+console.log("\nAll NASAQ app icon assets generated successfully!");
