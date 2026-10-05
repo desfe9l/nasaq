@@ -1,4 +1,17 @@
 export type DesignGenerationMode = "generate" | "balance" | "professional";
+export type CoverStyle =
+  | "minimal"
+  | "editorial"
+  | "premium"
+  | "gradient"
+  | "wave"
+  | "geometric"
+  | "image-led"
+  | "executive"
+  | "formal"
+  | "legal"
+  | "media"
+  | "annual-report";
 
 export interface DesignBriefInput {
   prompt: string;
@@ -6,6 +19,7 @@ export interface DesignBriefInput {
   requestedPages?: number;
   style?: string;
   format?: string;
+  coverStyle?: CoverStyle;
   bilingual?: boolean;
   contentDensity?: "light" | "balanced" | "dense";
 }
@@ -18,7 +32,7 @@ export interface DesignBrief {
   style: string;
   format: "a4-book" | "wide-slide" | "tall-story";
   pages: number;
-  coverStyle: "minimal" | "editorial" | "premium" | "gradient" | "wave" | "geometric" | "image-led" | "executive" | "formal";
+  coverStyle: CoverStyle;
   bilingual: boolean;
   contentDensity: "light" | "balanced" | "dense";
   visualDirection: string;
@@ -55,6 +69,9 @@ const COVER_STYLES = new Set([
   "image-led",
   "executive",
   "formal",
+  "legal",
+  "media",
+  "annual-report",
 ]);
 
 export function normalizeDesignBriefInput(input: Partial<DesignBriefInput>): DesignBriefInput {
@@ -65,6 +82,7 @@ export function normalizeDesignBriefInput(input: Partial<DesignBriefInput>): Des
       input.requestedPages == null ? undefined : Math.min(12, Math.max(1, Math.round(Number(input.requestedPages) || 1))),
     style: typeof input.style === "string" && STYLES.has(input.style) ? input.style : undefined,
     format: typeof input.format === "string" && FORMATS.has(input.format) ? input.format : undefined,
+    coverStyle: input.coverStyle && COVER_STYLES.has(input.coverStyle) ? input.coverStyle : undefined,
     bilingual: Boolean(input.bilingual),
     contentDensity:
       input.contentDensity === "light" || input.contentDensity === "dense" ? input.contentDensity : "balanced",

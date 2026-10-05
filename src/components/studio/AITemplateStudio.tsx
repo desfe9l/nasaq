@@ -38,7 +38,7 @@ import {
   type StudioGenerationResult,
 } from "@/lib/intelligence/pipeline";
 import { generateDesignBriefFn } from "@/lib/ai/functions";
-import type { DesignGenerationMode } from "@/lib/ai/design-contract";
+import type { CoverStyle, DesignGenerationMode } from "@/lib/ai/design-contract";
 import type { DesignVariation } from "@/lib/intelligence/variations";
 import { DESIGN_STYLES, type DesignFormat, type DesignStyle } from "@/lib/intelligence/schema";
 import { pageSize } from "@/lib/editor/model";
@@ -127,6 +127,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
   const [overrideFormat, setOverrideFormat] = useState<DesignFormat | "auto">("auto");
   const [overridePages, setOverridePages] = useState<number | "auto">("auto");
   const [generationMode, setGenerationMode] = useState<DesignGenerationMode>("professional");
+  const [overrideCover, setOverrideCover] = useState<CoverStyle | "auto">("auto");
 
   // Active variation project
   const currentVariation: DesignVariation | undefined =
@@ -206,6 +207,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
           requestedPages: typeof overridePages === "number" ? overridePages : undefined,
           style: overrideStyle === "auto" ? undefined : overrideStyle,
           format: overrideFormat === "auto" ? undefined : overrideFormat,
+          coverStyle: overrideCover === "auto" ? undefined : overrideCover,
           bilingual: /ثنائي|لغتين|عربي.*إنجليزي|إنجليزي.*عربي/i.test(text),
         },
       });
@@ -221,6 +223,11 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
         style: overrideStyle === "auto" ? brief.style : overrideStyle,
         format: overrideFormat === "auto" ? brief.format : overrideFormat,
         pages: typeof overridePages === "number" ? overridePages : brief.pages,
+        coverStyle: overrideCover === "auto" ? brief.coverStyle : overrideCover,
+        generationMode,
+        contentDensity: brief.contentDensity,
+        bilingual: brief.bilingual,
+        visualDirection: brief.visualDirection,
       };
 
       /*
@@ -442,6 +449,28 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
                   <option value="generate">توليد — أفكار وتكوينات جديدة</option>
                   <option value="balance">توازن — ضبط الكثافة والهرمية</option>
                   <option value="professional">احتراف — إخراج مؤسسي صارم</option>
+                </select>
+              </label>
+              <label className="grid gap-1 text-[11px] font-bold text-muted">
+                اتجاه الغلاف
+                <select
+                  value={overrideCover}
+                  onChange={(e) => setOverrideCover(e.target.value as CoverStyle | "auto")}
+                  className="h-9 rounded-lg border border-line bg-surface px-2 text-[12px] font-bold"
+                >
+                  <option value="auto">تلقائي من Gemini</option>
+                  <option value="minimal">Minimal · بسيط</option>
+                  <option value="editorial">Editorial · تحريري</option>
+                  <option value="premium">Premium · فاخر</option>
+                  <option value="gradient">Gradient · تدرج</option>
+                  <option value="wave">Wave · منحنيات</option>
+                  <option value="geometric">Geometric · هندسي</option>
+                  <option value="image-led">Image-led · صورة رئيسية</option>
+                  <option value="executive">Executive · قيادي</option>
+                  <option value="formal">Formal · رسمي</option>
+                  <option value="legal">Legal · قانوني</option>
+                  <option value="media">Media · إعلامي</option>
+                  <option value="annual-report">Annual report · سنوي</option>
                 </select>
               </label>
               <label className="grid gap-1 text-[11px] font-bold text-muted">

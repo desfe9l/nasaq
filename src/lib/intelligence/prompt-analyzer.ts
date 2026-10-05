@@ -22,6 +22,23 @@ export interface PromptAnalysis {
   org: string;
   style: DesignStyle;
   styleLabel: string;
+  coverStyle:
+    | "minimal"
+    | "editorial"
+    | "premium"
+    | "gradient"
+    | "wave"
+    | "geometric"
+    | "image-led"
+    | "executive"
+    | "formal"
+    | "legal"
+    | "media"
+    | "annual-report";
+  generationMode: "generate" | "balance" | "professional";
+  contentDensity: "light" | "balanced" | "dense";
+  bilingual: boolean;
+  visualDirection: string;
   pages: number;
   format: DesignFormat;
   orientation: "portrait" | "landscape";
@@ -207,6 +224,19 @@ export function parsePrompt(prompt: string): PromptAnalysis {
   let subtitle = "رصد النتائج الاستراتيجية ومؤشرات الإنجاز المعتمدة";
   let org = "الجهة المختصة";
   let classification = "وثيقة رسمية - للاستخدام الداخلي";
+  let coverStyle: PromptAnalysis["coverStyle"] = "formal";
+  const generationMode: PromptAnalysis["generationMode"] = /توازن|متوازن/i.test(clean)
+    ? "balance"
+    : /توليد|إبداعي|إبداع/i.test(clean)
+      ? "generate"
+      : "professional";
+  const contentDensity: PromptAnalysis["contentDensity"] = /مكثف|كثيف|تفصيلي/i.test(clean)
+    ? "dense"
+    : /موجز|خفيف|minimal/i.test(clean)
+      ? "light"
+      : "balanced";
+  const bilingual = /ثنائي|لغتين|عربي.*إنجليزي|إنجليزي.*عربي/i.test(clean);
+  let visualDirection = "تكوين عربي RTL مؤسسي بهرمية قوية ومساحات بيضاء مقصودة";
 
   // Check organization in prompt
   const orgMatch = clean.match(/(?:لـ|لجهة|لشركة|لهيئة|لمؤسسة|لمركز|لوزارة|لمكتب)\s+([^،.\n]+)/i);
@@ -231,6 +261,8 @@ export function parsePrompt(prompt: string): PromptAnalysis {
     }
     if (!orgMatch) org = "الإدارة العامة للأمن السيبراني";
     classification = "وثيقة رسمية - سري للغاية";
+    coverStyle = "gradient";
+    visualDirection = "شبكة تقنية دقيقة فوق تدرج عميق مع صورة معالجة وطبقات ضوء";
   } else if (/(?:ال)?سنوي|إنجازات|حصاد|تقرير\s*(?:ال)?سنوي/i.test(clean)) {
     topic = "التقرير السنوي";
     style = "government";
@@ -239,6 +271,7 @@ export function parsePrompt(prompt: string): PromptAnalysis {
     subtitle = "استعراض مستهدفات الأداء والمشاريع المنجزة والأثر المحقق";
     if (!orgMatch) org = "الهيئة الوطنية للتطوير المؤسسي";
     classification = "تقرير سنوي منشور - معتمد";
+    coverStyle = "annual-report";
   } else if (/(?:ال)?شرك(?:ة|ات)|ملف\s*تعريفي|بروفايل|أعمال/i.test(clean)) {
     topic = "ملف الشركة التعريفي";
     style = "corporate";
@@ -247,6 +280,7 @@ export function parsePrompt(prompt: string): PromptAnalysis {
     subtitle = "رؤيتنا، خدماتنا المتقدمة، وقصص النجاح في تمكين الشركاء";
     if (!orgMatch) org = "شركة نَسَق للاستشارات والحلول المتقدمة";
     classification = "ملف تعريفي رسمي للشركاء";
+    coverStyle = "image-led";
   } else if (/طاقة|بيئة|استدامة|شمسية|خضراء/i.test(clean)) {
     topic = "الاستدامة والطاقة المتجددة";
     style = "institutional";
@@ -255,6 +289,7 @@ export function parsePrompt(prompt: string): PromptAnalysis {
     subtitle = "خفض الانبعاثات وتحقيق كفاءة الطاقة والتحول الأخضر المستدام";
     if (!orgMatch) org = "مركز كفاءة الطاقة والمبادرات الخضراء";
     classification = "وثيقة التميز البيئي والاستدامة";
+    coverStyle = "wave";
   } else if (/صحة|طبي|رعاية|مستشفى/i.test(clean)) {
     topic = "الرعاية الصحية والتحول الصحي";
     style = "institutional";
@@ -263,6 +298,7 @@ export function parsePrompt(prompt: string): PromptAnalysis {
     subtitle = "تطوير منظومة الخدمات الطبية وتجربة المريض وسلامة الرعاية";
     if (!orgMatch) org = "التجمع الصحي وإدارة الرعاية المتقدمة";
     classification = "وثيقة الجودة والاعتماد الصحي";
+    coverStyle = "media";
   } else if (/مالي|استثمار|ميزانية|أرباح|أسهم/i.test(clean)) {
     topic = "التقرير المالي والاستثماري";
     style = "executive";
@@ -411,6 +447,11 @@ export function parsePrompt(prompt: string): PromptAnalysis {
     org,
     style,
     styleLabel,
+    coverStyle,
+    generationMode,
+    contentDensity,
+    bilingual,
+    visualDirection,
     pages,
     format,
     orientation,

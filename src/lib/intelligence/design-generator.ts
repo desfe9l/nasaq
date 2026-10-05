@@ -71,6 +71,65 @@ function put(page: Page, type: ElType, over: Partial<CanvasEl>): CanvasEl {
   return el;
 }
 
+function gradient(field: string, accent: string, reverse = false) {
+  return {
+    type: "linear" as const,
+    angle: reverse ? 135 : 225,
+    cx: 50,
+    cy: 50,
+    stops: [
+      { id: "field", offset: 0, color: field, opacity: 1 },
+      { id: "accent", offset: 0.62, color: accent, opacity: 0.92 },
+      { id: "deep", offset: 1, color: field, opacity: 1 },
+    ],
+  };
+}
+
+function premiumOrnament(page: Page, intent: PromptAnalysis, index: number) {
+  const { w, h } = pageSize(page);
+  const p = intent.palette;
+  const creative = intent.generationMode === "generate";
+  const tight = intent.generationMode === "balance";
+  const variant = (index + (creative ? 1 : tight ? 2 : 0)) % 3;
+  page.bgGradient = gradient(p.paper, p.field, variant === 1);
+  put(page, "shape", {
+    name: "موجة زخرفية قابلة للتحرير",
+    x: variant === 0 ? -12 : w * 0.42,
+    y: h - (tight ? 42 : 64),
+    w: w * 0.72,
+    h: tight ? 44 : 72,
+    opacity: 0.12,
+    style: { fill: p.field, borderWidth: 0, shapeId: "wave" },
+  });
+  put(page, "shape", {
+    name: "منحنى جانبي قابل للتحرير",
+    x: variant === 2 ? -12 : w - 30,
+    y: variant === 2 ? 22 : 8,
+    w: 42,
+    h: h * 0.48,
+    opacity: 0.1,
+    style: { fill: p.accent, borderWidth: 0, shapeId: "curve-side" },
+  });
+  put(page, "shape", {
+    name: "معين زخرفي",
+    x: variant === 1 ? w * 0.22 : w - 28,
+    y: 22 + variant * 8,
+    w: 9,
+    h: 9,
+    opacity: 0.9,
+    style: { fill: p.accent, borderWidth: 0, shapeId: "diamond" },
+  });
+  put(page, "line", {
+    name: "خيط الإيقاع البصري",
+    x: variant === 1 ? w * 0.2 : w * 0.58,
+    y: h * 0.22,
+    w: w * 0.22,
+    h: 0,
+    opacity: 0.85,
+    style: { color: p.accent, stroke: 0.8 },
+  });
+}
+
 function write(
   page: Page,
   name: string,
@@ -232,16 +291,63 @@ export function buildOfficialCover(page: Page, intent: PromptAnalysis) {
   const { w, h } = pageSize(page);
   const m = marginOf(w);
   const p = intent.palette;
+  const cover = intent.coverStyle;
+  const creative = intent.generationMode === "generate";
+  const darkCover = ["premium", "gradient", "wave", "geometric", "image-led", "media"].includes(cover);
+  page.bgGradient = darkCover ? gradient(p.field, p.accent, creative) : gradient(p.paper, p.field);
+  if (darkCover) {
+    put(page, "shape", {
+      name: "طبقة الغلاف المتدرجة",
+      x: 0,
+      y: 0,
+      w,
+      h,
+      style: { fill: p.field, gradient: gradient(p.field, p.accent, creative), borderWidth: 0, shapeId: "rect" },
+    });
+  }
+  if (["wave", "media", "annual-report"].includes(cover)) {
+    put(page, "shape", {
+      name: "موجة الغلاف الرئيسية",
+      x: -12,
+      y: h * 0.58,
+      w: w * 0.78,
+      h: h * 0.38,
+      opacity: 0.92,
+      style: { fill: p.field, gradient: gradient(p.field, p.accent), borderWidth: 0, shapeId: "wave" },
+    });
+  }
+  if (["geometric", "annual-report", "legal"].includes(cover)) {
+    put(page, "shape", {
+      name: "كتلة هندسية للغلاف",
+      x: w * 0.58,
+      y: 0,
+      w: w * 0.48,
+      h: h * 0.42,
+      opacity: 0.82,
+      style: { fill: p.accent, gradient: gradient(p.accent, p.field, true), borderWidth: 0, shapeId: "diagonal" },
+    });
+  }
+  if (cover === "minimal" || cover === "legal") {
+    put(page, "shape", {
+      name: "إطار الغلاف الهادئ",
+      x: m,
+      y: m,
+      w: w - m * 2,
+      h: h - m * 2,
+      opacity: 0.8,
+      style: { fill: "none", borderColor: p.accent, borderWidth: 0.45, radius: 2, shapeId: "frame-rounded" },
+    });
+  }
 
   // Header band
-  const bandH = Math.round(h * 0.36);
+  const bandH = darkCover ? Math.round(h * 0.42) : Math.round(h * 0.36);
   put(page, "shape", {
     name: "حقل الغلاف الرئيسي",
     x: 0,
     y: 0,
     w,
     h: bandH,
-    style: { fill: p.field, borderWidth: 0, radius: 0, shape: "rect" },
+    style: { fill: p.field, gradient: darkCover ? gradient(p.field, p.accent, creative) : undefined, borderWidth: 0, radius: 0, shape: "rect" },
   });
 
   // Golden separator line
@@ -314,6 +420,10 @@ export function buildOfficialCover(page: Page, intent: PromptAnalysis) {
       borderColor: p.accent,
       borderWidth: 0.5,
       objectFit: "cover",
+      frameId: ["wave", "media", "image-led"].includes(cover) ? "arch-frame" : "frame-rounded",
+      fade: darkCover ? { from: "transparent", to: p.field, direction: "toBottom", opacity: 0.7, blend: "normal" } : undefined,
+      brightness: darkCover ? 88 : 100,
+      contrast: darkCover ? 112 : 100,
     },
   });
 
@@ -1361,6 +1471,7 @@ export function generateFromIntent(intent: PromptAnalysis): Project {
         buildExecutiveOverview(page, intent, pageIndex, pagesCount);
       }
     }
+    if (i > 0) premiumOrnament(page, intent, i);
 
     pages.push(page);
   }
