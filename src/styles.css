@@ -1714,6 +1714,23 @@ body.is-gesturing .artboard-cell:not(.is-active) {
   content-visibility: auto;
   contain-intrinsic-size: 420px 640px;
 }
+
+/*
+ * Once a canvas gesture owns the pointer, the browser gets nothing from it.
+ *
+ * `touch-action: none` on the stage/page stops Safari and Chrome from claiming
+ * the FIRST touchmove for pan, double-tap zoom or the iOS callout, and the
+ * stage preventDefaults the non-portable `gesture*` events. This is the last
+ * slice: while a drag is confirmed, the whole document stops offering
+ * overscroll bounce, text selection and long-press callouts, so a finger that
+ * slides off the artboard mid-drag cannot hand the gesture to the system.
+ */
+body.is-gesturing {
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
 .guide-v.is-page-center, .guide-h.is-page-center { background: #a855f7; }
 .snap-feedback {
   position: absolute;

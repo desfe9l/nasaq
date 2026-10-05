@@ -1054,8 +1054,19 @@ export function CanvasStage({
      * the rotate branch of `paintFrame`). */
     let rotateHold: number | null = null;
 
-    const applyPressSelection = () => {
+    /**
+     * `additive` keeps whatever is already selected and adds this element —
+     * the multi-select a long press enters, and the Shift+click equivalent on
+     * a desktop. `selectMany` (not `toggleSelect`) so a long press on an
+     * element that is ALREADY selected keeps the group instead of dropping it.
+     */
+    const applyPressSelection = (additive = false) => {
       const fresh = useEditor.getState();
+      if (additive) {
+        if (!fresh.selectedIds.includes(el.id))
+          fresh.selectMany([...fresh.selectedIds, el.id]);
+        return;
+      }
       if (e.shiftKey) toggleSelect(el.id);
       else if (!fresh.selectedIds.includes(el.id)) select(el.id);
     };
@@ -1137,7 +1148,14 @@ export function CanvasStage({
           longPressFired = true;
           heldLong = true;
           decided = true;
-          applyPressSelection();
+          /*
+           * A long press enters MULTI-SELECT: the pressed element joins the
+           * current selection and the object does not move — the gesture never
+           * becomes a drag (`heldLong` blocks every frame and the commit), so
+           * the author can hold, add, and then drag the group with the next
+           * press.
+           */
+          applyPressSelection(true);
           useEditor.getState().openContextMenu({
             x: e.clientX,
             y: e.clientY,
@@ -1176,6 +1194,16 @@ export function CanvasStage({
       framePending = false;
       const op = opRef.current;
       if (!op || heldLong) return;
+      /*
+       * ONE modifier rule for every input: the keyboard's Shift/Alt, or the
+       * held second finger a touch/Pencil gesture reports through the pointer
+       * session. Nothing below branches on the device — it reads the merged
+       * value, so a modifier drag snaps angles and locks proportions exactly
+       * like Shift does, and releasing the finger mid-drag frees it again.
+       */
+      const touchShift = input.current!.shiftModifier;
+      const shiftHeld = ev.shiftKey || touchShift;
+      const altHeld = ev.altKey;
       const cur = toMm(ev);
       const dist = Math.hypot(cur.x - start.x, cur.y - start.y);
       if (dist > maxDist) maxDist = dist;
@@ -1227,8 +1255,8 @@ export function CanvasStage({
           next,
           others,
           size,
-          snapGrid && !ev.altKey,
-          !ev.altKey && (snapElements || ev.shiftKey),
+          snapGrid && !altHeld,
+          !altHeld && (snapElements || shiftHeld),
           zoomNow,
           op.origins,
           op.orig.rotation || 0,
@@ -1240,7 +1268,7 @@ export function CanvasStage({
           op.orig.style?.flipX === true,
           op.orig.style?.flipY === true,
         );
-        const ratioLocked = ev.shiftKey || op.orig.style?.aspectLock === true;
+        const ratioLocked = shiftHeld || op.orig.style?.aspectLock === true;
         /*
          * Anchor-based resize — the ONE model for every shape at every
          * rotation (see `resizeToPointer`). The pointer's absolute page
@@ -1254,7 +1282,9 @@ export function CanvasStage({
          * gesture uses to suspend snapping, so holding Alt always means
          * "raw, unassisted transform". Snapping is skipped while Alt is held
          * and during ratio-locked resizes (the dragged edge would fight the
-         * proportion constraint).
+         * proportion constraint) — EXCEPT for the touch modifier, which keeps
+         * a uniform, proportion-preserving snap so a locked resize still
+         * reports its alignment.
          */
         resizeToPointer(
           next,
@@ -1266,7 +1296,7 @@ export function CanvasStage({
           {
             widthLocked: op.orig.widthLocked,
             heightLocked: op.orig.heightLocked,
-            centered: ev.altKey,
+            centered: altHeld,
           },
         );
         if (!ratioLocked) {
@@ -1277,10 +1307,25 @@ export function CanvasStage({
               mirrored,
               others,
               size,
-              snapGrid && !ev.altKey,
-              snapElements && !ev.altKey,
+              snapGrid && !altHeld,
+              snapElements && !altHeld,
               zoomNow,
               op.orig.rotation || 0,
+            ),
+          );
+        } else if (touchShift) {
+          const zoomNow = useEditor.getState().zoom;
+          setGuides(
+            applyResizeSnap(
+              next,
+              mirrored,
+              others,
+              size,
+              false,
+              true,
+              zoomNow,
+              op.orig.rotation || 0,
+              { ratioLock: true },
             ),
           );
         }
@@ -1302,10 +1347,11 @@ export function CanvasStage({
           distC < 2 ? (rotateHold ?? a0) : Math.atan2(cur.y - cy, cur.x - cx);
         if (distC >= 2) rotateHold = a1;
         const raw = (op.orig.rotation || 0) + ((a1 - a0) * 180) / Math.PI;
-        next.rotation = snapRotation(raw, ev.shiftKey);
+        next.rotation = snapRotation(raw, shiftHeld);
         setRotationHint({
           angle: next.rotation,
-          shift: ev.shiftKey,
+          shift: shiftHeld,
+          touch: ev.pointerType !== "mouse",
           x: ev.clientX,
           y: ev.clientY,
         });
@@ -1371,6 +1417,17 @@ export function CanvasStage({
         longPressHandle = null;
         input.current!.lock(e.pointerId);
         beginGesture();
+        /*
+         * A held modifier finger can be confirmed after the finger has already
+         * travelled (that is how the two-finger case is disambiguated from a
+         * pan). Starting the drag from the CURRENT point keeps the element
+         * exactly where it is instead of jumping the distance the finger
+         * covered while the gesture was still undecided.
+         */
+        if (input.current!.shiftModifier && opRef.current) {
+          opRef.current.startX = cur.x;
+          opRef.current.startY = cur.y;
+        }
         maxDist = dist;
       }
       if (heldLong) return;
@@ -1475,7 +1532,19 @@ export function CanvasStage({
       interaction.endInteraction();
     };
 
-    input.current!.claim(e, { move, end: up, cancel, yieldable: defer });
+    /*
+     * `supportsModifier` is what lets a second contact act as the held
+     * Shift-equivalent for THIS gesture (angle snapping, aspect-ratio resize,
+     * element snapping). It is an element transform, so a held finger is a
+     * modifier and never a pan — whichever finger happens to be holding it.
+     */
+    input.current!.claim(e, {
+      move,
+      end: up,
+      cancel,
+      yieldable: defer,
+      supportsModifier: true,
+    });
   };
 
   /*
@@ -3060,7 +3129,11 @@ function RotationHintLayer() {
         {Math.round(rotationHint.angle)}°
       </strong>
       <span>
-        {rotationHint.shift ? "التقاط 15°/45°/90°" : "Shift للالتقاط"}
+        {rotationHint.shift
+          ? "التقاط 15°/45°/90°"
+          : rotationHint.touch
+            ? "إصبع ثانٍ للالتقاط"
+            : "Shift للالتقاط"}
       </span>
     </div>
   );

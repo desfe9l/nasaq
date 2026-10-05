@@ -768,6 +768,10 @@ export function applySnap(
  * top), so even those would land on the wrong lines — only 0° is safe.
  * Anything else returns immediately: a tilted box resizes freeform, which is
  * deterministic and never corrupts the anchored edge.
+ *
+ * `options.ratioLock` switches to the proportion-preserving snap used when a
+ * modifier gesture (a held finger on touch) locks the aspect ratio: see the
+ * branch below.
  */
 export function applyResizeSnap(
   box: GestureBox,
@@ -778,6 +782,7 @@ export function applyResizeSnap(
   smart: boolean,
   zoom: number,
   rotation: number = 0,
+  options: { ratioLock?: boolean } = {},
 ): SnapGuides {
   // Normalize into [0, 360) and treat anything but 0 (mod 360) as tilted.
   const r = (((Number(rotation) || 0) % 360) + 360) % 360;
@@ -820,6 +825,82 @@ export function applyResizeSnap(
   };
 
   const raw = { ...box };
+  /*
+   * ── Proportion-preserving snap (modifier gesture) ───────────────────────
+   *
+   * A locked aspect ratio and a two-axis edge snap fight each other: nudging
+   * one edge to a guide changes the other dimension, which then no longer
+   * sits on ITS guide. So the snap is applied UNIFORMLY instead — the live
+   * edge closest to a target sets one scale, both dimensions follow it, and
+   * the anchored corner/edge stays exactly where it was. The author still
+   * gets a real guide line, which is what makes a ratio-locked touch resize
+   * feel precise rather than freeform. Grid quantisation is deliberately
+   * skipped here: a 5 mm grid on one axis is unreachable on the other once
+   * the proportion is fixed.
+   */
+  if (options.ratioLock) {
+    if (raw.w <= 0 || raw.h <= 0) return { v: [], h: [] };
+    const ratio = raw.w / raw.h;
+    const candidates: {
+      axis: "x" | "y";
+      target: number;
+      scale: number;
+    }[] = [];
+    const offer = (
+      axis: "x" | "y",
+      best: { delta: number; target: number } | null,
+      extent: number,
+    ) => {
+      // `extent` is signed: a live WEST/NORTH edge grows when its delta is
+      // negative, so the sign carries the anchor side into the scale.
+      if (!best || extent === 0) return;
+      const scale = 1 + best.delta / extent;
+      if (scale <= 0) return;
+      candidates.push({ axis, target: best.target, scale });
+    };
+    if (smart) {
+      const xTargets = edgesFor("x", size.w);
+      const yTargets = edgesFor("y", size.h);
+      if (liveLeft) offer("x", nearest(raw.x, xTargets), -raw.w);
+      else if (liveRight) offer("x", nearest(raw.x + raw.w, xTargets), raw.w);
+      if (liveTop) offer("y", nearest(raw.y, yTargets), -raw.h);
+      else if (liveBottom) offer("y", nearest(raw.y + raw.h, yTargets), raw.h);
+    }
+    /*
+     * The winning axis is the one that scales the box least, so a resize
+     * snaps to the alignment it is already closest to and never jumps.
+     */
+    let chosen: (typeof candidates)[number] | null = null;
+    for (const c of candidates) {
+      const w = c.axis === "x" ? raw.w * c.scale : raw.h * c.scale * ratio;
+      const h = c.axis === "x" ? (raw.w * c.scale) / ratio : raw.h * c.scale;
+      if (w < MIN_SIZE || h < MIN_SIZE) continue;
+      if (!chosen || Math.abs(c.scale - 1) < Math.abs(chosen.scale - 1))
+        chosen = c;
+    }
+    if (!chosen) return { v: [], h: [] };
+    const w = chosen.axis === "x" ? raw.w * chosen.scale : raw.h * chosen.scale * ratio;
+    const h = chosen.axis === "x" ? (raw.w * chosen.scale) / ratio : raw.h * chosen.scale;
+    box.w = w;
+    box.h = h;
+    // Anchored feature stays put: a live left/top edge moves the opposite
+    // edge's anchor; an edge handle on one axis keeps the other centred.
+    box.x =
+      liveLeft || liveRight
+        ? liveLeft
+          ? raw.x + raw.w - w
+          : raw.x
+        : raw.x + raw.w / 2 - w / 2;
+    box.y =
+      liveTop || liveBottom
+        ? liveTop
+          ? raw.y + raw.h - h
+          : raw.y
+        : raw.y + raw.h / 2 - h / 2;
+    return chosen.axis === "x"
+      ? { v: [chosen.target], h: [] }
+      : { v: [], h: [chosen.target] };
+  }
   // Smart candidates are measured BEFORE grid quantisation. Otherwise a page
   // edge such as 297 mm becomes unreachable at high zoom on a 5 mm grid.
   if (grid) {

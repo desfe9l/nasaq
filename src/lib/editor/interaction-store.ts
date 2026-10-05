@@ -105,6 +105,9 @@ export function marqueeForPage(
 export interface RotationHint {
   angle: number;
   shift: boolean;
+  /** True for a touch/Pencil rotation, so the hint names the finger gesture
+   * that snaps instead of the Shift key. */
+  touch?: boolean;
   x: number;
   y: number;
 }

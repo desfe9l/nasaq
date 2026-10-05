@@ -36,6 +36,9 @@ try {
   await page.evaluate(async () => {
     window.editor = (await import("/src/lib/editor/store.ts")).useEditor;
     window.makeEl = (await import("/src/lib/editor/model.ts")).createElement;
+    window.interaction = (
+      await import("/src/lib/editor/interaction-store.ts")
+    ).useInteraction;
   });
   const fixture = async (over = {}) => {
     await page.evaluate((over) => {
@@ -332,6 +335,218 @@ try {
   pass(
     "two-finger tap undoes exactly one real history entry with sequential lifts",
   );
+
+  /*
+   * ── The held-finger modifier ────────────────────────────────────────────
+   * One finger holds still and acts as the Shift-equivalent for the gesture
+   * the OTHER finger owns. Observable from the transient interaction store:
+   * the modifier is what turns element snapping on, reports the rotation
+   * snap, and locks the resize proportion.
+   */
+  const snapSweep = async (from, second) => {
+    let snapped = null;
+    for (let dx = 0; dx <= 60; dx += 5) {
+      const points = [{ x: from.x + dx, y: from.y }];
+      if (second) points.push(second);
+      await touch("touchMove", points);
+      const live = await page.evaluate(() => {
+        const st = window.interaction.getState();
+        return { guides: st.guides, geom: st.overrides["qa-box"] };
+      });
+      if (live.guides.v.length || live.guides.h.length) snapped = live;
+    }
+    return snapped;
+  };
+  const modifierFinger = (c) => ({ x: c.x + 170, y: c.y + 130 });
+
+  // A reference edge 131mm from the page origin: the sweep walks the dragged
+  // box's east edge (120 → ~136mm) straight across it.
+  const withReference = async () => {
+    await fixture();
+    await page.evaluate(() => {
+      const s = window.editor.getState();
+      const ref = window.makeEl("box", {
+        id: "qa-ref",
+        x: 131,
+        y: 50,
+        w: 40,
+        h: 30,
+      });
+      window.editor.setState({
+        pages: [{ ...s.pages[0], elements: [...s.pages[0].elements, ref] }],
+        snapGrid: false,
+        snapElements: false,
+        selectedIds: [],
+        selectedId: null,
+      });
+      window.editor.getState().commit();
+    });
+    await page.waitForTimeout(200);
+  };
+
+  await withReference();
+  c = await center();
+  assert.equal(
+    await snapSweep(c, null),
+    null,
+    "with element snapping off, a plain finger drag shows no guides",
+  );
+  await touch("touchEnd", []);
+  await page.waitForTimeout(120);
+
+  await withReference();
+  c = await center();
+  before = await state();
+  await touch("touchStart", [c]);
+  await touch("touchStart", [c, modifierFinger(c)]);
+  const snappedFrame = await snapSweep(c, modifierFinger(c));
+  assert.ok(snappedFrame, "the held finger turns element snapping on");
+  assert.ok(
+    snappedFrame.guides.v.includes(131),
+    `guide reports the real target: ${JSON.stringify(snappedFrame.guides)}`,
+  );
+  assert.equal(
+    Math.round((snappedFrame.geom.x + snappedFrame.geom.w) * 100) / 100,
+    131,
+    "the dragged edge lands exactly on the guide",
+  );
+  const heldX = snappedFrame.geom.x;
+  // The held finger roams; the element must not follow it.
+  await touch("touchMove", [
+    { x: c.x + 40, y: c.y },
+    { x: c.x + 60, y: c.y + 40 },
+  ]);
+  await page.waitForTimeout(80);
+  assert.equal(
+    (
+      await page.evaluate(
+        () => window.interaction.getState().overrides["qa-box"].x,
+      )
+    ),
+    heldX,
+    "the modifier finger never moves the element",
+  );
+  await touch("touchEnd", [{ id: 2, x: c.x + 60, y: c.y + 40 }]);
+  await touch("touchEnd", []);
+  await page.waitForTimeout(150);
+  after = await state();
+  assert.ok(after.el.x > before.el.x, "the owning finger still moved it");
+  assert.equal(after.zoom, before.zoom, "no pinch/zoom was triggered");
+  pass(
+    "held second finger is a modifier: snaps the drag, shows guides, never moves the element",
+  );
+
+  await fixture();
+  await page.evaluate(() => window.editor.getState().select("qa-box"));
+  await page.waitForTimeout(150);
+  h = await center(".selection-frame .rotate-handle.ne");
+  before = await state();
+  await touch("touchStart", [h]);
+  await touch("touchStart", [h, { x: h.x - 160, y: h.y + 120 }]);
+  await touch("touchMove", [
+    { x: h.x + 18, y: h.y + 26 },
+    { x: h.x - 160, y: h.y + 120 },
+  ]);
+  await page.waitForTimeout(80);
+  const hint = await page.evaluate(
+    () => window.interaction.getState().rotationHint,
+  );
+  assert.ok(hint && hint.shift === true, "the rotation readout reports the snap");
+  await touch("touchEnd", [{ id: 2, x: h.x - 160, y: h.y + 120 }]);
+  await touch("touchEnd", []);
+  await page.waitForTimeout(150);
+  after = await state();
+  const offGrid = Math.abs(((after.el.rotation % 15) + 15) % 15);
+  assert.ok(
+    Math.min(offGrid, 15 - offGrid) < 1e-6,
+    `rotation snapped to 15° (got ${after.el.rotation})`,
+  );
+  pass("rotation snaps to 15° while the modifier finger is held");
+
+  await fixture();
+  await page.evaluate(() => window.editor.getState().select("qa-box"));
+  await page.waitForTimeout(150);
+  h = await center(".selection-frame .handle.se");
+  before = await state();
+  await touch("touchStart", [h]);
+  await touch("touchStart", [h, { x: h.x - 160, y: h.y - 120 }]);
+  await touch("touchMove", [
+    { x: h.x + 34, y: h.y + 6 },
+    { x: h.x - 160, y: h.y - 120 },
+  ]);
+  await page.waitForTimeout(80);
+  await touch("touchEnd", [{ id: 2, x: h.x - 160, y: h.y - 120 }]);
+  await touch("touchEnd", []);
+  await page.waitForTimeout(150);
+  after = await state();
+  assert.ok(after.el.w > before.el.w, "the corner still resized");
+  assert.ok(
+    Math.abs(after.el.w / after.el.h - before.el.w / before.el.h) < 0.01,
+    `proportion preserved: ${before.el.w}/${before.el.h} → ${after.el.w}/${after.el.h}`,
+  );
+  assert.equal(after.el.x, before.el.x, "the anchored corner never drifts");
+  pass("resize keeps the aspect ratio while the modifier finger is held");
+
+  // Long press enters MULTI-SELECT: the pressed element joins the selection
+  // and the object does not move.
+  await fixture();
+  await page.evaluate(() => {
+    const s = window.editor.getState();
+    const extra = window.makeEl("box", {
+      id: "qa-box2",
+      x: 140,
+      y: 50,
+      w: 40,
+      h: 30,
+    });
+    window.editor.setState({
+      pages: [{ ...s.pages[0], elements: [...s.pages[0].elements, extra] }],
+      selectedIds: ["qa-box"],
+      selectedId: "qa-box",
+      contextMenu: null,
+    });
+    window.editor.getState().commit();
+  });
+  await page.waitForTimeout(200);
+  const c2 = await center('.canvas-el[data-el-id="qa-box2"]');
+  before = await state();
+  await touch("touchStart", [c2]);
+  await page.waitForTimeout(700);
+  await touch("touchEnd", []);
+  await page.waitForTimeout(150);
+  assert.deepEqual(
+    (await page.evaluate(() => [...window.editor.getState().selectedIds])).sort(),
+    ["qa-box", "qa-box2"],
+    "the long-pressed element joined the existing selection",
+  );
+  after = await state();
+  assert.equal(after.el.x, before.el.x, "the pressed object did not move");
+  assert.equal(after.past, before.past, "multi-select created no history");
+  pass("long press enters multi-select without moving the pressed object");
+
+  // Pencil + finger: a fingertip next to an active Pencil is a modifier, and
+  // the Pencil keeps ownership of its gesture.
+  await withReference();
+  c = await center();
+  before = await state();
+  await pen("mousePressed", c);
+  await touch("touchStart", [modifierFinger(c)]);
+  let penSnapped = null;
+  for (let dx = 0; dx <= 60 && !penSnapped; dx += 5) {
+    await pen("mouseMoved", { x: c.x + dx, y: c.y });
+    const live = await page.evaluate(() => {
+      const st = window.interaction.getState();
+      return { guides: st.guides, geom: st.overrides["qa-box"] };
+    });
+    if (live.guides.v.length) penSnapped = live;
+  }
+  assert.ok(penSnapped, "a fingertip modifies a live Pencil drag");
+  await pen("mouseReleased", { x: c.x + 60, y: c.y });
+  await touch("touchEnd", []);
+  await page.waitForTimeout(150);
+  after = await state();
+  assert.ok(after.el.x > before.el.x, "the Pencil gesture was never stolen");
+  pass("Pencil + finger: the finger acts as a modifier, the Pencil keeps the drag");
 
   for (const [name, x, grabFraction] of [
     ["fully outside", -75, 0.5],

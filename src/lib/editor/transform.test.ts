@@ -306,6 +306,74 @@ test("resize grid snap rounds the live edge to the grid", () => {
   assert.equal((box2.x + box2.w) % GRID, 0);
 });
 
+// ── Proportion-preserving resize snap (held-modifier gesture) ────────────────
+
+test("ratioLock snaps the closest live edge and scales both dimensions", () => {
+  const size = { w: 210, h: 297 };
+  const others = [{ id: "a", x: 100, y: 0, w: 40, h: 40 }];
+  // 2:1 box whose east edge is 1.5mm short of the neighbour's west edge.
+  const b = { x: 10, y: 10, w: 88.5, h: 44.25 };
+  const guides = applyResizeSnap(b, "se", others, size, false, true, 1, 0, {
+    ratioLock: true,
+  });
+  assert.equal(b.w, 90, "the snapped axis lands exactly on the target");
+  assert.equal(b.h, 45, "the other dimension follows the same scale");
+  assert.equal(b.x, 10, "the anchored west edge never drifts");
+  assert.equal(b.y, 10, "the anchored north edge never drifts");
+  assert.deepEqual(guides.v, [100]);
+  assert.deepEqual(guides.h, []);
+});
+
+test("ratioLock keeps a single-axis edge handle centred on the other axis", () => {
+  const size = { w: 210, h: 297 };
+  const others = [{ id: "a", x: 100, y: 0, w: 40, h: 40 }];
+  const b = { x: 10, y: 10, w: 88.5, h: 44.25 };
+  const guides = applyResizeSnap(b, "e", others, size, false, true, 1, 0, {
+    ratioLock: true,
+  });
+  assert.equal(b.w, 90);
+  assert.equal(b.h, 45);
+  assert.equal(b.x, 10);
+  assert.equal(b.y, 10 + 44.25 / 2 - 45 / 2, "the height grows about the centre");
+  assert.deepEqual(guides.v, [100]);
+});
+
+test("ratioLock anchors the opposite corner for a west/north handle", () => {
+  const size = { w: 210, h: 297 };
+  const others = [{ id: "a", x: 10, y: 0, w: 40, h: 40 }];
+  const b = { x: 11.5, y: 10, w: 88.5, h: 44.25 };
+  applyResizeSnap(b, "nw", others, size, false, true, 1, 0, {
+    ratioLock: true,
+  });
+  assert.equal(b.x, 10, "the west edge lands on the target");
+  assert.equal(b.w, 90);
+  assert.equal(b.x + b.w, 100, "the anchored east edge is preserved");
+  assert.equal(b.h, 45);
+  assert.equal(b.y + b.h, 54.25, "the anchored south edge is preserved");
+});
+
+test("ratioLock reports nothing and changes nothing when no edge is close", () => {
+  const size = { w: 210, h: 297 };
+  const b = { x: 10, y: 10, w: 50, h: 25 };
+  const before = { ...b };
+  const guides = applyResizeSnap(b, "se", [], size, false, true, 1, 0, {
+    ratioLock: true,
+  });
+  assert.deepEqual(b, before);
+  assert.deepEqual(guides, { v: [], h: [] });
+});
+
+test("ratioLock stays suspended for a rotated box", () => {
+  const size = { w: 210, h: 297 };
+  const others = [{ id: "a", x: 100, y: 0, w: 40, h: 40 }];
+  const b = { x: 10, y: 10, w: 88.5, h: 44.25 };
+  const guides = applyResizeSnap(b, "se", others, size, false, true, 1, 30, {
+    ratioLock: true,
+  });
+  assert.equal(b.w, 88.5, "a tilted box resizes freeform");
+  assert.deepEqual(guides, { v: [], h: [] });
+});
+
 // ── Rotation-aware transformation model ─────────────────────────────────────
 
 test("rotationIsAxisAligned accepts multiples of 90 with float tolerance", () => {
