@@ -15,7 +15,12 @@ export const Route = createFileRoute("/create")({
   head: () => ({ meta: [{ title: "إنشاء تصميم | نَسَق" }] }),
   validateSearch: (search: Record<string, unknown>): CreateDesignSearch => ({
     start:
-      search.start === "template" || search.start === "blank" ? search.start : undefined,
+      search.start === "template" ||
+      search.start === "blank" ||
+      search.start === "ai" ||
+      search.start === "raw"
+        ? search.start
+        : undefined,
     template: typeof search.template === "string" ? search.template : undefined,
     size: typeof search.size === "string" ? search.size : undefined,
   }),

@@ -21,6 +21,8 @@ import {
 } from "@/lib/editor/storage";
 import { syncStorageOwner } from "@/lib/auth/storage-owner-sync";
 import { resolveTemplateName } from "@/lib/templates/naming";
+import { applyBrandToProject } from "@/lib/editor/brand-design";
+import type { BrandKit } from "@/lib/product/product";
 
 export const IMPORT_HISTORY_KEY = "importServiceHistory";
 const HISTORY_LIMIT = 24;
@@ -45,6 +47,13 @@ export interface CommitInput {
   /** PSD conversion, for asset decisions. */
   psd?: { project: Project; assets: AssetFinding[] } | null;
   fonts?: AttachedFonts;
+  /**
+   * The account's institutional identity, when `brand_kit` is licensed and the
+   * author asked for it. Applied here — the one place every import path passes
+   * through — so a converted file arrives in the organisation's colours without
+   * any importer knowing about identities.
+   */
+  brand?: BrandKit | null;
 }
 
 /** Build the final project (assets routed, fonts embedded, title applied). */
@@ -62,6 +71,7 @@ export async function buildFinalProject(input: CommitInput): Promise<Project> {
     rememberUploadedFont(family, dataUrl);
     return { family, dataUrl };
   });
+  if (input.brand) project = applyBrandToProject(project, input.brand);
   const name = resolveTemplateName({
     title: input.title,
     titleIsManual: input.titleIsManual,

@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useBrandIdentity, type BrandIdentityState } from "@/lib/product/use-brand-identity";
 import {
   ArrowLeftRight,
   CheckCircle2,
@@ -18,6 +19,7 @@ import {
   FileUp,
   FolderOpen,
   Layers,
+  Palette,
   Loader2,
   SquareArrowOutUpRight,
   RotateCcw,
@@ -86,6 +88,7 @@ interface RepairState {
 }
 
 export function ImportServicePage() {
+  const brand = useBrandIdentity();
   const { user, isPending } = useCurrentUserState();
   const [access, setAccess] = useState<Access>("checking");
 
@@ -111,7 +114,7 @@ export function ImportServicePage() {
     <div className="min-h-screen bg-paper">
       <SiteHeader current="/import" />
       <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
-        <ServiceMasthead />
+        <ServiceMasthead brand={brand} />
         {access === "checking" && (
           <p className="mt-10 flex items-center gap-2 text-[13px] font-bold text-muted">
             <Loader2 className="size-4 animate-spin" /> جارٍ التحقق من الصلاحية…
@@ -119,7 +122,7 @@ export function ImportServicePage() {
         )}
         {access === "signin" && <AccessDenied kind="signin" />}
         {access === "forbidden" && <AccessDenied kind="forbidden" />}
-        {access === "ok" && <ServiceWorkspace />}
+        {access === "ok" && <ServiceWorkspace brand={brand} />}
       </main>
       <SiteFooter />
     </div>
@@ -128,7 +131,7 @@ export function ImportServicePage() {
 
 /* ── masthead & gate ──────────────────────────────────────────────────────── */
 
-function ServiceMasthead() {
+function ServiceMasthead({ brand }: { brand: BrandIdentityState }) {
   return (
     <header className="overflow-hidden rounded-2xl border border-line bg-surface">
       <div className="flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6">
@@ -141,6 +144,12 @@ function ServiceMasthead() {
               {BRAND.platformEn} · IMPORT STUDIO
             </p>
             <h1 className="mt-0.5 text-[22px] font-black text-ink">استيراد القوالب وتحويلها</h1>
+            {brand.kit && (
+              <p className="mt-1 inline-flex items-center gap-1.5 rounded-full border border-brand/40 bg-navy/5 px-2.5 py-0.5 text-[10.5px] font-bold text-brand">
+                <Palette className="size-3" aria-hidden />
+                تُطبَّق {brand.kit.organizationName?.trim() || "الهوية المؤسسية"} على المستند المحوَّل
+              </p>
+            )}
             <p className="mt-1 max-w-2xl text-[12.5px] font-semibold leading-6 text-muted">
               ارفع ملف Photoshop أو Word أو PowerPoint أو PDF أو صورة، واحصل على مستند {BRAND.platform} قابل
               للتحرير بالكامل — مع فحص ذكي للمشكلات وإصلاح تلقائي يحافظ على التكوين الأصلي.
@@ -195,7 +204,7 @@ function AccessDenied({ kind }: { kind: "signin" | "forbidden" }) {
 
 /* ── the workspace ────────────────────────────────────────────────────────── */
 
-function ServiceWorkspace() {
+function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [sourceBytes, setSourceBytes] = useState<Uint8Array | null>(null);
@@ -392,6 +401,10 @@ function ServiceWorkspace() {
       project: working,
       psd,
       fonts,
+      // The identity the account licensed, if any: a converted file arrives in
+      // the organisation's colours. The «saved» repair path above is untouched —
+      // an existing document is repaired, never repainted.
+      brand: brand.kit,
     });
     const thumb =
       (composite && composite.length < 1_800_000 ? composite : null) ||

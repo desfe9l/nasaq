@@ -20,7 +20,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
-import { Database, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { Database, LayoutTemplate, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 import { SIZE_PRESETS, THEMES, type PackId, type Page, type ThemeId } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
@@ -32,6 +32,7 @@ import { entrySlug } from "@/lib/templates/entry-slug";
 import {
   CREATE_ROUTE,
   TEMPLATES_ROUTE,
+  categoryPathFor,
   editorPathFor,
   templatePathFor,
   templatesFilterPathFor,
@@ -41,6 +42,8 @@ import { DEMO_LICENSE, canCreateDemoProject, canUseDemoPack } from "@/lib/produc
 import { projectAccessBlock } from "@/lib/editor/access-limits";
 import { getPublishedTemplateFn } from "@/lib/admin/functions";
 import { useLicense } from "@/lib/license/client";
+import { useBrandIdentity } from "@/lib/product/use-brand-identity";
+import { applyBrandToSeed } from "@/lib/editor/brand-design";
 import {
   CATALOG_PILLS,
   entryProjectSeed,
@@ -67,6 +70,7 @@ import {
 } from "@/components/site/TemplateDialogs";
 import { useCatalogEntries, useCustomTemplates, useTemplateDraft } from "@/components/site/useCatalog";
 import { commitTemplateDraft } from "@/lib/templates/draft-commit";
+import { TEMPLATE_CATEGORY_SURFACES } from "@/lib/templates/category-pages";
 import {
   mergePublishedTemplateContext,
   publishedTemplateSeed,
@@ -102,6 +106,7 @@ export function TemplatesPage({
   const activeProjectId = useEditor((s) => s.id);
   const orgName = useEditor((s) => s.orgName);
   const { entitlements } = useLicense();
+  const brand = useBrandIdentity();
 
   const [theme, setTheme] = useState<ThemeId>("official");
   const [pill, setPill] = useState<CatalogPillId>(() =>
@@ -214,7 +219,11 @@ export function TemplatesPage({
   /** Managed legacy content is fetched through the existing server license gate. */
   const projectSeedForEntry = async (entry: CatalogEntry) => {
     try {
-      if (!entry.managedTemplate) return entryProjectSeed(entry, { themeId: theme, orgName });
+      if (!entry.managedTemplate)
+        return applyBrandToSeed(
+          entryProjectSeed(entry, { themeId: theme, orgName }),
+          brand.kit,
+        );
       const result = await getPublishedTemplateFn({
         data: { id: templateDisplaySlug(entry.managedTemplate) },
       });
@@ -226,9 +235,12 @@ export function TemplatesPage({
         }
         return null;
       }
-      return mergePublishedTemplateContext(
-        publishedTemplateSeed(result.template),
-        entryProjectSeed(entry, { themeId: theme, orgName }),
+      return applyBrandToSeed(
+        mergePublishedTemplateContext(
+          publishedTemplateSeed(result.template),
+          entryProjectSeed(entry, { themeId: theme, orgName }),
+        ),
+        brand.kit,
       );
     } catch (error) {
       // Network failure or an unreadable payload: say so instead of leaving
@@ -584,6 +596,24 @@ export function TemplatesPage({
                 </button>
               );
             })}
+          </div>
+
+          {/* The six public category pages: a destination, not a filter state. */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-line/70 pt-4">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-extrabold text-muted">
+              <LayoutTemplate className="size-3.5" aria-hidden />
+              صفحات الفئات:
+            </span>
+            {TEMPLATE_CATEGORY_SURFACES.map((surface) => (
+              <a
+                key={surface.id}
+                href={categoryPathFor(surface.id)}
+                title={surface.purpose}
+                className="rounded-full border border-line bg-paper px-3 py-1 text-[11.5px] font-bold text-muted transition hover:border-brand hover:text-ink"
+              >
+                {surface.title}
+              </a>
+            ))}
           </div>
 
           <div className="flex flex-wrap items-center gap-2 border-t border-line/70 pt-4">

@@ -10,6 +10,13 @@ import {
   type ImageAnalysis,
   type ImageAnalysisInput,
 } from "./image-contract.ts";
+import {
+  cleanSelectionText,
+  normalizeSelectionInput,
+  selectionPrompt,
+  validSelectionInput,
+  type SelectionActionInput,
+} from "./selection-contract.ts";
 
 /** Provider boundary: swap this adapter without changing editor code. */
 export async function generateReportDraft(
@@ -93,6 +100,69 @@ export async function generateReportDraft(
               .trim()
           : "";
     return normalizeDraft(parseProviderJson(text), input.maxSections);
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Contextual action on a selection — same provider, same key, same failure
+ * vocabulary as the report draft. Only the response shape differs: this path
+ * returns the transformed TEXT itself (or table rows), not a JSON document.
+ */
+export async function transformSelection(
+  rawInput: SelectionActionInput,
+): Promise<string> {
+  const apiKey = process.env.XAI_API_KEY?.trim();
+  if (!apiKey) throw new Error("not_configured");
+  const input = normalizeSelectionInput(rawInput);
+  if (!validSelectionInput(input)) throw new Error("invalid");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25_000);
+  try {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: process.env.NASAQ_AI_MODEL?.trim() || "grok-3-mini",
+        temperature: 0.2,
+        max_tokens: 1_600,
+        messages: [
+          {
+            role: "system",
+            content: [
+              "You are an institutional Arabic-first editor for NASAQ.",
+              "Never invent facts, figures, dates, names, citations or sources.",
+              "Your answer replaces ONLY the selection the author made; do not describe the edit.",
+              "Return the transformed content itself and nothing else.",
+            ].join(" "),
+          },
+          {
+            role: "user",
+            content: `${selectionPrompt(input)}\n\n---\n${input.text}`,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) throw new Error("provider_rejected");
+      if (response.status === 429) throw new Error("provider_rate");
+      throw new Error(`provider_${response.status}`);
+    }
+
+    const payload = (await response.json()) as {
+      choices?: Array<{ message?: { content?: unknown } }>;
+    };
+    const content = payload.choices?.[0]?.message?.content;
+    const text = typeof content === "string" ? cleanSelectionText(content) : "";
+    if (!text) throw new Error("empty_result");
+    return text;
   } finally {
     clearTimeout(timeout);
   }

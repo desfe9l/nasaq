@@ -38,6 +38,16 @@ export const CREATE_ROUTE = "/create";
 /** The AI design generation studio. */
 export const STUDIO_ROUTE = "/studio";
 
+/**
+ * `/ai` — «من محتوى خام إلى مستند» (`src/routes/ai.tsx`).
+ *
+ * The public demonstration of the real pipeline: the visitor pastes their own
+ * content, the page measures it, composes a real A4 document with the shared
+ * composer, runs the shared critic, and reports the before/after verdict. It
+ * ends in a real editable NASAQ document, never a mock preview.
+ */
+export const AI_RAW_ROUTE = "/ai";
+
 /** The editor. Bare `/editor` is an ENTRY, never a blank canvas — see routes. */
 export const EDITOR_ROUTE = "/editor";
 
@@ -259,6 +269,20 @@ export function templateSharePathFor(idOrSlug: string): string {
 }
 
 /**
+ * `/templates/category/<id>` — a template category as its own page.
+ *
+ * Category browsing used to be query parameters only (`?pill=…`), which means a
+ * category could not be linked, indexed, or shared as a destination. The
+ * category id is validated by the page against `TEMPLATE_CATEGORIES`; this
+ * builder only guarantees an absolute, encoded segment.
+ */
+export const TEMPLATE_CATEGORY_ROUTE = `${TEMPLATES_ROUTE}/category`;
+
+export function categoryPathFor(categoryId: string): string {
+  return `${TEMPLATE_CATEGORY_ROUTE}/${segment(categoryId)}`;
+}
+
+/**
  * `/templates/share/<token>` — a personally shared template copy.
  *
  * This used to build `/share/<token>`, an address no route ever served, so any
@@ -298,9 +322,17 @@ export function sharedShortPathFor(code: string): string | null {
   return part ? `${SHORT_SHARE_ROUTE}/${part}` : null;
 }
 
-/** `/create?…` — the creation screen, optionally pre-configured. */
+/**
+ * `/create?…` — the creation screen, optionally pre-configured.
+ *
+ * `start` names the WAY the document begins (blank · template · ai · raw), so a
+ * chosen entry point is an address the author can bookmark, share and return to,
+ * not a transient panel state.
+ */
+export type CreateStartId = "blank" | "template" | "ai" | "raw";
+
 export function createPathFor(
-  params: { start?: "blank" | "template"; template?: string; size?: string } = {},
+  params: { start?: CreateStartId; template?: string; size?: string } = {},
 ): string {
   const search = new URLSearchParams();
   if (params.start) search.set("start", params.start);

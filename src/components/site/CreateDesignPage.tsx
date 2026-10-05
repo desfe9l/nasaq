@@ -12,15 +12,23 @@
  * you did not ask for".
  */
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, FilePlus2, LayoutTemplate, ShieldCheck, Sparkles } from "lucide-react";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { NewDocumentForm } from "@/components/site/NewDocumentDialog";
+import {
+  AiStartPanel,
+  CreatePathChooser,
+  TemplateStartStrip,
+  type CreateStartPath,
+} from "@/components/site/CreateStartPaths";
+import { RawContentFlow } from "@/components/site/RawContentFlow";
 import { useEditor } from "@/lib/editor/store";
 import { useLicense } from "@/lib/license/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useEditorEntry } from "@/lib/auth/use-editor-entry";
 import {
+  AI_RAW_ROUTE,
   CREATE_ROUTE,
   EDITOR_ROUTE,
   PROJECTS_ROUTE,
@@ -32,12 +40,17 @@ import type { NewDocumentConfig } from "@/lib/editor/new-document";
 
 /** What the screen can be pre-configured with (`createPathFor` writes these). */
 export interface CreateDesignSearch {
-  start?: "blank" | "template";
+  start?: "blank" | "template" | "ai" | "raw";
   template?: string;
   size?: string;
 }
 
 export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
+  const [path, setPath] = useState<CreateStartPath>(() =>
+    search.start === "ai" || search.start === "raw" || search.start === "template"
+      ? search.start
+      : "blank",
+  );
   const hydrate = useEditor((s) => s.hydrate);
   const setEntitlements = useEditor((s) => s.setEntitlements);
   const { user } = useCurrentUserState();
@@ -53,6 +66,23 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
   }, [entitlements, setEntitlements]);
 
   /*
+   * The chosen entry point is written back to the address. `replaceState` (not
+   * a router push) so the chooser itself does not become a history entry — but
+   * the URL the author copies always names the way they started.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (path === "blank") params.delete("start");
+    else params.set("start", path);
+    const query = params.toString();
+    const next = `${CREATE_ROUTE}${query ? `?${query}` : ""}`;
+    if (`${window.location.pathname}${window.location.search}` !== next) {
+      window.history.replaceState(null, "", next);
+    }
+  }, [path]);
+
+  /*
    * The document is created here and the address follows it. A full navigation
    * (not a router push) is deliberate: the editor boots from its own URL, so a
    * refresh, a bookmark or a shared link re-opens exactly this document.
@@ -61,12 +91,19 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
     window.location.assign(projectId ? editorPathFor(projectId) : EDITOR_ROUTE);
   }, []);
 
-  const initial: Partial<NewDocumentConfig> = {
-    ...(search.start ? { start: search.start } : {}),
-    ...(search.template
-      ? { pack: search.template as NewDocumentConfig["pack"], start: "template" as const }
-      : {}),
-  };
+  /*
+   * The form is configured by the CHOSEN PATH, not by the raw query string: the
+   * template path preselects a starter pack, the blank path preselects nothing.
+   * It is keyed on the path so switching entry points remounts the form with the
+   * right configuration instead of leaving the previous one in place.
+   */
+  const initial: Partial<NewDocumentConfig> =
+    path === "template"
+      ? {
+          start: "template",
+          pack: (search.template as NewDocumentConfig["pack"]) || "official",
+        }
+      : {};
 
   return (
     <div className="min-h-full bg-paper">
@@ -83,9 +120,9 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
               إنشاء تصميم
             </h1>
             <p className="mt-2 max-w-2xl text-[13.5px] leading-7 text-muted">
-              اختر نوع المستند والمقاس والاتجاه — يظهر المقاس النهائي في المعاينة
-              قبل الدخول إلى المحرر، ثم يُنشأ المستند بمقاسه الصحيح ويُحفظ في
-              مشاريعك.
+              اختر طريقة البدء أولًا — فارغ، أو قالب جاهز، أو وصف بالذكاء الاصطناعي،
+              أو محتوى خام. في كل الحالات يُحفظ المستند الناتج في مشاريعك ويُفتح في
+              محرر نَسَق بمقاسه الصحيح.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -120,7 +157,32 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
           </div>
         </header>
 
+        {/* «كيف تريد أن تبدأ؟» — the four entry points, each one an address. */}
+        <CreatePathChooser active={path} onSelect={setPath} />
+
+        {path === "raw" && (
+          <div className="mt-5">
+            <RawContentFlow />
+            <p className="mt-3 text-[11.5px] leading-6 text-muted">
+              هذا المسار ينشئ المستند هنا مباشرة. لمشاهدة قياس «قبل/بعد» بالدرجة على
+              المحرّك نفسه، افتح{" "}
+              <a
+                href={AI_RAW_ROUTE}
+                className="font-bold text-brand underline underline-offset-4"
+              >
+                صفحة محتوى خام ← مستند
+              </a>
+              .
+            </p>
+          </div>
+        )}
+
+        {path === "ai" && <AiStartPanel />}
+
+        {path === "template" && <TemplateStartStrip />}
+
         {/* The configuration form, page variant: same rules as the dialog. */}
+        {(path === "blank" || path === "template") && (
         <section className="mt-7 overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3.5">
             <div className="flex items-center gap-2.5">
@@ -144,6 +206,7 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
 
           <div className="p-5">
             <NewDocumentForm
+              key={path}
               variant="page"
               initial={initial}
               submitLabel="إنشاء وفتح المحرر"
@@ -151,6 +214,7 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
             />
           </div>
         </section>
+        )}
 
         <p className="mt-5 flex items-start gap-2 text-[12px] leading-6 text-muted">
           <ArrowRight className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden />

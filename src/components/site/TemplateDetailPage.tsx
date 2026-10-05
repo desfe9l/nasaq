@@ -38,6 +38,7 @@ import {
   type TemplateActionResult,
 } from "@/lib/templates/entry-actions";
 import { useLicense } from "@/lib/license/client";
+import { useBrandIdentity } from "@/lib/product/use-brand-identity";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import {
   LICENSE_ROUTE,
@@ -66,9 +67,10 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
 
   const entry = useMemo(() => findEntryBySlug(entries, slug), [entries, slug]);
 
+  const brand = useBrandIdentity();
   const context = useMemo(
-    () => ({ theme: storeTheme ?? "official", orgName, entitlements }),
-    [storeTheme, orgName, entitlements],
+    () => ({ theme: storeTheme ?? "official", orgName, entitlements, identity: brand.kit }),
+    [storeTheme, orgName, entitlements, brand.kit],
   );
 
   /**

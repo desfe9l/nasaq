@@ -96,6 +96,7 @@ import {
   subscribeRecentColors,
 } from "@/lib/editor/recent-colors";
 import { ArabicTextTools } from "./ArabicTextTools";
+import { SelectionAiActions } from "./SelectionAiActions";
 import { ImageAiTools } from "./ImageAiTools";
 import { ImageEnhanceTools } from "./ImageEnhanceTools";
 import { ImageFrameGallery } from "./ImageFrameGallery";
@@ -962,6 +963,14 @@ export function PropertiesPanel({
                  * in a section of their own.
                  */}
                 {TEXT_MARKUP_TYPES.has(el.type) && <ArabicTextTools el={el} />}
+
+                {/*
+                 * Contextual AI on the SAME selection, directly under the
+                 * typography tools: the author's two questions about a paragraph
+                 * («does it look right» / «does it read right») are one scroll
+                 * apart, and both act on exactly what is selected.
+                 */}
+                {TEXT_MARKUP_TYPES.has(el.type) && <SelectionAiActions el={el} />}
               </AccordionSection>
             )}
 

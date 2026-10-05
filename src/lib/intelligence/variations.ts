@@ -50,12 +50,25 @@ const PALETTES = {
   },
 };
 
-export function generateVariations(baseIntent: PromptAnalysis): DesignVariation[] {
+/**
+ * Four layout directions, one palette decision.
+ *
+ * By default each variation carries its own palette, which is how the studio
+ * offers four complete looks. When the author has an institutional identity
+ * (`PaletteRoles` override), every variation is generated in THAT palette: the
+ * four variations then differ in composition, not in colour — which is the
+ * whole point of an identity.
+ */
+export function generateVariations(
+  baseIntent: PromptAnalysis,
+  paletteOverride?: PaletteRoles,
+): DesignVariation[] {
+  const palette = (fallback: PaletteRoles) => paletteOverride ?? fallback;
   // Variation 1: Sovereign Institutional
   const sovereignIntent: PromptAnalysis = {
     ...baseIntent,
     style: "institutional",
-    palette: PALETTES.sovereign,
+    palette: palette(PALETTES.sovereign),
   };
   const sovereignProject = generateFromIntent(sovereignIntent);
   const sovereignCritique = critiqueProject(sovereignProject);
@@ -64,7 +77,7 @@ export function generateVariations(baseIntent: PromptAnalysis): DesignVariation[
   const executiveIntent: PromptAnalysis = {
     ...baseIntent,
     style: "executive",
-    palette: PALETTES.executive,
+    palette: palette(PALETTES.executive),
   };
   const executiveProject = generateFromIntent(executiveIntent);
   const executiveCritique = critiqueProject(executiveProject);
@@ -73,7 +86,7 @@ export function generateVariations(baseIntent: PromptAnalysis): DesignVariation[
   const editorialIntent: PromptAnalysis = {
     ...baseIntent,
     style: "editorial",
-    palette: PALETTES.editorial,
+    palette: palette(PALETTES.editorial),
   };
   const editorialProject = generateFromIntent(editorialIntent);
   const editorialCritique = critiqueProject(editorialProject);
@@ -82,7 +95,7 @@ export function generateVariations(baseIntent: PromptAnalysis): DesignVariation[
   const digitalIntent: PromptAnalysis = {
     ...baseIntent,
     style: "corporate",
-    palette: PALETTES.digital,
+    palette: palette(PALETTES.digital),
   };
   const digitalProject = generateFromIntent(digitalIntent);
   const digitalCritique = critiqueProject(digitalProject);
@@ -96,7 +109,7 @@ export function generateVariations(baseIntent: PromptAnalysis): DesignVariation[
       badge: "الهوية الرسمية",
       project: sovereignProject,
       score: Math.max(88, sovereignCritique.score),
-      palette: PALETTES.sovereign,
+      palette: palette(PALETTES.sovereign),
     },
     {
       id: "executive",
@@ -106,7 +119,7 @@ export function generateVariations(baseIntent: PromptAnalysis): DesignVariation[
       badge: "قيادي وتنفيذي",
       project: executiveProject,
       score: Math.max(86, executiveCritique.score),
-      palette: PALETTES.executive,
+      palette: palette(PALETTES.executive),
     },
     {
       id: "editorial",
@@ -116,7 +129,7 @@ export function generateVariations(baseIntent: PromptAnalysis): DesignVariation[
       badge: "تحريري ونشر",
       project: editorialProject,
       score: Math.max(85, editorialCritique.score),
-      palette: PALETTES.editorial,
+      palette: palette(PALETTES.editorial),
     },
     {
       id: "digital",
@@ -126,7 +139,7 @@ export function generateVariations(baseIntent: PromptAnalysis): DesignVariation[
       badge: "تقني ورقمي",
       project: digitalProject,
       score: Math.max(87, digitalCritique.score),
-      palette: PALETTES.digital,
+      palette: palette(PALETTES.digital),
     },
   ];
 }

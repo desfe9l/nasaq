@@ -478,12 +478,17 @@ export function generateOriginal(brief: DesignBrief): Project {
   return projectShell(brief.title || "قالب جديد", org, pages);
 }
 
-/** A cramped left-aligned dump of the extracted lines. The critic's "before". */
-export function literalDraft(analysis: DesignAnalysis): Project {
-  const { w, h } = analysis.document.primary;
+/**
+ * A cramped left-aligned dump of lines. The critic's "before".
+ *
+ * Generalized from `literalDraft` so the reference path and the raw-content path
+ * use the same "before" object: a single sheet, tiny left-to-right text, one line
+ * per row — exactly what content looks like when nobody has composed it yet.
+ */
+export function literalTextDraft(title: string, lines: string[], w: number, h: number): Project {
   const page = sheet("نقل حرفي", w, h, "#ffffff");
-  const lines = [analysis.title, ...analysis.extractedLines.filter((line) => line !== analysis.title)].slice(0, 8);
-  lines.forEach((line, index) => {
+  const kept = [title, ...lines.filter((line) => line !== title)].slice(0, 8);
+  kept.forEach((line, index) => {
     write(page, `سطر ${index + 1}`, line, 3, 4 + index * 7, Math.min(w - 4, 90), 8, {
       fontFamily: "Cairo",
       fontSize: 7,
@@ -496,8 +501,8 @@ export function literalDraft(analysis: DesignAnalysis): Project {
       textBoxMode: "fixed",
     });
   });
-  if (!lines.length) {
-    write(page, "بلا نص", analysis.title, 3, 4, 40, 8, {
+  if (!kept.length) {
+    write(page, "بلا نص", title, 3, 4, 40, 8, {
       fontFamily: "Cairo",
       fontSize: 7,
       color: "#bbbbbb",
@@ -506,10 +511,40 @@ export function literalDraft(analysis: DesignAnalysis): Project {
       direction: "ltr",
     });
   }
-  return projectShell(analysis.title, "", [page]);
+  return projectShell(title, "", [page]);
+}
+
+export function literalDraft(analysis: DesignAnalysis): Project {
+  return literalTextDraft(
+    analysis.title,
+    analysis.extractedLines,
+    analysis.document.primary.w,
+    analysis.document.primary.h,
+  );
 }
 
 const META_LINE = /@|https?:\/\/|\b05\d{7,}\b|9200\d{3,}/;
+
+/** Split raw lines into contact/metadata lines and prose — one definition. */
+export function splitMetaLines(lines: string[]): { meta: string[]; body: string[] } {
+  const meta = lines.filter((line) => META_LINE.test(line));
+  return { meta, body: lines.filter((line) => !META_LINE.test(line)) };
+}
+
+/**
+ * Which line is the subtitle, which are contact metadata and which are prose.
+ * One definition, shared by the reference path and the raw-content path so the
+ * two can never disagree about what counts as content.
+ */
+export function splitCopy(
+  title: string,
+  lines: string[],
+): { title: string; subtitle: string; meta: string[]; body: string[] } {
+  const rest = lines.filter((line) => line !== title);
+  const { meta, body: prose } = splitMetaLines(rest);
+  const subtitle = prose.find((line) => line.length <= 90) || "";
+  return { title, subtitle, meta, body: prose.filter((line) => line !== subtitle) };
+}
 
 function copyBlocks(analysis: DesignAnalysis): {
   title: string;
@@ -517,12 +552,7 @@ function copyBlocks(analysis: DesignAnalysis): {
   meta: string[];
   body: string[];
 } {
-  const title = analysis.title;
-  const rest = analysis.extractedLines.filter((line) => line !== title);
-  const meta = rest.filter((line) => META_LINE.test(line));
-  const prose = rest.filter((line) => !META_LINE.test(line));
-  const subtitle = prose.find((line) => line.length <= 90) || "";
-  return { title, subtitle, meta, body: prose.filter((line) => line !== subtitle) };
+  return splitCopy(analysis.title, analysis.extractedLines);
 }
 
 function chunkBody(lines: string[], slots: number): string[][] {
@@ -609,29 +639,48 @@ function quietPage(
   footer(page, palette, org, index, total);
 }
 
-export function composeReference(analysis: DesignAnalysis): Project {
-  const { w, h } = analysis.document.primary;
-  const palette = analysis.palette;
-  const total = Math.max(1, analysis.document.pages);
-  const copy = copyBlocks(analysis);
-  const orgLine =
-    analysis.extractedLines.find((line) => /إنفاذ|انفاذ|شركة|مؤسس|للمزاد/.test(line) && line.length <= 42) ||
-    "";
+export interface TextComposition {
+  title: string;
+  subtitle: string;
+  meta: string[];
+  body: string[];
+  /** Page geometry of the composed document. */
+  w: number;
+  h: number;
+  palette: PaletteRoles;
+  /** Total pages, cover included. */
+  total: number;
+  format: DesignFormat;
+  /** One line under the title — the organisation, when it is known. */
+  orgLine: string;
+}
+
+/**
+ * THE composer: content + a palette + a page plan → a real document.
+ *
+ * It was extracted from `composeReference` so the reference path and the
+ * raw-content path are literally the same code. The composer never invents a
+ * line: every string it writes comes from the caller's `title`, `subtitle`,
+ * `meta` or `body`, and the only authored sentences are the structural labels
+ * the platform already used («لا نص مستخرج لهذه الصفحة», «الختام…»).
+ */
+export function composeText(input: TextComposition): Project {
+  const { w, h, palette, total, format, title, subtitle, meta, body, orgLine } = input;
   const slots = Math.max(0, total - 1);
-  const pageLines = analysis.document.format === "wide-slide" ? [...copy.body, ...copy.meta] : copy.body;
+  const pageLines = format === "wide-slide" ? [...body, ...meta] : body;
   const chunks = chunkBody(pageLines, slots);
   const pages: Page[] = [];
   for (let index = 0; index < total; index += 1) {
     const page = sheet(index === 0 ? "الغلاف" : `صفحة ${index + 1}`, w, h, palette.paper);
     if (index === 0) {
-      if (analysis.document.format === "wide-slide") {
-        coverWide(page, palette, copy.title, copy.subtitle, orgLine);
+      if (format === "wide-slide") {
+        coverWide(page, palette, title, subtitle, orgLine);
       } else {
-        const band = coverPortrait(page, palette, copy.title, copy.subtitle, orgLine, analysis.document.format, total > 1);
+        const band = coverPortrait(page, palette, title, subtitle, orgLine, format, total > 1);
         if (total === 1) {
           const m = marginOf(w);
           const column = w - m * 2 - 22;
-          const extra = [...copy.body, ...copy.meta].filter(Boolean);
+          const extra = [...body, ...meta].filter(Boolean);
           if (extra.length) {
             const top = Math.min(band + 8, h - 40);
             write(page, "متن المصدر", extra.join("\n"), m, top, column, Math.max(12, h - top - 28), {
@@ -644,9 +693,9 @@ export function composeReference(analysis: DesignAnalysis): Project {
               overflowVisible: false,
             });
           }
-        } else if (copy.meta.length) {
+        } else if (meta.length) {
           const m = marginOf(w);
-          write(page, "بيانات المصدر", copy.meta.slice(0, 3).join("\n"), m, h - 40, w - m * 2 - 22, 12, {
+          write(page, "بيانات المصدر", meta.slice(0, 3).join("\n"), m, h - 40, w - m * 2 - 22, 12, {
             fontFamily: "IBM Plex Sans Arabic",
             fontSize: 8,
             fontWeight: 600,
@@ -658,14 +707,14 @@ export function composeReference(analysis: DesignAnalysis): Project {
         }
       }
     } else if (chunks[index - 1]?.length) {
-      sourcePage(page, palette, copy.title, chunks[index - 1], index + 1, total, orgLine);
+      sourcePage(page, palette, title, chunks[index - 1], index + 1, total, orgLine);
     } else {
-      quietPage(page, palette, copy.title, index + 1, total, orgLine);
+      quietPage(page, palette, title, index + 1, total, orgLine);
     }
     pages.push(page);
   }
-  if (analysis.document.format === "wide-slide" && total === 1) {
-    const extra = [...copy.body, ...copy.meta].filter(Boolean);
+  if (format === "wide-slide" && total === 1) {
+    const extra = [...body, ...meta].filter(Boolean);
     if (extra.length) {
       const page = pages[0];
       const panel = Math.round(w * 0.4);
@@ -680,7 +729,24 @@ export function composeReference(analysis: DesignAnalysis): Project {
       });
     }
   }
-  return projectShell(copy.title, orgLine, pages);
+  return projectShell(title, orgLine, pages);
+}
+
+export function composeReference(analysis: DesignAnalysis): Project {
+  const { w, h } = analysis.document.primary;
+  const copy = copyBlocks(analysis);
+  const orgLine =
+    analysis.extractedLines.find((line) => /إنفاذ|انفاذ|شركة|مؤسس|للمزاد/.test(line) && line.length <= 42) ||
+    "";
+  return composeText({
+    ...copy,
+    w,
+    h,
+    palette: analysis.palette,
+    total: Math.max(1, analysis.document.pages),
+    format: analysis.document.format,
+    orgLine,
+  });
 }
 
 export function textsOf(project: Project): string[] {

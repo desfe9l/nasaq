@@ -33,12 +33,20 @@ import {
   saveDraft,
 } from "@/lib/templates/custom-templates";
 import { getProject } from "@/lib/editor/storage";
+import { applyBrandToSeed } from "@/lib/editor/brand-design";
+import type { BrandKit } from "@/lib/product/product";
 
 export interface TemplateActionContext {
   theme: ThemeId;
   orgName: string;
   /** The server-resolved entitlements — the same map the store judges by. */
   entitlements: Record<FeatureId, boolean>;
+  /**
+   * The account's institutional identity, when `brand_kit` is licensed. The
+   * caller passes it in (see `useBrandIdentity`) so this action layer stays a
+   * pure decision-maker.
+   */
+  identity?: BrandKit | null;
 }
 
 /** Why an action could not proceed — each reason has its own way forward. */
@@ -83,10 +91,13 @@ async function seedForEntry(
 > {
   try {
     if (!entry.managedTemplate) {
-      const seed = entryProjectSeed(entry, {
-        themeId: context.theme,
-        orgName: context.orgName,
-      });
+      const seed = applyBrandToSeed(
+        entryProjectSeed(entry, {
+          themeId: context.theme,
+          orgName: context.orgName,
+        }),
+        context.identity,
+      );
       return { status: "ok", seed: overrides.name ? { ...seed, name: overrides.name } : seed };
     }
     const { getPublishedTemplateFn } = await import("@/lib/admin/functions");
@@ -111,9 +122,9 @@ async function seedForEntry(
       themeId: context.theme,
       orgName: context.orgName,
     });
-    const seed = mergePublishedTemplateContext(
-      publishedTemplateSeed(result.template),
-      context$,
+    const seed = applyBrandToSeed(
+      mergePublishedTemplateContext(publishedTemplateSeed(result.template), context$),
+      context.identity,
     );
     return { status: "ok", seed: overrides.name ? { ...seed, name: overrides.name } : seed };
   } catch {

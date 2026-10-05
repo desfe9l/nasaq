@@ -9,6 +9,12 @@ import { INTELLIGENCE_SCHEMA_VERSION } from "./schema";
 import { parsePrompt, type PromptAnalysis } from "./prompt-analyzer";
 import { generateFromIntent } from "./design-generator";
 import { generateVariations, type DesignVariation } from "./variations";
+import {
+  applyBrandToIntent,
+  applyBrandToProject,
+  brandIsConfigured,
+} from "@/lib/editor/brand-design";
+import type { BrandKit } from "@/lib/product/product";
 
 /** Two correction passes, then a final critique. Not an open loop. */
 export const MAX_APPLY_ROUNDS = 2;
@@ -28,7 +34,11 @@ export function designDna(): DesignDna {
   return DNA;
 }
 
-function runLoop(project: Project, label: string, path: PipelineResult["path"]): PipelineResult & { project: Project } {
+export function runLoop(
+  project: Project,
+  label: string,
+  path: PipelineResult["path"],
+): PipelineResult & { project: Project } {
   let current = clone(project);
   const iterations: PipelineResult["iterations"] = [];
   let stopped: PipelineResult["stoppedBecause"] = "max-iterations";
@@ -74,20 +84,50 @@ export interface StudioGenerationResult {
 
 /**
  * Primary Natural-Language Prompt -> Production-Ready NASAQ Design
+ *
+ * `brand` is the institutional identity from «الهوية». When it is supplied —
+ * and the caller has already checked the `brand_kit` entitlement — the palette
+ * is injected into the intent BEFORE any
+ * builder runs, so the cover, the KPI boards, the tables and the closing page
+ * are all generated in the organisation's own colours, and the identity's fonts
+ * are applied to the finished pages. No builder needed to know about it.
  */
 export function generateDesignFromPrompt(
   prompt: string,
   overrides?: Partial<PromptAnalysis>,
+  brand?: BrandKit | null,
 ): StudioGenerationResult {
   const parsed = parsePrompt(prompt);
-  const intent: PromptAnalysis = {
+  const base: PromptAnalysis = {
     ...parsed,
     ...(overrides || {}),
   };
+  const identity = brand && brandIsConfigured(brand) ? brand : null;
+  const intent = identity ? applyBrandToIntent(base, identity) : base;
 
   const initialProject = generateFromIntent(intent);
-  const primaryResult = runLoop(initialProject, intent.title, "generate");
-  const variations = generateVariations(intent);
+  const primary = runLoop(initialProject, intent.title, "generate");
+  const primaryResult = identity
+    ? {
+        ...primary,
+        project: applyBrandToProject(primary.project, identity, {
+          from: intent.palette,
+        }),
+      }
+    : primary;
+  const variations = generateVariations(
+    intent,
+    identity ? intent.palette : undefined,
+  ).map((variation) =>
+    identity
+      ? {
+          ...variation,
+          project: applyBrandToProject(variation.project, identity, {
+            from: variation.palette,
+          }),
+        }
+      : variation,
+  );
 
   return {
     intent,
