@@ -47,6 +47,7 @@ import { Route as AdminStudioRouteImport } from './routes/admin/studio'
 import { Route as AdminTemplatesRouteImport } from './routes/admin/templates'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as ApiAppVersionRouteImport } from './routes/api/app-version'
+import { Route as ApiStorageDiag4f9c1dRouteImport } from './routes/api/storage-diag-4f9c1d'
 import { Route as EditorIndexRouteImport } from './routes/editor/index'
 import { Route as EditorProjectIdRouteImport } from './routes/editor/$projectId'
 import { Route as PaymentCancelRouteImport } from './routes/payment/cancel'
@@ -261,6 +262,11 @@ const ApiAppVersionRoute = ApiAppVersionRouteImport.update({
   path: '/api/app-version',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiStorageDiag4f9c1dRoute = ApiStorageDiag4f9c1dRouteImport.update({
+  id: '/api/storage-diag-4f9c1d',
+  path: '/api/storage-diag-4f9c1d',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EditorIndexRoute = EditorIndexRouteImport.update({
   id: '/editor/',
   path: '/editor/',
@@ -413,6 +419,7 @@ export interface FileRoutesByFullPath {
   '/admin/templates': typeof AdminTemplatesRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/app-version': typeof ApiAppVersionRoute
+  '/api/storage-diag-4f9c1d': typeof ApiStorageDiag4f9c1dRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
@@ -473,6 +480,7 @@ export interface FileRoutesByTo {
   '/admin/templates': typeof AdminTemplatesRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/app-version': typeof ApiAppVersionRoute
+  '/api/storage-diag-4f9c1d': typeof ApiStorageDiag4f9c1dRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
@@ -536,6 +544,7 @@ export interface FileRoutesById {
   '/admin/templates': typeof AdminTemplatesRoute
   '/admin/users': typeof AdminUsersRoute
   '/api/app-version': typeof ApiAppVersionRoute
+  '/api/storage-diag-4f9c1d': typeof ApiStorageDiag4f9c1dRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
@@ -600,6 +609,7 @@ export interface FileRouteTypes {
     | '/admin/templates'
     | '/admin/users'
     | '/api/app-version'
+    | '/api/storage-diag-4f9c1d'
     | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
@@ -660,6 +670,7 @@ export interface FileRouteTypes {
     | '/admin/templates'
     | '/admin/users'
     | '/api/app-version'
+    | '/api/storage-diag-4f9c1d'
     | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
@@ -722,6 +733,7 @@ export interface FileRouteTypes {
     | '/admin/templates'
     | '/admin/users'
     | '/api/app-version'
+    | '/api/storage-diag-4f9c1d'
     | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
@@ -774,6 +786,7 @@ export interface RootRouteChildren {
   WorkspaceRoute: typeof WorkspaceRoute
   Char1575Char1604Char1607Char1608Char1610Char1577Route: typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   ApiAppVersionRoute: typeof ApiAppVersionRoute
+  ApiStorageDiag4f9c1dRoute: typeof ApiStorageDiag4f9c1dRoute
   EditorProjectIdRoute: typeof EditorProjectIdRoute
   PaymentCancelRoute: typeof PaymentCancelRoute
   PaymentSuccessRoute: typeof PaymentSuccessRoute
@@ -1058,6 +1071,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAppVersionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/storage-diag-4f9c1d': {
+      id: '/api/storage-diag-4f9c1d'
+      path: '/api/storage-diag-4f9c1d'
+      fullPath: '/api/storage-diag-4f9c1d'
+      preLoaderRoute: typeof ApiStorageDiag4f9c1dRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/editor/': {
       id: '/editor/'
       path: '/editor'
@@ -1320,6 +1340,7 @@ const rootRouteChildren: RootRouteChildren = {
   Char1575Char1604Char1607Char1608Char1610Char1577Route:
     Char1575Char1604Char1607Char1608Char1610Char1577Route,
   ApiAppVersionRoute: ApiAppVersionRoute,
+  ApiStorageDiag4f9c1dRoute: ApiStorageDiag4f9c1dRoute,
   EditorProjectIdRoute: EditorProjectIdRoute,
   PaymentCancelRoute: PaymentCancelRoute,
   PaymentSuccessRoute: PaymentSuccessRoute,
