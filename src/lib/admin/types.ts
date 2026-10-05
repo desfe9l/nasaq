@@ -44,6 +44,13 @@ export interface BrandPreset {
   accentColor: string;
   paperColor: string;
   textColor: string;
+  /**
+   * Whether the palette is offered in the product.
+   *
+   * Absent means published: presets saved before this flag existed stay
+   * visible, and the administration can retire one without deleting it.
+   */
+  published?: boolean;
 }
 
 /**
@@ -182,6 +189,13 @@ export interface AdminTemplateSummary {
   status: TemplateStatus;
   kind: TemplateKind;
   thumbnail: string | null;
+  /*
+   * Ordered additional preview images. A template is a multi-page document:
+   * one card image cannot show a cover, a content page and a table page, so the
+   * gallery renders this list next to the real page previews. Always an array —
+   * an older row without the column reads as empty.
+   */
+  previews: string[];
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
@@ -204,6 +218,8 @@ export interface AdminTemplateInput {
   kind: TemplateKind;
   content: string;
   thumbnail?: string | null;
+  /** `null` clears the list; `undefined` keeps the stored one. */
+  previews?: string[] | null;
   sortOrder?: number;
   /** Editor project this official template was saved from. Updates in place. */
   originProjectId?: string | null;

@@ -8,6 +8,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { SmartImage, aspectRatioOf } from "@/components/ui/SmartImage";
 import {
   Copy,
   Eye,
@@ -208,10 +209,19 @@ export function TemplateCard({
           style={{ height: PREVIEW_BOX }}
         >
           {entry.thumbnail ? (
-            <img
+            /*
+             * An owner-uploaded preview. Its box is the template's own page
+             * ratio, so the card never resizes when the artwork lands, and
+             * `contain` keeps the uploaded proportions instead of cropping
+             * them into the card.
+             */
+            <SmartImage
               src={entry.thumbnail}
               alt={`معاينة ${entry.title}`}
-              className="max-h-full max-w-full rounded-[3px] border border-line bg-white object-contain shadow-md transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-xl"
+              fit="contain"
+              aspectRatio={aspectRatioOf(size)}
+              className="max-h-full max-w-full rounded-[3px] border border-line bg-white shadow-md transition-all duration-300 group-hover:scale-[1.02] group-hover:shadow-xl"
+              imageClassName="object-contain"
             />
           ) : (
             <TemplateStackPreview

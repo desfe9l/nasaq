@@ -7,13 +7,13 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Eye, FileText, FolderOpen, Maximize2, Minimize2, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Eye, FileText, FolderOpen, Pencil, Plus, Trash2, X } from "lucide-react";
 import { THEMES, pageSize, type ProjectMeta, type ThemeId } from "@/lib/editor/model";
 import { TEMPLATE_CATEGORIES, type TemplateCategoryId } from "@/lib/editor/templates";
 import { cn } from "@/lib/utils";
 import { CATALOG_PILLS, pagesLabel, type CatalogEntry } from "@/lib/templates/catalog";
 import type { CatalogPillId } from "@/lib/templates/custom-templates";
-import { TemplatePreview } from "./TemplatePreview";
+import { TemplateGallery, slidesFromTemplate } from "./TemplateGallery";
 
 const PILL_CHOICES = CATALOG_PILLS.filter((p) => p.id !== "all");
 
@@ -120,7 +120,6 @@ export function QuickViewDialog({
   onDelete?: () => void;
 }) {
   const [index, setIndex] = useState(0);
-  const [full, setFull] = useState(false);
   const page = entry.pages[Math.min(index, entry.pages.length - 1)];
   const size = pageSize(page);
 
@@ -138,60 +137,18 @@ export function QuickViewDialog({
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
         <div className="min-w-0">
-          <div className="flex items-center justify-between gap-2 pb-3">
-            <h3 className="text-[13px] font-extrabold text-muted">
-              الصفحة {index + 1} من {entry.pages.length}
-            </h3>
-            <button
-              type="button"
-              onClick={() => setFull((v) => !v)}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[11px] font-bold text-muted transition hover:bg-line-2 hover:text-ink"
-            >
-              {full ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-              {full ? "ملاءمة الصفحة" : "الحجم الكامل"}
-            </button>
-          </div>
-          <div className="max-h-[58vh] overflow-auto rounded-xl bg-paper p-4">
-            {entry.thumbnail ? (
-              <img
-                src={entry.thumbnail}
-                alt={`معاينة ${entry.title}`}
-                className="mx-auto max-h-[54vh] max-w-full object-contain"
-              />
-            ) : (
-              <div
-                className="mx-auto"
-                style={{ width: full ? `${size.w}mm` : `min(100%, ${Math.max(160, Math.round(580 * (size.w / size.h)))}px)` }}
-              >
-                <TemplatePreview page={page} className="rounded-md border border-line shadow-lg" />
-              </div>
-            )}
-          </div>
-          {entry.pages.length > 1 && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {entry.pages.map((p, i) => {
-                const thumb = pageSize(p);
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setIndex(i)}
-                    aria-pressed={i === index}
-                    title={p.name}
-                    className={cn(
-                      "w-20 rounded-lg border p-1 transition",
-                      i === index
-                        ? "border-brand ring-2 ring-navy/30"
-                        : "border-line hover:border-brand",
-                    )}
-                    style={{ aspectRatio: `${thumb.w} / ${thumb.h}` }}
-                  >
-                    <TemplatePreview page={p} className="rounded-[4px]" />
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {/*
+           * The quick view IS the gallery: swipe/drag, arrows, dots and
+           * thumbnails are the same interaction the detail page offers, so
+           * "preview" means one thing everywhere in the product.
+           */}
+          <TemplateGallery
+            slides={slidesFromTemplate(entry.pages, entry.previews)}
+            locked={entry.managedTemplate?.tier === "licensed"}
+            lockedNote="النسخة الكاملة تتطلب ترخيصًا"
+            label={`معاينة ${entry.title}`}
+            onSlideChange={setIndex}
+          />
         </div>
 
         <aside className="grid content-start gap-3">

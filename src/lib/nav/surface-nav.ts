@@ -5,7 +5,7 @@
  * swipe, or a hamburger: every destination is an explicit item the chrome
  * renders inside the product, away from the physical screen edge.
  */
-import { NAV_ITEMS } from "../brand.ts";
+import { NAV_ITEMS, type NavItem } from "../brand.ts";
 
 /** Practical minimum hit size for a finger (CSS px). */
 export const NAV_TOUCH_TARGET = 44;
@@ -19,6 +19,16 @@ export interface SurfaceNavItem {
   /** Site routes. Editor items omit this and toggle a panel instead. */
   href?: string;
   title: string;
+  /**
+   * The destination holds an account's own documents.
+   *
+   * Such a tab is only offered to a verified session: a visitor must not see
+   * «المشاريع» in the chrome, and the route itself is separately guarded
+   * (`RequireSignedIn`). Hide-until-resolved (rather than show-then-redirect)
+   * is deliberate — the navigation a visitor sees never advertises a surface
+   * they cannot open.
+   */
+  requiresSession?: boolean;
 }
 
 const SITE_SHORT: Record<string, string> = {
@@ -26,7 +36,8 @@ const SITE_SHORT: Record<string, string> = {
   "/projects": "المشاريع",
   "/templates": "القوالب",
   "/purchase": "التراخيص",
-  "/custom-design": "تصميم",
+  // «طلب تصميم» — a service REQUEST, never the editor's «إنشاء تصميم».
+  "/custom-design": "طلب تصميم",
   "/الهوية": "الهوية",
   "/about": "المنصة",
   "/contact": "تواصل",
@@ -40,8 +51,25 @@ export const SITE_SURFACE_NAV: readonly SurfaceNavItem[] = NAV_ITEMS.map(
     label: item.label,
     shortLabel: SITE_SHORT[item.to] ?? item.label,
     title: item.label,
+    requiresSession: item.requiresSession,
   }),
 );
+
+/**
+ * The site strip a given session may see.
+ *
+ * One predicate, used by the header and the footer, so a visitor can never
+ * reach «المشاريع» from one surface while it is hidden on another.
+ */
+export function siteNavFor(signedIn: boolean): readonly SurfaceNavItem[] {
+  return SITE_SURFACE_NAV.filter((item) => !item.requiresSession || signedIn);
+}
+
+/** Footer links share the header's visibility rule (see `siteNavFor`). */
+export function siteNavLabelsFor(signedIn: boolean): readonly NavItem[] {
+  const allowed = new Set(siteNavFor(signedIn).map((item) => item.id));
+  return NAV_ITEMS.filter((item) => allowed.has(item.to));
+}
 
 /**
  * Editor surfaces that used to hide behind «عرض» or a drawer edge.

@@ -28,6 +28,7 @@ import {
   ArrowUp,
   Eye,
   EyeOff,
+  ImageOff,
   ImageUp,
   Loader2,
   Plus,
@@ -46,6 +47,7 @@ import {
   type SiteImages,
 } from "@/lib/admin/types";
 import { cn } from "@/lib/utils";
+import { SmartImage } from "@/components/ui/SmartImage";
 
 const primaryBtn =
   "inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-navy px-4 text-[13px] font-extrabold text-on-brand transition hover:bg-ok disabled:opacity-50";
@@ -255,7 +257,7 @@ export function SiteImagesPanel() {
                     ? "صورة محفوظة من المالك"
                     : slot.id === "mark"
                       ? "شعار نَسَق الحالي"
-                      : "لا توجد صورة — لن تظهر الصورة القديمة"}
+                      : "لا توجد صورة مخصّصة — يُعرض الشعار الحالي"}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -301,14 +303,12 @@ export function SiteImagesPanel() {
             </div>
             <div className="grid h-44 place-items-center overflow-hidden rounded-lg border border-line bg-surface-2 p-2">
               {src ? (
-                <img
-                  src={src}
-                  alt=""
-                  className="max-h-full max-w-full object-contain"
-                  loading="lazy"
-                />
+                <SmartImage src={src} alt="" decorative fit="contain" className="h-full w-full" />
               ) : (
-                <span className="text-[12px] font-bold text-muted">لا توجد صورة</span>
+                <span className="grid place-items-center gap-1.5 text-muted">
+                  <ImageOff className="size-5 opacity-50" aria-hidden />
+                  <span className="text-[11px] font-bold">لا توجد صورة بعد</span>
+                </span>
               )}
             </div>
           </section>

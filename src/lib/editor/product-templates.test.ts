@@ -110,6 +110,7 @@ test("Admin template overrides replace their catalog entry and drafts hide the f
     status: "published" as const,
     kind: "json" as const,
     thumbnail: "data:image/svg+xml;base64,PHN2Zy8+",
+    previews: [],
     sortOrder: 0,
     createdAt: "",
     updatedAt: "",

@@ -168,73 +168,126 @@ export function PurchasePage() {
         ),
     [activeBilling, checkoutLinks, currentPlanKey],
   );
+  /*
+   * The plan ladder, read top to bottom: free → individual → team → the
+   * institution. Each rung is colour-coded (neutral, brand, navy, gold) so the
+   * difference between plans is visible before any word is read, and every rung
+   * states either its price or exactly how it is acquired — never a blank
+   * "تواصل معنا" with no reason.
+   */
+  const planLadderTone: Record<PlanFamily, string> = {
+    individual: "border-brand/35 bg-navy/[0.04]",
+    team: "border-navy bg-navy/[0.07] ring-1 ring-navy/20",
+  };
+
   return (
-    <div className="min-h-full bg-page ">
+    <div className="min-h-full bg-page">
       <SiteHeader current="/purchase" />
-      <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:py-12">
-        {/* Header */}
-        <div className="max-w-3xl">
-          <p className="text-[11px] font-bold tracking-[0.14em] text-brand">الاشتراكات والتراخيص</p>
-          <h1 className="mt-2 text-[28px] font-extrabold leading-tight text-ink sm:text-[32px]">اختر الترخيص المناسب لاحتياجك</h1>
-          <p className="mt-3 text-[14px] leading-7 text-muted ">قارن الخطط المتاحة، واختر الفترة المدعومة، ثم أكمل الشراء بأمان. تُفعّل التراخيص الرقمية بعد التحقق من السداد خادميًا.</p>
-        </div>
-
-        {/* Current state — Free / Trial / Pro / Lifetime × Active / Expired / Revoked */}
-        <div className="mt-5 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[12px] border border-line/70 bg-surface-2 px-4 py-3 ">
-          <span className="text-[11px] font-bold text-muted ">حالتك الحالية</span>
-          <span className={`rounded-full px-3 py-1 text-[11px] font-extrabold ${TONE_STYLES[stateView.tone]}`}>{stateView.label}</span>
-          <span className="text-[12px] leading-6 text-muted ">{stateView.detail}</span>
-          <a href="/license" className="ms-auto text-[12px] font-bold text-brand underline ">تفاصيل الترخيص</a>
-        </div>
-
-        {/* كيف تعمل التراخيص */}
-        <div className="mt-6 rounded-[12px] border border-line/70 bg-surface-2 p-5 ">
-          <h2 className="text-[13px] font-bold text-ink ">كيف تعمل تراخيص نَسَق</h2>
-          <div className="mt-3 grid gap-4 sm:grid-cols-3">
-            <div className="flex gap-3">
-              <span className="grid size-7 place-items-center rounded-full bg-inverse text-[11px] font-bold text-on-inverse ">1</span>
-              <div>
-                <p className="text-[13px] font-bold text-ink ">اختيار الباقة</p>
-                <p className="mt-1 text-[12px] leading-6 text-muted ">اختر بين الترخيص الفردي وترخيص الفريق بحسب طريقة استخدامك.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <span className="grid size-7 place-items-center rounded-full bg-inverse text-[11px] font-bold text-on-inverse ">2</span>
-              <div>
-                <p className="text-[13px] font-bold text-ink ">تحديد المدة والسداد</p>
-                <p className="mt-1 text-[12px] leading-6 text-muted ">اختر إحدى الفترات المتاحة، ثم أكمل السداد بأمان.</p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <span className="grid size-7 place-items-center rounded-full bg-navy text-[11px] font-bold text-on-brand">3</span>
-              <div>
-                <p className="text-[13px] font-bold text-ink ">التفعيل الفوري</p>
-                <p className="mt-1 text-[12px] leading-6 text-muted ">يُصدر النظام ترخيصك الرقمي ويربطه بحسابك، وتُفتح المزايا فورًا.</p>
-              </div>
+      <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:py-14">
+        {/* ── Hero: what is being bought, and the two doors ─────────────── */}
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-end">
+          <div className="max-w-3xl">
+            <p className="text-[11px] font-extrabold tracking-[0.18em] text-brand">
+              تراخيص نَسَق
+            </p>
+            <h1 className="mt-2 text-[30px] font-black leading-[1.3] text-ink sm:text-[38px]">
+              ترخيص واحد يفتح كل أدوات نَسَق
+            </h1>
+            <p className="mt-3 text-[15px] leading-8 text-muted">
+              ابدأ مجانًا بلا بطاقة، ثم ارتقِ إلى الترخيص الفردي أو ترخيص الفريق عند
+              الحاجة: قوالب أكثر، وصفحات بلا حدود، وهويات مؤسسية، وطباعة جاهزة.
+              الاشتراك السنوي وتراخيص الجهات تُرتَّب مباشرة مع المبيعات.
+            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-2.5">
+              <a
+                href={CREATE_ROUTE}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] bg-navy px-6 text-[14px] font-extrabold text-on-brand transition hover:bg-ok"
+              >
+                ابدأ مجانًا الآن
+              </a>
+              <a
+                href="/contact"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-[12px] border border-line bg-surface px-5 text-[13.5px] font-extrabold text-ink transition hover:border-brand"
+              >
+                تواصل مع المبيعات
+              </a>
             </div>
           </div>
-        </div>
 
-        {/* Trust */}
+          {/* The reader's own state, stated once, in plain Arabic. */}
+          <div className="rounded-[14px] border border-line bg-surface-2 p-4">
+            <p className="text-[11px] font-extrabold text-muted">حالتك الحالية</p>
+            <p className="mt-1.5">
+              <span className={`rounded-full px-3 py-1 text-[12px] font-extrabold ${TONE_STYLES[stateView.tone]}`}>
+                {stateView.label}
+              </span>
+            </p>
+            <p className="mt-2 text-[12.5px] leading-6 text-muted">{stateView.detail}</p>
+            <a href="/license" className="mt-2 inline-block text-[12.5px] font-bold text-brand underline">
+              تفاصيل الترخيص وإدارته
+            </a>
+          </div>
+        </section>
+
+        {/* ── How licensing works: numbered, roomy, one idea per step ───── */}
+        <section id="how" className="mt-10 rounded-[16px] border border-line bg-surface p-6 sm:p-8">
+          <h2 className="font-display text-[22px] font-black text-ink">كيف تعمل تراخيص نَسَق</h2>
+          <p className="mt-2 max-w-2xl text-[14px] leading-7 text-muted">
+            ثلاث خطوات فقط من الاختيار إلى فتح المزايا — دون مفاتيح تُدخل يدويًا ودون
+            تفاصيل تقنية.
+          </p>
+          <ol className="mt-6 grid gap-6 sm:grid-cols-3">
+            {[
+              {
+                title: "اختر الباقة المناسبة",
+                body: "فردية لمن يعمل بمفرده، وترخيص فريق للجهات التي تشارك القوالب والهوية بين عدة مستخدمين.",
+              },
+              {
+                title: "حدّد الفترة وأكمل السداد",
+                body: "الفترات المتاحة شهريًا أو كل 3 أشهر. الاشتراك السنوي وتراخيص الجهات يتم ترتيبها عبر المبيعات.",
+              },
+              {
+                title: "يُفعَّل ترخيصك فورًا",
+                body: "بعد التحقق من السداد يُربط الترخيص بحسابك تلقائيًا، وتُفتح القوالب والمزايا مباشرة.",
+              },
+            ].map((step, index) => (
+              <li key={step.title} className="grid gap-2">
+                <span className="grid size-9 place-items-center rounded-full bg-navy text-[15px] font-black text-on-brand">
+                  {index + 1}
+                </span>
+                <strong className="text-[14.5px] font-extrabold text-ink">{step.title}</strong>
+                <span className="text-[13px] leading-7 text-muted">{step.body}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        {/* ── Trust strip ───────────────────────────────────────────────── */}
         <div className="mt-5 flex flex-wrap gap-2">
           {[
-            { Icon: Lock, label: "الدفع الإلكتروني الآمن" },
+            { Icon: Lock, label: "دفع إلكتروني آمن" },
             { Icon: CreditCard, label: "تجديد تلقائي قابل للإلغاء" },
-            { Icon: Key, label: "ترخيص رقمي وتفعيل بعد التحقق" },
-            { Icon: ShieldCheck, label: "تخزين محلي أولًا" },
+            { Icon: Key, label: "ترخيص رقمي يُربط بحسابك" },
+            { Icon: ShieldCheck, label: "مشاريعك محفوظة على جهازك أولًا" },
           ].map(({ Icon, label }) => (
-            <span key={String(label)} className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1 text-[11px] font-semibold text-muted ">
-              <Icon className="size-3.5 text-ink/60 " />
-              {String(label)}
+            <span
+              key={label}
+              className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-3 py-1.5 text-[12px] font-bold text-muted"
+            >
+              <Icon className="size-3.5 text-brand" />
+              {label}
             </span>
           ))}
         </div>
 
-        {/* Billing options are limited to periods with a live Gumroad link. */}
+        {/* ── Period switch: only what is actually sold is offered ──────── */}
         {checkoutResolved && availablePeriods.length > 0 && (
-          <div className="mt-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div
+            id="plans"
+            className="mt-9 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between"
+          >
             <div>
-              <p className="mb-2 text-[12px] font-bold text-ink">فترة الاشتراك</p>
+              <p className="mb-2 text-[13px] font-extrabold text-ink">فترة الاشتراك</p>
               {availablePeriods.length > 1 ? (
                 <div role="group" aria-label="فترة الاشتراك" className="inline-flex rounded-[10px] border border-line bg-surface p-1">
                   {availablePeriods.map((period) => (
@@ -243,95 +296,129 @@ export function PurchasePage() {
                       type="button"
                       onClick={() => setBilling(period)}
                       aria-pressed={activeBilling === period}
-                      className={`rounded-[8px] px-4 py-2 text-[13px] font-bold transition ${activeBilling === period ? "bg-inverse text-on-inverse shadow-sm ring-1 ring-inverse" : "text-muted hover:bg-surface-2 hover:text-ink"}`}
+                      className={`rounded-[8px] px-4 py-2 text-[13px] font-bold transition ${
+                        activeBilling === period
+                          ? "bg-navy text-on-brand shadow-sm"
+                          : "text-muted hover:bg-surface-2 hover:text-ink"
+                      }`}
                     >
                       {period === "quarterly" ? "كل 3 أشهر — أفضل قيمة" : PERIOD_LABELS[period]}
                     </button>
                   ))}
                 </div>
               ) : (
-                <p className="text-[13px] font-semibold text-muted">
-                  {PERIOD_LABELS[availablePeriods[0]]}
-                </p>
+                <p className="text-[13px] font-semibold text-muted">{PERIOD_LABELS[availablePeriods[0]]}</p>
               )}
             </div>
             {paidPlans.length > 0 && (
-              <div className="max-w-md text-[12px] leading-6 text-muted">
+              <div className="max-w-md text-[12.5px] leading-6 text-muted">
                 {buyerEmail ? (
-                  <p>سيظهر بريد حسابك في نموذج الدفع. بعد الشراء، يُربط الترخيص بالحساب المرتبط بهذا البريد. للشراء لحساب آخر، استخدم بريده في النموذج.</p>
+                  <p>
+                    سيظهر بريد حسابك في نموذج الدفع، ويُربط الترخيص بهذا الحساب بعد
+                    الشراء. للشراء لحساب آخر، استخدم بريده في النموذج.
+                  </p>
                 ) : (
-                  <p>استخدم البريد الذي ستسجّل به في نَسَق؛ يُربط الترخيص بحسابك عند تسجيل الدخول. لا يلزم التسجيل قبل الشراء.</p>
+                  <p>
+                    استخدم البريد الذي ستسجّل به في نَسَق؛ يُربط الترخيص بحسابك عند تسجيل
+                    الدخول. لا يلزم التسجيل قبل الشراء.
+                  </p>
                 )}
               </div>
             )}
           </div>
         )}
 
-        {/* Only Free and plans with a live checkout (plus the user's exact
-            current membership, which links to account management). */}
-        <div className="mt-6 grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          <div className="flex flex-col rounded-xl border border-line/70 bg-surface-2 p-5">
-            <div className="flex-1">
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="text-[15px] font-bold text-ink">مجاني</h2>
-                <span className="shrink-0 rounded-full border border-line/70 bg-surface px-2.5 py-1 text-[10px] font-bold text-muted">مجانية دائمًا</span>
-              </div>
-              <p className="mt-2 text-[12px] leading-6 text-muted">خطة مجانية دائمة للتقييم والبدء، دون دفع أو تاريخ انتهاء.</p>
-              <p className="mt-4 text-[24px] font-extrabold text-ink">0 <span className="text-[13px] font-bold text-muted">ر.س</span></p>
-              <p className="text-[11px] text-muted">المدة: دائمة</p>
-              <div className="mt-4 border-t border-line/60 pt-3.5">
-                <ul className="grid gap-1.5">
-                  {FREE_PLAN.features.map((feature) => (
-                    <li key={feature} className="flex items-start gap-2 text-[12px] leading-5 text-muted">
-                      <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-muted" /> {feature}
-                    </li>
-                  ))}
-                </ul>
-              </div>
+        {/* ── The ladder: free, individual, team, institution ───────────── */}
+        <div className="mt-6 grid items-stretch gap-4 lg:grid-cols-2 xl:grid-cols-4">
+          {/* Rung 1 — Free. Colour: neutral. */}
+          <div className="flex flex-col rounded-[16px] border border-line bg-surface-2 p-5">
+            <div className="flex items-start justify-between gap-2">
+              <h2 className="text-[16px] font-black text-ink">مجاني</h2>
+              <span className="shrink-0 rounded-full border border-line bg-surface px-2.5 py-1 text-[10.5px] font-extrabold text-muted">
+                دائم
+              </span>
             </div>
-            <a href={CREATE_ROUTE} className="mt-5 inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-line bg-surface text-[13px] font-bold text-ink hover:bg-surface-2">ابدأ مجانًا</a>
+            <p className="mt-2 text-[12.5px] leading-6 text-muted">
+              للتقييم والبدء: مشروع تجريبي وقوالب أساسية، دون دفع أو تاريخ انتهاء.
+            </p>
+            <p className="mt-4 font-display text-[28px] font-black text-ink">
+              0 <span className="text-[13px] font-bold text-muted">ر.س</span>
+            </p>
+            <p className="text-[11.5px] text-muted">لا يتطلب ترخيصًا — متاح للجميع</p>
+            <ul className="mt-4 grid gap-1.5 border-t border-line/60 pt-3.5">
+              {FREE_PLAN.features.map((feature) => (
+                <li key={feature} className="flex items-start gap-2 text-[12.5px] leading-6 text-muted">
+                  <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-muted" /> {feature}
+                </li>
+              ))}
+            </ul>
+            <a
+              href={CREATE_ROUTE}
+              className="mt-auto inline-flex h-10 w-full items-center justify-center rounded-[10px] border border-line bg-surface text-[13px] font-extrabold text-ink transition hover:border-brand"
+            >
+              جرّب مجانًا
+            </a>
           </div>
 
+          {/* Rungs 2–3 — the paid plans actually on sale. */}
           {paidPlans.map(({ family, planKey, plan }) => {
             const isTeam = family === "team";
             const isCurrentPlan = currentPlanKey === planKey;
             const checkoutUrl = gumroadUrlFor(planKey);
             return (
-              <div key={planKey} className={cardClass(`flex flex-col p-5 ${isTeam ? "border-brand/30 shadow-sm" : ""}`)}>
-                <div className="flex-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h2 className="text-[15px] font-bold text-ink">{isTeam ? "نَسَق | فريق" : "نَسَق | فردي"}</h2>
-                      <p className="mt-1 text-[12px] leading-5 text-muted">{plan.description}</p>
-                    </div>
-                    {isCurrentPlan ? (
-                      <span className="shrink-0 rounded-full bg-navy px-2.5 py-1 text-[10px] font-bold text-on-brand">خطتك الحالية</span>
-                    ) : plan.popular ? (
-                      <span className="shrink-0 rounded-full bg-inverse px-2.5 py-1 text-[10px] font-bold text-on-inverse">الأكثر طلبًا</span>
-                    ) : null}
+              <div
+                key={planKey}
+                className={cardClass(`flex flex-col rounded-[16px] p-5 ${planLadderTone[family]}`)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <h2 className="text-[16px] font-black text-ink">
+                      {isTeam ? "نَسَق | فريق" : "نَسَق | فردي"}
+                    </h2>
+                    <p className="mt-1 text-[12.5px] leading-6 text-muted">{plan.description}</p>
                   </div>
-                  <p className="mt-4 text-[24px] font-extrabold text-ink">
-                    {plan.amount.toLocaleString("en-US")} <span className="text-[13px] font-bold text-muted">ر.س</span>{" "}
-                    <span className="text-[12px] font-bold text-muted">/ {activeBilling === "quarterly" ? "كل 3 أشهر" : "شهري"}</span>
-                  </p>
-                  <p className="text-[11px] text-muted">مدة الترخيص {plan.durationDays} يومًا · {activeBilling === "quarterly" ? "تجديد كل 3 أشهر" : "تجديد شهري"}</p>
-                  {activeBilling === "quarterly" && (
-                    <p className="mt-1 text-[11px] font-semibold text-brand">وفّر {planSavings(plan)} ر.س مقارنة بالشهري</p>
-                  )}
-                  <div className="mt-4 border-t border-line/60 pt-3.5">
-                    <p className="text-[11px] font-bold text-ink">المزايا المشمولة:</p>
-                    <ul className="mt-2.5 grid gap-1.5">
-                      {plan.features.map((feature) => (
-                        <li key={feature} className="flex items-start gap-2 text-[12px] leading-5 text-muted">
-                          <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-brand" /> {feature}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-                <div className="mt-5">
                   {isCurrentPlan ? (
-                    <a href="/account" className="inline-flex h-9 w-full items-center justify-center rounded-[10px] border border-brand/40 bg-navy/10 text-[13px] font-bold text-brand hover:bg-navy-2/15">
+                    <span className="shrink-0 rounded-full bg-navy px-2.5 py-1 text-[10.5px] font-extrabold text-on-brand">
+                      خطتك الحالية
+                    </span>
+                  ) : isTeam ? (
+                    <span className="shrink-0 rounded-full bg-navy px-2.5 py-1 text-[10.5px] font-extrabold text-on-brand">
+                      الأكثر طلبًا
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-4 font-display text-[28px] font-black text-ink">
+                  {plan.amount.toLocaleString("en-US")}{" "}
+                  <span className="text-[13px] font-bold text-muted">ر.س</span>{" "}
+                  <span className="text-[12px] font-bold text-muted">
+                    / {activeBilling === "quarterly" ? "كل 3 أشهر" : "شهريًا"}
+                  </span>
+                </p>
+                <p className="text-[11.5px] text-muted">
+                  مدة الترخيص {plan.durationDays} يومًا ·{" "}
+                  {activeBilling === "quarterly" ? "تجديد كل 3 أشهر" : "تجديد شهري"}
+                </p>
+                {activeBilling === "quarterly" && (
+                  <p className="mt-1 text-[11.5px] font-extrabold text-brand">
+                    وفّر {planSavings(plan)} ر.س مقارنة بالدفع الشهري
+                  </p>
+                )}
+                <p className="mt-2 rounded-[8px] bg-surface/70 px-2.5 py-1.5 text-[11.5px] font-bold text-ink">
+                  يشمل القوالب المتميزة والتصدير الكامل
+                </p>
+                <ul className="mt-3.5 grid gap-1.5 border-t border-line/60 pt-3.5">
+                  {plan.features.map((feature) => (
+                    <li key={feature} className="flex items-start gap-2 text-[12.5px] leading-6 text-muted">
+                      <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-brand" /> {feature}
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-auto pt-5">
+                  {isCurrentPlan ? (
+                    <a
+                      href="/account"
+                      className="inline-flex h-10 w-full items-center justify-center rounded-[10px] border border-brand/40 bg-surface text-[13px] font-extrabold text-brand"
+                    >
                       إدارة الاشتراك
                     </a>
                   ) : checkoutUrl ? (
@@ -340,46 +427,112 @@ export function PurchasePage() {
                       target="_blank"
                       rel="noreferrer noopener"
                       aria-label={`اشترك الآن — ${plan.arabicName}`}
-                      className="subscription-cta inline-flex h-9 w-full items-center justify-center rounded-[10px] text-[13px] font-bold transition"
+                      className="subscription-cta inline-flex h-10 w-full items-center justify-center rounded-[10px] text-[13px] font-extrabold transition"
                     >
                       اشترك الآن
                     </a>
-                  ) : null}
-                  <p className="mt-2 text-center text-[11px] text-muted">
-                    {isCurrentPlan ? "تفاصيل التجديد والترخيص في حسابك" : "ترخيص رقمي · دفع آمن"}
+                  ) : (
+                    <a
+                      href="/contact"
+                      className="inline-flex h-10 w-full items-center justify-center rounded-[10px] border border-line bg-surface text-[13px] font-extrabold text-ink"
+                    >
+                      تواصل مع المبيعات
+                    </a>
+                  )}
+                  <p className="mt-2 text-center text-[11.5px] text-muted">
+                    {isCurrentPlan ? "التجديد والتفاصيل في حسابك" : "ترخيص رقمي · دفع آمن"}
                   </p>
                 </div>
               </div>
             );
           })}
+
+          {/* Rung 4 — the institution. Colour: gold, acquired by conversation. */}
+          <div className="flex flex-col rounded-[16px] border border-gold/50 bg-gold/10 p-5">
+            <div className="flex items-start justify-between gap-2">
+              <h2 className="text-[16px] font-black text-ink">نَسَق | الجهات</h2>
+              <span className="shrink-0 rounded-full bg-gold/25 px-2.5 py-1 text-[10.5px] font-extrabold text-ink">
+                بحسب الجهة
+              </span>
+            </div>
+            <p className="mt-2 text-[12.5px] leading-6 text-muted">
+              للجهات الحكومية والشركات: مقاعد متعددة، وفواتير رسمية، وهوية مؤسسية
+              موحّدة، واشتراك سنوي باتفاق مباشر.
+            </p>
+            <p className="mt-4 font-display text-[20px] font-black text-ink">
+              عرض سعر مخصّص
+            </p>
+            <p className="text-[11.5px] text-muted">
+              يُحدَّد بعد معرفة عدد المقاعد ونطاق الاستخدام — دون أسعار مخفية.
+            </p>
+            <ul className="mt-4 grid gap-1.5 border-t border-gold/40 pt-3.5">
+              {[
+                "مقاعد متعددة لمستخدِمي الجهة",
+                "اشتراك سنوي وفواتير رسمية",
+                "قوالب وهوية مؤسسية مخصّصة",
+                "دعم فني وتدريب للفريق",
+              ].map((feature) => (
+                <li key={feature} className="flex items-start gap-2 text-[12.5px] leading-6 text-muted">
+                  <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-gold" /> {feature}
+                </li>
+              ))}
+            </ul>
+            <a
+              href="/contact"
+              className="mt-auto inline-flex h-10 w-full items-center justify-center rounded-[10px] bg-gold px-4 text-[13px] font-extrabold text-on-gold transition hover:bg-gold-2"
+            >
+              تواصل مع المبيعات
+            </a>
+          </div>
         </div>
-        {/* FAQ */}
-        <section className="mt-10 border-t border-line/60 pt-8 ">
-          <h2 className="text-[18px] font-bold text-ink ">الأسئلة الشائعة</h2>
+
+        <p className="mt-4 text-[12.5px] leading-6 text-muted">
+          كل الأسعار بالريال السعودي وتشمل ضريبة القيمة المضافة حيث تنطبق. الاشتراك
+          الشهري أو ربع السنوي يُجدَّد تلقائيًا ويمكن إلغاؤه من حسابك في أي وقت؛
+          الاشتراك السنوي متاح باتفاق مباشر مع المبيعات.
+        </p>
+
+        {/* ── FAQ ───────────────────────────────────────────────────────── */}
+        <section className="mt-10 border-t border-line/60 pt-8">
+          <h2 className="font-display text-[20px] font-black text-ink">الأسئلة الشائعة</h2>
           <div className="mt-5 grid gap-2">
             {FAQS.map((faq, i) => {
               const open = openFaq === i;
               return (
-                <div key={faq.q} className="overflow-hidden rounded-[10px] border border-line/70 bg-surface ">
-                  <button type="button" onClick={() => setOpenFaq(open ? null : i)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-right text-[13px] font-bold text-ink ">
+                <div key={faq.q} className="overflow-hidden rounded-[10px] border border-line/70 bg-surface">
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaq(open ? null : i)}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-right text-[13.5px] font-extrabold text-ink"
+                  >
                     {faq.q}
                     <ChevronDown className={`size-4 text-muted transition ${open ? "rotate-180" : ""}`} />
                   </button>
-                  {open && <p className="border-t border-line/60 px-4 py-3 text-[13px] leading-7 text-muted ">{faq.a}</p>}
+                  {open && (
+                    <p className="border-t border-line/60 px-4 py-3 text-[13px] leading-7 text-muted">
+                      {faq.a}
+                    </p>
+                  )}
                 </div>
               );
             })}
           </div>
         </section>
 
-        <section className="mt-10 flex flex-wrap items-center justify-between gap-4 rounded-[12px] border border-line/60 bg-surface-2 p-4 ">
+        <section className="mt-10 flex flex-wrap items-center justify-between gap-4 rounded-[14px] border border-line/60 bg-surface-2 p-5">
           <div>
-            <h3 className="text-[13px] font-bold text-ink ">لا تحتاج إدخال أي مفتاح ترخيص أثناء الدفع</h3>
-            <p className="mt-1 text-[12px] text-muted ">
-              يُنشأ الترخيص ويُربط بحسابك تلقائيًا بعد التحقق من الدفع. وإن كان لديك مفتاح ترخيص سابق، فأدره من صفحة التراخيص.
+            <h3 className="text-[14px] font-extrabold text-ink">
+              لا تحتاج إدخال أي مفتاح ترخيص أثناء الدفع
+            </h3>
+            <p className="mt-1 max-w-2xl text-[12.5px] leading-6 text-muted">
+              يُنشأ الترخيص ويُربط بحسابك تلقائيًا بعد التحقق من السداد. وإن كان لديك
+              مفتاح ترخيص سابق، فأدره من صفحة التراخيص.
             </p>
           </div>
-          <a href="/license" className="inline-flex h-9 items-center gap-2 rounded-[10px] border border-line bg-surface px-4 text-[12px] font-bold text-ink hover:bg-surface ">
+          <a
+            href="/license"
+            className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-line bg-surface px-4 text-[12.5px] font-extrabold text-ink hover:border-brand"
+          >
             <Key className="size-3.5" /> إدارة الترخيص
           </a>
         </section>

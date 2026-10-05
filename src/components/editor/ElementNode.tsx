@@ -28,6 +28,7 @@ import { mapShapePart } from "@/lib/editor/shape-affine";
 import { isPalmTouch } from "@/lib/editor/pen-input";
 import { paintCss } from "@/lib/editor/gradient";
 import { imageLayout, normalizeCrop } from "@/lib/editor/image-crop";
+import { useImageLoadState } from "@/lib/editor/use-image-load";
 import { GradientDefs } from "./GradientDefs";
 import { ShapeGlyph, ShapeParts } from "./ShapeGlyph";
 
@@ -899,17 +900,29 @@ function ElementContent({
         )}
       </>
     );
+    /*
+     * An empty picture slot.
+     *
+     * The element keeps its box, its frame and its place in the document — what
+     * it does NOT do is print a sentence about itself. «لا توجد صورة» used to
+     * appear for a moment on every load, because the artwork is resolved after
+     * the page is laid out; the author saw a development-era message flash
+     * across their document. An empty slot now looks like an empty slot (a
+     * quiet plate with the universal "no picture" pictogram), and the picker
+     * that fills it lives where it always did — in the properties panel.
+     */
     if (!src) {
+      const plate = (
+        <div className="grid h-full w-full place-items-center bg-surface-2" aria-hidden>
+          <span className="el-image-empty" />
+        </div>
+      );
       return frameParts ? (
         <FrameClip id={frameClipId} parts={frameParts} fillRule={frameFillRule(frame!.id)}>
-          <div className="grid h-full w-full place-items-center bg-[#f4f6fa] text-[9pt] font-bold text-muted">
-            لا توجد صورة
-          </div>
+          {plate}
         </FrameClip>
       ) : (
-        <div className="grid h-full w-full place-items-center bg-[#f4f6fa] text-[9pt] font-bold text-muted">
-          لا توجد صورة
-        </div>
+        plate
       );
     }
     if (!frameParts) return artwork;
@@ -1112,6 +1125,20 @@ function ImageArtwork({
   framed?: boolean;
 }) {
   const s = el.style;
+  /*
+   * The geometry is the element's own box, so the load state only controls what
+   * is painted inside it: a quiet plate first, the picture when it is decoded.
+   * Nothing here can move the document.
+   */
+  const loadState = useImageLoadState(src);
+  const pending = loadState !== "ready";
+  const plate = pending ? (
+    <span aria-hidden className="el-image-plate" data-state={loadState} />
+  ) : null;
+  const artClass = cn(
+    "el-image-art",
+    loadState === "ready" ? "opacity-100" : "opacity-0",
+  );
   const filterId = useId().replace(/:/g, "");
   const sharp = Math.max(0, Math.min(100, Number(s.sharpness) || 0));
   const filter = imageAdjustCss(s, sharp > 0 ? filterId : undefined);
@@ -1135,10 +1162,12 @@ function ImageArtwork({
             </filter>
           </svg>
         )}
+        {plate}
         <img
           alt=""
           src={src}
           draggable={false}
+          className={artClass}
           style={{
             width: "100%",
             height: "100%",
@@ -1179,6 +1208,7 @@ function ImageArtwork({
         pointerEvents: "none",
       }}
     >
+      {plate}
       {sharp > 0 && (
         <svg width="0" height="0" aria-hidden className="absolute">
           <filter id={filterId}>
@@ -1204,6 +1234,7 @@ function ImageArtwork({
           alt=""
           src={src}
           draggable={false}
+          className={artClass}
           style={{
             position: "absolute",
             display: "block",

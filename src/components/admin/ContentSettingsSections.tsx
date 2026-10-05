@@ -441,6 +441,70 @@ export function AdminBrandingSection() {
                 }
               />
             ))}
+            {/* Publishing, duplication and order are first-class: a palette the
+                owner wants to retire is unpublished, not destroyed, and a
+                variation is duplicated before it is edited. */}
+            <label className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-2.5 text-[11.5px] font-bold">
+              <input
+                type="checkbox"
+                checked={preset.published !== false}
+                onChange={(event) =>
+                  setPresets(
+                    presets.map((item, i) =>
+                      i === index ? { ...item, published: event.target.checked } : item,
+                    ),
+                  )
+                }
+              />
+              منشورة
+            </label>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center rounded-lg border border-line px-2.5 text-[11.5px] font-bold disabled:opacity-40"
+              disabled={index === 0}
+              aria-label="تحريك اللوحة للأعلى"
+              onClick={() =>
+                setPresets(
+                  presets.map((item, i) => {
+                    if (i === index - 1) return presets[index];
+                    if (i === index) return presets[index - 1];
+                    return item;
+                  }),
+                )
+              }
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center rounded-lg border border-line px-2.5 text-[11.5px] font-bold disabled:opacity-40"
+              disabled={index === presets.length - 1}
+              aria-label="تحريك اللوحة للأسفل"
+              onClick={() =>
+                setPresets(
+                  presets.map((item, i) => {
+                    if (i === index) return presets[index + 1];
+                    if (i === index + 1) return presets[index];
+                    return item;
+                  }),
+                )
+              }
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              className="inline-flex h-9 items-center rounded-lg border border-line px-2.5 text-[11.5px] font-bold"
+              aria-label="إنشاء نسخة من اللوحة"
+              onClick={() =>
+                setPresets([
+                  ...presets,
+                  { ...preset, id: `preset-${Date.now()}`, name: `${preset.name} (نسخة)` },
+                ])
+              }
+            >
+              نسخة
+            </button>
             <button
               type="button"
               className="inline-flex h-9 items-center rounded-lg border border-line px-2.5 text-error"

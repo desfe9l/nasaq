@@ -7,6 +7,7 @@ import { projectAccessBlock } from "@/lib/editor/access-limits";
 import { editorPathFor } from "@/lib/site-routes";
 import { templateToProjectSeed } from "@/lib/templates/document-template";
 import { getSharedPersonalTemplateFn } from "@/lib/templates/personal-functions";
+import { SmartImage } from "@/components/ui/SmartImage";
 
 export interface SharedTemplateCard {
   id: string;
@@ -89,7 +90,13 @@ export function SharedPersonalTemplatePage({
       <main className="mx-auto grid w-full max-w-5xl gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[280px_1fr]">
         <div className="overflow-hidden rounded-2xl border border-line bg-surface">
           {template.thumbnail ? (
-            <img src={template.thumbnail} alt="" className="w-full object-cover" />
+            <SmartImage
+              src={template.thumbnail}
+              decorative
+              fit="cover"
+              aspectRatio="3 / 4"
+              className="w-full"
+            />
           ) : (
             <div className="grid aspect-[3/4] place-items-center text-sm text-muted">معاينة القالب</div>
           )}

@@ -20,6 +20,7 @@ import {
   renamePersonalTemplateFn,
   setPersonalSharingFn,
 } from "@/lib/templates/personal-functions";
+import { SmartImage } from "@/components/ui/SmartImage";
 
 interface Row {
   id: string;
@@ -207,7 +208,13 @@ function TemplateRow({
   return (
     <li className="flex flex-wrap items-center gap-3 rounded-2xl border border-line bg-surface p-3">
       {row.thumbnail ? (
-        <img src={row.thumbnail} alt="" className="h-20 w-14 rounded-lg object-cover" />
+        <SmartImage
+          src={row.thumbnail}
+          decorative
+          fit="cover"
+          aspectRatio="70 / 99"
+          className="h-20 w-14 shrink-0 rounded-lg border border-line"
+        />
       ) : (
         <div className="grid h-20 w-14 place-items-center rounded-lg bg-line-2 text-[10px] text-muted">بدون معاينة</div>
       )}

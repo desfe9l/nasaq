@@ -271,7 +271,7 @@ export function ProjectsPage() {
             }}
             disabled={!assets.length && !assetFolders.length}
             className="inline-flex h-11 items-center gap-2 rounded-[10px] border border-line px-4 text-[13px] font-bold disabled:opacity-50"
-            title="نسخة احتياطية من مكتبة العناصر والمجلدات كملف JSON"
+            title="حفظ نسخة احتياطية من مكتبة العناصر والمجلدات"
           >
             <Download className="size-4" aria-hidden />
             نسخة احتياطية للمكتبة
@@ -302,7 +302,7 @@ export function ProjectsPage() {
                 });
               } catch {
                 void import("sonner").then(({ toast }) =>
-                  toast.error("تعذر قراءة الملف — تأكد أنه ملف مشروع بصيغة JSON"),
+                  toast.error("تعذر قراءة الملف — تأكد أنه ملف مشروع نَسَق صالح"),
                 );
               }
             };

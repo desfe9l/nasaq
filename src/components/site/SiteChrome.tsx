@@ -1,16 +1,27 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "@tanstack/react-router";
 import { createPortal } from "react-dom";
-import { ChevronDown, FilePlus2, KeyRound, Layers, LogIn, LogOut, Palette, UserRound } from "lucide-react";
-import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
-  BRAND,
-  NAV_ITEMS,
-  WHATSAPP_MESSAGES,
-  whatsappHref,
-} from "@/lib/brand";
+  ChevronDown,
+  CloudSun,
+  FilePlus2,
+  KeyRound,
+  Layers,
+  LogIn,
+  LogOut,
+  MoonStar,
+  Sun,
+  UserRound,
+} from "lucide-react";
+import { ThemedToaster } from "@/components/ui/ThemedToaster";
+import { BRAND, WHATSAPP_MESSAGES, whatsappHref } from "@/lib/brand";
 import { SocialLinks } from "@/components/site/SocialLinks";
-import { readStoredTheme, writeStoredTheme, subscribeTheme } from "@/lib/theme";
+import {
+  readStoredTheme,
+  writeStoredTheme,
+  subscribeTheme,
+  type AppearanceMode,
+} from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import { adminTemplatesAccessFn } from "@/lib/admin/functions";
@@ -25,7 +36,8 @@ import {
   useWorkspaceEntry,
 } from "@/lib/auth/use-workspace-entry";
 import { ProductNav } from "@/components/nav/ProductNav";
-import { SITE_SURFACE_NAV } from "@/lib/nav/surface-nav";
+import { siteNavFor, siteNavLabelsFor } from "@/lib/nav/surface-nav";
+import { ContactRequestButton } from "./ClientRequestPanel";
 import { AccountControlContent } from "./AccountControlContent";
 import { WorkspaceMark } from "./WorkspaceMark";
 import { useAccountTier } from "./AccountBadge";
@@ -36,9 +48,20 @@ import {
   useAccountMenuPlacement,
 } from "./AccountMenuPanel";
 
-/** The site-header counterpart of the editor's compact icon controls. */
-const APPEARANCE_CONTROL_CLASS =
-  "site-header-action grid size-11 shrink-0 place-items-center rounded-[9px] border border-line bg-transparent text-muted transition-[background-color,border-color,color,transform] duration-150 hover:border-brand/60 hover:bg-navy/10 hover:text-brand active:scale-[0.96] active:bg-navy/15 active:text-brand focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand";
+/**
+ * The three appearance states, each with a glyph that cannot be mistaken for
+ * another: a sun for «فاتح», a sun behind cloud for «خافت», a crescent for
+ * «داكن». `AppearanceMode` keeps the order of the palette itself.
+ */
+const THEME_CHOICES: readonly {
+  id: AppearanceMode;
+  label: string;
+  icon: typeof Sun;
+}[] = [
+  { id: "light", label: "فاتح", icon: Sun },
+  { id: "dim", label: "خافت", icon: CloudSun },
+  { id: "dark", label: "داكن", icon: MoonStar },
+];
 
 /**
  * The editor call-to-action in the site chrome.
@@ -340,26 +363,20 @@ export function SiteHeader({ current }: { current: string }) {
   );
   useEffect(() => subscribeTheme(setAppearance), []);
 
-  const appearanceLabel =
-    appearance === "light" ? "فاتح" : appearance === "dim" ? "خافت" : "داكن";
-  const toggleTheme = () => {
-    const next =
-      appearance === "light"
-        ? "dim"
-        : appearance === "dim"
-          ? "dark"
-          : "light";
+  /*
+   * Navigation is session-aware: a shelf that belongs to an account is never
+   * advertised to a visitor (see `siteNavFor`). While the session resolves we
+   * show the visitor set — a protected tab must never flash on screen first.
+   */
+  const { user } = useCurrentUserState();
+  const navItems = useMemo(() => siteNavFor(Boolean(user)), [user]);
+
+  const setTheme = (next: AppearanceMode) => {
     setAppearance(next);
     writeStoredTheme(next);
   };
 
   return (
-    /*
-     * Site-wide toast host. The editor mounts its own inside EditorApp, so
-     * putting one here (every marketing/site page renders SiteHeader) gives
-     * those pages live feedback — imports, saves, clipboard — without ever
-     * doubling up on /editor.
-     */
     <>
     <ThemedToaster position="top-center" richColors dir="rtl" />
     <AnnouncementBar />
@@ -377,29 +394,56 @@ export function SiteHeader({ current }: { current: string }) {
 
         <ProductNav
           label="الروابط الرئيسية"
-          items={SITE_SURFACE_NAV}
+          items={navItems}
           activeId={current}
         />
 
         <div className="site-header-actions flex shrink-0 items-center gap-1.5">
-          {/* One compact palette control cycles the shared site/editor appearance. */}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            aria-label={`تغيير مظهر مساحة العمل (الحالي: ${appearanceLabel})`}
-            title={`مظهر مساحة العمل: ${appearanceLabel}`}
-            className={APPEARANCE_CONTROL_CLASS}
+          {/*
+           * Appearance — three distinct states, each with its own icon and
+           * Arabic name, so «فاتح / خافت / داكن» is read rather than guessed.
+           * A single cycling palette icon told the author nothing about which
+           * mode they were in or what the next press would do.
+           */}
+          <div
+            role="group"
+            aria-label="مظهر الواجهة"
+            className="site-appearance flex h-11 items-center gap-0.5 rounded-[10px] border border-line bg-surface p-0.5"
           >
-            <Palette className="size-4" strokeWidth={1.75} aria-hidden="true" />
-          </button>
-          <a
-            href={whatsappHref(WHATSAPP_MESSAGES.support)}
-            className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-[8px] border border-line px-3 text-[12px] font-bold xl:inline-flex"
-          >
-            <span className="tabular-nums" dir="rtl">
-              تواصل عبر واتساب
-            </span>
-          </a>
+            {THEME_CHOICES.map((choice) => {
+              const Icon = choice.icon;
+              const active = appearance === choice.id;
+              return (
+                <button
+                  key={choice.id}
+                  type="button"
+                  onClick={() => setTheme(choice.id)}
+                  aria-pressed={active}
+                  aria-label={`مظهر ${choice.label}`}
+                  title={`مظهر ${choice.label}`}
+                  data-active={active ? "true" : undefined}
+                  className={cn(
+                    "site-appearance-option grid size-9 place-items-center rounded-[8px] transition-[background-color,color,box-shadow] duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand",
+                    active
+                      ? "bg-navy text-on-brand shadow-sm"
+                      : "text-muted hover:bg-line-2 hover:text-ink",
+                  )}
+                >
+                  <Icon className="size-4" strokeWidth={1.9} aria-hidden="true" />
+                </button>
+              );
+            })}
+          </div>
+          {/*
+           * «اطلب خدمة» — the platform's own request channel, in the chrome.
+           *
+           * The header used to lead with a WhatsApp number, which made the
+           * platform's contact model a third-party link. The native panel is now
+           * the primary door (available to visitors too); the messaging channel
+           * stays available on the contact page and in the footer for people who
+           * prefer it.
+           */}
+          <ContactRequestButton source="site" label="اطلب خدمة" compact />
           <NewDocumentButton />
           <EditorEntryLink />
           <HeaderAccount />
@@ -412,6 +456,10 @@ export function SiteHeader({ current }: { current: string }) {
 
 export function SiteFooter() {
   const { texts } = useSiteSettings();
+  // The footer repeats the header's rule: a protected shelf is not advertised
+  // to a visitor from a second surface.
+  const { user } = useCurrentUserState();
+  const footerLinks = useMemo(() => siteNavLabelsFor(Boolean(user)), [user]);
   return (
     <footer className="border-t border-line/60 bg-page">
       <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-8 sm:grid-cols-2 sm:px-6 md:grid-cols-3">
@@ -430,7 +478,7 @@ export function SiteFooter() {
         <div>
           <h3 className="mb-2 text-[12px] font-extrabold text-muted">روابط</h3>
           <ul className="grid gap-1.5">
-            {NAV_ITEMS.map((item) => (
+            {footerLinks.map((item) => (
               <li key={item.to}>
                 <a href={item.to} className="text-[13px] font-bold hover:text-brand-hover">
                   {item.label}
@@ -441,10 +489,11 @@ export function SiteFooter() {
         </div>
         <div>
           <h3 className="mb-2 text-[12px] font-extrabold text-muted">التواصل</h3>
+          <ContactRequestButton source="site" label="اطلب خدمة" className="w-full justify-center" />
           <a
             href={whatsappHref(WHATSAPP_MESSAGES.footer)}
             target="_blank" rel="noopener noreferrer"
-            className="inline-flex h-9 items-center rounded-[8px] border border-line px-3 text-[13px] font-bold tabular-nums"
+            className="mt-2 inline-flex h-9 items-center rounded-[8px] border border-line px-3 text-[13px] font-bold tabular-nums"
             dir="rtl"
           >
             تواصل عبر واتساب

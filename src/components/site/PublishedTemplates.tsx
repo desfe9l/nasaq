@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { usePublishedTemplates } from "@/lib/admin/use-site-settings";
 import { publishedTemplatePath, templateDisplaySlug } from "@/lib/templates/published";
 import { LicenseBadgeIcon } from "./LicenseBadge";
+import { SmartImage } from "@/components/ui/SmartImage";
 
 /** Published templates have stable, public links. The destination rechecks
  * publication and entitlement before importing a private working copy. */
@@ -35,7 +36,17 @@ export function PublishedTemplates() {
             <div key={t.id} className="group flex flex-col rounded-xl border border-line bg-surface p-3 text-right transition hover:-translate-y-0.5 hover:border-brand/50 ">
               <a href={publishedTemplatePath(slug)} className="flex flex-1 flex-col" aria-label={`فتح القالب ${t.title}`}>
                 <span className="relative grid aspect-[210/297] w-full place-items-center overflow-hidden rounded-lg border border-line bg-surface ">
-                  {t.thumbnail ? <img src={t.thumbnail} alt="" className="h-full w-full object-contain" /> : <LayoutTemplate className="size-8 text-muted" />}
+                  {t.thumbnail ? (
+                    <SmartImage
+                      src={t.thumbnail}
+                      decorative
+                      fit="contain"
+                      aspectRatio="210 / 297"
+                      className="h-full w-full"
+                    />
+                  ) : (
+                    <LayoutTemplate className="size-8 text-muted" />
+                  )}
                   {t.tier === "licensed" && (
                     <span className="absolute top-2 left-2">
                       <LicenseBadgeIcon state="locked" title="النسخة الكاملة — يتطلب ترخيصًا" />

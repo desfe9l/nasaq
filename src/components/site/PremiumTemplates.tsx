@@ -1,7 +1,8 @@
 import { ChevronDown, Crown } from "lucide-react";
 import { PACKS, createProject } from "@/lib/editor/templates";
-import { LicenseBadge } from "./LicenseBadge";
 import { TemplatePreview } from "./TemplatePreview";
+import { PremiumAccessNote } from "./TemplateAccess";
+import { SmartImage } from "@/components/ui/SmartImage";
 import { usePublishedTemplates } from "@/lib/admin/use-site-settings";
 import {
   publishedTemplatePath,
@@ -49,9 +50,20 @@ export function PremiumTemplates({
         </summary>
         <div className="border-t border-line p-3">
           {showHeading && (
-            <p className="mb-3 text-[12px] leading-6 text-muted">
-              قوالب مؤسسية قابلة للتحرير — تُفتح وفق ترخيصك الحالي.
-            </p>
+            <>
+              {/*
+               * The price is stated once for the whole shelf, and every card
+               * carries its own chip — a premium template is never a lock with
+               * no number next to it.
+               */}
+              <PremiumAccessNote className="mb-3" hideSales />
+              <div className="mb-3 flex flex-wrap items-center gap-2 text-[11.5px] text-muted">
+                <span>قوالب مؤسسية قابلة للتحرير — تُفتح وفق ترخيصك الحالي.</span>
+                <a href="/contact" className="font-extrabold text-brand underline">
+                  تواصل مع المبيعات
+                </a>
+              </div>
+            </>
           )}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {published.map((template) => (
@@ -61,11 +73,13 @@ export function PremiumTemplates({
                 className={card}
               >
                 {template.thumbnail && (
-                  <img
+                  <SmartImage
                     src={template.thumbnail}
                     alt=""
-                    loading="lazy"
-                    className="h-36 w-full rounded border border-line object-contain"
+                    decorative
+                    fit="contain"
+                    aspectRatio="4 / 3"
+                    className="h-36 w-full rounded border border-line bg-surface-2"
                   />
                 )}
                 <strong className="line-clamp-2 text-[13px]">
@@ -77,7 +91,7 @@ export function PremiumTemplates({
                   </p>
                 )}
                 <span className="mt-auto">
-                  <LicenseBadge state="locked" label="متاح في النسخة الكاملة" />
+                  <PremiumAccessNote compact />
                 </span>
               </a>
             ))}
@@ -95,11 +109,9 @@ export function PremiumTemplates({
                 <p className="line-clamp-2 text-[11px] leading-5 text-muted">
                   {pack.desc}
                 </p>
-                <div className="mt-auto flex items-center justify-between gap-2">
-                  <LicenseBadge state="locked" label="متاح في النسخة الكاملة" />
-                  <span className="text-[10px] text-muted">
-                    {pack.pages} صفحة
-                  </span>
+                <div className="mt-auto grid gap-2">
+                  <PremiumAccessNote compact />
+                  <span className="text-[10px] text-muted">{pack.pages} صفحة</span>
                 </div>
               </a>
             ))}

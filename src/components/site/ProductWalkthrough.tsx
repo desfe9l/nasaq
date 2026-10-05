@@ -3,6 +3,7 @@ import {
   Download,
   FileText,
   FolderOpen,
+  ImageOff,
   Layers3,
   LayoutTemplate,
   Shapes,
@@ -127,7 +128,10 @@ export function ProductWalkthrough() {
                     className="max-h-full max-w-full object-contain"
                   />
                 ) : (
-                  <span className="text-[11px] font-bold text-muted">لا توجد صورة</span>
+                  <span className="grid place-items-center gap-1.5 text-muted">
+                    <ImageOff className="size-5 opacity-50" aria-hidden />
+                    <span className="text-[11px] font-bold">لا توجد صورة بعد</span>
+                  </span>
                 )}
               </div>
               <div className="p-4">
