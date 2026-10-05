@@ -332,8 +332,7 @@ export const deleteStoredAsset = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
-/** The signed-in account's library metadata. Empty when nothing has been synced. */
-export const getLibraryCatalog = createServerFn({ method: "GET" })
+/** The signed-in account's library metadata. Empty when nothing has been synced. */export const getLibraryCatalog = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<{ payload: LibraryCatalog | null; updatedAt: string | null }> => {
     const sql = await getSql();
@@ -486,3 +485,91 @@ export const downloadStoredAssets = createServerFn({ method: "POST" })
   });
 
 
+/**
+ * Administrator-only storage verification.
+ *
+ * Answers the one question the rest of this module cannot answer honestly:
+ * "is cloud storage actually working in THIS deployment?" — because a
+ * deployment with no R2 variables behaves exactly like a healthy local-first
+ * one. The check runs the real provider and the real `storage_assets` flow, in
+ * the caller's own namespace, then removes everything it created.
+ *
+ * Reporting rules: statuses and variable NAMES only. No credential, endpoint,
+ * account id or object key is ever returned, and the caller must be an
+ * authorized admin (the same gate the owner vault uses) because the check
+ * writes — once — to the shared bucket.
+ */
+export const verifyObjectStorage = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<
+    | {
+        ok: true;
+        configured: boolean;
+        report: import("./verify.server").StorageRoundTripReport;
+        metadata: { ok: boolean; steps: import("./verify.server").StorageCheckStep[] };
+      }
+    | { ok: false; reason: StorageFailureReason }
+  > => {
+    const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
+    const { denyForbidden } = await import("@/lib/auth/forbidden.server");
+    const authorization = await getAuthorizationContext({
+      id: context.userId,
+      email: context.userEmail,
+    });
+    if (!authorization.isAdmin) await denyForbidden();
+
+    const { runStorageRoundTrip, runMetadataRoundTrip } = await import("./verify.server");
+    const report = await runStorageRoundTrip();
+    if (!report.configured) {
+      return { ok: false, reason: "not_configured" };
+    }
+
+    // A metadata row is only meaningful next to the object it describes, so
+    // this half writes its own object under the ADMIN'S OWN user prefix and
+    // removes both again. Nothing outside the caller's namespace is touched.
+    const { getObjectStorage } = await import("./r2.server");
+    const storage = getObjectStorage();
+    const sql = await getSql();
+    const assetId = uid("obj").replace(/[^A-Za-z0-9_-]/g, "");
+    const objectKey = buildStorageObjectKey({
+      userId: context.userId,
+      projectId: null,
+      assetId,
+    });
+    const { isKeyOwnedBy } = await import("./provider");
+    const payload = new Uint8Array(Buffer.from(`nasaq-metadata-verify-${Date.now()}`, "utf8"));
+
+    let metadata: {
+      ok: boolean;
+      steps: import("./verify.server").StorageCheckStep[];
+    } = { ok: false, steps: [] };
+    let objectWritten = false;
+    try {
+      if (!storage) return { ok: false, reason: "not_configured" };
+      if (!isKeyOwnedBy(objectKey, context.userId)) {
+        metadata = { ok: false, steps: [{ step: "ownership-prefix", ok: false }] };
+      } else {
+        await storage.put(objectKey, payload, "text/plain");
+        objectWritten = true;
+        const result = await runMetadataRoundTrip(
+          sql as unknown as import("./verify.server").SqlTag,
+          context.userId,
+          objectKey,
+          payload.byteLength,
+        );
+        metadata = { ok: result.ok, steps: result.steps };
+      }
+    } catch {
+      metadata = { ok: false, steps: [{ step: "metadata-round-trip", ok: false, detail: "failed" }] };
+    } finally {
+      if (objectWritten) {
+        try {
+          await storage?.delete(objectKey);
+        } catch {
+          /* the object is under a fresh key of the caller's own prefix */
+        }
+      }
+    }
+
+    return { ok: true, configured: true, report, metadata };
+  });

@@ -69,6 +69,29 @@ export function objectStorageConfigured(): boolean {
 }
 
 /**
+ * The variable NAMES still missing for storage to become active.
+ *
+ * Names only — never a value. Only the variable a deployer can actually act on
+ * is listed: the bucket has a documented default (`nasaq-sa`) and the endpoint
+ * may be derived from the account id, so neither is reported as required. This
+ * is what turns "the editor silently stayed local" into an actionable line in
+ * the owner vault and in `npm run storage:verify`.
+ */
+export function objectStorageMissingVariables(): string[] {
+  const missing: string[] = [];
+  if (!r2Endpoint()) missing.push("R2_ACCOUNT_ID (or a valid R2_ENDPOINT)");
+  if (!env("R2_ACCESS_KEY_ID")) missing.push("R2_ACCESS_KEY_ID");
+  if (!env("R2_SECRET_ACCESS_KEY")) missing.push("R2_SECRET_ACCESS_KEY");
+  return missing;
+}
+
+/** Where the active endpoint comes from. A source label, never the value. */
+export function r2EndpointSource(): "R2_ENDPOINT" | "R2_ACCOUNT_ID" | "none" {
+  if (env("R2_ENDPOINT")) return r2Endpoint() ? "R2_ENDPOINT" : "none";
+  return r2Endpoint() ? "R2_ACCOUNT_ID" : "none";
+}
+
+/**
  * The active provider, or null when storage is not configured.
  *
  * Cached per process: the config is immutable for the lifetime of a deployment
