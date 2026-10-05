@@ -3955,6 +3955,39 @@ body.is-resizing-panel .editor-dock-strip::before {
   box-shadow: 0 0 0 1.5px var(--editor-accent);
 }
 
+.editor-sync-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-inline-end: 4px;
+  padding: 0 8px;
+  border-radius: 8px;
+  color: var(--editor-text);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.editor-sync-status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  flex: 0 0 auto;
+}
+.editor-sync-status.is-pending,
+.editor-sync-status.is-offline {
+  color: var(--editor-danger);
+}
+.editor-sync-status.is-sync {
+  color: var(--editor-accent-ink);
+}
+.editor-sync-status.is-synced {
+  color: var(--editor-accent-ink);
+}
+
 /* One 32px chrome control for everything inside the capsule. */
 .editor-capsule-btn {
   display: grid;

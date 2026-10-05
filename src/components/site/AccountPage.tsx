@@ -1,5 +1,6 @@
 import { getCatalogPlan, planSavings } from "@/lib/commercial/catalog";
 import { useCallback, useEffect, useState } from "react";
+import { WifiOff } from "lucide-react";
 import { RedirectToSignIn } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
@@ -48,17 +49,40 @@ export function AccountPage() {
   const [error, setError] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+  useEffect(() => {
+    const on = () => setIsOffline(false);
+    const off = () => setIsOffline(true);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
+
   const load = useCallback(async () => {
     try {
       setError(null);
       const result = await getMyAccountPage();
       setData(result);
-      // Only decides whether to show the admin link. Every admin action
-      // re-verifies server-side, so a tampered value here grants nothing.
+      try {
+        const { cacheCommercial } = await import("@/lib/offline/commercial-cache");
+        await cacheCommercial({ account: result.account, requests: result.requests, plans: result.plans });
+      } catch {}
       const admin = await amIAdmin();
       setIsAdmin(admin.isAdmin || result.account.isAdmin);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "تعذّر تحميل بيانات الحساب.");
+      // Offline fallback: show cached data if available
+      try {
+        const { getCachedCommercial } = await import("@/lib/offline/commercial-cache");
+        const cached = getCachedCommercial();
+        if (cached?.account) {
+          setData(cached as unknown as AccountData);
+          setError("وضع عدم الاتصال — تُعرض البيانات المحفوظة. إجراءات الدفع تتطلب اتصالاً.");
+        } else {
+          setError(err instanceof Error ? err.message : "تعذّر تحميل بيانات الحساب.");
+        }
+      } catch {
+        setError(err instanceof Error ? err.message : "تعذّر تحميل بيانات الحساب.");
+      }
     } finally {
       setLoading(false);
     }
@@ -75,6 +99,13 @@ export function AccountPage() {
   return (
     <div className="min-h-screen bg-paper">
       <SiteHeader current="/account" />
+      {isOffline && (
+        <div className="mx-auto max-w-4xl px-4 pt-3 sm:px-6">
+          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-bold text-amber-900">
+            <WifiOff className="size-4" /> وضع عدم الاتصال — البيانات المعروضة محلية، وإجراءات الدفع والاشتراك تتطلب اتصالاً.
+          </div>
+        </div>
+      )}
       <main className="mx-auto w-full max-w-4xl px-4 py-10 sm:px-6">
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -270,6 +301,9 @@ function PlanSection({
 
   async function handleSubmit() {
     if (!plan) return;
+    const { requireOnlineForPurchase } = await import("@/lib/offline/commercial-cache");
+    const online = await requireOnlineForPurchase();
+    if (!online) { setError("وضع عدم الاتصال — إجراءات الدفع والدفع تتطلب اتصالاً بالإنترنت."); return; }
     setSubmitting(true);
     setError(null);
     setMessage(null);
@@ -416,7 +450,7 @@ function PlanSection({
             </p>
             <button
               type="button"
-              disabled={submitting || !reference.trim()}
+              disabled={submitting || !reference.trim() || (typeof navigator !== "undefined" && !navigator.onLine)}
               onClick={() => void handleSubmit()}
               className="h-11 cursor-pointer rounded-[10px] bg-navy text-[13px] font-extrabold text-on-brand transition hover:bg-navy-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
@@ -477,6 +511,8 @@ function RequestsSection({
   if (requests.length === 0) return null;
 
   async function cancel(id: string) {
+    const { requireOnlineForPurchase } = await import("@/lib/offline/commercial-cache");
+    if (!(await requireOnlineForPurchase())) return;
     setBusy(id);
     try {
       await cancelMyPaymentRequest({ data: { requestId: id } });

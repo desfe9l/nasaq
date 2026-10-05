@@ -69,9 +69,30 @@ export function ProjectsPage() {
     setEntitlements(entitlements);
   }, [entitlements, setEntitlements]);
 
+  const [offlineProjects, setOfflineProjects] = useState<ProjectMeta[] | null>(null);
+  const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+  useEffect(() => {
+    const on = () => setIsOffline(false);
+    const off = () => setIsOffline(true);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
   useEffect(() => {
     void hydrate().then(() => refreshProjects());
   }, [hydrate, refreshProjects]);
+  // Offline fallback: show cached workspace snapshot when store empty but cache has it
+  useEffect(() => {
+    if (projects.length || projectsLoading) return;
+    if (!isOffline) return;
+    void (async () => {
+      try {
+        const { getWorkspaceSnapshot } = await import("@/lib/offline/workspace-cache");
+        const snap = await getWorkspaceSnapshot();
+        if (snap?.projects?.length) setOfflineProjects(snap.projects);
+      } catch {}
+    })();
+  }, [projects.length, projectsLoading, isOffline]);
 
   // IndexedDB storage meter — real usage reported by the browser, not a guess.
   useEffect(() => {
@@ -89,7 +110,8 @@ export function ProjectsPage() {
     };
   }, [projects.length]);
 
-  const filtered = projects
+  const displayProjects = offlineProjects && !projects.length ? offlineProjects : projects;
+  const filtered = displayProjects
     .filter((p) => matchesFilter(p, filter))
     .filter((p) => {
       const needle = query.trim().toLowerCase();
@@ -172,6 +194,11 @@ export function ProjectsPage() {
       <SiteHeader current="/projects" />
 
       <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
+        {isOffline && (
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-bold text-amber-900">
+            <HardDriveDownload className="size-4" /> وضع عدم الاتصال — تُعرض المشاريع المحفوظة محليًا. التعديل والحفظ متاحان، وستتم المزامنة تلقائيًا عند عودة الاتصال.
+          </div>
+        )}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-[26px] font-extrabold">مشاريعي</h1>

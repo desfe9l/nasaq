@@ -21,6 +21,7 @@ import {
   Share2,
   Sparkles,
 } from "lucide-react";
+import { TemplateOfflineButton } from "@/components/site/TemplateOfflineButton";
 import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { TemplateGallery, slidesFromTemplate } from "@/components/site/TemplateGallery";
@@ -39,6 +40,7 @@ import {
   type TemplateActionResult,
 } from "@/lib/templates/entry-actions";
 import { useLicense } from "@/lib/license/client";
+import { canUseDemoPack } from "@/lib/product/product";
 import { useBrandIdentity } from "@/lib/product/use-brand-identity";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import {
@@ -215,6 +217,22 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
                 <Sparkles className="size-4" aria-hidden />
                 {busy === "use" ? "جارٍ الإنشاء…" : "استخدام القالب"}
               </button>
+              {!locked && entry && (
+                <TemplateOfflineButton
+                  templateId={entry.sourceId}
+                  title={entry.title}
+                  tier={entry.managedTemplate?.tier === "licensed" || (entry.kind === "pack" && !canUseDemoPack(entry.sourceId)) ? "licensed" : "free"}
+                  source={entry.managedTemplate ? "admin" : entry.kind === "custom" ? "personal" : "builtin"}
+                  fetchContent={() =>
+                    import("@/lib/offline/template-cache").then((m) =>
+                      m.offlineContentForCatalogEntry(entry, {
+                        themeId: storeTheme ?? "official",
+                        orgName,
+                      }),
+                    )
+                  }
+                />
+              )}
               <button
                 type="button"
                 onClick={() => void run("edit")}

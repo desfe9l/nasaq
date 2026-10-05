@@ -12,6 +12,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { NsqFileLaunch } from "@/components/nsq/NsqFileLaunch";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { AppUpdateNotice } from "@/components/AppUpdateNotice";
+import { OfflineStatus } from "@/components/ui/OfflineStatus";
 import { initInstallPrompt } from "@/lib/app-install";
 // `__APP_BUILD_ID__` is a build-time literal (src/env.d.ts), never a binding.
 // Side-effect import: applies the visitor's stored light/dark choice to
@@ -116,6 +117,11 @@ export const Route = createRootRoute({
     useEffect(() => {
       initInstallPrompt();
     }, []);
+    // Offline-first: register app-shell service worker and start connectivity monitoring
+    useEffect(() => {
+      void import("@/lib/offline/register-sw").then((m)=>m.registerOfflineSW());
+      void import("@/lib/offline/connectivity").then((m)=>m.initConnectivity());
+    }, []);
     return (
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
@@ -129,6 +135,7 @@ export const Route = createRootRoute({
           <Outlet />
         </AuthProvider>
         <AppUpdateNotice />
+        <OfflineStatus />
         <Analytics />
         <Scripts />
       </body>

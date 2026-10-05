@@ -62,6 +62,7 @@ import {
   type CatalogPillId,
 } from "@/lib/templates/custom-templates";
 import { TemplateCard } from "@/components/site/TemplateCard";
+import { TemplateOfflineButton } from "@/components/site/TemplateOfflineButton";
 import {
   ConfirmDialog,
   QuickViewDialog,
@@ -751,12 +752,15 @@ export function TemplatesPage({
           </div>
         ) : (
           <div className={cn("mt-6", CARD_WRAP)}>
-            {filtered.map((entry) => (
-              <div key={entry.id} className={cn("flex", CARD_W)}>
+            {filtered.map((entry) => {
+              const locked = packLocked(entry);
+              const tier: "free" | "licensed" = locked || (entry as unknown as { managedTemplate?: { tier?: string } }).managedTemplate?.tier === "licensed" || (entry.kind === "pack" ? !canUseDemoPack(entry.sourceId) : false) ? "licensed" : "free";
+              return (
+              <div key={entry.id} className={cn("flex flex-col gap-2", CARD_W)}>
                 <TemplateCard
                   entry={entry}
                   href={templatePathFor(entrySlug(entry))}
-                  locked={packLocked(entry)}
+                  locked={locked}
                   highlight={justSaved === entry.id}
                   actions={{
                     onUse: () => void startFromEntry(entry),
@@ -767,8 +771,22 @@ export function TemplatesPage({
                     onDelete: () => setConfirmId(entry.id),
                   }}
                 />
+                {!locked && (
+                  <TemplateOfflineButton
+                    templateId={entry.id}
+                    title={entry.title ?? entry.id}
+                    tier={tier}
+                    source={entry.kind === "custom" ? "personal" : (entry as unknown as { managedTemplate?: unknown }).managedTemplate ? "admin" : "builtin"}
+                    fetchContent={() =>
+                      import("@/lib/offline/template-cache").then((m) =>
+                        m.offlineContentForCatalogEntry(entry, { themeId: theme, orgName }),
+                      )
+                    }
+                  />
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

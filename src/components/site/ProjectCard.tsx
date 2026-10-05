@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { THEMES, type ProjectMeta } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
 import { SmartImage } from "@/components/ui/SmartImage";
+import { ProjectOfflineButton } from "@/components/site/ProjectOfflineButton";
 import { cn } from "@/lib/utils";
 
 function relativeTime(ts: number) {
@@ -236,6 +237,9 @@ export function ProjectCard({
               <span className="mt-0.5 block text-[11px] tabular-nums text-muted">
                 آخر تعديل {relativeTime(project.updatedAt)}
                 {project.orgName ? ` · ${project.orgName}` : ""}
+              </span>
+              <span className="mt-2 flex">
+                <ProjectOfflineButton projectId={project.id} updatedAt={project.updatedAt} />
               </span>
             </button>
           )}
