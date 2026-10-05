@@ -245,7 +245,7 @@ import {
 } from "@/lib/editor/canvas-space";
 import { mmToPx } from "@/lib/editor/render-units";
 import { useInteraction } from "@/lib/editor/interaction-store";
-import { findElement, type Project } from "@/lib/editor/model";
+import { findElement } from "@/lib/editor/model";
 import { LeftPanel, ElementToolsWindow } from "./LeftPanel";
 import { PropertiesPanel, LayersPanel } from "./RightPanel";
 import { AssetLibrary } from "./AssetLibrary";
@@ -302,12 +302,10 @@ import { NsqIntake } from "./NsqIntake";
 import { AppInstallNotice } from "@/components/AppInstallNotice";
 import { isStandalone } from "@/lib/app-install";
 import { MobileWorkspaceGuide } from "@/components/editor/MobileWorkspaceGuide";
-import { useNsqSignedIn } from "@/lib/nsq/use-nsq-session";
 import { ProjectFileMenu, NSQ_SAVE_AS_EVENT } from "./ProjectFileMenu";
 import { NSQ_ACCEPT } from "@/lib/nsq/format";
-import { receiveProjectFile } from "@/lib/nsq/intake";
 import { rememberUploadedFont } from "@/lib/nsq/fonts";
-import { classifyImport } from "@/lib/editor/import/detect";
+import { openDesignFile } from "@/lib/editor/import/open";
 
 /**
  * The studio shell.
@@ -335,7 +333,6 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
   /** A licensed account's «الرئيسية» is its NASAQ Home; everyone else's is the site. */
   const homeHref =
     !isSuspended && (hasLicense || isAdmin) ? WORKSPACE_HOME_PATH : "/";
-  const { signedIn: nsqSignedIn } = useNsqSignedIn();
 
   const projectInput = useRef<HTMLInputElement>(null);
   const imageInput = useRef<HTMLInputElement>(null);
@@ -497,48 +494,10 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
    * ordinary pages and objects; there is no format-specific canvas or mode.
    */
   const openSelectedFile = async (file: File) => {
-    if (!(await requestLeave())) return;
-    const loadingId = toast.loading("جارٍ استيراد الملف إلى المحرر…");
-    try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      const classified = classifyImport(file.name, bytes);
-      if (!classified.format) throw new Error(classified.error || "صيغة غير مدعومة.");
-      if (classified.format === "nsq" || classified.format === "json") {
-        toast.dismiss(loadingId);
-        await receiveProjectFile(file, nsqSignedIn);
-        return;
-      }
-
-      // One canonical import service for every non-native format; PSD/PSB and
-      // Office/PDF/raster share the same call, result shape and size policy.
-      const [{ listAssets }, { importTemplateBytes }] = await Promise.all([
-        import("@/lib/editor/storage"),
-        import("@/lib/editor/import/run"),
-      ]);
-      const result = await importTemplateBytes(bytes, file.name, { assets: await listAssets() });
-      const project: Project = result.project;
-      const notes = result.notes;
-
-      const opened = await useEditor.getState().importProject(project, { successMessage: null });
-      if (!opened) {
-        toast.dismiss(loadingId);
-        return;
-      }
-      const approximate = notes.filter(
-        (note) => note.mode === "partial" || note.mode === "flattened" || note.mode === "skipped",
-      );
-      const partialCount = approximate.length;
-      const notePreview = approximate
-        .slice(0, 2)
-        .map((note) => `${note.name}: ${note.reason}`)
-        .join(" · ");
-      toast.success("تم الاستيراد — افتُتح المستند في محرر نَسَق", {
-        id: loadingId,
-        description: partialCount ? `${partialCount} ملاحظة تحويل. ${notePreview}` : undefined,
-      });
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "تعذر استيراد الملف", { id: loadingId });
-    }
+    // ONE opener for the picker, the canvas drop and the editor-wide drop:
+    // native containers keep the inbox/account path, every other format goes
+    // through the canonical import service (see import/open.ts).
+    await openDesignFile(file);
   };
 
   const upload = (kind: "image" | "logo" | "font" | "library") => {

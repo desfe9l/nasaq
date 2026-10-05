@@ -19,6 +19,7 @@ import {
   type CanvasEl,
 } from "./model";
 import { applySvgColors, safeSvgSrc, sanitizeSvgContent } from "./svg";
+import { normalizeBlurMm } from "./blur";
 import { projectAccessBlock } from "./access-limits";
 import { editorAccessResolved, useEditor } from "./store";
 import {
@@ -386,11 +387,16 @@ export async function exportDocxEditable(
   downloadBlob(blob, `${name}.docx`);
 }
 
-/** Native Office keeps normal objects editable. Only unsupported gradient/crop
- * paint (including groups that contain it) uses the existing browser renderer. */
+/** Native Office keeps normal objects editable. Only unsupported gradient,
+ * crop or layer-blur paint (including groups that contain it) uses the
+ * existing browser renderer — dropping a blur would change the artwork, so it
+ * is rasterised instead of being rewritten into a crisp object. */
 async function materializeSceneSources(pages: Page[]): Promise<Page[]> {
   const needsPaint = (el: CanvasEl): boolean =>
-    !!el.style.gradient || !!el.style.crop || !!el.children?.some(needsPaint);
+    !!el.style.gradient ||
+    !!el.style.crop ||
+    normalizeBlurMm(el.style.blur) > 0 ||
+    !!el.children?.some(needsPaint);
   const { svgToPngDataUrl } = await import("./svg");
   const scale = jobExportScale(pages.map(pageSize), 2);
   const output: Page[] = [];

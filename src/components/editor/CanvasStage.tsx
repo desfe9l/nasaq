@@ -83,6 +83,7 @@ import { toast } from "sonner";
 import { beginCanvasNavigation, zoomAnchoredAt } from "@/lib/editor/viewport";
 import { measuredSelectionBox, type PageBoxMm } from "@/lib/editor/ui-state";
 import { LIBRARY_DND_MIME, parseLibraryDrop } from "@/lib/editor/library-dnd";
+import { importableByName, openDesignFile } from "@/lib/editor/import/open";
 import { ARTBOARD_GUTTER_MM } from "@/lib/editor/artboard";
 const GRAPHIC_HEADING_MIME = "application/x-nasaq-graphic-heading";
 import {
@@ -274,7 +275,9 @@ export function CanvasStage({
   const setGuides = useInteraction((s) => s.setGuides);
   const setRotationHint = useInteraction((s) => s.setRotationHint);
   const setMarquee = useInteraction((s) => s.setMarquee);
-  const [dropping, setDropping] = useState<"file" | "library" | null>(null);
+  const [dropping, setDropping] = useState<
+    "file" | "document" | "library" | null
+  >(null);
   /*
    * The live tool comes from the ONE tool store. Reading `toolState()` inside a
    * gesture (never a stale closure) is what makes the first press after picking
@@ -2205,12 +2208,24 @@ export function CanvasStage({
         const isGraphic = e.dataTransfer.types.includes(GRAPHIC_HEADING_MIME);
         if ((!onDropImage || !isFile) && !isLibrary && !isGraphic) return;
         // An `.nsq` project is opened by the editor-wide intake (NsqIntake),
-        // which shows its own drop overlay — not the image hint.
+        // which shows its own drop overlay — not the canvas hint.
         if (isFile && !isLibrary && !isGraphic && likelyNsqDrag(e.dataTransfer))
           return;
         e.preventDefault();
         e.dataTransfer.dropEffect = "copy";
-        setDropping(isLibrary || isGraphic ? "library" : "file");
+        /*
+         * Images are placed as elements; every other supported file is a
+         * DOCUMENT drop that goes through the one importer. The hint says
+         * which promise the drop keeps.
+         */
+        const items = Array.from(e.dataTransfer.items || []).filter(
+          (item) => item.kind === "file",
+        );
+        const imagesOnly =
+          items.length > 0 && items.every((item) => item.type.startsWith("image/"));
+        setDropping(
+          isLibrary || isGraphic ? "library" : imagesOnly ? "file" : "document",
+        );
       }}
       onDragLeave={(e) => {
         if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
@@ -2246,7 +2261,17 @@ export function CanvasStage({
         if (!onDropImage) return;
         e.preventDefault();
         const file = Array.from(e.dataTransfer.files)[0];
-        if (!file || !file.type.startsWith("image/")) {
+        if (!file) return;
+        if (!file.type.startsWith("image/")) {
+          /*
+           * A design document dropped on the canvas opens exactly like one
+           * chosen from «استيراد ملف» — the same canonical importer, the same
+           * editable NASAQ document (import/open.ts).
+           */
+          if (importableByName(file.name)) {
+            void openDesignFile(file);
+            return;
+          }
           toast.error("نوع الملف غير مدعوم.");
           return;
         }
@@ -2259,7 +2284,9 @@ export function CanvasStage({
         <div className="canvas-drop-hint pointer-events-none absolute top-3 left-1/2 z-[var(--z-canvas-overlay)] -translate-x-1/2 w-max rounded-full border border-line bg-surface px-4 py-1.5 text-[11px] font-extrabold text-brand shadow-sm">
           {dropping === "library"
             ? "أفلت العنصر ليُضاف في هذا الموضع"
-            : "أفلت الصورة لإضافتها إلى الصفحة"}
+            : dropping === "document"
+              ? "أفلت الملف ليُفتح كمستند نَسَق قابل للتحرير"
+              : "أفلت الصورة لإضافتها إلى الصفحة"}
         </div>
       )}
       <div

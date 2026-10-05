@@ -27,6 +27,7 @@ import {
 import { mapShapePart } from "@/lib/editor/shape-affine";
 import { isPalmTouch } from "@/lib/editor/pen-input";
 import { gradientCss, paintCss } from "@/lib/editor/gradient";
+import { blurFilterCss } from "@/lib/editor/blur";
 import { imageLayout, normalizeCrop } from "@/lib/editor/image-crop";
 import { useImageLoadState } from "@/lib/editor/use-image-load";
 import { GradientDefs } from "./GradientDefs";
@@ -306,6 +307,15 @@ export const ElementNode = memo(function ElementNode({
 
   if (el.hidden) return null;
 
+  /*
+   * تمويه الطبقة — the layer blur paints the artwork, not the element's own
+   * box-shadow: the node frame keeps the shadow crisp (the way Photoshop blurs
+   * layer pixels, not its layer effects) and the clip-path on the node still
+   * cuts the blurred result. A wrapper is only added when there is a blur, so
+   * a crisp document renders exactly the DOM it always did.
+   */
+  const blurFilter = blurFilterCss(view.style?.blur);
+
   return (
     <div
       data-el-id={el.id}
@@ -391,17 +401,36 @@ export const ElementNode = memo(function ElementNode({
           </defs>
         </svg>
       )}
-      <ElementContent
-        el={view}
-        textRef={textRef}
-        onBlur={finishEdit}
-        onKeyDown={handleEditKey}
-        siblings={activeElements}
-        interactive={interactive}
-        pageRef={
-          pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
-        }
-      />
+      {blurFilter ? (
+        <div
+          className="el-blur"
+          style={{ position: "absolute", inset: 0, filter: blurFilter }}
+        >
+          <ElementContent
+            el={view}
+            textRef={textRef}
+            onBlur={finishEdit}
+            onKeyDown={handleEditKey}
+            siblings={activeElements}
+            interactive={interactive}
+            pageRef={
+              pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
+            }
+          />
+        </div>
+      ) : (
+        <ElementContent
+          el={view}
+          textRef={textRef}
+          onBlur={finishEdit}
+          onKeyDown={handleEditKey}
+          siblings={activeElements}
+          interactive={interactive}
+          pageRef={
+            pageNo ? { number: pageNo, count: pageCount ?? pageNo } : undefined
+          }
+        />
+      )}
     </div>
   );
 }, areElementNodePropsEqual);

@@ -179,6 +179,13 @@ export interface ElStyle {
   paragraphSpacing?: number;
   textShadow?: string;
   shadow?: string;
+  /**
+   * تمويه الطبقة (Layer Blur / Smart Filter blur), in millimetres; 0/unset is
+   * a crisp layer. Painted by the canvas on the element's artwork — not on its
+   * box-shadow — and rasterised identically by every pixel export (see
+   * `blur.ts` for the one codec).
+   */
+  blur?: number;
   objectFit?: "cover" | "contain" | "fill";
   objectX?: number;
   objectY?: number;

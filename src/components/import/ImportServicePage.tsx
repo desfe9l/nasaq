@@ -235,8 +235,10 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
     setTitleIsManual(false);
     if (!next) return;
     const name = next.name.toLowerCase();
-    if (!/\.(psd|psb|docx|pptx|pdf|png|jpe?g|svg)$/i.test(name)) {
-      setError("صيغة غير مدعومة. المقبول: PSD وDOCX وPPTX وPDF وPNG وJPG وSVG.");
+    // Exactly the formats the canonical service converts (`import/run.ts`);
+    // the bytes are still classified before any converter runs.
+    if (!/\.(psd|psb|docx|pptx|xlsx|pdf|png|jpe?g|svg)$/i.test(name)) {
+      setError("صيغة غير مدعومة. المقبول: PSD وDOCX وPPTX وXLSX وPDF وPNG وJPG وSVG.");
       return;
     }
     setFile(next);
