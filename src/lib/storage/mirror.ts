@@ -11,8 +11,22 @@
  * endpoint and no bucket name is referenced here.
  */
 import { hasSignedInOwner } from "@/lib/editor/storage-owner";
+import { getSetting, setSetting } from "@/lib/editor/storage";
 import type { LibraryCatalog } from "./library-sync";
 import type { StorageAssetKind, StoredAsset } from "./provider";
+import { normalizeCloudStoragePreference, type CloudStoragePreference } from "./cloud-policy";
+
+export async function getCloudStoragePreference(): Promise<CloudStoragePreference> {
+  return normalizeCloudStoragePreference(await getSetting("cloudStorageMode"));
+}
+
+export async function setCloudStoragePreference(preference: CloudStoragePreference): Promise<void> {
+  await setSetting("cloudStorageMode", preference);
+}
+
+async function cloudEnabled(): Promise<boolean> {
+  return (await getCloudStoragePreference()) === "cloud";
+}
 
 /** Split a `data:` URL into its content type and raw base64 payload. */
 export function parseDataUrl(
@@ -42,6 +56,7 @@ export async function mirrorAssetToStorage(asset: {
 }): Promise<string | null> {
   try {
     if (!hasSignedInOwner()) return null;
+    if (!(await cloudEnabled())) return null;
     const parsed = parseDataUrl(asset.src);
     if (!parsed) return null;
     const kind = kindFor(parsed.contentType);
@@ -72,6 +87,7 @@ export async function mirrorAssetToStorage(asset: {
 export async function pullRemoteAssets(): Promise<StoredAsset[]> {
   try {
     if (!hasSignedInOwner()) return [];
+    if (!(await cloudEnabled())) return [];
     const { listStoredAssets } = await import("./functions");
     const list = await listStoredAssets();
     return Array.isArray(list) ? list : [];
@@ -89,6 +105,7 @@ export async function fetchRemoteAssetDataUrl(
 ): Promise<{ dataUrl: string; asset: StoredAsset } | null> {
   try {
     if (!hasSignedInOwner() || !id) return null;
+    if (!(await cloudEnabled())) return null;
     const { downloadStoredAsset } = await import("./functions");
     const result = await downloadStoredAsset({ data: { id } });
     return result.ok ? { dataUrl: result.dataUrl, asset: result.asset } : null;
@@ -117,6 +134,7 @@ export async function pullLibraryCatalog(): Promise<
 > {
   try {
     if (!hasSignedInOwner()) return { ok: false };
+    if (!(await cloudEnabled())) return { ok: false };
     const { getLibraryCatalog } = await import("./functions");
     const result = await getLibraryCatalog();
     return { ok: true, payload: result?.payload ?? null };
@@ -129,6 +147,7 @@ export async function pullLibraryCatalog(): Promise<
 export async function pushLibraryCatalog(payload: LibraryCatalog): Promise<boolean> {
   try {
     if (!hasSignedInOwner()) return false;
+    if (!(await cloudEnabled())) return false;
     const { saveLibraryCatalog } = await import("./functions");
     const result = await saveLibraryCatalog({ data: { payload } });
     return Boolean(result?.ok);
@@ -146,6 +165,7 @@ export async function copyRemoteAssets(
 ): Promise<Array<{ sourceId: string; remoteId: string }>> {
   const unique = [...new Set(sourceIds.filter(Boolean))];
   if (!hasSignedInOwner() || !unique.length) return [];
+  if (!(await cloudEnabled())) return [];
   const copied: Array<{ sourceId: string; remoteId: string }> = [];
   try {
     const { copyStoredAssets } = await import("./functions");
@@ -168,6 +188,7 @@ export async function fetchRemoteAssetDataUrls(
 ): Promise<Array<{ id: string; dataUrl: string; asset: StoredAsset }>> {
   const unique = [...new Set(ids.filter(Boolean))];
   if (!hasSignedInOwner() || !unique.length) return [];
+  if (!(await cloudEnabled())) return [];
   const files: Array<{ id: string; dataUrl: string; asset: StoredAsset }> = [];
   try {
     const { downloadStoredAssets } = await import("./functions");

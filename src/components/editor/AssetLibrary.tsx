@@ -32,6 +32,7 @@ import {
   X,
 } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
+import { useLicense } from "@/lib/license/client";
 import { INSTITUTIONAL_FOLDER_ID, INSTITUTIONAL_FOLDER_NAME, applyInstitutionalBackground } from "@/lib/editor/institutional-backgrounds";
 import { useInstitutionalBackgrounds } from "@/lib/editor/use-institutional-backgrounds";
 import { pageSize } from "@/lib/editor/model";
@@ -54,6 +55,7 @@ import {
 } from "@/lib/editor/library-import";
 import { extractSvgMarkup } from "@/lib/editor/ui-state";
 import { cn } from "@/lib/utils";
+import { getCloudStoragePreference, setCloudStoragePreference } from "@/lib/storage/mirror";
 
 type PendingAsset = Asset & { fileName: string };
 
@@ -157,6 +159,7 @@ export function AssetLibrary({
   const addElement = useEditor((s) => s.addElement);
   const removeAsset = useEditor((s) => s.removeAsset);
   const removeAssets = useEditor((s) => s.removeAssets);
+  const detachRemoteAssets = useEditor((s) => s.detachRemoteAssets);
   const renameAsset = useEditor((s) => s.renameAsset);
   const addAsset = useEditor((s) => s.addAsset);
   const selectAssets = useEditor((s) => s.selectAssets);
@@ -175,6 +178,7 @@ export function AssetLibrary({
   const moveAssetsToFolder = useEditor((s) => s.moveAssetsToFolder);
   const duplicateLibrary = useEditor((s) => s.duplicateLibrary);
   const importLibraryPlan = useEditor((s) => s.importLibraryPlan);
+  const { isLoading: licenseLoading, hasLicense, isAdmin } = useLicense();
   const addCustomIcon = useEditor((s) => s.addCustomIcon);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -217,6 +221,22 @@ export function AssetLibrary({
   const [batchDeleting, setBatchDeleting] = useState(false);
   const [folderDraft, setFolderDraft] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "compact">("grid");
+  const [cloudStorageMode, setCloudStorageMode] = useState<"local" | "cloud">("local");
+
+  useEffect(() => {
+    if (licenseLoading) return;
+    void (async () => {
+      const current = await getCloudStoragePreference();
+      if (isAdmin) {
+        if (current !== "cloud") await setCloudStoragePreference("cloud");
+        setCloudStorageMode("cloud");
+      } else if (hasLicense) {
+        setCloudStorageMode(current);
+      } else {
+        setCloudStorageMode("local");
+      }
+    })();
+  }, [hasLicense, isAdmin, licenseLoading]);
   /*
    * The control bar collapses to ONE icon row: authors with big shelves kept
    * losing the assets themselves to the filters above them. The choice is
@@ -657,9 +677,18 @@ export function AssetLibrary({
     }
   };
 
-  const exportLibrary = () => {
+  const exportLibrary = async () => {
     const name = downloadLibraryFile({ folders, assets });
+    if (!isAdmin && hasLicense) await detachRemoteAssets(assets.map((asset) => asset.id));
     toast.success(`تم تنزيل المكتبة — ${name}`);
+  };
+
+  const toggleCloudStorage = async () => {
+    if (!hasLicense || isAdmin) return;
+    const next = cloudStorageMode === "cloud" ? "local" : "cloud";
+    await setCloudStoragePreference(next);
+    setCloudStorageMode(next);
+    toast.success(next === "cloud" ? "سيبقى المحتوى محفوظًا سحابيًا ومتزامنًا" : "الحفظ المحلي مفعّل؛ سيُحذف R2 بعد الاستخراج المحلي");
   };
 
   const importLibrary = async (file: File) => {
@@ -714,13 +743,18 @@ export function AssetLibrary({
         <div className="asset-library-tools flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={exportLibrary}
+            onClick={() => void exportLibrary()}
             aria-label="تصدير المكتبة"
             title="تصدير المكتبة"
             className="asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border border-line"
           >
             <Download className="size-3.5" />
           </button>
+          {hasLicense && !isAdmin && (
+            <button type="button" onClick={() => void toggleCloudStorage()} aria-pressed={cloudStorageMode === "cloud"} aria-label={cloudStorageMode === "cloud" ? "إيقاف الاحتفاظ السحابي" : "تفعيل الاحتفاظ السحابي"} title={cloudStorageMode === "cloud" ? "الاحتفاظ السحابي مفعّل" : "تفعيل الاحتفاظ السحابي"} className={cn("asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border", cloudStorageMode === "cloud" ? "border-emerald-500 text-emerald-600" : "border-line text-muted")}>
+              <span className="text-[10px] font-black">R2</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={() => libraryImportRef.current?.click()}

@@ -475,6 +475,8 @@ interface EditorStore extends Project, Ui, History {
   removeAsset: (id: string) => Promise<void>;
   /** Batch delete for the multi-select — assets only, never folders. */
   removeAssets: (ids: string[]) => Promise<void>;
+  /** Remove cloud copies after a verified local export, preserving local assets. */
+  detachRemoteAssets: (ids: string[]) => Promise<void>;
   /** Replace the selection wholesale (shift+click range, select-all). */
   selectAssets: (ids: string[]) => void;
   renameAsset: (id: string, name: string) => Promise<void>;
@@ -2201,6 +2203,35 @@ export const useEditor = create<EditorStore>((set, get) => {
         targets.map((target) =>
           rememberLibraryRemoval("libraryRemovedAssets", target.remoteId || target.id),
         ),
+      );
+      queueLibrarySync();
+    },
+
+    detachRemoteAssets: async (ids) => {
+      const wanted = new Set(ids.filter(Boolean));
+      const targets = get().assets.filter((asset) =>
+        wanted.has(asset.id) || (asset.remoteId ? wanted.has(asset.remoteId) : false),
+      );
+      if (!targets.length) return;
+      const { removeRemoteAsset } = await import("@/lib/storage/mirror");
+      const remoteTargets = targets
+        .map((target) => target.remoteId)
+        .filter((id): id is string => Boolean(id));
+      const deleted = await Promise.all(remoteTargets.map((id) => removeRemoteAsset(id)));
+      if (deleted.some((ok) => !ok)) return;
+      await Promise.all(targets.map((asset) => saveAsset({ ...asset, remoteId: undefined })));
+      set((state) => ({
+        assets: state.assets.map((asset) =>
+          targets.some((target) => target.id === asset.id)
+            ? { ...asset, remoteId: undefined }
+            : asset,
+        ),
+      }));
+      await Promise.all(
+        targets
+          .map((target) => target.remoteId)
+          .filter((id): id is string => Boolean(id))
+          .map((id) => rememberLibraryRemoval("libraryRemovedAssets", id)),
       );
       queueLibrarySync();
     },

@@ -146,6 +146,8 @@ export type SettingsKey =
   | "assetFolders"
   /** SVG icons/dividers the author added to the smart library. */
   | "customLibrary"
+  /** Subscriber choice: keep library assets in R2 or local-only. */
+  | "cloudStorageMode"
   | "brandProfiles"
   /** Documents saved by the /import service, newest first (service history). */
   | "importServiceHistory"
@@ -543,6 +545,7 @@ const OWNER_SCOPED_SETTINGS = new Set<string>([
   "activePageId",
   "assetFolders",
   "customLibrary",
+  "cloudStorageMode",
 ]);
 
 /** The row key `key` is stored under for the current owner. */

@@ -42,6 +42,12 @@ export type UploadAssetResult =
   | { ok: true; asset: StoredAsset }
   | { ok: false; reason: StorageFailureReason };
 
+async function hasCloudStorageAccess(context: { userId: string; userEmail?: string | null }): Promise<boolean> {
+  const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
+  const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail ?? null });
+  return access.isOwner || access.isAdmin || Boolean(access.license);
+}
+
 type AssetRow = {
   id: string;
   kind: string;
@@ -136,6 +142,7 @@ export const uploadEditorAsset = createServerFn({ method: "POST" })
     },
   )
   .handler(async ({ context, data }): Promise<UploadAssetResult> => {
+    if (!(await hasCloudStorageAccess(context))) return { ok: false, reason: "forbidden" };
     const { getObjectStorage } = await import("./r2.server");
     const storage = getObjectStorage();
     if (!storage) return { ok: false, reason: "not_configured" };
@@ -191,6 +198,7 @@ export const uploadEditorAsset = createServerFn({ method: "POST" })
 export const listStoredAssets = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<StoredAsset[]> => {
+    if (!(await hasCloudStorageAccess(context))) return [];
     const { objectStorageConfigured } = await import("./r2.server");
     if (!objectStorageConfigured()) return [];
     const sql = await getSql();
@@ -222,6 +230,7 @@ export const getStoredAssetUrl = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<
     { ok: true; url: string; expiresInSeconds: number } | { ok: false; reason: StorageFailureReason }
   > => {
+    if (!(await hasCloudStorageAccess(context))) return { ok: false, reason: "not_found" };
     const { getObjectStorage } = await import("./r2.server");
     const storage = getObjectStorage();
     if (!storage) return { ok: false, reason: "not_configured" };
@@ -268,6 +277,7 @@ export const downloadStoredAsset = createServerFn({ method: "POST" })
       | { ok: true; dataUrl: string; asset: StoredAsset }
       | { ok: false; reason: StorageFailureReason }
     > => {
+      if (!(await hasCloudStorageAccess(context))) return { ok: false, reason: "not_found" };
       const { getObjectStorage } = await import("./r2.server");
       const storage = getObjectStorage();
       if (!storage) return { ok: false, reason: "not_configured" };
@@ -312,6 +322,7 @@ export const deleteStoredAsset = createServerFn({ method: "POST" })
     return { id };
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean }> => {
+    if (!(await hasCloudStorageAccess(context))) return { ok: false };
     const { getObjectStorage } = await import("./r2.server");
     const storage = getObjectStorage();
     if (!storage) return { ok: false };
@@ -335,6 +346,7 @@ export const deleteStoredAsset = createServerFn({ method: "POST" })
 /** The signed-in account's library metadata. Empty when nothing has been synced. */export const getLibraryCatalog = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<{ payload: LibraryCatalog | null; updatedAt: string | null }> => {
+    if (!(await hasCloudStorageAccess(context))) return { payload: null, updatedAt: null };
     const sql = await getSql();
     const rows = await sql<{ payload: unknown; updated_at: string | Date }>`
       select payload, updated_at from library_catalog
@@ -358,6 +370,7 @@ export const saveLibraryCatalog = createServerFn({ method: "POST" })
     return { payload: normalizeCatalog(payload) };
   })
   .handler(async ({ context, data }): Promise<{ ok: true } | { ok: false; reason: "rejected" }> => {
+    if (!(await hasCloudStorageAccess(context))) return { ok: false, reason: "rejected" };
     const sql = await getSql();
     const body = JSON.stringify(data.payload);
     await sql`
@@ -390,6 +403,7 @@ export const copyStoredAssets = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<{
     copies: Array<{ sourceId: string; asset: StoredAsset }>;
   }> => {
+    if (!(await hasCloudStorageAccess(context))) return { copies: [] };
     const { getObjectStorage } = await import("./r2.server");
     const storage = getObjectStorage();
     if (!storage) return { copies: [] };
@@ -452,6 +466,7 @@ export const downloadStoredAssets = createServerFn({ method: "POST" })
   .handler(async ({ context, data }): Promise<{
     files: Array<{ id: string; dataUrl: string; asset: StoredAsset }>;
   }> => {
+    if (!(await hasCloudStorageAccess(context))) return { files: [] };
     const { getObjectStorage } = await import("./r2.server");
     const storage = getObjectStorage();
     if (!storage) return { files: [] };
