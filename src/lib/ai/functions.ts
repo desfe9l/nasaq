@@ -7,6 +7,13 @@ import {
   type ReportDraftInput,
   type ReportDraftResult,
 } from "./contract";
+import {
+  cleanSelectionText,
+  normalizeSelectionInput,
+  validSelectionInput,
+  type SelectionActionInput,
+  type SelectionActionResult,
+} from "./selection-contract";
 
 let getRequestRef: typeof import("@tanstack/react-start/server").getRequest | null = null;
 
@@ -104,6 +111,92 @@ export const generateReportDraftFn = createServerFn({ method: "POST" })
         ok: false,
         code: "provider_error",
         message: "تعذر توليد المسودة الآن. لم يتغير محتوى المستند.",
+      };
+    }
+  });
+
+/**
+ * «إجراءات المحتوى المحدد» — transform ONE selected element's text.
+ *
+ * Same authorization (`ai_report`), same rate-limit discipline as the draft
+ * function, but a tighter per-user budget: a transformation is cheap and
+ * frequent, so the panel offers it as a button rather than a form. The IP rule
+ * is shared with the draft function's helper above.
+ */
+export const transformSelectionFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: SelectionActionInput) => data)
+  .handler(async ({ data, context }): Promise<SelectionActionResult> => {
+    const input = normalizeSelectionInput(data);
+    if (!validSelectionInput(input)) {
+      return {
+        ok: false,
+        code: "invalid",
+        message: "لا يوجد نص محدد كافٍ لتنفيذ الإجراء.",
+      };
+    }
+
+    const { getAuthorizationContext, requireFeature } = await import(
+      "@/lib/auth/authorization.server"
+    );
+    const access = await getAuthorizationContext({
+      id: context.userId,
+      email: context.userEmail,
+    });
+    try {
+      requireFeature(access, "ai_report");
+    } catch {
+      return {
+        ok: false,
+        code: "license_required",
+        message: "تحتاج هذه الميزة إلى ترخيص نشط.",
+      };
+    }
+
+    if (
+      !access.isAdmin &&
+      (!checkRateLimit("ai:selection:user", context.userId, 20, 60_000) ||
+        !checkRateLimit("ai:selection:ip", await clientIdentifier(), 40, 60_000))
+    ) {
+      return {
+        ok: false,
+        code: "rate_limited",
+        message: "تم الوصول إلى حد المحاولات المؤقت. حاول بعد دقيقة.",
+      };
+    }
+
+    try {
+      const { transformSelection } = await import("./provider.server");
+      const text = cleanSelectionText(await transformSelection(input));
+      if (!text) throw new Error("empty_result");
+      return { ok: true, text };
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "provider_error";
+      if (code === "not_configured") {
+        return {
+          ok: false,
+          code: "not_configured",
+          message: "خدمة الذكاء الاصطناعي غير مفعّلة لهذه البيئة بعد.",
+        };
+      }
+      if (code === "provider_rate") {
+        return {
+          ok: false,
+          code: "rate_limited",
+          message: "مزود الذكاء الاصطناعي مشغول مؤقتًا. حاول بعد قليل. لم يتغير العنصر.",
+        };
+      }
+      if (code === "provider_rejected") {
+        return {
+          ok: false,
+          code: "provider_error",
+          message: "رفض مزود الذكاء الاصطناعي الطلب. لم يتغير العنصر.",
+        };
+      }
+      return {
+        ok: false,
+        code: "provider_error",
+        message: "تعذر تنفيذ الإجراء الآن. لم يتغير العنصر.",
       };
     }
   });

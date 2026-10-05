@@ -5,6 +5,8 @@ import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { useAccountTier } from "@/components/site/AccountBadge";
 import { useLicense } from "@/lib/license/client";
+import { useBrandIdentity } from "@/lib/product/use-brand-identity";
+import { applyBrandToSeed } from "@/lib/editor/brand-design";
 import { useEditor } from "@/lib/editor/store";
 import { projectAccessBlock } from "@/lib/editor/access-limits";
 import { editorPathFor } from "@/lib/site-routes";
@@ -52,6 +54,7 @@ export function MyTemplatesPage() {
 function LicensedTemplates({ user }: { user: AppUser }) {
   const tier = useAccountTier(user);
   const { entitlements } = useLicense();
+  const brand = useBrandIdentity();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const importProject = useEditor((s) => s.importProject);
@@ -88,7 +91,10 @@ function LicensedTemplates({ user }: { user: AppUser }) {
       toast.error(!result.ok ? result.error : "تعذر فتح القالب");
       return;
     }
-    const seed = templateToProjectSeed(result.template.content, result.template.title);
+    const seed = applyBrandToSeed(
+      templateToProjectSeed(result.template.content, result.template.title),
+      brand.kit,
+    );
     const block = projectAccessBlock(seed, {
       premium_templates: entitlements.premium_templates === true,
       unlimited_projects: entitlements.unlimited_projects === true,

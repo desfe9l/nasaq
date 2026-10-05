@@ -20,8 +20,9 @@ import { cn } from "@/lib/utils";
 import { TemplatePreview } from "./TemplatePreview";
 import { buildIdentityDocument } from "@/lib/editor/identity-document";
 import { useEditor } from "@/lib/editor/store";
-import { editorPathFor } from "@/lib/site-routes";
+import { LICENSE_ROUTE, editorPathFor } from "@/lib/site-routes";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useLicense } from "@/lib/license/client";
 import { toast } from "sonner";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 
@@ -285,6 +286,13 @@ export function BrandKitPage() {
   const runIdentityAction = (action: () => Promise<unknown>) => { void action().catch(error => toast.error(error instanceof Error ? error.message : "تعذر حفظ الهوية")); };
 
   const kitDate = formatKitDate(kit);
+  /*
+   * The identity is editable by anyone — it is the author's own document
+   * identity. PRODUCING a document from it is the licensed part
+   * (`brand_kit` = «إدارة وتطبيق الهوية المؤسسية»), and this is where that
+   * promise becomes true.
+   */
+  const { entitlements } = useLicense(user?.id, user?.primaryEmail);
   const identityDocument = useMemo(() => buildIdentityDocument(kit, previewMode, kitDate, recipient), [kit, previewMode, kitDate, recipient]);
   const createDocument = async () => {
     setCreating(true);
@@ -568,9 +576,22 @@ export function BrandKitPage() {
               <div data-brand-a4-preview className="mt-3">
                 <TemplatePreview page={identityDocument.pages[0]} className="rounded-md border border-line" />
               </div>
-              <button type="button" disabled={creating} onClick={() => void createDocument()} className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 text-[12px] font-bold text-on-brand disabled:opacity-50">
-                <FilePenLine className="size-4" />{creating ? "جارٍ الإنشاء…" : "إنشاء مستند بهذه الهوية"}
-              </button>
+              {entitlements.brand_kit ? (
+                <button type="button" disabled={creating} onClick={() => void createDocument()} className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-navy px-3 text-[12px] font-bold text-on-brand disabled:opacity-50">
+                  <FilePenLine className="size-4" />{creating ? "جارٍ الإنشاء…" : "إنشاء مستند بهذه الهوية"}
+                </button>
+              ) : (
+                <div className="mt-3 rounded-lg border border-line bg-paper px-3 py-2 text-right">
+                  <p className="text-[11px] leading-5 text-muted">
+                    يمكنك تعديل هويتك وحفظها الآن. تطبيقها على المستندات المُنشأة
+                    والمستوردة وإنشاء المستند الرسمي منها يتطلب ترخيص «الهوية
+                    المؤسسية».
+                  </p>
+                  <a href={LICENSE_ROUTE} className="mt-1.5 inline-flex h-8 items-center rounded-lg border border-line px-2.5 text-[11px] font-bold text-ink transition hover:border-brand">
+                    تفعيل الترخيص
+                  </a>
+                </div>
+              )}
 
               <div className="mt-3 flex items-center gap-2">
                 {[kit.primaryColor, kit.secondaryColor, kit.accentColor, kit.paperColor || "#fbfaf6", kit.textColor || "#1f2937"].map((c, i) => (

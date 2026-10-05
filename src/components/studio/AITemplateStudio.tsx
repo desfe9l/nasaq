@@ -1,7 +1,6 @@
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Sparkles,
-  ArrowRight,
   ChevronLeft,
   ChevronRight,
   Layers,
@@ -11,15 +10,25 @@ import {
   ExternalLink,
   CheckCircle2,
   Palette,
-  FileText,
-  Layout,
-  Maximize2,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react";
 import { toast } from "sonner";
 import { saveProject, setSetting } from "@/lib/editor/storage";
-import { editorPathFor } from "@/lib/site-routes";
+import { BRAND_ROUTE, editorPathFor } from "@/lib/site-routes";
+import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { useLicense } from "@/lib/license/client";
+import {
+  DEMO_MAX_PAGES,
+  exceedsProjectPageLimit,
+  exceedsSavedProjectLimit,
+  projectAccessBlock,
+} from "@/lib/editor/access-limits";
+import { useEditor } from "@/lib/editor/store";
+import { readBrandKit } from "@/lib/product/brand-kit";
+import {
+  brandIsConfigured,
+  describeBrandApplication,
+} from "@/lib/editor/brand-design";
+import type { BrandKit } from "@/lib/product/product";
 import { uid, cn } from "@/lib/utils";
 import { saveCustomTemplate } from "@/lib/templates/custom-templates";
 import { resolveTemplateName } from "@/lib/templates/naming";
@@ -59,7 +68,42 @@ const FORMAT_OPTIONS: Array<{ id: DesignFormat; label: string; desc: string }> =
   { id: "tall-story", label: "إنفوجرافيك طولي", desc: "سلسلة بيانات ورسوم بيانية" },
 ];
 
+/**
+ * One generation entry point for the studio.
+ *
+ * It exists so the page-load preview, the manual generate and the
+ * identity-repaint all obey the SAME rules: the page ceiling of the account's
+ * plan, and the institutional identity when it is licensed. `generateFromIntent`
+ * would happily build a six-page document for a plan that opens three; the
+ * studio is not allowed to promise more than the editor will honour.
+ */
+function buildGeneration(
+  text: string,
+  overrides: Record<string, unknown>,
+  entitlements: { unlimited_pages?: boolean },
+  brand: BrandKit | null,
+): StudioGenerationResult {
+  const bounded = { ...overrides };
+  if (
+    !entitlements.unlimited_pages &&
+    typeof bounded.pages === "number" &&
+    bounded.pages > DEMO_MAX_PAGES
+  ) {
+    bounded.pages = DEMO_MAX_PAGES;
+  }
+  return generateDesignFromPrompt(text, bounded, brand);
+}
+
 export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) {
+  /*
+   * The studio judges by the account's REAL entitlements. It used to hand
+   * `saveCustomTemplate` a hardcoded all-true map, which meant a free or expired
+   * account could persist a template the editor store would then refuse to open.
+   * The same map now decides what can be generated and saved here.
+   */
+  const { user } = useCurrentUserState();
+  const { entitlements } = useLicense(user?.id, user?.primaryEmail);
+  const [brandKit, setBrandKit] = useState<BrandKit | null>(null);
   const [prompt, setPrompt] = useState(initialPrompt || "صمم تقريرًا رسميًا عن الأمن السيبراني");
   const [busy, setBusy] = useState(false);
   const [stepLabel, setStepLabel] = useState("");
@@ -81,14 +125,50 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
   const [overrideFormat, setOverrideFormat] = useState<DesignFormat | "auto">("auto");
   const [overridePages, setOverridePages] = useState<number | "auto">("auto");
 
-  // Visual scale
-  const [zoom, setZoom] = useState(1);
-
   // Active variation project
   const currentVariation: DesignVariation | undefined =
     result?.variations.find((v) => v.id === selectedVariationId) || result?.variations[0];
   const activeProject = currentVariation?.project || result?.primaryResult.project;
   const activePage = activeProject?.pages[activePageIndex] || activeProject?.pages[0];
+
+  /*
+   * «الهوية» is read once on mount, and only used when the `brand_kit`
+   * entitlement is present. Reading is not applying: without the entitlement the
+   * kit is simply not handed to the generator.
+   */
+  const generatedByHand = useRef(false);
+  const promptRef = useRef(prompt);
+  promptRef.current = prompt;
+  useEffect(() => {
+    let alive = true;
+    if (!entitlements.brand_kit) {
+      setBrandKit(null);
+      return () => {
+        alive = false;
+      };
+    }
+    void readBrandKit()
+      .then((kit) => {
+        if (!alive) return;
+        // A default kit is not an identity: it must not repaint the studio.
+        if (!brandIsConfigured(kit)) return;
+        setBrandKit(kit);
+        // The preview generated on mount was painted before the kit finished
+        // loading. Repaint it in the identity — once, and only if the author has
+        // not already generated a design of their own.
+        if (!generatedByHand.current) {
+          try {
+            setResult(buildGeneration(promptRef.current, {}, entitlements, kit));
+          } catch {
+            /* the un-branded preview stays; generation is still available */
+          }
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [entitlements]);
 
   const handleGenerate = async (targetPrompt?: string) => {
     const text = (targetPrompt || prompt).trim();
@@ -110,6 +190,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
       await new Promise((r) => setTimeout(r, 150));
       setStepLabel("ضبط التوازن البصري والطباعة العربية RTL...");
 
+      generatedByHand.current = true;
       const overrides: Record<string, unknown> = {};
       if (overrideStyle !== "auto") overrides.style = overrideStyle;
       if (overrideFormat !== "auto") {
@@ -123,7 +204,20 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
       }
       if (overridePages !== "auto") overrides.pages = overridePages;
 
-      const gen = generateDesignFromPrompt(text, overrides);
+      /*
+       * The page ceiling is the store's own number, enforced in ONE place
+       * (`buildGeneration`, which the mount preview also goes through); here the
+       * author is simply told when their request was brought back to the plan.
+       */
+      const requestedPages = typeof overrides.pages === "number" ? overrides.pages : null;
+      const gen = buildGeneration(text, overrides, entitlements, brandKit);
+      if (
+        requestedPages !== null &&
+        !entitlements.unlimited_pages &&
+        requestedPages > DEMO_MAX_PAGES
+      ) {
+        toast.info(`الخطة الحالية تسمح بـ${DEMO_MAX_PAGES} صفحات — وُلّد التصميم ضمنها.`);
+      }
       setResult(gen);
       setSelectedVariationId("sovereign");
       setActivePageIndex(0);
@@ -139,29 +233,63 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
 
   const openInEditor = async () => {
     if (!activeProject) return;
+    const category = result?.intent.docType === "presentation" ? "slides" : "reports";
     try {
+      const store = useEditor.getState();
+      // The project list is counted exactly as the editor counts it, against the
+      // account's own entitlements — no hardcoded allowances.
+      store.setEntitlements(entitlements);
+      await store.hydrate();
+      if (exceedsSavedProjectLimit(useEditor.getState().projects.length, entitlements)) {
+        toast.error("اكتملت مساحة تجربة المحرر", {
+          description: "يتضمن العرض مشروعًا واحدًا. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
+        });
+        return;
+      }
       const name = resolveTemplateName({
         title: activeProject.name || result?.intent.title || "",
-        category: result?.intent.docType === "presentation" ? "slides" : "reports",
+        category,
         kind: "json",
         content: activeProject,
       });
+      const block = projectAccessBlock(activeProject, entitlements);
+      if (block) {
+        toast.error(
+          block === "premium-template"
+            ? "هذا التصميم يعتمد على قالب في النسخة الكاملة — فعّل ترخيصًا مناسبًا."
+            : `يتجاوز التصميم حد ${DEMO_MAX_PAGES} صفحات في خطتك الحالية.`,
+        );
+        return;
+      }
       const saved = await saveProject({
         ...activeProject,
         id: uid("proj"),
         name,
       });
       await setSetting("activeProjectId", saved.id);
-      await saveCustomTemplate(
-        {
-          title: saved.name.slice(0, 80),
-          desc: `تصميم مولد بواسطة الذكاء الاصطناعي · نمط ${currentVariation?.name || "مؤسسي"}`,
-          category: result?.intent.docType === "presentation" ? "slides" : "reports",
-          tags: ["ai-generation", result?.intent.topic || "institutional"],
-          pages: saved.pages,
-        },
-        { premium_templates: true, unlimited_projects: true, unlimited_pages: true },
-      );
+      /*
+       * Saving the design into the template library is a convenience, not the
+       * goal: a plan that cannot hold it (page ceiling) still gets the editable
+       * document in the editor, with the reason said out loud.
+       */
+      try {
+        await saveCustomTemplate(
+          {
+            title: saved.name.slice(0, 80),
+            desc: `تصميم مولد بواسطة الذكاء الاصطناعي · نمط ${currentVariation?.name || "مؤسسي"}`,
+            category,
+            tags: ["ai-generation", result?.intent.topic || "institutional"],
+            pages: saved.pages,
+          },
+          entitlements,
+        );
+      } catch (templateError) {
+        if (exceedsProjectPageLimit(saved.pages.length, entitlements)) {
+          toast.info("حُفظ المستند في مشاريعك؛ ولم يُضف إلى مكتبة القوالب ضمن خطتك الحالية.");
+        } else {
+          console.warn("studio template save failed", templateError);
+        }
+      }
       toast.success("جارٍ فتح التصميم في محرر نَسَق...");
       if (saved.id) {
         window.location.assign(editorPathFor(saved.id));
@@ -191,14 +319,39 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setShowTuning(!showTuning)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[12px] font-bold text-muted transition hover:border-brand hover:text-brand"
-          >
-            <SlidersHorizontal className="size-3.5" />
-            <span>خيارات التخصيص</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/*
+             * The identity is visible, not implied: the author can see WHOSE
+             * colours the design is being generated in, and can change them.
+             */}
+            {brandKit ? (
+              <a
+                href={BRAND_ROUTE}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-brand/40 bg-navy/5 px-3 text-[12px] font-bold text-brand transition hover:border-brand"
+                title="الهوية المطبقة على التوليد — عدّلها من «هوية مستندك»"
+              >
+                <Palette className="size-3.5" aria-hidden />
+                <span>{describeBrandApplication(brandKit)}</span>
+              </a>
+            ) : (
+              <a
+                href={BRAND_ROUTE}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[12px] font-bold text-muted transition hover:border-brand hover:text-brand"
+                title="اربط التوليد بهوية جهتك"
+              >
+                <Palette className="size-3.5" aria-hidden />
+                <span>هوية مؤسسية</span>
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowTuning(!showTuning)}
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[12px] font-bold text-muted transition hover:border-brand hover:text-brand"
+            >
+              <SlidersHorizontal className="size-3.5" />
+              <span>خيارات التخصيص</span>
+            </button>
+          </div>
         </div>
 
         {/* Primary Prompt Input */}

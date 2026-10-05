@@ -48,6 +48,8 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { OPEN_NEW_DOCUMENT_EVENT } from "@/lib/auth/use-workspace-entry";
 import { licenseSummary } from "@/lib/license/summary";
 import { useLicense, type LicenseState } from "@/lib/license/client";
+import { useBrandIdentity } from "@/lib/product/use-brand-identity";
+import { applyBrandToSeed } from "@/lib/editor/brand-design";
 import { toast } from "sonner";
 import { Navigate } from "@tanstack/react-router";
 import { canUseDemoPack } from "@/lib/product/product";
@@ -246,6 +248,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
   const setEntitlements = useEditor((s) => s.setEntitlements);
   const storeOrg = useEditor((s) => s.orgName);
   const entitlements = license.entitlements;
+  const brand = useBrandIdentity();
   /*
    * استوديو الاستيراد (/import) is a template-manager entitlement. The card
    * only appears for accounts that hold it — a visitor without the right sees
@@ -388,12 +391,15 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
           themeId: "official",
           orgName: storeOrg,
         });
-        seed = mergePublishedTemplateContext(managed, context);
+        seed = applyBrandToSeed(mergePublishedTemplateContext(managed, context), brand.kit);
       } else {
-        seed = entryProjectSeed(entry, {
-          themeId: "official",
-          orgName: storeOrg,
-        });
+        seed = applyBrandToSeed(
+          entryProjectSeed(entry, {
+            themeId: "official",
+            orgName: storeOrg,
+          }),
+          brand.kit,
+        );
       }
       const created = await createDocument(
         {

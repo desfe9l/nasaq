@@ -7,6 +7,8 @@ import { getPublishedTemplateFn, getPublishedTemplateMetaFn } from "@/lib/admin/
 import { templateDisplaySlug, publishedTemplateAbsoluteUrl } from "@/lib/templates/published";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useLicense } from "@/lib/license/client";
+import { useBrandIdentity } from "@/lib/product/use-brand-identity";
+import { applyBrandToSeed } from "@/lib/editor/brand-design";
 import { useEditor } from "@/lib/editor/store";
 import { DEMO_LICENSE, canCreateDemoProject } from "@/lib/product/product";
 import { publishedTemplateSeed } from "@/lib/templates/published";
@@ -43,6 +45,7 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
   const [copied, setCopied] = useState(false);
   const { isPending: userPending } = useCurrentUserState();
   const { entitlements, isLoading: licenseLoading } = useLicense();
+  const brand = useBrandIdentity();
   const opened = useRef<string | null>(null);
 
   // Fetch meta if not provided (client fallback, SSR should provide)
@@ -105,11 +108,14 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
       const editor = useEditor.getState();
       await editor.hydrate();
       const current = useEditor.getState();
-      const seed = {
-        ...publishedTemplateSeed(result.template),
-        theme: current.theme,
-        orgName: current.orgName,
-      };
+      const seed = applyBrandToSeed(
+        {
+          ...publishedTemplateSeed(result.template),
+          theme: current.theme,
+          orgName: current.orgName,
+        },
+        brand.kit,
+      );
       if (!entitlements.unlimited_projects && !canCreateDemoProject(current.projects.length)) {
         toast.error("اكتملت مساحة تجربة المحرر", {
           description: "يتضمن العرض مشروعًا واحدًا. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",

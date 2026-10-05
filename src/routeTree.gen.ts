@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AiRouteImport } from './routes/ai'
 import { Route as BrandKitRouteImport } from './routes/brand-kit'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as CreateRouteImport } from './routes/create'
@@ -66,6 +67,7 @@ import { Route as ApiWebhooksGumroadRouteImport } from './routes/api/webhooks/gu
 import { Route as ApiWebhooksKeygenRouteImport } from './routes/api/webhooks/keygen'
 import { Route as TemplatesTemplateIdPreviewRouteImport } from './routes/templates/$templateId.preview'
 import { Route as TemplatesTemplateIdShareRouteImport } from './routes/templates/$templateId.share'
+import { Route as TemplatesCategoryCategoryIdRouteImport } from './routes/templates/category.$categoryId'
 import { Route as TemplatesShareTokenRouteImport } from './routes/templates/share/$token'
 
 const IndexRoute = IndexRouteImport.update({
@@ -86,6 +88,11 @@ const AccountRoute = AccountRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiRoute = AiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BrandKitRoute = BrandKitRouteImport.update({
@@ -356,6 +363,12 @@ const TemplatesTemplateIdShareRoute =
     path: '/share',
     getParentRoute: () => TemplatesTemplateIdRoute,
   } as any)
+const TemplatesCategoryCategoryIdRoute =
+  TemplatesCategoryCategoryIdRouteImport.update({
+    id: '/category/$categoryId',
+    path: '/category/$categoryId',
+    getParentRoute: () => TemplatesRoute,
+  } as any)
 const TemplatesShareTokenRoute = TemplatesShareTokenRouteImport.update({
   id: '/share/$token',
   path: '/share/$token',
@@ -367,6 +380,7 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRouteWithChildren
+  '/ai': typeof AiRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
   '/create': typeof CreateRoute
@@ -419,6 +433,7 @@ export interface FileRoutesByFullPath {
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
   '/templates/$templateId/preview': typeof TemplatesTemplateIdPreviewRoute
   '/templates/$templateId/share': typeof TemplatesTemplateIdShareRoute
+  '/templates/category/$categoryId': typeof TemplatesCategoryCategoryIdRoute
   '/templates/share/$token': typeof TemplatesShareTokenRoute
   '/admin/licenses/': typeof AdminLicensesIndexRoute
 }
@@ -426,6 +441,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
+  '/ai': typeof AiRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
   '/create': typeof CreateRoute
@@ -477,6 +493,7 @@ export interface FileRoutesByTo {
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
   '/templates/$templateId/preview': typeof TemplatesTemplateIdPreviewRoute
   '/templates/$templateId/share': typeof TemplatesTemplateIdShareRoute
+  '/templates/category/$categoryId': typeof TemplatesCategoryCategoryIdRoute
   '/templates/share/$token': typeof TemplatesShareTokenRoute
   '/admin/licenses': typeof AdminLicensesIndexRoute
 }
@@ -486,6 +503,7 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/account': typeof AccountRoute
   '/admin': typeof AdminRouteWithChildren
+  '/ai': typeof AiRoute
   '/brand-kit': typeof BrandKitRoute
   '/contact': typeof ContactRoute
   '/create': typeof CreateRoute
@@ -538,6 +556,7 @@ export interface FileRoutesById {
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
   '/templates/$templateId/preview': typeof TemplatesTemplateIdPreviewRoute
   '/templates/$templateId/share': typeof TemplatesTemplateIdShareRoute
+  '/templates/category/$categoryId': typeof TemplatesCategoryCategoryIdRoute
   '/templates/share/$token': typeof TemplatesShareTokenRoute
   '/admin/licenses/': typeof AdminLicensesIndexRoute
 }
@@ -548,6 +567,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account'
     | '/admin'
+    | '/ai'
     | '/brand-kit'
     | '/contact'
     | '/create'
@@ -600,6 +620,7 @@ export interface FileRouteTypes {
     | '/api/webhooks/keygen'
     | '/templates/$templateId/preview'
     | '/templates/$templateId/share'
+    | '/templates/category/$categoryId'
     | '/templates/share/$token'
     | '/admin/licenses/'
   fileRoutesByTo: FileRoutesByTo
@@ -607,6 +628,7 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/account'
+    | '/ai'
     | '/brand-kit'
     | '/contact'
     | '/create'
@@ -658,6 +680,7 @@ export interface FileRouteTypes {
     | '/api/webhooks/keygen'
     | '/templates/$templateId/preview'
     | '/templates/$templateId/share'
+    | '/templates/category/$categoryId'
     | '/templates/share/$token'
     | '/admin/licenses'
   id:
@@ -666,6 +689,7 @@ export interface FileRouteTypes {
     | '/about'
     | '/account'
     | '/admin'
+    | '/ai'
     | '/brand-kit'
     | '/contact'
     | '/create'
@@ -718,6 +742,7 @@ export interface FileRouteTypes {
     | '/api/webhooks/keygen'
     | '/templates/$templateId/preview'
     | '/templates/$templateId/share'
+    | '/templates/category/$categoryId'
     | '/templates/share/$token'
     | '/admin/licenses/'
   fileRoutesById: FileRoutesById
@@ -727,6 +752,7 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   AccountRoute: typeof AccountRoute
   AdminRoute: typeof AdminRouteWithChildren
+  AiRoute: typeof AiRoute
   BrandKitRoute: typeof BrandKitRoute
   ContactRoute: typeof ContactRoute
   CreateRoute: typeof CreateRoute
@@ -792,6 +818,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai': {
+      id: '/ai'
+      path: '/ai'
+      fullPath: '/ai'
+      preLoaderRoute: typeof AiRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/brand-kit': {
@@ -1165,6 +1198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TemplatesTemplateIdShareRouteImport
       parentRoute: typeof TemplatesTemplateIdRoute
     }
+    '/templates/category/$categoryId': {
+      id: '/templates/category/$categoryId'
+      path: '/category/$categoryId'
+      fullPath: '/templates/category/$categoryId'
+      preLoaderRoute: typeof TemplatesCategoryCategoryIdRouteImport
+      parentRoute: typeof TemplatesRoute
+    }
     '/templates/share/$token': {
       id: '/templates/share/$token'
       path: '/share/$token'
@@ -1237,12 +1277,14 @@ const TemplatesTemplateIdRouteWithChildren =
 interface TemplatesRouteChildren {
   TemplatesTemplateIdRoute: typeof TemplatesTemplateIdRouteWithChildren
   TemplatesIndexRoute: typeof TemplatesIndexRoute
+  TemplatesCategoryCategoryIdRoute: typeof TemplatesCategoryCategoryIdRoute
   TemplatesShareTokenRoute: typeof TemplatesShareTokenRoute
 }
 
 const TemplatesRouteChildren: TemplatesRouteChildren = {
   TemplatesTemplateIdRoute: TemplatesTemplateIdRouteWithChildren,
   TemplatesIndexRoute: TemplatesIndexRoute,
+  TemplatesCategoryCategoryIdRoute: TemplatesCategoryCategoryIdRoute,
   TemplatesShareTokenRoute: TemplatesShareTokenRoute,
 }
 
@@ -1255,6 +1297,7 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   AccountRoute: AccountRoute,
   AdminRoute: AdminRouteWithChildren,
+  AiRoute: AiRoute,
   BrandKitRoute: BrandKitRoute,
   ContactRoute: ContactRoute,
   CreateRoute: CreateRoute,

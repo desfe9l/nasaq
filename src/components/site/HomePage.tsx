@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { ArrowLeft, ChevronDown, Briefcase, FileText, LayoutTemplate, FileDown, Palette, ShieldCheck, Workflow, Files, Building2, Megaphone, PenTool, FolderOpen, Layers, Shapes } from "lucide-react";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
-import { editorPathFor } from "@/lib/site-routes";
+import { CREATE_ROUTE, editorPathFor } from "@/lib/site-routes";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { ProjectCard } from "@/components/site/ProjectCard";
 import { PRODUCT_COPY } from "@/lib/product/copy";
@@ -130,7 +130,15 @@ export function HomePage() {
 
               <div className="mt-7 flex flex-wrap items-center gap-3">
                 <a
-                  href={entry.ready && workspace.ready ? (workspace.licensed ? WORKSPACE_HOME_PATH : entry.href) : undefined}
+                  /*
+                   * «ابدأ بالتصميم» is the creation promise of the page, so it
+                   * keeps it: a licensed account lands on its workspace Home
+                   * (whose first section is creation); everybody else lands on
+                   * `/create`, where the four ways to begin are chosen. The old
+                   * behaviour sent signed-in authors to the bare editor, which
+                   * only bounced them to `/create` a moment later.
+                   */
+                  href={entry.ready && workspace.ready ? (workspace.licensed ? WORKSPACE_HOME_PATH : CREATE_ROUTE) : undefined}
                   onClick={(event) => {
                     if (!workspace.ready || !entry.ready) event.preventDefault();
                   }}
