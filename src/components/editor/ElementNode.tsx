@@ -13,8 +13,17 @@ import { applyNumerals } from "@/lib/editor/arabic";
 import { fadeStyle, normalizeFade } from "@/lib/editor/fade";
 import { imageAdjustCss, safeImageSrc, sharpnessKernel } from "@/lib/editor/images";
 import { applySvgColors, sanitizeSvgContent } from "@/lib/editor/svg";
-import { isCompoundShape, shapeDef } from "@/lib/editor/shapes";
-import { shapeIdOf } from "@/lib/editor/shape-render";
+import { isCompoundShape, shapeDef, type ShapePart } from "@/lib/editor/shapes";
+import {
+  dashArrayForUnits,
+  shapeIdOf,
+  strokeToUnits,
+} from "@/lib/editor/shape-render";
+import {
+  frameClipParts,
+  frameFillRule,
+  frameOfStyle,
+} from "@/lib/editor/image-frames";
 import { mapShapePart } from "@/lib/editor/shape-affine";
 import { isPalmTouch } from "@/lib/editor/pen-input";
 import { paintCss } from "@/lib/editor/gradient";
@@ -414,7 +423,10 @@ function ElementContent({
   interactive: boolean;
 }) {
   const s = el.style || {};
-  const gradientId = `paint-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const rawId = useId().replace(/[^a-zA-Z0-9_-]/g, "");
+  const gradientId = `paint-${rawId}`;
+  /** One stable local id for this element's image frame clip. */
+  const frameClipId = `frame-${rawId}`;
   /*
    * A shape that clips another element paints as the clip outline, not as a
    * filled shape (the same rule every vector editor uses): an opaque fill would
@@ -827,35 +839,84 @@ function ElementContent({
 
   if (el.type === "image" || el.type === "logo" || el.type === "qr") {
     const src = safeImageSrc(el.src);
-    if (!src) {
-      return (
-        <div className="grid h-full w-full place-items-center bg-[#f4f6fa] text-[9pt] font-bold text-muted">
-          لا توجد صورة
-        </div>
-      );
-    }
-    const fade = normalizeFade(s.fade);
-    return (
+    /*
+     * إطار الصورة — the frame is a property of THIS picture, so its silhouette
+     * is cut in fractional box units and follows the element through resize,
+     * rotation, cropping and every export path. It composes with a clipping
+     * mask (which clips the outer node): the two cuts intersect, exactly as two
+     * nested clips should.
+     */
+    const frame = frameOfStyle(s);
+    const frameParts = frame ? frameClipParts(frame.id) : null;
+    const artwork = (
       <>
-        <ImageArtwork el={el} src={src} />
+        <ImageArtwork el={el} src={src} framed={Boolean(frameParts)} />
         {/*
          * Step 8 — طبقة التلاشي. Painted after the image so it always sits on
          * top, sized to the frame (not the photo), and inert: it is decoration,
          * so a click must reach the image underneath and dragging the element
          * must keep working.
          */}
-        {fade && (
+        {normalizeFade(s.fade) && (
           <div
             aria-hidden
             data-fade-overlay={el.id}
             className="fade-overlay"
             style={{
-              ...fadeStyle(fade),
-              borderRadius: `${s.radius || 0}mm`,
+              ...fadeStyle(normalizeFade(s.fade)!),
+              borderRadius: frameParts ? undefined : `${s.radius || 0}mm`,
             }}
           />
         )}
+        {frameParts && Number(s.borderWidth) > 0 && (
+          /* The author's outline follows the frame silhouette, not the box. */
+          <svg
+            aria-hidden
+            focusable={false}
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            className="pointer-events-none absolute inset-0 h-full w-full"
+          >
+            <g
+              fill="none"
+              stroke={s.borderColor || "#ffffff"}
+              strokeWidth={strokeToUnits(Number(s.borderWidth), { w: el.w, h: el.h })}
+              strokeDasharray={
+                s.borderDash
+                  ? dashArrayForUnits(
+                      strokeToUnits(Number(s.borderWidth), { w: el.w, h: el.h }),
+                    )
+                  : undefined
+              }
+              strokeLinejoin="round"
+            >
+              <ShapeParts
+                parts={shapeDef(frame!.shapeId).parts}
+                fillRule={frameFillRule(frame!.id)}
+              />
+            </g>
+          </svg>
+        )}
       </>
+    );
+    if (!src) {
+      return frameParts ? (
+        <FrameClip id={frameClipId} parts={frameParts} fillRule={frameFillRule(frame!.id)}>
+          <div className="grid h-full w-full place-items-center bg-[#f4f6fa] text-[9pt] font-bold text-muted">
+            لا توجد صورة
+          </div>
+        </FrameClip>
+      ) : (
+        <div className="grid h-full w-full place-items-center bg-[#f4f6fa] text-[9pt] font-bold text-muted">
+          لا توجد صورة
+        </div>
+      );
+    }
+    if (!frameParts) return artwork;
+    return (
+      <FrameClip id={frameClipId} parts={frameParts} fillRule={frameFillRule(frame!.id)}>
+        {artwork}
+      </FrameClip>
     );
   }
 
@@ -998,14 +1059,64 @@ function ElementContent({
 
   return null;
 }
+/**
+ * Cut a picture to a frame silhouette.
+ *
+ * The geometry lives in a zero-sized inline `<svg>` next to the artwork so
+ * `url(#…)` always resolves locally, and it is expressed in fractional
+ * `objectBoundingBox` units — the same contract the clipping mask uses, because
+ * a `clipPath` referenced from HTML drops its contents the moment they carry an
+ * SVG transform (`shape-affine.ts`).
+ */
+function FrameClip({
+  id,
+  parts,
+  fillRule,
+  children,
+}: {
+  id: string;
+  parts: ShapePart[];
+  fillRule?: "evenodd";
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="image-frame-clip relative h-full w-full"
+      style={{ clipPath: `url(#${id})` }}
+    >
+      <svg
+        className="pointer-events-none absolute left-0 top-0 h-0 w-0"
+        aria-hidden
+        focusable={false}
+      >
+        <defs>
+          <clipPath id={id} clipPathUnits="objectBoundingBox">
+            <ShapeParts parts={parts} fillRule={fillRule} />
+          </clipPath>
+        </defs>
+      </svg>
+      {children}
+    </div>
+  );
+}
+
 /** A source crop never stretches pixels: Fit/Fill change the viewport, not the source. */
-function ImageArtwork({ el, src }: { el: CanvasEl; src: string }) {
+function ImageArtwork({
+  el,
+  src,
+  framed,
+}: {
+  el: CanvasEl;
+  src: string;
+  /** A frame owns the silhouette, so the box radius must not fight it. */
+  framed?: boolean;
+}) {
   const s = el.style;
   const filterId = useId().replace(/:/g, "");
   const sharp = Math.max(0, Math.min(100, Number(s.sharpness) || 0));
   const filter = imageAdjustCss(s, sharp > 0 ? filterId : undefined);
   const crop = normalizeCrop(s.crop);
-  const radius = `${s.radius || 0}mm`;
+  const radius = framed ? "0mm" : `${s.radius || 0}mm`;
   const stroke =
     Number(s.borderWidth) > 0
       ? `${s.borderWidth}mm ${s.borderDash ? "dashed" : "solid"} ${s.borderColor || "transparent"}`

@@ -185,13 +185,20 @@ export function PageBackground({ page }: { page: Page }) {
             type="checkbox"
             className="mt-0.5"
             disabled={page.locked}
-            checked={page.clipContent !== false}
+            /*
+             * Per-page EXCEPTION to the workspace preference «إظهار العناصر
+             * خارج الصفحة»: checked hides this sheet's overflow while the rest
+             * of the document keeps showing it. When the global preference is
+             * already «إخفاء», every page is hidden and this box stays a
+             * stored preference for the day it is turned back on.
+             */
+            checked={Boolean(page.clipContent)}
             onChange={(event) =>
               setBackground(page.id, { clipContent: event.target.checked })
             }
           />
           <span>
-            إخفاء ما يخرج عن الصفحة أثناء التحرير
+            إخفاء ما يخرج عن هذه الصفحة أثناء التحرير
             <span className="mt-0.5 block font-semibold text-muted">
               العناصر تبقى محفوظة، ويُقص ظهورها فقط.
             </span>

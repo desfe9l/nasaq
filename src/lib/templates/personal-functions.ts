@@ -16,9 +16,11 @@ import {
 } from "@/lib/templates/document-template";
 import { freshPages } from "@/lib/templates/custom-templates";
 import { applyTemplateNameToContent, resolveTemplateName } from "@/lib/templates/naming";
+import { backfillShortCodes, ensureShortCode } from "@/lib/templates/short-code.server";
 
 const MAX_ITEMS = 80;
-const TOKEN_RE = /^[a-zA-Z0-9_-]{16,80}$/;
+/** Legacy opaque tokens are 16–80 chars; a short code is 7. Both resolve. */
+const TOKEN_RE = /^[a-zA-Z0-9_-]{6,80}$/;
 
 type Gate =
   | { ok: true; userId: string; premium: boolean; staff: boolean }
@@ -74,6 +76,7 @@ function summaryRow(row: Record<string, unknown>) {
     category: String(row.category ?? "general"),
     visibility: row.visibility === "shared" ? "shared" as const : "private" as const,
     shareToken: typeof row.share_token === "string" ? row.share_token : null,
+    shortCode: typeof row.short_code === "string" ? row.short_code : null,
     thumbnail: typeof row.thumbnail === "string" ? row.thumbnail : null,
     pageCount: Number(row.page_count) || 1,
     pageW: Number(row.page_w) || 210,
@@ -93,8 +96,10 @@ export const listPersonalTemplatesFn = createServerFn({ method: "POST" })
     const gate = await gatePersonal(context);
     if (!gate.ok) return { ok: false as const, error: gate.error, templates: [] };
     const sql = await db();
+    /* Rows saved before short codes existed get one on first listing. */
+    await backfillShortCodes(sql, "user_templates");
     const rows = await sql.query(
-      `SELECT id, title, description, category, visibility, share_token, thumbnail,
+      `SELECT id, title, description, category, visibility, share_token, short_code, thumbnail,
               page_count, page_w, page_h, updated_at
        FROM user_templates WHERE user_id = $1
        ORDER BY updated_at DESC LIMIT $2`,
@@ -192,13 +197,16 @@ export const savePersonalTemplateFn = createServerFn({ method: "POST" })
         ],
       );
     }
+    /* Mint the short public address once, then reuse it forever. */
+    const shortCode = await ensureShortCode(sql, "user_templates", id);
     const row = await sql.query(
-      `SELECT id, title, description, category, visibility, share_token, thumbnail,
+      `SELECT id, title, description, category, visibility, share_token, short_code, thumbnail,
               page_count, page_w, page_h, updated_at
        FROM user_templates WHERE id = $1 AND user_id = $2 LIMIT 1`,
       [id, gate.userId],
     );
-    return { ok: true as const, template: summaryRow(row[0] || { id, title }) };
+    const saved = summaryRow(row[0] || { id, title });
+    return { ok: true as const, template: { ...saved, shortCode: saved.shortCode || shortCode } };
   });
 
 export const renamePersonalTemplateFn = createServerFn({ method: "POST" })
@@ -286,7 +294,8 @@ export const setPersonalSharingFn = createServerFn({ method: "POST" })
          WHERE id = $1 AND user_id = $2`,
         [id, gate.userId, shareToken],
       );
-      return { ok: true as const, shareToken };
+      const shortCode = await ensureShortCode(sql, "user_templates", id);
+      return { ok: true as const, shareToken, shortCode };
     }
     await sql.query(
       `UPDATE user_templates SET visibility = 'private', share_token = null, updated_at = now()
@@ -321,13 +330,18 @@ export const getSharedPersonalTemplateFn = createServerFn({ method: "POST" })
   .middleware([optionalAuthMiddleware])
   .validator((data: { token: string; includeContent?: boolean }) => data)
   .handler(async ({ data, context }) => {
-    const shareToken = cleanText(data.token, 80);
+    const shareToken = cleanText(data.token, 80).toLowerCase();
     if (!TOKEN_RE.test(shareToken)) return { ok: false as const, error: "القالب غير متاح" };
     const sql = await db();
+    /*
+     * `/s/<code>` and the legacy `/templates/share/<token>` are the same public
+     * surface: one lookup answers both, and only a row the owner explicitly
+     * shared is ever returned.
+     */
     const rows = await sql.query<Record<string, unknown>>(
       `SELECT id, title, description, category, thumbnail, content, page_count, page_w, page_h
        FROM user_templates
-       WHERE share_token = $1 AND visibility = 'shared' LIMIT 1`,
+       WHERE (share_token = $1 OR short_code = $1) AND visibility = 'shared' LIMIT 1`,
       [shareToken],
     );
     if (!rows.length) return { ok: false as const, error: "القالب غير متاح" };

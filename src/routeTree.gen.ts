@@ -51,7 +51,9 @@ import { Route as EditorProjectIdRouteImport } from './routes/editor/$projectId'
 import { Route as PaymentCancelRouteImport } from './routes/payment/cancel'
 import { Route as PaymentSuccessRouteImport } from './routes/payment/success'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
-import { Route as TTokenRouteImport } from './routes/t/$token'
+import { Route as SCodeRouteImport } from './routes/s/$code'
+import { Route as ShareTokenRouteImport } from './routes/share/$token'
+import { Route as TCodeRouteImport } from './routes/t/$code'
 import { Route as TemplatesIndexRouteImport } from './routes/templates/index'
 import { Route as TemplatesTemplateIdRouteImport } from './routes/templates/$templateId'
 import { Route as AdminLicensesIndexRouteImport } from './routes/admin/licenses/index'
@@ -277,9 +279,19 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/$projectId',
   getParentRoute: () => ProjectsRoute,
 } as any)
-const TTokenRoute = TTokenRouteImport.update({
-  id: '/t/$token',
-  path: '/t/$token',
+const SCodeRoute = SCodeRouteImport.update({
+  id: '/s/$code',
+  path: '/s/$code',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareTokenRoute = ShareTokenRouteImport.update({
+  id: '/share/$token',
+  path: '/share/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TCodeRoute = TCodeRouteImport.update({
+  id: '/t/$code',
+  path: '/t/$code',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TemplatesIndexRoute = TemplatesIndexRouteImport.update({
@@ -391,7 +403,9 @@ export interface FileRoutesByFullPath {
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
-  '/t/$token': typeof TTokenRoute
+  '/s/$code': typeof SCodeRoute
+  '/share/$token': typeof ShareTokenRoute
+  '/t/$code': typeof TCodeRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/editor/': typeof EditorIndexRoute
@@ -447,7 +461,9 @@ export interface FileRoutesByTo {
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
-  '/t/$token': typeof TTokenRoute
+  '/s/$code': typeof SCodeRoute
+  '/share/$token': typeof ShareTokenRoute
+  '/t/$code': typeof TCodeRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
   '/admin': typeof AdminIndexRoute
   '/editor': typeof EditorIndexRoute
@@ -506,7 +522,9 @@ export interface FileRoutesById {
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
-  '/t/$token': typeof TTokenRoute
+  '/s/$code': typeof SCodeRoute
+  '/share/$token': typeof ShareTokenRoute
+  '/t/$code': typeof TCodeRoute
   '/templates/$templateId': typeof TemplatesTemplateIdRouteWithChildren
   '/admin/': typeof AdminIndexRoute
   '/editor/': typeof EditorIndexRoute
@@ -566,7 +584,9 @@ export interface FileRouteTypes {
     | '/payment/cancel'
     | '/payment/success'
     | '/projects/$projectId'
-    | '/t/$token'
+    | '/s/$code'
+    | '/share/$token'
+    | '/t/$code'
     | '/templates/$templateId'
     | '/admin/'
     | '/editor/'
@@ -622,7 +642,9 @@ export interface FileRouteTypes {
     | '/payment/cancel'
     | '/payment/success'
     | '/projects/$projectId'
-    | '/t/$token'
+    | '/s/$code'
+    | '/share/$token'
+    | '/t/$code'
     | '/templates/$templateId'
     | '/admin'
     | '/editor'
@@ -680,7 +702,9 @@ export interface FileRouteTypes {
     | '/payment/cancel'
     | '/payment/success'
     | '/projects/$projectId'
-    | '/t/$token'
+    | '/s/$code'
+    | '/share/$token'
+    | '/t/$code'
     | '/templates/$templateId'
     | '/admin/'
     | '/editor/'
@@ -727,7 +751,9 @@ export interface RootRouteChildren {
   EditorProjectIdRoute: typeof EditorProjectIdRoute
   PaymentCancelRoute: typeof PaymentCancelRoute
   PaymentSuccessRoute: typeof PaymentSuccessRoute
-  TTokenRoute: typeof TTokenRoute
+  SCodeRoute: typeof SCodeRoute
+  ShareTokenRoute: typeof ShareTokenRoute
+  TCodeRoute: typeof TCodeRoute
   EditorIndexRoute: typeof EditorIndexRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
@@ -1034,11 +1060,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof ProjectsRoute
     }
-    '/t/$token': {
-      id: '/t/$token'
-      path: '/t/$token'
-      fullPath: '/t/$token'
-      preLoaderRoute: typeof TTokenRouteImport
+    '/s/$code': {
+      id: '/s/$code'
+      path: '/s/$code'
+      fullPath: '/s/$code'
+      preLoaderRoute: typeof SCodeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share/$token': {
+      id: '/share/$token'
+      path: '/share/$token'
+      fullPath: '/share/$token'
+      preLoaderRoute: typeof ShareTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/t/$code': {
+      id: '/t/$code'
+      path: '/t/$code'
+      fullPath: '/t/$code'
+      preLoaderRoute: typeof TCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/templates/': {
@@ -1240,7 +1280,9 @@ const rootRouteChildren: RootRouteChildren = {
   EditorProjectIdRoute: EditorProjectIdRoute,
   PaymentCancelRoute: PaymentCancelRoute,
   PaymentSuccessRoute: PaymentSuccessRoute,
-  TTokenRoute: TTokenRoute,
+  SCodeRoute: SCodeRoute,
+  ShareTokenRoute: ShareTokenRoute,
+  TCodeRoute: TCodeRoute,
   EditorIndexRoute: EditorIndexRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,

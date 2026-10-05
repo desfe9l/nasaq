@@ -10,6 +10,8 @@
  * production, PGLite in preview) and the tables in migrations/0002.
  */
 
+import { normalizeShortCode } from "@/lib/templates/short-code";
+import { backfillShortCodes, ensureShortCode } from "@/lib/templates/short-code.server";
 import { createServerFn } from "@tanstack/react-start";
 import { svgDangerFindings } from "@/lib/editor/svg-scrub";
 import { publicTemplateContent } from "@/lib/templates/document-template";
@@ -35,7 +37,16 @@ const SECTIONS: SettingsSection[] = [
   "brandPresets",
   "images",
 ];
-const MAX_TEMPLATE_BYTES = 4 * 1024 * 1024;
+/*
+ * Payload ceilings, measured the way the wire measures them.
+ *
+ * 4 MB of UTF-16 CHARACTERS used to refuse ordinary work: a report template
+ * with three embedded photographs is routinely 6–10 MB of base64, and the
+ * author got "حجم الملف يتجاوز 4 ميغابايت" for a document that saved perfectly
+ * well in the editor. The ceiling is now a real storage budget in UTF-8 bytes,
+ * high enough for embedded artwork and low enough to stay a sanity check.
+ */
+const MAX_TEMPLATE_BYTES = 24 * 1024 * 1024;
 /*
  * Ceiling on a stored preview image.
  *
@@ -45,7 +56,40 @@ const MAX_TEMPLATE_BYTES = 4 * 1024 * 1024;
  * and only a genuinely oversized payload — a vector that inlines another
  * document, a pathological PNG — is refused.
  */
-const MAX_THUMB_BYTES = 2 * 1024 * 1024;
+const MAX_THUMB_BYTES = 4 * 1024 * 1024;
+
+/** Length in UTF-8 bytes — what actually travels and what Postgres stores. */
+function utf8Bytes(value: string): number {
+  return typeof TextEncoder === "function"
+    ? new TextEncoder().encode(value).length
+    : value.length;
+}
+
+/** A human-readable size for the error the author sees. */
+function mbLabel(bytes: number): string {
+  return `${Math.round(bytes / (1024 * 1024))} ميغابايت`;
+}
+
+/**
+ * One honest answer for every storage failure.
+ *
+ * A template save that throws used to reach the browser as a rejected promise:
+ * the panel kept spinning, the author saw nothing (or a generic "تعثر الحفظ"),
+ * and the real reason — a missing `DATABASE_URL`, a refused connection, a
+ * constraint — stayed in a server log nobody was reading. Every privileged
+ * write now returns its own failure with the reason, so the UI can show it and
+ * the owner can act on it. Nothing here invents success.
+ */
+function storageFailure(action: string, err: unknown): { ok: false; error: string } {
+  const raw = err instanceof Error ? err.message : String(err ?? "خطأ غير معروف");
+  const safe = raw
+    .replace(/(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/\S+/gi, "<اتصال قاعدة البيانات>")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 400);
+  console.error(`[admin] ${action} failed:`, err);
+  return { ok: false as const, error: `تعذّر ${action}: ${safe}` };
+}
 
 type VerifiedContext = { userId: string; userEmail: string | null };
 
@@ -145,6 +189,12 @@ async function ensureProductTemplates(db: Awaited<ReturnType<typeof sql>>) {
     ...buildProductTemplateSeeds(),
     ...buildLegacyTemplateSeeds(),
   ]);
+  /*
+   * Every catalogue row also owns a short public address (`/t/<code>`), so a
+   * template seeded before codes existed still gets one the first time the
+   * catalogue is read. Idempotent: afterwards nothing matches the `IS NULL`.
+   */
+  await backfillShortCodes(db, "admin_templates");
 }
 
 /**
@@ -185,7 +235,10 @@ async function refreshBundledTemplateArtwork(
          content text,
          thumbnail text
        )
-       WHERE t.id = v.id`,
+       WHERE t.id = v.id
+         -- An owner edit always outranks the generated artwork: this refresh
+         -- exists to ship a catalog redesign, never to roll back a save.
+         AND t.owner_edited = false`,
       [JSON.stringify(payload)],
     );
   }
@@ -260,6 +313,7 @@ function rowToSummary(row: Record<string, unknown>): AdminTemplateSummary {
     sortOrder: Number(row.sort_order ?? 0),
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
+    shortCode: normalizeShortCode(row.short_code),
   };
 }
 
@@ -318,16 +372,40 @@ function publicJsonContent(content: string): string {
   }
   return JSON.stringify({ pages: parsed?.pages });
 }
+/*
+ * Only a BASE64 data URL is accepted, in the image types the panels produce.
+ *
+ * Every preview path (the admin file picker, the editor's own page capture)
+ * emits `data:image/…;base64,…`, so a looser rule buys nothing — while a
+ * percent-encoded variant (`;utf8,<svg …>`) would let raw markup reach a
+ * stored row in a shape no scrubber here has inspected.
+ */
 function validThumbnail(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
   if (!/^data:image\/(png|jpe?g|webp|svg\+xml);base64,/i.test(value)) return null;
-  return value.length <= MAX_THUMB_BYTES ? value : null;
+  return utf8Bytes(value) <= MAX_THUMB_BYTES ? value : null;
+}
+
+/**
+ * Why a submitted preview image could not be stored.
+ *
+ * Silently keeping the OLD image made "I replaced the picture and the save did
+ * nothing" indistinguishable from a working save. The author now gets the
+ * reason, and the row is only written when the image really is storable.
+ */
+function thumbnailRejection(value: string): string {
+  const bytes = utf8Bytes(value);
+  if (bytes > MAX_THUMB_BYTES)
+    return `صورة المعاينة بحجم ${mbLabel(bytes)} وتتجاوز الحد الأقصى ${mbLabel(MAX_THUMB_BYTES)} — أعد رفعها بصيغة أصغر`;
+  return "صورة المعاينة غير صالحة — تُقبل PNG أو JPG أو WebP أو SVG كـ data URL";
 }
 
 /** Server-side content validation: JSON must be a project with pages; SVG must be an <svg> root without scripts. */
 function validateContent(kind: TemplateKind, content: string): string | null {
   if (typeof content !== "string" || !content.trim()) return "المحتوى فارغ";
-  if (content.length > MAX_TEMPLATE_BYTES) return "حجم الملف يتجاوز 4 ميغابايت";
+  const bytes = utf8Bytes(content);
+  if (bytes > MAX_TEMPLATE_BYTES)
+    return `حجم الملف ${mbLabel(bytes)} ويتجاوز الحد الأقصى ${mbLabel(MAX_TEMPLATE_BYTES)} — قلّل الصور المضمّنة ثم أعد الحفظ`;
   if (kind === "json") {
     const parsed = parseJson(content) as { pages?: unknown } | null;
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.pages) || parsed.pages.length === 0) {
@@ -474,7 +552,7 @@ export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handle
     const db = await sql();
     await ensureProductTemplates(db);
     const rows = await db.query(
-      `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
+      `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at, short_code
        FROM admin_templates WHERE status = 'published' ORDER BY sort_order ASC, updated_at DESC LIMIT 500`,
     );
     return rows.map(rowToSummary);
@@ -512,8 +590,8 @@ export const getPublishedTemplateMetaFn = createServerFn({ method: "GET" })
       const key = String(data.idOrSlug || "").trim().slice(0, 200);
       if (!key) return { ok: false, error: "معرّف غير صالح" };
       const rows = await db.query(
-        `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
-         FROM admin_templates WHERE (slug = $1 OR id = $1) AND status = 'published' LIMIT 1`,
+        `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at, short_code
+         FROM admin_templates WHERE (slug = $1 OR id = $1 OR short_code = $1) AND status = 'published' LIMIT 1`,
         [key],
       );
       if (!rows.length) return { ok: false, error: "القالب غير موجود" };
@@ -536,7 +614,7 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
     await ensureProductTemplates(db);
     const key = String(data.id || "").trim().slice(0, 200);
     if (!key) return { ok: false as const, error: "معرّف غير صالح" };
-    const rows = await db.query(`SELECT * FROM admin_templates WHERE (slug = $1 OR id = $1) AND status = 'published' LIMIT 1`, [key]);
+    const rows = await db.query(`SELECT * FROM admin_templates WHERE (slug = $1 OR id = $1 OR short_code = $1) AND status = 'published' LIMIT 1`, [key]);
     if (!rows.length) return { ok: false as const, error: "القالب غير موجود" };
     const row = rows[0];
     if (row.tier === "licensed") {
@@ -558,13 +636,17 @@ export const adminListTemplatesFn = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const gate = await verifyTemplateManagerContext(context);
     if (!gate.ok) return { ok: false as const, error: gate.error, templates: [] };
-    const db = await sql();
-    await ensureProductTemplates(db);
-    const rows = await db.query(
-      `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at
-       FROM admin_templates ORDER BY sort_order ASC, updated_at DESC LIMIT 500`,
-    );
-    return { ok: true as const, templates: rows.map(rowToSummary) };
+    try {
+      const db = await sql();
+      await ensureProductTemplates(db);
+      const rows = await db.query(
+        `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at, short_code
+         FROM admin_templates ORDER BY sort_order ASC, updated_at DESC LIMIT 500`,
+      );
+      return { ok: true as const, templates: rows.map(rowToSummary) };
+    } catch (err) {
+      return { ...storageFailure("قراءة القوالب", err), templates: [] };
+    }
   });
 
 /** Read a complete template payload for the authorized Admin Dashboard editor. */
@@ -576,20 +658,46 @@ export const adminGetTemplateFn = createServerFn({ method: "POST" })
     if (!gate.ok) return { ok: false as const, error: gate.error };
     const id = String(data.id || "").trim().slice(0, 120);
     if (!id) return { ok: false as const, error: "معرّف القالب غير صالح" };
-    const db = await sql();
-    await ensureProductTemplates(db);
-    const rows = await db.query(`SELECT * FROM admin_templates WHERE id = $1 LIMIT 1`, [id]);
-    if (!rows.length) return { ok: false as const, error: "القالب غير موجود" };
-    return {
-      ok: true as const,
-      template: { ...rowToSummary(rows[0]), content: String(rows[0].content) } as AdminTemplate,
-    };
+    try {
+      const db = await sql();
+      await ensureProductTemplates(db);
+      const rows = await db.query(`SELECT * FROM admin_templates WHERE id = $1 LIMIT 1`, [id]);
+      if (!rows.length) return { ok: false as const, error: "القالب غير موجود" };
+      return {
+        ok: true as const,
+        template: { ...rowToSummary(rows[0]), content: String(rows[0].content) } as AdminTemplate,
+      };
+    } catch (err) {
+      return storageFailure("قراءة القالب", err);
+    }
   });
 
 export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { template: AdminTemplateInput }) => data)
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }): Promise<
+    | { ok: false; error: string }
+    | { ok: true; id: string; slug: string | null; shortCode: string | null; title: string }
+  > => {
+    /*
+     * Every failure path returns its reason. A throw here used to surface in
+     * the console as a rejected server-function call while the panel stayed in
+     * its "saving" state — the recurring "تعثر الحفظ" with nothing to act on.
+     */
+    try {
+      return await upsertTemplate(data, context);
+    } catch (err) {
+      return storageFailure("حفظ القالب", err);
+    }
+  });
+
+async function upsertTemplate(
+  data: { template: AdminTemplateInput },
+  context: VerifiedContext,
+): Promise<
+  | { ok: false; error: string }
+  | { ok: true; id: string; slug: string | null; shortCode: string | null; title: string }
+> {
     const gate = await verifyTemplateManagerContext(context);
     if (!gate.ok) return { ok: false as const, error: gate.error };
     const t = data.template;
@@ -627,13 +735,14 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
       const thumbnail = validThumbnail(t.thumbnail);
       const rows = await db.query<{ id: string; slug: string | null }>(
         `INSERT INTO admin_templates
-          (id, slug, title, description, category, tier, status, kind, content, thumbnail, sort_order, origin_project_id, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now(), now())
+          (id, slug, title, description, category, tier, status, kind, content, thumbnail, sort_order, origin_project_id, owner_edited, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, true, now(), now())
          ON CONFLICT (origin_project_id) WHERE origin_project_id IS NOT NULL
          DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description,
            category = EXCLUDED.category, tier = EXCLUDED.tier, status = EXCLUDED.status,
            kind = EXCLUDED.kind, content = EXCLUDED.content,
            thumbnail = COALESCE(EXCLUDED.thumbnail, admin_templates.thumbnail),
+           owner_edited = true,
            updated_at = now()
          RETURNING id, slug`,
         [
@@ -656,7 +765,13 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
       if (status !== "published" || tier !== "free") {
         await clearFeaturedTemplateReference(db, saved.id);
       }
-      return { ok: true as const, id: saved.id, slug: saved.slug, title };
+      /*
+       * The short public address (`/t/<code>`) is minted the first time a row
+       * is saved and then kept for the life of the template, so a link that
+       * was already sent out never changes.
+       */
+      const shortCode = await ensureShortCode(db, "admin_templates", saved.id);
+      return { ok: true as const, id: saved.id, slug: saved.slug, title, shortCode };
     }
     const existing = t.id
       ? await db.query<{ content: string; kind: string; slug: string | null; thumbnail: string | null }>(
@@ -687,8 +802,10 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
      */
     let thumbnail: string | null;
     if (t.thumbnail === null) thumbnail = null;
-    else if (validThumbnail(t.thumbnail)) thumbnail = t.thumbnail!;
-    else thumbnail = existing[0]?.thumbnail ?? null;
+    else if (t.thumbnail === undefined || t.thumbnail === "")
+      thumbnail = existing[0]?.thumbnail ?? null;
+    else if (validThumbnail(t.thumbnail)) thumbnail = t.thumbnail;
+    else return { ok: false as const, error: thumbnailRejection(String(t.thumbnail)) };
     const { randomUUID } = await import("node:crypto");
     const id = existing.length ? String(t.id) : `tpl_${randomUUID()}`;
     // Slug handling: keep existing if present, else generate from title or explicit input
@@ -715,11 +832,12 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
     }
 
     await db.query(
-      `INSERT INTO admin_templates (id, slug, title, description, category, tier, status, kind, content, thumbnail, sort_order, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now(), now())
+      `INSERT INTO admin_templates (id, slug, title, description, category, tier, status, kind, content, thumbnail, sort_order, owner_edited, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, true, now(), now())
        ON CONFLICT (id) DO UPDATE SET slug = EXCLUDED.slug, title = EXCLUDED.title, description = EXCLUDED.description,
          category = EXCLUDED.category, tier = EXCLUDED.tier, status = EXCLUDED.status, kind = EXCLUDED.kind,
-         content = EXCLUDED.content, thumbnail = EXCLUDED.thumbnail, sort_order = EXCLUDED.sort_order, updated_at = now()`,
+         content = EXCLUDED.content, thumbnail = EXCLUDED.thumbnail, sort_order = EXCLUDED.sort_order,
+         owner_edited = true, updated_at = now()`,
       [
         id,
         slug,
@@ -737,8 +855,14 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
     if (status !== "published" || tier !== "free") {
       await clearFeaturedTemplateReference(db, id);
     }
-    return { ok: true as const, id, slug, title };
-  });
+    /*
+     * The short public address (`/t/<code>`) is minted the first time a row is
+     * saved and then kept for the life of the template, so a link that was
+     * already sent out never changes.
+     */
+    const shortCode = await ensureShortCode(db, "admin_templates", id);
+    return { ok: true as const, id, slug, title, shortCode };
+}
 
 export const adminSetTemplateStatusFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -746,7 +870,12 @@ export const adminSetTemplateStatusFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const gate = await verifyTemplateManagerContext(context);
     if (!gate.ok) return { ok: false as const, error: gate.error };
-    const db = await sql();
+    let db: Awaited<ReturnType<typeof sql>>;
+    try {
+      db = await sql();
+    } catch (err) {
+      return storageFailure("تحديث حالة القالب", err);
+    }
     if (data.status && ["draft", "published", "archived"].includes(data.status)) {
       await db.query(`UPDATE admin_templates SET status = $2, updated_at = now() WHERE id = $1`, [data.id, data.status]);
     }
@@ -772,7 +901,12 @@ export const adminDeleteTemplateFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const gate = await verifyTemplateManagerContext(context);
     if (!gate.ok) return { ok: false as const, error: gate.error };
-    const db = await sql();
+    let db: Awaited<ReturnType<typeof sql>>;
+    try {
+      db = await sql();
+    } catch (err) {
+      return storageFailure("حذف القالب", err);
+    }
     await db.query(`DELETE FROM admin_templates WHERE id = $1`, [data.id]);
     await clearFeaturedTemplateReference(db, data.id);
     return { ok: true as const };
@@ -784,7 +918,12 @@ export const adminRegenerateSlugFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const gate = await verifyTemplateManagerContext(context);
     if (!gate.ok) return { ok: false as const, error: gate.error };
-    const db = await sql();
+    let db: Awaited<ReturnType<typeof sql>>;
+    try {
+      db = await sql();
+    } catch (err) {
+      return storageFailure("توليد رابط القالب", err);
+    }
     const rows = await db.query<{ title: string }>(`SELECT title FROM admin_templates WHERE id = $1 LIMIT 1`, [data.id]);
     if (!rows.length) return { ok: false as const, error: "القالب غير موجود" };
     const base = data.slug ? sanitizeSlug(data.slug) : slugifyTitle(rows[0].title);

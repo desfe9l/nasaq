@@ -50,7 +50,6 @@ function page(
     w: size?.w,
     h: size?.h,
     elements: [],
-    clipContent: true,
   };
   const add: Add = (type, over = {}) => {
     const el = createElement(type, over, theme);

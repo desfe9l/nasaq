@@ -74,6 +74,10 @@ import {
 import { detectDeviceFonts, type DetectedFont } from "./fonts";
 import { resolveTextBox, setTextContext } from "./text-render";
 import { DEFAULT_PRINT_GUIDES, type PrintGuideSettings } from "./print-guides";
+import {
+  SHOW_OUTSIDE_PAGE_DEFAULT,
+  normalizeShowOutsidePage,
+} from "./page-visibility";
 import { splitArtboard } from "./artboard";
 import {
   applyFurniture,
@@ -97,6 +101,7 @@ import {
   type ReportBlockId,
 } from "./report-blocks";
 import { buildGraphicHeading, type GraphicHeadingId } from "./graphic-headings";
+import { framedImageOverrides, imageFrameDef } from "./image-frames";
 import type { ReportDraft } from "../ai/contract";
 import { insertPageAfter, resolveNewPageSize, type NewPageRequest } from "./page-order";
 import { safeImageSrc } from "./images";
@@ -273,6 +278,18 @@ interface Ui {
   showGrid: boolean;
   snapGrid: boolean;
   snapElements: boolean;
+  /**
+   * «إظهار العناصر خارج الصفحة» — the workspace-wide answer to "may artwork
+   * that hangs off the sheet still be seen?".
+   *
+   * ON (the default) paints every element wherever its geometry puts it, so a
+   * bleed, an arc or a half-placed photo stays visible while it is being
+   * edited. OFF clips each artboard to its own rectangle. It is a VIEW
+   * preference only: nothing is deleted, moved, resized or reordered, the
+   * document keeps every element either way, and the export keeps its own
+   * independent «قص التصدير» switch.
+   */
+  showOutsidePage: boolean;
   previewAll: boolean;
   focusMode: boolean;
   appearance: AppearanceMode;
@@ -701,6 +718,14 @@ interface EditorStore extends Project, Ui, History {
   insertReportBlock: (id: ReportBlockId) => string | undefined;
   /** Insert a ready-made graphic heading (editable group) onto the page. */
   insertGraphicHeading: (id: GraphicHeadingId) => string | undefined;
+  /**
+   * «أشكال و إطارات الصور» — drop a framed picture on the active page.
+   *
+   * One click inserts a real `image` element carrying `style.frameId`, so the
+   * picture is immediately editable in every way an inserted image is
+   * (replace, crop, resize, rotate) and keeps the chosen silhouette.
+   */
+  insertImageFrame: (frameId: string) => string | undefined;
   insertGraphicHeadingAt: (
     id: GraphicHeadingId,
     at: { x: number; y: number },
@@ -866,6 +891,8 @@ interface EditorStore extends Project, Ui, History {
     live?: boolean,
   ) => void;
   setClipExport: (on: boolean) => void;
+  /** Show/hide artwork that sits outside the page rectangle (view only). */
+  setShowOutsidePage: (on: boolean) => void;
   setPageSize: (
     id: string,
     sizeId: SizeId,
@@ -1128,9 +1155,11 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
   incoming.transactionNo ||= "";
   pages.forEach((p) => {
     p.elements ||= [];
-    // Projects saved before the editing-clip preference existed inherit the
-    // new default; an explicit false remains the author's saved choice.
-    p.clipContent ??= true;
+    // The editing-clip preference is a per-page EXCEPTION, never a default:
+    // a page with no stored value follows the workspace preference
+    // «إظهار العناصر خارج الصفحة» (`page-visibility.ts`), so opening an older
+    // project can never silently start hiding artwork its author could see.
+    // An explicit value — true or false — is the author's saved choice.
     if (p.bgGradient !== undefined)
       p.bgGradient = normalizeGradient(p.bgGradient);
     p.w = pageSize(p).w;
@@ -1425,6 +1454,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     editingId: null,
     zoom: 0.82,
     showGrid: false,
+    showOutsidePage: SHOW_OUTSIDE_PAGE_DEFAULT,
     printGuides: { ...DEFAULT_PRINT_GUIDES },
     clipExport: true,
     snapGrid: true,
@@ -1868,6 +1898,7 @@ export const useEditor = create<EditorStore>((set, get) => {
               ? { dx: ui.bubbleOffset.dx, dy: ui.bubbleOffset.dy }
               : null,
           showGrid: ui.showGrid ?? WORKSPACE_TOGGLE_DEFAULTS.showGrid,
+          showOutsidePage: normalizeShowOutsidePage(ui.showOutsidePage),
           snapGrid: ui.snapGrid ?? WORKSPACE_TOGGLE_DEFAULTS.snapGrid,
           snapElements:
             ui.snapElements ?? WORKSPACE_TOGGLE_DEFAULTS.snapElements,
@@ -4325,6 +4356,33 @@ export const useEditor = create<EditorStore>((set, get) => {
       return block.id;
     },
 
+    insertImageFrame: (frameId) => {
+      const frame = imageFrameDef(frameId);
+      if (!frame) return undefined;
+      const overrides = framedImageOverrides(frame.id);
+      if (!overrides) return undefined;
+      const s = get();
+      const page = activePageOf(s);
+      if (!page || page.locked || page.hidden) return undefined;
+      /*
+       * A frame is inserted at its catalogue size, then constrained to the
+       * sheet like any other element: a 92 mm landscape frame on a 60 mm-wide
+       * card still lands whole and centred instead of hanging off the page.
+       */
+      const size = pageSize(page);
+      const scale = Math.min(
+        1,
+        (size.w * 0.8) / Math.max(1, overrides.w ?? 1),
+        (size.h * 0.8) / Math.max(1, overrides.h ?? 1),
+      );
+      const el = get().addElementAt("image", {
+        ...overrides,
+        w: Math.max(8, (overrides.w ?? frame.w) * scale),
+        h: Math.max(8, (overrides.h ?? frame.h) * scale),
+      });
+      return el?.id;
+    },
+
     insertGraphicHeadingAt: (id, at) => {
       const s = get();
       const page = activePageOf(s);
@@ -5312,7 +5370,6 @@ export const useEditor = create<EditorStore>((set, get) => {
         id: uid("page"),
         name: `صفحة ${s.pages.length + 1}`,
         elements: [],
-        clipContent: true,
         bg: THEMES[s.theme].paper,
         w: preset.w,
         h: preset.h,
@@ -5622,6 +5679,24 @@ export const useEditor = create<EditorStore>((set, get) => {
       scheduleSave(400);
     },
 
+    setShowOutsidePage: (on) => {
+      const next = normalizeShowOutsidePage(on);
+      /*
+       * A workspace preference, not a document property: it lives in the same
+       * UI slot as the grid and the snapping switches, so it survives a reload
+       * and follows the author into every file — and it never touches the
+       * pages, which is why no save is scheduled and no history entry is
+       * pushed. Flipping it cannot lose artwork: only the artboard's clipping
+       * changes.
+       */
+      if (get().showOutsidePage === next) {
+        writeUi({ showOutsidePage: next });
+        return;
+      }
+      set({ showOutsidePage: next });
+      writeUi({ showOutsidePage: next });
+    },
+
     setPageSize: (id, sizeId, custom) => {
       const s = get();
       const preset = sizePreset(sizeId);
@@ -5735,6 +5810,8 @@ interface PersistedUi {
   snapGrid?: boolean;
   /** Snap to other elements (absent = on). */
   snapElements?: boolean;
+  /** Artwork outside the page rectangle stays visible (absent = on). */
+  showOutsidePage?: boolean;
 }
 
 /**

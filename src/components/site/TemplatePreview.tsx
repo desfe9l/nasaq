@@ -6,6 +6,7 @@ import { pageBackgroundCss, paintCss } from "@/lib/editor/gradient";
 import { isCompoundShape, shapeDef } from "@/lib/editor/shapes";
 import { shapeIdOf } from "@/lib/editor/shape-render";
 import { mapShapePart } from "@/lib/editor/shape-affine";
+import { frameClipParts, frameFillRule } from "@/lib/editor/image-frames";
 /*
  * Real template previews.
  *
@@ -524,6 +525,23 @@ function PreviewElement({
         </svg>
       );
     }
+    /*
+     * إطار الصورة — the picture's own frame (`style.frameId`), cut in fractional
+     * box units exactly like the canvas does, so a shared or catalogued template
+     * shows the same silhouette the author sees in the editor.
+     */
+    const frameParts = frameClipParts(s.frameId);
+    const frameClipId = `preview-frame-${paintId}`;
+    const framePath = frameParts ? `url(#${frameClipId})` : undefined;
+    const frameNode = frameParts ? (
+      <svg className="pointer-events-none absolute h-0 w-0" aria-hidden focusable={false}>
+        <defs>
+          <clipPath id={frameClipId} clipPathUnits="objectBoundingBox">
+            <ShapeParts parts={frameParts} fillRule={frameFillRule(s.frameId)} />
+          </clipPath>
+        </defs>
+      </svg>
+    ) : null;
     const src = safeImageSrc(el.src);
     if (!src) {
       /* No source yet: a soft frame reads better than an empty hole. */
@@ -533,9 +551,12 @@ function PreviewElement({
             ...box,
             background:
               "repeating-linear-gradient(45deg, #eef2f7, #eef2f7 2px, #e2e8f0 2px, #e2e8f0 4px)",
-            borderRadius: s.radius ? mm(s.radius, scale) : undefined,
+            borderRadius: frameParts ? undefined : s.radius ? mm(s.radius, scale) : undefined,
+            clipPath: framePath,
           }}
-        />
+        >
+          {frameNode}
+        </div>
       );
     }
     const crop = normalizeCrop(s.crop);
@@ -552,9 +573,11 @@ function PreviewElement({
         <div
           style={{
             ...box,
-            borderRadius: s.radius ? mm(s.radius, scale) : undefined,
+            borderRadius: frameParts ? undefined : s.radius ? mm(s.radius, scale) : undefined,
+            clipPath: framePath,
           }}
         >
+          {frameNode}
           <div
             style={{
               position: "absolute",
@@ -583,8 +606,52 @@ function PreviewElement({
         </div>
       );
     }
+    const pictureStyle = (extra: React.CSSProperties = {}): React.CSSProperties => ({
+      ...box,
+      objectFit: s.objectFit || (el.type === "logo" ? "contain" : "cover"),
+      borderRadius:
+        frameParts || clipPath ? undefined : s.radius ? mm(s.radius, scale) : undefined,
+      ...extra,
+    });
+    /* No frame: exactly the picture the editor paints (mask clip included). */
+    if (!frameParts) {
+      return (
+        <>
+          {clipNode}
+          <img
+            alt=""
+            src={src}
+            draggable={false}
+            loading="lazy"
+            decoding="async"
+            style={pictureStyle({ clipPath })}
+          />
+        </>
+      );
+    }
+    /*
+     * A frame cuts the element's own box. With no mask that is one property on
+     * the picture; with a mask the two compose — the frame on the box, the mask
+     * on the picture inside it — so neither silhouette is lost.
+     */
+    if (!clipPath) {
+      return (
+        <>
+          {frameNode}
+          <img
+            alt=""
+            src={src}
+            draggable={false}
+            loading="lazy"
+            decoding="async"
+            style={pictureStyle({ clipPath: framePath })}
+          />
+        </>
+      );
+    }
     return (
-      <>
+      <div style={{ ...box, clipPath: framePath }}>
+        {frameNode}
         {clipNode}
         <img
           alt=""
@@ -593,13 +660,15 @@ function PreviewElement({
           loading="lazy"
           decoding="async"
           style={{
-            ...box,
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
             objectFit: s.objectFit || (el.type === "logo" ? "contain" : "cover"),
-            borderRadius: s.radius ? mm(s.radius, scale) : undefined,
             clipPath,
           }}
         />
-      </>
+      </div>
     );
   }
 

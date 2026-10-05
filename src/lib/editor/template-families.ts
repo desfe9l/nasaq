@@ -111,7 +111,6 @@ function sheet(
     w: 210,
     h: 297,
     elements: [],
-    clipContent: true,
   };
   const add: Add = (type, over = {}) => {
     const el = createElement(type, over, theme);

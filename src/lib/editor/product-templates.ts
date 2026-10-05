@@ -43,7 +43,6 @@ function page(name: string, w = 210, h = 297): Page {
     h,
     bg: PAPER,
     elements: [],
-    clipContent: true,
   };
 }
 

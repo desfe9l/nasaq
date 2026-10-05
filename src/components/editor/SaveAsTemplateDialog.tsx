@@ -17,7 +17,7 @@ import {
   savePersonalTemplateFn,
   setPersonalSharingFn,
 } from "@/lib/templates/personal-functions";
-import { personalShareAbsoluteUrl } from "@/lib/templates/personal";
+import { personalShareAbsoluteUrl, personalShareKey } from "@/lib/templates/personal";
 import { publishedTemplateAbsoluteUrl } from "@/lib/templates/published";
 import { templatesFilterPathFor } from "@/lib/site-routes";
 import { ADMIN_ROUTES } from "@/lib/site-routes";
@@ -113,9 +113,9 @@ export function SaveAsTemplateDialog({
         toast.error(result.ok ? "تعذر حفظ القالب" : result.error);
         return;
       }
-      const url = result.template.shareToken
-        ? personalShareAbsoluteUrl(result.template.shareToken)
-        : null;
+      /* Short link first (`/s/<code>`); the legacy token still resolves. */
+      const shareKey = personalShareKey(result.template);
+      const url = shareKey ? personalShareAbsoluteUrl(shareKey) : null;
       setSaved({
         id: result.template.id,
         slug: null,
@@ -124,8 +124,16 @@ export function SaveAsTemplateDialog({
         personal: true,
       });
       toast.success("تم حفظ القالب في قوالبي");
-    } catch {
-      toast.error("تعذر حفظ القالب");
+    } catch (error) {
+      /*
+       * The real reason, never a shrug: a refused connection, a missing
+       * DATABASE_URL, an oversized payload or a rejected entitlement each say
+       * something different, and the author can only act on the truth.
+       */
+      const message =
+        error instanceof Error ? error.message : "تعذر حفظ القالب — أعد المحاولة";
+      console.error("[templates] save failed:", error);
+      toast.error(message.slice(0, 400));
     } finally {
       setBusy(false);
     }
@@ -137,11 +145,12 @@ export function SaveAsTemplateDialog({
     try {
       if (saved.personal) {
         const result = await setPersonalSharingFn({ data: { id: saved.id, shared: true } });
-        if (!result.ok || !result.shareToken) {
+        const shareKey = result.ok ? result.shortCode || result.shareToken : null;
+        if (!result.ok || !shareKey) {
           toast.error(result.ok ? "تعذر إنشاء الرابط" : result.error);
           return;
         }
-        const url = personalShareAbsoluteUrl(result.shareToken);
+        const url = personalShareAbsoluteUrl(shareKey);
         setSaved({ ...saved, url });
         return;
       }
@@ -154,8 +163,11 @@ export function SaveAsTemplateDialog({
       }
       setSaved({ ...saved, url: publishedTemplateAbsoluteUrl(saved.slug || saved.id) });
       toast.success("أصبح القالب منشورًا");
-    } catch {
-      toast.error("تعذر مشاركة القالب");
+    } catch (error) {
+      console.error("[templates] share failed:", error);
+      toast.error(
+        (error instanceof Error ? error.message : "تعذر مشاركة القالب").slice(0, 400),
+      );
     } finally {
       setBusy(false);
     }

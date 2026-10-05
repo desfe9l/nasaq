@@ -38,6 +38,9 @@ coverage/
 # Local agent/tool state
 .openbrowser/
 
+# Embedded preview database (PGLite). Real data, never source.
+.pglite-data/
+
 # OS / editor
 .DS_Store
 Thumbs.db
