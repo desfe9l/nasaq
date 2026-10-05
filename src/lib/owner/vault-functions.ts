@@ -35,7 +35,7 @@ const productionUrl = "https://nasaq-sa.vercel.app";
 const vercelDashboard = "https://vercel.com/desfe9l/nasaq";
 const keygenDashboard = "https://beta.portal.keygen.sh";
 const keygenApi = "https://api.keygen.sh/v1";
-const xaiDashboard = "https://console.x.ai";
+const geminiDashboard = "https://aistudio.google.com/apikey";
 const googleConsole = "https://console.cloud.google.com/apis/credentials";
 
 function envValue(key: string): string | undefined {
@@ -195,33 +195,33 @@ const ENV_SPECS: EnvSpec[] = [
     guide: guide("أنشئ connection string جديدًا من Neon، حدّث Vercel، ثم أعد النشر وشغّل migrations.", "https://console.neon.tech", "DATABASE_URL", "Production / Preview بحسب قاعدة البيانات", "نعم، إعادة نشر ومراجعة migrations مطلوبة.", "لا يوجد Webhook.", "ألغِ endpoint أو كلمة المرور القديمة من Neon بعد التحقق."),
   },
   {
-    key: "XAI_API_KEY",
+    key: "GEMINI_API_KEY",
     section: "ai",
-    service: "xAI",
-    account: "xAI API account",
-    label: "مفتاح xAI API",
+    service: "Google Gemini",
+    account: "Google AI Studio API account",
+    label: "مفتاح Google Gemini API",
     sensitivity: "secret",
-    purpose: "توليد مسودات تقارير حقيقية عبر server-side xAI provider.",
-    loginUrl: xaiDashboard,
-    dashboardUrl: xaiDashboard,
-    apiUrl: "https://api.x.ai/v1",
+    purpose: "توليد مسودات التقارير والتحويلات وتحليل الصور عبر server-side Google Gemini provider.",
+    loginUrl: geminiDashboard,
+    dashboardUrl: geminiDashboard,
+    apiUrl: "https://generativelanguage.googleapis.com/v1beta",
     configurationLocation: "Vercel → Settings → Environment Variables",
-    guide: guide("أنشئ مفتاحًا جديدًا من xAI Console، حدّث Vercel، ثم أعد النشر واختبر تقريرًا مرخصًا.", xaiDashboard, "XAI_API_KEY", "Production / Preview / Development حسب البيئة", "نعم، إعادة نشر مطلوبة.", "لا يوجد Webhook.", "ألغِ المفتاح القديم من xAI بعد نجاح الطلب الجديد."),
+    guide: guide("أنشئ مفتاحًا جديدًا من Google AI Studio، حدّث Vercel، ثم أعد النشر واختبر تقريرًا مرخصًا.", geminiDashboard, "GEMINI_API_KEY", "Production / Preview / Development حسب البيئة", "نعم، إعادة نشر مطلوبة.", "لا يوجد Webhook.", "ألغِ المفتاح القديم من Google AI Studio بعد نجاح الطلب الجديد."),
   },
   {
     key: "NASAQ_AI_MODEL",
     section: "ai",
-    service: "xAI",
+    service: "Google Gemini",
     account: "NASAQ AI configuration",
     label: "النموذج",
     sensitivity: "public",
-    purpose: "اسم النموذج الذي يطلبه provider؛ fallback الحالي grok-3-mini.",
-    loginUrl: xaiDashboard,
-    dashboardUrl: xaiDashboard,
-    apiUrl: "https://api.x.ai/v1",
+    purpose: "اسم النموذج الذي يطلبه provider؛ fallback الحالي gemini-2.5-flash.",
+    loginUrl: geminiDashboard,
+    dashboardUrl: geminiDashboard,
+    apiUrl: "https://generativelanguage.googleapis.com/v1beta",
     configurationLocation: "Vercel environment؛ fallback في src/lib/ai/provider.server.ts",
-    fallbackValue: "grok-3-mini",
-    guide: guide("اختر نموذجًا مدعومًا من xAI ثم حدّث المتغير واختبر schema المسودة.", xaiDashboard, "NASAQ_AI_MODEL"),
+    fallbackValue: "gemini-2.5-flash",
+    guide: guide("اختر نموذجًا مدعومًا من Google Gemini ثم حدّث المتغير واختبر schema المسودة.", geminiDashboard, "NASAQ_AI_MODEL"),
   },
   {
     key: "KEYGEN_API_TOKEN",
@@ -779,19 +779,19 @@ function findings(
     });
   }
   /*
-   * XAI_API_KEY is handled strictly server-side: the key itself never appears
+   * GEMINI_API_KEY is handled strictly server-side: the key itself never appears
    * in code or git — only Vercel environment variables (see ENV_SPECS entry,
-   * whose guide walks the owner through creating/rotating it in xAI Console).
+   * whose guide walks the owner through creating/rotating it in Google AI Studio).
    * The AI draft features already degrade honestly to a server-config error
    * when it is absent, so a missing key is an optional capability notice —
    * never an error, and never a reason to touch client code.
    */
-  if (!runtime("XAI_API_KEY")) {
+  if (!runtime("GEMINI_API_KEY")) {
     result.push({
       severity: "info",
-      title: "تكامل xAI اختياري — غير مفعّل",
-      detail: "XAI_API_KEY (خادمي فقط، يُدار من Vercel) غير موجود؛ ميزات المسودات الذكية متوقفة برسالة إعداد واضحة، وبقية المنصة تعمل طبيعيًا.",
-      action: "فعّله فقط بعد اعتماد حدود الإنفاق: أنشئ المفتاح من xAI Console وأضفه في Vercel → Environment Variables ثم أعد النشر. لا تضع أي مفتاح في الكود أو Git أبدًا.",
+      title: "تكامل Google Gemini اختياري — غير مفعّل",
+      detail: "GEMINI_API_KEY (خادمي فقط، يُدار من Vercel) غير موجود؛ ميزات المسودات الذكية متوقفة برسالة إعداد واضحة، وبقية المنصة تعمل طبيعيًا.",
+      action: "فعّله فقط بعد اعتماد حدود الإنفاق: أنشئ المفتاح من Google AI Studio وأضفه في Vercel → Environment Variables ثم أعد النشر. لا تضع أي مفتاح في الكود أو Git أبدًا.",
     });
   }
   if (!runtime("KEYGEN_API_TOKEN")) {

@@ -17,13 +17,13 @@ test("CSV export includes owner-readable values and protects hidden platform val
     findings: [],
     entries: [
       {
-        id: "env.XAI_API_KEY",
+        id: "env.GEMINI_API_KEY",
         section: "ai",
-        service: "xAI",
+        service: "Google Gemini",
         account: "test",
-        label: "xAI",
-        variable: "XAI_API_KEY",
-        value: "xai-secret",
+        label: "Gemini",
+        variable: "GEMINI_API_KEY",
+        value: "gemini-secret",
         ownerReadable: true,
         configured: true,
         origin: "runtime",
@@ -59,6 +59,6 @@ test("CSV export includes owner-readable values and protects hidden platform val
     ],
   };
   const csv = inventoryToCsv(inventory);
-  assert.match(csv, /xai-secret/);
+  assert.match(csv, /gemini-secret/);
   assert.doesNotMatch(csv, /GROK_CONNECTOR_ACCESS_TOKEN,.*secret/);
 });

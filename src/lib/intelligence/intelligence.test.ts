@@ -113,12 +113,12 @@ test("the critic names a fix, and the improve path keeps existing NASAQ text", (
 test("language model stays unwired unless a key exists", () => {
   assert.equal(DETERMINISTIC_MODEL_ID, "nasaq-measured-critic");
   assert.equal(languageModelConfigured({}), false);
-  assert.equal(languageModelConfigured({ XAI_API_KEY: "  " }), false);
-  assert.equal(languageModelConfigured({ XAI_API_KEY: "present" }), true);
-  assert.equal(visualNoteReady({ XAI_API_KEY: "present" }, []), false);
-  assert.equal(visualNoteReady({ XAI_API_KEY: "present" }, ["data:image/png;base64,abcd"]), false);
-  assert.equal(
-    visualNoteReady({ XAI_API_KEY: "present" }, [`data:image/png;base64,${"a".repeat(40)}`]),
+	assert.equal(languageModelConfigured({ GEMINI_API_KEY: "  " }), false);
+	assert.equal(languageModelConfigured({ GEMINI_API_KEY: "present" }), true);
+	assert.equal(visualNoteReady({ GEMINI_API_KEY: "present" }, []), false);
+	assert.equal(visualNoteReady({ GEMINI_API_KEY: "present" }, ["data:image/png;base64,abcd"]), false);
+	assert.equal(
+		visualNoteReady({ GEMINI_API_KEY: "present" }, [`data:image/png;base64,${"a".repeat(40)}`]),
     true,
   );
   assert.equal(adapterFor("psd").kind, "psd");

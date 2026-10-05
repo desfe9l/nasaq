@@ -17,12 +17,12 @@ export interface LanguageNoteResult {
   note: string;
 }
 
-export function languageModelConfigured(env: { XAI_API_KEY?: string }): boolean {
-  return Boolean(env.XAI_API_KEY?.trim());
+export function languageModelConfigured(env: { GEMINI_API_KEY?: string }): boolean {
+	return Boolean(env.GEMINI_API_KEY?.trim());
 }
 
 /** A visual note needs both a configured model and a real rendered image. */
-export function visualNoteReady(env: { XAI_API_KEY?: string }, images?: string[]): boolean {
+export function visualNoteReady(env: { GEMINI_API_KEY?: string }, images?: string[]): boolean {
   return (
     languageModelConfigured(env) &&
     Boolean(images?.some((item) => item.startsWith("data:image/") && item.length > 32 && item.length < 200_000))

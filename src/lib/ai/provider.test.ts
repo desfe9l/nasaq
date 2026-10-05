@@ -13,35 +13,29 @@ const input = {
   pageTarget: 1,
 };
 
-test("xAI provider reports missing configuration without mocking a response", async () => {
-  const previous = process.env.XAI_API_KEY;
-  delete process.env.XAI_API_KEY;
+test("Gemini provider reports missing configuration without mocking a response", async () => {
+  const previous = process.env.GEMINI_API_KEY;
+  delete process.env.GEMINI_API_KEY;
   await assert.rejects(generateReportDraft(input), /not_configured/);
-  if (previous === undefined) delete process.env.XAI_API_KEY;
-  else process.env.XAI_API_KEY = previous;
+  if (previous === undefined) delete process.env.GEMINI_API_KEY;
+  else process.env.GEMINI_API_KEY = previous;
 });
 
-test("xAI provider sends the real server-side request and normalizes JSON", async () => {
-  const previousKey = process.env.XAI_API_KEY;
+test("Gemini provider sends the real server-side request and normalizes JSON", async () => {
+  const previousKey = process.env.GEMINI_API_KEY;
   const previousFetch = globalThis.fetch;
-  process.env.XAI_API_KEY = "test-server-key";
-  let authorization = "";
+  process.env.GEMINI_API_KEY = "test-server-key";
+  let requestBody = "";
   globalThis.fetch = async (_input, init) => {
-    authorization = new Headers(init?.headers).get("authorization") ?? "";
+    requestBody = String(init?.body || "");
     return new Response(
       JSON.stringify({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                title: "تقرير",
-                summary: "ملخص",
-                sections: [{ heading: "النتائج", body: "النص", bullets: [] }],
-                nextSteps: [],
-              }),
-            },
-          },
-        ],
+        candidates: [{ content: { parts: [{ text: JSON.stringify({
+          title: "تقرير",
+          summary: "ملخص",
+          sections: [{ heading: "النتائج", body: "النص", bullets: [] }],
+          nextSteps: [],
+        }) }] } }],
       }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
@@ -49,35 +43,30 @@ test("xAI provider sends the real server-side request and normalizes JSON", asyn
 
   try {
     const draft = await generateReportDraft(input);
-    assert.equal(authorization, "Bearer test-server-key");
+    assert.match(requestBody, /systemInstruction/);
+    assert.match(requestBody, /gemini-2\.5-flash|نتائج الربع الثاني/);
     assert.equal(draft.sections[0]?.heading, "النتائج");
   } finally {
     globalThis.fetch = previousFetch;
-    if (previousKey === undefined) delete process.env.XAI_API_KEY;
-    else process.env.XAI_API_KEY = previousKey;
+    if (previousKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousKey;
   }
 });
 
-test("image analysis sends the inline image to the configured vision provider", async () => {
-  const previousKey = process.env.XAI_API_KEY;
+test("image analysis sends the inline image to Gemini vision", async () => {
+  const previousKey = process.env.GEMINI_API_KEY;
   const previousFetch = globalThis.fetch;
-  process.env.XAI_API_KEY = "test-server-key";
+  process.env.GEMINI_API_KEY = "test-server-key";
   let requestBody = "";
   globalThis.fetch = async (_input, init) => {
     requestBody = String(init?.body || "");
     return new Response(
       JSON.stringify({
-        choices: [
-          {
-            message: {
-              content: JSON.stringify({
-                description: "مشهد مكتبي",
-                recognizedText: "قرار",
-                objects: ["طاولة"],
-              }),
-            },
-          },
-        ],
+        candidates: [{ content: { parts: [{ text: JSON.stringify({
+          description: "مشهد مكتبي",
+          recognizedText: "قرار",
+          objects: ["طاولة"],
+        }) }] } }],
       }),
       { status: 200, headers: { "content-type": "application/json" } },
     );
@@ -87,11 +76,11 @@ test("image analysis sends the inline image to the configured vision provider", 
     const imageData = `data:image/png;base64,${"A".repeat(40)}`;
     const result = await analyzeImage({ imageData, language: "ar" });
     assert.equal(result.recognizedText, "قرار");
-    assert.match(requestBody, /image_url/);
-    assert.match(requestBody, new RegExp(imageData));
+    assert.match(requestBody, /inlineData/);
+    assert.match(requestBody, /data:image\/png|A{40}/);
   } finally {
     globalThis.fetch = previousFetch;
-    if (previousKey === undefined) delete process.env.XAI_API_KEY;
-    else process.env.XAI_API_KEY = previousKey;
+    if (previousKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = previousKey;
   }
 });
