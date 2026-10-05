@@ -28,8 +28,54 @@ export const STORAGE_ALLOWED_CONTENT_TYPES: Record<StorageAssetKind, readonly st
   "project-file": ["application/json", "application/pdf", "application/zip"],
 };
 
-/** No per-object size ceiling. */
-export const STORAGE_MAX_OBJECT_BYTES = Number.POSITIVE_INFINITY;
+/**
+ * Per-object size ceilings, in bytes.
+ *
+ * There used to be none (`Number.POSITIVE_INFINITY`), which meant the upload
+ * handler would `Buffer.from()` a base64 payload of ANY size a signed-in caller
+ * cared to send — unbounded memory in the function, unbounded bytes in the
+ * bucket, and a one-request storage-cost amplification. The limits are set well
+ * above what the editor legitimately produces (a report image is a few
+ * megabytes; the platform's own request-body ceiling is far below the
+ * project-file limit), so no real import or save changes behaviour.
+ */
+export const STORAGE_MAX_OBJECT_BYTES_BY_KIND: Record<StorageAssetKind, number> = {
+  image: 25 * 1024 * 1024,
+  svg: 4 * 1024 * 1024,
+  "project-file": 64 * 1024 * 1024,
+};
+
+/** Largest ceiling across kinds — the bound for kind-agnostic pre-checks. */
+export const STORAGE_MAX_OBJECT_BYTES = Math.max(
+  ...Object.values(STORAGE_MAX_OBJECT_BYTES_BY_KIND),
+);
+
+/**
+ * The ceiling for one kind.
+ *
+ * An unrecognised kind falls back to the STRICTEST known limit, never the
+ * loosest: a size check must fail closed, so a caller that ever reaches this
+ * with a value outside `STORAGE_ASSET_KINDS` gets the smallest budget rather
+ * than the biggest one. (`uploadEditorAsset` validates the kind first, so in
+ * practice the fallback is unreachable — it is here so it cannot become a
+ * fail-open path later.)
+ */
+export function storageMaxBytesForKind(kind: StorageAssetKind): number {
+  return (
+    STORAGE_MAX_OBJECT_BYTES_BY_KIND[kind] ??
+    Math.min(...Object.values(STORAGE_MAX_OBJECT_BYTES_BY_KIND))
+  );
+}
+
+/**
+ * Largest base64 string the validator accepts for a kind.
+ *
+ * Base64 inflates by 4/3, so this rejects an oversized payload BEFORE a buffer
+ * is allocated for it — the point of the check is to avoid the allocation.
+ */
+export function storageMaxBase64Length(kind: StorageAssetKind): number {
+  return Math.ceil((storageMaxBytesForKind(kind) * 4) / 3) + 1024;
+}
 
 export function isAllowedStorageContentType(
   kind: StorageAssetKind,

@@ -10,15 +10,16 @@ import {
 
 let getRequestRef: typeof import("@tanstack/react-start/server").getRequest | null = null;
 
+/**
+ * Shared IP rule (`@/lib/auth/request-ip`): the RIGHTMOST forwarded entry, not
+ * the caller-supplied first one — a rotating `x-forwarded-for` used to mint a
+ * fresh per-IP bucket on every request.
+ */
 async function clientIdentifier(): Promise<string> {
   try {
     getRequestRef ??= (await import("@tanstack/react-start/server")).getRequest;
-    const request = getRequestRef();
-    return (
-      request?.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      request?.headers.get("x-real-ip") ||
-      "unknown"
-    );
+    const { clientIpFromHeaders } = await import("@/lib/auth/request-ip");
+    return clientIpFromHeaders(getRequestRef()?.headers);
   } catch {
     return "unknown";
   }

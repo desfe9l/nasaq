@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { getSql } from "@/lib/db";
+import { clientIpFromHeaders } from "@/lib/auth/request-ip";
 import { checkRateLimit } from "@/lib/license/rate-limit";
 import {
   gumroadApiConfigured,
@@ -46,15 +47,11 @@ export const Route = createFileRoute("/api/webhooks/gumroad")({
           time: new Date().toISOString(),
         }),
       POST: async ({ request }) => {
-        let ip = "";
-        try {
-          const url = new URL(request.url);
-          ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || url.hostname;
-        } catch {
-          ip = "unknown";
-        }
+        // Rightmost forwarded entry: the first one is caller-supplied, and a
+        // rotating value would make this ping throttle a no-op.
+        const ip = clientIpFromHeaders(request.headers);
         // Light abuse guard; the real gate is server-side sale verification.
-        if (!checkRateLimit("gumroad:ping", ip || "unknown", 120, 60_000)) {
+        if (!checkRateLimit("gumroad:ping", ip, 120, 60_000)) {
           return Response.json({ received: false, error: "rate_limited" }, { status: 429 });
         }
 

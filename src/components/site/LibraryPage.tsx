@@ -17,6 +17,8 @@ import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { useEditor } from "@/lib/editor/store";
 import { downloadLibraryFile } from "@/lib/editor/library-export";
+// Library SVG is painted inline: allow-list scrubbed at the render boundary.
+import { safeLibrarySvg } from "@/lib/editor/svg";
 import { hasSignedInOwner } from "@/lib/editor/storage-owner";
 import { accountIdentity } from "@/lib/auth/identity";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -243,7 +245,7 @@ export function LibraryPage() {
                   <span
                     className="size-8 shrink-0 text-ink [&>svg]:size-8"
                     aria-hidden
-                    dangerouslySetInnerHTML={{ __html: item.svg }}
+                    dangerouslySetInnerHTML={{ __html: safeLibrarySvg(item.svg) }}
                   />
                   <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-ink">
                     {item.name}

@@ -11,6 +11,7 @@
  */
 
 import { createServerFn } from "@tanstack/react-start";
+import { svgDangerFindings } from "@/lib/editor/svg-scrub";
 import { publicTemplateContent } from "@/lib/templates/document-template";
 import { applyTemplateNameToContent, resolveTemplateName } from "@/lib/templates/naming";
 import { authMiddleware, optionalAuthMiddleware } from "@/lib/auth/middleware";
@@ -335,7 +336,22 @@ function validateContent(kind: TemplateKind, content: string): string | null {
     return null;
   }
   if (!/^\s*(<\?xml[\s\S]*?\?>\s*)?(<!--[\s\S]*?-->\s*)*<svg[\s>]/i.test(content)) return "ملف SVG غير صالح";
-  if (/<script|\son\w+\s*=|javascript:/i.test(content)) return "ملف SVG يحتوي على شيفرة غير مسموحة";
+  /*
+   * Hostile-construct check, shared with the editor's own SVG allow-list.
+   *
+   * The previous regex looked for `\son\w+\s*=`, i.e. an event handler
+   * preceded by WHITESPACE — so `<svg/onload=alert(1)>` (a slash instead of a
+   * space, which HTML parsers accept) walked straight through, and so did
+   * `<foreignObject>`, `<style>@import …`, `<use href="https://evil/x.svg">`
+   * and SMIL/`href` variants. Published template SVG is rendered on public
+   * pages, so the tokenizer that already guards the canvas is the check here:
+   * it refuses an executable element, a handler in ANY position, an external
+   * reference and a `javascript:`/`data:text/html` URI, while still accepting
+   * the unlisted-but-harmless attributes a Figma or Illustrator export carries.
+   */
+  if (svgDangerFindings(content).length > 0) {
+    return "ملف SVG يحتوي على شيفرة غير مسموحة";
+  }
   return null;
 }
 

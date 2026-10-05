@@ -22,6 +22,8 @@ import type { Gradient } from "@/lib/editor/gradient";
 import { SHAPES } from "@/lib/editor/shapes";
 import { PAGE_TEMPLATES, type PageTemplateDef } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
+// Library SVG is painted inline: allow-list scrubbed at the render boundary.
+import { safeLibrarySvg } from "@/lib/editor/svg";
 import {
   writeLibraryDrag,
   type LibraryDropItem,
@@ -1100,7 +1102,7 @@ export function SmartLibraryPanel({
                       })
                     }
                     className="grid size-full place-items-center"
-                    dangerouslySetInnerHTML={{ __html: item.svg }}
+                    dangerouslySetInnerHTML={{ __html: safeLibrarySvg(item.svg) }}
                   />
                   <button
                     type="button"
@@ -1238,7 +1240,7 @@ export function SmartLibraryPanel({
                         })
                       }
                       className="grid size-full place-items-center p-1"
-                      dangerouslySetInnerHTML={{ __html: item.svg }}
+                      dangerouslySetInnerHTML={{ __html: safeLibrarySvg(item.svg) }}
                     />
                     <button
                       type="button"

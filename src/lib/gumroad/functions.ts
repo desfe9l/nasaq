@@ -25,9 +25,17 @@ import type {
 type AdminContext = { userId: string; userEmail: string | null };
 
 const adminGate = async (context: AdminContext): Promise<void> => {
+  /*
+   * Both imports are dynamic: this module is imported by client components, and
+   * the authorization context reads the database and the session while the 403
+   * shape lives in the Start request runtime. Keeping them out of the module
+   * graph is what makes the file browser-safe (the handlers themselves are
+   * extracted server-side at build time).
+   */
   const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
+  const { denyForbidden } = await import("@/lib/auth/forbidden.server");
   const authorization = await getAuthorizationContext({ id: context.userId, email: context.userEmail });
-  if (!authorization.isAdmin) throw new Error("Forbidden");
+  if (!authorization.isAdmin) await denyForbidden();
 };
 
 export const getGumroadGatewayStatusFn = createServerFn({ method: "GET" })

@@ -5,7 +5,17 @@
  * survive a sync between two devices of the SAME account. It never reads
  * another user's catalog. Parent ids that dangle or cycle are lifted to the
  * root, matching the editor's "delete a folder lifts its children" rule.
+ *
+ * `customItems[].svg` is markup this module hands back to a browser that
+ * paints it inline, so it is scrubbed through the editor's SVG allow-list
+ * BEFORE it is stored or returned. `normalizeCatalog` runs on the server (in
+ * `saveLibraryCatalog`'s validator and on every `getLibraryCatalog` read), so
+ * this is the one place where a tampered client, a poisoned row or a payload
+ * written before sanitising existed can be stopped for every device of the
+ * account at once. The scrubber is DOM-free by design — there is no
+ * `DOMParser` here.
  */
+import { scrubSvgMarkup } from "@/lib/editor/svg-scrub";
 
 export interface SyncFolder {
   id: string;
@@ -128,8 +138,13 @@ export function normalizeCatalog(value: unknown): LibraryCatalog {
       if (!row || typeof row !== "object") continue;
       const item = row as Record<string, unknown>;
       const id = typeof item.id === "string" ? item.id.trim() : "";
-      const svg = typeof item.svg === "string" ? item.svg : "";
-      if (!id || !svg.includes("<svg") || svg.length > LIMITS.svg) continue;
+      const raw = typeof item.svg === "string" ? item.svg : "";
+      if (!id || !raw.includes("<svg") || raw.length > LIMITS.svg) continue;
+      // Allow-list scrub: no script/handler/external reference is ever stored
+      // or shipped back to a browser. `keepRootBox` preserves the authored
+      // width/height the shelf thumbnails are sized by.
+      const svg = scrubSvgMarkup(raw, { keepRootBox: true });
+      if (!svg) continue;
       customItems.push({
         id,
         name: cleanName(item.name, "رمز"),
