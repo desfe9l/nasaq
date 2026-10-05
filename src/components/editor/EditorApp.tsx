@@ -300,6 +300,7 @@ import { HeadingGeneratorDialog } from "./HeadingGeneratorDialog";
 import { OnboardingTour, hasSeenTour } from "./OnboardingTour";
 import { NsqIntake } from "./NsqIntake";
 import { AppInstallNotice } from "@/components/AppInstallNotice";
+import { MobileWorkspaceGuide } from "@/components/editor/MobileWorkspaceGuide";
 import { useNsqSignedIn } from "@/lib/nsq/use-nsq-session";
 import { ProjectFileMenu, NSQ_SAVE_AS_EVENT } from "./ProjectFileMenu";
 import { NSQ_ACCEPT } from "@/lib/nsq/format";
@@ -2644,6 +2645,11 @@ function Studio({
       )}
       {/* One-time offer to install the editor as a desktop app. */}
       <AppInstallNotice />
+      {/*
+       * Phone workspace: the first run names the gestures and the dock, so the
+       * mobile layout is an explained instrument rather than a row of icons.
+       */}
+      {isMobileSurface && <MobileWorkspaceGuide />}
       <header
         ref={headerRef}
         data-editor-obstacle="header"

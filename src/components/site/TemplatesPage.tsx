@@ -518,8 +518,9 @@ export function TemplatesPage({
       <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-[26px] font-extrabold text-ink">القوالب</h1>
-            <p className="mt-2 max-w-2xl text-[14px] leading-7 text-muted">
+            <p className="nsq-eyebrow">مكتبة نَسَق</p>
+            <h1 className="nsq-title mt-2.5 text-[28px]">القوالب</h1>
+            <p className="mt-2.5 max-w-2xl text-[14px] leading-7 text-muted">
               كل قالب هنا معاينة حقيقية لصفحاته: استخدمه لإنشاء مشروع، أو عاينه سريعًا، أو عدّله وكرّره
               واحفظه في «قوالبي الخاصة» — والتغييرات تظهر في الكتالوج مباشرة.
             </p>

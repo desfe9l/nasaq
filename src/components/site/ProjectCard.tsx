@@ -12,6 +12,7 @@ import {
 import { toast } from "sonner";
 import { THEMES, type ProjectMeta } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
+import { SmartImage } from "@/components/ui/SmartImage";
 import { cn } from "@/lib/utils";
 
 function relativeTime(ts: number) {
@@ -133,12 +134,13 @@ export function ProjectCard({
       )}
     >
       {project.thumbnail ? (
-        <img
+        <SmartImage
           src={project.thumbnail}
-          alt=""
-          aria-hidden
-          loading="lazy"
-          className="h-full w-full bg-surface object-contain object-top"
+          decorative
+          fit="contain"
+          position="center top"
+          className="h-full w-full bg-surface"
+          imageClassName="object-top"
         />
       ) : (
         <span className="flex h-full w-full flex-col">
@@ -272,7 +274,7 @@ export function ProjectCard({
             نسخ المشروع
           </MenuItem>
           <MenuItem onClick={() => void exportJson()} icon={FileDown}>
-            تصدير JSON
+            نسخة احتياطية
           </MenuItem>
           <MenuItem onClick={() => setConfirming(true)} icon={Trash2} danger>
             حذف

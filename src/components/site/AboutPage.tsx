@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import {
   AlertTriangle,
   BadgeCheck,
+  FileArchive,
   FileDown,
-  FileJson,
   FileText,
   Globe,
   MessageCircle,
@@ -22,12 +22,12 @@ const FORMAT_PILLS = [
   { icon: Presentation, label: "PowerPoint" },
   { icon: FileText, label: "Word" },
   { icon: Globe, label: "HTML" },
-  { icon: FileJson, label: "JSON" },
+  { icon: FileArchive, label: "نسخة نَسَق" },
 ] as const;
 
 /** 3×2 grid of platform guarantees. */
 const SPECS: { title: string; body: string }[] = [
-  { title: "عربي RTL كامل", body: "الواجهة والتحرير والمحاذاة بترتيب من اليمين لليسار — لا ترجمة سطحية." },
+  { title: "محرر عربي بالكامل", body: "مصمم للعمل باللغة العربية: النص والمحاذاة والخطوط والأرقام بترتيب من اليمين إلى اليسار — لا ترجمة سطحية." },
   { title: "مقاسات قياسية", body: "A4 رأسي/أفقي، A3، وشرائح 16:9 مع مقاسات مخصصة بالمليمتر." },
   { title: "جودة طباعة 300 DPI", body: "مخرجات PDF وصور بدقة طباعة رسمية صالحة للتسليم." },
   { title: "تخزين محلي أولًا", body: "تُحفظ المشاريع داخل متصفح الجهاز، مع اتصال عند الحاجة إلى التحقق من الترخيص أو خدمات الذكاء الاصطناعي." },

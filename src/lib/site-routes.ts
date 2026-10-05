@@ -84,6 +84,8 @@ export const OWNER_VAULT_ROUTE = "/owner-vault";
 export const ADMIN_ROUTES = {
   /** Operations dashboard: the state of the platform in one screen. */
   dashboard: "/admin",
+  /** Client requests: the platform's own inbox for «تواصل معنا / اطلب خدمة». */
+  requests: "/admin/requests",
   /** Template records: create, edit, duplicate, delete, publish, preview. */
   templates: "/admin/templates",
   /** The template studio: design-time authoring entry points. */
@@ -129,6 +131,13 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     to: ADMIN_ROUTES.dashboard,
     label: "لوحة القيادة",
     description: "حالة المنصة: المشتركون، المدفوعات، والقوالب في لمحة واحدة.",
+    group: "operations",
+  },
+  {
+    id: "requests",
+    to: ADMIN_ROUTES.requests,
+    label: "الطلبات والمراسلات",
+    description: "طلبات العملاء الواردة من المنصة: المتابعة، الرد، وإعدادات التواصل.",
     group: "operations",
   },
   {

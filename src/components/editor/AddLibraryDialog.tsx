@@ -314,7 +314,7 @@ export function AddLibraryDialog({ onClose }: { onClose: () => void }) {
               <ImageIcon className="size-5 text-brand" aria-hidden />
               <span className="text-[12px] font-extrabold">اختيار ملفات</span>
               <span className="text-[10px] leading-4 text-muted">
-                أي صيغة مدعومة: PNG · JPG · WebP · SVG · ملف مكتبة JSON
+                أي صيغة مدعومة: PNG · JPG · WebP · SVG · ملف مكتبة نَسَق
               </span>
             </button>
           </div>

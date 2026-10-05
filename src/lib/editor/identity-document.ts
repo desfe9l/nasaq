@@ -2,7 +2,30 @@ import { createElement, type CanvasEl } from "./model";
 import { buildNewDocument, defaultNewDocument } from "./new-document";
 import type { BrandKit } from "../product/product";
 
-export type IdentityDocumentKind = "cover" | "letter" | "certificate";
+/*
+ * The document kinds the identity page renders.
+ *
+ * Each one exists because it exercises the kit differently, and each is a real
+ * editable NASAQ document — not a mock-up: portrait A4 pages (cover, letter,
+ * certificate), a landscape 16:9 slide, and a vertical social/announcement
+ * card. Adding a kind here makes it available to the preview, to «إنشاء
+ * مستند», and to export through the same builder.
+ */
+export type IdentityDocumentKind =
+  | "cover"
+  | "letter"
+  | "certificate"
+  | "slide"
+  | "card";
+
+/** Which kit size each kind is built on. */
+export const IDENTITY_DOCUMENT_KINDS: readonly IdentityDocumentKind[] = [
+  "cover",
+  "letter",
+  "certificate",
+  "slide",
+  "card",
+];
 /** Real editable artwork shared by Identity preview, creation, persistence and export. */
 export function buildIdentityDocument(
   kit: BrandKit,
@@ -15,13 +38,27 @@ export function buildIdentityDocument(
       ? "شهادة تقدير"
       : kind === "letter"
         ? "خطاب رسمي"
-        : "عنوان التقرير";
+        : kind === "slide"
+          ? "عنوان العرض التقديمي"
+          : kind === "card"
+            ? "بطاقة تهنئة رسمية"
+            : "عنوان التقرير";
+  const docKind =
+    kind === "cover" || kind === "card"
+      ? "report"
+      : kind === "slide"
+        ? "presentation"
+        : kind;
   const project = buildNewDocument(
     defaultNewDocument({
-      kind: kind === "cover" ? "report" : kind,
+      kind: docKind,
       name: title,
       orgName: kit.organizationName,
-      orientation: kit.pageSize === "a4-landscape" ? "landscape" : "portrait",
+      ...(kind === "slide"
+        ? { size: "slide" as const, orientation: "landscape" as const }
+        : kind === "card"
+          ? { size: "story" as const, orientation: "portrait" as const }
+          : { orientation: kit.pageSize === "a4-landscape" ? ("landscape" as const) : ("portrait" as const) }),
     }),
   );
   const page = project.pages[0];
@@ -55,7 +92,25 @@ export function buildIdentityDocument(
         lineHeight: 1.5,
       },
     });
-  if (kind === "certificate") {
+  if (kind === "card") {
+    for (const [inset, color, width] of [
+      [7, kit.accentColor, 0.5],
+      [9.5, kit.primaryColor, 1],
+    ] as const)
+      add("shape", {
+        name: "إطار البطاقة",
+        x: inset,
+        y: inset,
+        w: w - inset * 2,
+        h: h - inset * 2,
+        style: {
+          shape: "rect",
+          fill: "none",
+          borderColor: color,
+          borderWidth: width,
+        },
+      });
+  } else if (kind === "certificate") {
     for (const [inset, color, width] of [
       [10, kit.primaryColor, 0.8],
       [13, kit.accentColor, 0.35],
@@ -94,12 +149,24 @@ export function buildIdentityDocument(
     });
   text(kit.organizationName || "اسم الجهة", 49, 14, 16, kit.secondaryColor);
   if (kit.subDepartment) text(kit.subDepartment, 63, 10, 11);
-  text(title, h * 0.3, 24, 30, kit.primaryColor);
-  if (kind === "certificate") {
+  text(
+    title,
+    kind === "slide" ? h * 0.36 : kind === "card" ? h * 0.28 : h * 0.3,
+    24,
+    kind === "slide" ? 34 : 30,
+    kit.primaryColor,
+  );
+  if (kind === "card") {
+    text("بمناسبة غالية، نتقدّم إليكم", h * 0.4, 12, 14);
+    text("بأطيب التهاني والتبريكات", h * 0.47, 18, 22, kit.secondaryColor);
+    text(kit.subDepartment ? kit.subDepartment : "وتقبلوا خالص التحايا والتقدير", h * 0.6, 14, 12);
+  } else if (kind === "certificate") {
     text("تُمنح هذه الشهادة إلى", h * 0.46, 12, 14);
     text(recipient, h * 0.54, 18, 24, kit.secondaryColor);
     text("تقديرًا لجهوده المتميزة ومساهمته الفاعلة", h * 0.65, 18, 15);
     text("التوقيع", h - 36, 10, 10);
+  } else if (kind === "slide") {
+    text("عرض مؤسسي — يمكن تحرير كل عنصر في المحرر", h * 0.55, h * 0.16, 15);
   } else {
     text(
       kind === "letter"

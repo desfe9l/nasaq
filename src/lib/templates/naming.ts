@@ -161,6 +161,40 @@ function normalizedCategory(value: string): string {
     .trim();
 }
 
+/**
+ * The model's own category ids, as a set.
+ *
+ * Exported so classification (`organization.ts`) and the admin panel can ask
+ * "is this value a category the FILTERS understand?" without duplicating the
+ * list — and so a free-text Arabic category is never mistaken for one.
+ */
+export const KNOWN_CATEGORY_IDS: ReadonlySet<string> = new Set(
+  Object.keys(CATEGORY_LABELS).filter((key) => key !== "general"),
+);
+
+/** True only for an id the catalogue's filters actually accept. */
+export function isKnownTemplateCategoryId(value: unknown): boolean {
+  return KNOWN_CATEGORY_IDS.has(normalizedCategory(asText(value)));
+}
+
+/**
+ * The canonical id for a stored category value, or "" when it is not one.
+ *
+ * `isKnownTemplateCategoryId` answers a yes/no question; callers that must
+ * STORE the value need the id itself (case/space normalised), so the catalogue
+ * keeps answering the same filter after an administrator retypes «Covers».
+ */
+export function canonicalCategoryId(value: unknown): string {
+  const id = normalizedCategory(asText(value));
+  return id && KNOWN_CATEGORY_IDS.has(id) ? id : "";
+}
+
+/** The Arabic label for a stored category id, or "" when it is not one. */
+export function knownCategoryLabel(value: unknown): string {
+  const id = normalizedCategory(asText(value));
+  return id ? (CATEGORY_LABELS[id] ?? "") : "";
+}
+
 /** Display a known category in Arabic without exposing internal category ids. */
 export function templateCategoryLabel(value: unknown): string {
   const category = asText(value).trim();

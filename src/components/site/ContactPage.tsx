@@ -5,6 +5,7 @@ import { BRAND, CONTACT_PHONE_INTL, WHATSAPP_MESSAGES, telHref, whatsappHref } f
 import { useEditor } from "@/lib/editor/store";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { SocialLinks } from "@/components/site/SocialLinks";
+import { ClientRequestForm } from "./ClientRequestPanel";
 
 const SCOPES = ["تقرير رسمي", "عرض تقديمي", "غلاف ومستند", "تصميم إنفوجرافيك", "استفسار آخر"];
 
@@ -74,6 +75,35 @@ export function ContactPage() {
           تحدث مباشرة مع {BRAND.team} للاستفسار عن الترخيص، تجهيز الهوية، أو تسليم نسخة مناسبة لجهتك.
         </p>
 
+        {/*
+         * The platform's own request system, FIRST.
+         *
+         * The page used to open with a phone number and a WhatsApp link, which
+         * made a third-party channel the only way to reach NASAQ. A visitor or a
+         * signed-in customer now writes the request here; it is stored, tracked
+         * and answered from the administration's inbox. The direct channels stay
+         * directly below for anyone who prefers them.
+         */}
+        <section className="mt-8 rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-7">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="max-w-2xl">
+              <p className="text-[11px] font-extrabold tracking-[0.14em] text-brand">
+                طلب داخل المنصة
+              </p>
+              <h2 className="mt-2 text-[21px] font-extrabold text-ink">
+                اطلب خدمة أو تواصل معنا من هنا
+              </h2>
+              <p className="mt-2 text-[13px] leading-7 text-muted">
+                اكتب طلبك ويصل مباشرة إلى إدارة نَسَق مع بيانات التواصل، ويُتابع من لوحة الطلبات.
+                لا تحتاج إلى حساب، وإن كنت مسجّلًا فسيُربط الطلب بحسابك وتظهر ردودنا في «طلباتي».
+              </p>
+            </div>
+          </div>
+          <div className="mt-5">
+            <ClientRequestForm source="contact" />
+          </div>
+        </section>
+
         <div className="mt-8 grid gap-6 border-y border-line py-7 md:grid-cols-[1fr_auto] md:items-center">
           <div>
             <div className="flex flex-wrap items-center gap-2 text-[13px] font-extrabold text-muted">
@@ -99,7 +129,10 @@ export function ContactPage() {
                 {copied ? <Check className="size-4 text-brand" /> : <Copy className="size-4" />}
               </button>
             </div>
-            <p className="mt-2 text-[12px] text-muted">رقم دولي للاتصال وواتساب. اختر نوع الطلب أدناه ليُضاف تلقائياً إلى رسالتك.</p>
+            <p className="mt-2 text-[12px] text-muted">
+              قناة مباشرة لمن يفضّل الاتصال أو المراسلة. يمكنك أيضًا إرسال الطلب من النموذج أعلاه
+              ليُسجَّل داخل المنصة ويحصل على متابعة.
+            </p>
             {/* Official accounts live inside the existing contact block — the
                 same place a visitor is already looking for a channel, so no
                 new section is added to the page. Handles are shown in full

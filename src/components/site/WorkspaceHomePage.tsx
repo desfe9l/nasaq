@@ -661,7 +661,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
               </a>
             )}
             <span className="text-[11px] font-semibold text-muted">
-              لديك مشروع محفوظ؟ افتح ملف ‎.nsq‎ أو نسخة JSON لمتابعة العمل.
+              لديك مشروع محفوظ؟ افتح ملف نَسَق ‎.nsq‎ أو نسخة احتياطية لمتابعة العمل.
             </span>
           </div>
         </section>

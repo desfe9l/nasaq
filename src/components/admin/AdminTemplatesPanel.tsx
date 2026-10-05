@@ -54,7 +54,18 @@ import {
 } from "@/lib/templates/published";
 import { templateShortPathFor } from "@/lib/site-routes";
 import { prepareTemplateThumbnail } from "@/lib/templates/thumbnail";
-import { generateTemplateName } from "@/lib/templates/naming";
+import {
+  generateTemplateName,
+  templateCategoryLabel,
+} from "@/lib/templates/naming";
+import {
+  analysisSummary,
+  analyzeTemplate,
+  suggestTemplateCategory,
+  suggestTemplateName,
+} from "@/lib/templates/organization";
+import { TEMPLATE_CATEGORIES } from "@/lib/editor/templates";
+import type { Page } from "@/lib/editor/model";
 import { buildTemplateShareCopy, ensureTemplateShareUrl } from "@/lib/templates/sharing-copy";
 import { invalidateAdminPublicContent } from "@/lib/admin/use-site-settings";
 
@@ -79,6 +90,16 @@ interface Draft {
    * platform body limit, turned "rename a template" into a failed save.
    */
   thumbnailChanged: boolean;
+  /**
+   * The ordered additional preview images.
+   *
+   * A template is a multi-page document; one card image cannot show a cover, a
+   * content page and a table page. `previewsChanged` follows the same rule as
+   * the thumbnail: only a changed list is sent, so renaming a template can
+   * never re-upload (or wipe) the owner's artwork.
+   */
+  previews: string[];
+  previewsChanged: boolean;
   sortOrder: number;
   slug?: string | null;
   /** Short public address (`/t/<code>`), minted by the server on first save. */
@@ -109,6 +130,8 @@ const EMPTY_DRAFT: Draft = {
   titleIsManual: false,
   thumbnail: null,
   thumbnailChanged: false,
+  previews: [],
+  previewsChanged: false,
   sortOrder: 0,
   slug: "",
 };
@@ -188,6 +211,7 @@ export function AdminTemplatesPanel() {
   const [localProjects, setLocalProjects] = useState<ProjectMeta[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
   const thumbRef = useRef<HTMLInputElement>(null);
+  const previewsRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -222,6 +246,8 @@ export function AdminTemplatesPanel() {
         titleIsManual: true,
         thumbnail: result.template.thumbnail,
         thumbnailChanged: false,
+        previews: result.template.previews ?? [],
+        previewsChanged: false,
         slug: result.template.slug || "",
       });
     } catch (error) {
@@ -367,6 +393,7 @@ export function AdminTemplatesPanel() {
               : draft.thumbnail && !draft.id
                 ? draft.thumbnail
                 : undefined,
+            previews: draft.previewsChanged ? draft.previews : undefined,
             sortOrder: draft.sortOrder,
           },
         },
@@ -555,6 +582,26 @@ export function AdminTemplatesPanel() {
     }),
     [items],
   );
+  /*
+   * The same content-derived analysis the catalogue uses to organise itself,
+   * surfaced to the author as a REVIEWABLE suggestion: document type, purpose,
+   * dimensions and keyword summary, plus one-click adoption of the derived name
+   * and category. The administrator always overrides — the analysis only fills
+   * in what reading the document itself already says.
+   */
+  const analysis = useMemo(() => {
+    if (!draft) return null;
+    if (!draft.content.trim()) return null;
+    try {
+      const parsed = JSON.parse(draft.content) as { pages?: Page[] };
+      if (!Array.isArray(parsed.pages) || !parsed.pages.length) return null;
+      return analyzeTemplate(parsed.pages);
+    } catch {
+      return null;
+    }
+  }, [draft]);
+  const derivedCategory = analysis ? suggestTemplateCategory(analysis) : null;
+
   const suggestedTitle = draft
     ? generateTemplateName({
         sourceName: draft.fileName,
@@ -596,6 +643,63 @@ export function AdminTemplatesPanel() {
             </button>
           </div>
 
+          {/*
+           * «قراءة القالب» — what the platform understood from the document
+           * itself. Everything here is a suggestion the author can accept in
+           * one click or replace; nothing is applied behind their back.
+           */}
+          {analysis && (
+            <div className="grid gap-2 rounded-lg border border-line bg-surface-2 p-3">
+              <div className="flex flex-wrap items-center gap-2 text-[11.5px]">
+                <span className="rounded-full bg-navy px-2 py-0.5 font-extrabold text-on-brand">
+                  {analysis.documentTypeLabel}
+                </span>
+                <span className="rounded-full border border-line px-2 py-0.5 font-bold text-muted">
+                  {analysis.pages} صفحة
+                </span>
+                <span className="rounded-full border border-line px-2 py-0.5 font-bold text-muted">
+                  {analysis.sizeLabel}
+                </span>
+                <span className="rounded-full border border-line px-2 py-0.5 font-bold text-muted">
+                  {analysis.language === "ar" ? "عربي" : analysis.language === "mixed" ? "عربي/إنجليزي" : "إنجليزي"}
+                </span>
+              </div>
+              <p className="text-[11px] leading-5 text-muted">{analysisSummary(analysis)}</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className={ghostBtn}
+                  onClick={() =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            title: suggestTemplateName(analysis),
+                            titleIsManual: true,
+                          }
+                        : current,
+                    )
+                  }
+                >
+                  اعتماد الاسم المقترح
+                </button>
+                {derivedCategory && (
+                  <button
+                    type="button"
+                    className={ghostBtn}
+                    onClick={() =>
+                      setDraft((current) =>
+                        current ? { ...current, category: derivedCategory } : current,
+                      )
+                    }
+                  >
+                    التصنيف المقترح: {templateCategoryLabel(derivedCategory)}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="grid gap-3 md:grid-cols-2">
             <label className={label}>
               العنوان
@@ -629,11 +733,29 @@ export function AdminTemplatesPanel() {
             </label>
             <label className={label}>
               التصنيف
-              <input
+              {/*
+               * The classification is the platform's own taxonomy, not a free
+               * text box: an id the filters do not know is a template no pill
+               * can find. «تلقائي» hands the decision to the analysis below.
+               */}
+              <select
                 className={input}
                 value={draft.category}
                 onChange={(e) => setDraft({ ...draft, category: e.target.value })}
-              />
+              >
+                <option value="">تلقائي — من محتوى القالب</option>
+                {TEMPLATE_CATEGORIES.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.title}
+                  </option>
+                ))}
+                {draft.category &&
+                  !TEMPLATE_CATEGORIES.some((category) => category.id === draft.category) && (
+                    <option value={draft.category}>
+                      {templateCategoryLabel(draft.category)}
+                    </option>
+                  )}
+              </select>
             </label>
             <label className={cn(label, "md:col-span-2")}>
               الوصف
@@ -764,6 +886,133 @@ export function AdminTemplatesPanel() {
               </>
             )}
           </div>
+
+          {/*
+           * PREVIEW IMAGES — the ordered set the gallery shows.
+           *
+           * Each upload goes through the same normaliser as the card image
+           * (bounded longest edge, aspect ratio preserved), so a 4:3 photo and a
+           * 16:9 capture both land undistorted. Order is the author's, because
+           * the first image is what the gallery opens on.
+           */}
+          <section className="rounded-lg border border-line bg-surface p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 className="text-[12.5px] font-extrabold text-ink">صور المعاينة</h3>
+                <p className="mt-0.5 text-[11px] leading-5 text-muted">
+                  تُعرض في معرض القالب مع صفحات المستند الحقيقية، بالترتيب أدناه. لا حاجة لقصّ
+                  الصور — تُحفظ بنسبها الأصلية.
+                </p>
+              </div>
+              <input
+                ref={previewsRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                multiple
+                className="hidden"
+                onChange={async (event) => {
+                  const files = [...(event.target.files ?? [])];
+                  event.target.value = "";
+                  if (!files.length) return;
+                  try {
+                    const prepared: string[] = [];
+                    for (const file of files) prepared.push(await prepareTemplateThumbnail(file));
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            previews: [...current.previews, ...prepared].slice(0, 12),
+                            previewsChanged: true,
+                          }
+                        : current,
+                    );
+                    toast.success(`أُضيفت ${prepared.length} صورة معاينة`);
+                  } catch (error) {
+                    toast.error(error instanceof Error ? error.message : "تعذّرت معالجة الصورة");
+                  }
+                }}
+              />
+              <button type="button" className={ghostBtn} onClick={() => previewsRef.current?.click()}>
+                <Upload className="size-3.5" /> إضافة صور معاينة
+              </button>
+            </div>
+            {draft.previews.length > 0 ? (
+              <ul className="mt-3 flex flex-wrap gap-2">
+                {draft.previews.map((src, index) => (
+                  <li
+                    key={`${index}-${src.slice(-24)}`}
+                    className="w-[104px] rounded-lg border border-line bg-surface-2 p-1"
+                  >
+                    <span className="grid aspect-[4/3] place-items-center overflow-hidden rounded bg-surface">
+                      <img src={src} alt="" className="max-h-full max-w-full object-contain" />
+                    </span>
+                    <span className="mt-1 flex items-center justify-between gap-1">
+                      <span className="text-[10px] font-bold text-muted">#{index + 1}</span>
+                      <span className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          aria-label="تحريك للأعلى"
+                          title="تحريك للأعلى"
+                          disabled={index === 0}
+                          className="grid size-6 place-items-center rounded border border-line text-[11px] disabled:opacity-40"
+                          onClick={() =>
+                            setDraft((current) => {
+                              if (!current || index === 0) return current;
+                              const next = [...current.previews];
+                              [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                              return { ...current, previews: next, previewsChanged: true };
+                            })
+                          }
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="تحريك للأسفل"
+                          title="تحريك للأسفل"
+                          disabled={index === draft.previews.length - 1}
+                          className="grid size-6 place-items-center rounded border border-line text-[11px] disabled:opacity-40"
+                          onClick={() =>
+                            setDraft((current) => {
+                              if (!current || index >= current.previews.length - 1) return current;
+                              const next = [...current.previews];
+                              [next[index + 1], next[index]] = [next[index], next[index + 1]];
+                              return { ...current, previews: next, previewsChanged: true };
+                            })
+                          }
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="حذف الصورة"
+                          title="حذف الصورة"
+                          className="grid size-6 place-items-center rounded border border-danger/40 text-[11px] text-error"
+                          onClick={() =>
+                            setDraft((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    previews: current.previews.filter((_, i) => i !== index),
+                                    previewsChanged: true,
+                                  }
+                                : current,
+                            )
+                          }
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-[11px] text-muted">
+                لا توجد صور معاينة مرفوعة — يُعرض المستند الحقيقي في المعرض.
+              </p>
+            )}
+          </section>
 
           <details className="rounded-lg border border-line bg-surface">
             <summary className="cursor-pointer px-3 py-2 text-[12px] font-extrabold">

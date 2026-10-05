@@ -35,6 +35,14 @@ import {
 } from "@/lib/editor/model";
 import type { AdminTemplateSummary } from "@/lib/admin/types";
 import { freshPages, type CatalogPillId, type CustomTemplate } from "./custom-templates";
+import {
+  analysisSummary,
+  analyzeTemplate,
+  needsGeneratedName,
+  orderTemplates,
+  resolveCategory,
+  suggestTemplateName,
+} from "./organization";
 
 /**
  * Filter pills, in the order the catalog shows them.
@@ -87,6 +95,12 @@ export interface CatalogEntry {
   managedTemplate?: AdminTemplateSummary;
   /** Owner-managed thumbnail, when a bundled template has been edited. */
   thumbnail?: string;
+  /**
+   * The owner's ordered additional preview images. The gallery renders these
+   * next to the real page previews, so a multi-page template can be read
+   * before it is opened.
+   */
+  previews: string[];
 }
 
 function builtinTemplateId(entry: Pick<CatalogEntry, "kind" | "sourceId">): string | null {
@@ -95,24 +109,48 @@ function builtinTemplateId(entry: Pick<CatalogEntry, "kind" | "sourceId">): stri
   return null;
 }
 
+/**
+ * Apply an administrator's record over a built-in template.
+ *
+ * Two rules make the shelf readable:
+ *
+ *   • A name the product must never show (an empty title, «قالب ١», a raw file
+ *     name, a generator id) is REPLACED by the content-derived name. A real
+ *     title an administrator typed is kept exactly as typed — an override is an
+ *     override.
+ *   • The category is resolved the same way: a stored id wins, free text is
+ *     kept as the displayed label while the derived id drives the filters, and
+ *     an empty value is filled from the document's own content.
+ */
 function applyManagedTemplate(
   entry: CatalogEntry,
   template: AdminTemplateSummary | undefined,
 ): CatalogEntry {
-  if (!template) return entry;
-  const validCategory = TEMPLATE_CATEGORIES.find((item) => item.id === template.category);
-  const category = validCategory?.id ?? entry.category;
-  const categoryLabel = template.category || entry.categoryLabel;
-  const text = `${template.title} ${template.description} ${categoryLabel}`;
+  const analysis = analyzeTemplate(entry.pages);
+  if (!template) {
+    if (!needsGeneratedName(entry.title)) return entry;
+    return {
+      ...entry,
+      title: suggestTemplateName(analysis),
+      desc: entry.desc || analysisSummary(analysis),
+    };
+  }
+  const resolved = resolveCategory(template.category, analysis);
+  const title = needsGeneratedName(template.title)
+    ? suggestTemplateName(analysis)
+    : template.title;
+  const categoryLabel = resolved.title || entry.categoryLabel;
+  const text = `${title} ${template.description} ${categoryLabel}`;
   const evidence = elementEvidence(entry.pages);
   return {
     ...entry,
-    title: template.title,
-    desc: template.description,
-    category,
+    title,
+    desc: template.description?.trim() || analysisSummary(analysis),
+    category: resolved.id,
     categoryLabel,
-    pills: [...new Set([...entry.pills, ...pillsFor(category, { text, ...evidence })])],
+    pills: [...new Set([...entry.pills, ...pillsFor(resolved.id, { text, ...evidence })])],
     thumbnail: template.thumbnail || undefined,
+    previews: template.previews ?? [],
     managedTemplate: template,
   };
 }
@@ -231,6 +269,7 @@ function pageEntry(def: PageTemplateDef, theme: Theme, org: string): CatalogEntr
     tags,
     badges: badgesFor("page", undefined, 1),
     size: { w: size.w, h: size.h },
+    previews: [],
     pages,
   };
 }
@@ -258,6 +297,7 @@ function packEntry(pack: (typeof PACKS)[number], theme: Theme, org: string): Cat
     tags: [pack.pages, KIND_LABEL.pack],
     badges: badgesFor("pack", undefined, pages.length),
     size: { w: size.w, h: size.h },
+    previews: [],
     pages,
   };
 }
@@ -283,6 +323,7 @@ function customEntry(item: CustomTemplate): CatalogEntry {
     tags: item.tags ?? [],
     badges: badgesFor("custom", item.updatedAt, pages.length),
     size: { w: size.w, h: size.h },
+    previews: [],
     pages,
     custom: item,
   };
@@ -319,7 +360,19 @@ export function buildCatalog(options: {
   const packs = PACKS
     .map((pack) => resolveBuiltin(packEntry(pack, theme, org)))
     .filter((entry): entry is CatalogEntry => entry !== null);
-  return [...custom, ...pages, ...packs];
+  /*
+   * Meaningful ordering: covers before reports before annexes, an author's
+   * explicit position first, ties broken by the document's own family, size and
+   * name. The author's own saved templates stay at the head of the shelf — they
+   * came to the catalogue to manage their work.
+   */
+  const ordered = orderTemplates(
+    [...pages, ...packs].map((entry) => ({
+      ...entry,
+      sortOrder: entry.managedTemplate?.sortOrder ?? null,
+    })),
+  ).map(({ sortOrder: _ignored, ...entry }) => entry as CatalogEntry);
+  return [...custom, ...ordered];
 }
 
 /**

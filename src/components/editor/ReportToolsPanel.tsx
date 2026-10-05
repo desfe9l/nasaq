@@ -161,7 +161,7 @@ export function ReportToolsPanel() {
           <span className="ms-auto rounded-full bg-navy-2/10 px-2 py-0.5 text-[9px] font-bold text-brand-hover">اسحب أو انقر</span>
         </h4>
         <p className="text-[10px] leading-4 text-muted">
-          عناوين جاهزة كعناصر جرافيكية قابلة للتحرير — اسحبها وأفلتها في الموضع المحدد داخل اللوحة، أو انقر للإضافة في المنتصف. مجموعة منظمة، RTL صحيح، النص الطويل يتكيف.
+          عناوين جاهزة كعناصر جرافيكية قابلة للتحرير — اسحبها وأفلتها في الموضع المحدد داخل اللوحة، أو انقر للإضافة في المنتصف. مجموعة منظمة، مصمَّمة للعمل باللغة العربية، والنص الطويل يتكيف مع مساحته.
         </p>
         <div className="mb-2 rounded-[6px] bg-gold/15 px-2 py-1 text-[10px] leading-4 text-warning">
           💡 تلميح: اسحب العنوان وضعه بدقة في المكان الذي تريده داخل الـArtboard — يبقى Group واحد قابل للتحديد والتحريك.

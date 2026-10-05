@@ -133,7 +133,9 @@ export type AdminAction =
   | "subscription.expiration_changed"
   | "plan.changed"
   | "payment_settings.updated"
-  | "admin.granted";
+  | "admin.granted"
+  /** A client request's status, priority, assignee or written answer changed. */
+  | "client_request.updated";
 
 /** Payload for submitting a payment reference. */
 export type SubmitPaymentInput = {

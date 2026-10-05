@@ -14,6 +14,9 @@ import { DEMO_LICENSE, canCreateDemoProject } from "@/lib/product/product";
 import { publishedTemplateSeed } from "@/lib/templates/published";
 import type { AdminTemplateSummary } from "@/lib/admin/types";
 import { CREATE_ROUTE, editorPathFor } from "@/lib/site-routes";
+import { SmartImage } from "@/components/ui/SmartImage";
+import { PremiumAccessNote } from "@/components/site/TemplateAccess";
+import { ContactRequestButton } from "@/components/site/ClientRequestPanel";
 
 interface Props {
   initialTemplate?: AdminTemplateSummary | null;
@@ -235,11 +238,13 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
                 {template.thumbnail ? (
                   <div className="relative w-full max-w-[420px]">
                     <div className="absolute -inset-3 rounded-[18px] bg-navy/5 blur-xl" aria-hidden />
-                    <img
+                    <SmartImage
                       src={template.thumbnail}
                       alt={template.title}
-                      className="relative aspect-[210/297] w-full rounded-[14px] border border-line bg-white object-contain shadow-xl"
-                      loading="eager"
+                      fit="contain"
+                      eager
+                      aspectRatio="210 / 297"
+                      className="relative w-full rounded-[14px] border border-line bg-white shadow-xl"
                     />
                   </div>
                 ) : (
@@ -324,28 +329,24 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
                 </button>
 
                 {needsLicense ? (
-                  <div className="rounded-xl border border-gold/30 bg-gold/10 p-4">
-                    <div className="flex items-start gap-3">
-                      <Lock className="mt-0.5 size-4 shrink-0 text-warning" strokeWidth={2.25} />
-                      <div>
-                        <p className="text-[13px] font-bold text-ink">هذا القالب ضمن النسخة الكاملة</p>
-                        <p className="mt-1 text-[12px] leading-6 text-muted">
-                          يمكنك معاينته مجانًا، وعند الاستخدام سيُطلب ترخيص ساري للوصول إلى المحتوى الكامل.
-                        </p>
-                        <a
-                          href="/license"
-                          className="mt-3 inline-flex h-9 items-center rounded-lg bg-inverse px-4 text-[12px] font-bold text-on-inverse"
-                        >
-                          ترقية إلى النسخة الكاملة
-                        </a>
-                      </div>
-                    </div>
-                  </div>
+                  /* Price + requirement + both doors, never a bare lock. */
+                  <PremiumAccessNote />
                 ) : (
                   <p className="text-center text-[11px] leading-5 text-muted">
                     يفتح كنسخة مستقلة في مساحتك — القالب الأصلي يبقى محفوظًا بدون تعديل. التخزين محلي أولًا.
                   </p>
                 )}
+
+                {/* A template-scoped question belongs to this template, not to a
+                    generic contact form. */}
+                <ContactRequestButton
+                  source="template"
+                  templateId={template.id}
+                  defaultKind="template"
+                  serviceLabel="قالب أو مكتبة قوالب"
+                  label="اطلب خدمة على هذا القالب"
+                  className="w-full justify-center"
+                />
 
                 <div className="grid grid-cols-2 gap-2">
                   <button

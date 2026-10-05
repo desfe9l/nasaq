@@ -1,24 +1,31 @@
 import { useEffect, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-  Blocks,
+  Building2,
   FileText,
   Files,
   FolderKanban,
   FolderOpen,
   Home,
-  Info,
   KeyRound,
   Layers,
   LayoutTemplate,
-  MessageCircle,
+  MessagesSquare,
   Palette,
   PenLine,
+  Shapes,
   SlidersHorizontal,
+  Wrench,
 } from "lucide-react";
 import type { SurfaceNavItem } from "@/lib/nav/surface-nav";
 import { cn } from "@/lib/utils";
 
+/*
+ * One glyph per destination, chosen so no two things an author could confuse
+ * look alike: the template shelf is a layout, the editor's elements are shapes,
+ * the report tools are a document, the platform page is the institution, and
+ * contact is a conversation — not a generic «info».
+ */
 const ICONS: Record<string, LucideIcon> = {
   "/": Home,
   "/projects": FolderKanban,
@@ -26,11 +33,11 @@ const ICONS: Record<string, LucideIcon> = {
   "/purchase": KeyRound,
   "/custom-design": PenLine,
   "/الهوية": Palette,
-  "/about": Info,
-  "/contact": MessageCircle,
+  "/about": Building2,
+  "/contact": MessagesSquare,
   library: FolderOpen,
-  elements: LayoutTemplate,
-  tools: Blocks,
+  elements: Shapes,
+  tools: Wrench,
   pages: Files,
   properties: SlidersHorizontal,
   layers: Layers,

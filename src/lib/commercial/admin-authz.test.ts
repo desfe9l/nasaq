@@ -296,18 +296,18 @@ describe("admin lifecycle operations", () => {
   it("changePlan switches the plan without moving the expiry", async () => {
     const id = await requestFor(CAROL);
     const { expiresAt } = await approvePayment(sql, { adminUserId: ADMIN }, id, null);
-    await changePlan(sql, { adminUserId: ADMIN }, CAROL, "annual");
+    await changePlan(sql, { adminUserId: ADMIN }, CAROL, "individual-quarterly");
 
     const account = await getAccount(sql, CAROL);
-    assert.equal(account.planId, "annual");
+    assert.equal(account.planId, "individual-quarterly");
     assert.equal(account.expiresAt, expiresAt);
   });
 
   it("activateCustomer grants access with no payment request involved", async () => {
-    await activateCustomer(sql, { adminUserId: ADMIN }, DAVE, "quarterly");
+    await activateCustomer(sql, { adminUserId: ADMIN }, DAVE, "team-quarterly");
     const account = await getAccount(sql, DAVE);
     assert.equal(account.status, "ACTIVE");
-    assert.equal(account.planId, "quarterly");
+    assert.equal(account.planId, "team-quarterly");
   });
 });
 

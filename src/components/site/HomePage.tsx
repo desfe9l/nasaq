@@ -115,13 +115,13 @@ export function HomePage() {
             className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-10 px-4 py-14 sm:px-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:py-20"
           >
             <div>
-              <div className="mb-5 inline-flex items-center rounded-full border border-brand/15 bg-navy/5 px-3.5 py-1.5 text-[11px] font-bold tracking-wide text-ink">
+              <p className="nsq-eyebrow mb-4">
                 {texts.heroEyebrow.trim() || PRODUCT_COPY.hero.eyebrow}
-              </div>
-              <h1 className="max-w-2xl text-[30px] font-extrabold leading-[1.25] text-ink sm:text-[40px]">
+              </p>
+              <h1 className="nsq-title max-w-2xl text-[32px] sm:text-[42px]">
                 {texts.heroTitle.trim() || PRODUCT_COPY.hero.title}
               </h1>
-              <p className="mt-5 max-w-xl text-[15px] leading-8 text-muted">
+              <p className="nsq-lede mt-5">
                 {texts.heroDescription.trim() || PRODUCT_COPY.hero.description}
               </p>
               <p className="mt-3 max-w-xl text-[13px] leading-6 text-muted">
@@ -166,7 +166,7 @@ export function HomePage() {
 
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <ProjectFileButton />
-                <span className="text-[11px] text-muted">افتح ملف ‎.nsq‎ أو نسخة JSON محفوظة سابقًا</span>
+                <span className="text-[11px] text-muted">افتح ملف نَسَق ‎.nsq‎ أو نسخة احتياطية محفوظة سابقًا</span>
               </div>
             </div>
 
@@ -183,8 +183,8 @@ export function HomePage() {
         <section className="border-b border-line/60 bg-page py-12 sm:py-14">
           <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
             <div className="max-w-2xl">
-              <p className="text-[11px] font-bold tracking-[0.14em] text-brand">ماذا تقدم نَسَق</p>
-              <h2 className="mt-2 text-[22px] font-extrabold text-ink">إنتاج بصري منظم للمخرجات المتكررة</h2>
+              <p className="nsq-eyebrow">ماذا تقدم نَسَق</p>
+              <h2 className="nsq-title-sm mt-2.5 text-[23px]">إنتاج بصري منظم للمخرجات المتكررة</h2>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-3">
               {[
@@ -212,7 +212,7 @@ export function HomePage() {
             <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
               <div>
                 <p className="text-[11px] font-bold tracking-[0.14em] text-brand">لمن تناسب</p>
-                <h2 className="mt-2 text-[22px] font-extrabold text-ink">مصممة للجهات والمؤسسات والفرق المحترفة</h2>
+                <h2 className="nsq-title-sm mt-2.5 text-[23px]">مصممة للجهات والمؤسسات والفرق المحترفة</h2>
                 <p className="mt-2 text-[13px] leading-7 text-muted">توفر نَسَق بيئة عمل تناسب المتطلبات الرسمية، مع التزام بالهوية البصرية والجودة الطباعية وسهولة إعادة الاستخدام عبر القوالب.</p>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -316,7 +316,7 @@ export function HomePage() {
         <section className="border-t border-line/60 bg-surface-2 py-12 sm:py-14">
           <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
             <p className="text-[11px] font-bold tracking-[0.14em] text-brand">الميزات والخدمات الأساسية</p>
-            <h2 className="mt-2 text-[23px] font-extrabold text-ink">أدوات متخصصة لإنتاج المستند المؤسسي</h2>
+            <h2 className="nsq-title-sm mt-2.5 text-[24px]">أدوات متخصصة لإنتاج المستند المؤسسي</h2>
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {HIGHLIGHTS.map((h) => {
                 const Icon = h.icon;

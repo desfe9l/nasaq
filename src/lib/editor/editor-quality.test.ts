@@ -170,10 +170,22 @@ test("active page rail and artboard use clean green active-state tokens and lice
   assert.match(css, /\.page-rail-number-active\s*\{[^}]*--editor-success/);
   assert.match(css, /\.artboard-active-outline\s*\{[^}]*--editor-success/);
 
+  /*
+   * A premium template carries its requirement AND its price: the shelf shows
+   * the shared access note, and every card carries the compact chip. The old
+   * assertion pinned a phrase that said "available in the full version" without
+   * ever saying what that costs; the requirement is now stronger, so the test
+   * is too.
+   */
   const premium = readFileSync(
     "src/components/site/PremiumTemplates.tsx",
     "utf8",
   );
   assert.doesNotMatch(premium, /قالب مرخص/);
-  assert.match(premium, /متاح في النسخة الكاملة/);
+  assert.match(premium, /PremiumAccessNote/);
+  const access = readFileSync("src/components/site/TemplateAccess.tsx", "utf8");
+  assert.match(access, /PREMIUM_FROM_SAR/);
+  assert.match(access, /يتطلب ترخيصًا/);
+  assert.match(access, /احصل على الترخيص/);
+  assert.match(access, /تواصل مع المبيعات/);
 });

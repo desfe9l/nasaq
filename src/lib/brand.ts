@@ -110,6 +110,8 @@ export const WHATSAPP_MESSAGES = {
 export interface NavItem {
   to: string;
   label: string;
+  /** True when the destination belongs to an account and needs a verified session. */
+  requiresSession?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -120,6 +122,8 @@ export const NAV_ITEMS: NavItem[] = [
   {
     to: "/projects",
     label: "المشاريع",
+    // The shelf lists an account's own documents; a visitor is never offered it.
+    requiresSession: true,
   },
   {
     to: "/templates",
@@ -170,15 +174,32 @@ export const SECONDARY_NAV_ITEMS: NavItem[] = NAV_ITEMS.slice(4);
  *     number.
  */
 export const CUSTOM_DESIGN = {
-  title: "طلب تصميم خاص",
+  title: "اطلب تصميمًا خاصًا من نَسَق",
+  /**
+   * The distinction the page exists to make: this is a SERVICE the team
+   * performs, not the editor the customer uses. Both lines are shown together —
+   * a customer who actually wanted the editor should find the door, and one who
+   * wanted a designer should not be sent into a canvas by mistake.
+   */
+  eyebrow: "خدمة تصميم من فريق نَسَق",
   subtitle:
-    "مسار مؤسسي مخصّص لمن يحتاج تقريراً أو هوية بصرية أو منظومة مخرجات كاملة تُبنى على مقاس جهته.",
-  logoSlotLabel: "مساحة الشعار",
-  logoSlotHint: "تُحفظ هذه المساحة لشعار الجهة، ويوضع الشعار هنا بعد اعتماد الطلب.",
-  channelPlaceholder: "قناة التواصل المباشر لطلبات التصميم — قيد التجهيز",
+    "فريق نَسَق يصمّم لك تقريرًا أو هوية مخرجات أو عرضًا مؤسسيًا كاملًا على مقاس جهتك. هذه خدمة تصميم ينفّذها الفريق — وليست محرّر التصميم الذي تصمّم فيه بنفسك.",
+  editorNote:
+    "إن كنت تفضّل التصميم بنفسك، ابدأ من المحرر مباشرة — القوالب والهوية جاهزة هناك.",
+  editorCta: "إنشاء تصميم بنفسك في المحرر",
+  logoSlotLabel: "مساحة شعار جهتك",
+  logoSlotHint: "تُضاف هنا هوية الجهة بعد اعتماد الطلب، ليُبنى التصميم عليها.",
+  serviceNote:
+    "هذه الخدمة ينفّذها فريق نَسَق يدويًا وفق طلبك وبيانات جهتك، بخلاف القوالب الجاهزة التي تستخدمها بنفسك داخل المحرر.",
+  channelPlaceholder: "قنوات التواصل المباشر مع فريق نَسَق",
   channelHint:
-    "لا يُعرض هنا رقم غير معتمد. إلى أن تُفعّل القناة الرسمية يمكنك إرسال الطلب من صفحة التواصل وسيصل إلى إدارة نَسَق.",
+    "يصل الطلب مباشرة إلى إدارة نَسَق مع بيانات جهتك، ويُتابع من لوحة الطلبات داخل المنصة.",
   turnaround: "الرد المبدئي من إدارة نَسَق خلال يوم عمل واحد.",
+  steps: [
+    { id: "send", label: "أرسل الطلب", hint: "حدّد نوع التصميم والجهة والموعد المطلوب." },
+    { id: "reply", label: "استلم الرد والنطاق", hint: "يراجع الفريق الطلب ويرسل النطاق والمدة." },
+    { id: "deliver", label: "استلم التصميم", hint: "يُسلَّم التصميم وهويتك مطبَّقة وقابلًا للتعديل." },
+  ],
   scopes: [
     { id: "report", label: "تقرير مؤسسي كامل", hint: "غلاف، فصول، جداول، مؤشرات، وتصدير طباعي." },
     { id: "identity", label: "هوية مخرجات", hint: "ألوان وخطوط ورأس وتذييل موحّد لمستندات الجهة." },

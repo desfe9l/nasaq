@@ -17,14 +17,15 @@ import {
   ArrowRight,
   Copy,
   Eye,
-  Lock,
   Pencil,
   Share2,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
-import { TemplatePreview } from "@/components/site/TemplatePreview";
+import { TemplateGallery, slidesFromTemplate } from "@/components/site/TemplateGallery";
+import { PremiumAccessNote } from "@/components/site/TemplateAccess";
+import { ContactRequestButton } from "@/components/site/ClientRequestPanel";
 import { useCatalogEntries } from "@/components/site/useCatalog";
 import { useEditor } from "@/lib/editor/store";
 import { pageSize } from "@/lib/editor/model";
@@ -49,7 +50,6 @@ import {
   templatePreviewPathFor,
   templateSharePathFor,
 } from "@/lib/site-routes";
-import { cn } from "@/lib/utils";
 
 export function TemplateDetailPage({ slug }: { slug: string }) {
   const hydrate = useEditor((s) => s.hydrate);
@@ -59,7 +59,9 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
   const { user } = useCurrentUserState();
   const { entitlements } = useLicense(user?.id, user?.primaryEmail);
   const [busy, setBusy] = useState<"use" | "edit" | "duplicate" | null>(null);
-  const [pageIndex, setPageIndex] = useState(0);
+  // The gallery owns which page is on screen; this only mirrors it so the
+  // actions can say which page the author was looking at.
+  const [, setPageIndex] = useState(0);
 
   useEffect(() => {
     void hydrate();
@@ -146,8 +148,6 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
   }
 
   const locked = entryRequiresLicense(entry, entitlements);
-  const index = Math.min(pageIndex, entry.pages.length - 1);
-  const page = entry.pages[index];
   const size = pageSize(entry.pages[0]);
   const slugForEntry = entrySlug(entry);
   const isManaged = Boolean(entry.managedTemplate);
@@ -166,48 +166,23 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
         </nav>
 
         <div className="mt-4 grid gap-7 lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)]">
-          {/* Real pages — the template itself, not a mock-up. */}
+          {/*
+           * The real document, as a slides experience.
+           *
+           * Multi-page templates are navigated the way a reader expects — drag
+           * or swipe the sheet, tap to advance, trackpad swipe, arrow keys,
+           * arrows, dots and a thumbnail strip — instead of only being counted.
+           * A locked (paid) template uses the SAME preview; the requirement is
+           * stated on the artwork rather than replacing it.
+           */}
           <aside className="grid content-start gap-3">
-            <div
-              className={cn(
-                "grid place-items-center rounded-2xl border border-line bg-surface-2 p-4 shadow-card",
-                locked && "relative",
-              )}
-            >
-              <div className="w-full" style={{ maxWidth: size.w > size.h ? "100%" : "86%" }}>
-                <TemplatePreview
-                  page={page}
-                  className="rounded-[3px] border border-line shadow-lg"
-                />
-              </div>
-              {locked && (
-                <span className="absolute inset-x-4 bottom-4 inline-flex items-center justify-center gap-1.5 rounded-lg bg-navy/90 px-3 py-2 text-[11px] font-extrabold text-on-brand">
-                  <Lock className="size-3.5" aria-hidden />
-                  متاح في النسخة الكاملة
-                </span>
-              )}
-            </div>
-            {entry.pages.length > 1 && (
-              <div className="grid grid-cols-4 gap-2">
-                {entry.pages.slice(0, 8).map((thumb, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={() => setPageIndex(i)}
-                    aria-label={`الصفحة ${i + 1}`}
-                    aria-pressed={i === index}
-                    className={cn(
-                      "overflow-hidden rounded-lg border bg-white p-0.5 transition",
-                      i === index
-                        ? "border-brand ring-2 ring-navy/20"
-                        : "border-line hover:border-brand",
-                    )}
-                  >
-                    <TemplatePreview page={thumb} className="rounded-[2px]" />
-                  </button>
-                ))}
-              </div>
-            )}
+            <TemplateGallery
+              slides={slidesFromTemplate(entry.pages, entry.previews)}
+              locked={locked}
+              lockedNote={`النسخة الكاملة تتطلب ترخيصًا — ${entry.kindLabel}`}
+              label={`معاينة ${entry.title}`}
+              onSlideChange={setPageIndex}
+            />
           </aside>
 
           <section className="min-w-0">
@@ -269,21 +244,12 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
             </div>
 
             {locked && (
-              <div className="mt-5 rounded-xl border border-gold/50 bg-gold/10 p-4">
-                <p className="text-[13px] font-extrabold text-ink">
-                  هذا القالب ضمن القوالب المميزة
-                </p>
-                <p className="mt-1 text-[12px] leading-6 text-muted">
-                  يمكنك معاينته ودراسته الآن. لاستخدامه أو تعديله، فعّل الترخيص
-                  المناسب لجهتك.
-                </p>
-                <a
-                  href={LICENSE_ROUTE}
-                  className="mt-3 inline-flex h-9 items-center rounded-lg bg-navy px-3 text-[12px] font-extrabold text-on-brand"
-                >
-                  عرض التراخيص
-                </a>
-              </div>
+              /*
+               * A paid template states the price and both doors — the plan
+               * ladder and the sales conversation — instead of a lock with no
+               * number on it.
+               */
+              <PremiumAccessNote prominent className="mt-5" />
             )}
 
             <dl className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -309,12 +275,22 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
               المحرر إلا بعد أن تختار.
             </p>
 
-            <a
-              href={createPathFor()}
-              className="mt-4 inline-flex h-10 items-center gap-2 rounded-[10px] border border-line bg-surface px-4 text-[12.5px] font-bold text-ink transition hover:border-brand"
-            >
-              بدء تصميم فارغ بمقاس تختاره
-            </a>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <a
+                href={createPathFor()}
+                className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-line bg-surface px-4 text-[12.5px] font-bold text-ink transition hover:border-brand"
+              >
+                بدء تصميم فارغ بمقاس تختاره
+              </a>
+              {/* A question about THIS template is a template-scoped request. */}
+              <ContactRequestButton
+                source="template"
+                templateId={entry.managedTemplate?.id ?? entry.sourceId}
+                defaultKind="template"
+                serviceLabel="قالب أو مكتبة قوالب"
+                label="اطلب خدمة على هذا القالب"
+              />
+            </div>
           </section>
         </div>
       </main>

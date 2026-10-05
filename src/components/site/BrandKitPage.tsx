@@ -18,7 +18,10 @@ import {
 import { BRAND } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 import { TemplatePreview } from "./TemplatePreview";
-import { buildIdentityDocument } from "@/lib/editor/identity-document";
+import {
+  buildIdentityDocument,
+  type IdentityDocumentKind,
+} from "@/lib/editor/identity-document";
 import { useEditor } from "@/lib/editor/store";
 import { LICENSE_ROUTE, editorPathFor } from "@/lib/site-routes";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
@@ -60,11 +63,20 @@ const PALETTE_PRESETS: {
   { name: "الأزرق الملكي", primaryColor: "#143c7b", secondaryColor: "#0c2552", accentColor: "#c6a05a", paperColor: "#f7f8fb", textColor: "#14213a" },
 ];
 
-type PreviewMode = "cover" | "letter" | "certificate";
+/**
+ * Every display mode the kit is shown in.
+ *
+ * The modes are the SAME document kinds the editor builds, so what a customer
+ * reviews here is exactly what «إنشاء مستند» produces: A4 portrait pages, a
+ * landscape 16:9 slide, and a vertical announcement card.
+ */
+type PreviewMode = IdentityDocumentKind;
 const PREVIEW_MODES: { id: PreviewMode; label: string }[] = [
   { id: "cover", label: "غلاف تقرير" },
   { id: "letter", label: "خطاب رسمي" },
   { id: "certificate", label: "شهادة تقدير" },
+  { id: "slide", label: "عرض 16:9" },
+  { id: "card", label: "بطاقة تهنئة" },
 ];
 
 function formatKitDate(kit: BrandKit) {
@@ -199,8 +211,17 @@ export function BrandKitPage() {
     };
 
   const { brandPresets } = useSiteSettings();
-  /** Built-in presets plus the defaults published from /admin. */
-  const allPresets = [...PALETTE_PRESETS, ...brandPresets.map(({ id: _id, ...p }) => p)];
+  /*
+   * Built-in presets plus the palettes the administration publishes. A preset
+   * the owner has unpublished (`published === false`) is simply not offered —
+   * the same rule the catalogue uses for draft templates.
+   */
+  const allPresets = [
+    ...PALETTE_PRESETS,
+    ...brandPresets
+      .filter((preset) => preset.published !== false)
+      .map(({ id: _id, published: _published, ...p }) => p),
+  ];
   const [savedColors, setSavedColors] = useState<string[]>([]);
   useEffect(() => setSavedColors(readSavedColors()), []);
   const saveColor = (color: string) => {
@@ -313,7 +334,7 @@ export function BrandKitPage() {
 
         <section className="grid gap-6 border-b border-line py-12 lg:grid-cols-[1.15fr_.85fr]"><div><h2 className="text-[20px] font-extrabold">صُممت وطُوّرت بعناية مؤسسية</h2><p className="mt-3 text-[14px] leading-7 text-muted">{BRAND.team} يقف خلف {BRAND.name}. يركز العمل على أدوات عملية وواضحة تساعد الفرق والأفراد على تجهيز مخرجاتهم الرسمية بطريقة منظمة.</p></div><div className="flex items-center gap-4 border-r-2 border-gold pr-4"><img src="/nasaq-mark.svg" alt="" aria-hidden className="size-12" /><div><strong className="block text-[16px] font-extrabold">{BRAND.team}</strong><span className="mt-1 block text-[12px] text-muted">فريق التطوير والتشغيل</span></div></div></section>
 
-        <section className="py-12"><h2 className="text-[20px] font-extrabold">ماذا تقدم {BRAND.name}؟</h2><div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Service icon={FilePenLine} title="تحرير التصاميم والمستندات" body="نصوص وصور وأشكال وجداول وعناصر قابلة للتحريك والتعديل." /><Service icon={LayoutTemplate} title="قوالب وصفحات جاهزة" body="ابدأ بتكوين منظم ثم عدّل المحتوى والهوية بما يناسب عملك." /><Service icon={FolderKanban} title="إدارة المشاريع" body="احفظ مشاريعك محلياً، وافتحها ونظم صفحاتها قبل التصدير." /><Service icon={Type} title="تجربة عربية" body="دعم RTL، النص العربي، المحاذاة، الخطوط، والأرقام في مساحة عمل واحدة." /><Service icon={Palette} title="هوية مرنة" body="اضبط ألوان الجهة وخطوطها ورؤوس الصفحات وتذييلها للمستند." /><Service icon={CheckCircle2} title="معاينة وتصدير" body="راجع التصميم ثم صدّره بالصيغة المتاحة وفق نوع الترخيص." /></div></section>
+        <section className="py-12"><h2 className="text-[20px] font-extrabold">ماذا تقدم {BRAND.name}؟</h2><div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><Service icon={FilePenLine} title="تحرير التصاميم والمستندات" body="نصوص وصور وأشكال وجداول وعناصر قابلة للتحريك والتعديل." /><Service icon={LayoutTemplate} title="قوالب وصفحات جاهزة" body="ابدأ بتكوين منظم ثم عدّل المحتوى والهوية بما يناسب عملك." /><Service icon={FolderKanban} title="إدارة المشاريع" body="احفظ مشاريعك محلياً، وافتحها ونظم صفحاتها قبل التصدير." /><Service icon={Type} title="محرر عربي بالكامل" body="النص العربي والمحاذاة والخطوط والأرقام في مساحة عمل واحدة، مصممة للعمل باللغة العربية." /><Service icon={Palette} title="هوية مرنة" body="اضبط ألوان الجهة وخطوطها ورؤوس الصفحات وتذييلها للمستند." /><Service icon={CheckCircle2} title="معاينة وتصدير" body="راجع التصميم ثم صدّره بالصيغة المتاحة وفق نوع الترخيص." /></div></section>
 
         <section className="grid gap-5 border-y border-line py-12 lg:grid-cols-2"><div><div className="flex items-center gap-2"><ShieldCheck className="size-5 text-brand-hover" /><h2 className="text-[20px] font-extrabold">لماذا {BRAND.name}؟</h2></div><p className="mt-3 text-[14px] leading-7 text-muted">تجمع المنصة القوالب والمشاريع والصفحات والعناصر وأدوات التحرير في واجهة عربية واحدة، لتصل إلى أدوات العمل بسرعة وتحافظ على تنظيم الملف من البداية إلى التصدير.</p></div><div><div className="flex items-center gap-2"><LockKeyhole className="size-5 text-brand-hover" /><h2 className="text-[20px] font-extrabold">الأمان والخصوصية</h2></div><p className="mt-3 text-[14px] leading-7 text-muted">يحفظ الإصدار الحالي المشاريع داخل متصفحك ولا يرفعها تلقائياً إلى خادم. لا تُضمَّن مفاتيح API أو بيانات اعتماد في الواجهة أو المستودع. أما التراخيص المدفوعة فتحتاج تحققاً خادمياً عند نشر النسخة التجارية، ولا يمكن اعتبار كود الواجهة المتاح للمتصفح محمياً من النسخ.</p></div></section>
 

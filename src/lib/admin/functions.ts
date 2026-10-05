@@ -314,6 +314,7 @@ function rowToSummary(row: Record<string, unknown>): AdminTemplateSummary {
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
     shortCode: normalizeShortCode(row.short_code),
+    previews: validPreviews(row.previews) ?? [],
   };
 }
 
@@ -380,6 +381,24 @@ function publicJsonContent(content: string): string {
  * percent-encoded variant (`;utf8,<svg …>`) would let raw markup reach a
  * stored row in a shape no scrubber here has inspected.
  */
+/**
+ * The additional preview images, validated the same way as the card image.
+ *
+ * `null` clears the list, `undefined` keeps whatever is stored (the same
+ * keep/replace/clear contract the thumbnail uses, so editing a title can never
+ * wipe an owner's uploaded previews).
+ */
+function validPreviews(value: unknown): string[] | null {
+  if (value === null) return null;
+  if (!Array.isArray(value)) return null;
+  const out: string[] = [];
+  for (const entry of value.slice(0, 12)) {
+    const valid = validThumbnail(entry);
+    if (valid) out.push(valid);
+  }
+  return out;
+}
+
 function validThumbnail(value: unknown): string | null {
   if (typeof value !== "string" || !value) return null;
   if (!/^data:image\/(png|jpe?g|webp|svg\+xml);base64,/i.test(value)) return null;
@@ -552,7 +571,7 @@ export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handle
     const db = await sql();
     await ensureProductTemplates(db);
     const rows = await db.query(
-      `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at, short_code
+      `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, previews, sort_order, created_at, updated_at, short_code
        FROM admin_templates WHERE status = 'published' ORDER BY sort_order ASC, updated_at DESC LIMIT 500`,
     );
     return rows.map(rowToSummary);
@@ -590,7 +609,7 @@ export const getPublishedTemplateMetaFn = createServerFn({ method: "GET" })
       const key = String(data.idOrSlug || "").trim().slice(0, 200);
       if (!key) return { ok: false, error: "معرّف غير صالح" };
       const rows = await db.query(
-        `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, sort_order, created_at, updated_at, short_code
+        `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, previews, sort_order, created_at, updated_at, short_code
          FROM admin_templates WHERE (slug = $1 OR id = $1 OR short_code = $1) AND status = 'published' LIMIT 1`,
         [key],
       );
@@ -733,15 +752,17 @@ async function upsertTemplate(
       const baseInput = t.slug ? sanitizeSlug(String(t.slug)) : slugifyTitle(title);
       const slug = await ensureUniqueSlug(db, baseInput || newId);
       const thumbnail = validThumbnail(t.thumbnail);
+      const previews = validPreviews(t.previews) ?? [];
       const rows = await db.query<{ id: string; slug: string | null }>(
         `INSERT INTO admin_templates
-          (id, slug, title, description, category, tier, status, kind, content, thumbnail, sort_order, origin_project_id, owner_edited, created_at, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, true, now(), now())
+          (id, slug, title, description, category, tier, status, kind, content, thumbnail, previews, sort_order, origin_project_id, owner_edited, created_at, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13, true, now(), now())
          ON CONFLICT (origin_project_id) WHERE origin_project_id IS NOT NULL
          DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description,
            category = EXCLUDED.category, tier = EXCLUDED.tier, status = EXCLUDED.status,
            kind = EXCLUDED.kind, content = EXCLUDED.content,
            thumbnail = COALESCE(EXCLUDED.thumbnail, admin_templates.thumbnail),
+           previews = EXCLUDED.previews,
            owner_edited = true,
            updated_at = now()
          RETURNING id, slug`,
@@ -756,6 +777,7 @@ async function upsertTemplate(
           kind,
           content,
           thumbnail,
+          JSON.stringify(previews),
           Number.isFinite(Number(t.sortOrder)) ? Math.trunc(Number(t.sortOrder)) : 0,
           origin,
         ],
@@ -774,8 +796,8 @@ async function upsertTemplate(
       return { ok: true as const, id: saved.id, slug: saved.slug, title, shortCode };
     }
     const existing = t.id
-      ? await db.query<{ content: string; kind: string; slug: string | null; thumbnail: string | null }>(
-          `SELECT content, kind, slug, thumbnail FROM admin_templates WHERE id = $1`,
+      ? await db.query<{ content: string; kind: string; slug: string | null; thumbnail: string | null; previews: unknown }>(
+          `SELECT content, kind, slug, thumbnail, previews FROM admin_templates WHERE id = $1`,
           [t.id],
         )
       : [];
@@ -806,6 +828,18 @@ async function upsertTemplate(
       thumbnail = existing[0]?.thumbnail ?? null;
     else if (validThumbnail(t.thumbnail)) thumbnail = t.thumbnail;
     else return { ok: false as const, error: thumbnailRejection(String(t.thumbnail)) };
+    /*
+     * PREVIEW SET — the same three cases as the card image, applied to the
+     * ordered list: an explicit array replaces it (an empty array clears it),
+     * `null` clears it, and undefined keeps what is stored.
+     */
+    const submittedPreviews = validPreviews(t.previews);
+    const previews: string[] =
+      t.previews === null
+        ? []
+        : t.previews === undefined
+          ? (validPreviews(existing[0]?.previews) ?? [])
+          : (submittedPreviews ?? (validPreviews(existing[0]?.previews) ?? []));
     const { randomUUID } = await import("node:crypto");
     const id = existing.length ? String(t.id) : `tpl_${randomUUID()}`;
     // Slug handling: keep existing if present, else generate from title or explicit input
@@ -832,11 +866,12 @@ async function upsertTemplate(
     }
 
     await db.query(
-      `INSERT INTO admin_templates (id, slug, title, description, category, tier, status, kind, content, thumbnail, sort_order, owner_edited, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, true, now(), now())
+      `INSERT INTO admin_templates (id, slug, title, description, category, tier, status, kind, content, thumbnail, previews, sort_order, owner_edited, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12, true, now(), now())
        ON CONFLICT (id) DO UPDATE SET slug = EXCLUDED.slug, title = EXCLUDED.title, description = EXCLUDED.description,
          category = EXCLUDED.category, tier = EXCLUDED.tier, status = EXCLUDED.status, kind = EXCLUDED.kind,
-         content = EXCLUDED.content, thumbnail = EXCLUDED.thumbnail, sort_order = EXCLUDED.sort_order,
+         content = EXCLUDED.content, thumbnail = EXCLUDED.thumbnail, previews = EXCLUDED.previews,
+         sort_order = EXCLUDED.sort_order,
          owner_edited = true, updated_at = now()`,
       [
         id,
@@ -849,6 +884,7 @@ async function upsertTemplate(
         kind,
         content,
         thumbnail,
+        JSON.stringify(previews),
         Number.isFinite(Number(t.sortOrder)) ? Math.trunc(Number(t.sortOrder)) : 0,
       ],
     );

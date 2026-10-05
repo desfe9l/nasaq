@@ -57,11 +57,35 @@ export function RedirectToSignIn({ to = SIGN_IN_PATH }: { to?: string }) {
   return <Navigate to={to} search={safe ? { redirect: safe } : undefined} replace />;
 }
 
+/**
+ * The one session-resolution screen.
+ *
+ * A guarded page is never rendered before the session is known, so this is what
+ * the author actually sees for that moment. It is a quiet, branded skeleton —
+ * a paper-coloured page, the platform lockup, and one plain Arabic sentence —
+ * rather than a bare line of text: the transition into the real page should
+ * read as the page arriving, not as a debug state passing by.
+ */
+export function SessionGateLoader({ note }: { note?: string }) {
+  return (
+    <div className="grid min-h-screen place-items-center bg-paper px-6" role="status" aria-live="polite">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <img src="/nasaq-mark.svg" alt="" aria-hidden className="size-10 opacity-80" />
+        <div className="grid gap-1.5">
+          <strong className="text-[15px] font-extrabold text-ink">جارٍ تجهيز مساحتك…</strong>
+          <span className="text-[12.5px] text-muted">{note ?? "نتحقق من حسابك ثم نفتح الصفحة."}</span>
+        </div>
+        <span aria-hidden className="h-1 w-24 overflow-hidden rounded-full bg-line-2">
+          <span className="session-gate-bar block h-full w-1/3 rounded-full bg-navy" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export function RequireSignedIn({ children }: { children: ReactNode }) {
   const { user, isPending } = useCurrentUserState();
-  if (isPending) {
-    return <div className="grid min-h-screen place-items-center text-sm text-muted">جارٍ التحقق…</div>;
-  }
+  if (isPending) return <SessionGateLoader />;
   if (!user) return <RedirectToSignIn />;
   return <>{children}</>;
 }
@@ -89,11 +113,7 @@ export function RequireAdmin({ children }: { children: ReactNode }) {
 
   if (isPending || allowed === null) {
     if (!user && !isPending) return <RedirectToSignIn />;
-    return (
-      <div className="grid min-h-screen place-items-center text-sm text-muted">
-        جارٍ التحقق من صلاحية الإدارة…
-      </div>
-    );
+    return <SessionGateLoader note="جارٍ التحقق من صلاحية الإدارة…" />;
   }
   if (!user) return <RedirectToSignIn />;
   if (!allowed) {
