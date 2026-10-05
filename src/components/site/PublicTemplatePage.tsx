@@ -16,6 +16,7 @@ import type { AdminTemplateSummary } from "@/lib/admin/types";
 import { CREATE_ROUTE, editorPathFor } from "@/lib/site-routes";
 import { SmartImage } from "@/components/ui/SmartImage";
 import { PremiumAccessNote } from "@/components/site/TemplateAccess";
+import { TemplateOfflineButton } from "@/components/site/TemplateOfflineButton";
 import { ContactRequestButton } from "@/components/site/ClientRequestPanel";
 
 interface Props {
@@ -335,6 +336,27 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
                   <p className="text-center text-[11px] leading-5 text-muted">
                     يفتح كنسخة مستقلة في مساحتك — القالب الأصلي يبقى محفوظًا بدون تعديل. التخزين محلي أولًا.
                   </p>
+                )}
+
+                {!licenseLoading && template && (!isLicensed || canAccessLicensed) && (
+                  <div className="flex justify-center">
+                    <TemplateOfflineButton
+                      templateId={template.id}
+                      title={template.title}
+                      tier={isLicensed ? "licensed" : "free"}
+                      source="admin"
+                      fetchContent={async () => {
+                        const res = await getPublishedTemplateFn({ data: { id: template.id } });
+                        if (!res.ok || !res.template?.content) {
+                          throw new Error(!res.ok ? res.error : "محتوى القالب غير متاح");
+                        }
+                        return {
+                          content: String(res.template.content),
+                          thumbnail: template.thumbnail,
+                        };
+                      }}
+                    />
+                  </div>
                 )}
 
                 {/* A template-scoped question belongs to this template, not to a

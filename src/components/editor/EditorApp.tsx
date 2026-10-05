@@ -261,6 +261,7 @@ import { EditorWorkspaceSkeleton } from "@/components/ui/Skeleton";
 import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
 import { EditorAccountMenu } from "./EditorAccountMenu";
 import { HeaderPaint } from "./HeaderPaint";
+import { EditorSyncStatus } from "@/components/ui/OfflineStatus";
 import {
   OVERLAY_BREAKPOINT,
   DOCK_BREAKPOINT,
@@ -2833,6 +2834,7 @@ function Studio({
               className="editor-doc-name"
               placeholder="مستند جديد"
             />
+            <EditorSyncStatus />
           </div>
         </div>
 

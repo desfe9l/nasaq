@@ -10,8 +10,7 @@
  * local asset store so an offline open has everything it needs.
  */
 
-import { getStorageOwner } from "@/lib/editor/storage-owner";
-import type { Project } from "@/lib/editor/model";
+import { clone, type CanvasEl, type Project } from "@/lib/editor/model";
 
 function collectImageSrcs(project: Project): string[] {
   const srcs: string[] = [];
@@ -71,11 +70,15 @@ export async function cacheProjectAssets(project: Project): Promise<{ cached: nu
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject)=>{
-    const r = new FileReader();
-    r.onload = ()=> resolve(String(r.result));
-    r.onerror = ()=> reject(r.error);
-    r.readAsDataURL(blob);
+  return blob.arrayBuffer().then((buffer) => {
+    const bytes = new Uint8Array(buffer);
+    const mime = blob.type || "application/octet-stream";
+    let binary = "";
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+    }
+    return `data:${mime};base64,${btoa(binary)}`;
   });
 }
 
@@ -101,4 +104,91 @@ export async function cacheProjectFonts(project: Project): Promise<void> {
       await fetch(document.querySelector<HTMLLinkElement>('link[href*="fonts.googleapis.com"]')?.href ?? "https://fonts.googleapis.com/css2?family=Cairo", { cache: "force-cache", mode: "no-cors" }).catch(()=>null);
     } catch {}
   }
+}
+
+type AssetNode = {
+  src?: string;
+  style?: { bgImage?: string };
+  children?: AssetNode[];
+};
+
+async function inlineRemoteUrl(
+  src: string,
+  memo: Map<string, string>,
+): Promise<{ src: string; cached: boolean; failed: boolean }> {
+  if (!src || src.startsWith("data:") || src.startsWith("blob:")) {
+    return { src, cached: false, failed: false };
+  }
+  if (!/^https?:\/\//i.test(src)) return { src, cached: false, failed: false };
+  const hit = memo.get(src);
+  if (hit) return { src: hit, cached: true, failed: false };
+  try {
+    if (typeof fetch === "undefined") return { src, cached: false, failed: true };
+    const res = await fetch(src, { cache: "force-cache" });
+    if (!res.ok) return { src, cached: false, failed: true };
+    const blob = await res.blob();
+    const dataUrl = await blobToDataUrl(blob);
+    memo.set(src, dataUrl);
+    try {
+      const { saveAsset, listAssets } = await import("@/lib/editor/storage");
+      const existing = await listAssets();
+      if (!existing.some((asset) => asset.src === dataUrl)) {
+        await saveAsset({ name: `offline-${Date.now()}`, src: dataUrl, w: 800, h: 600 });
+      }
+    } catch {
+      /* The data URL inside the project is the offline copy. The library row is extra. */
+    }
+    return { src: dataUrl, cached: true, failed: false };
+  } catch {
+    return { src, cached: false, failed: true };
+  }
+}
+
+async function inlineNode(
+  node: AssetNode,
+  memo: Map<string, string>,
+  tally: { cached: number; failed: number },
+): Promise<void> {
+  if (typeof node.src === "string" && node.src) {
+    const next = await inlineRemoteUrl(node.src, memo);
+    if (next.cached) tally.cached += 1;
+    if (next.failed) tally.failed += 1;
+    node.src = next.src;
+  }
+  const bg = node.style?.bgImage;
+  if (typeof bg === "string" && bg) {
+    const next = await inlineRemoteUrl(bg, memo);
+    if (next.cached) tally.cached += 1;
+    if (next.failed) tally.failed += 1;
+    if (node.style) node.style.bgImage = next.src;
+  }
+  for (const child of node.children ?? []) {
+    await inlineNode(child, memo, tally);
+  }
+}
+
+/**
+ * Copy every remote image the project paints into the document itself
+ * (data URLs) and the local asset library. Pages that already embed data
+ * URLs are left untouched. A failed fetch is counted — the caller must not
+ * mark the project offline-ready while a required asset is still remote.
+ */
+export async function materializeProjectForOffline(
+  project: Project,
+): Promise<{ project: Project; cached: number; failed: number }> {
+  const next = clone(project);
+  const memo = new Map<string, string>();
+  const tally = { cached: 0, failed: 0 };
+  for (const page of next.pages ?? []) {
+    if (typeof page.bgImage === "string" && page.bgImage) {
+      const inlined = await inlineRemoteUrl(page.bgImage, memo);
+      if (inlined.cached) tally.cached += 1;
+      if (inlined.failed) tally.failed += 1;
+      page.bgImage = inlined.src;
+    }
+    for (const el of page.elements ?? []) {
+      await inlineNode(el as CanvasEl & AssetNode, memo, tally);
+    }
+  }
+  return { project: next, cached: tally.cached, failed: tally.failed };
 }

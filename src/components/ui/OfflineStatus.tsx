@@ -1,20 +1,27 @@
 import { useEffect, useState } from "react";
-import { subscribeConnectivity, getConnectivityStatus, type SyncStatus } from "@/lib/offline/connectivity";
+import { useRouterState } from "@tanstack/react-router";
+import {
+  editorStatusLabel,
+  getConnectivityStatus,
+  subscribeConnectivity,
+  type SyncStatus,
+} from "@/lib/offline/connectivity";
+import { useEditor } from "@/lib/editor/store";
 
 const LABEL: Record<SyncStatus, { text: string; tone: string }> = {
   offline: { text: "دون اتصال", tone: "bg-amber-500" },
   online: { text: "متصل", tone: "bg-emerald-500" },
-  syncing: { text: "جاري المزامنة…", tone: "bg-sky-500 animate-pulse" },
+  syncing: { text: "جاري المزامنة", tone: "bg-sky-500 animate-pulse" },
   synced: { text: "تمت المزامنة", tone: "bg-emerald-600" },
   error: { text: "تعذر المزامنة", tone: "bg-red-500" },
 };
 
 /**
- * Compact Offline / Syncing / Synced status — never obstructs the editor canvas.
- * Fixed corner pill, RTL friendly, minimal footprint. Only shows offline/syncing
- * prominently; "online/synced" fades quickly.
+ * Compact Offline / Syncing / Synced status for pages outside the editor.
+ * The editor has its own header indicator (`EditorSyncStatus`).
  */
 export function OfflineStatus({ compact = false }: { compact?: boolean }) {
+  const path = useRouterState({ select: (s) => s.location.pathname });
   const [status, setStatus] = useState<SyncStatus>(getConnectivityStatus().status);
   const [online, setOnline] = useState(getConnectivityStatus().online);
   const [visible, setVisible] = useState(true);
@@ -28,7 +35,6 @@ export function OfflineStatus({ compact = false }: { compact?: boolean }) {
     return unsub;
   }, []);
 
-  // Auto-hide "online/synced" after 3s so it doesn't clutter editor
   useEffect(() => {
     if (status === "online" || status === "synced") {
       const t = setTimeout(() => setVisible(false), 3000);
@@ -37,9 +43,9 @@ export function OfflineStatus({ compact = false }: { compact?: boolean }) {
     setVisible(true);
   }, [status]);
 
+  if (path.startsWith("/editor")) return null;
   if (!visible && (status === "online" || status === "synced")) return null;
 
-  // Always show when offline or syncing/error
   const show = visible || status === "offline" || status === "syncing" || status === "error";
   if (!show) return null;
 
@@ -70,19 +76,41 @@ export function OfflineStatus({ compact = false }: { compact?: boolean }) {
   );
 }
 
-/** Inline badge for header/workspace — smaller, for toolbar areas */
-export function OfflineBadge() {
+/** Always-visible save + sync state in the editor header. */
+export function EditorSyncStatus() {
+  const saveState = useEditor((s) => s.saveState);
   const [status, setStatus] = useState<SyncStatus>(getConnectivityStatus().status);
-  useEffect(() => subscribeConnectivity((s) => setStatus(s)), []);
-  if (status === "online" || status === "synced") return null;
-  const meta = LABEL[status];
+  const [online, setOnline] = useState(getConnectivityStatus().online);
+
+  useEffect(() => {
+    return subscribeConnectivity((next, isOnline) => {
+      setStatus(next);
+      setOnline(isOnline);
+    });
+  }, []);
+
+  const label = editorStatusLabel(saveState, status, online);
+  const tone =
+    label === "دون اتصال"
+      ? "is-offline"
+      : label === "جاري الحفظ"
+        ? "is-pending"
+        : label === "جاري المزامنة"
+          ? "is-sync"
+          : label === "تمت المزامنة"
+            ? "is-synced"
+            : "is-saved";
+
   return (
     <span
-      data-testid="offline-badge"
-      className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-1 text-[11px] font-bold"
+      role="status"
+      aria-live="polite"
+      data-testid="editor-sync-status"
+      className={`editor-sync-status ${tone}`}
+      title={label}
     >
-      <span className={["size-1.5 rounded-full", meta.tone].join(" ")} aria-hidden />
-      {meta.text}
+      <span className="dot" aria-hidden />
+      {label}
     </span>
   );
 }

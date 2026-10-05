@@ -2,7 +2,7 @@
 // Caches the application shell and required static assets so the app can launch offline.
 // Versioned cache names ensure updates don't serve stale shells.
 
-const CACHE_VERSION = "nasaq-shell-v2";
+const CACHE_VERSION = "nasaq-shell-v3";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const FONT_CACHE = `${CACHE_VERSION}-fonts`;
@@ -12,6 +12,10 @@ const FONT_CACHE = `${CACHE_VERSION}-fonts`;
 // added dynamically on fetch.
 const PRECACHE_URLS = [
   "/",
+  "/workspace",
+  "/projects",
+  "/templates",
+  "/editor",
   "/manifest.webmanifest",
   "/nasaq-mark.svg",
   "/icons/nasaq-192.png",

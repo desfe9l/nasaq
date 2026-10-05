@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Download, Check, Loader2, WifiOff } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { getStorageOwner } from "@/lib/editor/storage-owner";
 
@@ -18,15 +19,6 @@ interface Props {
  */
 export function TemplateOfflineButton({ templateId, title, tier, source, fetchContent, onCached }: Props) {
   const [state, setState] = useState<"idle" | "checking" | "cached" | "downloading" | "offline-blocked">("checking");
-  const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
-
-  useEffect(() => {
-    const on = () => setIsOnline(true);
-    const off = () => setIsOnline(false);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
-  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -40,10 +32,6 @@ export function TemplateOfflineButton({ templateId, title, tier, source, fetchCo
   }, [templateId]);
 
   const handleDownload = async () => {
-    if (tier && tier !== "free" && !isOnline) {
-      setState("offline-blocked");
-      return;
-    }
     if (!fetchContent) return;
     setState("downloading");
     try {
@@ -59,10 +47,12 @@ export function TemplateOfflineButton({ templateId, title, tier, source, fetchCo
         setState("cached");
         onCached?.();
       } else {
-        setState("idle");
+        setState(res.error.includes("اتصال") ? "offline-blocked" : "idle");
+        toast.error(res.error);
       }
     } catch {
       setState("idle");
+      toast.error("تعذر حفظ القالب للعمل دون اتصال");
     }
   };
 
@@ -103,7 +93,7 @@ export function TemplateOfflineButton({ templateId, title, tier, source, fetchCo
       )}
     >
       {state === "downloading" ? <Loader2 className="size-3 animate-spin" /> : <Download className="size-3" />}
-      حفظ دون اتصال
+      حفظ للعمل دون اتصال
     </button>
   );
 }

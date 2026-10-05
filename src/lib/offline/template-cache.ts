@@ -9,6 +9,9 @@
  */
 
 import { getStorageOwner, ANON_OWNER } from "@/lib/editor/storage-owner";
+import type { ThemeId } from "@/lib/editor/model";
+import type { CatalogEntry } from "@/lib/templates/catalog";
+import type { CachedEntitlement } from "./entitlement-cache";
 
 export interface OfflineTemplateRecord {
   id: string; // template id (admin_templates.id or user_templates.id or builtin pack/page id)
@@ -121,8 +124,54 @@ export async function removeOfflineTemplate(id: string, ownerId: string = getSto
 
 /**
  * Authorized download helper — gates on entitlement and fetches template content.
- * Caller should have checked entitlements, but we re-validate via cacheEntitlement.
+ * Paid / licensed templates are cached only after a server-validated entitlement
+ * (or its unexpired offline grace). Local pages are never treated as a purchase.
  */
+function isPaidTier(tier?: string | null): boolean {
+  return Boolean(tier && tier !== "free");
+}
+
+function entitlementAllowsPremium(ent: CachedEntitlement | null): boolean {
+  if (!ent) return false;
+  if (ent.isSuspended) return false;
+  if (ent.isAdmin || ent.isOwner) return true;
+  return ent.entitlements?.premium_templates === true;
+}
+
+async function premiumTemplateAllowed(ownerId: string): Promise<boolean> {
+  const { getCachedEntitlement, isEntitlementValidOffline, cacheEntitlement } = await import("./entitlement-cache");
+  const cached = await getCachedEntitlement(ownerId);
+  if (isEntitlementValidOffline(cached) && entitlementAllowsPremium(cached)) return true;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+  try {
+    const { getLicenseStatusFn } = await import("@/lib/license/functions");
+    const status = await getLicenseStatusFn();
+    const entitlements = status.entitlements;
+    const allowed = Boolean(
+      entitlements?.premium_templates ||
+      (status as { isAdmin?: boolean }).isAdmin ||
+      (status as { isOwner?: boolean }).isOwner,
+    );
+    if (!allowed) return false;
+    await cacheEntitlement({
+      ownerId,
+      entitlements: entitlements ?? {},
+      validatedAt: Date.now(),
+      expiresAt: (status as { license?: { expiresAt?: string | null }; expiresAt?: string | null }).license?.expiresAt
+        ?? (status as { expiresAt?: string | null }).expiresAt
+        ?? null,
+      isAdmin: Boolean((status as { isAdmin?: boolean }).isAdmin),
+      isOwner: Boolean((status as { isOwner?: boolean }).isOwner),
+      isSuspended: Boolean((status as { isSuspended?: boolean }).isSuspended),
+      hasLicense: Boolean((status as { hasLicense?: boolean }).hasLicense),
+      source: "server",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function downloadAndCacheTemplate(input: {
   id: string;
   title: string;
@@ -132,15 +181,10 @@ export async function downloadAndCacheTemplate(input: {
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const ownerId = getStorageOwner();
   if (ownerId === ANON_OWNER) return { ok: false, error: "سجّل الدخول لحفظ القالب دون اتصال" };
-  // Enforce licensing: paid tier requires entitlement (cached grace counts)
-  if (input.tier && input.tier !== "free") {
-    const { getCachedEntitlement, isEntitlementValidOffline } = await import("./entitlement-cache");
-    const cached = await getCachedEntitlement(ownerId);
-    const valid = isEntitlementValidOffline(cached);
-    // If offline cache says not entitled, we still allow download when ONLINE
-    // because server will gate fetchContent. Offline download is only after online auth.
-    if (!valid && typeof navigator !== "undefined" && navigator.onLine === false) {
-      return { ok: false, error: "القالب المميز يتطلب اتصالاً للتحقق من الترخيص قبل التنزيل" };
+  if (isPaidTier(input.tier)) {
+    const allowed = await premiumTemplateAllowed(ownerId);
+    if (!allowed) {
+      return { ok: false, error: "لا يمكن حفظ قالب غير مرخّص للعمل دون اتصال" };
     }
   }
   try {
@@ -159,4 +203,48 @@ export async function downloadAndCacheTemplate(input: {
   } catch (err) {
     return { ok: false, error: String(err).slice(0, 400) };
   }
+}
+
+/**
+ * Load template bytes for an offline save. Licensed managed templates go
+ * through `getPublishedTemplateFn`, which refuses unauthorized content.
+ * Free catalogue entries use the local seed already shipped with the app.
+ */
+export async function offlineContentForCatalogEntry(
+  entry: CatalogEntry,
+  opts: { themeId: string; orgName: string },
+): Promise<{ content: string; thumbnail?: string | null; pagesCount?: number }> {
+  if (entry.kind === "custom") {
+    const mod = await import("@/lib/templates/custom-templates");
+    const rec = await mod.customTemplateById(entry.sourceId);
+    if (!rec) throw new Error("القالب غير موجود");
+    const pages = (rec as { pages?: unknown[] }).pages;
+    return {
+      content: JSON.stringify(rec),
+      thumbnail: (rec as { thumbnail?: string | null }).thumbnail ?? entry.thumbnail ?? null,
+      pagesCount: Array.isArray(pages) ? pages.length : entry.pages?.length,
+    };
+  }
+  if (entry.managedTemplate) {
+    const mod = await import("@/lib/admin/functions");
+    const res = await mod.getPublishedTemplateFn({ data: { id: entry.managedTemplate.id } });
+    if (!res.ok || !res.template?.content) {
+      if (entry.managedTemplate.tier === "licensed") {
+        throw new Error(!res.ok ? res.error : "هذا القالب غير متاح دون ترخيص");
+      }
+    } else {
+      return {
+        content: String(res.template.content),
+        thumbnail: entry.thumbnail ?? res.template.thumbnail ?? null,
+        pagesCount: entry.pages?.length,
+      };
+    }
+  }
+  const { entryProjectSeed } = await import("@/lib/templates/catalog");
+  const seed = entryProjectSeed(entry, { themeId: opts.themeId as ThemeId, orgName: opts.orgName });
+  return {
+    content: JSON.stringify(seed),
+    thumbnail: entry.thumbnail ?? null,
+    pagesCount: seed.pages?.length ?? entry.pages?.length,
+  };
 }

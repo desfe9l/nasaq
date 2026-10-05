@@ -777,28 +777,11 @@ export function TemplatesPage({
                     title={entry.title ?? entry.id}
                     tier={tier}
                     source={entry.kind === "custom" ? "personal" : (entry as unknown as { managedTemplate?: unknown }).managedTemplate ? "admin" : "builtin"}
-                    fetchContent={async () => {
-                      try {
-                        if (entry.kind === "custom") {
-                          const mod = await import("@/lib/templates/custom-templates");
-                          const rec = await mod.customTemplateById((entry as unknown as { sourceId: string }).sourceId);
-                          if (rec) return { content: JSON.stringify(rec), thumbnail: (rec as unknown as { thumbnail?: string | null }).thumbnail ?? null, pagesCount: Array.isArray((rec as unknown as { pages?: unknown[] }).pages) ? (rec as unknown as { pages: unknown[] }).pages.length : undefined };
-                        }
-                        const kind = (entry as unknown as { kind: string }).kind;
-                        const pubId = (entry as unknown as { publishedId?: string }).publishedId;
-                        if (kind === "published" || pubId) {
-                          const mod = await import("@/lib/admin/functions");
-                          const res = await (mod.getPublishedTemplateFn as unknown as (arg: unknown) => Promise<{ ok: boolean; template?: { content: string } }> )({ data: { id: String(pubId ?? (entry as unknown as { sourceId?: string }).sourceId ?? entry.id) } } as never).catch(() => null);
-                          if (res?.ok && (res as unknown as { template?: { content?: string } })?.template?.content) return { content: String((res as unknown as { template: { content: string } }).template.content), thumbnail: entry.thumbnail ?? null, pagesCount: entry.pages?.length };
-                        }
-                      } catch {}
-                      try {
-                        const seed = entryProjectSeed(entry, { themeId: theme, orgName });
-                        return { content: JSON.stringify(seed), thumbnail: entry.thumbnail ?? null, pagesCount: seed.pages?.length ?? entry.pages?.length };
-                      } catch {
-                        return { content: JSON.stringify({ pages: entry.pages, title: entry.title }), thumbnail: entry.thumbnail ?? null, pagesCount: entry.pages?.length };
-                      }
-                    }}
+                    fetchContent={() =>
+                      import("@/lib/offline/template-cache").then((m) =>
+                        m.offlineContentForCatalogEntry(entry, { themeId: theme, orgName }),
+                      )
+                    }
                   />
                 )}
               </div>

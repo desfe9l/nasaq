@@ -48,7 +48,9 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { OPEN_NEW_DOCUMENT_EVENT } from "@/lib/auth/use-workspace-entry";
 import { licenseSummary } from "@/lib/license/summary";
 import { useLicense, type LicenseState } from "@/lib/license/client";
-import { HardDriveDownload, WifiOff } from "lucide-react";
+import { WifiOff } from "lucide-react";
+import { ProjectOfflineButton } from "./ProjectOfflineButton";
+import { TemplateOfflineButton } from "./TemplateOfflineButton";
 import { useBrandIdentity } from "@/lib/product/use-brand-identity";
 import { applyBrandToSeed } from "@/lib/editor/brand-design";
 import { toast } from "sonner";
@@ -225,6 +227,7 @@ function ContinueCard({
             <FolderOpen className="size-4" />
             متابعة التحرير
           </button>
+          <ProjectOfflineButton projectId={project.id} updatedAt={project.updatedAt} />
           <span className="inline-flex items-center gap-1.5 text-[11px] font-bold text-muted">
             <span
               className="size-2.5 rounded-full"
@@ -883,7 +886,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
             <>
               <div className={CARD_WRAP}>
                 {shown.slice(0, HOME_TEMPLATE_LIMIT).map((entry) => (
-                  <div key={entry.id} className={cn("flex", CARD_W)}>
+                  <div key={entry.id} className={cn("flex flex-col gap-2", CARD_W)}>
                     <TemplateCard
                       entry={entry}
                       href={templatePathFor(entrySlug(entry))}
@@ -894,6 +897,19 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
                         onQuickView: () => setQuickViewId(entry.id),
                       }}
                     />
+                    {!packLocked(entry) && (
+                      <TemplateOfflineButton
+                        templateId={entry.id}
+                        title={entry.title}
+                        tier={entry.managedTemplate?.tier === "licensed" || (entry.kind === "pack" && !canUseDemoPack(entry.sourceId)) ? "licensed" : "free"}
+                        source={entry.kind === "custom" ? "personal" : entry.managedTemplate ? "admin" : "builtin"}
+                        fetchContent={() =>
+                          import("@/lib/offline/template-cache").then((m) =>
+                            m.offlineContentForCatalogEntry(entry, { themeId: "official", orgName: storeOrg }),
+                          )
+                        }
+                      />
+                    )}
                   </div>
                 ))}
               </div>

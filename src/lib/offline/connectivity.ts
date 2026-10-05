@@ -148,3 +148,22 @@ export function getConnectivityStatus(): { status: SyncStatus; online: boolean; 
 export function triggerSync(): void {
   scheduleSync(200);
 }
+
+/** Save phases the editor store already publishes. Kept local to avoid a store import cycle. */
+export type SavePhase = "idle" | "dirty" | "saving" | "saved" | "error";
+
+/**
+ * The one compact status the editor header shows. Only the product's five
+ * labels — derived from the live save phase and the existing sync status.
+ */
+export function editorStatusLabel(
+  save: SavePhase,
+  sync: SyncStatus,
+  isOnline: boolean,
+): "محفوظ" | "جاري الحفظ" | "دون اتصال" | "جاري المزامنة" | "تمت المزامنة" {
+  if (save === "saving" || save === "dirty") return "جاري الحفظ";
+  if (sync === "syncing") return "جاري المزامنة";
+  if (!isOnline || sync === "offline") return "دون اتصال";
+  if (sync === "synced") return "تمت المزامنة";
+  return "محفوظ";
+}

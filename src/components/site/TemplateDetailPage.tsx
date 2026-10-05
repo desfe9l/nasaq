@@ -40,6 +40,7 @@ import {
   type TemplateActionResult,
 } from "@/lib/templates/entry-actions";
 import { useLicense } from "@/lib/license/client";
+import { canUseDemoPack } from "@/lib/product/product";
 import { useBrandIdentity } from "@/lib/product/use-brand-identity";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import {
@@ -220,13 +221,16 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
                 <TemplateOfflineButton
                   templateId={entry.sourceId}
                   title={entry.title}
-                  tier={entry.managedTemplate?.tier ?? (locked ? "premium" : "free")}
+                  tier={entry.managedTemplate?.tier === "licensed" || (entry.kind === "pack" && !canUseDemoPack(entry.sourceId)) ? "licensed" : "free"}
                   source={entry.managedTemplate ? "admin" : entry.kind === "custom" ? "personal" : "builtin"}
-                  fetchContent={async () => {
-                    // For builtin/managed, serialize the live pages; for paid managed we still allow after auth
-                    const content = JSON.stringify({ pages: entry.pages, title: entry.title });
-                    return { content, thumbnail: entry.thumbnail ?? null, pagesCount: entry.pages.length };
-                  }}
+                  fetchContent={() =>
+                    import("@/lib/offline/template-cache").then((m) =>
+                      m.offlineContentForCatalogEntry(entry, {
+                        themeId: storeTheme ?? "official",
+                        orgName,
+                      }),
+                    )
+                  }
                 />
               )}
               <button

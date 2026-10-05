@@ -6,8 +6,9 @@ import { saveProject, getProject, listProjects, deleteProject } from "@/lib/edit
 import { createProject } from "@/lib/editor/templates";
 import { cacheEntitlement, getCachedEntitlement, isEntitlementValidOffline } from "./entitlement-cache";
 import { enqueueSync, listPendingQueue, processSyncQueue, resolveConflict } from "./sync-queue";
-import { cacheTemplateForOffline, getOfflineTemplate, isTemplateAvailableOffline } from "./template-cache";
-import { saveWorkspaceSnapshot, getWorkspaceSnapshot } from "./workspace-cache";
+import { cacheTemplateForOffline, getOfflineTemplate, isTemplateAvailableOffline, downloadAndCacheTemplate } from "./template-cache";
+import { saveWorkspaceSnapshot, getWorkspaceSnapshot, prepareProjectForOffline, isProjectPreparedOffline } from "./workspace-cache";
+import { editorStatusLabel } from "./connectivity";
 
 // fake navigator.onLine toggling
 function setOnline(v: boolean) {
@@ -257,4 +258,129 @@ test("offline queue prevents duplicate sync operations (dedupe)", async () => {
   setOnline(true);
   await processSyncQueue();
   setStorageOwner(ANON_OWNER);
+});
+
+test("editor header status follows the existing save and sync state", () => {
+  assert.equal(editorStatusLabel("saving", "online", true), "جاري الحفظ");
+  assert.equal(editorStatusLabel("dirty", "synced", true), "جاري الحفظ");
+  assert.equal(editorStatusLabel("saved", "syncing", true), "جاري المزامنة");
+  assert.equal(editorStatusLabel("saved", "online", false), "دون اتصال");
+  assert.equal(editorStatusLabel("saved", "offline", true), "دون اتصال");
+  assert.equal(editorStatusLabel("saved", "synced", true), "تمت المزامنة");
+  assert.equal(editorStatusLabel("saved", "online", true), "محفوظ");
+  assert.equal(editorStatusLabel("idle", "online", true), "محفوظ");
+});
+
+test("prepareProjectForOffline keeps pages locally and records the project", async () => {
+  setOnline(true);
+  setStorageOwner("prep-user");
+  const base = createProject("official");
+  const proj = await saveProject({ ...base, id: "prep-1", name: "تحضير" });
+  const result = await prepareProjectForOffline("prep-1");
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.pages, proj.pages.length);
+  assert.equal(await isProjectPreparedOffline("prep-1"), true);
+
+  setOnline(false);
+  const opened = await getProject("prep-1");
+  assert.ok(opened);
+  assert.equal(opened!.pages.length, proj.pages.length);
+  assert.equal((await prepareProjectForOffline("prep-1")).ok, false, "preparing requires a connection");
+
+  setOnline(true);
+  const missing = await prepareProjectForOffline("does-not-exist");
+  assert.equal(missing.ok, false);
+
+  await deleteProject("prep-1");
+  assert.equal(await isProjectPreparedOffline("prep-1"), false);
+  setStorageOwner(ANON_OWNER);
+});
+
+test("remote assets are stored inside the project when it is prepared", async () => {
+  setOnline(true);
+  setStorageOwner("asset-user");
+  const original = globalThis.fetch;
+  globalThis.fetch = (async () =>
+    new Response(new Uint8Array([1, 2, 3, 4]), {
+      status: 200,
+      headers: { "content-type": "image/png" },
+    })) as typeof fetch;
+  try {
+    const base = createProject("official");
+    base.pages[0]?.elements.push({
+      id: "img-remote",
+      type: "image",
+      name: "remote",
+      x: 0,
+      y: 0,
+      w: 12,
+      h: 12,
+      rotation: 0,
+      opacity: 1,
+      z: 2,
+      src: "https://cdn.example.test/logo.png",
+      style: {},
+    } as never);
+    await saveProject({ ...base, id: "prep-asset", name: "أصول" });
+    const result = await prepareProjectForOffline("prep-asset");
+    assert.equal(result.ok, true);
+    if (result.ok) assert.ok(result.assetsCached >= 1);
+    const stored = await getProject("prep-asset");
+    const src = stored?.pages[0]?.elements.find((el) => el.id === "img-remote")?.src ?? "";
+    assert.equal(src.startsWith("data:image/png;base64,"), true);
+  } finally {
+    globalThis.fetch = original;
+    await deleteProject("prep-asset");
+    setStorageOwner(ANON_OWNER);
+  }
+});
+
+test("unauthorized paid templates are not cached for offline use", async () => {
+  setOnline(false);
+  setStorageOwner("unlicensed-user");
+  let called = false;
+  const denied = await downloadAndCacheTemplate({
+    id: "secret-tpl",
+    title: "قالب مدفوع",
+    source: "admin",
+    tier: "licensed",
+    fetchContent: async () => {
+      called = true;
+      return { content: "SECRET-PAID-CONTENT" };
+    },
+  });
+  assert.equal(denied.ok, false);
+  assert.equal(called, false, "fetch must not run before entitlement is valid");
+  assert.equal(await isTemplateAvailableOffline("secret-tpl"), false);
+
+  await cacheEntitlement({
+    ownerId: "unlicensed-user",
+    entitlements: { premium_templates: true } as unknown as Record<string, boolean>,
+    validatedAt: Date.now(),
+    expiresAt: null,
+    isAdmin: false,
+    isOwner: false,
+    hasLicense: true,
+    source: "server",
+  });
+  const allowed = await downloadAndCacheTemplate({
+    id: "secret-tpl",
+    title: "قالب مدفوع",
+    source: "admin",
+    tier: "licensed",
+    fetchContent: async () => ({ content: "{\"pages\":[]}" }),
+  });
+  assert.equal(allowed.ok, true);
+  assert.equal(await isTemplateAvailableOffline("secret-tpl"), true);
+
+  setStorageOwner(ANON_OWNER);
+  const anon = await downloadAndCacheTemplate({
+    id: "free-anon",
+    title: "مجاني",
+    source: "builtin",
+    tier: "free",
+    fetchContent: async () => ({ content: "{}" }),
+  });
+  assert.equal(anon.ok, false);
+  setOnline(true);
 });
