@@ -63,6 +63,8 @@ export function ViewMenu({
   const zoom = useEditor((s) => s.zoom);
   const clipExport = useEditor((s) => s.clipExport);
   const setClipExport = useEditor((s) => s.setClipExport);
+  const showOutsidePage = useEditor((s) => s.showOutsidePage);
+  const setShowOutsidePage = useEditor((s) => s.setShowOutsidePage);
   const activePage = useEditor((s) =>
     s.pages.find((page) => page.id === s.activePageId),
   );
@@ -244,14 +246,27 @@ export function ViewMenu({
         checked={bubbleEnabled}
         onSelect={() => toggleBubble()}
       />
+      <MenuGroup title="العناصر خارج الصفحة" />
+      <MenuRow
+        label="إظهار العناصر خارج الصفحة"
+        checked={showOutsidePage !== false}
+        hint="الافتراضي — كل عنصر يبقى مرئيًا حتى لو تجاوز حدّ الصفحة"
+        onSelect={() => setShowOutsidePage(true)}
+      />
       <MenuRow
         label="إخفاء العناصر خارج الصفحة"
-        checked={Boolean(activePage && activePage.clipContent !== false)}
-        hint="يقص الظهور فقط — العناصر تبقى في الملف"
+        checked={showOutsidePage === false}
+        hint="قصٌّ في العرض فقط: لا يحذف عنصرًا ولا يحرّكه ولا يغيّر قياسه"
+        onSelect={() => setShowOutsidePage(false)}
+      />
+      <MenuRow
+        label="إخفاء العناصر خارج هذه الصفحة فقط"
+        checked={Boolean(activePage?.clipContent)}
+        hint="استثناء لصفحة واحدة — العناصر تبقى في الملف"
         onSelect={() => {
           if (!activePage) return;
           setPageBackground(activePage.id, {
-            clipContent: activePage.clipContent === false,
+            clipContent: !activePage.clipContent,
           });
         }}
       />

@@ -6,13 +6,27 @@
  */
 
 import { SITE_ORIGIN } from "@/lib/og/share";
+import { isShortCode } from "@/lib/templates/short-code";
+import { sharedShortPathFor, sharedTemplatePathFor } from "@/lib/site-routes";
 
 export type PersonalVisibility = "private" | "shared";
 
-export function personalSharePath(token: string): string | null {
-  const clean = String(token || "").trim();
-  if (!/^[a-zA-Z0-9_-]{16,80}$/.test(clean)) return null;
-  return `/templates/share/${encodeURIComponent(clean)}`;
+/** The historical opaque token: 16–80 URL-safe characters. */
+const SHARE_TOKEN_RE = /^[a-zA-Z0-9_-]{16,80}$/;
+
+/**
+ * The public address of a shared personal template.
+ *
+ * A short code (`/s/k7m2p9q`) is preferred — it is what gets copied, printed and
+ * dictated. An older row that only has the long token still resolves, through
+ * its legacy path, so links already in circulation keep working.
+ */
+export function personalSharePath(tokenOrCode: string): string | null {
+  const clean = String(tokenOrCode || "").trim();
+  if (!clean) return null;
+  if (isShortCode(clean)) return sharedShortPathFor(clean);
+  if (SHARE_TOKEN_RE.test(clean)) return sharedTemplatePathFor(clean);
+  return null;
 }
 
 export function personalShareAbsoluteUrl(token: string, origin?: string): string | null {
@@ -22,12 +36,27 @@ export function personalShareAbsoluteUrl(token: string, origin?: string): string
   return `${base}${path}`;
 }
 
+/**
+ * The key to build a share URL from: the short code when the row has one,
+ * otherwise the legacy token.
+ */
+export function personalShareKey(row: {
+  shortCode?: string | null;
+  shareToken?: string | null;
+} | null): string | null {
+  if (!row) return null;
+  if (row.shortCode && isShortCode(row.shortCode)) return row.shortCode;
+  if (row.shareToken && SHARE_TOKEN_RE.test(row.shareToken)) return row.shareToken;
+  return null;
+}
+
 /** Private and missing templates are indistinguishable to everyone else. */
 export function personalTemplateIsPublic(row: {
   visibility?: string | null;
   shareToken?: string | null;
 } | null): boolean {
-  return Boolean(row && row.visibility === "shared" && row.shareToken && personalSharePath(row.shareToken));
+  if (!row || row.visibility !== "shared") return false;
+  return personalShareKey(row) !== null;
 }
 
 export function canUsePersonalTemplates(access: {

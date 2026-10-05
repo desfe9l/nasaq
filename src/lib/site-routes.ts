@@ -258,9 +258,44 @@ export function templateSharePathFor(idOrSlug: string): string {
   return `${templatePathFor(idOrSlug)}/share`;
 }
 
-/** `/share/<token>` — a personally shared template copy. */
+/**
+ * `/templates/share/<token>` — a personally shared template copy.
+ *
+ * This used to build `/share/<token>`, an address no route ever served, so any
+ * link produced with it was a 404. The real route lives under `/templates`,
+ * and `/share/<token>` now redirects to the short form below.
+ */
 export function sharedTemplatePathFor(token: string): string {
-  return `/share/${segment(token)}`;
+  return `${TEMPLATES_ROUTE}/share/${segment(token)}`;
+}
+
+/* ── short share links ─────────────────────────────────────────────────── */
+
+/**
+ * `/t/<code>` — the short, professional address of a published template.
+ *
+ * Seven unambiguous characters instead of an internal id: `nasaq.app/t/k7m2p9q`
+ * rather than `…/templates/tpl_9f2c1a7e-4b0d-4a55-9c31-0aa9d0b21f44`.
+ */
+export const SHORT_TEMPLATE_ROUTE = "/t";
+
+/** `/s/<code>` — the short address of a personally shared template. */
+export const SHORT_SHARE_ROUTE = "/s";
+
+/** Short-code segment, or `null` when the value is not a code. */
+function shortSegment(code: string): string | null {
+  const raw = String(code || "").trim().toLowerCase();
+  return /^[a-z0-9]{4,12}$/.test(raw) ? raw : null;
+}
+
+export function templateShortPathFor(code: string): string | null {
+  const part = shortSegment(code);
+  return part ? `${SHORT_TEMPLATE_ROUTE}/${part}` : null;
+}
+
+export function sharedShortPathFor(code: string): string | null {
+  const part = shortSegment(code);
+  return part ? `${SHORT_SHARE_ROUTE}/${part}` : null;
 }
 
 /** `/create?…` — the creation screen, optionally pre-configured. */

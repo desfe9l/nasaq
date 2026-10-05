@@ -50,7 +50,8 @@ test("the default configuration is one A4 portrait page", () => {
   assert.equal(project.pages.length, 1);
   assert.equal(project.pages[0].w, 210);
   assert.equal(project.pages[0].h, 297);
-  assert.equal(project.pages[0].clipContent, true);
+  // No stored per-page preference: the page follows «إظهار العناصر خارج الصفحة».
+  assert.equal(project.pages[0].clipContent, undefined);
   assert.ok(project.name.length > 0);
 });
 

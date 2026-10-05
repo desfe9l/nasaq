@@ -8,6 +8,7 @@ import {
 } from "@/lib/editor/model";
 import type { EntryProjectSeed } from "@/lib/templates/catalog";
 import { freshPages } from "@/lib/templates/custom-templates";
+import { normalizeShortCode } from "@/lib/templates/short-code";
 
 /** Only published admin records have share links. Never link local/private templates. */
 export function publishedTemplatePath(idOrSlug: string): string {
@@ -45,8 +46,22 @@ export function templateIdFromShortToken(token: string): string | null {
   }
 }
 
-/** A concise public URL, reversible without adding another database column. */
-export function shortPublishedTemplatePath(template: { id: string; slug?: string | null }): string {
+/**
+ * A concise public URL.
+ *
+ * The seven-character code minted onto the row (`/t/<code>`) wins whenever the
+ * record carries one: it is short, stable and independent of the internal id.
+ * Older rows fall back to the reversible token already in circulation, and a
+ * template that has neither keeps its descriptive `/templates/<slug>` address —
+ * no link that was ever handed out stops resolving.
+ */
+export function shortPublishedTemplatePath(template: {
+  id: string;
+  slug?: string | null;
+  shortCode?: string | null;
+}): string {
+  const code = normalizeShortCode(template.shortCode);
+  if (code) return `/t/${code}`;
   const token = shortTemplateToken(template.id);
   return token
     ? `/t/${token}`
@@ -62,7 +77,7 @@ export function publishedTemplateAbsoluteUrl(idOrSlug: string, origin?: string):
 }
 
 export function shortPublishedTemplateAbsoluteUrl(
-  template: { id: string; slug?: string | null },
+  template: { id: string; slug?: string | null; shortCode?: string | null },
   origin?: string,
 ): string {
   const base = (origin || SITE_ORIGIN).replace(/\/$/, "");

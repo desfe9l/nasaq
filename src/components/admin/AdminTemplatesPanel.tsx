@@ -52,6 +52,7 @@ import {
   publishedTemplateAbsoluteUrl,
   shortPublishedTemplateAbsoluteUrl,
 } from "@/lib/templates/published";
+import { templateShortPathFor } from "@/lib/site-routes";
 import { prepareTemplateThumbnail } from "@/lib/templates/thumbnail";
 import { generateTemplateName } from "@/lib/templates/naming";
 import { buildTemplateShareCopy, ensureTemplateShareUrl } from "@/lib/templates/sharing-copy";
@@ -70,8 +71,18 @@ interface Draft {
   fileName: string;
   titleIsManual: boolean;
   thumbnail: string | null;
+  /**
+   * The preview image differs from the stored one.
+   *
+   * Only a CHANGED image is sent: re-uploading the row's own (already stored)
+   * data URL on every metadata edit doubled the payload for nothing and, past a
+   * platform body limit, turned "rename a template" into a failed save.
+   */
+  thumbnailChanged: boolean;
   sortOrder: number;
   slug?: string | null;
+  /** Short public address (`/t/<code>`), minted by the server on first save. */
+  shortCode?: string | null;
 }
 
 interface ShareDraft {
@@ -97,9 +108,13 @@ const EMPTY_DRAFT: Draft = {
   fileName: "",
   titleIsManual: false,
   thumbnail: null,
+  thumbnailChanged: false,
   sortOrder: 0,
   slug: "",
 };
+
+/** The server's storage budget for one template payload (`admin/functions.ts`). */
+const MAX_TEMPLATE_PAYLOAD_BYTES = 24 * 1024 * 1024;
 
 const input =
  "h-10 w-full rounded-lg border border-line bg-surface px-3 text-[13px] font-semibold outline-none focus:border-brand focus:ring-1 focus:ring-brand/40";
@@ -176,27 +191,47 @@ export function AdminTemplatesPanel() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await adminListTemplatesFn();
-    if (res.ok) setItems(res.templates);
-    else toast.error(res.error);
-    setLoading(false);
+    try {
+      const res = await adminListTemplatesFn();
+      if (res.ok) setItems(res.templates);
+      else toast.error(res.error);
+    } catch (error) {
+      console.error("[admin] template list failed:", error);
+      toast.error(
+        (error instanceof Error ? error.message : "تعذّر قراءة قائمة القوالب").slice(0, 400),
+      );
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const editTemplate = async (item: AdminTemplateSummary) => {
     setBusyId(item.id);
-    const result = await adminGetTemplateFn({ data: { id: item.id } });
-    setBusyId(null);
-    if (!result.ok) return toast.error(result.error);
-    setDraft({
-      ...EMPTY_DRAFT,
-      ...result.template,
-      content: result.template.content,
-      contentChanged: false,
-      fileName: "",
-      titleIsManual: true,
-      thumbnail: result.template.thumbnail,
-      slug: result.template.slug || "",
-    });
+    try {
+      const result = await adminGetTemplateFn({ data: { id: item.id } });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setDraft({
+        ...EMPTY_DRAFT,
+        ...result.template,
+        content: result.template.content,
+        contentChanged: false,
+        fileName: "",
+        titleIsManual: true,
+        thumbnail: result.template.thumbnail,
+        thumbnailChanged: false,
+        slug: result.template.slug || "",
+      });
+    } catch (error) {
+      console.error("[admin] open template failed:", error);
+      toast.error(
+        (error instanceof Error ? error.message : "تعذّر فتح القالب").slice(0, 400),
+      );
+    } finally {
+      setBusyId(null);
+    }
   };
 
   useEffect(() => {
@@ -281,35 +316,85 @@ export function AdminTemplatesPanel() {
   };
 
   const save = async () => {
-    if (!draft) return;
-    if (!draft.id && !draft.content) return toast.error("ارفع ملف JSON أو SVG، أو اختر مشروعًا محليًا");
+    if (!draft || saving) return;
+    if (!draft.id && !draft.content) {
+      toast.error("ارفع ملف JSON أو SVG، أو اختر مشروعًا محليًا");
+      return;
+    }
+    /*
+     * Pre-flight the payload against the SAME budget the server enforces, so an
+     * oversized document is refused here with a usable message instead of dying
+     * in the network layer as an anonymous failure.
+     */
+    if (draft.contentChanged) {
+      const bytes = new TextEncoder().encode(draft.content).length;
+      if (bytes > MAX_TEMPLATE_PAYLOAD_BYTES) {
+        toast.error(
+          `حجم المحتوى ${(bytes / 1048576).toFixed(1)} م.ب ويتجاوز الحد الأقصى ${
+            MAX_TEMPLATE_PAYLOAD_BYTES / 1048576
+          } م.ب — قلّل الصور المضمّنة داخل المستند ثم أعد الحفظ`,
+          { duration: 9000 },
+        );
+        return;
+      }
+    }
     setSaving(true);
-    const res = await adminUpsertTemplateFn({
-      data: {
-        template: {
-          id: draft.id,
-          slug: draft.slug?.trim() ? draft.slug.trim() : undefined,
-          title: draft.titleIsManual ? draft.title : "",
-          titleIsManual: draft.titleIsManual,
-          sourceName: draft.fileName,
-          format: draft.fileName.split(".").pop() || draft.kind,
-          description: draft.description,
-          category: draft.category,
-          tier: draft.tier,
-          status: draft.status,
-          kind: draft.kind,
-          content: draft.contentChanged ? draft.content : "",
-          thumbnail: draft.thumbnail,
-          sortOrder: draft.sortOrder,
+    try {
+      const res = await adminUpsertTemplateFn({
+        data: {
+          template: {
+            id: draft.id,
+            slug: draft.slug?.trim() ? draft.slug.trim() : undefined,
+            /* An untouched title is derived server-side from the file. */
+            title: draft.titleIsManual ? draft.title : "",
+            titleIsManual: draft.titleIsManual,
+            sourceName: draft.fileName,
+            format: draft.fileName.split(".").pop() || draft.kind,
+            description: draft.description,
+            category: draft.category,
+            tier: draft.tier,
+            status: draft.status,
+            kind: draft.kind,
+            content: draft.contentChanged ? draft.content : "",
+            /*
+             * `null` clears the image, a changed one replaces it, and an
+             * untouched image is simply not sent — the server keeps the stored
+             * bytes. Every case is now explicit, so "replace the picture" can
+             * no longer be silently dropped.
+             */
+            thumbnail: draft.thumbnailChanged
+              ? draft.thumbnail
+              : draft.thumbnail && !draft.id
+                ? draft.thumbnail
+                : undefined,
+            sortOrder: draft.sortOrder,
+          },
         },
-      },
-    });
-    setSaving(false);
-    if (!res.ok) return toast.error(res.error);
-    toast.success(draft.id ? `تم تحديث «${res.title}»` : `تم إضافة «${res.title}»`);
-    invalidateAdminPublicContent();
-    setDraft(null);
-    void load();
+      });
+      if (!res.ok) {
+        toast.error(res.error, { duration: 9000 });
+        return;
+      }
+      toast.success(draft.id ? `تم تحديث «${res.title}»` : `تم إضافة «${res.title}»`);
+      invalidateAdminPublicContent();
+      setDraft(null);
+      await load();
+    } catch (error) {
+      /*
+       * A rejected server call is a FAILED SAVE and is reported as one — with
+       * its reason. The draft stays open so the author's work is still there.
+       */
+      console.error("[admin] template save failed:", error);
+      toast.error(
+        (error instanceof Error ? error.message : "تعذّر حفظ القالب — أعد المحاولة").slice(
+          0,
+          400,
+        ),
+        { duration: 9000 },
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleSelected = (id: string) =>
@@ -487,7 +572,7 @@ export function AdminTemplatesPanel() {
         <div>
           <h2 className="text-[18px] font-black">إدارة القوالب</h2>
           <p className="text-[12px] text-muted">
-            {counts.all} قالب · {counts.published} منشور · {counts.licensed} مرخّص. المنشور يظهر في صفحة القوالب، و«مرخّص» يُفتح عبر تحقق الترخيص على الخادم فقط. كل قالب منشور له رابط عام ثابت <span className="font-mono" dir="ltr">/templates/:slug</span>.
+            {counts.all} قالب · {counts.published} منشور · {counts.licensed} مرخّص. المنشور يظهر في صفحة القوالب، و«مرخّص» يُفتح عبر تحقق الترخيص على الخادم فقط. كل قالب منشور له رابط عام ثابت <span className="font-mono" dir="ltr">/templates/:slug</span> ورابط مختصر للمشاركة <span className="font-mono" dir="ltr">/t/:code</span>.
           </p>
         </div>
         <button type="button" className={primaryBtn} onClick={() => setDraft({ ...EMPTY_DRAFT })}>
@@ -534,6 +619,13 @@ export function AdminTemplatesPanel() {
                 value={draft.slug || ""}
                 onChange={(e) => setDraft({ ...draft, slug: e.target.value })}
               />
+              {draft.shortCode ? (
+                <span className="mt-1 block text-[11px] text-muted">
+                  الرابط المختصر العام:{" "}
+                  <span className="font-mono" dir="ltr">/t/{draft.shortCode}</span>{" "}
+                  — ثابت لا يتغيّر
+                </span>
+              ) : null}
             </label>
             <label className={label}>
               التصنيف
@@ -638,7 +730,9 @@ export function AdminTemplatesPanel() {
                    * become a storable image instead of a size error.
                    */
                   const dataUrl = await prepareTemplateThumbnail(f);
-                  setDraft((d) => (d ? { ...d, thumbnail: dataUrl } : d));
+                  setDraft((d) =>
+                    d ? { ...d, thumbnail: dataUrl, thumbnailChanged: true } : d,
+                  );
                 } catch (err) {
                   toast.error(err instanceof Error ? err.message : "تعذّرت معالجة الصورة");
                 }
@@ -659,7 +753,11 @@ export function AdminTemplatesPanel() {
                 <button
                   type="button"
                   className={ghostBtn}
-                  onClick={() => setDraft((d) => (d ? { ...d, thumbnail: null } : d))}
+                  onClick={() =>
+                    setDraft((d) =>
+                      d ? { ...d, thumbnail: null, thumbnailChanged: true } : d,
+                    )
+                  }
                 >
                   إزالة الصورة
                 </button>
@@ -805,6 +903,12 @@ export function AdminTemplatesPanel() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((t) => {
             const displaySlug = templateDisplaySlug(t);
+            /*
+             * The address worth handing out is the short one (`/t/<code>`)
+             * minted for the row; the descriptive slug page stays the fallback
+             * and the canonical page for «فتح» when there is no code yet.
+             */
+            const shortPath = t.shortCode ? templateShortPathFor(t.shortCode) : null;
             const publicUrl = shortPublishedTemplateAbsoluteUrl(t);
             return (
               <article
@@ -932,7 +1036,7 @@ export function AdminTemplatesPanel() {
                           مشاركة على Pinterest
                         </button>
                         <a
-                          href={publishedTemplatePath(displaySlug)}
+                          href={shortPath || publishedTemplatePath(displaySlug)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className={cn(ghostBtn, "inline-flex")}

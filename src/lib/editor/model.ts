@@ -199,6 +199,15 @@ export interface ElStyle {
   svgStrokeWidth?: number;
   /** `shape` elements: id from `shapes.ts`. Absent means a plain rectangle. */
   shapeId?: string;
+  /**
+   * إطار الصورة — `image`/`logo` elements: id from `image-frames.ts`.
+   *
+   * The frame is a property of the picture, not a second element: its
+   * silhouette clips the artwork in fractional box units, so replacing the
+   * image, cropping inside the frame, resizing and rotating all keep the shape
+   * exactly as chosen. Absent (or an unknown id) means a plain rectangle.
+   */
+  frameId?: string;
   /** Preserve the element's intrinsic proportions while resizing. */
   aspectLock?: boolean;
   /**

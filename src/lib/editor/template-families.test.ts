@@ -11,7 +11,8 @@ test("family templates stay inside the page and stay distinct", () => {
     const page = createTemplatePage(meta.id, THEMES.official, "جهة الاختبار");
     assert.equal(page.w, 210);
     assert.equal(page.h, 297);
-    assert.equal(page.clipContent, true);
+    // Templates carry no forced clip; the workspace preference decides.
+    assert.equal(page.clipContent, undefined);
     assert.ok(page.elements.length >= 5, meta.id);
     assert.equal(buildFamilyPage(meta.id, THEMES.official, "")?.elements.length, page.elements.length);
     const signature = page.elements

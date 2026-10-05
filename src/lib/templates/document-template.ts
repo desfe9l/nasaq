@@ -11,7 +11,15 @@ import { pageSize, type PackId, type Page, type SizeId, type ThemeId } from "@/l
 
 export const TEMPLATE_DOCUMENT_FORMAT = "nasaq.template";
 export const TEMPLATE_DOCUMENT_VERSION = 1;
-export const MAX_TEMPLATE_DOCUMENT_BYTES = 4 * 1024 * 1024;
+/**
+ * Storage budget for one template document, in UTF-8 bytes.
+ *
+ * Raised from a 4 MB *character* guess: a report template with a few embedded
+ * photographs is normally 6–10 MB of base64, and refusing it made «حفظ كقالب»
+ * fail on exactly the documents the platform exists for. The server measures the
+ * same budget (`admin/functions.ts`), so the client and the store agree.
+ */
+export const MAX_TEMPLATE_DOCUMENT_BYTES = 24 * 1024 * 1024;
 
 export interface TemplateFont {
   family: string;
@@ -130,7 +138,12 @@ export function serializeTemplateDocument(doc: TemplateDocument): string {
 
 export function validateTemplateDocument(raw: string): string | null {
   if (typeof raw !== "string" || !raw.trim()) return "المحتوى فارغ";
-  if (raw.length > MAX_TEMPLATE_DOCUMENT_BYTES) return "حجم القالب يتجاوز 4 ميغابايت";
+  const bytes =
+    typeof TextEncoder === "function" ? new TextEncoder().encode(raw).length : raw.length;
+  if (bytes > MAX_TEMPLATE_DOCUMENT_BYTES)
+    return `حجم القالب ${Math.round(bytes / (1024 * 1024))} ميغابايت ويتجاوز الحد الأقصى ${Math.round(
+      MAX_TEMPLATE_DOCUMENT_BYTES / (1024 * 1024),
+    )} ميغابايت — قلّل الصور المضمّنة ثم أعد الحفظ`;
   try {
     const parsed = JSON.parse(raw) as unknown;
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {

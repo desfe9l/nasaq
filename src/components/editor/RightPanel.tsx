@@ -98,6 +98,7 @@ import {
 import { ArabicTextTools } from "./ArabicTextTools";
 import { ImageAiTools } from "./ImageAiTools";
 import { ImageEnhanceTools } from "./ImageEnhanceTools";
+import { ImageFrameGallery } from "./ImageFrameGallery";
 import { ScrubField, ScrubInput } from "./ui/ScrubInput";
 import { IMAGE_ADJUSTMENT_PRESETS } from "@/lib/editor/images";
 // Library SVG is painted inline: allow-list scrubbed at the render boundary.
@@ -1711,6 +1712,25 @@ export function PropertiesPanel({
                 <>
                   {page && <ImageAiTools el={el} pageId={page.id} />}
                   {page && <ImageEnhanceTools el={el} pageId={page.id} />}
+                  {/*
+                   * إطار الصورة — the same gallery Report Tools inserts from,
+                   * here as a property: the frame belongs to the picture, so it
+                   * can be changed or removed at any time without touching the
+                   * source, the crop, the box or the rotation.
+                   */}
+                  <Field label="إطار الصورة / الشكل" full>
+                    <ImageFrameGallery
+                      mode="apply"
+                      activeId={el.style.frameId}
+                      disabled={Boolean(el.locked)}
+                      onPick={(frameId) =>
+                        updateStyle(el.id, {
+                          frameId: frameId ?? undefined,
+                          ...(frameId ? {} : { radius: el.style.radius }),
+                        })
+                      }
+                    />
+                  </Field>
                   {/* «ملاءمة الصفحة»: one press takes the picture to the page's
                       own size — full bleed, or the largest size that stays
                       inside the sheet with the picture's proportions. */}

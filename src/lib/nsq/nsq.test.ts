@@ -288,8 +288,12 @@ describe("nsq package round trip", () => {
     assert.equal(p.pages![0].bgImageFit, "cover");
     assert.equal(p.pages![0].bgImageX, 24);
     assert.equal(p.pages![0].bgImageY, 76);
-    assert.equal(p.pages![0].clipContent, false, "saved show-overflow preference survives");
-    assert.equal(p.pages![1].clipContent, true, "missing legacy preference defaults to clipping");
+    assert.equal(p.pages![0].clipContent, false, "a saved per-page preference survives the round trip");
+    assert.equal(
+      p.pages![1].clipContent,
+      undefined,
+      "a page with no stored preference follows the workspace preference, not a forced clip",
+    );
     const [text, image, shape, group] = p.pages![0].elements;
     assert.deepEqual(text, original.pages[0].elements[0]);
     assert.equal(image.src, PNG);

@@ -9,7 +9,7 @@ import { useEditor } from "@/lib/editor/store";
 import { projectAccessBlock } from "@/lib/editor/access-limits";
 import { editorPathFor } from "@/lib/site-routes";
 import { templateToProjectSeed } from "@/lib/templates/document-template";
-import { personalShareAbsoluteUrl } from "@/lib/templates/personal";
+import { personalShareAbsoluteUrl, personalShareKey } from "@/lib/templates/personal";
 import {
   deletePersonalTemplateFn,
   duplicatePersonalTemplateFn,
@@ -26,6 +26,8 @@ interface Row {
   category: string;
   visibility: "private" | "shared";
   shareToken: string | null;
+  /** Short public code (`/s/<code>`); preferred over the long legacy token. */
+  shortCode?: string | null;
   thumbnail: string | null;
   pageCount: number;
   pageW: number;
@@ -152,7 +154,9 @@ function TemplateRow({
   onOpen: () => void;
   onChanged: () => void;
 }) {
-  const url = row.visibility === "shared" && row.shareToken ? personalShareAbsoluteUrl(row.shareToken) : null;
+  /* The short link when the row has one; the legacy token still resolves. */
+  const shareKey = row.visibility === "shared" ? personalShareKey(row) : null;
+  const url = shareKey ? personalShareAbsoluteUrl(shareKey) : null;
   const rename = async () => {
     const title = window.prompt("اسم القالب", row.title);
     if (!title || title.trim() === row.title) return;
@@ -180,8 +184,9 @@ function TemplateRow({
       toast.error(result.error);
       return;
     }
-    if (result.shareToken) {
-      const link = personalShareAbsoluteUrl(result.shareToken);
+    const key = result.shortCode || result.shareToken;
+    if (key) {
+      const link = personalShareAbsoluteUrl(key);
       if (link) {
         try {
           await navigator.clipboard.writeText(link);

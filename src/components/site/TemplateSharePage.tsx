@@ -25,6 +25,7 @@ import {
   TEMPLATES_ROUTE,
   templatePathFor,
   templatePreviewPathFor,
+  templateShortPathFor,
 } from "@/lib/site-routes";
 import { cn } from "@/lib/utils";
 
@@ -77,10 +78,18 @@ export function TemplateSharePage({ slug }: { slug: string }) {
     : published
       ? templatePreviewPathFor(templateDisplaySlug(published))
       : null;
+  /*
+   * What gets copied is the SHORT link (`/t/<code>`) whenever the published row
+   * has one: it is the address people paste into a chat, a slide or an email,
+   * and it resolves to this very template page. The descriptive
+   * `/templates/<slug>` address stays available as «صفحة القالب».
+   */
+  const shortPath = published?.shortCode ? templateShortPathFor(published.shortCode) : null;
+  const sharePath = shortPath || canonicalPath;
   const absolute =
-    canonicalPath && typeof window !== "undefined"
-      ? new URL(canonicalPath, window.location.origin).href
-      : canonicalPath;
+    sharePath && typeof window !== "undefined"
+      ? new URL(sharePath, window.location.origin).href
+      : sharePath;
 
   const copy = async () => {
     if (!absolute) return;

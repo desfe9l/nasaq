@@ -667,7 +667,6 @@ export function validatePages(
         typeof rawPage.name === "string"
           ? rawPage.name.slice(0, 200)
           : `صفحة ${index + 1}`,
-      clipContent: rawPage.clipContent !== false,
       elements: rawEls
         .map((e) => cleanEl(e, 0))
         .filter((e): e is CanvasEl => e !== null),
@@ -698,6 +697,12 @@ export function validatePages(
       else if (opts.strict && value !== undefined)
         throw new NsqError("invalid", `page ${key}`);
     }
+    /*
+     * «قصّ العرض» is a per-page EXCEPTION, not a default: only an explicit
+     * stored value is restored, and a file that never carried one follows the
+     * workspace preference «إظهار العناصر خارج الصفحة» — so re-importing an
+     * older project never starts hiding artwork its author could see.
+     */
     if (typeof rawPage.clipContent === "boolean")
       page.clipContent = rawPage.clipContent;
     if (rawPage.bgGradient !== undefined) {
