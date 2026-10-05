@@ -1,9 +1,12 @@
 /**
  * Template import inside the owner dashboard.
  *
- * PSD, DOCX, PPTX, PDF and images are authorised on the server, then converted
- * in the browser into real NASAQ elements. The owner can open the document,
- * save it, or keep it as a draft template.
+ * A thin surface over the one canonical import service
+ * (`@/lib/editor/import/run`): the same call converts PSD, DOCX, PPTX, XLSX,
+ * PDF and images, and this panel adds the owner-only extras — the per-asset
+ * library routing decisions, the font attachments and the PSD report — then
+ * opens the result as a fully editable native NASAQ document in the editor.
+ * There is no second converter here.
  */
 
 import { useMemo, useRef, useState } from "react";
@@ -17,22 +20,19 @@ import {
   Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
-import { adminUpsertTemplateFn } from "@/lib/admin/functions";
 import { authorizeTemplateImportFn } from "@/lib/psd/functions";
 import { syncStorageOwner } from "@/lib/auth/storage-owner-sync";
 import type { CanvasEl, Project } from "@/lib/editor/model";
-import {
-  getSetting,
-  listAssets,
-  saveAsset,
-  saveProject,
-  setSetting,
-  type AssetFolder,
-} from "@/lib/editor/storage";
-import { editorPathFor } from "@/lib/site-routes";
-import type { AssetDecision, AssetDisposition, PsdImportResult } from "@/lib/editor/psd/pipeline";
+import { getSetting, listAssets, saveAsset, setSetting, type AssetFolder } from "@/lib/editor/storage";
+import type { AssetDecision, AssetDisposition } from "@/lib/editor/psd/pipeline";
 import { classifyImport } from "@/lib/editor/import/detect";
-import type { BuiltImport, ImportKind } from "@/lib/editor/import/shared";
+import type { TemplateImport } from "@/lib/editor/import/run";
+import type { ImportKind } from "@/lib/editor/import/shared";
+import {
+  openSavedInEditor,
+  saveImportedDocument,
+  saveImportedTemplate,
+} from "@/components/import/commit";
 import { repairBreakdown, repairProject, type RepairCounts, type RepairFix } from "@/lib/editor/import/repair";
 import { magicHexOf } from "@/lib/editor/psd/security";
 import { generateTemplateName, resolveTemplateName } from "@/lib/templates/naming";
@@ -145,8 +145,11 @@ export function PsdImportPanel() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [progress, setProgress] = useState({ stage: "", percent: 0, detail: "" });
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<PsdImportResult | null>(null);
-  const [office, setOffice] = useState<BuiltImport | null>(null);
+  const [converted, setConverted] = useState<TemplateImport | null>(null);
+  // The canonical result, split for the two report flavours it can carry:
+  // a PSD conversion report, or the Office/PDF/raster notes + stats.
+  const result = converted?.psd ?? null;
+  const office = converted && !converted.psd ? converted : null;
   const [formatFilter, setFormatFilter] = useState<(typeof FORMAT_CHIPS)[number]["id"]>("all");
   const [folders, setFolders] = useState<AssetFolder[]>([]);
   const [library, setLibrary] = useState<{ id: string; name: string; src: string }[]>([]);
@@ -163,8 +166,7 @@ export function PsdImportPanel() {
 
   const take = (next: File | null) => {
     setError(null);
-    setResult(null);
-    setOffice(null);
+    setConverted(null);
     setPhase("idle");
     setFonts({});
     setRepair(null);
@@ -196,8 +198,7 @@ export function PsdImportPanel() {
     if (!file) return;
     setPhase("working");
     setError(null);
-    setResult(null);
-    setOffice(null);
+    setConverted(null);
     setRepair(null);
     setRepairedProject(null);
     try {
@@ -215,53 +216,34 @@ export function PsdImportPanel() {
       });
       if (!gate.ok) throw new Error(gate.error);
       await syncStorageOwner();
-      if (classified.format === "psd" || classified.format === "psb") {
-        const [assets, storedFolders] = await Promise.all([
-          listAssets(),
-          getSetting<AssetFolder[]>("assetFolders"),
-        ]);
-        const folderList = Array.isArray(storedFolders) ? storedFolders : [];
-        setFolders(folderList);
-        setLibrary(assets.map((asset) => ({ id: asset.id, name: asset.name, src: asset.src })));
-        const { fingerprintAssets } = await import("@/lib/editor/psd/pipeline");
-        const { runPsdImport } = await import("@/lib/editor/psd/run");
-        const prints = await fingerprintAssets(assets, (stage, percent, detail) => {
-          setProgress({ stage, percent, detail: detail || "" });
-        });
-        const imported = await runPsdImport(bytes, gate.fileName, prints, (stage, percent, detail) => {
-          setProgress({ stage, percent, detail: detail || "" });
-        });
+      const [assets, storedFolders] = await Promise.all([
+        listAssets(),
+        getSetting<AssetFolder[]>("assetFolders"),
+      ]);
+      setFolders(Array.isArray(storedFolders) ? storedFolders : []);
+      setLibrary(assets.map((asset) => ({ id: asset.id, name: asset.name, src: asset.src })));
+      // One canonical service — PSD/PSB and Office/PDF/raster share this call.
+      const { importTemplateBytes } = await import("@/lib/editor/import/run");
+      const imported = await importTemplateBytes(bytes, gate.fileName, {
+        assets,
+        onProgress: (stage, percent, detail) => setProgress({ stage, percent, detail: detail || "" }),
+      });
+      if (imported.psd) {
         const initial: Record<string, AssetDisposition> = {};
-        for (const asset of imported.report.assets) initial[asset.hash] = "design";
+        for (const asset of imported.psd.report.assets) initial[asset.hash] = "design";
         setDecisions(initial);
-        setResult(imported);
-        setTitle(generateTemplateName({
-          title: imported.project.name,
-          titleIsManual: false,
-          sourceName: gate.fileName,
-          format: classified.format,
-          category: "psd",
-          kind: "json",
-          content: imported.project,
-        }));
-        setTitleIsManual(false);
-      } else {
-        const { importTemplateBytes } = await import("@/lib/editor/import/run");
-        setProgress({ stage: "تحويل الملف", percent: 20, detail: classified.format.toUpperCase() });
-        const imported = await importTemplateBytes(bytes, gate.fileName);
-        setOffice(imported);
-        setTitle(generateTemplateName({
-          title: imported.project.name,
-          titleIsManual: false,
-          sourceName: gate.fileName,
-          format: classified.format,
-          category: classified.format === "pptx" ? "slides" : "import",
-          kind: "json",
-          content: imported.project,
-        }));
-        setTitleIsManual(false);
-        setProgress({ stage: "اكتمل", percent: 100, detail: "" });
       }
+      setConverted(imported);
+      setTitle(generateTemplateName({
+        title: imported.project.name,
+        titleIsManual: false,
+        sourceName: gate.fileName,
+        format: imported.format,
+        category: imported.format === "pptx" ? "slides" : imported.psd ? "psd" : "import",
+        kind: "json",
+        content: imported.project,
+      }));
+      setTitleIsManual(false);
       setPhase("ready");
     } catch (err) {
       setPhase("idle");
@@ -369,13 +351,18 @@ export function PsdImportPanel() {
     };
   };
 
+  /** The format this result should be recorded under, for history and templates. */
+  const formatOf = (): string => office?.format || (result ? "psd" : "import");
+
   const openInEditor = async () => {
     setBusy("editor");
     try {
       const project = await commitProject();
-      const saved = await saveProject(project);
-      await setSetting("activeProjectId", saved.id || null);
-      if (saved.id) window.location.assign(editorPathFor(saved.id));
+      // Same save → open path as the /import service: the document lands in the
+      // library and the editor opens it as a native, fully editable NASAQ file.
+      const saved = await saveImportedDocument(project, formatOf());
+      if (!saved.ok || !saved.id) throw new Error(saved.error);
+      await openSavedInEditor(saved.id);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "تعذر فتح المستند");
       setBusy(null);
@@ -386,7 +373,8 @@ export function PsdImportPanel() {
     setBusy("document");
     try {
       const project = await commitProject();
-      await saveProject(project);
+      const saved = await saveImportedDocument(project, formatOf());
+      if (!saved.ok) throw new Error(saved.error);
       toast.success("حُفظ المستند في المشاريع، ويمكن فتحه من المحرر لاحقًا.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "تعذر حفظ المستند");
@@ -399,10 +387,6 @@ export function PsdImportPanel() {
     setBusy("template");
     try {
       const project = await commitProject();
-      const content = JSON.stringify(project);
-      if (content.length > 4 * 1024 * 1024) {
-        throw new Error("المستند أكبر من حد القالب (4 ميغابايت). افتحه في المحرر، أو أبقِ الصور داخل التصميم فقط.");
-      }
       const thumb = office?.previewDataUrl || (result?.compositeDataUrl && result.compositeDataUrl.length < 1_800_000 ? result.compositeDataUrl : null);
       const partial = (office?.notes || [])
         .filter((note) => note.mode !== "editable")
@@ -412,24 +396,9 @@ export function PsdImportPanel() {
       const description = office
         ? `محوّل من ${office.format.toUpperCase()} إلى عناصر نَسَق قابلة للتحرير. ${office.stats.texts} نص · ${office.stats.tables} جداول · ${office.stats.images} صور. ${partial}`.slice(0, 500)
         : "محوَّل من PSD إلى عناصر نَسَق قابلة للتحرير";
-      const saved = await adminUpsertTemplateFn({
-        data: {
-          template: {
-            title: project.name,
-            titleIsManual,
-            sourceName: file?.name || "",
-            format: office?.format || file?.name.split(".").pop() || "psd",
-            description,
-            category: office?.format === "pptx" ? "slides" : office ? "import" : "psd",
-            tier: "free",
-            status: "draft",
-            kind: "json",
-            content,
-            thumbnail: thumb && thumb.length < 1_800_000 ? thumb : null,
-          },
-        },
-      });
-      if (!saved.ok) throw new Error(saved.error);
+      // Same draft-template bookkeeping as the /import service.
+      const outcome = await saveImportedTemplate(project, formatOf(), description, thumb, file?.name || "", titleIsManual);
+      if (!outcome.ok) throw new Error(outcome.error);
       toast.success("حُفظ كقالب مسودة. يمكن تعديله لاحقًا من إدارة القوالب أو فتحه في المحرر.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "تعذر حفظ القالب");

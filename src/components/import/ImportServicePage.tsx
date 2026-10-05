@@ -38,7 +38,7 @@ import { authorizeTemplateImportFn } from "@/lib/psd/functions";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import type { Project } from "@/lib/editor/model";
 import { classifyImport } from "@/lib/editor/import/detect";
-import type { BuiltImport } from "@/lib/editor/import/shared";
+import type { TemplateImport } from "@/lib/editor/import/run";
 import { inspectProject } from "@/lib/editor/import/inspect";
 import {
   repairBreakdown,
@@ -75,9 +75,13 @@ const MAX_HINT = "PSD حتى ٢٠٠ ميغابايت · ملفات Office وPDF 
 
 type Access = "checking" | "ok" | "signin" | "forbidden";
 
+/**
+ * One converted-document shape for every format — the canonical import
+ * service's `TemplateImport` — plus the «already saved document» case used by
+ * the repair flow. The PSD report, when present, lives on `result.psd`.
+ */
 type ImportedDoc =
-  | { kind: "psd"; result: PsdImportResult }
-  | { kind: "office"; built: BuiltImport }
+  | { kind: "converted"; result: TemplateImport }
   | { kind: "saved"; project: Project; id: string };
 
 interface RepairState {
@@ -264,47 +268,28 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
       });
       if (!gate.ok) throw new Error(gate.error);
       setSourceBytes(bytes);
-      if (classified.format === "psd" || classified.format === "psb") {
-        const { listAssets } = await import("@/lib/editor/storage");
-        const { fingerprintAssets } = await import("@/lib/editor/psd/pipeline");
-        const { runPsdImport } = await import("@/lib/editor/psd/run");
-        const assets = await listAssets();
-        const prints = await fingerprintAssets(assets, (stage, percent, detail) =>
-          setProgress({ stage, percent: percent, detail: detail || "" }),
-        );
-        const result = await runPsdImport(bytes, gate.fileName, prints, (stage, percent, detail) =>
-          setProgress({ stage, percent, detail: detail || "" }),
-        );
-        setImported({ kind: "psd", result });
-        setWorking(result.project);
-        setTitle(generateTemplateName({
-          title: result.project.name,
-          titleIsManual: false,
-          sourceName: gate.fileName,
-          format: classified.format,
-          category: "psd",
-          kind: "json",
-          content: result.project,
-        }));
-        setTitleIsManual(false);
-      } else {
-        const { importTemplateBytes } = await import("@/lib/editor/import/run");
-        setProgress({ stage: "تحويل الملف", percent: 25, detail: classified.format.toUpperCase() });
-        const built = await importTemplateBytes(bytes, gate.fileName);
-        setImported({ kind: "office", built });
-        setWorking(built.project);
-        setTitle(generateTemplateName({
-          title: built.project.name,
-          titleIsManual: false,
-          sourceName: gate.fileName,
-          format: classified.format,
-          category: classified.format === "pptx" ? "slides" : "import",
-          kind: "json",
-          content: built.project,
-        }));
-        setTitleIsManual(false);
-        setProgress({ stage: "اكتمل", percent: 100, detail: "" });
-      }
+      // One canonical service for every format — PSD/PSB included.
+      const [{ listAssets }, { importTemplateBytes }] = await Promise.all([
+        import("@/lib/editor/storage"),
+        import("@/lib/editor/import/run"),
+      ]);
+      const assets = await listAssets();
+      const result = await importTemplateBytes(bytes, gate.fileName, {
+        assets,
+        onProgress: (stage, percent, detail) => setProgress({ stage, percent, detail: detail || "" }),
+      });
+      setImported({ kind: "converted", result });
+      setWorking(result.project);
+      setTitle(generateTemplateName({
+        title: result.project.name,
+        titleIsManual: false,
+        sourceName: gate.fileName,
+        format: result.format,
+        category: result.format === "pptx" ? "slides" : result.psd ? "psd" : "import",
+        kind: "json",
+        content: result.project,
+      }));
+      setTitleIsManual(false);
       setTrustOrigin(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "تعذر تحويل الملف");
@@ -338,7 +323,7 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
 
   const repairOptions = useMemo(() => {
     const pageSizes =
-      imported?.kind === "psd" ? imported.result.report.pageSizesMm : undefined;
+      imported?.kind === "converted" ? imported.result.psd?.report.pageSizesMm : undefined;
     return { pageSizes, trustOrigin };
   }, [imported, trustOrigin]);
 
@@ -346,7 +331,7 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
     if (!working || !imported) return;
     setBusy("repair");
     try {
-      const base = imported.kind === "saved" ? working : imported.kind === "psd" ? imported.result.project : imported.built.project;
+      const base = imported.kind === "saved" ? working : imported.result.project;
       const result = await repairProject(base, repairOptions);
       setRepair({ fixes: result.fixes, counts: result.counts, base });
       setWorking(result.project);
@@ -389,10 +374,11 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
         name: resolveTemplateName({ title, titleIsManual, kind: "json", content: working }),
       };
     }
-    const psd = imported.kind === "psd" ? { project: working, assets: imported.result.report.assets } : null;
-    const officeThumb = imported.kind === "office" ? imported.built.previewDataUrl : null;
-    const composite = imported.kind === "psd" ? imported.result.compositeDataUrl : null;
-    const format = imported.kind === "psd" ? "psd" : imported.built.format;
+    const converted = imported.result;
+    const psd = converted.psd ? { project: working, assets: converted.psd.report.assets } : null;
+    const officeThumb = converted.psd ? null : converted.previewDataUrl;
+    const composite = converted.psd?.compositeDataUrl ?? null;
+    const format = converted.format;
     const final = await buildFinalProject({
       title,
       titleIsManual,
@@ -418,7 +404,7 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
     setBusy("open");
     try {
       const project = await commitProject();
-      const saved = await saveImportedDocument(project, imported?.kind === "psd" ? "psd" : imported?.kind === "office" ? imported.built.format : "saved");
+      const saved = await saveImportedDocument(project, imported?.kind === "converted" ? imported.result.format : "saved");
       if (!saved.ok || !saved.id) throw new Error(saved.error);
       await openSavedInEditor(saved.id);
     } catch (err) {
@@ -436,7 +422,7 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
         if (!outcome.ok) throw new Error(outcome.error);
         toast.success("حُدّث المستند بالإصلاحات");
       } else {
-        const outcome = await saveImportedDocument(project, imported?.kind === "psd" ? "psd" : "import");
+        const outcome = await saveImportedDocument(project, imported?.kind === "converted" ? imported.result.format : "import");
         if (!outcome.ok) throw new Error(outcome.error);
         toast.success("حُفظ المستند في المشاريع، ويمكن فتحه من المحرر لاحقًا");
       }
@@ -452,7 +438,7 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
     try {
       const project = await commitProject();
       const stats = inspectProject(project).fonts;
-      const format = imported?.kind === "psd" ? "psd" : imported?.kind === "office" ? imported.built.format : "import";
+      const format = imported?.kind === "converted" ? imported.result.format : "import";
       const description = `محوّل عبر استوديو الاستيراد إلى عناصر ${BRAND.platform} قابلة للتحرير. ${stats.length} خط.`;
       const thumb = project.thumbnail || null;
       const outcome = await saveImportedTemplate(project, format, description, thumb, file?.name || "", titleIsManual);
@@ -528,14 +514,12 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
           <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface px-4 py-3">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="rounded-full bg-navy px-2.5 py-1 text-[10px] font-black tracking-wide text-on-brand">
-                {(imported.kind === "psd" && "PSD") ||
-                  (imported.kind === "office" && imported.built.format.toUpperCase()) ||
-                  "مستند محفوظ"}
+                {imported.kind === "converted" ? imported.result.format.toUpperCase() : "مستند محفوظ"}
               </span>
               <p className="truncate text-[13px] font-extrabold text-ink">{working.name}</p>
-              {imported.kind === "psd" && (
+              {imported.kind === "converted" && imported.result.psd && (
                 <span className="text-[11px] font-bold text-muted">
-                  اكتمال التحويل {imported.result.report.completion}%
+                  اكتمال التحويل {imported.result.psd.report.completion}%
                 </span>
               )}
             </div>
@@ -606,7 +590,7 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
                   compareLabels={["قبل الإصلاح", "بعد الإصلاح"]}
                 />
               </div>
-              <Diagnostics imported={imported} />
+              <Diagnostics converted={imported.kind === "converted" ? imported.result : null} />
             </div>
 
             {/* side rail: inspector + repair + actions */}
@@ -663,7 +647,7 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
                     </button>
                   </div>
                 </div>
-                <FontsCard imported={imported} fonts={fonts} setFonts={setFonts} />
+                <FontsCard psd={imported.kind === "converted" ? imported.result.psd ?? null : null} fonts={fonts} setFonts={setFonts} />
               </section>
             </aside>
           </div>
@@ -682,16 +666,16 @@ function ServiceWorkspace({ brand }: { brand: BrandIdentityState }) {
 /* ── fonts ────────────────────────────────────────────────────────────────── */
 
 function FontsCard({
-  imported,
+  psd,
   fonts,
   setFonts,
 }: {
-  imported: ImportedDoc;
+  psd: PsdImportResult | null;
   fonts: AttachedFonts;
   setFonts: (next: AttachedFonts) => void;
 }) {
-  if (imported.kind !== "psd") return null;
-  const missing = imported.result.report.fonts.filter((font) => font.status === "missing");
+  if (!psd) return null;
+  const missing = psd.report.fonts.filter((font) => font.status === "missing");
   if (!missing.length) return null;
   return (
     <div className="mt-1 grid gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3">
@@ -731,32 +715,31 @@ function FontsCard({
 
 /* ── diagnostics ──────────────────────────────────────────────────────────── */
 
-function Diagnostics({ imported }: { imported: ImportedDoc }) {
-  if (imported.kind === "saved") return null;
-  const rows =
-    imported.kind === "psd"
-      ? [
-          ["الأبعاد الأصلية", `${imported.result.report.widthPx}×${imported.result.report.heightPx} بكسل`],
-          ["الدقة", `${Math.round(imported.result.report.dpi)} dpi`],
-          ["الطبقات", String(imported.result.report.layerCount)],
-          ["نصوص", String(imported.result.report.textCount)],
-          ["صور", String(imported.result.report.imageCount)],
-          ["أشكال", String(imported.result.report.shapeCount)],
-        ]
-      : [
-          ["الصفحات", String(imported.built.stats.pages)],
-          ["نصوص", String(imported.built.stats.texts)],
-          ["جداول", String(imported.built.stats.tables)],
-          ["صور", String(imported.built.stats.images)],
-          ["أشكال", String(imported.built.stats.shapes)],
-        ];
-  const notes: { name: string; reason: string }[] =
-    imported.kind === "psd"
-      ? imported.result.report.fallbacks.map((item) => ({ name: item.layerName, reason: item.reason }))
-      : imported.built.notes
-          .filter((note) => note.mode !== "editable")
-          .map((note) => ({ name: note.name, reason: note.reason }));
-  const issues = imported.kind === "psd" ? imported.result.validation.issues.filter((issue) => issue.severity === "error") : [];
+function Diagnostics({ converted }: { converted: TemplateImport | null }) {
+  if (!converted) return null;
+  const psd = converted.psd ?? null;
+  const rows = psd
+    ? [
+        ["الأبعاد الأصلية", `${psd.report.widthPx}×${psd.report.heightPx} بكسل`],
+        ["الدقة", `${Math.round(psd.report.dpi)} dpi`],
+        ["الطبقات", String(psd.report.layerCount)],
+        ["نصوص", String(psd.report.textCount)],
+        ["صور", String(psd.report.imageCount)],
+        ["أشكال", String(psd.report.shapeCount)],
+      ]
+    : [
+        ["الصفحات", String(converted.stats.pages)],
+        ["نصوص", String(converted.stats.texts)],
+        ["جداول", String(converted.stats.tables)],
+        ["صور", String(converted.stats.images)],
+        ["أشكال", String(converted.stats.shapes)],
+      ];
+  const notes: { name: string; reason: string }[] = psd
+    ? psd.report.fallbacks.map((item) => ({ name: item.layerName, reason: item.reason }))
+    : converted.notes
+        .filter((note) => note.mode !== "editable")
+        .map((note) => ({ name: note.name, reason: note.reason }));
+  const issues = psd ? psd.validation.issues.filter((issue) => issue.severity === "error") : [];
   return (
     <details className="rounded-2xl border border-line bg-surface px-4 py-3">
       <summary className="cursor-pointer text-[12px] font-extrabold text-muted">

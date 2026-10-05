@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { initializeCanvas, readPsd, writePsd } from "ag-psd";
 
 import { applyAssetDecisions, importPsdBytes } from "./pipeline.ts";
+import { importTemplateBytes } from "../import/run.ts";
 import { placedFlip } from "./parse.ts";
 import { assertPsdBytes, sanitizeLayerName } from "./security.ts";
 import { resolvePsdFont } from "./fonts.ts";
@@ -184,6 +185,23 @@ describe("PSD → NASAQ", () => {
     assert.equal(resolvePsdFont("ComicSans", false, false).status, "missing");
     assert.equal(resolvePsdFont("Tajawal-Bold", true, false).family, "Tajawal");
     assert.equal(resolvePsdFont("Arial", false, false).family, "Arial");
+  });
+
+  it("is reached through the one canonical import service", async () => {
+    const bytes = sampleFile();
+    const direct = await importPsdBytes(bytes, "تقرير.psd");
+    const viaService = await importTemplateBytes(bytes, "تقرير.psd", { worker: false });
+    assert.equal(viaService.format, "psd");
+    assert.ok(viaService.psd, "the PSD report must survive the canonical path");
+    assert.equal(viaService.project.pages.length, direct.project.pages.length);
+    assert.equal(viaService.stats.pages, direct.project.pages.length);
+    assert.equal(viaService.stats.texts, direct.report.textCount);
+    assert.equal(viaService.psd!.validation.ok, true);
+    assert.equal(
+      viaService.previewDataUrl,
+      direct.project.thumbnail || direct.compositeDataUrl || null,
+    );
+    assert.equal(viaService.notes.length, direct.report.fallbacks.length);
   });
 
   it("converts text, a photograph, a group and a solid into editable elements", async () => {
