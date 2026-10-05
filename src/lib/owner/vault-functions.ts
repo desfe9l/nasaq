@@ -223,6 +223,85 @@ const ENV_SPECS: EnvSpec[] = [
     fallbackValue: "gemini-2.5-flash",
     guide: guide("اختر نموذجًا مدعومًا من Google Gemini ثم حدّث المتغير واختبر schema المسودة.", geminiDashboard, "NASAQ_AI_MODEL"),
   },
+  /*
+   * Cloudflare R2 object storage. The integration is optional by design — with
+   * these unset the editor keeps its local-first library and every storage call
+   * answers `not_configured` — which is exactly why they are listed here: a
+   * deployment that never got the credentials looks identical to a healthy one
+   * from the outside. The vault is owner-only, so the owner can read the values
+   * here; nothing in this file, the logs or the API ever prints them.
+   */
+  {
+    key: "R2_ACCOUNT_ID",
+    section: "services",
+    service: "Cloudflare R2",
+    account: "Cloudflare account",
+    label: "معرّف حساب Cloudflare R2",
+    sensitivity: "sensitive",
+    purpose: "يُشتق منه endpoint المتوافق مع S3: https://<ACCOUNT_ID>.r2.cloudflarestorage.com. بدونه لا يفعّل التخزين السحابي.",
+    loginUrl: "https://dash.cloudflare.com/",
+    dashboardUrl: "https://dash.cloudflare.com/",
+    apiUrl: null,
+    configurationLocation: "Vercel → Settings → Environment Variables (Production) + Cloudflare dashboard → R2",
+    guide: guide("انسخ Account ID من لوحة Cloudflare (R2 → Overview) ثم أضفه في Vercel وأعد النشر، أو اضبط R2_ENDPOINT صراحةً.", "https://dash.cloudflare.com/", "R2_ACCOUNT_ID أو R2_ENDPOINT", "Production (ونفس القيم في Preview إن أردت الاختبار)", "نعم، أعد النشر ثم شغّل npm run storage:verify."),
+  },
+  {
+    key: "R2_ACCESS_KEY_ID",
+    section: "services",
+    service: "Cloudflare R2",
+    account: "Cloudflare R2 API token",
+    label: "R2 Access Key ID",
+    sensitivity: "secret",
+    purpose: "المفتاح العام لرمز R2 API المستخدم في توقيع طلبات S3 (خادمي فقط، لا يبدأ بـ VITE_).",
+    loginUrl: "https://dash.cloudflare.com/",
+    dashboardUrl: "https://dash.cloudflare.com/",
+    apiUrl: null,
+    configurationLocation: "Vercel → Settings → Environment Variables (Production)؛ يُنشأ من R2 → Manage R2 API Tokens",
+    guide: guide("أنشئ R2 API Token بصلاحية Object Read & Write على الحاوية nasaq-sa، ثم ضع Access Key ID في Vercel وأعد النشر.", "https://dash.cloudflare.com/", "R2_ACCESS_KEY_ID", "Production", "نعم، ثم شغّل npm run storage:verify للتأكد من الرفع والقراءة والحذف."),
+  },
+  {
+    key: "R2_SECRET_ACCESS_KEY",
+    section: "services",
+    service: "Cloudflare R2",
+    account: "Cloudflare R2 API token",
+    label: "R2 Secret Access Key",
+    sensitivity: "secret",
+    purpose: "سر توقيع SigV4؛ خادمي بالكامل — لا يُطبع ولا يُسجّل ولا يصل إلى المتصفح أبدًا.",
+    loginUrl: "https://dash.cloudflare.com/",
+    dashboardUrl: "https://dash.cloudflare.com/",
+    apiUrl: null,
+    configurationLocation: "Vercel → Settings → Environment Variables (Production)؛ يُعرض مرة واحدة عند إنشاء التوكن",
+    guide: guide("انسخ Secret Access Key مباشرة بعد إنشاء الرمز (لا يُعرض لاحقًا) وضعه في Vercel ثم أعد النشر؛ عند الشك ألغِ الرمز وأنشئ غيره.", "https://dash.cloudflare.com/", "R2_SECRET_ACCESS_KEY", "Production", "نعم.", "لا يوجد Webhook.", "ألغِ الرمز القديم من Cloudflare بعد نجاح التحقق."),
+  },
+  {
+    key: "R2_BUCKET_NAME",
+    section: "services",
+    service: "Cloudflare R2",
+    account: "NASAQ bucket",
+    label: "اسم الحاوية",
+    sensitivity: "public",
+    purpose: "حاوية الكائنات؛ القيمة الافتراضية في الكود nasaq-sa عند غياب المتغير.",
+    loginUrl: "https://dash.cloudflare.com/",
+    dashboardUrl: "https://dash.cloudflare.com/",
+    apiUrl: null,
+    configurationLocation: "Vercel environment؛ fallback في src/lib/storage/r2.server.ts",
+    fallbackValue: "nasaq-sa",
+    guide: guide("أنشئ الحاوية في R2 (أو استخدم الافتراضية nasaq-sa) وحدّث المتغير إن اختلف الاسم.", "https://dash.cloudflare.com/", "R2_BUCKET_NAME"),
+  },
+  {
+    key: "R2_ENDPOINT",
+    section: "services",
+    service: "Cloudflare R2",
+    account: "Cloudflare R2 endpoint",
+    label: "Endpoint صريح (اختياري)",
+    sensitivity: "sensitive",
+    purpose: "اختياري: يُلزم فقط عند استخدام نطاق مخصص أو endpoint خاص بمنطقة قضائية؛ وإلا فيُشتق من R2_ACCOUNT_ID.",
+    loginUrl: "https://dash.cloudflare.com/",
+    dashboardUrl: "https://dash.cloudflare.com/",
+    apiUrl: null,
+    configurationLocation: "Vercel → Settings → Environment Variables (Production) — اتركه فارغًا في الحالة الشائعة",
+    guide: guide("اتركه فارغًا؛ يُضبط فقط إذا كان الحساب يستخدم نطاقًا مخصصًا أو endpoint غير المُشتق المعتاد (يُقبل https فقط).", "https://dash.cloudflare.com/", "R2_ENDPOINT", "Production", "نعم عند تغييره.", "لا يوجد Webhook.", "أزل القيمة القديمة إن توقفت عن استخدام النطاق المخصص."),
+  },
   {
     key: "KEYGEN_API_TOKEN",
     section: "payments",
@@ -755,11 +834,11 @@ function serviceEntries(): VaultEntry[] {
   ];
 }
 
-function findings(
+async function findings(
   entries: VaultEntry[],
   ownerConfigured: boolean,
   missingPolicies: string[],
-): OwnerVaultFinding[] {
+): Promise<OwnerVaultFinding[]> {
   const result: OwnerVaultFinding[] = [];
   const runtime = (key: string) => entries.find((entry) => entry.variable === key)?.configured;
   if (!ownerConfigured) {
@@ -792,6 +871,30 @@ function findings(
       title: "تكامل Google Gemini اختياري — غير مفعّل",
       detail: "GEMINI_API_KEY (خادمي فقط، يُدار من Vercel) غير موجود؛ ميزات المسودات الذكية متوقفة برسالة إعداد واضحة، وبقية المنصة تعمل طبيعيًا.",
       action: "فعّله فقط بعد اعتماد حدود الإنفاق: أنشئ المفتاح من Google AI Studio وأضفه في Vercel → Environment Variables ثم أعد النشر. لا تضع أي مفتاح في الكود أو Git أبدًا.",
+    });
+  }
+  /*
+   * Object storage is optional, but its failure mode is silent: without the R2
+   * variables the editor keeps its local-first library and every cloud asset
+   * call answers `not_configured`, so nothing in the product looks wrong while
+   * the bucket sits empty. Surfacing it here (and via `npm run storage:verify`
+   * or the admin `verifyObjectStorage` check) is what makes the gap actionable.
+   */
+  const { objectStorageMissingVariables } = await import("@/lib/storage/r2.server");
+  const storageMissing = objectStorageMissingVariables();
+  if (storageMissing.length) {
+    result.push({
+      severity: "info",
+      title: "التخزين السحابي (Cloudflare R2) غير مفعّل — المكتبة محلية فقط",
+      detail: `المتغيرات التالية غير موجودة في runtime الحالي: ${storageMissing.join("، ")}. لذلك يعمل المحرر بسلوكه المحلي المعتاد ولا تُرفع الأصول إلى الحاوية.`,
+      action: "أضف المتغيرات في Vercel (Production) ثم أعد النشر، ثم شغّل npm run storage:verify للتأكد من الرفع والقراءة بالرابط الموقّع والحذف.",
+    });
+  } else if (!runtime("R2_BUCKET_NAME") && !envValue("R2_BUCKET_NAME")) {
+    result.push({
+      severity: "info",
+      title: "التخزين السحابي مفعّل بالحاوية الافتراضية",
+      detail: "R2_ACCOUNT_ID والمفاتيح موجودة، واسم الحاوية يأتي من الافتراضي nasaq-sa في الكود.",
+      action: "إن كانت الحاوية الفعلية باسم آخر، اضبط R2_BUCKET_NAME — وإلا فلا حاجة لتغيير شيء.",
     });
   }
   if (!runtime("KEYGEN_API_TOKEN")) {
@@ -865,7 +968,7 @@ export async function buildOwnerVaultInventory(): Promise<OwnerVaultInventory> {
     ownerConfigured,
     entries,
     routes: ROUTES,
-    findings: findings(entries, ownerConfigured, missingPolicies),
+    findings: await findings(entries, ownerConfigured, missingPolicies),
   };
 }
 

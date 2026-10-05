@@ -1,0 +1,48 @@
+name: Storage verification (Cloudflare R2)
+
+# Answers "is object storage actually working?" from a runner that can reach
+# Cloudflare and the production database. The editor degrades to its local-first
+# library when R2 is unconfigured, so a deployment whose variables are missing
+# looks healthy from the outside — this workflow is the honest check.
+#
+# Requires the repository/environment secrets R2_ACCOUNT_ID, R2_ACCESS_KEY_ID,
+# R2_SECRET_ACCESS_KEY, (optional) R2_BUCKET_NAME / R2_ENDPOINT and
+# DATABASE_URL.
+#
+# It is production-safe: one object under a fresh `cli…` prefix and one
+# `storage_assets` row, both removed in the same run. Secrets are passed as
+# environment variables to the script and never echoed — the job prints statuses
+# and variable NAMES only.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which deployment environment to verify
+        required: true
+        default: Production
+        type: choice
+        options: [Production, Preview, Development]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.environment || 'Production' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm ci --no-audit --no-fund
+      - name: Object storage round trip (upload → metadata → read → delete)
+        env:
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npm run storage:verify
