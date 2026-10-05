@@ -184,12 +184,12 @@ export function FillEditor({
           apply(solid, { ...next, type: type as Gradient["type"] }, true);
         }}
       >
-        <option value="solid">لون موحّد · Solid</option>
-        <option value="none">شفاف · Transparent</option>
+        <option value="solid">لون موحّد</option>
+        <option value="none">شفاف</option>
         {allowGradient && (
           <>
-            <option value="linear">تدرّج خطي · Linear</option>
-            <option value="radial">تدرّج شعاعي · Radial</option>
+            <option value="linear">تدرّج خطي</option>
+            <option value="radial">تدرّج دائري</option>
           </>
         )}
       </select>

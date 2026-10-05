@@ -2,6 +2,9 @@ import { useEffect, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Building2,
+  Blocks,
+  Baseline,
+  Settings2,
   FileText,
   Files,
   FolderKanban,
@@ -36,7 +39,12 @@ const ICONS: Record<string, LucideIcon> = {
   "/about": Building2,
   "/contact": MessagesSquare,
   library: FolderOpen,
-  elements: Shapes,
+  elements: Blocks,
+  shapes: Shapes,
+  templates: LayoutTemplate,
+  theme: Palette,
+  fonts: Baseline,
+  settings: Settings2,
   tools: Wrench,
   pages: Files,
   properties: SlidersHorizontal,

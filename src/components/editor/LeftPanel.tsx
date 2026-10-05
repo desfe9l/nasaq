@@ -338,7 +338,7 @@ export function LeftPanel({
 
             {/* «عناصر أساسية» — text, images/logos and the code-bearing blocks. */}
             <div className="mb-2 rounded-[6px] bg-navy-2/5 px-2 py-1 text-[10px] leading-4 text-brand-hover">
-                💡 اسحب أي عنصر وأفلته في المكان المحدد داخل الـArtboard — يُضاف بدقة في موضع الإفلات
+                💡 اسحب أي عنصر وأفلته في المكان المحدد داخل لوحة الرسم — يُضاف بدقة في موضع الإفلات
               </div>
             <AccordionSection
               title="عناصر أساسية"

@@ -46,3 +46,40 @@ test("editor navigation names each surface explicitly", () => {
 test("touch targets stay at the practical finger size", () => {
   assert.ok(NAV_TOUCH_TARGET >= 44);
 });
+
+test("all existing editor tabs have Arabic, direct navigation", async () => {
+  const { EDITOR_ELEMENT_TAB_IDS, isEditorElementTab } =
+    await import("./surface-nav.ts");
+  for (const id of [
+    ...EDITOR_ELEMENT_TAB_IDS,
+    "library",
+    "tools",
+    "properties",
+    "layers",
+    "report",
+  ])
+    assert.ok(EDITOR_SURFACE_IDS.includes(id), id);
+  for (const tab of EDITOR_SURFACE_NAV)
+    assert.match(tab.shortLabel, /^[\u0600-\u06ff\s]+$/u);
+  assert.equal(isEditorElementTab("fonts"), true);
+  assert.equal(isEditorElementTab("library"), false);
+  assert.equal(isEditorElementTab("unknown"), false);
+});
+
+test("child tabs do not highlight Elements or closed windows", async () => {
+  const { editorSurfaceActive } = await import("./surface-nav.ts");
+  assert.equal(editorSurfaceActive("pages", "pages", { elements: true }), true);
+  assert.equal(
+    editorSurfaceActive("elements", "pages", { elements: true }),
+    false,
+  );
+  assert.equal(
+    editorSurfaceActive("fonts", "fonts", { elements: false }),
+    false,
+  );
+  assert.equal(
+    editorSurfaceActive("elements", "library", { elements: true }),
+    true,
+  );
+  assert.equal(editorSurfaceActive("report", "fonts", { report: true }), true);
+});

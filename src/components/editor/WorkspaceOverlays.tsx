@@ -872,7 +872,7 @@ export function WorkspaceOverlays({
             <div className="my-1 border-t border-[var(--editor-border)]" />
             <span className="flex items-center gap-2 px-2.5 py-1.5 text-[9px] text-[var(--editor-text-secondary)]">
               <Keyboard className="size-3" /> اضغط Escape للإغلاق · Right-click
-              داخل Artboard
+              داخل لوحة الرسم
             </span>
           </div>
         </div>

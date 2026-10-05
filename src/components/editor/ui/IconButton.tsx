@@ -60,6 +60,7 @@ export function IconButton({
           className,
         )}
         aria-label={label}
+        aria-pressed={active}
         aria-keyshortcuts={shortcut || undefined}
         {...rest}
       >
