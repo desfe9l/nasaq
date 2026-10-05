@@ -128,7 +128,7 @@ import { Tip } from "./ui/Tip";
 import { ViewMenu } from "./ViewMenu";
 import { AppearanceMenu } from "./AppearanceMenu";
 import { ProductNav } from "@/components/nav/ProductNav";
-import { EDITOR_SURFACE_NAV } from "@/lib/nav/surface-nav";
+import { EDITOR_SURFACE_NAV, isEditorElementTab, editorSurfaceActive } from "@/lib/nav/surface-nav";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -221,7 +221,6 @@ import {
   saveLabel,
   PAGES_PANEL_MIN,
   type LeftTab,
-  type RightTab,
 } from "@/lib/editor/store";
 import {
   leavePromptOpen,
@@ -300,6 +299,7 @@ import { HeadingGeneratorDialog } from "./HeadingGeneratorDialog";
 import { OnboardingTour, hasSeenTour } from "./OnboardingTour";
 import { NsqIntake } from "./NsqIntake";
 import { AppInstallNotice } from "@/components/AppInstallNotice";
+import { isStandalone } from "@/lib/app-install";
 import { MobileWorkspaceGuide } from "@/components/editor/MobileWorkspaceGuide";
 import { useNsqSignedIn } from "@/lib/nsq/use-nsq-session";
 import { ProjectFileMenu, NSQ_SAVE_AS_EVENT } from "./ProjectFileMenu";
@@ -855,6 +855,21 @@ function Studio({
     media.addEventListener("change", update);
     return () => media.removeEventListener("change", update);
   }, []);
+  // Installed windows use the same tools and saved groups, one window at a
+  // time. Observe display-mode transitions as well as iOS's standalone flag.
+  const [installedApp, setInstalledApp] = useState(false);
+  useEffect(() => {
+    const media = window.matchMedia("(display-mode: standalone)");
+    const update = () => setInstalledApp(isStandalone());
+    update();
+    media.addEventListener("change", update);
+    window.addEventListener("pageshow", update);
+    return () => {
+      media.removeEventListener("change", update);
+      window.removeEventListener("pageshow", update);
+    };
+  }, []);
+  const compactPanels = installedApp || coarsePointer || !canDock;
   /** The shell root: the surface attribute and the zoom guards live here. */
   const shellRef = useRef<HTMLDivElement>(null);
   /** First load is what arms the auto-fit below. */
@@ -1654,10 +1669,11 @@ function Studio({
     // Desktop windows remain independently composable. On touch/overlay
     // surfaces a single shared window is deliberate: it maximises artboard
     // visibility and makes every new dock press an unambiguous replacement.
-    if (coarsePointer || !canDock) closePanelHosts();
+    if (compactPanels) closePanelHosts();
     setGroupState((s) =>
       s.tabs[host] === id ? s : { ...s, tabs: { ...s.tabs, [host]: id } },
     );
+    setCollapsedPanels((current) => current[host] ? { ...current, [host]: false } : current);
     setPanelOpenFlag(host, true);
   };
   const togglePanelWindow = (id: PanelId) => {
@@ -1756,7 +1772,7 @@ function Studio({
    */
   const previousPanelOpenRef = useRef<Record<PanelId, boolean>>(panelOpen);
   useEffect(() => {
-    if (!coarsePointer && canDock) {
+    if (!compactPanels) {
       previousPanelOpenRef.current = panelOpen;
       return;
     }
@@ -1779,8 +1795,7 @@ function Studio({
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    canDock,
-    coarsePointer,
+    compactPanels,
     panelOpen.library,
     panelOpen.tools,
     panelOpen.elements,
@@ -2130,7 +2145,7 @@ function Studio({
     // The shipped two-window arrangement belongs only to a real desktop. Do
     // not consume its one-time migration key while the same account is opening
     // on a phone/tablet; those surfaces are transiently artboard-first below.
-    if (!hydrated || deviceSurface !== "desktop") return;
+    if (!hydrated || installedApp || deviceSurface !== "desktop") return;
     try {
       if (localStorage.getItem(LAYOUT_APPLIED_KEY)) return;
       localStorage.setItem(LAYOUT_APPLIED_KEY, "1");
@@ -2143,7 +2158,7 @@ function Studio({
     for (const id of PANEL_IDS) setPanelOpenFlag(id, false);
     setPanelOpenFlag(WORKSPACE_RIGHT_GROUP[0], true);
     setPanelOpenFlag(WORKSPACE_LEFT_GROUP[0], true);
-  }, [hydrated, deviceSurface]);
+  }, [hydrated, deviceSurface, installedApp]);
 
   const widePanelLayoutRef = useRef<
     | {
@@ -2158,7 +2173,7 @@ function Studio({
   >(undefined);
   useEffect(() => {
     if (!hydrated) return;
-    if (deviceSurface === "desktop") {
+    if (deviceSurface === "desktop" && !installedApp) {
       if (widePanelLayoutRef.current) {
         useEditor.setState(widePanelLayoutRef.current);
         widePanelLayoutRef.current = undefined;
@@ -2179,7 +2194,7 @@ function Studio({
       };
     }
     closePanelHosts();
-  }, [closePanelHosts, deviceSurface, documentRevision, hydrated]);
+  }, [closePanelHosts, deviceSurface, documentRevision, hydrated, installedApp]);
 
   /** Which window (if any) currently occupies each screen edge. */
   const dockW = (id: PanelId) =>
@@ -2404,8 +2419,8 @@ function Studio({
         return (
           <ElementToolsWindow
             onAddCustomAsset={onAddCustomAsset}
-            onOpenShapes={() => useEditor.getState().setLeftTab("shapes")}
-            onOpenTemplates={() => useEditor.getState().setLeftTab("templates")}
+            onOpenShapes={() => openLeftTab("shapes")}
+            onOpenTemplates={() => openLeftTab("templates")}
           />
         );
       case "elements":
@@ -2435,6 +2450,7 @@ function Studio({
     <div className="flex h-full min-h-0 flex-col">
       <PanelTabStrip
         host={id}
+        compact={compactPanels}
         state={groupState}
         onSelect={(tab) => selectTab(id, tab)}
         onDropTab={dropTab}
@@ -2446,37 +2462,14 @@ function Studio({
     </div>
   );
 
-  /**
-   * Restore a collapsed desktop panel (optionally straight onto a tab) in one
-   * click. Windows are independent now: opening one never closes the others.
-   */
-  const expandPanel = (
-    side: "left" | "right",
-    tab?: LeftTab | RightTab,
-  ) => {
-    if (coarsePointer || !canDock) closePanelHosts();
-    const state = useEditor.getState();
-    if (side === "left") {
-      if (tab) state.setLeftTab(tab as LeftTab);
-      if (state.leftCollapsed) state.toggle("leftCollapsed");
-      useEditor.setState({ leftOpen: true });
-    } else {
-      if (tab) state.setRightTab(tab as RightTab);
-      if (state.rightCollapsed) state.toggle("rightCollapsed");
-      useEditor.setState({ rightOpen: true });
-    }
-  };
   /** Toolbar shortcuts to a panel tab: open (and un-collapse) that panel. */
   const openLeftTab = (tab: LeftTab) => {
     if (useEditor.getState().focusMode) toggle("focusMode");
     // setLeftTab routes «library»/«tools» to their own windows.
     useEditor.getState().setLeftTab(tab);
-    // Grouped panels live inside their host window: raise it on the tab.
-    if (tab === "library" || tab === "tools" || tab === "elements") {
-      revealPanel(tab);
-      return;
-    }
-    expandPanel("left", tab);
+    // Resolve EVERY child through its current host. Merely setting leftOpen
+    // fails when Elements is an inactive tab in an already-open custom group.
+    revealPanel(tab === "library" || tab === "tools" ? tab : "elements");
   };
 
   /**
@@ -2485,16 +2478,13 @@ function Studio({
    * «الصفحات» reveals the pages tab inside لوحة العناصر and the page rail.
    */
   const onSurfaceNav = (id: string) => {
-    if (id === "pages") {
-      const state = useEditor.getState();
-      const pagesVisible =
-        state.leftTab === "pages" && panelChecked.elements && !state.focusMode;
-      if (pagesVisible) {
+    if (isEditorElementTab(id)) {
+      if (editorSurfaceActive(id, useEditor.getState().leftTab, panelChecked) && !focusMode) {
         togglePanelWindow("elements");
         return;
       }
-      openLeftTab("pages");
-      if (useEditor.getState().pagesRailHidden)
+      openLeftTab(id);
+      if (id === "pages" && useEditor.getState().pagesRailHidden)
         useEditor.getState().togglePagesRailHidden();
       return;
     }
@@ -2614,6 +2604,7 @@ function Studio({
       dir="rtl"
       data-editor-surface={surface}
       data-device-surface={deviceSurface}
+      data-installed-app={installedApp ? "true" : undefined}
       className={cn(
         "editor-ui editor-shell grid grid-rows-[auto_minmax(0,1fr)]",
         appearance === "light" ? "editor-light" : "editor-dark",
@@ -2730,8 +2721,8 @@ function Studio({
                   active={activeTool === id}
                   icon={<Glyph className="size-4" strokeWidth={1.7} />}
                   onClick={() => {
-                    if (id === "text") useEditor.getState().setLeftTab("elements");
-                    if (id === "shape") useEditor.getState().setLeftTab("shapes");
+                    if (id === "text") openLeftTab("elements");
+                    if (id === "shape") openLeftTab("shapes");
                     useTools.getState().setTool(activeTool === id ? "select" : id);
                   }}
                 />
@@ -2880,12 +2871,10 @@ function Studio({
         </div>
         <ProductNav
           className="editor-surface-nav editor-mobile-surface-dock"
-          label="أسطح المحرر"
+          label="أدوات المحرر"
           items={EDITOR_SURFACE_NAV}
           isActive={(id) =>
-            id === "pages"
-              ? leftTab === "pages" && panelChecked.elements && !focusMode
-              : Boolean(panelChecked[id as PanelId]) && !focusMode
+            !focusMode && !cropActive && editorSurfaceActive(id, leftTab, panelChecked)
           }
           onSelect={onSurfaceNav}
         />
@@ -2936,7 +2925,7 @@ function Studio({
           <CanvasStage
             onDropImage={onDropImage}
             onCanvasTap={
-              coarsePointer || !canDock ? closePanelHosts : undefined
+              compactPanels ? closePanelHosts : undefined
             }
           />
           {/* Properties of the live tool, docked to the canvas — never a second
@@ -2999,6 +2988,7 @@ function Studio({
             title={PANEL_META[groupState.tabs[id] ?? id].title}
             side={PANEL_DEFS[id].side}
             open={panelOpen[id] && !cropActive && !focusMode}
+            drawer={isMobileSurface}
             onClose={() => setPanelOpenFlag(id, false)}
             onDockSideChange={(side) => changeDockSide(id, side)}
             collapsed={Boolean(collapsedPanels[id])}

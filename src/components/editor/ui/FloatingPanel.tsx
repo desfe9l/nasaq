@@ -60,6 +60,8 @@ export interface FloatingPanelProps {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
+  /** Phone presentation only; content, ownership and state stay unchanged. */
+  drawer?: boolean;
   /** Physical side the panel prefers while floating (spawn + obstacle). */
   side?: "left" | "right";
   /**
@@ -134,6 +136,7 @@ export function FloatingPanel({
   open,
   onClose,
   children,
+  drawer = false,
   side = "right",
   dockSide = null,
   onDockSideChange,
@@ -662,7 +665,7 @@ export function FloatingPanel({
     );
   };
 
-  const style: CSSProperties | undefined = dockSide
+  const style: CSSProperties | undefined = drawer ? undefined : dockSide
     ? gridAreaStyle
     : collapsed
       ? {
@@ -685,9 +688,10 @@ export function FloatingPanel({
         // `touch-properties-sheet` / `editor-sidebar` stay on the node: the
         // panel skin and the editor QA scripts address the panel by them.
         "editor-floating-panel touch-properties-sheet editor-sidebar",
+        drawer && "is-drawer",
         dockSide && "is-docked",
         dockSide && `is-docked-${dockSide}`,
-        collapsed && "is-collapsed",
+        collapsed && !drawer && "is-collapsed",
         open && "is-open",
         dragging && "is-dragging",
         holding && "is-drag-armed",
@@ -707,7 +711,7 @@ export function FloatingPanel({
           // only DRAGS after a hold (armHold), never on a plain click.
           if ((event.target as HTMLElement).closest("button:not(.touch-properties-grip)"))
             return;
-          armHold(event);
+          if (!drawer) armHold(event);
         }}
         onContextMenu={(event) => {
           // A touch hold must not summon the browser menu mid-drag.
@@ -718,22 +722,23 @@ export function FloatingPanel({
         <button
           type="button"
           className="touch-properties-grip"
-          aria-label={`تحريك ${title} — اضغط مطولًا ثم اسحب`}
-          title="اضغط مطولًا ثم اسحب لتحريك اللوحة — الأسهم للتحريك الدقيق"
+          aria-label={drawer ? title : `تحريك ${title} — اضغط مطولًا ثم اسحب`}
+          tabIndex={drawer ? -1 : 0}
+          title={drawer ? title : "اضغط مطولًا ثم اسحب لتحريك اللوحة — الأسهم للتحريك الدقيق"}
           onPointerDown={(event) => {
             // The whole title bar holds-then-drags; the grip is its
             // a11y/keyboard face and stops the bubble so the header handler
             // does not arm a second gesture on a different capture target.
             event.stopPropagation();
-            armHold(event);
+            if (!drawer) armHold(event);
           }}
           {...holdGestureEvents}
-          onKeyDown={(event) => nudge(event, "move")}
+          onKeyDown={(event) => { if (!drawer) nudge(event, "move"); }}
         >
           <GripHorizontal size={16} aria-hidden="true" />
           <span>{title}</span>
         </button>
-        {onDockSideChange && (
+        {!drawer && onDockSideChange && (
           <div className="fp-dock-cluster relative shrink-0 flex items-center">
             <button
               type="button"
@@ -840,7 +845,7 @@ export function FloatingPanel({
             )}
           </div>
         )}
-        <button
+        {!drawer && <button
           type="button"
           aria-pressed={collapsed}
           aria-label={collapsed ? `فتح ${title}` : `طي ${title}`}
@@ -849,7 +854,7 @@ export function FloatingPanel({
           disabled={!onToggleCollapsed}
         >
           <Minus size={16} className={collapsed ? "rotate-90" : undefined} />
-        </button>
+        </button>}
         <button
           type="button"
           aria-label={`إغلاق ${title}`}
@@ -860,7 +865,7 @@ export function FloatingPanel({
         </button>
       </div>
       <div className="touch-properties-content">{children}</div>
-      {!dockSide && !collapsed && (
+      {!drawer && !dockSide && !collapsed && (
         <>
           {(["n", "s", "e", "w", "ne", "nw", "se", "sw"] as const).map(grip)}
         </>

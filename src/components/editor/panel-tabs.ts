@@ -20,11 +20,11 @@ import type { LeftTab, RightTab } from "@/lib/editor/store";
 export const LEFT_PANEL_TABS: { id: LeftTab; label: string; icon: LucideIcon }[] = [
   { id: "library", label: "المكتبة", icon: FolderOpen },
   { id: "tools", label: "أدوات العناصر", icon: Blocks },
-  { id: "elements", label: "عناصر", icon: LayoutTemplate },
+  { id: "elements", label: "العناصر", icon: LayoutTemplate },
   { id: "shapes", label: "أشكال", icon: Shapes },
   { id: "templates", label: "قوالب", icon: FileText },
   { id: "pages", label: "صفحات", icon: Layers },
-  { id: "theme", label: "سمة", icon: Palette },
+  { id: "theme", label: "الألوان", icon: Palette },
   { id: "fonts", label: "خطوط", icon: Baseline },
   { id: "settings", label: "إعدادات", icon: Settings2 },
 ];

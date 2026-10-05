@@ -73,8 +73,8 @@ export function siteNavLabelsFor(signedIn: boolean): readonly NavItem[] {
 
 /**
  * Editor surfaces that used to hide behind «عرض» or a drawer edge.
- * `pages` is the document pages tab (and reveals the page rail); the rest
- * are the six workspace windows.
+ * Every existing left-panel tab and workspace window has a direct route.
+ * These are navigation targets, not extra panels or editor state.
  */
 export const EDITOR_SURFACE_NAV: readonly SurfaceNavItem[] = [
   {
@@ -94,6 +94,31 @@ export const EDITOR_SURFACE_NAV: readonly SurfaceNavItem[] = [
     label: "الأدوات",
     shortLabel: "الأدوات",
     title: "أدوات العناصر",
+  },
+  {
+    id: "shapes",
+    label: "الأشكال",
+    shortLabel: "الأشكال",
+    title: "الأشكال والرموز",
+  },
+  {
+    id: "templates",
+    label: "القوالب",
+    shortLabel: "القوالب",
+    title: "قوالب الصفحات",
+  },
+  {
+    id: "theme",
+    label: "الألوان",
+    shortLabel: "الألوان",
+    title: "ألوان المستند",
+  },
+  { id: "fonts", label: "الخطوط", shortLabel: "الخطوط", title: "خطوط النصوص" },
+  {
+    id: "settings",
+    label: "الإعدادات",
+    shortLabel: "الإعدادات",
+    title: "إعدادات المستند",
   },
   {
     id: "pages",
@@ -129,4 +154,33 @@ export function coversRoutes(
   routes: readonly { to: string }[],
 ): boolean {
   return routes.every((route) => items.some((item) => item.id === route.to));
+}
+
+/** Tabs hosted by the existing elements window, including custom groupings. */
+export const EDITOR_ELEMENT_TAB_IDS = [
+  "elements",
+  "shapes",
+  "templates",
+  "theme",
+  "fonts",
+  "settings",
+  "pages",
+] as const;
+
+export function isEditorElementTab(
+  id: string,
+): id is (typeof EDITOR_ELEMENT_TAB_IDS)[number] {
+  return (EDITOR_ELEMENT_TAB_IDS as readonly string[]).includes(id);
+}
+
+/** Never mark Elements active while its Pages/Fonts/etc. child is showing. */
+export function editorSurfaceActive(
+  id: string,
+  leftTab: string,
+  panels: Readonly<Record<string, boolean>>,
+): boolean {
+  if (!isEditorElementTab(id)) return Boolean(panels[id]);
+  const visibleTab =
+    leftTab === "library" || leftTab === "tools" ? "elements" : leftTab;
+  return Boolean(panels.elements) && visibleTab === id;
 }

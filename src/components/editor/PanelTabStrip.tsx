@@ -15,12 +15,14 @@ export { PANEL_META };
  */
 export function PanelTabStrip({
   host,
+  compact = false,
   state,
   onSelect,
   onDropTab,
   onDetach,
 }: {
   host: EditorPanelId;
+  compact?: boolean;
   state: PanelGroupState;
   onSelect: (tab: EditorPanelId) => void;
   onDropTab: (tab: EditorPanelId, host: EditorPanelId) => void;
@@ -55,7 +57,7 @@ export function PanelTabStrip({
             role="tab"
             aria-selected={id === active}
             tabIndex={0}
-            draggable
+            draggable={!compact}
             onDragStart={(event) => {
               event.dataTransfer.setData("text/nasaq-panel", id);
               event.dataTransfer.effectAllowed = "move";
@@ -68,11 +70,11 @@ export function PanelTabStrip({
               }
             }}
             className={cn("panel-tab", id === active && "is-active")}
-            title={`${meta.title} — اسحبه إلى نافذة أخرى للتجميع`}
+            title={compact ? meta.title : `${meta.title} — اسحبه إلى نافذة أخرى للتجميع`}
           >
             <Icon className="size-3.5" aria-hidden />
             <span>{meta.title}</span>
-            {grouped && id === active && (
+            {!compact && grouped && id === active && (
               <button
                 type="button"
                 aria-label={`فك تجمع ${meta.title} في نافذة مستقلة`}
@@ -88,7 +90,7 @@ export function PanelTabStrip({
           </div>
         );
       })}
-      {!grouped && (
+      {!compact && !grouped && (
         <span className="panel-tab-hint" aria-hidden>
           أفلت تبويبًا هنا لجمعه
         </span>
