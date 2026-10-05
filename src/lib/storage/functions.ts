@@ -508,7 +508,7 @@ export const verifyObjectStorage = createServerFn({ method: "POST" })
         report: import("./verify.server").StorageRoundTripReport;
         metadata: { ok: boolean; steps: import("./verify.server").StorageCheckStep[] };
       }
-    | { ok: false; reason: StorageFailureReason }
+    | { ok: false; reason: StorageFailureReason; missingVariables?: string[] }
   > => {
     const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
     const { denyForbidden } = await import("@/lib/auth/forbidden.server");
@@ -521,7 +521,9 @@ export const verifyObjectStorage = createServerFn({ method: "POST" })
     const { runStorageRoundTrip, runMetadataRoundTrip } = await import("./verify.server");
     const report = await runStorageRoundTrip();
     if (!report.configured) {
-      return { ok: false, reason: "not_configured" };
+      // Variable NAMES only — the caller can act on exactly what is absent
+      // without a value ever crossing the wire.
+      return { ok: false, reason: "not_configured", missingVariables: report.missingVariables };
     }
 
     // A metadata row is only meaningful next to the object it describes, so

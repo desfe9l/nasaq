@@ -24,6 +24,7 @@ import {
 import { toast } from "sonner";
 import { getOwnerVaultFn } from "@/lib/owner/vault-functions";
 import { GumroadGatewayCard } from "./GumroadGatewayCard";
+import { StorageVerificationCard } from "./StorageVerificationCard";
 import {
   downloadTextFile,
   inventoryToCsv,
@@ -222,6 +223,7 @@ export default function OwnerVaultPage() {
             </div>
           </div>
           <GumroadGatewayCard visible={selectedSection === "all" || selectedSection === "payments"} />
+          <StorageVerificationCard visible={selectedSection === "all" || selectedSection === "services"} />
           <div className="relative print:hidden"><Search className="pointer-events-none absolute right-3 top-3 size-4 text-slate-500" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث عن مزود، حساب، متغير أو غرض…" className="h-10 w-full rounded-xl border border-white/10 bg-white/[0.045] pr-10 pl-4 text-sm outline-none placeholder:text-slate-600 focus:border-emerald-400/60" /></div>
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035]">
             {filteredEntries.map((entry) => {
