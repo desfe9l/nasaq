@@ -7,10 +7,14 @@
  * its own.
  *
  * Palm rejection is best-effort by nature: Safari never tags a contact as
- * "palm", so the heuristic is proximity in TIME to the Pencil — a pen that is
- * currently pressed, or that has just hovered/moved nearby within a short
- * grace window. While the pen is down (or freshly active) a touch pointer is
- * treated as the resting palm and swallowed by the gesture layer.
+ * "palm", so the heuristic combines proximity in TIME to the Pencil — a pen
+ * that is currently pressed, or that has just hovered/moved nearby within a
+ * short grace window — with the SIZE of the contact the platform reports. A
+ * large contact near an active pen is a resting hand and is swallowed; a
+ * fingertip-sized contact near an active pen is deliberate, which is what
+ * makes Pencil + finger combinations possible at all (the other hand holding a
+ * modifier while the Pencil draws or drags). When a platform reports no
+ * contact geometry at all, the conservative time-only rule applies.
  *
  * Everything here is dependency-free and clock-injectable, so the rules are
  * unit-testable without real hardware.
@@ -22,6 +26,12 @@ export interface PenPointerLike {
   pointerId?: number;
   /** DOM event type: pointerdown / pointerup / pointercancel / move / over / out. */
   type?: string;
+  /**
+   * Contact geometry in CSS px. iPadOS reports the real footprint of a touch:
+   * a fingertip is small, a resting palm covers a much wider patch of glass.
+   */
+  width?: number;
+  height?: number;
 }
 
 /** Pen contacts currently in contact with the glass. */
@@ -60,6 +70,18 @@ export function notePenActivity(
 }
 
 /**
+ * A touch contact at least this wide (or tall) in CSS px is a resting palm.
+ * iPadOS reports a fingertip around 10–20px and a palm several times wider, so
+ * the threshold sits well clear of a deliberate finger, including a firm one.
+ */
+export const PALM_MIN_CONTACT_PX = 32;
+
+/** The larger reported contact dimension, or 0 when the platform says nothing. */
+function contactSize(event: PenPointerLike): number {
+  return Math.max(Number(event.width) || 0, Number(event.height) || 0);
+}
+
+/**
  * True when a TOUCH pointer should be treated as palm contact and ignored.
  *
  * Non-touch pointers (pen, mouse) are never palm — the pen IS the author, and
@@ -70,8 +92,14 @@ export function isPalmTouch(
   at: number = nowMs(),
 ): boolean {
   if (event.pointerType !== "touch") return false;
-  if (penDown.size > 0) return true;
-  return at - lastPenAt < PEN_GRACE_MS;
+  const penNear = penDown.size > 0 || at - lastPenAt < PEN_GRACE_MS;
+  if (!penNear) return false;
+  const size = contactSize(event);
+  // No contact geometry: fall back to the conservative time-only rule.
+  if (size <= 0) return true;
+  // A fingertip while the Pencil is down is the author's other hand — a held
+  // modifier — and must reach the gesture layer.
+  return size >= PALM_MIN_CONTACT_PX;
 }
 
 /** Forget all pen state (window blur, tests). */

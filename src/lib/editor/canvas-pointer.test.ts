@@ -14,9 +14,14 @@ function fixture() {
     redo: () => calls.redo++,
     navigate: () => () => calls.nav++,
   });
-  const claim = (e: PointerEvent, yieldable = true) =>
+  const claim = (
+    e: PointerEvent,
+    yieldable = true,
+    supportsModifier = false,
+  ) =>
     input.claim(e, {
       yieldable,
+      supportsModifier,
       move: () => calls.move++,
       end: () => calls.end++,
       cancel: () => calls.cancel++,
@@ -130,4 +135,117 @@ test("three-finger redo is preserved and cannot also undo", () => {
   input.end(p(3, 200), false, 120);
   assert.equal(calls.redo, 1);
   assert.equal(calls.undo, 0);
+});
+
+/* ── The held-finger modifier ─────────────────────────────────────────── *
+ * One finger holds still and acts as the Shift-equivalent modifier; the
+ * finger that owns the gesture keeps driving it. Neither rule depends on
+ * which hand holds which finger.                                            */
+test("a held second finger becomes the modifier and never moves the element", () => {
+  const { input, calls, claim } = fixture();
+  input.down(p(1), 0);
+  claim(p(1), true, true);
+  // Joins while the element press is still pending: parked, not discarded.
+  input.down(p(2, 200, 200), 20);
+  assert.equal(calls.cancel, 0);
+  assert.equal(input.shiftModifier, false);
+  // The owner travels: the hold is confirmed and the press resumes.
+  input.move(p(1, 40), 30);
+  assert.equal(input.shiftModifier, true);
+  assert.equal(calls.move, 1);
+  assert.equal(calls.nav, 0);
+  // The modifier finger may roam; it drives nothing.
+  input.move(p(2, 260, 260), 40);
+  assert.equal(calls.move, 1);
+  input.move(p(1, 80), 50);
+  assert.equal(calls.move, 2);
+  input.end(p(1, 80), false, 60);
+  assert.equal(calls.end, 1); // the gesture commits normally
+  assert.equal(calls.undo, 0);
+  input.end(p(2, 260, 260), false, 70);
+  assert.equal(input.shiftModifier, false);
+});
+test("a slow press-and-hold modifier engages inside the slop distance", () => {
+  const { input, calls, claim } = fixture();
+  input.down(p(1), 0);
+  claim(p(1), true, true);
+  input.down(p(2, 200, 200), 100);
+  // 10 screen px: past the slop, short of the drive distance — the 200 ms
+  // hold is what confirms the modifier here.
+  input.move(p(1, 10), 400);
+  assert.equal(input.shiftModifier, true);
+  assert.equal(calls.move, 1);
+  assert.equal(calls.nav, 0);
+});
+test("a travelling second finger is navigation, not a modifier", () => {
+  const { input, calls, claim } = fixture();
+  input.down(p(1), 0);
+  claim(p(1), true, true);
+  input.down(p(2, 200, 200), 20);
+  input.move(p(2, 230, 200), 30);
+  assert.equal(input.shiftModifier, false);
+  assert.equal(calls.cancel, 1); // the parked press is promoted away
+  assert.ok(calls.nav > 0);
+  input.end(p(1), false, 60);
+  input.end(p(2, 230, 200), false, 70);
+  assert.equal(calls.undo, 0);
+});
+test("a lone finger joins a Pencil gesture as its modifier", () => {
+  const { input, calls, claim } = fixture();
+  const pen = p(1, 0, 0, "pen");
+  input.down(pen, 0);
+  claim(pen, false, true); // an established pen drag is never yieldable
+  input.down(p(2, 300, 300), 10);
+  input.move(p(1, 20, 0, "pen"), 300);
+  assert.equal(input.shiftModifier, true);
+  assert.equal(calls.cancel, 0); // the pen gesture was not stolen
+  assert.equal(calls.move, 1);
+  assert.equal(calls.nav, 0);
+});
+test("releasing the held finger frees the rest of the gesture", () => {
+  const { input, calls, claim } = fixture();
+  input.down(p(1), 0);
+  claim(p(1), true, true);
+  input.down(p(2, 200, 200), 20);
+  input.move(p(1, 40), 300);
+  assert.equal(input.shiftModifier, true);
+  input.end(p(2, 200, 200), false, 310);
+  assert.equal(input.shiftModifier, false);
+  input.move(p(1, 90), 320);
+  assert.equal(calls.move, 2); // still the owner, now unmodified
+});
+test("a third finger cannot turn a modifier gesture into navigation", () => {
+  const { input, calls, claim } = fixture();
+  input.down(p(1), 0);
+  claim(p(1), true, true);
+  input.down(p(2, 200, 200), 20);
+  input.move(p(1, 40), 300);
+  assert.equal(input.shiftModifier, true);
+  input.down(p(3, 400, 400), 310);
+  input.move(p(3, 500, 500), 320);
+  assert.equal(calls.nav, 0);
+  assert.equal(calls.cancel, 0);
+  assert.equal(input.shiftModifier, true);
+});
+test("a modifier-capable press still yields to a two-finger undo tap", () => {
+  const { input, calls, claim } = fixture();
+  input.down(p(1), 0);
+  claim(p(1), true, true);
+  input.down(p(2, 100), 40);
+  input.end(p(1), false, 110);
+  input.end(p(2, 100), false, 150);
+  assert.equal(calls.cancel, 1); // the parked press is discarded, not committed
+  assert.equal(calls.end, 0);
+  assert.equal(calls.undo, 1);
+  assert.equal(input.shiftModifier, false);
+});
+test("a gesture without modifier support never gains a modifier", () => {
+  const { input, calls, claim } = fixture();
+  input.down(p(1), 0);
+  claim(p(1));
+  input.down(p(2, 200, 200), 20);
+  input.move(p(1, 60), 300);
+  assert.equal(input.shiftModifier, false);
+  assert.equal(calls.cancel, 1);
+  assert.ok(calls.nav > 0);
 });
