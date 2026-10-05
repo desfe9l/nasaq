@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { WifiOff, HardDriveDownload } from "lucide-react";
 import { CheckCircle2, ChevronDown, CreditCard, Key, ShieldCheck, Lock } from "lucide-react";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { getGumroadCheckoutLinksFn } from "@/lib/gumroad/functions";
@@ -85,6 +86,14 @@ export function PurchasePage() {
     };
   }, []);
   const { user } = useCurrentUserState();
+  const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+  useEffect(() => {
+    const on = () => setIsOffline(false);
+    const off = () => setIsOffline(true);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
 
   // Current subscription state. `getMyAccountPage` is also the Gumroad claim
   // point: a membership bought with this verified email (webhook missed or the
@@ -183,6 +192,13 @@ export function PurchasePage() {
   return (
     <div className="min-h-full bg-page">
       <SiteHeader current="/purchase" />
+      {isOffline && (
+        <div className="mx-auto max-w-6xl px-4 pt-3 sm:px-6">
+          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-bold text-amber-900">
+            <WifiOff className="size-4" /> وضع عدم الاتصال — تُعرض معلومات الاشتراك المحفوظة، لكن إجراءات الشراء والدفع تتطلب اتصالاً. ستتم المزامنة عند عودة الاتصال.
+          </div>
+        </div>
+      )}
       <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:py-14">
         {/* ── Hero: what is being bought, and the two doors ─────────────── */}
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-end">
@@ -422,15 +438,21 @@ export function PurchasePage() {
                       إدارة الاشتراك
                     </a>
                   ) : checkoutUrl ? (
-                    <a
-                      href={checkoutUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      aria-label={`اشترك الآن — ${plan.arabicName}`}
-                      className="subscription-cta inline-flex h-10 w-full items-center justify-center rounded-[10px] text-[13px] font-extrabold transition"
-                    >
-                      اشترك الآن
-                    </a>
+                    isOffline ? (
+                      <span className="inline-flex h-10 w-full cursor-not-allowed items-center justify-center rounded-[10px] border border-line bg-line-2 text-[13px] font-extrabold text-muted">
+                        <WifiOff className="ms-2 size-4" /> يتطلب اتصالاً
+                      </span>
+                    ) : (
+                      <a
+                        href={checkoutUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        aria-label={`اشترك الآن — ${plan.arabicName}`}
+                        className="subscription-cta inline-flex h-10 w-full items-center justify-center rounded-[10px] text-[13px] font-extrabold transition"
+                      >
+                        اشترك الآن
+                      </a>
+                    )
                   ) : (
                     <a
                       href="/contact"

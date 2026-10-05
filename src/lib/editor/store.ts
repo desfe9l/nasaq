@@ -1217,7 +1217,9 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
 
 let librarySyncTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** Push the account catalog after local edits. Never runs for a guest. */
+/** Push the account catalog after local edits. Never runs for a guest.
+ * Offline-first: enqueues a deduplicated sync operation so reconnect automatically pushes.
+ */
 function queueLibrarySync() {
   if (!hasSignedInOwner()) return;
   if (librarySyncTimer) clearTimeout(librarySyncTimer);
@@ -1232,16 +1234,32 @@ function queueLibrarySync() {
         "libraryRemovedFolders",
       );
       const { toCatalog } = await import("@/lib/storage/library-client");
-      const { pushLibraryCatalog } = await import("@/lib/storage/mirror");
-      await pushLibraryCatalog(
-        toCatalog({
-          folders: state.assetFolders,
-          assets: state.assets,
-          customItems: state.customIcons,
-          removedAssets: Array.isArray(removedAssets) ? removedAssets : [],
-          removedFolders: Array.isArray(removedFolders) ? removedFolders : [],
-        }),
-      );
+      const catalog = toCatalog({
+        folders: state.assetFolders,
+        assets: state.assets,
+        customItems: state.customIcons,
+        removedAssets: Array.isArray(removedAssets) ? removedAssets : [],
+        removedFolders: Array.isArray(removedFolders) ? removedFolders : [],
+      });
+      // Enqueue for reliable offline sync (deduplicated)
+      try {
+        const { enqueueSync } = await import("@/lib/offline/sync-queue");
+        await enqueueSync("library:catalog", catalog, { dedupeKey: "library:catalog", version: Date.now() });
+        void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
+      } catch {}
+      // Best-effort immediate push when online
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        try { const { triggerSync } = await import("@/lib/offline/connectivity"); triggerSync(); } catch {}
+        return;
+      }
+      try {
+        const { pushLibraryCatalog } = await import("@/lib/storage/mirror");
+        const ok = await pushLibraryCatalog(catalog);
+        if (ok) {
+          // On success the queue can drain; trigger connectivity sync to clean queue
+          try { const { triggerSync } = await import("@/lib/offline/connectivity"); triggerSync(); } catch {}
+        }
+      } catch {}
     })();
   }, 800);
 }
@@ -1737,15 +1755,43 @@ export const useEditor = create<EditorStore>((set, get) => {
       let entitlements: Record<FeatureId, boolean> = {
         ...LICENSE_ENTITLEMENTS.FREE,
       };
+      let cachedGraceEntitlements: Record<FeatureId, boolean> | null = null;
       if (owner !== ANON_OWNER) {
         try {
           const { getLicenseStatusFn } =
             await import("@/lib/license/functions");
           const status = await getLicenseStatusFn();
           entitlements = status.entitlements ?? entitlements;
+          // Cache validated entitlement for offline grace
+          try {
+            const { cacheEntitlement } = await import("@/lib/offline/entitlement-cache");
+            await cacheEntitlement({
+              ownerId: owner,
+              entitlements,
+              validatedAt: Date.now(),
+              expiresAt: (status as unknown as { license?: { expiresAt?: string | null } })?.license?.expiresAt ?? (status as unknown as { expiresAt?: string | null })?.expiresAt ?? null,
+              isAdmin: Boolean((status as unknown as Record<string, unknown>).isAdmin),
+              isOwner: Boolean((status as unknown as Record<string, unknown>).isOwner),
+              isSuspended: Boolean((status as unknown as Record<string, unknown>).isSuspended),
+              hasLicense: Boolean((status as unknown as Record<string, unknown>).hasLicense),
+              source: "server",
+            });
+          } catch {}
         } catch {
-          // A failed license lookup grants no additional access.
-          entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
+          // Offline or network failure: try cached grace entitlement
+          try {
+            const { getCachedEntitlement, isEntitlementValidOffline } = await import("@/lib/offline/entitlement-cache");
+            const cached = await getCachedEntitlement(owner);
+            if (cached && isEntitlementValidOffline(cached)) {
+              entitlements = cached.entitlements;
+              cachedGraceEntitlements = cached.entitlements;
+            } else {
+              // No valid cached entitlement — remain FREE but allow local offline editing
+              entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
+            }
+          } catch {
+            entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
+          }
         }
       }
       // An account switch during the network round-trip invalidates both the
@@ -1757,6 +1803,16 @@ export const useEditor = create<EditorStore>((set, get) => {
         entitlementsResolved: true,
         entitlementsOwner: owner,
       });
+      // If we fell back to cached grace, surface offline notice
+      if (cachedGraceEntitlements) {
+        console.info("[offline] using cached entitlement grace for", owner);
+      }
+      // Kick off connectivity monitor and workspace snapshot refresh (offline cache)
+      try {
+        void import("@/lib/offline/connectivity").then((m) => m.initConnectivity());
+        void import("@/lib/offline/workspace-cache").then((m) => void m.refreshWorkspaceCache());
+        void import("@/lib/offline/connectivity").then((m) => m.triggerSync());
+      } catch {}
       const mode = storageMode();
       set({ storage: { mode, persistent: mode === "indexeddb" } });
 
@@ -2573,6 +2629,13 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
       if (!get().showcase) {
         await setSetting("activeProjectId", saved.id);
+        try {
+          const { enqueueSync } = await import("@/lib/offline/sync-queue");
+          await enqueueSync("project:create", saved, { dedupeKey: `project:create:${saved.id}`, version: saved.updatedAt });
+          void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
+          void import("@/lib/offline/asset-cache").then(m=>{ void m.cacheProjectAssets(saved as never); void m.cacheProjectFonts(saved as never); });
+          void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+        } catch {}
         await get().refreshProjects();
       }
       return true;
@@ -2720,6 +2783,13 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
       if (!get().showcase) {
         await setSetting("activeProjectId", saved.id);
+        try {
+          const { enqueueSync } = await import("@/lib/offline/sync-queue");
+          await enqueueSync("project:create", saved, { dedupeKey: `project:create:${saved.id}`, version: saved.updatedAt });
+          void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
+          void import("@/lib/offline/asset-cache").then(m=>{ void m.cacheProjectAssets(saved as never); void m.cacheProjectFonts(saved as never); });
+          void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+        } catch {}
         await get().refreshProjects();
       }
       return true;
@@ -2934,6 +3004,14 @@ export const useEditor = create<EditorStore>((set, get) => {
               savedAt: Date.now(),
             });
             clearDraftSnapshot();
+            // Offline-first: enqueue sync, refresh workspace shell and cache assets/fonts for offline open
+            try {
+              const { enqueueSync } = await import("@/lib/offline/sync-queue");
+              await enqueueSync("project:update", saved, { dedupeKey: `project:update:${saved.id}`, version: saved.updatedAt });
+              void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
+              void import("@/lib/offline/asset-cache").then(m=>{ void m.cacheProjectAssets(saved as never); void m.cacheProjectFonts(saved as never); });
+              void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+            } catch {}
             return;
           } catch (err) {
             console.error("[editor] autosave failed", err);
@@ -3039,6 +3117,12 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
         return;
       if (get().id === id) set({ name });
+      try {
+        const { enqueueSync } = await import("@/lib/offline/sync-queue");
+        await enqueueSync("project:rename", { id, name, updatedAt: Date.now() }, { dedupeKey: `project:rename:${id}` });
+        void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
+        void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+      } catch {}
       await get().refreshProjects();
     },
 
@@ -3054,6 +3138,12 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
         return;
       if (get().id === id) set({ favorite });
+      try {
+        const { enqueueSync } = await import("@/lib/offline/sync-queue");
+        await enqueueSync("project:favorite", { id, favorite, updatedAt: Date.now() }, { dedupeKey: `project:favorite:${id}` });
+        void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
+        void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+      } catch {}
       await get().refreshProjects();
     },
 
@@ -3157,6 +3247,12 @@ export const useEditor = create<EditorStore>((set, get) => {
           return;
         }
       }
+      try {
+        const { enqueueSync } = await import("@/lib/offline/sync-queue");
+        await enqueueSync("project:duplicate", { id: savedCopy.id, sourceId: id, updatedAt: Date.now() }, { dedupeKey: `project:duplicate:${savedCopy.id}` });
+        void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
+        void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+      } catch {}
       await get().refreshProjects();
     },
 
@@ -3165,6 +3261,12 @@ export const useEditor = create<EditorStore>((set, get) => {
       const sessionOwner = get().sessionOwner;
       if (!get().projects.some((project) => project.id === id)) return;
       await removeProject(id);
+      try {
+        const { enqueueSync } = await import("@/lib/offline/sync-queue");
+        await enqueueSync("project:delete", { id, updatedAt: Date.now() }, { dedupeKey: `project:delete:${id}` });
+        void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
+        void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+      } catch {}
       if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
         return;
       const s = get();

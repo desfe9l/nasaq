@@ -21,6 +21,7 @@ import {
   Share2,
   Sparkles,
 } from "lucide-react";
+import { TemplateOfflineButton } from "@/components/site/TemplateOfflineButton";
 import { toast } from "sonner";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { TemplateGallery, slidesFromTemplate } from "@/components/site/TemplateGallery";
@@ -215,6 +216,19 @@ export function TemplateDetailPage({ slug }: { slug: string }) {
                 <Sparkles className="size-4" aria-hidden />
                 {busy === "use" ? "جارٍ الإنشاء…" : "استخدام القالب"}
               </button>
+              {!locked && entry && (
+                <TemplateOfflineButton
+                  templateId={entry.sourceId}
+                  title={entry.title}
+                  tier={entry.managedTemplate?.tier ?? (locked ? "premium" : "free")}
+                  source={entry.managedTemplate ? "admin" : entry.kind === "custom" ? "personal" : "builtin"}
+                  fetchContent={async () => {
+                    // For builtin/managed, serialize the live pages; for paid managed we still allow after auth
+                    const content = JSON.stringify({ pages: entry.pages, title: entry.title });
+                    return { content, thumbnail: entry.thumbnail ?? null, pagesCount: entry.pages.length };
+                  }}
+                />
+              )}
               <button
                 type="button"
                 onClick={() => void run("edit")}

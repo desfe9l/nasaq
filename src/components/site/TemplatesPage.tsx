@@ -62,6 +62,7 @@ import {
   type CatalogPillId,
 } from "@/lib/templates/custom-templates";
 import { TemplateCard } from "@/components/site/TemplateCard";
+import { TemplateOfflineButton } from "@/components/site/TemplateOfflineButton";
 import {
   ConfirmDialog,
   QuickViewDialog,
@@ -751,12 +752,15 @@ export function TemplatesPage({
           </div>
         ) : (
           <div className={cn("mt-6", CARD_WRAP)}>
-            {filtered.map((entry) => (
-              <div key={entry.id} className={cn("flex", CARD_W)}>
+            {filtered.map((entry) => {
+              const locked = packLocked(entry);
+              const tier: "free" | "licensed" = locked || (entry as unknown as { managedTemplate?: { tier?: string } }).managedTemplate?.tier === "licensed" || (entry.kind === "pack" ? !canUseDemoPack(entry.sourceId) : false) ? "licensed" : "free";
+              return (
+              <div key={entry.id} className={cn("flex flex-col gap-2", CARD_W)}>
                 <TemplateCard
                   entry={entry}
                   href={templatePathFor(entrySlug(entry))}
-                  locked={packLocked(entry)}
+                  locked={locked}
                   highlight={justSaved === entry.id}
                   actions={{
                     onUse: () => void startFromEntry(entry),
@@ -767,8 +771,39 @@ export function TemplatesPage({
                     onDelete: () => setConfirmId(entry.id),
                   }}
                 />
+                {!locked && (
+                  <TemplateOfflineButton
+                    templateId={entry.id}
+                    title={entry.title ?? entry.id}
+                    tier={tier}
+                    source={entry.kind === "custom" ? "personal" : (entry as unknown as { managedTemplate?: unknown }).managedTemplate ? "admin" : "builtin"}
+                    fetchContent={async () => {
+                      try {
+                        if (entry.kind === "custom") {
+                          const mod = await import("@/lib/templates/custom-templates");
+                          const rec = await mod.customTemplateById((entry as unknown as { sourceId: string }).sourceId);
+                          if (rec) return { content: JSON.stringify(rec), thumbnail: (rec as unknown as { thumbnail?: string | null }).thumbnail ?? null, pagesCount: Array.isArray((rec as unknown as { pages?: unknown[] }).pages) ? (rec as unknown as { pages: unknown[] }).pages.length : undefined };
+                        }
+                        const kind = (entry as unknown as { kind: string }).kind;
+                        const pubId = (entry as unknown as { publishedId?: string }).publishedId;
+                        if (kind === "published" || pubId) {
+                          const mod = await import("@/lib/admin/functions");
+                          const res = await (mod.getPublishedTemplateFn as unknown as (arg: unknown) => Promise<{ ok: boolean; template?: { content: string } }> )({ data: { id: String(pubId ?? (entry as unknown as { sourceId?: string }).sourceId ?? entry.id) } } as never).catch(() => null);
+                          if (res?.ok && (res as unknown as { template?: { content?: string } })?.template?.content) return { content: String((res as unknown as { template: { content: string } }).template.content), thumbnail: entry.thumbnail ?? null, pagesCount: entry.pages?.length };
+                        }
+                      } catch {}
+                      try {
+                        const seed = entryProjectSeed(entry, { themeId: theme, orgName });
+                        return { content: JSON.stringify(seed), thumbnail: entry.thumbnail ?? null, pagesCount: seed.pages?.length ?? entry.pages?.length };
+                      } catch {
+                        return { content: JSON.stringify({ pages: entry.pages, title: entry.title }), thumbnail: entry.thumbnail ?? null, pagesCount: entry.pages?.length };
+                      }
+                    }}
+                  />
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
 

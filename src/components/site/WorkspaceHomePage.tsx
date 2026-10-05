@@ -48,6 +48,7 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { OPEN_NEW_DOCUMENT_EVENT } from "@/lib/auth/use-workspace-entry";
 import { licenseSummary } from "@/lib/license/summary";
 import { useLicense, type LicenseState } from "@/lib/license/client";
+import { HardDriveDownload, WifiOff } from "lucide-react";
 import { useBrandIdentity } from "@/lib/product/use-brand-identity";
 import { applyBrandToSeed } from "@/lib/editor/brand-design";
 import { toast } from "sonner";
@@ -239,11 +240,31 @@ function ContinueCard({
 }
 
 export function WorkspaceHomePage({ license }: { license: LicenseState }) {
+  const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
+  useEffect(() => {
+    const on = () => setIsOffline(false);
+    const off = () => setIsOffline(true);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, []);
   const { user } = useCurrentUserState();
   const hydrate = useEditor((s) => s.hydrate);
   const hydrated = useEditor((s) => s.hydrated);
   const projects = useEditor((s) => s.projects);
   const projectsLoading = useEditor((s) => s.projectsLoading);
+  const [offlineProjects, setOfflineProjects] = useState<ProjectMeta[] | null>(null);
+  useEffect(() => {
+    if (projects.length || projectsLoading) return;
+    if (!isOffline) return;
+    void (async () => {
+      try {
+        const { getWorkspaceSnapshot } = await import("@/lib/offline/workspace-cache");
+        const snap = await getWorkspaceSnapshot();
+        if (snap?.projects?.length) setOfflineProjects(snap.projects);
+      } catch {}
+    })();
+  }, [projects.length, projectsLoading, isOffline]);
   const createDocument = useEditor((s) => s.createDocument);
   const setEntitlements = useEditor((s) => s.setEntitlements);
   const storeOrg = useEditor((s) => s.orgName);
@@ -299,10 +320,11 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
     return () => window.removeEventListener(OPEN_NEW_DOCUMENT_EVENT, open);
   }, []);
 
+  const displayProjects = offlineProjects && !projects.length ? offlineProjects : projects;
   const recent = useMemo(
     () => {
       const query = projectQuery.trim().toLocaleLowerCase("ar");
-      return [...projects]
+      return [...displayProjects]
         .filter((project) =>
           !query ||
           `${project.name} ${project.orgName || ""}`
@@ -311,7 +333,7 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
         )
         .sort((a, b) => b.updatedAt - a.updatedAt);
     },
-    [projects, projectQuery],
+    [displayProjects, projectQuery],
   );
   const [latest, ...others] = recent;
 
@@ -430,6 +452,13 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
   return (
     <div className="min-h-full bg-paper">
       <SiteHeader current={WORKSPACE_ROUTE} />
+      {isOffline && (
+        <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 pt-3 text-[12px] font-bold text-amber-900 sm:px-6">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1">
+            <WifiOff className="size-3.5" /> وضع عدم الاتصال — المحتوى المحفوظ محليًا متاح. سيُستأنف الحفظ والمزامنة عند عودة الاتصال.
+          </span>
+        </div>
+      )}
 
       <main className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-8 sm:px-6 md:gap-12 md:py-12">
         {/* ── 1. NASAQ introduction ─────────────────────────────────────── */}

@@ -220,6 +220,7 @@ function waitForPopupToken(popup: Window): Promise<string | null> {
  * state to clear, and the sign-out itself must not fail on a cache hiccup.
  */
 async function clearLocalIdentityState(): Promise<void> {
+  try { localStorage.removeItem("nasaq-last-owner"); } catch {}
   try {
     const { ANON_OWNER, getStorageOwner, setStorageOwner } = await import(
       "@/lib/editor/storage-owner"

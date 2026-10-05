@@ -39,11 +39,14 @@ const LEGACY_DB_NAME = "faisal-reports";
  * already holds, so an unchanged version silently leaves existing installs
  * without the new store.
  */
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 const PROJECTS = "projects";
 const SETTINGS = "settings";
 const ASSETS = "assets";
 const CUSTOM_TEMPLATES = "customTemplates";
+const SYNC_QUEUE = "syncQueue";
+const OFFLINE_TEMPLATES = "offlineTemplates";
+const WORKSPACE_CACHE = "workspaceCache";
 const LS_PROJECTS = "nasaq-projects-v1";
 const LS_SETTINGS = "nasaq-settings-v1";
 const LS_ASSETS = "nasaq-assets-v1";
@@ -287,6 +290,19 @@ function openDb(): Promise<IDBDatabase | null> {
         const store = db.createObjectStore(CUSTOM_TEMPLATES, { keyPath: "id" });
         store.createIndex("updatedAt", "updatedAt");
       }
+      if (!db.objectStoreNames.contains(SYNC_QUEUE)) {
+        const store = db.createObjectStore(SYNC_QUEUE, { keyPath: "id" });
+        store.createIndex("ownerId", "ownerId");
+        store.createIndex("createdAt", "createdAt");
+      }
+      if (!db.objectStoreNames.contains(OFFLINE_TEMPLATES)) {
+        const store = db.createObjectStore(OFFLINE_TEMPLATES, { keyPath: "id" });
+        store.createIndex("ownerId", "ownerId");
+        store.createIndex("cachedAt", "cachedAt");
+      }
+      if (!db.objectStoreNames.contains(WORKSPACE_CACHE)) {
+        db.createObjectStore(WORKSPACE_CACHE, { keyPath: "key" });
+      }
     };
     req.onsuccess = () => {
       const db = req.result;
@@ -452,24 +468,37 @@ export async function saveProject(project: Project): Promise<Project> {
     const existing = fallback.raw().find(row => row.id === stamped.id);
     if (existing && !canRead(existing)) throw new Error("لا يمكن استبدال مشروع تابع لحساب آخر");
     fallback.put(stamped);
+    // Fire-and-forget: queue for cloud sync when IndexedDB unavailable (localStorage fallback)
+    void import("@/lib/offline/sync-queue").then(m => {
+      const isCreate = !existing;
+      return m.enqueueSync((isCreate ? "project:create" : "project:update") as never, stamped as unknown as Record<string, unknown>, { dedupeKey: `${isCreate ? "project:create" : "project:update"}:${stamped.id}` });
+    }).catch(() => {});
     return stamped;
   }
+  let isCreate = false;
   await tx(db, PROJECTS, "readwrite", async (t) => {
     const store = t.objectStore(PROJECTS);
     const existing = await request(store.get(stamped.id!)) as OwnedRow<Project> | undefined;
     if (existing && !canRead(existing)) throw new Error("لا يمكن استبدال مشروع تابع لحساب آخر");
     if (ownerId !== getStorageOwner()) throw new Error("Storage owner changed during save");
+    isCreate = !existing;
     await request(store.put({ ...clone(stamped), ownerId }));
   });
+  // Keep workspace recent list warm and queue cloud sync (best-effort, never throw)
+  void import("@/lib/offline/workspace-cache").then(m => m.refreshWorkspaceCache().catch(()=>{})).catch(()=>{});
+  void import("@/lib/offline/sync-queue").then(m => {
+    return m.enqueueSync((isCreate ? "project:create" : "project:update") as never, stamped as unknown as Record<string, unknown>, { dedupeKey: `${isCreate ? "project:create" : "project:update"}:${stamped.id}` });
+  }).catch(() => {});
   return stamped;
 }
 
 export async function deleteProject(id: string): Promise<void> {
+  const ownerId = getStorageOwner();
   const db = await openDb();
   if (!db) {
-    // `get` only resolves rows the current owner may read — a foreign id
-    // silently no-ops instead of deleting another account's document.
     if (fallback.get(id)) fallback.remove(id);
+    void import("@/lib/offline/sync-queue").then(m => m.enqueueSync("project:delete" as never, { id } as unknown as Record<string, unknown>, { dedupeKey: `project:delete:${id}` })).catch(()=>{});
+    void import("@/lib/offline/workspace-cache").then(m => m.refreshWorkspaceCache().catch(()=>{})).catch(()=>{});
     return;
   }
   const row = (await tx(db, PROJECTS, "readonly", (t) =>
@@ -479,6 +508,8 @@ export async function deleteProject(id: string): Promise<void> {
   await tx(db, PROJECTS, "readwrite", (t) =>
     request(t.objectStore(PROJECTS).delete(id)),
   );
+  void import("@/lib/offline/sync-queue").then(m => m.enqueueSync("project:delete" as never, { id } as unknown as Record<string, unknown>, { dedupeKey: `project:delete:${id}` })).catch(()=>{});
+  void import("@/lib/offline/workspace-cache").then(m => m.refreshWorkspaceCache().catch(()=>{})).catch(()=>{});
 }
 
 export async function duplicateProject(id: string): Promise<Project | null> {
@@ -994,3 +1025,16 @@ export async function renameAsset(id: string, name: string): Promise<void> {
     request(t.objectStore(ASSETS).put({ ...row, name })),
   );
 }
+
+// ── Offline Extensions ───────────────────────────────────────────────────────
+export const OFFLINE_STORES = { SYNC_QUEUE, OFFLINE_TEMPLATES, WORKSPACE_CACHE } as const;
+
+/** Expose the underlying DB for offline modules that share the same versioned schema. */
+export function getOfflineDb(): Promise<IDBDatabase | null> {
+  return openDb();
+}
+export function offlineTx<T>(db: IDBDatabase, stores: string | string[], mode: IDBTransactionMode, run: (t: IDBTransaction)=>Promise<T>|T): Promise<T> {
+  return tx(db, stores, mode, run);
+}
+export function offlineRequest<T>(req: IDBRequest<T>): Promise<T> { return request(req); }
+export function resetDbForTests(): void { dbPromise = null; }
