@@ -134,7 +134,7 @@ describe("a user with a valid team licence", () => {
 
 describe("a team licence is never downgraded to individual", () => {
   it("keeps team flags for every team plan", () => {
-    for (const plan of ["team-monthly", "team-quarterly", "team-annual"] as const) {
+    for (const plan of ["team-monthly", "team-quarterly"] as const) {
       const entitlements = entitlementsForPlan(plan, "PRO");
       assert.equal(entitlements.team_features, true, plan);
       assert.equal(entitlements.collaboration, true, plan);
@@ -143,7 +143,7 @@ describe("a team licence is never downgraded to individual", () => {
   });
 
   it("strips team flags from every individual plan", () => {
-    for (const plan of ["individual-monthly", "individual-quarterly", "individual-annual"] as const) {
+    for (const plan of ["individual-monthly", "individual-quarterly"] as const) {
       const entitlements = entitlementsForPlan(plan, "PRO");
       assert.equal(entitlements.team_features, false, plan);
       assert.equal(entitlements.collaboration, false, plan);

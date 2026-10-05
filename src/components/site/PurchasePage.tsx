@@ -21,14 +21,13 @@ import {
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { CREATE_ROUTE } from "@/lib/site-routes";
 import { cardClass } from "@/components/site/cards";
-import { whatsappHref } from "@/lib/brand";
 
 const FAQS: { q: string; a: string }[] = [
   { q: "كيف تُفعَّل التراخيص؟", a: "بعد إتمام الدفع، يتحقق النظام من العملية خادميًا ثم يُنشئ ترخيصًا رقميًا ويربطه بحسابك تلقائيًا بنفس بريد الشراء. تدير الترخيص من صفحة التراخيص." },
   { q: "هل أحتاج إدخال مفتاح ترخيص أثناء الدفع؟", a: "لا. لا يُطلب منك أي مفتاح أثناء الشراء ولا بعده: الترخيص يُنشأ ويُربط بحسابك تلقائيًا. استخدم البريد المرتبط بحسابك وأكمل بيانات الدفع المطلوبة." },
   { q: "ما حالات الاشتراك في نَسَق؟", a: "النوع: Free (مجاني)، Trial (تجريبي)، Pro (احترافي شهري أو ربع سنوي)، Lifetime (مدى الحياة). والحالة: Active (نشط)، Expired (منتهي)، Revoked (ملغى أو موقوف). تظهر حالتك الحالية في أعلى هذه الصفحة." },
   { q: "ماذا لو لم أكن مسجلًا قبل الشراء؟", a: "لا مشكلة: أكمل الدفع باستخدام البريد الذي ستسجّل به في نَسَق، وعند أول تسجيل دخول يُربط الاشتراك بحسابك تلقائيًا." },
-  { q: "ما مدد الاشتراك المتاحة؟", a: "تتوفر الخطط الشهرية والربع سنوية بحسب روابط الشراء المتاحة، كما يمكن للجهات طلب اشتراك سنوي والتواصل معنا عبر WhatsApp لمعرفة السعر والتفاصيل." },
+  { q: "ما مدد الاشتراك المتاحة؟", a: "تتوفر الخطط الشهرية والربع سنوية بحسب روابط الشراء المتاحة." },
   { q: "أين تُعالج ملفاتي؟", a: "المحرر يعمل بتخزين محلي أولًا: المشاريع والصور والهويات تُحفظ داخل المتصفح عبر IndexedDB. الاتصال مطلوب فقط للتحقق من الترخيص." },
   { q: "هل يمكنني العمل بدون اتصال؟", a: "نعم، بعد التفعيل تعمل أدوات التحرير والحفظ والتصدير محليًا حتى عند انقطاع الشبكة." },
   { q: "هل الخطة المجانية محدودة المدة؟", a: "لا، الخطة المجانية دائمة دون تاريخ انتهاء، مع قيود على المزايا المتقدمة." },
@@ -169,8 +168,6 @@ export function PurchasePage() {
         ),
     [activeBilling, checkoutLinks, currentPlanKey],
   );
-  const annualPlan = CENTRAL_PLANS["team-annual"];
-
   return (
     <div className="min-h-full bg-page ">
       <SiteHeader current="/purchase" />
@@ -355,36 +352,6 @@ export function PurchasePage() {
               </div>
             );
           })}
-          <article className={cardClass("flex flex-col p-5")}>
-            <div className="flex-1">
-              <h2 className="text-[15px] font-bold text-ink">ترخيص الجهات — سنوي</h2>
-              <p className="mt-1 text-[12px] leading-5 text-muted">{annualPlan.description}</p>
-              <p className="mt-4 text-[17px] font-extrabold leading-7 text-ink">
-                تواصل معنا عبر WhatsApp
-              </p>
-              <p className="text-[11px] text-muted">
-                مدة الترخيص {annualPlan.durationDays} يومًا · تفاصيل السعر مع الجهة
-              </p>
-              <ul className="mt-4 grid gap-1.5 border-t border-line/60 pt-3.5">
-                {annualPlan.features.map((feature) => (
-                  <li key={feature} className="flex items-start gap-2 text-[12px] leading-5 text-muted">
-                    <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-brand" /> {feature}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <a
-              href={whatsappHref("السلام عليكم، أرغب في معرفة سعر وتفاصيل الاشتراك السنوي للجهات في منصة نَسَق.")}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="subscription-cta mt-5 inline-flex h-9 w-full items-center justify-center rounded-[10px] text-[13px] font-bold transition"
-            >
-              تواصل معنا عبر WhatsApp
-            </a>
-            <p className="mt-2 text-center text-[11px] text-muted">
-              اكتشاف الخطة منفصل عن تفعيل الترخيص
-            </p>
-          </article>
         </div>
         {/* FAQ */}
         <section className="mt-10 border-t border-line/60 pt-8 ">

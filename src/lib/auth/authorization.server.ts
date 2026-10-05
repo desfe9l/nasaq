@@ -8,6 +8,7 @@ import {
   entitlementsForPlan,
   entitlementsFromKeygenCodes,
   LICENSE_ENTITLEMENTS,
+  type BillingPeriod,
   type FeatureId,
   type License,
   type LicensePlan,
@@ -54,18 +55,28 @@ function manualSubscriptionLicense(
 ): License | null {
   if (subscription.source_transaction_id != null || subscription.status !== "ACTIVE" ||
       Date.parse(String(subscription.expires_at)) <= Date.now()) return null;
-  // Legacy manually approved plans predate the central catalog. Give them
-  // individual features only; never infer team seats from a legacy name.
-  const plan: LicensePlan = getCatalogPlan(subscription.plan_id)?.key ||
-    (subscription.plan_id === "quarterly" ? "individual-quarterly"
-      : subscription.plan_id === "annual" ? "individual-annual" : "individual-monthly");
+  // Historical manually approved subscriptions predate the central catalog.
+  // Keep their already-recorded access/term readable without making those ids
+  // purchasable or exposing them as current catalog / Keygen plans.
+  const catalogPlan = getCatalogPlan(subscription.plan_id);
+  const plan: LicensePlan = catalogPlan?.key ??
+    (subscription.plan_id === "quarterly"
+      ? "individual-quarterly"
+      : subscription.plan_id === "team-annual"
+        ? "team-monthly"
+        : "individual-monthly");
+  const billing: BillingPeriod = catalogPlan?.period ??
+    (subscription.plan_id === "annual" || subscription.plan_id === "individual-annual" || subscription.plan_id === "team-annual"
+      ? "annual"
+      : subscription.plan_id === "quarterly"
+        ? "quarterly"
+        : "monthly");
   const createdAt = new Date(subscription.activated_at).toISOString();
   return {
     id: `subscription:${subscription.id}`, keyHash: "", keyPrefix: "", type: "PRO", status: "ACTIVE",
     userId, activatedAt: createdAt, expiresAt: new Date(subscription.expires_at).toISOString(),
     createdAt, updatedAt: createdAt, revokedAt: null, activationCount: 1, maxActivations: null,
-    metadata: { source: "manual", plan, billing: plan.endsWith("annual") ? "annual"
-      : plan.endsWith("quarterly") ? "quarterly" : "monthly" },
+    metadata: { source: "manual", plan, billing },
   };
 }
 

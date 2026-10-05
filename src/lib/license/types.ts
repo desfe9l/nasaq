@@ -9,7 +9,9 @@
 
 export type LicenseType = "FREE" | "TRIAL" | "PRO" | "LIFETIME";
 export type LicenseSource = "manual" | "keygen";
-export type LicensePlan = "individual-monthly" | "individual-quarterly" | "team-monthly" | "team-quarterly" | "individual-annual" | "team-annual";
+/** Paid plans supported by the current NASAQ catalog. */
+export type LicensePlan = "individual-monthly" | "individual-quarterly" | "team-monthly" | "team-quarterly";
+/** `annual` is retained only to describe legacy subscriptions already on record. */
 export type BillingPeriod = "monthly" | "quarterly" | "annual";
 export type LicenseStatus = "ACTIVE" | "EXPIRED" | "REVOKED";
 

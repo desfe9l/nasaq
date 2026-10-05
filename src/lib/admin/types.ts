@@ -1,4 +1,4 @@
-import { CENTRAL_PLANS, planSavings } from "../commercial/catalog";
+import { CENTRAL_PLANS } from "../commercial/catalog";
 /**
  * NASAQ admin-managed content — shared (client + server) types and defaults.
  *
@@ -17,8 +17,6 @@ export interface CommercialSettings {
   /** Monthly list prices in SAR. */
   priceIndividualMonthly: number;
   priceTeamMonthly: number;
-  /** Annual discount percentage applied on the pricing page. */
-  annualDiscountPercent: number;
 }
 
 export interface Announcement {
@@ -155,7 +153,6 @@ export const DEFAULT_SITE_SETTINGS: PublicSiteSettings = {
     whatsappEnterpriseMessage: "السلام عليكم، أرغب بطلب ترخيص مؤسسي مخصص لمنصة نَسَق.",
     priceIndividualMonthly: CENTRAL_PLANS["individual-monthly"].amount,
     priceTeamMonthly: CENTRAL_PLANS["team-monthly"].amount,
-    annualDiscountPercent: Math.round(planSavings(CENTRAL_PLANS["individual-annual"]) / (CENTRAL_PLANS["individual-monthly"].amount * 12) * 100),
   },
   announcement: { enabled: false, text: "", href: "", tone: "info" },
   texts: {
@@ -277,7 +274,6 @@ export function normalizeSection<K extends SettingsSection>(key: K, raw: unknown
         whatsappEnterpriseMessage: str(r.whatsappEnterpriseMessage, 500, d.commercial.whatsappEnterpriseMessage),
         priceIndividualMonthly: d.commercial.priceIndividualMonthly,
         priceTeamMonthly: d.commercial.priceTeamMonthly,
-        annualDiscountPercent: d.commercial.annualDiscountPercent,
       };
       return value as PublicSiteSettings[K];
     }
