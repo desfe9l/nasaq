@@ -37,7 +37,7 @@ export function magicMatches(format: ImportKind, magicHex: string): boolean {
   const h = magicHex.toLowerCase().replace(/[^0-9a-f]/g, "");
   if (h.length < 4) return false;
   if (format === "psd" || format === "psb") return h.startsWith("38425053");
-  if (format === "docx" || format === "pptx") return h.startsWith(ZIP);
+  if (format === "docx" || format === "pptx" || format === "xlsx") return h.startsWith(ZIP);
   if (format === "pdf") return h.startsWith("25504446");
   if (format === "png") return h.startsWith("89504e47");
   if (format === "jpg") return h.startsWith("ffd8ff");
@@ -72,8 +72,12 @@ export function classifyImport(fileName: string, bytes: Uint8Array): ClassifiedF
   if (kind === "ppt" || kind === "xls") {
     return { error: "صيغة Office القديمة غير مدعومة. احفظ الملف كـ DOCX أو PPTX ثم أعد المحاولة." };
   }
-  if (kind === "xlsx" || kind === "csv") {
-    return { error: "جداول Excel تُستورد من محرر الجدول، وليست قالب صفحة في هذا المسار." };
+  if (kind === "xlsx") {
+    if (!signature.startsWith(ZIP)) return { error: "الملف ليس حزمة Excel (XLSX) صالحة." };
+    return { format: "xlsx" };
+  }
+  if (kind === "csv") {
+    return { error: "ملفات CSV تُستورد من محرر الجدول مباشرة." };
   }
   if (signature.startsWith("38425053") || kind === "psd" || kind === "psb") {
     if (!signature.startsWith("38425053")) return { error: "الملف ليس PSD أو PSB صالحًا." };
@@ -101,5 +105,5 @@ export function classifyImport(fileName: string, bytes: Uint8Array): ClassifiedF
     if (kind === "docx") return { format: "docx" };
     return { format: "docx" };
   }
-  return { error: "صيغة غير مدعومة. المقبول: PSD وDOCX وPPTX وPDF وPNG وJPG وSVG." };
+  return { error: "صيغة غير مدعومة. المقبول: PSD وDOCX وPPTX وXLSX وPDF وPNG وJPG وSVG." };
 }

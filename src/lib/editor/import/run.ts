@@ -9,6 +9,7 @@ import { importDocxBytes } from "./docx";
 import { importImageBytes } from "./raster";
 import { importPdfBytes } from "./pdf";
 import { importPptxBytes } from "./pptx";
+import { importXlsxBytes } from "./xlsx";
 import { type BuiltImport, type ImportKind, type ImportNote } from "./shared";
 import { countProjectElements, normalizeProjectFile } from "../../nsq/normalize";
 
@@ -95,6 +96,7 @@ export async function importTemplateBytes(
   }
   if (format === "docx") return importDocxBytes(bytes, fileName, ids);
   if (format === "pptx") return importPptxBytes(bytes, fileName, ids);
+  if (format === "xlsx") return importXlsxBytes(bytes, fileName, ids);
   if (format === "pdf") return importPdfBytes(bytes, fileName, ids);
   return importImageBytes(bytes, fileName, format, ids);
 }

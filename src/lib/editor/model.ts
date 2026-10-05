@@ -121,6 +121,24 @@ export type ElType =
 export type ThemeId = "official" | "eid" | "ministry" | "slate" | "sand";
 export type PackId = "official" | "eid" | "briefing" | "blank" | "slides";
 
+export type EditorBlendMode =
+  | "normal"
+  | "multiply"
+  | "screen"
+  | "overlay"
+  | "darken"
+  | "lighten"
+  | "color-dodge"
+  | "color-burn"
+  | "hard-light"
+  | "soft-light"
+  | "difference"
+  | "exclusion"
+  | "hue"
+  | "saturation"
+  | "color"
+  | "luminosity";
+
 export interface ElStyle {
   fontFamily?: string;
   fontSize?: number;
@@ -135,28 +153,14 @@ export interface ElStyle {
    * editor can actually render are stored — PSD modes without a CSS equivalent
    * stay in the import report instead of being renamed into a near miss.
    */
-  blendMode?:
-    | "normal"
-    | "multiply"
-    | "screen"
-    | "overlay"
-    | "darken"
-    | "lighten"
-    | "color-dodge"
-    | "color-burn"
-    | "hard-light"
-    | "soft-light"
-    | "difference"
-    | "exclusion"
-    | "hue"
-    | "saturation"
-    | "color"
-    | "luminosity";
+  blendMode?: EditorBlendMode;
   color?: string;
   background?: string;
   fill?: string;
   /** Shared multi-stop paint; solid/transparent fill stays in `fill`. */
   gradient?: Gradient;
+  /** Image gradient overlays may blend independently of the source layer. */
+  gradientBlendMode?: EditorBlendMode;
   /** Non-destructive source window; independent from frame resizing. */
   crop?: ImageCrop;
   borderColor?: string;
@@ -310,7 +314,7 @@ export type TextBoxMode = "free" | "autoHeight" | "fixed" | "autoWidth" | "fit";
 /** Types whose box can auto-size to their text. */
 export const AUTO_TEXT_TYPES: ElType[] = ["text", "box", "stat", "stamp"];
 
-export type ElementSourceKind = "psd" | "docx" | "pptx" | "pdf" | "image";
+export type ElementSourceKind = "psd" | "docx" | "pptx" | "pdf" | "xlsx" | "image";
 
 export interface CanvasEl {
   id: string;

@@ -1,3 +1,5 @@
+import type { Gradient } from "../gradient";
+
 /**
  * Intermediate PSD document and the NASAQ conversion report.
  *
@@ -34,6 +36,10 @@ export interface PsdEffectNotes {
   shadow?: string;
   strokeColor?: string;
   strokeWidthMm?: number;
+  /** Gradient fill/overlay retained as a native multi-stop NASAQ paint. */
+  gradient?: Gradient;
+  gradientOverlay?: boolean;
+  gradientBlendMode?: string;
   mapped: string[];
   unsupported: string[];
 }
@@ -43,6 +49,7 @@ export type PsdNodeKind =
   | "text"
   | "pixels"
   | "shape"
+  | "vector"
   | "adjustment"
   | "empty";
 
@@ -74,7 +81,10 @@ export interface PsdNode {
     fill: string;
     radiusPx: number;
     kind: "rect" | "circle" | "rounded";
+    gradient?: Gradient;
   };
+  /** Sanitized SVG path data reconstructed from a PSD vector mask. */
+  vector?: { content: string };
   image?: {
     dataUrl: string;
     width: number;

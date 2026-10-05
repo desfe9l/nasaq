@@ -26,7 +26,7 @@ import {
 } from "@/lib/editor/image-frames";
 import { mapShapePart } from "@/lib/editor/shape-affine";
 import { isPalmTouch } from "@/lib/editor/pen-input";
-import { paintCss } from "@/lib/editor/gradient";
+import { gradientCss, paintCss } from "@/lib/editor/gradient";
 import { imageLayout, normalizeCrop } from "@/lib/editor/image-crop";
 import { useImageLoadState } from "@/lib/editor/use-image-load";
 import { GradientDefs } from "./GradientDefs";
@@ -852,6 +852,18 @@ function ElementContent({
     const artwork = (
       <>
         <ImageArtwork el={el} src={src} framed={Boolean(frameParts)} />
+        {s.gradient && (
+          <div
+            aria-hidden
+            data-gradient-overlay={el.id}
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background: gradientCss(s.gradient),
+              mixBlendMode: s.gradientBlendMode || "normal",
+              borderRadius: frameParts ? undefined : `${s.radius || 0}mm`,
+            }}
+          />
+        )}
         {/*
          * Step 8 — طبقة التلاشي. Painted after the image so it always sits on
          * top, sized to the frame (not the photo), and inert: it is decoration,

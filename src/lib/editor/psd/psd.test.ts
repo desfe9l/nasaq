@@ -237,6 +237,141 @@ describe("PSD → NASAQ", () => {
     assert.ok(Math.abs((photo?.x || 0) - ((group?.x || 0) + rawPhoto.x)) < 0.05);
   });
 
+  it("applies raster masks and keeps editable Photoshop effects as native styles", async () => {
+    const maskedData = solid(8, 4, 220, 40, 30);
+    const maskData = solid(8, 4, 255, 255, 255);
+    for (let i = 0; i < 4; i += 1) {
+      maskData.data[i * 4] = 0;
+      maskData.data[i * 4 + 1] = 0;
+      maskData.data[i * 4 + 2] = 0;
+    }
+    const bytes = writePsd({
+      width: 80,
+      height: 40,
+      children: [
+        {
+          name: "Masked photo",
+          left: 0,
+          top: 0,
+          right: 8,
+          bottom: 4,
+          imageData: maskedData,
+          mask: { left: 0, top: 0, right: 8, bottom: 4, defaultColor: 255, imageData: maskData },
+        },
+        {
+          name: "Vector gradient",
+          left: 58,
+          top: 0,
+          right: 78,
+          bottom: 20,
+          vectorFill: {
+            type: "solid",
+            name: "violet",
+            style: "linear",
+            angle: 90,
+            colorStops: [
+              { location: 0, midpoint: 0.5, color: { r: 25, g: 40, b: 120 } },
+              { location: 4096, midpoint: 0.5, color: { r: 230, g: 180, b: 70 } },
+            ],
+            opacityStops: [
+              { location: 0, midpoint: 0.5, opacity: 1 },
+              { location: 4096, midpoint: 0.5, opacity: 1 },
+            ],
+          },
+          vectorOrigination: {
+            keyDescriptorList: [{
+              keyOriginType: 1,
+              keyOriginResolution: 72,
+              keyOriginShapeBoundingBox: {
+                top: { units: "Pixels", value: 0 },
+                left: { units: "Pixels", value: 58 },
+                bottom: { units: "Pixels", value: 20 },
+                right: { units: "Pixels", value: 78 },
+              },
+            }],
+          },
+        },
+        {
+          name: "Bezier path",
+          left: 20,
+          top: 10,
+          right: 40,
+          bottom: 30,
+          vectorFill: { type: "color", color: { r: 30, g: 90, b: 60 } },
+          vectorMask: {
+            paths: [{
+              open: false,
+              fillRule: "non-zero",
+              operation: "combine",
+              knots: [
+                { linked: true, points: [20, 10, 20, 10, 20, 10] },
+                { linked: true, points: [40, 10, 40, 10, 40, 10] },
+                { linked: true, points: [30, 30, 30, 30, 30, 30] },
+              ],
+            }],
+          },
+        },
+        {
+          name: "Effects",
+          left: 12,
+          top: 0,
+          right: 52,
+          bottom: 30,
+          imageData: checker(40, 30),
+          effects: {
+            innerShadow: [{ enabled: true, opacity: 0.4, angle: 90, distance: { units: "Pixels", value: 2 }, size: { units: "Pixels", value: 3 }, color: { r: 0, g: 0, b: 0 } }],
+            outerGlow: { enabled: true, opacity: 0.6, size: { units: "Pixels", value: 5 }, color: { r: 255, g: 230, b: 170 } },
+            innerGlow: { enabled: true, opacity: 0.25, size: { units: "Pixels", value: 2 }, color: { r: 255, g: 255, b: 255 } },
+            bevel: { enabled: true, size: { units: "Pixels", value: 2 }, highlightColor: { r: 255, g: 255, b: 255 }, shadowColor: { r: 0, g: 0, b: 0 }, highlightOpacity: 0.5, shadowOpacity: 0.4 },
+            stroke: [{ enabled: true, fillType: "color", size: { units: "Pixels", value: 2 }, color: { r: 198, g: 160, b: 90 } }],
+            gradientOverlay: [{
+              enabled: true,
+              opacity: 0.7,
+              type: "linear",
+              angle: 45,
+              blendMode: "screen",
+              gradient: {
+                type: "solid",
+                name: "gold",
+                colorStops: [
+                  { location: 0, midpoint: 0.5, color: { r: 10, g: 20, b: 30 } },
+                  { location: 4096, midpoint: 0.5, color: { r: 220, g: 180, b: 90 } },
+                ],
+                opacityStops: [
+                  { location: 0, midpoint: 0.5, opacity: 1 },
+                  { location: 4096, midpoint: 0.5, opacity: 1 },
+                ],
+              },
+            }],
+          },
+        },
+      ] as never,
+    }, { noBackground: true });
+    const imported = await importPsdBytes(bytes, "effects.psd");
+    const elements = flat(imported.project.pages[0]!.elements);
+    const masked = elements.find((el) => el.name === "Masked photo");
+    const styled = elements.find((el) => el.name === "Effects");
+    const vectorGradient = elements.find((el) => el.name === "Vector gradient");
+    const bezier = elements.find((el) => el.name === "Bezier path");
+    assert.equal(vectorGradient?.type, "shape");
+    assert.ok(vectorGradient?.style.gradient?.stops.length === 2);
+    assert.equal(vectorGradient?.style.gradient?.stops[1]?.offset, 1);
+    assert.equal(bezier?.type, "svg");
+    assert.match(bezier?.content || "", /<path[^>]+d="M20 10 C20 10 40 10 40 10/);
+    assert.match(bezier?.content || "", /#1e5a3c/);
+    assert.equal(masked?.type, "image");
+    assert.match(masked?.src || "", /^data:image\/png;base64,/);
+    assert.ok(masked?.source?.reason?.includes("قناع"));
+    assert.equal(styled?.type, "image");
+    assert.ok(styled?.style.shadow?.includes("inset"));
+    assert.ok(styled?.style.shadow?.includes("rgba"));
+    assert.ok(styled?.style.gradient?.stops.length === 2);
+    assert.equal(styled?.style.gradientBlendMode, "screen");
+    assert.equal(styled?.style.borderColor, "#c6a05a");
+    assert.ok(imported.report.fallbacks.some((item) => item.layerName === "Masked photo" && /قناع/.test(item.reason)));
+    assert.ok(imported.report.fallbacks.some((item) => item.layerName === "Effects" && /تقريبياً/.test(item.reason)));
+  });
+
   it("matches an extracted image to the library by hash and does not queue a duplicate", async () => {
     const bytes = sampleFile();
     const first = await importPsdBytes(bytes, "one.psd");

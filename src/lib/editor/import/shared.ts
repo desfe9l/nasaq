@@ -12,7 +12,7 @@ import { serializeTable } from "../tables";
 import { uid } from "../../utils";
 import { intrinsicPxOf, stampImportOrigins } from "./origin";
 
-export type ImportKind = "nsq" | "json" | "psd" | "psb" | "docx" | "pptx" | "pdf" | "png" | "jpg" | "svg";
+export type ImportKind = "nsq" | "json" | "psd" | "psb" | "docx" | "pptx" | "xlsx" | "pdf" | "png" | "jpg" | "svg";
 
 export interface ImportNote {
   name: string;
@@ -173,8 +173,8 @@ export class ImportBuilder {
       name: name.slice(0, 80) || type,
       x: round2(box.x),
       y: round2(box.y),
-      w: round2(Math.max(4, box.w)),
-      h: round2(Math.max(4, box.h)),
+      w: round2(Math.max(type === "svg" || type === "line" ? 0.4 : 4, box.w)),
+      h: round2(Math.max(type === "svg" || type === "line" ? 0.4 : 4, box.h)),
       rotation: 0,
       opacity: 1,
       z: this.z,
@@ -222,15 +222,40 @@ export class ImportBuilder {
     return el;
   }
 
-  shape(page: Page, box: Box, fill: string, name: string, shape: "rect" | "circle" | "rounded" = "rect", radius = 0): CanvasEl {
-    const el = this.base("shape", name, box);
+  shape(
+    page: Page,
+    box: Box,
+    fill: string,
+    name: string,
+    shape: "rect" | "circle" | "rounded" = "rect",
+    radius = 0,
+    style: Partial<ElStyle> = {},
+    partial?: string,
+  ): CanvasEl {
+    const el = this.base("shape", name, box, partial);
     el.style = {
-      fill: fill || "#e7e2d8",
+      ...style,
+      fill: fill || "transparent",
       shape,
       radius: radius > 0 ? round2(radius) : undefined,
     };
     page.elements.push(el);
     this.shapes += 1;
+    return el;
+  }
+
+  line(page: Page, box: Box, color: string, width: number, name: string, partial?: string): CanvasEl {
+    const el = this.base("line", name, box, partial);
+    el.style = { color: color || "#172033", stroke: Math.max(0.1, width) };
+    page.elements.push(el);
+    this.shapes += 1;
+    return el;
+  }
+
+  group(page: Page, box: Box, children: CanvasEl[], name: string, partial?: string): CanvasEl {
+    const el = this.base("group", name, box, partial);
+    el.children = children;
+    page.elements.push(el);
     return el;
   }
 
@@ -305,10 +330,15 @@ export class ImportBuilder {
     const preview = previewDataUrl(this.pages[0]);
     const project: Project = {
       version: 2,
+      // Imported geometry is already expressed in document millimetres. Mark it
+      // native so the editor's legacy safety constraints never resize or move
+      // source-authored objects while opening the file.
+      nativeFormat: 1,
       name: fileStem(this.fileName),
       theme: "official",
       orgName: "",
       defaultSize: sizeIdOf(this.pages[0]) as SizeId,
+      pack: "blank",
       pages: this.pages,
       ...(preview ? { thumbnail: preview } : {}),
     };
