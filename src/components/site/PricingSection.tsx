@@ -27,7 +27,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Sparkles } from "lucide-react";
 import { cardClass } from "@/components/site/cards";
-import { whatsappHref } from "@/lib/brand";
 import { getGumroadCheckoutLinksFn } from "@/lib/gumroad/functions";
 import {
   isGumroadPlanKey,
@@ -41,7 +40,6 @@ import {
   PERIOD_LABELS,
   checkoutKeyFor,
   homePlanCards,
-  institutionalAnnualCard,
   type HomePlanCard,
   type SwitchablePeriod,
 } from "@/lib/commercial/plan-cards";
@@ -110,13 +108,11 @@ export function PricingSection({
   }, [activePeriod, availablePeriods.length, checkoutResolved, period]);
 
   const cards = useMemo(
-    () => [
-      ...homePlanCards(activePeriod).filter((card) => {
+    () =>
+      homePlanCards(activePeriod).filter((card) => {
         const planKey = checkoutKeyFor(card);
         return !planKey || Boolean(checkoutLinks[planKey]);
       }),
-      institutionalAnnualCard(),
-    ],
     [activePeriod, checkoutLinks],
   );
   const subscribe = useCallback(
@@ -163,15 +159,7 @@ export function PricingSection({
   const run = useCallback(
     (card: HomePlanCard) => {
       if (card.kind === "free") onStartFree();
-      else if (card.kind === "contact") {
-        window.open(
-          whatsappHref(
-            "السلام عليكم، أرغب بطلب الاشتراك السنوي للجهة المؤسسية من منصة نَسَق.",
-          ),
-          "_blank",
-          "noopener,noreferrer",
-        );
-      } else void subscribe(card);
+      else void subscribe(card);
     },
     [onStartFree, subscribe],
   );
@@ -245,7 +233,7 @@ export function PricingSection({
         )}
 
         {/* Cards */}
-        <div className="mt-6 grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-6 grid items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
           {cards.map((card) => (
             <PlanCard
               key={card.id}
@@ -311,18 +299,12 @@ function PlanCard({
         <p className="mt-1 text-[11px] text-muted">{card.description}</p>
 
         <p className="mt-4 text-[24px] font-extrabold leading-tight text-ink">
-          {card.kind === "contact" ? (
-            <span className="text-[17px] leading-7">{card.formattedAmount}</span>
-          ) : (
-            <>
-              {card.formattedAmount}{" "}
-              <span className="text-[13px] font-bold text-muted">ر.س</span>{" "}
-              {free ? null : (
-                <span className="text-[12px] font-bold text-muted">
-                  / {card.priceSuffix}
-                </span>
-              )}
-            </>
+          {card.formattedAmount}{" "}
+          <span className="text-[13px] font-bold text-muted">ر.س</span>{" "}
+          {free ? null : (
+            <span className="text-[12px] font-bold text-muted">
+              / {card.priceSuffix}
+            </span>
           )}
         </p>
         <p className="mt-1 text-[11px] text-muted">{card.termLabel}</p>

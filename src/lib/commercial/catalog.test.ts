@@ -2,6 +2,8 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   FREE_PLAN,
+  getCatalogPlan,
+  isValidPlanKey,
   listCatalogPlans,
   planKeyFor,
   requireCatalogPlan,
@@ -15,22 +17,34 @@ import {
 } from "../gumroad/mapping.ts";
 import { createTestSql } from "./test-db.ts";
 import {
+  getPlan,
   getPurchasablePlan,
   listEnabledPlans,
   updatePlan,
 } from "./plans.server.ts";
 
 describe("Final pricing contract", () => {
-  it("has permanent Free and exactly six unique paid prices/products", () => {
+  it("has permanent Free and exactly four supported paid prices/products", () => {
     assert.equal(FREE_PLAN.permanent, true);
-    assert.deepEqual(Object.values(FREE_PLAN.prices), [0, 0, 0]);
+    assert.deepEqual(Object.values(FREE_PLAN.prices), [0, 0]);
     const plans = listCatalogPlans();
     assert.deepEqual(
       plans.map((p) => p.amount),
-      [79, 199, 199, 499, 699, 1799],
+      [79, 199, 199, 499],
     );
-    assert.equal(new Set(plans.map((p) => p.productId)).size, 6);
-    assert.equal(new Set(plans.map((p) => p.priceId)).size, 6);
+    assert.equal(new Set(plans.map((p) => p.productId)).size, 4);
+    assert.equal(new Set(plans.map((p) => p.priceId)).size, 4);
+    assert.deepEqual(plans.map((plan) => plan.key), [
+      "individual-monthly",
+      "individual-quarterly",
+      "team-monthly",
+      "team-quarterly",
+    ]);
+    for (const retiredAnnualKey of ["individual-annual", "team-annual"]) {
+      assert.equal(isValidPlanKey(retiredAnnualKey), false);
+      assert.equal(getCatalogPlan(retiredAnnualKey), null);
+    }
+    assert.throws(() => planKeyFor("individual", "annual" as never));
     for (const p of plans) {
       assert.equal(planKeyFor(p.family, p.period), p.key);
       // The catalog is the only price source: no component may re-price a plan.
@@ -71,11 +85,12 @@ describe("Final pricing contract", () => {
     assert.ok(!gumroadCheckoutUrl("team-quarterly").includes("monthly=true"));
   });
 
-  it("migrates all prices, rejects legacy/free purchases and ignores stale DB prices", async () => {
+  it("migrates only supported prices and rejects stale annual DB rows", async () => {
     const { sql, close } = await createTestSql();
     try {
-      assert.equal((await listEnabledPlans(sql)).length, 6);
+      assert.equal((await listEnabledPlans(sql)).length, 4);
       assert.equal(await getPurchasablePlan(sql, "monthly"), null);
+      assert.equal(await getPurchasablePlan(sql, "annual"), null);
       assert.equal(await getPurchasablePlan(sql, "free"), null);
       for (const plan of listCatalogPlans()) {
         const rows = await sql<{
@@ -87,14 +102,17 @@ describe("Final pricing contract", () => {
           plan.amount,
         );
       }
-      await sql`update plans set price = 1 where id = 'individual-annual'`;
-      assert.equal(
-        (await getPurchasablePlan(sql, "individual-annual"))!.price,
-        "699",
-      );
-      await assert.rejects(
-        updatePlan(sql, "individual-annual", { price: "1" }),
-      );
+      for (const id of ["individual-annual", "team-annual"]) {
+        await sql`
+          insert into plans (id, name, arabic_name, price, duration_days)
+          values (${id}, ${id}, ${id}, 999, 365)
+        `;
+        assert.equal(await getCatalogPlan(id), null);
+        assert.equal(await getPlan(sql, id), null);
+        assert.equal(await getPurchasablePlan(sql, id), null);
+        await assert.rejects(updatePlan(sql, id, { price: "1" }));
+      }
+      assert.equal((await listEnabledPlans(sql)).length, 4);
     } finally {
       await close();
     }

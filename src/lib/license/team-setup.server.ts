@@ -33,20 +33,18 @@ export const TEAM_ENTITLEMENT_CODES = [
   "nasaq.advanced-tools",
 ] as const;
 
-/** Team plans NASAQ knows about. `team-lifetime` has no plan by design. */
-export const TEAM_PLANS = ["team-monthly", "team-quarterly", "team-annual"] as const;
+/** The two Team plans currently supported by NASAQ; lifetime has no plan by design. */
+export const TEAM_PLANS = ["team-monthly", "team-quarterly"] as const;
 export type TeamPlan = (typeof TEAM_PLANS)[number];
 
 const PLAN_DURATION_SECONDS: Record<TeamPlan, number> = {
   "team-monthly": 2_592_000, // 30 days
   "team-quarterly": 7_776_000, // 90 days
-  "team-annual": 31_536_000, // 365 days
 };
 
 const PLAN_LABELS: Record<TeamPlan, string> = {
   "team-monthly": "Team Monthly",
   "team-quarterly": "Team Quarterly",
-  "team-annual": "Team Annual",
 };
 
 export type StepState = "ready" | "missing" | "failed";
@@ -247,9 +245,8 @@ async function inspectPlan(plan: TeamPlan, repair: boolean, catalogue: Map<strin
   let policyId = keygenPolicyId(plan as KeygenPlan);
 
   if (!policyId) {
-    // team-annual is intentionally unconfigured; only the two paid Team plans
-    // NASAQ sells are worth creating, and only when repairing.
-    if (!repair || plan === "team-annual") {
+    // Only the two currently supported Team plans are eligible for repair.
+    if (!repair) {
       return { ...base, detail: "لا يوجد Policy ID — الخطة غير مفعّلة" };
     }
     try {

@@ -14,8 +14,6 @@ const DEFAULT_POLICIES: Record<KeygenPlan, string> = {
   "individual-quarterly": "7b078b25-8fd0-485d-9dd6-75b92afb24c9",
   "team-monthly": "2b6984ed-1022-4718-a0b3-cc07c4cd5dad",
   "team-quarterly": "6a4b079a-45f8-4e94-90a6-b8864acbfd96",
-  "individual-annual": "",
-  "team-annual": "",
   lifetime: "3704e4a4-5645-4be7-b6c9-2067c722341d",
 };
 
@@ -141,8 +139,6 @@ export function planForKeygenPolicy(policyId: string): LicensePlan | undefined {
     "individual-quarterly",
     "team-monthly",
     "team-quarterly",
-    "individual-annual",
-    "team-annual",
   ];
   if (!policyId) return undefined;
   return plans.find((plan) => keygenPolicyId(plan) === policyId);
@@ -301,7 +297,7 @@ function verificationFromResponse(key: string, response: KeygenResponse, entitle
       keygenPolicyId: policyId,
       keygenProductId: productId,
       plan: plan || "",
-      billing: plan?.endsWith("quarterly") ? "quarterly" : plan?.endsWith("annual") ? "annual" : "monthly",
+      billing: plan?.endsWith("quarterly") ? "quarterly" : "monthly",
       entitlements: entitlementCodes.join(","),
     },
   };

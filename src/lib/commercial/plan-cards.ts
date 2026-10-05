@@ -33,11 +33,7 @@ import {
   type PlanKey,
 } from "./catalog.ts";
 
-/**
- * The two periods the homepage switcher offers. `annual` exists in the catalog
- * but has no Gumroad tier, so offering it here would quote a plan the buyer
- * cannot check out — the same availability rule `/purchase` follows.
- */
+/** The only currently supported billing periods exposed on the sales surfaces. */
 export type SwitchablePeriod = "monthly" | "quarterly";
 
 export const HOME_BILLING_PERIODS: readonly SwitchablePeriod[] = [
@@ -103,7 +99,7 @@ export type HomePlanCard = {
   description: string;
   /** Catalog amount in SAR; 0 for the free plan. */
   amount: number;
-  /** Amount with the Latin thousands separator, e.g. `1,799`. */
+  /** Amount with the Latin thousands separator. */
   formattedAmount: string;
   /** The `/ شهرياً` suffix next to the amount. */
   priceSuffix: string;
@@ -118,7 +114,7 @@ export type HomePlanCard = {
   features: readonly string[];
   /** Wears the «الأكثر شعبية» ribbon. */
   featured: boolean;
-  kind: "free" | "paid" | "contact";
+  kind: "free" | "paid";
   /** Label of the card's action button. */
   ctaLabel: string;
   /** The line under the action button. */
@@ -218,35 +214,6 @@ function freeCard(): HomePlanCard {
  */
 export function homePlanCards(period: SwitchablePeriod): HomePlanCard[] {
   return [freeCard(), paidCard("individual", period), paidCard("team", period)];
-}
-
-/**
- * Annual institutional licence.
- *
- * It lives in the catalog (`team-annual`) but has no Gumroad checkout, so it
- * is not a switcher period. The homepage still offers it as its own card:
- * the amount is the catalog's, and the action is a request, not a checkout
- * the buyer cannot complete.
- */
-export function institutionalAnnualCard(): HomePlanCard {
-  const plan = CENTRAL_PLANS["team-annual"];
-  return {
-    id: plan.key,
-    name: "جهات — سنوي",
-    description: "اشتراك سنوي للجهات المؤسسية",
-    amount: 0,
-    formattedAmount: "تواصل معنا عبر WhatsApp",
-    priceSuffix: "",
-    termLabel: `ترخيص لمدة ${plan.durationDays} يومًا`,
-    renewalLabel: "تفاصيل التجديد عبر واتساب",
-    savings: 0,
-    hasSavings: false,
-    features: ["ترخيص الجهة لمدة سنة", "كل مزايا الفريق", "تفعيل مؤسسي"],
-    featured: false,
-    kind: "contact",
-    ctaLabel: "تواصل معنا عبر WhatsApp",
-    ctaHint: "السعر والتفاصيل تُحدَّد مع الجهة",
-  };
 }
 
 /** The plan key a card's «اشترك الآن» button checks out, or null for Free. */

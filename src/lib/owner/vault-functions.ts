@@ -474,34 +474,6 @@ const ENV_SPECS: EnvSpec[] = [
     guide: guide("انسخ Policy ID من Keygen ثم حدّث متغير البيئة.", keygenDashboard, "KEYGEN_POLICY_TEAM_QUARTERLY_ID"),
   },
   {
-    key: "KEYGEN_POLICY_INDIVIDUAL_ANNUAL_ID",
-    section: "payments",
-    service: "Keygen Portal",
-    account: "NASAQ licensing account",
-    label: "Individual annual policy ID",
-    sensitivity: "public",
-    purpose: "Policy اشتراك NASAQ الفردي السنوي (غير مطروح للبيع حاليًا).",
-    loginUrl: keygenDashboard,
-    dashboardUrl: keygenDashboard,
-    apiUrl: keygenApi,
-    configurationLocation: "Vercel environment؛ server-only في src/lib/license/keygen.ts",
-    guide: guide("أنشئ Policy سنويًا في Keygen أو استخدم Policy سنوي معتمدًا ثم أضف المعرف.", keygenDashboard, "KEYGEN_POLICY_INDIVIDUAL_ANNUAL_ID"),
-  },
-  {
-    key: "KEYGEN_POLICY_TEAM_ANNUAL_ID",
-    section: "payments",
-    service: "Keygen Portal",
-    account: "NASAQ licensing account",
-    label: "Team annual policy ID",
-    sensitivity: "public",
-    purpose: "Policy اشتراك NASAQ للفرق السنوي (غير مطروح للبيع حاليًا).",
-    loginUrl: keygenDashboard,
-    dashboardUrl: keygenDashboard,
-    apiUrl: keygenApi,
-    configurationLocation: "Vercel environment؛ server-only في src/lib/license/keygen.ts",
-    guide: guide("أنشئ Policy سنويًا في Keygen أو استخدم Policy سنوي معتمدًا ثم أضف المعرف.", keygenDashboard, "KEYGEN_POLICY_TEAM_ANNUAL_ID"),
-  },
-  {
     key: "KEYGEN_POLICY_LIFETIME_ID",
     section: "payments",
     service: "Keygen Portal",
@@ -925,18 +897,15 @@ async function findings(
         "ولّد سرًا عشوائيًا جديدًا لـ BETTER_AUTH_SECRET في Vercel (سينهي الجلسات الحالية)، وأبقِ GOOGLE_CLIENT_SECRET كما هو من Google Cloud، ثم أعد النشر.",
     });
   }
-  /*
-   * The annual plans ship in the central catalog but stay unpurchasable until
-   * their Keygen policies exist — checkout availability already gates them,
-   * so this is a configuration gap to surface, not a runtime failure.
-   */
+  // The catalog contains only plans NASAQ currently supports. A missing policy
+  // here is actionable; retired/unsupported plans are deliberately not checked.
   if (missingPolicies.length) {
     result.push({
       severity: "medium",
-      title: "سياسات Keygen ناقصة لبعض الباقات",
-      detail: `الباقات التالية معروضة في الكتالوج بلا Policy ID: ${missingPolicies.join("، ")} — وتبقى غير قابلة للشراء حتى تُضبط.`,
+      title: "سياسات Keygen ناقصة لبعض الباقات المدعومة",
+      detail: `الباقات المدعومة التالية معروضة في الكتالوج بلا Policy ID: ${missingPolicies.join("، ")} — ولا يمكن إصدار تراخيصها حتى تُضبط.`,
       action:
-        "أنشئ Policy مطابقًا لكل باقة في Keygen Portal ثم أضف المعرف في Vercel باسم KEYGEN_POLICY_<PLAN>_ID وأعد النشر.",
+        "اضبط Policy معتمدًا لكل باقة مدعومة في Keygen Portal ثم أضف المعرف في Vercel باسم KEYGEN_POLICY_<PLAN>_ID وأعد النشر.",
     });
   }
   result.push({

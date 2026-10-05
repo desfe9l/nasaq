@@ -13,13 +13,11 @@ export const PLAN_KEYS = [
   "individual-quarterly",
   "team-monthly",
   "team-quarterly",
-  "individual-annual",
-  "team-annual",
 ] as const;
 
 export type PlanKey = (typeof PLAN_KEYS)[number];
 export type PlanFamily = "individual" | "team";
-export type PlanPeriod = "monthly" | "quarterly" | "annual";
+export type PlanPeriod = "monthly" | "quarterly";
 
 export interface CatalogPlan {
   readonly key: PlanKey;
@@ -145,50 +143,6 @@ export const CENTRAL_PLANS: Record<PlanKey, CatalogPlan> = {
     ],
     sortOrder: 40,
   },
-  "individual-annual": {
-    key: "individual-annual",
-    productId: "nasaq-individual-annual",
-    priceId: "nasaq-individual-annual-sar-v1",
-    family: "individual",
-    period: "annual",
-    name: "NASAQ Individual Annual",
-    arabicName: "Pro — فردي — سنوي",
-    title: "ترخيص Pro — فردي سنوي",
-    description: "ترخيص رقمي لمدة 365 يومًا",
-    amount: 699,
-    currency: "SAR",
-    durationDays: 365,
-    isDigital: true,
-    keygenPolicyKey: "individual-annual",
-    features: [
-      "القوالب الكاملة المتميزة",
-      "تصدير حتى 300 DPI بلا علامة مائية",
-      "تحديثات النسخة المرخصة طوال المدة",
-    ],
-    sortOrder: 50,
-  },
-  "team-annual": {
-    key: "team-annual",
-    productId: "nasaq-team-annual",
-    priceId: "nasaq-team-annual-sar-v1",
-    family: "team",
-    period: "annual",
-    name: "NASAQ Team Annual",
-    arabicName: "Team — فريق — سنوي",
-    title: "ترخيص Team — فريق سنوي",
-    description: "ترخيص رقمي لمدة 365 يومًا",
-    amount: 1799,
-    currency: "SAR",
-    durationDays: 365,
-    isDigital: true,
-    keygenPolicyKey: "team-annual",
-    features: [
-      "القوالب الكاملة المتميزة",
-      "تصدير حتى 300 DPI بلا علامة مائية",
-      "تحديثات النسخة المرخصة طوال المدة",
-    ],
-    sortOrder: 60,
-  },
 };
 
 export function isValidPlanKey(key: string): key is PlanKey {
@@ -227,7 +181,7 @@ export function listCatalogPlans(): CatalogPlan[] {
 export const FREE_PLAN = {
   name: "Free — مجاني",
   permanent: true,
-  prices: { monthly: 0, quarterly: 0, annual: 0 },
+  prices: { monthly: 0, quarterly: 0 },
   features: [
     "أدوات التحرير الأساسية",
     "حفظ المشاريع محليًا في المتصفح",
@@ -238,7 +192,6 @@ export const FREE_PLAN = {
 export const BILLING_PERIODS = [
   { id: "monthly", label: "شهري", months: 1 },
   { id: "quarterly", label: "كل 3 أشهر — أفضل قيمة", months: 3 },
-  { id: "annual", label: "سنوي", months: 12 },
 ] as const;
 
 export function planSavings(plan: CatalogPlan): number {

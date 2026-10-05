@@ -1,4 +1,4 @@
-// Browser regression for all three billing choices; no checkout requests are made.
+// Browser regression for the two supported billing choices; no checkout requests are made.
 import { chromium } from "playwright";
 import assert from "node:assert/strict";
 import { mkdirSync } from "node:fs";
@@ -30,10 +30,11 @@ try {
       .filter({
         has: page.getByRole("heading", { name: "Free — مجاني", exact: true }),
       });
+    assert.equal(await page.getByRole("button", { name: "سنوي", exact: true }).count(), 0);
+    assert.equal(await page.getByText("ترخيص الجهات — سنوي", { exact: true }).count(), 0);
     for (const [label, a, b] of [
       ["شهري", "79", "199"],
       ["3 أشهر — أفضل قيمة", "199", "499"],
-      ["سنوي", "699", "1,799"],
     ]) {
       await page.getByRole("button", { name: label, exact: true }).click();
       assert.match(await pro.innerText(), new RegExp(a));

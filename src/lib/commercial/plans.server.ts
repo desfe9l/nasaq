@@ -70,7 +70,7 @@ export async function listEnabledPlans(sql: Sql): Promise<Plan[]> {
   return rows.filter((row) => getCatalogPlan(row.id)).map(toPlan);
 }
 
-/** Every plan including disabled ones — admin views only. */
+/** Every current catalog plan including disabled ones — admin views only. */
 export async function listAllPlans(sql: Sql): Promise<Plan[]> {
   const rows = await sql<PlanDbRow>`
     select id, name, arabic_name, description, price, currency,
@@ -83,6 +83,7 @@ export async function listAllPlans(sql: Sql): Promise<Plan[]> {
 
 /** One plan by id, enabled or not (an admin may need to inspect a disabled one). */
 export async function getPlan(sql: Sql, planId: string): Promise<Plan | null> {
+  if (!getCatalogPlan(planId)) return null;
   const rows = await sql<PlanDbRow>`
     select id, name, arabic_name, description, price, currency,
            duration_days, features, enabled, sort_order
