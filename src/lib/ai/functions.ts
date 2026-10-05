@@ -200,3 +200,31 @@ export const transformSelectionFn = createServerFn({ method: "POST" })
       };
     }
   });
+
+/**
+ * «نَسَق AI» — the admin-facing status of the ONE AI layer.
+ *
+ * It answers what an operator can act on: is the Gemini adapter configured at
+ * all, and which model answers. It never reads, echoes or hints at the key.
+ * Capabilities, licences and rate limits are owned by the calls themselves —
+ * this probe reports, it does not authorize anything.
+ */
+export const nasaqAiStatusFn = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async (): Promise<{
+    configured: boolean;
+    model: string;
+    capabilities: string[];
+  }> => {
+    const model = process.env.NASAQ_AI_MODEL?.trim() || "gemini-2.5-flash";
+    return {
+      configured: Boolean(process.env.GEMINI_API_KEY?.trim()),
+      model,
+      capabilities: [
+        "تقرير ذكي",
+        "إجراءات النص المحدد",
+        "تحليل الصور وOCR",
+        "توليد محتوى خام إلى مستند",
+      ],
+    };
+  });

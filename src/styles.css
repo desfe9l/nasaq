@@ -1746,6 +1746,11 @@ body.is-gesturing .artboard-cell:not(.is-active) {
   content: ""; position: absolute; inset: 32%; background: #fff;
   border: calc(1px / var(--editor-zoom, 1)) solid #172033;
 }
+/* Pan keeps the window fixed — the same grab surface, gold accent, no handles. */
+.crop-window.is-pan {
+  outline: calc(2px / var(--editor-zoom, 1)) solid var(--color-gold-2, #c9a86a);
+  background-image: none;
+}
 .crop-handle.nw { top: 0; left: 0; cursor: nwse-resize; }
 .crop-handle.ne { top: 0; left: 100%; cursor: nesw-resize; }
 .crop-handle.se { top: 100%; left: 100%; cursor: nwse-resize; }
@@ -1768,6 +1773,13 @@ body.is-gesturing .artboard-cell:not(.is-active) {
 }
 .crop-actions .tool-props-chip {
   border-color: var(--editor-border, #dde2ea);
+}
+.crop-actions-mode {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--color-brand, #0f5132);
 }
 @media (pointer: coarse) {
   .crop-handle { width: calc(44px / var(--editor-zoom, 1)); height: calc(44px / var(--editor-zoom, 1)); }

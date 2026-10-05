@@ -21,9 +21,10 @@ import {
   Lock,
   RotateCcw,
   RotateCw,
+  PaintBucket,
   Search,
   Scaling,
-  Scissors,
+  Settings2,
   Trash2,
   Unlock,
   X,
@@ -88,7 +89,9 @@ import { toast } from "sonner";
 import { ShapePreview } from "./ShapePreview";
 import { AccordionSection, SubGroup, useAccordionState } from "./ui/Accordion";
 import { FillField } from "./ui/FillField";
-import { PageBackground } from "./PageBackground";
+import { OPEN_PAGE_SETTINGS_EVENT } from "./PageSettingsDialog";
+import { beginImageReposition } from "@/lib/editor/crop-session";
+import { MaskIcon, MaskOffIcon, RepositionImageIcon } from "./ui/NsqIcons";
 import { ColorField } from "./ui/ColorField";
 import {
   getRecentColors,
@@ -140,6 +143,8 @@ export function PropertiesPanel({
   const flipSelected = useEditor((s) => s.flipSelected);
   const toggleFadeOverlay = useEditor((s) => s.toggleFadeOverlay);
   const updateStyle = useEditor((s) => s.updateStyle);
+  const applyClipMask = useEditor((s) => s.applyClipMask);
+  const removeClipMask = useEditor((s) => s.removeClipMask);
   const fitTextBox = useEditor((s) => s.fitTextBox);
   const deleteSelected = useEditor((s) => s.deleteSelected);
   const toggleLock = useEditor((s) => s.toggleLock);
@@ -258,7 +263,39 @@ export function PropertiesPanel({
       <div className="editor-pane-scroll editor-panel-body no-bottom-pad p-3">
         {!el && (
           <div className="grid gap-2">
-            {page && <PageBackground key={page.id} page={page} />}
+            {/*
+             * Page options are a FLOATING tool, not a resident panel: one
+             * compact strip for context, and «خيارات الصفحة» opens the same
+             * on-demand dialog the page rail uses (Esc / outside click closes
+             * it). A permanently expanded background editor used to occupy the
+             * dock's first screen and push every other control down.
+             */}
+            {page && (
+              <div className="page-options-strip flex items-center justify-between gap-2 rounded-[8px] border border-line bg-surface-2/40 px-2.5 py-2">
+                <span className="flex min-w-0 items-center gap-2 text-[11px] font-bold text-ink">
+                  <PaintBucket className="size-3.5 shrink-0 text-brand" />
+                  <span className="truncate">{page.name}</span>
+                  <span className="shrink-0 text-[10px] font-semibold text-muted tabular-nums">
+                    {Math.round(pageSize(page).w)}×{Math.round(pageSize(page).h)}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="editor-mini-btn shrink-0 justify-center gap-1"
+                  title="خيارات الصفحة — مقاس، اتجاه، خلفية، وتصفير هوامش؛ تُفتح عند الطلب وتُغلق بسهولة"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new CustomEvent(OPEN_PAGE_SETTINGS_EVENT, {
+                        detail: page.id,
+                      }),
+                    )
+                  }
+                >
+                  <Settings2 className="size-3.5" />
+                  خيارات الصفحة
+                </button>
+              </div>
+            )}
             <EmptyNote>
               اختر عنصراً على الصفحة لعرض خصائصه: الموضع، المقاس، الدوران،
               الشفافية، الخط، الألوان، الإطار والظل. النقر المزدوج على النص
@@ -1740,6 +1777,80 @@ export function PropertiesPanel({
                       }
                     />
                   </Field>
+                  {/*
+                   * Dock parity with the floating controls: the picture moves
+                   * inside its frame/mask without touching the frame, and the
+                   * clipping mask is an explicit, reversible choice — the same
+                   * store actions, so no second behaviour exists to drift.
+                   */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      className="editor-mini-btn justify-center gap-1.5"
+                      disabled={el.locked}
+                      title="تحريك الصورة داخل الإطار/القناع — دون تغيير مقاس الشكل"
+                      onClick={() => beginImageReposition(el.id)}
+                    >
+                      <RepositionImageIcon className="size-3.5" />
+                      تحريك داخل الإطار
+                    </button>
+                    {el.clippedBy ? (
+                      <button
+                        type="button"
+                        className="editor-mini-btn justify-center gap-1.5"
+                        disabled={el.locked}
+                        title="إزالة قناع القص — ترجع الصورة حرة"
+                        onClick={() => removeClipMask(el.clippedBy!)}
+                      >
+                        <MaskOffIcon className="size-3.5" />
+                        إزالة القناع
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="editor-mini-btn justify-center gap-1.5"
+                        disabled={el.locked}
+                        title="قصّ الصورة على الشكل الملاصق لها (Clipping Mask)"
+                        onClick={() => {
+                          const state = useEditor.getState();
+                          const pg = state.pages.find(
+                            (p) => p.id === state.activePageId,
+                          );
+                          if (!pg || page?.locked) {
+                            toast.message("هذه الصفحة مقفلة");
+                            return;
+                          }
+                          const overlaps = (
+                            a: typeof el,
+                            b: (typeof pg.elements)[number],
+                          ) =>
+                            a.x < b.x + b.w &&
+                            b.x < a.x + a.w &&
+                            a.y < b.y + b.h &&
+                            b.y < a.y + a.h;
+                          const mask = pg.elements
+                            .filter(
+                              (m) =>
+                                m.id !== el.id &&
+                                !m.hidden &&
+                                (m.type === "shape" || m.type === "svg") &&
+                                overlaps(el, m),
+                            )
+                            .sort((a, b) => b.z - a.z)[0];
+                          if (!mask) {
+                            toast.message(
+                              "أضف شكلاً يلامس الصورة أولاً — ثم انقر القناع",
+                            );
+                            return;
+                          }
+                          applyClipMask(el.id, mask.id);
+                        }}
+                      >
+                        <MaskIcon className="size-3.5" />
+                        قناع القص
+                      </button>
+                    )}
+                  </div>
                   {/* «ملاءمة الصفحة»: one press takes the picture to the page's
                       own size — full bleed, or the largest size that stays
                       inside the sheet with the picture's proportions. */}
@@ -2852,7 +2963,7 @@ const LayerRow = memo(function LayerRow({
                 {layer.linkId && <Link className="size-3.5 text-gold-2" />}
                 {/* The mask relationship is visible in the tree, not only on canvas. */}
                 {layer.clippedBy && (
-                  <Scissors
+                  <MaskIcon
                     className="size-3.5 text-gold-2"
                     aria-label="مقصوص بقناع"
                   />

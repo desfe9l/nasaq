@@ -82,7 +82,10 @@ function elementImage(pageId: string, elementId: string) {
   );
 }
 
-export function beginImageCrop(elementId: string) {
+export function beginImageCrop(
+  elementId: string,
+  mode: "crop" | "pan" = "crop",
+) {
   if (useInteraction.getState().active || typeof window === "undefined") return;
   // Finish live property edits before capturing the immutable crop source.
   window.dispatchEvent(new Event("nasaq:selection-ui-reset"));
@@ -97,7 +100,10 @@ export function beginImageCrop(elementId: string) {
     !["image", "logo"].includes(el.type)
   )
     return;
-  if (el.resizeLocked || el.widthLocked || el.heightLocked) {
+  if (
+    mode === "crop" &&
+    (el.resizeLocked || el.widthLocked || el.heightLocked)
+  ) {
     toast.message("فك قفل أبعاد الصورة قبل تغيير إطار القص");
     return;
   }
@@ -142,7 +148,18 @@ export function beginImageCrop(elementId: string) {
     source,
     bounds,
     box: { ...bounds },
+    mode,
   });
+}
+
+/**
+ * «تحريك الصورة داخل الإطار» — the same session as a crop, but the source
+ * window keeps its size: dragging moves the picture inside a FIXED frame.
+ * Dimension locks never block it, because the frame never changes; a frame
+ * (mask) or shape applied to the element keeps clipping exactly as before.
+ */
+export function beginImageReposition(elementId: string) {
+  beginImageCrop(elementId, "pan");
 }
 
 /**
@@ -193,6 +210,40 @@ export function applyImageCrop() {
   const session = useInteraction.getState().crop;
   if (!session) return;
   const { original: el, source, box, pageId } = session;
+  /*
+   * «تحريك داخل الإطار»: the window keeps its size and the element keeps its
+   * frame — only the source window slides. The mask, the scale and every lock
+   * on the geometry stay exactly as the author left them.
+   */
+  if (session.mode === "pan") {
+    const state0 = useEditor.getState();
+    const page0 = state0.pages.find((p) => p.id === pageId);
+    if (
+      !page0 ||
+      page0.locked ||
+      state0.activePageId !== pageId ||
+      state0.selectedId !== el.id ||
+      state0.enteredGroupId !== session.enteredGroupId ||
+      findElement(page0.elements, el.id)?.el !== el
+    ) {
+      cancelImageCrop();
+      return;
+    }
+    const layout0 = imageLayout(
+      el,
+      source,
+      el.style.crop,
+      el.style.objectFit || (el.type === "logo" ? "contain" : "cover"),
+      el.style.objectX,
+      el.style.objectY,
+    );
+    const crop = cropFromLocalBox(box, layout0);
+    useInteraction.getState().endCrop();
+    state0.updateElement(el.id, { style: { ...el.style, crop } });
+    useTools.getState().armSelect("off");
+    toast.success("تم تحريك الصورة داخل إطارها", { duration: 1500 });
+    return;
+  }
   const state = useEditor.getState();
   const page = state.pages.find((p) => p.id === pageId);
   // A source, selection or ancestor-transform change invalidates the draft.

@@ -11,6 +11,13 @@ export interface CropSession {
   source: { w: number; h: number };
   box: RectMm;
   bounds: RectMm;
+  /**
+   * «crop» resizes the source window (the classic crop). «pan» keeps the
+   * window — and with it the frame, the scale and the mask — fixed and lets
+   * the author slide the picture inside the shape. The element's geometry is
+   * untouched in both modes; only what the frame shows changes.
+   */
+  mode?: "crop" | "pan";
 }
 
 /**

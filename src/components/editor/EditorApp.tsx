@@ -296,6 +296,8 @@ import { useLicense } from "@/lib/license/client";
 import { WORKSPACE_HOME_PATH } from "@/lib/auth/use-workspace-entry";
 import { AddLibraryDialog } from "./AddLibraryDialog";
 import { HeadingGeneratorDialog } from "./HeadingGeneratorDialog";
+import { NasaqAiHub } from "./NasaqAiHub";
+import { toggleNasaqAi } from "@/lib/ai/nasaq-ai";
 import { OnboardingTour, hasSeenTour } from "./OnboardingTour";
 import { NsqIntake } from "./NsqIntake";
 import { AppInstallNotice } from "@/components/AppInstallNotice";
@@ -880,6 +882,11 @@ function Studio({
   const [addLibraryOpen, setAddLibraryOpen] = useState(false);
   const [libraryFolderRequest, setLibraryFolderRequest] = useState(0);
   const [headingGeneratorOpen, setHeadingGeneratorOpen] = useState(false);
+  useEffect(() => {
+    const open = () => setHeadingGeneratorOpen(true);
+    window.addEventListener("nasaq:open-heading-generator", open);
+    return () => window.removeEventListener("nasaq:open-heading-generator", open);
+  }, []);
   /**
    * First-visit walkthrough. Read once, on mount, so the tour never reappears
    * mid-session after the author dismisses it.
@@ -2478,6 +2485,12 @@ function Studio({
    * «الصفحات» reveals the pages tab inside لوحة العناصر and the page rail.
    */
   const onSurfaceNav = (id: string) => {
+    // «نَسَق AI» is one window for every capability — the hub owns its state.
+    if (id === "ai") {
+      if (useEditor.getState().focusMode) toggle("focusMode");
+      toggleNasaqAi();
+      return;
+    }
     if (isEditorElementTab(id)) {
       if (editorSurfaceActive(id, useEditor.getState().leftTab, panelChecked) && !focusMode) {
         togglePanelWindow("elements");
@@ -2654,9 +2667,22 @@ function Studio({
         >
           {!isMobileSurface && (
             <>
-              <span className="editor-brand-mark" title="نَسَق | NASAQ">
+              {/*
+               * The NASAQ mark in the editor is ONE thing: the door back to the
+               * main workspace. It links to /workspace only — never «الرئيسية»
+               * marketing, never a new-document state, never a document reset.
+               * It still passes through the leave guard, so a dirty document is
+               * asked about before the door opens.
+               */}
+              <a
+                href={WORKSPACE_HOME_PATH}
+                className="editor-brand-mark"
+                title="نَسَق | NASAQ — العودة إلى مساحة العمل"
+                aria-label="العودة إلى مساحة عمل نَسَق الرئيسية"
+                onClick={leaveEditor}
+              >
                 <BrandLogo compact markOnly />
-              </span>
+              </a>
               <span className="editor-header-sep" aria-hidden />
             </>
           )}
@@ -3023,6 +3049,7 @@ function Studio({
           onClose={() => setHeadingGeneratorOpen(false)}
         />
       )}
+      <NasaqAiHub />
       {/*
        * First-visit walkthrough. Mounted only after hydration: the tour
        * measures real controls, and measuring a skeleton would highlight the

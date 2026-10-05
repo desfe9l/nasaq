@@ -59,7 +59,8 @@ import { cn } from "@/lib/utils";
 import { StrokeControls, StrokeField } from "./StrokeControls";
 import { ScrubInput } from "./ui/ScrubInput";
 import { FillField } from "./ui/FillField";
-import { beginImageCrop } from "@/lib/editor/crop-session";
+import { beginImageCrop, beginImageReposition } from "@/lib/editor/crop-session";
+import { MaskIcon, MaskOffIcon, RepositionImageIcon } from "./ui/NsqIcons";
 import { snapshotPage, snapshotSelection } from "@/lib/editor/render-snapshot";
 import { toast } from "sonner";
 import type { Gradient } from "@/lib/editor/gradient";
@@ -165,6 +166,44 @@ export function FloatingToolbar({
   const updateStyle = useEditor((s) => s.updateStyle);
   const updateElement = useEditor((s) => s.updateElement);
   const commit = useEditor((s) => s.commit);
+  const applyClipMask = useEditor((s) => s.applyClipMask);
+  const removeClipMask = useEditor((s) => s.removeClipMask);
+  /**
+   * «قناع القص» from the bubble itself.
+   *
+   * One press, no dialog: if the picture is already masked the press releases
+   * it; otherwise the mask is the topmost shape or SVG the picture overlaps —
+   * the shape the author just placed it on. Nothing about the frame or the
+   * mask's size changes: only the clipping pointer, undoable like any edit.
+   */
+  const toggleImageMask = () => {
+    const state = useEditor.getState();
+    const page = state.pages.find((p) => p.id === pageId);
+    if (!page) return;
+    if (el.clippedBy) {
+      removeClipMask(el.clippedBy);
+      return;
+    }
+    const overlaps = (a: CanvasEl, b: CanvasEl) =>
+      a.x < b.x + b.w &&
+      b.x < a.x + a.w &&
+      a.y < b.y + b.h &&
+      b.y < a.y + a.h;
+    const mask = page.elements
+      .filter(
+        (m) =>
+          m.id !== el.id &&
+          !m.hidden &&
+          (m.type === "shape" || m.type === "svg") &&
+          overlaps(m, el),
+      )
+      .sort((a, b) => b.z - a.z)[0];
+    if (!mask) {
+      toast.message("ضع شكلاً أو رمز SVG يلامس الصورة أولاً — ثم انقر القناع");
+      return;
+    }
+    applyClipMask(el.id, mask.id);
+  };
   /** «ملاءمة الصفحة»: resize the element to the page it sits on. */
   const fitElementToPage = (target: CanvasEl, mode: FitPageMode) => {
     const state = useEditor.getState();
@@ -1135,6 +1174,29 @@ export function FloatingToolbar({
           >
             <Crop />
           </TipButton>
+          <TipButton
+            label="تحريك الصورة داخل الإطار"
+            hint="انقل الصورة أعلى/أسفل ويمين/يسار داخل الشكل — مقاس الإطار والقص والدوران تبقى كما هي"
+            disabled={el.locked || count !== 1}
+            onClick={() => beginImageReposition(el.id)}
+          >
+            <RepositionImageIcon />
+          </TipButton>
+          {["image", "logo"].includes(el.type) && (
+            <TipButton
+              label={el.clippedBy ? "إزالة قناع القص" : "قناع القص — قصّ الصورة على الشكل"}
+              hint={
+                el.clippedBy
+                  ? "إرجاع الصورة حرة دون شكل القص"
+                  : "استخدم الشكل الملامس تحت الصورة كقناع — القناع خيار صريح هنا وفي الأدوات السياقية"
+              }
+              pressed={Boolean(el.clippedBy)}
+              disabled={el.locked || count !== 1}
+              onClick={toggleImageMask}
+            >
+              {el.clippedBy ? <MaskOffIcon /> : <MaskIcon />}
+            </TipButton>
+          )}
           <AnchorMenu
             label="ملاءمة الصورة"
             width={220}

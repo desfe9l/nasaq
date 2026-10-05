@@ -6,7 +6,7 @@ import {
 import { mmToPx } from "@/lib/editor/render-units";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Check, X } from "lucide-react";
+import { Check, Crop, Move, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { pageSize, findElement } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
@@ -25,6 +25,7 @@ const corners = ["nw", "ne", "se", "sw"] as const;
 /** Crop owns its own pointer frame; no document resize/move handler can acquire it. */
 export function CropOverlay({ session }: { session: CropSession }) {
   const { original: el, transform, box, bounds } = session;
+  const pan = session.mode === "pan";
   const ref = useRef<HTMLDivElement>(null);
   const cleanup = useRef<(() => void) | null>(null);
   const activePageId = useEditor((s) => s.activePageId);
@@ -65,6 +66,31 @@ export function CropOverlay({ session }: { session: CropSession }) {
         event.stopImmediatePropagation();
         if (event.key === "Enter") applyImageCrop();
         else cancel();
+      } else if (
+        event.key.startsWith("Arrow") &&
+        useInteraction.getState().crop?.mode === "pan" &&
+        !(
+          event.target instanceof HTMLElement &&
+          event.target.closest("input, select, textarea")
+        )
+      ) {
+        // Keyboard panning: 1 mm per press, 5 mm with Shift — the frame fixed.
+        event.preventDefault();
+        event.stopPropagation();
+        const s = useInteraction.getState().crop;
+        if (!s) return;
+        const step = event.shiftKey ? 5 : 1;
+        const dx =
+          event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0;
+        const dy =
+          event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0;
+        const fit = (v: number, lo: number, hi: number) =>
+          Math.max(lo, Math.min(hi, v));
+        useInteraction.getState().setCropBox({
+          ...s.box,
+          x: fit(s.box.x + dx, s.bounds.x, s.bounds.x + s.bounds.w - s.box.w),
+          y: fit(s.box.y + dy, s.bounds.y, s.bounds.y + s.bounds.h - s.box.h),
+        });
       } else if (!(
         event.target instanceof HTMLElement &&
         event.target.closest("input, select, textarea")
@@ -248,19 +274,21 @@ export function CropOverlay({ session }: { session: CropSession }) {
           })}
         />
         <div
-          className="crop-window"
+          className={cn("crop-window", pan && "is-pan")}
           style={rectStyle(box)}
           onPointerDown={(e) => start(e, "move")}
+          title={pan ? "اسحب لتحريك الصورة داخل الإطار" : undefined}
         >
-          {corners.map((handle) => (
-            <button
-              key={handle}
-              type="button"
-              aria-label={`مقبض قص ${handle}`}
-              className={`crop-handle ${handle}`}
-              onPointerDown={(e) => start(e, handle)}
-            />
-          ))}
+          {!pan &&
+            corners.map((handle) => (
+              <button
+                key={handle}
+                type="button"
+                aria-label={`مقبض قص ${handle}`}
+                className={`crop-handle ${handle}`}
+                onPointerDown={(e) => start(e, handle)}
+              />
+            ))}
         </div>
       </div>
       <CropActions pageId={session.pageId} elementId={el.id} />
@@ -283,6 +311,7 @@ function CropActions({
 }) {
   const zoom = useEditor((s) => s.zoom);
   const box = useInteraction((s) => s.crop?.box ?? null);
+  const pan = useInteraction((s) => s.crop?.mode === "pan");
   const aspect = useTools((s) => s.cropAspect);
   const setAspect = useTools((s) => s.setCropAspect);
   const bubbleRef = useRef<HTMLDivElement>(null);
@@ -344,10 +373,18 @@ function CropActions({
       style={{ ...pos, maxWidth: "calc(100vw - 16px)" }}
       dir="rtl"
       role="toolbar"
-      aria-label="وضع قص الصورة"
+      aria-label={pan ? "وضع تحريك الصورة داخل الإطار" : "وضع قص الصورة"}
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div className="crop-actions-row">
+        <span className="crop-actions-mode" aria-hidden>
+          {pan ? (
+            <Move className="size-3.5" />
+          ) : (
+            <Crop className="size-3.5" />
+          )}
+        </span>
+        {!pan && (
         <div className="tool-props-chips" role="group" aria-label="نسبة القص">
           {ASPECT_RATIOS.map((ratio) => (
             <button
@@ -362,11 +399,12 @@ function CropActions({
             </button>
           ))}
         </div>
+        )}
         <button
           type="button"
           className="floating-toolbar-btn is-primary"
-          title="تطبيق القص · Enter"
-          aria-label="تطبيق القص"
+          title={pan ? "تطبيق التحريك · Enter" : "تطبيق القص · Enter"}
+          aria-label={pan ? "تطبيق تحريك الصورة" : "تطبيق القص"}
           onClick={applyImageCrop}
         >
           <Check />
@@ -374,8 +412,8 @@ function CropActions({
         <button
           type="button"
           className="floating-toolbar-btn"
-          title="إلغاء القص · Escape"
-          aria-label="إلغاء القص"
+          title={pan ? "إلغاء التحريك · Escape" : "إلغاء القص · Escape"}
+          aria-label={pan ? "إلغاء تحريك الصورة" : "إلغاء القص"}
           onClick={cancelImageCrop}
         >
           <X />

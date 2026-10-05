@@ -104,8 +104,18 @@ export const ADMIN_ROUTES = {
   payments: "/admin/payments",
   /** Plans, prices and subscription state. */
   plans: "/admin/plans",
+  /** Store & products: the commerce surface — gateway, catalogue, prices. */
+  store: "/admin/store",
+  /** Template categories as a managed surface: counts and destinations. */
+  categories: "/admin/categories",
   /** System settings, including commercial configuration. */
   settings: "/admin/settings",
+  /** Sharing and social publishing of the platform and its templates. */
+  sharing: "/admin/sharing",
+  /** NASAQ AI: the one assistant's model, knowledge base and limits. */
+  ai: "/admin/ai",
+  /** Owner vault: provider API keys, kept out of every other surface. */
+  vault: "/admin/vault",
   /** Audit log of privileged actions. */
   audit: "/admin/audit",
   /** Template import service (PSD / package intake). */
@@ -169,6 +179,13 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     group: "operations",
   },
   {
+    id: "store",
+    to: ADMIN_ROUTES.store,
+    label: "المتجر والمنتجات",
+    description: "بوابة Gumroad، المنتجات المرتبطة، والباقات — واجهة البيع الواحدة.",
+    group: "operations",
+  },
+  {
     id: "templates",
     to: ADMIN_ROUTES.templates,
     label: "القوالب",
@@ -197,6 +214,20 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     group: "content",
   },
   {
+    id: "categories",
+    to: ADMIN_ROUTES.categories,
+    label: "الفئات",
+    description: "تصنيفات القوالب على المنصة: عدّاتها الحقيقية ووجهاتها.",
+    group: "content",
+  },
+  {
+    id: "sharing",
+    to: ADMIN_ROUTES.sharing,
+    label: "المشاركة والنشر",
+    description: "روابط القوالب المختصرة، معاينة النشر الاجتماعي، ونصوص المشاركة.",
+    group: "content",
+  },
+  {
     id: "assets",
     to: ADMIN_ROUTES.assets,
     label: "صور الموقع",
@@ -215,6 +246,20 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     to: ADMIN_ROUTES.settings,
     label: "إعدادات النظام",
     description: "الأسعار، الدفع، وحدود المنصة.",
+    group: "identity",
+  },
+  {
+    id: "ai",
+    to: ADMIN_ROUTES.ai,
+    label: "نَسَق AI",
+    description: "مزوّد الذكاء، قاعدة معرفة الستوديو، وحدود الاستخدام — في مكان واحد.",
+    group: "identity",
+  },
+  {
+    id: "vault",
+    to: ADMIN_ROUTES.vault,
+    label: "خزنة المفاتيح",
+    description: "مفاتيح مزوّدي API — لا تُعرض في أي قسم آخر.",
     group: "identity",
   },
   {

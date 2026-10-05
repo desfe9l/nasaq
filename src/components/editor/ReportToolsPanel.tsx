@@ -18,10 +18,7 @@ import {
 import { THEMES } from "@/lib/editor/model";
 import { KPI_CARDS, type KpiKind } from "@/lib/editor/report-tools";
 import { REPORT_BLOCKS, type ReportBlockId } from "@/lib/editor/report-blocks";
-import {
-  GRAPHIC_HEADINGS,
-  type GraphicHeadingId,
-} from "@/lib/editor/graphic-headings";
+import { HeadingGallery } from "./HeadingGallery";
 import { ImageFrameGallery } from "./ImageFrameGallery";
 import { runPreflight, preflightSummary } from "@/lib/editor/preflight";
 import {
@@ -32,6 +29,7 @@ import { imageSizeResolver } from "@/lib/editor/images";
 import { useEditor } from "@/lib/editor/store";
 import { cn } from "@/lib/utils";
 import { AiReportPanel } from "./AiReportPanel";
+import { Wand2 } from "lucide-react";
 
 const GUIDE_ROWS: {
   key: keyof PrintGuideSettings;
@@ -73,6 +71,9 @@ export function ReportToolsPanel() {
   const insertKpiCard = useEditor((s) => s.insertKpiCard);
   const insertReportBlock = useEditor((s) => s.insertReportBlock);
   const insertGraphicHeading = useEditor((s) => s.insertGraphicHeading);
+  const activePageLocked = useEditor(
+    (s) => !!s.pages.find((p) => p.id === s.activePageId)?.locked,
+  );
   const insertImageFrame = useEditor((s) => s.insertImageFrame);
   const applyHeaderFooter = useEditor((s) => s.applyHeaderFooter);
   const removeHeaderFooter = useEditor((s) => s.removeHeaderFooter);
@@ -152,101 +153,33 @@ export function ReportToolsPanel() {
       </div>
 
       {/* ── Graphic Headings — العناوين الجرافيكية ──────────────────────── */}
-      <div className="editor-subgroup ring-1 ring-transparent hover:ring-navy-2/10 transition rounded-[8px] p-1">
+      <div className="editor-subgroup">
         <h4 className="editor-subgroup-title">
           <span className="inline-flex items-center gap-1.5">
             <PenLine className="size-3.5 text-brand-hover" />
             العناوين الجرافيكية
           </span>
-          <span className="ms-auto rounded-full bg-navy-2/10 px-2 py-0.5 text-[9px] font-bold text-brand-hover">اسحب أو انقر</span>
-        </h4>
-        <p className="text-[10px] leading-4 text-muted">
-          عناوين جاهزة كعناصر جرافيكية قابلة للتحرير — اسحبها وأفلتها في الموضع المحدد داخل اللوحة، أو انقر للإضافة في المنتصف. مجموعة منظمة، مصمَّمة للعمل باللغة العربية، والنص الطويل يتكيف مع مساحته.
-        </p>
-        <div className="mb-2 rounded-[6px] bg-gold/15 px-2 py-1 text-[10px] leading-4 text-warning">
-          💡 تلميح: اسحب العنوان وضعه بدقة في المكان الذي تريده داخل لوحة الرسم — يبقى مجموعة واحدة قابلة للتحديد والتحريك.
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {GRAPHIC_HEADINGS.map((h) => (
+          <span className="ms-auto flex items-center gap-1">
             <button
-              key={h.id}
               type="button"
-              draggable
-              onDragStart={(e) => {
-                e.dataTransfer.setData("application/x-nasaq-graphic-heading", h.id);
-                e.dataTransfer.effectAllowed = "copy";
-              }}
-              title={`${h.hint} — اسحب وأفلت في الموضع المحدد داخل الصفحة`}
-              onClick={() => insertGraphicHeading(h.id as GraphicHeadingId)}
-              className="group relative flex min-h-[68px] flex-col gap-1 overflow-hidden rounded-[10px] border border-line bg-surface px-2.5 py-2.5 text-right transition hover:border-navy-2 hover:shadow-sm"
+              className="editor-mini-btn inline-flex items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[9.5px] font-bold text-brand-hover hover:border-navy-2"
+              title="مولد عناوين الفقرات — نص، عنوان فرعي، ورقم قسم بمعاينة حية"
+              onClick={() =>
+                window.dispatchEvent(new CustomEvent("nasaq:open-heading-generator"))
+              }
             >
-              {/* Thumbnail preview - fixed height, balanced */}
-              <span className="pointer-events-none flex h-[18px] w-full items-center">
-                {h.thumbnail === "main" && (
-                  <span className="flex w-full flex-col items-end gap-1">
-                    <span className="block h-[8px] w-[72%] rounded-[2px] bg-navy-2/90" />
-                    <span className="block h-[2px] w-[28%] rounded bg-gold-2" />
-                  </span>
-                )}
-                {h.thumbnail === "section" && (
-                  <span className="flex w-full items-center justify-end gap-1">
-                    <span className="h-[6px] w-[56%] rounded-[2px] bg-ink/80" />
-                    <span className="h-[12px] w-[3px] rounded bg-navy-2" />
-                  </span>
-                )}
-                {h.thumbnail === "sub" && (
-                  <span className="flex w-full items-center justify-end gap-1">
-                    <span className="h-[5px] w-[48%] rounded-[2px] bg-ink/70" />
-                    <span className="h-[5px] w-[5px] shrink-0 rounded-full bg-gold-2" />
-                  </span>
-                )}
-                {h.thumbnail === "bar" && (
-                  <span className="flex h-[14px] w-full items-center rounded-[4px] bg-navy-2 px-1.5">
-                    <span className="block h-[5px] w-[70%] rounded-[2px] bg-surface-2" />
-                  </span>
-                )}
-                {h.thumbnail === "card" && (
-                  <span className="flex h-[14px] w-full items-center rounded-[6px] border border-line bg-surface px-1.5 shadow-sm">
-                    <span className="block h-[5px] w-[60%] rounded-[2px] bg-ink/80" />
-                  </span>
-                )}
-                {h.thumbnail === "numbered" && (
-                  <span className="flex w-full items-center justify-end gap-1.5">
-                    <span className="h-[5px] w-[52%] rounded-[2px] bg-ink/80" />
-                    <span className="flex h-[12px] w-[12px] shrink-0 items-center justify-center rounded-full bg-navy-2 text-[6px] text-white">١</span>
-                  </span>
-                )}
-                {h.thumbnail === "separator" && (
-                  <span className="flex w-full items-center gap-1">
-                    <span className="h-[1px] flex-1 bg-line" />
-                    <span className="h-[3px] w-[3px] shrink-0 rounded-full bg-gold-2" />
-                    <span className="h-[5px] w-[36%] shrink-0 rounded-[2px] bg-ink/80" />
-                  </span>
-                )}
-                {h.thumbnail === "institutional" && (
-                  <span className="flex h-[14px] w-full items-center justify-center rounded-[2px] border border-navy-2/60 px-1">
-                    <span className="block h-[5px] w-[52%] rounded-[2px] bg-navy-2/80" />
-                  </span>
-                )}
-                {h.thumbnail === "modern" && (
-                  <span className="flex h-[14px] w-full overflow-hidden rounded-[6px] border border-line">
-                    <span className="flex h-full flex-1 items-center px-1">
-                      <span className="h-[4px] w-[68%] rounded-[2px] bg-ink/70" />
-                    </span>
-                    <span className="h-full w-[28%] bg-navy-2" />
-                  </span>
-                )}
-                {h.thumbnail === "simple" && (
-                  <span className="flex w-full justify-end">
-                    <span className="block h-[6px] w-[58%] rounded-[2px] bg-ink/80" />
-                  </span>
-                )}
-              </span>
-              <span className="line-clamp-1 text-[10px] font-extrabold leading-4 text-ink">{h.label}</span>
-              <span className="line-clamp-1 text-[9px] font-semibold leading-3 text-muted">{h.hint}</span>
+              <Wand2 className="size-3" aria-hidden />
+              المولد
             </button>
-          ))}
-        </div>
+            <span className="rounded-full bg-navy-2/10 px-2 py-0.5 text-[9px] font-bold text-brand-hover">
+              نقرة أو سحب
+            </span>
+          </span>
+        </h4>
+        <HeadingGallery
+          disabled={Boolean(activePageLocked)}
+          onPick={(id) => insertGraphicHeading(id)}
+        />
       </div>
 
       {/* ── Image shapes / frames — أشكال و إطارات الصور ─────────────────── */}
