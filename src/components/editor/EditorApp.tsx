@@ -509,36 +509,26 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
         return;
       }
 
-      let project: Project;
-      let notes: { name: string; mode: string; reason: string }[] = [];
-      if (classified.format === "psd" || classified.format === "psb") {
-        if (bytes.byteLength > 200 * 1024 * 1024) throw new Error("حجم ملف PSD/PSB أكبر من ٢٠٠ ميغابايت.");
-        const [{ listAssets }, { fingerprintAssets }, { runPsdImport }] = await Promise.all([
-          import("@/lib/editor/storage"),
-          import("@/lib/editor/psd/pipeline"),
-          import("@/lib/editor/psd/run"),
-        ]);
-        const assets = await listAssets();
-        const library = await fingerprintAssets(assets);
-        const result = await runPsdImport(bytes, file.name, library);
-        project = result.project;
-        notes = result.report.fallbacks.map((item) => ({ name: item.layerName, mode: item.mode, reason: item.reason }));
-      } else {
-        if (bytes.byteLength > 80 * 1024 * 1024) throw new Error("حجم الملف أكبر من ٨٠ ميغابايت.");
-        const { importTemplateBytes } = await import("@/lib/editor/import/run");
-        const result = await importTemplateBytes(bytes, file.name);
-        project = result.project;
-        notes = result.notes;
-      }
+      // One canonical import service for every non-native format; PSD/PSB and
+      // Office/PDF/raster share the same call, result shape and size policy.
+      const [{ listAssets }, { importTemplateBytes }] = await Promise.all([
+        import("@/lib/editor/storage"),
+        import("@/lib/editor/import/run"),
+      ]);
+      const result = await importTemplateBytes(bytes, file.name, { assets: await listAssets() });
+      const project: Project = result.project;
+      const notes = result.notes;
 
       const opened = await useEditor.getState().importProject(project, { successMessage: null });
       if (!opened) {
         toast.dismiss(loadingId);
         return;
       }
-      const partialCount = notes.filter((note) => note.mode === "partial" || note.mode === "raster" || note.mode === "flattened" || note.mode === "skipped").length;
-      const notePreview = notes
-        .filter((note) => note.mode === "partial" || note.mode === "raster" || note.mode === "flattened" || note.mode === "skipped")
+      const approximate = notes.filter(
+        (note) => note.mode === "partial" || note.mode === "flattened" || note.mode === "skipped",
+      );
+      const partialCount = approximate.length;
+      const notePreview = approximate
         .slice(0, 2)
         .map((note) => `${note.name}: ${note.reason}`)
         .join(" · ");
