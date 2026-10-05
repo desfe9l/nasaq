@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Navigate, useLocation } from "@tanstack/react-router";
+import { Navigate } from "@tanstack/react-router";
 import { GOOGLE_PROVIDER_ID, authEnabled, signIn, signOut } from "./client";
 import { hasGateSessionMarker } from "./gate-session-marker";
 import { resolveSignInGateState } from "./sign-in-gate";
@@ -49,12 +49,23 @@ export function RedirectToSignIn({ to = SIGN_IN_PATH }: { to?: string }) {
   /*
    * The guarded address travels with the visitor: signing in returns them to
    * the page a shared link (or a bookmark) named, never to a generic landing.
+   *
+   * It is captured ONCE, at mount, from the real browser URL — never from a
+   * location subscription. A subscribed read re-renders <Navigate> after it
+   * commits, when the location has already become `/login?redirect=<from>`;
+   * the fresh `from` then wraps the sign-in address itself, and every
+   * re-commit encodes the previous redirect inside a longer one. That loop
+   * grows the URL without bound and takes the tab down with it — a renderer
+   * crash: a blank page, no console error, nothing recoverable. Frozen at
+   * mount, the navigation commits exactly once and the destination the
+   * visitor actually asked for travels intact.
    */
-  const from = useLocation({
-    select: (location) => `${location.pathname}${location.searchStr ?? ""}`,
+  const [from] = useState(() => {
+    if (typeof window === "undefined") return undefined;
+    const full = `${window.location.pathname}${window.location.search}`;
+    return full && full !== to ? full : undefined;
   });
-  const safe = from && from !== to ? from : undefined;
-  return <Navigate to={to} search={safe ? { redirect: safe } : undefined} replace />;
+  return <Navigate to={to} search={from ? { redirect: from } : undefined} replace />;
 }
 
 /**
