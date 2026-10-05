@@ -37,6 +37,8 @@ import {
   generateDesignFromPrompt,
   type StudioGenerationResult,
 } from "@/lib/intelligence/pipeline";
+import { generateDesignBriefFn } from "@/lib/ai/functions";
+import type { DesignGenerationMode } from "@/lib/ai/design-contract";
 import type { DesignVariation } from "@/lib/intelligence/variations";
 import { DESIGN_STYLES, type DesignFormat, type DesignStyle } from "@/lib/intelligence/schema";
 import { pageSize } from "@/lib/editor/model";
@@ -124,6 +126,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
   const [overrideStyle, setOverrideStyle] = useState<DesignStyle | "auto">("auto");
   const [overrideFormat, setOverrideFormat] = useState<DesignFormat | "auto">("auto");
   const [overridePages, setOverridePages] = useState<number | "auto">("auto");
+  const [generationMode, setGenerationMode] = useState<DesignGenerationMode>("professional");
 
   // Active variation project
   const currentVariation: DesignVariation | undefined =
@@ -181,15 +184,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
     setStepLabel("تحليل الموجه واستخلاص متطلبات الهوية...");
 
     try {
-      await new Promise((r) => setTimeout(r, 120));
-      setStepLabel("بناء الهيكل والشبكة التصميمية واختيار الألوان...");
-
-      await new Promise((r) => setTimeout(r, 150));
-      setStepLabel("توليد المكونات، المؤشرات، والجداول وتوزيع العناصر...");
-
-      await new Promise((r) => setTimeout(r, 150));
-      setStepLabel("ضبط التوازن البصري والطباعة العربية RTL...");
-
+      setStepLabel("إرسال وصف التصميم إلى Gemini عبر المسار الآمن...");
       generatedByHand.current = true;
       const overrides: Record<string, unknown> = {};
       if (overrideStyle !== "auto") overrides.style = overrideStyle;
@@ -204,13 +199,37 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
       }
       if (overridePages !== "auto") overrides.pages = overridePages;
 
+      const briefResult = await generateDesignBriefFn({
+        data: {
+          prompt: text,
+          mode: generationMode,
+          requestedPages: typeof overridePages === "number" ? overridePages : undefined,
+          style: overrideStyle === "auto" ? undefined : overrideStyle,
+          format: overrideFormat === "auto" ? undefined : overrideFormat,
+          bilingual: /ثنائي|لغتين|عربي.*إنجليزي|إنجليزي.*عربي/i.test(text),
+        },
+      });
+      if (!briefResult.ok) throw new Error(briefResult.message);
+      setStepLabel("تحويل التوجيه المعتمد إلى عناصر NASAQ قابلة للتحرير...");
+      const brief = briefResult.brief;
+      const aiOverrides: Record<string, unknown> = {
+        ...overrides,
+        title: brief.title,
+        subtitle: brief.subtitle,
+        org: brief.org,
+        topic: brief.topic,
+        style: overrideStyle === "auto" ? brief.style : overrideStyle,
+        format: overrideFormat === "auto" ? brief.format : overrideFormat,
+        pages: typeof overridePages === "number" ? overridePages : brief.pages,
+      };
+
       /*
        * The page ceiling is the store's own number, enforced in ONE place
        * (`buildGeneration`, which the mount preview also goes through); here the
        * author is simply told when their request was brought back to the plan.
        */
       const requestedPages = typeof overrides.pages === "number" ? overrides.pages : null;
-      const gen = buildGeneration(text, overrides, entitlements, brandKit);
+      const gen = buildGeneration(text, aiOverrides, entitlements, brandKit);
       if (
         requestedPages !== null &&
         !entitlements.unlimited_pages &&
@@ -223,7 +242,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
       setActivePageIndex(0);
       toast.success("تم توليد التصميم والبدائل بنجاح");
     } catch (err) {
-      toast.error("حدث خطأ أثناء التوليد، يرجى المحاولة مرة أخرى");
+      toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء التوليد، يرجى المحاولة مرة أخرى");
       console.error(err);
     } finally {
       setBusy(false);
@@ -412,7 +431,19 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
 
           {/* Quick Tuning Drawer (Optional) */}
           {showTuning && (
-            <div className="mt-3 grid gap-3 rounded-xl border border-line/80 bg-surface-2/40 p-4 sm:grid-cols-3">
+            <div className="mt-3 grid gap-3 rounded-xl border border-line/80 bg-surface-2/40 p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <label className="grid gap-1 text-[11px] font-bold text-muted">
+                وضع الذكاء الاصطناعي
+                <select
+                  value={generationMode}
+                  onChange={(e) => setGenerationMode(e.target.value as DesignGenerationMode)}
+                  className="h-9 rounded-lg border border-line bg-surface px-2 text-[12px] font-bold"
+                >
+                  <option value="generate">توليد — أفكار وتكوينات جديدة</option>
+                  <option value="balance">توازن — ضبط الكثافة والهرمية</option>
+                  <option value="professional">احتراف — إخراج مؤسسي صارم</option>
+                </select>
+              </label>
               <label className="grid gap-1 text-[11px] font-bold text-muted">
                 نمط التصميم
                 <select

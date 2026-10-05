@@ -14,6 +14,12 @@ import {
   type SelectionActionInput,
   type SelectionActionResult,
 } from "./selection-contract";
+import {
+  normalizeDesignBriefInput,
+  validDesignBriefInput,
+  type DesignBriefInput,
+  type DesignBriefResult,
+} from "./design-contract";
 
 let getRequestRef: typeof import("@tanstack/react-start/server").getRequest | null = null;
 
@@ -112,6 +118,48 @@ export const generateReportDraftFn = createServerFn({ method: "POST" })
         code: "provider_error",
         message: "تعذر توليد المسودة الآن. لم يتغير محتوى المستند.",
       };
+    }
+  });
+
+/** Gemini supplies art direction; NASAQ turns it into real editable elements. */
+export const generateDesignBriefFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .validator((data: Partial<DesignBriefInput>) => normalizeDesignBriefInput(data))
+  .handler(async ({ data, context }): Promise<DesignBriefResult> => {
+    if (!validDesignBriefInput(data)) {
+      return { ok: false, code: "invalid", message: "اكتب وصفًا واضحًا للتصميم المطلوب." };
+    }
+    const { getAuthorizationContext, requireFeature } = await import(
+      "@/lib/auth/authorization.server"
+    );
+    const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail });
+    try {
+      requireFeature(access, "ai_report");
+    } catch {
+      return { ok: false, code: "license_required", message: "تحتاج هذه الميزة إلى ترخيص نشط." };
+    }
+    if (
+      !access.isAdmin &&
+      (!checkRateLimit("ai:design:user", context.userId, 6, 60_000) ||
+        !checkRateLimit("ai:design:ip", await clientIdentifier(), 12, 60_000))
+    ) {
+      return { ok: false, code: "rate_limited", message: "تم الوصول إلى حد المحاولات المؤقت. حاول بعد دقيقة." };
+    }
+    try {
+      const { generateDesignBrief } = await import("./provider.server");
+      return { ok: true, brief: await generateDesignBrief(data) };
+    } catch (error) {
+      const code = error instanceof Error ? error.message : "provider_error";
+      if (code === "not_configured") {
+        return { ok: false, code: "not_configured", message: "خدمة الذكاء الاصطناعي غير مفعّلة لهذه البيئة بعد." };
+      }
+      if (code === "provider_rate") {
+        return { ok: false, code: "rate_limited", message: "مزود الذكاء الاصطناعي مشغول مؤقتًا. حاول بعد قليل." };
+      }
+      if (code === "provider_rejected") {
+        return { ok: false, code: "provider_error", message: "رفض مزود الذكاء الاصطناعي الطلب." };
+      }
+      return { ok: false, code: "provider_error", message: "تعذر توليد التوجيه التصميمي الآن." };
     }
   });
 
@@ -222,6 +270,7 @@ export const nasaqAiStatusFn = createServerFn({ method: "GET" })
       model,
       capabilities: [
         "تقرير ذكي",
+        "توجيه تصميمي قابل للتحرير",
         "إجراءات النص المحدد",
         "تحليل الصور وOCR",
         "توليد محتوى خام إلى مستند",

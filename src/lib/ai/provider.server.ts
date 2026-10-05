@@ -17,6 +17,12 @@ import {
   validSelectionInput,
   type SelectionActionInput,
 } from "./selection-contract.ts";
+import {
+  normalizeDesignBrief,
+  normalizeDesignBriefInput,
+  type DesignBrief,
+  type DesignBriefInput,
+} from "./design-contract.ts";
 
 type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
@@ -117,6 +123,28 @@ export async function generateReportDraft(
     ],
   });
   return normalizeDraft(parseProviderJson(text), input.maxSections);
+}
+
+/** Gemini supplies art direction; NASAQ turns it into real editable elements. */
+export async function generateDesignBrief(rawInput: DesignBriefInput): Promise<DesignBrief> {
+  const input = normalizeDesignBriefInput(rawInput);
+  if (!input.prompt) throw new Error("invalid");
+  const text = await requestGemini({
+    model: modelName(),
+    temperature: input.mode === "professional" ? 0.25 : 0.45,
+    maxOutputTokens: 1_800,
+    jsonResponse: true,
+    system: [
+      "You are the art director for NASAQ, an Arabic-first institutional design platform.",
+      "Return JSON only with title, subtitle, org, topic, style, format, pages, coverStyle, bilingual, contentDensity, and visualDirection.",
+      "Use professional Arabic-first RTL direction. Do not invent real organizations, logos, people, facts, dates, numbers, or official endorsements.",
+      "Use only the supported NASAQ style, format, and coverStyle values from the user input contract.",
+      "The result will be converted into real editable NASAQ text, shape, image, table, line, and group elements; never return SVG or a flattened image.",
+      `Generation mode: ${input.mode}. Content density: ${input.contentDensity}. Bilingual requested: ${input.bilingual ? "yes" : "no"}.`,
+    ].join(" "),
+    userParts: [{ text: JSON.stringify(input) }],
+  });
+  return normalizeDesignBrief(parseProviderJson(text), input);
 }
 
 /**
