@@ -714,9 +714,10 @@ export function bubblePartWidth(part: BubblePart): number {
     case "ink":
     case "element":
       return cells(2);
-    // Replace, crop, fit, rotate, enhance and lighten.
+    // Replace, crop, reposition (pan inside the frame), mask, fit, rotate,
+    // enhance and lighten.
     case "image":
-      return cells(6);
+      return cells(8);
     case "stroke":
       // Owns its leading separator, so a selection without stroke support
       // never leaves a stray divider behind.

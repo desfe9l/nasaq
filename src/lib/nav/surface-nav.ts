@@ -144,6 +144,12 @@ export const EDITOR_SURFACE_NAV: readonly SurfaceNavItem[] = [
     shortLabel: "التقرير",
     title: "أدوات التقرير",
   },
+  {
+    id: "ai",
+    label: "نَسَق AI",
+    shortLabel: "الذكاء",
+    title: "نَسَق AI — التقرير، تحديد المحتوى، تحليل الصور، وتوليد المستندات في نافذة واحدة",
+  },
 ];
 
 export const EDITOR_SURFACE_IDS = EDITOR_SURFACE_NAV.map((item) => item.id);

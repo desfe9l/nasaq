@@ -71,6 +71,7 @@ import { useTools } from "@/lib/editor/tool-store";
 import { toolDef } from "@/lib/editor/tools";
 import { cn, downloadText } from "@/lib/utils";
 import { toast } from "sonner";
+import { MaskIcon, MaskOffIcon } from "./ui/NsqIcons";
 
 type MenuPoint = ContextMenuPoint;
 type ContextAction = {
@@ -332,6 +333,43 @@ export function WorkspaceOverlays({
   const maskApplicable =
     !!maskSource && !!maskShape && selectedEls.length === 2;
   const maskRemovable = selectedEls.length === 1 && !!selectedEls[0].clippedBy;
+  /*
+   * «Image placed on top of another shape/image»: with ONE element selected,
+   * masking stays an EXPLICIT option — the partner is found among the elements
+   * the selection overlaps. An image finds the topmost shape under it; a shape
+   * or SVG finds the topmost picture on it. The action re-reads the store on
+   * click, so the pointer can never be stale.
+   */
+  const maskPair = (() => {
+    if (maskApplicable || maskRemovable || selectedEls.length !== 1)
+      return null;
+    const only = selectedEls[0];
+    const state = useEditor.getState();
+    const page = state.pages.find((p) => p.id === state.activePageId);
+    if (!page || page.locked || only.locked) return null;
+    const isImage =
+      only.type === "image" || only.type === "logo" || only.type === "qr";
+    const isShape = only.type === "shape" || only.type === "svg";
+    if (!isImage && !isShape) return null;
+    const overlaps = (a: CanvasEl, b: CanvasEl) =>
+      a.x < b.x + b.w &&
+      b.x < a.x + a.w &&
+      a.y < b.y + b.h &&
+      b.y < a.y + a.h;
+    const partner = page.elements
+      .filter((m) => {
+        if (m.id === only.id || m.hidden) return false;
+        const family = isImage
+          ? m.type === "shape" || m.type === "svg"
+          : m.type === "image" || m.type === "logo" || m.type === "qr";
+        return family && overlaps(only, m);
+      })
+      .sort((a, b) => b.z - a.z)[0];
+    if (!partner) return null;
+    return isImage
+      ? { sourceId: only.id, shapeId: partner.id, label: "قص الصورة على الشكل الملاصق" }
+      : { sourceId: partner.id, shapeId: only.id, label: "قص الصورة العلوية بهذا الشكل" };
+  })();
   const toggleFadeOverlay = useEditor((s) => s.toggleFadeOverlay);
   const fadeApplicable = selectedEls.some(
     (el) => el.type === "image" || el.type === "logo" || el.type === "qr",
@@ -618,8 +656,29 @@ export function WorkspaceOverlays({
           ? [
               {
                 label: "تطبيق قناع القص (Clipping Mask)",
-                icon: Group,
+                icon: MaskIcon,
                 run: () => applyMask(maskSource!.id, maskShape!.id),
+                sepBefore: true,
+              } as ContextAction,
+            ]
+          : []),
+        ...(maskPair
+          ? [
+              {
+                label: maskPair.label,
+                hint: "يبقى مقاس الشكل والصورة كما هو — القص pointer قابل للتراجع",
+                icon: MaskIcon,
+                run: () => {
+                  const s = useEditor.getState();
+                  const pg = s.pages.find((p) => p.id === s.activePageId);
+                  if (
+                    !pg ||
+                    !findElement(pg.elements, maskPair.sourceId)?.el ||
+                    !findElement(pg.elements, maskPair.shapeId)?.el
+                  )
+                    return;
+                  applyMask(maskPair.sourceId, maskPair.shapeId);
+                },
                 sepBefore: true,
               } as ContextAction,
             ]
@@ -628,7 +687,7 @@ export function WorkspaceOverlays({
           ? [
               {
                 label: "إزالة قناع القص",
-                icon: Ungroup,
+                icon: MaskOffIcon,
                 run: () => removeMask(selectedEls[0].clippedBy!),
               } as ContextAction,
             ]

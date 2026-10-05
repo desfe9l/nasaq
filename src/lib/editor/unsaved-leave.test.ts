@@ -116,9 +116,9 @@ function waitForPromptOpen(): Promise<void> {
 
 test("unsaved warning matches the editor copy and only dirty work", () => {
   assert.equal(LEAVE_TITLE, "لديك تغييرات غير محفوظة");
-  assert.equal(LEAVE_BODY, "هل تريد حفظ المشروع قبل المغادرة؟");
-  assert.equal(LEAVE_SAVE, "حفظ ومتابعة");
-  assert.equal(LEAVE_DISCARD, "متابعة بدون حفظ");
+  assert.equal(LEAVE_BODY, "هل تريد حفظ المشروع قبل الخروج من المحرر؟");
+  assert.equal(LEAVE_SAVE, "حفظ وخروج");
+  assert.equal(LEAVE_DISCARD, "الخروج بدون حفظ");
   assert.equal(LEAVE_CANCEL, "إلغاء");
   assert.equal(hasUnsavedChanges("dirty"), true);
   assert.equal(hasUnsavedChanges("error"), true);

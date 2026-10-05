@@ -87,13 +87,28 @@ export function PageRail({
     requestAnimationFrame(() => scrollStageToPage(page.id, true));
   };
 
+  /**
+   * The thumbnail box, FITTED — not two independently clamped numbers.
+   *
+   * The old maths clamped height and width separately, so a wide A4-landscape
+   * rail that fell to 76 px got a forced `min 34` width: the ratio broke, and
+   * the over-tall column was then cut by the rail's own `overflow-hidden` —
+   * thumbnails clipped at the top, labels shaved at the bottom, both exactly
+   * the "unprofessional crop" this rail must never show. Now the height is
+   * what the rail can actually afford, and the WIDTH DERIVES FROM IT through
+   * the page ratio; the label row and the item's own padding+border are part
+   * of the budget, so every state (expanded, mobile-landscape, dragged-short)
+   * fits the container it lives in.
+   */
   const thumbBox = (ratio: number) => {
-    const chrome = 44;
-    const available = Math.max(48, height - chrome);
-    const floor = Math.max(40, minHeight - chrome);
-    const h = clamp(Math.round(available), floor, 100);
-    const w = clamp(Math.round(h * ratio), 34, 240);
-    return { w, h };
+    const safeRatio = Number.isFinite(ratio) && ratio > 0.05 ? ratio : 1;
+    const label = 16; // caption row: name + page number
+    const chrome = 12; // li padding + border + thumbnail gap
+    const budget = Math.max(36, height - label - chrome);
+    const floorH = Math.max(26, minHeight - label - chrome);
+    const h = clamp(Math.min(budget, 104), Math.min(floorH, budget), 104);
+    const w = clamp(Math.round(h * safeRatio), 36, 224);
+    return { w, h: Math.round(w / safeRatio) };
   };
 
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -269,7 +284,6 @@ export function PageRail({
           const size = pageSize(p);
           const ratio = size.w / size.h;
           const { w: thumbW, h: thumbH } = thumbBox(ratio);
-          void size;
           const active = p.id === activePageId;
           return (
             <li
@@ -288,7 +302,7 @@ export function PageRail({
               )}
               style={{ outlineOffset: "2px" }}
             >
-              <div>
+              <div className="flex flex-col items-center">
                 <button
                   type="button"
                   aria-label={`${p.name} ${i + 1}`}

@@ -18,6 +18,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import {
+  Bot,
   Boxes,
   Image as ImageIcon,
   KeyRound,
@@ -31,9 +32,13 @@ import {
   ReceiptText,
   ScrollText,
   Settings,
+  Share2,
   Shield,
   Sparkles,
+  Store,
+  Tags,
   Users,
+  Vault,
 } from "lucide-react";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import { amIAdmin } from "@/lib/commercial/admin-functions";
@@ -43,7 +48,9 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import {
   ADMIN_ROUTES,
   ADMIN_SECTIONS,
+  ADMIN_SECTION_GROUPS,
   BRAND_ROUTE,
+  type AdminSection,
   isAdminSectionActive,
 } from "@/lib/site-routes";
 import { cn } from "@/lib/utils";
@@ -102,6 +109,11 @@ const SECTION_ICONS: Record<string, typeof Users> = {
   branding: Palette,
   settings: Settings,
   audit: ScrollText,
+  store: Store,
+  categories: Tags,
+  sharing: Share2,
+  ai: Bot,
+  vault: Vault,
 };
 
 export function AdminConsole({ children }: { children?: ReactNode }) {
@@ -225,40 +237,95 @@ export function AdminConsole({ children }: { children?: ReactNode }) {
             </div>
           </div>
 
-          {/* Real links: every section is an address, and Back moves between them. */}
-          <nav aria-label="أقسام لوحة الإدارة" className="mx-auto max-w-7xl px-4">
-            <ul className="flex flex-wrap items-center gap-1 pb-2">
-              {sectionListFor(access).map((section) => {
-                const Icon = SECTION_ICONS[section.id] ?? Boxes;
-                const active = isAdminSectionActive(pathname, section);
-                return (
-                  <li key={section.id}>
-                    <Link
-                      to={section.to}
-                      aria-current={active ? "page" : undefined}
-                      title={section.description}
-                      className={cn(
-                        "inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-[12.5px] font-extrabold transition",
-                        active
-                          ? "bg-navy text-on-brand"
-                          : "text-muted hover:bg-line-2 hover:text-ink",
-                      )}
-                    >
-                      <Icon className="size-3.5" aria-hidden />
-                      {section.label}
-                    </Link>
-                  </li>
-                );
-              })}
+          {/*
+           * Compact chip row — the sidebar's twin for short screens (phones,
+           * iPad in split view). Same links, same order, same active rule.
+           */}
+          <nav
+            aria-label="أقسام لوحة الإدارة"
+            className="mx-auto max-w-7xl overflow-x-auto px-4 pb-2 lg:hidden"
+          >
+            <ul className="flex min-w-max items-center gap-1">
+              {sectionListFor(access).map((section) => (
+                <li key={section.id}>
+                  <AdminNavLink section={section} pathname={pathname} variant="chip" />
+                </li>
+              ))}
             </ul>
           </nav>
         </header>
 
-        <main className="mx-auto max-w-7xl px-4 py-6">
-          {children ?? <Outlet />}
-        </main>
+        <div className="mx-auto flex max-w-7xl gap-6 px-4 py-6">
+          {/*
+           * The ONE admin navigation: a grouped sidebar on wide screens.
+           * Every management function in the platform lives in this tree with
+           * its own direct URL — nothing admin is scattered on unrelated pages.
+           */}
+          <aside className="sticky top-[104px] hidden h-max w-56 shrink-0 flex-col gap-4 lg:flex">
+            {ADMIN_SECTION_GROUPS.map((group) => {
+              const items = sectionListFor(access).filter(
+                (section) => section.group === group.id,
+              );
+              if (!items.length) return null;
+              return (
+                <nav
+                  key={group.id}
+                  aria-label={`مجموعة ${group.label}`}
+                  className="grid gap-1"
+                >
+                  <p className="px-2 text-[9px] font-black tracking-[0.18em] text-muted">
+                    {group.label}
+                  </p>
+                  {items.map((section) => (
+                    <AdminNavLink
+                      key={section.id}
+                      section={section}
+                      pathname={pathname}
+                      variant="row"
+                    />
+                  ))}
+                </nav>
+              );
+            })}
+          </aside>
+
+          <main className="min-w-0 flex-1">{children ?? <Outlet />}</main>
+        </div>
       </div>
     </AdminAccessContext.Provider>
+  );
+}
+
+/** One navigation entry — sidebar row or compact chip; one rule for both. */
+function AdminNavLink({
+  section,
+  pathname,
+  variant,
+}: {
+  section: AdminSection;
+  pathname: string;
+  variant: "row" | "chip";
+}) {
+  const Icon = SECTION_ICONS[section.id] ?? Boxes;
+  const active = isAdminSectionActive(pathname, section);
+  return (
+    <Link
+      to={section.to}
+      aria-current={active ? "page" : undefined}
+      title={section.description}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-lg font-extrabold transition",
+        variant === "chip"
+          ? "h-9 px-3 text-[12.5px]"
+          : "h-9 w-full px-2.5 text-[12.5px]",
+        active
+          ? "bg-navy text-on-brand"
+          : "text-muted hover:bg-line-2 hover:text-ink",
+      )}
+    >
+      <Icon className="size-3.5 shrink-0" aria-hidden />
+      {section.label}
+    </Link>
   );
 }
 
@@ -271,7 +338,10 @@ export function sectionListFor(access: AdminAccess) {
       section.id === "import" ||
       section.id === "content" ||
       section.id === "assets" ||
-      section.id === "branding";
+      section.id === "branding" ||
+      section.id === "categories" ||
+      section.id === "sharing" ||
+      section.id === "ai";
     return needsContent ? access.content : access.commercial;
   });
 }

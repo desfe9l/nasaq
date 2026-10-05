@@ -35,18 +35,23 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as Char1575Char1604Char1607Char1608Char1610Char1577RouteImport } from './routes/الهوية'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAiRouteImport } from './routes/admin/ai'
 import { Route as AdminAssetsRouteImport } from './routes/admin/assets'
 import { Route as AdminAuditRouteImport } from './routes/admin/audit'
 import { Route as AdminBrandingRouteImport } from './routes/admin/branding'
+import { Route as AdminCategoriesRouteImport } from './routes/admin/categories'
 import { Route as AdminContentRouteImport } from './routes/admin/content'
 import { Route as AdminImportRouteImport } from './routes/admin/import'
 import { Route as AdminPaymentsRouteImport } from './routes/admin/payments'
 import { Route as AdminPlansRouteImport } from './routes/admin/plans'
 import { Route as AdminRequestsRouteImport } from './routes/admin/requests'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminSharingRouteImport } from './routes/admin/sharing'
+import { Route as AdminStoreRouteImport } from './routes/admin/store'
 import { Route as AdminStudioRouteImport } from './routes/admin/studio'
 import { Route as AdminTemplatesRouteImport } from './routes/admin/templates'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
+import { Route as AdminVaultRouteImport } from './routes/admin/vault'
 import { Route as ApiAppVersionRouteImport } from './routes/api/app-version'
 import { Route as EditorIndexRouteImport } from './routes/editor/index'
 import { Route as EditorProjectIdRouteImport } from './routes/editor/$projectId'
@@ -202,6 +207,11 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminAiRoute = AdminAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminAssetsRoute = AdminAssetsRouteImport.update({
   id: '/assets',
   path: '/assets',
@@ -215,6 +225,11 @@ const AdminAuditRoute = AdminAuditRouteImport.update({
 const AdminBrandingRoute = AdminBrandingRouteImport.update({
   id: '/branding',
   path: '/branding',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminCategoriesRoute = AdminCategoriesRouteImport.update({
+  id: '/categories',
+  path: '/categories',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminContentRoute = AdminContentRouteImport.update({
@@ -247,6 +262,16 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminSharingRoute = AdminSharingRouteImport.update({
+  id: '/sharing',
+  path: '/sharing',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminStoreRoute = AdminStoreRouteImport.update({
+  id: '/store',
+  path: '/store',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminStudioRoute = AdminStudioRouteImport.update({
   id: '/studio',
   path: '/studio',
@@ -260,6 +285,11 @@ const AdminTemplatesRoute = AdminTemplatesRouteImport.update({
 const AdminUsersRoute = AdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminVaultRoute = AdminVaultRouteImport.update({
+  id: '/vault',
+  path: '/vault',
   getParentRoute: () => AdminRoute,
 } as any)
 const ApiAppVersionRoute = ApiAppVersionRouteImport.update({
@@ -407,18 +437,23 @@ export interface FileRoutesByFullPath {
   '/terms': typeof TermsRoute
   '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/admin/ai': typeof AdminAiRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/branding': typeof AdminBrandingRoute
+  '/admin/categories': typeof AdminCategoriesRoute
   '/admin/content': typeof AdminContentRoute
   '/admin/import': typeof AdminImportRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/plans': typeof AdminPlansRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/sharing': typeof AdminSharingRoute
+  '/admin/store': typeof AdminStoreRoute
   '/admin/studio': typeof AdminStudioRoute
   '/admin/templates': typeof AdminTemplatesRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/vault': typeof AdminVaultRoute
   '/api/app-version': typeof ApiAppVersionRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
@@ -468,18 +503,23 @@ export interface FileRoutesByTo {
   '/terms': typeof TermsRoute
   '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/admin/ai': typeof AdminAiRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/branding': typeof AdminBrandingRoute
+  '/admin/categories': typeof AdminCategoriesRoute
   '/admin/content': typeof AdminContentRoute
   '/admin/import': typeof AdminImportRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/plans': typeof AdminPlansRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/sharing': typeof AdminSharingRoute
+  '/admin/store': typeof AdminStoreRoute
   '/admin/studio': typeof AdminStudioRoute
   '/admin/templates': typeof AdminTemplatesRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/vault': typeof AdminVaultRoute
   '/api/app-version': typeof ApiAppVersionRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
@@ -532,18 +572,23 @@ export interface FileRoutesById {
   '/terms': typeof TermsRoute
   '/workspace': typeof WorkspaceRoute
   '/الهوية': typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
+  '/admin/ai': typeof AdminAiRoute
   '/admin/assets': typeof AdminAssetsRoute
   '/admin/audit': typeof AdminAuditRoute
   '/admin/branding': typeof AdminBrandingRoute
+  '/admin/categories': typeof AdminCategoriesRoute
   '/admin/content': typeof AdminContentRoute
   '/admin/import': typeof AdminImportRoute
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/plans': typeof AdminPlansRoute
   '/admin/requests': typeof AdminRequestsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/sharing': typeof AdminSharingRoute
+  '/admin/store': typeof AdminStoreRoute
   '/admin/studio': typeof AdminStudioRoute
   '/admin/templates': typeof AdminTemplatesRoute
   '/admin/users': typeof AdminUsersRoute
+  '/admin/vault': typeof AdminVaultRoute
   '/api/app-version': typeof ApiAppVersionRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
@@ -597,18 +642,23 @@ export interface FileRouteTypes {
     | '/terms'
     | '/workspace'
     | '/الهوية'
+    | '/admin/ai'
     | '/admin/assets'
     | '/admin/audit'
     | '/admin/branding'
+    | '/admin/categories'
     | '/admin/content'
     | '/admin/import'
     | '/admin/payments'
     | '/admin/plans'
     | '/admin/requests'
     | '/admin/settings'
+    | '/admin/sharing'
+    | '/admin/store'
     | '/admin/studio'
     | '/admin/templates'
     | '/admin/users'
+    | '/admin/vault'
     | '/api/app-version'
     | '/editor/$projectId'
     | '/payment/cancel'
@@ -658,18 +708,23 @@ export interface FileRouteTypes {
     | '/terms'
     | '/workspace'
     | '/الهوية'
+    | '/admin/ai'
     | '/admin/assets'
     | '/admin/audit'
     | '/admin/branding'
+    | '/admin/categories'
     | '/admin/content'
     | '/admin/import'
     | '/admin/payments'
     | '/admin/plans'
     | '/admin/requests'
     | '/admin/settings'
+    | '/admin/sharing'
+    | '/admin/store'
     | '/admin/studio'
     | '/admin/templates'
     | '/admin/users'
+    | '/admin/vault'
     | '/api/app-version'
     | '/editor/$projectId'
     | '/payment/cancel'
@@ -721,18 +776,23 @@ export interface FileRouteTypes {
     | '/terms'
     | '/workspace'
     | '/الهوية'
+    | '/admin/ai'
     | '/admin/assets'
     | '/admin/audit'
     | '/admin/branding'
+    | '/admin/categories'
     | '/admin/content'
     | '/admin/import'
     | '/admin/payments'
     | '/admin/plans'
     | '/admin/requests'
     | '/admin/settings'
+    | '/admin/sharing'
+    | '/admin/store'
     | '/admin/studio'
     | '/admin/templates'
     | '/admin/users'
+    | '/admin/vault'
     | '/api/app-version'
     | '/editor/$projectId'
     | '/payment/cancel'
@@ -986,6 +1046,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/ai': {
+      id: '/admin/ai'
+      path: '/ai'
+      fullPath: '/admin/ai'
+      preLoaderRoute: typeof AdminAiRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/assets': {
       id: '/admin/assets'
       path: '/assets'
@@ -1005,6 +1072,13 @@ declare module '@tanstack/react-router' {
       path: '/branding'
       fullPath: '/admin/branding'
       preLoaderRoute: typeof AdminBrandingRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/categories': {
+      id: '/admin/categories'
+      path: '/categories'
+      fullPath: '/admin/categories'
+      preLoaderRoute: typeof AdminCategoriesRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/content': {
@@ -1049,6 +1123,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/sharing': {
+      id: '/admin/sharing'
+      path: '/sharing'
+      fullPath: '/admin/sharing'
+      preLoaderRoute: typeof AdminSharingRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/store': {
+      id: '/admin/store'
+      path: '/store'
+      fullPath: '/admin/store'
+      preLoaderRoute: typeof AdminStoreRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/studio': {
       id: '/admin/studio'
       path: '/studio'
@@ -1068,6 +1156,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/admin/users'
       preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/vault': {
+      id: '/admin/vault'
+      path: '/vault'
+      fullPath: '/admin/vault'
+      preLoaderRoute: typeof AdminVaultRouteImport
       parentRoute: typeof AdminRoute
     }
     '/api/app-version': {
@@ -1235,35 +1330,45 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminAiRoute: typeof AdminAiRoute
   AdminAssetsRoute: typeof AdminAssetsRoute
   AdminAuditRoute: typeof AdminAuditRoute
   AdminBrandingRoute: typeof AdminBrandingRoute
+  AdminCategoriesRoute: typeof AdminCategoriesRoute
   AdminContentRoute: typeof AdminContentRoute
   AdminImportRoute: typeof AdminImportRoute
   AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminPlansRoute: typeof AdminPlansRoute
   AdminRequestsRoute: typeof AdminRequestsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminSharingRoute: typeof AdminSharingRoute
+  AdminStoreRoute: typeof AdminStoreRoute
   AdminStudioRoute: typeof AdminStudioRoute
   AdminTemplatesRoute: typeof AdminTemplatesRoute
   AdminUsersRoute: typeof AdminUsersRoute
+  AdminVaultRoute: typeof AdminVaultRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminLicensesIndexRoute: typeof AdminLicensesIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAiRoute: AdminAiRoute,
   AdminAssetsRoute: AdminAssetsRoute,
   AdminAuditRoute: AdminAuditRoute,
   AdminBrandingRoute: AdminBrandingRoute,
+  AdminCategoriesRoute: AdminCategoriesRoute,
   AdminContentRoute: AdminContentRoute,
   AdminImportRoute: AdminImportRoute,
   AdminPaymentsRoute: AdminPaymentsRoute,
   AdminPlansRoute: AdminPlansRoute,
   AdminRequestsRoute: AdminRequestsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AdminSharingRoute: AdminSharingRoute,
+  AdminStoreRoute: AdminStoreRoute,
   AdminStudioRoute: AdminStudioRoute,
   AdminTemplatesRoute: AdminTemplatesRoute,
   AdminUsersRoute: AdminUsersRoute,
+  AdminVaultRoute: AdminVaultRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminLicensesIndexRoute: AdminLicensesIndexRoute,
 }

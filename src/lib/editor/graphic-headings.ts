@@ -7,6 +7,7 @@
 import {
   createElement,
   createGroupFrom,
+  placeholderImage,
   type CanvasEl,
   type Theme,
   type ThemeId,
@@ -23,26 +24,52 @@ export type GraphicHeadingId =
   | "separator"
   | "institutional"
   | "modern"
-  | "simple";
+  | "simple"
+  | "coverBand"
+  | "sealTitle"
+  | "sideImage";
 
 export interface GraphicHeadingDef {
   id: GraphicHeadingId;
   label: string;
   hint: string;
   thumbnail: GraphicHeadingId;
+  /** Composition class the gallery tile draws (keeps tiles honest: one per id). */
+  kind: "text" | "image-text";
 }
 
 export const GRAPHIC_HEADINGS: GraphicHeadingDef[] = [
-  { id: "main", label: "عنوان رئيسي", hint: "كبير مع خط ذهبي سفلي", thumbnail: "main" },
-  { id: "section", label: "عنوان قسم", hint: "شريط جانبي أخضر", thumbnail: "section" },
-  { id: "sub", label: "عنوان فرعي", hint: "نقطة ذهبية + نص متوسط", thumbnail: "sub" },
-  { id: "bar", label: "عنوان داخل شريط", hint: "خلفية داكنة ونص أبيض", thumbnail: "bar" },
-  { id: "card", label: "عنوان داخل بطاقة", hint: "بطاقة بيضاء بظل خفيف", thumbnail: "card" },
-  { id: "numbered", label: "عنوان مع رقم القسم", hint: "رقم داخل دائرة + عنوان", thumbnail: "numbered" },
-  { id: "separator", label: "عنوان مع فاصل", hint: "خط فاصل وزخرفة", thumbnail: "separator" },
-  { id: "institutional", label: "عنوان مؤسسي", hint: "إطار رسمي وخط Amiri", thumbnail: "institutional" },
-  { id: "modern", label: "عنوان حديث", hint: "خلفية ملونة وتدرج عصري", thumbnail: "modern" },
-  { id: "simple", label: "عنوان بسيط", hint: "نص نظيف بدون زخرفة", thumbnail: "simple" },
+  { id: "main", label: "عنوان رئيسي", hint: "كبير مع خط ذهبي سفلي", thumbnail: "main", kind: "text" },
+  { id: "section", label: "عنوان قسم", hint: "شريط جانبي أخضر", thumbnail: "section", kind: "text" },
+  { id: "sub", label: "عنوان فرعي", hint: "نقطة ذهبية + نص متوسط", thumbnail: "sub", kind: "text" },
+  { id: "bar", label: "عنوان داخل شريط", hint: "خلفية داكنة ونص أبيض", thumbnail: "bar", kind: "text" },
+  { id: "card", label: "عنوان داخل بطاقة", hint: "بطاقة بيضاء بظل خفيف", thumbnail: "card", kind: "text" },
+  { id: "numbered", label: "عنوان مع رقم القسم", hint: "رقم داخل دائرة + عنوان", thumbnail: "numbered", kind: "text" },
+  { id: "separator", label: "عنوان مع فاصل", hint: "خط فاصل وزخرفة", thumbnail: "separator", kind: "text" },
+  { id: "institutional", label: "عنوان مؤسسي", hint: "إطار رسمي وخط Amiri", thumbnail: "institutional", kind: "text" },
+  { id: "modern", label: "عنوان حديث", hint: "خلفية ملونة وتدرج عصري", thumbnail: "modern", kind: "text" },
+  { id: "simple", label: "عنوان بسيط", hint: "نص نظيف بدون زخرفة", thumbnail: "simple", kind: "text" },
+  {
+    id: "coverBand",
+    label: "شريط غلاف بصورة",
+    hint: "صورة يسار وعنوان وفرعي يمين — جاهز لأغلفة التقارير",
+    thumbnail: "coverBand",
+    kind: "image-text",
+  },
+  {
+    id: "sealTitle",
+    label: "عنوان مع ختم دائري",
+    hint: "دائرة شعار يمين + سطران عنوان بمحاذاة مؤسسية",
+    thumbnail: "sealTitle",
+    kind: "image-text",
+  },
+  {
+    id: "sideImage",
+    label: "عنوان بصورة جانبية",
+    hint: "صورة مربعة مقصوصة على شكل دائري مع عنوان وخط لوني",
+    thumbnail: "sideImage",
+    kind: "image-text",
+  },
 ];
 
 function txt(theme: Theme, over: Partial<CanvasEl>, style: Partial<CanvasEl["style"]> = {}): CanvasEl {
@@ -202,12 +229,131 @@ function buildSimple(theme: Theme): CanvasEl {
   return makeGroup([bg, textEl], "عنوان بسيط");
 }
 
+/*
+ * Image-bearing compositions. The picture is an ordinary `image` element with
+ * the placeholder source, so «تغيير الصورة» replaces it in place — the band,
+ * the seal and the layout never move, and the frame silhouette (style.frameId)
+ * keeps the circle or square cut through every replacement.
+ */
+function imgEl(
+  theme: Theme,
+  over: Partial<CanvasEl>,
+  style: Partial<CanvasEl["style"]> = {},
+): CanvasEl {
+  return createElement(
+    "image",
+    {
+      src: placeholderImage("image"),
+      name: "صورة العنوان",
+      ...over,
+      style: { objectFit: "cover", objectX: 50, objectY: 50, ...style },
+    },
+    theme,
+  );
+}
+
+function buildCoverBand(theme: Theme): CanvasEl {
+  const W = 160;
+  const H = 26;
+  const bg = boxEl(
+    theme,
+    { name: "شريط الغلاف", x: 0, y: 0, w: W, h: H },
+    { fill: theme.primary, borderColor: "transparent", radius: 3, padding: 0 },
+  );
+  const img = imgEl(theme, {
+    name: "صورة الغلاف",
+    x: 1.5,
+    y: 1.5,
+    w: H - 3,
+    h: H - 3,
+  });
+  const title = txt(
+    theme,
+    { name: "عنوان الغلاف", x: 34, y: 3, w: W - 40, h: 11, content: "عنوان التقرير" },
+    { fontFamily: "Tajawal", fontSize: 15, fontWeight: 900, color: "#ffffff", textAlign: "right", lineHeight: 1.25, textFit: "shrink" },
+  );
+  const subtitle = txt(
+    theme,
+    { name: "سطر الغلاف", x: 34, y: 15, w: W - 40, h: 7, content: "الجهة المالكة · التاريخ" },
+    { fontFamily: "Cairo", fontSize: 9, fontWeight: 600, color: "rgba(255,255,255,.85)", textAlign: "right", textFit: "shrink" },
+  );
+  const rule = lineEl(
+    theme,
+    { name: "خط ذهبي جانبي", x: W - 2.4, y: 4, w: 1.2, h: H - 8 },
+    { color: theme.accent, stroke: 1.2 },
+  );
+  return makeGroup([bg, img, title, subtitle, rule], "شريط غلاف بصورة");
+}
+
+function buildSealTitle(theme: Theme): CanvasEl {
+  const W = 160;
+  const seal = imgEl(theme, {
+    name: "ختم دائري",
+    x: W - 20,
+    y: 0,
+    w: 20,
+    h: 20,
+    style: { objectFit: "cover", objectX: 50, objectY: 50, frameId: "circle" },
+  });
+  const title = txt(
+    theme,
+    { name: "عنوان الختم", x: 0, y: 1, w: W - 28, h: 10, content: "عنوان مع ختم" },
+    { fontFamily: "Amiri", fontSize: 14, fontWeight: 700, color: theme.primary, textAlign: "right", textFit: "shrink" },
+  );
+  const subtitle = txt(
+    theme,
+    { name: "سطر تحت الختم", x: 0, y: 11.5, w: W - 28, h: 6, content: "تقرير سنوي — الفصل الأول" },
+    { fontFamily: "Cairo", fontSize: 8.5, fontWeight: 600, color: theme.muted, textAlign: "right", textFit: "shrink" },
+  );
+  return makeGroup([seal, title, subtitle], "عنوان مع ختم دائري");
+}
+
+function buildSideImage(theme: Theme): CanvasEl {
+  const W = 160;
+  const H = 22;
+  const bg = boxEl(
+    theme,
+    { name: "خلفية عنوان بصورة", x: 0, y: 0, w: W, h: H },
+    { fill: theme.surface, borderColor: theme.line, borderWidth: 0.3, radius: 4, padding: 0 },
+  );
+  const img = imgEl(theme, {
+    name: "صورة جانبية",
+    x: W - 22,
+    y: 2,
+    w: 18,
+    h: 18,
+    style: { objectFit: "cover", objectX: 50, objectY: 50, frameId: "rounded" },
+  });
+  const accent = shapeEl(theme, {
+    name: "شريط لوني",
+    x: W - 26.5,
+    y: 4,
+    w: 2.5,
+    h: H - 8,
+    style: { fill: theme.accent, radius: 1.2 },
+  });
+  const title = txt(
+    theme,
+    { name: "عنوان بصورة", x: 3, y: 2, w: W - 34, h: 11, content: "عنوان بصورة جانبية" },
+    { fontFamily: "Tajawal", fontSize: 13.5, fontWeight: 800, color: theme.ink, textAlign: "right", textFit: "shrink" },
+  );
+  const line = lineEl(
+    theme,
+    { name: "سطر وصفي", x: 3, y: 14.5, w: W - 34, h: 0.8 },
+    { color: theme.line, stroke: 0.4 },
+  );
+  return makeGroup([bg, img, accent, title, line], "عنوان بصورة جانبية");
+}
+
 export function buildGraphicHeading(
   id: GraphicHeadingId,
   themeId: ThemeId,
 ): CanvasEl | null {
   const theme = THEMES[themeId] ?? THEMES.official;
   switch (id) {
+    case "coverBand": return buildCoverBand(theme);
+    case "sealTitle": return buildSealTitle(theme);
+    case "sideImage": return buildSideImage(theme);
     case "main": return buildMain(theme);
     case "section": return buildSection(theme);
     case "sub": return buildSub(theme);

@@ -1,6 +1,6 @@
 import { createPortal } from "react-dom";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { Download, FilePlus2, FolderOpen, LayoutTemplate, Save, SaveAll } from "lucide-react";
+import { Download, FilePlus2, FolderOpen, LayoutTemplate, LogOut, Save, SaveAll } from "lucide-react";
 import { useEditor } from "@/lib/editor/store";
 import { canUseDemoExport } from "@/lib/product/product";
 import { authEnabled } from "@/lib/auth/client";
@@ -20,6 +20,7 @@ import { useAccountTier } from "@/components/site/AccountBadge";
 import { adminTemplatesAccessFn } from "@/lib/admin/functions";
 import { requestLeave } from "@/lib/editor/leave-controller";
 import { templatesFilterPathFor } from "@/lib/site-routes";
+import { WORKSPACE_HOME_PATH } from "@/lib/auth/use-workspace-entry";
 import { SaveAsTemplateDialog } from "@/components/editor/SaveAsTemplateDialog";
 
 const SignInRequiredModalLazy = lazy(() =>
@@ -268,6 +269,18 @@ export function ProjectFileMenu({ onOpenFile }: { onOpenFile: () => void }) {
                 }}
               />
             )}
+            <div className="my-1 border-t border-[var(--editor-border)]" />
+            <Item
+              icon={<LogOut className="size-4" />}
+              label="خروج من المحرر"
+              hint="يُسأل عن الحفظ عند وجود تغييرات فقط"
+              onClick={() => {
+                setOpen(false);
+                void requestLeave().then((ok) => {
+                  if (ok) window.location.assign(WORKSPACE_HOME_PATH);
+                });
+              }}
+            />
             <p className="px-2.5 pb-1 pt-1.5 text-[10px] leading-4 text-muted">
               ملف واحد يحفظ الصفحات والصور والخطوط والطبقات، ويُفتح قابلًا
               للتعديل على أي جهاز.
