@@ -10,6 +10,7 @@
 import { uid } from "../../utils";
 import type { CanvasEl, ElStyle, Page, Project } from "../model";
 import { stampAssetPx } from "../import/origin";
+import { normalizeBlurMm } from "../blur";
 import { resolvePsdFont } from "./fonts";
 import type {
   AssetFinding,
@@ -105,6 +106,12 @@ function applyCommonStyle(el: CanvasEl, node: PsdNode): void {
     el.style.blendMode = node.cssBlend as ElStyle["blendMode"];
   }
   if (node.effects.shadow) el.style.shadow = node.effects.shadow;
+  /*
+   * تمويه الطبقة: a smart object's blur survives as the editor's own effect
+   * (one clamped millimetre value) on every layer kind — text, shape, vector,
+   * pixels and group alike — instead of being baked into the bitmap.
+   */
+  if (node.effects.blurMm) el.style.blur = normalizeBlurMm(node.effects.blurMm);
   if (node.effects.gradient && (!node.effects.gradientOverlay || el.type === "image" || el.type === "shape")) {
     el.style.gradient = node.effects.gradient;
     if (node.effects.gradientOverlay && el.type === "image" && node.effects.gradientBlendMode) {

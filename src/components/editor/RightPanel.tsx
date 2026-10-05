@@ -39,7 +39,10 @@ import {
   findElement,
   parseTable,
   type CanvasEl,
+  type EditorBlendMode,
+  type ElStyle,
 } from "@/lib/editor/model";
+import { MAX_BLUR_MM, normalizeBlurMm } from "@/lib/editor/blur";
 import {
   LETTER_SPACINGS,
   LINE_HEIGHTS,
@@ -2260,6 +2263,53 @@ export function PropertiesPanel({
                     </div>
                   );
                 })()}
+              {/*
+               * تمويه الطبقة + وضع المزج — the two per-layer effects the
+               * canvas paints on the element itself. Blur is one clamped
+               * millimetre value (`blur.ts`); the blend list is exactly the
+               * modes `ElStyle.blendMode` can render, so an imported PSD blend
+               * mode without a CSS equivalent never appears as a near-miss —
+               * it stays in the import report instead.
+               */}
+              <Field label="تمويه الطبقة (مم)">
+                <ScrubInput
+                  label="تمويه الطبقة بالمليمترات — صفر يعني طبقة حادة"
+                  value={normalizeBlurMm(el.style.blur)}
+                  min={0}
+                  max={MAX_BLUR_MM}
+                  step={0.25}
+                  precision={2}
+                  suffix="مم"
+                  onChange={(v) =>
+                    updateStyle(
+                      el.id,
+                      { blur: v > 0 ? normalizeBlurMm(v) : undefined },
+                      true,
+                    )
+                  }
+                  onCommit={(v) =>
+                    updateStyle(el.id, {
+                      blur: v > 0 ? normalizeBlurMm(v) : undefined,
+                    })
+                  }
+                />
+              </Field>
+              <Field label="وضع المزج">
+                <select
+                  value={el.style.blendMode || "normal"}
+                  onChange={(e) =>
+                    updateStyle(el.id, {
+                      blendMode: e.target.value as ElStyle["blendMode"],
+                    })
+                  }
+                >
+                  {BLEND_MODES.map((mode) => (
+                    <option key={mode.id} value={mode.id}>
+                      {mode.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </AccordionSection>
 
             {/*
@@ -2749,6 +2799,29 @@ function setTableCell(
   data[row][col] = value;
   updateElement(el.id, { content: JSON.stringify(data) }, true);
 }
+
+/**
+ * وضع المزج — the renderable blend modes, one label each. `ElStyle.blendMode`
+ * is the source of truth; this list only names it for the picker.
+ */
+const BLEND_MODES: { id: EditorBlendMode; label: string }[] = [
+  { id: "normal", label: "عادي" },
+  { id: "multiply", label: "تراكب (Multiply)" },
+  { id: "screen", label: "شاشة (Screen)" },
+  { id: "overlay", label: "طبقة فوق (Overlay)" },
+  { id: "darken", label: "تغميق (Darken)" },
+  { id: "lighten", label: "تفتيح (Lighten)" },
+  { id: "color-dodge", label: "تفتيح لوني (Color Dodge)" },
+  { id: "color-burn", label: "حرق لوني (Color Burn)" },
+  { id: "hard-light", label: "ضوء قوي (Hard Light)" },
+  { id: "soft-light", label: "ضوء ناعم (Soft Light)" },
+  { id: "difference", label: "فرق (Difference)" },
+  { id: "exclusion", label: "استبعاد (Exclusion)" },
+  { id: "hue", label: "تدرج لوني (Hue)" },
+  { id: "saturation", label: "تشبع (Saturation)" },
+  { id: "color", label: "لون (Color)" },
+  { id: "luminosity", label: "إضاءة (Luminosity)" },
+];
 
 function shadowId(value: string | undefined) {
   if (!value) return "none";

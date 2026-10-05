@@ -34,6 +34,12 @@ export interface PsdTextRun {
 export interface PsdEffectNotes {
   /** box-shadow string in the editor's mm vocabulary, when mapped. */
   shadow?: string;
+  /**
+   * تمويه الطبقة — a smart object's blur filter, in millimetres, when mapped.
+   * One value for the whole layer (`ElStyle.blur`), so several stacked blur
+   * filters arrive as their strongest radius plus an explicit note.
+   */
+  blurMm?: number;
   strokeColor?: string;
   strokeWidthMm?: number;
   /** Gradient fill/overlay retained as a native multi-stop NASAQ paint. */

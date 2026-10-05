@@ -11,6 +11,7 @@ import {
 } from "@/lib/nsq/intake";
 import { requestLeave } from "@/lib/editor/leave-controller";
 import { NsqAccountGate } from "@/components/nsq/NsqAccountGate";
+import { importableByName, openDesignFile } from "@/lib/editor/import/open";
 
 /** Session flag: the visitor chose «لاحقًا» for this particular file. */
 const DEFER_KEY = "nasaq-nsq-gate-deferred";
@@ -26,7 +27,9 @@ export function NsqIntake() {
   >(null);
   const [restoreFailed, setRestoreFailed] = useState(false);
   const [gateOpen, setGateOpen] = useState(false);
-  const [dragging, setDragging] = useState(false);
+  const [draggingKind, setDraggingKind] = useState<
+    null | "project" | "document"
+  >(null);
   const signedInRef = useRef(signedIn);
   signedInRef.current = signedIn;
 
@@ -91,26 +94,50 @@ export function NsqIntake() {
       // browser navigate away to the file. Canvas image drops keep their own
       // handler — it runs first and marks the event handled.
       e.preventDefault();
-      if (likelyNsqDrag(e.dataTransfer)) {
+      const nsq = likelyNsqDrag(e.dataTransfer);
+      const items = Array.from(e.dataTransfer.items || []).filter(
+        (item) => item.kind === "file",
+      );
+      // An image drag (SVG included) is a canvas placement handled by the
+      // canvas itself; it must not raise the document-open overlay.
+      const imagesOnly =
+        items.length > 0 && items.every((item) => item.type.startsWith("image/"));
+      if (nsq || !imagesOnly) {
         e.dataTransfer.dropEffect = "copy";
-        setDragging(true);
+        setDraggingKind(nsq ? "project" : "document");
         clearTimeout(leaveTimer);
-        leaveTimer = setTimeout(() => setDragging(false), 250);
+        leaveTimer = setTimeout(() => setDraggingKind(null), 250);
       }
     };
     const onDropCapture = (e: DragEvent) => {
-      const file = Array.from(e.dataTransfer?.files || []).find((f) =>
-        isNsqFileName(f.name),
+      const files = Array.from(e.dataTransfer?.files || []);
+      const nsq = files.find((f) => isNsqFileName(f.name));
+      if (nsq) {
+        setDraggingKind(null);
+        // Capture phase on window: runs before the canvas/library handlers, so
+        // an `.nsq` is opened as a project, never mistaken for an image.
+        e.preventDefault();
+        e.stopPropagation();
+        void requestLeave().then((ok) => {
+          if (ok) void receiveProjectFile(nsq, signedInRef.current);
+        });
+        return;
+      }
+      /*
+       * Any other supported design file dropped OUTSIDE the canvas (panels,
+       * rails, toolbar) opens through the same canonical importer the picker
+       * uses — one importer, one editable result. Images (SVG included) stay
+       * with the canvas: dropping a picture on a page places it as an element,
+       * which is a different intent from opening a document.
+       */
+      const document = files.find(
+        (f) => importableByName(f.name) && !f.type.startsWith("image/"),
       );
-      setDragging(false);
-      if (!file) return;
-      // Capture phase on window: runs before the canvas/library handlers, so
-      // an `.nsq` is opened as a project, never mistaken for an image.
+      setDraggingKind(null);
+      if (!document) return;
       e.preventDefault();
       e.stopPropagation();
-      void requestLeave().then((ok) => {
-        if (ok) void receiveProjectFile(file, signedInRef.current);
-      });
+      void openDesignFile(document);
     };
     const onDrop = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes("Files")) e.preventDefault();
@@ -152,14 +179,16 @@ export function NsqIntake() {
 
   return (
     <>
-      {dragging && (
+      {draggingKind && (
         <div
           className="pointer-events-none fixed inset-0 z-[calc(var(--z-dialog)+1)] grid place-items-center bg-navy/35 p-6 backdrop-blur-[1px]"
           aria-hidden
         >
           <div className="flex items-center gap-3 rounded-[14px] border-2 border-dashed border-gold bg-surface/95 px-6 py-4 text-[14px] font-extrabold text-brand shadow-2xl">
             <FileDown className="size-5" />
-            أفلت ملف نَسَق (.nsq) لفتحه كمشروع قابل للتعديل
+            {draggingKind === "project"
+              ? "أفلت ملف نَسَق (.nsq) لفتحه كمشروع قابل للتعديل"
+              : "أفلت الملف ليُفتح كمستند نَسَق قابل للتحرير"}
           </div>
         </div>
       )}

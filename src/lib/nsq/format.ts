@@ -19,6 +19,7 @@
  * the schema, the path guards and the migrations directly.
  */
 
+import { normalizeBlurMm } from "../editor/blur.ts";
 import { normalizeGradient } from "../editor/gradient.ts";
 import { normalizeCrop } from "../editor/image-crop.ts";
 import type { CanvasEl, ElType, Page, Project } from "../editor/model.ts";
@@ -515,6 +516,9 @@ export function validatePages(
     if (out.gradient !== undefined)
       out.gradient = normalizeGradient(out.gradient);
     if (out.crop !== undefined) out.crop = normalizeCrop(out.crop);
+    // تمويه الطبقة is one clamped millimetre value; a document that carries a
+    // wild number is cleaned on intake rather than handed to the renderer.
+    if (out.blur !== undefined) out.blur = normalizeBlurMm(out.blur) || undefined;
     return out;
   };
 

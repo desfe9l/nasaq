@@ -320,8 +320,66 @@ function effectsOf(layer: Layer, dpi: number): PsdEffectNotes {
     if (fx.solidFill?.some((f) => f.enabled !== false)) notes.unsupported.push("تعبئة لون فوق الطبقة");
   }
   notes.shadow = shadows.length ? shadows.join(", ") : undefined;
+  smartFilterBlur(layer, dpi, notes);
 
   return notes;
+}
+
+/**
+ * العوامل الذكية (Smart Filters) على كائن ذكي.
+ *
+ * A smart object's filters live on `placedLayer.filter.list`. The blur family
+ * (Gaussian / Box / Surface / plain Blur) becomes ONE native «تمويه الطبقة»
+ * value in millimetres — the same layer-blur effect the editor paints and
+ * every raster export captures — so a smart-object blur survives as an
+ * editable effect instead of being flattened into the bitmap. Filters with no
+ * NASAQ equivalent (motion/radial/shape/smart blur, displace, stylize, …) are
+ * named in the report; they are never silently dropped.
+ */
+export function smartFilterBlur(layer: Layer, dpi: number, notes: PsdEffectNotes): void {
+  const list = layer.placedLayer?.filter;
+  if (!list?.enabled || !list.list?.length) return;
+  const pxToMm = (px: number) => (px * 25.4) / dpi;
+  const radii: number[] = [];
+  let approximate = false;
+  let skipped = 0;
+  for (const item of list.list) {
+    if (item.enabled === false) continue;
+    switch (item.type) {
+      case "gaussian blur":
+      case "box blur": {
+        const radius = unitPx(item.filter?.radius, dpi);
+        if (radius > 0) radii.push(pxToMm(radius));
+        if (typeof item.opacity === "number" && item.opacity < 1) approximate = true;
+        break;
+      }
+      case "surface blur": {
+        const radius = unitPx(item.filter?.radius, dpi);
+        if (radius > 0) radii.push(pxToMm(radius));
+        approximate = true; // the threshold keeps edges crisp in Photoshop
+        break;
+      }
+      case "blur":
+      case "blur more":
+        // The file stores no radius for the canned filters; the note says so.
+        approximate = true;
+        skipped += 1;
+        break;
+      default:
+        notes.unsupported.push(`عامل ذكي «${item.type}»`);
+    }
+  }
+  if (radii.length) {
+    const strongest = Math.max(...radii);
+    notes.blurMm = Math.min(25, Math.round(strongest * 100) / 100);
+    notes.mapped.push("تمويه طبقة من عامل ذكي");
+    if (radii.length > 1) {
+      notes.unsupported.push(`دُمجت ${radii.length} عوامل تمويه في قيمة واحدة`);
+    }
+    if (approximate) notes.unsupported.push("تفاصيل العامل الذكي ممثلة تقريبياً");
+  } else if (skipped) {
+    notes.unsupported.push("تمويه ذكي بلا قيمة نصف قطر مخزّنة في الملف");
+  }
 }
 
 function textOf(layer: Layer): PsdTextRun | null {

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { initializeCanvas, readPsd, writePsd } from "ag-psd";
+import { initializeCanvas, readPsd, writePsd, type Layer } from "ag-psd";
 
 import { applyAssetDecisions, importPsdBytes } from "./pipeline.ts";
 import { importTemplateBytes } from "../import/run.ts";
-import { placedFlip } from "./parse.ts";
+import { placedFlip, smartFilterBlur } from "./parse.ts";
+import { convertPsdDocument } from "./convert.ts";
+import type { PsdEffectNotes } from "./types.ts";
 import { assertPsdBytes, sanitizeLayerName } from "./security.ts";
 import { resolvePsdFont } from "./fonts.ts";
 import type { CanvasEl } from "../model.ts";
@@ -646,5 +648,91 @@ describe("PSD → NASAQ", () => {
     assert.ok(Math.abs((restoredBackdrop?.w || 0) - (originalBackdrop?.w || 0)) < 0.15);
     const settled = await repairProject(rescaled.project, { pageSizes: result.report.pageSizesMm });
     assert.equal(settled.fixes.length, 0);
+  });
+
+  it("maps a smart object's blur filter to the editable layer-blur effect", async () => {
+    const notes: PsdEffectNotes = { mapped: [], unsupported: [] };
+    smartFilterBlur(
+      {
+        placedLayer: {
+          filter: {
+            enabled: true,
+            list: [
+              {
+                type: "gaussian blur",
+                enabled: true,
+                opacity: 1,
+                filter: { radius: { units: "Pixels", value: 48 } },
+              },
+              {
+                type: "motion blur",
+                enabled: true,
+                opacity: 1,
+                filter: { angle: 20, distance: { units: "Pixels", value: 10 } },
+              },
+              { type: "blur more", enabled: true, opacity: 1 },
+            ],
+          },
+        },
+      } as unknown as Layer,
+      96,
+      notes,
+    );
+    // 48 px at 96 dpi → 12.7 mm, carried as ONE native blur value.
+    assert.ok(notes.blurMm && Math.abs(notes.blurMm - 12.7) < 0.05);
+    assert.ok(notes.mapped.includes("تمويه طبقة من عامل ذكي"));
+    // Filters with no NASAQ equivalent are named in the report, never dropped.
+    assert.ok(notes.unsupported.some((reason) => reason.includes("motion blur")));
+
+    const converted = convertPsdDocument({
+      fileName: "smart.psd",
+      widthPx: 960,
+      heightPx: 720,
+      dpi: 96,
+      pages: [
+        {
+          name: "صفحة",
+          widthPx: 960,
+          heightPx: 720,
+          nodes: [
+            {
+              id: "L1",
+              name: "Blurred title",
+              kind: "text",
+              hidden: false,
+              opacity: 1,
+              blendMode: "normal",
+              clipping: false,
+              left: 40,
+              top: 40,
+              width: 400,
+              height: 80,
+              boundsEstimated: false,
+              rotation: 0,
+              text: {
+                content: "عنوان",
+                fontName: "Tajawal-Bold",
+                fontSize: 32,
+                fauxBold: false,
+                fauxItalic: false,
+                underline: false,
+                color: "#172033",
+                align: "right",
+                lineHeight: 1.4,
+                letterSpacingMm: 0,
+                direction: "rtl" as const,
+              },
+              effects: { blurMm: notes.blurMm, mapped: [], unsupported: [] },
+              issues: [],
+              children: [],
+            },
+          ],
+        },
+      ],
+    });
+    const el = converted.project.pages[0]!.elements[0]!;
+    assert.equal(el.type, "text");
+    assert.equal(el.style.blur, 12.7, "the blur reaches the element as an editable style");
+    assert.equal(el.content, "عنوان");
   });
 });

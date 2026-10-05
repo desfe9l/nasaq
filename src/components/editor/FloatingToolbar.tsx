@@ -58,6 +58,7 @@ import { bubbleLayout, placeFloatingToolbar } from "@/lib/editor/ui-state";
 import { cn } from "@/lib/utils";
 import { StrokeControls, StrokeField } from "./StrokeControls";
 import { ScrubInput } from "./ui/ScrubInput";
+import { MAX_BLUR_MM, normalizeBlurMm } from "@/lib/editor/blur";
 import { FillField } from "./ui/FillField";
 import { beginImageCrop, beginImageReposition } from "@/lib/editor/crop-session";
 import { MaskIcon, MaskOffIcon, RepositionImageIcon } from "./ui/NsqIcons";
@@ -1503,7 +1504,7 @@ export function FloatingToolbar({
             onSelect={deleteSelected}
           />
         </MenuGrid>
-        <MenuGroup title="الشفافية" />
+        <MenuGroup title="الشفافية والمؤثرات" />
         <div className="editor-menu-field">
           <ScrubInput
             label="الشفافية"
@@ -1516,6 +1517,32 @@ export function FloatingToolbar({
             onChange={(v) => updateElement(el.id, { opacity: v / 100 }, true)}
             onCommit={(v) => {
               updateElement(el.id, { opacity: v / 100 });
+              commit();
+            }}
+          />
+        </div>
+        {/* تمويه الطبقة — the same clamped millimetre effect the properties
+            panel edits (blur.ts), one tap away while the object is selected. */}
+        <div className="editor-menu-field">
+          <ScrubInput
+            label="تمويه الطبقة"
+            value={normalizeBlurMm(el.style.blur)}
+            min={0}
+            max={MAX_BLUR_MM}
+            step={0.25}
+            precision={2}
+            suffix="مم"
+            onChange={(v) =>
+              updateElement(
+                el.id,
+                { style: { blur: v > 0 ? normalizeBlurMm(v) : undefined } },
+                true,
+              )
+            }
+            onCommit={(v) => {
+              updateElement(el.id, {
+                style: { blur: v > 0 ? normalizeBlurMm(v) : undefined },
+              });
               commit();
             }}
           />
