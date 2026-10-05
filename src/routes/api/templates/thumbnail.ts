@@ -87,11 +87,19 @@ export const Route = createFileRoute("/api/templates/thumbnail")({
                 },
               });
             } catch (error) {
+              /*
+               * This route is unauthenticated and crawled by third parties, so
+               * the failure detail belongs in the deploy log only. A rasteriser
+               * (WASM) error message can carry an absolute path, a library
+               * version or a partial input dump — echoing it back would hand an
+               * anonymous caller a way to fingerprint the runtime. Keep the 500
+               * (a crawler must not cache a broken preview as a success) and
+               * answer with nothing.
+               */
               console.error("[thumbnail] raster", error);
-              const message = error instanceof Error ? error.message : "raster";
-              return new Response(message.slice(0, 300), {
+              return new Response(null, {
                 status: 500,
-                headers: { "cache-control": "no-store", "content-type": "text/plain;charset=utf-8" },
+                headers: { "cache-control": "no-store" },
               });
             }
           }

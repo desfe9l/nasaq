@@ -23,7 +23,8 @@ import {
   isSafeKeySegment,
   sanitizeFileName,
   STORAGE_ASSET_KINDS,
-  STORAGE_MAX_OBJECT_BYTES,
+  storageMaxBase64Length,
+  storageMaxBytesForKind,
   type StorageAssetKind,
   type StoredAsset,
 } from "./provider";
@@ -100,9 +101,9 @@ export const uploadEditorAsset = createServerFn({ method: "POST" })
 
       const base64 = typeof data?.base64 === "string" ? data.base64.trim() : "";
       if (!base64) throw new Error("محتوى الملف مفقود");
-      // Base64 inflates by 4/3; reject obviously oversized payloads before
-      // allocating a buffer for them.
-      if (base64.length > Math.ceil((STORAGE_MAX_OBJECT_BYTES * 4) / 3) + 1024) {
+      // Base64 inflates by 4/3; reject an oversized payload for THIS kind
+      // before a buffer is allocated for it.
+      if (base64.length > storageMaxBase64Length(kind)) {
         throw new Error("حجم الملف يتجاوز الحد المسموح");
       }
 
@@ -141,7 +142,9 @@ export const uploadEditorAsset = createServerFn({ method: "POST" })
 
     const bytes = new Uint8Array(Buffer.from(data.base64, "base64"));
     if (!bytes.byteLength) return { ok: false, reason: "rejected" };
-    if (bytes.byteLength > STORAGE_MAX_OBJECT_BYTES) {
+    // The decoded size is the authoritative one: base64 whitespace or padding
+    // tricks cannot make a large object look small to this check.
+    if (bytes.byteLength > storageMaxBytesForKind(data.kind)) {
       return { ok: false, reason: "too_large" };
     }
 

@@ -83,17 +83,21 @@ function svgFrame(text: string): { w: number; h: number } {
   return fitMm(w, h);
 }
 
+/**
+ * Sanitise an imported SVG file.
+ *
+ * `sanitizeSvgContent` is the editor's single allow-list walk. It used to be
+ * browser-only, so this function carried a regex fallback for the server path —
+ * and that fallback only removed a `<script>` BLOCK and a WHITESPACE-preceded
+ * `on…` attribute, so `<svg/onload=…>`, `<foreignObject>` and `<style>` all
+ * survived an import that ran without a DOM. The allow-list now has a DOM-free
+ * tokenizer behind it (`./svg-scrub`), so there is exactly one rule set and no
+ * weaker path to fall through to.
+ */
 function safeSvg(raw: string): string {
-  if (typeof DOMParser !== "undefined") {
-    const clean = sanitizeSvgContent(raw);
-    if (clean) return clean;
-  }
-  const stripped = raw
-    .replace(/<script\b[\s\S]*?<\/script>/gi, "")
-    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-    .replace(/javascript:/gi, "");
-  if (!/<svg[\s>]/i.test(stripped)) throw new Error("ملف SVG غير صالح.");
-  return stripped;
+  const clean = sanitizeSvgContent(raw);
+  if (!clean || !/<svg[\s>]/i.test(clean)) throw new Error("ملف SVG غير صالح.");
+  return clean;
 }
 
 export async function importImageBytes(

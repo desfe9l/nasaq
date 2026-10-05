@@ -6,6 +6,8 @@
  * with the plain Node test runner — the same convention the other editor
  * modules follow.
  */
+// Relative (no path alias) and dependency-free, per this module's rule above.
+import { scrubSvgMarkup } from "./svg-scrub";
 
 /**
  * Screens at or below this width swap the docked sidebars for floating
@@ -268,16 +270,23 @@ export function clampPagesHeight(height: number): number {
 }
 
 /**
- * Pull the `<svg>…</svg>` root out of an uploaded file.
+ * Pull the `<svg>…</svg>` root out of an uploaded file — SANITISED.
  *
  * Exported icons routinely arrive wrapped in an XML prolog, a doctype or author
  * comments; the page only needs the root element, and rejecting a file for
  * carrying a prolog would be user-hostile.
+ *
+ * The markup this returns is what the library stores, syncs to the account's
+ * other devices and paints with `dangerouslySetInnerHTML`, so it goes through
+ * the same allow-list the canvas renderer uses (`./svg-scrub`, DOM-free so it
+ * also runs on the server and in these Node tests). An icon downloaded from a
+ * third-party pack — or a library catalog written by a tampered client — can
+ * carry `<script>`, `<foreignObject>`, `<style>` or an `on…` handler; none of
+ * it survives. `keepRootBox` preserves the authored width/height because the
+ * importer measures the asset's intrinsic size from this very markup.
  */
 export function extractSvgMarkup(raw: string): string | null {
-  const match = String(raw || "").match(/<svg[\s\S]*?<\/svg\s*>/i);
-  if (!match) return null;
-  const markup = match[0].trim();
+  const markup = scrubSvgMarkup(raw, { keepRootBox: true }).trim();
   return markup.length > 24 ? markup : null;
 }
 

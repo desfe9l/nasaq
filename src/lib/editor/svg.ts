@@ -3,6 +3,20 @@ import {
   normalizeGradient,
   type Gradient,
 } from "./gradient";
+import {
+  safeSvgHref,
+  safeSvgUrlRef,
+  scrubSvgMarkup,
+  SVG_ALLOWED_ATTRS,
+  SVG_ALLOWED_TAGS,
+} from "./svg-scrub";
+
+/*
+ * Re-exported so components keep one import site for every SVG guard. The
+ * implementation lives in the dependency-free `./svg-scrub` so the store can
+ * use it too (see the note there).
+ */
+export { safeLibrarySvg } from "./svg-scrub";
 /**
  * SVG element support — sanitising author-pasted markup and rasterising it
  * for the Office exporters.
@@ -17,131 +31,33 @@ import {
  * handlers, external references) are removed rather than escaped.
  */
 
-/** Elements that may survive sanitising (drawn + structural only). */
-const ALLOWED_TAGS = new Set([
-  "svg",
-  "g",
-  "defs",
-  "symbol",
-  "use",
-  "title",
-  "desc",
-  "path",
-  "rect",
-  "circle",
-  "ellipse",
-  "line",
-  "polyline",
-  "polygon",
-  "text",
-  "tspan",
-  "marker",
-  "clippath",
-  "mask",
-  "pattern",
-  "lineargradient",
-  "radialgradient",
-  "stop",
-  "filter",
-  "feflood",
-  "feblend",
-  "fecolormatrix",
-  "fecomposite",
-  "fegaussianblur",
-  "feoffset",
-]);
-
-/** Attributes that may survive: presentation + geometry + a few linking ids. */
-const ALLOWED_ATTRS = new Set([
-  "id",
-  "class",
-  "d",
-  "x",
-  "y",
-  "x1",
-  "x2",
-  "y1",
-  "y2",
-  "cx",
-  "cy",
-  "r",
-  "rx",
-  "ry",
-  "width",
-  "height",
-  "viewbox",
-  "points",
-  "fill",
-  "fill-opacity",
-  "fill-rule",
-  "stroke",
-  "stroke-opacity",
-  "stroke-width",
-  "stroke-linecap",
-  "stroke-linejoin",
-  "stroke-dasharray",
-  "stroke-dashoffset",
-  "opacity",
-  "transform",
-  "dx",
-  "dy",
-  "offset",
-  "stop-color",
-  "stop-opacity",
-  "gradientunits",
-  "spreadmethod",
-  "text-anchor",
-  "font-family",
-  "font-size",
-  "font-weight",
-  "preserveaspectratio",
-  "clip-path",
-  "clip-rule",
-  "mask",
-  "filter",
-  "in",
-  "in2",
-  "result",
-  "stddeviation",
-  "values",
-  "type",
-  "tablevalues",
-  "slope",
-  "intercept",
-  "amplitude",
-  "exponent",
-  "href",
-  "xmlns",
-  "xmlns:xlink",
-  "role",
-  "aria-hidden",
-]);
+/**
+ * The allow-lists live in `./svg-scrub` — one definition shared with the
+ * DOM-free scrubber used by the server and by Node tests, so a browser
+ * sanitise and a server-side scrub can never disagree about what is safe.
+ */
+const ALLOWED_TAGS = SVG_ALLOWED_TAGS;
+const ALLOWED_ATTRS = SVG_ALLOWED_ATTRS;
 
 /** `href` may only reference an in-document fragment (`#id`) — never a URL. */
-function safeHref(value: string): string {
-  const v = value.trim();
-  return v.startsWith("#") ? v : "";
-}
+const safeHref = safeSvgHref;
 
 /** URI-bearing values (fill/stroke/clip-path/filter/mask) must stay internal. */
-function safeUrlRef(value: string): string {
-  const v = value.trim();
-  return v.startsWith("url('#") ||
-    v.startsWith('url("#') ||
-    /^url\('#[^)]+'\)$/.test(v) ||
-    /^url\("#[^)]+"\)$/.test(v) ||
-    /^url\(#\S+\)$/.test(v)
-    ? v
-    : "";
-}
+const safeUrlRef = safeSvgUrlRef;
 
 /**
  * Sanitise pasted SVG source. Returns clean markup, or "" when the input holds
  * no root `<svg>` at all. Never throws.
+ *
+ * Uses the browser's own parser when there is one. Outside a DOM (the server
+ * normalising a synced library catalog, Node-run tests) it falls back to the
+ * equivalent allow-list tokenizer in `./svg-scrub` instead of returning "" —
+ * silently emptying a valid drawing on the server would corrupt library sync.
  */
 export function sanitizeSvgContent(raw: unknown): string {
   const value = String(raw ?? "");
   if (!value.includes("<svg")) return "";
+  if (typeof DOMParser === "undefined") return scrubSvgMarkup(value);
   try {
     const doc = new DOMParser().parseFromString(value, "image/svg+xml");
     const root = doc.documentElement;
@@ -177,7 +93,7 @@ export function sanitizeSvgContent(raw: unknown): string {
     root.removeAttribute("height");
     return new XMLSerializer().serializeToString(root);
   } catch {
-    return "";
+    return scrubSvgMarkup(value);
   }
 }
 

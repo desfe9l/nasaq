@@ -138,6 +138,8 @@ import {
   isOverlayViewport,
 } from "./ui-state";
 import { nudgeStack, restack, type LayerDropSide } from "./layers";
+// Dependency-free (no DOMParser) so it is safe in this module's Node tests.
+import { safeLibrarySvg } from "./svg-scrub";
 import {
   disarmUnloadBypass,
   hasLeaveGuard,
@@ -1916,14 +1918,24 @@ export const useEditor = create<EditorStore>((set, get) => {
       // Author-added vector icons/dividers live beside the asset shelf: same
       // durability, but stored as SVG markup so they stay vector on the page.
       const custom = await getSetting<CustomLibraryItem[]>("customLibrary");
+      /*
+       * Rows written before SVG sanitising existed are still on disk (and in
+       * the account catalog), so hydration scrubs them through the same
+       * allow-list the importer and the renderer use. A stored icon is painted
+       * inline in three different panels — none of them may be the first line
+       * of defence.
+       */
       set({
         customIcons: Array.isArray(custom)
-          ? custom.filter(
-              (item) =>
-                item &&
-                typeof item.svg === "string" &&
-                item.svg.includes("<svg"),
-            )
+          ? custom
+              .filter(
+                (item) =>
+                  item &&
+                  typeof item.svg === "string" &&
+                  item.svg.includes("<svg"),
+              )
+              .map((item) => ({ ...item, svg: safeLibrarySvg(item.svg) }))
+              .filter((item) => item.svg.includes("<svg"))
           : [],
       });
 
@@ -1989,13 +2001,19 @@ export const useEditor = create<EditorStore>((set, get) => {
             if (!reconciled || getStorageOwner() !== owner || get().sessionOwner !== syncSession) {
               return;
             }
+            // The cloud catalog is scrubbed server-side; this is the same
+            // allow-list applied again so a payload written by any other path
+            // can never reach the panels unsanitised.
+            const customItems = reconciled.customItems
+              .map((item) => ({ ...item, svg: safeLibrarySvg(item.svg) }))
+              .filter((item) => item.svg.includes("<svg"));
             set({
               assets: reconciled.assets,
               assetFolders: reconciled.folders,
-              customIcons: reconciled.customItems,
+              customIcons: customItems,
             });
             await setSetting("assetFolders", reconciled.folders);
-            await setSetting("customLibrary", reconciled.customItems);
+            await setSetting("customLibrary", customItems);
             await setSetting("libraryRemovedAssets", reconciled.removedAssets);
             await setSetting("libraryRemovedFolders", reconciled.removedFolders);
           })

@@ -6,7 +6,10 @@ import {
   isKeyOwnedBy,
   isSafeKeySegment,
   sanitizeFileName,
+  STORAGE_MAX_OBJECT_BYTES,
   storageIdentitySegment,
+  storageMaxBase64Length,
+  storageMaxBytesForKind,
   UnsafeKeySegmentError,
   userKeyPrefix,
 } from "./provider.ts";
@@ -149,4 +152,43 @@ test("data URLs split into content type and payload", () => {
     base64: "AAAB",
   });
   assert.equal(parseDataUrl("https://example.com/a.png"), null);
+});
+
+/*
+ * Upload size ceilings.
+ *
+ * `STORAGE_MAX_OBJECT_BYTES` used to be `Number.POSITIVE_INFINITY`, so the
+ * handler would `Buffer.from()` a base64 payload of ANY size a signed-in caller
+ * sent: unbounded memory in the function, unbounded bytes in the bucket, and a
+ * one-request storage-cost amplification. The limits below are the contract.
+ */
+test("every asset kind has a finite ceiling", () => {
+  for (const kind of ["image", "svg", "project-file"] as const) {
+    const limit = storageMaxBytesForKind(kind);
+    assert.ok(Number.isFinite(limit), `${kind} must be bounded`);
+    assert.ok(limit > 0, `${kind} must accept real files`);
+    assert.ok(limit <= STORAGE_MAX_OBJECT_BYTES);
+  }
+  assert.equal(Number.isFinite(STORAGE_MAX_OBJECT_BYTES), true);
+});
+
+test("ceilings stay far above what the editor legitimately produces", () => {
+  // A report image is a few megabytes; an SVG icon is kilobytes; a .nsq or an
+  // exported PDF/ZIP project file is the largest legitimate payload.
+  assert.ok(storageMaxBytesForKind("image") >= 10 * 1024 * 1024);
+  assert.ok(storageMaxBytesForKind("svg") >= 1024 * 1024);
+  assert.ok(storageMaxBytesForKind("project-file") >= 32 * 1024 * 1024);
+  // An SVG is markup: it must not be a smuggling route for a huge object.
+  assert.ok(storageMaxBytesForKind("svg") < storageMaxBytesForKind("project-file"));
+});
+
+test("the base64 pre-check bounds the payload BEFORE a buffer is allocated", () => {
+  for (const kind of ["image", "svg", "project-file"] as const) {
+    const limit = storageMaxBytesForKind(kind);
+    const maxBase64 = storageMaxBase64Length(kind);
+    assert.ok(Number.isFinite(maxBase64));
+    // Base64 inflates by 4/3, so the string bound must sit just above it.
+    assert.ok(maxBase64 >= (limit * 4) / 3);
+    assert.ok(maxBase64 <= Math.ceil((limit * 4) / 3) + 1024);
+  }
 });

@@ -38,6 +38,7 @@ import {
   updateKeygenLicenseExpiry,
 } from "./keygen";
 import { activateKeygenForSession, persistKeygenLicense, revalidateKeygenForSession } from "./activation.server";
+import { clientIpFromHeaders, rateLimitKey } from "@/lib/auth/request-ip";
 import { checkRateLimit } from "./rate-limit";
 import { licensingIntegrationReadiness } from "./integrations.server";
 import { getCatalogPlan } from "@/lib/commercial/catalog";
@@ -69,22 +70,35 @@ async function loadGetRequest() {
   getRequestRef ??= (await import("@tanstack/react-start/server")).getRequest;
   return getRequestRef;
 }
-function ipFromRequest(req: Request | null | undefined): string {
-  const h = req?.headers;
-  if (!h) return "unknown";
-  return (
-    h.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    h.get("x-real-ip") ||
-    "unknown"
-  );
-}
+/**
+ * The parsing rule lives in `@/lib/auth/request-ip` (dependency-free, so this
+ * dual client/server module never drags the request-context import into the
+ * browser graph). It reads the RIGHTMOST forwarded entry: the first one is
+ * caller-supplied and used to let an attacker mint a fresh bucket per request.
+ */
 async function getClientIp(): Promise<string> {
   try {
     const getRequest = await loadGetRequest();
-    return ipFromRequest(getRequest());
+    return clientIpFromHeaders(getRequest()?.headers);
   } catch {
     return "unknown";
   }
+}
+
+/**
+ * Throttle one licence action for this caller.
+ *
+ * Two buckets, either of which can refuse: the verified user id (unforgeable —
+ * it comes from the session, so a spoofed header cannot rotate it) and the IP
+ * (which still bounds a caller whose session is being reused from many
+ * addresses, and covers the signed-out shape of the public API routes).
+ */
+async function licenceRateLimited(action: string, userId: string, limit: number): Promise<boolean> {
+  const ip = await getClientIp();
+  return (
+    !checkRateLimit(`${action}:user`, rateLimitKey(userId, ip), limit, 60_000) ||
+    !checkRateLimit(`${action}:ip`, ip, limit * 4, 60_000)
+  );
 }
 
 /**
@@ -162,10 +176,8 @@ export const activateLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { key: string }) => data)
   .handler(async ({ data, context }): Promise<LicenseActivateResult> => {
-    const ip = await getClientIp();
-
-    // Rate limit: 5 attempts per minute per IP
-    if (!checkRateLimit("license:activate", ip, 5, 60_000)) {
+    // Rate limit: 5 attempts per minute for this account (and a wider IP bucket).
+    if (await licenceRateLimited("license:activate", context.userId, 5)) {
       return {
         success: false,
         message: "تم تجاوز الحد المسموح من المحاولات. يرجى المحاولة لاحقًا.",
@@ -243,9 +255,7 @@ export const validateLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { key: string }) => data)
   .handler(async ({ data, context }): Promise<LicenseValidateResult> => {
-    const ip = await getClientIp();
-
-    if (!checkRateLimit("license:validate", ip, 20, 60_000)) {
+    if (await licenceRateLimited("license:validate", context.userId, 20)) {
       return { valid: false };
     }
 
@@ -292,8 +302,7 @@ export const deactivateLicenseFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: { key: string }) => data)
   .handler(async ({ data, context }) => {
-    const ip = await getClientIp();
-    if (!checkRateLimit("license:deactivate", ip, 5, 60_000)) return { success: false };
+    if (await licenceRateLimited("license:deactivate", context.userId, 5)) return { success: false };
     const key = normalizeLicenseKey(data.key);
     const local = await findLicenseByKeyHash(hashLicenseKey(key));
     if (!local) return { success: false };

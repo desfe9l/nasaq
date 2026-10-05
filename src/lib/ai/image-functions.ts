@@ -7,15 +7,18 @@ import {
   type ImageAnalysisResult,
 } from "./image-contract";
 
+/**
+ * Shared IP rule (`@/lib/auth/request-ip`): the RIGHTMOST forwarded entry, not
+ * the caller-supplied first one — a rotating `x-forwarded-for` used to mint a
+ * fresh per-IP bucket on every request.
+ */
 async function clientIdentifier(): Promise<string> {
   try {
-    const { getRequest } = await import("@tanstack/react-start/server");
-    const request = getRequest();
-    return (
-      request?.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      request?.headers.get("x-real-ip") ||
-      "unknown"
-    );
+    const [{ getRequest }, { clientIpFromHeaders }] = await Promise.all([
+      import("@tanstack/react-start/server"),
+      import("@/lib/auth/request-ip"),
+    ]);
+    return clientIpFromHeaders(getRequest()?.headers);
   } catch {
     return "unknown";
   }

@@ -100,6 +100,8 @@ import { ImageAiTools } from "./ImageAiTools";
 import { ImageEnhanceTools } from "./ImageEnhanceTools";
 import { ScrubField, ScrubInput } from "./ui/ScrubInput";
 import { IMAGE_ADJUSTMENT_PRESETS } from "@/lib/editor/images";
+// Library SVG is painted inline: allow-list scrubbed at the render boundary.
+import { safeLibrarySvg } from "@/lib/editor/svg";
 
 const TEXT_TYPES = ["text", "box", "stat", "stamp", "table", "progress"];
 
@@ -1373,7 +1375,7 @@ export function PropertiesPanel({
                               })
                             }
                             className="library-asset-card p-1"
-                            dangerouslySetInnerHTML={{ __html: item.svg }}
+                            dangerouslySetInnerHTML={{ __html: safeLibrarySvg(item.svg) }}
                           />
                         ))}
                       </div>
