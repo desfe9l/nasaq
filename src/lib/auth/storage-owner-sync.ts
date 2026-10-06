@@ -22,6 +22,24 @@ import { DEV_USER } from "./use-current-user";
 /** Coalesces bursts of syncs (several components hydrate on one mount). */
 let inFlight: Promise<string> | null = null;
 const LAST_OWNER_KEY = "nasaq-last-owner";
+/** A session probe must never hold document open. Local cache proceeds either way. */
+const SESSION_BUDGET_MS = 900;
+
+function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("session-budget")), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
 
 function rememberOwner(id: string | null): void {
   try {
@@ -36,18 +54,31 @@ async function resolveOwnerId(): Promise<string | null> {
   if (!authEnabled) return DEV_USER.id;
   // Never probe a session during SSR — the client library is browser-only.
   if (typeof window === "undefined") return null;
+  const remembered = recallOwner();
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  // A local document must open without a session round-trip. Offline (and a
+  // hung session probe) keep the last owner so IndexedDB stays readable.
+  if (offline && remembered) return remembered;
   try {
-    const { data } = await authClient.getSession();
+    const { data } = await withDeadline(authClient.getSession(), SESSION_BUDGET_MS);
     const id = data?.user?.id ?? null;
     if (id) rememberOwner(id);
     return id;
   } catch {
-    // Offline: session probe failed. If we have a remembered owner and are
-    // offline, keep that owner so cached workspace/projects remain visible.
-    // Otherwise fail closed to anon.
-    if (typeof navigator !== "undefined" && navigator.onLine === false) {
-      const remembered = recallOwner();
-      if (remembered) return remembered;
+    if (remembered) {
+      // The probe failed or exceeded the budget. Open the remembered library
+      // now, and adopt a later session only if it is actually a different owner.
+      void authClient
+        .getSession()
+        .then(({ data }) => {
+          const id = data?.user?.id ?? null;
+          if (!id || id === remembered) return;
+          rememberOwner(id);
+          setStorageOwner(id);
+          window.dispatchEvent(new CustomEvent("nasaq:owner-changed"));
+        })
+        .catch(() => undefined);
+      return remembered;
     }
     return null;
   }

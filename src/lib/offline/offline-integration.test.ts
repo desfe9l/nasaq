@@ -260,15 +260,29 @@ test("offline queue prevents duplicate sync operations (dedupe)", async () => {
   setStorageOwner(ANON_OWNER);
 });
 
-test("editor header status follows the existing save and sync state", () => {
-  assert.equal(editorStatusLabel("saving", "online", true), "جاري الحفظ");
-  assert.equal(editorStatusLabel("dirty", "synced", true), "جاري الحفظ");
-  assert.equal(editorStatusLabel("saved", "syncing", true), "جاري المزامنة");
-  assert.equal(editorStatusLabel("saved", "online", false), "دون اتصال");
-  assert.equal(editorStatusLabel("saved", "offline", true), "دون اتصال");
-  assert.equal(editorStatusLabel("saved", "synced", true), "تمت المزامنة");
-  assert.equal(editorStatusLabel("saved", "online", true), "محفوظ");
-  assert.equal(editorStatusLabel("idle", "online", true), "محفوظ");
+test("editor header status follows the document, save and sync machines separately", () => {
+  assert.equal(editorStatusLabel("saving", "online", true), "جارٍ الحفظ");
+  assert.equal(editorStatusLabel("dirty", "synced", true), "تغييرات محلية");
+  assert.equal(editorStatusLabel("saved", "syncing", true), "تتم المزامنة");
+  assert.equal(editorStatusLabel("saved", "online", false), "متاح دون اتصال");
+  assert.equal(editorStatusLabel("saved", "offline", true), "متاح دون اتصال");
+  assert.equal(editorStatusLabel("saved", "synced", true), "متزامن");
+  assert.equal(editorStatusLabel("saved", "online", true), "محفوظ محليًا");
+  assert.equal(editorStatusLabel("idle", "online", true), "محفوظ محليًا");
+  assert.equal(editorStatusLabel("saved", "error", true), "تعذر التزامن");
+  assert.equal(editorStatusLabel("error", "online", true), "تعذر الحفظ");
+  assert.equal(editorStatusLabel("saved", "syncing", false, "ready"), "متاح دون اتصال");
+  assert.equal(editorStatusLabel("saving", "syncing", true, "loading"), "جارٍ فتح المستند");
+  assert.equal(editorStatusLabel("saved", "online", true, "ready"), "محفوظ محليًا");
+});
+
+test("an empty sync queue does not re-enter syncing", async () => {
+  const { settledOnlineStatus } = await import("./connectivity");
+  assert.equal(settledOnlineStatus("syncing"), "synced");
+  assert.equal(settledOnlineStatus("error"), "synced");
+  assert.equal(settledOnlineStatus("offline"), "online");
+  assert.equal(settledOnlineStatus("synced"), "synced");
+  assert.equal(settledOnlineStatus("online"), "online");
 });
 
 test("prepareProjectForOffline keeps pages locally and records the project", async () => {

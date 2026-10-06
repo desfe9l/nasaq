@@ -258,10 +258,10 @@ import { PageSettingsHost } from "./PageSettingsDialog";
 import { NewPageHost } from "./NewPageDialog";
 import { cn } from "@/lib/utils";
 import { EditorWorkspaceSkeleton } from "@/components/ui/Skeleton";
+import { useRevealWhile } from "@/components/ui/OfflineStatus";
 import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
 import { EditorAccountMenu } from "./EditorAccountMenu";
 import { HeaderPaint } from "./HeaderPaint";
-import { EditorSyncStatus } from "@/components/ui/OfflineStatus";
 import {
   OVERLAY_BREAKPOINT,
   DOCK_BREAKPOINT,
@@ -318,6 +318,7 @@ import { openDesignFile } from "@/lib/editor/import/open";
 export function EditorApp({ projectId }: { projectId?: string } = {}) {
   const hydrate = useEditor((s) => s.hydrate);
   const hydrated = useEditor((s) => s.hydrated);
+  const showOpening = useRevealWhile(!hydrated);
   /** ?showcase=1 (live product preview on the site): hide the account surface. */
   const showcase = useEditor((s) => s.showcase);
   const setEntitlements = useEditor((s) => s.setEntitlements);
@@ -484,7 +485,11 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
   };
 
   if (!hydrated) {
-    return <EditorWorkspaceSkeleton />;
+    return showOpening ? (
+      <EditorWorkspaceSkeleton />
+    ) : (
+      <div className="h-full min-h-0 bg-paper" />
+    );
   }
 
   const openFile = () => projectInput.current?.click();
@@ -2834,7 +2839,6 @@ function Studio({
               className="editor-doc-name"
               placeholder="مستند جديد"
             />
-            <EditorSyncStatus />
           </div>
         </div>
 
@@ -2999,7 +3003,7 @@ function Studio({
               />
             )}
           </div>
-          {deviceSurface !== "mobile-landscape" && <WorkspaceStatusBar />}
+          <WorkspaceStatusBar />
         </div>
         {dockedBySide.left && renderDockedWindow(dockedBySide.left, "left")}
         {dockedBySide.right && renderDockedWindow(dockedBySide.right, "right")}

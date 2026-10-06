@@ -423,6 +423,11 @@ export interface FontChoice {
 interface EditorStore extends Project, Ui, History {
   hydrated: boolean;
   /**
+   * Document open only: idle → loading → ready.
+   * Save and sync must never move this back to loading.
+   */
+  documentPhase: "idle" | "loading" | "ready";
+  /**
    * Read-only showcase boot (`?showcase=1`): fully interactive, but nothing
    * is ever persisted — autosave and explicit saves are no-ops and the
    * onboarding surface (tour, intake, account menu) stays out of the way.
@@ -1218,6 +1223,8 @@ function normalizeProject(incoming: ProjectSnapshot): ProjectSnapshot {
 }
 
 let librarySyncTimer: ReturnType<typeof setTimeout> | null = null;
+/** Concurrent route + shell mounts share one open. A second call must not restart loading. */
+let hydrateInflight: Promise<void> | null = null;
 
 /** Push the account catalog after local edits. Never runs for a guest.
  * Offline-first: enqueues a deduplicated sync operation so reconnect automatically pushes.
@@ -1508,6 +1515,7 @@ export const useEditor = create<EditorStore>((set, get) => {
     clockTick: 0,
     captureArmed: false,
     hydrated: false,
+    documentPhase: "idle",
     showcase: BOOT_SHOWCASE,
     sessionOwner: null,
     entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
@@ -1632,6 +1640,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       cleanSnapshot = projectSlice(get());
       set({
         hydrated: false,
+        documentPhase: "idle",
         sessionOwner: null,
         fontChoices: bundledFontChoices(),
         fontsProbed: false,
@@ -1655,7 +1664,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
     },
 
-    hydrate: async () => {
+    hydrate: () => {
+      if (hydrateInflight) return hydrateInflight;
+      const tracked = (async () => {
       /*
        * Showcase boot (?template=…&showcase=1): the marketing site embeds a
        * live editor as its product preview. Boot straight from the requested
@@ -1718,6 +1729,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         }
         set({
           hydrated: true,
+          documentPhase: "ready",
           entitlementsResolved: true,
           entitlementsOwner: null,
           appearance,
@@ -1734,9 +1746,31 @@ export const useEditor = create<EditorStore>((set, get) => {
         }
         return;
       }
+      // A ready document for the pinned owner is not opened again. Session
+      // confirmation stays in the background and must not flip the shell back
+      // to a loading screen.
+      const pinned = getStorageOwner();
+      if (
+        get().hydrated &&
+        get().documentPhase === "ready" &&
+        get().sessionOwner === pinned
+      ) {
+        void import("@/lib/auth/storage-owner-sync").then(({ syncStorageOwner }) =>
+          syncStorageOwner().then((next) => {
+            if (!useEditor.getState().hydrated) return;
+            if (next === useEditor.getState().sessionOwner) return;
+            hydrateInflight = null;
+            useEditor.getState().resetUserScopedState();
+            void useEditor.getState().hydrate();
+          }),
+        );
+        return;
+      }
+      if (get().documentPhase !== "loading") set({ documentPhase: "loading" });
       // Never read under the wrong identity: resolve the storage owner from
       // the live session BEFORE any library read. (With auth disabled this
       // pins the shared dev user, matching the server-side verifier.)
+      // The resolver itself is budgeted so a hung session cannot trap loading.
       let owner: string;
       try {
         const { syncStorageOwner } =
@@ -1751,54 +1785,32 @@ export const useEditor = create<EditorStore>((set, get) => {
         // Same identity → already loaded, nothing to do. Identity changed
         // without a page reload (popup sign-in on the same route) → drop the
         // previous session's data before loading the new owner's library.
-        if (get().sessionOwner === owner) return;
+        if (get().sessionOwner === owner) {
+          if (get().documentPhase !== "ready") set({ documentPhase: "ready" });
+          return;
+        }
         get().resetUserScopedState();
       }
       let entitlements: Record<FeatureId, boolean> = {
         ...LICENSE_ENTITLEMENTS.FREE,
       };
       let cachedGraceEntitlements: Record<FeatureId, boolean> | null = null;
+      // Local entitlement cache only. The network license refresh runs AFTER
+      // the document is editable and is not allowed to hold or restart loading.
       if (owner !== ANON_OWNER) {
         try {
-          const { getLicenseStatusFn } =
-            await import("@/lib/license/functions");
-          const status = await getLicenseStatusFn();
-          entitlements = status.entitlements ?? entitlements;
-          // Cache validated entitlement for offline grace
-          try {
-            const { cacheEntitlement } = await import("@/lib/offline/entitlement-cache");
-            await cacheEntitlement({
-              ownerId: owner,
-              entitlements,
-              validatedAt: Date.now(),
-              expiresAt: (status as unknown as { license?: { expiresAt?: string | null } })?.license?.expiresAt ?? (status as unknown as { expiresAt?: string | null })?.expiresAt ?? null,
-              isAdmin: Boolean((status as unknown as Record<string, unknown>).isAdmin),
-              isOwner: Boolean((status as unknown as Record<string, unknown>).isOwner),
-              isSuspended: Boolean((status as unknown as Record<string, unknown>).isSuspended),
-              hasLicense: Boolean((status as unknown as Record<string, unknown>).hasLicense),
-              source: "server",
-            });
-          } catch {}
-        } catch {
-          // Offline or network failure: try cached grace entitlement
-          try {
-            const { getCachedEntitlement, isEntitlementValidOffline } = await import("@/lib/offline/entitlement-cache");
-            const cached = await getCachedEntitlement(owner);
-            if (cached && isEntitlementValidOffline(cached)) {
-              entitlements = cached.entitlements;
-              cachedGraceEntitlements = cached.entitlements;
-            } else {
-              // No valid cached entitlement — remain FREE but allow local offline editing
-              entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
-            }
-          } catch {
-            entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
+          const { getCachedEntitlement, isEntitlementValidOffline } =
+            await import("@/lib/offline/entitlement-cache");
+          const cached = await getCachedEntitlement(owner);
+          if (cached && isEntitlementValidOffline(cached)) {
+            entitlements = cached.entitlements;
+            cachedGraceEntitlements = cached.entitlements;
           }
+        } catch {
+          entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
         }
       }
-      // An account switch during the network round-trip invalidates both the
-      // status response and any following reads. Do not hydrate the old scope.
-      if (getStorageOwner() !== owner) return;
+      if (getStorageOwner() !== owner) owner = getStorageOwner();
       set({
         sessionOwner: owner,
         entitlements,
@@ -1809,11 +1821,11 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (cachedGraceEntitlements) {
         console.info("[offline] using cached entitlement grace for", owner);
       }
-      // Kick off connectivity monitor and workspace snapshot refresh (offline cache)
+      // Connectivity starts after the local document is open. triggerSync is a
+      // no-op visually when the queue is empty — it must not look like loading.
       try {
         void import("@/lib/offline/connectivity").then((m) => m.initConnectivity());
         void import("@/lib/offline/workspace-cache").then((m) => void m.refreshWorkspaceCache());
-        void import("@/lib/offline/connectivity").then((m) => m.triggerSync());
       } catch {}
       const mode = storageMode();
       set({ storage: { mode, persistent: mode === "indexeddb" } });
@@ -2035,14 +2047,25 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!recoveredDirty) {
         cleanSnapshot = snap;
       }
+      if (getStorageOwner() !== owner) {
+        set({ hydrated: false, documentPhase: "idle" });
+        return;
+      }
       set({
         hydrated: true,
+        documentPhase: "ready",
         past: [snap],
         future: [],
         saveState: recoveredDirty ? "dirty" : "saved",
         savedAt: Date.now(),
       });
       if (recoveredDirty) scheduleSave(400);
+      void refreshEntitlementsInBackground(owner);
+      })().finally(() => {
+        if (hydrateInflight === tracked) hydrateInflight = null;
+      });
+      hydrateInflight = tracked;
+      return tracked;
     },
 
     refreshProjects: async () => {
@@ -6155,6 +6178,63 @@ useEditor.subscribe((state, prev) => {
   }
   syncTextContext(state);
 });
+
+/**
+ * Network licence refresh. Never changes `documentPhase` — a slow or failed
+ * status call must not put the open document back into a loading screen.
+ */
+function refreshEntitlementsInBackground(owner: string) {
+  if (!owner || owner === ANON_OWNER) return;
+  void (async () => {
+    try {
+      const { getLicenseStatusFn } = await import("@/lib/license/functions");
+      const status = await getLicenseStatusFn();
+      if (getStorageOwner() !== owner) return;
+      const live = useEditor.getState();
+      if (live.sessionOwner !== owner || !live.hydrated) return;
+      const entitlements = status.entitlements ?? live.entitlements;
+      try {
+        const { cacheEntitlement } = await import("@/lib/offline/entitlement-cache");
+        const record = status as unknown as {
+          license?: { expiresAt?: string | null };
+          expiresAt?: string | null;
+          isAdmin?: boolean;
+          isOwner?: boolean;
+          isSuspended?: boolean;
+          hasLicense?: boolean;
+        };
+        await cacheEntitlement({
+          ownerId: owner,
+          entitlements,
+          validatedAt: Date.now(),
+          expiresAt: record.license?.expiresAt ?? record.expiresAt ?? null,
+          isAdmin: Boolean(record.isAdmin),
+          isOwner: Boolean(record.isOwner),
+          isSuspended: Boolean(record.isSuspended),
+          hasLicense: Boolean(record.hasLicense),
+          source: "server",
+        });
+      } catch {
+        /* cache is optional */
+      }
+      if (getStorageOwner() !== owner || useEditor.getState().sessionOwner !== owner) return;
+      useEditor.getState().setEntitlements(entitlements, owner);
+    } catch {
+      /* Offline or unreachable: the local cache applied during open stays. */
+    }
+  })();
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("nasaq:owner-changed", () => {
+    const owner = getStorageOwner();
+    const state = useEditor.getState();
+    if (!state.sessionOwner || state.sessionOwner === owner) return;
+    hydrateInflight = null;
+    state.resetUserScopedState();
+    void state.hydrate();
+  });
+}
 
 export function editorAccessResolved(): boolean {
   return hasResolvedEditorAccess(useEditor.getState(), getStorageOwner());

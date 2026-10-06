@@ -3959,16 +3959,18 @@ body.is-resizing-panel .editor-dock-strip::before {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  margin-inline-end: 4px;
+  height: 22px;
+  max-width: min(46vw, 240px);
+  min-width: 0;
+  margin: 0;
   padding: 0 8px;
   border-radius: 8px;
-  color: var(--editor-text);
+  color: var(--editor-text-secondary);
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
-  white-space: nowrap;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  pointer-events: auto;
 }
 .editor-sync-status .dot {
   width: 7px;
@@ -3977,15 +3979,49 @@ body.is-resizing-panel .editor-dock-strip::before {
   background: currentColor;
   flex: 0 0 auto;
 }
-.editor-sync-status.is-pending,
+.editor-sync-status .editor-sync-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.editor-sync-status.is-pending {
+  color: var(--color-warning, #8a6520);
+}
 .editor-sync-status.is-offline {
-  color: var(--editor-danger);
+  color: var(--editor-text-secondary);
 }
 .editor-sync-status.is-sync {
   color: var(--editor-accent-ink);
 }
-.editor-sync-status.is-synced {
-  color: var(--editor-accent-ink);
+.editor-sync-status.is-synced,
+.editor-sync-status.is-saved {
+  color: var(--editor-text-secondary);
+}
+.editor-sync-status.is-error {
+  color: var(--editor-danger, var(--color-error, #b42318));
+}
+.editor-sync-retry {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.editor-status-bar .editor-sync-status {
+  height: 22px;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+body.is-editor [data-testid="offline-status"] {
+  display: none !important;
 }
 
 /* One 32px chrome control for everything inside the capsule. */
@@ -5230,6 +5266,12 @@ button.license-badge-locked:focus-visible {
    The page commands scroll independently of thumbnails at narrow widths. */
 .editor-status-bar { height: 36px; min-height: 36px; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 12px; padding-block: 2px; }
 .editor-status-bar > span { flex-shrink: 0; }
+.editor-status-bar > .editor-sync-status {
+  flex: 0 1 auto;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: min(46vw, 240px);
+}
 .editor-status-bar button { min-height: 32px; }
 
 .editor-page-rail > div:first-child { overflow-y: auto; }

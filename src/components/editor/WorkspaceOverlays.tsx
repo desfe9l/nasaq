@@ -66,6 +66,7 @@ import {
   parseTable,
   type CanvasEl,
 } from "@/lib/editor/model";
+import { EditorSyncStatus } from "@/components/ui/OfflineStatus";
 import { toCsv } from "@/lib/editor/tables";
 import { useTools } from "@/lib/editor/tool-store";
 import { toolDef } from "@/lib/editor/tools";
@@ -1159,6 +1160,7 @@ export function WorkspaceStatusBar() {
           ? `${selectedIds.length} محدد${selectionLabel ? ` · ${selectionLabel}` : ""}`
           : "لا يوجد تحديد"}
       </span>
+      <EditorSyncStatus />
     </div>
   );
 }

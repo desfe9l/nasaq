@@ -22,7 +22,9 @@ export function subscribeConnectivity(fn: Listener): () => void {
   return () => listeners.delete(fn);
 }
 
-function emit(status: SyncStatus) {
+function emit(status: SyncStatus, nextOnline = online) {
+  if (status === currentStatus && nextOnline === online) return;
+  online = nextOnline;
   currentStatus = status;
   for (const fn of listeners) {
     try { fn(status, online); } catch {}
@@ -32,22 +34,29 @@ function emit(status: SyncStatus) {
   }
 }
 
-/** Probe real connectivity beyond navigator.onLine (captive portal etc) */
+/** Probe real connectivity beyond navigator.onLine (captive portal etc). */
 async function probeOnline(): Promise<boolean> {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 2500);
   try {
-    // Use a cache-busted tiny fetch to same origin — succeeds when actually online
+    // Any same-origin response (even 404) means the network is up.
+    // The abort keeps a dead socket from pinning the sync pass open.
     const res = await fetch(`/api/app-version?probe=${Date.now()}`, {
       method: "GET",
       cache: "no-store",
       headers: { "cache-control": "no-cache" },
+      signal: controller.signal,
     });
-    // Any response (even 404) means network is up
     return Boolean(res);
   } catch {
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
+
+let drainFlight: Promise<void> | null = null;
 
 function scheduleSync(delay = 1200) {
   if (syncTimer) clearTimeout(syncTimer);
@@ -57,56 +66,75 @@ function scheduleSync(delay = 1200) {
   }, delay);
 }
 
+/**
+ * One sync pass. An empty queue never enters "syncing" — autosave and
+ * reconnect used to flash a loading/sync badge even when nothing was queued.
+ * Failure stays on "error" until a later pass actually succeeds.
+ */
 async function drainQueue() {
-  const wasOnline = online;
-  online = await probeOnline();
-  if (!online) {
-    emit("offline");
+  if (drainFlight) return drainFlight;
+  const job = drainQueueBody().finally(() => {
+    if (drainFlight === job) drainFlight = null;
+  });
+  drainFlight = job;
+  return job;
+}
+
+async function drainQueueBody() {
+  const probed = await probeOnline();
+  if (!probed) {
+    emit("offline", false);
     return;
   }
-  if (!wasOnline && online) {
-    // just came back online
+  const { processSyncQueue, hasPendingSync } = await import("./sync-queue");
+  const pending = await hasPendingSync();
+  if (!pending) {
+    emit(settledOnlineStatus(currentStatus), true);
+    return;
   }
-  emit("syncing");
+  emit("syncing", true);
   try {
-    const { processSyncQueue, hasPendingSync } = await import("./sync-queue");
     const result = await processSyncQueue();
-    lastSyncAt = Date.now();
     const stillPending = await hasPendingSync();
-    if (stillPending && result.conflicts > 0) {
-      emit("error");
-    } else if (stillPending && result.failed > 0) {
-      // will retry on next heartbeat
-      emit("online");
-      scheduleSync(5000);
-    } else if (stillPending) {
-      emit("online");
-      scheduleSync(3000);
-    } else {
-      emit("synced");
-      // stay synced for a moment then go to online
-      setTimeout(() => {
-        if (currentStatus === "synced") emit("online");
-      }, 2500);
+    lastSyncAt = Date.now();
+    if (!stillPending) {
+      emit("synced", true);
+      return;
     }
+    if (result.conflicts > 0 || result.failed > 0) {
+      emit("error", true);
+      scheduleSync(8000);
+      return;
+    }
+    scheduleSync(3000);
   } catch {
-    emit("error");
+    emit("error", true);
+    scheduleSync(8000);
   }
+}
+
+/** Online, with nothing left to push. Do not bounce synced → online → syncing. */
+export function settledOnlineStatus(current: SyncStatus): SyncStatus {
+  if (current === "syncing" || current === "error") return "synced";
+  if (current === "synced") return "synced";
+  return "online";
 }
 
 function onOnline() {
   online = true;
-  emit("online");
-  void probeOnline().then((ok) => {
-    online = ok;
-    if (ok) scheduleSync(800);
-    else emit("offline");
+  emit("online", true);
+  void probeOnline().then(async (ok) => {
+    if (!ok) {
+      emit("offline", false);
+      return;
+    }
+    const { hasPendingSync } = await import("./sync-queue");
+    if (await hasPendingSync()) scheduleSync(800);
   });
 }
 
 function onOffline() {
-  online = false;
-  emit("offline");
+  emit("offline", false);
 }
 
 let initialized = false;
@@ -120,19 +148,27 @@ export function initConnectivity(): void {
   window.addEventListener("offline", onOffline);
   // Periodic heartbeat to detect reconnection when events are unreliable
   heartbeatTimer = setInterval(() => {
-    void probeOnline().then((ok) => {
-      if (ok !== online) {
-        online = ok;
-        emit(ok ? "online" : "offline");
-        if (ok) scheduleSync(600);
+    void probeOnline().then(async (ok) => {
+      if (ok === online && (ok ? currentStatus !== "offline" : currentStatus === "offline")) return;
+      if (!ok) {
+        emit("offline", false);
+        return;
       }
+      emit(currentStatus === "offline" ? "online" : currentStatus, true);
+      const { hasPendingSync } = await import("./sync-queue");
+      if (await hasPendingSync()) scheduleSync(600);
     });
   }, 30_000);
-  // Initial probe
-  void probeOnline().then((ok) => {
-    online = ok;
-    emit(ok ? (currentStatus === "syncing" ? "syncing" : "online") : "offline");
-    if (ok) scheduleSync(1500);
+  heartbeatTimer.unref?.();
+  // Initial probe must not pretend a sync is running when the queue is empty.
+  void probeOnline().then(async (ok) => {
+    if (!ok) {
+      emit("offline", false);
+      return;
+    }
+    const { hasPendingSync } = await import("./sync-queue");
+    if (await hasPendingSync()) scheduleSync(400);
+    else emit(settledOnlineStatus(currentStatus), true);
   });
 
   // Re-sync when storage owner changes (account switch)
@@ -153,17 +189,39 @@ export function triggerSync(): void {
 export type SavePhase = "idle" | "dirty" | "saving" | "saved" | "error";
 
 /**
- * The one compact status the editor header shows. Only the product's five
- * labels — derived from the live save phase and the existing sync status.
+ * Document open is a different machine from save and sync.
+ * `loading` is only the first local open. It must not be reused for autosave.
+ */
+export type DocumentPhase = "idle" | "loading" | "ready";
+
+export type EditorStatusCopy =
+  | "جارٍ فتح المستند"
+  | "محفوظ محليًا"
+  | "تتم المزامنة"
+  | "متزامن"
+  | "متاح دون اتصال"
+  | "تعذر التزامن"
+  | "جارٍ الحفظ"
+  | "تغييرات محلية"
+  | "تعذر الحفظ";
+
+/**
+ * The one status the editor chrome shows. Loading is only document open.
+ * Offline, local save, sync and sync failure never share a spinner.
  */
 export function editorStatusLabel(
   save: SavePhase,
   sync: SyncStatus,
   isOnline: boolean,
-): "محفوظ" | "جاري الحفظ" | "دون اتصال" | "جاري المزامنة" | "تمت المزامنة" {
-  if (save === "saving" || save === "dirty") return "جاري الحفظ";
-  if (sync === "syncing") return "جاري المزامنة";
-  if (!isOnline || sync === "offline") return "دون اتصال";
-  if (sync === "synced") return "تمت المزامنة";
-  return "محفوظ";
+  phase: DocumentPhase = "ready",
+): EditorStatusCopy {
+  if (phase === "loading") return "جارٍ فتح المستند";
+  if (!isOnline || sync === "offline") return "متاح دون اتصال";
+  if (sync === "error") return "تعذر التزامن";
+  if (sync === "syncing") return "تتم المزامنة";
+  if (save === "error") return "تعذر الحفظ";
+  if (save === "saving") return "جارٍ الحفظ";
+  if (save === "dirty") return "تغييرات محلية";
+  if (sync === "synced") return "متزامن";
+  return "محفوظ محليًا";
 }
