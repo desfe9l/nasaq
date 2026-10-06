@@ -5,6 +5,7 @@ import { analyzeImageFn } from "@/lib/ai/image-functions";
 import type { ImageAnalysis } from "@/lib/ai/image-contract";
 import type { CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
+import { aiOperationErrorMessage, applyAIEditorOperations } from "@/lib/ai/editor-bridge";
 
 async function rasterDataUrl(src: string): Promise<string> {
   const image = new Image();
@@ -42,8 +43,6 @@ export function ImageAiTools({
   el: CanvasEl;
   pageId: string;
 }) {
-  const addElementAt = useEditor((s) => s.addElementAt);
-  const select = useEditor((s) => s.select);
   const entitlements = useEditor((s) => s.entitlements);
   const entitlementsResolved = useEditor((s) => s.entitlementsResolved);
   const [analysis, setAnalysis] = useState<ImageAnalysis | null>(null);
@@ -75,9 +74,11 @@ export function ImageAiTools({
     const content = analysis?.recognizedText.trim();
     if (!content) return;
     const height = Math.min(120, Math.max(12, content.split("\n").length * 6));
-    const inserted = addElementAt(
-      "text",
-      {
+    void applyAIEditorOperations(useEditor.getState(), [{
+      type: "create_element",
+      pageId,
+      elementType: "text",
+      props: {
         name: "نص مستخرج من الصورة",
         content,
         w: Math.max(25, el.w),
@@ -89,13 +90,16 @@ export function ImageAiTools({
           overflowVisible: true,
         },
       },
-      { x: el.x + el.w / 2, y: el.y + el.h + height / 2 + 8 },
-      pageId,
-    );
-    if (inserted) {
-      select(inserted.id);
+      x: el.x + el.w / 2 - Math.max(25, el.w) / 2,
+      y: el.y + el.h + height / 2 + 8 - height / 2,
+    }]).then((results) => {
+      const result = results[0];
+      if (!result?.ok) {
+        toast.error(result ? aiOperationErrorMessage(result) : "تعذر إدراج النص؛ لم يتغير المستند.");
+        return;
+      }
       toast.success("أُضيف النص كعنصر قابل للتحرير.");
-    }
+    });
   };
 
   return (

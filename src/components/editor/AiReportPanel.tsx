@@ -10,27 +10,18 @@ import {
   type ReportType,
 } from "@/lib/ai/contract";
 import { useEditor } from "@/lib/editor/store";
-import type { CanvasEl } from "@/lib/editor/model";
-
-function pageText(elements: CanvasEl[], limit: number): string {
-  const parts: string[] = [];
-  const walk = (list: CanvasEl[]) => {
-    for (const el of list) {
-      const text = String(el.content ?? "").trim();
-      if (text) parts.push(text);
-      if (el.children?.length) walk(el.children);
-      if (parts.join("\n").length >= limit) return;
-    }
-  };
-  walk(elements);
-  return parts.join("\n").slice(0, limit);
-}
+import {
+  aiOperationErrorMessage,
+  applyAIEditorOperations,
+  buildAIEditorContext,
+} from "@/lib/ai/editor-bridge";
 
 /** User-triggered AI intake. It never edits the page until the author inserts it. */
 export function AiReportPanel() {
-  const insertReportDraft = useEditor((s) => s.insertReportDraft);
   const documentTitle = useEditor((s) => s.name);
   const pages = useEditor((s) => s.pages);
+  const activePageId = useEditor((s) => s.activePageId);
+  const selectedIds = useEditor((s) => s.selectedIds);
   const entitlements = useEditor((s) => s.entitlements);
   const entitlementsResolved = useEditor((s) => s.entitlementsResolved);
   const [brief, setBrief] = useState("");
@@ -64,7 +55,13 @@ export function AiReportPanel() {
           detailLevel,
           pageTarget,
           documentTitle,
-          documentContext: pages.map((page) => pageText(page.elements, 1200)).join("\n").slice(0, 4000),
+          documentContext: JSON.stringify(buildAIEditorContext({
+            name: documentTitle,
+            theme: useEditor.getState().theme,
+            pages,
+            activePageId,
+            selectedIds,
+          })).slice(0, 4000),
         },
       });
       if (!result.ok) {
@@ -82,10 +79,18 @@ export function AiReportPanel() {
 
   const insertDraft = () => {
     if (!draft) return;
-    const id = insertReportDraft(draft, draftElementId || undefined);
-    if (id) {
-      setDraftElementId(id);
-    }
+    void applyAIEditorOperations(useEditor.getState(), [{
+      type: "insert_report_draft",
+      draft,
+      existingId: draftElementId || undefined,
+    }]).then((results) => {
+      const result = results[0];
+      if (!result?.ok) {
+        toast.error(result ? aiOperationErrorMessage(result) : "تعذر إدراج المسودة؛ لم يتغير المستند.");
+        return;
+      }
+      if (result.createdIds?.[0]) setDraftElementId(result.createdIds[0]);
+    });
   };
 
   return (

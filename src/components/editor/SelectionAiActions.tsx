@@ -37,6 +37,7 @@ import {
   type SelectionActionId,
 } from "@/lib/ai/selection-contract";
 import { transformSelectionFn } from "@/lib/ai/functions";
+import { aiOperationErrorMessage, applyAIEditorOperations } from "@/lib/ai/editor-bridge";
 import { cn } from "@/lib/utils";
 
 /** The element's own text. Tables carry a JSON matrix, everything else content. */
@@ -63,8 +64,6 @@ function elementText(el: CanvasEl): string {
 }
 
 export function SelectionAiActions({ el }: { el: CanvasEl }) {
-  const updateElement = useEditor((s) => s.updateElement);
-  const replaceElement = useEditor((s) => s.replaceElement);
   const theme = useEditor((s) => s.theme);
   const entitlements = useEditor((s) => s.entitlements);
 
@@ -131,11 +130,32 @@ export function SelectionAiActions({ el }: { el: CanvasEl }) {
         },
         THEMES[theme],
       );
-      replaceElement(table);
-      toast.success(`حُوّل النص إلى جدول قابل للتحرير (${rows.length} صفًا)`);
+      void applyAIEditorOperations(useEditor.getState(), [{
+        type: "replace_element",
+        elementId: el.id,
+        elementType: "table",
+        props: table,
+      }]).then((results) => {
+        const result = results[0];
+        if (!result?.ok) {
+          setError(result ? aiOperationErrorMessage(result) : "تعذر تطبيق العملية؛ لم يتغير المستند.");
+          return;
+        }
+        toast.success(`حُوّل النص إلى جدول قابل للتحرير (${rows.length} صفًا)`);
+      });
     } else {
-      updateElement(el.id, { content: pending.text });
-      toast.success("تم تطبيق النص على العنصر المحدد");
+      void applyAIEditorOperations(useEditor.getState(), [{
+        type: "update_text",
+        elementId: el.id,
+        content: pending.text,
+      }]).then((results) => {
+        const result = results[0];
+        if (!result?.ok) {
+          setError(result ? aiOperationErrorMessage(result) : "تعذر تطبيق العملية؛ لم يتغير المستند.");
+          return;
+        }
+        toast.success("تم تطبيق النص على العنصر المحدد");
+      });
     }
     setPending(null);
     setInstructions("");

@@ -12,7 +12,7 @@ import {
   Palette,
 } from "lucide-react";
 import { toast } from "sonner";
-import { saveProject, setSetting } from "@/lib/editor/storage";
+import { getProject, setSetting } from "@/lib/editor/storage";
 import { BRAND_ROUTE, editorPathFor } from "@/lib/site-routes";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useLicense } from "@/lib/license/client";
@@ -29,7 +29,7 @@ import {
   describeBrandApplication,
 } from "@/lib/editor/brand-design";
 import type { BrandKit } from "@/lib/product/product";
-import { uid, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { saveCustomTemplate } from "@/lib/templates/custom-templates";
 import { resolveTemplateName } from "@/lib/templates/naming";
 import { TemplatePreview } from "@/components/site/TemplatePreview";
@@ -288,11 +288,20 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
         );
         return;
       }
-      const saved = await saveProject({
-        ...activeProject,
-        id: uid("proj"),
-        name,
-      });
+      const created = await store.createDocument(
+        { ...activeProject, name },
+        { autoName: false },
+      );
+      if (!created) {
+        toast.error("تعذر تطبيق التصميم على نموذج المستند؛ لم يتم حفظ أي تغيير.");
+        return;
+      }
+      const savedId = useEditor.getState().id;
+      const saved = savedId ? await getProject(savedId) : null;
+      if (!saved) {
+        toast.error("تعذر التحقق من المستند الناتج؛ لم يتم فتحه.");
+        return;
+      }
       await setSetting("activeProjectId", saved.id);
       /*
        * Saving the design into the template library is a convenience, not the
