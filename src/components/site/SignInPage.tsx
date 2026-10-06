@@ -1,8 +1,8 @@
-import { useState } from "react";
 import { Navigate } from "@tanstack/react-router";
 import { BRAND } from "@/lib/brand";
-import { SOCIAL_PROVIDERS, authEnabled, signIn } from "@/lib/auth/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
+import { SIGN_UP_ROUTE } from "@/lib/site-routes";
+import { EmailAuthForm } from "./EmailAuthForm";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
 
 /**
@@ -14,15 +14,12 @@ import { SiteFooter, SiteHeader } from "./SiteChrome";
  * here on every hard reload.
  */
 export function SignInPage({ redirect }: { redirect?: string } = {}) {
-  const destination = redirect && redirect.startsWith("/") ? redirect : "/account";
   const { user, isPending } = useCurrentUserState();
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
 
   if (isPending) {
     return (
       <div className="min-h-screen bg-paper">
-        <SiteHeader current="/login" />
+        <SiteHeader current={"/login"} />
         <main className="mx-auto grid w-full max-w-md place-items-center px-4 py-24">
           <p className="text-[13px] text-muted">جارٍ التحقق من الجلسة…</p>
         </main>
@@ -42,59 +39,23 @@ export function SignInPage({ redirect }: { redirect?: string } = {}) {
 
   return (
     <div className="min-h-screen bg-paper">
-      <SiteHeader current="/login" />
+      <SiteHeader current={"/login"} />
       <main className="mx-auto w-full max-w-md px-4 py-16">
         <div className="rounded-[14px] border border-line bg-surface p-6 shadow-sm">
           <h1 className="text-xl font-extrabold">تسجيل الدخول</h1>
           <p className="mt-2 text-[13px] leading-6 text-muted">
-            سجّل الدخول للوصول إلى حسابك، واختيار الباقة، ومتابعة طلبات الدفع.
+            سجّل الدخول للوصول إلى حسابك، ومشاريعك، والمحرر، وأدوات الذكاء الاصطناعي.
           </p>
 
-          {!authEnabled ? (
-            <p className="mt-5 rounded-[10px] border border-gold/40 bg-gold/10 p-3 text-[12px] leading-6">
-              تسجيل الدخول غير مُفعّل في هذه النسخة. يتم استخدام حساب تجريبي محلي.
-            </p>
-          ) : (
-            <div className="mt-5 grid gap-2">
-              {SOCIAL_PROVIDERS.map((provider) => (
-                <button
-                  key={provider.providerId}
-                  type="button"
-                  disabled={busy !== null}
-                  onClick={() => {
-                    setError(null);
-                    setBusy(provider.providerId);
-                    void signIn(provider.providerId as "google", { callbackURL: destination }).catch(
-                      (err: unknown) => {
-                        setBusy(null);
-                        setError(
-                          err instanceof Error ? err.message : "تعذّر تسجيل الدخول.",
-                        );
-                      },
-                    );
-                  }}
-                  className="h-11 w-full cursor-pointer rounded-[10px] bg-navy text-[13px] font-extrabold text-on-brand transition hover:bg-navy-2 disabled:cursor-wait disabled:opacity-60"
-                >
-                  {busy === provider.providerId
-                    ? "جارٍ التحويل…"
-                    : `المتابعة عبر ${provider.label}`}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {error && (
-            <p
-              role="alert"
-              className="mt-4 rounded-[10px] border border-danger/30 bg-danger/5 p-3 text-[12px] leading-6 text-error"
-            >
-              {error}
-            </p>
-          )}
+          <EmailAuthForm mode="sign-in" redirect={redirect} />
 
           <p className="mt-5 border-t border-line pt-4 text-[11px] leading-5 text-muted">
             بياناتك ومشاريعك محفوظة في حسابك ومتصفحك. {BRAND.lockup} —{" "}
             {BRAND.platform}
+            {" · "}
+            <a href={SIGN_UP_ROUTE} className="font-bold text-brand underline-offset-4 hover:underline">
+              إنشاء حساب جديد
+            </a>
           </p>
         </div>
       </main>

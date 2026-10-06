@@ -1,4 +1,4 @@
-import { getRequest } from "@tanstack/react-start/server";
+import { getRequest, setResponseStatus } from "@tanstack/react-start/server";
 import { gateIdentityEnabled } from "./gate-identity.server";
 import { auth, authConfigured } from "./server";
 
@@ -40,6 +40,29 @@ export class UnauthorizedError extends Error {
     super("Unauthorized");
     this.name = "UnauthorizedError";
   }
+}
+
+/**
+ * Reject an unauthenticated server call, and make the rejection READ as 401.
+ *
+ * TanStack Start serialises a thrown error with
+ * `status = ALS response.status ?? 500`, so a signed-out call to an
+ * authenticated server function used to answer **HTTP 500** — indistinguishable
+ * from a crash in the network tab, in monitoring, and in the deploy logs (the
+ * exact failure `forbidden.server.ts` documents for 403). Setting the status
+ * first gives the client and the operator the true diagnosis; the throw below
+ * still carries the stable `UnauthorizedError` contract.
+ */
+export function denyUnauthorized(): never {
+  try {
+    // Outside a Start request context (a direct call in a test, an offline
+    // script) there is no response to decorate — the throw is the part that
+    // matters, so never let the decoration replace it.
+    setResponseStatus(401, "Unauthorized");
+  } catch {
+    /* keep throwing */
+  }
+  throw new UnauthorizedError();
 }
 
 export type VerifiedUser = { id: string; email: string | null };
@@ -92,6 +115,6 @@ export async function requireUserId(bearerToken?: string): Promise<string> {
     return DEV_USER_ID;
   }
   const user = await getSessionUser(bearerToken);
-  if (!user) throw new UnauthorizedError();
+  if (!user) denyUnauthorized();
   return user.id;
 }

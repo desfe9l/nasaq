@@ -25,7 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useSiteSettings } from "@/lib/admin/use-site-settings";
 import { adminTemplatesAccessFn } from "@/lib/admin/functions";
-import { CREATE_ROUTE, EDITOR_ROUTE, IMPORT_ROUTE } from "@/lib/site-routes";
+import { CREATE_ROUTE, EDITOR_ROUTE, IMPORT_ROUTE, LOGIN_ROUTE } from "@/lib/site-routes";
 import { authEnabled, signOut } from "@/lib/auth/client";
 import { useCurrentUserState, type AppUser } from "@/lib/auth/use-current-user";
 import { accountIdentity } from "@/lib/auth/identity";
@@ -219,9 +219,15 @@ function HeaderAccount() {
   if (!hydrated || !authEnabled || isPending) return null;
 
   if (!user) {
+    /*
+     * The guest door, from the route catalog: `/login` is also `SIGN_IN_PATH`
+     * (`gates.tsx`) and links on to `/signup`, so a visitor who wants to CREATE
+     * an account is one click from here, and a returning author is already
+     * where they need to be.
+     */
     return (
       <a
-        href="/login"
+        href={LOGIN_ROUTE}
         className="site-header-action inline-flex h-11 min-w-11 max-w-[168px] items-center gap-1.5 rounded-[8px] border border-line px-2.5 text-[12px] font-bold text-ink transition hover:border-brand hover:text-brand-hover"
       >
         <LogIn className="size-4 shrink-0" aria-hidden />

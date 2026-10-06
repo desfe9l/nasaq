@@ -1,10 +1,24 @@
 /**
- * Local email/password sign-in (this app's Better Auth DB).
+ * Local email/password accounts (this app's own Better Auth database).
  *
- * Off by default. To enable: set `emailAndPasswordEnabled` to `true` below,
- * then build sign-up / sign-in forms with `authClient.signUp.email` /
- * `authClient.signIn.email` from `@/lib/auth/client` (see the auth skill).
+ * ENABLED. This is the flag the rest of the codebase reads — `server.ts` turns
+ * it into Better Auth's `emailAndPassword` provider, `config.ts` counts it as a
+ * real sign-in provider (so server-side session verification is active without
+ * any OAuth credentials), and the sign-in / sign-up surfaces decide what to
+ * render from the same report.
  *
- * Do NOT edit `server.ts` for this — that file is frozen pre-wired config.
+ * WHY IT IS ON: NASAQ's account path must not depend on a third-party OAuth
+ * client. With this flag `false` (the previous state) Better Auth answered
+ * every sign-up with `EMAIL_PASSWORD_SIGN_UP_DISABLED`, so an account could only
+ * ever be created through Google — and with no Google credentials configured the
+ * whole account path was inert while still rendering a sign-in page.
+ *
+ * Accounts created here are first-class: a real `user` row, a real `account` row
+ * with providerId `credential`, and a real session row + signed cookie, exactly
+ * like the OAuth path. Nothing about this file changes the licensing, pricing or
+ * entitlement rules — those stay server-owned (see `src/lib/license`).
+ *
+ * Keep this module dependency-free: `config.ts` imports it, and both are read
+ * from the client bundle as well as from the server.
  */
-export const emailAndPasswordEnabled = false;
+export const emailAndPasswordEnabled = true;

@@ -32,6 +32,7 @@ import {
 } from "@/lib/intelligence/raw-content";
 import type { ReportDraft, ReportDetail, AiTone } from "@/lib/ai/contract";
 import { generateReportDraftFn } from "@/lib/ai/functions";
+import { aiCallErrorMessage } from "@/lib/ai/client-errors";
 import { LICENSE_ROUTE, editorPathFor } from "@/lib/site-routes";
 import { readBrandKit } from "@/lib/product/brand-kit";
 import {
@@ -103,8 +104,10 @@ export function RawContentFlow() {
       setDraft(result.draft);
       setDraftSource("ai");
       toast.success("نُظّم المحتوى كمسودة — راجعها قبل إنشاء المستند");
-    } catch {
-      setError("تعذر الاتصال بخدمة الذكاء الاصطناعي. يمكنك الترتيب المحلي.");
+    } catch (error) {
+      setError(
+        aiCallErrorMessage(error, "تعذّر الاتصال بخدمة الذكاء الاصطناعي. يمكنك الترتيب المحلي."),
+      );
     } finally {
       setBusy(null);
     }

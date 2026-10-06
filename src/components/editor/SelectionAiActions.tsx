@@ -37,6 +37,7 @@ import {
   type SelectionActionId,
 } from "@/lib/ai/selection-contract";
 import { transformSelectionFn } from "@/lib/ai/functions";
+import { aiCallErrorMessage } from "@/lib/ai/client-errors";
 import { aiOperationErrorMessage, applyAIEditorOperations } from "@/lib/ai/editor-bridge";
 import { cn } from "@/lib/utils";
 
@@ -97,8 +98,8 @@ export function SelectionAiActions({ el }: { el: CanvasEl }) {
         return;
       }
       setPending({ action, text: result.text });
-    } catch {
-      setError("تعذر الاتصال بخدمة الذكاء الاصطناعي. لم يتغير العنصر.");
+    } catch (error) {
+      setError(aiCallErrorMessage(error, "تعذّر الاتصال بخدمة الذكاء الاصطناعي. لم يتغير العنصر."));
     } finally {
       setBusy(null);
     }
