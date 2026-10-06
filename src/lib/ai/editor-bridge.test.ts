@@ -31,6 +31,11 @@ function fakeApi(overrides: Partial<AIEditorCommandApi> = {}): AIEditorCommandAp
     pages: [page],
     activePageId: page.id,
     selectedIds: [],
+    saveState: "saved",
+    beginAITransaction: () => calls.push("beginAITransaction"),
+    commitAITransaction: () => calls.push("commitAITransaction"),
+    finalizeAITransaction: () => calls.push("finalizeAITransaction"),
+    rollbackAITransaction: () => calls.push("rollbackAITransaction"),
     updateElement: () => calls.push("updateElement"),
     updateStyle: () => calls.push("updateStyle"),
     replaceElement: () => calls.push("replaceElement"),
@@ -59,7 +64,6 @@ function fakeApi(overrides: Partial<AIEditorCommandApi> = {}): AIEditorCommandAp
     saveNow: async () => {
       calls.push("saveNow");
     },
-    undo: () => calls.push("undo"),
     ...overrides,
   };
 }

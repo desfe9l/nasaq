@@ -42,6 +42,7 @@ import type { CoverStyle, DesignGenerationMode } from "@/lib/ai/design-contract"
 import type { DesignVariation } from "@/lib/intelligence/variations";
 import { DESIGN_STYLES, type DesignFormat, type DesignStyle } from "@/lib/intelligence/schema";
 import { pageSize } from "@/lib/editor/model";
+import { applyAIEditorOperations, aiOperationErrorMessage } from "@/lib/ai/editor-bridge";
 
 const PROMPT_SUGGESTIONS = [
   "صمم تقريرًا رسميًا عن الأمن السيبراني",
@@ -288,12 +289,12 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
         );
         return;
       }
-      const created = await store.createDocument(
-        { ...activeProject, name },
-        { autoName: false },
-      );
-      if (!created) {
-        toast.error("تعذر تطبيق التصميم على نموذج المستند؛ لم يتم حفظ أي تغيير.");
+      const generated = await applyAIEditorOperations(store, [{
+        type: "generate_document",
+        project: { ...activeProject, name },
+      }]);
+      if (!generated[0]?.ok) {
+        toast.error(generated[0] ? aiOperationErrorMessage(generated[0]) : "تعذر تطبيق التصميم على نموذج المستند؛ لم يتم حفظ أي تغيير.");
         return;
       }
       const savedId = useEditor.getState().id;

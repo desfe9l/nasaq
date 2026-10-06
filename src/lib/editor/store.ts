@@ -938,6 +938,11 @@ interface EditorStore extends Project, Ui, History {
   undo: () => void;
   redo: () => void;
   commit: () => void;
+  /** Begin/end/rollback one atomic AI command transaction. */
+  beginAITransaction: () => void;
+  commitAITransaction: () => void;
+  finalizeAITransaction: () => void;
+  rollbackAITransaction: () => void;
 }
 
 function hasResolvedEditorAccess(
@@ -1348,6 +1353,11 @@ export const useEditor = create<EditorStore>((set, get) => {
     a.licensedTemplateId === b.licensedTemplateId;
 
   let historyBatch = 0;
+  let aiTransactionSnapshot: ProjectSnapshot | null = null;
+  let aiTransactionPast: ProjectSnapshot[] | null = null;
+  let aiTransactionFuture: ProjectSnapshot[] | null = null;
+  let aiTransactionSelection: Pick<EditorStore, "selectedId" | "selectedIds" | "enteredGroupId" | "activePageId"> | null = null;
+  let aiTransactionSaveState: SaveState | null = null;
   const pushHistory = () => {
     if (historyBatch) return;
     const snapshot = projectSlice(get());
@@ -6132,6 +6142,53 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     commit: () => pushHistory(),
+    beginAITransaction: () => {
+      if (historyBatch === 0) {
+        const state = get();
+        aiTransactionSnapshot = clone(projectSlice(state));
+        aiTransactionPast = state.past;
+        aiTransactionFuture = state.future;
+        aiTransactionSelection = {
+          selectedId: state.selectedId,
+          selectedIds: [...state.selectedIds],
+          enteredGroupId: state.enteredGroupId,
+          activePageId: state.activePageId,
+        };
+        aiTransactionSaveState = state.saveState;
+      }
+      historyBatch += 1;
+    },
+    commitAITransaction: () => {
+      if (historyBatch <= 0) return;
+      historyBatch -= 1;
+      if (historyBatch > 0) return;
+      pushHistory();
+    },
+    finalizeAITransaction: () => {
+      aiTransactionSnapshot = null;
+      aiTransactionPast = null;
+      aiTransactionFuture = null;
+      aiTransactionSelection = null;
+      aiTransactionSaveState = null;
+    },
+    rollbackAITransaction: () => {
+      if (!aiTransactionSnapshot) return;
+      const snapshot = clone(aiTransactionSnapshot);
+      const selection = aiTransactionSelection;
+      historyBatch = 0;
+      applyProject(snapshot, {
+        ...(selection || {}),
+        past: aiTransactionPast || get().past,
+        future: aiTransactionFuture || get().future,
+        saveState: aiTransactionSaveState || "saved",
+        saveArmed: false,
+      });
+      aiTransactionSnapshot = null;
+      aiTransactionPast = null;
+      aiTransactionFuture = null;
+      aiTransactionSelection = null;
+      aiTransactionSaveState = null;
+    },
   };
 });
 

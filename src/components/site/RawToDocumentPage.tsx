@@ -29,9 +29,7 @@ import { useLicense } from "@/lib/license/client";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useBrandIdentity } from "@/lib/product/use-brand-identity";
 import { applyBrandToProject } from "@/lib/editor/brand-design";
-import { saveProject, setSetting } from "@/lib/editor/storage";
 import { exceedsSavedProjectLimit } from "@/lib/editor/access-limits";
-import { uid } from "@/lib/utils";
 import {
   LICENSE_ROUTE,
   STUDIO_ROUTE,
@@ -92,9 +90,16 @@ export function RawToDocumentPage() {
     }
     try {
       const project = brand.kit ? applyBrandToProject(demo.after, brand.kit) : demo.after;
-      const id = uid("proj");
-      await saveProject({ ...project, id });
-      await setSetting("activeProjectId", id);
+      const created = await store.createDocument(project, { autoName: false });
+      if (!created) {
+        toast.error("تعذر تطبيق المستند الناتج؛ لم يتم حفظ أي تغيير.");
+        return;
+      }
+      const id = useEditor.getState().id;
+      if (!id) {
+        toast.error("تعذر التحقق من المستند الناتج؛ لم يتم فتحه.");
+        return;
+      }
       window.location.assign(editorPathFor(id));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "تعذر حفظ المستند");
