@@ -6,7 +6,7 @@ const originalDatabaseUrl = process.env.DATABASE_URL;
 process.env.VERCEL = "1";
 delete process.env.DATABASE_URL;
 
-const { ensureDbReady, getSql } = await import("./db.ts");
+const { ensureDbReady, getSql, normalizeDatabaseUrl } = await import("./db.ts");
 
 if (originalVercel === undefined) delete process.env.VERCEL;
 else process.env.VERCEL = originalVercel;
@@ -19,4 +19,29 @@ test("Vercel bootstrap stays renderable without a database but DB access fails c
     getSql(),
     /DATABASE_URL is not set on this deployment/,
   );
+});
+
+test("normalizeDatabaseUrl replaces ambiguous sslmodes with verify-full", () => {
+  assert.equal(
+    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=require"),
+    "postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-full",
+  );
+  assert.equal(
+    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=prefer"),
+    "postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-full",
+  );
+  assert.equal(
+    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-ca"),
+    "postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-full",
+  );
+  assert.equal(
+    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-full"),
+    "postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-full",
+  );
+  assert.equal(
+    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb"),
+    "postgres://user:pass@ep-test.neon.tech/neondb",
+  );
+  assert.equal(normalizeDatabaseUrl(undefined), undefined);
+  assert.equal(normalizeDatabaseUrl("   "), undefined);
 });

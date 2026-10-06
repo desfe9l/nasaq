@@ -59,9 +59,22 @@ if (!report.configured) {
   console.log("  ! metadata check skipped — DATABASE_URL is not set in this process.");
 } else {
   const { default: pg } = await import("pg");
+  function normalizeDatabaseUrl(connectionString) {
+    if (!connectionString) return connectionString;
+    const trimmed = connectionString.trim();
+    if (!trimmed) return undefined;
+    try {
+      const url = new URL(trimmed);
+      const sslmode = url.searchParams.get("sslmode");
+      if (sslmode && ["require", "prefer", "verify-ca"].includes(sslmode.toLowerCase())) {
+        url.searchParams.set("sslmode", "verify-full");
+        return url.toString();
+      }
+    } catch {}
+    return trimmed;
+  }
   const client = new pg.Client({
-    connectionString: process.env.DATABASE_URL,
-    ssl: { rejectUnauthorized: false },
+    connectionString: normalizeDatabaseUrl(process.env.DATABASE_URL),
   });
   try {
     await client.connect();

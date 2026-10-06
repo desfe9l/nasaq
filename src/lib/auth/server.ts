@@ -34,7 +34,7 @@ import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
-import { ensureDbReady, getPglite } from "../db";
+import { ensureDbReady, getPglite, normalizeDatabaseUrl } from "../db";
 import {
   authAllowedHosts,
   authBaseURL,
@@ -134,7 +134,7 @@ const baseURL = explicitBaseURL ?? {
 // button then does nothing, with only a server-side log to explain it.
 const trustedOrigins = authTrustedOrigins(process.env);
 
-const databaseUrl = process.env.DATABASE_URL?.trim() || undefined;
+const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
 
 // Real Postgres when `DATABASE_URL` is set (deployed apps), else the app's
 // embedded PGLite (preview) via a Kysely dialect — so Better Auth persists to the
