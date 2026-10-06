@@ -140,25 +140,44 @@ export async function enqueueSync(
     }
   }
 
-  // Deduplicate within same owner+dedupeKey
-  const existing = (await tx(db, "readonly", async (store) => {
+  // Deduplicate within the same owner+dedupeKey in ONE read/write transaction.
+  // A separate read followed by a write lets concurrent autosaves both observe
+  // an empty queue and insert duplicate rows before either write is visible.
+  const entry = await tx(db, "readwrite", async (store) => {
     const all = (await request(store.getAll())) as SyncQueueEntry[];
-    return all.find((e) => e.ownerId === ownerId && e.dedupeKey === dedupeKey) ?? null;
-  })) as SyncQueueEntry | null;
-
-  const entry: SyncQueueEntry = {
-    id: existing?.id ?? uid("sync"),
-    ownerId,
-    type,
-    dedupeKey,
-    payload,
-    createdAt: Date.now(),
-    attempts: existing?.attempts ?? 0,
-    version,
-  };
-
-  await tx(db, "readwrite", async (store) => {
-    await request(store.put(entry));
+    const projectId =
+      (type === "project:create" || type === "project:update") &&
+      typeof (payload as Record<string, unknown>)?.id === "string"
+        ? String((payload as Record<string, unknown>).id)
+        : null;
+    const existing =
+      all.find((e) => {
+        if (e.ownerId !== ownerId) return false;
+        if (e.dedupeKey === dedupeKey) return true;
+        if (!projectId || (e.type !== "project:create" && e.type !== "project:update")) return false;
+        return (e.payload as Record<string, unknown> | null)?.id === projectId;
+      }) ?? null;
+    // A create followed by an update is still one unsent document. Keep the
+    // create operation (the remote may not have the document yet), but always
+    // replace it with the latest payload.
+    const effectiveType =
+      existing?.type === "project:create" || type === "project:create"
+        ? "project:create"
+        : type;
+    const effectiveKey =
+      effectiveType === type ? dedupeKey : `project:create:${projectId}`;
+    const next: SyncQueueEntry = {
+      id: existing?.id ?? uid("sync"),
+      ownerId,
+      type: effectiveType,
+      dedupeKey: effectiveKey,
+      payload,
+      createdAt: Date.now(),
+      attempts: existing?.attempts ?? 0,
+      version,
+    };
+    await request(store.put(next));
+    return next;
   });
   announceEnqueued();
   return entry.id;
