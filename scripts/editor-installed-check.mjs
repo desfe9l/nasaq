@@ -203,7 +203,19 @@ try {
     await page
       .locator('.editor-header-actions button[aria-keyshortcuts="⌘S"]')
       .click();
-    await page.locator(".editor-header-actions .is-saved").waitFor();
+    /*
+     * The save state is ONE chip in the document capsule (the old per-button
+     * `.is-saved` tone was a second rendering of the same state). Wait for it
+     * to leave «جارٍ الحفظ…» and report a settled document.
+     */
+    await page
+      .locator(
+        '.editor-doc-capsule [data-testid="editor-sync-status"][data-status="local"], ' +
+          '.editor-doc-capsule [data-testid="editor-sync-status"][data-status="synced"], ' +
+          '.editor-doc-capsule [data-testid="editor-sync-status"][data-status="ready"]',
+      )
+      .first()
+      .waitFor();
     await page.getByRole("button", { name: "المظهر", exact: true }).click();
     await page
       .locator(".editor-menu-row")

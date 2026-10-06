@@ -194,7 +194,6 @@ function sanitizeDockSides(
 export const OPEN_REPORT_TOOLS_EVENT = "nasaq:open-report-tools";
 import {
   Brush,
-  Check,
   ChevronDown,
   Circle,
   Download,
@@ -218,7 +217,6 @@ import { toast } from "sonner";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
 import {
   useEditor,
-  saveLabel,
   PAGES_PANEL_MIN,
   type LeftTab,
 } from "@/lib/editor/store";
@@ -261,7 +259,7 @@ import { EditorWorkspaceSkeleton } from "@/components/ui/Skeleton";
 import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
 import { EditorAccountMenu } from "./EditorAccountMenu";
 import { HeaderPaint } from "./HeaderPaint";
-import { EditorSyncStatus } from "@/components/ui/OfflineStatus";
+import { EditorDocumentStatus } from "@/components/ui/OfflineStatus";
 import {
   OVERLAY_BREAKPOINT,
   DOCK_BREAKPOINT,
@@ -317,7 +315,20 @@ import { openDesignFile } from "@/lib/editor/import/open";
  */
 export function EditorApp({ projectId }: { projectId?: string } = {}) {
   const hydrate = useEditor((s) => s.hydrate);
-  const hydrated = useEditor((s) => s.hydrated);
+  /**
+   * The lifecycle of the open document. The skeleton answers to THIS — never to
+   * autosave, the sync queue or the connection.
+   */
+  const documentPhase = useEditor((s) => s.documentPhase);
+  /**
+   * Latched: once a document has been on screen, the studio never returns to
+   * its opening placeholder for a later swap (opening another design keeps the
+   * author's panels, camera and scroll exactly where they were).
+   */
+  const [booted, setBooted] = useState(() => documentPhase === "ready");
+  useEffect(() => {
+    if (documentPhase === "ready") setBooted(true);
+  }, [documentPhase]);
   /** ?showcase=1 (live product preview on the site): hide the account surface. */
   const showcase = useEditor((s) => s.showcase);
   const setEntitlements = useEditor((s) => s.setEntitlements);
@@ -361,9 +372,18 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
    * documents I glanced at".
    */
   const openProjectId = useEditor((s) => s.id);
+  /**
+   * The address follows a document the STUDIO put on screen. It never chases a
+   * boot restore (that is the route's job: `/editor/X` must open X, not
+   * "whatever was last touched"), and it stays still while an open is running —
+   * otherwise the address would rewrite itself to the outgoing document and
+   * fight the resolution that is about to land.
+   */
+  const documentOrigin = useEditor((s) => s.documentOrigin);
   const navigate = useNavigate();
   useEffect(() => {
     if (!projectId || !openProjectId || openProjectId === projectId) return;
+    if (documentOrigin !== "open" || documentPhase !== "ready") return;
     void navigate({
       to: "/editor/$projectId",
       params: { projectId: openProjectId },
@@ -375,7 +395,7 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
        */
       ignoreBlocker: true,
     });
-  }, [openProjectId, projectId, navigate]);
+  }, [documentOrigin, documentPhase, openProjectId, projectId, navigate]);
 
   // Keep editor-side limits in sync with the same server-derived entitlements
   // used by the license and export surfaces.
@@ -483,7 +503,7 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
     }
   };
 
-  if (!hydrated) {
+  if (!booted) {
     return <EditorWorkspaceSkeleton />;
   }
 
@@ -2834,7 +2854,9 @@ function Studio({
               className="editor-doc-name"
               placeholder="مستند جديد"
             />
-            <EditorSyncStatus />
+            {/* Narrow phone chrome shows the short label: the surface comes
+                from the editor's ONE responsive resolver, not a probe. */}
+            <EditorDocumentStatus compact={isMobileSurface} />
           </div>
         </div>
 
@@ -2875,7 +2897,7 @@ function Studio({
           {!isMobileSurface && workspaceViewMenu}
           {/* Permanent icon-first appearance gateway on every surface. */}
           <AppearanceMenu />
-          <SaveBadge onClick={() => void saveNow()} />
+          <SaveNowButton onClick={() => void saveNow()} />
           <ProjectFileMenu onOpenFile={onOpenFile} />
           <IconButton
             label="تصدير المشروع"
@@ -3062,37 +3084,21 @@ function Studio({
 }
 
 /**
- * Save-state indicator. Self-subscribed (including the 20 s `clockTick`
- * heartbeat the shell no longer re-renders for) so a save state change
- * repaints this button alone.
+ * «احفظ الآن» — the ACTION only.
+ *
+ * It used to mirror the autosave state a second time (label, tone and tick
+ * icon), so «جارٍ الحفظ» / «تعذر الحفظ» were painted by two components at
+ * once. The header status chip owns that state; this button only saves.
+ * `saveNow()` already serialises overlapping writes, so it stays tappable.
  */
-function SaveBadge({ onClick }: { onClick: () => void }) {
-  const state = useEditor((s) => s.saveState);
-  const savedAt = useEditor((s) => s.savedAt);
-  useEditor((s) => s.clockTick);
-  const label = saveLabel(state, savedAt, Date.now());
-  const tone =
-    state === "error"
-      ? "is-danger"
-      : state === "dirty" || state === "saving"
-        ? "is-pending"
-        : "is-saved";
+function SaveNowButton({ onClick }: { onClick: () => void }) {
   return (
-    /* Same 34px control as the rest of the strip: the state lives in the icon
-       and its colour, the full sentence in the tooltip. */
     <IconButton
-      label={label}
-      hint="حفظ المستند الآن"
+      label="حفظ المستند الآن"
+      hint="حفظ فوري للمستند"
       shortcut="⌘S"
       onClick={onClick}
-      className={tone}
-      icon={
-        state === "saved" ? (
-          <Check className="size-4" strokeWidth={1.9} />
-        ) : (
-          <Save className="size-4" strokeWidth={1.7} />
-        )
-      }
+      icon={<Save className="size-4" strokeWidth={1.7} />}
     />
   );
 }

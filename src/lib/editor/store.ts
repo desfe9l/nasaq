@@ -35,6 +35,7 @@ import {
   type ThemeId,
 } from "./model";
 import { DEFAULT_FADE, normalizeFade } from "./fade";
+import type { DocumentPhase } from "./document-status";
 import {
   deleteAsset as removeAsset,
   deleteProject as removeProject,
@@ -179,6 +180,10 @@ export type LeftTab =
 export type RightTab = "properties" | "layers";
 export type View = "home" | "editor";
 
+/**
+ * Autosave phases. `saved` means "durable on this device" — the cloud mirror
+ * is a separate concern (`documentStatus()` in `./document-status`).
+ */
 export type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 
 /** Export formats the studio can produce (mirrors `export.ts`). */
@@ -422,6 +427,32 @@ export interface FontChoice {
 
 interface EditorStore extends Project, Ui, History {
   hydrated: boolean;
+  /**
+   * The DOCUMENT lifecycle — the single source of truth for "is the studio
+   * opening a document?".
+   *
+   * `idle → loading → ready`, and nothing else may move it: not autosave, not
+   * the sync queue, not a network change. `openProjectState` is the only place
+   * that reaches `ready` (it is the single funnel every create/open/import/
+   * restore path goes through), and `withDocumentOpen` restores the previous
+   * phase on every exit — so a refused or failed open can never strand the
+   * editor on «جارٍ الفتح…».
+   */
+  documentPhase: DocumentPhase;
+  /**
+   * How the live document got here. «restore» is the boot restore of whatever
+   * the author last had open; «open» is a document the studio itself put on
+   * screen. The route uses it to tell a cold address from a warm switch: a warm
+   * switch keeps the studio mounted instead of tearing it down into a loading
+   * surface.
+   */
+  documentOrigin: "none" | "restore" | "open";
+  /**
+   * True while autosave is armed (a debounce timer is pending or a write is in
+   * flight). Lets the status say «غير محفوظ» instead of showing a save that
+   * will never happen — the old permanent «جاري الحفظ» on dirty documents.
+   */
+  saveArmed: boolean;
   /**
    * Read-only showcase boot (`?showcase=1`): fully interactive, but nothing
    * is ever persisted — autosave and explicit saves are no-ops and the
@@ -1251,7 +1282,7 @@ function queueLibrarySync() {
       } catch {}
       // Best-effort immediate push when online
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        try { const { triggerSync } = await import("@/lib/offline/connectivity"); triggerSync(); } catch {}
+        try { const { requestSync } = await import("@/lib/offline/connectivity"); requestSync(); } catch {}
         return;
       }
       try {
@@ -1259,7 +1290,7 @@ function queueLibrarySync() {
         const ok = await pushLibraryCatalog(catalog);
         if (ok) {
           // On success the queue can drain; trigger connectivity sync to clean queue
-          try { const { triggerSync } = await import("@/lib/offline/connectivity"); triggerSync(); } catch {}
+          try { const { requestSync } = await import("@/lib/offline/connectivity"); requestSync(); } catch {}
         }
       } catch {}
     })();
@@ -1298,6 +1329,8 @@ export const useEditor = create<EditorStore>((set, get) => {
       saveTimer = null;
       void get().saveNow();
     }, delay);
+    /* The status may now honestly say «جارٍ الحفظ»: a write really is armed. */
+    if (!get().saveArmed) set({ saveArmed: true });
   };
 
   const HISTORY_LIMIT = 60;
@@ -1373,6 +1406,13 @@ export const useEditor = create<EditorStore>((set, get) => {
     extra: Partial<EditorStore> = {},
   ) =>
     applyProject(incoming, {
+      /*
+       * The single place the document lifecycle reaches `ready`: every create,
+       * open, import and boot-restore path funnels through here, so `ready`
+       * always means "a real document is in memory" — never a save or a sync.
+       */
+      documentPhase: "ready",
+      documentOrigin: extra.documentOrigin ?? "open",
       ...extra,
       documentRevision: get().documentRevision + 1,
     });
@@ -1463,199 +1503,86 @@ export const useEditor = create<EditorStore>((set, get) => {
     pushHistory();
   };
 
-  return {
-    ...blank,
-    transactionNo: blank.transactionNo ?? "",
-    activePageId: blank.pages[0].id,
-    documentRevision: 0,
-    selectedId: null,
-    selectedIds: [],
-    enteredGroupId: null,
-    editingId: null,
-    zoom: 0.82,
-    showGrid: false,
-    showOutsidePage: SHOW_OUTSIDE_PAGE_DEFAULT,
-    printGuides: { ...DEFAULT_PRINT_GUIDES },
-    clipExport: true,
-    snapGrid: true,
-    snapElements: true,
-    previewAll: true,
-    focusMode: false,
-    appearance: readStoredTheme() ?? "light",
-    leftTab: "library",
-    rightTab: "properties",
-    leftOpen: false,
-    rightOpen: false,
-    leftCollapsed: false,
-    rightCollapsed: false,
-    layersOpen: false,
-    reportToolsOpen: false,
-    libraryOpen: false,
-    toolsOpen: false,
-    artboardGridCols: 4,
-    pagesPanelHeight: PAGES_PANEL_DEFAULT,
-    pagesRailCollapsed: false,
-    pagesRailHidden: false,
-    contextMenu: null,
-    bubbleEnabled: true,
-    bubbleOffset: null,
-    exportOpen: false,
-    exportPreset: null,
-    pageManagerOpen: false,
-    tablePickerOpen: false,
-    saveState: "idle",
-    savedAt: null,
-    clockTick: 0,
-    captureArmed: false,
-    hydrated: false,
-    showcase: BOOT_SHOWCASE,
-    sessionOwner: null,
-    entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
-    entitlementsResolved: false,
-    entitlementsOwner: null,
-    setEntitlements: (entitlements, owner = getStorageOwner()) => {
-      if (owner !== getStorageOwner()) return;
-      const before = get();
-      if (before.hydrated && before.sessionOwner !== owner) return;
-      const resolved = { ...entitlements };
-      set({
-        entitlements: resolved,
-        entitlementsResolved: true,
-        entitlementsOwner: owner,
-      });
+  /** Coalesces concurrent `hydrate()` calls (see the store method). */
+  let hydrateInFlight: Promise<void> | null = null;
 
-      const current = get();
-      if (
-        current.showcase ||
-        !current.hydrated ||
-        current.sessionOwner !== owner
-      )
-        return;
-      const block = projectAccessBlock(current, resolved);
-      if (!block) return;
+  /** Nesting depth of document opens: only the outermost settles the phase. */
+  let documentOpenDepth = 0;
 
-      // A licence downgrade revokes the active document immediately. Keep the
-      // saved project row available for a later re-licence, but remove its
-      // contents and history from the live editor instead of leaving a writable
-      // canvas whose next save would be refused.
-      saveSessionGen += 1;
-      activeSave = null;
-      savePaused = false;
-      if (saveTimer) {
-        clearTimeout(saveTimer);
-        saveTimer = null;
+  /**
+   * Run a document open under the ONE lifecycle phase.
+   *
+   * `loading` is entered only while a document is genuinely being read, and the
+   * phase always settles on exit — a refused, missing, unauthorised or failed
+   * open can never strand the editor on «جارٍ فتح المستند…» (the old code set a
+   * loading flag and left the happy path to clear it).
+   */
+  const withDocumentOpen = async <T,>(run: () => Promise<T>): Promise<T> => {
+    documentOpenDepth += 1;
+    set({ documentPhase: "loading" });
+    try {
+      return await run();
+    } finally {
+      documentOpenDepth -= 1;
+      if (documentOpenDepth === 0 && get().documentPhase === "loading") {
+        set({ documentPhase: get().hydrated ? "ready" : "idle" });
       }
-      clearDraftSnapshot();
-      openProjectState(createProject("blank", current.theme), { zoom: current.zoom });
-      const snap = projectSlice(get());
-      cleanSnapshot = snap;
-      set({
-        past: [snap],
-        future: [],
-        saveState: "saved",
-        savedAt: Date.now(),
-      });
-      void setSetting("activeProjectId", null);
-      toast.error(
-        block === "premium-template"
-          ? "انتهى الوصول إلى هذا المستند؛ فعّل ترخيصًا مناسبًا لمتابعة العمل"
-          : "يتجاوز هذا الملف حد صفحات خطتك الحالية",
-        { id: "editor-current-document-access" },
-      );
-    },
-    clipboard: null,
-    styleClipboard: null,
-    past: [],
-    future: [],
-    projects: [],
-    projectsLoading: true,
-    storage: { mode: "indexeddb", persistent: true },
-    assets: [],
-    assetFolders: [],
-    assetFolderId: null,
-    selectedAssetIds: [],
-    assetsLoading: true,
-    fontChoices: bundledFontChoices(),
-    fontsProbed: false,
-    customIcons: [],
+    }
+  };
 
-    /**
-     * Probe installed fonts on first editor open.
-     *
-     * Detection re-rasterises probe strings, so it is deferred until the author
-     * actually needs the list rather than run during boot, and `fontsProbed`
-     * keeps it to one run per session.
-     */
-    probeFonts: () => {
-      if (get().fontsProbed) return;
-      let detected: DetectedFont[] = [];
+  /**
+   * Server revalidation of the licence, kept OFF the document path: the cached
+   * grace value is what the open used, and the server's answer arrives through
+   * the store's single `setEntitlements` funnel — so a downgrade still revokes a
+   * document the account may no longer edit.
+   */
+  const refreshEntitlementsInBackground = (owner: string) => {
+    void (async () => {
       try {
-        detected = detectDeviceFonts();
+        const { getLicenseStatusFn } = await import("@/lib/license/functions");
+        const status = await getLicenseStatusFn();
+        if (getStorageOwner() !== owner) return;
+        const resolved = status.entitlements ?? { ...LICENSE_ENTITLEMENTS.FREE };
+        try {
+          const { cacheEntitlement } =
+            await import("@/lib/offline/entitlement-cache");
+          const typed = status as unknown as {
+            license?: { expiresAt?: string | null };
+            expiresAt?: string | null;
+          };
+          await cacheEntitlement({
+            ownerId: owner,
+            entitlements: resolved,
+            validatedAt: Date.now(),
+            expiresAt: typed.license?.expiresAt ?? typed.expiresAt ?? null,
+            isAdmin: Boolean((status as unknown as Record<string, unknown>).isAdmin),
+            isOwner: Boolean((status as unknown as Record<string, unknown>).isOwner),
+            isSuspended: Boolean((status as unknown as Record<string, unknown>).isSuspended),
+            hasLicense: Boolean((status as unknown as Record<string, unknown>).hasLicense),
+            source: "server",
+          });
+        } catch {
+          /* the cache is best-effort; the live value below still applies */
+        }
+        if (getStorageOwner() !== owner) return;
+        get().setEntitlements(resolved, owner);
+        /*
+         * An edit made while access was still unresolved was never scheduled
+         * (autosave refuses to write before the owner is known), so a dirty
+         * document is armed again now — otherwise the status would sit on
+         * «غير محفوظ» for the rest of the session.
+         */
+        if (get().saveState === "dirty" && !get().isSavePaused())
+          scheduleSave(400);
       } catch {
-        // A blocked canvas (privacy mode) leaves the bundled list intact.
-        detected = [];
+        /* Offline, or the function bridge is unavailable: the cached grace (or
+           FREE) stands and local editing continues. */
       }
-      const uploaded = get().fontChoices.filter((f) => f.source === "uploaded");
-      set({
-        fontsProbed: true,
-        fontChoices: mergeFontChoices(detected, uploaded),
-      });
-    },
+    })();
+  };
 
-    registerFont: (family, note) => {
-      const trimmed = String(family || "").trim();
-      if (!trimmed) return;
-      const list = get().fontChoices.filter((f) => f.family !== trimmed);
-      set({
-        fontChoices: [
-          ...list,
-          { family: trimmed, note: note || "خط مرفوع", source: "uploaded" },
-        ],
-      });
-    },
-
-    resetUserScopedState: () => {
-      clearUploadedFonts();
-      saveSessionGen += 1;
-      activeSave = null;
-      savePaused = false;
-      // Cancel any pending autosave first — it must not fire mid-reset and
-      // write the outgoing session's document under the new owner.
-      if (saveTimer) {
-        clearTimeout(saveTimer);
-        saveTimer = null;
-      }
-      // A fresh document keeps the editor shell functional for whoever is
-      // here now (the editor is open to visitors); the previous account's
-      // pages, library list, asset shelf and custom vectors are all dropped.
-      openProjectState(createProject("official"), { zoom: get().zoom });
-      cleanSnapshot = projectSlice(get());
-      set({
-        hydrated: false,
-        sessionOwner: null,
-        fontChoices: bundledFontChoices(),
-        fontsProbed: false,
-        projects: [],
-        projectsLoading: true,
-        assets: [],
-        assetsLoading: true,
-        assetFolders: [],
-        assetFolderId: null,
-        selectedAssetIds: [],
-        customIcons: [],
-        clipboard: null,
-        styleClipboard: null,
-        past: [],
-        future: [],
-        entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
-        entitlementsResolved: false,
-        entitlementsOwner: null,
-        saveState: "idle",
-        savedAt: null,
-      });
-    },
-
-    hydrate: async () => {
+  /** The single hydration run — see `hydrate`. */
+  const runHydrate = async (): Promise<void> => {
       /*
        * Showcase boot (?template=…&showcase=1): the marketing site embeds a
        * live editor as its product preview. Boot straight from the requested
@@ -1718,6 +1645,8 @@ export const useEditor = create<EditorStore>((set, get) => {
         }
         set({
           hydrated: true,
+          documentPhase: "ready",
+          documentOrigin: "restore",
           entitlementsResolved: true,
           entitlementsOwner: null,
           appearance,
@@ -1725,6 +1654,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           past: [projectSlice(get())],
           future: [],
           saveState: "saved",
+          saveArmed: false,
           savedAt: Date.now(),
         });
         try {
@@ -1754,47 +1684,41 @@ export const useEditor = create<EditorStore>((set, get) => {
         if (get().sessionOwner === owner) return;
         get().resetUserScopedState();
       }
+      /*
+       * The document lifecycle enters `loading` HERE — after the identity was
+       * resolved and after an already-hydrated store returned above — and
+       * reaches `ready` only when a document is really in memory
+       * (`openProjectState`). A second `hydrate()` (the route and the studio
+       * both ask) therefore never touches the phase of a document that is
+       * already on screen, and nothing else — no save, no sync, no network
+       * event — may move it at all.
+       */
+      set({ documentPhase: "loading" });
       let entitlements: Record<FeatureId, boolean> = {
         ...LICENSE_ENTITLEMENTS.FREE,
       };
       let cachedGraceEntitlements: Record<FeatureId, boolean> | null = null;
       if (owner !== ANON_OWNER) {
         try {
-          const { getLicenseStatusFn } =
-            await import("@/lib/license/functions");
-          const status = await getLicenseStatusFn();
-          entitlements = status.entitlements ?? entitlements;
-          // Cache validated entitlement for offline grace
-          try {
-            const { cacheEntitlement } = await import("@/lib/offline/entitlement-cache");
-            await cacheEntitlement({
-              ownerId: owner,
-              entitlements,
-              validatedAt: Date.now(),
-              expiresAt: (status as unknown as { license?: { expiresAt?: string | null } })?.license?.expiresAt ?? (status as unknown as { expiresAt?: string | null })?.expiresAt ?? null,
-              isAdmin: Boolean((status as unknown as Record<string, unknown>).isAdmin),
-              isOwner: Boolean((status as unknown as Record<string, unknown>).isOwner),
-              isSuspended: Boolean((status as unknown as Record<string, unknown>).isSuspended),
-              hasLicense: Boolean((status as unknown as Record<string, unknown>).hasLicense),
-              source: "server",
-            });
-          } catch {}
-        } catch {
-          // Offline or network failure: try cached grace entitlement
-          try {
-            const { getCachedEntitlement, isEntitlementValidOffline } = await import("@/lib/offline/entitlement-cache");
-            const cached = await getCachedEntitlement(owner);
-            if (cached && isEntitlementValidOffline(cached)) {
-              entitlements = cached.entitlements;
-              cachedGraceEntitlements = cached.entitlements;
-            } else {
-              // No valid cached entitlement — remain FREE but allow local offline editing
-              entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
-            }
-          } catch {
-            entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
+          /*
+           * LOCAL FIRST. A validated entitlement is already on this device for
+           * every account that has been online here, so a document that is
+           * ready in IndexedDB opens without waiting for the network — the
+           * offline reload included. The server is re-consulted in the
+           * background below and its answer (a downgrade included) still wins
+           * through the store's single `setEntitlements` funnel.
+           */
+          const { getCachedEntitlement, isEntitlementValidOffline } =
+            await import("@/lib/offline/entitlement-cache");
+          const cached = await getCachedEntitlement(owner);
+          if (cached && isEntitlementValidOffline(cached)) {
+            entitlements = cached.entitlements;
+            cachedGraceEntitlements = cached.entitlements;
           }
+        } catch {
+          /* No cache: stay FREE for this open; the background check resolves it. */
         }
+        refreshEntitlementsInBackground(owner);
       }
       // An account switch during the network round-trip invalidates both the
       // status response and any following reads. Do not hydrate the old scope.
@@ -1809,11 +1733,14 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (cachedGraceEntitlements) {
         console.info("[offline] using cached entitlement grace for", owner);
       }
-      // Kick off connectivity monitor and workspace snapshot refresh (offline cache)
+      /*
+       * Connectivity monitor + workspace snapshot (offline cache). The monitor
+       * is what drains a queue that survived a reload — it inspects the real
+       * queue itself, so booting a clean session emits no sync at all.
+       */
       try {
         void import("@/lib/offline/connectivity").then((m) => m.initConnectivity());
         void import("@/lib/offline/workspace-cache").then((m) => void m.refreshWorkspaceCache());
-        void import("@/lib/offline/connectivity").then((m) => m.triggerSync());
       } catch {}
       const mode = storageMode();
       set({ storage: { mode, persistent: mode === "indexeddb" } });
@@ -1969,6 +1896,9 @@ export const useEditor = create<EditorStore>((set, get) => {
           await restoreFonts(active);
           if (getStorageOwner() === owner && get().sessionOwner === owner)
             openProjectState(active, {
+              // Boot restore: the address may name another document, so this is
+              // NOT a studio-requested open (see `documentOrigin`).
+              documentOrigin: "restore",
               zoom: get().zoom,
               ...(restoredUnsavedDraft ? { id: undefined } : {}),
               ...(activePageSetting && !restoredFromDraft
@@ -1981,7 +1911,9 @@ export const useEditor = create<EditorStore>((set, get) => {
             );
             // The restored draft IS the current document — mark it dirty so
             // the next auto-save makes the recovery durable in IndexedDB.
-            set({ saveState: "dirty" });
+            // `scheduleSave(400)` below arms it; until then the status honestly
+            // reads «غير محفوظ» instead of pretending a write is in flight.
+            set({ saveState: "dirty", saveArmed: false });
           }
         } else if (
           activePageSetting &&
@@ -1992,6 +1924,32 @@ export const useEditor = create<EditorStore>((set, get) => {
       } catch {
         set({ projectsLoading: false });
       }
+
+      document.documentElement.lang = "ar";
+      document.documentElement.dir = "rtl";
+      const recoveredDirty = get().saveState === "dirty";
+      const snap = projectSlice(get());
+      if (!recoveredDirty) {
+        cleanSnapshot = snap;
+      }
+      /*
+       * READY. From this line the document is open and editable; everything
+       * below is library work that must never gate the canvas (assets, folders,
+       * custom vectors, the workspace snapshot, the sync queue).
+       */
+      set({
+        hydrated: true,
+        documentPhase: "ready",
+        // Nothing was studio-opened here: this is the boot restore (which may
+        // legitimately be the starter document when nothing was saved yet).
+        documentOrigin: "restore",
+        past: [snap],
+        future: [],
+        saveState: recoveredDirty ? "dirty" : "saved",
+        saveArmed: false,
+        savedAt: Date.now(),
+      });
+      if (recoveredDirty) scheduleSave(400);
 
       // The asset shelf is independent of the project load: a corrupt or empty
       // project list must still leave the author's saved logos reachable.
@@ -2027,22 +1985,239 @@ export const useEditor = create<EditorStore>((set, get) => {
               .filter((item) => item.svg.includes("<svg"))
           : [],
       });
+  };
 
-      document.documentElement.lang = "ar";
-      document.documentElement.dir = "rtl";
-      const recoveredDirty = get().saveState === "dirty";
-      const snap = projectSlice(get());
-      if (!recoveredDirty) {
-        cleanSnapshot = snap;
-      }
+
+  return {
+    ...blank,
+    transactionNo: blank.transactionNo ?? "",
+    activePageId: blank.pages[0].id,
+    documentRevision: 0,
+    selectedId: null,
+    selectedIds: [],
+    enteredGroupId: null,
+    editingId: null,
+    zoom: 0.82,
+    showGrid: false,
+    showOutsidePage: SHOW_OUTSIDE_PAGE_DEFAULT,
+    printGuides: { ...DEFAULT_PRINT_GUIDES },
+    clipExport: true,
+    snapGrid: true,
+    snapElements: true,
+    previewAll: true,
+    focusMode: false,
+    appearance: readStoredTheme() ?? "light",
+    leftTab: "library",
+    rightTab: "properties",
+    leftOpen: false,
+    rightOpen: false,
+    leftCollapsed: false,
+    rightCollapsed: false,
+    layersOpen: false,
+    reportToolsOpen: false,
+    libraryOpen: false,
+    toolsOpen: false,
+    artboardGridCols: 4,
+    pagesPanelHeight: PAGES_PANEL_DEFAULT,
+    pagesRailCollapsed: false,
+    pagesRailHidden: false,
+    contextMenu: null,
+    bubbleEnabled: true,
+    bubbleOffset: null,
+    exportOpen: false,
+    exportPreset: null,
+    pageManagerOpen: false,
+    tablePickerOpen: false,
+    saveState: "idle",
+    saveArmed: false,
+    savedAt: null,
+    clockTick: 0,
+    captureArmed: false,
+    hydrated: false,
+    documentPhase: "idle",
+    documentOrigin: "none",
+    showcase: BOOT_SHOWCASE,
+    sessionOwner: null,
+    entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
+    entitlementsResolved: false,
+    entitlementsOwner: null,
+    setEntitlements: (entitlements, owner = getStorageOwner()) => {
+      if (owner !== getStorageOwner()) return;
+      const before = get();
+      if (before.hydrated && before.sessionOwner !== owner) return;
+      const resolved = { ...entitlements };
       set({
-        hydrated: true,
+        entitlements: resolved,
+        entitlementsResolved: true,
+        entitlementsOwner: owner,
+      });
+
+      const current = get();
+      if (
+        current.showcase ||
+        !current.hydrated ||
+        current.sessionOwner !== owner
+      )
+        return;
+      const block = projectAccessBlock(current, resolved);
+      if (!block) return;
+
+      // A licence downgrade revokes the active document immediately. Keep the
+      // saved project row available for a later re-licence, but remove its
+      // contents and history from the live editor instead of leaving a writable
+      // canvas whose next save would be refused.
+      saveSessionGen += 1;
+      activeSave = null;
+      savePaused = false;
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      clearDraftSnapshot();
+      openProjectState(createProject("blank", current.theme), { zoom: current.zoom });
+      const snap = projectSlice(get());
+      cleanSnapshot = snap;
+      set({
         past: [snap],
         future: [],
-        saveState: recoveredDirty ? "dirty" : "saved",
+        saveState: "saved",
+        saveArmed: false,
         savedAt: Date.now(),
       });
-      if (recoveredDirty) scheduleSave(400);
+      void setSetting("activeProjectId", null);
+      toast.error(
+        block === "premium-template"
+          ? "انتهى الوصول إلى هذا المستند؛ فعّل ترخيصًا مناسبًا لمتابعة العمل"
+          : "يتجاوز هذا الملف حد صفحات خطتك الحالية",
+        { id: "editor-current-document-access" },
+      );
+    },
+    clipboard: null,
+    styleClipboard: null,
+    past: [],
+    future: [],
+    projects: [],
+    projectsLoading: true,
+    storage: { mode: "indexeddb", persistent: true },
+    assets: [],
+    assetFolders: [],
+    assetFolderId: null,
+    selectedAssetIds: [],
+    assetsLoading: true,
+    fontChoices: bundledFontChoices(),
+    fontsProbed: false,
+    customIcons: [],
+
+    /**
+     * Probe installed fonts on first editor open.
+     *
+     * Detection re-rasterises probe strings, so it is deferred until the author
+     * actually needs the list rather than run during boot, and `fontsProbed`
+     * keeps it to one run per session.
+     */
+    probeFonts: () => {
+      if (get().fontsProbed) return;
+      let detected: DetectedFont[] = [];
+      try {
+        detected = detectDeviceFonts();
+      } catch {
+        // A blocked canvas (privacy mode) leaves the bundled list intact.
+        detected = [];
+      }
+      const uploaded = get().fontChoices.filter((f) => f.source === "uploaded");
+      set({
+        fontsProbed: true,
+        fontChoices: mergeFontChoices(detected, uploaded),
+      });
+    },
+
+    registerFont: (family, note) => {
+      const trimmed = String(family || "").trim();
+      if (!trimmed) return;
+      const list = get().fontChoices.filter((f) => f.family !== trimmed);
+      set({
+        fontChoices: [
+          ...list,
+          { family: trimmed, note: note || "خط مرفوع", source: "uploaded" },
+        ],
+      });
+    },
+
+    resetUserScopedState: () => {
+      clearUploadedFonts();
+      saveSessionGen += 1;
+      activeSave = null;
+      savePaused = false;
+      // Cancel any pending autosave first — it must not fire mid-reset and
+      // write the outgoing session's document under the new owner.
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+      }
+      // A fresh document keeps the editor shell functional for whoever is
+      // here now (the editor is open to visitors); the previous account's
+      // pages, library list, asset shelf and custom vectors are all dropped.
+      openProjectState(createProject("official"), { zoom: get().zoom });
+      cleanSnapshot = projectSlice(get());
+      set({
+        hydrated: false,
+        sessionOwner: null,
+        fontChoices: bundledFontChoices(),
+        fontsProbed: false,
+        projects: [],
+        projectsLoading: true,
+        assets: [],
+        assetsLoading: true,
+        assetFolders: [],
+        assetFolderId: null,
+        selectedAssetIds: [],
+        customIcons: [],
+        clipboard: null,
+        styleClipboard: null,
+        past: [],
+        future: [],
+        entitlements: { ...LICENSE_ENTITLEMENTS.FREE },
+        entitlementsResolved: false,
+        entitlementsOwner: null,
+        saveState: "idle",
+        saveArmed: false,
+        savedAt: null,
+        // A boundary reset is not an open: the next hydrate() decides.
+        documentPhase: "idle",
+        documentOrigin: "none",
+      });
+    },
+
+
+
+    hydrate: async () => {
+      /*
+       * ONE in-flight boot.
+       *
+       * The route and the studio both ask on mount, and a document switch can
+       * ask again. Two concurrent runs used to restore the library twice and
+       * re-open the document twice — the repeated load states, the doubled
+       * toasts and the camera jumping right after a save. Callers now join the
+       * same promise, and the run always leaves a settled phase behind.
+       */
+      if (hydrateInFlight) return hydrateInFlight;
+      const run = (async () => {
+        try {
+          await runHydrate();
+        } finally {
+          // The lifecycle never rests in `loading`: a run that aborted (owner
+          // switched mid-boot) or that found no document falls back to what the
+          // store actually is.
+          if (get().documentPhase === "loading")
+            set({ documentPhase: get().hydrated ? "ready" : "idle" });
+        }
+      })();
+      hydrateInFlight = run;
+      try {
+        await run;
+      } finally {
+        if (hydrateInFlight === run) hydrateInFlight = null;
+      }
     },
 
     refreshProjects: async () => {
@@ -2656,6 +2831,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         past: [snap],
         future: [],
         saveState: "saved",
+        saveArmed: false,
         savedAt: Date.now(),
       });
       if (!get().showcase) {
@@ -2665,7 +2841,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           await enqueueSync("project:create", saved, { dedupeKey: `project:create:${saved.id}`, version: saved.updatedAt });
           void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
           void import("@/lib/offline/asset-cache").then(m=>{ void m.cacheProjectAssets(saved as never); void m.cacheProjectFonts(saved as never); });
-          void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+          void import("@/lib/offline/connectivity").then(m=>m.requestSync());
         } catch {}
         await get().refreshProjects();
       }
@@ -2810,6 +2986,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         past: [snap],
         future: [],
         saveState: "saved",
+        saveArmed: false,
         savedAt: Date.now(),
       });
       if (!get().showcase) {
@@ -2819,7 +2996,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           await enqueueSync("project:create", saved, { dedupeKey: `project:create:${saved.id}`, version: saved.updatedAt });
           void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
           void import("@/lib/offline/asset-cache").then(m=>{ void m.cacheProjectAssets(saved as never); void m.cacheProjectFonts(saved as never); });
-          void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+          void import("@/lib/offline/connectivity").then(m=>m.requestSync());
         } catch {}
         await get().refreshProjects();
       }
@@ -2827,75 +3004,103 @@ export const useEditor = create<EditorStore>((set, get) => {
     },
 
     openProject: async (id) => {
-      if (!requireEditorAccess()) return false;
-      const owner = getStorageOwner();
-      const sessionOwner = get().sessionOwner;
-      const sameOwner = () =>
-        getStorageOwner() === owner && get().sessionOwner === sessionOwner;
-      let project: Project | null;
-      try {
-        project = await getProject(id);
-      } catch {
-        if (sameOwner()) toast.error("تعذر قراءة المشروع المحفوظ");
-        return false;
-      }
-      if (!sameOwner()) return false;
-      if (!project) {
-        toast.error("تعذر فتح المشروع");
-        await get().refreshProjects();
-        return false;
-      }
-      const denyBlockedProject = () => {
-        const block = projectAccessBlock(project, get().entitlements);
-        if (!block) return false;
-        toast.error(
-          block === "premium-template"
-            ? "هذا المستند مبني على قالب يتطلب النسخة الكاملة"
-            : "تجاوز هذا الملف حد صفحات خطتك الحالية",
-          {
-            description:
-              block === "premium-template"
-                ? "فعّل ترخيصًا مناسبًا لفتحه وتعديله."
-                : "تسمح الخطة الحالية بثلاث صفحات لكل مشروع.",
-          },
-        );
+      /*
+       * Already on screen: a re-open would re-read the row, discard in-memory
+       * edits that the debounce has not written yet, and reset the camera and
+       * the undo stack. The address bar asking for the document that is already
+       * open (every reload, every warm switch) must be free — and it must not
+       * even blink the phase.
+       *
+       * This check has to live ABOVE `withDocumentOpen`: that helper enters
+       * `loading` before the body runs, so the same test inside the body was
+       * never true and every address-bar re-address performed a full reload
+       * (the loading flash and the discarded edits the author reported).
+       */
+      if (get().id === id && get().documentPhase === "ready") {
+        if (!get().showcase) {
+          void setSetting("activeProjectId", id).catch(() => undefined);
+        }
         return true;
-      };
-      if (denyBlockedProject()) return false;
-      if (
-        hasLeaveGuard() &&
-        !get().showcase &&
-        hasUnsavedChanges(get().saveState)
-      ) {
-        const allowed = await requestLeave();
-        if (!allowed || !sameOwner() || denyBlockedProject()) return false;
       }
-      await restoreFonts(project);
-      if (!sameOwner() || denyBlockedProject()) return false;
-      saveSessionGen += 1;
-      activeSave = null;
-      savePaused = false;
-      if (saveTimer) {
-        clearTimeout(saveTimer);
-        saveTimer = null;
-      }
-      clearDraftSnapshot();
-      openProjectState(project, { zoom: get().zoom || 0.82 });
-      const snap = projectSlice(get());
-      cleanSnapshot = snap;
-      set({
-        past: [snap],
-        future: [],
-        saveState: "saved",
-        savedAt: Date.now(),
+      /*
+       * ONE lifecycle phase for the whole open. `withDocumentOpen` enters
+       * `loading` for the read and settles it on every exit path — a missing,
+       * locked or refused document can never leave the header reading
+       * «جارٍ فتح المستند…», which is exactly how the old editor could get
+       * stuck on a loading state that survived the document.
+       */
+      return withDocumentOpen(async () => {
+        if (!requireEditorAccess()) return false;
+        const owner = getStorageOwner();
+        const sessionOwner = get().sessionOwner;
+        const sameOwner = () =>
+          getStorageOwner() === owner && get().sessionOwner === sessionOwner;
+        let project: Project | null;
+        try {
+          project = await getProject(id);
+        } catch {
+          if (sameOwner()) toast.error("تعذر قراءة المشروع المحفوظ");
+          return false;
+        }
+        if (!sameOwner()) return false;
+        if (!project) {
+          toast.error("تعذر فتح المشروع");
+          await get().refreshProjects();
+          return false;
+        }
+        const denyBlockedProject = () => {
+          const block = projectAccessBlock(project, get().entitlements);
+          if (!block) return false;
+          toast.error(
+            block === "premium-template"
+              ? "هذا المستند مبني على قالب يتطلب النسخة الكاملة"
+              : "تجاوز هذا الملف حد صفحات خطتك الحالية",
+            {
+              description:
+                block === "premium-template"
+                  ? "فعّل ترخيصًا مناسبًا لفتحه وتعديله."
+                  : "تسمح الخطة الحالية بثلاث صفحات لكل مشروع.",
+            },
+          );
+          return true;
+        };
+        if (denyBlockedProject()) return false;
+        if (
+          hasLeaveGuard() &&
+          !get().showcase &&
+          hasUnsavedChanges(get().saveState)
+        ) {
+          const allowed = await requestLeave();
+          if (!allowed || !sameOwner() || denyBlockedProject()) return false;
+        }
+        await restoreFonts(project);
+        if (!sameOwner() || denyBlockedProject()) return false;
+        saveSessionGen += 1;
+        activeSave = null;
+        savePaused = false;
+        if (saveTimer) {
+          clearTimeout(saveTimer);
+          saveTimer = null;
+        }
+        clearDraftSnapshot();
+        openProjectState(project, { zoom: get().zoom || 0.82 });
+        const snap = projectSlice(get());
+        cleanSnapshot = snap;
+        set({
+          past: [snap],
+          future: [],
+          saveState: "saved",
+          saveArmed: false,
+          savedAt: Date.now(),
+        });
+        try {
+          await setSetting("activeProjectId", project.id);
+        } catch {
+          // The document is open in memory even if the optional last-opened
+          // preference cannot be persisted by this browser.
+        }
+        return true;
       });
-      try {
-        await setSetting("activeProjectId", project.id);
-      } catch {
-        // The document is open in memory even if the optional last-opened
-        // preference cannot be persisted by this browser.
-      }
-      return true;
     },
 
     saveNow: async () => {
@@ -2916,7 +3121,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           if (!initial.pages?.length) return;
           const entitlements = initial.entitlements;
           if (exceedsProjectPageLimit(initial.pages.length, entitlements)) {
-            set({ saveState: "error" });
+            set({ saveState: "error", saveArmed: false });
             toast.error("لا يمكن حفظ مستند يتجاوز حد الصفحات في خطتك", {
               id: "editor-access-save-limit",
             });
@@ -2926,13 +3131,13 @@ export const useEditor = create<EditorStore>((set, get) => {
             requiresPremiumPack(initial.pack, entitlements) ||
             requiresLicensedTemplate(initial.licensedTemplateId, entitlements)
           ) {
-            set({ saveState: "error" });
+            set({ saveState: "error", saveArmed: false });
             toast.error("يتطلب حفظ هذا المستند ترخيصًا مناسبًا", {
               id: "editor-access-save-template",
             });
             return;
           }
-          set({ saveState: "saving" });
+          set({ saveState: "saving", saveArmed: true });
           try {
             let captured: string | null = null;
             if (thumbnailCaptureDue()) {
@@ -3032,6 +3237,7 @@ export const useEditor = create<EditorStore>((set, get) => {
             cleanSnapshot = projectSlice(get());
             set({
               saveState: "saved",
+              saveArmed: false,
               savedAt: Date.now(),
             });
             clearDraftSnapshot();
@@ -3041,16 +3247,19 @@ export const useEditor = create<EditorStore>((set, get) => {
               await enqueueSync("project:update", saved, { dedupeKey: `project:update:${saved.id}`, version: saved.updatedAt });
               void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
               void import("@/lib/offline/asset-cache").then(m=>{ void m.cacheProjectAssets(saved as never); void m.cacheProjectFonts(saved as never); });
-              void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+              void import("@/lib/offline/connectivity").then(m=>m.requestSync());
             } catch {}
             return;
           } catch (err) {
             console.error("[editor] autosave failed", err);
             if (gen === saveSessionGen && getStorageOwner() === requestOwner) {
-              set({ saveState: "error" });
-              toast.error("تعذر حفظ المشروع — تحقق من مساحة التخزين", {
-                id: "editor-save-error",
-              });
+              /*
+               * ONE renderer for this state: the header status chip owns it
+               * (with its retry action and its explanation), so no toast
+               * repeats the same failure. Policy refusals above still toast —
+               * they name a rule the chip cannot express.
+               */
+              set({ saveState: "error", saveArmed: false });
             }
             return;
           }
@@ -3061,6 +3270,14 @@ export const useEditor = create<EditorStore>((set, get) => {
         if (activeSave === pending) {
           activeSave = null;
         }
+        /*
+         * The run is over. If it returned early (an aborted owner, an access
+         * refusal, nothing to write) with no timer behind it, nothing is armed
+         * — the status must say «غير محفوظ» rather than a save that will never
+         * happen.
+         */
+        if (!saveTimer && get().saveState !== "saving" && get().saveArmed)
+          set({ saveArmed: false });
       });
       activeSave = pending;
       await pending;
@@ -3071,6 +3288,8 @@ export const useEditor = create<EditorStore>((set, get) => {
         clearTimeout(saveTimer);
         saveTimer = null;
       }
+      // Nothing is armed any more: the status must stop claiming a write.
+      if (get().saveArmed && get().saveState !== "saving") set({ saveArmed: false });
     },
 
     pauseScheduledSave: () => {
@@ -3079,6 +3298,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         clearTimeout(saveTimer);
         saveTimer = null;
       }
+      if (get().saveState !== "saving") set({ saveArmed: false });
     },
 
     resumeScheduledSave: () => {
@@ -3097,6 +3317,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         clearTimeout(saveTimer);
         saveTimer = null;
       }
+      set({ saveArmed: false });
       clearDraftSnapshot();
       const current = get();
       const owner = getStorageOwner();
@@ -3127,6 +3348,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         past: [snap],
         future: [],
         saveState: "saved",
+        saveArmed: false,
         savedAt: persisted?.updatedAt ?? Date.now(),
       });
     },
@@ -3152,7 +3374,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         const { enqueueSync } = await import("@/lib/offline/sync-queue");
         await enqueueSync("project:rename", { id, name, updatedAt: Date.now() }, { dedupeKey: `project:rename:${id}` });
         void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
-        void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+        void import("@/lib/offline/connectivity").then(m=>m.requestSync());
       } catch {}
       await get().refreshProjects();
     },
@@ -3173,7 +3395,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         const { enqueueSync } = await import("@/lib/offline/sync-queue");
         await enqueueSync("project:favorite", { id, favorite, updatedAt: Date.now() }, { dedupeKey: `project:favorite:${id}` });
         void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
-        void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+        void import("@/lib/offline/connectivity").then(m=>m.requestSync());
       } catch {}
       await get().refreshProjects();
     },
@@ -3282,7 +3504,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         const { enqueueSync } = await import("@/lib/offline/sync-queue");
         await enqueueSync("project:duplicate", { id: savedCopy.id, sourceId: id, updatedAt: Date.now() }, { dedupeKey: `project:duplicate:${savedCopy.id}` });
         void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
-        void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+        void import("@/lib/offline/connectivity").then(m=>m.requestSync());
       } catch {}
       await get().refreshProjects();
     },
@@ -3296,7 +3518,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         const { enqueueSync } = await import("@/lib/offline/sync-queue");
         await enqueueSync("project:delete", { id, updatedAt: Date.now() }, { dedupeKey: `project:delete:${id}` });
         void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
-        void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
+        void import("@/lib/offline/connectivity").then(m=>m.requestSync());
       } catch {}
       if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
         return;
@@ -3317,6 +3539,7 @@ export const useEditor = create<EditorStore>((set, get) => {
           past: [snap],
           future: [],
           saveState: "saved",
+          saveArmed: false,
           savedAt: Date.now(),
         });
         await setSetting("activeProjectId", null);
@@ -3512,6 +3735,7 @@ export const useEditor = create<EditorStore>((set, get) => {
         past: [snap],
         future: [],
         saveState: "saved",
+        saveArmed: false,
         savedAt: Date.now(),
       });
       await setSetting("activeProjectId", saved.id);
@@ -6098,25 +6322,6 @@ export function getSelected(): CanvasEl | null {
 /** All currently selected elements of the active page, primary last. */
 export function getSelectedMany(): CanvasEl[] {
   return useEditor.getState().selectedElements();
-}
-
-/** Human label for the autosave indicator. */
-export function saveLabel(
-  state: SaveState,
-  savedAt: number | null,
-  now: number,
-): string {
-  if (state === "saving") return "جارٍ الحفظ…";
-  if (state === "error") return "تعذر الحفظ — تحقق من مساحة المتصفح";
-  if (state === "dirty") return "تغييرات غير محفوظة…";
-  if (!savedAt) return "جاهز";
-  const seconds = Math.max(0, Math.round((now - savedAt) / 1000));
-  if (seconds < 5) return "تم الحفظ";
-  if (seconds < 60) return `آخر حفظ منذ ${seconds} ثانية`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `آخر حفظ منذ ${minutes} دقيقة`;
-  const hours = Math.round(minutes / 60);
-  return `آخر حفظ منذ ${hours} ساعة`;
 }
 
 /*

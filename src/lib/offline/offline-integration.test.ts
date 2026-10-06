@@ -8,7 +8,7 @@ import { cacheEntitlement, getCachedEntitlement, isEntitlementValidOffline } fro
 import { enqueueSync, listPendingQueue, processSyncQueue, resolveConflict } from "./sync-queue";
 import { cacheTemplateForOffline, getOfflineTemplate, isTemplateAvailableOffline, downloadAndCacheTemplate } from "./template-cache";
 import { saveWorkspaceSnapshot, getWorkspaceSnapshot, prepareProjectForOffline, isProjectPreparedOffline } from "./workspace-cache";
-import { editorStatusLabel } from "./connectivity";
+import { documentStatus } from "@/lib/editor/document-status";
 
 // fake navigator.onLine toggling
 function setOnline(v: boolean) {
@@ -260,15 +260,58 @@ test("offline queue prevents duplicate sync operations (dedupe)", async () => {
   setStorageOwner(ANON_OWNER);
 });
 
-test("editor header status follows the existing save and sync state", () => {
-  assert.equal(editorStatusLabel("saving", "online", true), "جاري الحفظ");
-  assert.equal(editorStatusLabel("dirty", "synced", true), "جاري الحفظ");
-  assert.equal(editorStatusLabel("saved", "syncing", true), "جاري المزامنة");
-  assert.equal(editorStatusLabel("saved", "online", false), "دون اتصال");
-  assert.equal(editorStatusLabel("saved", "offline", true), "دون اتصال");
-  assert.equal(editorStatusLabel("saved", "synced", true), "تمت المزامنة");
-  assert.equal(editorStatusLabel("saved", "online", true), "محفوظ");
-  assert.equal(editorStatusLabel("idle", "online", true), "محفوظ");
+test("the editor status is ONE projection of the document lifecycle", () => {
+  const ready = {
+    phase: "ready",
+    save: "saved",
+    online: true,
+    sync: "idle",
+    persisted: true,
+  } as const;
+
+  // Only an OPEN renders as loading, and a save or a sync can never be it.
+  assert.equal(documentStatus({ ...ready, phase: "loading" }).kind, "opening");
+  assert.equal(documentStatus({ ...ready, save: "saving" }).kind, "pending-save");
+  assert.equal(documentStatus({ ...ready, sync: "syncing" }).kind, "syncing");
+  assert.equal(documentStatus({ ...ready, online: false }).kind, "offline");
+
+  // A paused autosave is honestly «غير محفوظ», not a save that never happens.
+  assert.equal(documentStatus({ ...ready, save: "dirty" }).kind, "unsaved");
+  assert.equal(
+    documentStatus({ ...ready, save: "dirty", saveArmed: true }).kind,
+    "pending-save",
+  );
+
+  // Offline, with the document on this device: workable, never loading.
+  const offline = documentStatus({ ...ready, online: false });
+  assert.equal(offline.label, "دون اتصال · متاح محليًا");
+  assert.match(offline.detail, /متاح للعمل دون اتصال/);
+  assert.equal(offline.busy, false);
+  assert.equal(offline.ready, true);
+
+  // Local durability and the cloud mirror are two different facts.
+  assert.equal(documentStatus({ ...ready, pendingSync: true }).kind, "local");
+  assert.equal(
+    documentStatus({ ...ready, lastSyncedAt: Date.now() }).kind,
+    "synced",
+  );
+
+  // A failure outranks everything merely happening.
+  assert.equal(documentStatus({ ...ready, save: "error" }).kind, "save-error");
+  assert.equal(
+    documentStatus({ ...ready, sync: "error", lastSyncedAt: 1 }).kind,
+    "sync-error",
+  );
+  assert.equal(
+    documentStatus({ ...ready, sync: "error", save: "saving" }).kind,
+    "sync-error",
+    "an unresolved failure outranks work that is merely happening",
+  );
+  assert.equal(
+    documentStatus({ ...ready, save: "error", sync: "error" }).kind,
+    "save-error",
+    "when both failed, the local write is the one that loses data",
+  );
 });
 
 test("prepareProjectForOffline keeps pages locally and records the project", async () => {
