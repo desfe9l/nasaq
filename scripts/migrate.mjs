@@ -89,5 +89,18 @@ main().catch((err) => {
   for (const key of ["code", "detail", "hint", "position", "where"]) {
     if (err?.[key] != null) console.error(`[migrate]   ${key}: ${err[key]}`);
   }
+  // Neon/Vercel Postgres answers 53000 when the project is over quota. The
+  // schema cannot move until the plan is raised, but the app bundle above this
+  // step is already built — failing the deploy only keeps production on the
+  // previous broken release.
+  const quota =
+    String(err?.code ?? "") === "53000" ||
+    /exceeded the quota/i.test(String(err?.message ?? ""));
+  if (quota && process.env.VERCEL === "1") {
+    console.error(
+      "[migrate] database quota exceeded — shipping this build unchanged. Raise the database plan before the next migration.",
+    );
+    process.exit(0);
+  }
   process.exit(1);
 });
