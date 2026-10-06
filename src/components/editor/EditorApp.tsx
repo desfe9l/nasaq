@@ -130,7 +130,7 @@ import { AppearanceMenu } from "./AppearanceMenu";
 import { ProductNav } from "@/components/nav/ProductNav";
 import { EDITOR_SURFACE_NAV, isEditorElementTab, editorSurfaceActive } from "@/lib/nav/surface-nav";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 
 /* ── The six independent windows ─────────────────────────────────────────────
  * Each editor list is its own floating window (its own open flag, rectangle and
@@ -309,6 +309,72 @@ import { rememberUploadedFont } from "@/lib/nsq/fonts";
 import { openDesignFile } from "@/lib/editor/import/open";
 
 /**
+ * Tool state has its own fast path: keep the toolbar's Zustand subscription in
+ * this small island instead of the large Studio shell. CanvasStage still reacts
+ * through its own selector, while panels, page rail, dialogs, and chrome avoid
+ * a shell-wide render for an ordinary tool switch.
+ */
+const EditorToolCluster = memo(function EditorToolCluster({
+  onOpenLeftTab,
+}: {
+  onOpenLeftTab: (tab: LeftTab) => void;
+}) {
+  const activeTool = useTools((state) => state.tool);
+  const activeRegionMode = useTools((state) => state.regionMode);
+
+  return (
+    <div
+      className="editor-tool-cluster"
+      role="group"
+      aria-label="أدوات التحديد والرسم"
+    >
+      <SelectCropTool activeTool={activeTool} activeMode={activeRegionMode} />
+      <span className="editor-header-sep" aria-hidden />
+      {(["brush", "eraser"] as const).map((id) => {
+        const def = toolDef(id);
+        const Glyph = PAINT_ICONS[id];
+        return (
+          <IconButton
+            key={id}
+            label={def.label}
+            hint={def.hint}
+            shortcut={def.shortcut}
+            active={activeTool === id}
+            icon={<Glyph className="size-4" strokeWidth={1.7} />}
+            onClick={() => {
+              const selected = useTools.getState().tool === id;
+              useTools.getState().setTool(selected ? "select" : id);
+            }}
+          />
+        );
+      })}
+      <span className="editor-header-sep" aria-hidden />
+      {(["text", "shape"] as const).map((id) => {
+        const def = toolDef(id);
+        const Glyph = PAINT_ICONS[id];
+        return (
+          <IconButton
+            key={id}
+            label={def.label}
+            hint={def.hint}
+            shortcut={def.shortcut}
+            active={activeTool === id}
+            icon={<Glyph className="size-4" strokeWidth={1.7} />}
+            onClick={() => {
+              // Arm the live tool before revealing its supporting panel so its
+              // visual state is never held behind an unrelated layout update.
+              const selected = useTools.getState().tool === id;
+              useTools.getState().setTool(selected ? "select" : id);
+              onOpenLeftTab(id === "text" ? "elements" : "shapes");
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+});
+
+/**
  * The studio shell.
  *
  * Route-level concerns (site chrome, navigation) live in `SiteHeader`; this
@@ -349,8 +415,8 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
   const customAssetInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    void hydrate();
-  }, [hydrate]);
+    if (!hydrated) void hydrate(projectId);
+  }, [hydrate, hydrated, projectId]);
 
   /*
    * One document, one address. When the author switches documents INSIDE the
@@ -765,7 +831,9 @@ function Studio({
     return () =>
       window.removeEventListener(OPEN_EDITOR_SETTINGS_EVENT, openSettings);
   }, []);
-  const appearance = useEditor((s) => s.appearance);
+  // Appearance updates its shell classes through a store subscription below;
+  // the large Studio tree must not subscribe to a theme-only preference.
+  const appearance = useEditor.getState().appearance;
   useEffect(
     () =>
       subscribeTheme((value) =>
@@ -872,6 +940,25 @@ function Studio({
   const compactPanels = installedApp || coarsePointer || !canDock;
   /** The shell root: the surface attribute and the zoom guards live here. */
   const shellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const applyAppearanceClasses = (mode: typeof appearance) => {
+      const shell = shellRef.current;
+      if (!shell) return;
+      shell.classList.toggle("editor-light", mode === "light");
+      shell.classList.toggle("editor-dark", mode !== "light");
+      shell.classList.toggle("editor-dim", mode === "dim");
+    };
+    applyAppearanceClasses(useEditor.getState().appearance);
+    return useEditor.subscribe((state, previous) => {
+      if (state.appearance !== previous.appearance)
+        applyAppearanceClasses(state.appearance);
+    });
+  }, []);
+  const openLeftTabRef = useRef<(tab: LeftTab) => void>(() => {});
+  const openLeftTabAction = useCallback(
+    (tab: LeftTab) => openLeftTabRef.current(tab),
+    [],
+  );
   /** First load is what arms the auto-fit below. */
   const hydrated = useEditor((s) => s.hydrated);
   /** ?showcase=1: no walkthrough, no account menu in the product preview. */
@@ -1550,8 +1637,6 @@ function Studio({
    * window events, and the canvas kept a third copy. The single store removes
    * the whole class of "the button looks armed but the canvas disagrees" bugs.
    */
-  const activeTool = useTools((s) => s.tool);
-  const activeRegionMode = useTools((s) => s.regionMode);
   const armTool = (tool: ToolId | null) =>
     useTools.getState().setTool(tool ?? "select");
 
@@ -2476,6 +2561,7 @@ function Studio({
     // fails when Elements is an inactive tab in an already-open custom group.
     revealPanel(tab === "library" || tab === "tools" ? tab : "elements");
   };
+  openLeftTabRef.current = openLeftTab;
 
   /**
    * Explicit surface navigation. Same strip as the site: a press opens or
@@ -2708,51 +2794,7 @@ function Studio({
               Apply/Cancel. Every button writes the single tool store, so the
               header and the canvas can never disagree about what is armed. */}
           <span className="editor-header-sep" aria-hidden />
-          <div
-            className="editor-tool-cluster"
-            role="group"
-            aria-label="أدوات التحديد والرسم"
-          >
-            <SelectCropTool activeTool={activeTool} activeMode={activeRegionMode} />
-            <span className="editor-header-sep" aria-hidden />
-            {(["brush", "eraser"] as const).map((id) => {
-              const def = toolDef(id);
-              const Glyph = PAINT_ICONS[id];
-              return (
-                <IconButton
-                  key={id}
-                  label={def.label}
-                  hint={def.hint}
-                  shortcut={def.shortcut}
-                  active={activeTool === id}
-                  icon={<Glyph className="size-4" strokeWidth={1.7} />}
-                  onClick={() =>
-                    useTools.getState().setTool(activeTool === id ? "select" : id)
-                  }
-                />
-              );
-            })}
-            <span className="editor-header-sep" aria-hidden />
-            {(["text", "shape"] as const).map((id) => {
-              const def = toolDef(id);
-              const Glyph = PAINT_ICONS[id];
-              return (
-                <IconButton
-                  key={id}
-                  label={def.label}
-                  hint={def.hint}
-                  shortcut={def.shortcut}
-                  active={activeTool === id}
-                  icon={<Glyph className="size-4" strokeWidth={1.7} />}
-                  onClick={() => {
-                    if (id === "text") openLeftTab("elements");
-                    if (id === "shape") openLeftTab("shapes");
-                    useTools.getState().setTool(activeTool === id ? "select" : id);
-                  }}
-                />
-              );
-            })}
-          </div>
+          <EditorToolCluster onOpenLeftTab={openLeftTabAction} />
           {!isMobileSurface && (
             <>
               <span className="editor-header-sep" aria-hidden />

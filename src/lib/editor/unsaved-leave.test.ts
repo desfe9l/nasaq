@@ -133,6 +133,40 @@ test("unsaved warning matches the editor copy and only dirty work", () => {
   assert.equal(leavePromptSuppressed("error"), false);
 });
 
+test("the newest deep-link opens before the project library is enumerated", async () => {
+  setStorageOwner(ANON_OWNER);
+  clearDraftSnapshot();
+  const superseded = await saveProject({
+    ...createProject("blank", "official"),
+    name: "مستند سابق",
+  });
+  const target = await saveProject({
+    ...createProject("blank", "official"),
+    name: "المستند المرتبط مباشرة",
+  });
+  let projectScans = 0;
+  const originalGetAll = IDBObjectStore.prototype.getAll;
+  IDBObjectStore.prototype.getAll = new Proxy(originalGetAll, {
+    apply(method, store, args) {
+      if ((store as IDBObjectStore).name === "projects") projectScans += 1;
+      return Reflect.apply(method, store, args);
+    },
+  });
+
+  try {
+    useEditor.setState({ hydrated: false, sessionOwner: null });
+    await Promise.all([
+      useEditor.getState().hydrate(superseded.id),
+      useEditor.getState().hydrate(target.id),
+    ]);
+    assert.equal(useEditor.getState().hydrated, true);
+    assert.equal(useEditor.getState().id, target.id);
+    assert.equal(projectScans, 0, "route hydration must not wait for a full project scan");
+  } finally {
+    IDBObjectStore.prototype.getAll = originalGetAll;
+  }
+});
+
 test("all 12 unsaved-changes protection scenarios work end-to-end", async () => {
   const owner = ANON_OWNER;
   setStorageOwner(owner);
@@ -376,7 +410,25 @@ test("all 12 unsaved-changes protection scenarios work end-to-end", async () => 
 
     // 12. Mobile/iPad page lifecycle -> recoverable state is preserved.
     useEditor.getState().pauseScheduledSave();
+    clearDraftSnapshot();
+    for (const key of ["showGrid", "snapGrid", "snapElements"] as const) {
+      const initial = useEditor.getState()[key];
+      useEditor.getState().toggle(key);
+      assert.equal(useEditor.getState()[key], !initial, `${key} toggles immediately`);
+      assert.equal(
+        window.localStorage.getItem("nasaq-draft-v1"),
+        null,
+        "workspace toggles must not synchronously serialize the full project",
+      );
+      useEditor.getState().toggle(key);
+      assert.equal(useEditor.getState()[key], initial, `${key} toggles back immediately`);
+    }
     useEditor.getState().setName("تعديل مستعاد بعد إغلاق تبويب الآيباد");
+    assert.equal(
+      window.localStorage.getItem("nasaq-draft-v1"),
+      null,
+      "typing must stay off the synchronous localStorage draft path",
+    );
     // Simulate pagehide calling unloadShouldPrompt()
     assert.equal(unloadShouldPrompt(), true);
     const rawDraft = window.localStorage.getItem("nasaq-draft-v1");

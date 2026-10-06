@@ -509,7 +509,7 @@ interface EditorStore extends Project, Ui, History {
   fontsProbed: boolean;
   probeFonts: () => void;
   registerFont: (family: string, note?: string) => void;
-  hydrate: () => Promise<void>;
+  hydrate: (projectId?: string) => Promise<void>;
   refreshProjects: () => Promise<void>;
   createProject: (pack: PackId, theme?: ThemeId) => Promise<boolean>;
   /**
@@ -929,6 +929,67 @@ function hasResolvedEditorAccess(
   );
 }
 
+async function resolveOwnerEntitlements(owner: string): Promise<{
+  entitlements: Record<FeatureId, boolean>;
+  cachedGraceEntitlements: Record<FeatureId, boolean> | null;
+}> {
+  let entitlements: Record<FeatureId, boolean> = {
+    ...LICENSE_ENTITLEMENTS.FREE,
+  };
+  let cachedGraceEntitlements: Record<FeatureId, boolean> | null = null;
+  if (owner === ANON_OWNER) return { entitlements, cachedGraceEntitlements };
+
+  try {
+    const { getLicenseStatusFn } =
+      await import("@/lib/license/functions");
+    const status = await getLicenseStatusFn();
+    entitlements = status.entitlements ?? entitlements;
+    try {
+      const { cacheEntitlement } =
+        await import("@/lib/offline/entitlement-cache");
+      await cacheEntitlement({
+        ownerId: owner,
+        entitlements,
+        validatedAt: Date.now(),
+        expiresAt:
+          (status as unknown as {
+            license?: { expiresAt?: string | null };
+          })?.license?.expiresAt ??
+          (status as unknown as { expiresAt?: string | null })?.expiresAt ??
+          null,
+        isAdmin: Boolean(
+          (status as unknown as Record<string, unknown>).isAdmin,
+        ),
+        isOwner: Boolean(
+          (status as unknown as Record<string, unknown>).isOwner,
+        ),
+        isSuspended: Boolean(
+          (status as unknown as Record<string, unknown>).isSuspended,
+        ),
+        hasLicense: Boolean(
+          (status as unknown as Record<string, unknown>).hasLicense,
+        ),
+        source: "server",
+      });
+    } catch {
+      /* verified server status remains usable for this session */
+    }
+  } catch {
+    try {
+      const { getCachedEntitlement, isEntitlementValidOffline } =
+        await import("@/lib/offline/entitlement-cache");
+      const cached = await getCachedEntitlement(owner);
+      if (cached && isEntitlementValidOffline(cached)) {
+        entitlements = cached.entitlements;
+        cachedGraceEntitlements = cached.entitlements;
+      }
+    } catch {
+      entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
+    }
+  }
+  return { entitlements, cachedGraceEntitlements };
+}
+
 function projectSlice(s: ProjectSnapshot): ProjectSnapshot {
   return {
     version: s.version,
@@ -1278,6 +1339,7 @@ export const useEditor = create<EditorStore>((set, get) => {
   let activeSave: Promise<void> | null = null;
   let activeSaveGen = -1;
   let saveSessionGen = 0;
+  let latestRequestedHydrationId: string | undefined;
   let cleanSnapshot: ProjectSnapshot = projectSlice(blank);
 
   /** Debounced autosave. Kept off the render path: no store writes until it fires. */
@@ -1292,7 +1354,9 @@ export const useEditor = create<EditorStore>((set, get) => {
     }
     disarmUnloadBypass();
     if (get().saveState !== "saving") set({ saveState: "dirty" });
-    writeDraftSnapshot();
+    // Full-document JSON is reserved for the unload/pagehide safety net.
+    // Serialising images and pages here made toggles and keystrokes block before
+    // their debounced IndexedDB save.
     if (savePaused) return;
     saveTimer = setTimeout(() => {
       saveTimer = null;
@@ -1655,19 +1719,22 @@ export const useEditor = create<EditorStore>((set, get) => {
       });
     },
 
-    hydrate: async () => {
+    hydrate: async (requestedProjectId) => {
+      if (requestedProjectId)
+        latestRequestedHydrationId = requestedProjectId;
       /*
        * Showcase boot (?template=…&showcase=1): the marketing site embeds a
        * live editor as its product preview. Boot straight from the requested
        * pack — no owner, no library, no drafts, no persistence — and keep
-       * the read-only asset shelf + fonts so template artwork resolves.
-       * The regular hydration path below is left untouched.
+       * the read-only asset shelf + fonts so template artwork resolves; fonts
+       * and the shelf are loaded after the preview becomes interactive.
        */
       if (get().showcase) {
         const ui = readUi();
         const appearance = readStoredTheme() ?? "light";
         applyStoredTheme();
         const zoom = typeof ui.zoom === "number" ? clampZoom(ui.zoom) : 0.82;
+        let fontsToRestore: Project | null = null;
         try {
           let project: Project;
           if (BOOT_ADMIN_TEMPLATE) {
@@ -1703,14 +1770,14 @@ export const useEditor = create<EditorStore>((set, get) => {
               "",
             );
           }
-          await restoreFonts(project);
+          fontsToRestore = project;
           openProjectState(project, { zoom });
         } catch (error) {
           if (BOOT_ADMIN_TEMPLATE) {
             // Never substitute a different showcase document when a catalog
             // record is missing, unpublished or unavailable to the visitor.
             const empty = createProject("blank");
-            await restoreFonts(empty);
+            fontsToRestore = empty;
             openProjectState(empty, { zoom });
             toast.error("تعذر تحميل المستند المميز من سجل القوالب المنشور");
             console.error("[editor] homepage catalog preview failed", error);
@@ -1727,11 +1794,13 @@ export const useEditor = create<EditorStore>((set, get) => {
           saveState: "saved",
           savedAt: Date.now(),
         });
-        try {
-          await get().refreshAssets();
-        } catch {
-          set({ assetsLoading: false });
-        }
+        runWhenIdle(() => {
+          if (fontsToRestore)
+            void restoreFonts(fontsToRestore).catch(() => undefined);
+          void get()
+            .refreshAssets()
+            .catch(() => set({ assetsLoading: false }));
+        });
         return;
       }
       // Never read under the wrong identity: resolve the storage owner from
@@ -1754,51 +1823,33 @@ export const useEditor = create<EditorStore>((set, get) => {
         if (get().sessionOwner === owner) return;
         get().resetUserScopedState();
       }
-      let entitlements: Record<FeatureId, boolean> = {
-        ...LICENSE_ENTITLEMENTS.FREE,
-      };
-      let cachedGraceEntitlements: Record<FeatureId, boolean> | null = null;
-      if (owner !== ANON_OWNER) {
-        try {
-          const { getLicenseStatusFn } =
-            await import("@/lib/license/functions");
-          const status = await getLicenseStatusFn();
-          entitlements = status.entitlements ?? entitlements;
-          // Cache validated entitlement for offline grace
-          try {
-            const { cacheEntitlement } = await import("@/lib/offline/entitlement-cache");
-            await cacheEntitlement({
-              ownerId: owner,
-              entitlements,
-              validatedAt: Date.now(),
-              expiresAt: (status as unknown as { license?: { expiresAt?: string | null } })?.license?.expiresAt ?? (status as unknown as { expiresAt?: string | null })?.expiresAt ?? null,
-              isAdmin: Boolean((status as unknown as Record<string, unknown>).isAdmin),
-              isOwner: Boolean((status as unknown as Record<string, unknown>).isOwner),
-              isSuspended: Boolean((status as unknown as Record<string, unknown>).isSuspended),
-              hasLicense: Boolean((status as unknown as Record<string, unknown>).hasLicense),
-              source: "server",
-            });
-          } catch {}
-        } catch {
-          // Offline or network failure: try cached grace entitlement
-          try {
-            const { getCachedEntitlement, isEntitlementValidOffline } = await import("@/lib/offline/entitlement-cache");
-            const cached = await getCachedEntitlement(owner);
-            if (cached && isEntitlementValidOffline(cached)) {
-              entitlements = cached.entitlements;
-              cachedGraceEntitlements = cached.entitlements;
-            } else {
-              // No valid cached entitlement — remain FREE but allow local offline editing
-              entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
-            }
-          } catch {
-            entitlements = { ...LICENSE_ENTITLEMENTS.FREE };
-          }
-        }
-      }
-      // An account switch during the network round-trip invalidates both the
-      // status response and any following reads. Do not hydrate the old scope.
-      if (getStorageOwner() !== owner) return;
+      const ui = readUi();
+      // License verification and local document reads are independent once the
+      // owner is pinned. Keep the access check before exposing document data.
+      const entitlementPromise = resolveOwnerEntitlements(owner);
+      const projectDataPromise = loadInitialProjectData(
+        owner,
+        requestedProjectId,
+        ui,
+      ).catch(() => ({
+        projects: null,
+        active: null,
+        activePageSetting: null,
+        restoredFromDraft: false,
+        restoredUnsavedDraft: false,
+        preDraftSnapshot: null,
+      }));
+      const [
+        { entitlements, cachedGraceEntitlements },
+        initialProjectData,
+      ] = await Promise.all([entitlementPromise, projectDataPromise]);
+      // An account switch or a newer URL request invalidates stale responses.
+      if (
+        getStorageOwner() !== owner ||
+        (requestedProjectId &&
+          latestRequestedHydrationId !== requestedProjectId)
+      )
+        return;
       set({
         sessionOwner: owner,
         entitlements,
@@ -1818,215 +1869,111 @@ export const useEditor = create<EditorStore>((set, get) => {
       const mode = storageMode();
       set({ storage: { mode, persistent: mode === "indexeddb" } });
 
-      try {
-        const ui = readUi();
-        const legacy = localStorage.getItem(LEGACY_STORE_KEY);
-        let list = await listProjects();
-        // The pre-library autosave blob predates ownership tracking — only a
-        // signed-in account may claim it, never a signed-out visitor.
-        if (!list.length && legacy && hasSignedInOwner()) {
-          try {
-            const migrated = await migrateLegacyProject(JSON.parse(legacy));
-            if (migrated) {
-              list = await listProjects();
-              toast.success("تم ترحيل مشروعك المحفوظ إلى مكتبة المشاريع");
-            }
-          } catch {
-            /* a corrupt legacy blob must not block startup */
-          }
-        }
-        const activeId =
-          (await getSetting<string>("activeProjectId")) || ui.activeProjectId;
-        // Freshest page the author was on — `setActivePage` records it even
-        // when no edit has triggered a save since the switch.
-        const activePageSetting = await getSetting<string>("activePageId");
-        let active: ProjectSnapshot | null = activeId
-          ? await getProject(activeId)
-          : null;
-        if (!active && list[0]?.id) {
-          active = await getProject(list[0].id);
-        }
-        /*
-         * Reload safety: a synchronous draft written while the page was being
-         * torn down (beforeunload/pagehide) can be newer than the last
-         * IndexedDB save. It wins only for the SAME owner and the SAME
-         * project, and only when it really is newer — otherwise it is stale
-         * noise from a session that saved fine.
-         */
-        const draft = readDraftSnapshot(owner);
-        let restoredFromDraft = false;
-        let restoredUnsavedDraft = false;
-        let preDraftSnapshot: ProjectSnapshot | null = null;
-        if (draft?.projectId && (!active || active.id !== draft.projectId)) {
-          const byDraftId = await getProject(draft.projectId);
-          if (byDraftId) active = byDraftId;
-        }
-        if (
-          draft &&
-          active &&
-          draft.projectId === active.id &&
-          draft.savedAt >= (active.updatedAt ?? 0)
-        ) {
-          preDraftSnapshot = clone(active);
-          const merged: ProjectSnapshot = { ...active, ...draft.project };
-          merged.activePageId =
-            draft.activePageId || draft.project.activePageId;
-          active = merged;
-          restoredFromDraft = true;
-        } else if (
-          draft &&
-          !draft.projectId &&
-          draft.savedAt >= (active?.updatedAt ?? 0)
-        ) {
-          preDraftSnapshot = active ? clone(active) : projectSlice(blank);
-          active = {
-            ...draft.project,
-            activePageId: draft.activePageId || draft.project.activePageId,
-          };
-          restoredFromDraft = true;
-          restoredUnsavedDraft = true;
-        }
-        if (preDraftSnapshot) {
-          cleanSnapshot = preDraftSnapshot;
-        }
-        const activeBlock = active
-          ? projectAccessBlock(active, get().entitlements)
-          : null;
-        if (active && activeBlock) {
-          // Never place an inaccessible saved file (or recovery draft) into the
-          // live editor state. Its saved row remains in the owner's library so
-          // restoring the entitlement can make it available again.
-          active = null;
-          restoredFromDraft = false;
-          restoredUnsavedDraft = false;
-          clearDraftSnapshot();
-          await setSetting("activeProjectId", null).catch(() => undefined);
-          toast.error(
-            activeBlock === "premium-template"
-              ? "المستند الأخير يتطلب ترخيصًا مناسبًا؛ افتح ملفًا متاحًا أو فعّل الترخيص"
-              : "المستند الأخير يتجاوز حد صفحات خطتك الحالية؛ افتح ملفًا متاحًا أو فعّل الترخيص",
-          );
-        }
-        // The shared preference is the only authority, including the default.
-        const appearance = readStoredTheme() ?? "light";
-        applyStoredTheme();
-
-        /*
-         * The inspector is now INDEPENDENT windows: the old "only one side at
-         * a time" rule is gone (nextLeftOpen no longer yields to
-         * nextRightOpen), so the author's three inspector windows plus the
-         * library and element-tools panels come back exactly as they were.
-         */
-        const nextRightOpen =
-          ui.rightOpen !== undefined ? Boolean(ui.rightOpen) : get().rightOpen;
-        const nextLeftOpen =
-          ui.leftOpen !== undefined ? Boolean(ui.leftOpen) : get().leftOpen;
-
-        set({
-          projects: list,
-          projectsLoading: false,
-          appearance,
-          focusMode: Boolean(ui.focusMode),
-          leftOpen: nextLeftOpen,
-          rightOpen: nextRightOpen,
-          leftCollapsed: Boolean(ui.leftCollapsed),
-          rightCollapsed: Boolean(ui.rightCollapsed),
-          layersOpen: Boolean(ui.layersOpen),
-          reportToolsOpen: Boolean(ui.reportToolsOpen),
-          libraryOpen: Boolean(ui.libraryOpen),
-          toolsOpen: Boolean(ui.toolsOpen),
-          artboardGridCols:
-            typeof ui.artboardGridCols === "number"
-              ? clamp(ui.artboardGridCols, 1, 8)
-              : 4,
-          previewAll: true,
-          zoom: typeof ui.zoom === "number" ? clampZoom(ui.zoom) : 0.82,
-          pagesPanelHeight: clampPagesHeight(
-            typeof ui.pagesPanelHeight === "number"
-              ? ui.pagesPanelHeight
-              : PAGES_PANEL_DEFAULT,
-          ),
-          pagesRailCollapsed: Boolean(ui.pagesRailCollapsed),
-          pagesRailHidden: Boolean(ui.pagesRailHidden),
-          bubbleEnabled: ui.bubble !== false,
-          bubbleOffset:
-            ui.bubbleOffset &&
-            typeof ui.bubbleOffset.dx === "number" &&
-            typeof ui.bubbleOffset.dy === "number"
-              ? { dx: ui.bubbleOffset.dx, dy: ui.bubbleOffset.dy }
-              : null,
-          showGrid: ui.showGrid ?? WORKSPACE_TOGGLE_DEFAULTS.showGrid,
-          showOutsidePage: normalizeShowOutsidePage(ui.showOutsidePage),
-          snapGrid: ui.snapGrid ?? WORKSPACE_TOGGLE_DEFAULTS.snapGrid,
-          snapElements:
-            ui.snapElements ?? WORKSPACE_TOGGLE_DEFAULTS.snapElements,
-          printGuides: {
-            ...DEFAULT_PRINT_GUIDES,
-            ...(ui.printGuides ?? {}),
-          },
-        });
-        if (active) {
-          await restoreFonts(active);
-          if (getStorageOwner() === owner && get().sessionOwner === owner)
-            openProjectState(active, {
-              zoom: get().zoom,
-              ...(restoredUnsavedDraft ? { id: undefined } : {}),
-              ...(activePageSetting && !restoredFromDraft
-                ? { activePageId: activePageSetting }
-                : {}),
-            });
-          if (restoredFromDraft) {
-            toast.success(
-              "تمت استعادة آخر تعديلات غير محفوظة بعد إعادة التحميل",
-            );
-            // The restored draft IS the current document — mark it dirty so
-            // the next auto-save makes the recovery durable in IndexedDB.
-            set({ saveState: "dirty" });
-          }
-        } else if (
-          activePageSetting &&
-          get().pages.some((p) => p.id === activePageSetting)
-        ) {
-          set({ activePageId: activePageSetting });
-        }
-      } catch {
-        set({ projectsLoading: false });
+      const {
+        projects,
+        active: loadedActive,
+        activePageSetting,
+        restoredFromDraft,
+        restoredUnsavedDraft,
+        preDraftSnapshot,
+      } = initialProjectData;
+      let active = loadedActive;
+      if (preDraftSnapshot) cleanSnapshot = preDraftSnapshot;
+      const activeBlock = active
+        ? projectAccessBlock(active, get().entitlements)
+        : null;
+      if (active && activeBlock) {
+        // Never place an inaccessible file or recovery draft in live state.
+        active = null;
+        if (restoredFromDraft) clearDraftSnapshot();
+        if (!requestedProjectId)
+          void setSetting("activeProjectId", null).catch(() => undefined);
+        toast.error(
+          activeBlock === "premium-template"
+            ? "المستند الأخير يتطلب ترخيصًا مناسبًا؛ افتح ملفًا متاحًا أو فعّل الترخيص"
+            : "المستند الأخير يتجاوز حد صفحات خطتك الحالية؛ افتح ملفًا متاحًا أو فعّل الترخيص",
+        );
       }
+      const appearance = readStoredTheme() ?? "light";
+      applyStoredTheme();
 
-      // The asset shelf is independent of the project load: a corrupt or empty
-      // project list must still leave the author's saved logos reachable.
-      try {
-        await get().refreshAssets();
-      } catch {
-        set({ assetsLoading: false });
-      }
+      const nextRightOpen =
+        ui.rightOpen !== undefined ? Boolean(ui.rightOpen) : get().rightOpen;
+      const nextLeftOpen =
+        ui.leftOpen !== undefined ? Boolean(ui.leftOpen) : get().leftOpen;
 
-      const folders = await getSetting<AssetFolder[]>("assetFolders");
-      set({ assetFolders: Array.isArray(folders) ? folders : [] });
-
-      // Author-added vector icons/dividers live beside the asset shelf: same
-      // durability, but stored as SVG markup so they stay vector on the page.
-      const custom = await getSetting<CustomLibraryItem[]>("customLibrary");
-      /*
-       * Rows written before SVG sanitising existed are still on disk (and in
-       * the account catalog), so hydration scrubs them through the same
-       * allow-list the importer and the renderer use. A stored icon is painted
-       * inline in three different panels — none of them may be the first line
-       * of defence.
-       */
       set({
-        customIcons: Array.isArray(custom)
-          ? custom
-              .filter(
-                (item) =>
-                  item &&
-                  typeof item.svg === "string" &&
-                  item.svg.includes("<svg"),
-              )
-              .map((item) => ({ ...item, svg: safeLibrarySvg(item.svg) }))
-              .filter((item) => item.svg.includes("<svg"))
-          : [],
+        projects: projects ?? get().projects,
+        projectsLoading: projects === null,
+        appearance,
+        focusMode: Boolean(ui.focusMode),
+        leftOpen: nextLeftOpen,
+        rightOpen: nextRightOpen,
+        leftCollapsed: Boolean(ui.leftCollapsed),
+        rightCollapsed: Boolean(ui.rightCollapsed),
+        layersOpen: Boolean(ui.layersOpen),
+        reportToolsOpen: Boolean(ui.reportToolsOpen),
+        libraryOpen: Boolean(ui.libraryOpen),
+        toolsOpen: Boolean(ui.toolsOpen),
+        artboardGridCols:
+          typeof ui.artboardGridCols === "number"
+            ? clamp(ui.artboardGridCols, 1, 8)
+            : 4,
+        previewAll: true,
+        zoom: typeof ui.zoom === "number" ? clampZoom(ui.zoom) : 0.82,
+        pagesPanelHeight: clampPagesHeight(
+          typeof ui.pagesPanelHeight === "number"
+            ? ui.pagesPanelHeight
+            : PAGES_PANEL_DEFAULT,
+        ),
+        pagesRailCollapsed: Boolean(ui.pagesRailCollapsed),
+        pagesRailHidden: Boolean(ui.pagesRailHidden),
+        bubbleEnabled: ui.bubble !== false,
+        bubbleOffset:
+          ui.bubbleOffset &&
+          typeof ui.bubbleOffset.dx === "number" &&
+          typeof ui.bubbleOffset.dy === "number"
+            ? { dx: ui.bubbleOffset.dx, dy: ui.bubbleOffset.dy }
+            : null,
+        showGrid: ui.showGrid ?? WORKSPACE_TOGGLE_DEFAULTS.showGrid,
+        showOutsidePage: normalizeShowOutsidePage(ui.showOutsidePage),
+        snapGrid: ui.snapGrid ?? WORKSPACE_TOGGLE_DEFAULTS.snapGrid,
+        snapElements: ui.snapElements ?? WORKSPACE_TOGGLE_DEFAULTS.snapElements,
+        printGuides: {
+          ...DEFAULT_PRINT_GUIDES,
+          ...(ui.printGuides ?? {}),
+        },
       });
+      if (
+        active &&
+        getStorageOwner() === owner &&
+        get().sessionOwner === owner
+      ) {
+        // Install the document first. Embedded fonts arrive off the critical path.
+        openProjectState(active, {
+          zoom: get().zoom,
+          ...(restoredUnsavedDraft ? { id: undefined } : {}),
+          ...(activePageSetting && !restoredFromDraft
+            ? { activePageId: activePageSetting }
+            : {}),
+        });
+        if (restoredFromDraft) {
+          toast.success(
+            "تمت استعادة آخر تعديلات غير محفوظة بعد إعادة التحميل",
+          );
+          set({ saveState: "dirty" });
+        }
+      } else if (
+        activePageSetting &&
+        get().pages.some((p) => p.id === activePageSetting)
+      ) {
+        set({ activePageId: activePageSetting });
+      }
+
+      if (requestedProjectId && active?.id === requestedProjectId)
+        void setSetting("activeProjectId", requestedProjectId).catch(
+          () => undefined,
+        );
 
       document.documentElement.lang = "ar";
       document.documentElement.dir = "rtl";
@@ -2043,6 +1990,88 @@ export const useEditor = create<EditorStore>((set, get) => {
         savedAt: Date.now(),
       });
       if (recoveredDirty) scheduleSave(400);
+
+      const sessionOwner = owner;
+      const assetFoldersAtHydration = get().assetFolders;
+      const customIconsAtHydration = get().customIcons;
+      runWhenIdle(() => {
+        if (
+          getStorageOwner() !== owner ||
+          get().sessionOwner !== sessionOwner
+        )
+          return;
+
+        if (active && get().id === active.id)
+          void restoreFonts(active).catch(() => undefined);
+
+        // The canvas is live before its library shelf and remaining preferences
+        // finish loading. These responses are owner-scoped and mutation-aware.
+        void get()
+          .refreshAssets()
+          .catch(() => set({ assetsLoading: false }));
+        void Promise.all([
+          getSetting<AssetFolder[]>("assetFolders"),
+          getSetting<CustomLibraryItem[]>("customLibrary"),
+        ])
+          .then(([folders, custom]) => {
+            if (
+              getStorageOwner() !== owner ||
+              get().sessionOwner !== sessionOwner
+            )
+              return;
+            const nextCustomIcons = Array.isArray(custom)
+              ? custom
+                  .filter(
+                    (item) =>
+                      item &&
+                      typeof item.svg === "string" &&
+                      item.svg.includes("<svg"),
+                  )
+                  .map((item) => ({
+                    ...item,
+                    svg: safeLibrarySvg(item.svg),
+                  }))
+                  .filter((item) => item.svg.includes("<svg"))
+              : [];
+            set((state) => ({
+              ...(state.assetFolders === assetFoldersAtHydration
+                ? { assetFolders: Array.isArray(folders) ? folders : [] }
+                : {}),
+              ...(state.customIcons === customIconsAtHydration
+                ? { customIcons: nextCustomIcons }
+                : {}),
+            }));
+          })
+          .catch(() => undefined);
+
+        if (projects === null) {
+          void listProjects()
+            .then((list) => {
+              if (
+                getStorageOwner() === owner &&
+                get().sessionOwner === sessionOwner
+              ) {
+                const latestProjects = get().projects;
+                const merged = new Map(list.map((project) => [project.id, project]));
+                // A save/create may finish while enumeration is in flight.
+                for (const project of latestProjects) merged.set(project.id, project);
+                set({
+                  projects: [...merged.values()].sort(
+                    (a, b) => b.updatedAt - a.updatedAt,
+                  ),
+                  projectsLoading: false,
+                });
+              }
+            })
+            .catch(() => {
+              if (
+                getStorageOwner() === owner &&
+                get().sessionOwner === sessionOwner
+              )
+                set({ projectsLoading: false });
+            });
+        }
+      });
     },
 
     refreshProjects: async () => {
@@ -2061,11 +2090,19 @@ export const useEditor = create<EditorStore>((set, get) => {
     refreshAssets: async () => {
       const owner = getStorageOwner();
       const sessionOwner = get().sessionOwner;
-      const assets = await listAssets();
+      const assetsAtStart = get().assets;
+      let assets = await listAssets();
       // Asset shelves are owner-scoped just like projects; discard stale reads
       // after a popup login/logout or an in-tab account switch.
       if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
         return;
+      // If a local mutation raced this background read, sample storage again
+      // rather than letting the startup response undo the newer in-memory edit.
+      if (get().assets !== assetsAtStart) {
+        assets = await listAssets();
+        if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
+          return;
+      }
       set({ assets, assetsLoading: false });
 
       if (hasSignedInOwner()) {
@@ -2087,7 +2124,15 @@ export const useEditor = create<EditorStore>((set, get) => {
               removedAssets: Array.isArray(removedAssets) ? removedAssets : [],
               removedFolders: Array.isArray(removedFolders) ? removedFolders : [],
             });
-            if (!reconciled || getStorageOwner() !== owner || get().sessionOwner !== syncSession) {
+            const latest = get();
+            if (
+              !reconciled ||
+              getStorageOwner() !== owner ||
+              latest.sessionOwner !== syncSession ||
+              latest.assets !== live.assets ||
+              latest.assetFolders !== live.assetFolders ||
+              latest.customIcons !== live.customIcons
+            ) {
               return;
             }
             // The cloud catalog is scrubbed server-side; this is the same
@@ -2659,15 +2704,36 @@ export const useEditor = create<EditorStore>((set, get) => {
         savedAt: Date.now(),
       });
       if (!get().showcase) {
-        await setSetting("activeProjectId", saved.id);
-        try {
-          const { enqueueSync } = await import("@/lib/offline/sync-queue");
-          await enqueueSync("project:create", saved, { dedupeKey: `project:create:${saved.id}`, version: saved.updatedAt });
-          void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
-          void import("@/lib/offline/asset-cache").then(m=>{ void m.cacheProjectAssets(saved as never); void m.cacheProjectFonts(saved as never); });
-          void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
-        } catch {}
-        await get().refreshProjects();
+        void setSetting("activeProjectId", saved.id).catch(() => undefined);
+        void import("@/lib/offline/sync-queue")
+          .then(async ({ enqueueSync }) => {
+            if (
+              getStorageOwner() !== owner ||
+              get().sessionOwner !== sessionOwner
+            )
+              return;
+            await enqueueSync("project:create", saved, {
+              dedupeKey: `project:create:${saved.id}`,
+              version: saved.updatedAt,
+            });
+            if (
+              getStorageOwner() !== owner ||
+              get().sessionOwner !== sessionOwner
+            )
+              return;
+            void import("@/lib/offline/workspace-cache").then((m) =>
+              void m.refreshWorkspaceCache(),
+            );
+            void import("@/lib/offline/asset-cache").then((m) => {
+              void m.cacheProjectAssets(saved as never);
+              void m.cacheProjectFonts(saved as never);
+            });
+            void import("@/lib/offline/connectivity").then((m) =>
+              m.triggerSync(),
+            );
+          })
+          .catch(() => undefined);
+        void get().refreshProjects().catch(() => undefined);
       }
       return true;
     },
@@ -2813,15 +2879,36 @@ export const useEditor = create<EditorStore>((set, get) => {
         savedAt: Date.now(),
       });
       if (!get().showcase) {
-        await setSetting("activeProjectId", saved.id);
-        try {
-          const { enqueueSync } = await import("@/lib/offline/sync-queue");
-          await enqueueSync("project:create", saved, { dedupeKey: `project:create:${saved.id}`, version: saved.updatedAt });
-          void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
-          void import("@/lib/offline/asset-cache").then(m=>{ void m.cacheProjectAssets(saved as never); void m.cacheProjectFonts(saved as never); });
-          void import("@/lib/offline/connectivity").then(m=>m.triggerSync());
-        } catch {}
-        await get().refreshProjects();
+        void setSetting("activeProjectId", saved.id).catch(() => undefined);
+        void import("@/lib/offline/sync-queue")
+          .then(async ({ enqueueSync }) => {
+            if (
+              getStorageOwner() !== requestOwner ||
+              get().sessionOwner !== requestSessionOwner
+            )
+              return;
+            await enqueueSync("project:create", saved, {
+              dedupeKey: `project:create:${saved.id}`,
+              version: saved.updatedAt,
+            });
+            if (
+              getStorageOwner() !== requestOwner ||
+              get().sessionOwner !== requestSessionOwner
+            )
+              return;
+            void import("@/lib/offline/workspace-cache").then((m) =>
+              void m.refreshWorkspaceCache(),
+            );
+            void import("@/lib/offline/asset-cache").then((m) => {
+              void m.cacheProjectAssets(saved as never);
+              void m.cacheProjectFonts(saved as never);
+            });
+            void import("@/lib/offline/connectivity").then((m) =>
+              m.triggerSync(),
+            );
+          })
+          .catch(() => undefined);
+        void get().refreshProjects().catch(() => undefined);
       }
       return true;
     },
@@ -2842,7 +2929,7 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (!sameOwner()) return false;
       if (!project) {
         toast.error("تعذر فتح المشروع");
-        await get().refreshProjects();
+        void get().refreshProjects().catch(() => undefined);
         return false;
       }
       const denyBlockedProject = () => {
@@ -2870,7 +2957,6 @@ export const useEditor = create<EditorStore>((set, get) => {
         const allowed = await requestLeave();
         if (!allowed || !sameOwner() || denyBlockedProject()) return false;
       }
-      await restoreFonts(project);
       if (!sameOwner() || denyBlockedProject()) return false;
       saveSessionGen += 1;
       activeSave = null;
@@ -2889,12 +2975,12 @@ export const useEditor = create<EditorStore>((set, get) => {
         saveState: "saved",
         savedAt: Date.now(),
       });
-      try {
-        await setSetting("activeProjectId", project.id);
-      } catch {
-        // The document is open in memory even if the optional last-opened
-        // preference cannot be persisted by this browser.
-      }
+      runWhenIdle(() => {
+        if (!sameOwner() || get().id !== project.id) return;
+        void restoreFonts(project).catch(() => undefined);
+      });
+      // The optional last-opened preference must not hold the route transition.
+      void setSetting("activeProjectId", project.id).catch(() => undefined);
       return true;
     },
 
@@ -3026,7 +3112,9 @@ export const useEditor = create<EditorStore>((set, get) => {
               };
             });
             if (changed) {
-              writeDraftSnapshot();
+              // The loop immediately persists the newer live snapshot. Avoid a
+              // second synchronous localStorage serialization here; pagehide
+              // remains the recovery path if the browser closes first.
               continue;
             }
             cleanSnapshot = projectSlice(get());
@@ -3112,11 +3200,6 @@ export const useEditor = create<EditorStore>((set, get) => {
       if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
         return;
       const target = persisted ? clone(persisted) : clone(cleanSnapshot);
-      if (persisted) {
-        await restoreFonts(persisted);
-        if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
-          return;
-      }
       applyProject(target, {
         zoom: get().zoom || 0.82,
         id: persisted ? persisted.id : target.id,
@@ -3129,6 +3212,16 @@ export const useEditor = create<EditorStore>((set, get) => {
         saveState: "saved",
         savedAt: persisted?.updatedAt ?? Date.now(),
       });
+      if (persisted) {
+        runWhenIdle(() => {
+          if (
+            getStorageOwner() === owner &&
+            get().sessionOwner === sessionOwner &&
+            get().id === persisted.id
+          )
+            void restoreFonts(persisted).catch(() => undefined);
+        });
+      }
     },
 
     renameProject: async (id, name) => {
@@ -3492,7 +3585,6 @@ export const useEditor = create<EditorStore>((set, get) => {
           return false;
         }
       }
-      await restoreFonts(saved);
       if (!sameOwner() || !sameDocument() || !editorAccessReady()) return false;
       saveSessionGen += 1;
       activeSave = null;
@@ -3514,8 +3606,12 @@ export const useEditor = create<EditorStore>((set, get) => {
         saveState: "saved",
         savedAt: Date.now(),
       });
-      await setSetting("activeProjectId", saved.id);
-      await get().refreshProjects();
+      runWhenIdle(() => {
+        if (sameOwner() && get().id === saved.id)
+          void restoreFonts(saved).catch(() => undefined);
+      });
+      void setSetting("activeProjectId", saved.id).catch(() => undefined);
+      void get().refreshProjects().catch(() => undefined);
       if (opts.successMessage !== null) {
         toast.success(opts.successMessage || "تم استيراد المشروع");
       }
@@ -6067,6 +6163,146 @@ function readUi(): PersistedUi {
     return typeof parsed === "object" && parsed ? (parsed as PersistedUi) : {};
   } catch {
     return {};
+  }
+}
+
+interface InitialProjectData {
+  /** null means the project list is intentionally loaded in the background. */
+  projects: ProjectMeta[] | null;
+  active: ProjectSnapshot | null;
+  activePageSetting: string | null;
+  restoredFromDraft: boolean;
+  restoredUnsavedDraft: boolean;
+  preDraftSnapshot: ProjectSnapshot | null;
+}
+
+async function loadInitialProjectData(
+  owner: string,
+  requestedProjectId: string | undefined,
+  ui: PersistedUi,
+): Promise<InitialProjectData> {
+  let storedActiveId: string | null = null;
+  let activePageSetting: string | null = null;
+  let active: ProjectSnapshot | null = null;
+  if (requestedProjectId) {
+    // Resolve the deep-linked document alongside lightweight page preferences;
+    // never enumerate the library to render a URL-addressed project.
+    const storedPreferences = Promise.all([
+      getSetting<string>("activeProjectId").catch(() => null),
+      getSetting<string>("activePageId").catch(() => null),
+    ]);
+    const [requestedProject, [lastProjectId, lastPageId]] = await Promise.all([
+      getProject(requestedProjectId),
+      storedPreferences,
+    ]);
+    active = requestedProject;
+    if (lastProjectId === requestedProjectId || ui.activeProjectId === requestedProjectId)
+      activePageSetting = lastPageId;
+  } else {
+    [storedActiveId, activePageSetting] = await Promise.all([
+      getSetting<string>("activeProjectId").catch(() => null),
+      getSetting<string>("activePageId").catch(() => null),
+    ]);
+    const activeId = storedActiveId || ui.activeProjectId;
+    if (activeId) active = await getProject(activeId);
+  }
+  let projects: ProjectMeta[] | null = null;
+
+  // Project listings materialize every saved document from IndexedDB. The
+  // requested URL (or last-opened id) avoids that full-library read on startup.
+  if (!requestedProjectId && !active) {
+    projects = await listProjects();
+    let legacy: string | null = null;
+    try {
+      legacy = localStorage.getItem(LEGACY_STORE_KEY);
+    } catch {
+      /* legacy migration is best-effort */
+    }
+    // The pre-library autosave blob predates ownership tracking — only a
+    // signed-in account may claim it, never a signed-out visitor.
+    if (!projects.length && legacy && hasSignedInOwner()) {
+      try {
+        const migrated = await migrateLegacyProject(JSON.parse(legacy));
+        if (migrated) {
+          projects = await listProjects();
+          toast.success("تم ترحيل مشروعك المحفوظ إلى مكتبة المشاريع");
+        }
+      } catch {
+        /* a corrupt legacy blob must not block startup */
+      }
+    }
+    if (projects[0]?.id) active = await getProject(projects[0].id);
+  }
+
+  /* The route URL wins over a recovery draft for a different document. */
+  const draft = readDraftSnapshot(owner);
+  const mayRestoreDraft =
+    !requestedProjectId || draft?.projectId === requestedProjectId;
+  let restoredFromDraft = false;
+  let restoredUnsavedDraft = false;
+  let preDraftSnapshot: ProjectSnapshot | null = null;
+
+  if (
+    mayRestoreDraft &&
+    draft?.projectId &&
+    (!active || active.id !== draft.projectId)
+  ) {
+    const byDraftId = await getProject(draft.projectId);
+    if (byDraftId) active = byDraftId;
+  }
+  if (
+    mayRestoreDraft &&
+    draft &&
+    active &&
+    draft.projectId === active.id &&
+    draft.savedAt >= (active.updatedAt ?? 0)
+  ) {
+    preDraftSnapshot = clone(active);
+    const merged: ProjectSnapshot = { ...active, ...draft.project };
+    merged.activePageId = draft.activePageId || draft.project.activePageId;
+    active = merged;
+    restoredFromDraft = true;
+  } else if (
+    mayRestoreDraft &&
+    !requestedProjectId &&
+    draft &&
+    !draft.projectId &&
+    draft.savedAt >= (active?.updatedAt ?? 0)
+  ) {
+    preDraftSnapshot = active ? clone(active) : projectSlice(blank);
+    active = {
+      ...draft.project,
+      activePageId: draft.activePageId || draft.project.activePageId,
+    };
+    restoredFromDraft = true;
+    restoredUnsavedDraft = true;
+  }
+
+  return {
+    projects,
+    active,
+    activePageSetting,
+    restoredFromDraft,
+    restoredUnsavedDraft,
+    preDraftSnapshot,
+  };
+}
+
+function runWhenIdle(callback: () => void): void {
+  if (typeof window === "undefined") {
+    callback();
+    return;
+  }
+  const idleWindow = window as Window & {
+    requestIdleCallback?: (
+      task: () => void,
+      options?: { timeout?: number },
+    ) => number;
+  };
+  if (idleWindow.requestIdleCallback) {
+    idleWindow.requestIdleCallback(callback, { timeout: 1200 });
+  } else {
+    window.setTimeout(callback, 0);
   }
 }
 

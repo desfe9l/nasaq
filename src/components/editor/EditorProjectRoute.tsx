@@ -16,6 +16,7 @@ import { Link } from "@tanstack/react-router";
 import { EditorApp } from "@/components/editor/EditorApp";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { useEditor } from "@/lib/editor/store";
+import { getStorageOwner } from "@/lib/editor/storage-owner";
 import { CREATE_ROUTE, PROJECTS_ROUTE } from "@/lib/site-routes";
 
 type Resolution = {
@@ -25,20 +26,35 @@ type Resolution = {
 
 export function EditorProjectRoute({ projectId }: { projectId: string }) {
   const hydrate = useEditor((s) => s.hydrate);
+  const sessionReady = useEditor(
+    (state) =>
+      state.hydrated && state.sessionOwner === getStorageOwner(),
+  );
+  const alreadyOpen = useEditor(
+    (state) =>
+      state.hydrated &&
+      state.id === projectId &&
+      state.sessionOwner === getStorageOwner(),
+  );
   const [resolution, setResolution] = useState<Resolution>(() => ({
     projectId,
     status: "resolving",
   }));
 
   useEffect(() => {
+    if (alreadyOpen) return;
     let alive = true;
     setResolution({ projectId, status: "resolving" });
     void (async () => {
       try {
-        await hydrate();
+        // An owner-pinned editor can open the target directly; rechecking the
+        // auth session here would add an avoidable network round-trip.
+        if (!sessionReady) await hydrate(projectId);
+        if (!alive) return;
         const current = useEditor.getState();
-        const alreadyOpen = current.id === projectId && current.hydrated;
-        const opened = alreadyOpen || (await current.openProject(projectId));
+        const opened =
+          (current.id === projectId && current.hydrated) ||
+          (await current.openProject(projectId));
         if (!alive) return;
 
         // Do not mount the generic editor (or whatever project hydration last
@@ -60,7 +76,9 @@ export function EditorProjectRoute({ projectId }: { projectId: string }) {
     return () => {
       alive = false;
     };
-  }, [hydrate, projectId]);
+  }, [alreadyOpen, hydrate, projectId, sessionReady]);
+
+  if (alreadyOpen) return <EditorApp projectId={projectId} />;
 
   if (resolution.projectId === projectId && resolution.status === "ready") {
     return <EditorApp projectId={projectId} />;
