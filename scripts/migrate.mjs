@@ -22,6 +22,12 @@ if (!databaseUrl) {
   );
   process.exit(0);
 }
+if (process.env.VERCEL_ENV === "preview") {
+  console.log(
+    "[migrate] Vercel Preview — skipping deploy-time migrations; Preview shares the Production schema.",
+  );
+  process.exit(0);
+}
 
 const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "migrations");
 
