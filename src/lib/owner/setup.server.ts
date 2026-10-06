@@ -237,7 +237,21 @@ export async function testDatabaseConnection(): Promise<{ ok: boolean; detail: s
 
 /** Map a driver error to a short reason that cannot leak connection details. */
 export function safeDatabaseReason(error: unknown): string {
+  const errCode = (error as { code?: string })?.code;
   const raw = error instanceof Error ? error.message.toLowerCase() : "";
+
+  if (errCode === "53000" || raw.includes("quota") || raw.includes("exceeded the quota")) {
+    return "تم تجاوز حد الحصة في Neon (Postgres 53000 Quota Exceeded) — تواصل مع إدارة المشروع لترقية خطة Neon أو انتظار دورة الفوترة.";
+  }
+  if (errCode === "53300" || raw.includes("too many clients") || raw.includes("too many connections")) {
+    return "تم استنزاف عدد الاتصالات المسموح بها في قاعدة البيانات (Postgres 53300) — تحقق من استخدام endpoint المجمّع (-pooler).";
+  }
+  if (errCode === "53100" || raw.includes("disk full") || errCode === "53200" || raw.includes("out of memory")) {
+    return "استنفاد موارد التخزين أو الذاكرة في قاعدة البيانات (Postgres 53100/53200).";
+  }
+  if (errCode === "57P03" || raw.includes("the database system is starting up") || raw.includes("cannot connect now")) {
+    return "قاعدة البيانات قيد الإقلاع أو الاستعادة من السكون (Postgres 57P03) — أعد المحاولة خلال ثوانٍ.";
+  }
   if (raw.includes("password") || raw.includes("authentication")) {
     return "فشل المصادقة مع قاعدة البيانات — راجع اسم المستخدم وكلمة المرور لدى المزود.";
   }

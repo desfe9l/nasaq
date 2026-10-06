@@ -33,8 +33,7 @@ import { bearer } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
-import { Pool } from "pg";
-import { ensureDbReady, getPglite, normalizeDatabaseUrl } from "../db";
+import { ensureDbReady, getPglite, getSharedPgPool, normalizeDatabaseUrl } from "../db";
 import {
   authAllowedHosts,
   authBaseURL,
@@ -140,8 +139,9 @@ const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
 // embedded PGLite (preview) via a Kysely dialect — so Better Auth persists to the
 // SAME DB as app data, including email/password users. Both use the Better Auth
 // schema from the root migrations (0001/0003_auth.sql).
+// Reuses the shared, serverless-optimized connection pool from getSharedPgPool().
 const database = databaseUrl
-  ? new Pool({ connectionString: databaseUrl })
+  ? getSharedPgPool()!
   : { dialect: pgliteDialect(() => getPglite()), type: "postgres" as const };
 
 /** Session token cookie name — also read by the live-preview popup completion page. */

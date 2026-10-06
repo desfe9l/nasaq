@@ -21,7 +21,33 @@ export const Route = createFileRoute("/api/auth/$")({
       // method + path, so listing them individually would only add drift.
       ANY: async ({ request }: { request: Request }) => {
         const { auth } = await import("@/lib/auth/server");
-        return auth.handler(request);
+        try {
+          return await auth.handler(request);
+        } catch (error) {
+          console.error("[auth] handler error:", error);
+          const message = error instanceof Error ? error.message : String(error);
+          const isQuota = /53000|quota/i.test(message);
+          const isConn = /53300|too many/i.test(message);
+          const status = isQuota || isConn ? 503 : 500;
+          return new Response(
+            JSON.stringify({
+              code: isQuota
+                ? "DATABASE_QUOTA_EXCEEDED"
+                : isConn
+                ? "DATABASE_TOO_MANY_CONNECTIONS"
+                : "AUTH_INTERNAL_ERROR",
+              message: isQuota
+                ? "قاعدة البيانات تجاوزت الحصة المتاحة (Neon Quota Exceeded)."
+                : isConn
+                ? "قاعدة البيانات تشهد ضغط اتصالات مرتفع."
+                : "خطأ غير متوقع في خدمة المصادقة.",
+            }),
+            {
+              status,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
       },
     },
   },

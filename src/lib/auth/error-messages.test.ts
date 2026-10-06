@@ -66,6 +66,25 @@ describe("authErrorMessage", () => {
     assert.match(authErrorMessage({ status: 500 }), /الخادم/);
   });
 
+  it("explains Neon database quota and connection limit errors clearly", () => {
+    assert.match(
+      authErrorMessage({ code: "DATABASE_QUOTA_EXCEEDED" }),
+      /الحصة|Neon Quota/,
+    );
+    assert.match(
+      authErrorMessage({ message: "error: 53000: project has exceeded the quota" }),
+      /الحصة|Neon Quota/,
+    );
+    assert.match(
+      authErrorMessage({ code: "DATABASE_TOO_MANY_CONNECTIONS" }),
+      /اتصالات|ضغط/,
+    );
+    assert.match(
+      authErrorMessage({ message: "FATAL: remaining connection slots are reserved" }),
+      /اتصالات|ضغط/,
+    );
+  });
+
   it("always produces a non-empty sentence", () => {
     for (const input of [null, undefined, {}, { code: "SOMETHING_NEW" }]) {
       assert.ok(authErrorMessage(input).length > 0);
