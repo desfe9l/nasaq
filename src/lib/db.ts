@@ -3,12 +3,32 @@ import { pendingMigrations } from "../../scripts/migration-plan.mjs";
 /** Which database backend is active. */
 export type DbSource = "neon" | "pglite";
 
+/**
+ * Normalize DATABASE_URL SSL parameters to prevent pg-connection-string v3/pg v9 deprecation
+ * warnings while preserving full TLS certificate and hostname verification (sslmode=verify-full).
+ */
+export function normalizeDatabaseUrl(connectionString: string | undefined): string | undefined {
+  if (!connectionString) return connectionString;
+  const trimmed = connectionString.trim();
+  if (!trimmed) return undefined;
+  try {
+    const url = new URL(trimmed);
+    const sslmode = url.searchParams.get("sslmode");
+    if (sslmode && ["require", "prefer", "verify-ca"].includes(sslmode.toLowerCase())) {
+      url.searchParams.set("sslmode", "verify-full");
+      return url.toString();
+    }
+  } catch {
+    /* invalid URL format — return as-is for pg driver error handling */
+  }
+  return trimmed;
+}
+
 // An empty/whitespace DATABASE_URL (an easy misconfig in deploy UIs) must mean
 // "unset" — otherwise production would silently run on the PGLite fallback.
 const rawDatabaseUrl =
   typeof process !== "undefined" ? process.env.DATABASE_URL : undefined;
-const databaseUrl =
-  rawDatabaseUrl && rawDatabaseUrl.trim() ? rawDatabaseUrl : undefined;
+const databaseUrl = normalizeDatabaseUrl(rawDatabaseUrl);
 
 /**
  * Active backend: real **Neon** when `DATABASE_URL` is set, otherwise local
