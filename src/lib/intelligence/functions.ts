@@ -44,6 +44,18 @@ export const intelligenceNoteFn = createServerFn({ method: "POST" })
           note: "لا يوجد نموذج لغوي مفعّل. التقييم المعتمد هو الفحص القياسي.",
         };
       }
+      if (code === "provider_timeout") {
+        return { ok: false, code: "provider_error", note: "انتهت مهلة ملاحظة النموذج. التقييم القياسي لم يتغير." };
+      }
+      if (code === "provider_aborted") {
+        return { ok: false, code: "provider_error", note: "أُلغي طلب ملاحظة النموذج. التقييم القياسي لم يتغير." };
+      }
+      if (code === "provider_blocked") {
+        return { ok: false, code: "provider_error", note: "حجب مزود النموذج الطلب. التقييم القياسي لم يتغير." };
+      }
+      if (code === "provider_unavailable") {
+        return { ok: false, code: "provider_error", note: "مزود النموذج غير متاح مؤقتًا. التقييم القياسي لم يتغير." };
+      }
       return {
         ok: false,
         code: "provider_error",

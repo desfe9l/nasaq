@@ -24,6 +24,18 @@ async function clientIdentifier(): Promise<string> {
   }
 }
 
+function imageProviderMessage(code: string): string {
+  if (code === "provider_timeout") return "انتهت مهلة تحليل الصورة. لم يتغير المستند؛ حاول مرة أخرى.";
+  if (code === "provider_aborted") return "أُلغي تحليل الصورة.";
+  if (code === "provider_auth") return "رفض مزود تحليل الصور بيانات الاعتماد.";
+  if (code === "invalid_model") return "نموذج تحليل الصور المكوّن غير صالح.";
+  if (code === "provider_blocked") return "حجب مزود تحليل الصور هذا الطلب.";
+  if (code === "provider_empty") return "لم يُعد مزود تحليل الصور نتيجة قابلة للاستخدام.";
+  if (code === "provider_malformed") return "أعاد مزود تحليل الصور نتيجة غير مكتملة.";
+  if (code === "provider_unavailable") return "مزود تحليل الصور غير متاح مؤقتًا.";
+  return "تعذر تحليل الصورة الآن.";
+}
+
 export const analyzeImageFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator(
@@ -88,7 +100,7 @@ export const analyzeImageFn = createServerFn({ method: "POST" })
       return {
         ok: false,
         code: "provider_error",
-        message: "تعذر تحليل الصورة الآن.",
+        message: imageProviderMessage(code),
       };
     }
   });
