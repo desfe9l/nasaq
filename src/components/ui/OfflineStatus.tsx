@@ -1,156 +1,217 @@
-import { useEffect, useState } from "react";
+import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useRouterState } from "@tanstack/react-router";
+import { CloudOff, RefreshCw } from "lucide-react";
 import {
-  editorStatusLabel,
-  getConnectivityStatus,
+  documentStatus,
+  type DocumentStatus,
+} from "@/lib/editor/document-status";
+import {
+  getConnectivity,
+  retrySync,
   subscribeConnectivity,
-  triggerSync,
-  type EditorStatusCopy,
-  type SyncStatus,
+  type ConnectivitySnapshot,
 } from "@/lib/offline/connectivity";
 import { useEditor } from "@/lib/editor/store";
-
-const LABEL: Record<SyncStatus, { text: string; tone: string }> = {
-  offline: { text: "متاح دون اتصال", tone: "bg-amber-500" },
-  online: { text: "متصل", tone: "bg-emerald-500" },
-  syncing: { text: "تتم المزامنة", tone: "bg-sky-500" },
-  synced: { text: "متزامن", tone: "bg-emerald-600" },
-  error: { text: "تعذر التزامن", tone: "bg-red-500" },
-};
+import { WORKSPACE_ROUTE } from "@/lib/site-routes";
 
 /**
- * Reveal a blocker only after it has actually lasted. Clearing `active`
- * hides immediately — this does not keep a finished load on screen.
+ * The ONE visible document/sync status.
+ *
+ * House rule, and the reason this file replaced three separate indicators:
+ *
+ *   · exactly ONE component renders the document's state at a time — the
+ *     editor's chrome chip (`EditorDocumentStatus`) or, outside the editor, the
+ *     compact site pill (`OfflineStatus`), and never both on the same screen;
+ *   · the state comes from ONE projection (`documentStatus()`), so «جارٍ
+ *     الحفظ» can never be painted by two components and «تحميل» can never mean
+ *     a save or a sync;
+ *   · the status lives in CHROME (the header capsule / a status pill), never
+ *     over the canvas, the artboard, the text or the toolbars;
+ *   · no timer decides what the author sees: a state disappears when the state
+ *     itself changes, not because a few seconds passed.
  */
-export function useRevealWhile(active: boolean, delay = 280): boolean {
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    if (!active) {
-      setVisible(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setVisible(true), delay);
-    return () => window.clearTimeout(timer);
-  }, [active, delay]);
-  return visible;
-}
 
-/**
- * Compact Offline / Syncing / Synced status for pages outside the editor.
- * The editor has one status, in the workspace status bar — never a floating
- * badge over the page.
- */
-export function OfflineStatus({ compact = false }: { compact?: boolean }) {
-  const path = useRouterState({ select: (s) => s.location.pathname });
-  const [status, setStatus] = useState<SyncStatus>(getConnectivityStatus().status);
-  const [online, setOnline] = useState(getConnectivityStatus().online);
-  const [visible, setVisible] = useState(true);
-
-  useEffect(() => {
-    const unsub = subscribeConnectivity((s, isOnline) => {
-      setStatus(s);
-      setOnline(isOnline);
-      setVisible(true);
-    });
-    return unsub;
-  }, []);
-
-  useEffect(() => {
-    if (status === "online" || status === "synced") {
-      const t = setTimeout(() => setVisible(false), 3000);
-      return () => clearTimeout(t);
-    }
-    setVisible(true);
-  }, [status]);
-
-  if (path.startsWith("/editor")) return null;
-  if (
-    path === "/" ||
-    path.startsWith("/projects") ||
-    path.startsWith("/purchase") ||
-    path.startsWith("/account")
-  ) {
-    return null;
-  }
-  if (!visible && (status === "online" || status === "synced")) return null;
-
-  const show = visible || status === "offline" || status === "syncing" || status === "error";
-  if (!show) return null;
-
-  const meta = LABEL[status];
-
-  return (
-    <div
-      role="status"
-      aria-live="polite"
-      data-testid="offline-status"
-      className={[
-        "pointer-events-none flex justify-center px-3",
-        compact ? "py-1" : "py-2",
-      ].join(" ")}
-    >
-      <div
-        className={[
-          "inline-flex max-w-full items-center gap-2 rounded-full border bg-surface/95 px-3 py-1.5 text-[11px] font-bold shadow-sm backdrop-blur",
-          status === "offline" ? "border-amber-300 text-amber-900" : "border-line text-ink",
-        ].join(" ")}
-      >
-        <span className={["size-2 shrink-0 rounded-full", meta.tone].join(" ")} aria-hidden />
-        <span className="truncate">{meta.text}</span>
-        {!online && status !== "offline" && <span className="text-muted">· دون اتصال</span>}
-      </div>
-    </div>
+function useConnectivity(): ConnectivitySnapshot {
+  return useSyncExternalStore(
+    subscribeConnectivity,
+    getConnectivity,
+    getConnectivity,
   );
 }
 
-const TONE: Record<EditorStatusCopy, string> = {
-  "جارٍ فتح المستند": "is-sync",
-  "محفوظ محليًا": "is-saved",
-  "تتم المزامنة": "is-sync",
-  "متزامن": "is-synced",
-  "متاح دون اتصال": "is-offline",
-  "تعذر التزامن": "is-error",
-  "جارٍ الحفظ": "is-pending",
-  "تغييرات محلية": "is-pending",
-  "تعذر الحفظ": "is-error",
-};
-
-/** The only document status. Lives in editor chrome, never on the artboard. */
-export function EditorSyncStatus() {
-  const saveState = useEditor((s) => s.saveState);
+function useDocumentStatus(): DocumentStatus {
   const phase = useEditor((s) => s.documentPhase);
-  const [status, setStatus] = useState<SyncStatus>(getConnectivityStatus().status);
-  const [online, setOnline] = useState(getConnectivityStatus().online);
+  const save = useEditor((s) => s.saveState);
+  const saveArmed = useEditor((s) => s.saveArmed);
+  const showcase = useEditor((s) => s.showcase);
+  const conn = useConnectivity();
+  return useMemo(
+    () =>
+      documentStatus({
+        phase,
+        save,
+        saveArmed,
+        online: conn.online,
+        sync: conn.sync,
+        pendingSync: conn.pending,
+        lastSyncedAt: conn.lastSyncedAt,
+        /* The showcase preview is interactive but never persisted. */
+        persisted: !showcase,
+      }),
+    [phase, save, saveArmed, showcase, conn],
+  );
+}
 
-  useEffect(() => {
-    return subscribeConnectivity((next, isOnline) => {
-      setStatus(next);
-      setOnline(isOnline);
-    });
-  }, []);
+/**
+ * Always-visible document status for the editor header capsule.
+ *
+ * It owns the save state, the sync state and the connection state — the
+ * `SaveNowButton` beside it is an ACTION, so the same state is never rendered
+ * twice. A `retryable` state turns the chip into the retry control.
+ */
+export function EditorDocumentStatus({ compact = false }: { compact?: boolean }) {
+  const status = useDocumentStatus();
+  const retry = useCallback(() => {
+    if (status.kind === "sync-error") retrySync();
+    else if (status.kind === "save-error") void useEditor.getState().saveNow();
+  }, [status.kind]);
 
-  const label = editorStatusLabel(saveState, status, online, phase);
-  const failed = label === "تعذر التزامن";
+  const label = compact ? status.short : status.label;
+  const className = [
+    "editor-sync-status",
+    `is-${status.tone}`,
+    status.busy && "is-busy",
+    status.retryable && "is-action",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const body = (
+    <>
+      {status.degradedByOffline ? (
+        <CloudOff className="glyph" aria-hidden />
+      ) : (
+        <span className="dot" aria-hidden />
+      )}
+      <span className="label">{label}</span>
+      {status.retryable && <RefreshCw className="glyph" aria-hidden />}
+    </>
+  );
+
+  if (status.retryable)
+    return (
+      <button
+        type="button"
+        role="status"
+        aria-live="polite"
+        data-testid="editor-sync-status"
+        data-status={status.kind}
+        className={className}
+        title={`${status.detail} — انقر لإعادة المحاولة`}
+        aria-label={`${status.label}. ${status.detail} اضغط لإعادة المحاولة`}
+        onClick={retry}
+      >
+        {body}
+      </button>
+    );
 
   return (
     <span
       role="status"
       aria-live="polite"
       data-testid="editor-sync-status"
-      className={`editor-sync-status ${TONE[label]}`}
-      title={label}
+      data-status={status.kind}
+      className={className}
+      title={status.detail}
+      aria-label={`${status.label}. ${status.detail}`}
     >
-      <span className="dot" aria-hidden />
-      <span className="editor-sync-label">{label}</span>
-      {failed && (
-        <button
-          type="button"
-          className="editor-sync-retry"
-          onClick={() => triggerSync()}
-        >
-          إعادة المحاولة
-        </button>
-      )}
+      {body}
     </span>
+  );
+}
+
+/**
+ * Compact connectivity pill for pages OUTSIDE the editor.
+ *
+ * Only actionable states are shown at all (`offline`, a real `syncing`, or a
+ * failed sync): «متصل» / «تمت المزامنة» were noise that floated over page
+ * content indefinitely. It sits inside the safe area, below dialogs and toasts
+ * in the z order, and never swallows a pointer event — the retry button is the
+ * only interactive part.
+ */
+export function OfflineStatus() {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const conn = useConnectivity();
+
+  const offline = !conn.online;
+  const error = conn.sync === "error";
+  const syncing = conn.sync === "syncing";
+
+  /* The editor has ONE status, in its chrome; never a second floating one. */
+  if (path.startsWith("/editor")) return null;
+  /* Nothing actionable to say. This is why the old pill never left the screen. */
+  if (!offline && !error && !syncing) return null;
+  /*
+   * مساحة العمل paints its own in-flow offline notice (it also explains that
+   * saving and syncing resume on reconnection). One fact, one surface: while
+   * offline this pill would be saying the same thing twice on that page.
+   */
+  if (offline && path.startsWith(WORKSPACE_ROUTE)) return null;
+
+  const text = offline ? "دون اتصال" : syncing ? "جارٍ المزامنة…" : "تعذر التزامن";
+  const detail = offline
+    ? "المشاريع والمستندات المحفوظة متاحة للعمل دون اتصال — ستتم المزامنة تلقائيًا عند عودة الاتصال."
+    : syncing
+      ? "تُزامن تغييراتك المحفوظة محليًا مع الخدمة."
+      : "تعذر إرسال بعض التغييرات إلى الخدمة. بياناتك المحلية سليمة.";
+
+  return (
+    <div
+      className={[
+        /* Chrome, not content: centred inside the safe area, below dialogs and
+         * toasts in the z order, and never a target for stray taps. */
+        "pointer-events-none fixed inset-x-0 bottom-[calc(12px+var(--safe-bottom,0px))] z-[var(--z-dropdown)] flex justify-center px-3",
+        "print:hidden",
+      ].join(" ")}
+    >
+      <div
+        role="status"
+        aria-live="polite"
+        data-testid="offline-status"
+        data-status={offline ? "offline" : conn.sync}
+        className={[
+          "inline-flex max-w-[min(92vw,32rem)] items-center gap-2 rounded-full border bg-surface px-3 py-1.5 text-[11px] font-bold text-ink shadow-lg",
+          offline ? "border-warning" : error ? "border-error" : "border-line",
+        ].join(" ")}
+        title={detail}
+      >
+        {offline ? (
+          <CloudOff className="size-3.5 shrink-0 text-warning" aria-hidden />
+        ) : (
+          <span
+            className={[
+              "size-2 shrink-0 rounded-full",
+              error ? "bg-error" : "bg-brand",
+            ].join(" ")}
+            aria-hidden
+          />
+        )}
+        <span>{text}</span>
+        {offline && (
+          <span className="hidden text-muted sm:inline">
+            · المستندات المحفوظة متاحة للعمل
+          </span>
+        )}
+        {error && (
+          <button
+            type="button"
+            className="pointer-events-auto rounded-full border border-line px-2 py-0.5 font-extrabold"
+            onClick={() => retrySync()}
+          >
+            إعادة المحاولة
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

@@ -3955,22 +3955,39 @@ body.is-resizing-panel .editor-dock-strip::before {
   box-shadow: 0 0 0 1.5px var(--editor-accent);
 }
 
+/*
+ * The document status chip — the ONE state readout in the editor chrome.
+ *
+ * It lives inside the header's document capsule, in normal flow: it can never
+ * overlap the canvas, the artboard, the page rail, the toolbars or a selection
+ * handle, on any surface. Tones are editor roles (light / dark / dim all resolve
+ * them), so a state never becomes invisible on a theme switch. Only a state
+ * that is genuinely working pulses — a settled document is still.
+ */
 .editor-sync-status {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 22px;
-  max-width: min(46vw, 240px);
+  height: 28px;
   min-width: 0;
-  margin: 0;
+  max-width: 17ch;
+  margin-inline-end: 4px;
   padding: 0 8px;
+  border: 1px solid transparent;
   border-radius: 8px;
+  background: transparent;
   color: var(--editor-text-secondary);
+  font-family: inherit;
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
+  white-space: nowrap;
   flex: 0 1 auto;
-  pointer-events: auto;
+}
+.editor-sync-status .label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .editor-sync-status .dot {
   width: 7px;
@@ -3979,49 +3996,53 @@ body.is-resizing-panel .editor-dock-strip::before {
   background: currentColor;
   flex: 0 0 auto;
 }
-.editor-sync-status .editor-sync-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.editor-sync-status .glyph {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+.editor-sync-status.is-ok {
+  color: var(--editor-success);
 }
 .editor-sync-status.is-pending {
-  color: var(--color-warning, #8a6520);
-}
-.editor-sync-status.is-offline {
-  color: var(--editor-text-secondary);
-}
-.editor-sync-status.is-sync {
   color: var(--editor-accent-ink);
 }
-.editor-sync-status.is-synced,
-.editor-sync-status.is-saved {
-  color: var(--editor-text-secondary);
+.editor-sync-status.is-warn {
+  color: var(--color-warning);
 }
-.editor-sync-status.is-error {
-  color: var(--editor-danger, var(--color-error, #b42318));
+.editor-sync-status.is-danger {
+  color: var(--editor-danger);
 }
-.editor-sync-retry {
-  flex: 0 0 auto;
-  margin: 0;
-  padding: 0 6px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-weight: 800;
+/* A failure is the one state that is worth a tap. */
+.editor-sync-status.is-action {
   cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  border-color: currentColor;
 }
-.editor-status-bar .editor-sync-status {
-  height: 22px;
-  flex: 0 1 auto;
-  min-width: 0;
+.editor-sync-status.is-action:hover {
+  background: var(--editor-hover);
 }
-body.is-editor [data-testid="offline-status"] {
-  display: none !important;
+/* Real work only: opening, writing, syncing. */
+.editor-sync-status.is-busy .dot {
+  animation: editor-status-pulse 1.1s ease-in-out infinite;
+}
+@keyframes editor-status-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(0.72); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .editor-sync-status.is-busy .dot { animation: none; }
+}
+/* Phones: the chip keeps its dot and short label, and yields the name first.
+   It never shrinks away — hiding the state is how the old editor lost it — so
+   the document name yields the space instead (it stays readable and scrolls
+   inside its own field). */
+.editor-ui[data-device-surface^="mobile-"] .editor-sync-status {
+  max-width: 11ch;
+  padding-inline: 6px;
+  flex: 0 0 auto;
+}
+.editor-ui[data-device-surface^="mobile-"] .editor-doc-name {
+  min-width: 5ch;
 }
 
 /* One 32px chrome control for everything inside the capsule. */
@@ -4188,10 +4209,6 @@ body.is-editor [data-testid="offline-status"] {
   outline: 2px solid var(--editor-accent-hover);
   outline-offset: 1px;
 }
-/* Save-state tones: one colour, three meanings, always explained by tooltip. */
-.editor-icon-btn.is-saved { color: var(--editor-success); }
-.editor-icon-btn.is-pending { color: var(--editor-text-secondary); }
-.editor-icon-btn.is-danger.is-error { color: var(--editor-danger, #d98c86); }
 
 /* The zoom cluster's buttons share the capsule, so they drop the margin. */
 .editor-zoom-btn { width: 30px; height: 28px; border-radius: 7px; }
@@ -5266,12 +5283,6 @@ button.license-badge-locked:focus-visible {
    The page commands scroll independently of thumbnails at narrow widths. */
 .editor-status-bar { height: 36px; min-height: 36px; flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; gap: 12px; padding-block: 2px; }
 .editor-status-bar > span { flex-shrink: 0; }
-.editor-status-bar > .editor-sync-status {
-  flex: 0 1 auto;
-  flex-shrink: 1;
-  min-width: 0;
-  max-width: min(46vw, 240px);
-}
 .editor-status-bar button { min-height: 32px; }
 
 .editor-page-rail > div:first-child { overflow-y: auto; }

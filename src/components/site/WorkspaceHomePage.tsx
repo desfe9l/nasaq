@@ -12,7 +12,14 @@
  *     element ids), so a template's source is never modified.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   ArrowLeft,
   Clock3,
@@ -30,6 +37,10 @@ import {
 } from "lucide-react";
 import { THEMES, type ProjectMeta } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
+import {
+  getConnectivity,
+  subscribeConnectivity,
+} from "@/lib/offline/connectivity";
 import {
   CREATE_ROUTE,
   WORKSPACE_ROUTE,
@@ -243,14 +254,19 @@ function ContinueCard({
 }
 
 export function WorkspaceHomePage({ license }: { license: LicenseState }) {
-  const [isOffline, setIsOffline] = useState(typeof navigator !== "undefined" ? !navigator.onLine : false);
-  useEffect(() => {
-    const on = () => setIsOffline(false);
-    const off = () => setIsOffline(true);
-    window.addEventListener("online", on);
-    window.addEventListener("offline", off);
-    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
-  }, []);
+  /*
+   * ONE connection fact for the whole app. This page used to own a second
+   * listener pair on `navigator.onLine`, so the banner here and the site status
+   * pill could disagree — and neither of them knew what the real probe found
+   * (a captive portal reports «online» while nothing resolves). It now reads
+   * the connectivity engine, the same source the editor's status chip uses.
+   */
+  const conn = useSyncExternalStore(
+    subscribeConnectivity,
+    getConnectivity,
+    getConnectivity,
+  );
+  const isOffline = !conn.online;
   const { user } = useCurrentUserState();
   const hydrate = useEditor((s) => s.hydrate);
   const hydrated = useEditor((s) => s.hydrated);

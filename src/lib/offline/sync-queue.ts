@@ -38,6 +38,17 @@ export interface SyncQueueEntry {
 
 const STORE = "syncQueue";
 
+/**
+ * Tell the connectivity engine that work is waiting. Deliberately an event
+ * rather than an import: `connectivity` imports this module, and the UI needs
+ * the queue's state without either module owning the other.
+ */
+function announceEnqueued(): void {
+  if (typeof window === "undefined" || typeof window.dispatchEvent !== "function")
+    return;
+  window.dispatchEvent(new CustomEvent("nasaq:sync-enqueued"));
+}
+
 async function getDb(): Promise<IDBDatabase | null> {
   const { getOfflineDb } = await import("@/lib/editor/storage");
   return getOfflineDb();
@@ -122,6 +133,7 @@ export async function enqueueSync(
       // cap queue
       if (list.length > 500) list.splice(0, list.length - 500);
       localStorage.setItem(key, JSON.stringify(list));
+      announceEnqueued();
       return entry.id;
     } catch {
       return uid("sync");
@@ -148,6 +160,7 @@ export async function enqueueSync(
   await tx(db, "readwrite", async (store) => {
     await request(store.put(entry));
   });
+  announceEnqueued();
   return entry.id;
 }
 
