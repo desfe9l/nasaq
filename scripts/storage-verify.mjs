@@ -59,7 +59,7 @@ if (!report.configured) {
   console.log("  ! metadata check skipped — DATABASE_URL is not set in this process.");
 } else {
   const { default: pg } = await import("pg");
-  function normalizeDatabaseUrl(connectionString) {
+  function normalizeDatabaseUrl(connectionString, options = {}) {
     if (!connectionString) return connectionString;
     const trimmed = connectionString.trim();
     if (!trimmed) return undefined;
@@ -68,8 +68,16 @@ if (!report.configured) {
       const sslmode = url.searchParams.get("sslmode");
       if (sslmode && ["require", "prefer", "verify-ca"].includes(sslmode.toLowerCase())) {
         url.searchParams.set("sslmode", "verify-full");
-        return url.toString();
       }
+      const usePooler = options.pooled !== false;
+      if (usePooler && url.hostname.endsWith(".neon.tech")) {
+        const parts = url.hostname.split(".");
+        if (parts[0] && parts[0].startsWith("ep-") && !parts[0].endsWith("-pooler")) {
+          parts[0] = `${parts[0]}-pooler`;
+          url.hostname = parts.join(".");
+        }
+      }
+      return url.toString();
     } catch {}
     return trimmed;
   }

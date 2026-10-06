@@ -21,26 +21,34 @@ test("Vercel bootstrap stays renderable without a database but DB access fails c
   );
 });
 
-test("normalizeDatabaseUrl replaces ambiguous sslmodes with verify-full", () => {
+test("normalizeDatabaseUrl replaces ambiguous sslmodes with verify-full and routes Neon through pooler", () => {
   assert.equal(
     normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=require"),
-    "postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-full",
+    "postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=verify-full",
   );
   assert.equal(
     normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=prefer"),
-    "postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-full",
+    "postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=verify-full",
   );
   assert.equal(
     normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-ca"),
-    "postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-full",
+    "postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=verify-full",
   );
   assert.equal(
     normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-full"),
-    "postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-full",
+    "postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=verify-full",
   );
   assert.equal(
-    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb"),
+    normalizeDatabaseUrl("postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=require"),
+    "postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=verify-full",
+  );
+  assert.equal(
+    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb", { pooled: false }),
     "postgres://user:pass@ep-test.neon.tech/neondb",
+  );
+  assert.equal(
+    normalizeDatabaseUrl("postgres://user:pass@my-custom-db.internal/db?sslmode=require"),
+    "postgres://user:pass@my-custom-db.internal/db?sslmode=verify-full",
   );
   assert.equal(normalizeDatabaseUrl(undefined), undefined);
   assert.equal(normalizeDatabaseUrl("   "), undefined);

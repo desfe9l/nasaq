@@ -1,3 +1,4 @@
+import { Pool, types } from "pg";
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
 
 /** Which database backend is active. */
@@ -6,8 +7,15 @@ export type DbSource = "neon" | "pglite";
 /**
  * Normalize DATABASE_URL SSL parameters to prevent pg-connection-string v3/pg v9 deprecation
  * warnings while preserving full TLS certificate and hostname verification (sslmode=verify-full).
+ *
+ * For Neon databases (*.neon.tech), automatically ensures the hostname routes through Neon's
+ * PgBouncer connection pooler (-pooler) to prevent connection exhaustion in serverless environments,
+ * unless explicitly disabled via options.pooled = false (e.g. for migrations).
  */
-export function normalizeDatabaseUrl(connectionString: string | undefined): string | undefined {
+export function normalizeDatabaseUrl(
+  connectionString: string | undefined,
+  options: { pooled?: boolean } = {},
+): string | undefined {
   if (!connectionString) return connectionString;
   const trimmed = connectionString.trim();
   if (!trimmed) return undefined;
@@ -16,8 +24,18 @@ export function normalizeDatabaseUrl(connectionString: string | undefined): stri
     const sslmode = url.searchParams.get("sslmode");
     if (sslmode && ["require", "prefer", "verify-ca"].includes(sslmode.toLowerCase())) {
       url.searchParams.set("sslmode", "verify-full");
-      return url.toString();
     }
+
+    const usePooler = options.pooled !== false;
+    if (usePooler && url.hostname.endsWith(".neon.tech")) {
+      const parts = url.hostname.split(".");
+      if (parts[0] && parts[0].startsWith("ep-") && !parts[0].endsWith("-pooler")) {
+        parts[0] = `${parts[0]}-pooler`;
+        url.hostname = parts.join(".");
+      }
+    }
+
+    return url.toString();
   } catch {
     /* invalid URL format — return as-is for pg driver error handling */
   }
@@ -79,6 +97,7 @@ export interface Sql {
  * `getSql()`). A failed init clears its slot so the next call retries.
  */
 const globalRef = globalThis as typeof globalThis & {
+  __sharedPgPool__?: Pool;
   __pgSqlPromise__?: Promise<Sql>;
   __pgliteInstance__?: Promise<import("@electric-sql/pglite").PGlite>;
   __pgliteMigrateChain__?: Promise<void>;
@@ -119,15 +138,56 @@ function toSql(run: Run): Sql {
   return sql;
 }
 
+/**
+ * Shared, serverless-optimized connection pool for Neon Postgres.
+ *
+ * Designed to prevent resource and connection exhaustion:
+ * 1. max connections capped at 2 in serverless (prevents hitting Neon's max_connections ceiling);
+ * 2. idleTimeoutMillis 5000 (releases idle sockets quickly to prevent connection leaks across lambda invocations);
+ * 3. connectionTimeoutMillis 5000 (fails fast instead of blocking the function for 15s/30s gateway timeout);
+ * 4. allowExitOnIdle true (lets serverless workers exit cleanly);
+ * 5. pool.on("error") handles unexpected idle connection resets (e.g. Neon compute sleep or scale-to-zero)
+ *    so Node does not crash with an unhandled process-level error.
+ */
+function createDatabasePool(connectionString: string): Pool {
+  types.setTypeParser(OID_INT8, Number);
+  types.setTypeParser(OID_DATE, identity);
+  types.setTypeParser(OID_INTERVAL, identity);
+
+  const isServerless = typeof process !== "undefined" && process.env.VERCEL === "1";
+
+  const pool = new Pool({
+    connectionString,
+    max: isServerless ? 2 : 10,
+    idleTimeoutMillis: 5000,
+    connectionTimeoutMillis: 5000,
+    allowExitOnIdle: isServerless,
+  });
+
+  pool.on("error", (err) => {
+    console.error("[db] Idle pool client error:", (err as Error)?.message ?? err);
+  });
+
+  return pool;
+}
+
+/**
+ * Access the shared pg.Pool instance for deployed Postgres.
+ * Shared between the application query engine (`getSql`) and Better Auth (`auth`),
+ * eliminating duplicate pools and halving connection consumption per serverless instance.
+ */
+export function getSharedPgPool(): Pool | undefined {
+  if (!databaseUrl) return undefined;
+  globalRef.__sharedPgPool__ ??= createDatabasePool(databaseUrl);
+  return globalRef.__sharedPgPool__;
+}
+
 function createNeonSql(): Promise<Sql> {
   globalRef.__pgSqlPromise__ ??= (async () => {
-    // Regular Postgres driver: node-postgres (`pg`) — works directly with Neon's
-    // pooled endpoint. One pool per process; warm serverless instances reuse it.
-    const { Pool, types } = await import("pg");
-    types.setTypeParser(OID_INT8, Number);
-    types.setTypeParser(OID_DATE, identity);
-    types.setTypeParser(OID_INTERVAL, identity);
-    const pool = new Pool({ connectionString: databaseUrl });
+    const pool = getSharedPgPool();
+    if (!pool) {
+      throw new Error("Failed to initialize database pool");
+    }
     return toSql(async <T>(text: string, params: unknown[]) => {
       const res = await pool.query(text, params);
       return res.rows as T[];
