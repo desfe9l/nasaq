@@ -111,7 +111,7 @@ function Choice({
       aria-pressed={active}
       aria-label={label}
       className={cn(
-        "rounded-xl border text-right transition-all duration-150",
+        "rounded-lg border text-right transition-all duration-150",
         active
           ? "border-brand bg-navy/[0.06] ring-2 ring-navy/20"
           : "border-line bg-surface hover:border-brand hover:bg-paper/60",
@@ -318,15 +318,15 @@ export function NewDocumentForm({
         />
       )}
 
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px]">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
           {/* ── configuration ─────────────────────────────────────────── */}
-          <div className="grid min-w-0 content-start gap-5">
+          <div className="grid min-w-0 content-start gap-4">
             <Section title="نقطة البداية">
               <div className="grid grid-cols-2 gap-2.5">
                 <Choice
                   active={!isTemplate}
                   onClick={() => set({ start: "blank" })}
-                  className="flex items-start gap-3 p-3.5"
+                  className="flex items-start gap-2.5 p-3"
                 >
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy/10 text-brand">
                     <FileText className="size-4" />
@@ -343,7 +343,7 @@ export function NewDocumentForm({
                 <Choice
                   active={isTemplate}
                   onClick={() => set({ start: "template" })}
-                  className="flex items-start gap-3 p-3.5"
+                  className="flex items-start gap-2.5 p-3"
                 >
                   <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-gold/25 text-ink">
                     <LayoutTemplate className="size-4" />
@@ -374,9 +374,9 @@ export function NewDocumentForm({
                         key={pack.id}
                         active={active}
                         onClick={() => set({ pack: pack.id })}
-                        className="flex flex-col p-2"
+                        className="flex flex-col p-1.5"
                       >
-                        <span className="grid h-[104px] place-items-center rounded-lg bg-paper/70 p-2">
+                        <span className="grid h-[88px] place-items-center rounded-lg bg-paper/70 p-1.5">
                           <span
                             className="block"
                             style={{
@@ -392,7 +392,7 @@ export function NewDocumentForm({
                             />
                           </span>
                         </span>
-                        <span className="mt-2 block text-[12px] font-extrabold leading-5 text-ink">
+                        <span className="mt-1.5 block text-[11.5px] font-extrabold leading-5 text-ink">
                           {pack.title}
                         </span>
                         <span className="text-[10px] font-bold text-muted">
@@ -431,7 +431,7 @@ export function NewDocumentForm({
                   </div>
                 </Section>
 
-                <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto]">
                   <Section
                     title="مقاس الصفحة"
                     hint="المقاسات المتعارف عليها + مقاس مخصص"

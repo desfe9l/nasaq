@@ -337,19 +337,19 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
   };
 
   return (
-    <div className="grid gap-6 text-ink" dir="rtl">
+    <div className="grid gap-4 text-ink" dir="rtl">
       {/* ----------------- Header & Prompt Box ----------------- */}
-      <section className="relative overflow-hidden rounded-2xl border border-line bg-surface p-5 shadow-sm sm:p-7">
+      <section className="relative overflow-hidden rounded-xl border border-line bg-surface p-4 shadow-sm sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <div className="grid size-10 place-items-center rounded-xl bg-navy text-on-brand shadow-sm">
-              <Sparkles className="size-5 text-gold" />
+            <div className="grid size-9 place-items-center rounded-lg bg-navy text-on-brand shadow-sm">
+              <Sparkles className="size-4 text-gold" />
             </div>
             <div>
-              <h1 className="text-[18px] font-black sm:text-[20px]">
+              <h1 className="text-[16px] font-black sm:text-[18px]">
                 استوديو التصميم والتوليد بالذكاء الاصطناعي
               </h1>
-              <p className="text-[12px] font-semibold text-muted">
+              <p className="text-[11px] font-semibold text-muted">
                 حول فكرتك إلى تصميم مؤسسي متكامل وقابل للتحرير بالكامل في محرر نَسَق
               </p>
             </div>
@@ -391,8 +391,8 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
         </div>
 
         {/* Primary Prompt Input */}
-        <div className="mt-5 grid gap-3">
-          <div className="relative flex flex-col gap-2 sm:flex-row">
+        <div className="mt-4 grid gap-2">
+          <div className="relative flex flex-col gap-1.5 sm:flex-row">
             <div className="relative flex-1">
               <input
                 type="text"
@@ -403,7 +403,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
                 }}
                 disabled={busy}
                 placeholder="اكتب وصف التصميم المطلوب... مثل: صمم تقريرًا رسميًا عن الأمن السيبراني"
-                className="h-12 w-full rounded-xl border-2 border-line bg-page px-4 text-[14px] font-bold placeholder:text-muted/60 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 sm:text-[15px]"
+                className="h-11 w-full rounded-lg border-2 border-line bg-page px-3 text-[13px] font-bold placeholder:text-muted/60 focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20 sm:text-[14px]"
               />
             </div>
 
@@ -411,7 +411,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
               type="button"
               disabled={busy || !prompt.trim()}
               onClick={() => void handleGenerate()}
-              className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-navy px-6 text-[14px] font-black text-on-brand shadow-md transition hover:bg-navy-2 active:scale-[0.99] disabled:opacity-50"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-navy px-5 text-[13px] font-black text-on-brand shadow-md transition hover:bg-navy-2 active:scale-[0.99] disabled:opacity-50"
             >
               {busy ? (
                 <>
@@ -448,7 +448,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
 
           {/* Quick Tuning Drawer (Optional) */}
           {showTuning && (
-            <div className="mt-3 grid gap-3 rounded-xl border border-line/80 bg-surface-2/40 p-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="mt-2 grid gap-2 rounded-lg border border-line/80 bg-surface-2/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
               <label className="grid gap-1 text-[11px] font-bold text-muted">
                 وضع الذكاء الاصطناعي
                 <select

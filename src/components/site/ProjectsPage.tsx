@@ -142,13 +142,13 @@ export function ProjectsPage() {
     <button
       type="button"
       onClick={() => void startNew()}
-      className="group flex min-h-[172px] flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-line bg-surface/50 p-6 text-center transition-all duration-200 hover:-translate-y-1 hover:border-brand hover:bg-surface hover:shadow-card-hover"
+      className="group flex min-h-[140px] flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-line bg-surface/50 p-4 text-center transition-all duration-200 hover:-translate-y-1 hover:border-brand hover:bg-surface hover:shadow-card-hover"
     >
-      <span className="grid size-12 place-items-center rounded-full bg-navy/10 text-brand transition group-hover:bg-navy-2 group-hover:text-on-brand">
-        <Plus className="size-6" />
+      <span className="grid size-9 place-items-center rounded-full bg-navy/10 text-brand transition group-hover:bg-navy-2 group-hover:text-on-brand">
+        <Plus className="size-5" />
       </span>
-      <span className="text-[14px] font-extrabold">إنشاء مستند جديد</span>
-      <span className="text-[12px] leading-5 text-muted">
+      <span className="text-[13px] font-extrabold">إنشاء مستند جديد</span>
+      <span className="text-[11px] leading-5 text-muted">
         ابدأ بصفحة فارغة وابنِ مستندك من الصفر
       </span>
     </button>
@@ -193,7 +193,7 @@ export function ProjectsPage() {
     <div className="min-h-full bg-paper">
       <SiteHeader current="/projects" />
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-12 sm:px-6 md:py-16">
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 md:py-10">
         {isOffline && (
           <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-bold text-amber-900">
             <HardDriveDownload className="size-4" /> وضع عدم الاتصال — تُعرض المشاريع المحفوظة محليًا. التعديل والحفظ متاحان، وستتم المزامنة تلقائيًا عند عودة الاتصال.
@@ -201,8 +201,8 @@ export function ProjectsPage() {
         )}
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="text-[26px] font-extrabold">مشاريعي</h1>
-            <p className="mt-1 text-[13px] leading-6 text-muted">
+            <h1 className="text-[23px] font-extrabold">مشاريعي</h1>
+            <p className="mt-1 text-[12px] leading-5 text-muted">
               {BRAND.nameAr} — {BRAND.platformEn}. كل مشروع يحتوي صفحات متعددة، وتُحفظ الملفات{" "}
               {storage.mode === "indexeddb" ? "في IndexedDB داخل متصفحك" : "في LocalStorage"}.
             </p>
@@ -251,7 +251,7 @@ export function ProjectsPage() {
          */}
         <section
           aria-label="مساحتي — المكتبة الشخصية"
-          className="mt-6 flex flex-wrap items-center gap-4 rounded-2xl border border-line bg-surface p-4"
+          className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-line bg-surface p-3"
         >
           <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand/10 text-brand-hover">
             {hasSignedInOwner() ? (
@@ -341,7 +341,7 @@ export function ProjectsPage() {
         />
 
         {/* Toolbar: search + sort on one row, filter chips + view toggle below. */}
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-1.5">
           <label className="relative min-w-[220px] flex-1">
             <Search className="absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted" />
             <input
@@ -349,14 +349,14 @@ export function ProjectsPage() {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="ابحث باسم المشروع أو الجهة"
               aria-label="بحث في المشاريع"
-              className="h-11 w-full rounded-[10px] border border-line bg-surface pr-9 pl-3 text-[13px] font-semibold"
+              className="h-10 w-full rounded-[8px] border border-line bg-surface pr-9 pl-3 text-[12px] font-semibold"
             />
           </label>
           <select
             value={sort}
             onChange={(e) => setSort(e.target.value as "recent" | "name" | "pages")}
             aria-label="ترتيب المشاريع"
-            className="h-11 rounded-[10px] border border-line bg-surface px-3 text-[13px] font-semibold"
+            className="h-10 rounded-[8px] border border-line bg-surface px-3 text-[12px] font-semibold"
           >
             <option value="recent">الأحدث تعديلاً</option>
             <option value="name">الاسم أبجدياً</option>
@@ -365,7 +365,7 @@ export function ProjectsPage() {
           <div
             role="group"
             aria-label="طريقة العرض"
-            className="flex h-11 items-center rounded-[10px] border border-line bg-surface p-1"
+            className="flex h-10 items-center rounded-[8px] border border-line bg-surface p-1"
           >
             <button
               type="button"
@@ -374,7 +374,7 @@ export function ProjectsPage() {
               aria-label="عرض شبكي"
               title="عرض شبكي"
               className={cn(
-                "grid size-9 place-items-center rounded-[7px] transition",
+                "grid size-8 place-items-center rounded-[6px] transition",
                 view === "grid"
                   ? "bg-navy text-on-brand"
                   : "text-muted hover:bg-line-2",
@@ -389,7 +389,7 @@ export function ProjectsPage() {
               aria-label="عرض قائمة مضغوط"
               title="قائمة مضغوطة"
               className={cn(
-                "grid size-9 place-items-center rounded-[7px] transition",
+                "grid size-8 place-items-center rounded-[6px] transition",
                 view === "list"
                   ? "bg-navy text-on-brand"
                   : "text-muted hover:bg-line-2",
@@ -400,7 +400,7 @@ export function ProjectsPage() {
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="تصفية المشاريع">
+        <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="تصفية المشاريع">
           {FILTERS.map((chip) => (
             <button
               key={chip.id}
@@ -408,7 +408,7 @@ export function ProjectsPage() {
               onClick={() => setFilter(chip.id)}
               aria-pressed={filter === chip.id}
               className={cn(
-                "rounded-full border px-4 py-1.5 text-[12px] font-bold transition",
+                "rounded-full border px-3 py-1 text-[11px] font-bold transition",
                 filter === chip.id
                   ? "border-brand bg-navy text-on-brand"
                   : "border-line bg-surface text-muted hover:border-brand hover:text-ink",
@@ -423,7 +423,7 @@ export function ProjectsPage() {
         </div>
 
         {projectsLoading ? (
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 md:gap-4 lg:grid-cols-3">
             {[0, 1, 2, 3, 4, 5].map((i) => (
               <div
                 key={i}
@@ -435,14 +435,14 @@ export function ProjectsPage() {
           <>
             {/* The dashed «new document» tile is always the first grid cell. */}
             {view === "grid" ? (
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 md:gap-6 lg:grid-cols-3">
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 md:gap-4 lg:grid-cols-3">
                 {createCard}
                 {filtered.map((p) => (
                   <ProjectCard key={p.id} project={p} onOpen={open} />
                 ))}
               </div>
             ) : (
-              <div className="mt-6 grid gap-3">
+              <div className="mt-4 grid gap-2">
                 {createCard}
                 {filtered.map((p) => (
                   <ProjectCard key={p.id} project={p} onOpen={open} variant="list" />

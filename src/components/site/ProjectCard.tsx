@@ -131,7 +131,7 @@ export function ProjectCard({
  "relative overflow-hidden rounded-[7px] border border-line bg-surface shadow-sm",
         // Real A4 proportions (210 × 297): the page-1 snapshot sits inside a
         // paper frame instead of being cropped into a banner strip.
-        isList ? "aspect-[210/297] w-[56px] shrink-0" : compact ? "mx-auto aspect-[210/297] h-[150px]" : "mx-auto aspect-[210/297] h-[200px]",
+        isList ? "aspect-[210/297] w-[52px] shrink-0" : compact ? "mx-auto aspect-[210/297] h-[132px]" : "mx-auto aspect-[210/297] h-[168px]",
       )}
     >
       {project.thumbnail ? (
@@ -178,7 +178,7 @@ export function ProjectCard({
   return (
     <div
       className={cn(
- "shadow-card group relative rounded-xl border border-line bg-surface p-4 transition-all duration-200 hover:-translate-y-1 hover:border-brand hover:shadow-card-hover",
+ "shadow-card group relative rounded-xl border border-line bg-surface p-3 transition-all duration-200 hover:-translate-y-1 hover:border-brand hover:shadow-card-hover",
         isList && "flex items-center gap-4 p-3",
         busy && "opacity-60",
       )}
@@ -223,7 +223,7 @@ export function ProjectCard({
               className="block w-full text-right"
             >
               {/* Wrap instead of truncate: long official titles stay readable. */}
-              <strong className="line-clamp-2 break-words text-[14px] font-extrabold leading-6">
+              <strong className="line-clamp-2 break-words text-[13px] font-extrabold leading-5">
                 {project.name}
                 {project.favorite && (
                   <span className="mr-1 text-warning" title="في المفضلة">

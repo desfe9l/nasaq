@@ -78,15 +78,15 @@ export function OpenNsqPage() {
   return (
     <div className="min-h-screen bg-paper">
       <SiteHeader current="/open" />
-      <main className="mx-auto w-full max-w-2xl px-4 py-12 sm:py-16" dir="rtl">
+      <main className="mx-auto w-full max-w-xl px-4 py-8 sm:py-10" dir="rtl">
         <div className="text-center">
-          <span className="inline-grid size-12 place-items-center rounded-[14px] bg-navy/10 text-brand">
-            <FileArchive className="size-6" aria-hidden />
+          <span className="inline-grid size-10 place-items-center rounded-xl bg-navy/10 text-brand">
+            <FileArchive className="size-5" aria-hidden />
           </span>
-          <h1 className="mt-4 text-2xl font-extrabold">
+          <h1 className="mt-3 text-[22px] font-extrabold">
             افتح ملف {BRAND.platform}
           </h1>
-          <p className="mx-auto mt-2 max-w-md text-[13.5px] leading-7 text-muted">
+          <p className="mx-auto mt-1.5 max-w-md text-[12.5px] leading-6 text-muted">
             استلمت مشروعًا بصيغة ‎.nsq؟ افتحه هنا ليظهر في محرر {BRAND.platform}{" "}
             قابلًا للتعديل بالكامل — النصوص والصور والطبقات كما صُمّمت.
           </p>
@@ -106,7 +106,7 @@ export function OpenNsqPage() {
             if (file && !checking) void handle(file);
           }}
           className={cn(
-            "mt-8 grid place-items-center rounded-[16px] border-2 border-dashed px-6 py-12 text-center transition",
+            "mt-6 grid place-items-center rounded-xl border-2 border-dashed px-5 py-9 text-center transition",
             over
               ? "border-gold bg-gold/10"
               : "border-line bg-surface",
@@ -130,7 +130,7 @@ export function OpenNsqPage() {
               <button
                 type="button"
                 onClick={() => input.current?.click()}
-                className="mt-3 inline-flex h-11 items-center gap-2 rounded-[10px] bg-navy px-5 text-[13px] font-extrabold text-on-brand transition hover:bg-navy-2"
+                className="mt-3 inline-flex h-10 items-center gap-2 rounded-[8px] bg-navy px-4 text-[12px] font-extrabold text-on-brand transition hover:bg-navy-2"
               >
                 <FolderOpen className="size-4" />
                 اختيار ملف من الجهاز
@@ -171,8 +171,8 @@ export function OpenNsqPage() {
           }}
         />
 
-        <ul className="mt-8 grid gap-3 text-[12.5px] text-muted sm:grid-cols-2">
-          <li className="flex items-start gap-2 rounded-[12px] border border-line bg-surface p-4">
+        <ul className="mt-5 grid gap-2 text-[11.5px] text-muted sm:grid-cols-2">
+          <li className="flex items-start gap-2 rounded-[10px] border border-line bg-surface p-3">
             <ShieldCheck
               className="mt-0.5 size-4 shrink-0 text-brand-hover"
               aria-hidden
@@ -180,7 +180,7 @@ export function OpenNsqPage() {
             يُفحص الملف ويُحفظ في متصفحك أولًا — لا يُنفَّذ أي محتوى منه، ولا
             يضيع أثناء تسجيل الدخول.
           </li>
-          <li className="flex items-start gap-2 rounded-[12px] border border-line bg-surface p-4">
+          <li className="flex items-start gap-2 rounded-[10px] border border-line bg-surface p-3">
             <PenLine
               className="mt-0.5 size-4 shrink-0 text-brand-hover"
               aria-hidden

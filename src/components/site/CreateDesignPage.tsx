@@ -109,39 +109,39 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
     <div className="min-h-full bg-paper">
       <SiteHeader current={CREATE_ROUTE} />
 
-      <main className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 md:py-14">
+      <main className="mx-auto w-full max-w-5xl px-4 py-7 sm:px-6 md:py-9">
         {/* Masthead — where you are, what this screen decides, and what is next. */}
-        <header className="flex flex-wrap items-end justify-between gap-5">
+        <header className="flex flex-wrap items-end justify-between gap-4">
           <div className="min-w-0">
             <p className="text-[10px] font-extrabold tracking-[0.2em] text-muted">
               NASAQ · WORKSPACE
             </p>
-            <h1 className="mt-1.5 text-[27px] font-extrabold text-ink">
+            <h1 className="mt-1 text-[23px] font-extrabold text-ink">
               إنشاء تصميم
             </h1>
-            <p className="mt-2 max-w-2xl text-[13.5px] leading-7 text-muted">
+            <p className="mt-1.5 max-w-2xl text-[12.5px] leading-6 text-muted">
               اختر طريقة البدء أولًا — فارغ، أو قالب جاهز، أو وصف بالذكاء الاصطناعي،
               أو محتوى خام. في كل الحالات يُحفظ المستند الناتج في مشاريعك ويُفتح في
               محرر نَسَق بمقاسه الصحيح.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             <a
               href="/studio"
-              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-navy px-3.5 text-[12.5px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
+              className="inline-flex h-9 items-center gap-1.5 rounded-[8px] bg-navy px-3 text-[12px] font-extrabold text-on-brand shadow-sm transition hover:bg-navy-2"
             >
               <Sparkles className="size-4 text-gold" aria-hidden />
               استوديو التوليد بالذكاء الاصطناعي
             </a>
             <a
               href={PROJECTS_ROUTE}
-              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-line bg-surface px-3.5 text-[12.5px] font-bold text-ink transition hover:border-brand"
+              className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold text-ink transition hover:border-brand"
             >
               مشاريعي
             </a>
             <a
               href={TEMPLATES_ROUTE}
-              className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-line bg-surface px-3.5 text-[12.5px] font-bold text-ink transition hover:border-brand"
+              className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold text-ink transition hover:border-brand"
             >
               <LayoutTemplate className="size-4" aria-hidden />
               القوالب الجاهزة
@@ -149,7 +149,7 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
             {entry.ready && entry.direct && (
               <a
                 href={WORKSPACE_ROUTE}
-                className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-line bg-surface px-3.5 text-[12.5px] font-bold text-ink transition hover:border-brand"
+                className="inline-flex h-9 items-center gap-1.5 rounded-[8px] border border-line bg-surface px-3 text-[12px] font-bold text-ink transition hover:border-brand"
               >
                 مساحة العمل
               </a>
@@ -184,7 +184,7 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
         {/* The configuration form, page variant: same rules as the dialog. */}
         {(path === "blank" || path === "template") && (
         <section className="mt-7 overflow-hidden rounded-2xl border border-line bg-surface shadow-card">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
             <div className="flex items-center gap-2.5">
               <span className="grid size-9 place-items-center rounded-[10px] bg-navy/10 text-brand">
                 <FilePlus2 className="size-4" aria-hidden />
@@ -204,7 +204,7 @@ export function CreateDesignPage({ search }: { search: CreateDesignSearch }) {
             </span>
           </div>
 
-          <div className="p-5">
+          <div className="p-4">
             <NewDocumentForm
               key={path}
               variant="page"

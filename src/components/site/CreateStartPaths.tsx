@@ -58,7 +58,7 @@ export function CreatePathChooser({
   onSelect: (path: CreateStartPath) => void;
 }) {
   return (
-    <div className="mt-6 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
       {CREATE_START_PATHS.map((item) => {
         const Icon = ICONS[item.id];
         const selected = active === item.id;
@@ -69,7 +69,7 @@ export function CreatePathChooser({
             onClick={() => onSelect(item.id)}
             aria-pressed={selected}
             className={cn(
-              "rounded-2xl border p-4 text-right transition",
+              "rounded-xl border p-3 text-right transition",
               selected
                 ? "border-brand bg-navy/5 shadow-card"
                 : "border-line bg-surface hover:border-brand/60",
@@ -77,7 +77,7 @@ export function CreatePathChooser({
           >
             <span
               className={cn(
-                "grid size-9 place-items-center rounded-[10px]",
+                "grid size-8 place-items-center rounded-lg",
                 selected ? "bg-navy text-on-brand" : "bg-navy/10 text-brand",
               )}
             >
@@ -114,7 +114,7 @@ export function AiStartPanel() {
   return (
     <section className="mt-5 rounded-2xl border border-line bg-surface p-5 shadow-card">
       <div className="flex items-center gap-2.5">
-        <span className="grid size-9 place-items-center rounded-[10px] bg-navy/10 text-brand">
+        <span className="grid size-8 place-items-center rounded-lg bg-navy/10 text-brand">
           <Sparkles className="size-4" aria-hidden />
         </span>
         <div>
