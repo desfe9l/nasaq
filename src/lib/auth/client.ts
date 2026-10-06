@@ -2,6 +2,12 @@ import { createAuthClient } from "better-auth/react";
 import { runPreSignInSignOut, runSignOut } from "../../../scripts/sign-out-plan.mjs";
 import { GOOGLE_PROVIDER_ID, SOCIAL_PROVIDERS } from "./providers";
 import { isLivePreviewHost } from "./preview-host";
+import { authErrorMessage, type AuthErrorLike } from "./error-messages";
+import {
+  validateSignInInput,
+  validateSignUpInput,
+  type CredentialInput,
+} from "./credentials";
 
 /**
  * Better Auth client for this React SPA (browser-side).
@@ -308,4 +314,135 @@ export async function signOut(redirectTo = "/"): Promise<void> {
       window.location.href = redirectTo;
     },
   });
+}
+
+// ── Email + password ────────────────────────────────────────────────────────
+// The primary account path: it needs no third-party provider, and the session it
+// creates is the SAME signed cookie (or preview bearer token) the Google path
+// issues — one session model, two doors.
+
+/** Result of an email/password attempt. Failures always carry readable Arabic. */
+export type EmailAuthResult =
+  | { ok: true }
+  | { ok: false; message: string; fieldErrors: Record<string, string> };
+
+export type EmailAuthInput = CredentialInput & {
+  /** Where to continue after success. Site-internal path. */
+  callbackURL?: string;
+};
+
+/** Field errors gathered before any request leaves the browser. */
+function fieldErrorResult(
+  errors: Record<string, string>,
+  fallback: string,
+): EmailAuthResult {
+  const first = Object.values(errors).find(Boolean) ?? fallback;
+  return { ok: false, message: first, fieldErrors: errors };
+}
+
+/**
+ * Create an account with email + password.
+ *
+ * Order of operations, none of which may be skipped:
+ *   validate in the browser → Better Auth creates the `user` + `account` rows →
+ *   a session is issued (autoSignIn) → the storage owner is re-pinned to the NEW
+ *   account → the caller navigates.
+ *
+ * Without the storage-owner step the visitor would land in the app with the
+ * previous identity's (or the anonymous) library still pinned, which is exactly
+ * the "my documents belong to someone else" class of bug.
+ */
+export async function signUpWithEmail(input: EmailAuthInput): Promise<EmailAuthResult> {
+  if (!authEnabled) {
+    return {
+      ok: false,
+      message: "تسجيل الدخول غير مُفعّل في هذه النسخة.",
+      fieldErrors: {},
+    };
+  }
+  const valid = validateSignUpInput(input);
+  if (!valid.ok) {
+    return fieldErrorResult(valid.errors, "تحقق من بيانات الحساب ثم أعد المحاولة.");
+  }
+  try {
+    const { data, error } = await authClient.signUp.email({
+      email: valid.value.email,
+      password: valid.value.password,
+      name: valid.value.name,
+      callbackURL: input.callbackURL ?? "/",
+    });
+    if (error) {
+      return {
+        ok: false,
+        message: authErrorMessage(error as AuthErrorLike, "sign-up"),
+        fieldErrors: {},
+      };
+    }
+    adoptSessionToken(data);
+    await applyNewSessionToClientState();
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      message: authErrorMessage(
+        { message: err instanceof Error ? err.message : null },
+        "sign-up",
+      ),
+      fieldErrors: {},
+    };
+  }
+}
+
+/** Sign in to an existing account with email + password. */
+export async function signInWithEmail(input: EmailAuthInput): Promise<EmailAuthResult> {
+  if (!authEnabled) {
+    return {
+      ok: false,
+      message: "تسجيل الدخول غير مُفعّل في هذه النسخة.",
+      fieldErrors: {},
+    };
+  }
+  const valid = validateSignInInput(input);
+  if (!valid.ok) {
+    return fieldErrorResult(valid.errors, "أدخل البريد الإلكتروني وكلمة المرور.");
+  }
+  try {
+    const { data, error } = await authClient.signIn.email({
+      email: valid.value.email,
+      password: valid.value.password,
+      callbackURL: input.callbackURL ?? "/",
+    });
+    if (error) {
+      return {
+        ok: false,
+        message: authErrorMessage(error as AuthErrorLike, "sign-in"),
+        fieldErrors: {},
+      };
+    }
+    adoptSessionToken(data);
+    await applyNewSessionToClientState();
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      message: authErrorMessage(
+        { message: err instanceof Error ? err.message : null },
+        "sign-in",
+      ),
+      fieldErrors: {},
+    };
+  }
+}
+
+/**
+ * In the live preview the app is an embedded iframe with PARTITIONED cookies, so
+ * the session cookie the auth response sets cannot be re-read on the next
+ * request. The same response carries the session token; storing it keeps
+ * email/password sign-in working there exactly like the popup OAuth path does.
+ * Deployed (cookie auth) stores nothing.
+ */
+function adoptSessionToken(data: unknown): void {
+  if (!inLivePreview()) return;
+  const token = (data as { token?: unknown } | null)?.token;
+  if (token) setBearerToken(String(token));
 }

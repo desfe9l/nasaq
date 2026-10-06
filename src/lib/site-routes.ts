@@ -71,6 +71,14 @@ export const MY_TEMPLATES_ROUTE = "/my-templates";
 export const OPEN_ROUTE = "/open";
 export const DEMO_ROUTE = "/demo";
 export const LOGIN_ROUTE = "/login";
+/**
+ * `/signup` — creating an account with email + password.
+ *
+ * A destination of its own (not a mode of `/login`): a shared link, a bookmark
+ * and a fresh visitor all need an address that says "start here", and the
+ * sign-in page stays the place returning visitors go.
+ */
+export const SIGN_UP_ROUTE = "/signup";
 export const OWNER_VAULT_ROUTE = "/owner-vault";
 
 /**

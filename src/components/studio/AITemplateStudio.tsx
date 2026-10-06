@@ -38,6 +38,7 @@ import {
   type StudioGenerationResult,
 } from "@/lib/intelligence/pipeline";
 import { generateDesignBriefFn } from "@/lib/ai/functions";
+import { aiCallErrorMessage } from "@/lib/ai/client-errors";
 import type { CoverStyle, DesignGenerationMode } from "@/lib/ai/design-contract";
 import type { DesignVariation } from "@/lib/intelligence/variations";
 import { DESIGN_STYLES, type DesignFormat, type DesignStyle } from "@/lib/intelligence/schema";
@@ -251,7 +252,14 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
       setActivePageIndex(0);
       toast.success("تم توليد التصميم والبدائل بنجاح");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "حدث خطأ أثناء التوليد، يرجى المحاولة مرة أخرى");
+      /*
+       * A failure here is usually the SERVER refusing the call (no session, no
+       * licence) — not the provider failing. The mapper keeps that distinction;
+       * the raw error goes to the console for diagnosis, never to the author.
+       */
+      toast.error(
+        aiCallErrorMessage(err, "حدث خطأ أثناء التوليد، يرجى المحاولة مرة أخرى"),
+      );
       console.error(err);
     } finally {
       setBusy(false);

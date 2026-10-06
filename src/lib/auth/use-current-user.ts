@@ -8,6 +8,15 @@ export type AppUser = {
   profileImageUrl: string | null;
   /** True when this is the sandbox/dev fallback (auth not configured). */
   isDevFallback: boolean;
+  /**
+   * Account creation time as reported by the auth session (ISO string), or
+   * `null` for an identity that has none (the disabled-auth dev user).
+   * Optional so every existing `AppUser` literal stays valid; a live session
+   * always fills it. Read it through `@/lib/auth/account` for the normalized view.
+   */
+  createdAt?: string | null;
+  /** Whether the account's email address is verified. */
+  emailVerified?: boolean;
 };
 
 /**
@@ -23,6 +32,8 @@ export const DEV_USER: AppUser = {
   primaryEmail: "dev@example.com",
   profileImageUrl: null,
   isDevFallback: true,
+  createdAt: null,
+  emailVerified: false,
 };
 
 /** `useCurrentUserState()` result: the user plus the session-loading flag. */
@@ -68,6 +79,12 @@ export function useCurrentUserState(): CurrentUserState {
           primaryEmail: user.email ?? null,
           profileImageUrl: user.image ?? null,
           isDevFallback: false,
+          // The session's own account fields — the same row the server verifies
+          // against, so createdAt/emailVerified can never disagree with the DB.
+          createdAt: (user as { createdAt?: unknown }).createdAt
+            ? String((user as { createdAt?: unknown }).createdAt)
+            : null,
+          emailVerified: (user as { emailVerified?: unknown }).emailVerified === true,
         }
       : null,
     isPending,

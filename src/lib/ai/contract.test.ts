@@ -47,3 +47,49 @@ test("report draft normalisation removes unusable sections", () => {
   assert.deepEqual(draft.sections[0].bullets, ["نقطة"]);
   assert.match(draftAsText(draft), /نتائج/);
 });
+
+test("a caller payload missing required fields is rejected, never crashed", () => {
+  // Server-function input is caller-controlled: the `.validator()` is a type
+  // annotation, not a runtime guard, so `normalizeDraftInput` must be total.
+  // Reading `input.brief.trim()` here used to throw out of the handler (HTTP
+  // 500) instead of returning the typed "invalid" result the panel renders.
+  const empty = normalizeDraftInput({} as never);
+  assert.equal(empty.brief, "");
+  assert.equal(empty.audience, "");
+  assert.equal(validDraftInput(empty), false);
+
+  const wrongTypes = normalizeDraftInput({
+    brief: 42,
+    audience: null,
+    tone: "نبرة",
+    language: "fr",
+    maxSections: "many",
+    reportType: "unknown",
+    detailLevel: "unknown",
+    pageTarget: -3,
+  } as never);
+  assert.equal(wrongTypes.brief, "");
+  assert.equal(wrongTypes.audience, "");
+  assert.equal(wrongTypes.reportType, "executive");
+  assert.equal(wrongTypes.detailLevel, "standard");
+  assert.equal(wrongTypes.pageTarget, 1);
+  assert.equal(validDraftInput(wrongTypes), false);
+
+  // Optional text fields are trimmed when present and defaulted when absent.
+  // A payload with only the two required strings still fails validation (the
+  // tone/language enums are required) — but it fails with the typed result.
+  const partial = normalizeDraftInput({ brief: "تقرير", audience: "الإدارة" } as never);
+  assert.equal(validDraftInput(partial), false);
+
+  const withOptionals = normalizeDraftInput({
+    brief: "تقرير",
+    audience: "الإدارة",
+    tone: "official",
+    language: "ar",
+    documentTitle: "  العنوان  ",
+    documentContext: undefined,
+  } as never);
+  assert.equal(withOptionals.documentTitle, "العنوان");
+  assert.equal(withOptionals.documentContext, "");
+  assert.equal(validDraftInput(withOptionals), true);
+});

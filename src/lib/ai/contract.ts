@@ -59,9 +59,15 @@ const MAX_BRIEF = 8_000;
 const MAX_AUDIENCE = 240;
 
 export function normalizeDraftInput(input: ReportDraftInput): ReportDraftInput {
+  // Server-function input is caller-controlled, and the validator is a type
+  // annotation — not a runtime guard. Read the two required strings defensively
+  // so a call missing them reaches `validDraftInput` and returns the typed
+  // "invalid" result instead of crashing the handler with a 500.
+  const brief = typeof input?.brief === "string" ? input.brief : "";
+  const audience = typeof input?.audience === "string" ? input.audience : "";
   return {
-    brief: input.brief.trim().slice(0, MAX_BRIEF),
-    audience: input.audience.trim().slice(0, MAX_AUDIENCE),
+    brief: brief.trim().slice(0, MAX_BRIEF),
+    audience: audience.trim().slice(0, MAX_AUDIENCE),
     tone: input.tone,
     language: input.language,
     maxSections: Math.min(8, Math.max(1, Math.round(input.maxSections || 4))),

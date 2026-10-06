@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Loader2, ScanText, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { analyzeImageFn } from "@/lib/ai/image-functions";
+import { aiCallErrorMessage } from "@/lib/ai/client-errors";
 import type { ImageAnalysis } from "@/lib/ai/image-contract";
 import type { CanvasEl } from "@/lib/editor/model";
 import { useEditor } from "@/lib/editor/store";
@@ -63,8 +64,10 @@ export function ImageAiTools({
       }
       setAnalysis(result.analysis);
       toast.success("اكتمل تحليل الصورة؛ راجع النص قبل إدراجه.");
-    } catch {
-      toast.error("تعذر تجهيز الصورة أو الاتصال بخدمة التحليل.");
+    } catch (error) {
+      toast.error(
+        aiCallErrorMessage(error, "تعذّر تجهيز الصورة أو الاتصال بخدمة التحليل."),
+      );
     } finally {
       setBusy(false);
     }

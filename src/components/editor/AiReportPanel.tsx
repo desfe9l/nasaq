@@ -2,6 +2,7 @@ import { useState } from "react";
 import { FileText, Loader2, Plus, RefreshCw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { generateReportDraftFn } from "@/lib/ai/functions";
+import { aiCallErrorMessage } from "@/lib/ai/client-errors";
 import {
   type AiLanguage,
   type AiTone,
@@ -70,8 +71,8 @@ export function AiReportPanel() {
       }
       setDraft(result.draft);
       toast.success("تم توليد مسودة قابلة للمراجعة");
-    } catch {
-      toast.error("تعذر الاتصال بخدمة الذكاء الاصطناعي. لم يتغير المستند.");
+    } catch (error) {
+      toast.error(aiCallErrorMessage(error));
     } finally {
       setBusy(false);
     }

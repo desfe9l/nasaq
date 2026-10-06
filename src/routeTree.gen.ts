@@ -29,6 +29,7 @@ import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as PurchaseRouteImport } from './routes/purchase'
+import { Route as SignupRouteImport } from './routes/signup'
 import { Route as StudioRouteImport } from './routes/studio'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as TermsRouteImport } from './routes/terms'
@@ -174,6 +175,11 @@ const ProjectsRoute = ProjectsRouteImport.update({
 const PurchaseRoute = PurchaseRouteImport.update({
   id: '/purchase',
   path: '/purchase',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupRoute = SignupRouteImport.update({
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StudioRoute = StudioRouteImport.update({
@@ -432,6 +438,7 @@ export interface FileRoutesByFullPath {
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/purchase': typeof PurchaseRoute
+  '/signup': typeof SignupRoute
   '/studio': typeof StudioRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/terms': typeof TermsRoute
@@ -499,6 +506,7 @@ export interface FileRoutesByTo {
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/purchase': typeof PurchaseRoute
+  '/signup': typeof SignupRoute
   '/studio': typeof StudioRoute
   '/terms': typeof TermsRoute
   '/workspace': typeof WorkspaceRoute
@@ -567,6 +575,7 @@ export interface FileRoutesById {
   '/privacy': typeof PrivacyRoute
   '/projects': typeof ProjectsRouteWithChildren
   '/purchase': typeof PurchaseRoute
+  '/signup': typeof SignupRoute
   '/studio': typeof StudioRoute
   '/templates': typeof TemplatesRouteWithChildren
   '/terms': typeof TermsRoute
@@ -637,6 +646,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/projects'
     | '/purchase'
+    | '/signup'
     | '/studio'
     | '/templates'
     | '/terms'
@@ -704,6 +714,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/projects'
     | '/purchase'
+    | '/signup'
     | '/studio'
     | '/terms'
     | '/workspace'
@@ -771,6 +782,7 @@ export interface FileRouteTypes {
     | '/privacy'
     | '/projects'
     | '/purchase'
+    | '/signup'
     | '/studio'
     | '/templates'
     | '/terms'
@@ -840,6 +852,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ProjectsRoute: typeof ProjectsRouteWithChildren
   PurchaseRoute: typeof PurchaseRoute
+  SignupRoute: typeof SignupRoute
   StudioRoute: typeof StudioRoute
   TemplatesRoute: typeof TemplatesRouteWithChildren
   TermsRoute: typeof TermsRoute
@@ -1002,6 +1015,13 @@ declare module '@tanstack/react-router' {
       path: '/purchase'
       fullPath: '/purchase'
       preLoaderRoute: typeof PurchaseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/studio': {
@@ -1439,6 +1459,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ProjectsRoute: ProjectsRouteWithChildren,
   PurchaseRoute: PurchaseRoute,
+  SignupRoute: SignupRoute,
   StudioRoute: StudioRoute,
   TemplatesRoute: TemplatesRouteWithChildren,
   TermsRoute: TermsRoute,
