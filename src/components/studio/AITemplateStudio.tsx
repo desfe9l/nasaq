@@ -175,6 +175,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
   }, [entitlements]);
 
   const handleGenerate = async (targetPrompt?: string) => {
+    if (busy) return;
     const text = (targetPrompt || prompt).trim();
     if (!text) {
       toast.error("يرجى كتابة وصف التصميم المطلوب");
@@ -564,8 +565,9 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
+                disabled={busy}
                 onClick={() => void handleGenerate()}
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[12px] font-bold text-ink transition hover:border-brand hover:text-brand"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-3 text-[12px] font-bold text-ink transition hover:border-brand hover:text-brand disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RotateCcw className="size-3.5" />
                 إعادة التوليد

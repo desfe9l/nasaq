@@ -23,6 +23,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, FileWarning, Plus } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { EditorApp } from "@/components/editor/EditorApp";
+import { useRevealWhile } from "@/components/ui/reveal";
 import { EditorWorkspaceSkeleton } from "@/components/ui/Skeleton";
 import { SiteFooter, SiteHeader } from "@/components/site/SiteChrome";
 import { useEditor } from "@/lib/editor/store";
@@ -36,6 +37,7 @@ export function EditorProjectRoute({ projectId }: { projectId: string }) {
   /** The last projectId this route FAILED to open, so a cold link can say so. */
   const [failed, setFailed] = useState<string | null>(null);
 
+  const coldOpeningVisible = useRevealWhile(!failed);
   const ready = documentPhase === "ready";
   const showsRequestedDocument = ready && openId === projectId;
   /**
@@ -87,8 +89,14 @@ export function EditorProjectRoute({ projectId }: { projectId: string }) {
   if (failed === projectId) return <DocumentUnavailable />;
 
   /* Cold address still resolving: ONE loading surface (the same skeleton the
-   * studio uses), never a second bespoke "جارٍ فتح المستند…" page. */
-  return <EditorWorkspaceSkeleton />;
+   * studio uses), never a second bespoke "جارٍ فتح المستند…" page — and it is
+   * only painted once the resolution has genuinely lasted, so a warm open
+   * never flashes anything. */
+  return coldOpeningVisible ? (
+    <EditorWorkspaceSkeleton />
+  ) : (
+    <div className="min-h-screen bg-paper" />
+  );
 }
 
 function DocumentUnavailable() {

@@ -45,6 +45,8 @@ const RETRY_MAX_MS = 30_000;
 const COALESCE_MS = 2_000;
 /** Reconnection heartbeat: catches a captive portal that lies to us. */
 const HEARTBEAT_MS = 30_000;
+/** A dead socket must never pin the online fact open (see `probeOnline`). */
+const PROBE_TIMEOUT_MS = 2_500;
 
 const listeners = new Set<Listener>();
 
@@ -129,15 +131,25 @@ function browserFetchAvailable(): boolean {
 async function probeOnline(): Promise<boolean> {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return false;
   if (!browserFetchAvailable()) return true;
+  /*
+   * Bounded: a socket that never answers must not pin the online fact (or a
+   * drain) open for the rest of the session. Any same-origin response — a 404
+   * included — proves the network is up.
+   */
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
   try {
     const res = await fetch(`/api/app-version?probe=${Date.now()}`, {
       method: "GET",
       cache: "no-store",
       headers: { "cache-control": "no-cache" },
+      signal: controller.signal,
     });
     return Boolean(res);
   } catch {
     return false;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

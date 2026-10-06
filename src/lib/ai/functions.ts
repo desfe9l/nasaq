@@ -38,6 +38,18 @@ async function clientIdentifier(): Promise<string> {
   }
 }
 
+function providerFailureMessage(code: string, fallback: string): string {
+  if (code === "provider_timeout") return "انتهت مهلة خدمة الذكاء الاصطناعي. لم يتغير المستند؛ حاول مرة أخرى.";
+  if (code === "provider_aborted") return "أُلغي طلب الذكاء الاصطناعي. لم يتغير المستند.";
+  if (code === "provider_auth") return "رفض مزود الذكاء الاصطناعي بيانات الاعتماد. لم يتغير المستند.";
+  if (code === "invalid_model") return "نموذج الذكاء الاصطناعي المكوّن غير صالح. لم يتغير المستند.";
+  if (code === "provider_blocked") return "حجب مزود الذكاء الاصطناعي هذا الطلب. لم يتغير المستند.";
+  if (code === "provider_empty") return "لم يُعد مزود الذكاء الاصطناعي نتيجة قابلة للاستخدام. لم يتغير المستند.";
+  if (code === "provider_malformed") return "أعاد مزود الذكاء الاصطناعي نتيجة غير مكتملة. لم يتغير المستند.";
+  if (code === "provider_unavailable") return "مزود الذكاء الاصطناعي غير متاح مؤقتًا. لم يتغير المستند.";
+  return fallback;
+}
+
 export const generateReportDraftFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .validator((data: ReportDraftInput) => data)
@@ -116,7 +128,7 @@ export const generateReportDraftFn = createServerFn({ method: "POST" })
       return {
         ok: false,
         code: "provider_error",
-        message: "تعذر توليد المسودة الآن. لم يتغير محتوى المستند.",
+        message: providerFailureMessage(code, "تعذر توليد المسودة الآن. لم يتغير محتوى المستند."),
       };
     }
   });
@@ -159,7 +171,7 @@ export const generateDesignBriefFn = createServerFn({ method: "POST" })
       if (code === "provider_rejected") {
         return { ok: false, code: "provider_error", message: "رفض مزود الذكاء الاصطناعي الطلب." };
       }
-      return { ok: false, code: "provider_error", message: "تعذر توليد التوجيه التصميمي الآن." };
+      return { ok: false, code: "provider_error", message: providerFailureMessage(code, "تعذر توليد التوجيه التصميمي الآن.") };
     }
   });
 
@@ -244,7 +256,7 @@ export const transformSelectionFn = createServerFn({ method: "POST" })
       return {
         ok: false,
         code: "provider_error",
-        message: "تعذر تنفيذ الإجراء الآن. لم يتغير العنصر.",
+        message: providerFailureMessage(code, "تعذر تنفيذ الإجراء الآن. لم يتغير العنصر."),
       };
     }
   });

@@ -260,6 +260,7 @@ import { WorkspaceOverlays, WorkspaceStatusBar } from "./WorkspaceOverlays";
 import { EditorAccountMenu } from "./EditorAccountMenu";
 import { HeaderPaint } from "./HeaderPaint";
 import { EditorDocumentStatus } from "@/components/ui/OfflineStatus";
+import { useRevealWhile } from "@/components/ui/reveal";
 import {
   OVERLAY_BREAKPOINT,
   DOCK_BREAKPOINT,
@@ -329,6 +330,13 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
   useEffect(() => {
     if (documentPhase === "ready") setBooted(true);
   }, [documentPhase]);
+  /**
+   * …and an open that finishes in a few milliseconds never paints the
+   * placeholder at all: the loading surface appears only once the open has
+   * actually lasted (a real restore from IndexedDB is one frame). It hides on
+   * the next frame after the document lands.
+   */
+  const openingVisible = useRevealWhile(!booted);
   /** ?showcase=1 (live product preview on the site): hide the account surface. */
   const showcase = useEditor((s) => s.showcase);
   const setEntitlements = useEditor((s) => s.setEntitlements);
@@ -504,7 +512,11 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
   };
 
   if (!booted) {
-    return <EditorWorkspaceSkeleton />;
+    return openingVisible ? (
+      <EditorWorkspaceSkeleton />
+    ) : (
+      <div className="h-full min-h-0 bg-paper" />
+    );
   }
 
   const openFile = () => projectInput.current?.click();
