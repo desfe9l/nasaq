@@ -141,3 +141,11 @@ test("Vercel guard follows production build imports and excludes tests", () => {
   const fixed = inspectDeployConfig(root);
   assert.equal(fixed.ok, true, fixed.issues.join("\n"));
 });
+
+test("a stray pnpm workspace file is rejected", () => {
+  const root = makeFixture("npm ci --include=dev");
+  write(root, "pnpm-workspace.yaml", "allowBuilds:\n  core-js: false\n");
+  const result = inspectDeployConfig(root);
+  assert.equal(result.ok, false);
+  assert.match(result.issues.join("\n"), /pnpm-workspace\.yaml/);
+});

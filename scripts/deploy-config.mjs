@@ -9,7 +9,7 @@
  * guard, so it remains runnable even after a broken `npm ci` has omitted dev
  * tooling.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { builtinModules } from "node:module";
 import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -799,6 +799,14 @@ export function inspectDeployConfig(root = rootDir) {
     !vercel.installCommand.trim()
   ) {
     issues.push("vercel.json must define installCommand explicitly.");
+  }
+
+  for (const stray of ["pnpm-lock.yaml", "pnpm-workspace.yaml"]) {
+    if (existsSync(resolve(projectRoot, stray))) {
+      issues.push(
+        `${stray} makes Vercel treat this single-package app as an incomplete pnpm workspace and run pnpm instead of npm. Delete it.`,
+      );
+    }
   }
 
   const install = analyzeInstallCommand(vercel.installCommand ?? "");
