@@ -12,6 +12,7 @@
  */
 
 import { useMemo, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import {
   FileText,
   LayoutTemplate,
@@ -287,6 +288,14 @@ export function NewDocumentForm({
         autoName: !config.name.trim(),
       });
       if (created) onCreated(useEditor.getState().id ?? null);
+      else toast.error("تعذر إنشاء المستند؛ لم يتم فتح المحرر");
+    } catch (error) {
+      toast.error("تعذر حفظ المستند الجديد", {
+        description:
+          error instanceof Error
+            ? error.message
+            : "تحقق من الاتصال أو المساحة المتاحة ثم أعد المحاولة.",
+      });
     } finally {
       setBusy(false);
     }

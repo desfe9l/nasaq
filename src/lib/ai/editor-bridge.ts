@@ -1,10 +1,12 @@
 import type { ReportDraft } from "./contract";
 import type { CanvasEl, ElType, Page, Project, ProjectSnapshot, ThemeId } from "@/lib/editor/model";
+import { validateProject } from "@/lib/intelligence/layout";
 
 export type AIEditorErrorCode =
   | "invalid_operation"
   | "unsupported_operation"
   | "target_not_found"
+  | "invalid_document"
   | "command_failed"
   | "persistence_failed";
 
@@ -164,6 +166,10 @@ export async function applyAIEditorOperations(api: AIEditorCommandApi, operation
     }
     const operation = checked[0] as OperationOf<"generate_document">;
     try {
+      const problems = validateProject(operation.project);
+      if (problems.length) {
+        return [resultFailure(operation, 0, "invalid_document", "The generated document failed NASAQ validation and was not opened.", problems)];
+      }
       const created = await api.createDocument(operation.project, { autoName: false });
       if (!created) return [resultFailure(operation, 0, "command_failed", "The editor rejected the generated document; no document was changed.")];
       return [{ ok: true, operationId: operationId(operation, 0) }];

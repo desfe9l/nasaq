@@ -116,3 +116,24 @@ test("element creation is normalized through addElementAt and returns the real i
   assert.equal(results[0]?.ok, true);
   if (results[0]?.ok) assert.deepEqual(results[0].createdIds, ["created-1"]);
 });
+
+test("malformed generated documents are rejected before the editor command runs", async () => {
+  const api = fakeApi({ createDocument: async () => true });
+  const results = await applyAIEditorOperations(api, [{
+    type: "generate_document",
+    project: { version: 2, name: "تالف", pages: [] },
+  }]);
+  assert.equal(results[0]?.ok, false);
+  if (results[0]?.ok === false) assert.equal(results[0].code, "invalid_document");
+});
+
+test("a persistence failure is reported as a rollback, not a success", async () => {
+  const api = fakeApi({ saveState: "error" });
+  const results = await applyAIEditorOperations(api, [{
+    type: "update_text",
+    elementId: element.id,
+    content: "لا يجب أن يثبت",
+  }]);
+  assert.equal(results[0]?.ok, false);
+  if (results[0]?.ok === false) assert.equal(results[0].code, "persistence_failed");
+});
