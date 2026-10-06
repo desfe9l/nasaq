@@ -13,7 +13,7 @@
  * It is deliberately the SAME pipeline, not a showcase version of it:
  *   · the composition is `composeText` (the generalized `composeReference`)
  *   · the improvement is `runLoop` (the critic + gated fixes used everywhere)
- *   · the save is `saveProject` + the editor's own address
+ *   · the save is the editor's `createDocument` command + its own address
  *
  * The page never claims the original file's structure was preserved: the copy
  * says exactly what happened, and the verdict lists the measured numbers.
