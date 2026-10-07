@@ -1,6 +1,9 @@
 {
   "name": "nasaq",
   "private": true,
+  "engines": {
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
+  },
   "sideEffects": false,
   "type": "module",
   "description": "NASAQ | نَسَق — Professional Design & Report Editor / منصة التصميم والتحرير المؤسسي",
@@ -18,7 +21,7 @@
     "preview": "node scripts/with-app-env.mjs vite preview",
     "preview:restart": "node scripts/preview.mjs restart",
     "preview:stop": "node scripts/preview.mjs stop",
-    "typecheck": "node scripts/emit-share-raster-assets.mjs && tsc --noEmit",
+    "typecheck": "tsc --noEmit",
     "check:auth": "node scripts/check-auth-invariant.mjs",
     "check:deploy": "node scripts/deploy-config.mjs",
     "test": "npm run test:src && npm run test:editor:tools && npm run test:editor:products",
