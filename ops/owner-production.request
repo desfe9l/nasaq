@@ -6,4 +6,4 @@
 #   migrate  — the guarded move + the complete live verification battery
 #   verify   — the verification battery only, no move
 mode: dry-run
-request-seq: 3
+request-seq: 4
