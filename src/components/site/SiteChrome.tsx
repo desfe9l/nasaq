@@ -161,7 +161,7 @@ function NewDocumentForUser({ user }: { user: AppUser }) {
 /**
  * «تسجيل الدخول / إنشاء حساب» and the signed-in identity chip.
  *
- * One entry point for the whole site chrome, driven by the existing Better Auth
+ * One entry point for the whole site chrome, driven by the existing auth client
  * session (`useCurrentUserState`). While the session resolves it renders nothing
  * so a signed-in visitor never sees a sign-in flash on reload. Editing does not
  * require an account — only exporting does (see `SignInRequiredModal`).

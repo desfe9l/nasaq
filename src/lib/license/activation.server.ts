@@ -17,7 +17,7 @@ import {
 } from "./server.ts";
 import type { License } from "./types.ts";
 
-/** Supplied ONLY by authMiddleware's verified Better Auth session. */
+/** Supplied ONLY by authMiddleware's verified session. */
 export type LicenseSession = { userId: string; userEmail: string | null };
 
 const NOT_OWNER = "مفتاح الترخيص لا يخص هذا المستخدم.";

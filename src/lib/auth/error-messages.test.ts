@@ -126,4 +126,39 @@ describe("configuration notices", () => {
     assert.match(detail[0], /BETTER_AUTH_SECRET/);
     assert.doesNotMatch(detail[0], /\n/);
   });
+
+  it("answers a visitor in Arabic — the raw English log line is never the notice", () => {
+    const english =
+      "Durable auth storage is not configured (missing: R2_ACCOUNT_ID (or R2_ENDPOINT), " +
+      "R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY). Set R2_ACCOUNT_ID (or R2_ENDPOINT), " +
+      "R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, or provide DATABASE_URL; auth never " +
+      "falls back to process memory.";
+    const [line] = authConfigurationDetail({ errors: [english] });
+    assert.match(line, /تخزين الهوية/);
+    // The actionable part — the variable NAMES — survives.
+    assert.match(line, /R2_ACCOUNT_ID/);
+    assert.match(line, /R2_ACCESS_KEY_ID/);
+    // Nothing untranslated leaks through to the page.
+    assert.doesNotMatch(line, /never falls back|Durable auth storage/i);
+    assert.doesNotMatch(line, /\n/);
+  });
+
+  it("translates every configuration error the report can carry", () => {
+    const lines = authConfigurationDetail({
+      errors: [
+        "No sign-in provider is configured: set GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET, " +
+          "or keep the email/password provider enabled (src/lib/auth/email-password.ts).",
+        "BETTER_AUTH_URL (http://nasaq.example) must use https on a deployment: __Host- " +
+          "session cookies are rejected over plain http, so no session is ever stored.",
+        "Some brand new failure mode nobody has written a translator for yet.",
+      ],
+    });
+    assert.equal(lines.length, 3);
+    assert.match(lines[0], /لا توجد طريقة دخول/);
+    assert.match(lines[1], /https/);
+    assert.match(lines[1], /http:\/\/nasaq\.example/);
+    // Unknown errors still answer in Arabic and keep the diagnostic tail.
+    assert.match(lines[2], /إعداد المصادقة/);
+    assert.match(lines[2], /brand new failure mode/);
+  });
 });

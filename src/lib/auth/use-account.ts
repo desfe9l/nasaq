@@ -13,7 +13,7 @@
  */
 
 import { useCurrentUserState } from "./use-current-user";
-import { authClient, authEnabled } from "./client";
+import { authEnabled, useSession } from "./client";
 import { accountProfile, type AccountProfile, type AccountSession } from "./account";
 import { useLicense } from "@/lib/license/client";
 import type { FeatureId } from "@/lib/license/types";
@@ -37,12 +37,13 @@ export type AccountState = {
  */
 export function useAccount(): AccountState {
   const { user, isPending } = useCurrentUserState();
+  // Both hooks are called unconditionally. `authEnabled` is a module constant
+  // fixed at load, so the branch below cannot change the hook order — and with
+  // auth disabled `useSession()` reports `{ data: null, isPending: false }`.
+  const { data } = useSession();
   if (!authEnabled) {
     return { profile: accountProfile(user), session: null, isPending: false };
   }
-  // Safe despite the branch above: `authEnabled` is a module constant fixed at
-  // load, so the hook order stays stable across every render.
-  const { data } = authClient.useSession();
   const session = data?.session;
   return {
     profile: accountProfile(user),

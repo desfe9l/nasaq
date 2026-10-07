@@ -1,53 +1,28 @@
 /**
- * Better Auth catch-all route: `/api/auth/*`.
+ * `/api/auth/*` — the first-party authentication endpoints.
  *
- * This is what makes sign-in work at all — without it every `/api/auth/*` request
- * (including `get-session`) falls through to the SPA and 404s, which is exactly
- * what `authClient.useSession()` would report as "always signed out".
+ * This route is what makes sign-in work at all: without it every auth request
+ * (including `get-session`) falls through to the SPA and 404s, which a session
+ * hook reports as "always signed out". The whole surface is one handler
+ * (`http.server.ts`), so there is exactly one place that sets cookies, checks
+ * the request origin, and decides what a failure looks like.
  *
- * `auth.handler` is the whole Better Auth HTTP surface: sign-in, sign-out, the
- * OAuth callback, and session reads. We forward the incoming Request unchanged so
- * cookies and headers (including the preview's bearer token) reach it intact.
+ * The handler never throws: a storage outage answers 503 with a stable code
+ * instead of a 500 stack trace, and a missing configuration answers the same
+ * way on every request rather than crashing the module graph at import time.
  *
- * Server-only by construction: `server.ts` imports `pg`, the preview secret and
- * Better Auth's Node internals, none of which may reach the browser.
+ * Server-only by construction: it reaches the identity store, the password
+ * hasher and server-only environment variables.
  */
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/api/auth/$")({
   server: {
     handlers: {
-      // One handler for every method: Better Auth dispatches internally on
-      // method + path, so listing them individually would only add drift.
+      // One handler for every method: the router dispatches on method + path.
       ANY: async ({ request }: { request: Request }) => {
-        const { auth } = await import("@/lib/auth/server");
-        try {
-          return await auth.handler(request);
-        } catch (error) {
-          console.error("[auth] handler error:", error);
-          const message = error instanceof Error ? error.message : String(error);
-          const isQuota = /53000|quota/i.test(message);
-          const isConn = /53300|too many/i.test(message);
-          const status = isQuota || isConn ? 503 : 500;
-          return new Response(
-            JSON.stringify({
-              code: isQuota
-                ? "DATABASE_QUOTA_EXCEEDED"
-                : isConn
-                ? "DATABASE_TOO_MANY_CONNECTIONS"
-                : "AUTH_INTERNAL_ERROR",
-              message: isQuota
-                ? "قاعدة البيانات تجاوزت الحصة المتاحة (Neon Quota Exceeded)."
-                : isConn
-                ? "قاعدة البيانات تشهد ضغط اتصالات مرتفع."
-                : "خطأ غير متوقع في خدمة المصادقة.",
-            }),
-            {
-              status,
-              headers: { "content-type": "application/json" },
-            },
-          );
-        }
+        const { handleAuthRequest } = await import("@/lib/auth/http.server");
+        return handleAuthRequest(request);
       },
     },
   },

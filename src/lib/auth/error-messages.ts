@@ -1,5 +1,5 @@
 /**
- * Auth error presentation — ONE translation from a Better Auth failure (or a
+ * Auth error presentation — ONE translation from an auth failure (or a
  * configuration defect) to what the visitor reads.
  *
  * Rules this module enforces:
@@ -12,7 +12,7 @@
 
 import type { AuthEnvironmentReport } from "./config";
 
-/** The shape Better Auth's client returns for a failed call. */
+/** The shape the auth client returns for a failed call. */
 export type AuthErrorLike = {
   code?: string | null;
   message?: string | null;
@@ -28,7 +28,7 @@ export const GENERIC_AUTH_ERROR =
   "تعذّر إكمال العملية. تحقق من اتصالك ثم أعد المحاولة.";
 
 /**
- * Map a Better Auth error code (or its message) to the sentence the visitor
+ * Map an auth error code (or its message) to the sentence the visitor
  * sees. `code` is authoritative; the message is only a fallback for older
  * responses that carry no code.
  */
@@ -147,11 +147,47 @@ export function authConfigurationNotice(
   return "تسجيل الدخول غير مهيأ بالكامل على هذه النسخة: إعدادات الخادم ناقصة، وقد لا تستمر الجلسة. تواصل مع إدارة المنصة.";
 }
 
-/** Short, non-secret one-line detail for the operator-facing notice. */
+/**
+ * One Arabic line per configuration problem, for the notice a VISITOR reads.
+ *
+ * `config.ts` writes its errors in English because they also go to the server
+ * log, where every other line is English and the reader is an operator. The
+ * same strings used to be rendered verbatim on the Arabic sign-in page, so a
+ * visitor whose deployment had no identity storage was shown
+ * "Durable auth storage is not configured (missing: R2_ACCOUNT_ID …)" —
+ * a sentence they cannot act on, in a language they may not read.
+ *
+ * The mapping keeps the two things a visitor OR their platform admin needs:
+ * the variable NAMES (unavoidable, and never a value), and an Arabic sentence
+ * saying what is unavailable. Anything unrecognised falls back to the generic
+ * Arabic sentence rather than leaking an English log line onto the page.
+ */
 export function authConfigurationDetail(
   report: Pick<AuthEnvironmentReport, "errors">,
 ): string[] {
-  // Messages built by `config.ts` carry variable NAMES only — never a value —
-  // so they are safe to show. Stack traces would not be.
-  return report.errors.map((error) => error.replace(/\s+/g, " ").trim());
+  return report.errors.map((error) => translateConfigurationError(error));
+}
+
+/** Arabic rendering of one `config.ts` error; variable names survive intact. */
+export function translateConfigurationError(error: string): string {
+  const text = error.replace(/\s+/g, " ").trim();
+  /*
+   * The missing list can itself contain parentheses — `R2_ACCOUNT_ID (or
+   * R2_ENDPOINT), R2_ACCESS_KEY_ID, …` — so the end of the list is the `).`
+   * that closes the sentence, not the first `)`. Taking the first one used to
+   * truncate the list mid-way (and drop the list's own closing paren with it).
+   */
+  const missing =
+    text.match(/missing: (.*?)\)\./)?.[1] ?? text.match(/missing: (.*?)(?:;|\.|$)/)?.[1];
+  if (/Durable auth storage is not configured/i.test(text)) {
+    return `تخزين الهوية غير مهيأ على هذه النسخة${missing ? ` (الناقص: ${missing})` : ""} — لن يعمل إنشاء الحساب أو تسجيل الدخول حتى يُضبط، ولن تُحفظ الجلسات في ذاكرة مؤقتة.`;
+  }
+  if (/No sign-in provider is configured/i.test(text)) {
+    return "لا توجد طريقة دخول مفعّلة على الخادم — لم تُضبط بيانات Google ولم يُفعّل الدخول بالبريد وكلمة المرور.";
+  }
+  if (/must use https on a deployment/i.test(text)) {
+    const origin = text.match(/BETTER_AUTH_URL \(([^)]+)\)/)?.[1];
+    return `عنوان المصادقة${origin ? ` (${origin})` : ""} يجب أن يكون https على بيئة النشر، وإلا رفض المتصفح كوكي الجلسة الآمن ولم تُحفظ أي جلسة.`;
+  }
+  return "إعداد المصادقة على الخادم غير مكتمل؛ تواصل مع إدارة المنصة مع هذا السطر: " + text;
 }

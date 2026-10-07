@@ -152,7 +152,7 @@ export class UnsafeKeySegmentError extends Error {
 /**
  * Stable, path-safe segment for an identity that is not already safe.
  *
- * Better Auth ids are alphanumeric, but an external identity provider could
+ * Session ids are alphanumeric, but an external identity provider could
  * hand over an id containing `@`, `:` or `/`. Rejecting those users outright
  * would be a functional regression, so the id is sanitised and suffixed with a
  * deterministic FNV-1a digest of the ORIGINAL value: two different ids can
@@ -214,4 +214,14 @@ export interface ObjectStorageProvider {
   delete(key: string): Promise<void>;
   /** Time-limited read URL, so objects stay private in the bucket. */
   signedGetUrl(key: string, expiresInSeconds: number): Promise<string>;
+  /**
+   * OPTIONAL create-only write: `true` when this call created the object,
+   * `false` when the key already existed. This is what makes a unique index
+   * (a normalized email, a lock owner) safe against two concurrent serverless
+   * invocations — a read-then-write cannot be. Providers that cannot express it
+   * omit the method and callers fall back to their own compare-after-write.
+   */
+  putIfAbsent?(key: string, body: Uint8Array, contentType: string): Promise<boolean>;
+  /** OPTIONAL key listing under a prefix, for indexes and admin listings. */
+  list?(prefix: string, limit: number): Promise<string[]>;
 }

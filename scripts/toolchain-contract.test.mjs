@@ -5,13 +5,23 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const nodeEngine = "^22.22.2 || ^24.15.0 || >=26.0.0";
+/**
+ * The Node range the deployment platform accepts.
+ *
+ * Vercel resolves `engines.node` against the Node majors its build image ships
+ * and refuses a range that matches none of them — an unbounded/odd range is
+ * rejected before the build starts ("Found invalid or discontinued Node.js
+ * Version"), which is a failed deployment that no amount of application code
+ * can fix. A single supported major (`22.x`) is the form Vercel's own error
+ * message recommends, so that is the contract.
+ */
+const nodeEngine = "22.x";
 
 function readJson(path) {
   return JSON.parse(readFileSync(join(root, path), "utf8"));
 }
 
-test("toolchain pins the Node versions supported by its locked dependencies", () => {
+test("toolchain pins a Node major the deploy platform supports", () => {
   const manifest = readJson("package.json");
   const lockfile = readJson("package-lock.json");
 

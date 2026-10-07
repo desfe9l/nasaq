@@ -80,17 +80,34 @@ export class S3RequestError extends Error {
 /**
  * Sign and send one request. The payload hash is always computed from the body
  * so a proxy cannot alter bytes in flight.
+ *
+ * `query` is for operations that are addressed by query string (ListObjectsV2);
+ * it is canonicalised exactly as the signature requires — RFC 3986 encoded by
+ * key and value, then sorted — and signed headers always include every header
+ * this function sets, so a conditional write (`if-none-match`) cannot be altered
+ * in flight either.
  */
 async function signedRequest(
   config: S3ClientConfig,
   method: "PUT" | "GET" | "DELETE" | "HEAD",
   key: string,
-  options: { body?: Uint8Array; contentType?: string } = {},
+  options: {
+    body?: Uint8Array;
+    contentType?: string;
+    query?: Record<string, string>;
+    headers?: Record<string, string>;
+  } = {},
 ): Promise<Response> {
   const endpoint = new URL(config.endpoint);
   const canonicalUri = objectPath(config, key);
   const { amzDate, dateStamp } = amzDates();
   const payloadHash = sha256Hex(options.body ?? new Uint8Array());
+
+  const canonicalQuery = Object.entries(options.query ?? {})
+    .map(([name, value]) => [uriEncode(name, true), uriEncode(value, true)] as const)
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+    .map(([name, value]) => `${name}=${value}`)
+    .join("&");
 
   const headers: Record<string, string> = {
     host: endpoint.host,
@@ -98,6 +115,9 @@ async function signedRequest(
     "x-amz-date": amzDate,
   };
   if (options.contentType) headers["content-type"] = options.contentType;
+  for (const [name, value] of Object.entries(options.headers ?? {})) {
+    headers[name.toLowerCase()] = value;
+  }
 
   const sortedHeaderNames = Object.keys(headers).sort();
   const canonicalHeaders = sortedHeaderNames
@@ -107,7 +127,7 @@ async function signedRequest(
   const canonicalRequest = [
     method,
     canonicalUri,
-    "",
+    canonicalQuery,
     canonicalHeaders,
     signedHeaders,
     payloadHash,
@@ -122,7 +142,10 @@ async function signedRequest(
   ].join("\n");
   const signature = hmac(signingKey(config, dateStamp), stringToSign).toString("hex");
 
-  const response = await fetch(`${endpoint.origin}${canonicalUri}`, {
+  const url = `${endpoint.origin}${canonicalUri}${
+    canonicalQuery ? `?${canonicalQuery}` : ""
+  }`;
+  const response = await fetch(url, {
     method,
     headers: {
       ...headers,
@@ -185,6 +208,16 @@ export function presignGetUrl(
   return `${endpoint.origin}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`;
 }
 
+/** Decode the five XML entities S3 responses can carry inside a key. */
+function unescapeXml(value: string): string {
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
 /**
  * Provider implementation over the signer above.
  *
@@ -203,6 +236,77 @@ export function createS3Provider(config: S3ClientConfig): ObjectStorageProvider 
           response.status,
         );
       }
+    },
+
+    /**
+     * Create-only write. `If-None-Match: *` makes the bucket itself the
+     * arbiter: a second writer gets 412 and is told the key already existed,
+     * which is what a unique email index needs under concurrency.
+     *
+     * A provider that does not understand the header (400/501) is reported as
+     * "unsupported" with a thrown error instead of a false "created", so the
+     * caller can fall back to its own compare-after-write protocol rather than
+     * silently accepting a duplicate.
+     */
+    async putIfAbsent(key, body, contentType) {
+      const response = await signedRequest(config, "PUT", key, {
+        body,
+        contentType,
+        headers: { "if-none-match": "*" },
+      });
+      if (response.status === 412 || response.status === 409) return false;
+      if (response.status === 400 || response.status === 501) {
+        throw new S3RequestError(
+          "object storage does not support conditional writes",
+          response.status,
+        );
+      }
+      if (!response.ok) {
+        throw new S3RequestError(
+          `object storage rejected the conditional upload (${response.status})`,
+          response.status,
+        );
+      }
+      return true;
+    },
+
+    /**
+     * ListObjectsV2 over a prefix. Only keys are returned (the auth store's key
+     * layout carries the identifier), capped by `max-keys` so one call can never
+     * try to enumerate an unbounded bucket.
+     */
+    async list(prefix, limit) {
+      const keys: string[] = [];
+      let continuationToken: string | undefined;
+      const pageSize = Math.min(Math.max(Math.trunc(limit), 1), 1000);
+      while (keys.length < limit) {
+        const query: Record<string, string> = {
+          "list-type": "2",
+          prefix,
+          "max-keys": String(Math.min(pageSize, limit - keys.length)),
+        };
+        if (continuationToken) query["continuation-token"] = continuationToken;
+        const response = await signedRequest(config, "GET", "", { query });
+        if (!response.ok) {
+          throw new S3RequestError(
+            `object storage list failed (${response.status})`,
+            response.status,
+          );
+        }
+        const xml = await response.text();
+        for (const match of xml.matchAll(/<Key>([\s\S]*?)<\/Key>/g)) {
+          const key = unescapeXml(match[1] ?? "");
+          if (key) keys.push(key);
+          if (keys.length >= limit) break;
+        }
+        const truncated = /<IsTruncated>\s*true\s*<\/IsTruncated>/i.test(xml);
+        const next = xml.match(
+          /<NextContinuationToken>([\s\S]*?)<\/NextContinuationToken>/,
+        )?.[1];
+        if (!truncated || !next) break;
+        continuationToken = unescapeXml(next);
+      }
+      return keys;
     },
 
     async get(key) {

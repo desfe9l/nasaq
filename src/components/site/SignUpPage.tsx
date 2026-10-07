@@ -6,7 +6,7 @@ import { EmailAuthForm } from "./EmailAuthForm";
 import { SiteFooter, SiteHeader } from "./SiteChrome";
 
 /**
- * Account creation — email + password, in this app's own Better Auth database.
+ * Account creation — email + password, in this app's own identity store.
  *
  * The same rules as sign-in: wait out `isPending` before deciding anything, and
  * send an already-signed-in visitor straight to the app (creating a second

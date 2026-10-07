@@ -16,7 +16,15 @@
  * React route here paints the full app shell in the popup. The opener lives in
  * `client.ts` (`signIn` → `openSignInPopup`).
  */
-import { auth, SESSION_TOKEN_COOKIE } from "./server";
+import {
+  createOAuthState,
+  encodeOAuthState,
+  googleAuthConfigured,
+  googleAuthorizeUrl,
+  googleRedirectUri,
+  oauthStateCookie,
+} from "./google.server";
+import { readCookieValue, SESSION_TOKEN_COOKIE } from "./session";
 
 /** Message shape the popup posts to the opener (must match `client.ts`). */
 type PopupMessage = {
@@ -35,7 +43,9 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
 
   if (done) {
     const errored = url.searchParams.has("error");
-    const token = errored ? null : readCookie(request, SESSION_TOKEN_COOKIE);
+    const token = errored
+      ? null
+      : readCookieValue(request.headers.get("cookie"), SESSION_TOKEN_COOKIE);
     const message: PopupMessage = {
       source: "grok-auth-popup",
       token,
@@ -61,47 +71,38 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
 
   // Stay first-party for the callback so the session cookie lands in THIS popup.
   const back = `${url.origin}/auth/popup?done=1`;
-  try {
-    const apiRes = await auth.api.signInSocial({
-      body: {
-        provider: providerId,
-        callbackURL: back,
-        errorCallbackURL: `${back}&error=1`,
-      },
-      // Forward the preview host so Better Auth derives the correct baseURL /
-      // redirect_uri for the dynamic Arena or legacy Grok preview origin.
-      headers: request.headers,
-      asResponse: true,
+  if (!googleAuthConfigured()) {
+    return completionResponse({
+      source: "grok-auth-popup",
+      token: null,
+      error: "provider_not_configured",
     });
-
-    if (!apiRes.ok) {
-      const detail = await apiRes.text().catch(() => "");
-      return completionResponse({
-        source: "grok-auth-popup",
-        token: null,
-        error: detail || `oauth_init_failed_${apiRes.status}`,
-      });
-    }
-
-    const body = (await apiRes.json().catch(() => null)) as {
-      url?: string;
-    } | null;
-    const location = body?.url;
+  }
+  try {
+    // Same PKCE + state flow the normal sign-in endpoint uses; the popup just
+    // skips the JSON hop and redirects straight to the provider.
+    const state = createOAuthState({
+      callbackURL: back,
+      errorCallbackURL: `${back}&error=1`,
+    });
+    const location = googleAuthorizeUrl({
+      redirectUri: googleRedirectUri(url.origin),
+      state,
+    });
     if (!location) {
       return completionResponse({
         source: "grok-auth-popup",
         token: null,
-        error: "oauth_init_missing_url",
+        error: "provider_not_configured",
       });
     }
-
-    // 302 to Google. Forward any
-    // Set-Cookie (OAuth state / PKCE) so the callback can complete in this popup.
-    const headers = new Headers({ location, "cache-control": "no-store" });
-    for (const cookie of apiRes.headers.getSetCookie()) {
-      headers.append("set-cookie", cookie);
-    }
-    return new Response(null, { status: 302, headers });
+    return new Response(null, {
+      status: 302,
+      headers: cookieHeaders([oauthStateCookie(encodeOAuthState(state))], {
+        location,
+        "cache-control": "no-store",
+      }),
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "oauth_init_threw";
     return completionResponse({
@@ -110,6 +111,13 @@ export async function handleAuthPopupRequest(request: Request): Promise<Response
       error: message,
     });
   }
+}
+
+/** Attach `Set-Cookie` values to a plain headers record (multi-value). */
+function cookieHeaders(cookies: readonly string[], base: Record<string, string>): Headers {
+  const headers = new Headers(base);
+  for (const cookie of cookies) headers.append("set-cookie", cookie);
+  return headers;
 }
 
 function completionResponse(message: PopupMessage): Response {
@@ -155,24 +163,4 @@ function completionHtml(message: PopupMessage): string {
 </script>
 </body>
 </html>`;
-}
-
-/** Read a single cookie value from the request (handles `=` inside values). */
-function readCookie(request: Request, name: string): string | null {
-  const header = request.headers.get("cookie");
-  if (!header) return null;
-  for (const part of header.split(";")) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq <= 0) continue;
-    if (trimmed.slice(0, eq) !== name) continue;
-    const raw = trimmed.slice(eq + 1);
-    try {
-      return decodeURIComponent(raw);
-    } catch {
-      return raw;
-    }
-  }
-  return null;
 }

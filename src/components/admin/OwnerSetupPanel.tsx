@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, Copy, Loader2, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Loader2, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import {
-  generateAuthSecretFn,
   getOwnerSetupFn,
-  testBetterAuthFn,
+  testAuthStoreFn,
   testDatabaseFn,
   testGoogleOAuthFn,
   verifyTeamLicensingFn,
@@ -21,9 +20,9 @@ import { cn } from "@/lib/utils";
  * Two deliberate properties:
  *   · A row turns green only after a real probe answered — env presence alone
  *     shows amber with "اضغط اختبار الاتصال".
- *   · No saved secret is ever rendered. The only secret that can appear is a
- *     freshly generated Better Auth secret, shown once so it can be pasted
- *     into the deployment provider, and cleared on demand.
+ *   · No secret is ever rendered, generated or requested: identity storage is
+ *     reported by variable NAME (R2_* or DATABASE_URL) and validated with a
+ *     real session probe.
  */
 
 type RowId = OwnerSetupOverview["checks"][number]["id"];
@@ -47,7 +46,6 @@ export function OwnerSetupPanel() {
   const [results, setResults] = useState<Partial<Record<RowId, { ok: boolean; detail: string }>>>({});
   const [ownerEmail, setOwnerEmail] = useState("");
   const [clientId, setClientId] = useState("");
-  const [generatedSecret, setGeneratedSecret] = useState<string | null>(null);
   const [team, setTeam] = useState<TeamSetupReport | null>(null);
   const [teamBusy, setTeamBusy] = useState(false);
 
@@ -80,15 +78,6 @@ export function OwnerSetupPanel() {
       }));
     } finally {
       setBusy(null);
-    }
-  };
-
-  const copy = async (value: string) => {
-    try {
-      await navigator.clipboard.writeText(value);
-      toast.success("تم النسخ إلى الحافظة");
-    } catch {
-      toast.error("تعذر النسخ من المتصفح");
     }
   };
 
@@ -149,49 +138,14 @@ export function OwnerSetupPanel() {
           </div>
         </SetupRow>
 
-        {/* Better Auth */}
-        <SetupRow id="better-auth" title="Better Auth" variable="BETTER_AUTH_SECRET" check={check("better-auth")} result={results["better-auth"]} busy={busy === "better-auth"}>
-          <div className="flex flex-wrap items-center gap-2">
-            <ActionButton
-              busy={busy === "better-auth"}
-              onClick={() => void run("better-auth", () => testBetterAuthFn())}
-            >
-              اختبار الاتصال
-            </ActionButton>
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  const result = await generateAuthSecretFn();
-                  setGeneratedSecret(result.secret);
-                  toast.message(result.detail);
-                } catch {
-                  toast.error("تعذر توليد السر");
-                }
-              }}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/15 px-3 text-xs font-black hover:border-emerald-400/50"
-            >
-              توليد Secret
-            </button>
-          </div>
-          {generatedSecret && (
-            <div className="mt-2 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3">
-              <p className="text-[11px] font-black text-amber-100">
-                يُعرض مرة واحدة فقط — لم يُحفظ في أي مكان. الصقه في متغيّر BETTER_AUTH_SECRET لدى مزوّد النشر.
-              </p>
-              <div className="mt-2 flex items-center gap-2">
-                <code dir="ltr" className="flex-1 break-all rounded bg-black/40 p-2 text-[11px] text-amber-50">
-                  {generatedSecret}
-                </code>
-                <button type="button" onClick={() => void copy(generatedSecret)} className="grid size-8 shrink-0 place-items-center rounded-md border border-white/15 hover:border-emerald-400/50" aria-label="نسخ السر">
-                  <Copy className="size-3.5" />
-                </button>
-                <button type="button" onClick={() => setGeneratedSecret(null)} className="h-8 shrink-0 rounded-md border border-white/15 px-2 text-[11px] font-bold hover:border-emerald-400/50">
-                  إخفاء
-                </button>
-              </div>
-            </div>
-          )}
+        {/* Identity storage */}
+        <SetupRow id="auth-store" title="تخزين الهوية" variable={check("auth-store")?.variable ?? "R2_ACCESS_KEY_ID"} check={check("auth-store")} result={results["auth-store"]} busy={busy === "auth-store"}>
+          <ActionButton
+            busy={busy === "auth-store"}
+            onClick={() => void run("auth-store", () => testAuthStoreFn())}
+          >
+            اختبار الاتصال
+          </ActionButton>
         </SetupRow>
 
         {/* Database */}

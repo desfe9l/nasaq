@@ -1,7 +1,7 @@
 /**
  * The social providers this app offers for sign-in.
  *
- * Keep this dependency-free so both the Better Auth server and the browser UI
+ * Keep this dependency-free so both the auth server and the browser UI
  * can share the same single-provider contract without bundling server code.
  */
 export type SocialProvider = {

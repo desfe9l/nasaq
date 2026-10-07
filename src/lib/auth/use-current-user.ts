@@ -1,4 +1,4 @@
-import { authClient, authEnabled } from "./client";
+import { authEnabled, useSession } from "./client";
 
 /** Normalized user shape used across the app, auth on or off. */
 export type AppUser = {
@@ -23,7 +23,7 @@ export type AppUser = {
  * Stable fallback user, used ONLY when auth is explicitly disabled
  * (`VITE_AUTH_ENABLED=false`) for local development. It is not a production
  * identity and must never substitute for a verified account. With auth on,
- * session state comes from Better Auth; embedded previews may use the bearer
+ * session state comes from this app's own auth API; embedded previews may use the bearer
  * token flow when cookie partitioning requires it.
  */
 export const DEV_USER: AppUser = {
@@ -49,7 +49,7 @@ export type CurrentUserState = {
  *   - Auth enabled -> the verified signed-in user; `user` is `null` while
  *                            the session resolves (`isPending: true`) and when
  *                            signed out (`isPending: false`). Session comes from
- *                            Better Auth `useSession()` → `/api/auth/get-session`
+ *                            this app's `useSession()` → `/api/auth/get-session`
  *                            (cookie when deployed; bearer in a partitioned preview).
  *   - Auth disabled (`VITE_AUTH_ENABLED=false`) -> `DEV_USER`, never pending.
  *
@@ -66,10 +66,10 @@ export type CurrentUserState = {
  * call keeps a stable hook order across every render of a given component.
  */
 export function useCurrentUserState(): CurrentUserState {
+  // Unconditional hook call: `authEnabled` is a module constant fixed at load,
+  // so the guard below can never change the hook order between renders.
+  const { data, isPending } = useSession();
   if (!authEnabled) return { user: DEV_USER, isPending: false };
-  // Safe despite the guard: `authEnabled` is a module constant fixed at load, so
-  // the hook order stays stable across every render of a given component.
-  const { data, isPending } = authClient.useSession();
   const user = data?.user;
   return {
     user: user

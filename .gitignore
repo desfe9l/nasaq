@@ -41,6 +41,9 @@ coverage/
 # Embedded preview database (PGLite). Real data, never source.
 .pglite-data/
 
+# Local first-party auth store (dev/e2e accounts + sessions). Real data, never source.
+.nasaq-auth/
+
 # OS / editor
 .DS_Store
 Thumbs.db

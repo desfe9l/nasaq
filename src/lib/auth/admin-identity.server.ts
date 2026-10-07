@@ -37,7 +37,7 @@ export type AdminIdentityConfig = {
  * Read the server-side administrator allowlist.
  *
  * `NASAQ_ADMIN_USER_IDS` is the existing deployment setting and accepts either
- * verified Better Auth user ids or comma-separated email addresses. Owner
+ * verified account user ids or comma-separated email addresses. Owner
  * configuration is included as an explicit administrator source as well. There
  * is deliberately no hard-coded fallback address.
  */

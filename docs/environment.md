@@ -11,8 +11,8 @@ Two commands keep this document honest, and both are safe to run anywhere:
 ```bash
 npm run env:audit     # fails if the code reads an undocumented variable,
                       # or if anything credential-shaped carries a VITE_ prefix
-npm run check:auth    # the auth invariant: Better Auth wiring, secret
-                      # independence, cookie attributes, schema
+npm run check:auth    # the auth invariant: first-party wiring, cookie
+                      # attributes, secret independence, schema coverage
 ```
 
 The audit is strict on purpose: a new variable cannot enter the code without
@@ -36,10 +36,11 @@ they are injected, not configured.
 
 | Variable | Read by | If it is missing |
 | --- | --- | --- |
-| `VITE_AUTH_ENABLED` | `src/lib/auth/config.ts`, `src/lib/auth/client.ts` | Defaults to `true`. Setting it to `false` disables sign-in entirely; with `DATABASE_URL` also set, every authenticated server function rejects (fail closed) instead of sharing one dev user across real data. |
-| `BETTER_AUTH_SECRET` | `src/lib/auth/config.ts`, `src/lib/auth/server.ts` | **Blocking.** On `VERCEL=1` (or `NASAQ_STRICT_ENV=1`) the app logs a blocking error at boot and the sign-in page shows it: with a per-process random secret, a cookie signed by one serverless instance is rejected by the next, so the visitor signs in and is signed out again. Must be ≥ 32 chars, random, and used nowhere else (`openssl rand -hex 32`). Reusing `GOOGLE_CLIENT_SECRET` or any API key is reported as `reused-oauth-secret` / `reused-api-key` — same blocking error. |
-| `DATABASE_URL` | `src/lib/db.ts`, `src/lib/auth/server.ts`, `src/lib/auth/verify.server.ts`, `scripts/migrate.mjs` | **Blocking on Vercel** (read-only filesystem, so the embedded PGLite fallback cannot run). `src/lib/db.ts` fails closed with a clear message rather than pretending to persist. Migrations in `migrations/` apply automatically during `npm run build`. |
-| `BETTER_AUTH_URL` | `src/lib/auth/config.ts` | Not fatal — Better Auth derives the origin per request from the (proxied) host, validated against the same allowlist as trusted origins. Set it to the canonical `https://` origin so the Google OAuth redirect URI is stable. A non-https value on a deployment is a blocking error: `__Host-` session cookies are rejected over plain http. |
+| `VITE_AUTH_ENABLED` | `src/lib/auth/config.ts`, `src/lib/auth/client.ts` | Defaults to `true`. Setting it to `false` disables sign-in entirely; with durable identity storage also set, every authenticated server function rejects (fail closed) instead of sharing one dev user across real data. |
+| **Identity storage — `R2_ACCOUNT_ID` (or `R2_ENDPOINT`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`** | `src/lib/auth/store/` | **Blocking for sign-in only.** Accounts and sessions live in this app's own object storage under the private `_nasaq-auth/` prefix. With **no R2 and no `DATABASE_URL`**, every page still renders but sign-in answers `503 AUTH_STORE_UNAVAILABLE` with the missing variable NAMES in the log (`auth never falls back to process memory`). `R2_BUCKET_NAME` defaults to the configured bucket; the same credentials already serve the editor's cloud library, so no new service is needed. |
+| `DATABASE_URL` | `src/lib/db.ts`, `src/lib/auth/store/status.ts`, `scripts/migrate.mjs` | **No longer required for sign-in.** It serves the app's own data (licences, projects, requests, admin) and stands in as the identity store when R2 is not configured. Without it, database-backed features fail closed with a clear message instead of pretending to persist, and sign-in falls back to R2. Migrations in `migrations/` apply automatically during `npm run build`; a database that is unreachable or over quota **no longer fails the deploy** — the log says so and the rest of the app ships. |
+| `BETTER_AUTH_URL` | `src/lib/auth/config.ts` | Not fatal — the auth service derives the origin per request from the (proxied) host, validated against the same allowlist as trusted origins. Set it to the canonical `https://` origin so the Google OAuth redirect URI and absolute links are stable. A non-https value on a deployment is a blocking error: `__Host-` session cookies are rejected over plain http. |
+| `BETTER_AUTH_SECRET` | `src/lib/auth/config.ts`, `src/lib/owner/setup.server.ts` | **Ignored, and no longer needed.** Sessions are opaque 256-bit tokens whose SHA-256 is stored in the identity store — there is no cookie signature to forge and no per-instance state to keep in sync. A deployment that still sets it gets an explicit warning that it does nothing instead of assuming it protects something. Do NOT treat its absence as a misconfiguration. |
 
 Production also relies on variables Vercel injects itself — `VERCEL=1`,
 `VERCEL_ENV`, `VERCEL_URL`, `VERCEL_PROJECT_PRODUCTION_URL`, `NODE_ENV`. Never
@@ -50,19 +51,24 @@ deployments (`https://<project>-*.vercel.app`), never a blanket `*.vercel.app`.
 
 None. `npm run dev` works with no `.env` at all:
 
-- accounts and sessions live in the embedded PGLite database
-  (`<cwd>/.pglite-data`) and migrate themselves at startup;
-- the signing secret is a per-process random value, so **sessions do not survive
-  a dev-server restart** (the app warns about this at boot);
+- accounts and sessions live in a local file store (`<cwd>/.nasaq-auth/`,
+  gitignored) and survive a dev-server restart;
+- passwords are hashed with Argon2id (`m=19456, t=2, p=1`) and sessions are
+  random opaque tokens — no signing secret exists to configure;
 - email/password sign-up and sign-in are fully functional, which is what the
-  HTTP end-to-end check exercises.
+  HTTP end-to-end check (`npm run test:auth:e2e`) exercises.
+
+`npm run preview` serves the built output with `VERCEL=1` set, i.e. as a
+deployed runtime: with no R2 and no `DATABASE_URL` it deliberately refuses
+sign-in (503) instead of pretending a read-only, per-invocation filesystem is
+storage. Use the dev server (or configure a store) to exercise sign-in.
 
 Useful for local work, none required:
 
 | Variable | Effect |
 | --- | --- |
-| `BETTER_AUTH_SECRET` | Keeps local sessions valid across dev-server restarts. |
 | `DATABASE_URL` | Runs local dev against real Postgres instead of PGLite. |
+| `R2_*` | Runs local dev against real object storage for both assets and identity. |
 | `GEMINI_API_KEY` | Turns the real AI surfaces on locally (see §3). Without it every AI call answers `not_configured` — clearly, never with fake content. |
 
 ## 3. Optional
@@ -78,7 +84,7 @@ explains what is needed) instead of failing obscurely.
 | `NASAQ_AI_MODEL` | Model id for the Gemini boundary (`src/lib/ai/provider.server.ts`) | Defaults to `gemini-2.5-flash`. |
 | `NASAQ_PUBLIC_URL` | Owner diagnostics ping; public-origin fallbacks | Falls back to `VERCEL_PROJECT_PRODUCTION_URL` / `BETTER_AUTH_URL`. |
 | `NASAQ_TRUSTED_ORIGINS` | Extra origins allowed to POST credentials (custom domains, staging) | Only this deployment's own hosts are trusted. A credential POST from another origin is refused (`INVALID_ORIGIN`), which `npm run test:auth:e2e` asserts. |
-| `NASAQ_ALLOWED_HOSTS` | Extra host patterns for Better Auth's per-request base URL | Only hostnames derived from `VERCEL_*` / configured origins are accepted. |
+| `NASAQ_ALLOWED_HOSTS` | Extra host patterns for the per-request base URL | Only hostnames derived from `VERCEL_*` / configured origins are accepted. |
 | `NASAQ_STRICT_ENV=1` | Applies the production requirements on a self-hosted runtime that does not set `VERCEL=1` | Ignored. |
 | `GUMROAD_ACCESS_TOKEN` | The only payment provider — verifies every sale/subscription before licence issuance | The Gumroad status card reports exactly what is missing; no fake activation. |
 | `GUMROAD_PRODUCT_ID`, `GUMROAD_PRODUCT_PERMALINK`, `GUMROAD_STORE_BASE_URL`, `GUMROAD_TIER_*_NAME` | Product/tier resolution for the same flow | Product id is resolved from `GET /v2/products` by permalink; tier names default to the shipped ones. |
@@ -86,13 +92,13 @@ explains what is needed) instead of failing obscurely.
 | `NASAQ_OWNER_ID`, `NASAQ_OWNER_EMAIL`, `NASAQ_SUPER_ADMIN_IDS`, `NASAQ_SUPER_ADMIN_EMAILS`, `NASAQ_ADMIN_USER_IDS` | Owner/admin identity (licence administration) | No one is an administrator; nothing else changes. These are identities, not secrets — they still belong in the server environment only. |
 | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `R2_ENDPOINT` | Cloudflare R2 asset storage (cloud library) | Storage calls return `not_configured`; the editor keeps its local-first library, so work is never lost. Verify with `npm run storage:verify` (reports names, never values). |
 | `VITE_NASAQ_BG_MODEL_PUBLIC_PATH` | Self-hosted background-removal model weights | The public model CDN is used. Image tools run in the browser either way; no image leaves the device. |
-| `GROK_PROJECT_ID`, `GROK_GATE_ORIGIN`, `GROK_CONNECTORS_URL`, `GROK_CONNECTOR_ACCESS_TOKEN` | The Grok platform gate/connector (injected by the Grok deployer only) | Inert. On Vercel either the Better Auth session or the built-in gate identity path is used. |
+| `GROK_PROJECT_ID`, `GROK_GATE_ORIGIN`, `GROK_CONNECTORS_URL`, `GROK_CONNECTOR_ACCESS_TOKEN` | The Grok platform gate/connector (injected by the Grok deployer only) | Inert. On Vercel either the app's own session or the built-in gate identity path is used. |
 
 ## 4. Server-only secrets
 
 Never exposed to the browser, never logged, never committed:
 
-`BETTER_AUTH_SECRET`, `DATABASE_URL`, `GOOGLE_CLIENT_SECRET`, `GEMINI_API_KEY`,
+`DATABASE_URL`, `GOOGLE_CLIENT_SECRET`, `GEMINI_API_KEY`,
 `GUMROAD_ACCESS_TOKEN`, `KEYGEN_API_TOKEN`, `KEYGEN_PUBLIC_KEY`,
 `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `GROK_CONNECTOR_ACCESS_TOKEN`,
 `NASAQ_COMPAT_KEY` (sample key for `scripts/license-compat-check.mjs`).
@@ -118,7 +124,7 @@ Vercel they are simply absent.
 | Command | Proves |
 | --- | --- |
 | `npm run env:audit` | Every read variable is documented; no secret carries `VITE_`. |
-| `npm run check:auth` | Better Auth wiring: secret independence, cookie attributes, session config, schema coverage. |
+| `npm run check:auth` | Auth wiring: first-party endpoints, secret independence, cookie attributes, session config, schema coverage. |
 | `npm run test:auth` | Unit contract: environment report, credential validation, error mapping, account normalization. |
 | `npm run test:auth:e2e` | Real HTTP account flow: sign-up → session → duplicate refused → wrong password refused → foreign origin refused → sign-in → protected route with/without session → sign-out. |
 | `npm run test:ai:e2e` | Every AI server function answers **401** without a session and reaches the handler with one — returning either a real draft or a typed failure, never a fake success. |

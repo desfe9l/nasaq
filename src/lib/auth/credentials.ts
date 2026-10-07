@@ -2,7 +2,7 @@
  * Email/password form contract — pure validation shared by the sign-up and
  * sign-in surfaces and by their tests.
  *
- * The rules mirror what Better Auth enforces server-side (8–128 characters), so
+ * The rules mirror what the server enforces (8–128 characters), so
  * the form never submits something the API will reject, and the server remains
  * the authority. Nothing here stores, logs or transmits a password.
  */
@@ -40,7 +40,7 @@ export type CredentialInput = {
  * Email normalization. Trim + lower-case only: NASAQ keeps the address the
  * visitor typed (minus surrounding whitespace) and never rewrites the local
  * part, because an address that differs from the real one cannot receive mail.
- * Lower-casing the whole address matches how Better Auth and the admin
+ * Lower-casing the whole address matches how the server and the admin
  * allowlists compare it.
  */
 export function normalizeEmail(value: string | undefined | null): string {

@@ -173,7 +173,7 @@ function createDatabasePool(connectionString: string): Pool {
 
 /**
  * Access the shared pg.Pool instance for deployed Postgres.
- * Shared between the application query engine (`getSql`) and Better Auth (`auth`),
+ * Shared between the application query engine (`getSql`) and the licence tables,
  * eliminating duplicate pools and halving connection consumption per serverless instance.
  */
 export function getSharedPgPool(): Pool | undefined {
@@ -351,7 +351,7 @@ export function getSql(): Promise<Sql> {
 
 /**
  * The shared PGLite instance (preview only), with `migrations/*.sql` applied.
- * Lets Better Auth persist to the SAME embedded DB as app data in preview (via a
+ * Lets the licence tables persist to the SAME embedded DB as app data in preview (via a
  * Kysely dialect). Throws when `DATABASE_URL` is set (that path uses Neon).
  */
 export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite> {

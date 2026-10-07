@@ -80,7 +80,7 @@ export const verifyOwnerEmailFn = createServerFn({ method: "POST" })
     if (!account) {
       return {
         ok: false,
-        detail: "لا يوجد حساب Better Auth بهذا البريد بعد. سجّل الدخول به مرة واحدة ثم أعد المحاولة.",
+        detail: "لا يوجد حساب بهذا البريد بعد. سجّل الدخول به مرة واحدة ثم أعد المحاولة.",
         variable: "NASAQ_OWNER_EMAIL",
       };
     }
@@ -138,33 +138,19 @@ export const verifyGoogleClientIdFn = createServerFn({ method: "POST" })
   });
 
 /**
- * Mint a strong session secret for the owner to paste into the deployment
- * provider. Shown once, stored nowhere, logged nowhere.
+ * Live identity-storage probe: the active backend must be configured, and a
+ * session resolution against the caller's own headers must answer. Reports
+ * variable NAMES only — never a value.
  */
-export const generateAuthSecretFn = createServerFn({ method: "POST" })
-  .middleware([authMiddleware])
-  .handler(async ({ context }): Promise<{ variable: string; secret: string; detail: string }> => {
-    await requireAdmin(context);
-    const { generateAuthSecret } = await import("./setup.server");
-    return {
-      variable: "BETTER_AUTH_SECRET",
-      secret: generateAuthSecret(),
-      detail:
-        "انسخه الآن إلى مزوّد النشر ثم أعد النشر — لن يُعرض مرة أخرى ولم يُحفظ في أي مكان. ستنتهي الجلسات الحالية بعد تغييره.",
-    };
-  });
-
-/** Live Better Auth probe (instance + Google provider wiring + secret hygiene). */
-export const testBetterAuthFn = createServerFn({ method: "POST" })
+export const testAuthStoreFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<SetupProbeResult> => {
     await requireAdmin(context);
-    const { checkBetterAuthSecret, probeBetterAuth } = await import("./setup.server");
-    const secret = checkBetterAuthSecret();
-    if (secret.state !== "ready") return { ok: false, detail: secret.summary };
+    const { checkAuthStorage, probeAuthService } = await import("./setup.server");
+    const storage = checkAuthStorage();
+    if (storage.state === "missing") return { ok: false, detail: storage.summary };
     const request = getRequest();
-    const probe = await probeBetterAuth(request?.headers ?? new Headers());
-    return probe;
+    return probeAuthService(request?.headers ?? new Headers());
   });
 
 /** Real database round-trip. Failure reasons are sanitised. */
