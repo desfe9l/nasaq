@@ -111,8 +111,22 @@ jobs:
           exit 1
       - name: Account gate + sign-out flows (auth endpoints mocked)
         run: |
-          npm run test:nsq:browser
-          npm run test:leave:browser
+          set -o pipefail
+          status=0
+          npm run test:nsq:browser 2>&1 | tee /tmp/nsq-browser.log || status=1
+          npm run test:leave:browser 2>&1 | tee /tmp/leave-browser.log || status=1
+          exit $status
+      - name: Upload browser diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-logs
+          path: |
+            /tmp/nsq-browser.log
+            /tmp/leave-browser.log
+            /tmp/dev-browser.log
+          if-no-files-found: ignore
+          retention-days: 3
       - name: Dev server log (on failure)
         if: failure()
         run: tail -100 /tmp/dev-browser.log || true
