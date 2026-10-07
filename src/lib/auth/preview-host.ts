@@ -7,13 +7,13 @@
  */
 export const LIVE_PREVIEW_HOST_SUFFIXES = [".e2b.app", ".grok-sandbox.com"] as const;
 
-/** Better Auth dynamic-base-URL host patterns for the same preview origins. */
+/** Dynamic-base-URL host patterns for the same preview origins. */
 export const LIVE_PREVIEW_ALLOWED_HOSTS = [
   "*.e2b.app",
   "*.grok-sandbox.com",
 ] as const;
 
-/** Both Better Auth's host match and browser Origin forms for those hosts. */
+/** Both the host match and the browser Origin forms for those hosts. */
 export const LIVE_PREVIEW_TRUSTED_ORIGINS = LIVE_PREVIEW_ALLOWED_HOSTS.flatMap(
   (host) => [host, `https://${host}`, `http://${host}`],
 );

@@ -145,12 +145,16 @@ describe("production environment report", () => {
     assert.deepEqual(report.providers, { google: false, emailPassword: true });
   });
 
-  it("blocks a deployment with no signing secret and names the variable", () => {
+  it("does NOT block a deployment just because BETTER_AUTH_SECRET is unset", () => {
+    // Sessions are opaque server-side tokens stored in the identity backend —
+    // they are not signed cookies — so a missing signing secret changes nothing
+    // about whether a visitor can sign in. It is reported, never required.
     const env: Record<string, string | undefined> = { ...PRODUCTION };
     delete env.BETTER_AUTH_SECRET;
     const report = authEnvironmentReport(env);
-    assert.equal(report.ok, false);
-    assert.ok(report.errors.some((error) => error.includes("BETTER_AUTH_SECRET")));
+    assert.equal(report.ok, true, report.errors.join(" | "));
+    assert.ok(!report.errors.some((error) => error.includes("BETTER_AUTH_SECRET")));
+    assert.ok(report.warnings.some((warning) => warning.includes("BETTER_AUTH_SECRET")));
   });
 
   it("blocks a deployment with no durable auth storage", () => {
@@ -190,12 +194,13 @@ describe("production environment report", () => {
 });
 
 describe("development environment report", () => {
-  it("warns (never blocks) about the per-process dev secret", () => {
+  it("says nothing about a signing secret on a dev box (sessions do not use one)", () => {
     const report = authEnvironmentReport({ VITE_AUTH_ENABLED: "true" });
     assert.equal(report.ok, true);
     assert.equal(report.deployed, false);
     assert.equal(report.secret, "unset");
-    assert.ok(report.warnings.some((warning) => warning.includes("BETTER_AUTH_SECRET")));
+    assert.ok(!report.errors.some((problem) => problem.includes("BETTER_AUTH_SECRET")));
+    assert.ok(!report.warnings.some((warning) => warning.includes("BETTER_AUTH_SECRET")));
   });
 
   it("keeps auth on by default and honours the explicit off switch", () => {

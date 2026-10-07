@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * «تسجيل الدخول مطلوب قبل التصدير» — the gate shown when a visitor who is not
  * signed in tries to export / download a design.
  *
- * It reuses the platform's existing auth surface only: the Better Auth client
+ * It reuses the platform's existing auth surface only: the first-party auth client
  * (`signIn`) and the provider list shared with `/login`. It never mints a local
  * session and never bypasses the server. When auth is disabled
  * (`VITE_AUTH_ENABLED=false`, the dev fallback) the caller never opens it —

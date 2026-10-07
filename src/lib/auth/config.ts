@@ -3,13 +3,13 @@
  * environment alone:
  *
  *   · which sign-in providers this deployment offers,
- *   · which origins it answers on (Better Auth base URL + trusted origins),
+ *   · which origins it answers on (canonical base URL + trusted origins),
  *   · whether a real signing secret exists (and whether it is independent of
  *     every OAuth/API secret),
  *   · and whether the environment is complete enough to promise a working
  *     sign-up → sign-in → session flow.
  *
- * It is deliberately dependency-free: no `better-auth` import, no `process.env`
+ * It is deliberately dependency-free: no third-party auth import, no `process.env`
  * read at module scope. Callers pass the environment record in, so the same
  * rules can be unit-tested and reused by the deploy-time checks without a
  * server running.
@@ -39,6 +39,11 @@ import {
   LIVE_PREVIEW_ALLOWED_HOSTS,
   LIVE_PREVIEW_TRUSTED_ORIGINS,
 } from "./preview-host";
+import {
+  authStoreStatus,
+  isDeployedRuntime,
+  type AuthStoreStatus,
+} from "./store/status";
 
 /** The environment surface this module reads (`process.env` shape). */
 export type AuthEnvironment = Record<string, string | undefined>;
@@ -47,7 +52,7 @@ export type AuthEnvironment = Record<string, string | undefined>;
 export type AuthProviderFlags = {
   /** Google OAuth (client id + secret both present). */
   google: boolean;
-  /** Email + password accounts handled by this app's own Better Auth. */
+  /** Email + password accounts handled by this app's own auth service. */
   emailPassword: boolean;
 };
 
@@ -67,10 +72,16 @@ export type AuthEnvironmentReport = {
   /** True when sign-up → sign-in → persisted session is expected to work. */
   ok: boolean;
   providers: AuthProviderFlags;
-  /** Durable first-party auth storage is configured (R2 in this repository). */
-  database: boolean;
+  /** Which durable backend serves identity, and whether one exists at all. */
+  storage: AuthStoreStatus;
+  /**
+   * `BETTER_AUTH_SECRET` (or its absence). Sessions are opaque server-side
+   * tokens now, not signed cookies, so this value plays NO part in whether a
+   * session works — it is reported only so an operator can see that a leftover
+   * variable is being ignored rather than silently doing something.
+   */
   secret: AuthSecretStatus;
-  /** The absolute origin Better Auth signs/redirects against, when known. */
+  /** The absolute origin the auth service signs/redirects against, when known. */
   baseURL: string | null;
   /** Origins (and wildcard patterns) that may POST credentials to this app. */
   trustedOrigins: string[];
@@ -104,7 +115,7 @@ export const LOCAL_DEV_ORIGINS: readonly string[] = [
   "http://[::1]:8080",
 ];
 
-/** Local hostnames accepted by Better Auth's dynamic base URL. */
+/** Local hostnames accepted by the dynamic base URL. */
 export const LOCAL_DEV_HOSTS: readonly string[] = [
   "localhost",
   "127.0.0.1",
@@ -186,11 +197,11 @@ export function deploymentHosts(env: AuthEnvironment): string[] {
 }
 
 /**
- * The origin Better Auth signs against and redirects back to.
+ * The origin the auth service signs against and redirects back to.
  *
  * `BETTER_AUTH_URL` wins when set (Google OAuth requires a redirect URI that is
  * registered exactly, so a fixed public origin is the correct production
- * choice). Without it, Better Auth derives the origin per request from the
+ * choice). Without it, the auth service derives the origin per request from the
  * (proxied) host, validated against `authAllowedHosts()`.
  */
 export function authBaseURL(env: AuthEnvironment): string | undefined {
@@ -224,7 +235,7 @@ export function vercelPreviewOriginPatterns(env: AuthEnvironment): string[] {
 }
 
 /**
- * Origins Better Auth accepts on credentialed requests (sign-up, sign-in, …).
+ * Origins the auth service accepts on credentialed requests (sign-up, sign-in, …).
  * A missing entry surfaces to the user as `INVALID_ORIGIN` on the auth POST —
  * which looks exactly like "the login button does nothing".
  *
@@ -276,7 +287,7 @@ export function authTrustedOrigins(env: AuthEnvironment): string[] {
   return [...origins];
 }
 
-/** Host patterns for Better Auth's per-request (dynamic) base URL. */
+/** Host patterns for the per-request (dynamic) base URL. */
 export function authAllowedHosts(env: AuthEnvironment): string[] {
   const hosts = new Set<string>();
   for (const host of deploymentHosts(env)) hosts.add(host);
@@ -330,27 +341,19 @@ export function authEnabled(env: AuthEnvironment): boolean {
  * True for a real deployment (Vercel injects `VERCEL=1` in build and function
  * runtimes). `NASAQ_STRICT_ENV=1` opts a self-hosted production runtime into the
  * same requirements.
+ *
+ * Re-exported from the identity-store decision so callers keep one import site,
+ * and so there is exactly ONE definition of "deployed" in the codebase.
  */
-export function isDeployedRuntime(env: AuthEnvironment): boolean {
-  return readEnv(env, "VERCEL") === "1" || readEnv(env, "NASAQ_STRICT_ENV") === "1";
-}
-
-/** True when the application's durable R2 auth storage is configured. */
-export function hasDatabase(env: AuthEnvironment): boolean {
-  return Boolean(
-    readEnv(env, "R2_ACCESS_KEY_ID") &&
-      readEnv(env, "R2_SECRET_ACCESS_KEY") &&
-      (readEnv(env, "R2_ACCOUNT_ID") || readEnv(env, "R2_ENDPOINT")),
-  );
-}
+export { isDeployedRuntime };
 
 /**
  * The environment contract, evaluated.
  *
  * `errors` are conditions under which a user-visible auth flow is broken
- * (sign-up cannot persist, sessions do not survive a request, no provider
- * exists, or the signing secret is not independent). `warnings` describe
- * working-but-noteworthy states such as the dev-only generated secret.
+ * (accounts cannot be persisted, no provider exists, the public URL would make
+ * `__Host-` cookies undeliverable). `warnings` describe working-but-noteworthy
+ * states such as a dev-only store or a leftover `BETTER_AUTH_SECRET`.
  */
 export function authEnvironmentReport(
   env: AuthEnvironment,
@@ -359,7 +362,7 @@ export function authEnvironmentReport(
   const enabled = authEnabled(env);
   const deployed = isDeployedRuntime(env);
   const providers = authProviderFlags(env, emailPassword);
-  const database = hasDatabase(env);
+  const storage = authStoreStatus(env);
   const secret = resolveAuthSecret(env);
   const baseURL = authBaseURL(env) ?? null;
   const trustedOrigins = authTrustedOrigins(env);
@@ -373,41 +376,39 @@ export function authEnvironmentReport(
           "or keep the email/password provider enabled (src/lib/auth/email-password.ts).",
       );
     }
-    if (secret.status === "unset") {
+    if (!storage.configured) {
       if (deployed) {
         errors.push(
-          "BETTER_AUTH_SECRET is not set on this deployment. Sessions are signed with a " +
-            "per-process random secret, so every request that lands on a different serverless " +
-            "instance sees an invalid session — sign-in appears to work, then the visitor is " +
-            "signed out again. Set BETTER_AUTH_SECRET to a random value of at least " +
-            `${MIN_SECRET_LENGTH} characters (openssl rand -hex 32) and redeploy.`,
-        );
-      } else {
-        warnings.push(
-          "BETTER_AUTH_SECRET is not set — using a per-process development secret. " +
-            "Sessions are invalidated when the dev server restarts.",
-        );
-      }
-    }
-    if (deployed && secret.status !== "unset" && secret.status !== "configured") {
-      errors.push(
-        "BETTER_AUTH_SECRET must be a fresh random value of at least " +
-          `${MIN_SECRET_LENGTH} characters, independent of every other secret ` +
-          "(GOOGLE_CLIENT_SECRET, GEMINI_API_KEY, KEYGEN_API_TOKEN, …). " +
-          `Current problem: ${secret.status}.`,
-      );
-    }
-    if (!database) {
-      if (deployed) {
-        errors.push(
-          "Durable auth storage is not configured. Set R2_ACCOUNT_ID (or R2_ENDPOINT), " +
-            "R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY; auth never falls back to process memory.",
+          `Durable auth storage is not configured (missing: ${storage.missing.join(", ")}). ` +
+            "Set R2_ACCOUNT_ID (or R2_ENDPOINT), R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, " +
+            "or provide DATABASE_URL; auth never falls back to process memory.",
         );
       } else {
         warnings.push(
           "R2 auth storage is not set — durable account and session tests require the R2 variables.",
         );
       }
+    } else if (storage.durable && !deployed && storage.kind !== "filesystem") {
+      warnings.push(
+        `Auth storage backend: ${storage.kind}. Development uses the local filesystem store ` +
+          "when R2 is absent; a deployment requires a durable backend.",
+      );
+    }
+    /* `BETTER_AUTH_SECRET` signed cookies for the previous implementation. This
+       one stores opaque server-side session tokens, so the variable no longer
+       affects whether a session works. Say so instead of demanding it. */
+    if (secret.status === "unset") {
+      if (deployed) {
+        warnings.push(
+          "BETTER_AUTH_SECRET is not set. It is no longer required — sessions are opaque " +
+            "tokens verified against durable storage — so this is informational only.",
+        );
+      }
+    } else if (deployed && secret.status !== "configured") {
+      warnings.push(
+        "BETTER_AUTH_SECRET is present but unused by this implementation " +
+          `(status: ${secret.status}). Remove it to avoid implying it still signs sessions.`,
+      );
     }
     if (baseURL) {
       const https = baseURL.startsWith("https://");
@@ -427,7 +428,7 @@ export function authEnvironmentReport(
       }
     } else if (deployed) {
       warnings.push(
-        "BETTER_AUTH_URL is not set — Better Auth derives the origin from the request host. " +
+        "BETTER_AUTH_URL is not set — the origin is derived from the request host. " +
           "Set it to the canonical public origin so OAuth redirect URIs stay stable.",
       );
     }
@@ -438,7 +439,7 @@ export function authEnvironmentReport(
     deployed,
     ok: errors.length === 0,
     providers,
-    database,
+    storage,
     secret: secret.status,
     baseURL,
     trustedOrigins,
@@ -457,7 +458,8 @@ export function describeAuthEnvironment(report: AuthEnvironmentReport): string {
     .join("+");
   return (
     `[auth] enabled=${report.authEnabled} providers=${providers || "none"} ` +
-    `database=${report.database ? "managed" : "embedded"} secret=${report.secret} ` +
+    `storage=${report.storage.kind ?? "none"}${report.storage.durable ? "" : "!"} ` +
+    `secret=${report.secret} ` +
     `baseURL=${report.baseURL ?? "(per-request)"} origins=${report.trustedOrigins.length}`
   );
 }

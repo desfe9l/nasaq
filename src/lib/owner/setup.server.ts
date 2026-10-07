@@ -3,7 +3,7 @@
  *
  * The rule this module exists to enforce: **a configured variable is not a
  * working service.** Everything here either tests the real thing (a database
- * round-trip, Google's token endpoint, the live Better Auth instance, the
+ * round-trip, Google's token endpoint, the ACTIVE identity store, the
  * signed-in identity) or says plainly that it could not.
  *
  * Secret discipline:
@@ -11,19 +11,19 @@
  *     error message. Results carry booleans, lengths and safe summaries only.
  *   · `DATABASE_URL` is summarised as host + database name; user, password and
  *     query string never leave this module.
- *   · A generated Better Auth secret is returned exactly once, to the owner's
- *     own screen, and is never written to disk, database or log.
+ *   · Backend variable NAMES are reported when identity storage is missing;
+ *     values are never read back into a check result.
  *
  * Nothing here writes to the process environment: a serverless runtime's env
  * is read-only, so "تهيئة" validates and hands back the exact variable to set
  * in the deployment provider rather than pretending to persist it.
  */
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { authStoreStatus } from "@/lib/auth/store/status";
 
 export type SetupState = "ready" | "missing" | "warning";
 
 export type SetupCheck = {
-  id: "owner" | "better-auth" | "database" | "google-client-id" | "google-client-secret";
+  id: "owner" | "auth-store" | "database" | "google-client-id" | "google-client-secret";
   variable: string;
   label: string;
   state: SetupState;
@@ -37,13 +37,6 @@ function env(name: string): string | undefined {
   return process.env[name]?.trim() || undefined;
 }
 
-/** Constant-time equality for two secrets of unknown length. */
-function secretsEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  return left.length === right.length && timingSafeEqual(left, right);
-}
-
 // ── Owner identity ─────────────────────────────────────────────────────────
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -53,8 +46,7 @@ export function isValidEmailFormat(value: string): boolean {
 }
 
 /**
- * Does the configured owner email actually match the signed-in Better Auth
- * identity? Presence of the variable proves nothing — a typo locks the owner
+ * Does the configured owner email actually match the signed-in identity? Presence of the variable proves nothing — a typo locks the owner
  * out of their own vault, which is exactly the failure this catches.
  */
 export function checkOwnerIdentity(sessionEmail: string | null): SetupCheck {
@@ -97,90 +89,89 @@ export function checkOwnerIdentity(sessionEmail: string | null): SetupCheck {
     label: "هوية المالك",
     state: matches ? "ready" : "warning",
     summary: matches
-      ? "جاهز — البريد المضبوط يطابق حساب Better Auth الحالي."
+      ? "جاهز — البريد المضبوط يطابق الحساب المسجّل الدخول الآن."
       : "البريد مضبوط لكنه لا يطابق الحساب الذي فتح الخزنة الآن.",
     probed: true,
   };
 }
 
-// ── Better Auth ────────────────────────────────────────────────────────────
+// ── Identity storage ───────────────────────────────────────────────────────
 
-/** Minimum length for a session signing secret (32 bytes of base64 ≈ 44). */
-const MIN_SECRET_LENGTH = 32;
-
-export function checkBetterAuthSecret(): SetupCheck {
-  const secret = env("BETTER_AUTH_SECRET");
-  const googleSecret = env("GOOGLE_CLIENT_SECRET");
-  if (!secret) {
+/**
+ * Where accounts and sessions actually live.
+ *
+ * This row used to be "Better Auth secret": a signing key that, when missing,
+ * signed everyone out on the next request. Sessions are now opaque tokens whose
+ * hash is stored in a durable backend, so the thing that can silently break
+ * sign-in is the BACKEND — an object store or a Postgres URL — and that is what
+ * this check reports. A deployment with neither fails closed with a 503 naming
+ * the variables to set, never by keeping accounts in process memory.
+ */
+export function checkAuthStorage(): SetupCheck {
+  const status = authStoreStatus();
+  const variable =
+    status.kind === "postgres"
+      ? "DATABASE_URL"
+      : status.configured
+        ? "R2_ACCESS_KEY_ID"
+        : (status.missing[0] ?? "DATABASE_URL");
+  if (status.configured && status.kind === "filesystem") {
     return {
-      id: "better-auth",
-      variable: "BETTER_AUTH_SECRET",
-      label: "سر جلسات Better Auth",
+      id: "auth-store",
+      variable,
+      label: "تخزين الهوية",
+      state: "warning",
+      summary:
+        "مخزن تطوير محلي (.nasaq-auth). على بيئة نشر يجب ضبط R2 أو DATABASE_URL وإلا يُرفض تسجيل الدخول.",
+      probed: true,
+    };
+  }
+  if (!status.configured) {
+    return {
+      id: "auth-store",
+      variable,
+      label: "تخزين الهوية",
       state: "missing",
-      summary:
-        "بيانات ناقصة — بدونه يولّد التطبيق سرًا مؤقتًا في الذاكرة وتسقط كل الجلسات مع كل نشر.",
-      probed: true,
-    };
-  }
-  if (googleSecret && secretsEqual(secret, googleSecret)) {
-    return {
-      id: "better-auth",
-      variable: "BETTER_AUTH_SECRET",
-      label: "سر جلسات Better Auth",
-      state: "warning",
-      summary:
-        "خطر: القيمة نفسها مستخدمة في GOOGLE_CLIENT_SECRET. ولّد سرًا مستقلًا لجلسات Better Auth.",
-      probed: true,
-    };
-  }
-  if (secret.length < MIN_SECRET_LENGTH) {
-    return {
-      id: "better-auth",
-      variable: "BETTER_AUTH_SECRET",
-      label: "سر جلسات Better Auth",
-      state: "warning",
-      summary: `السر قصير (${secret.length} محرفًا). استخدم 32 محرفًا فأكثر من مصدر عشوائي.`,
+      summary: `بيانات ناقصة — ${status.missing.join("، ") || "DATABASE_URL"} غير مضبوط، وتسجيل الدخول سيفشل بـ503.`,
       probed: true,
     };
   }
   return {
-    id: "better-auth",
-    variable: "BETTER_AUTH_SECRET",
-    label: "سر جلسات Better Auth",
+    id: "auth-store",
+    variable,
+    label: "تخزين الهوية",
     state: "ready",
-    summary: "جاهز — سر مستقل بطول كافٍ، ولا يُعرض هنا إطلاقًا.",
+    summary:
+      status.kind === "cloudflare-r2"
+        ? "جاهز — الحسابات والجلسات في تخزين الكائنات (R2)، مستقل عن قاعدة البيانات."
+        : "جاهز — الحسابات والجلسات في قاعدة البيانات (DATABASE_URL).",
     probed: true,
   };
 }
 
 /**
- * Generate a strong secret for the owner to paste into the deployment
- * provider. Returned once, never stored and never logged: a serverless
- * runtime cannot write its own environment, so pretending to "save" it would
- * be a lie that silently loses every session on the next deploy.
+ * Live check of the auth service: the ACTIVE store must be configured, and a
+ * session resolution for the caller's own headers must answer. Imports are
+ * dynamic so a configuration error surfaces as a result rather than breaking
+ * the whole admin vault.
  */
-export function generateAuthSecret(): string {
-  return randomBytes(32).toString("base64url");
-}
-
-/**
- * Live check of the Better Auth instance: builds the server, asks it to
- * resolve a session for the caller's own headers and confirms the handler
- * answers. Import is dynamic so a configuration error surfaces as a result
- * rather than breaking the whole vault.
- */
-export async function probeBetterAuth(headers: Headers): Promise<{ ok: boolean; detail: string }> {
+export async function probeAuthService(headers: Headers): Promise<{ ok: boolean; detail: string }> {
+  const storage = checkAuthStorage();
+  if (storage.state === "missing") return { ok: false, detail: storage.summary };
   try {
-    const { auth, authConfigured } = await import("@/lib/auth/server");
-    await auth.api.getSession({ headers });
+    const [{ resolveRequestSession }, { authConfiguration }] = await Promise.all([
+      import("@/lib/auth/request-session.server"),
+      import("@/lib/auth/server"),
+    ]);
+    await resolveRequestSession(headers, { emitCookies: false });
     return {
-      ok: authConfigured,
-      detail: authConfigured
-        ? "Better Auth يستجيب ويحل الجلسة، وGoogle مفعّل كمزوّد."
-        : "Better Auth يستجيب لكن مزوّد Google غير مكتمل (client id/secret).",
+      ok: authConfiguration.ok,
+      detail: authConfiguration.ok
+        ? `المصادقة تعمل — تخزين الهوية: ${authConfiguration.storage.kind ?? "غير مهيأ"}.`
+        : "إعدادات المصادقة غير مكتملة على هذه النسخة.",
     };
   } catch {
-    return { ok: false, detail: "تعذر تشغيل Better Auth بالإعدادات الحالية." };
+    return { ok: false, detail: "تعذّر تشغيل خدمة المصادقة بالإعدادات الحالية." };
   }
 }
 
@@ -376,7 +367,7 @@ export async function testGoogleOAuth(): Promise<{ ok: boolean; detail: string }
 export function readSetupChecks(sessionEmail: string | null): SetupCheck[] {
   return [
     checkOwnerIdentity(sessionEmail),
-    checkBetterAuthSecret(),
+    checkAuthStorage(),
     checkDatabase(),
     checkGoogleClientId(),
     checkGoogleClientSecret(),

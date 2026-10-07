@@ -214,4 +214,14 @@ export interface ObjectStorageProvider {
   delete(key: string): Promise<void>;
   /** Time-limited read URL, so objects stay private in the bucket. */
   signedGetUrl(key: string, expiresInSeconds: number): Promise<string>;
+  /**
+   * OPTIONAL create-only write: `true` when this call created the object,
+   * `false` when the key already existed. This is what makes a unique index
+   * (a normalized email, a lock owner) safe against two concurrent serverless
+   * invocations — a read-then-write cannot be. Providers that cannot express it
+   * omit the method and callers fall back to their own compare-after-write.
+   */
+  putIfAbsent?(key: string, body: Uint8Array, contentType: string): Promise<boolean>;
+  /** OPTIONAL key listing under a prefix, for indexes and admin listings. */
+  list?(prefix: string, limit: number): Promise<string[]>;
 }

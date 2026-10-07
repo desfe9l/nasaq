@@ -1,5 +1,5 @@
 import { setStorageOwner } from "@/lib/editor/storage-owner";
-import { authClient, authEnabled } from "./client";
+import { authEnabled, getSession } from "./client";
 import { DEV_USER } from "./use-current-user";
 
 /**
@@ -12,7 +12,7 @@ import { DEV_USER } from "./use-current-user";
  *
  * - auth disabled (`VITE_AUTH_ENABLED=false`) → the shared dev user, matching
  *   what `useCurrentUserState()` and the server-side verifier report;
- * - auth enabled → the Better Auth session user (`getSession()` — the same
+ * - auth enabled → the signed-in account (`getSession()` — the same
  *   source `useCurrentUserState()` renders from), or `null` when signed out.
  *
  * Called at every identity boundary: `hydrate()` in the editor store (each
@@ -62,7 +62,7 @@ async function resolveOwnerId(): Promise<string | null> {
   // hung session probe) keep the last owner so IndexedDB stays readable.
   if (offline && remembered) return remembered;
   try {
-    const { data } = await withDeadline(authClient.getSession(), SESSION_BUDGET_MS);
+    const { data } = await withDeadline(getSession(), SESSION_BUDGET_MS);
     const id = data?.user?.id ?? null;
     if (id) rememberOwner(id);
     return id;
@@ -70,8 +70,7 @@ async function resolveOwnerId(): Promise<string | null> {
     if (remembered) {
       // The probe failed or exceeded the budget. Open the remembered library
       // now, and adopt a later session only if it is actually a different owner.
-      void authClient
-        .getSession()
+      void getSession()
         .then(({ data }) => {
           const id = data?.user?.id ?? null;
           if (!id || id === remembered) return;

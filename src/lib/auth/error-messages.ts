@@ -1,5 +1,5 @@
 /**
- * Auth error presentation — ONE translation from a Better Auth failure (or a
+ * Auth error presentation — ONE translation from an auth failure (or a
  * configuration defect) to what the visitor reads.
  *
  * Rules this module enforces:
@@ -12,7 +12,7 @@
 
 import type { AuthEnvironmentReport } from "./config";
 
-/** The shape Better Auth's client returns for a failed call. */
+/** The shape the auth client returns for a failed call. */
 export type AuthErrorLike = {
   code?: string | null;
   message?: string | null;
@@ -28,7 +28,7 @@ export const GENERIC_AUTH_ERROR =
   "تعذّر إكمال العملية. تحقق من اتصالك ثم أعد المحاولة.";
 
 /**
- * Map a Better Auth error code (or its message) to the sentence the visitor
+ * Map an auth error code (or its message) to the sentence the visitor
  * sees. `code` is authoritative; the message is only a fallback for older
  * responses that carry no code.
  */

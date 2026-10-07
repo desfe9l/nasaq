@@ -1,4 +1,4 @@
-import { authClient, authEnabled } from "./client";
+import { authEnabled, useSession } from "./client";
 
 /** Normalized user shape used across the app, auth on or off. */
 export type AppUser = {
@@ -66,10 +66,10 @@ export type CurrentUserState = {
  * call keeps a stable hook order across every render of a given component.
  */
 export function useCurrentUserState(): CurrentUserState {
+  // Unconditional hook call: `authEnabled` is a module constant fixed at load,
+  // so the guard below can never change the hook order between renders.
+  const { data, isPending } = useSession();
   if (!authEnabled) return { user: DEV_USER, isPending: false };
-  // Safe despite the guard: `authEnabled` is a module constant fixed at load, so
-  // the hook order stays stable across every render of a given component.
-  const { data, isPending } = authClient.useSession();
   const user = data?.user;
   return {
     user: user

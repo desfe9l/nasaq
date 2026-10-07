@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
  * signing in (or creating an account — Google sign-in does both) can never
  * lose it. It previews the actual project (first page, title, page count) so
  * the visitor sees something they can use, not a download wall. Reuses the
- * platform's existing Better Auth client and provider list; after the round
+ * platform's existing auth client and provider list; after the round
  * trip `NSQ_RESUME_URL` brings them straight back into the editor, where the
  * project opens.
  */

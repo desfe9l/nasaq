@@ -108,14 +108,54 @@ async function main() {
   }
 }
 
+/**
+ * SQLSTATEs and network codes that mean "the database could not be reached or
+ * has no room", as opposed to "this migration is wrong".
+ *
+ * Connection exceptions (class 08), resource exhaustion (53xxx), lock/connect
+ * timeouts, and the usual socket errors all fall here.
+ */
+const INFRASTRUCTURE_CODES = new Set([
+  "08000", "08001", "08003", "08004", "08006", "08007", "08P01",
+  "53000", "53100", "53200", "53300", "53400",
+  "55P03", "57P03", "57014",
+  "ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN",
+  "EPIPE", "EHOSTUNREACH", "ENETUNREACH",
+]);
+
+function isInfrastructureFailure(err) {
+  if (!err) return false;
+  if (INFRASTRUCTURE_CODES.has(String(err.code ?? ""))) return true;
+  return /quota|insufficient resources|too many (clients|connections)|terminating connection|connection (refused|reset|terminated)|timed out|timeout expired/i.test(
+    String(err.message ?? ""),
+  );
+}
+
 main().catch((err) => {
-  console.error("[migrate] failed:", err?.message || err);
-  // pg errors carry the context needed to debug a bad SQL file.
-  for (const key of ["code", "detail", "hint", "position", "where"]) {
-    if (err?.[key] != null) console.error(`[migrate]   ${key}: ${err[key]}`);
+  // pg errors carry the context needed to debug a bad SQL file; a credential or
+  // bookkeeping failure is quoted the same way.
+  const detail = `[migrate] ${err?.message || err}`;
+  const context = ["code", "detail", "hint", "position", "where"]
+    .filter((key) => err?.[key] != null)
+    .map((key) => `\n[migrate]   ${key}: ${err[key]}`)
+    .join("");
+
+  if (isInfrastructureFailure(err)) {
+    // The database is unreachable or over quota — a condition the deploy cannot
+    // fix, and one that must not take the whole site down with it. Every file is
+    // applied in its own transaction, so the schema is exactly as consistent as
+    // it was before this run; nothing is recorded as applied. The build
+    // continues, LOUDLY, and the pending file is picked up by the next deploy
+    // (or by `npm run db:migrate`) once the database is back.
+    console.error("[migrate] WARNING: the database is unreachable or out of quota — continuing the deploy WITHOUT applying migrations.");
+    console.error(detail + context);
+    console.error("[migrate] Run `DATABASE_URL=… npm run db:migrate` once the database is reachable.");
+    process.exit(0);
   }
-  // A migration that could not start or commit leaves the prior schema intact
-  // (each file is transactional above), but this deployment must not ship a
-  // bundle that assumes the unapplied schema. That includes Neon quota 53000.
+
+  console.error("[migrate] failed:" + context.replace(/^\n/, " "));
+  console.error(detail);
+  // A bad migration must stop the deploy: shipping a bundle that assumes a
+  // schema which was never created breaks requests instead of the build.
   process.exit(1);
 });

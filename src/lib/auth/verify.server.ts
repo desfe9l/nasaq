@@ -1,29 +1,38 @@
 import { getRequest, setResponseStatus } from "@tanstack/react-start/server";
 import { gateIdentityEnabled } from "./gate-identity.server";
-import { auth, authConfigured } from "./server";
-import { objectStorageConfigured } from "@/lib/storage/r2.server";
+import { resolveRequestSession } from "./request-session.server";
+import { authConfigured } from "./server";
+import { authStoreStatus } from "./store/status";
 
 /**
  * Server-side session resolution (server-only).
  *
- * Because this app runs its OWN Better Auth at same-origin `/api/auth/*`, the
- * session cookie is sent with every request to this app — server functions AND
- * SSR loaders included. So we resolve the user straight from the request cookies
- * via `auth.api.getSession` (no client-minted JWT needed). Never trust a
- * client-supplied user id — only the result of this verification.
+ * This app runs its OWN first-party auth at same-origin `/api/auth/*`, so the
+ * session cookie rides along on every request to this app — server functions
+ * and SSR loaders included. So we resolve the user straight from the request
+ * (cookie, or the live preview's bearer token), with no client-minted identity
+ * of any kind. Never trust a client-supplied user id — only the result of this
+ * verification.
+ *
+ * Import-time is safe by construction: nothing here reads a credential or opens
+ * a connection, so a missing environment variable degrades sign-in instead of
+ * crashing the module graph (pages that need no identity keep rendering).
  */
 
-/** True when a real database is configured server-side. */
-const authStorageConfigured = objectStorageConfigured();
+/** True when a REAL (non-development) identity backend is configured. */
+function realAuthStorageConfigured(): boolean {
+  const status = authStoreStatus();
+  return status.configured && status.kind !== null && status.kind !== "filesystem";
+}
 
 /** Re-export so callers can branch on it without importing `server.ts`. */
 export { authConfigured };
 
-if (authStorageConfigured && !authConfigured) {
+if (realAuthStorageConfigured() && !authConfigured) {
   console.error(
     "[auth] durable auth storage is set but auth is disabled (VITE_AUTH_ENABLED=false) " +
       "— requireUserId() will reject every request (fail closed) rather than " +
-      "share one dev user on a real database.",
+      "share one dev user on a real backend.",
   );
 }
 
@@ -80,12 +89,13 @@ export type VerifiedUser = {
  *
  * `bearerToken` is for the LIVE PREVIEW: the app runs in a partitioned iframe
  * whose cookies don't reach the server, so `authMiddleware` forwards the session
- * as a bearer token, which we present as `Authorization: Bearer …` (the `bearer`
- * plugin resolves it). When deployed no token is passed and the cookie is used.
+ * as a bearer token. When deployed no token is passed and the cookie is used.
+ *
+ * Read-only on purpose: it never rotates the token or writes a cookie, because a
+ * server function cannot hand a replacement cookie back to the browser. Session
+ * rotation happens on the HTTP session endpoint, which can.
  */
-export async function getSessionUser(
-  bearerToken?: string,
-): Promise<VerifiedUser | null> {
+export async function getSessionUser(bearerToken?: string): Promise<VerifiedUser | null> {
   if (!authConfigured && !gateIdentityEnabled()) return null;
   const request = getRequest();
   if (!request) return null;
@@ -94,32 +104,34 @@ export async function getSessionUser(
     headers = new Headers(request.headers);
     headers.set("Authorization", `Bearer ${bearerToken}`);
   }
-  const session = await auth.api.getSession({ headers });
-  if (!session?.user) return null;
+  const resolved = await resolveRequestSession(headers, {
+    materializeGate: false,
+    emitCookies: false,
+  }).catch(() => null);
+  if (!resolved) return null;
   return {
-    id: session.user.id,
-    email: session.user.email ?? null,
-    emailVerified: session.user.emailVerified === true,
+    id: resolved.user.id,
+    email: resolved.user.email ?? null,
+    emailVerified: resolved.user.emailVerified === true,
   };
 }
 
 /**
  * Resolve the current user id for a server function, or throw when unauthorized.
  * Prefer `authMiddleware` (`./middleware`), which calls this for you.
- * - Auth enabled -> the verified session user id; throws
- *   `UnauthorizedError` when signed out. Works in the sandbox preview too (real
- *   sign-in via the baked preview client).
- * - Auth disabled (`VITE_AUTH_ENABLED=false`) + `DATABASE_URL` set -> throw (fail
- *   closed): one shared dev user on a real database would let every visitor
- *   read/write everyone's rows.
- * - Auth disabled + no database -> the shared dev user id.
+ * - Auth enabled -> the verified session user id; throws `UnauthorizedError`
+ *   when signed out. Works in the sandbox preview too (real sign-in).
+ * - Auth disabled (`VITE_AUTH_ENABLED=false`) + a real backend configured ->
+ *   throw (fail closed): one shared dev user on real identity storage would let
+ *   every visitor read/write everyone's rows.
+ * - Auth disabled + no real backend -> the shared dev user id.
  */
 export async function requireUserId(bearerToken?: string): Promise<string> {
   if (!authConfigured && !gateIdentityEnabled()) {
-    if (authStorageConfigured) {
+    if (realAuthStorageConfigured()) {
       throw new Error(
         "Auth is disabled (VITE_AUTH_ENABLED=false) but durable auth storage is set — " +
-          "refusing to fall back to the shared dev user against a real database.",
+          "refusing to fall back to the shared dev user against real identity storage.",
       );
     }
     return DEV_USER_ID;

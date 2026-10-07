@@ -2,7 +2,7 @@
  * NASAQ admin — server functions for /admin.
  *
  * Security model:
- *   • Every privileged call requires the verified Better Auth session.
+ *   • Every privileged call requires the verified session.
  *   • Owner access is resolved server-side from NASAQ_OWNER_ID or
  *     NASAQ_OWNER_EMAIL; neither value is sent to the browser.
  *
