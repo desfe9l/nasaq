@@ -53,15 +53,15 @@ jobs:
   migrate:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    environment: ${{ inputs.environment }}
+    environment: ${{ inputs.environment || 'Production' }}
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
-      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-      KEYGEN_API_TOKEN: ${{ secrets.KEYGEN_API_TOKEN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.NEON_DATABASE_URL || secrets.POSTGRES_URL }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || secrets.STORAGE_ACCOUNT_ID || secrets.AWS_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID || secrets.STORAGE_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY || secrets.STORAGE_SECRET_ACCESS_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME || secrets.STORAGE_BUCKET_NAME }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT || secrets.STORAGE_ENDPOINT }}
+      KEYGEN_API_TOKEN: ${{ secrets.KEYGEN_API_TOKEN || secrets.KEYGEN_ACCOUNT_TOKEN || secrets.KEYGEN_TOKEN }}
       KEYGEN_ACCOUNT_SLUG: ${{ secrets.KEYGEN_ACCOUNT_SLUG }}
       KEYGEN_PRODUCT_ID: ${{ secrets.KEYGEN_PRODUCT_ID }}
       NASAQ_OWNER_ID: ${{ secrets.NASAQ_OWNER_ID }}
@@ -92,14 +92,24 @@ jobs:
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "operating mode: $mode"
 
-      - name: Production environment sanity (names only, never values)
+      - name: Production environment sanity (presence of NAMES only, never values)
         shell: bash
         run: |
-          for var in DATABASE_URL R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
-            if [ -z "${!var:-}" ]; then echo "::error::required environment $var is not configured for this run"; exit 2; fi
+          fail=0
+          report() {
+            if [ -n "${!2:-}" ]; then echo "present : $1 (via $2)"; else echo "ABSENT  : $1"; fail=1; fi
+          }
+          var_or() { for name in "$@"; do if [ -n "${!name:-}" ]; then echo "$name"; return; fi; done; }
+          report "database (DATABASE_URL family)" "$(var_or DATABASE_URL NEON_DATABASE_URL POSTGRES_URL)"
+          if [ -z "${!$(var_or DATABASE_URL NEON_DATABASE_URL POSTGRES_URL):-}" ]; then fail=1; fi
+          for trio in "R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY" "STORAGE_ACCOUNT_ID STORAGE_ACCESS_KEY_ID STORAGE_SECRET_ACCESS_KEY" "AWS_ACCOUNT_ID AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY"; do
+            set -- $trio
+            if [ -n "${!1:-}" ] && [ -n "${!2:-}" ] && [ -n "${!3:-}" ]; then echo "present : object storage trio ($1 family)"; found=1; break; fi
           done
-          echo "required environment names present"
-          if [ -z "${KEYGEN_API_TOKEN:-}" ]; then echo "::warning::KEYGEN_API_TOKEN absent — the provider verification step will fail closed"; fi
+          if [ -z "${found:-}" ]; then echo "ABSENT  : object storage trio (R2_/STORAGE_/AWS_ account+access+secret)"; fail=1; fi
+          if [ -z "${KEYGEN_API_TOKEN:-}" ]; then echo "ABSENT  : KEYGEN_API_TOKEN — provider verification will fail closed"; fail=1; else echo "present : KEYGEN_API_TOKEN"; fi
+          if [ "$fail" -ne 0 ]; then echo "::error::a required capability is not configured for this run (see ABSENT lines; names only)"; exit 2; fi
+          echo "all required capabilities present (verified by name only)"
 
       - name: Migration dry run (what would move, fingerprints only)
         if: steps.op.outputs.mode != 'verify'

@@ -1,8 +1,9 @@
 # One-shot production request consumed by .github/workflows/owner-production.yml.
 #
-# Changing the `mode` line ON MAIN is the request: the file's change runs the
+# Changing the `mode` line ON MAIN is the request: the file change runs the
 # workflow, and the commit is the audit record (who/what/when). Valid modes:
 #   dry-run  — report what the owner migration WOULD move; nothing is written
 #   migrate  — the guarded move + the complete live verification battery
 #   verify   — the verification battery only, no move
 mode: dry-run
+request-seq: 2
