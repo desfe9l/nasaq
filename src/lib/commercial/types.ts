@@ -134,6 +134,11 @@ export type AdminAction =
   | "plan.changed"
   | "payment_settings.updated"
   | "admin.granted"
+  /**
+   * Administrator authority was re-bound to the account its holder signs in
+   * with after the first-party auth migration changed their account id.
+   */
+  | "owner.recovered"
   /** A client request's status, priority, assignee or written answer changed. */
   | "client_request.updated";
 

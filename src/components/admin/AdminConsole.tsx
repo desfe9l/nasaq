@@ -105,6 +105,29 @@ export function resolveAdminAccess(): Promise<AdminAccess> {
   }));
 }
 
+/**
+ * Re-bind administrator authority to the account signing in, once per visit.
+ *
+ * After the first-party auth migration an owner's account id changed, so the
+ * `admin_users` row and every `NASAQ_OWNER_ID` that named the old one stopped
+ * belonging to them and the console answered «لا تملك صلاحية الوصول» with no
+ * way back. This is the one authorized repair; it grants nothing to a visitor,
+ * refuses when any account that can still sign in holds administrator
+ * authority, and is a no-op for everyone already authorized.
+ *
+ * It runs BEFORE the probes so a legitimate owner is restored by simply
+ * opening the console, and it never renders anything itself — the decision is
+ * still made by the server on every call below it.
+ */
+async function attemptOwnerRecovery(): Promise<void> {
+  try {
+    const { adminRecoverOwnerIdentityFn } = await import("@/lib/admin/functions");
+    await adminRecoverOwnerIdentityFn();
+  } catch {
+    /* A refused recovery is the normal case for everyone but the owner. */
+  }
+}
+
 type AccessDiagnosis = {
   userId: string;
   emailVerified: boolean;
@@ -194,9 +217,19 @@ export function AdminConsole({ children }: { children?: ReactNode }) {
 
   useEffect(() => {
     let alive = true;
-    void resolveAdminAccess().then((next) => {
+    void (async () => {
+      const first = await resolveAdminAccess();
+      if (!alive) return;
+      if (first.commercial || first.content) {
+        setAccess(first);
+        return;
+      }
+      // Only an unauthorized session asks for the repair — an administrator
+      // pays nothing for it, and the owner is restored on the same page load.
+      await attemptOwnerRecovery();
+      const next = await resolveAdminAccess();
       if (alive) setAccess(next);
-    });
+    })();
     return () => {
       alive = false;
     };

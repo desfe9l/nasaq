@@ -279,7 +279,9 @@ async function ownerMutations(owner, customer) {
     const db = vault.value?.entries?.find?.((e) => e.variable === "DATABASE_URL");
     assert.ok(db, "DATABASE_URL row present");
     assert.equal(db.ownerReadable, true);
-    assert.ok(db.value, "owner can read the configured value (not printed)");
+    // Only a variable this environment actually holds has a value to read; a
+    // deployment without DATABASE_URL is not a redaction failure.
+    if (db.configured) assert.ok(db.value, "owner can read the configured value (not printed)");
   });
 }
 
@@ -288,6 +290,8 @@ async function refusedMutations(role, session, targetId) {
   const attempts = [
     ["adminSaveSettingsFn", { section: "announcement", value: { text: "pwned" } }, (v) => v?.ok === true],
     ["adminGrantAdmin", { userId: session.user?.id ?? "x", note: "self" }, (v) => v?.ok === true],
+    // The migration repair must be a no-op that grants nothing to a customer.
+    ["adminRecoverOwnerIdentityFn", undefined, (v) => v?.ok === true],
     ["adminUpsertTemplateFn", { template: { title: "x", kind: "json", content: "{}" } }, (v) => v?.ok === true],
     ["adminCreateLicenseFn", { type: "FREE" }, (v) => Boolean(v?.licenseId)],
     ["adminActivateCustomer", { userId: targetId ?? "x", planId: "individual-monthly" }, () => true],
@@ -330,6 +334,19 @@ async function main() {
   if (owner) {
     console.log("[admin-e2e] owner");
     if (owner.user?.id) console.log(`  (owner account id ${owner.user.id})`);
+    /*
+     * The migration repair, exactly as the console runs it.
+     *
+     * An owner whose account id changed in the first-party auth rewrite owns no
+     * `admin_users` row and matches no `NASAQ_OWNER_ID`; the console calls this
+     * before it decides what to render. A legitimate owner is re-bound and the
+     * checks below must then pass; everyone else is refused and nothing changes.
+     */
+    await step("owner: identity recovery resolves the owner authority", async () => {
+      const result = await call("adminRecoverOwnerIdentityFn", { cookie: owner.cookie });
+      assert.ok(result.status < 500, describeResult(result));
+      assert.equal(result.value?.ok, true, describeResult(result));
+    });
     await readChecks("owner", owner, true);
     if (mutations) await ownerMutations(owner, customer);
   }
@@ -369,6 +386,11 @@ async function main() {
   });
   await step("anonymous: getAdminCustomers is 401", async () => {
     const result = await call("getAdminCustomers", { method: "GET" });
+    assert.equal(result.status, 401, `got ${result.status}`);
+  });
+  await step("anonymous: adminRecoverOwnerIdentityFn is 401", async () => {
+    if (!IDS.has("adminRecoverOwnerIdentityFn")) return;
+    const result = await call("adminRecoverOwnerIdentityFn", {});
     assert.equal(result.status, 401, `got ${result.status}`);
   });
 

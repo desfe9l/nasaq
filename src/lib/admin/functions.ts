@@ -546,10 +546,97 @@ export const adminBootstrapOwnerFn = createServerFn({ method: "POST" })
       email: context.userEmail,
       emailVerified: context.userEmailVerified,
     };
+    /*
+     * Re-bind first. `ensureOwnerSuperAdmin` can only promote an identity the
+     * deployment already names, so for an owner whose account id changed in
+     * the first-party auth migration it answers `not_owner` — exactly the
+     * caller this button exists for. The recovery is the repair that makes
+     * the promotion meaningful again; it is idempotent and refuses everyone
+     * who cannot prove they are the deployment's owner.
+     */
+    await recoverOwnerIdentity(context);
     const result = await ensureOwnerSuperAdmin(db, identity);
     const diagnostics = await superAdminDiagnostics(db, identity);
     return { ...result, ...diagnostics };
   });
+
+export type OwnerRecoveryResult = {
+  ok: boolean;
+  reason: string;
+  error?: string;
+  role?: string;
+};
+
+/**
+ * Re-bind the platform's administrator authority to the account the CALLER
+ * signs in with.
+ *
+ * This is the repair for the migration's real damage: authority is stored
+ * against an account id, and an owner who signed in again after the first-party
+ * auth rewrite was minted a new id, orphaning their `admin_users` row and every
+ * `NASAQ_OWNER_ID` that named the old one. Nothing a visitor sends can trigger
+ * a grant here — see `recoverOwnerAuthority` for the guard (no live
+ * administrator may exist, the address must be the deployment's own owner
+ * address or the one an orphaned administrator row carried, and the write is
+ * once-only and audited).
+ *
+ * Rate-limited on the verified session id, which a client cannot rotate.
+ */
+export const adminRecoverOwnerIdentityFn = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }): Promise<OwnerRecoveryResult> => {
+    const { checkRateLimit } = await import("@/lib/license/rate-limit");
+    if (!checkRateLimit("owner:recover", `user:${context.userId}`, 10, 60_000)) {
+      return {
+        ok: false,
+        reason: "rate_limited",
+        error: "محاولات كثيرة — أعد المحاولة بعد قليل.",
+      };
+    }
+    return recoverOwnerIdentity(context);
+  });
+
+/** Shared by the recovery endpoint and the owner self-heal button. */
+async function recoverOwnerIdentity(context: VerifiedContext): Promise<OwnerRecoveryResult> {
+  const { isAnonymousDevUser } = await import("./owner-gate.server");
+  if (isAnonymousDevUser(context.userId)) {
+    return { ok: false, reason: "no_session", error: "سجّل الدخول بحساب المالك أولًا." };
+  }
+  let db: Awaited<ReturnType<typeof sql>>;
+  try {
+    db = await sql();
+  } catch {
+    return {
+      ok: false,
+      reason: "store_unavailable",
+      error: "قاعدة البيانات غير متاحة الآن — أعد المحاولة بعد قليل.",
+    };
+  }
+  const { recoverOwnerAuthority, authIdentityDirectory } = await import(
+    "@/lib/auth/owner-binding.server"
+  );
+  const directory = await authIdentityDirectory();
+  const identity = {
+    id: context.userId,
+    email: context.userEmail,
+    emailVerified: context.userEmailVerified,
+  };
+  const result = await recoverOwnerAuthority(db, identity, directory, {
+    audit: async ({ action, detail }) => {
+      const { audit } = await import("@/lib/commercial/admin.server");
+      await audit(db, {
+        adminUserId: context.userId,
+        action: action as Parameters<typeof audit>[1]["action"],
+        targetType: "owner_binding",
+        targetId: context.userId,
+        detail: detail as Record<string, string | number | boolean | null>,
+      });
+    },
+  });
+  return result.ok
+    ? { ok: true, reason: result.reason, role: result.role }
+    : { ok: false, reason: result.reason, error: result.error };
+}
 
 // ── Site settings ──────────────────────────────────────────────────────────
 

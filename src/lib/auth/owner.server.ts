@@ -1,3 +1,5 @@
+import type { Sql } from "../db.ts";
+
 export type OwnerIdentity = {
   id: string;
   email: string | null;
@@ -38,4 +40,22 @@ export function isOwnerIdentity(
         identity.emailVerified &&
         identity.email?.trim().toLowerCase() === config.email),
   );
+}
+
+/**
+ * The owner decision, configuration PLUS the durable binding.
+ *
+ * `NASAQ_OWNER_ID` is an exact id and `NASAQ_OWNER_EMAIL` requires a verified
+ * address, so neither can follow an account whose id changed in the first-party
+ * auth migration. The binding is the repair: it is written once, server-side,
+ * by `recoverOwnerAuthority`, and it names the id the owner actually signs in
+ * with. Imported dynamically so this module keeps zero dependencies.
+ */
+export async function isOwnerIdentityWithBinding(
+  sql: Sql,
+  identity: OwnerIdentity,
+): Promise<boolean> {
+  if (isOwnerIdentity(identity)) return true;
+  const { readOwnerBinding, isBoundOwner } = await import("./owner-binding.server.ts");
+  return isBoundOwner(await readOwnerBinding(sql), identity);
 }

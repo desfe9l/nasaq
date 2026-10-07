@@ -40,6 +40,26 @@ export class ForbiddenError extends Error {
   }
 }
 
+/**
+ * The durable half of the owner decision — best-effort by construction.
+ *
+ * It needs one read of `site_settings`, so it is only ever consulted on a path
+ * that has already touched the database (or for a caller who is already an
+ * administrator); a configured owner must still be answered while the database
+ * is unreachable, which is why the check above it stays DB-free.
+ */
+async function isBoundOwnerIdentity(
+  sql: Awaited<ReturnType<typeof getSql>>,
+  identity: OwnerIdentity,
+): Promise<boolean> {
+  try {
+    const { readOwnerBinding, isBoundOwner } = await import("./owner-binding.server.ts");
+    return isBoundOwner(await readOwnerBinding(sql), identity);
+  } catch {
+    return false;
+  }
+}
+
 export function isActiveLicense(license: License): boolean {
   return Boolean(
     license.status === "ACTIVE" &&
@@ -104,8 +124,10 @@ export async function getAuthorizationContext(
       // `isOwner` is carried through here, not reset to false. An owner known
       // only by an `admin_users` row (no `NASAQ_OWNER_*` env pair) used to land
       // in this branch and lose the flag — and with it every owner-only
-      // surface, licences included.
-      isOwner,
+      // surface, licences included. The durable binding is consulted too: an
+      // owner whose account id changed in the first-party auth migration is
+      // the owner even though `NASAQ_OWNER_ID` still names the old id.
+      isOwner: isOwner || (await isBoundOwnerIdentity(sql, identity)),
       isAdmin: true,
       isSuspended: false,
       license: null,
