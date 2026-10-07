@@ -67,7 +67,7 @@ export type AuthEnvironmentReport = {
   /** True when sign-up → sign-in → persisted session is expected to work. */
   ok: boolean;
   providers: AuthProviderFlags;
-  /** A managed Postgres is configured (sessions survive instance recycling). */
+  /** Durable first-party auth storage is configured (R2 in this repository). */
   database: boolean;
   secret: AuthSecretStatus;
   /** The absolute origin Better Auth signs/redirects against, when known. */
@@ -335,9 +335,13 @@ export function isDeployedRuntime(env: AuthEnvironment): boolean {
   return readEnv(env, "VERCEL") === "1" || readEnv(env, "NASAQ_STRICT_ENV") === "1";
 }
 
-/** True when a managed Postgres connection string is configured. */
+/** True when the application's durable R2 auth storage is configured. */
 export function hasDatabase(env: AuthEnvironment): boolean {
-  return Boolean(readEnv(env, "DATABASE_URL"));
+  return Boolean(
+    readEnv(env, "R2_ACCESS_KEY_ID") &&
+      readEnv(env, "R2_SECRET_ACCESS_KEY") &&
+      (readEnv(env, "R2_ACCOUNT_ID") || readEnv(env, "R2_ENDPOINT")),
+  );
 }
 
 /**
@@ -396,14 +400,12 @@ export function authEnvironmentReport(
     if (!database) {
       if (deployed) {
         errors.push(
-          "DATABASE_URL is not set. Sessions and accounts must persist in managed Postgres " +
-            "(the embedded PGLite fallback has no writable filesystem on Vercel and is " +
-            "per-invocation). Set DATABASE_URL and redeploy.",
+          "Durable auth storage is not configured. Set R2_ACCOUNT_ID (or R2_ENDPOINT), " +
+            "R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY; auth never falls back to process memory.",
         );
       } else {
         warnings.push(
-          "DATABASE_URL is not set — accounts and sessions live in the embedded PGLite " +
-            "database for local development only.",
+          "R2 auth storage is not set — durable account and session tests require the R2 variables.",
         );
       }
     }

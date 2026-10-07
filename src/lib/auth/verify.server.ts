@@ -1,6 +1,7 @@
 import { getRequest, setResponseStatus } from "@tanstack/react-start/server";
 import { gateIdentityEnabled } from "./gate-identity.server";
 import { auth, authConfigured } from "./server";
+import { objectStorageConfigured } from "@/lib/storage/r2.server";
 
 /**
  * Server-side session resolution (server-only).
@@ -13,14 +14,14 @@ import { auth, authConfigured } from "./server";
  */
 
 /** True when a real database is configured server-side. */
-const databaseConfigured = Boolean(process.env.DATABASE_URL?.trim());
+const authStorageConfigured = objectStorageConfigured();
 
 /** Re-export so callers can branch on it without importing `server.ts`. */
 export { authConfigured };
 
-if (databaseConfigured && !authConfigured) {
+if (authStorageConfigured && !authConfigured) {
   console.error(
-    "[auth] DATABASE_URL is set but auth is disabled (VITE_AUTH_ENABLED=false) " +
+    "[auth] durable auth storage is set but auth is disabled (VITE_AUTH_ENABLED=false) " +
       "— requireUserId() will reject every request (fail closed) rather than " +
       "share one dev user on a real database.",
   );
@@ -115,9 +116,9 @@ export async function getSessionUser(
  */
 export async function requireUserId(bearerToken?: string): Promise<string> {
   if (!authConfigured && !gateIdentityEnabled()) {
-    if (databaseConfigured) {
+    if (authStorageConfigured) {
       throw new Error(
-        "Auth is disabled (VITE_AUTH_ENABLED=false) but DATABASE_URL is set — " +
+        "Auth is disabled (VITE_AUTH_ENABLED=false) but durable auth storage is set — " +
           "refusing to fall back to the shared dev user against a real database.",
       );
     }

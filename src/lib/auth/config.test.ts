@@ -22,7 +22,9 @@ const PRODUCTION = {
   VERCEL_PROJECT_PRODUCTION_URL: "nasaq-sa.vercel.app",
   BETTER_AUTH_URL: "https://nasaq-sa.vercel.app",
   BETTER_AUTH_SECRET: "9f2c1a7e4b0d4a559c310aa9d0b21f44",
-  DATABASE_URL: "postgres://user:pass@host/db",
+  R2_ACCOUNT_ID: "account-id",
+  R2_ACCESS_KEY_ID: "access-key",
+  R2_SECRET_ACCESS_KEY: "secret-key",
 } satisfies Record<string, string>;
 
 describe("environment helpers", () => {
@@ -151,11 +153,11 @@ describe("production environment report", () => {
     assert.ok(report.errors.some((error) => error.includes("BETTER_AUTH_SECRET")));
   });
 
-  it("blocks a deployment with no database, because sessions could not persist", () => {
+  it("blocks a deployment with no durable auth storage", () => {
     const env: Record<string, string | undefined> = { ...PRODUCTION };
-    delete env.DATABASE_URL;
+    delete env.R2_ACCESS_KEY_ID;
     const report = authEnvironmentReport(env);
-    assert.ok(report.errors.some((error) => error.includes("DATABASE_URL")));
+    assert.ok(report.errors.some((error) => error.includes("Durable auth storage")));
   });
 
   it("blocks a deployment with no provider at all", () => {
@@ -208,7 +210,7 @@ describe("development environment report", () => {
       BETTER_AUTH_SECRET: "9f2c1a7e4b0d4a559c310aa9d0b21f44",
     });
     assert.equal(report.deployed, true);
-    assert.equal(report.ok, false); // no DATABASE_URL, no public URL
+    assert.equal(report.ok, false); // no durable auth storage, no public URL
   });
 
   it("accepts a minimum-length secret without complaint", () => {

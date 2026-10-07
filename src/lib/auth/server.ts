@@ -7,14 +7,15 @@
  * to create an account, sign in, or read a session.
  *
  * Runtime modes:
- *   - Deployed: `BETTER_AUTH_SECRET` + `DATABASE_URL` are required (see
- *     `./config`); sessions persist in Postgres. Google is available when
+ *   - Deployed: `BETTER_AUTH_SECRET` + the R2 auth-storage variables are required
+ *     (see `./config`); accounts and sessions persist in the application's own
+ *     private object storage. Google is available when
  *     `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` are set.
- *   - Sandbox live preview: sessions use the app's embedded PGLite database. Iframe
- *     clients use a bearer token when browser cookie partitioning prevents
+ *   - Sandbox live preview: sessions use the same AuthStore when R2 is configured.
+ *     Iframe clients use a bearer token when browser cookie partitioning prevents
  *     session reads.
  *   - Explicit local-only opt-out (`VITE_AUTH_ENABLED=false`): no auth providers;
- *     the dev-user fallback is unavailable once `DATABASE_URL` is configured
+ *     the dev-user fallback is unavailable once durable auth storage is configured
  *     (see `verify.server.ts`).
  *
  * THE CONFIGURATION CONTRACT LIVES IN `./config`: which providers exist, which
@@ -33,7 +34,6 @@ import { bearer } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { getCookie } from "@tanstack/react-start/server";
 import { randomBytes } from "node:crypto";
-import { ensureDbReady, getPglite, getSharedPgPool, normalizeDatabaseUrl } from "../db";
 import {
   authAllowedHosts,
   authBaseURL,
@@ -52,16 +52,11 @@ import {
   GOOGLE_OAUTH_CALLBACK_PATH,
   GOOGLE_PROVIDER_ID,
 } from "./providers";
-import { pgliteDialect } from "./pglite-dialect";
-
-// Kick (and share) PGLite bootstrap as soon as the auth server module loads.
-void ensureDbReady();
+import { createR2AuthAdapter } from "./r2-adapter.server";
 
 /**
- * Preview secret must outlive module reloads: PGLite (and its session rows) is
- * stored on `globalThis`, so an HMR re-eval of this file must NOT mint a new
- * signing secret or every existing session becomes invalid mid-dev. Process
- * restart clears both the secret and PGLite together.
+ * Preview secret must outlive module reloads, so an HMR re-eval of this file must
+ * NOT mint a new signing secret or every existing session becomes invalid mid-dev.
  *
  * NEVER used on a deployment: `authEnvironmentReport` raises a blocking error
  * when `BETTER_AUTH_SECRET` is missing there (a per-process secret cannot sign
@@ -133,16 +128,10 @@ const baseURL = explicitBaseURL ?? {
 // button then does nothing, with only a server-side log to explain it.
 const trustedOrigins = authTrustedOrigins(process.env);
 
-const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
-
-// Real Postgres when `DATABASE_URL` is set (deployed apps), else the app's
-// embedded PGLite (preview) via a Kysely dialect — so Better Auth persists to the
-// SAME DB as app data, including email/password users. Both use the Better Auth
-// schema from the root migrations (0001/0003_auth.sql).
-// Reuses the shared, serverless-optimized connection pool from getSharedPgPool().
-const database = databaseUrl
-  ? getSharedPgPool()!
-  : { dialect: pgliteDialect(() => getPglite()), type: "postgres" as const };
+// Identity data is kept in the application's own durable R2 bucket. It is
+// deliberately separate from document metadata and does not require Neon,
+// Postgres, a serverless process, or a third-party identity provider.
+const database = createR2AuthAdapter();
 
 /** Session token cookie name — also read by the live-preview popup completion page. */
 export const SESSION_TOKEN_COOKIE = "__Host-grok-auth.session_token";
