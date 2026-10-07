@@ -61,6 +61,10 @@ export async function verifyTemplateManager(
   context: CallerIdentity,
   sqlPromise: Promise<Sql>,
 ): Promise<OwnerGateResult> {
+  // The connection is opened eagerly by the caller but may never be awaited
+  // below (a configured identity needs no database). Mark it handled so an
+  // unreachable database cannot surface as an unhandled rejection.
+  sqlPromise.catch(() => undefined);
   // 1. A real, authenticated session — the shared dev user is "not signed in".
   if (isAnonymousDevUser(context.userId)) {
     return {
@@ -74,16 +78,44 @@ export async function verifyTemplateManager(
     email: context.userEmail,
     emailVerified: context.userEmailVerified,
   };
-  const sql = await sqlPromise;
-  const [{ isSuperAdminIdentity, ensureOwnerSuperAdmin }, { isAdminIdentity }] =
-    await Promise.all([
-      import("@/lib/auth/super-admin.server"),
-      import("@/lib/auth/admin-identity.server"),
-    ]);
-  // 2. Owner self-heal first: a configured owner must never be turned away by
-  // an empty `admin_users` table on a fresh deployment.
+  const [
+    { isSuperAdminIdentity, ensureOwnerSuperAdmin, isConfiguredSuperAdminIdentity },
+    { isAdminIdentity, isConfiguredAdminIdentity },
+  ] = await Promise.all([
+    import("@/lib/auth/super-admin.server"),
+    import("@/lib/auth/admin-identity.server"),
+  ]);
   const { isOwnerIdentity } = await import("@/lib/auth/owner.server");
-  if (isOwnerIdentity(identity)) await ensureOwnerSuperAdmin(sql, identity);
+  /*
+   * 2. Deployment configuration answers WITHOUT the database. The owner's
+   * SUPER_ADMIN row is still self-healed, but best-effort: a database that is
+   * unreachable (or a row write that fails) must not turn the configured owner
+   * away from the console — each template call reports its own storage error.
+   */
+  if (isConfiguredSuperAdminIdentity(identity) || isConfiguredAdminIdentity(identity)) {
+    if (isOwnerIdentity(identity)) {
+      try {
+        await ensureOwnerSuperAdmin(await sqlPromise, identity);
+      } catch (error) {
+        console.warn(
+          "[admin] owner SUPER_ADMIN self-heal skipped:",
+          error instanceof Error ? error.message.slice(0, 200) : "unknown error",
+        );
+      }
+    }
+    return { ok: true, identity };
+  }
+  // 3. Database-backed roles (SUPER_ADMIN / ADMIN rows).
+  let sql: Sql;
+  try {
+    sql = await sqlPromise;
+  } catch {
+    return {
+      ok: false,
+      reason: "not_owner",
+      error: "تعذّر التحقق من الصلاحية — قاعدة البيانات غير متاحة الآن. أعد المحاولة بعد قليل.",
+    };
+  }
   const allowed =
     (await isSuperAdminIdentity(sql, identity)) ||
     (await isAdminIdentity(sql, identity));

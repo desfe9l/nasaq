@@ -64,6 +64,7 @@ import {
   SESSION_TOKEN_COOKIE,
 } from "./session";
 import { getAuthStore } from "./store/index.server";
+import { defaultLegacyAccountSource } from "./legacy-accounts.server";
 import { GATE_SESSION_MARKER_COOKIE } from "./gate-session-marker";
 
 const JSON_HEADERS = { "content-type": "application/json; charset=utf-8" } as const;
@@ -241,7 +242,9 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
     if (path === "/sign-up/email" && method === "POST") {
       const body = await readJson(request);
       const store = await requireStore();
-      const result = await signUpWithPassword(store, { ...body, ...contextOf(request) });
+      const result = await signUpWithPassword(store, { ...body, ...contextOf(request) }, new Date(), {
+        legacy: defaultLegacyAccountSource(),
+      });
       if (!result.ok) return failureResponse(result.failure);
       return json(sessionBody(result.value), 200, [sessionCookie(result.value.token)]);
     }
@@ -249,7 +252,9 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
     if (path === "/sign-in/email" && method === "POST") {
       const body = await readJson(request);
       const store = await requireStore();
-      const result = await signInWithPassword(store, { ...body, ...contextOf(request) });
+      const result = await signInWithPassword(store, { ...body, ...contextOf(request) }, new Date(), {
+        legacy: defaultLegacyAccountSource(),
+      });
       if (!result.ok) return failureResponse(result.failure);
       return json(sessionBody(result.value), 200, [sessionCookie(result.value.token)]);
     }
@@ -366,6 +371,8 @@ export async function handleAuthRequest(request: Request): Promise<Response> {
           image: exchanged.profile.image,
           ...contextOf(request),
         },
+        new Date(),
+        { legacy: defaultLegacyAccountSource() },
       );
       if (!result.ok) {
         console.error("[auth] Google sign-in could not start a session:", result.failure.code);

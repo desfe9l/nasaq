@@ -281,10 +281,14 @@ export function createR2AuthStore(provider: ObjectStorageProvider): AuthStore {
         USERS_PREFIX,
         Math.max(1, Math.min(Math.trunc(limit), 500)),
       );
+      // Bounded parallel reads: one GET per account, read sequentially, made
+      // the admin customer list time out once the store held a few hundred.
       const users: StoredUser[] = [];
-      for (const key of keys) {
-        const row = await readJson<Record<string, unknown>>(provider, key);
-        if (row) users.push(rowToUser(row));
+      for (let index = 0; index < keys.length; index += 25) {
+        const rows = await Promise.all(
+          keys.slice(index, index + 25).map((key) => readJson<Record<string, unknown>>(provider, key)),
+        );
+        for (const row of rows) if (row) users.push(rowToUser(row));
       }
       return users.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     },

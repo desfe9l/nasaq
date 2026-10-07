@@ -21,7 +21,7 @@
  * source of truth, and removing the env var never revokes a table-granted admin.
  */
 import { randomUUID } from "node:crypto";
-import { isAdminUser } from "../auth/admin-identity.server.ts";
+import { isAdminCaller, isAdminUser } from "../auth/admin-identity.server.ts";
 import type { Sql } from "../db.ts";
 import {
   computeExpiry,
@@ -65,8 +65,14 @@ export async function isAdmin(
   sql: Sql,
   userId: string,
   userEmail?: string | null,
+  userEmailVerified?: boolean,
 ): Promise<boolean> {
-  return isAdminUser(sql, userId, userEmail);
+  // With the session's verification state (every server function passes it)
+  // the decision is the same one the template console and the vault make.
+  if (typeof userEmailVerified === "boolean") {
+    return isAdminCaller(sql, { id: userId, email: userEmail ?? null, emailVerified: userEmailVerified });
+  }
+  return isAdminUser(sql, userId);
 }
 
 /**
@@ -77,8 +83,9 @@ export async function requireAdmin(
   sql: Sql,
   userId: string,
   userEmail?: string | null,
+  userEmailVerified?: boolean,
 ): Promise<void> {
-  if (!(await isAdmin(sql, userId, userEmail))) throw new AdminRequiredError();
+  if (!(await isAdmin(sql, userId, userEmail, userEmailVerified))) throw new AdminRequiredError();
 }
 
 type AdminActor = { adminUserId: string };
@@ -509,13 +516,54 @@ export async function restoreCustomer(
  * second implementation in SQL is how the list and the dashboard end up
  * disagreeing.
  */
+export type CustomerIdentity = {
+  id: string;
+  email: string | null;
+  name: string | null;
+  createdAt: string | Date;
+};
+
+/**
+ * Union of the identity store's accounts and the legacy `"user"` projection,
+ * one row per id. The identity store is authoritative for address and name;
+ * the projection contributes pre-migration accounts and anything the store
+ * listing did not reach. Newest first.
+ */
+export function mergeCustomerIdentities(
+  projected: CustomerIdentity[],
+  stored: CustomerIdentity[],
+): CustomerIdentity[] {
+  const byId = new Map<string, CustomerIdentity>();
+  for (const row of projected) byId.set(row.id, row);
+  for (const row of stored) {
+    const previous = byId.get(row.id);
+    byId.set(row.id, {
+      id: row.id,
+      email: row.email ?? previous?.email ?? null,
+      name: row.name ?? previous?.name ?? null,
+      createdAt: previous?.createdAt ?? row.createdAt,
+    });
+  }
+  const time = (value: string | Date) => (value instanceof Date ? value.getTime() : Date.parse(value) || 0);
+  return [...byId.values()].sort((a, b) => time(b.createdAt) - time(a.createdAt));
+}
+
 export async function listCustomersForAdmin(
   sql: Sql,
   now: Date = new Date(),
+  storedIdentities: CustomerIdentity[] = [],
 ): Promise<AdminCustomer[]> {
-  const users = await sql<{ id: string; email: string | null; name: string | null; createdAt: string | Date }>`
+  /*
+   * Since first-party auth the account list lives in the identity store; the
+   * `"user"` table is a best-effort projection (and the only place accounts
+   * from before the migration are listed until they sign in again). Reading
+   * only the projection hid every account the mirror missed — so a paying
+   * customer could not be found, activated or suspended from this list.
+   */
+  const projected = await sql<CustomerIdentity>`
     select id, email, name, "createdAt" as "createdAt" from "user" order by "createdAt" desc
   `;
+  const users = mergeCustomerIdentities(projected, storedIdentities);
 
   const subs = await sql<{
     user_id: string;

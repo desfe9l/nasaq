@@ -140,3 +140,18 @@ export function downloadTextFile(filename: string, content: string, type: string
   anchor.click();
   URL.revokeObjectURL(url);
 }
+
+/**
+ * The vault as a STAFF administrator (an `ADMIN` row, not the owner) may see
+ * it: every row, status, guide and finding — but no secret or sensitive VALUE.
+ * Raw credentials are owner/super-administrator material; a promoted staff
+ * account that is phished must not hand over every key in the deployment.
+ */
+export function redactVaultForStaff(inventory: OwnerVaultInventory): OwnerVaultInventory {
+  return {
+    ...inventory,
+    entries: inventory.entries.map((entry) =>
+      entry.sensitivity === "public" ? entry : { ...entry, value: null, ownerReadable: false },
+    ),
+  };
+}

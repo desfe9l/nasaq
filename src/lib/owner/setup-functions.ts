@@ -71,12 +71,25 @@ export const verifyOwnerEmailFn = createServerFn({ method: "POST" })
       return { ok: false, detail: "صيغة البريد غير صالحة.", variable: "NASAQ_OWNER_EMAIL" };
     }
 
-    const { getSql } = await import("@/lib/db");
-    const sql = await getSql();
-    const rows = await sql<{ id: string; verified: boolean }>`
-      select id, "emailVerified" as verified from "user" where lower(email) = ${data.email} limit 1
-    `;
-    const account = rows[0];
+    // The identity store is the authority since first-party auth; the
+    // `"user"` projection is only consulted for accounts it does not hold.
+    const { findAuthUserByEmail } = await import("@/lib/auth/identities.server");
+    const stored = await findAuthUserByEmail(data.email);
+    let account: { id: string; verified: boolean } | undefined = stored
+      ? { id: stored.id, verified: stored.emailVerified }
+      : undefined;
+    if (!account) {
+      try {
+        const { getSql } = await import("@/lib/db");
+        const sql = await getSql();
+        const rows = await sql<{ id: string; verified: boolean }>`
+          select id, "emailVerified" as verified from "user" where lower(email) = ${data.email} limit 1
+        `;
+        account = rows[0];
+      } catch {
+        account = undefined;
+      }
+    }
     if (!account) {
       return {
         ok: false,
@@ -87,7 +100,7 @@ export const verifyOwnerEmailFn = createServerFn({ method: "POST" })
     if (!account.verified) {
       return {
         ok: false,
-        detail: "الحساب موجود لكن بريده غير موثّق لدى مزوّد الدخول.",
+        detail: "الحساب موجود لكن بريده غير موثّق. سجّل الدخول به عبر Google مرة واحدة ليُوثَّق البريد، أو اضبط NASAQ_OWNER_ID بمعرّف الحساب.",
         variable: "NASAQ_OWNER_EMAIL",
       };
     }

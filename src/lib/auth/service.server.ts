@@ -47,6 +47,12 @@ import {
 import type { AuthStore, StoredSession, StoredUser } from "./store/types";
 import { mirrorUserToDatabase } from "./user-mirror.server";
 import { AuthStoreUnavailableError, DuplicateEmailError } from "./store/types";
+import {
+  NO_LEGACY_ACCOUNTS,
+  verifyLegacyPasswordHash,
+  type LegacyAccount,
+  type LegacyAccountSource,
+} from "./legacy-accounts.server";
 
 /** What a caller gets back: a stable code plus the sentence the UI shows. */
 export type AuthFailure = {
@@ -241,6 +247,111 @@ async function issueSession(
   return { token, session };
 }
 
+// ── Pre-migration account continuity ────────────────────────────────────────
+
+/**
+ * Optional collaborators of the service. The HTTP router passes the production
+ * legacy source; direct callers (tests, the gate path) default to none, so the
+ * behaviour of a deployment that never had Better Auth is unchanged.
+ */
+export type AuthServiceOptions = {
+  /** Accounts that existed before first-party auth (see `legacy-accounts.server.ts`). */
+  legacy?: LegacyAccountSource;
+};
+
+async function findLegacyAccount(
+  options: AuthServiceOptions | undefined,
+  email: string,
+): Promise<LegacyAccount | null> {
+  const source = options?.legacy ?? NO_LEGACY_ACCOUNTS;
+  try {
+    return await source.findByEmail(email);
+  } catch {
+    return null;
+  }
+}
+
+/** A deterministic, non-deliverable address that frees the real one. */
+function relinkTombstoneEmail(userId: string): string {
+  const safe = userId.replace(/[^A-Za-z0-9_-]/g, "").slice(0, 64) || "account";
+  return `relinked+${safe}@legacy.invalid`;
+}
+
+/**
+ * Bring a pre-migration account into the AuthStore under its ORIGINAL id.
+ *
+ * Only ever called after the caller proved control of that account — the old
+ * password verified against the old hash, or a provider-verified address. When
+ * the address is currently held by a post-migration account with a different
+ * id (someone signed up again after the cutover, or squatted the address),
+ * that account is detached — its sessions revoked and its address replaced by
+ * a non-deliverable tombstone — but never deleted, so an operator can still
+ * recover anything it holds. Returns null when adoption is not possible.
+ */
+async function adoptLegacyAccount(
+  store: AuthStore,
+  legacy: LegacyAccount,
+  fields: { passwordHash: string | null; emailVerified: boolean; name?: string | null; image?: string | null },
+): Promise<StoredUser | null> {
+  const email = normalizeEmail(legacy.email);
+  const existingById = await store.findUserById(legacy.id);
+  if (existingById) {
+    // Already adopted. It is the right account only while it still owns the address.
+    return existingById.email === email ? existingById : null;
+  }
+  const holder = await store.findUserByEmail(email);
+  if (holder && holder.id !== legacy.id) {
+    await store.deleteUserSessions(holder.id);
+    await store.updateUser(holder.id, { email: relinkTombstoneEmail(holder.id) });
+  }
+  let adopted: StoredUser;
+  try {
+    adopted = await store.createUser({
+      id: legacy.id,
+      email,
+      name: fields.name || legacy.name || null,
+      emailVerified: fields.emailVerified || legacy.emailVerified,
+      image: fields.image || legacy.image || null,
+      passwordHash: fields.passwordHash,
+      ...(legacy.createdAt ? { createdAt: legacy.createdAt } : {}),
+    });
+  } catch (error) {
+    if (!(error instanceof DuplicateEmailError)) throw error;
+    // A concurrent request adopted it first: use that row only if it is ours.
+    const again = await store.findUserByEmail(email);
+    return again && again.id === legacy.id ? again : null;
+  }
+  // Operator trail: ids only — never an address, a hash or a token.
+  console.info(
+    `[auth] adopted pre-migration account ${legacy.id} (source: ${legacy.source})` +
+      (holder && holder.id !== legacy.id ? `; detached post-migration account ${holder.id}` : ""),
+  );
+  return adopted;
+}
+
+/**
+ * Whether `password` proves control of the legacy account for `user`'s address
+ * in a way that should change which account signs in:
+ *   · `relink` — a DIFFERENT, not-yet-adopted original id owns the address;
+ *   · `set-password` — the adopted account has no password yet (it was adopted
+ *     via Google) and the old password is the one Better Auth held.
+ */
+async function legacyPasswordClaim(
+  options: AuthServiceOptions | undefined,
+  store: AuthStore,
+  user: StoredUser,
+  password: string,
+): Promise<{ kind: "relink"; legacy: LegacyAccount } | { kind: "set-password" } | null> {
+  const legacy = await findLegacyAccount(options, user.email);
+  if (!legacy?.passwordHash) return null;
+  if (legacy.id === user.id) {
+    if (user.passwordHash) return null;
+    return (await verifyLegacyPasswordHash(legacy.passwordHash, password)) ? { kind: "set-password" } : null;
+  }
+  if (await store.findUserById(legacy.id)) return null;
+  return (await verifyLegacyPasswordHash(legacy.passwordHash, password)) ? { kind: "relink", legacy } : null;
+}
+
 // ── Sign-up ──────────────────────────────────────────────────────────────────
 
 export type SignUpInput = AuthRequestContext & {
@@ -259,6 +370,7 @@ export async function signUpWithPassword(
   store: AuthStore,
   input: SignUpInput,
   now: Date = new Date(),
+  options?: AuthServiceOptions,
 ): Promise<AuthOutcome<SessionResult>> {
   const email = normalizeEmail(String(input.email ?? ""));
   const password = String(input.password ?? "");
@@ -290,6 +402,47 @@ export async function signUpWithPassword(
   }
 
   const passwordHash = await hashPassword(password);
+
+  /*
+   * An address that belonged to a pre-migration account is not free to take:
+   * minting a new id for it is exactly what detached owners and staff from
+   * their roles, licences and files. The original holder proves it with the old
+   * password and gets the ORIGINAL account; anyone else is told the address is
+   * registered — the same answer as any other duplicate.
+   */
+  if (!(await store.findUserByEmail(email))) {
+    const legacy = await findLegacyAccount(options, email);
+    if (legacy && !(await store.findUserById(legacy.id))) {
+      const proven = await verifyLegacyPasswordHash(legacy.passwordHash, password);
+      const adopted = proven
+        ? await adoptLegacyAccount(store, legacy, { passwordHash, emailVerified: legacy.emailVerified })
+        : null;
+      if (!adopted) {
+        return fail(
+          "USER_ALREADY_EXISTS",
+          422,
+          "هذا البريد الإلكتروني مسجّل بالفعل. سجّل الدخول بدلًا من إنشاء حساب جديد.",
+        );
+      }
+      await mirrorUserToDatabase(adopted);
+      const issued = await issueSession(store, adopted, input, now);
+      return {
+        ok: true,
+        value: {
+          user: publicUser(adopted),
+          session: {
+            id: issued.session.id,
+            userId: issued.session.userId,
+            createdAt: issued.session.createdAt,
+            expiresAt: issued.session.expiresAt,
+            rotated: false,
+          },
+          token: issued.token,
+        },
+      };
+    }
+  }
+
   let user: StoredUser;
   try {
     user = await store.createUser({
@@ -347,6 +500,7 @@ export async function signInWithPassword(
   store: AuthStore,
   input: SignInInput,
   now: Date = new Date(),
+  options?: AuthServiceOptions,
 ): Promise<AuthOutcome<SessionResult>> {
   const email = normalizeEmail(String(input.email ?? ""));
   const password = String(input.password ?? "");
@@ -393,11 +547,41 @@ export async function signInWithPassword(
     );
   }
 
-  const user = await store.findUserByEmail(email);
+  let user = await store.findUserByEmail(email);
   if (!user) {
-    // Burn the same work as a real verification, then answer identically.
-    await verifyPasswordAgainstUnknownAccount(password);
-    return fail("INVALID_EMAIL_OR_PASSWORD", 401, INVALID_CREDENTIALS_MESSAGE);
+    // An account from before first-party auth: the old password adopts it
+    // under its ORIGINAL id (roles, licences and files stay attached).
+    const legacy = await findLegacyAccount(options, email);
+    if (legacy?.passwordHash) {
+      if (await verifyLegacyPasswordHash(legacy.passwordHash, password)) {
+        const adopted = await adoptLegacyAccount(store, legacy, {
+          passwordHash: await hashPassword(password),
+          emailVerified: legacy.emailVerified,
+        });
+        if (adopted) user = adopted;
+      }
+    } else {
+      // Burn the same work as a real verification, then answer identically.
+      await verifyPasswordAgainstUnknownAccount(password);
+    }
+    if (!user) return fail("INVALID_EMAIL_OR_PASSWORD", 401, INVALID_CREDENTIALS_MESSAGE);
+    await clearRateLimit(store, loginAddressKey(email));
+    await mirrorUserToDatabase(user);
+    const adoptedSession = await issueSession(store, user, input, now);
+    return {
+      ok: true,
+      value: {
+        user: publicUser(user),
+        session: {
+          id: adoptedSession.session.id,
+          userId: adoptedSession.session.userId,
+          createdAt: adoptedSession.session.createdAt,
+          expiresAt: adoptedSession.session.expiresAt,
+          rotated: false,
+        },
+        token: adoptedSession.token,
+      },
+    };
   }
 
   if (user.lockedUntil && Date.parse(user.lockedUntil) > now.getTime()) {
@@ -415,7 +599,26 @@ export async function signInWithPassword(
     );
   }
 
-  const verification = await verifyPassword(password, user.passwordHash);
+  let verification = await verifyPassword(password, user.passwordHash);
+  /*
+   * The address is held by a post-migration account (or an adopted account
+   * with no password yet) — the pre-migration password still proves the
+   * ORIGINAL account. On success the original account is the one signed in.
+   */
+  const claim = await legacyPasswordClaim(options, store, user, password);
+  if (claim?.kind === "relink") {
+    const adopted = await adoptLegacyAccount(store, claim.legacy, {
+      passwordHash: await hashPassword(password),
+      emailVerified: claim.legacy.emailVerified,
+    });
+    if (adopted) {
+      user = adopted;
+      verification = { ok: true, needsRehash: false };
+    }
+  } else if (claim?.kind === "set-password") {
+    user = (await store.updateUser(user.id, { passwordHash: await hashPassword(password) })) ?? user;
+    verification = { ok: true, needsRehash: false };
+  }
   if (!verification.ok) {
     const failures = (user.failedAttempts ?? 0) + 1;
     const lockSeconds = lockDurationForFailures(failures);
@@ -649,6 +852,7 @@ export async function signInWithExternalIdentity(
   store: AuthStore,
   identity: ExternalIdentityInput,
   now: Date = new Date(),
+  options?: AuthServiceOptions,
 ): Promise<AuthOutcome<SessionResult>> {
   const subject = String(identity.subject ?? "").trim();
   if (!subject) return fail("INVALID_USER", 400, "تعذّر تحديد هوية المستخدم.");
@@ -660,6 +864,20 @@ export async function signInWithExternalIdentity(
   const image = identity.image?.trim() || null;
 
   let user = await store.findUserById(id);
+  if (!user && identity.emailVerified === true && !(await store.findUserByEmail(email))) {
+    // A provider-VERIFIED address that belonged to a pre-migration account
+    // signs into that account under its ORIGINAL id, exactly as Better Auth's
+    // trusted-provider linking did — never a fresh duplicate identity.
+    const legacy = await findLegacyAccount(options, email);
+    if (legacy && legacy.id !== id) {
+      user = await adoptLegacyAccount(store, legacy, {
+        passwordHash: null,
+        emailVerified: true,
+        name,
+        image,
+      });
+    }
+  }
   if (!user) {
     try {
       user = await store.createUser({

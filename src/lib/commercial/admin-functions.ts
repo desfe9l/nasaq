@@ -59,8 +59,21 @@ import type {
 export const amIAdmin = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<{ isAdmin: boolean }> => {
+    // A configured owner/administrator is answered from deployment config and
+    // the verified session alone, so the console opens even while the database
+    // is unreachable (each action still re-checks and reports its own failure).
+    const { isConfiguredAdminIdentity } = await import("@/lib/auth/admin-identity.server");
+    if (
+      isConfiguredAdminIdentity({
+        id: context.userId,
+        email: context.userEmail,
+        emailVerified: context.userEmailVerified,
+      })
+    ) {
+      return { isAdmin: true };
+    }
     const sql = await getSql();
-    return { isAdmin: await isAdmin(sql, context.userId, context.userEmail) };
+    return { isAdmin: await isAdmin(sql, context.userId, context.userEmail, context.userEmailVerified) };
   });
 
 /** The admin queue. Optionally filtered by status. */
@@ -83,8 +96,10 @@ export const getAdminPaymentRequests = createServerFn({ method: "GET" })
   })
   .handler(async ({ context, data }): Promise<AdminPaymentRequest[]> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
-    return listPaymentRequestsForAdmin(sql, data.status);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
+    const rows = await listPaymentRequestsForAdmin(sql, data.status);
+    const { withStoreEmails } = await import("@/lib/auth/identities.server");
+    return (await withStoreEmails(rows as Array<AdminPaymentRequest & Record<string, unknown>>, "userId", "userEmail")) as AdminPaymentRequest[];
   });
 
 /** One request in full, including the customer's reference and note. */
@@ -97,8 +112,12 @@ export const getAdminPaymentRequest = createServerFn({ method: "GET" })
   })
   .handler(async ({ context, data }): Promise<AdminPaymentRequest | null> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
-    return getPaymentRequestForAdmin(sql, data.requestId);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
+    const row = await getPaymentRequestForAdmin(sql, data.requestId);
+    if (!row || row.userEmail) return row;
+    const { withStoreEmails } = await import("@/lib/auth/identities.server");
+    const [filled] = await withStoreEmails([row as AdminPaymentRequest & Record<string, unknown>], "userId", "userEmail");
+    return filled as AdminPaymentRequest;
   });
 
 /** Approve a payment: records the decision and grants the entitlement. */
@@ -113,7 +132,7 @@ export const adminApprovePayment = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     try {
       await approvePayment(sql, { adminUserId: context.userId }, data.requestId, data.adminNote);
       return { ok: true };
@@ -136,7 +155,7 @@ export const adminRejectPayment = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     try {
       await rejectPayment(sql, { adminUserId: context.userId }, data.requestId, data.adminNote);
       return { ok: true };
@@ -150,8 +169,10 @@ export const getAdminCustomers = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<AdminCustomer[]> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
-    return listCustomersForAdmin(sql);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
+    const { listAuthUsers } = await import("@/lib/auth/identities.server");
+    const stored = await listAuthUsers(500);
+    return listCustomersForAdmin(sql, new Date(), stored);
   });
 
 /** Manually activate (or re-activate) a customer on a plan. */
@@ -166,7 +187,7 @@ export const adminActivateCustomer = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     try {
       await activateCustomer(sql, { adminUserId: context.userId }, data.userId, data.planId);
       return { ok: true };
@@ -185,7 +206,7 @@ export const adminSuspendCustomer = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     try {
       await suspendCustomer(sql, { adminUserId: context.userId }, data.userId);
       return { ok: true };
@@ -204,7 +225,7 @@ export const adminRestoreCustomer = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     try {
       await restoreCustomer(sql, { adminUserId: context.userId }, data.userId);
       return { ok: true };
@@ -225,7 +246,7 @@ export const adminExtendSubscription = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     try {
       await extendSubscription(sql, { adminUserId: context.userId }, data.userId, data.days);
       return { ok: true };
@@ -248,7 +269,7 @@ export const adminSetExpiration = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     try {
       await setExpiration(
         sql,
@@ -274,7 +295,7 @@ export const adminChangePlan = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     try {
       await changePlan(sql, { adminUserId: context.userId }, data.userId, data.planId);
       return { ok: true };
@@ -288,7 +309,7 @@ export const getAdminPlans = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<Plan[]> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     return listAllPlans(sql);
   });
 
@@ -336,7 +357,7 @@ export const adminUpdatePlan = createServerFn({ method: "POST" })
   )
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     const { planId, ...patch } = data;
     try {
       await updatePlan(sql, planId, patch);
@@ -363,7 +384,7 @@ export const adminUpdatePaymentSettings = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     try {
       await updatePaymentSettings(sql, data);
       return { ok: true };
@@ -377,7 +398,7 @@ export const getAdminAuditLog = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<AdminAuditEntry[]> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     return listAuditLog(sql, 100);
   });
 
@@ -393,7 +414,7 @@ export const adminGrantAdmin = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean; error?: string }> => {
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
     try {
       await grantAdmin(sql, { adminUserId: context.userId }, data.userId, data.note ?? null);
       return { ok: true };
@@ -406,7 +427,46 @@ export const adminGrantAdmin = createServerFn({ method: "POST" })
 export const adminBootstrapFirst = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<{ ok: boolean; wasEmpty: boolean; error?: string }> => {
+    const [{ adminIdentityConfigPresent, isConfiguredAdminIdentity }, { isAnonymousDevUser }, { isDeployedRuntime }] =
+      await Promise.all([
+        import("@/lib/auth/admin-identity.server"),
+        import("@/lib/admin/owner-gate.server"),
+        import("@/lib/auth/store/status"),
+      ]);
+    const identity = { id: context.userId, email: context.userEmail, emailVerified: context.userEmailVerified };
+    // The shared auth-disabled dev user is "not signed in" — never an admin.
+    if (isAnonymousDevUser(context.userId)) {
+      return { ok: false, wasEmpty: false, error: "سجّل الدخول أولًا." };
+    }
     const sql = await getSql();
+    /*
+     * "First signed-in account becomes admin" is only safe where nobody has
+     * been named. Once the deployment names an owner/administrator, the empty
+     * table is filled by THAT identity (SUPER_ADMIN self-heal) and nobody else
+     * — otherwise any visitor could claim a fresh production database. A
+     * deployed runtime with no owner configured is refused outright: set
+     * NASAQ_OWNER_ID / NASAQ_OWNER_EMAIL instead.
+     */
+    if (adminIdentityConfigPresent()) {
+      if (!isConfiguredAdminIdentity(identity)) {
+        return { ok: false, wasEmpty: false, error: "التفعيل متاح للحساب المحدّد كمالك في إعدادات النشر فقط." };
+      }
+      const { ensureOwnerSuperAdmin } = await import("@/lib/auth/super-admin.server");
+      const healed = await ensureOwnerSuperAdmin(sql, identity);
+      // A configured staff administrator (not the owner) is already an admin
+      // by configuration; only a real self-heal failure is reported.
+      if (!healed.ok && healed.reason !== "not_owner") {
+        return { ok: false, wasEmpty: false, error: healed.reason };
+      }
+      return { ok: true, wasEmpty: healed.created };
+    }
+    if (isDeployedRuntime()) {
+      return {
+        ok: false,
+        wasEmpty: false,
+        error: "اضبط NASAQ_OWNER_ID أو NASAQ_OWNER_EMAIL في إعدادات النشر لتعيين المالك.",
+      };
+    }
     try {
       const res = await (await import("./admin.server")).bootstrapFirstAdmin(sql, context.userId);
       return res;

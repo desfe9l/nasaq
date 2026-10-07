@@ -210,7 +210,7 @@ export const adminListClientRequestsFn = createServerFn({ method: "POST" })
   .handler(async ({ data, context }): Promise<AdminRequestsResult> => {
     const { requireAdmin } = await import("@/lib/commercial/admin.server");
     const sql = await getSql();
-    await requireAdmin(sql, context.userId, context.userEmail);
+    await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
 
     const settings = await readRequestSettings(sql);
     const status = isRequestStatus(data.status) ? data.status : (data.status ?? "all");
@@ -237,7 +237,7 @@ export const adminUpdateClientRequestFn = createServerFn({ method: "POST" })
     }): Promise<{ ok: boolean; error?: string; request?: AdminRequestRow }> => {
       const { requireAdmin } = await import("@/lib/commercial/admin.server");
       const sql = await getSql();
-      await requireAdmin(sql, context.userId, context.userEmail);
+      await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
 
       const id = String(data.id ?? "").trim();
       if (!id) return { ok: false, error: "طلب غير معروف." };
@@ -291,7 +291,7 @@ export const adminSaveRequestSettingsFn = createServerFn({ method: "POST" })
     }): Promise<{ ok: boolean; error?: string; settings?: RequestSettings }> => {
       const { requireAdmin } = await import("@/lib/commercial/admin.server");
       const sql = await getSql();
-      await requireAdmin(sql, context.userId, context.userEmail);
+      await requireAdmin(sql, context.userId, context.userEmail, context.userEmailVerified);
       try {
         const settings = await saveRequestSettings(sql, data);
         return { ok: true, settings };

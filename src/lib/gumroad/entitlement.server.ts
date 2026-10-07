@@ -88,6 +88,15 @@ export async function resolveUserIdForBuyerEmail(
 ): Promise<{ userId: string } | null> {
   const normalized = email.trim().toLowerCase();
   if (!normalized || !normalized.includes("@")) return null;
+  // The identity store is authoritative since first-party auth; the `"user"`
+  // projection only covers accounts it does not (yet) hold.
+  try {
+    const { findAuthUserByEmail } = await import("@/lib/auth/identities.server");
+    const stored = await findAuthUserByEmail(normalized);
+    if (stored) return { userId: stored.id };
+  } catch {
+    /* fall through to the projection */
+  }
   const rows = await sql<{ id: string }>`
     select id from "user" where lower(email) = ${normalized} limit 2
   `;
