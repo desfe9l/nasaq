@@ -111,9 +111,11 @@ export function normalizeDesignBrief(value: unknown, input: DesignBriefInput): D
   const requestedStyle = String(raw.style ?? input.style ?? "institutional");
   const coverStyle = String(raw.coverStyle ?? "formal");
   return {
-    title: text(raw.title, "وثيقة مؤسسية"),
-    subtitle: text(raw.subtitle, "مخرجات مؤسسية منظمة وقابلة للتحرير"),
-    org: text(raw.org, "الجهة المختصة"),
+    // Provider omissions are fields for the owner to fill, never facts for the
+    // generator to infer or institutional claims for it to make.
+    title: text(raw.title, "[عنوان المستند]"),
+    subtitle: text(raw.subtitle, "[أضف ملخصًا موثقًا من المصدر]"),
+    org: text(raw.org, "[اسم الجهة]"),
     topic: text(raw.topic, input.prompt.slice(0, 120)),
     style: STYLES.has(requestedStyle) ? requestedStyle : "institutional",
     format,
@@ -124,6 +126,6 @@ export function normalizeDesignBrief(value: unknown, input: DesignBriefInput): D
       raw.contentDensity === "light" || raw.contentDensity === "dense"
         ? raw.contentDensity
         : input.contentDensity ?? "balanced",
-    visualDirection: text(raw.visualDirection, "تكوين عربي RTL بهرمية قوية، تباين مؤسسي، وخط ذهبي دقيق"),
+    visualDirection: text(raw.visualDirection, "تكوين عربي RTL بهرمية واضحة ومساحات بيضاء مقصودة"),
   };
 }

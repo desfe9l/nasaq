@@ -35,6 +35,16 @@ export interface RawContentAnalysis {
   suggestedTitle: string;
 }
 
+/** A single-page draft cannot honestly preserve an unbounded provider payload. */
+export const RAW_MAX_CHARS = 7_600;
+
+export interface RawContentRetentionVerdict {
+  ok: boolean;
+  sourceLines: number;
+  retainedLines: number;
+  missingLines: string[];
+}
+
 const BULLET = /^\s*(?:[-–—•*·]|\(?\d{1,2}\)?[.)-]|[\u0660-\u0669]{1,2}[.)-])\s+/;
 /*
  * A figure is a WHOLE number (Western or Arabic-Indic) with an optional unit —
@@ -57,6 +67,24 @@ function cleanLine(line: string): string {
   return line.replace(/\s+/g, " ").trim();
 }
 
+function normalizedContentLine(line: string): string {
+  return cleanLine(line)
+    .replace(BULLET, "")
+    .replace(/[:：]$/, "")
+    .trim();
+}
+
+export function rawContentCharCount(raw: string): number {
+  return [...String(raw ?? "").replace(/\r\n?/g, "\n")].length;
+}
+
+export function assertRawContentWithinLimit(raw: string): void {
+  const chars = rawContentCharCount(raw);
+  if (chars > RAW_MAX_CHARS) {
+    throw new Error(`المحتوى يتجاوز الحد الواضح البالغ ${RAW_MAX_CHARS.toLocaleString("ar-SA")} حرفًا؛ قسّمه إلى مستندات منفصلة قبل التنظيم.`);
+  }
+}
+
 export function analyzeRawContent(raw: string): RawContentAnalysis {
   const text = String(raw ?? "").replace(/\r\n?/g, "\n");
   const lines = text.split("\n").map((line) => line.trim());
@@ -68,7 +96,7 @@ export function analyzeRawContent(raw: string): RawContentAnalysis {
   const tableRows = delimited.some((row) => row.length > 1) ? delimited.slice(0, 60) : [];
 
   return {
-    chars: [...text].length,
+    chars: rawContentCharCount(text),
     words: text.split(/\s+/).filter(Boolean).length,
     lines: filled.length,
     paragraphs: filled.filter((line, index) => index > 0 && lines[index - 1] === "").length + (filled.length ? 1 : 0),
@@ -81,9 +109,10 @@ export function analyzeRawContent(raw: string): RawContentAnalysis {
 }
 
 /** The brief handed to the provider: the paste itself, plus the no-invention rule. */
-export const RAW_BRIEF_LIMIT = 7_600;
+export const RAW_BRIEF_LIMIT = RAW_MAX_CHARS;
 
 export function rawBrief(raw: string, title: string, audience: string): string {
+  assertRawContentWithinLimit(raw);
   const analysis = analyzeRawContent(raw);
   return [
     "حوّل المحتوى الخام التالي إلى مسودة تقرير مؤسسي منظّم.",
@@ -93,7 +122,7 @@ export function rawBrief(raw: string, title: string, audience: string): string {
     audience ? `الجمهور: ${audience}.` : "",
     analysis.headings.length ? `العناوين المذكورة في المحتوى: ${analysis.headings.slice(0, 6).join(" · ")}.` : "",
     "المحتوى الخام:",
-    String(raw ?? "").slice(0, RAW_BRIEF_LIMIT),
+    String(raw ?? ""),
   ]
     .filter(Boolean)
     .join("\n");
@@ -113,6 +142,7 @@ export function draftFromRawContent(
   raw: string,
   options: { title?: string; maxSections?: number } = {},
 ): ReportDraft {
+  assertRawContentWithinLimit(raw);
   const maxSections = Math.min(
     RAW_MAX_SECTIONS,
     Math.max(1, Math.round(options.maxSections ?? RAW_MAX_SECTIONS)),
@@ -163,5 +193,36 @@ export function draftFromRawContent(
     summary: "",
     sections: sections.filter((section) => section.body || section.bullets.length),
     nextSteps: [],
+  };
+}
+
+/**
+ * A draft may be organised differently, but it must retain every meaningful
+ * source line verbatim before this flow can create an editable document.
+ */
+export function rawContentRetentionVerdict(raw: string, draft: ReportDraft): RawContentRetentionVerdict {
+  const source = [...new Set(
+    String(raw ?? "")
+      .replace(/\r\n?/g, "\n")
+      .split("\n")
+      .map(normalizedContentLine)
+      .filter(Boolean),
+  )];
+  const drafted = [
+    draft.title,
+    draft.summary,
+    ...draft.sections.flatMap((section) => [section.heading, section.body, ...section.bullets]),
+    ...draft.nextSteps,
+  ]
+    .flatMap((value) => String(value ?? "").split("\n"))
+    .map(normalizedContentLine)
+    .filter(Boolean)
+    .join("\n");
+  const missingLines = source.filter((line) => !drafted.includes(line));
+  return {
+    ok: missingLines.length === 0,
+    sourceLines: source.length,
+    retainedLines: source.length - missingLines.length,
+    missingLines: missingLines.slice(0, 8),
   };
 }

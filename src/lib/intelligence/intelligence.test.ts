@@ -220,6 +220,25 @@ test("prompt analyzer correctly parses prompt intent, docType, and page count", 
   assert.ok(companyProfile.pages >= 1);
 });
 
+test("prompt-only generation uses explicit placeholders instead of fabricated institutional facts", () => {
+  const generated = generateDesignFromPrompt("صمم تقريرًا رسميًا عن الأمن السيبراني", { pages: 4 });
+  const copy = JSON.stringify(generated.primaryResult.project);
+  assert.match(copy, /\[اسم الجهة\]/);
+  assert.match(copy, /\[التاريخ يحدده المالك\]/);
+  assert.match(copy, /\[القيمة 1\]/);
+  assert.match(copy, /\[حالة الاعتماد يحدده المالك\]/);
+  for (const fabricated of [
+    "99.8%",
+    "NSQ-2026-GOV",
+    "أكتوبر ٢٠٢٦م",
+    "الإدارة العامة للأمن السيبراني",
+    "صفر حوادث أمنية حرجة",
+    "معتمد رسميًا",
+  ]) {
+    assert.equal(copy.includes(fabricated), false, `must not inject ${fabricated}`);
+  }
+});
+
 test("generateDesignFromPrompt creates production-ready editable NASAQ project with variations", () => {
   const result = generateDesignFromPrompt("صمم تقريرًا رسميًا عن الأمن السيبراني");
   assert.ok(result.primaryResult.project);

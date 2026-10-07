@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { initializeCanvas, readPsd, writePsd, type Layer } from "ag-psd";
 
-import { applyAssetDecisions, importPsdBytes } from "./pipeline.ts";
+import {
+  applyAssetDecisions,
+  assertEditablePsdValidation,
+  importPsdBytes,
+  PsdValidationError,
+} from "./pipeline.ts";
 import { importTemplateBytes } from "../import/run.ts";
 import { placedFlip, smartFilterBlur } from "./parse.ts";
 import { convertPsdDocument } from "./convert.ts";
@@ -181,6 +186,18 @@ function flat(els: CanvasEl[], dx = 0, dy = 0): CanvasEl[] {
 }
 
 describe("PSD → NASAQ", () => {
+  it("blocks an editable import when PSD validation reports an error", () => {
+    const validation = {
+      ok: false,
+      issues: [{ severity: "error" as const, code: "missing-layer", message: "طبقة مفقودة" }],
+    };
+    assert.throws(
+      () => assertEditablePsdValidation(validation),
+      (error: unknown) => error instanceof PsdValidationError && error.validation === validation,
+    );
+    assert.doesNotThrow(() => assertEditablePsdValidation({ ok: true, issues: [] }));
+  });
+
   it("rejects a file that is not a PSD and a hostile layer name", () => {
     assert.throws(() => assertPsdBytes(new Uint8Array([1, 2, 3, 4, 5, 6])), /PSD/);
     assert.equal(sanitizeLayerName("../etc/passwd", "طبقة"), "etc passwd");

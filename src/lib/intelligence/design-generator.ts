@@ -161,6 +161,11 @@ function marginOf(w: number): number {
   return Math.min(16, Math.max(10, Math.round(w * 0.06)));
 }
 
+/** Visible, editable fields instead of claims the prompt did not establish. */
+function placeholder(field: string): string {
+  return `[${field} يحدده المالك]`;
+}
+
 function runningHead(page: Page, palette: PaletteRoles, section: string, org: string) {
   const { w } = pageSize(page);
   const m = marginOf(w);
@@ -248,7 +253,7 @@ function footerBar(
   });
 
   // Entity & doc type text
-  const label = `${org || "نَسَق للتصميم المؤسسي"} · ${docType}`;
+  const label = `${org || placeholder("اسم الجهة")} · ${docType}`;
   const orgEl = write(page, "بيانات التذييل", label, m + 24, y + 3.5, w - m * 2 - 30, 7, {
     fontFamily: "IBM Plex Sans Arabic",
     fontSize: 7.5,
@@ -455,7 +460,7 @@ export function buildOfficialCover(page: Page, intent: PromptAnalysis) {
     color: p.muted,
   });
 
-  write(page, "رقم الوثيقة", "الرقم المرجعي: NSQ-2026-GOV", m + (w - m * 2) / 2, metaY + 4, (w - m * 2) / 2 - 8, 6, {
+  write(page, "رقم الوثيقة", `الرقم المرجعي: ${placeholder("الرقم المرجعي")}`, m + (w - m * 2) / 2, metaY + 4, (w - m * 2) / 2 - 8, 6, {
     fontFamily: "IBM Plex Sans Arabic",
     fontSize: 7.5,
     fontWeight: 600,
@@ -463,7 +468,7 @@ export function buildOfficialCover(page: Page, intent: PromptAnalysis) {
     textAlign: "left",
   });
 
-  write(page, "الاعتماد", "نسخة معتمدة ومطابقة لضوابط الهوية الرسمية", m + 6, metaY + 12, w - m * 2 - 12, 6, {
+  write(page, "الاعتماد", placeholder("حالة الاعتماد"), m + 6, metaY + 12, w - m * 2 - 12, 6, {
     fontFamily: "IBM Plex Sans Arabic",
     fontSize: 8,
     fontWeight: 700,
@@ -508,12 +513,7 @@ export function buildExecutiveOverview(page: Page, intent: PromptAnalysis, pageI
     style: { fill: p.field, borderWidth: 0, radius: 2 },
   });
 
-  const summaryText =
-    intent.topic === "الأمن السيبراني"
-      ? "يستعرض هذا التقرير مستويات الجاهزية الرقمية والصمود السيبراني لكافة الأصول والخدمات الحيوية. تم التحقق من الامتثال الكامل للضوابط الأساسية الصادرة عن الهيئة الوطنية، مع تسجيل صفر حوادث أمنية حرجة وتطوير شامل لمنظومة الاستجابة الاستباقية."
-      : intent.topic === "الاستدامة والطاقة المتجددة"
-        ? "يجسد هذا التقرير التزام المنظومة بتحقيق المستهدفات الوطنية للطاقة المتجددة وخفض الانبعاثات الكربونية. تعكس النتائج التشغيلية تقدمًا استثنائيًا في تبني الحلول النظيفة وترشيد استهلاك الموارد الطبيعية وفق أعلى المعايير العالمية."
-        : "يستعرض هذا المستند المخرجات التشغيلية ومستوى التقدم المحرز في المبادرات الاستراتيجية. تم تقييم مؤشرات الكفاءة والجودة لضمان اتساق العمليات مع المستهدفات المقرة وتعظيم الأثر المؤسسي والاقتصادي.";
+  const summaryText = "[أضف ملخصًا موثقًا من المحتوى أو المصدر المعتمد]";
 
   write(page, "متن المستخلص", summaryText, m + 6, y + 4, w - m * 2 - 12, cardH - 8, {
     fontFamily: "Noto Naskh Arabic",
@@ -541,7 +541,7 @@ export function buildExecutiveOverview(page: Page, intent: PromptAnalysis, pageI
     color: p.accent,
     textAlign: "center",
   });
-  write(page, "نص المقولة", "«الريادة المؤسسية تتطلب بناء قدرات استباقية وامتثالاً صارماً لمعايير الحوكمة والجودة الشاملة.»", m + 6, y + 4, w - m * 2 - 18, quoteH - 8, {
+  write(page, "نص المقولة", "[أضف اقتباسًا أو رسالة معتمدة من المصدر]", m + 6, y + 4, w - m * 2 - 18, quoteH - 8, {
     fontFamily: "Tajawal",
     fontSize: 10.5,
     fontWeight: 700,
@@ -602,19 +602,19 @@ export function buildExecutiveOverview(page: Page, intent: PromptAnalysis, pageI
       h: signH,
       style: { fill: "#fafbfd", borderColor: "#e2e8f0", borderWidth: 0.5, radius: 3 },
     });
-    write(page, "صفة المعتمد", "المعتمد التنفيذي", m + 6, y + 4, (w - m * 2) / 2, 6, {
+    write(page, "صفة المعتمد", placeholder("صفة المعتمد"), m + 6, y + 4, (w - m * 2) / 2, 6, {
       fontFamily: "IBM Plex Sans Arabic",
       fontSize: 8,
       fontWeight: 700,
       color: p.field,
     });
-    write(page, "اسم المعتمد", "اللجنة القيادية لمراجعة التقارير", m + 6, y + 11, (w - m * 2) / 2, 6, {
+    write(page, "اسم المعتمد", placeholder("اسم المعتمد"), m + 6, y + 11, (w - m * 2) / 2, 6, {
       fontFamily: "Noto Naskh Arabic",
       fontSize: 8,
       fontWeight: 500,
       color: p.muted,
     });
-    write(page, "حالة الوثيقة", "مُجاز رسميًا للعمل بموجبه", m + (w - m * 2) / 2, y + 7, (w - m * 2) / 2 - 8, 8, {
+    write(page, "حالة الوثيقة", placeholder("حالة الوثيقة"), m + (w - m * 2) / 2, y + 7, (w - m * 2) / 2 - 8, 8, {
       fontFamily: "IBM Plex Sans Arabic",
       fontSize: 8,
       fontWeight: 700,
@@ -738,8 +738,7 @@ export function buildKpiDashboard(page: Page, intent: PromptAnalysis, pageIndex:
       color: p.field,
     });
 
-    const analysisText =
-      "تؤكد القراءات الرقمية تحقيق تقدم ملموس في جميع المحاور التشغيلية بنسبة مطابقة قياسية. تشير البيانات إلى استقرار كفاءة المعالجة وانخفاض فترات التوقف، مع التوصية بالحفاظ على التدقيق المستمر لضمان استدامة النتائج وتطوير القدرات التنافسية.";
+    const analysisText = "[أضف تحليلًا موثقًا للبيانات أو المؤشرات]";
 
     write(page, "متن التحليل", analysisText, m + 6, y + 13, w - m * 2 - 12, insightH - 16, {
       fontFamily: "Noto Naskh Arabic",
@@ -770,7 +769,7 @@ export function buildDataMatrix(page: Page, intent: PromptAnalysis, pageIndex: n
   });
   y += 12;
 
-  write(page, "مقدمة الجدول", "جدول البيانات المعتمد الذي يوضح توزيع المهام ومستوى الإنجاز لكل مجال عمل محدد.", m, y, w - m * 2, 8, {
+  write(page, "مقدمة الجدول", "[أضف وصفًا موثقًا للبيانات أو نطاق الجدول]", m, y, w - m * 2, 8, {
     fontFamily: "Noto Naskh Arabic",
     fontSize: 9,
     fontWeight: 500,
@@ -830,7 +829,7 @@ export function buildDataMatrix(page: Page, intent: PromptAnalysis, pageIndex: n
     write(
       page,
       "نص الملاحظات",
-      "تم اعتماد ومطابقة كافة البيانات أعلاه استناداً إلى سجلات الأنظمة والتقارير الدورية المستقلة دون تعديل يدوي.",
+      "[أضف ملاحظات التحقق أو مصدر البيانات بعد المراجعة]",
       m + 6,
       y + 11,
       w - m * 2 - 12,
@@ -865,7 +864,7 @@ export function buildFrameworkPage(page: Page, intent: PromptAnalysis, pageIndex
   });
   y += 12;
 
-  write(page, "مقدمة المحاور", "يرتكز نموذج العمل على ثلاثة محاور رئيسية تتكامل لتحقيق أعلى مستويات الفعالية والجاهزية المؤسسية.", m, y, w - m * 2, 8, {
+  write(page, "مقدمة المحاور", "[أضف مقدمة موثقة للمحاور والبرامج]", m, y, w - m * 2, 8, {
     fontFamily: "Noto Naskh Arabic",
     fontSize: 9,
     fontWeight: 500,
@@ -945,7 +944,7 @@ export function buildClosingEndorsement(page: Page, intent: PromptAnalysis, page
   const m = marginOf(w);
   const p = intent.palette;
 
-  runningHead(page, p, "التوصيات الختامية والاعتماد الرسمي", intent.org);
+  runningHead(page, p, "التوصيات الختامية والتوقيع", intent.org);
 
   let y = 24;
 
@@ -1001,7 +1000,7 @@ export function buildClosingEndorsement(page: Page, intent: PromptAnalysis, page
   // Official Endorsement and Stamp section
   const certH = Math.min(80, h - y - 25);
   put(page, "shape", {
-    name: "إطار الاعتماد الرسمي",
+    name: "إطار التوقيع",
     x: m,
     y,
     w: w - m * 2,
@@ -1009,7 +1008,7 @@ export function buildClosingEndorsement(page: Page, intent: PromptAnalysis, page
     style: { fill: "#fbfcfd", borderColor: p.accent, borderWidth: 0.8, radius: 4 },
   });
 
-  write(page, "عنوان الاعتماد", "اعتماد ومصادقة الوثيقة الرسمية", m + 6, y + 6, w - m * 2 - 12, 8, {
+  write(page, "عنوان الاعتماد", placeholder("عنوان قسم الاعتماد"), m + 6, y + 6, w - m * 2 - 12, 8, {
     fontFamily: "Tajawal",
     fontSize: 13,
     fontWeight: 800,
@@ -1019,7 +1018,7 @@ export function buildClosingEndorsement(page: Page, intent: PromptAnalysis, page
   write(
     page,
     "صيغة الاعتماد",
-    `تمت المراجعة والتدقيق والاعتماد النهائي بموجب الصلاحيات المخولة لـ ${intent.org}. يُعمل بما ورد في هذه الوثيقة من تاريخ اعتمادها.`,
+    "[أضف صيغة الاعتماد بعد التفويض والمراجعة]",
     m + 6,
     y + 16,
     w - m * 2 - 46,
@@ -1035,8 +1034,8 @@ export function buildClosingEndorsement(page: Page, intent: PromptAnalysis, page
 
   // Official Stamp Element
   put(page, "stamp", {
-    name: "ختم الاعتماد",
-    content: "معتمد رسميًا",
+    name: "ختم التوقيع",
+    content: placeholder("نص الختم"),
     x: w - m - 42,
     y: y + 20,
     w: 32,
@@ -1054,7 +1053,7 @@ export function buildClosingEndorsement(page: Page, intent: PromptAnalysis, page
 
   // Two signature lines
   const sigY = y + certH - 24;
-  write(page, "توقيع رئيس اللجنة", "رئيس اللجنة الإشرافية\n____________________", m + 10, sigY, (w - m * 2) / 2 - 20, 14, {
+  write(page, "توقيع رئيس اللجنة", `${placeholder("صفة الموقّع الأول")}\n____________________`, m + 10, sigY, (w - m * 2) / 2 - 20, 14, {
     fontFamily: "Tajawal",
     fontSize: 9,
     fontWeight: 700,
@@ -1063,7 +1062,7 @@ export function buildClosingEndorsement(page: Page, intent: PromptAnalysis, page
     lineHeight: 1.6,
   });
 
-  write(page, "توقيع الأمين العام", "المشرف العام على الإدارة\n____________________", m + (w - m * 2) / 2 + 10, sigY, (w - m * 2) / 2 - 45, 14, {
+  write(page, "توقيع الأمين العام", `${placeholder("صفة الموقّع الثاني")}\n____________________`, m + (w - m * 2) / 2 + 10, sigY, (w - m * 2) / 2 - 45, 14, {
     fontFamily: "Tajawal",
     fontSize: 9,
     fontWeight: 700,
@@ -1175,12 +1174,11 @@ export function buildSlideContent(
     });
     y += 18;
 
-    const agendaItems = [
-      { num: "٠١", title: "مستخلص الأداء والمؤشرات الاستراتيجية", desc: "استعراض النتائج المحققة ومقارنتها بالمستهدفات العامة." },
-      { num: "٠٢", title: "مبادرات ومشاريع التحول ذات الأولوية", desc: "حالة تنفيذ البرامج الحيوية ونسب إنجاز المسارات." },
-      { num: "٠٣", title: "إدارة المخاطر والامتثال التنظيمي", desc: "التوافق مع الضوابط الوطنية وخطة الاستجابة الاستباقية." },
-      { num: "٠٤", title: "القرارات التنفيذية وخطة العمل القادمة", desc: "مصفوفة التوصيات والميزانيات التقديرية المطلوبة." },
-    ];
+    const agendaItems = Array.from({ length: 4 }, (_, index) => ({
+      num: `٠${index + 1}`,
+      title: `[عنوان المحور ${index + 1}]`,
+      desc: `[أضف وصفًا موثقًا للمحور ${index + 1}]`,
+    }));
 
     const cardW = (w - m * 2 - 12) / 4;
     const cardH = h - y - 30;
@@ -1288,7 +1286,7 @@ export function buildSlideContent(
       style: { fill: "#ffffff", borderColor: "#e2e8f0", borderWidth: 0.5, radius: 4 },
     });
 
-    write(page, "نص تحليل الشريحة", "تعكس نتائج الربع الحالي ارتفاعاً قياسياً في الأداء يفوق خط الأساس المعتمد. توصي الإدارة بالتركيز على تسريع إطلاق المبادرات المجدولة في المرحلة القادمة واستمرار تفعيل المراقبة اللحظية لضمان استدامة التميز.", m + 10, y + 10, w - m * 2 - 20, insightH - 20, {
+    write(page, "نص تحليل الشريحة", "[أضف تحليلًا موثقًا للبيانات والقرارات المقترحة]", m + 10, y + 10, w - m * 2 - 20, insightH - 20, {
       fontFamily: "Noto Naskh Arabic",
       fontSize: 11,
       fontWeight: 500,
@@ -1296,7 +1294,7 @@ export function buildSlideContent(
       lineHeight: 1.7,
     });
   } else if (slideType === "pillars") {
-    write(page, "عنوان شريحة الركائز", "المحاور والبرامج التنفيذية المعتمدة", m, y, w - m * 2, 12, {
+    write(page, "عنوان شريحة الركائز", "[عنوان المحاور والبرامج من المصدر]", m, y, w - m * 2, 12, {
       fontFamily: "Tajawal",
       fontSize: 20,
       fontWeight: 800,

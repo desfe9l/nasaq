@@ -25,9 +25,11 @@ import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { exceedsSavedProjectLimit } from "@/lib/editor/access-limits";
 import { buildDraftDocument } from "@/lib/editor/raw-document";
 import {
+  RAW_MAX_CHARS,
   RAW_MAX_SECTIONS,
   analyzeRawContent,
   draftFromRawContent,
+  rawContentRetentionVerdict,
   rawBrief,
 } from "@/lib/intelligence/raw-content";
 import type { ReportDraft, ReportDetail, AiTone } from "@/lib/ai/contract";
@@ -69,11 +71,28 @@ export function RawContentFlow() {
   const [detail, setDetail] = useState<ReportDetail>("standard");
   const [draft, setDraft] = useState<ReportDraft | null>(null);
   const [draftSource, setDraftSource] = useState<"ai" | "local" | null>(null);
+  const [retention, setRetention] = useState<ReturnType<typeof rawContentRetentionVerdict> | null>(null);
   const [busy, setBusy] = useState<"ai" | "local" | "build" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const analysis = useMemo(() => analyzeRawContent(raw), [raw]);
-  const ready = raw.trim().length >= 40;
+  const tooLarge = analysis.chars > RAW_MAX_CHARS;
+  const ready = raw.trim().length >= 40 && !tooLarge;
+
+  const acceptDraft = (next: ReportDraft, source: "ai" | "local") => {
+    const verdict = rawContentRetentionVerdict(raw, next);
+    setRetention(verdict);
+    if (!verdict.ok) {
+      setDraft(null);
+      setDraftSource(null);
+      setError(
+        `لم تثبت المسودة الاحتفاظ بكل المحتوى (${verdict.retainedLines} من ${verdict.sourceLines} سطرًا). لم يُنشأ مستند؛ استخدم الترتيب المحلي أو راجع النص الناقص: ${verdict.missingLines.join(" · ")}`,
+      );
+      return;
+    }
+    setDraft(next);
+    setDraftSource(source);
+  };
 
   const organizeWithAi = async () => {
     if (!ready) return;
@@ -101,9 +120,10 @@ export function RawContentFlow() {
         );
         return;
       }
-      setDraft(result.draft);
-      setDraftSource("ai");
-      toast.success("نُظّم المحتوى كمسودة — راجعها قبل إنشاء المستند");
+      acceptDraft(result.draft, "ai");
+      if (rawContentRetentionVerdict(raw, result.draft).ok) {
+        toast.success("نُظّم المحتوى كمسودة — ثبت الاحتفاظ بالمحتوى قبل إنشاء المستند");
+      }
     } catch (error) {
       setError(
         aiCallErrorMessage(error, "تعذّر الاتصال بخدمة الذكاء الاصطناعي. يمكنك الترتيب المحلي."),
@@ -118,9 +138,11 @@ export function RawContentFlow() {
     setBusy("local");
     setError(null);
     try {
-      setDraft(draftFromRawContent(raw, { title }));
-      setDraftSource("local");
-      toast.info("رُتّب النص كما هو، دون إضافة أي معلومة");
+      const next = draftFromRawContent(raw, { title });
+      acceptDraft(next, "local");
+      if (rawContentRetentionVerdict(raw, next).ok) {
+        toast.info("رُتّب النص كما هو، وثبت الاحتفاظ به قبل الإنشاء");
+      }
     } finally {
       setBusy(null);
     }
@@ -128,6 +150,10 @@ export function RawContentFlow() {
 
   const openInEditor = async () => {
     if (!draft) return;
+    if (!retention?.ok) {
+      setError("لا يمكن إنشاء المستند قبل نجاح تحقق الاحتفاظ الكامل بالمحتوى.");
+      return;
+    }
     setBusy("build");
     setError(null);
     try {
@@ -189,6 +215,7 @@ export function RawContentFlow() {
             setRaw(event.target.value);
             setDraft(null);
             setDraftSource(null);
+            setRetention(null);
           }}
           rows={12}
           dir="rtl"
@@ -202,6 +229,9 @@ export function RawContentFlow() {
           <span className="rounded-full border border-line bg-paper px-2 py-0.5">{analysis.headings.length} عنوانًا</span>
           <span className="rounded-full border border-line bg-paper px-2 py-0.5">{analysis.bullets.length} نقطة</span>
           <span className="rounded-full border border-line bg-paper px-2 py-0.5">{analysis.numbers.length} رقمًا</span>
+          <span className={cn("rounded-full border px-2 py-0.5", tooLarge ? "border-red-200 bg-red-50 text-red-700" : "border-line bg-paper")}>
+            الحد: {RAW_MAX_CHARS.toLocaleString("ar-SA")} حرفًا
+          </span>
           {analysis.tableRows.length > 0 && (
             <span className="rounded-full border border-brand/40 bg-navy/5 px-2 py-0.5 text-brand">
               جدول بمعرّف: {analysis.tableRows.length} صفًا
@@ -287,7 +317,11 @@ export function RawContentFlow() {
         </div>
 
         {!ready && raw.length > 0 && (
-          <p className="mt-2 text-[11px] text-muted">اكتب ٤٠ حرفًا على الأقل ليقيس المحتوى ويُنظّمه.</p>
+          <p className={cn("mt-2 text-[11px]", tooLarge ? "text-red-700" : "text-muted")}>
+            {tooLarge
+              ? `المحتوى أطول من الحد الواضح (${RAW_MAX_CHARS.toLocaleString("ar-SA")} حرفًا). لم يُرسل أو يُقتطع؛ قسّمه إلى مستندات منفصلة أولًا.`
+              : "اكتب ٤٠ حرفًا على الأقل ليقيس المحتوى ويُنظّمه."}
+          </p>
         )}
         {error && (
           <p className="mt-3 rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-6 text-red-700">
@@ -317,6 +351,11 @@ export function RawContentFlow() {
             >
               {draftSource === "ai" ? "مسودة منظمة بالذكاء الاصطناعي" : "ترتيب محلي — النص كما هو"}
             </p>
+            {retention && (
+              <p className="mt-2 text-[10.5px] font-bold text-success">
+                تحقق الاحتفاظ: {retention.retainedLines} من {retention.sourceLines} سطرًا
+              </p>
+            )}
             <h3 className="mt-3 text-[13px] font-extrabold text-ink">{draft.title}</h3>
             <ul className="mt-2 grid gap-1.5">
               {draft.sections.map((section, index) => (
@@ -333,7 +372,7 @@ export function RawContentFlow() {
             </p>
             <button
               type="button"
-              disabled={busy !== null}
+              disabled={busy !== null || !retention?.ok}
               onClick={() => void openInEditor()}
               className="mt-3 inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] bg-navy px-4 text-[13px] font-extrabold text-on-brand transition hover:bg-navy-2 disabled:opacity-50"
             >

@@ -30,6 +30,24 @@ export interface PsdImportResult {
   compositeDataUrl?: string;
 }
 
+/** A conversion with validation errors is not safe to present as editable. */
+export class PsdValidationError extends Error {
+  readonly validation: ValidationResult;
+
+  constructor(validation: ValidationResult) {
+    const errors = validation.issues.filter((issue) => issue.severity === "error");
+    const detail = errors.slice(0, 2).map((issue) => issue.message).join(" · ");
+    super(`تعذر فتح أو حفظ PSD كتصميم قابل للتحرير لأن التحقق فشل.${detail ? ` ${detail}` : ""}`);
+    this.name = "PsdValidationError";
+    this.validation = validation;
+  }
+}
+
+/** Keep diagnostic validation available to the converter, but never bypass it. */
+export function assertEditablePsdValidation(validation: ValidationResult): void {
+  if (!validation.ok) throw new PsdValidationError(validation);
+}
+
 export async function importPsdBytes(
   bytes: Uint8Array | ArrayBuffer,
   fileName: string,
@@ -42,6 +60,7 @@ export async function importPsdBytes(
   const { project, report } = convertPsdDocument(doc, { library });
   onProgress?.("التحقق البصري", 90);
   const validation = validateConversion(doc, project);
+  assertEditablePsdValidation(validation);
   onProgress?.("اكتمل", 100);
   return {
     project,

@@ -7,9 +7,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  RAW_MAX_CHARS,
   RAW_MAX_SECTIONS,
   analyzeRawContent,
   draftFromRawContent,
+  rawContentRetentionVerdict,
   rawBrief,
 } from "./raw-content.ts";
 import { buildDraftDocument } from "../editor/raw-document.ts";
@@ -57,6 +59,10 @@ test("the deterministic draft keeps every line, grouped by the author's headings
   for (const line of ["رقمنة الطلبات", "45 موظفًا", "تثبيت الفريق الحالي", "30 يومًا"]) {
     assert.ok(text.includes(line), `${line} must survive the local draft`);
   }
+  const verdict = rawContentRetentionVerdict(PASTE, draft);
+  assert.equal(verdict.ok, true);
+  assert.equal(verdict.retainedLines, verdict.sourceLines);
+  assert.deepEqual(verdict.missingLines, []);
 });
 
 test("a long paste is not truncated by the section cap", () => {
@@ -82,6 +88,25 @@ test("the provider brief carries the content and the no-invention rule", () => {
   assert.match(brief, /رقمنة الطلبات/);
   // The brief is bounded, whatever the paste's length.
   assert.ok(brief.length <= 7_600 + 400);
+});
+
+test("oversized raw content is rejected rather than silently sliced before drafting", () => {
+  const oversized = "ن".repeat(RAW_MAX_CHARS + 1);
+  assert.throws(() => rawBrief(oversized, "", ""), /يتجاوز الحد/);
+  assert.throws(() => draftFromRawContent(oversized), /يتجاوز الحد/);
+});
+
+test("a draft that omits source content fails the retention verdict", () => {
+  const source = "العنوان\nسطر محفوظ\nسطر غائب";
+  const verdict = rawContentRetentionVerdict(source, {
+    title: "العنوان",
+    summary: "",
+    sections: [{ heading: "القسم", body: "سطر محفوظ", bullets: [] }],
+    nextSteps: [],
+  });
+  assert.equal(verdict.ok, false);
+  assert.equal(verdict.retainedLines, 2);
+  assert.deepEqual(verdict.missingLines, ["سطر غائب"]);
 });
 
 test("the draft becomes a real NASAQ project through the existing builders", () => {
