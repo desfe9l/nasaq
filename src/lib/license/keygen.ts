@@ -404,8 +404,29 @@ export async function ensureKeygenUser(session: { userId: string; userEmail: str
   if (user?.type !== "users" || !user.id || stringAttribute(user, "email")?.toLowerCase() !== email) {
     throw new KeygenRequestError("Keygen user identity mismatch", 502);
   }
-  if (nasaqId != null && nasaqId !== session.userId) throw new KeygenOwnershipError();
+  /*
+   * The provider user is keyed by ADDRESS and remembers the NASAQ account it
+   * was created from. When the first-party auth migration minted a new id for
+   * the same person, that remembered id is the orphaned one and this check
+   * refused the owner their own Keygen identity. The durable owner binding is
+   * the proof that the remembered id IS this caller's — no other account can
+   * present it, and the address still has to match exactly.
+   */
+  if (nasaqId != null && nasaqId !== session.userId && !(await isProvenLegacyOwnerId(session.userId, String(nasaqId)))) {
+    throw new KeygenOwnershipError();
+  }
   return user.id;
+}
+
+/** Does the durable owner binding prove `candidateId` is this caller's own orphaned id? */
+async function isProvenLegacyOwnerId(userId: string, candidateId: string): Promise<boolean> {
+  try {
+    const { getSql } = await import("@/lib/db");
+    const { provenLegacyUserIds } = await import("@/lib/auth/owner-binding.server");
+    return (await provenLegacyUserIds(await getSql(), userId)).includes(candidateId);
+  } catch {
+    return false;
+  }
 }
 
 /** Attach a single user (least privilege), not a license-owner transfer. */

@@ -38,6 +38,28 @@ export const getPlans = createServerFn({ method: "GET" }).handler(
   },
 );
 
+/**
+ * Move the owner's own commercial records onto the account they sign in with,
+ * before any state is read for them.
+ *
+ * The durable owner binding is the authority (`owner-binding.server.ts`); this
+ * delegates to the reconciliation module, which refuses every caller the
+ * binding does not name and refuses while the identity store cannot answer.
+ * Best-effort by construction: a failure must never break the page.
+ */
+async function reconcileOwnerRecordsQuietly(
+  sql: Awaited<ReturnType<typeof getSql>>,
+  context: { userId: string; userEmail: string | null },
+): Promise<void> {
+  try {
+    if (!context.userEmail) return;
+    const { reconcileQuietly } = await import("@/lib/auth/owner-binding.server");
+    await reconcileQuietly(sql, context.userId, context.userEmail);
+  } catch {
+    /* the account view below is still correct; the next pass heals the records */
+  }
+}
+
 /** The caller's own account summary. Authoritative server-side status. */
 export const getMyAccount = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
@@ -45,7 +67,12 @@ export const getMyAccount = createServerFn({ method: "GET" })
     const sql = await getSql();
     // `getAccount`, not the gate: a FREE customer must be able to see their own
     // status and buy a plan. The gate exists for PAID functionality only.
-    return getAccount(sql, context.userId);
+    await reconcileOwnerRecordsQuietly(sql, context);
+    return getAccount(sql, context.userId, new Date(), {
+      id: context.userId,
+      email: context.userEmail,
+      emailVerified: context.userEmailVerified,
+    });
   });
 
 /** The caller's own payment requests. Scoped by user id in SQL. */
@@ -83,7 +110,15 @@ export const getMyAccountPage = createServerFn({ method: "GET" })
       // stays the licensing authority; failures never break the page).
       const { claimGumroadSubscriptionsForUser } = await import("@/lib/gumroad/claim.server");
       await claimGumroadSubscriptionsForUser(sql, { userId: context.userId, userEmail: context.userEmail }).catch(() => undefined);
-      const account = await getAccount(sql, context.userId);
+      // The owner's licences/subscriptions must be on THIS account before the
+      // view describes it — otherwise the page says «Free» while the console
+      // says owner, which is exactly the mismatch being repaired.
+      await reconcileOwnerRecordsQuietly(sql, context);
+      const account = await getAccount(sql, context.userId, new Date(), {
+        id: context.userId,
+        email: context.userEmail,
+        emailVerified: context.userEmailVerified,
+      });
       const [requests, instructions, enabledPlans, hasPending] =
         await Promise.all([
           listOwnPaymentRequests(sql, context.userId),

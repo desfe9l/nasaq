@@ -52,6 +52,24 @@ function recallOwner(): string | null {
   try { return localStorage.getItem(LAST_OWNER_KEY); } catch { return null; }
 }
 
+/**
+ * Drop the entitlement cached under an account id we no longer sign in as.
+ *
+ * After the first-party auth migration minted a new account id, the cache
+ * entry under the OLD id still describes the same person — but it can never be
+ * refreshed for that id again, so honouring it later (offline, or a remembered
+ * owner) would show a stale, usually FREE, licence state. Best-effort: the
+ * cache is a convenience, never a source of truth.
+ */
+async function dropStaleOwnerCache(previousOwner: string): Promise<void> {
+  try {
+    const { clearEntitlementCache } = await import("@/lib/offline/entitlement-cache");
+    await clearEntitlementCache(previousOwner);
+  } catch {
+    /* an unavailable cache store leaves nothing to clean up */
+  }
+}
+
 async function resolveOwnerId(): Promise<string | null> {
   if (!authEnabled) return DEV_USER.id;
   // Never probe a session during SSR — the client library is browser-only.
@@ -64,7 +82,10 @@ async function resolveOwnerId(): Promise<string | null> {
   try {
     const { data } = await withDeadline(getSession(), SESSION_BUDGET_MS);
     const id = data?.user?.id ?? null;
-    if (id) rememberOwner(id);
+    if (id) {
+      if (remembered && remembered !== id) void dropStaleOwnerCache(remembered);
+      rememberOwner(id);
+    }
     return id;
   } catch {
     if (remembered) {
@@ -74,6 +95,7 @@ async function resolveOwnerId(): Promise<string | null> {
         .then(({ data }) => {
           const id = data?.user?.id ?? null;
           if (!id || id === remembered) return;
+          void dropStaleOwnerCache(remembered);
           rememberOwner(id);
           setStorageOwner(id);
           window.dispatchEvent(new CustomEvent("nasaq:owner-changed"));

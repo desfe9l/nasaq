@@ -139,6 +139,12 @@ export type AdminAction =
    * with after the first-party auth migration changed their account id.
    */
   | "owner.recovered"
+  /**
+   * The owner's own commercial records (licence, subscription, claims, data)
+   * were reconciled from an orphaned pre-migration id onto the account the
+   * owner signs in with. Written only behind the durable owner binding.
+   */
+  | "owner.reconciled"
   /** A client request's status, priority, assignee or written answer changed. */
   | "client_request.updated";
 

@@ -19,7 +19,7 @@
  * server, and so callers control the transaction.
  */
 import type { Sql } from "../db.ts";
-import { isAdminUser } from "../auth/admin-identity.server.ts";
+import { isAdminCaller, isAdminUser } from "../auth/admin-identity.server.ts";
 import type {
   AccountStatus,
   CustomerAccount,
@@ -111,6 +111,26 @@ export async function getSubscription(
 }
 
 /**
+ * THE administrator answer for a customer account view.
+ *
+ * With a verified session identity the decision is `isAdminCaller` — the exact
+ * function `getAuthorizationContext` uses, so the two can never disagree.
+ * Without one (an internal id-only caller) the id-only reader is used.
+ */
+async function isAdminFor(
+  sql: Sql,
+  userId: string,
+  identity?: { id: string; email?: string | null; emailVerified?: boolean },
+): Promise<boolean> {
+  if (!identity || identity.id !== userId) return isAdminUser(sql, userId);
+  return isAdminCaller(sql, {
+    id: identity.id,
+    email: identity.email ?? null,
+    emailVerified: identity.emailVerified === true,
+  });
+}
+
+/**
  * The customer's own account view — status plus display fields.
  *
  * Returns FREE with mostly-null fields for a brand-new account, which is what
@@ -120,8 +140,20 @@ export async function getAccount(
   sql: Sql,
   userId: string,
   now: Date = new Date(),
+  /**
+   * The VERIFIED session identity, when the caller has one.
+   *
+   * The administrator decision must be the same one every other gate makes
+   * (`getAuthorizationContext` → `isAdminCaller`), or the account page and the
+   * editor disagree about the same person: an owner recognised from their
+   * verified session (allow-listed address, `admin_users` row, or the durable
+   * owner binding from the first-party auth migration) was shown «Free» by
+   * this view while the editor granted full access. Callers that only hold an
+   * id (internal tooling) keep the id-only decision.
+   */
+  identity?: { id: string; email?: string | null; emailVerified?: boolean },
 ): Promise<CustomerAccount> {
-  const isAdmin = await isAdminUser(sql, userId);
+  const isAdmin = await isAdminFor(sql, userId, identity);
   const subscription = await getSubscription(sql, userId);
   if (!subscription) {
     return {
@@ -189,8 +221,9 @@ export async function requireActiveEntitlement(
   sql: Sql,
   userId: string,
   now: Date = new Date(),
+  identity?: { id: string; email?: string | null; emailVerified?: boolean },
 ): Promise<CustomerAccount> {
-  const account = await getAccount(sql, userId, now);
+  const account = await getAccount(sql, userId, now, identity);
   if (account.isAdmin) return account;
   if (account.status !== "ACTIVE") {
     throw new EntitlementRequiredError(account.status);

@@ -8,6 +8,7 @@
 
 import { getSql } from "@/lib/db";
 import { generateLicenseKey, hashLicenseKey, keyPrefix } from "./key";
+import { keygenScopeSql } from "./scope";
 import type {
   AdminLicenseCreate,
   AdminLicenseList,
@@ -208,10 +209,7 @@ export async function findLicensesByUserId(userId: string): Promise<License[]> {
   // usable by an account other than the one verified with the provider.
   const rows = await sql.query(
     `SELECT * FROM licenses WHERE user_id = $1
-       AND (metadata->>'source' IS DISTINCT FROM 'keygen' OR (
-         (metadata->>'nasaqUserId' IS NULL OR metadata->>'nasaqUserId' = $1)
-         AND (metadata->>'userScopeVerified' IS NULL OR metadata->>'userScopeVerified' = $1)
-       ))
+       AND (metadata->>'source' IS DISTINCT FROM 'keygen' OR ${keygenScopeSql("metadata")})
      ORDER BY created_at DESC`,
     [userId],
   );
