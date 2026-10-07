@@ -54,7 +54,8 @@
     "migrate:owner": "node --experimental-strip-types --import ./scripts/app-alias-register.mjs scripts/owner-migration-run.mjs",
     "verify:provider": "node --experimental-strip-types --import ./scripts/app-alias-register.mjs scripts/owner-license-provider-verify.mjs",
     "verify:owner-live": "node --experimental-strip-types --import ./scripts/app-alias-register.mjs scripts/owner-live-verify.mjs",
-    "probe:admin-mutations": "node --experimental-strip-types --import ./scripts/app-alias-register.mjs scripts/owner-admin-mutation-probe.mjs"
+    "probe:admin-mutations": "node --experimental-strip-types --import ./scripts/app-alias-register.mjs scripts/owner-admin-mutation-probe.mjs",
+    "verify:workflows": "node scripts/workflow-yaml-check.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
