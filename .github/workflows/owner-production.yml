@@ -108,17 +108,16 @@ jobs:
         run: |
           {
           fail=0
-          report() {
-            if [ -n "${!2:-}" ]; then echo "present : $1 (via $2)"; else echo "ABSENT  : $1"; fail=1; fi
-          }
-          var_or() { for name in "$@"; do if [ -n "${!name:-}" ]; then echo "$name"; return; fi; done; }
-          report "database (DATABASE_URL family)" "$(var_or DATABASE_URL NEON_DATABASE_URL POSTGRES_URL)"
-          for trio in "R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY" "STORAGE_ACCOUNT_ID STORAGE_ACCESS_KEY_ID STORAGE_SECRET_ACCESS_KEY" "AWS_ACCOUNT_ID AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY"; do
-            set -- $trio
-            if [ -n "${!1:-}" ] && [ -n "${!2:-}" ] && [ -n "${!3:-}" ]; then echo "present : object storage trio ($1 family)"; found=1; break; fi
+          present_var() { local n="$1"; [ -n "$n" ] && [ -n "${!n:-}" ]; }
+          first_present() { for n in "$@"; do if present_var "$n"; then echo "$n"; return 0; fi; done; return 1; }
+          db="$(first_present DATABASE_URL NEON_DATABASE_URL POSTGRES_URL || true)"
+          if [ -n "$db" ]; then echo "present : database url (via $db)"; else echo "ABSENT  : database url (DATABASE_URL family)"; fail=1; fi
+          found=""
+          for p in R2 STORAGE AWS; do
+            if present_var "${p}_ACCOUNT_ID" && present_var "${p}_ACCESS_KEY_ID" && present_var "${p}_SECRET_ACCESS_KEY"; then found="$p"; break; fi
           done
-          if [ -z "${found:-}" ]; then echo "ABSENT  : object storage trio (R2_/STORAGE_/AWS_ account+access+secret)"; fail=1; fi
-          if [ -z "${KEYGEN_API_TOKEN:-}" ]; then echo "ABSENT  : KEYGEN_API_TOKEN — provider verification will fail closed"; fail=1; else echo "present : KEYGEN_API_TOKEN"; fi
+          if [ -n "$found" ]; then echo "present : object storage trio (${found}_ family)"; else echo "ABSENT  : object storage trio (R2_/STORAGE_/AWS_ account+access+secret)"; fail=1; fi
+          if present_var KEYGEN_API_TOKEN; then echo "present : KEYGEN_API_TOKEN"; else echo "ABSENT  : KEYGEN_API_TOKEN"; fail=1; fi
           if [ "$fail" -ne 0 ]; then echo "::error::a required capability is not configured for this run (see ABSENT lines; names only)"; exit 2; fi
           echo "sanity: all required capabilities present (verified by name only)"
           } 2>&1 | tee -a /tmp/owner-production-report.txt
