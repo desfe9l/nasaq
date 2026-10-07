@@ -1,0 +1,76 @@
+name: Verify
+
+# The gate that would have caught the two production outages this suite exists
+# for:
+#
+#   · a module-load failure in the auth graph (the app must boot with NO
+#     configured storage — that contract is pinned by
+#     `src/lib/auth/deploy-runtime.test.ts`);
+#   · the build itself (`check:deploy` + `vite build` + the deployment-time
+#     migration runner, which must not fail the build when the database is
+#     unreachable).
+#
+# Deliberately hermetic: no secrets, no database, no object storage. Every step
+# below passes on a bare checkout, which is exactly the situation a new
+# deployment starts from.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint (errors fail, warnings are reported)
+        run: npm run lint
+      - name: Unit tests — auth contract
+        run: npm run test:auth
+      - name: Unit tests — scripts (deploy/migration policy)
+        run: npm run test:scripts
+      - name: Unit tests — application
+        run: npm run test:src
+
+      - name: Auth environment invariants
+        run: npm run check:auth
+      - name: Environment audit (no undocumented variable, no VITE_ secret)
+        run: npm run env:audit
+
+      - name: Build (deploy check + Vercel output + migration runner)
+        run: npm run build
+
+      # Real HTTP against a real server, with the file-backed store — the same
+      # flow a visitor performs: create an account, keep the session across a
+      # reload, refuse a duplicate, refuse a wrong password, refuse a foreign
+      # origin, sign in, reach a protected route, sign out.
+      - name: Auth end-to-end (dev server)
+        run: |
+          npm run dev > /tmp/dev.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8080/api/auth/ok > /dev/null; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8080/api/auth/ok
+          npm run test:auth:e2e
+      - name: Dev server log (on failure)
+        if: failure()
+        run: tail -100 /tmp/dev.log || true
