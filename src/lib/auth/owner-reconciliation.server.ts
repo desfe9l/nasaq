@@ -82,7 +82,7 @@ export type ReconciliationResult = {
  * Names are module constants, never input: the SQL text that names a table is
  * chosen here, and the owner ids are always parameters.
  */
-const OWNED_TABLES: ReadonlyArray<{ table: ReconcileTable; keyed: boolean }> = [
+export const OWNED_TABLES: ReadonlyArray<{ table: ReconcileTable; keyed: boolean }> = [
   { table: "licenses", keyed: false },
   { table: "license_claims", keyed: false },
   { table: "subscriptions", keyed: false },

@@ -56,13 +56,51 @@ export async function resolveOwnedProjectSlot(
 export type OwnedAsset = { id: string; objectKey: string };
 
 /**
+ * Accept a key under one of the caller's PROVEN pre-migration prefixes.
+ *
+ * The owner reconciliation moves `storage_assets` rows onto the canonical
+ * account, but the object bytes stay where they were uploaded — under the
+ * orphaned id's prefix, because object storage has no rename the database can
+ * perform transactionally. Without this accommodation the prefix assertion in
+ * `findOwnedAsset` reads the owner's own migrated library as a trespass and
+ * answers `not_found`: the row moved, the file relationship broke. That is
+ * exactly the split authority the reconciliation exists to end.
+ *
+ * The acceptance list comes ONLY from the durable owner binding
+ * (`provenLegacyUserIds`): server-held state, resolved fresh, empty for every
+ * non-owner. Nothing the client sends can name a prefix; the prefixes accepted
+ * here are the same orphaned ids the binding already proved belong to this
+ * caller — and an orphaned id can never sign in again, so its prefix can never
+ * receive a new object that would collide. Runs ONLY when the caller's own
+ * prefix already refused the key, so no other tenant's object ever reaches it.
+ */
+async function keyOwnedViaOwnerRebound(
+  sql: Sql,
+  objectKey: string,
+  userId: string,
+): Promise<boolean> {
+  try {
+    const { provenLegacyUserIds } = await import("@/lib/auth/owner-binding.server.ts");
+    const orphans = await provenLegacyUserIds(sql, userId);
+    for (const orphan of orphans) {
+      if (isKeyOwnedBy(objectKey, orphan)) return true;
+    }
+    return false;
+  } catch {
+    // A binding/orphan lookup failure must not widen access — fail closed.
+    return false;
+  }
+}
+
+/**
  * Load one asset the caller actually owns.
  *
  * The lookup is `id AND user_id` — an attacker who guesses or enumerates
  * another account's asset id gets the same `not_found` as for an id that does
  * not exist, so the response leaks nothing about other tenants' data. The
  * prefix assertion afterwards refuses any row whose key escaped the caller's
- * own namespace.
+ * own namespace — with the single, server-proven exception of a prefix the
+ * owner binding reconciled onto this caller (see `keyOwnedViaOwnerRebound`).
  */
 export async function findOwnedAsset(
   sql: Sql,
@@ -76,6 +114,10 @@ export async function findOwnedAsset(
   `;
   const row = rows[0];
   if (!row) return { ok: false, reason: "not_found" };
-  if (!isKeyOwnedBy(row.object_key, userId)) return { ok: false, reason: "not_found" };
+  if (!isKeyOwnedBy(row.object_key, userId)) {
+    if (!(await keyOwnedViaOwnerRebound(sql, row.object_key, userId))) {
+      return { ok: false, reason: "not_found" };
+    }
+  }
   return { ok: true, asset: { id: row.id, objectKey: row.object_key } };
 }
