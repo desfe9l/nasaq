@@ -19,10 +19,6 @@ name: Owner production migration + live verification
 # id, address, licence key, key hash or secret. Secrets arrive as environment
 # variables and are masked by Actions in any output.
 
-permissions:
-  contents: read
-  issues: write
-
 on:
   workflow_dispatch:
     inputs:
