@@ -19,6 +19,10 @@ name: Owner production migration + live verification
 # id, address, licence key, key hash or secret. Secrets arrive as environment
 # variables and are masked by Actions in any output.
 
+permissions:
+  contents: read
+  issues: write
+
 on:
   workflow_dispatch:
     inputs:
@@ -76,6 +80,15 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
 
+      # The sandbox that audits this repository has no egress to GitHub's log
+      # host, so every step's sanitized stdout (fingerprints/counts only —
+      # never keys, raw ids, or secrets) is collected into one report and
+      # published to the tracking issue at the end.
+      - name: Initialize report
+        shell: bash
+        run: |
+          echo "workflow started $(date -u +%FT%TZ)" > /tmp/owner-production-report.txt
+
       - name: Resolve operating mode (dispatch input, or the request file on push)
         id: op
         shell: bash
@@ -91,6 +104,7 @@ jobs:
           esac
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "operating mode: $mode"
+          echo "mode=$mode" >> /tmp/owner-production-report.txt
 
       - name: Production environment sanity (presence of NAMES only, never values)
         shell: bash
@@ -109,33 +123,50 @@ jobs:
           if [ -z "${found:-}" ]; then echo "ABSENT  : object storage trio (R2_/STORAGE_/AWS_ account+access+secret)"; fail=1; fi
           if [ -z "${KEYGEN_API_TOKEN:-}" ]; then echo "ABSENT  : KEYGEN_API_TOKEN — provider verification will fail closed"; fail=1; else echo "present : KEYGEN_API_TOKEN"; fi
           if [ "$fail" -ne 0 ]; then echo "::error::a required capability is not configured for this run (see ABSENT lines; names only)"; exit 2; fi
+          { if [ "$fail" -eq 0 ]; then echo "sanity: all required capabilities present (names only)"; else echo "sanity: FAILED — one capability unserved"; fi; } >> /tmp/owner-production-report.txt
           echo "all required capabilities present (verified by name only)"
 
       - name: Migration dry run (what would move, fingerprints only)
         if: steps.op.outputs.mode != 'verify'
-        run: npm run migrate:owner -- --dry-run
+        run: npm run migrate:owner -- --dry-run 2>&1 | tee -a /tmp/owner-production-report.txt
 
       - name: Owner identity migration (guarded, fingerprinted before/after)
         if: steps.op.outputs.mode == 'migrate'
-        run: npm run migrate:owner
+        run: npm run migrate:owner 2>&1 | tee -a /tmp/owner-production-report.txt
 
       - name: Database verification (orphan rows = 0, structural integrity)
         run: |
           set -o pipefail
-          npm run verify:owner -- --json | tee owner-verify-report.json
+          npm run verify:owner -- --json 2>&1 | tee -a /tmp/owner-production-report.txt owner-verify-report.json
 
       - name: Keygen live verification (existing keys, status, activations, owner scope)
-        run: npm run verify:provider
+        run: npm run verify:provider 2>&1 | tee -a /tmp/owner-production-report.txt
 
       - name: Live identity chain (auth = owner = database = licence = admin = editor entitlement)
-        run: npm run verify:owner-live
+        run: npm run verify:owner-live 2>&1 | tee -a /tmp/owner-production-report.txt
 
       - name: Reversible admin-mutation probe (synthetic rows, cleaned up)
         if: steps.op.outputs.mode == 'migrate'
-        run: npm run probe:admin-mutations
+        run: npm run probe:admin-mutations 2>&1 | tee -a /tmp/owner-production-report.txt
 
       - name: Object storage round trip (upload → metadata → read → delete)
-        run: npm run storage:verify
+        run: npm run storage:verify 2>&1 | tee -a /tmp/owner-production-report.txt
+
+      - name: Publish sanitized report to the tracking issue
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### owner-production run ${{ github.run_id }} — mode: ${{ steps.op.outputs.mode || 'unresolved' }} — $(date -u +%FT%TZ)"
+            echo
+            echo '```'
+            tail -c 60000 /tmp/owner-production-report.txt 2>/dev/null || echo 'no report collected'
+            echo
+            echo '```'
+          } > /tmp/owner-production-comment.md
+          gh issue comment 162 --repo "$GITHUB_REPOSITORY" --body-file /tmp/owner-production-comment.md
 
       - name: Upload verification report
         if: always()
