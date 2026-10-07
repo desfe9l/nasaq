@@ -106,13 +106,13 @@ jobs:
       - name: Production environment sanity (presence of NAMES only, never values)
         shell: bash
         run: |
+          {
           fail=0
           report() {
             if [ -n "${!2:-}" ]; then echo "present : $1 (via $2)"; else echo "ABSENT  : $1"; fail=1; fi
           }
           var_or() { for name in "$@"; do if [ -n "${!name:-}" ]; then echo "$name"; return; fi; done; }
           report "database (DATABASE_URL family)" "$(var_or DATABASE_URL NEON_DATABASE_URL POSTGRES_URL)"
-          if [ -z "${!$(var_or DATABASE_URL NEON_DATABASE_URL POSTGRES_URL):-}" ]; then fail=1; fi
           for trio in "R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY" "STORAGE_ACCOUNT_ID STORAGE_ACCESS_KEY_ID STORAGE_SECRET_ACCESS_KEY" "AWS_ACCOUNT_ID AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY"; do
             set -- $trio
             if [ -n "${!1:-}" ] && [ -n "${!2:-}" ] && [ -n "${!3:-}" ]; then echo "present : object storage trio ($1 family)"; found=1; break; fi
@@ -120,8 +120,8 @@ jobs:
           if [ -z "${found:-}" ]; then echo "ABSENT  : object storage trio (R2_/STORAGE_/AWS_ account+access+secret)"; fail=1; fi
           if [ -z "${KEYGEN_API_TOKEN:-}" ]; then echo "ABSENT  : KEYGEN_API_TOKEN — provider verification will fail closed"; fail=1; else echo "present : KEYGEN_API_TOKEN"; fi
           if [ "$fail" -ne 0 ]; then echo "::error::a required capability is not configured for this run (see ABSENT lines; names only)"; exit 2; fi
-          { if [ "$fail" -eq 0 ]; then echo "sanity: all required capabilities present (names only)"; else echo "sanity: FAILED — one capability unserved"; fi; } >> /tmp/owner-production-report.txt
-          echo "all required capabilities present (verified by name only)"
+          echo "sanity: all required capabilities present (verified by name only)"
+          } 2>&1 | tee -a /tmp/owner-production-report.txt
 
       - name: Migration dry run (what would move, fingerprints only)
         if: steps.op.outputs.mode != 'verify'
