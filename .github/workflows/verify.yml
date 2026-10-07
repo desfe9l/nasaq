@@ -52,8 +52,8 @@ jobs:
         run: npm run test:auth
       - name: Unit tests — scripts (deploy/migration policy)
         run: npm run test:scripts
-      - name: Unit tests — application
-        run: npm run test:src
+      - name: Unit tests — application, editor tools and product templates
+        run: npm test
       - name: Environment audit (no undocumented variable, no VITE_ secret)
         run: npm run env:audit
 
@@ -82,3 +82,37 @@ jobs:
       - name: Dev server log (on failure)
         if: failure()
         run: tail -100 /tmp/dev.log || true
+
+  # The browser flows drive the real UI against a real dev server with the auth
+  # endpoints MOCKED, so they cover the client half of sign-in (session boot,
+  # sign-out, the NSQ account gate) without needing an identity store, a
+  # provider or a secret. Separate job because a browser download is the one
+  # part of this pipeline that can fail for reasons unrelated to the code.
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - name: Start dev server
+        run: |
+          setsid nohup npm run dev > /tmp/dev-browser.log 2>&1 &
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8080/api/auth/ok > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          echo "::error::the dev server never answered /api/auth/ok"
+          tail -50 /tmp/dev-browser.log
+          exit 1
+      - name: Account gate + sign-out flows (auth endpoints mocked)
+        run: |
+          npm run test:nsq:browser
+          npm run test:leave:browser
+      - name: Dev server log (on failure)
+        if: failure()
+        run: tail -100 /tmp/dev-browser.log || true
