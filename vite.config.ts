@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { readdirSync } from "node:fs";
-import { join } from "node:path";
+import { copyFile, mkdir } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
@@ -46,6 +48,7 @@ function computeBuildId(): string {
 }
 
 const APP_BUILD_ID = computeBuildId();
+const require = createRequire(import.meta.url);
 
 function appBuildIdPlugin(): Plugin {
   return {
@@ -91,6 +94,45 @@ function pgliteBootstrapPlugin(): Plugin {
         console.error("[app-builder] DB bootstrap failed:", err);
         throw err;
       }
+    },
+  };
+}
+
+/**
+ * PGLite's JS entry uses `new URL("./pglite.{data,wasm}", import.meta.url)`
+ * (and does the same for `initdb.wasm`). Nitro bundles its JS into
+ * `__server.func/_libs`, but these files are not JS imports and are therefore
+ * not traced into the Vercel function automatically. Keep them next to the
+ * bundle, exactly where PGLite resolves them in `vite preview`.
+ *
+ * This is intentionally build-only. `db.ts` still fails closed for an actual
+ * Vercel function without DATABASE_URL; only local Vercel-output preview uses
+ * PGLite and its writable filesystem.
+ */
+function pgliteVercelRuntimeAssetsPlugin(): Plugin {
+  let root = "";
+  return {
+    name: "nasaq:pglite-vercel-runtime-assets",
+    apply: "build",
+    configResolved(config) {
+      root = config.root;
+    },
+    async closeBundle() {
+      const pgliteDist = dirname(require.resolve("@electric-sql/pglite"));
+      const functionLibs = join(
+        root,
+        ".vercel",
+        "output",
+        "functions",
+        "__server.func",
+        "_libs",
+      );
+      await mkdir(functionLibs, { recursive: true });
+      await Promise.all(
+        ["pglite.data", "pglite.wasm", "initdb.wasm"].map((file) =>
+          copyFile(join(pgliteDist, file), join(functionLibs, file)),
+        ),
+      );
     },
   };
 }
@@ -206,6 +248,9 @@ export default defineConfig(({ command, isPreview }) => ({
   resolve: { tsconfigPaths: true },
   plugins: [
     pgliteBootstrapPlugin(),
+    // Nitro writes the Vercel function before Vite's closeBundle phase, so
+    // PGLite's non-JS assets can be placed beside its bundled JS module here.
+    pgliteVercelRuntimeAssetsPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
     // Build identity read by the update guard and /api/app-version.
