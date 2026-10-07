@@ -22,13 +22,17 @@ import assert from "node:assert/strict";
 import type { Sql } from "@/lib/db";
 import { createTestSql } from "../commercial/test-db.ts";
 import {
+  OWNER_OPS_CLAIM_KEY,
   OWNER_OPS_COMPLETED_KEY,
   OWNER_OPS_CONFIRMATIONS,
   OWNER_OPS_MUTATING_STAGES,
   OWNER_OPS_REPORT_PREFIX,
   OWNER_OPS_STAGES,
+  claimOwnerOpsRun,
+  countOwnerOpsRuns,
   isOwnerOpsMutatingStage,
   isOwnerOpsStage,
+  releaseOwnerOpsRun,
   ownerOpsRuntimeVerdict,
   ownerOpsStagePolicy,
   readOwnerOpsLedger,
@@ -198,6 +202,76 @@ describe("owner ops — the stage cores refuse before they write", () => {
     const result = outcome.result as { ok: boolean; reason?: string; error?: string };
     assert.equal(result.ok, false);
     assert.ok(["no_binding", "store_unavailable"].includes(result.reason ?? ""));
+  });
+});
+
+describe("owner ops — single-flight claim and the durable budget", () => {
+  let sql: Sql;
+  let close: () => Promise<void>;
+
+  before(async () => {
+    const created = await createTestSql();
+    sql = created.sql;
+    close = created.close;
+  });
+
+  after(async () => {
+    await close();
+  });
+
+  it("only one mutating run may hold the claim, and a stale claim is taken over", async () => {
+    const first = await claimOwnerOpsRun(sql, { stage: "migrate", by: "fp-test" });
+    assert.ok(first, "the first claim is granted");
+
+    // A second, simultaneous run must be refused while the claim is live —
+    // this is what the in-memory limiter cannot see across instances.
+    assert.equal(await claimOwnerOpsRun(sql, { stage: "migrate", by: "fp-test" }), null);
+
+    // A killed instance must not brick the operation: past the TTL the claim
+    // is taken over rather than honoured forever.
+    await sql`
+      update site_settings
+         set updated_at = now() - interval '10 minutes'
+       where key = ${OWNER_OPS_CLAIM_KEY}
+    `;
+    const takenOver = await claimOwnerOpsRun(sql, { stage: "migrate", by: "fp-test" });
+    assert.ok(takenOver, "a stale claim is taken over");
+
+    // Releasing with a foreign token must not remove someone else's claim.
+    await releaseOwnerOpsRun(sql, "not-the-token");
+    assert.equal(
+      await claimOwnerOpsRun(sql, { stage: "migrate", by: "fp-test" }),
+      null,
+      "a foreign release does not free the claim",
+    );
+
+    // Releasing with our own token does.
+    await releaseOwnerOpsRun(sql, takenOver.token);
+    assert.ok(await claimOwnerOpsRun(sql, { stage: "migrate", by: "fp-test" }));
+  });
+
+  it("counts recent runs from the audit trail, not from memory", async () => {
+    const adminUserId = "audit-count-test";
+    assert.equal(await countOwnerOpsRuns(sql, adminUserId), 0);
+
+    for (const outcome of ["started", "completed", "refused"]) {
+      await sql`
+        insert into admin_audit_log (id, admin_user_id, action, target_type, target_id, detail)
+        values (${`ops-${outcome}`}, ${adminUserId}, 'owner.ops_run', 'owner_recovery', ${adminUserId},
+                ${JSON.stringify({ outcome, stage: "plan" })}::jsonb)
+      `;
+    }
+    assert.equal(await countOwnerOpsRuns(sql, adminUserId), 3);
+
+    // Rows outside the window do not count.
+    await sql`
+      update admin_audit_log set created_at = now() - interval '10 minutes'
+       where admin_user_id = ${adminUserId}
+    `;
+    assert.equal(await countOwnerOpsRuns(sql, adminUserId), 0);
+
+    // Another session's runs never count against this one.
+    assert.equal(await countOwnerOpsRuns(sql, "someone-else"), 0);
   });
 });
 

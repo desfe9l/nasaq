@@ -41,7 +41,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import {
+  OWNER_OPS_RUNS_PER_MINUTE,
+  claimOwnerOpsRun,
+  countOwnerOpsRuns,
+  isOwnerOpsMutatingStage,
   isOwnerOpsStage,
+  releaseOwnerOpsRun,
   ownerOpsRuntimeVerdict,
   ownerOpsStagePolicy,
   readOwnerOpsLedger,
@@ -76,6 +81,12 @@ function sameSiteVerdict(request: Request): { ok: true } | { ok: false; error: s
     }
   }
   return { ok: false, error: "Cross-site request refused." };
+}
+
+/** The claim records a fingerprint, never the raw account id. */
+async function callerFingerprint(userId: string): Promise<string> {
+  const { fingerprint } = await import("@/lib/auth/owner-migration-verify.server");
+  return fingerprint(userId);
 }
 
 type Guarded =
@@ -116,10 +127,19 @@ async function guard(request: Request, options: { requireBoundOwner: boolean }):
     };
   }
 
-  // The session is the application's own; nothing in the request can stand in
-  // for it. `resolveRequestSession` never throws for a missing store.
-  const session = await resolveRequestSession(request.headers, { emitCookies: false });
-  const user = session?.user;
+  /*
+   * The session is the application's own; nothing in the request can stand in
+   * for it. A store that cannot answer — or a hostile/corrupt token that makes
+   * it throw — is treated as "nobody is signed in": this endpoint answers 401,
+   * never a 500 that would leak an internal error shape.
+   */
+  let user: { id: string; email?: string | null; emailVerified?: boolean } | null = null;
+  try {
+    const session = await resolveRequestSession(request.headers, { emitCookies: false });
+    user = session?.user ?? null;
+  } catch {
+    user = null;
+  }
   if (!user?.id) {
     return { ok: false, response: json({ ok: false, reason: "unauthenticated", error: "Sign in as the owner first." }, 401) };
   }
@@ -235,7 +255,9 @@ export const Route = createFileRoute("/api/ops/owner-recovery")({
         if (!isOwnerOpsStage(stage)) {
           return json({ ok: false, reason: "unknown_stage", error: "Unknown stage." }, 400);
         }
-        const guarded = await guard(request, { requireBoundOwner: stage === "migrate" });
+        const guarded = await guard(request, {
+          requireBoundOwner: isOwnerOpsMutatingStage(stage),
+        });
         if (!guarded.ok) return guarded.response;
 
         const [{ getSql }, { audit }] = await Promise.all([
@@ -259,18 +281,63 @@ export const Route = createFileRoute("/api/ops/owner-recovery")({
           return json({ ok: false, reason: policy.reason, error: policy.error }, policy.status);
         }
 
-        const outcome = await runOwnerOpsStage(sql, stage as OwnerOpsStage, {
-          userId: guarded.userId,
-          audit: async ({ action, detail }) => {
-            await audit(sql, {
-              adminUserId: guarded.userId,
-              action,
-              targetType: "owner_recovery",
-              targetId: guarded.userId,
-              detail: { stage, ...detail },
-            });
-          },
-        });
+        const refuse = async (reason: string, error: string, status: number) => {
+          await audit(sql, {
+            adminUserId: guarded.userId,
+            action: "owner.ops_run",
+            targetType: "owner_recovery",
+            targetId: guarded.userId,
+            detail: { outcome: "refused", stage, reason },
+          });
+          return json({ ok: false, reason, error }, status);
+        };
+
+        /*
+         * The in-memory limiter above cannot see other serverless instances, so
+         * the budget is also counted from the durable audit trail. A stage that
+         * writes additionally takes a single-flight claim: two simultaneous
+         * `migrate` calls must not both find "not completed".
+         */
+        if ((await countOwnerOpsRuns(sql, guarded.userId)) >= OWNER_OPS_RUNS_PER_MINUTE) {
+          return await refuse(
+            "rate_limited",
+            "Too many runs — retry in a minute.",
+            429,
+          );
+        }
+
+        const mutating = isOwnerOpsMutatingStage(stage);
+        const claim = mutating
+          ? await claimOwnerOpsRun(sql, {
+              stage,
+              by: await callerFingerprint(guarded.userId),
+            })
+          : null;
+        if (mutating && !claim) {
+          return await refuse(
+            "run_in_progress",
+            "Another mutating run is already in progress (or was left behind by a killed instance; it expires after five minutes).",
+            409,
+          );
+        }
+
+        let outcome;
+        try {
+          outcome = await runOwnerOpsStage(sql, stage as OwnerOpsStage, {
+            userId: guarded.userId,
+            audit: async ({ action, detail }) => {
+              await audit(sql, {
+                adminUserId: guarded.userId,
+                action,
+                targetType: "owner_recovery",
+                targetId: guarded.userId,
+                detail: { stage, ...detail },
+              });
+            },
+          });
+        } finally {
+          if (claim) await releaseOwnerOpsRun(sql, claim.token);
+        }
 
         await audit(sql, {
           adminUserId: guarded.userId,

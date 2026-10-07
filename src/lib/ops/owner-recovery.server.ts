@@ -154,6 +154,80 @@ export function ownerOpsStagePolicy(
   return { allowed: true };
 }
 
+/** `site_settings` key: the single-flight claim for a mutating run. */
+export const OWNER_OPS_CLAIM_KEY = "nasaq.owner_ops.claim.v1";
+/**
+ * How long a claim stays valid without being released. A serverless instance
+ * can be killed mid-run (a platform timeout, a redeploy), which would leave
+ * the claim behind and lock the operation out forever — so a stale claim is
+ * taken over, never honoured.
+ */
+export const OWNER_OPS_CLAIM_TTL_MS = 5 * 60_000;
+/** Durable per-session budget, matching the in-memory limiter's intent. */
+export const OWNER_OPS_RUNS_PER_MINUTE = 10;
+
+/**
+ * Single-flight claim for a mutating stage.
+ *
+ * The in-memory rate limiter cannot see other serverless instances, so two
+ * simultaneous `migrate` calls on two instances would both find "not
+ * completed" and both run. This claim is the durable answer: one atomic
+ * conditional upsert wins, everyone else is refused while it is live. A stale
+ * claim (TTL) is taken over — a killed instance must not brick the operation.
+ */
+export async function claimOwnerOpsRun(
+  sql: Sql,
+  input: { stage: string; by: string },
+): Promise<{ token: string } | null> {
+  const token = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const value = JSON.stringify({ stage: input.stage, by: input.by, token });
+  try {
+    const claimed = await sql<{ key: string }>`
+      insert into site_settings (key, value, updated_at)
+      values (${OWNER_OPS_CLAIM_KEY}, ${value}::jsonb, now())
+      on conflict (key) do update set value = excluded.value, updated_at = now()
+      where site_settings.updated_at < now() - ${`${Math.round(OWNER_OPS_CLAIM_TTL_MS / 1000)} seconds`}::interval
+      returning key
+    `;
+    return claimed.length === 1 ? { token } : null;
+  } catch {
+    // A failing claim must not open the gate: fail closed.
+    return null;
+  }
+}
+
+/** Release our own claim (never someone else's). */
+export async function releaseOwnerOpsRun(sql: Sql, token: string): Promise<void> {
+  try {
+    await sql`
+      delete from site_settings
+       where key = ${OWNER_OPS_CLAIM_KEY} and value->>'token' = ${token}
+    `;
+  } catch {
+    /* a claim that outlives its run expires by TTL */
+  }
+}
+
+/** Durable count of recent runs by this session, across every instance. */
+export async function countOwnerOpsRuns(
+  sql: Sql,
+  adminUserId: string,
+  windowSeconds = 60,
+): Promise<number> {
+  try {
+    const rows = await sql<{ n: number }>`
+      select count(*)::int as n from admin_audit_log
+       where admin_user_id = ${adminUserId}
+         and action = 'owner.ops_run'
+         and created_at > now() - ${`${Math.round(windowSeconds)} seconds`}::interval
+    `;
+    return Number(rows[0]?.n ?? 0);
+  } catch {
+    /* an unreadable counter is not a licence to run: report as over budget */
+    return Number.MAX_SAFE_INTEGER;
+  }
+}
+
 /** The durable ledger: the one-shot marker and the last report of each stage. */
 export type OwnerOpsLedger = {
   completedAt: string | null;
