@@ -281,7 +281,9 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
         const { getWorkspaceSnapshot } = await import("@/lib/offline/workspace-cache");
         const snap = await getWorkspaceSnapshot();
         if (snap?.projects?.length) setOfflineProjects(snap.projects);
-      } catch {}
+      } catch {
+        /* No workspace snapshot is available; the regular project list remains empty. */
+      }
     })();
   }, [projects.length, projectsLoading, isOffline]);
   const createDocument = useEditor((s) => s.createDocument);
@@ -472,8 +474,8 @@ export function WorkspaceHomePage({ license }: { license: LicenseState }) {
     <div className="min-h-full bg-paper">
       <SiteHeader current={WORKSPACE_ROUTE} />
       {isOffline && (
-        <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 pt-3 text-[12px] font-bold text-amber-900 sm:px-6">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1">
+        <div className="mx-auto flex max-w-6xl items-center gap-2 px-4 pt-3 text-[12px] font-bold text-warning sm:px-6">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/40 bg-gold/10 px-3 py-1">
             <WifiOff className="size-3.5" /> وضع عدم الاتصال — المحتوى المحفوظ محليًا متاح. سيُستأنف الحفظ والمزامنة عند عودة الاتصال.
           </span>
         </div>

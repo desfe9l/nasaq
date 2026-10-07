@@ -65,11 +65,9 @@ export async function cacheTemplateForOffline(record: Omit<OfflineTemplateRecord
   };
   if (!db) {
     // fallback localStorage per-template (size limited, but preserves UX for IDB-less env)
-    try {
-      const key = `nasaq-offline-template::${ownerId}::${entry.id}`;
-      if (entry.content.length > 4_500_000) throw new Error("Template too large for localStorage fallback — IndexedDB required");
-      localStorage.setItem(key, JSON.stringify(entry));
-    } catch (e) { throw e; }
+    const key = `nasaq-offline-template::${ownerId}::${entry.id}`;
+    if (entry.content.length > 4_500_000) throw new Error("Template too large for localStorage fallback — IndexedDB required");
+    localStorage.setItem(key, JSON.stringify(entry));
     return;
   }
   await tx(db, "readwrite", async (s)=>{ await request(s.put(entry)); });
@@ -99,7 +97,9 @@ export async function listOfflineTemplates(ownerId: string = getStorageOwner()):
         const raw=localStorage.getItem(k);
         if (raw) out.push(JSON.parse(raw));
       }
-    } catch {}
+    } catch {
+      /* A partial localStorage scan is safer than failing the entire offline template list. */
+    }
     return out.sort((a,b)=>b.cachedAt-a.cachedAt);
   }
   const all = await tx(db, "readonly", async (s)=> (await request(s.getAll())) as OfflineTemplateRecord[]);
@@ -113,7 +113,9 @@ export async function isTemplateAvailableOffline(id: string, ownerId: string = g
 export async function removeOfflineTemplate(id: string, ownerId: string = getStorageOwner()): Promise<void> {
   const db = await getDb();
   if (!db) {
-    try { localStorage.removeItem(`nasaq-offline-template::${ownerId}::${id}`);} catch{}
+    try { localStorage.removeItem(`nasaq-offline-template::${ownerId}::${id}`); } catch {
+      /* The local fallback may already be unavailable or cleared. */
+    }
     return;
   }
   // only delete if owned by current owner

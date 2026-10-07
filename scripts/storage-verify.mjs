@@ -78,7 +78,9 @@ if (!report.configured) {
         }
       }
       return url.toString();
-    } catch {}
+    } catch {
+      /* A non-URL connection string is handed to pg unchanged. */
+    }
     return trimmed;
   }
   const client = new pg.Client({

@@ -128,7 +128,7 @@ function HeadingPreview({ id, theme }: { id: GraphicHeadingId; theme: PreviewThe
     case "bar":
       return (
         <span className="absolute inset-0 flex items-center justify-end rounded-[5px] px-2" style={band(deep)}>
-          <span className="block truncate text-[9px] font-extrabold leading-none text-white">{sample}</span>
+          <span className="block truncate text-[9px] font-extrabold leading-none text-on-brand">{sample}</span>
         </span>
       );
     case "card":
@@ -145,7 +145,7 @@ function HeadingPreview({ id, theme }: { id: GraphicHeadingId; theme: PreviewThe
       return row(
         <>
           <span
-            className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[8px] font-black text-white"
+            className="grid h-5 w-5 shrink-0 place-items-center rounded-full text-[8px] font-black text-on-brand"
             style={band(deep)}
           >
             ١
@@ -190,7 +190,7 @@ function HeadingPreview({ id, theme }: { id: GraphicHeadingId; theme: PreviewThe
         <span className="absolute inset-0 flex items-center gap-1.5 rounded-[5px] px-1.5" style={band(deep)}>
           {image(4, "22px")}
           <span className="flex min-w-0 flex-1 flex-col items-end gap-0.5">
-            <span className="block w-full truncate text-right text-[9px] font-black leading-none text-white">{sample}</span>
+            <span className="block w-full truncate text-right text-[9px] font-black leading-none text-on-brand">{sample}</span>
             <span className="block h-[1px] w-8" style={{ background: "rgba(255,255,255,.55)" }} />
           </span>
           <span className="h-6 w-[2px] rounded" style={band(gold)} />

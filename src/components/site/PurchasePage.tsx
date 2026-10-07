@@ -194,7 +194,7 @@ export function PurchasePage() {
       <SiteHeader current="/purchase" />
       {isOffline && (
         <div className="mx-auto max-w-6xl px-4 pt-3 sm:px-6">
-          <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-bold text-amber-900">
+          <div className="flex items-center gap-2 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-[12px] font-bold text-warning">
             <WifiOff className="size-4" /> وضع عدم الاتصال — تُعرض معلومات الاشتراك المحفوظة، لكن إجراءات الشراء والدفع تتطلب اتصالاً. ستتم المزامنة عند عودة الاتصال.
           </div>
         </div>

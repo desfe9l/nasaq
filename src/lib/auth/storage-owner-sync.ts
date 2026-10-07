@@ -44,7 +44,9 @@ function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
 function rememberOwner(id: string | null): void {
   try {
     if (id) localStorage.setItem(LAST_OWNER_KEY, id);
-  } catch {}
+  } catch {
+    /* Remembering the owner is an offline convenience, never an auth requirement. */
+  }
 }
 function recallOwner(): string | null {
   try { return localStorage.getItem(LAST_OWNER_KEY); } catch { return null; }

@@ -74,7 +74,7 @@ export function ProjectOfflineButton({
       <span
         title="صفحات المشروع وأصوله محفوظة على هذا الجهاز"
         className={cn(
-          "inline-flex h-7 items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2 text-[11px] font-extrabold text-emerald-800",
+          "inline-flex h-7 items-center gap-1 rounded-full border border-ok/30 bg-ok/10 px-2 text-[11px] font-extrabold text-success",
           className,
         )}
       >

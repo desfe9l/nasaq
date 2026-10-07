@@ -61,7 +61,9 @@ export async function saveWorkspaceSnapshot(snap: Omit<WorkspaceSnapshot,"update
     offlineReady: true,
   };
   if (!db) {
-    try { localStorage.setItem(keyFor(ownerId), JSON.stringify({ key: keyFor(ownerId), value: payload })); } catch {}
+    try { localStorage.setItem(keyFor(ownerId), JSON.stringify({ key: keyFor(ownerId), value: payload })); } catch {
+      /* The optional dashboard snapshot cannot be stored in this browser context. */
+    }
     return;
   }
   await tx(db,"readwrite", async(s)=>{ await request(s.put({ key: keyFor(ownerId), value: payload })); });
@@ -99,13 +101,20 @@ export async function refreshWorkspaceCache(): Promise<void> {
     // recentIds = top 10 by updatedAt
     const recentIds = [...metas].sort((a,b)=>b.updatedAt-a.updatedAt).slice(0,10).map(m=>m.id);
     await saveWorkspaceSnapshot({ ownerId, projects: metas, folders, recentIds, updatedAt: Date.now() });
-  } catch {}
+  } catch {
+    /* The dashboard can still read its primary stores when refreshing this derived cache fails. */
+  }
 }
 
 export async function clearWorkspaceCache(ownerId: string): Promise<void> {
   const key=keyFor(ownerId);
   const db=await getDb();
-  if (!db) { try{ localStorage.removeItem(key);}catch{}; return; }
+  if (!db) {
+    try { localStorage.removeItem(key); } catch {
+      /* The fallback cache may already be unavailable or cleared. */
+    }
+    return;
+  }
   await tx(db,"readwrite", async(s)=>{ await request(s.delete(key)); }).catch(()=>undefined);
 }
 

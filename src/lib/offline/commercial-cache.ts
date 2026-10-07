@@ -19,7 +19,9 @@ export interface CachedCommercial {
 export async function cacheCommercial(data: Omit<CachedCommercial, "cachedAt" | "ownerId">): Promise<void> {
   const ownerId = getStorageOwner();
   const payload: CachedCommercial = { ...data, ownerId, cachedAt: Date.now() };
-  try { localStorage.setItem(`${KEY_PREFIX}${ownerId}`, JSON.stringify(payload)); } catch {}
+  try { localStorage.setItem(`${KEY_PREFIX}${ownerId}`, JSON.stringify(payload)); } catch {
+    /* Offline account details are optional when browser storage is unavailable. */
+  }
 }
 
 export function getCachedCommercial(ownerId: string = getStorageOwner()): CachedCommercial | null {

@@ -1,7 +1,9 @@
-// @ts-nocheck
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
+
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+type JsonObject = { [key: string]: JsonValue };
 
 /**
  * Cloud project mirror — local IndexedDB stays source of truth, server is
@@ -11,7 +13,7 @@ import { getSql } from "@/lib/db";
 type CloudRow = {
   id: string;
   user_id: string;
-  payload: Record<string, unknown>;
+  payload: JsonObject;
   version: number;
   updated_at: string;
   created_at: string;
@@ -23,7 +25,7 @@ function toIso(d: Date | string): string {
 
 export const getCloudProjects = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .handler(async ({ context }): Promise<{ projects: Array<{ id: string; payload: Record<string, unknown>; version: number; updatedAt: string }> }> => {
+  .handler(async ({ context }): Promise<{ projects: Array<{ id: string; payload: JsonObject; version: number; updatedAt: string }> }> => {
     const sql = await getSql();
     const rows = await sql<CloudRow>`select id, payload, version, updated_at from cloud_projects where user_id = ${context.userId} order by updated_at desc`;
     return {
@@ -67,12 +69,12 @@ export const getCloudProjectVersion = createServerFn({ method: "GET" })
 
 export const saveCloudProject = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator((input: unknown): { id: string; payload: Record<string, unknown>; updatedAt?: number; version?: number } => {
+  .validator((input: unknown): { id: string; payload: JsonObject; updatedAt?: number; version?: number } => {
     const rec = input as Record<string, unknown>;
     const id = typeof rec?.id === "string" ? rec.id.trim() : "";
     if (!id || id.length > 120) throw new Error("id غير صالح");
     if (!rec?.payload || typeof rec.payload !== "object") throw new Error("payload غير صالح");
-    return { id, payload: rec.payload, updatedAt: typeof rec.updatedAt === "number" ? rec.updatedAt : Date.now(), version: typeof rec.version === "number" ? rec.version : undefined };
+    return { id, payload: rec.payload as JsonObject, updatedAt: typeof rec.updatedAt === "number" ? rec.updatedAt : Date.now(), version: typeof rec.version === "number" ? rec.version : undefined };
   })
   .handler(async ({ context, data }): Promise<any> => {
     const sql = await getSql();

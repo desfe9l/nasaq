@@ -90,7 +90,9 @@ export function ProjectsPage() {
         const { getWorkspaceSnapshot } = await import("@/lib/offline/workspace-cache");
         const snap = await getWorkspaceSnapshot();
         if (snap?.projects?.length) setOfflineProjects(snap.projects);
-      } catch {}
+      } catch {
+        /* No workspace snapshot is available; the regular project list remains empty. */
+      }
     })();
   }, [projects.length, projectsLoading, isOffline]);
 
@@ -195,7 +197,7 @@ export function ProjectsPage() {
 
       <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 md:py-10">
         {isOffline && (
-          <div className="mb-4 flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] font-bold text-amber-900">
+          <div className="mb-4 flex items-center gap-2 rounded-xl border border-gold/40 bg-gold/10 px-3 py-2 text-[12px] font-bold text-warning">
             <HardDriveDownload className="size-4" /> وضع عدم الاتصال — تُعرض المشاريع المحفوظة محليًا. التعديل والحفظ متاحان، وستتم المزامنة تلقائيًا عند عودة الاتصال.
           </div>
         )}

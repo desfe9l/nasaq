@@ -81,7 +81,9 @@ export async function cacheEntitlement(ent: CachedEntitlement): Promise<void> {
     // fallback to localStorage for environments without IndexedDB
     try {
       localStorage.setItem(cacheKey(ent.ownerId), JSON.stringify(ent));
-    } catch {}
+    } catch {
+      /* No local fallback is available; the next online entitlement check will retry. */
+    }
     return;
   }
   const key = cacheKey(ent.ownerId);
@@ -103,11 +105,15 @@ export async function getCachedEntitlement(
       )) as { key: string; value: CachedEntitlement } | undefined;
       if (row?.value) return row.value;
     }
-  } catch {}
+  } catch {
+    /* IndexedDB is unavailable; fall through to the localStorage fallback. */
+  }
   try {
     const raw = localStorage.getItem(key);
     if (raw) return JSON.parse(raw) as CachedEntitlement;
-  } catch {}
+  } catch {
+    /* The fallback entry is missing or malformed, so no cached entitlement is trusted. */
+  }
   return null;
 }
 
@@ -153,10 +159,14 @@ export async function clearEntitlementCache(ownerId: string): Promise<void> {
         request(t.objectStore(SETTINGS_STORE).delete(key)),
       );
     }
-  } catch {}
+  } catch {
+    /* A failed IndexedDB delete is followed by the independent localStorage cleanup. */
+  }
   try {
     localStorage.removeItem(key);
-  } catch {}
+  } catch {
+    /* The browser may deny localStorage access during sign-out cleanup. */
+  }
 }
 
 export const OFFLINE_GRACE_MS = GRACE_MS;

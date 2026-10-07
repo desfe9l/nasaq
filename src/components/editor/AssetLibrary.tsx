@@ -751,7 +751,7 @@ export function AssetLibrary({
             <Download className="size-3.5" />
           </button>
           {hasLicense && !isAdmin && (
-            <button type="button" onClick={() => void toggleCloudStorage()} aria-pressed={cloudStorageMode === "cloud"} aria-label={cloudStorageMode === "cloud" ? "إيقاف الاحتفاظ السحابي" : "تفعيل الاحتفاظ السحابي"} title={cloudStorageMode === "cloud" ? "الاحتفاظ السحابي مفعّل" : "تفعيل الاحتفاظ السحابي"} className={cn("asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border", cloudStorageMode === "cloud" ? "border-emerald-500 text-emerald-600" : "border-line text-muted")}>
+            <button type="button" onClick={() => void toggleCloudStorage()} aria-pressed={cloudStorageMode === "cloud"} aria-label={cloudStorageMode === "cloud" ? "إيقاف الاحتفاظ السحابي" : "تفعيل الاحتفاظ السحابي"} title={cloudStorageMode === "cloud" ? "الاحتفاظ السحابي مفعّل" : "تفعيل الاحتفاظ السحابي"} className={cn("asset-lib-icon-btn grid size-7 place-items-center rounded-[6px] border", cloudStorageMode === "cloud" ? "border-ok text-success" : "border-line text-muted")}>
               <span className="text-[10px] font-black">R2</span>
             </button>
           )}

@@ -229,7 +229,7 @@ export function RawContentFlow() {
           <span className="rounded-full border border-line bg-paper px-2 py-0.5">{analysis.headings.length} عنوانًا</span>
           <span className="rounded-full border border-line bg-paper px-2 py-0.5">{analysis.bullets.length} نقطة</span>
           <span className="rounded-full border border-line bg-paper px-2 py-0.5">{analysis.numbers.length} رقمًا</span>
-          <span className={cn("rounded-full border px-2 py-0.5", tooLarge ? "border-red-200 bg-red-50 text-red-700" : "border-line bg-paper")}>
+          <span className={cn("rounded-full border px-2 py-0.5", tooLarge ? "border-danger/30 bg-danger/10 text-error" : "border-line bg-paper")}>
             الحد: {RAW_MAX_CHARS.toLocaleString("ar-SA")} حرفًا
           </span>
           {analysis.tableRows.length > 0 && (
@@ -317,14 +317,14 @@ export function RawContentFlow() {
         </div>
 
         {!ready && raw.length > 0 && (
-          <p className={cn("mt-2 text-[11px]", tooLarge ? "text-red-700" : "text-muted")}>
+          <p className={cn("mt-2 text-[11px]", tooLarge ? "text-error" : "text-muted")}>
             {tooLarge
               ? `المحتوى أطول من الحد الواضح (${RAW_MAX_CHARS.toLocaleString("ar-SA")} حرفًا). لم يُرسل أو يُقتطع؛ قسّمه إلى مستندات منفصلة أولًا.`
               : "اكتب ٤٠ حرفًا على الأقل ليقيس المحتوى ويُنظّمه."}
           </p>
         )}
         {error && (
-          <p className="mt-3 rounded-[10px] border border-red-200 bg-red-50 px-3 py-2 text-[12px] leading-6 text-red-700">
+          <p className="mt-3 rounded-[10px] border border-danger/30 bg-danger/10 px-3 py-2 text-[12px] leading-6 text-error">
             {error}
           </p>
         )}

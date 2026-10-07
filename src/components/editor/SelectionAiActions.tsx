@@ -217,7 +217,7 @@ export function SelectionAiActions({ el }: { el: CanvasEl }) {
       />
 
       {error && (
-        <p className="mt-2 rounded-[8px] border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] leading-5 text-red-700">
+        <p className="mt-2 rounded-[8px] border border-danger/30 bg-danger/10 px-2 py-1.5 text-[11px] leading-5 text-error">
           {error}
         </p>
       )}

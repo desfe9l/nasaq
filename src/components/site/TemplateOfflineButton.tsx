@@ -67,7 +67,7 @@ export function TemplateOfflineButton({ templateId, title, tier, source, fetchCo
     return (
       <span
         title="متاح دون اتصال — تم تنزيل القالب على هذا الجهاز"
-        className="inline-flex h-7 items-center gap-1 rounded-full bg-emerald-50 px-2 text-[10px] font-extrabold text-emerald-700 border border-emerald-200"
+        className="inline-flex h-7 items-center gap-1 rounded-full bg-ok/10 px-2 text-[10px] font-extrabold text-success border border-ok/30"
       >
         <Check className="size-3" /> متاح دون اتصال
       </span>
@@ -75,7 +75,7 @@ export function TemplateOfflineButton({ templateId, title, tier, source, fetchCo
   }
   if (state === "offline-blocked") {
     return (
-      <span className="inline-flex h-7 items-center gap-1 rounded-full bg-amber-50 px-2 text-[10px] font-bold text-amber-800 border border-amber-200">
+      <span className="inline-flex h-7 items-center gap-1 rounded-full bg-gold/10 px-2 text-[10px] font-bold text-warning border border-gold/40">
         <WifiOff className="size-3" /> يتطلب اتصالاً
       </span>
     );

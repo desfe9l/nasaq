@@ -1284,10 +1284,12 @@ function queueLibrarySync() {
         const { enqueueSync } = await import("@/lib/offline/sync-queue");
         await enqueueSync("library:catalog", catalog, { dedupeKey: "library:catalog", version: Date.now() });
         void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
-      } catch {}
+      } catch {
+        /* The durable queue is unavailable; the immediate online push below can still sync. */
+      }
       // Best-effort immediate push when online
       if (typeof navigator !== "undefined" && navigator.onLine === false) {
-        try { const { requestSync } = await import("@/lib/offline/connectivity"); requestSync(); } catch {}
+        try { const { requestSync } = await import("@/lib/offline/connectivity"); requestSync(); } catch { /* Connectivity wake-up is best effort. */ }
         return;
       }
       try {
@@ -1295,9 +1297,11 @@ function queueLibrarySync() {
         const ok = await pushLibraryCatalog(catalog);
         if (ok) {
           // On success the queue can drain; trigger connectivity sync to clean queue
-          try { const { requestSync } = await import("@/lib/offline/connectivity"); requestSync(); } catch {}
+          try { const { requestSync } = await import("@/lib/offline/connectivity"); requestSync(); } catch { /* Connectivity wake-up is best effort. */ }
         }
-      } catch {}
+      } catch {
+        /* The optional immediate mirror does not block the local save. */
+      }
     })();
   }, 800);
 }
@@ -1751,7 +1755,9 @@ export const useEditor = create<EditorStore>((set, get) => {
       try {
         void import("@/lib/offline/connectivity").then((m) => m.initConnectivity());
         void import("@/lib/offline/workspace-cache").then((m) => void m.refreshWorkspaceCache());
-      } catch {}
+      } catch {
+        /* Offline services initialize opportunistically after hydration. */
+      }
       const mode = storageMode();
       set({ storage: { mode, persistent: mode === "indexeddb" } });
 
@@ -2852,7 +2858,9 @@ export const useEditor = create<EditorStore>((set, get) => {
           void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
           void import("@/lib/offline/asset-cache").then(m=>{ void m.cacheProjectAssets(saved as never); void m.cacheProjectFonts(saved as never); });
           void import("@/lib/offline/connectivity").then(m=>m.requestSync());
-        } catch {}
+        } catch {
+          /* The local project exists even if background sync cannot be queued yet. */
+        }
         await get().refreshProjects();
       }
       return true;
@@ -3007,7 +3015,9 @@ export const useEditor = create<EditorStore>((set, get) => {
           void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
           void import("@/lib/offline/asset-cache").then(m=>{ void m.cacheProjectAssets(saved as never); void m.cacheProjectFonts(saved as never); });
           void import("@/lib/offline/connectivity").then(m=>m.requestSync());
-        } catch {}
+        } catch {
+          /* The local project exists even if background sync cannot be queued yet. */
+        }
         await get().refreshProjects();
       }
       return true;
@@ -3258,7 +3268,9 @@ export const useEditor = create<EditorStore>((set, get) => {
               void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
               void import("@/lib/offline/asset-cache").then(m=>{ void m.cacheProjectAssets(saved as never); void m.cacheProjectFonts(saved as never); });
               void import("@/lib/offline/connectivity").then(m=>m.requestSync());
-            } catch {}
+            } catch {
+              /* Background sync is best effort; the local autosave has already completed. */
+            }
             return;
           } catch (err) {
             console.error("[editor] autosave failed", err);
@@ -3385,7 +3397,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         await enqueueSync("project:rename", { id, name, updatedAt: Date.now() }, { dedupeKey: `project:rename:${id}` });
         void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
         void import("@/lib/offline/connectivity").then(m=>m.requestSync());
-      } catch {}
+      } catch {
+        /* The local rename remains valid when its background sync cannot be queued. */
+      }
       await get().refreshProjects();
     },
 
@@ -3406,7 +3420,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         await enqueueSync("project:favorite", { id, favorite, updatedAt: Date.now() }, { dedupeKey: `project:favorite:${id}` });
         void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
         void import("@/lib/offline/connectivity").then(m=>m.requestSync());
-      } catch {}
+      } catch {
+        /* The local rename remains valid when its background sync cannot be queued. */
+      }
       await get().refreshProjects();
     },
 
@@ -3515,7 +3531,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         await enqueueSync("project:duplicate", { id: savedCopy.id, sourceId: id, updatedAt: Date.now() }, { dedupeKey: `project:duplicate:${savedCopy.id}` });
         void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
         void import("@/lib/offline/connectivity").then(m=>m.requestSync());
-      } catch {}
+      } catch {
+        /* The local rename remains valid when its background sync cannot be queued. */
+      }
       await get().refreshProjects();
     },
 
@@ -3529,7 +3547,9 @@ export const useEditor = create<EditorStore>((set, get) => {
         await enqueueSync("project:delete", { id, updatedAt: Date.now() }, { dedupeKey: `project:delete:${id}` });
         void import("@/lib/offline/workspace-cache").then(m=>void m.refreshWorkspaceCache());
         void import("@/lib/offline/connectivity").then(m=>m.requestSync());
-      } catch {}
+      } catch {
+        /* The local deletion remains valid when its background sync cannot be queued. */
+      }
       if (getStorageOwner() !== owner || get().sessionOwner !== sessionOwner)
         return;
       const s = get();

@@ -102,7 +102,9 @@ export async function cacheProjectFonts(project: Project): Promise<void> {
     try {
       // Trigger fetch of font css so SW caches it
       await fetch(document.querySelector<HTMLLinkElement>('link[href*="fonts.googleapis.com"]')?.href ?? "https://fonts.googleapis.com/css2?family=Cairo", { cache: "force-cache", mode: "no-cors" }).catch(()=>null);
-    } catch {}
+    } catch {
+      /* Font prewarming is opportunistic; an unavailable cache must not block editing. */
+    }
   }
 }
 
