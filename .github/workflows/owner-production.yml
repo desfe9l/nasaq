@@ -51,6 +51,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  probe:
+    name: "Environment probe: ${{ matrix.bound == 'true' && matrix.env || 'no binding' }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: Production
+            bound: 'true'
+          - env: Preview
+            bound: 'true'
+          - env: copilot
+            bound: 'true'
+          - env: ''
+            bound: 'false'
+    environment: ${{ matrix.bound == 'true' && matrix.env || null }}
+    concurrency:
+      group: owner-production-probe-${{ matrix.bound }}-${{ matrix.env }}
+      cancel-in-progress: false
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.NEON_DATABASE_URL || secrets.POSTGRES_URL }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || secrets.STORAGE_ACCOUNT_ID || secrets.AWS_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID || secrets.STORAGE_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY || secrets.STORAGE_SECRET_ACCESS_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
+      KEYGEN_API_TOKEN: ${{ secrets.KEYGEN_API_TOKEN || secrets.KEYGEN_ACCOUNT_TOKEN || secrets.KEYGEN_TOKEN }}
+    steps:
+      - name: Presence sweep (NAMES only, never values)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+          echo "### probe — environment: ${{ matrix.bound == 'true' && matrix.env || '(none — repository secrets only)' }} — $(date -u +%FT%TZ)"
+          have() { [ -n "${!1:-}" ]; }
+          line() { if have "$1"; then echo "present : $2"; else echo "ABSENT  : $2"; fi; }
+          line DATABASE_URL "database url"
+          s=0; for v in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do have "$v" && s=$((s+1)); done
+          if [ "$s" -eq 3 ]; then echo "present : object storage trio"; else echo "ABSENT  : object storage trio ($s/3)"; fi
+          line KEYGEN_API_TOKEN "keygen token"
+          } > /tmp/probe-comment.md
+          gh issue comment 162 --repo "$GITHUB_REPOSITORY" --body-file /tmp/probe-comment.md
+
   migrate:
     runs-on: ubuntu-latest
     timeout-minutes: 25
