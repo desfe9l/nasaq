@@ -218,6 +218,15 @@ export const Route = createFileRoute("/api/ops/owner-recovery")({
        *          "storage" | "admin-probe" | "battery", confirm?: string }`
        */
       POST: async ({ request }) => {
+        // The cheapest refusals come first: a non-production deployment or a
+        // cross-site caller is answered before the request body is read.
+        const runtime = ownerOpsRuntimeVerdict();
+        if (!runtime.allowed) {
+          return json({ ok: false, reason: runtime.reason, error: runtime.error }, runtime.status);
+        }
+        if (!sameSiteVerdict(request).ok) {
+          return json({ ok: false, reason: "cross_site", error: "Cross-site request refused." }, 403);
+        }
         const body = (await request.json().catch(() => ({}))) as {
           stage?: unknown;
           confirm?: unknown;
@@ -271,18 +280,17 @@ export const Route = createFileRoute("/api/ops/owner-recovery")({
           detail: { outcome: "completed", stage, ok: outcome.ok },
         });
 
+        // The report is the answer even when a stage is red: 200 with the
+        // verdict inside, so the evidence survives the failure it describes.
         const after = await readOwnerOpsLedger(sql);
-        return json(
-          {
-            ok: outcome.ok,
-            buildId: __APP_BUILD_ID__,
-            stage: outcome.stage,
-            at: outcome.at,
-            completedAt: after.completedAt,
-            result: outcome.result,
-          },
-          outcome.ok ? 200 : 200,
-        );
+        return json({
+          ok: outcome.ok,
+          buildId: __APP_BUILD_ID__,
+          stage: outcome.stage,
+          at: outcome.at,
+          completedAt: after.completedAt,
+          result: outcome.result,
+        });
       },
     },
   },
