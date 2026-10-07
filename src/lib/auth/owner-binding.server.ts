@@ -336,6 +336,15 @@ export async function recoverOwnerAuthority(
     (identity.emailVerified && isConfiguredSuperAdminIdentity(identity, superConfig)) ||
     isOwnerIdentity(identity)
   ) {
+    /*
+     * Authority is already in place — but the owner's COMMERCIAL records may
+     * still sit on the orphaned id (this is exactly the state #156 left:
+     * console restored, licences/subscriptions still pointing at an id nobody
+     * signs in as). The binding is the proof; best-effort reconciliation runs
+     * here too, so an owner bound before this repair existed is healed on their
+     * next privileged call.
+     */
+    await reconcileQuietly(sql, userId, identity.email ?? null, options);
     return {
       ok: true,
       reason: "already_authorized",
@@ -389,6 +398,13 @@ export async function recoverOwnerAuthority(
       action: "owner.recovered",
       detail: { source: "legacy_role_transfer", previousUserId: row.user_id, role },
     });
+    /*
+     * Authority moved; the owner's COMMERCIAL records must follow it. Without
+     * this the console works while licences, subscriptions and claims still
+     * name an id nobody can sign in as — the owner holds the platform and is
+     * billed as a stranger. Best-effort: the recovery already succeeded.
+     */
+    await reconcileQuietly(sql, userId, email, options);
     return { ok: true, reason: "bound", role, source: "legacy_role_transfer", previousUserId: row.user_id };
   }
 
@@ -412,7 +428,63 @@ export async function recoverOwnerAuthority(
     action: "owner.recovered",
     detail: { source: "owner_email_binding", previousUserId: null, role: SUPER_ADMIN_ROLE },
   });
+  await reconcileQuietly(sql, userId, email, options);
   return { ok: true, reason: "bound", role: SUPER_ADMIN_ROLE, source: "owner_email_binding", previousUserId: null };
+}
+
+/**
+ * Give the caller's own commercial records back to them. Silent by design.
+ *
+ * Runs only for the account a durable owner binding names — the module it
+ * delegates to refuses everyone else, refuses a live id, and refuses while the
+ * identity store cannot answer. A reconciliation failure must never turn a
+ * successful recovery into an error, so every path here swallows.
+ */
+export async function reconcileQuietly(
+  sql: Sql,
+  userId: string,
+  email: string | null,
+  options: {
+    audit?: (entry: { action: string; detail: Record<string, string | null> }) => Promise<void>;
+  } = {},
+): Promise<void> {
+  try {
+    const { reconcileOwnerForSession } = await import("./owner-reconciliation.server.ts");
+    await reconcileOwnerForSession(sql, { id: userId, email }, await authIdentityDirectory(), {
+      audit: options.audit
+        ? async ({ action, detail }) => {
+            await options.audit?.({
+              action,
+              detail: Object.fromEntries(
+                Object.entries(detail).map(([key, value]) => [key, value == null ? null : String(value)]),
+              ),
+            });
+          }
+        : undefined,
+    });
+  } catch {
+    /* best-effort: authority is restored; the records heal on the next pass */
+  }
+}
+
+/**
+ * The pre-migration ids a CONFIGURED or BOUND owner is allowed to be recognised
+ * by inside a provider scope (Keygen's `nasaqUserId` metadata, a licence's
+ * `userScopeVerified`).
+ *
+ * The durable binding is the only source, so this is exactly as trustworthy as
+ * the binding itself; a caller who is not the bound owner gets an empty list,
+ * which keeps the provider checks strict for everyone else.
+ */
+export async function provenLegacyUserIds(sql: Sql, userId: string): Promise<string[]> {
+  try {
+    const binding = await readOwnerBinding(sql);
+    if (!binding || binding.userId !== userId) return [];
+    const { provenOwnerOrphanIds } = await import("./owner-reconciliation.server.ts");
+    return await provenOwnerOrphanIds(sql, binding, await authIdentityDirectory());
+  } catch {
+    return [];
+  }
 }
 
 /**

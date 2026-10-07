@@ -19,6 +19,7 @@ import {
   readAdminIdentityConfig,
 } from "./admin-identity.server";
 import { isOwnerIdentity, type OwnerIdentity } from "./owner.server";
+import { keygenScopeSatisfied } from "@/lib/license/scope";
 import { getTrial } from "@/lib/license/trial.server";
 
 export type AuthorizationContext = OwnerIdentity & {
@@ -64,7 +65,12 @@ export function isActiveLicense(license: License): boolean {
   return Boolean(
     license.status === "ACTIVE" &&
       (!license.expiresAt || new Date(license.expiresAt).getTime() > Date.now()) &&
-      (license.metadata?.source !== "keygen" || license.metadata.userScopeVerified === license.userId),
+      // A Keygen row is only usable by the account it was verified for. The
+      // owner-binding reconciliation lets that scope follow its owner across
+      // the first-party auth migration (`metadata.ownerReboundFrom`) — see
+      // `@/lib/license/scope`. A customer's row still has to name them.
+      (license.metadata?.source !== "keygen" ||
+        keygenScopeSatisfied(license.metadata, license.userId ?? "")),
   );
 }
 

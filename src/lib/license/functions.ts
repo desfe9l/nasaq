@@ -41,6 +41,7 @@ import { activateKeygenForSession, persistKeygenLicense, revalidateKeygenForSess
 import { clientIpFromHeaders, rateLimitKey } from "@/lib/auth/request-ip";
 import { checkRateLimit } from "./rate-limit";
 import { licensingIntegrationReadiness } from "./integrations.server";
+import { keygenScopeSatisfied } from "./scope";
 import { getCatalogPlan } from "@/lib/commercial/catalog";
 import { entitlementsForPlan, entitlementsFromKeygenCodes, LICENSE_ENTITLEMENTS } from "./types";
 import type {
@@ -327,6 +328,44 @@ export const getLicenseStatusFn = createServerFn({ method: "POST" })
       emailVerified: context.userEmailVerified,
     });
     if (access.isAdmin) {
+      /*
+       * The owner's OWNERSHIP records follow the authority. When a durable
+       * owner binding names this account, its orphaned pre-migration id is the
+       * id the licences, subscriptions and claims were left on — reconcile them
+       * now so every surface that reads ownership directly (the account view,
+       * the licence tools, the admin customer list) stops describing the owner
+       * as a stranger. Guarded by the binding module and best-effort: the
+       * status answer below is never blocked by it.
+       */
+      try {
+        const { getSql } = await import("@/lib/db");
+        const { reconcileOwnerForSession } = await import("@/lib/auth/owner-reconciliation.server");
+        const { authIdentityDirectory } = await import("@/lib/auth/owner-binding.server");
+        const db = await getSql();
+        await reconcileOwnerForSession(
+          db,
+          { id: context.userId, email: context.userEmail },
+          await authIdentityDirectory(),
+          {
+            audit: async ({ action, detail }) => {
+              try {
+                const { audit } = await import("@/lib/commercial/admin.server");
+                await audit(db, {
+                  adminUserId: context.userId,
+                  action,
+                  targetType: "owner_binding",
+                  targetId: context.userId,
+                  detail,
+                });
+              } catch {
+                /* the audit row is a record; the move already happened */
+              }
+            },
+          },
+        );
+      } catch {
+        /* reconciliation is best-effort — never block the owner's status */
+      }
       return {
         hasLicense: true,
         isOwner: access.isOwner,
@@ -356,7 +395,7 @@ export const getLicenseStatusFn = createServerFn({ method: "POST" })
       info.status = "EXPIRED";
     }
     const message = info.status === "ACTIVE" && previous.metadata?.source === "keygen"
-      ? previous.metadata.userScopeVerified === context.userId
+      ? keygenScopeSatisfied(previous.metadata, context.userId)
         ? "تعذر التحقق من Keygen حاليًا. أعد المحاولة؛ لن تُفعّل الميزات دون تحقق."
         : "الترخيص بانتظار الربط مع Keygen. أعد التحقق أو أدخل المفتاح إذا كان لديك."
       : undefined;

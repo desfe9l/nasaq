@@ -1,4 +1,5 @@
 import { hashLicenseKey, keyPrefix, normalizeLicenseKey } from "./key.ts";
+import { boundToAnotherOwner, reboundFromIds } from "./scope.ts";
 import {
   attachKeygenUser,
   ensureKeygenUser,
@@ -28,10 +29,51 @@ type KeygenActivation =
   | { success: true; license: License; verification: KeygenVerification }
   | { success: false; message: string };
 
+/**
+ * Is this row scoped to a DIFFERENT account than the caller's?
+ *
+ * Every marker the row carries must name the caller — directly, or as one of
+ * the orphaned ids the durable owner binding reconciled onto them, so a
+ * recovered owner's own key does not answer "this key is not yours". A row
+ * whose scope names a third party still refuses, so a customer can never
+ * inherit another account's licence.
+ */
 function boundToOther(license: License | null, session: LicenseSession): boolean {
-  return Boolean(license?.userId && license.userId !== session.userId) ||
-    Boolean(license?.metadata?.nasaqUserId && license.metadata.nasaqUserId !== session.userId) ||
-    Boolean(license?.metadata?.userScopeVerified && license.metadata.userScopeVerified !== session.userId);
+  if (!license) return false;
+  return boundToAnotherOwner(license.metadata, license.userId, session.userId);
+}
+
+/**
+ * May a provider-side scope marker that names `candidateId` be accepted for
+ * this caller?
+ *
+ * Yes when it names them directly, when the row records it as a reconciled
+ * pre-migration id, or when the durable owner binding proves it is this
+ * caller's own orphaned id. Anything else refuses.
+ */
+async function scopeAccepted(
+  candidate: string | null | undefined,
+  session: LicenseSession,
+  local?: License | null,
+): Promise<boolean> {
+  if (!candidate) return true;
+  const value = String(candidate).trim();
+  if (!value || value === session.userId) return true;
+  if (local && reboundFromIds(local.metadata).includes(value)) return true;
+  try {
+    const { getSql } = await import("@/lib/db");
+    const { provenLegacyUserIds } = await import("@/lib/auth/owner-binding.server");
+    return (await provenLegacyUserIds(await getSql(), session.userId)).includes(value);
+  } catch {
+    return false;
+  }
+}
+
+/** `local`'s own scope markers, as the comparison list the Keygen checks use. */
+function localScopeOk(local: License, session: LicenseSession): boolean {
+  const marker = local.metadata?.userScopeVerified;
+  if (!marker) return true;
+  return marker === session.userId || reboundFromIds(local.metadata).includes(marker);
 }
 
 export async function persistKeygenLicense(verification: KeygenVerification, userId: string | null): Promise<License> {
@@ -70,7 +112,7 @@ export async function activateKeygenForSession(key: string, session: LicenseSess
     return { success: false, message: keygenMessage(verified) };
   }
   if (!verified.licenseId || verified.productId !== keygenProductId() ||
-      (verified.metadata.nasaqUserId && verified.metadata.nasaqUserId !== session.userId) ||
+      !(await scopeAccepted(verified.metadata.nasaqUserId, session, local)) ||
       (local?.metadata?.keygenLicenseId && local.metadata.keygenLicenseId !== verified.licenseId)) {
     return { success: false, message: INVALID };
   }
@@ -81,7 +123,7 @@ export async function activateKeygenForSession(key: string, session: LicenseSess
   {
     const remote = await getKeygenLicenseForClaim(verified.licenseId);
     if (normalizeLicenseKey(remote.key) !== normalized || remote.productId !== keygenProductId() ||
-        (remote.nasaqUserId && remote.nasaqUserId !== session.userId)) {
+        !(await scopeAccepted(remote.nasaqUserId, session, local))) {
       return { success: false, message: INVALID };
     }
     if (remote.ownerId === undefined || remote.usersCount === null) {
@@ -116,7 +158,7 @@ export async function activateKeygenForSession(key: string, session: LicenseSess
   }
 
   if (!verified.valid || verified.productId !== keygenProductId() ||
-      (verified.metadata.nasaqUserId && verified.metadata.nasaqUserId !== session.userId)) {
+      !(await scopeAccepted(verified.metadata.nasaqUserId, session, local))) {
     return { success: false, message: keygenMessage(verified) };
   }
   const license = await persistKeygenLicense(verified, session.userId);
@@ -127,11 +169,11 @@ export async function activateKeygenForSession(key: string, session: LicenseSess
 export async function revalidateLinkedKeygenLicense(local: License, session: LicenseSession): Promise<License | null> {
   const providerId = local.metadata?.keygenLicenseId;
   if (!session.userEmail || !providerId || local.userId !== session.userId ||
-      local.metadata?.userScopeVerified !== session.userId || boundToOther(local, session)) return null;
+      !localScopeOk(local, session) || boundToOther(local, session)) return null;
   const verified = await validateKeygenLicenseById(providerId, session.userEmail);
   if (verified.valid && verified.licenseId === providerId &&
       hashLicenseKey(verified.key) === local.keyHash &&
-      (!verified.metadata.nasaqUserId || verified.metadata.nasaqUserId === session.userId)) {
+      (await scopeAccepted(verified.metadata.nasaqUserId, session, local))) {
     return persistKeygenLicense(verified, session.userId);
   }
   await setLicenseStatusForUser(local.id, session.userId,
@@ -151,7 +193,7 @@ export async function revalidateKeygenForSession(key: string, session: LicenseSe
   const verified = await validateKeygenLicense(key, session.userEmail);
   if (!verified.valid || verified.productId !== keygenProductId() ||
       verified.licenseId !== local.metadata?.keygenLicenseId ||
-      (verified.metadata.nasaqUserId && verified.metadata.nasaqUserId !== session.userId)) {
+      !(await scopeAccepted(verified.metadata.nasaqUserId, session, local))) {
     await setLicenseStatusForUser(local.id, session.userId,
       verified.code === "EXPIRED" || verified.code === "OVERDUE" ? "EXPIRED" : "REVOKED");
     return { valid: false };
