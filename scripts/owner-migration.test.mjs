@@ -41,7 +41,13 @@ test("the production alias hook still maps plain aliases into src/", async () =>
   );
 });
 
-for (const script of ["owner-migration-verify.mjs", "owner-migration-run.mjs"]) {
+for (const script of [
+  "owner-migration-verify.mjs",
+  "owner-migration-run.mjs",
+  "owner-license-provider-verify.mjs",
+  "owner-live-verify.mjs",
+  "owner-admin-mutation-probe.mjs",
+]) {
   test(`scripts/${script} refuses to run without DATABASE_URL`, () => {
     const env = { ...process.env };
     delete env.DATABASE_URL;

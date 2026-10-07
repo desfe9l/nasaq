@@ -1,0 +1,104 @@
+name: Owner production migration + live verification
+
+# Runs the owner's identity migration and every post-migration verification
+# against the REAL production state, from a runner that holds the deployment's
+# own configuration (the GitHub Environment's secrets — the same DATABASE_URL
+# and R2 credentials the Vercel deployment uses).
+#
+# Modes:
+#   dry-run  — report what WOULD move; nothing is written. Run this first and
+#              read the output. (The migration itself is guarded: only the
+#              durable-binding canonical owner, only identity-store-proven
+#              orphans, live accounts untouchable.)
+#   migrate  — dry-run, then the guarded move, then the complete live
+#              verification battery, including the reversible admin-mutation
+#              probe (synthetic rows only, cleaned up in the same run).
+#   verify   — skip the move; re-run the whole verification battery only.
+#
+# Every step prints statuses, counts and sha256 fingerprints — never a user
+# id, address, licence key, key hash or secret. Secrets arrive as environment
+# variables and are masked by Actions in any output.
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment whose state is operated on
+        required: true
+        default: Production
+        type: choice
+        options: [Production]
+      mode:
+        description: dry-run (inspect), migrate (move + full verification), verify (verification only)
+        required: true
+        default: dry-run
+        type: choice
+        options: [dry-run, migrate, verify]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: owner-production-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: ${{ inputs.environment }}
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      KEYGEN_API_TOKEN: ${{ secrets.KEYGEN_API_TOKEN }}
+      KEYGEN_ACCOUNT_SLUG: ${{ secrets.KEYGEN_ACCOUNT_SLUG }}
+      KEYGEN_PRODUCT_ID: ${{ secrets.KEYGEN_PRODUCT_ID }}
+      NASAQ_OWNER_ID: ${{ secrets.NASAQ_OWNER_ID }}
+      NASAQ_OWNER_EMAIL: ${{ secrets.NASAQ_OWNER_EMAIL }}
+      NASAQ_SUPER_ADMIN_IDS: ${{ secrets.NASAQ_SUPER_ADMIN_IDS }}
+      NASAQ_ADMIN_USER_IDS: ${{ secrets.NASAQ_ADMIN_USER_IDS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+
+      - name: Migration dry run (what would move, fingerprints only)
+        if: inputs.mode != 'verify'
+        run: npm run migrate:owner -- --dry-run
+
+      - name: Owner identity migration (guarded, fingerprinted before/after)
+        if: inputs.mode == 'migrate'
+        run: npm run migrate:owner
+
+      - name: Database verification (orphan rows = 0, structural integrity)
+        run: |
+          set -o pipefail
+          npm run verify:owner -- --json | tee owner-verify-report.json
+
+      - name: Keygen live verification (existing keys, status, activations, owner scope)
+        run: npm run verify:provider
+
+      - name: Live identity chain (auth = owner = database = licence = admin = editor entitlement)
+        run: npm run verify:owner-live
+
+      - name: Reversible admin-mutation probe (synthetic rows, cleaned up)
+        if: inputs.mode == 'migrate'
+        run: npm run probe:admin-mutations
+
+      - name: Object storage round trip (upload → metadata → read → delete)
+        run: npm run storage:verify
+
+      - name: Upload verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owner-verify-report-${{ inputs.mode }}
+          path: owner-verify-report.json
+          if-no-files-found: ignore

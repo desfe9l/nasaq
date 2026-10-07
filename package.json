@@ -51,7 +51,10 @@
     "test:editor:browser": "node scripts/editor-quality-browser-check.mjs",
     "test:editor:smoke": "node scripts/editor-quality-production-smoke.mjs",
     "verify:owner": "node --experimental-strip-types --import ./scripts/app-alias-register.mjs scripts/owner-migration-verify.mjs",
-    "migrate:owner": "node --experimental-strip-types --import ./scripts/app-alias-register.mjs scripts/owner-migration-run.mjs"
+    "migrate:owner": "node --experimental-strip-types --import ./scripts/app-alias-register.mjs scripts/owner-migration-run.mjs",
+    "verify:provider": "node --experimental-strip-types --import ./scripts/app-alias-register.mjs scripts/owner-license-provider-verify.mjs",
+    "verify:owner-live": "node --experimental-strip-types --import ./scripts/app-alias-register.mjs scripts/owner-live-verify.mjs",
+    "probe:admin-mutations": "node --experimental-strip-types --import ./scripts/app-alias-register.mjs scripts/owner-admin-mutation-probe.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.4",
