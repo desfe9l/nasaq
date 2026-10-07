@@ -115,6 +115,13 @@ jobs:
           status=0
           npm run test:nsq:browser 2>&1 | tee /tmp/nsq-browser.log || status=1
           npm run test:leave:browser 2>&1 | tee /tmp/leave-browser.log || status=1
+          if [ "$status" -ne 0 ]; then
+            # Job logs and artifacts both live on a blob host that some networks
+            # cannot reach; an annotation rides the checks API and is readable
+            # from anywhere `gh` works. Newlines are folded so it stays one line.
+            detail=$(tail -c 1200 /tmp/nsq-browser.log /tmp/leave-browser.log | tr '\n' '~')
+            echo "::error::browser suite failed: $detail"
+          fi
           exit $status
       - name: Upload browser diagnostics
         if: always()
