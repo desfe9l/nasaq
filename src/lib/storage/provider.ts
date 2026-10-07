@@ -152,7 +152,7 @@ export class UnsafeKeySegmentError extends Error {
 /**
  * Stable, path-safe segment for an identity that is not already safe.
  *
- * Better Auth ids are alphanumeric, but an external identity provider could
+ * Session ids are alphanumeric, but an external identity provider could
  * hand over an id containing `@`, `:` or `/`. Rejecting those users outright
  * would be a functional regression, so the id is sanitised and suffixed with a
  * deterministic FNV-1a digest of the ORIGINAL value: two different ids can

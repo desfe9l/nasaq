@@ -3,7 +3,7 @@
  * rotation, revocation, lockouts.
  *
  * This is the ONLY place that decides who someone is. It talks to the
- * storage-agnostic `AuthStore` (`./store`), never to Postgres, Better Auth, an
+ * storage-agnostic `AuthStore` (`./store`), never to Postgres, a vendor, an
  * identity provider or process memory, so login keeps working exactly as long as
  * durable storage does — and the app's database is no longer part of that answer.
  *

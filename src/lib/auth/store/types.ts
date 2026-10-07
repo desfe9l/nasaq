@@ -1,7 +1,7 @@
 /**
  * The identity storage contract (AuthStore) — storage-agnostic by design.
  *
- * NASAQ owns its accounts. Nothing here knows about Better Auth, Postgres,
+ * NASAQ owns its accounts. Nothing here knows about Postgres,
  * Cloudflare or the filesystem: the service layer (`../service.server.ts`) speaks
  * only this interface, so the backend can be swapped without touching
  * authentication, its routes or its UI.

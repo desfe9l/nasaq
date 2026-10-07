@@ -304,8 +304,8 @@ function verificationFromResponse(key: string, response: KeygenResponse, entitle
 }
 
 function userScope(email: string): { product: string; user: string } {
-  // Keygen's scope.user is a Keygen user UUID *or email*, not the Better Auth
-  // user.id. Only server functions may supply the email from the verified session.
+  // Keygen's scope.user is a Keygen user UUID *or email*, not the NASAQ account
+  // id. Only server functions may supply the email from the verified session.
   const user = email?.trim().toLowerCase();
   if (!user || !user.includes("@")) throw new KeygenConfigurationError("Verified session email is required for Keygen user scope");
   return { product: keygenProductId(), user };
@@ -313,7 +313,7 @@ function userScope(email: string): { product: string; user: string } {
 
 export async function validateKeygenLicense(key: string, sessionEmail: string): Promise<KeygenVerification> {
   // Do not relax a user-locked policy: both activation and later validation
-  // must supply the same identity, obtained server-side from Better Auth.
+  // must supply the same identity, obtained server-side from the session.
   const normalizedKey = normalizeLicenseKey(key);
   const response = await request(
     "/licenses/actions/validate-key",

@@ -11,7 +11,7 @@
  *  3. Replays die on `gumroad_pings.dedupe_key` (unique) — Gumroad retries the
  *     same notification many times.
  *  4. Buyer → account binding happens by exact match between the VERIFIED
- *     buyer email and the Better Auth account email. A userId is never read
+ *     buyer email and the account email from the auth session. A userId is never read
  *     from the request, and `bound_user_id` is written once — a second account
  *     can never take over a bound subscription.
  *  5. Keygen stays the licensing authority: this module only drives it (mint /

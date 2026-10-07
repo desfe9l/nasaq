@@ -31,7 +31,7 @@ export type AuthStatus = {
   databaseConfigured: boolean;
   /** Which backend serves identity, or null when the deployment has none. */
   storageKind: "cloudflare-r2" | "postgres" | "filesystem" | null;
-  /** The origin Better Auth signs against, when the deployment pins one. */
+  /** The origin the auth service answers on, when the deployment pins one. */
   baseURL: string | null;
 };
 

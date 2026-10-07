@@ -92,7 +92,7 @@ export async function resolveUserIdForBuyerEmail(
     select id from "user" where lower(email) = ${normalized} limit 2
   `;
   // Zero rows → not registered yet. Two+ rows cannot happen (unique email in
-  // Better Auth) but fail closed rather than guessing between identities.
+  // the identity store) but fail closed rather than guessing between identities.
   if (rows.length !== 1) return null;
   return { userId: rows[0].id };
 }

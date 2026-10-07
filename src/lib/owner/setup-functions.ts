@@ -80,7 +80,7 @@ export const verifyOwnerEmailFn = createServerFn({ method: "POST" })
     if (!account) {
       return {
         ok: false,
-        detail: "لا يوجد حساب Better Auth بهذا البريد بعد. سجّل الدخول به مرة واحدة ثم أعد المحاولة.",
+        detail: "لا يوجد حساب بهذا البريد بعد. سجّل الدخول به مرة واحدة ثم أعد المحاولة.",
         variable: "NASAQ_OWNER_EMAIL",
       };
     }

@@ -60,7 +60,7 @@ export async function createTestSql(): Promise<{ sql: Sql; close: () => Promise<
   return { sql, close: () => pg.close() };
 }
 
-/** Insert a Better Auth user row so `"user"` joins resolve. */
+/** Insert a legacy `"user"` row so the licence/entitlement joins resolve. */
 export async function createUser(
   sql: Sql,
   input: { id: string; email: string; name?: string },

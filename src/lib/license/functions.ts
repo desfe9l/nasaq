@@ -600,7 +600,7 @@ export const assignLicenseFn = createServerFn({ method: "POST" })
 // actual job — an operator should never have to go hunting for a user id in
 // another table to do it.
 
-/** Resolve an email (or an id) to an actual Better Auth user. */
+/** Resolve an email (or an id) to an actual identity-store user. */
 async function resolveUser(value: string): Promise<{ id: string; email: string } | null> {
   const needle = value.trim();
   if (!needle) return null;

@@ -74,7 +74,7 @@ const ENV_SPECS: EnvSpec[] = [
     account: "MASTER OWNER",
     label: "معرّف المالك",
     sensitivity: "sensitive",
-    purpose: "مطابقة هوية Better Auth الموثّقة مع MASTER OWNER.",
+    purpose: "مطابقة الحساب الموثّق (الجلسة) مع MASTER OWNER.",
     loginUrl: "/login",
     dashboardUrl: "/owner-vault",
     apiUrl: null,
@@ -98,7 +98,7 @@ const ENV_SPECS: EnvSpec[] = [
   {
     key: "VITE_AUTH_ENABLED",
     section: "authentication",
-    service: "Better Auth / Google",
+    service: "First-party auth / Google",
     account: "NASAQ deployment",
     label: "تفعيل المصادقة",
     sensitivity: "public",
@@ -155,23 +155,24 @@ const ENV_SPECS: EnvSpec[] = [
   {
     key: "BETTER_AUTH_SECRET",
     section: "authentication",
-    service: "Better Auth",
+    service: "Legacy — no longer used",
     account: "NASAQ deployment",
-    label: "سر جلسات Better Auth",
+    label: "سر جلسات قديم (غير مستخدم)",
     sensitivity: "secret",
-    purpose: "توقيع وحماية جلسات المصادقة المحلية.",
+    purpose:
+      "لم يعد له أي دور: الجلسات الآن رموز عشوائية تُخزَّن بصمتها SHA-256 في مخزن الهوية، ولا يوجد توقيع كوكي يحتاج سرًّا. وجوده لا يضرّ، وحذفه لا يكسر شيئًا.",
     loginUrl: "/login",
     dashboardUrl: "https://vercel.com/dashboard",
     apiUrl: "/api/auth",
-    configurationLocation: "Vercel → Settings → Environment Variables",
-    guide: guide("ولّد سرًا عشوائيًا جديدًا في مزود النشر، ثم حدّثه وأعد النشر؛ ستنتهي الجلسات الحالية.", "https://vercel.com/dashboard", "BETTER_AUTH_SECRET", "Production / Preview / Development حسب البيئة", "نعم، إعادة نشر مطلوبة.", "لا يوجد Webhook.", "ألغِ القيمة القديمة بعد التأكد من عمل تسجيل الدخول الجديد."),
+    configurationLocation: "Vercel → Settings → Environment Variables (اختياري — يمكن حذفه)",
+    guide: guide("يمكنك حذف هذا المتغير من مزود النشر؛ لن تتأثر الجلسات لأنها لم تعد موقّعة به.", "https://vercel.com/dashboard", "BETTER_AUTH_SECRET (اختياري)", "لا ينطبق", "لا حاجة لإعادة نشر.", "لا يوجد Webhook.", "إن حذفته فلا حاجة لأي إجراء إضافي."),
   },
   {
     key: "BETTER_AUTH_URL",
     section: "authentication",
-    service: "Better Auth",
+    service: "First-party auth",
     account: "NASAQ deployment",
-    label: "عنوان Better Auth",
+    label: "العنوان الأساسي للمصادقة",
     sensitivity: "public",
     purpose: "العنوان الأساسي لتوليد callback وروابط Google OAuth في النشر.",
     loginUrl: "/login",
@@ -238,7 +239,7 @@ const ENV_SPECS: EnvSpec[] = [
     account: "Cloudflare account",
     label: "معرّف حساب Cloudflare R2",
     sensitivity: "sensitive",
-    purpose: "يُشتق منه endpoint المتوافق مع S3: https://<ACCOUNT_ID>.r2.cloudflarestorage.com. بدونه لا يفعّل التخزين السحابي.",
+    purpose: "يُشتق منه endpoint المتوافق مع S3: https://<ACCOUNT_ID>.r2.cloudflarestorage.com. بدونه لا يفعّل التخزين السحابي ولا مخزن الهوية (الحسابات والجلسات).",
     loginUrl: "https://dash.cloudflare.com/",
     dashboardUrl: "https://dash.cloudflare.com/",
     apiUrl: null,
@@ -569,7 +570,7 @@ const ROUTES: OwnerRouteInfo[] = [
   { label: "القوالب ومحتوى الموقع", path: "/admin/templates", status: "active", purpose: "إدارة القوالب المدفوعة ومحتوى الموقع وصوره." },
   { label: "إدارة التراخيص", path: "/admin/licenses", status: "active", purpose: "إصدار التراخيص ومراجعتها." },
   { label: "NASAQ Owner Vault", path: "/owner-vault", status: "active", purpose: "جرد المالك والبيانات الحساسة وإرشادات التغيير." },
-  { label: "تسجيل الدخول", path: "/login", status: "active", purpose: "مصادقة Better Auth / Grok." },
+  { label: "تسجيل الدخول", path: "/login", status: "active", purpose: "مصادقة المنصة نفسها (بريد/كلمة مرور أو Google) وGrok." },
   { label: "المحرر", path: "/editor", status: "active", purpose: "إنشاء التقارير والتصاميم." },
   { label: "المشاريع", path: "/projects", status: "active", purpose: "مكتبة مشاريع المستخدم." },
   { label: "القوالب", path: "/templates", status: "active", purpose: "كتالوج القوالب." },
@@ -577,7 +578,7 @@ const ROUTES: OwnerRouteInfo[] = [
   { label: "Gumroad Ping", path: "/api/webhooks/gumroad", status: "active", purpose: "استقبال إشعارات Gumroad والتحقق منها خادميًا ثم تفعيل التراخيص عبر Keygen." },
   { label: "الترخيص", path: "/license", status: "active", purpose: "تفعيل وإدارة الترخيص." },
   { label: "واجهة الهوية", path: "/الهوية", status: "active", purpose: "هوية وتقارير NASAQ." },
-  { label: "API المصادقة", path: "/api/auth/*", status: "active", purpose: "Better Auth callbacks والجلسات." },
+  { label: "API المصادقة", path: "/api/auth/*", status: "active", purpose: "نقاط المصادقة الأولى (تسجيل/دخول/خروج) وإرجاع Google والجلسات." },
   { label: "Keygen webhook", path: "/api/webhooks/keygen", status: "active", purpose: "مزامنة حالة التراخيص الموقّعة من Keygen." },
   { label: "License APIs", path: "/api/license/*", status: "active", purpose: "تفعيل والتحقق وإلغاء التراخيص." },
 ];
@@ -645,8 +646,8 @@ async function sourceEntries(): Promise<VaultEntry[]> {
       loginUrl: "https://accounts.google.com/",
       dashboardUrl: "https://console.cloud.google.com/apis/credentials",
       apiUrl: "https://accounts.google.com/o/oauth2/v2/auth",
-      purpose: "القيمة الفعلية التي يبنيها Better Auth لإعادة Google مباشرة إلى NASAQ.",
-      configurationLocation: "Better Auth socialProviders.google في src/lib/auth/server.ts؛ route handler في src/routes/api/auth/$.ts.",
+      purpose: "القيمة الفعلية التي يبنيها التطبيق لإعادة Google مباشرة إلى NASAQ.",
+      configurationLocation: "googleRedirectUri في src/lib/auth/google.server.ts؛ route handler في src/routes/api/auth/$.ts.",
       exposedInSource: true,
       changeGuide: guide("أضف URI نفسه حرفيًا في Google Web OAuth Client، ولا تضف wildcard.", "https://console.cloud.google.com/apis/credentials", "BETTER_AUTH_URL + ${GOOGLE_OAUTH_CALLBACK_PATH}", "Production", "نعم إذا تغيّر النطاق أو BETTER_AUTH_URL.", "راجع callback في Google Cloud إذا تغيّر النطاق.", "أزل URI القديم بعد نجاح النطاق الجديد."),
     }),
@@ -869,6 +870,32 @@ async function findings(
       action: "إن كانت الحاوية الفعلية باسم آخر، اضبط R2_BUCKET_NAME — وإلا فلا حاجة لتغيير شيء.",
     });
   }
+  /*
+   * Identity storage is the one thing that can make sign-in answer 503 while
+   * every page still looks healthy. Accounts and sessions live in R2 (preferred)
+   * or Postgres; with neither, the deployment fails sign-in CLOSED by design.
+   * Reporting it here in the owner's own words is what turns "sign-in is broken"
+   * into "set these two variables".
+   */
+  const { authStoreStatus } = await import("@/lib/auth/store/status");
+  const identityStorage = authStoreStatus();
+  if (!identityStorage.configured) {
+    result.push({
+      severity: "high",
+      title: "مخزن الهوية غير مهيأ — تسجيل الدخول سيفشل بـ503",
+      detail: `المتغيرات الناقصة: ${[...identityStorage.missing, "DATABASE_URL (بديل)"].join("، ")}. الحسابات لا تُحفظ في ذاكرة العملية إطلاقًا، لذلك تُرفض كل محاولة تسجيل دخول برسالة واضحة.`,
+      action:
+        "أضف مفاتيح R2 الثلاثة في Vercel (وهي نفسها المستخدمة لتخزين الأصول) أو اضبط DATABASE_URL، ثم أعد النشر.",
+    });
+  } else if (identityStorage.kind === "filesystem") {
+    result.push({
+      severity: "medium",
+      title: "مخزن الهوية محلي (تطوير فقط)",
+      detail:
+        "الحسابات والجلسات محفوظة في مجلد .nasaq-auth على هذا الجهاز؛ بيئة النشر لا تملك قرصًا دائمًا وتحتاج R2 أو DATABASE_URL.",
+      action: "على بيئة النشر: اضبط R2 أو DATABASE_URL ثم أعد النشر.",
+    });
+  }
   if (!runtime("KEYGEN_API_TOKEN")) {
     result.push({
       severity: "medium",
@@ -878,23 +905,32 @@ async function findings(
     });
   }
   /*
-   * Two unrelated secrets must never carry the same value: Better Auth signs
-   * every session cookie with BETTER_AUTH_SECRET, while GOOGLE_CLIENT_SECRET is
-   * handed to Google's token endpoint. Pasting one into both fields makes a
-   * Google-client rotation silently invalidate all sessions, and widens the
-   * blast radius of either leak to both systems. Compare values only; the
-   * finding never reveals them.
+   * Unrelated secrets must never share a value. `BETTER_AUTH_SECRET` no longer
+   * protects anything (sessions are opaque tokens, not signed cookies), but a
+   * deployment that still carries it holding the SAME string as another
+   * credential means that credential was copied around — the leak blast radius
+   * is what this reports. Compare values only; the finding never reveals them.
    */
-  const betterAuthSecret = envValue("BETTER_AUTH_SECRET");
+  const legacySessionSecret = envValue("BETTER_AUTH_SECRET");
   const googleClientSecret = envValue("GOOGLE_CLIENT_SECRET");
-  if (betterAuthSecret && googleClientSecret && betterAuthSecret === googleClientSecret) {
+  const geminiKey = envValue("GEMINI_API_KEY");
+  if (legacySessionSecret && googleClientSecret && legacySessionSecret === googleClientSecret) {
     result.push({
-      severity: "high",
+      severity: "medium",
       title: "BETTER_AUTH_SECRET وGOOGLE_CLIENT_SECRET يحملان القيمة نفسها",
       detail:
-        "سر جلسات Better Auth وسر عميل Google OAuth مضبوطان بالقيمة نفسها في runtime الحالي؛ وهما سرّان مستقلان لنظامين مختلفين.",
+        "المتغير القديم لسر الجلسات وسر عميل Google OAuth مضبوطان بالقيمة نفسها؛ سر الجلسات لم يعد مستخدمًا، لكن تطابق القيم يعني نسخ سر حقيقي إلى حقل آخر.",
       action:
-        "ولّد سرًا عشوائيًا جديدًا لـ BETTER_AUTH_SECRET في Vercel (سينهي الجلسات الحالية)، وأبقِ GOOGLE_CLIENT_SECRET كما هو من Google Cloud، ثم أعد النشر.",
+        "احذف BETTER_AUTH_SECRET من Vercel (لم يعد له دور)، وأبقِ GOOGLE_CLIENT_SECRET كما هو من Google Cloud، ثم أعد النشر.",
+    });
+  }
+  if (legacySessionSecret && geminiKey && legacySessionSecret === geminiKey) {
+    result.push({
+      severity: "medium",
+      title: "BETTER_AUTH_SECRET وGEMINI_API_KEY يحملان القيمة نفسها",
+      detail:
+        "سر قديم غير مستخدم ومفتاح الذكاء الاصطناعي بالقيمة نفسها؛ هذا يعني أن قيمة سرية نُسخت بين نظامين مستقلين.",
+      action: "احذف BETTER_AUTH_SECRET من Vercel وولّد مفتاح Gemini مستقلًا من Google AI Studio.",
     });
   }
   // The catalog contains only plans NASAQ currently supports. A missing policy

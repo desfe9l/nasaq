@@ -8,7 +8,7 @@
  * and `./http.server` (the `/api/auth/*` surface).
  *
  * Importing this file must NEVER throw. The previous implementation built a
- * Better Auth instance here, read a secret, and instantiated an R2 adapter at
+ * third-party auth instance here, read a signing secret, and built an adapter at
  * module load; when a variable was missing the import failed and took the whole
  * site down with it — including pages that have nothing to do with sign-in.
  * Everything expensive (the identity store, the database) is constructed lazily
