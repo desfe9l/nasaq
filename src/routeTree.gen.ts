@@ -69,6 +69,7 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiLicenseActivateRouteImport } from './routes/api/license/activate'
 import { Route as ApiLicenseDeactivateRouteImport } from './routes/api/license/deactivate'
 import { Route as ApiLicenseValidateRouteImport } from './routes/api/license/validate'
+import { Route as ApiOpsOwnerRecoveryRouteImport } from './routes/api/ops/owner-recovery'
 import { Route as ApiTemplatesThumbnailRouteImport } from './routes/api/templates/thumbnail'
 import { Route as ApiWebhooksGumroadRouteImport } from './routes/api/webhooks/gumroad'
 import { Route as ApiWebhooksKeygenRouteImport } from './routes/api/webhooks/keygen'
@@ -378,6 +379,11 @@ const ApiLicenseValidateRoute = ApiLicenseValidateRouteImport.update({
   path: '/api/license/validate',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOpsOwnerRecoveryRoute = ApiOpsOwnerRecoveryRouteImport.update({
+  id: '/api/ops/owner-recovery',
+  path: '/api/ops/owner-recovery',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiTemplatesThumbnailRoute = ApiTemplatesThumbnailRouteImport.update({
   id: '/api/templates/thumbnail',
   path: '/api/templates/thumbnail',
@@ -477,6 +483,7 @@ export interface FileRoutesByFullPath {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
+  '/api/ops/owner-recovery': typeof ApiOpsOwnerRecoveryRoute
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
@@ -544,6 +551,7 @@ export interface FileRoutesByTo {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
+  '/api/ops/owner-recovery': typeof ApiOpsOwnerRecoveryRoute
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
@@ -614,6 +622,7 @@ export interface FileRoutesById {
   '/api/license/activate': typeof ApiLicenseActivateRoute
   '/api/license/deactivate': typeof ApiLicenseDeactivateRoute
   '/api/license/validate': typeof ApiLicenseValidateRoute
+  '/api/ops/owner-recovery': typeof ApiOpsOwnerRecoveryRoute
   '/api/templates/thumbnail': typeof ApiTemplatesThumbnailRoute
   '/api/webhooks/gumroad': typeof ApiWebhooksGumroadRoute
   '/api/webhooks/keygen': typeof ApiWebhooksKeygenRoute
@@ -685,6 +694,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
+    | '/api/ops/owner-recovery'
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
@@ -752,6 +762,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
+    | '/api/ops/owner-recovery'
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
@@ -821,6 +832,7 @@ export interface FileRouteTypes {
     | '/api/license/activate'
     | '/api/license/deactivate'
     | '/api/license/validate'
+    | '/api/ops/owner-recovery'
     | '/api/templates/thumbnail'
     | '/api/webhooks/gumroad'
     | '/api/webhooks/keygen'
@@ -870,6 +882,7 @@ export interface RootRouteChildren {
   ApiLicenseActivateRoute: typeof ApiLicenseActivateRoute
   ApiLicenseDeactivateRoute: typeof ApiLicenseDeactivateRoute
   ApiLicenseValidateRoute: typeof ApiLicenseValidateRoute
+  ApiOpsOwnerRecoveryRoute: typeof ApiOpsOwnerRecoveryRoute
   ApiTemplatesThumbnailRoute: typeof ApiTemplatesThumbnailRoute
   ApiWebhooksGumroadRoute: typeof ApiWebhooksGumroadRoute
   ApiWebhooksKeygenRoute: typeof ApiWebhooksKeygenRoute
@@ -1297,6 +1310,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiLicenseValidateRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/ops/owner-recovery': {
+      id: '/api/ops/owner-recovery'
+      path: '/api/ops/owner-recovery'
+      fullPath: '/api/ops/owner-recovery'
+      preLoaderRoute: typeof ApiOpsOwnerRecoveryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/templates/thumbnail': {
       id: '/api/templates/thumbnail'
       path: '/api/templates/thumbnail'
@@ -1478,6 +1498,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiLicenseActivateRoute: ApiLicenseActivateRoute,
   ApiLicenseDeactivateRoute: ApiLicenseDeactivateRoute,
   ApiLicenseValidateRoute: ApiLicenseValidateRoute,
+  ApiOpsOwnerRecoveryRoute: ApiOpsOwnerRecoveryRoute,
   ApiTemplatesThumbnailRoute: ApiTemplatesThumbnailRoute,
   ApiWebhooksGumroadRoute: ApiWebhooksGumroadRoute,
   ApiWebhooksKeygenRoute: ApiWebhooksKeygenRoute,
