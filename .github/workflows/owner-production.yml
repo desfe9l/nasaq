@@ -34,6 +34,13 @@ on:
         default: dry-run
         type: choice
         options: [dry-run, migrate, verify]
+  push:
+    branches: [main]
+    paths:
+      # An auditable, git-only trigger: the change to this file IS the request
+      # (who/what/when is the commit), used where the token lacks actions:write
+      # for workflow_dispatch. `mode=` inside selects the run.
+      - "ops/owner-production.request"
 
 permissions:
   contents: read
@@ -69,12 +76,37 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
 
+      - name: Resolve operating mode (dispatch input, or the request file on push)
+        id: op
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            mode="${{ inputs.mode }}"
+          else
+            mode="$(sed -n 's/^mode[:=] *//p' ops/owner-production.request | tail -1 | tr -d '[:space:]')"
+          fi
+          case "$mode" in
+            dry-run|migrate|verify) ;;
+            *) echo "::error::unknown mode '$mode' (expected dry-run|migrate|verify)"; exit 2;;
+          esac
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "operating mode: $mode"
+
+      - name: Production environment sanity (names only, never values)
+        shell: bash
+        run: |
+          for var in DATABASE_URL R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do
+            if [ -z "${!var:-}" ]; then echo "::error::required environment $var is not configured for this run"; exit 2; fi
+          done
+          echo "required environment names present"
+          if [ -z "${KEYGEN_API_TOKEN:-}" ]; then echo "::warning::KEYGEN_API_TOKEN absent — the provider verification step will fail closed"; fi
+
       - name: Migration dry run (what would move, fingerprints only)
-        if: inputs.mode != 'verify'
+        if: steps.op.outputs.mode != 'verify'
         run: npm run migrate:owner -- --dry-run
 
       - name: Owner identity migration (guarded, fingerprinted before/after)
-        if: inputs.mode == 'migrate'
+        if: steps.op.outputs.mode == 'migrate'
         run: npm run migrate:owner
 
       - name: Database verification (orphan rows = 0, structural integrity)
@@ -89,7 +121,7 @@ jobs:
         run: npm run verify:owner-live
 
       - name: Reversible admin-mutation probe (synthetic rows, cleaned up)
-        if: inputs.mode == 'migrate'
+        if: steps.op.outputs.mode == 'migrate'
         run: npm run probe:admin-mutations
 
       - name: Object storage round trip (upload → metadata → read → delete)
@@ -99,6 +131,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: owner-verify-report-${{ inputs.mode }}
+          name: owner-verify-report-${{ steps.op.outputs.mode || 'unknown' }}
           path: owner-verify-report.json
           if-no-files-found: ignore
