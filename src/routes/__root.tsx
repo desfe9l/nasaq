@@ -62,6 +62,9 @@ export const Route = createRootRoute({
       { name: "apple-mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "default" },
       { name: "apple-mobile-web-app-title", content: "نَسَق" },
+      { name: "application-name", content: "نَسَق | NASAQ" },
+      { name: "msapplication-TileColor", content: "#006c35" },
+      { name: "msapplication-TileImage", content: "/icons/nasaq-192.png" },
       { title: PAGE_TITLE },
       { name: "theme-color", content: "#f4f0e8" },
       { name: "description", content: DESCRIPTION },
@@ -95,10 +98,17 @@ export const Route = createRootRoute({
       { name: "twitter:image:alt", content: SITE_OG_IMAGE_ALT },
     ],
     links: [
-      { rel: "icon", type: "image/svg+xml", href: "/nasaq-mark.svg" },
+      { rel: "icon", type: "image/svg+xml", href: "/icons/nasaq-app-icon.svg" },
+      { rel: "icon", type: "image/svg+xml", href: "/icons/nasaq-app-icon-dark.svg", media: "(prefers-color-scheme: dark)" },
+      { rel: "icon", type: "image/svg+xml", href: "/icons/nasaq-app-icon-light.svg", media: "(prefers-color-scheme: light)" },
+      { rel: "icon", type: "image/png", sizes: "32x32", href: "/icons/nasaq-32.png" },
+      { rel: "icon", type: "image/png", sizes: "16x16", href: "/icons/nasaq-16.png" },
+      { rel: "shortcut icon", href: "/favicon.svg" },
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/icons/nasaq-180.png" },
+      { rel: "apple-touch-icon", sizes: "192x192", href: "/icons/nasaq-192.png" },
+      { rel: "apple-touch-icon", sizes: "512x512", href: "/icons/nasaq-512.png" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
         rel: "preconnect",
@@ -144,11 +154,11 @@ export const Route = createRootRoute({
   },
 });
 
-/** Owner mark wins; otherwise the current NASAQ logo. Never the retired glyph. */
+/** Owner mark wins; otherwise the dedicated NASAQ app icon. Never the retired glyph. */
 function ManagedBrandIcon() {
   const mark = useSiteSettings().images.mark?.trim() ?? "";
   useEffect(() => {
-    const href = mark || "/nasaq-mark.svg";
+    const href = mark || "/icons/nasaq-app-icon.svg";
     const type = mark.startsWith("data:image/png")
       ? "image/png"
       : mark.startsWith("data:image/jpeg") || mark.startsWith("data:image/jpg")
