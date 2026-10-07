@@ -88,12 +88,15 @@ export async function isAdminIdentity(
   identity: VerifiedIdentity,
   config = readAdminIdentityConfig(),
 ): Promise<boolean> {
-  if (isConfiguredAdminIdentity(identity, config)) return true;
-
-  const rows = await sql<{ user_id: string }>`
-    select user_id from admin_users where user_id = ${identity.id} limit 1
-  `;
-  return rows.length > 0;
+  /*
+   * Delegated to `isAdminCaller` on purpose. This used to be a second,
+   * shorter copy of the same decision (configuration, then the row), and the
+   * two drifted the moment the durable owner binding was added: the template
+   * console and the vault would have kept answering "not an admin" for an
+   * owner whose id changed, while the commercial console let them in. One
+   * implementation, one answer.
+   */
+  return isAdminCaller(sql, identity, { config });
 }
 
 /** Where an account's verified address is read from when the caller has no session flag. */
@@ -145,7 +148,9 @@ export type AdminCallerOptions = {
  *      — no database needed;
  *   2. configured address with a server-VERIFIED session address — no database needed;
  *   3. an `admin_users` row (ADMIN or SUPER_ADMIN);
- *   4. only when the caller supplied no session verification state (id-only
+ *   4. the durable owner binding — the account the deployment's owner was
+ *      re-bound to after the first-party auth migration changed their id;
+ *   5. only when the caller supplied no session verification state (id-only
  *      internal callers): the account's verified address from the identity store.
  *
  * Before this existed the commercial console (users, payments, plans, settings,
@@ -176,6 +181,25 @@ export async function isAdminCaller(
     select user_id from admin_users where user_id = ${identity.id} limit 1
   `;
   if (rows.length > 0) return true;
+
+  /*
+   * 5. the durable owner binding.
+   *
+   * An account whose id changed in the first-party auth migration matches no
+   * configured id and owns no `admin_users` row until `recoverOwnerAuthority`
+   * re-binds it; once bound, this is what lets it back in. It is read from
+   * server-held state and matched on the verified session id, so it is no more
+   * forgeable than the `admin_users` row above it.
+   */
+  try {
+    const { readOwnerBinding, isBoundAdmin } = await import("./owner-binding.server.ts");
+    if (isBoundAdmin(await readOwnerBinding(sql), { id: identity.id, email: identity.email ?? null, emailVerified: identity.emailVerified === true })) {
+      return true;
+    }
+  } catch {
+    /* unreadable binding is "not an admin", exactly like an unreadable row */
+  }
+
   if (sessionVerified || config.emails.size === 0) return false;
 
   const account = await (options.lookupAccount ?? defaultAccountLookup(sql))(identity.id);

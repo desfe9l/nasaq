@@ -95,10 +95,19 @@ export async function isSuperAdminIdentity(
     const rows = await sql<{ role: string }>`
       select role from admin_users where user_id = ${identity.id} limit 1
     `;
-    return rows[0]?.role === SUPER_ADMIN_ROLE;
+    if (rows[0]?.role === SUPER_ADMIN_ROLE) return true;
   } catch {
     // A database without the `role` column (pre-0006) degrades to the
     // configuration check rather than locking the owner out mid-deploy.
+    return false;
+  }
+  // The durable binding: an owner whose account id changed in the first-party
+  // auth migration is the authority even though `NASAQ_OWNER_ID` still names
+  // the pre-migration id. Written once, server-side, never from the request.
+  try {
+    const { readOwnerBinding, isBoundOwner } = await import("./owner-binding.server.ts");
+    return isBoundOwner(await readOwnerBinding(sql), identity);
+  } catch {
     return false;
   }
 }
