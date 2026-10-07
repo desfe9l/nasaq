@@ -70,7 +70,8 @@ export function isConfiguredAdminIdentity(
 ): boolean {
   return Boolean(
     config.ids.has(identity.id) ||
-      (identity.email &&
+      (identity.emailVerified &&
+        identity.email &&
         config.emails.has(identity.email.trim().toLowerCase())),
   );
 }
@@ -113,12 +114,20 @@ export async function isAdminUser(
   `;
   if (rows.length > 0) return true;
   if (config.ids.has(userId)) return true;
-  if (userEmail && config.emails.has(userEmail.trim().toLowerCase())) return true;
   if (config.emails.size === 0) return false;
 
-  const userRows = await sql<{ email: string | null }>`
-    select email from "user" where id = ${userId} limit 1
+  const userRows = await sql<{ email: string | null; emailVerified: boolean }>`
+    select email, "emailVerified" from "user" where id = ${userId} limit 1
   `;
-  const email = userEmail || userRows[0]?.email || null;
-  return isConfiguredAdminIdentity({ id: userId, email }, config);
+  const user = userRows[0];
+  return isConfiguredAdminIdentity(
+    {
+      id: userId,
+      // Prefer the account row so a caller cannot provide an unverified/stale
+      // email value to turn an allowlisted address into an admin grant.
+      email: user?.email ?? userEmail ?? null,
+      emailVerified: user?.emailVerified === true,
+    },
+    config,
+  );
 }

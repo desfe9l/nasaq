@@ -26,12 +26,13 @@ export type OwnerSetupOverview = {
   checks: import("./setup.server").SetupCheck[];
 };
 
-async function requireAdmin(context: { userId: string; userEmail: string | null }) {
+async function requireAdmin(context: { userId: string; userEmail: string | null; userEmailVerified: boolean }) {
   const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
   const { denyForbidden } = await import("@/lib/auth/forbidden.server");
   const authorization = await getAuthorizationContext({
     id: context.userId,
     email: context.userEmail,
+    emailVerified: context.userEmailVerified,
   });
   // A signed-in non-admin is 403, not 500: see `forbidden.server.ts`.
   if (!authorization.isAdmin) await denyForbidden();

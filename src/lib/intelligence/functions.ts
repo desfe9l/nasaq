@@ -27,6 +27,7 @@ export const intelligenceNoteFn = createServerFn({ method: "POST" })
     const allowed = await isAdminIdentity(await getSql(), {
       id: context.userId,
       email: context.userEmail,
+      emailVerified: context.userEmailVerified,
     });
     if (!allowed) {
       return { ok: false, code: "unauthorized", note: "" };

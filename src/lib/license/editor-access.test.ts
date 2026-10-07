@@ -136,7 +136,7 @@ async function sessionUserOf(id: string): Promise<AppUser> {
  * function is the one the editor and the settings panel call.
  */
 async function stateOf(user: { id: string; email: string }) {
-  const access = await getAuthorizationContext({ id: user.id, email: user.email });
+  const access = await getAuthorizationContext({ id: user.id, email: user.email, emailVerified: true });
   const previous = access.license
     ? null
     : ((await findLicensesByUserId(user.id))[0] ?? null);

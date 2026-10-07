@@ -946,7 +946,7 @@ export const getOwnerVaultFn = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
     const { denyForbidden } = await import("@/lib/auth/forbidden.server");
-    const authorization = await getAuthorizationContext({ id: context.userId, email: context.userEmail });
+    const authorization = await getAuthorizationContext({ id: context.userId, email: context.userEmail, emailVerified: context.userEmailVerified });
     // The vault deliberately reveals real secret values, so a signed-in
     // non-admin must be refused here — 403, not a crash-shaped 500.
     if (!authorization.isAdmin) await denyForbidden();

@@ -57,6 +57,7 @@ export const analyzeImageFn = createServerFn({ method: "POST" })
     const access = await getAuthorizationContext({
       id: context.userId,
       email: context.userEmail,
+      emailVerified: context.userEmailVerified,
     });
     try {
       requireFeature(access, "ai_report");

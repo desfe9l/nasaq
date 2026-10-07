@@ -22,7 +22,11 @@ import type {
   GumroadVerificationTestResult,
 } from "./types";
 
-type AdminContext = { userId: string; userEmail: string | null };
+type AdminContext = {
+  userId: string;
+  userEmail: string | null;
+  userEmailVerified: boolean;
+};
 
 const adminGate = async (context: AdminContext): Promise<void> => {
   /*
@@ -34,7 +38,7 @@ const adminGate = async (context: AdminContext): Promise<void> => {
    */
   const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
   const { denyForbidden } = await import("@/lib/auth/forbidden.server");
-  const authorization = await getAuthorizationContext({ id: context.userId, email: context.userEmail });
+  const authorization = await getAuthorizationContext({ id: context.userId, email: context.userEmail, emailVerified: context.userEmailVerified });
   if (!authorization.isAdmin) await denyForbidden();
 };
 

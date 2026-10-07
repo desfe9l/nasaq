@@ -45,7 +45,11 @@ export const authMiddleware = createMiddleware({ type: "function" })
     const sessionUser = await getSessionUser(context.bearerToken);
     const userId = sessionUser?.id ?? (await requireUserId(context.bearerToken));
     return next({
-      context: { userId, userEmail: sessionUser?.email ?? null },
+      context: {
+        userId,
+        userEmail: sessionUser?.email ?? null,
+        userEmailVerified: sessionUser?.emailVerified === true,
+      },
     });
   });
 
@@ -61,6 +65,10 @@ export const optionalAuthMiddleware = createMiddleware({ type: "function" })
     assertSameSiteRequest();
     const user = await getSessionUser(context.bearerToken);
     return next({
-      context: { userId: user?.id ?? null, userEmail: user?.email ?? null },
+      context: {
+        userId: user?.id ?? null,
+        userEmail: user?.email ?? null,
+        userEmailVerified: user?.emailVerified === true,
+      },
     });
   });

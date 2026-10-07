@@ -42,9 +42,13 @@ export type UploadAssetResult =
   | { ok: true; asset: StoredAsset }
   | { ok: false; reason: StorageFailureReason };
 
-async function hasCloudStorageAccess(context: { userId: string; userEmail?: string | null }): Promise<boolean> {
+async function hasCloudStorageAccess(context: {
+  userId: string;
+  userEmail?: string | null;
+  userEmailVerified?: boolean;
+}): Promise<boolean> {
   const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
-  const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail ?? null });
+  const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail ?? null, emailVerified: context.userEmailVerified === true });
   return access.isOwner || access.isAdmin || Boolean(access.license);
 }
 
@@ -530,6 +534,7 @@ export const verifyObjectStorage = createServerFn({ method: "POST" })
     const authorization = await getAuthorizationContext({
       id: context.userId,
       email: context.userEmail,
+      emailVerified: context.userEmailVerified,
     });
     if (!authorization.isAdmin) await denyForbidden();
 

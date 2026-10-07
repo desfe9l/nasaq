@@ -7,11 +7,12 @@ import {
 } from "./admin-identity.server.ts";
 import { isOwnerIdentity, ownerConfigPresent } from "./owner.server.ts";
 
-test("owner matching accepts the configured id or email", () => {
+test("owner matching accepts configured ids and verified configured emails only", () => {
   const config = { id: "owner-123", email: "owner@example.com" };
-  assert.equal(isOwnerIdentity({ id: "owner-123", email: "other@example.com" }, config), true);
-  assert.equal(isOwnerIdentity({ id: "other", email: "OWNER@example.com" }, config), true);
-  assert.equal(isOwnerIdentity({ id: "other", email: "other@example.com" }, config), false);
+  assert.equal(isOwnerIdentity({ id: "owner-123", email: "other@example.com", emailVerified: false }, config), true);
+  assert.equal(isOwnerIdentity({ id: "other", email: "OWNER@example.com", emailVerified: true }, config), true);
+  assert.equal(isOwnerIdentity({ id: "other", email: "owner@example.com", emailVerified: false }, config), false);
+  assert.equal(isOwnerIdentity({ id: "other", email: "other@example.com", emailVerified: true }, config), false);
 });
 
 test("owner configuration presence never depends on exposing its values", () => {
@@ -27,19 +28,26 @@ const ADMIN_CONFIG: AdminIdentityConfig = {
 
 test("administrator matching accepts only configured ids and emails", () => {
   assert.equal(
-    isConfiguredAdminIdentity({ id: "admin-id", email: null }, ADMIN_CONFIG),
+    isConfiguredAdminIdentity({ id: "admin-id", email: null, emailVerified: false }, ADMIN_CONFIG),
     true,
   );
   assert.equal(
     isConfiguredAdminIdentity(
-      { id: "different-id", email: "ADMIN@example.com" },
+      { id: "different-id", email: "ADMIN@example.com", emailVerified: true },
       ADMIN_CONFIG,
     ),
     true,
   );
   assert.equal(
     isConfiguredAdminIdentity(
-      { id: "customer-id", email: "customer@example.com" },
+      { id: "different-id", email: "admin@example.com", emailVerified: false },
+      ADMIN_CONFIG,
+    ),
+    false,
+  );
+  assert.equal(
+    isConfiguredAdminIdentity(
+      { id: "customer-id", email: "customer@example.com", emailVerified: true },
       ADMIN_CONFIG,
     ),
     false,

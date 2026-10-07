@@ -26,9 +26,9 @@ type Gate =
   | { ok: true; userId: string; premium: boolean; staff: boolean }
   | { ok: false; error: string; code: "auth" | "forbidden" | "suspended" };
 
-async function gatePersonal(context: { userId: string; userEmail: string | null }): Promise<Gate> {
+async function gatePersonal(context: { userId: string; userEmail: string | null; userEmailVerified: boolean }): Promise<Gate> {
   const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
-  const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail });
+  const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail, emailVerified: context.userEmailVerified });
   if (access.isSuspended) {
     return { ok: false, code: "suspended", error: "الحساب موقوف — قوالبي غير متاحة." };
   }
@@ -352,7 +352,7 @@ export const getSharedPersonalTemplateFn = createServerFn({ method: "POST" })
       let allowed = false;
       if (context.userId) {
         const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
-        const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail });
+        const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail, emailVerified: context.userEmailVerified });
         allowed = access.isAdmin || access.isOwner || access.entitlements.premium_templates === true;
       }
       if (!allowed && data.includeContent) {

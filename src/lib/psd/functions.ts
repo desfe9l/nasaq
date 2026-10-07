@@ -7,11 +7,19 @@ import { PSD_MAX_BYTES, magicHexOk, sanitizeFileName } from "@/lib/editor/psd/se
 const OFFICE_MAX_BYTES = 80 * 1024 * 1024;
 const IMPORT_FORMATS = new Set<ImportKind>(["psd", "psb", "docx", "pptx", "xlsx", "pdf", "png", "jpg", "svg"]);
 
-async function ownerGate(context: { userId: string | null; userEmail?: string | null }) {
+async function ownerGate(context: {
+  userId: string | null;
+  userEmail?: string | null;
+  userEmailVerified?: boolean;
+}) {
   const { verifyTemplateManager } = await import("@/lib/admin/owner-gate.server");
   const { getSql } = await import("@/lib/db");
   return verifyTemplateManager(
-    { userId: context.userId || "", userEmail: context.userEmail ?? null },
+    {
+      userId: context.userId || "",
+      userEmail: context.userEmail ?? null,
+      userEmailVerified: context.userEmailVerified === true,
+    },
     getSql(),
   );
 }

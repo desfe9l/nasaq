@@ -38,6 +38,7 @@ import { DEV_USER_ID } from "@/lib/auth/verify.server";
 export interface CallerIdentity {
   userId: string;
   userEmail: string | null;
+  userEmailVerified: boolean;
 }
 
 export type OwnerGateResult =
@@ -71,6 +72,7 @@ export async function verifyTemplateManager(
   const identity: VerifiedIdentity = {
     id: context.userId,
     email: context.userEmail,
+    emailVerified: context.userEmailVerified,
   };
   const sql = await sqlPromise;
   const [{ isSuperAdminIdentity, ensureOwnerSuperAdmin }, { isAdminIdentity }] =

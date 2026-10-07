@@ -1,6 +1,8 @@
 export type OwnerIdentity = {
   id: string;
   email: string | null;
+  /** Authoritative account-row value from the server-verified session. */
+  emailVerified: boolean;
 };
 
 export type OwnerConfig = {
@@ -32,6 +34,8 @@ export function isOwnerIdentity(
 ): boolean {
   return Boolean(
     (config.id && identity.id === config.id) ||
-      (config.email && identity.email?.trim().toLowerCase() === config.email),
+      (config.email &&
+        identity.emailVerified &&
+        identity.email?.trim().toLowerCase() === config.email),
   );
 }

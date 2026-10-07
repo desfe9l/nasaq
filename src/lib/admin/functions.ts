@@ -91,7 +91,11 @@ function storageFailure(action: string, err: unknown): { ok: false; error: strin
   return { ok: false as const, error: `تعذّر ${action}: ${safe}` };
 }
 
-type VerifiedContext = { userId: string; userEmail: string | null };
+type VerifiedContext = {
+  userId: string;
+  userEmail: string | null;
+  userEmailVerified: boolean;
+};
 
 /**
  * Authorize a caller for the template catalogue — the platform's PAID content.
@@ -120,6 +124,7 @@ async function verifyAdmin(context: VerifiedContext): Promise<boolean> {
   return isAdminIdentity(await getSql(), {
     id: context.userId,
     email: context.userEmail,
+    emailVerified: context.userEmailVerified,
   });
 }
 
@@ -495,7 +500,11 @@ export const adminLicenseAccessFn = createServerFn({ method: "POST" })
       sql(),
       import("@/lib/auth/super-admin.server"),
     ]);
-    const identity = { id: context.userId, email: context.userEmail };
+    const identity = {
+      id: context.userId,
+      email: context.userEmail,
+      emailVerified: context.userEmailVerified,
+    };
     const diagnostics = await superAdminDiagnostics(db, identity);
     return {
       ...diagnostics,
@@ -513,7 +522,11 @@ export const adminBootstrapOwnerFn = createServerFn({ method: "POST" })
       sql(),
       import("@/lib/auth/super-admin.server"),
     ]);
-    const identity = { id: context.userId, email: context.userEmail };
+    const identity = {
+      id: context.userId,
+      email: context.userEmail,
+      emailVerified: context.userEmailVerified,
+    };
     const result = await ensureOwnerSuperAdmin(db, identity);
     const diagnostics = await superAdminDiagnostics(db, identity);
     return { ...result, ...diagnostics };
@@ -640,7 +653,7 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
       let allowed = false;
       if (context.userId) {
         const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
-        const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail });
+        const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail, emailVerified: context.userEmailVerified });
         allowed = access.isAdmin || access.entitlements.premium_templates === true;
       }
       if (!allowed) return { ok: false as const, error: "هذا القالب متاح في النسخة الكاملة", locked: true };

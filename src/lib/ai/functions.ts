@@ -69,6 +69,7 @@ export const generateReportDraftFn = createServerFn({ method: "POST" })
     const access = await getAuthorizationContext({
       id: context.userId,
       email: context.userEmail,
+      emailVerified: context.userEmailVerified,
     });
     try {
       requireFeature(access, "ai_report");
@@ -144,7 +145,7 @@ export const generateDesignBriefFn = createServerFn({ method: "POST" })
     const { getAuthorizationContext, requireFeature } = await import(
       "@/lib/auth/authorization.server"
     );
-    const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail });
+    const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail, emailVerified: context.userEmailVerified });
     try {
       requireFeature(access, "ai_report");
     } catch {
@@ -202,6 +203,7 @@ export const transformSelectionFn = createServerFn({ method: "POST" })
     const access = await getAuthorizationContext({
       id: context.userId,
       email: context.userEmail,
+      emailVerified: context.userEmailVerified,
     });
     try {
       requireFeature(access, "ai_report");

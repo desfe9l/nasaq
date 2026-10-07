@@ -73,7 +73,9 @@ export function isConfiguredSuperAdminIdentity(
 ): boolean {
   return Boolean(
     config.ids.has(identity.id) ||
-      (identity.email && config.emails.has(identity.email.trim().toLowerCase())),
+      (identity.emailVerified &&
+        identity.email &&
+        config.emails.has(identity.email.trim().toLowerCase())),
   );
 }
 

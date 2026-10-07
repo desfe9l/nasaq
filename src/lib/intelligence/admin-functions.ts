@@ -15,9 +15,9 @@ async function sql() {
   return getSql();
 }
 
-async function canManage(context: { userId: string | null; userEmail?: string | null }): Promise<boolean> {
+async function canManage(context: { userId: string | null; userEmail?: string | null; userEmailVerified?: boolean }): Promise<boolean> {
   const { isAdminIdentity } = await import("@/lib/auth/admin-identity.server");
-  return isAdminIdentity(await sql(), { id: context.userId || "", email: context.userEmail ?? null });
+  return isAdminIdentity(await sql(), { id: context.userId || "", email: context.userEmail ?? null, emailVerified: context.userEmailVerified === true });
 }
 
 async function readReferences(): Promise<StudioVisualReference[]> {

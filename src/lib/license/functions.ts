@@ -115,12 +115,13 @@ async function licenceRateLimited(action: string, userId: string, limit: number)
  * server-side from the verified session only — a client cannot claim it.
  */
 async function isAdministrator(
-  context: { userId: string; userEmail: string | null },
+  context: { userId: string; userEmail: string | null; userEmailVerified: boolean },
 ): Promise<boolean> {
   const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
   const access = await getAuthorizationContext({
     id: context.userId,
     email: context.userEmail,
+    emailVerified: context.userEmailVerified,
   });
   if (access.isAdmin || access.isOwner) return true;
   const { getSql } = await import("@/lib/db");
@@ -129,6 +130,7 @@ async function isAdministrator(
     return await isSuperAdminIdentity(await getSql(), {
       id: context.userId,
       email: context.userEmail,
+      emailVerified: context.userEmailVerified,
     });
   } catch {
     return false;
@@ -141,11 +143,11 @@ async function accountSuspended(userId: string): Promise<boolean> {
   return (await getSubscription(await getSql(), userId))?.status === "SUSPENDED";
 }
 
-async function isSuperAdministrator(context: { userId: string; userEmail: string | null }): Promise<boolean> {
+async function isSuperAdministrator(context: { userId: string; userEmail: string | null; userEmailVerified: boolean }): Promise<boolean> {
   if (!(await isAdministrator(context))) return false;
   const { getSql } = await import("@/lib/db");
   const { isSuperAdminIdentity } = await import("@/lib/auth/super-admin.server");
-  return isSuperAdminIdentity(await getSql(), { id: context.userId, email: context.userEmail });
+  return isSuperAdminIdentity(await getSql(), { id: context.userId, email: context.userEmail, emailVerified: context.userEmailVerified });
 }
 
 function publicLicense(license: License): LicenseInfo {
@@ -322,6 +324,7 @@ export const getLicenseStatusFn = createServerFn({ method: "POST" })
     const access = await getAuthorizationContext({
       id: context.userId,
       email: context.userEmail,
+      emailVerified: context.userEmailVerified,
     });
     if (access.isAdmin) {
       return {

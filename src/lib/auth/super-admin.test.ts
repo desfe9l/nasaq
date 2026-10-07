@@ -21,9 +21,9 @@ import {
 import { createTestSql, createUser } from "../commercial/test-db.ts";
 import type { Sql } from "../db.ts";
 
-const OWNER = { id: "usr-owner", email: "Owner@Example.com" };
-const STAFF = { id: "usr-staff", email: "staff@example.com" };
-const STRANGER = { id: "usr-stranger", email: "someone@example.com" };
+const OWNER = { id: "usr-owner", email: "Owner@Example.com", emailVerified: true };
+const STAFF = { id: "usr-staff", email: "staff@example.com", emailVerified: true };
+const STRANGER = { id: "usr-stranger", email: "someone@example.com", emailVerified: true };
 
 describe("Super admin owner bypass", () => {
   let sql: Sql;
@@ -60,6 +60,24 @@ describe("Super admin owner bypass", () => {
     process.env.NASAQ_OWNER_EMAIL = "owner@example.com";
     assert.equal(isConfiguredSuperAdminIdentity(OWNER), true);
     assert.equal(isConfiguredSuperAdminIdentity(STRANGER), false);
+  });
+
+  it("does not grant or bootstrap super admin from an unverified configured email", async () => {
+    delete process.env.NASAQ_OWNER_ID;
+    process.env.NASAQ_OWNER_EMAIL = OWNER.email.toLowerCase();
+    await sql`delete from admin_users where user_id = ${OWNER.id}`;
+    const unverified = { ...OWNER, emailVerified: false };
+    assert.equal(isConfiguredSuperAdminIdentity(unverified), false);
+    assert.equal(await isSuperAdminIdentity(sql, unverified), false);
+    assert.deepEqual(await ensureOwnerSuperAdmin(sql, unverified), {
+      ok: false,
+      reason: "not_owner",
+      created: false,
+    });
+    const rows = await sql<{ role: string }>`
+      select role from admin_users where user_id = ${OWNER.id}
+    `;
+    assert.equal(rows.length, 0);
   });
 
   it("accepts a comma-separated super-admin allowlist of ids and emails", () => {

@@ -115,7 +115,7 @@ describe("a user with a valid team licence", () => {
     // subscription). Its entitlements come from the stored plan, so this is the
     // path that runs without a live provider call.
     await giveLicense({ userId: TEAM_USER, plan: "team-monthly", source: "manual" });
-    const access = await getAuthorizationContext({ id: TEAM_USER, email: "team@example.com" });
+    const access = await getAuthorizationContext({ id: TEAM_USER, email: "team@example.com", emailVerified: true });
 
     assert.ok(access.license, "the team licence was not resolved for its owner");
     assert.equal(access.license?.userId, TEAM_USER);
@@ -168,7 +168,7 @@ describe("licence status is enforced", () => {
       source: "manual",
       expiresAt: new Date(Date.now() - 86_400_000).toISOString(),
     });
-    const access = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com" });
+    const access = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com", emailVerified: true });
     assert.equal(access.license, null);
     assert.equal(access.entitlements.team_features, false);
     assert.equal(access.entitlements.advanced_export, false);
@@ -178,7 +178,7 @@ describe("licence status is enforced", () => {
   it("gives a revoked team licence no entitlements", async () => {
     await sql`delete from licenses where user_id = ${SOLO_USER}`;
     await giveLicense({ userId: SOLO_USER, plan: "team-quarterly", source: "manual", status: "REVOKED" });
-    const access = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com" });
+    const access = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com", emailVerified: true });
     assert.equal(access.license, null);
     assert.equal(access.entitlements.team_features, false);
     assert.throws(() => requireFeature(access, "advanced_export"));
@@ -190,6 +190,7 @@ describe("no licence, no team features", () => {
     const access = await getAuthorizationContext({
       id: NO_LICENCE_USER,
       email: "none@example.com",
+      emailVerified: true,
     });
     assert.equal(access.license, null);
     assert.equal(access.isAdmin, false);
@@ -205,7 +206,7 @@ describe("team entitlements do not leak between accounts", () => {
   it("does not hand one account another account's team licence", async () => {
     await sql`delete from licenses where user_id = ${SOLO_USER}`;
     // TEAM_USER already holds a valid team licence from the case above.
-    const other = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com" });
+    const other = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com", emailVerified: true });
     assert.equal(other.license, null);
     assert.equal(other.entitlements.team_features, false);
   });
@@ -216,7 +217,7 @@ describe("team entitlements do not leak between accounts", () => {
     // provider-verified identity, not on the local `user_id` alone.
     const id = await giveLicense({ userId: TEAM_USER, plan: "team-monthly" });
     await sql`update licenses set user_id = ${SOLO_USER} where id = ${id}`;
-    const access = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com" });
+    const access = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com", emailVerified: true });
     assert.equal(access.entitlements.team_features, false);
     await sql`delete from licenses where id = ${id}`;
   });
@@ -244,10 +245,10 @@ describe("Keygen entitlement codes decide a Keygen licence", () => {
     // (see getAuthorizationContext); a row not scoped to the user grants nothing.
     await sql`delete from licenses where user_id = ${SOLO_USER}`;
     const id = await giveLicense({ userId: SOLO_USER, plan: "team-monthly", source: "keygen" });
-    const scoped = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com" });
+    const scoped = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com", emailVerified: true });
     assert.equal(scoped.license?.id, id);
     await sql`update licenses set metadata = metadata - 'userScopeVerified' where id = ${id}`;
-    const unscoped = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com" });
+    const unscoped = await getAuthorizationContext({ id: SOLO_USER, email: "solo@example.com", emailVerified: true });
     assert.equal(unscoped.license, null);
     assert.equal(unscoped.entitlements.team_features, false);
     await sql`delete from licenses where user_id = ${SOLO_USER}`;

@@ -118,6 +118,7 @@ export const submitClientRequestFn = createServerFn({ method: "POST" })
         const access = await getAuthorizationContext({
           id: context.userId,
           email: context.userEmail,
+          emailVerified: context.userEmailVerified,
         });
         if (access.isAdmin) {
           licensePlan = "إدارة";
