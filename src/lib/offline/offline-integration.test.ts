@@ -5,7 +5,14 @@ import { setStorageOwner, getStorageOwner, ANON_OWNER } from "@/lib/editor/stora
 import { saveProject, getProject, listProjects, deleteProject } from "@/lib/editor/storage";
 import { createProject } from "@/lib/editor/templates";
 import { cacheEntitlement, getCachedEntitlement, isEntitlementValidOffline } from "./entitlement-cache";
-import { enqueueSync, listPendingQueue, processSyncQueue, resolveConflict } from "./sync-queue";
+import {
+  acknowledgeSyncEntry,
+  enqueueSync,
+  listPendingQueue,
+  processSyncQueue,
+  projectPayloadForCloudSave,
+  resolveConflict,
+} from "./sync-queue";
 import { cacheTemplateForOffline, getOfflineTemplate, isTemplateAvailableOffline, downloadAndCacheTemplate } from "./template-cache";
 import { saveWorkspaceSnapshot, getWorkspaceSnapshot, prepareProjectForOffline, isProjectPreparedOffline } from "./workspace-cache";
 import { documentStatus } from "@/lib/editor/document-status";
@@ -257,6 +264,80 @@ test("offline queue prevents duplicate sync operations (dedupe)", async () => {
   // Cleanup: process to clear
   setOnline(true);
   await processSyncQueue();
+  setStorageOwner(ANON_OWNER);
+});
+
+test("rename metadata never becomes a cloud document payload with pages removed", () => {
+  const fullDocument = {
+    ...createProject("official"),
+    id: "cloud-pages-intact",
+    name: "الاسم الأصلي",
+  };
+  assert.ok(fullDocument.pages.length > 0, "the durable document has pages to protect");
+
+  const rename = {
+    type: "project:rename" as const,
+    payload: { id: fullDocument.id, name: "اسم جديد", updatedAt: 200 },
+  };
+  assert.equal(
+    projectPayloadForCloudSave(rename),
+    null,
+    "a partial rename must not reach saveCloudProject as a replacement payload",
+  );
+  assert.equal(
+    projectPayloadForCloudSave({ type: "project:favorite", payload: { id: fullDocument.id, favorite: true } }),
+    null,
+  );
+  assert.equal(
+    projectPayloadForCloudSave({ type: "project:duplicate", payload: { id: "copy", sourceId: fullDocument.id } }),
+    null,
+  );
+  const fullPayload = projectPayloadForCloudSave({
+    type: "project:update",
+    payload: fullDocument,
+  });
+  assert.strictEqual(
+    fullPayload,
+    fullDocument,
+    "the accompanying full save remains the only cloud document payload",
+  );
+  assert.equal(fullDocument.pages.length, (fullPayload?.pages as unknown[])?.length);
+});
+
+test("a v1 acknowledgement cannot delete v2 enqueued under the same queue id", async () => {
+  const owner = `queue-generation-${Date.now()}`;
+  const dedupeKey = `project:update:queue-generation-${Date.now()}`;
+  setStorageOwner(owner);
+
+  await enqueueSync(
+    "project:update",
+    { id: "queue-generation", pages: [{ id: "p1" }], updatedAt: 1 },
+    { dedupeKey, version: 1 },
+  );
+  const v1 = (await listPendingQueue(owner)).find((entry) => entry.dedupeKey === dedupeKey);
+  assert.ok(v1, "v1 is the snapshot sent before its await");
+
+  await enqueueSync(
+    "project:update",
+    { id: "queue-generation", pages: [{ id: "p1" }], name: "v2", updatedAt: 2 },
+    { dedupeKey, version: 2 },
+  );
+  const v2 = (await listPendingQueue(owner)).find((entry) => entry.dedupeKey === dedupeKey);
+  assert.ok(v2, "v2 replaces the deduped row while v1 is in flight");
+  assert.equal(v2.id, v1.id, "dedupe intentionally reuses the queue id");
+  assert.ok((v2.generation ?? 0) > (v1.generation ?? 0), "replacement advances generation");
+
+  assert.equal(await acknowledgeSyncEntry(v1), false, "a stale v1 acknowledgement must not remove v2");
+  const afterStaleAck = (await listPendingQueue(owner)).find((entry) => entry.dedupeKey === dedupeKey);
+  assert.equal((afterStaleAck?.payload as { name?: string }).name, "v2");
+
+  setStorageOwner(`${owner}-other`);
+  assert.equal(await acknowledgeSyncEntry(v2), false, "an owner switch cannot acknowledge the old owner's work");
+  assert.ok((await listPendingQueue(owner)).some((entry) => entry.dedupeKey === dedupeKey));
+
+  setStorageOwner(owner);
+  assert.equal(await acknowledgeSyncEntry(v2), true, "the matching current generation can be acknowledged");
+  assert.equal((await listPendingQueue(owner)).some((entry) => entry.dedupeKey === dedupeKey), false);
   setStorageOwner(ANON_OWNER);
 });
 

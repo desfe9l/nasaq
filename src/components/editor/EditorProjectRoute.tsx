@@ -36,6 +36,13 @@ export function EditorProjectRoute({ projectId }: { projectId: string }) {
   const openId = useEditor((s) => s.id);
   /** The last projectId this route FAILED to open, so a cold link can say so. */
   const [failed, setFailed] = useState<string | null>(null);
+  /**
+   * The address has precedence when it changed underneath an in-flight open.
+   * Keep that intent until this exact id has either opened or been refused, so
+   * the editor shell cannot navigate the URL back to the outgoing document.
+  */
+  const [resolvedRouteId, setResolvedRouteId] = useState<string | null>(null);
+  const routeResolving = resolvedRouteId !== projectId;
 
   const coldOpeningVisible = useRevealWhile(!failed);
   const ready = documentPhase === "ready";
@@ -61,32 +68,44 @@ export function EditorProjectRoute({ projectId }: { projectId: string }) {
     void (async () => {
       /* One in-flight boot for the whole app (the studio asks too). */
       await hydrate();
-      if (!alive) return;
-      const live = useEditor.getState();
-      /* The address already names the live document: nothing to open. */
-      if (live.documentPhase === "ready" && live.id === projectId) {
-        setFailed(null);
+      while (alive) {
+        const live = useEditor.getState();
+        /* The address already names the live document: nothing to open. */
+        if (live.documentPhase === "ready" && live.id === projectId) {
+          setFailed(null);
+          setResolvedRouteId(projectId);
+          return;
+        }
+        /*
+         * A route can change from /editor/A to /editor/B while A is still
+         * loading. The prior implementation returned here and never retried B,
+         * leaving the address on A. Wait for that shared open to settle, then
+         * resolve the CURRENT route id from this effect's closure.
+         */
+        if (live.documentPhase === "loading") {
+          await waitForDocumentOpenToSettle();
+          continue;
+        }
+        const opened = await live.openProject(projectId);
+        if (!alive) return;
+        setFailed(opened ? null : projectId);
+        setResolvedRouteId(projectId);
         return;
       }
-      /* Another open is in flight (a template, a switch): let it finish. */
-      if (live.documentPhase === "loading") return;
-      const opened = await live.openProject(projectId);
-      if (!alive) return;
-      setFailed(opened ? null : projectId);
     })();
     return () => {
       alive = false;
     };
   }, [hydrate, projectId]);
 
+  /* A refused address must never keep a previous warm document on screen. */
+  if (failed === projectId) return <DocumentUnavailable />;
+
   /* The address and the live document agree — or a studio document is already
    * on screen and this address is being caught up with. Either way the studio
    * stays mounted: no loading surface, no re-hydration, no camera jump. */
-  if (showsRequestedDocument || warm) return <EditorApp projectId={projectId} />;
-
-  /* Cold address, and this exact document was refused/not found: say so
-   * instead of substituting another design. */
-  if (failed === projectId) return <DocumentUnavailable />;
+  if (showsRequestedDocument || warm)
+    return <EditorApp projectId={projectId} suppressRouteFollow={routeResolving} />;
 
   /* Cold address still resolving: ONE loading surface (the same skeleton the
    * studio uses), never a second bespoke "جارٍ فتح المستند…" page — and it is
@@ -97,6 +116,23 @@ export function EditorProjectRoute({ projectId }: { projectId: string }) {
   ) : (
     <div className="min-h-screen bg-paper" />
   );
+}
+
+/** Resolve only after the shared store has left its nested open lifecycle. */
+function waitForDocumentOpenToSettle(): Promise<void> {
+  if (useEditor.getState().documentPhase !== "loading") return Promise.resolve();
+  return new Promise((resolve) => {
+    const unsubscribe = useEditor.subscribe((state) => {
+      if (state.documentPhase === "loading") return;
+      unsubscribe();
+      resolve();
+    });
+    // Do not miss the narrow gap between the first check and subscription.
+    if (useEditor.getState().documentPhase !== "loading") {
+      unsubscribe();
+      resolve();
+    }
+  });
 }
 
 function DocumentUnavailable() {

@@ -314,7 +314,14 @@ import { openDesignFile } from "@/lib/editor/import/open";
  * component owns the editor chrome, the hidden file inputs the panels drive,
  * and the global keyboard map.
  */
-export function EditorApp({ projectId }: { projectId?: string } = {}) {
+export function EditorApp({
+  projectId,
+  suppressRouteFollow = false,
+}: {
+  projectId?: string;
+  /** The route is resolving a newer address; do not rewrite it to stale state. */
+  suppressRouteFollow?: boolean;
+} = {}) {
   const hydrate = useEditor((s) => s.hydrate);
   /**
    * The lifecycle of the open document. The skeleton answers to THIS — never to
@@ -390,6 +397,7 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
   const documentOrigin = useEditor((s) => s.documentOrigin);
   const navigate = useNavigate();
   useEffect(() => {
+    if (suppressRouteFollow) return;
     if (!projectId || !openProjectId || openProjectId === projectId) return;
     if (documentOrigin !== "open" || documentPhase !== "ready") return;
     void navigate({
@@ -403,7 +411,14 @@ export function EditorApp({ projectId }: { projectId?: string } = {}) {
        */
       ignoreBlocker: true,
     });
-  }, [documentOrigin, documentPhase, openProjectId, projectId, navigate]);
+  }, [
+    documentOrigin,
+    documentPhase,
+    openProjectId,
+    projectId,
+    navigate,
+    suppressRouteFollow,
+  ]);
 
   // Keep editor-side limits in sync with the same server-derived entitlements
   // used by the license and export surfaces.

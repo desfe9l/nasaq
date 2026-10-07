@@ -34,6 +34,12 @@ export interface SyncQueueEntry {
   attempts: number;
   lastError?: string | null;
   version?: number; // payload version (updatedAt) for conflict checks
+  /**
+   * Changes every time a deduped row is replaced. A completed send may only
+   * acknowledge the exact generation it sent; otherwise a newer enqueue that
+   * reuses this row's id could be lost while the earlier request was awaiting.
+   */
+  generation?: number;
 }
 
 const STORE = "syncQueue";
@@ -127,6 +133,7 @@ export async function enqueueSync(
         createdAt: Date.now(),
         attempts: 0,
         version,
+        generation: existingIdx >= 0 ? (list[existingIdx].generation ?? 0) + 1 : 1,
       };
       if (existingIdx >= 0) list[existingIdx] = entry;
       else list.push(entry);
@@ -175,6 +182,7 @@ export async function enqueueSync(
       createdAt: Date.now(),
       attempts: existing?.attempts ?? 0,
       version,
+      generation: (existing?.generation ?? 0) + 1,
     };
     await request(store.put(next));
     return next;
@@ -207,61 +215,124 @@ export async function peekQueueSize(ownerId: string = getStorageOwner()): Promis
   return (await listPendingQueue(ownerId)).length;
 }
 
-async function removeFromQueue(id: string): Promise<void> {
+async function removeFromQueue(id: string, ownerId: string): Promise<void> {
   const db = await getDb();
   if (!db) {
-    // localStorage fallback: scan all owner keys
+    // The fallback queue is already owner-partitioned. Never scan every owner
+    // bucket and delete by id alone: a sign-out/sign-in must not let a stale
+    // worker erase another owner's pending row.
     try {
-      for (let i = 0; i < localStorage.length; i += 1) {
-        const key = localStorage.key(i);
-        if (!key?.startsWith("nasaq-sync-queue::")) continue;
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        const list: SyncQueueEntry[] = JSON.parse(raw);
-        const next = list.filter((e) => e.id !== id);
-        if (next.length !== list.length) localStorage.setItem(key, JSON.stringify(next));
-      }
-    } catch {}
-    return;
-  }
-  await tx(db, "readwrite", async (store) => {
-    await request(store.delete(id));
-  });
-}
-
-async function bumpAttempt(id: string, error: string): Promise<void> {
-  const db = await getDb();
-  if (!db) {
-    try {
-      for (let i = 0; i < localStorage.length; i += 1) {
-        const key = localStorage.key(i);
-        if (!key?.startsWith("nasaq-sync-queue::")) continue;
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        const list: SyncQueueEntry[] = JSON.parse(raw);
-        const idx = list.findIndex((e) => e.id === id);
-        if (idx >= 0) {
-          list[idx].attempts += 1;
-          list[idx].lastError = error.slice(0, 400);
-          localStorage.setItem(key, JSON.stringify(list));
-        }
-      }
-    } catch {}
+      const key = `nasaq-sync-queue::${ownerId}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return;
+      const list: SyncQueueEntry[] = JSON.parse(raw);
+      const next = list.filter((e) => e.id !== id || e.ownerId !== ownerId);
+      if (next.length !== list.length) localStorage.setItem(key, JSON.stringify(next));
+    } catch {
+      /* best-effort owner-scoped cleanup */
+    }
     return;
   }
   await tx(db, "readwrite", async (store) => {
     const entry = (await request(store.get(id))) as SyncQueueEntry | undefined;
-    if (!entry) return;
-    entry.attempts += 1;
-    entry.lastError = error.slice(0, 400);
-    await request(store.put(entry));
+    if (!entry || entry.ownerId !== ownerId) return;
+    await request(store.delete(id));
+  });
+}
+
+function isCurrentEntryOwner(entry: SyncQueueEntry): boolean {
+  return getStorageOwner() === entry.ownerId;
+}
+
+/**
+ * Acknowledge one completed send only when the durable row still describes the
+ * exact owner and generation that was sent. Dedupe deliberately preserves `id`,
+ * so matching by id alone would delete a v2 enqueued while v1 was in flight.
+ */
+export async function acknowledgeSyncEntry(entry: SyncQueueEntry): Promise<boolean> {
+  if (!isCurrentEntryOwner(entry)) return false;
+  const generation = entry.generation ?? 0;
+  const db = await getDb();
+  if (!db) {
+    try {
+      const key = `nasaq-sync-queue::${entry.ownerId}`;
+      const raw = localStorage.getItem(key);
+      const list: SyncQueueEntry[] = raw ? JSON.parse(raw) : [];
+      const idx = list.findIndex(
+        (candidate) =>
+          candidate.id === entry.id &&
+          candidate.ownerId === entry.ownerId &&
+          (candidate.generation ?? 0) === generation,
+      );
+      if (idx < 0 || !isCurrentEntryOwner(entry)) return false;
+      list.splice(idx, 1);
+      localStorage.setItem(key, JSON.stringify(list));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return tx(db, "readwrite", async (store) => {
+    const current = (await request(store.get(entry.id))) as SyncQueueEntry | undefined;
+    if (
+      !current ||
+      current.ownerId !== entry.ownerId ||
+      (current.generation ?? 0) !== generation ||
+      !isCurrentEntryOwner(entry)
+    ) {
+      return false;
+    }
+    await request(store.delete(entry.id));
+    return true;
+  });
+}
+
+/** Like acknowledgement, retry metadata must never be applied to a replacement row. */
+async function bumpAttempt(entry: SyncQueueEntry, error: string): Promise<boolean> {
+  if (!isCurrentEntryOwner(entry)) return false;
+  const generation = entry.generation ?? 0;
+  const db = await getDb();
+  if (!db) {
+    try {
+      const key = `nasaq-sync-queue::${entry.ownerId}`;
+      const raw = localStorage.getItem(key);
+      const list: SyncQueueEntry[] = raw ? JSON.parse(raw) : [];
+      const current = list.find(
+        (candidate) =>
+          candidate.id === entry.id &&
+          candidate.ownerId === entry.ownerId &&
+          (candidate.generation ?? 0) === generation,
+      );
+      if (!current || !isCurrentEntryOwner(entry)) return false;
+      current.attempts += 1;
+      current.lastError = error.slice(0, 400);
+      localStorage.setItem(key, JSON.stringify(list));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return tx(db, "readwrite", async (store) => {
+    const current = (await request(store.get(entry.id))) as SyncQueueEntry | undefined;
+    if (
+      !current ||
+      current.ownerId !== entry.ownerId ||
+      (current.generation ?? 0) !== generation ||
+      !isCurrentEntryOwner(entry)
+    ) {
+      return false;
+    }
+    current.attempts += 1;
+    current.lastError = error.slice(0, 400);
+    await request(store.put(current));
+    return true;
   });
 }
 
 /** Clear queue for an owner (used on sign-out or after successful drain). */
 export async function clearQueueForOwner(ownerId: string): Promise<void> {
   const entries = await listPendingQueue(ownerId);
-  for (const e of entries) await removeFromQueue(e.id);
+  for (const e of entries) await removeFromQueue(e.id, ownerId);
 }
 
 // ── Conflict handling helpers ─────────────────────────────────────────────
@@ -311,18 +382,24 @@ export async function processSyncQueue(): Promise<{
   let conflicts = 0;
 
   for (const entry of pending) {
-    if (inFlight.has(entry.dedupeKey)) continue;
-    inFlight.add(entry.dedupeKey);
+    // A session may change while an earlier queue drain is awaiting. Stop
+    // before invoking another old-owner request; each owner's in-flight key is
+    // separate so a stale request cannot suppress the new owner's queue.
+    if (getStorageOwner() !== ownerId) break;
+    const inFlightKey = `${entry.ownerId}:${entry.dedupeKey}`;
+    if (inFlight.has(inFlightKey)) continue;
+    inFlight.add(inFlightKey);
     try {
       const result = await attemptSyncEntry(entry);
+      if (getStorageOwner() !== ownerId) break;
       if (result.ok) {
-        await removeFromQueue(entry.id);
-        succeeded += 1;
+        if (await acknowledgeSyncEntry(entry)) succeeded += 1;
       } else if (result.conflict) {
+        const marked = await bumpAttempt(entry, `conflict: remote newer (local ${entry.version} < remote ${result.remoteVersion})`);
+        if (!marked) continue;
         conflicts += 1;
         // Keep entry but mark conflict so UI can surface; don't auto-delete
         // Bump attempt so it doesn't spin hot.
-        await bumpAttempt(entry.id, `conflict: remote newer (local ${entry.version} < remote ${result.remoteVersion})`);
         // Optionally pull remote — caller can decide to resolve.
         // For now we keep local queued but notify.
         if (typeof window !== "undefined") {
@@ -331,8 +408,9 @@ export async function processSyncQueue(): Promise<{
           );
         }
       } else {
+        const marked = await bumpAttempt(entry, result.error ?? "sync failed");
+        if (!marked) continue;
         failed += 1;
-        await bumpAttempt(entry.id, result.error ?? "sync failed");
         // If attempts exceed threshold, keep but stop hammering: next drain will retry
         if (entry.attempts > 10) {
           // after 10 failures, drop to avoid infinite queue growth but log
@@ -341,10 +419,12 @@ export async function processSyncQueue(): Promise<{
         }
       }
     } catch (err) {
-      failed += 1;
-      await bumpAttempt(entry.id, String(err).slice(0, 400));
+      if (getStorageOwner() === ownerId) {
+        const marked = await bumpAttempt(entry, String(err).slice(0, 400));
+        if (marked) failed += 1;
+      }
     } finally {
-      inFlight.delete(entry.dedupeKey);
+      inFlight.delete(inFlightKey);
     }
   }
 
@@ -366,12 +446,14 @@ async function attemptSyncEntry(entry: SyncQueueEntry): Promise<{
   if (typeof navigator !== "undefined" && navigator.onLine === false) {
     return { ok: false, error: "offline" };
   }
+  if (!isCurrentEntryOwner(entry)) return { ok: false, error: "owner changed" };
 
   try {
     switch (entry.type) {
       case "library:catalog": {
         // Payload is already a LibraryCatalog; push via existing mirror
         const { pushLibraryCatalog } = await import("@/lib/storage/mirror");
+        if (!isCurrentEntryOwner(entry)) return { ok: false, error: "owner changed" };
         const ok = await pushLibraryCatalog(entry.payload as never);
         return ok ? { ok: true } : { ok: false, error: "library push failed" };
       }
@@ -379,12 +461,16 @@ async function attemptSyncEntry(entry: SyncQueueEntry): Promise<{
         // No server sync needed — template offline-save is local. Mark done.
         return { ok: true };
       }
-      case "project:create":
-      case "project:update":
       case "project:rename":
-      case "project:delete":
       case "project:duplicate":
       case "project:favorite":
+        // These are metadata notifications only. Their preceding saveProject()
+        // call enqueues the complete create/update record; sending this partial
+        // payload through saveCloudProject would replace that record's pages.
+        return { ok: true };
+      case "project:create":
+      case "project:update":
+      case "project:delete":
       case "asset:save":
       case "asset:delete":
       case "asset:rename": {
@@ -392,6 +478,7 @@ async function attemptSyncEntry(entry: SyncQueueEntry): Promise<{
         // exists, try to sync there; otherwise consider local durable as success.
         // We still perform conflict check if we can fetch remote.
         const remoteVersion = await fetchRemoteVersion(entry);
+        if (!isCurrentEntryOwner(entry)) return { ok: false, error: "owner changed" };
         const localVersion = entry.version ?? Date.now();
         const decision = resolveConflict(localVersion, remoteVersion ?? undefined);
         if (decision === "remoteWins") {
@@ -418,6 +505,7 @@ async function attemptSyncEntry(entry: SyncQueueEntry): Promise<{
 
 async function fetchRemoteVersion(entry: SyncQueueEntry): Promise<number | null> {
   try {
+    if (!isCurrentEntryOwner(entry)) return null;
     const payload = entry.payload as Record<string, unknown> | null;
     const id = typeof payload?.id === "string" ? payload.id : null;
     if (!id) return null;
@@ -433,12 +521,14 @@ async function fetchRemoteVersion(entry: SyncQueueEntry): Promise<number | null>
 
 async function pushProjectToCloud(entry: SyncQueueEntry): Promise<boolean | "not_configured"> {
   try {
+    if (!isCurrentEntryOwner(entry)) return false;
     const payload = entry.payload as Record<string, unknown> | null;
     const id = typeof payload?.id === "string" ? (payload.id as string) : null;
     if (entry.type === "project:delete") {
       if (!id) return true;
       const mod = await import("@/lib/offline/functions").catch(() => null);
       if (!mod || typeof (mod as Record<string, unknown>).deleteCloudProject !== "function") return "not_configured";
+      if (!isCurrentEntryOwner(entry)) return false;
       const fn = (mod as Record<string, unknown>).deleteCloudProject as (args: unknown) => Promise<{ ok: boolean }>;
       const r = await fn({ data: { id } } as unknown).catch((e) => {
         const msg = String(e);
@@ -448,12 +538,14 @@ async function pushProjectToCloud(entry: SyncQueueEntry): Promise<boolean | "not
       if (!r) return "not_configured";
       return (r as { ok: boolean }).ok ? true : "not_configured";
     }
-    if (entry.type.startsWith("project:")) {
-      if (!id || !payload) return true;
+    if (entry.type === "project:create" || entry.type === "project:update") {
+      const fullPayload = projectPayloadForCloudSave(entry);
+      if (!id || !fullPayload) return true;
       const mod = await import("@/lib/offline/functions").catch(() => null);
       if (!mod || typeof (mod as Record<string, unknown>).saveCloudProject !== "function") return "not_configured";
+      if (!isCurrentEntryOwner(entry)) return false;
       const fn = (mod as Record<string, unknown>).saveCloudProject as (args: unknown) => Promise<{ ok: boolean; conflict?: boolean }>;
-      const r = await fn({ data: { id, payload, updatedAt: entry.version ?? Date.now(), version: entry.version } } as unknown).catch((e) => {
+      const r = await fn({ data: { id, payload: fullPayload, updatedAt: entry.version ?? Date.now(), version: entry.version } } as unknown).catch((e) => {
         const msg = String(e);
         if (/auth|unauthenticated|not.*signed.*in|without.*session/i.test(msg)) return { ok: true } as unknown;
         return null;
@@ -466,6 +558,22 @@ async function pushProjectToCloud(entry: SyncQueueEntry): Promise<boolean | "not
   } catch {
     return "not_configured";
   }
+}
+
+/**
+ * `saveCloudProject` replaces the complete cloud document, so only a durable
+ * create/update entry carrying the complete page payload may use it. Metadata
+ * operations (rename/favourite/duplicate) are deliberately acknowledged as
+ * local-only companions to the full save enqueued by storage; they must never
+ * turn `{ id, name }` into the cloud document and discard its pages.
+ */
+export function projectPayloadForCloudSave(
+  entry: Pick<SyncQueueEntry, "type" | "payload">,
+): Record<string, unknown> | null {
+  if (entry.type !== "project:create" && entry.type !== "project:update") return null;
+  const payload = entry.payload as Record<string, unknown> | null;
+  if (!payload || typeof payload.id !== "string" || !Array.isArray(payload.pages)) return null;
+  return payload;
 }
 
 /** Whether there are pending ops for current owner */
