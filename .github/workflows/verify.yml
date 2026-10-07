@@ -13,6 +13,11 @@ name: Verify
 # Deliberately hermetic: no secrets, no database, no object storage. Every step
 # below passes on a bare checkout, which is exactly the situation a new
 # deployment starts from.
+#
+# `npm run check:auth` compares a RUNNING dev server against what the next build
+# resolves, so it runs in the same step as the server it inspects (standalone it
+# reports "could not observe", exit 2 — that is an observation gap, not a
+# divergence).
 
 on:
   pull_request:
@@ -43,15 +48,12 @@ jobs:
         run: npm run typecheck
       - name: Lint (errors fail, warnings are reported)
         run: npm run lint
-      - name: Unit tests — auth contract
+      - name: Unit tests — auth contract (includes the boot contract)
         run: npm run test:auth
       - name: Unit tests — scripts (deploy/migration policy)
         run: npm run test:scripts
       - name: Unit tests — application
         run: npm run test:src
-
-      - name: Auth environment invariants
-        run: npm run check:auth
       - name: Environment audit (no undocumented variable, no VITE_ secret)
         run: npm run env:audit
 
@@ -62,14 +64,20 @@ jobs:
       # flow a visitor performs: create an account, keep the session across a
       # reload, refuse a duplicate, refuse a wrong password, refuse a foreign
       # origin, sign in, reach a protected route, sign out.
-      - name: Auth end-to-end (dev server)
+      - name: Auth end-to-end (dev server + invariant)
         run: |
-          npm run dev > /tmp/dev.log 2>&1 &
-          for attempt in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:8080/api/auth/ok > /dev/null; then break; fi
+          setsid nohup npm run dev > /tmp/dev.log 2>&1 &
+          ready=""
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:8080/api/auth/ok > /dev/null; then ready=yes; break; fi
             sleep 2
           done
+          if [ -z "$ready" ]; then
+            echo "::error::the dev server never answered /api/auth/ok"
+            exit 1
+          fi
           curl -fsS http://127.0.0.1:8080/api/auth/ok
+          npm run check:auth
           npm run test:auth:e2e
       - name: Dev server log (on failure)
         if: failure()
