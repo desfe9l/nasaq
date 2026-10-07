@@ -83,6 +83,13 @@ export const DEPLOYER_VARS = [
 
 /** Test/QA harness knobs — they configure scripts, never the product. */
 export const HARNESS_VARS = [
+  "ADMIN_E2E_BASE",
+  "ADMIN_E2E_MUTATIONS",
+  "ADMIN_E2E_OWNER_EMAIL",
+  "ADMIN_E2E_OWNER_PASSWORD",
+  "ADMIN_E2E_OWNER_SESSION",
+  "ADMIN_E2E_STAFF_EMAIL",
+  "ADMIN_E2E_STAFF_PASSWORD",
   "AGENT_BROWSER",
   "AI_E2E_BASE",
   "AUTH_E2E_BASE",

@@ -9,6 +9,7 @@ import {
   type VaultOrigin,
   type VaultSection,
   type VaultSensitivity,
+  redactVaultForStaff,
 } from "./vault";
 import { GOOGLE_OAUTH_CALLBACK_PATH, GOOGLE_PROVIDER_ID } from "@/lib/auth/providers";
 
@@ -986,5 +987,19 @@ export const getOwnerVaultFn = createServerFn({ method: "GET" })
     // The vault deliberately reveals real secret values, so a signed-in
     // non-admin must be refused here — 403, not a crash-shaped 500.
     if (!authorization.isAdmin) await denyForbidden();
-    return buildOwnerVaultInventory();
+    const inventory = await buildOwnerVaultInventory();
+    // Secret VALUES are for the owner / super-administrator only.
+    if (authorization.isOwner) return inventory;
+    const [{ getSql }, { isSuperAdminIdentity }] = await Promise.all([
+      import("@/lib/db"),
+      import("@/lib/auth/super-admin.server"),
+    ]);
+    const identity = { id: context.userId, email: context.userEmail, emailVerified: context.userEmailVerified };
+    let superAdmin = false;
+    try {
+      superAdmin = await isSuperAdminIdentity(await getSql(), identity);
+    } catch {
+      superAdmin = false;
+    }
+    return superAdmin ? inventory : redactVaultForStaff(inventory);
   });

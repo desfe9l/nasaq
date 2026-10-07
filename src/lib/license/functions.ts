@@ -463,7 +463,9 @@ export const adminListLicensesFn = createServerFn({ method: "POST" })
 
     const result = await dbListAll(data.offset ?? 0, data.limit ?? 50,
       typeof data.search === "string" ? data.search : "", data.status ?? "ALL");
-    return { error: null as string | null, licenses: result.licenses, total: result.total };
+    const { withStoreEmails } = await import("@/lib/auth/identities.server");
+    const licenses = await withStoreEmails(result.licenses as Array<AdminLicenseRow & Record<string, unknown>>, "userId", "userEmail");
+    return { error: null as string | null, licenses: licenses as AdminLicenseRow[], total: result.total };
   });
 
 // ── Admin: Revoke License ─────────────────────────────────────────────────
@@ -604,6 +606,11 @@ export const assignLicenseFn = createServerFn({ method: "POST" })
 async function resolveUser(value: string): Promise<{ id: string; email: string } | null> {
   const needle = value.trim();
   if (!needle) return null;
+  // Accounts created since first-party auth live in the identity store and are
+  // only best-effort projected into `"user"`; look there first.
+  const { findAuthUserByEmailOrId } = await import("@/lib/auth/identities.server");
+  const stored = await findAuthUserByEmailOrId(needle);
+  if (stored) return { id: stored.id, email: stored.email };
   const { getSql } = await import("@/lib/db");
   const sql = await getSql();
   if (needle.includes("@")) {

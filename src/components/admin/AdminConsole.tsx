@@ -41,6 +41,7 @@ import {
   Vault,
 } from "lucide-react";
 import { ThemedToaster } from "@/components/ui/ThemedToaster";
+import { toast } from "sonner";
 import { amIAdmin } from "@/lib/commercial/admin-functions";
 import { adminTemplatesAccessFn } from "@/lib/admin/functions";
 import { signOut } from "@/lib/auth/client";
@@ -79,19 +80,84 @@ export function useAdminAccess(): AdminAccess {
 
 /** Resolve both authorities for the signed-in session. */
 export function resolveAdminAccess(): Promise<AdminAccess> {
+  const errors: string[] = [];
+  const note = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error ?? "");
+    // "Forbidden" is an answer, not a failure; anything else is worth showing.
+    if (message && message !== "Forbidden") errors.push(message.slice(0, 200));
+    return false;
+  };
   return Promise.all([
     amIAdmin()
       .then((result) => Boolean(result.isAdmin))
-      .catch(() => false),
+      .catch(note),
     adminTemplatesAccessFn()
-      .then((result) => result.ok)
-      .catch(() => false),
+      .then((result) => {
+        if (!result.ok && result.reason !== "forbidden" && result.error) errors.push(result.error);
+        return result.ok;
+      })
+      .catch(note),
   ]).then(([commercial, content]) => ({
     ready: true,
     commercial,
     content,
-    error: null,
+    error: errors[0] ?? null,
   }));
+}
+
+type AccessDiagnosis = {
+  userId: string;
+  emailVerified: boolean;
+  ownerConfigured: boolean;
+  adminConfigured: boolean;
+  hasRow: boolean;
+  databaseReachable: boolean;
+};
+
+/**
+ * Why the console said no — about the CALLER only, never the configured ids.
+ * Turns "لا تملك صلاحية" into the one action that fixes it.
+ */
+function AccessDiagnosisPanel({ probeError }: { probeError: string | null }) {
+  const [diagnosis, setDiagnosis] = useState<AccessDiagnosis | null>(null);
+  useEffect(() => {
+    let alive = true;
+    void import("@/lib/admin/functions")
+      .then(({ adminLicenseAccessFn }) => adminLicenseAccessFn())
+      .then((result) => {
+        if (alive) setDiagnosis(result as AccessDiagnosis);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const hints: string[] = [];
+  if (probeError) hints.push(probeError);
+  if (diagnosis && !diagnosis.databaseReachable) {
+    hints.push("قاعدة البيانات غير متاحة الآن — صلاحيات المسؤولين المحفوظة فيها لا يمكن قراءتها.");
+  }
+  if (diagnosis && diagnosis.ownerConfigured && !diagnosis.emailVerified) {
+    hints.push(
+      "بريد هذا الحساب غير موثّق، فلا يُطابَق مع NASAQ_OWNER_EMAIL. سجّل الدخول عبر Google بالبريد نفسه، أو اضبط NASAQ_OWNER_ID بمعرّف هذا الحساب.",
+    );
+  }
+  if (diagnosis && !diagnosis.ownerConfigured && !diagnosis.adminConfigured) {
+    hints.push("لم يُحدَّد مالك في إعدادات النشر (NASAQ_OWNER_ID أو NASAQ_OWNER_EMAIL).");
+  }
+  if (!diagnosis && !hints.length) return null;
+  return (
+    <div className="mt-4 rounded-xl border border-line bg-paper p-3 text-[11.5px] leading-6 text-muted">
+      {diagnosis ? (
+        <p>
+          معرّف حسابك: <code className="font-mono text-ink" dir="ltr">{diagnosis.userId}</code>
+        </p>
+      ) : null}
+      {hints.map((hint) => (
+        <p key={hint}>• {hint}</p>
+      ))}
+    </div>
+  );
 }
 
 /** One icon per section — the console's navigation is scannable at a glance. */
@@ -163,6 +229,7 @@ export function AdminConsole({ children }: { children?: ReactNode }) {
             إذا كنت تعتقد أن هذا خطأ، تواصل مع إدارة المنصة. وإذا كانت قاعدة
             البيانات جديدة بلا مسؤول بعد، يمكنك تفعيل حسابك كأول مسؤول.
           </p>
+          <AccessDiagnosisPanel probeError={access.error} />
           <div className="mt-4 flex flex-wrap gap-2">
             <a
               href={BRAND_ROUTE}
@@ -174,8 +241,13 @@ export function AdminConsole({ children }: { children?: ReactNode }) {
               type="button"
               onClick={async () => {
                 const { adminBootstrapFirst } = await import("@/lib/commercial/admin-functions");
-                const result = await adminBootstrapFirst();
-                if (result.ok) window.location.reload();
+                try {
+                  const result = await adminBootstrapFirst();
+                  if (result.ok) window.location.reload();
+                  else toast.error(result.error || "لا يمكن التفعيل: يوجد مسؤول بالفعل.");
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "تعذّر التفعيل.");
+                }
               }}
               className="inline-flex h-9 items-center rounded-lg bg-navy px-3 text-[12px] font-extrabold text-on-brand"
             >

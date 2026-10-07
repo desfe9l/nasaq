@@ -496,19 +496,38 @@ export const adminTemplatesAccessFn = createServerFn({ method: "POST" })
 export const adminLicenseAccessFn = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
-    const [db, { superAdminDiagnostics, isConfiguredSuperAdminIdentity }] = await Promise.all([
-      sql(),
-      import("@/lib/auth/super-admin.server"),
-    ]);
+    const { superAdminDiagnostics, isConfiguredSuperAdminIdentity } = await import(
+      "@/lib/auth/super-admin.server"
+    );
     const identity = {
       id: context.userId,
       email: context.userEmail,
       emailVerified: context.userEmailVerified,
     };
+    /*
+     * A probe about the CALLER only (booleans, their own id) — safe for any
+     * signed-in account, and the only way a refused owner can see WHY: an
+     * unverified address, an id that does not match NASAQ_OWNER_ID, or a
+     * database that cannot be reached. It must answer even in that last case.
+     */
+    let databaseReachable = true;
+    let db: Awaited<ReturnType<typeof sql>>;
+    try {
+      db = await sql();
+      await db`select 1`;
+    } catch {
+      databaseReachable = false;
+      db = (async () => {
+        throw new Error("database unavailable");
+      }) as unknown as Awaited<ReturnType<typeof sql>>;
+    }
     const diagnostics = await superAdminDiagnostics(db, identity);
     return {
       ...diagnostics,
       canBootstrap: isConfiguredSuperAdminIdentity(identity),
+      userId: context.userId,
+      emailVerified: context.userEmailVerified === true,
+      databaseReachable,
     };
   });
 

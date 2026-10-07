@@ -96,38 +96,114 @@ export async function isAdminIdentity(
   return rows.length > 0;
 }
 
+/** Where an account's verified address is read from when the caller has no session flag. */
+export type AdminAccountLookup = (
+  userId: string,
+) => Promise<{ email: string | null; emailVerified: boolean } | null>;
+
+/**
+ * The account's address and verification state from the AUTHORITATIVE identity
+ * store (first-party AuthStore), falling back to the legacy `"user"` projection
+ * only when the store has no such account. Since #153 the projection can lag
+ * or be missing (the mirror is best-effort and collides with pre-migration
+ * rows), so it is never the first source any more.
+ */
+function defaultAccountLookup(sql: Sql): AdminAccountLookup {
+  return async (userId) => {
+    try {
+      const { findAuthUserById } = await import("./identities.server");
+      const account = await findAuthUserById(userId);
+      if (account) return { email: account.email, emailVerified: account.emailVerified };
+    } catch {
+      /* identity store unavailable — fall through to the projection */
+    }
+    try {
+      const rows = await sql<{ email: string | null; emailVerified: boolean }>`
+        select email, "emailVerified" from "user" where id = ${userId} limit 1
+      `;
+      const row = rows[0];
+      return row ? { email: row.email, emailVerified: row.emailVerified === true } : null;
+    } catch {
+      return null;
+    }
+  };
+}
+
+export type AdminCallerOptions = {
+  config?: AdminIdentityConfig;
+  lookupAccount?: AdminAccountLookup;
+};
+
+/**
+ * THE administrator decision for a caller, shared by every admin surface.
+ *
+ * `emailVerified` comes from the session the server resolved (`authMiddleware`
+ * → AuthStore), never from the browser, so when it is supplied it is the
+ * authority for the address. Order:
+ *
+ *   1. configured id (`NASAQ_OWNER_ID`, `NASAQ_ADMIN_USER_IDS`, `NASAQ_SUPER_ADMIN_IDS`)
+ *      — no database needed;
+ *   2. configured address with a server-VERIFIED session address — no database needed;
+ *   3. an `admin_users` row (ADMIN or SUPER_ADMIN);
+ *   4. only when the caller supplied no session verification state (id-only
+ *      internal callers): the account's verified address from the identity store.
+ *
+ * Before this existed the commercial console (users, payments, plans, settings,
+ * requests) answered step 4 from the `"user"` table ONLY, ignoring the verified
+ * session — so an owner who signed in after the first-party migration (whose
+ * account is not in `"user"`) was refused there while the template console and
+ * the vault, which use the session, let them in.
+ */
+export async function isAdminCaller(
+  sql: Sql,
+  identity: { id: string; email?: string | null; emailVerified?: boolean | null },
+  options: AdminCallerOptions = {},
+): Promise<boolean> {
+  const config = options.config ?? readAdminIdentityConfig();
+  const sessionVerified = typeof identity.emailVerified === "boolean";
+  if (config.ids.has(identity.id)) return true;
+  if (
+    sessionVerified &&
+    isConfiguredAdminIdentity(
+      { id: identity.id, email: identity.email ?? null, emailVerified: identity.emailVerified === true },
+      config,
+    )
+  ) {
+    return true;
+  }
+
+  const rows = await sql<{ user_id: string }>`
+    select user_id from admin_users where user_id = ${identity.id} limit 1
+  `;
+  if (rows.length > 0) return true;
+  if (sessionVerified || config.emails.size === 0) return false;
+
+  const account = await (options.lookupAccount ?? defaultAccountLookup(sql))(identity.id);
+  return isConfiguredAdminIdentity(
+    {
+      id: identity.id,
+      // The stored account wins over a caller-provided address: an id-only
+      // caller must not be able to name an allowlisted address it does not own.
+      email: account?.email ?? null,
+      emailVerified: account?.emailVerified === true,
+    },
+    config,
+  );
+}
+
 /** Compatibility helper for commercial call sites/tests, checking ID and optional session email or custom config. */
 export async function isAdminUser(
   sql: Sql,
   userId: string,
   userEmailOrConfig?: string | null | AdminIdentityConfig,
   customConfig?: AdminIdentityConfig,
+  lookupAccount?: AdminAccountLookup,
 ): Promise<boolean> {
-  const userEmail = typeof userEmailOrConfig === "string" ? userEmailOrConfig : null;
   const config =
     userEmailOrConfig && typeof userEmailOrConfig === "object" && "ids" in userEmailOrConfig
       ? userEmailOrConfig
       : customConfig || readAdminIdentityConfig();
-
-  const rows = await sql<{ user_id: string }>`
-    select user_id from admin_users where user_id = ${userId} limit 1
-  `;
-  if (rows.length > 0) return true;
-  if (config.ids.has(userId)) return true;
-  if (config.emails.size === 0) return false;
-
-  const userRows = await sql<{ email: string | null; emailVerified: boolean }>`
-    select email, "emailVerified" from "user" where id = ${userId} limit 1
-  `;
-  const user = userRows[0];
-  return isConfiguredAdminIdentity(
-    {
-      id: userId,
-      // Prefer the account row so a caller cannot provide an unverified/stale
-      // email value to turn an allowlisted address into an admin grant.
-      email: user?.email ?? userEmail ?? null,
-      emailVerified: user?.emailVerified === true,
-    },
-    config,
-  );
+  // No session verification state here: the address is re-read from the
+  // account (step 4 of `isAdminCaller`), never taken from the argument.
+  return isAdminCaller(sql, { id: userId }, { config, lookupAccount });
 }

@@ -57,6 +57,8 @@ jobs:
         run: npm run lint
       - name: Unit tests — auth contract (includes the boot contract)
         run: npm run test:auth
+      - name: Unit tests — admin authorization (owner / super-admin / staff / customer)
+        run: npm run test:admin
       - name: Unit tests — scripts (deploy/migration policy)
         run: npm run test:scripts
       - name: Unit tests — application, editor tools and product templates

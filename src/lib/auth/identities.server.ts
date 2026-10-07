@@ -110,3 +110,50 @@ export async function listAuthUsers(limit = 200): Promise<AuthIdentity[]> {
     return [];
   }
 }
+
+/**
+ * Addresses for a set of account ids, from the identity store.
+ *
+ * Admin listings (licences, payment requests) still LEFT JOIN `"user"` for the
+ * customer's address, and that projection is best-effort since first-party
+ * auth — so an account created after the migration showed up with no address
+ * and could not be identified or searched. Callers fill only the gaps with
+ * this. Bounded, never throws.
+ */
+export async function emailsForUserIds(ids: Iterable<string>, max = 200): Promise<Map<string, string>> {
+  const unique = [...new Set([...ids].map((id) => String(id ?? "").trim()).filter(Boolean))].slice(0, max);
+  const found = new Map<string, string>();
+  if (!unique.length) return found;
+  const active = await store();
+  if (!active) return found;
+  await Promise.all(
+    unique.map(async (id) => {
+      try {
+        const user = await active.findUserById(id);
+        if (user?.email) found.set(id, user.email);
+      } catch (error) {
+        warnOnce(error);
+      }
+    }),
+  );
+  return found;
+}
+
+/** Fill `email`-like gaps on rows keyed by user id. Returns new row objects. */
+export async function withStoreEmails<T extends Record<string, unknown>>(
+  rows: T[],
+  idKey: keyof T,
+  emailKey: keyof T,
+): Promise<T[]> {
+  const missing = rows
+    .filter((row) => !row[emailKey] && typeof row[idKey] === "string" && row[idKey])
+    .map((row) => String(row[idKey]));
+  if (!missing.length) return rows;
+  const emails = await emailsForUserIds(missing);
+  if (!emails.size) return rows;
+  return rows.map((row) => {
+    if (row[emailKey]) return row;
+    const email = emails.get(String(row[idKey] ?? ""));
+    return email ? { ...row, [emailKey]: email } : row;
+  });
+}
