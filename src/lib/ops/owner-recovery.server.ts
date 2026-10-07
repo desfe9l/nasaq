@@ -65,6 +65,21 @@ export type OwnerOpsStage = (typeof OWNER_OPS_STAGES)[number];
 export const OWNER_OPS_MUTATING_STAGES: readonly OwnerOpsStage[] = ["migrate", "admin-probe"];
 
 /**
+ * The stages that must never run twice.
+ *
+ * `migrate` MOVES ownership records, so it is one-shot: once it has completed
+ * and its post-migration verification passed, it is refused permanently.
+ *
+ * `admin-probe` is deliberately NOT here. It touches only synthetic
+ * `owner-probe-<run>-…` rows that it deletes in the same run, and it is part
+ * of the verification battery the migration is judged by — blocking it after
+ * the move would make "verify the migration" impossible to complete. It keeps
+ * every other guard: the canonical bound owner, the super-admin resolver, its
+ * confirmation phrase, the rate budget and the audit trail.
+ */
+export const OWNER_OPS_ONE_SHOT_STAGES: readonly OwnerOpsStage[] = ["migrate"];
+
+/**
  * Confirmation phrase a mutating stage must carry in the request body. It is
  * not a secret and grants nothing — it exists so a stray replay of an old
  * request (or an over-eager button) cannot move ownership records.
@@ -133,13 +148,13 @@ export function ownerOpsStagePolicy(
   stage: OwnerOpsStage,
   input: { completed: boolean; confirm?: unknown },
 ): OwnerOpsStagePolicy {
-  if (isOwnerOpsMutatingStage(stage) && input.completed) {
+  if (OWNER_OPS_ONE_SHOT_STAGES.includes(stage) && input.completed) {
     return {
       allowed: false,
       status: 409,
       reason: "already_completed",
       error:
-        "This operation completed and disabled itself. Read the durable report instead of re-running a mutation.",
+        "The migration already completed and disabled itself. Read the durable report instead of re-running the move.",
     };
   }
   const required = OWNER_OPS_CONFIRMATIONS[stage];

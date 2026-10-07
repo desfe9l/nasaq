@@ -278,7 +278,10 @@ export const Route = createFileRoute("/api/ops/owner-recovery")({
             targetId: guarded.userId,
             detail: { outcome: "refused", stage, reason: policy.reason },
           });
-          return json({ ok: false, reason: policy.reason, error: policy.error }, policy.status);
+          return json(
+            { ok: false, stage, reason: policy.reason, error: policy.error },
+            policy.status,
+          );
         }
 
         const refuse = async (reason: string, error: string, status: number) => {
@@ -289,7 +292,7 @@ export const Route = createFileRoute("/api/ops/owner-recovery")({
             targetId: guarded.userId,
             detail: { outcome: "refused", stage, reason },
           });
-          return json({ ok: false, reason, error }, status);
+          return json({ ok: false, stage, reason, error }, status);
         };
 
         /*

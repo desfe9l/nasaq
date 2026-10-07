@@ -120,13 +120,23 @@ execution **and every refusal** is written to `admin_audit_log` as
 `owner.ops_run`. Responses contain fingerprints, counts and verdicts only —
 never an id, address, key, key hash, connection string or token.
 
-The operation **disables itself**: once `migrate` completes and the
-post-migration verification is green, a marker in `site_settings`
-(`nasaq.owner_ops.completed.v1`) makes every mutating stage answer
-`409 already_completed` permanently. Read-only stages stay available so the
-evidence can be re-read. The route is temporary — delete
-`src/routes/api/ops/owner-recovery.ts` once the recovery is verified; the
-`site_settings` reports and the audit rows are the surviving record.
+The operation **disables its dangerous half by itself**: once `migrate`
+completes and the post-migration verification is green, a marker in
+`site_settings` (`nasaq.owner_ops.completed.v1`) makes the MOVE answer
+`409 already_completed` permanently — no environment change and no redeploy
+needed to make it inert. The read-only stages **and** the synthetic, fully
+self-cleaning `admin-probe` stay available, because they are the verification
+the migration is judged by and must still run against the migrated state.
+
+Run the stages in this order (each response is the sanitized report):
+
+```
+plan  →  migrate  →  identity  →  provider  →  storage  →  admin-probe
+```
+
+The route is temporary — delete `src/routes/api/ops/owner-recovery.ts` once the
+recovery is verified; the `site_settings` reports and the audit rows are the
+surviving record.
 
 Legacy retirement (STEP 8): after verification is green, the orphaned
 `admin_users` rows and legacy `"user"` projection rows remain in place —

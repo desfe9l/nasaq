@@ -26,6 +26,7 @@ import {
   OWNER_OPS_COMPLETED_KEY,
   OWNER_OPS_CONFIRMATIONS,
   OWNER_OPS_MUTATING_STAGES,
+  OWNER_OPS_ONE_SHOT_STAGES,
   OWNER_OPS_REPORT_PREFIX,
   OWNER_OPS_STAGES,
   claimOwnerOpsRun,
@@ -115,8 +116,8 @@ describe("owner ops — stage vocabulary", () => {
 });
 
 describe("owner ops — one-shot disable after success", () => {
-  it("refuses every mutating stage forever once the marker exists", () => {
-    for (const stage of OWNER_OPS_MUTATING_STAGES) {
+  it("refuses the MOVE forever once the marker exists", () => {
+    for (const stage of OWNER_OPS_ONE_SHOT_STAGES) {
       const refused = ownerOpsStagePolicy(stage, {
         completed: true,
         confirm: OWNER_OPS_CONFIRMATIONS[stage],
@@ -129,10 +130,27 @@ describe("owner ops — one-shot disable after success", () => {
     }
   });
 
-  it("keeps the read-only stages available after completion", () => {
+  it("keeps the read-only stages and the synthetic probe available after completion", () => {
     for (const stage of ["plan", "identity", "provider", "storage", "battery"] as const) {
       assert.equal(ownerOpsStagePolicy(stage, { completed: true }).allowed, true);
     }
+    /*
+     * The probe is part of the verification the migration is judged by, and it
+     * touches only rows it created and deleted itself — so it must still run
+     * AFTER the move, or "verify the migration" could never be completed.
+     * It keeps its confirmation phrase.
+     */
+    assert.equal(
+      ownerOpsStagePolicy("admin-probe", {
+        completed: true,
+        confirm: OWNER_OPS_CONFIRMATIONS["admin-probe"],
+      }).allowed,
+      true,
+    );
+    assert.equal(
+      ownerOpsStagePolicy("admin-probe", { completed: true, confirm: undefined }).allowed,
+      false,
+    );
   });
 });
 
@@ -322,14 +340,22 @@ describe("owner ops — durable ledger", () => {
       ["plan"],
     );
 
-    // The ledger decision and the pure policy agree: the operation is now
-    // inert for every mutating stage.
-    for (const stage of OWNER_OPS_MUTATING_STAGES) {
+    // The ledger decision and the pure policy agree: the move is now inert,
+    // while verification (read-only stages and the synthetic probe) continues
+    // to be possible against the migrated state.
+    for (const stage of OWNER_OPS_ONE_SHOT_STAGES) {
       const refused = ownerOpsStagePolicy(stage, {
         completed: ledger.completedAt !== null,
         confirm: OWNER_OPS_CONFIRMATIONS[stage],
       });
       assert.equal(refused.allowed, false);
     }
+    assert.equal(
+      ownerOpsStagePolicy("admin-probe", {
+        completed: ledger.completedAt !== null,
+        confirm: OWNER_OPS_CONFIRMATIONS["admin-probe"],
+      }).allowed,
+      true,
+    );
   });
 });
