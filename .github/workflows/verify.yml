@@ -24,6 +24,13 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      # Lets the browser job be pointed at an older commit, so a failure can be
+      # attributed to the code under review or to the runner environment.
+      checkout-ref:
+        description: Commit or branch to check out (defaults to the triggering ref)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -93,6 +100,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.checkout-ref || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
