@@ -13,7 +13,7 @@
   },
   "scripts": {
     "dev": "node scripts/with-app-env.mjs vite dev --host 0.0.0.0 --port 8080",
-    "build": "npm run check:deploy && node scripts/with-app-env.mjs vite build && node scripts/migrate.mjs",
+    "build": "npm run check:deploy && node scripts/with-app-env.mjs vite build && node scripts/migrate.mjs && if [ \"$NASAQ_ONE_TIME_IMPORT\" = \"1\" ]; then SOURCE_DATABASE_URL=\"$DATABASE_POSTGRES_URL\" npm run db:import; fi",
     "db:migrate": "node scripts/migrate.mjs",
     "db:import": "node scripts/migrate-import.mjs",
     "env:audit": "node scripts/env-audit.mjs --root .",
