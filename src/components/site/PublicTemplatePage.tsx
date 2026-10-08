@@ -10,7 +10,7 @@ import { useLicense } from "@/lib/license/client";
 import { useBrandIdentity } from "@/lib/product/use-brand-identity";
 import { applyBrandToSeed } from "@/lib/editor/brand-design";
 import { useEditor } from "@/lib/editor/store";
-import { DEMO_LICENSE, canCreateDemoProject } from "@/lib/product/product";
+import { applicationPageLimit, canCreateDemoProject } from "@/lib/product/product";
 import { publishedTemplateSeed } from "@/lib/templates/published";
 import type { AdminTemplateSummary } from "@/lib/admin/types";
 import { CREATE_ROUTE, editorPathFor } from "@/lib/site-routes";
@@ -127,7 +127,7 @@ export function PublicTemplatePage({ initialTemplate, templateId }: Props) {
         window.location.assign("/license");
         return;
       }
-      const maxPages = DEMO_LICENSE.entitlements.maxPagesPerProject ?? Infinity;
+      const maxPages = applicationPageLimit();
       if (!entitlements.unlimited_pages && seed.pages.length > maxPages) {
         toast.error("وصلت إلى حد صفحات تجربة المحرر", {
           description: "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",

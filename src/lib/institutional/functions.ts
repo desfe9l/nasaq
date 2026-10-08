@@ -62,6 +62,7 @@ export const listInstitutionalBackgroundsFn = createServerFn({ method: "GET" })
       ok: true as const,
       canManage: manage,
       updatedAt: catalog.updatedAt,
+      pollAfterMs: (await import("@/lib/control-plane/snapshot")).enforcementPlane().pollingIntervalMs,
       items: visibleInstitutionalBackgrounds(catalog, manage),
     };
   });

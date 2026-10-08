@@ -16,8 +16,8 @@ import { getProject, setSetting } from "@/lib/editor/storage";
 import { BRAND_ROUTE, editorPathFor } from "@/lib/site-routes";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useLicense } from "@/lib/license/client";
+import { applicationPageLimit } from "@/lib/product/product";
 import {
-  DEMO_MAX_PAGES,
   exceedsProjectPageLimit,
   exceedsSavedProjectLimit,
   projectAccessBlock,
@@ -91,9 +91,9 @@ function buildGeneration(
   if (
     !entitlements.unlimited_pages &&
     typeof bounded.pages === "number" &&
-    bounded.pages > DEMO_MAX_PAGES
+    bounded.pages > applicationPageLimit()
   ) {
-    bounded.pages = DEMO_MAX_PAGES;
+    bounded.pages = applicationPageLimit();
   }
   return generateDesignFromPrompt(text, bounded, brand);
 }
@@ -243,9 +243,9 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
       if (
         requestedPages !== null &&
         !entitlements.unlimited_pages &&
-        requestedPages > DEMO_MAX_PAGES
+        requestedPages > applicationPageLimit()
       ) {
-        toast.info(`الخطة الحالية تسمح بـ${DEMO_MAX_PAGES} صفحات — وُلّد التصميم ضمنها.`);
+        toast.info(`الخطة الحالية تسمح بـ${applicationPageLimit()} صفحات — وُلّد التصميم ضمنها.`);
       }
       setResult(gen);
       setSelectedVariationId("sovereign");
@@ -293,7 +293,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
         toast.error(
           block === "premium-template"
             ? "هذا التصميم يعتمد على قالب في النسخة الكاملة — فعّل ترخيصًا مناسبًا."
-            : `يتجاوز التصميم حد ${DEMO_MAX_PAGES} صفحات في خطتك الحالية.`,
+            : `يتجاوز التصميم حد ${applicationPageLimit()} صفحات في خطتك الحالية.`,
         );
         return;
       }

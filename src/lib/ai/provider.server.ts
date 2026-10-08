@@ -207,7 +207,8 @@ export async function requestGemini(request: GeminiRequest): Promise<string> {
     throw new GeminiProviderError("invalid_model");
   }
   const timeoutMs = request.timeoutMs ?? 45_000;
-  const maxAttempts = 2;
+  const retry = (await import("@/lib/control-plane/snapshot")).enforcementPlane().services.ai.retry;
+  const maxAttempts = retry.maxAttempts;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (request.signal?.aborted) throw new GeminiProviderError("provider_aborted");
@@ -244,7 +245,7 @@ export async function requestGemini(request: GeminiRequest): Promise<string> {
         if (request.signal?.aborted) throw new GeminiProviderError("provider_aborted");
         if (timedOut) throw new GeminiProviderError("provider_timeout");
         if (attempt + 1 < maxAttempts) {
-          await delay(150 * 2 ** attempt, request.signal);
+          await delay(retry.backoffMs * 2 ** attempt, request.signal);
           continue;
         }
         throw new GeminiProviderError("provider_unavailable");
@@ -257,12 +258,12 @@ export async function requestGemini(request: GeminiRequest): Promise<string> {
           if (isPermanent || attempt + 1 >= maxAttempts) {
             throw new GeminiProviderError(classified);
           }
-          await delay(150 * 2 ** attempt, request.signal);
+          await delay(retry.backoffMs * 2 ** attempt, request.signal);
           continue;
         }
 
         if (RETRYABLE_STATUS.has(response.status) && attempt + 1 < maxAttempts) {
-          await delay(150 * 2 ** attempt, request.signal);
+          await delay(retry.backoffMs * 2 ** attempt, request.signal);
           continue;
         }
         if (response.status === 401 || response.status === 403) {

@@ -47,6 +47,7 @@ import { Route as AdminImportRouteImport } from './routes/admin/import'
 import { Route as AdminPaymentsRouteImport } from './routes/admin/payments'
 import { Route as AdminPlansRouteImport } from './routes/admin/plans'
 import { Route as AdminRequestsRouteImport } from './routes/admin/requests'
+import { Route as AdminServicesRouteImport } from './routes/admin/services'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminSharingRouteImport } from './routes/admin/sharing'
 import { Route as AdminStoreRouteImport } from './routes/admin/store'
@@ -55,6 +56,7 @@ import { Route as AdminTemplatesRouteImport } from './routes/admin/templates'
 import { Route as AdminUsersRouteImport } from './routes/admin/users'
 import { Route as AdminVaultRouteImport } from './routes/admin/vault'
 import { Route as ApiAppVersionRouteImport } from './routes/api/app-version'
+import { Route as ApiOpsServiceStatusRouteImport } from './routes/api/ops/service-status'
 import { Route as EditorIndexRouteImport } from './routes/editor/index'
 import { Route as EditorProjectIdRouteImport } from './routes/editor/$projectId'
 import { Route as PaymentCancelRouteImport } from './routes/payment/cancel'
@@ -270,6 +272,11 @@ const AdminRequestsRoute = AdminRequestsRouteImport.update({
   path: '/requests',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminServicesRoute = AdminServicesRouteImport.update({
+  id: '/services',
+  path: '/services',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -308,6 +315,11 @@ const AdminVaultRoute = AdminVaultRouteImport.update({
 const ApiAppVersionRoute = ApiAppVersionRouteImport.update({
   id: '/api/app-version',
   path: '/api/app-version',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOpsServiceStatusRoute = ApiOpsServiceStatusRouteImport.update({
+  id: '/api/ops/service-status',
+  path: '/api/ops/service-status',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EditorIndexRoute = EditorIndexRouteImport.update({
@@ -467,6 +479,7 @@ export interface FileRoutesByFullPath {
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/plans': typeof AdminPlansRoute
   '/admin/requests': typeof AdminRequestsRoute
+  '/admin/services': typeof AdminServicesRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/sharing': typeof AdminSharingRoute
   '/admin/store': typeof AdminStoreRoute
@@ -475,6 +488,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vault': typeof AdminVaultRoute
   '/api/app-version': typeof ApiAppVersionRoute
+  '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
@@ -536,6 +550,7 @@ export interface FileRoutesByTo {
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/plans': typeof AdminPlansRoute
   '/admin/requests': typeof AdminRequestsRoute
+  '/admin/services': typeof AdminServicesRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/sharing': typeof AdminSharingRoute
   '/admin/store': typeof AdminStoreRoute
@@ -544,6 +559,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vault': typeof AdminVaultRoute
   '/api/app-version': typeof ApiAppVersionRoute
+  '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
@@ -608,6 +624,7 @@ export interface FileRoutesById {
   '/admin/payments': typeof AdminPaymentsRoute
   '/admin/plans': typeof AdminPlansRoute
   '/admin/requests': typeof AdminRequestsRoute
+  '/admin/services': typeof AdminServicesRoute
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/sharing': typeof AdminSharingRoute
   '/admin/store': typeof AdminStoreRoute
@@ -616,6 +633,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/admin/vault': typeof AdminVaultRoute
   '/api/app-version': typeof ApiAppVersionRoute
+  '/api/ops/service-status': typeof ApiOpsServiceStatusRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
   '/payment/cancel': typeof PaymentCancelRoute
   '/payment/success': typeof PaymentSuccessRoute
@@ -681,6 +699,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/plans'
     | '/admin/requests'
+    | '/admin/services'
     | '/admin/settings'
     | '/admin/sharing'
     | '/admin/store'
@@ -689,6 +708,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vault'
     | '/api/app-version'
+    | '/api/ops/service-status'
     | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
@@ -750,6 +770,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/plans'
     | '/admin/requests'
+    | '/admin/services'
     | '/admin/settings'
     | '/admin/sharing'
     | '/admin/store'
@@ -758,6 +779,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vault'
     | '/api/app-version'
+    | '/api/ops/service-status'
     | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
@@ -821,6 +843,7 @@ export interface FileRouteTypes {
     | '/admin/payments'
     | '/admin/plans'
     | '/admin/requests'
+    | '/admin/services'
     | '/admin/settings'
     | '/admin/sharing'
     | '/admin/store'
@@ -829,6 +852,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/admin/vault'
     | '/api/app-version'
+    | '/api/ops/service-status'
     | '/editor/$projectId'
     | '/payment/cancel'
     | '/payment/success'
@@ -884,6 +908,7 @@ export interface RootRouteChildren {
   WorkspaceRoute: typeof WorkspaceRoute
   Char1575Char1604Char1607Char1608Char1610Char1577Route: typeof Char1575Char1604Char1607Char1608Char1610Char1577Route
   ApiAppVersionRoute: typeof ApiAppVersionRoute
+  ApiOpsServiceStatusRoute: typeof ApiOpsServiceStatusRoute
   EditorProjectIdRoute: typeof EditorProjectIdRoute
   PaymentCancelRoute: typeof PaymentCancelRoute
   PaymentSuccessRoute: typeof PaymentSuccessRoute
@@ -1169,6 +1194,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRequestsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/services': {
+      id: '/admin/services'
+      path: '/services'
+      fullPath: '/admin/services'
+      preLoaderRoute: typeof AdminServicesRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/admin/settings': {
       id: '/admin/settings'
       path: '/settings'
@@ -1223,6 +1255,13 @@ declare module '@tanstack/react-router' {
       path: '/api/app-version'
       fullPath: '/api/app-version'
       preLoaderRoute: typeof ApiAppVersionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/ops/service-status': {
+      id: '/api/ops/service-status'
+      path: '/api/ops/service-status'
+      fullPath: '/api/ops/service-status'
+      preLoaderRoute: typeof ApiOpsServiceStatusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/editor/': {
@@ -1400,6 +1439,7 @@ interface AdminRouteChildren {
   AdminPaymentsRoute: typeof AdminPaymentsRoute
   AdminPlansRoute: typeof AdminPlansRoute
   AdminRequestsRoute: typeof AdminRequestsRoute
+  AdminServicesRoute: typeof AdminServicesRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSharingRoute: typeof AdminSharingRoute
   AdminStoreRoute: typeof AdminStoreRoute
@@ -1422,6 +1462,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminPaymentsRoute: AdminPaymentsRoute,
   AdminPlansRoute: AdminPlansRoute,
   AdminRequestsRoute: AdminRequestsRoute,
+  AdminServicesRoute: AdminServicesRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminSharingRoute: AdminSharingRoute,
   AdminStoreRoute: AdminStoreRoute,
@@ -1508,6 +1549,7 @@ const rootRouteChildren: RootRouteChildren = {
   Char1575Char1604Char1607Char1608Char1610Char1577Route:
     Char1575Char1604Char1607Char1608Char1610Char1577Route,
   ApiAppVersionRoute: ApiAppVersionRoute,
+  ApiOpsServiceStatusRoute: ApiOpsServiceStatusRoute,
   EditorProjectIdRoute: EditorProjectIdRoute,
   PaymentCancelRoute: PaymentCancelRoute,
   PaymentSuccessRoute: PaymentSuccessRoute,

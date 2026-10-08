@@ -12,6 +12,7 @@ import { AuthProvider } from "@/lib/auth/provider";
 import { NsqFileLaunch } from "@/components/nsq/NsqFileLaunch";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
 import { AppUpdateNotice } from "@/components/AppUpdateNotice";
+import { OperationalPolicySync } from "@/components/OperationalPolicySync";
 import { OfflineStatus } from "@/components/ui/OfflineStatus";
 import { initInstallPrompt } from "@/lib/app-install";
 // `__APP_BUILD_ID__` is a build-time literal (src/env.d.ts), never a binding.
@@ -142,6 +143,7 @@ export const Route = createRootRoute({
         <PreviewHostBridge />
         <NsqFileLaunch />
         <AuthProvider>
+          <OperationalPolicySync />
           <Outlet />
         </AuthProvider>
         <AppUpdateNotice />

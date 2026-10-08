@@ -26,7 +26,7 @@ import { THEMES, pageSize, type ThemeId } from "@/lib/editor/model";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
 import { exceedsSavedProjectLimit } from "@/lib/editor/access-limits";
-import { DEMO_LICENSE } from "@/lib/product/product";
+import { applicationPageLimit } from "@/lib/product/product";
 import {
   BLANK_BACKGROUNDS,
   DOC_KINDS,
@@ -246,9 +246,7 @@ export function NewDocumentForm({
   };
   const [busy, setBusy] = useState(false);
 
-  const maxPages = entitlements.unlimited_pages
-    ? MAX_NEW_PAGES
-    : (DEMO_LICENSE.entitlements.maxPagesPerProject ?? MAX_NEW_PAGES);
+  const maxPages = entitlements.unlimited_pages ? MAX_NEW_PAGES : applicationPageLimit();
 
   const set = (patch: Partial<NewDocumentConfig>) =>
     setConfig((c) => ({ ...c, ...patch }));
