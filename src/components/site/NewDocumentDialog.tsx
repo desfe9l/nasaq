@@ -25,6 +25,7 @@ import {
 import { THEMES, pageSize, type ThemeId } from "@/lib/editor/model";
 import { PACKS } from "@/lib/editor/templates";
 import { useEditor } from "@/lib/editor/store";
+import { exceedsSavedProjectLimit } from "@/lib/editor/access-limits";
 import { DEMO_LICENSE } from "@/lib/product/product";
 import {
   BLANK_BACKGROUNDS,
@@ -232,6 +233,7 @@ export function NewDocumentForm({
   const isDialog = variant === "dialog";
   const createDocument = useEditor((s) => s.createDocument);
   const entitlements = useEditor((s) => s.entitlements);
+  const projects = useEditor((s) => s.projects);
   const storeOrg = useEditor((s) => s.orgName);
   const [config, setConfig] = useState<NewDocumentConfig>(() =>
     defaultNewDocument({ orgName: storeOrg || "", ...initial }),
@@ -280,6 +282,12 @@ export function NewDocumentForm({
     if (busy) return;
     setBusy(true);
     try {
+      if (exceedsSavedProjectLimit(projects.length, entitlements)) {
+        toast.error("اكتملت مساحة تجربة المحرر", {
+          description: "يتضمن العرض مشروعًا واحدًا. اطلب النسخة الكاملة لإنشاء مشاريع إضافية.",
+        });
+        return;
+      }
       const project = buildNewDocument({
         ...config,
         pages: clampPages(config.pages, maxPages),
