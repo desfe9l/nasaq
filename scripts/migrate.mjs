@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import pg from "pg";
 import { pendingMigrations } from "./migration-plan.mjs";
 
-function normalizeDatabaseUrl(connectionString, options = {}) {
+function normalizeDatabaseUrl(connectionString) {
   if (!connectionString) return connectionString;
   const trimmed = connectionString.trim();
   if (!trimmed) return undefined;
@@ -25,14 +25,6 @@ function normalizeDatabaseUrl(connectionString, options = {}) {
     if (sslmode && ["require", "prefer", "verify-ca"].includes(sslmode.toLowerCase())) {
       url.searchParams.set("sslmode", "verify-full");
     }
-    const usePooler = options.pooled !== false;
-    if (usePooler && url.hostname.endsWith(".neon.tech")) {
-      const parts = url.hostname.split(".");
-      if (parts[0] && parts[0].startsWith("ep-") && !parts[0].endsWith("-pooler")) {
-        parts[0] = `${parts[0]}-pooler`;
-        url.hostname = parts.join(".");
-      }
-    }
     return url.toString();
   } catch {
     /* invalid URL format */
@@ -40,7 +32,7 @@ function normalizeDatabaseUrl(connectionString, options = {}) {
   return trimmed;
 }
 
-const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL, { pooled: false });
+const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
 if (!databaseUrl) {
   console.log(
     "[migrate] DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",

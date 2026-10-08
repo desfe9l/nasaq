@@ -94,7 +94,7 @@ export function fingerprint(id: string): string {
 
 export type OwnerMigrationReport = {
   at: string;
-  /** Which SQL backend answered ("neon" vs the local fallback). */
+  /** Which SQL backend answered ("postgres" vs the local fallback). */
   identityStoreReady: boolean;
   binding: {
     present: boolean;

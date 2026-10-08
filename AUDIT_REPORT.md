@@ -4,7 +4,7 @@
 - TanStack Start framework with React 19, Tailwind v4, TypeScript
 - Existing editor architecture (canvas, selection, multi-select, layers, shapes, text, images, tables, templates, export)
 - IndexedDB storage (DB_VERSION=3) with localStorage fallback for projects/assets/settings
-- PGLite (local) / Neon (production via DATABASE_URL) database architecture
+- PGLite (local) / PostgreSQL (production via DATABASE_URL) database architecture
 - better-auth authentication pre-wired (client, server, middleware, gates)
 - Office export writers: PPTX (pptxgenjs) and DOCX (docx) with editable content preservation
 - PNG/JPG/PDF/SVG export via html2canvas + jspdf
@@ -125,7 +125,7 @@ New: `WorkspaceOverlays.tsx`, `BrandKitPage.tsx`, `docs/` directory
 7. Set production environment variables in Vercel dashboard (not in source)
 
 ## O. Action still required from owner
-- Confirm `DATABASE_URL` for production Neon database (optional — PGLite works locally)
+- Confirm `DATABASE_URL` for production PostgreSQL database (optional — PGLite works locally)
 - Confirm `AUTH_SECRET` for production authentication
 - Confirm `GROK_PROJECT_ID` for deployed environment detection
 - Confirm admin account setup (existing auth architecture supports this)

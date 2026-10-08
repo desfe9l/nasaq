@@ -2,19 +2,16 @@ import { Pool, types } from "pg";
 import { pendingMigrations } from "../../scripts/migration-plan.mjs";
 
 /** Which database backend is active. */
-export type DbSource = "neon" | "pglite";
+export type DbSource = "postgres" | "pglite";
 
 /**
  * Normalize DATABASE_URL SSL parameters to prevent pg-connection-string v3/pg v9 deprecation
  * warnings while preserving full TLS certificate and hostname verification (sslmode=verify-full).
  *
- * For Neon databases (*.neon.tech), automatically ensures the hostname routes through Neon's
- * PgBouncer connection pooler (-pooler) to prevent connection exhaustion in serverless environments,
- * unless explicitly disabled via options.pooled = false (e.g. for migrations).
+ * This is generic PostgreSQL — no provider-specific hostname rewriting.
  */
 export function normalizeDatabaseUrl(
   connectionString: string | undefined,
-  options: { pooled?: boolean } = {},
 ): string | undefined {
   if (!connectionString) return connectionString;
   const trimmed = connectionString.trim();
@@ -25,16 +22,6 @@ export function normalizeDatabaseUrl(
     if (sslmode && ["require", "prefer", "verify-ca"].includes(sslmode.toLowerCase())) {
       url.searchParams.set("sslmode", "verify-full");
     }
-
-    const usePooler = options.pooled !== false;
-    if (usePooler && url.hostname.endsWith(".neon.tech")) {
-      const parts = url.hostname.split(".");
-      if (parts[0] && parts[0].startsWith("ep-") && !parts[0].endsWith("-pooler")) {
-        parts[0] = `${parts[0]}-pooler`;
-        url.hostname = parts.join(".");
-      }
-    }
-
     return url.toString();
   } catch {
     /* invalid URL format — return as-is for pg driver error handling */
@@ -49,13 +36,13 @@ const rawDatabaseUrl =
 const databaseUrl = normalizeDatabaseUrl(rawDatabaseUrl);
 
 /**
- * Active backend: real **Neon** when `DATABASE_URL` is set, otherwise local
+ * Active backend: real **PostgreSQL** when `DATABASE_URL` is set, otherwise local
  * embedded **PGLite** (Postgres compiled to WASM) for non-Vercel development.
  * Vercel fails closed without managed Postgres; an Arena/dev preview using
- * PGLite is not evidence of production persistence. Configure Neon by setting
+ * PGLite is not evidence of production persistence. Configure PostgreSQL by setting
  * `DATABASE_URL`; no backend code changes are needed.
  */
-export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
+export const dbSource: DbSource = databaseUrl ? "postgres" : "pglite";
 
 /**
  * Production guard. Vercel serverless functions have NO writable filesystem
@@ -63,7 +50,7 @@ export const dbSource: DbSource = databaseUrl ? "neon" : "pglite";
  * fallback there dies with a cryptic `ENOENT ... /var/task/_libs/pglite.data`.
  * Even if the file shipped, PGLite is in-memory per process, so licenses
  * written in one invocation would vanish in the next. Deployed apps MUST use
- * a managed Postgres via DATABASE_URL (free Neon works — `pg` is already a
+ * a managed Postgres via DATABASE_URL (any standard provider works — `pg` is already a
  * dependency and `scripts/migrate.mjs` applies migrations on every build).
  * `VERCEL=1` is injected by Vercel in all its build/function runtimes.
  */
@@ -71,7 +58,7 @@ const deployedWithoutDatabaseUrl =
   !databaseUrl && typeof process !== "undefined" && process.env.VERCEL === "1";
 
 /**
- * Minimal shared SQL surface, satisfied by both Neon and PGLite. Both the
+ * Minimal shared SQL surface, satisfied by both PostgreSQL and PGLite. Both the
  * tagged-template and `.query()` forms resolve to an array of row objects:
  *
  *   const sql = await getSql();
@@ -89,13 +76,11 @@ export interface Sql {
   ): Promise<T[]>;
 }
 
-/**
- * Init state lives on globalThis as promises: dev HMR creates new instances of
- * this module, and two instances racing module-level state would open a second
- * pool or run two concurrent PGLite migration passes (whose duplicate
- * `_migrations` insert rejects — and would get memoized, poisoning every later
- * `getSql()`). A failed init clears its slot so the next call retries.
- */
+// Init state lives on globalThis as promises: dev HMR creates new instances of
+// this module, and two instances racing module-level state would open a second
+// pool or run two concurrent PGLite migration passes (whose duplicate
+// `_migrations` insert rejects — and would get memoized, poisoning every later
+// `getSql()`). A failed init clears its slot so the next call retries.
 const globalRef = globalThis as typeof globalThis & {
   __sharedPgPool__?: Pool;
   __pgSqlPromise__?: Promise<Sql>;
@@ -139,14 +124,14 @@ function toSql(run: Run): Sql {
 }
 
 /**
- * Shared, serverless-optimized connection pool for Neon Postgres.
+ * Shared, serverless-optimized connection pool for PostgreSQL.
  *
  * Designed to prevent resource and connection exhaustion:
- * 1. max connections capped at 2 in serverless (prevents hitting Neon's max_connections ceiling);
+ * 1. max connections capped at 2 in serverless (prevents hitting max_connections ceiling);
  * 2. idleTimeoutMillis 5000 (releases idle sockets quickly to prevent connection leaks across lambda invocations);
  * 3. connectionTimeoutMillis 5000 (fails fast instead of blocking the function for 15s/30s gateway timeout);
  * 4. allowExitOnIdle true (lets serverless workers exit cleanly);
- * 5. pool.on("error") handles unexpected idle connection resets (e.g. Neon compute sleep or scale-to-zero)
+ * 5. pool.on("error") handles unexpected idle connection resets (e.g. compute sleep or scale-to-zero)
  *    so Node does not crash with an unhandled process-level error.
  */
 function createDatabasePool(connectionString: string): Pool {
@@ -182,7 +167,7 @@ export function getSharedPgPool(): Pool | undefined {
   return globalRef.__sharedPgPool__;
 }
 
-function createNeonSql(): Promise<Sql> {
+function createPostgresSql(): Promise<Sql> {
   globalRef.__pgSqlPromise__ ??= (async () => {
     const pool = getSharedPgPool();
     if (!pool) {
@@ -226,7 +211,7 @@ function pgliteDataDir(): string | undefined {
 }
 
 async function createPgliteSql(): Promise<Sql> {
-  // Embedded Postgres, imported on demand so it never loads on the Neon path.
+  // Embedded Postgres, imported on demand so it never loads on the Postgres path.
   // One instance per process, shared across HMR module instances, persisted to
   // `pgliteDataDir()` so data survives source edits AND server restarts.
   globalRef.__pgliteInstance__ ??= (async () => {
@@ -326,16 +311,16 @@ async function createSql(): Promise<Sql> {
       "[db] DATABASE_URL is not set on this deployment. Vercel serverless " +
         "cannot use the embedded PGLite fallback (no writable filesystem — it " +
         "fails with ENOENT _libs/pglite.data, and its data would not persist " +
-        "across invocations). Set DATABASE_URL to a managed Postgres (free " +
-        "Neon works) in Vercel → Settings → Environment Variables and redeploy. " +
+        "across invocations). Set DATABASE_URL to a managed Postgres (any " +
+        "standard provider works) in Vercel → Settings → Environment Variables and redeploy. " +
         "Migrations apply automatically during the build.",
     );
   }
-  return dbSource === "neon" ? createNeonSql() : createPgliteSql();
+  return dbSource === "postgres" ? createPostgresSql() : createPgliteSql();
 }
 
 /**
- * Get the shared, **server-only** SQL client. Neon when `DATABASE_URL` is set,
+ * Get the shared, **server-only** SQL client. PostgreSQL when `DATABASE_URL` is set,
  * otherwise the local PGLite fallback. Memoized — safe to call per request.
  *
  * Schema comes from `migrations/*.sql`, auto-applied before the first query on
@@ -352,7 +337,7 @@ export function getSql(): Promise<Sql> {
 /**
  * The shared PGLite instance (preview only), with `migrations/*.sql` applied.
  * Lets the licence tables persist to the SAME embedded DB as app data in preview (via a
- * Kysely dialect). Throws when `DATABASE_URL` is set (that path uses Neon).
+ * Kysely dialect). Throws when `DATABASE_URL` is set (that path uses PostgreSQL).
  */
 export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite> {
   if (dbSource !== "pglite") {
@@ -369,7 +354,7 @@ export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite
  *
  * - **PGLite** (preview / no `DATABASE_URL`): open the in-memory DB and apply
  *   `migrations/*.sql`. Idempotent — concurrent callers share one promise.
- * - **Neon**: no-op (pool is created lazily on first query).
+ * - **PostgreSQL**: no-op (pool is created lazily on first query).
  *
  * Vite `configureServer` awaits this at dev startup; production imports of this
  * module kick it off immediately (see bottom of file).
@@ -390,7 +375,7 @@ if (typeof window === "undefined") {
     // of a confusing PGLite stack trace on the first query.
     console.error(
       "[db] Deployed without DATABASE_URL — the license/database-backed " +
-        "features are unavailable. Set DATABASE_URL (free Neon Postgres) in " +
+        "features are unavailable. Set DATABASE_URL (any standard Postgres provider) in " +
         "Vercel → Settings → Environment Variables, then redeploy.",
     );
   } else if (dbSource === "pglite") {

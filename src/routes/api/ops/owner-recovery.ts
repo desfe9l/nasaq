@@ -117,7 +117,7 @@ async function guard(
     import("@/lib/auth/request-session.server"),
     import("@/lib/auth/isolation.server"),
   ]);
-  if (dbSource !== "neon") {
+  if (dbSource !== "postgres") {
     return {
       ok: false,
       response: json(
