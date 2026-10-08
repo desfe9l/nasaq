@@ -6,7 +6,7 @@
  * Every read compares revisions, so a cached copy cannot outlive an owner save.
  */
 
-import { deriveServiceHealth, type ControlActor } from "./decisions.ts";
+import { classifyDatabaseFailure, deriveServiceHealth, type ControlActor, type DatabaseFailureKind } from "./decisions.ts";
 import {
   bootstrapControlPlane,
   toPublicOperationalView,
@@ -21,6 +21,7 @@ import {
   markControlPlaneUnconfirmed,
   noteProviderSignal,
   publishControlPlane,
+  clearProviderSignal,
 } from "./snapshot.ts";
 import { createControlStore, type ControlWriteResult } from "./store.ts";
 
@@ -51,26 +52,67 @@ const store = createControlStore({
   },
 });
 
-export async function refreshControlPlane(): Promise<ControlPlaneDocument> {
+const FAILURE_BACKOFF_MS = 20_000;
+let lastDatabaseFailureAt = 0;
+let lastDatabaseFailure: DatabaseFailureKind | null = null;
+let refreshInflight: Promise<ControlPlaneDocument> | null = null;
+
+function providerProbe(kind: DatabaseFailureKind): "quota" | "down" | "timeout" {
+  return kind;
+}
+
+function rememberDatabaseFailure(kind: DatabaseFailureKind): ControlPlaneDocument {
+  lastDatabaseFailure = kind;
+  lastDatabaseFailureAt = Date.now();
+  markControlPlaneUnconfirmed();
+  noteProviderSignal("database", providerProbe(kind));
+  return enforcementPlane();
+}
+
+async function readPublishedPlane(): Promise<ControlPlaneDocument> {
   try {
     const stored = await store.read();
     const plane = stored ?? bootstrapControlPlane();
     publishControlPlane(plane, stored != null && stored.revision >= 1);
+    lastDatabaseFailure = null;
+    clearProviderSignal("database");
     return enforcementPlane();
-  } catch {
-    markControlPlaneUnconfirmed();
-    noteProviderSignal("database", "down");
-    return enforcementPlane();
+  } catch (error) {
+    return rememberDatabaseFailure(classifyDatabaseFailure(error));
   }
+}
+
+export function refreshControlPlane(): Promise<ControlPlaneDocument> {
+  const now = Date.now();
+  if (lastDatabaseFailure && now - lastDatabaseFailureAt < FAILURE_BACKOFF_MS) {
+    markControlPlaneUnconfirmed();
+    noteProviderSignal("database", providerProbe(lastDatabaseFailure));
+    return Promise.resolve(enforcementPlane());
+  }
+  if (!refreshInflight) {
+    refreshInflight = readPublishedPlane().finally(() => {
+      refreshInflight = null;
+    });
+  }
+  return refreshInflight;
 }
 
 export async function saveControlPatch(
   actor: ControlActor,
   patch: ControlPatch,
 ): Promise<ControlWriteResult> {
-  const result = await store.write(actor, patch);
-  if (result.ok) publishControlPlane(result.doc, true);
-  return result;
+  try {
+    const result = await store.write(actor, patch);
+    if (result.ok) {
+      publishControlPlane(result.doc, true);
+      lastDatabaseFailure = null;
+      clearProviderSignal("database");
+    }
+    return result;
+  } catch (error) {
+    rememberDatabaseFailure(classifyDatabaseFailure(error));
+    throw error;
+  }
 }
 
 export interface ServiceControlView {
@@ -82,20 +124,9 @@ export interface ServiceControlView {
 }
 
 export async function loadServiceControlView(): Promise<ServiceControlView> {
-  let databaseUnavailable = false;
-  let plane: ControlPlaneDocument;
-  try {
-    const stored = await store.read();
-    plane = stored ?? bootstrapControlPlane();
-    publishControlPlane(plane, stored != null && stored.revision >= 1);
-  } catch {
-    databaseUnavailable = true;
-    markControlPlaneUnconfirmed();
-    noteProviderSignal("database", "down");
-    plane = enforcementPlane();
-  }
+  const plane = await refreshControlPlane();
   const probes = currentProviderProbes();
-  if (databaseUnavailable) probes.database = "down";
+  const databaseUnavailable = probes.database === "down" || probes.database === "quota" || probes.database === "timeout";
   const health = deriveServiceHealth(plane, probes);
   let storageBytes: number | null = null;
   if (!databaseUnavailable) {

@@ -121,7 +121,15 @@ export const updateServiceControlFn = createServerFn({ method: "POST" })
       if (!saved.ok) return { ok: false as const, reason: "forbidden" as const };
       const view = await loadServiceControlView();
       return { ok: true as const, rejected: saved.rejected, ...view };
-    } catch {
+    } catch (error) {
+      const { classifyDatabaseFailure } = await import("./decisions");
+      if (classifyDatabaseFailure(error) === "quota") {
+        return {
+          ok: false as const,
+          reason: "provider_limited" as const,
+          error: "تعذّر حفظ السياسة لأن مزوّد قاعدة البيانات تجاوز حصته. لم يُكتَب أي تغيير، ولم تُوقَف المحرر أو التخزين أو الذكاء الاصطناعي.",
+        };
+      }
       return {
         ok: false as const,
         reason: "database_unavailable" as const,

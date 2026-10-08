@@ -4,6 +4,7 @@ import { resetRateLimits } from "@/lib/license/rate-limit";
 import {
   authenticationRequired,
   authorizeControlMutation,
+  classifyDatabaseFailure,
   commitControlChange,
   deriveServiceHealth,
   gateService,
@@ -18,8 +19,10 @@ import {
   type ControlPlaneDocument,
 } from "./schema.ts";
 import {
+  currentProviderProbes,
   enforcementPlane,
   markControlPlaneUnconfirmed,
+  noteProviderSignal,
   publishControlPlane,
   resetControlPlaneState,
 } from "./snapshot.ts";
@@ -133,6 +136,39 @@ test("a database failure is reported explicitly and does not shut the editor or 
   assert.equal(health.ai.status, "enabled");
   assert.equal(health.admin.status, "enabled");
   assert.notEqual(health.authentication.status, "disabled");
+});
+
+test("a Postgres quota is a provider limit and does not shut unrelated services", () => {
+  assert.equal(
+    classifyDatabaseFailure(
+      Object.assign(
+        new Error("Your account or project has exceeded the quota. Upgrade your plan to increase limits."),
+        { code: "53000" },
+      ),
+    ),
+    "quota",
+  );
+  assert.equal(classifyDatabaseFailure(new Error("connect ETIMEDOUT")), "timeout");
+  assert.equal(classifyDatabaseFailure(new Error("connect ECONNREFUSED")), "down");
+  resetControlPlaneState();
+  noteProviderSignal("database", "quota");
+  const probes = currentProviderProbes();
+  assert.equal(probes.database, "quota");
+  assert.equal(probes.ai, undefined);
+  assert.equal(probes.storage, undefined);
+  const health = deriveServiceHealth(bootstrapControlPlane(), probes);
+  assert.equal(health.database.status, "provider_limited");
+  assert.equal(health.database.reason, "postgres");
+  assert.equal(health.documents.status, "degraded");
+  assert.equal(health.templates.status, "degraded");
+  assert.equal(health.users_teams.status, "degraded");
+  assert.equal(health.authentication.status, "degraded");
+  for (const id of ["editor", "ai", "storage", "uploads", "admin", "image_processing", "import_export", "background", "polling", "api"] as const) {
+    assert.equal(health[id].status, "enabled", id);
+  }
+  assert.equal(gateService(bootstrapControlPlane(), "editor").allowed, true);
+  assert.equal(gateService(bootstrapControlPlane(), "ai").allowed, true);
+  resetControlPlaneState();
 });
 
 test("one failed provider does not shut down unrelated services", () => {

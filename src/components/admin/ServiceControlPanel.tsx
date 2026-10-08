@@ -124,7 +124,7 @@ export function ServiceControlPanel() {
     try {
       const result = await updateServiceControlFn({ data: patch });
       if (!result.ok) {
-        toast.error(result.reason === "database_unavailable" ? result.error : "رُفض التعديل.");
+        toast.error("error" in result && result.error ? result.error : "رُفض التعديل.");
         return;
       }
       if (result.rejected.length) toast.message(`لم يُقبل: ${result.rejected.join("، ")}`);
@@ -146,7 +146,11 @@ export function ServiceControlPanel() {
 
   return (
     <div className="grid gap-4">
-      {view.databaseUnavailable ? (
+      {view.health.database.status === "provider_limited" ? (
+        <p className="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-[12.5px] leading-6 text-ink">
+          مزوّد قاعدة البيانات تجاوز حصته. هذا حد خارجي وليس إيقافاً من نسق. المحرر والتخزين والذكاء الاصطناعي والإدارة لم تُوقَف.
+        </p>
+      ) : view.databaseUnavailable ? (
         <p className="rounded-xl border border-danger/40 bg-danger/10 px-3 py-2 text-[12.5px] leading-6 text-ink">
           قاعدة البيانات غير متاحة. الحالة ظاهرة صراحة، وبقية الخدمات لم تُوقَف بسبب ذلك.
         </p>

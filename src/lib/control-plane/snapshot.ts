@@ -71,12 +71,12 @@ export function noteProviderSignal(
   if (id === "storage") observations.set("uploads", { probe, at: now });
 }
 
-export function clearProviderSignals(): void {
-  observations.clear();
+export function clearProviderSignal(id: ServiceId): void {
+  observations.delete(id);
 }
 
 export function currentProviderProbes(now = Date.now()): {
-  database?: "down";
+  database?: "down" | "quota" | "timeout";
   storage?: "down" | "quota";
   ai?: "down" | "quota" | "billing" | "timeout";
 } {
@@ -90,7 +90,7 @@ export function currentProviderProbes(now = Date.now()): {
   const storage = fresh("storage");
   const ai = fresh("ai");
   return {
-    ...(database === "down" ? { database: "down" as const } : {}),
+    ...(database === "down" || database === "quota" || database === "timeout" ? { database } : {}),
     ...(storage === "down" || storage === "quota" ? { storage } : {}),
     ...(ai ? { ai } : {}),
   };

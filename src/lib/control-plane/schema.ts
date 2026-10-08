@@ -165,7 +165,7 @@ export const EXTERNAL_CONSTRAINTS = [
   {
     id: "postgres",
     service: "database" as const,
-    summary: "Postgres connection limits, disk, and availability belong to the database host.",
+    summary: "Postgres plan quota (compute, storage, connections) belongs to the database host. NASAQ reports it on the database service only.",
   },
   {
     id: "host-runtime",
