@@ -9,6 +9,7 @@ import { INTELLIGENCE_SCHEMA_VERSION } from "./schema";
 import { parsePrompt, type PromptAnalysis } from "./prompt-analyzer";
 import { generateFromIntent } from "./design-generator";
 import { generateVariations, type DesignVariation } from "./variations";
+import { checkLayoutVariety, type LayoutVarietyReport } from "./layout-variety";
 import {
   applyBrandToIntent,
   applyBrandToProject,
@@ -80,6 +81,9 @@ export interface StudioGenerationResult {
   intent: PromptAnalysis;
   primaryResult: PipelineResult & { project: Project };
   variations: DesignVariation[];
+  /** Layout Variety Check over the primary project: no two consecutive pages
+   * share a structure (the anti-monotony guarantee). */
+  layoutVariety: LayoutVarietyReport;
 }
 
 /**
@@ -133,6 +137,7 @@ export function generateDesignFromPrompt(
     intent,
     primaryResult,
     variations,
+    layoutVariety: checkLayoutVariety(primaryResult.project),
   };
 }
 

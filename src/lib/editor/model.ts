@@ -383,6 +383,14 @@ export interface CanvasEl {
    */
   hfRole?: "header" | "footer";
   /**
+   * Per-element layout metadata (positioning, visual hierarchy, accent cards,
+   * summary callouts). A pure marker like `hfRole`: the editor ignores it
+   * when rendering, the AI layout engine (`@/lib/intelligence/layout-variety`)
+   * stamps it at generation time, and it travels with the element through
+   * copy, group and save without touching geometry or behaviour.
+   */
+  layout?: ElementLayoutMeta;
+  /**
    * Where an imported element came from. The editor ignores it; importers
    * use it to keep each piece tied to the file it was read from.
    */
@@ -410,6 +418,38 @@ export interface CanvasEl {
      * from a header-only read of the data URL.
      */
     px?: { w: number; h: number };
+  };
+}
+
+/**
+ * Layout role of a generated element — what the element IS in the page's
+ * visual hierarchy (heading, body, accent card, stat card, summary callout,
+ * table, image, ornament, furniture). Assigned by the AI layout engine.
+ */
+export type LayoutElementRole =
+  | "heading"
+  | "body"
+  | "accent-card"
+  | "stat-card"
+  | "summary-callout"
+  | "table"
+  | "image"
+  | "ornament"
+  | "furniture";
+
+/**
+ * Independent visual-distribution options for ONE generated element:
+ * where it anchors in the RTL grid, how many columns it spans, and where it
+ * sits in the page's visual hierarchy (1 = primary, 2 = supporting,
+ * 3 = body/meta). `pattern` names the page layout the element belongs to.
+ */
+export interface ElementLayoutMeta {
+  role: LayoutElementRole;
+  hierarchy?: 1 | 2 | 3;
+  pattern?: string;
+  positioning?: {
+    anchor: "right" | "left" | "center" | "full";
+    columnSpan?: 1 | 2 | 3;
   };
 }
 

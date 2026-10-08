@@ -13,6 +13,15 @@ import {
 import type { PaletteRoles } from "./schema";
 import type { PromptAnalysis } from "./prompt-analyzer";
 import { plate } from "@/lib/editor/template-layouts";
+import {
+  directiveForPattern,
+  enforceLayoutVariety,
+  planPageLayouts,
+  stampLayoutMeta,
+  type LayoutPatternId,
+  type PageLayoutDirective,
+} from "./layout-variety";
+import { applyStylePreset, presetForDesignStyle } from "./style-presets";
 
 // High quality SVG artwork stand-ins tailored to themes
 function themedArtwork(topic: string): string {
@@ -939,6 +948,259 @@ export function buildFrameworkPage(page: Page, intent: PromptAnalysis, pageIndex
   footerBar(page, p, intent.org, pageIndex, total, intent.docTypeLabel);
 }
 
+/**
+ * «شبكة غير متماثلة» (asymmetric-editorial) — a 7/5 grid: a wide prose column
+ * on the right (RTL start) and a narrow sidebar of stat + callout + image on
+ * the left. Breaks the stacked full-width rhythm of the summary page.
+ */
+export function buildAsymmetricStory(page: Page, intent: PromptAnalysis, pageIndex: number, total: number) {
+  const { w, h } = pageSize(page);
+  const m = marginOf(w);
+  const p = intent.palette;
+  const scale = presetForDesignStyle(intent.style).typographyScale;
+
+  runningHead(page, p, "المحتوى التحليلي", intent.org);
+
+  const contentW = w - m * 2;
+  const gap = 6;
+  const mainW = Math.round(contentW * 0.62);
+  const sideW = contentW - mainW - gap;
+  const mainX = w - m - mainW; // RTL: the reading column starts on the right
+  const sideX = m;
+
+  // ── Main column (right): heading, prose, takeaway rows ──────────────────
+  write(page, "عنوان القسم", "[عنوان القسم من المصدر]", mainX, 24, mainW, 10, {
+    fontFamily: "Tajawal",
+    fontSize: scale.h1,
+    fontWeight: 800,
+    color: p.field,
+  });
+  put(page, "line", {
+    name: "خيط القسم",
+    x: mainX + mainW - 42,
+    y: 38,
+    w: 42,
+    h: 0.5,
+    style: { color: p.accent, stroke: 0.5 },
+  });
+  write(page, "متن القسم", "[أضف متنًا موثقًا من المحتوى أو المصدر المعتمد]", mainX, 44, mainW, 44, {
+    fontFamily: "Noto Naskh Arabic",
+    fontSize: scale.body,
+    fontWeight: 500,
+    color: p.ink,
+    lineHeight: 1.7,
+  });
+
+  intent.summaryTakeaways.slice(0, 2).forEach((item, index) => {
+    const rowY = 96 + index * 20;
+    put(page, "shape", {
+      name: `بطاقة مقتطف ${index + 1}`,
+      x: mainX,
+      y: rowY,
+      w: mainW,
+      h: 16,
+      style: { fill: "#ffffff", borderColor: "#edf2f7", borderWidth: 0.4, radius: 3 },
+    });
+    put(page, "shape", {
+      name: `معين مقتطف ${index + 1}`,
+      x: mainX + mainW - 8,
+      y: rowY + 6,
+      w: 4,
+      h: 4,
+      style: { fill: p.accent, borderWidth: 0, radius: 0, shape: "rect", shapeId: "diamond" },
+    });
+    write(page, `نص مقتطف ${index + 1}`, item, mainX + 6, rowY + 4.5, mainW - 18, 8, {
+      fontFamily: "Noto Naskh Arabic",
+      fontSize: 9,
+      fontWeight: 600,
+      color: p.ink,
+      lineHeight: 1.4,
+    });
+  });
+
+  // ── Sidebar (left): stat card, summary callout, image plate ─────────────
+  const statH = 36;
+  put(page, "shape", {
+    name: "بطاقة مؤشر جانبية",
+    x: sideX,
+    y: 24,
+    w: sideW,
+    h: statH,
+    style: { fill: p.field, borderWidth: 0, radius: 4 },
+  });
+  write(page, "قيمة المؤشر الجانبي", intent.keyMetrics[0]?.value ?? "[القيمة 1]", sideX + 5, 29, sideW - 10, 12, {
+    fontFamily: "Tajawal",
+    fontSize: scale.display,
+    fontWeight: 800,
+    color: p.onField,
+    lineHeight: 1.1,
+  });
+  write(page, "تسمية المؤشر الجانبي", intent.keyMetrics[0]?.label ?? "[اسم المؤشر 1]", sideX + 5, 44, sideW - 10, 6, {
+    fontFamily: "IBM Plex Sans Arabic",
+    fontSize: 7.5,
+    fontWeight: 600,
+    color: p.accent,
+    lineHeight: 1.1,
+  });
+  write(page, "اتجاه المؤشر الجانبي", intent.keyMetrics[0]?.trend ?? "", sideX + 5, 51, sideW - 10, 5, {
+    fontFamily: "IBM Plex Sans Arabic",
+    fontSize: 6.5,
+    fontWeight: 600,
+    color: p.onField,
+    lineHeight: 1.1,
+  });
+
+  const calloutY = 24 + statH + 6;
+  const calloutH = 48;
+  put(page, "shape", {
+    name: "إطار المقولة الجانبية",
+    x: sideX,
+    y: calloutY,
+    w: sideW,
+    h: calloutH,
+    style: { fill: p.paper, borderColor: p.accent, borderWidth: 0.6, radius: 3 },
+  });
+  write(page, "رمز الاقتباس", "«", sideX + sideW - 10, calloutY + 2, 8, 8, {
+    fontFamily: "Tajawal",
+    fontSize: 16,
+    fontWeight: 800,
+    color: p.accent,
+    textAlign: "center",
+  });
+  write(page, "نص المقولة", "[أضف اقتباسًا معتمدًا من المصدر]", sideX + 5, calloutY + 8, sideW - 14, calloutH - 12, {
+    fontFamily: "Tajawal",
+    fontSize: 9.5,
+    fontWeight: 700,
+    color: p.field,
+    lineHeight: 1.4,
+  });
+
+  const imgY = calloutY + calloutH + 6;
+  put(page, "image", {
+    name: "صورة جانبية",
+    x: sideX,
+    y: imgY,
+    w: sideW,
+    h: Math.min(54, h - imgY - 40),
+    src: themedArtwork(intent.topic),
+    style: { radius: 4, borderColor: "#cbd5e1", borderWidth: 0.5, objectFit: "cover" },
+  });
+
+  // ── Full-width summary callout band ─────────────────────────────────────
+  const bandY = 180;
+  const bandH = 30;
+  put(page, "shape", {
+    name: "بطاقة المقتطف الختامي",
+    x: m,
+    y: bandY,
+    w: contentW,
+    h: bandH,
+    style: { fill: "#ffffff", borderColor: "#e4e9f0", borderWidth: 0.5, radius: 3 },
+  });
+  put(page, "shape", {
+    name: "حد البطاقة الأيمن",
+    x: w - m - 3,
+    y: bandY,
+    w: 3,
+    h: bandH,
+    style: { fill: p.accent, borderWidth: 0, radius: 2 },
+  });
+  write(page, "عنوان المقتطف", "مقتطف", m + 6, bandY + 4, 60, 6, {
+    fontFamily: "Tajawal",
+    fontSize: 9.5,
+    fontWeight: 800,
+    color: p.field,
+  });
+  write(page, "نص المقتطف", "[أضف ملخصًا ختاميًا موثقًا من المصدر]", m + 6, bandY + 12, 158, 14, {
+    fontFamily: "Noto Naskh Arabic",
+    fontSize: 9,
+    fontWeight: 500,
+    color: p.ink,
+    lineHeight: 1.5,
+  });
+
+  footerBar(page, p, intent.org, pageIndex, total, intent.docTypeLabel);
+}
+
+/**
+ * «مقتطفات ومساحات بيضاء» (summary-callout) — an airy page: one display
+ * pull-quote, two callout cards, and deliberate empty space. The visual rest
+ * between the dense data pages.
+ */
+export function buildSummaryCallout(page: Page, intent: PromptAnalysis, pageIndex: number, total: number) {
+  const { w, h } = pageSize(page);
+  const m = marginOf(w);
+  const p = intent.palette;
+  const scale = presetForDesignStyle(intent.style).typographyScale;
+  const contentW = w - m * 2;
+
+  runningHead(page, p, "مقتطفات وملاحظات ختامية", intent.org);
+
+  // Display pull-quote
+  write(page, "المقولة", "[أضف مقولة أو اقتباسًا معتمدًا من المصدر]", m, 44, contentW, 30, {
+    fontFamily: "Tajawal",
+    fontSize: scale.display,
+    fontWeight: 800,
+    color: p.field,
+    lineHeight: 1.25,
+  });
+  put(page, "shape", {
+    name: "معين زخرفي",
+    x: w - m - 10,
+    y: 36,
+    w: 8,
+    h: 8,
+    style: { fill: p.accent, borderWidth: 0, radius: 0, shape: "rect", shapeId: "diamond" },
+  });
+  put(page, "line", {
+    name: "خيط الإيقاع البصري",
+    x: m,
+    y: 80,
+    w: 60,
+    h: 0.5,
+    style: { color: p.accent, stroke: 0.5 },
+  });
+
+  // Two summary callout cards in a balanced 2-column grid
+  const cardY = 96;
+  const cardH = 44;
+  const cardW = (contentW - 6) / 2;
+  intent.summaryTakeaways.slice(0, 2).forEach((item, index) => {
+    const cardX = index === 0 ? m : m + cardW + 6;
+    put(page, "shape", {
+      name: `بطاقة مقتطف ${index + 1}`,
+      x: cardX,
+      y: cardY,
+      w: cardW,
+      h: cardH,
+      style: { fill: p.paper, borderColor: p.accent, borderWidth: 0.6, radius: 3 },
+    });
+    write(page, `عنوان مقتطف ${index + 1}`, index === 0 ? "مقتطف أول" : "مقتطف ثانٍ", cardX + 5, cardY + 5, cardW - 10, 6, {
+      fontFamily: "Tajawal",
+      fontSize: 9.5,
+      fontWeight: 800,
+      color: p.field,
+    });
+    write(page, `نص مقتطف ${index + 1}`, item, cardX + 5, cardY + 14, cardW - 10, cardH - 20, {
+      fontFamily: "Noto Naskh Arabic",
+      fontSize: 9,
+      fontWeight: 500,
+      color: p.ink,
+      lineHeight: 1.5,
+    });
+  });
+
+  // Deliberate whitespace, then one quiet meta line above the footer
+  write(page, "مصدر الاقتباس", "[مصدر الاقتباس يحدده المالك]", m, h - 42, contentW, 6, {
+    fontFamily: "IBM Plex Sans Arabic",
+    fontSize: 8,
+    fontWeight: 600,
+    color: p.muted,
+  });
+
+  footerBar(page, p, intent.org, pageIndex, total, intent.docTypeLabel);
+}
+
 export function buildClosingEndorsement(page: Page, intent: PromptAnalysis, pageIndex: number, total: number) {
   const { w, h } = pageSize(page);
   const m = marginOf(w);
@@ -1152,7 +1414,7 @@ export function buildSlideCover(page: Page, intent: PromptAnalysis) {
 export function buildSlideContent(
   page: Page,
   intent: PromptAnalysis,
-  slideType: "agenda" | "kpis" | "pillars" | "matrix" | "closing",
+  slideType: "agenda" | "kpis" | "pillars" | "matrix" | "closing" | "asymmetric" | "callout",
   index: number,
   total: number,
 ) {
@@ -1375,6 +1637,135 @@ export function buildSlideContent(
         cellAlign: "right",
       },
     });
+  } else if (slideType === "asymmetric") {
+    // Asymmetric slide: wide content column on the right, stat sidebar on the left
+    write(page, "عنوان شريحة المحتوى", "[عنوان المحتوى من المصدر]", m, y, w - m * 2, 12, {
+      fontFamily: "Tajawal",
+      fontSize: 20,
+      fontWeight: 800,
+      color: p.field,
+    });
+    y += 18;
+
+    const contentW = w - m * 2;
+    const mainW = Math.round(contentW * 0.58);
+    const sideW = contentW - mainW - 6;
+    const mainX = w - m - mainW;
+    const sideX = m;
+
+    intent.summaryTakeaways.slice(0, 3).forEach((item, i) => {
+      const rowY = y + i * 20;
+      put(page, "shape", {
+        name: `دائرة رقم ${i + 1}`,
+        x: mainX + mainW - 10,
+        y: rowY + 1,
+        w: 8,
+        h: 8,
+        style: { fill: p.accent, borderWidth: 0, radius: 99, shape: "circle" },
+      });
+      write(page, `رقم ${i + 1}`, String(i + 1), mainX + mainW - 10, rowY + 1.8, 8, 8, {
+        fontFamily: "IBM Plex Sans Arabic",
+        fontSize: 6.5,
+        fontWeight: 800,
+        color: p.field,
+        textAlign: "center",
+      });
+      write(page, `نص ${i + 1}`, item, mainX, rowY + 2, mainW - 18, 12, {
+        fontFamily: "Noto Naskh Arabic",
+        fontSize: 10,
+        fontWeight: 600,
+        color: p.ink,
+        lineHeight: 1.4,
+      });
+    });
+
+    put(page, "shape", {
+      name: "بطاقة مؤشر الشريط الجانبي",
+      x: sideX,
+      y,
+      w: sideW,
+      h: 40,
+      style: { fill: p.field, borderWidth: 0, radius: 4 },
+    });
+    write(page, "قيمة مؤشر الشريط", intent.keyMetrics[0]?.value ?? "[القيمة 1]", sideX + 6, y + 5, sideW - 12, 16, {
+      fontFamily: "Tajawal",
+      fontSize: 22,
+      fontWeight: 800,
+      color: p.onField,
+    });
+    write(page, "تسمية مؤشر الشريط", intent.keyMetrics[0]?.label ?? "[اسم المؤشر 1]", sideX + 6, y + 24, sideW - 12, 8, {
+      fontFamily: "IBM Plex Sans Arabic",
+      fontSize: 8.5,
+      fontWeight: 600,
+      color: p.accent,
+    });
+    write(page, "اتجاه مؤشر الشريط", intent.keyMetrics[0]?.trend ?? "", sideX + 6, y + 32, sideW - 12, 6, {
+      fontFamily: "IBM Plex Sans Arabic",
+      fontSize: 7,
+      fontWeight: 600,
+      color: p.onField,
+    });
+
+    put(page, "shape", {
+      name: "إطار مقولة الشريط",
+      x: sideX,
+      y: y + 46,
+      w: sideW,
+      h: Math.max(30, h - (y + 46) - 30),
+      style: { fill: p.paper, borderColor: p.accent, borderWidth: 0.6, radius: 3 },
+    });
+    write(page, "نص مقولة الشريط", "[أضف اقتباسًا معتمدًا من المصدر]", sideX + 6, y + 52, sideW - 12, Math.max(20, h - (y + 52) - 36), {
+      fontFamily: "Tajawal",
+      fontSize: 10,
+      fontWeight: 700,
+      color: p.field,
+      lineHeight: 1.4,
+    });
+  } else if (slideType === "callout") {
+    // Airy callout slide: one display quote, attribution, two chips
+    write(page, "المقولة", "[أضف مقولة أو اقتباسًا معتمدًا من المصدر]", m, y + 8, w - m * 2, 36, {
+      fontFamily: "Tajawal",
+      fontSize: 24,
+      fontWeight: 800,
+      color: p.field,
+      lineHeight: 1.25,
+    });
+    put(page, "shape", {
+      name: "معين زخرفي",
+      x: w - m - 10,
+      y: y,
+      w: 8,
+      h: 8,
+      style: { fill: p.accent, borderWidth: 0, radius: 0, shape: "rect", shapeId: "diamond" },
+    });
+    write(page, "مصدر الاقتباس", "[مصدر الاقتباس يحدده المالك]", m, y + 52, w - m * 2, 8, {
+      fontFamily: "IBM Plex Sans Arabic",
+      fontSize: 9,
+      fontWeight: 600,
+      color: p.muted,
+    });
+
+    const chipY = y + 70;
+    [0, 1].forEach((i) => {
+      const label = `[عنوان المحور ${i + 1}]`;
+      const chipW = 70;
+      const chipX = i === 0 ? m : m + chipW + 6;
+      put(page, "shape", {
+        name: `شريحة ${i + 1}`,
+        x: chipX,
+        y: chipY,
+        w: chipW,
+        h: 10,
+        style: { fill: p.paper, borderColor: p.accent, borderWidth: 0.5, radius: 5 },
+      });
+      write(page, `نص شريحة ${i + 1}`, label, chipX + 4, chipY + 2, chipW - 8, 6, {
+        fontFamily: "IBM Plex Sans Arabic",
+        fontSize: 8,
+        fontWeight: 700,
+        color: p.field,
+        textAlign: "center",
+      });
+    });
   } else {
     // Closing slide
     write(page, "عنوان شريحة القرارات", "القرارات المطلوبة والخطوات القادمة", m, y, w - m * 2, 12, {
@@ -1421,65 +1812,103 @@ export function buildSlideContent(
 // Main Generator Entrypoint
 // -------------------------------------------------------------
 
+type PageBuilder = (page: Page, intent: PromptAnalysis, pageIndex: number, total: number) => void;
+
+/**
+ * Pattern → builder, per orientation. Every pattern maps to a REAL builder of
+ * editable elements — the anti-monotony guarantee lives in the plan, the
+ * builders only draw.
+ */
+const PORTRAIT_BUILDERS: Record<LayoutPatternId, PageBuilder> = {
+  "hero-cover": (page, intent) => buildOfficialCover(page, intent),
+  "executive-summary": buildExecutiveOverview,
+  "asymmetric-editorial": buildAsymmetricStory,
+  "multi-column-cards": buildFrameworkPage,
+  "stat-cards": buildKpiDashboard,
+  "table-matrix": buildDataMatrix,
+  "summary-callout": buildSummaryCallout,
+  "closing-endorsement": buildClosingEndorsement,
+};
+
+const SLIDE_BUILDERS: Record<LayoutPatternId, PageBuilder> = {
+  "hero-cover": (page, intent) => buildSlideCover(page, intent),
+  "executive-summary": (page, intent, i, t) => buildSlideContent(page, intent, "agenda", i, t),
+  "asymmetric-editorial": (page, intent, i, t) => buildSlideContent(page, intent, "asymmetric", i, t),
+  "multi-column-cards": (page, intent, i, t) => buildSlideContent(page, intent, "pillars", i, t),
+  "stat-cards": (page, intent, i, t) => buildSlideContent(page, intent, "kpis", i, t),
+  "table-matrix": (page, intent, i, t) => buildSlideContent(page, intent, "matrix", i, t),
+  "summary-callout": (page, intent, i, t) => buildSlideContent(page, intent, "callout", i, t),
+  "closing-endorsement": (page, intent, i, t) => buildSlideContent(page, intent, "closing", i, t),
+};
+
+/**
+ * THE entrypoint. Anti-Monotony & Dynamic Layout Rules, enforced:
+ *
+ *   1. planPageLayouts assigns one pattern per page — page 1 is a hero cover,
+ *      no two consecutive pages share a pattern, long documents end with a
+ *      closing endorsement. Provider directives (from the AI design brief)
+ *      are honored only when they obey the same rule.
+ *   2. Every page is stamped with per-element layout metadata (positioning,
+ *      visual hierarchy, accent cards, summary callouts) and painted with the
+ *      style preset's radius/shadow elevation.
+ *   3. The Layout Variety Check runs over the finished project; if two
+ *      consecutive pages still share a structure, the later page is rebuilt
+ *      with a secondary pattern AUTOMATICALLY.
+ */
 export function generateFromIntent(intent: PromptAnalysis): Project {
   const p = intent.palette;
   const isSlide = intent.format === "wide-slide";
   const pagesCount = intent.pages;
+  const preset = presetForDesignStyle(intent.style);
+  const builders = isSlide ? SLIDE_BUILDERS : PORTRAIT_BUILDERS;
 
-  const pages: Page[] = [];
+  const plan = planPageLayouts({
+    pages: pagesCount,
+    format: intent.format,
+    mode: intent.generationMode,
+    density: intent.contentDensity,
+    style: intent.style,
+    styleBias: preset.layoutBias,
+    directives: intent.pageLayouts,
+  });
 
-  for (let i = 0; i < pagesCount; i++) {
-    const pageIndex = i + 1;
+  const buildPage = (index: number, directive: PageLayoutDirective): Page => {
     const page = sheet(
-      i === 0 ? "الغلاف" : `صفحة ${pageIndex}`,
+      index === 0 ? "الغلاف" : `صفحة ${index + 1}`,
       intent.dimensions.w,
       intent.dimensions.h,
       p.paper,
     );
+    builders[directive.pattern](page, intent, index + 1, pagesCount);
+    if (index > 0) premiumOrnament(page, intent, index);
+    stampLayoutMeta(page, directive.pattern);
+    applyStylePreset(page, preset);
+    return page;
+  };
 
-    if (i === 0) {
-      if (isSlide) {
-        buildSlideCover(page, intent);
-      } else {
-        buildOfficialCover(page, intent);
-      }
-    } else if (isSlide) {
-      const slideTypes: Array<"agenda" | "kpis" | "pillars" | "matrix" | "closing"> = [
-        "agenda",
-        "kpis",
-        "pillars",
-        "matrix",
-        "closing",
-      ];
-      const type = slideTypes[(i - 1) % slideTypes.length];
-      buildSlideContent(page, intent, type, pageIndex, pagesCount);
-    } else {
-      // Multi-page portrait document
-      if (i === 1) {
-        buildExecutiveOverview(page, intent, pageIndex, pagesCount);
-      } else if (i === 2) {
-        buildKpiDashboard(page, intent, pageIndex, pagesCount);
-      } else if (i === 3) {
-        buildDataMatrix(page, intent, pageIndex, pagesCount);
-      } else if (i === 4) {
-        buildFrameworkPage(page, intent, pageIndex, pagesCount);
-      } else if (i === pagesCount - 1) {
-        buildClosingEndorsement(page, intent, pageIndex, pagesCount);
-      } else {
-        buildExecutiveOverview(page, intent, pageIndex, pagesCount);
-      }
-    }
-    if (i > 0) premiumOrnament(page, intent, i);
-
-    pages.push(page);
+  const pages: Page[] = [];
+  for (let i = 0; i < pagesCount; i++) {
+    pages.push(buildPage(i, plan[i] ?? directiveForPattern("executive-summary", i + 1)));
   }
+
+  const enforced = enforceLayoutVariety(
+    {
+      version: 2,
+      name: intent.title,
+      theme: "official",
+      orgName: intent.org,
+      defaultSize: sizeIdOf(pages[0]),
+      pages,
+    },
+    { rebuildPage: (pageIndex, directive) => buildPage(pageIndex, directive) },
+  );
 
   return {
     version: 2,
     name: intent.title,
     theme: "official",
     orgName: intent.org,
-    defaultSize: sizeIdOf(pages[0]),
-    pages,
+    defaultSize: sizeIdOf(enforced.project.pages[0]),
+    pages: enforced.project.pages,
   };
 }

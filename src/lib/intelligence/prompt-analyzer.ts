@@ -1,5 +1,6 @@
 import type { DesignFormat, DesignStyle, PaletteRoles } from "./schema";
 import { paletteForStyle } from "./dna";
+import type { PageLayoutDirective } from "./layout-variety";
 
 export interface PromptAnalysis {
   rawPrompt: string;
@@ -54,6 +55,12 @@ export interface PromptAnalysis {
   };
   summaryTakeaways: string[];
   recommendations: string[];
+  /**
+   * Per-page layout directives from the AI design brief (Anti-Monotony &
+   * Dynamic Layout Rules). Undefined for pure prompt parsing — the planner
+   * then falls back to the style-biased rotation.
+   */
+  pageLayouts?: PageLayoutDirective[];
 }
 
 const STYLE_LABELS: Record<DesignStyle, string> = {
