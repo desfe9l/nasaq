@@ -25,12 +25,14 @@ import {
   OWNER_OPS_CLAIM_KEY,
   OWNER_OPS_COMPLETED_KEY,
   OWNER_OPS_CONFIRMATIONS,
+  OWNER_OPS_BOOTSTRAP_STAGES,
   OWNER_OPS_MUTATING_STAGES,
   OWNER_OPS_ONE_SHOT_STAGES,
   OWNER_OPS_REPORT_PREFIX,
   OWNER_OPS_STAGES,
   claimOwnerOpsRun,
   countOwnerOpsRuns,
+  isOwnerOpsBootstrapStage,
   isOwnerOpsMutatingStage,
   isOwnerOpsStage,
   releaseOwnerOpsRun,
@@ -82,10 +84,44 @@ describe("owner ops — stage vocabulary", () => {
   });
 
   it("marks only the stages that write", () => {
-    assert.deepEqual([...OWNER_OPS_MUTATING_STAGES].sort(), ["admin-probe", "migrate"]);
+    assert.deepEqual([...OWNER_OPS_MUTATING_STAGES].sort(), [
+      "admin-probe",
+      "migrate",
+      "storage-rekey",
+    ]);
+    const writes = new Set(["migrate", "admin-probe", "storage-rekey"]);
     for (const stage of OWNER_OPS_STAGES) {
-      assert.equal(isOwnerOpsMutatingStage(stage), stage === "migrate" || stage === "admin-probe");
+      assert.equal(isOwnerOpsMutatingStage(stage), writes.has(stage));
     }
+  });
+
+  /*
+   * The bootstrap is the one stage reachable without existing owner
+   * authority. If this set ever grows, an account that cannot prove ownership
+   * gains a path to a stage that moves records — so the test pins it at
+   * exactly one, by name.
+   */
+  it("exempts exactly one stage from the owner-authority requirement", () => {
+    assert.deepEqual([...OWNER_OPS_BOOTSTRAP_STAGES], ["recover"]);
+    for (const stage of OWNER_OPS_STAGES) {
+      assert.equal(isOwnerOpsBootstrapStage(stage), stage === "recover");
+    }
+    // The bootstrap writes a binding, but it is NOT a record move: it must not
+    // be gated behind the canonical-owner check it exists to make possible.
+    assert.equal(isOwnerOpsMutatingStage("recover"), false);
+  });
+
+  it("keeps the one-shot lock on the move alone", () => {
+    assert.equal(ownerOpsStagePolicy("migrate", { completed: true, confirm: "MIGRATE-OWNER" }).allowed, false);
+    // Verification, the bootstrap and the resumable storage pass stay usable
+    // after the move: otherwise "verify the migration" is impossible to do.
+    for (const stage of ["recover", "plan", "identity", "report"] as const) {
+      assert.equal(ownerOpsStagePolicy(stage, { completed: true }).allowed, true, stage);
+    }
+    assert.equal(
+      ownerOpsStagePolicy("storage-rekey", { completed: true, confirm: "REKEY-STORAGE" }).allowed,
+      true,
+    );
   });
 
   it("requires a confirmation phrase for every mutating stage", () => {

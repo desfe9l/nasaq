@@ -27,6 +27,19 @@ function notifyLicenseChanged(): void {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(LICENSE_CHANGED));
 }
 
+/**
+ * Force every licence consumer on the page to re-read from the server.
+ *
+ * Exported for the owner recovery: when ownership moves, the entitlement the
+ * browser is holding was computed for the PREVIOUS owner id and nothing else
+ * would make it stale — the hook refreshes on an interval, so without this the
+ * owner stares at "no licence" for up to five minutes after a successful
+ * migration and reasonably concludes it failed. It invalidates nothing else.
+ */
+export function refreshLicenseState(): void {
+  notifyLicenseChanged();
+}
+
 export function getCachedLicenseKey(): string {
   if (typeof window === "undefined") return "";
   try {

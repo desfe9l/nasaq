@@ -43,10 +43,31 @@ import type { Sql } from "../db.ts";
 
 /** Every stage the operation understands. */
 export const OWNER_OPS_STAGES = [
+  /**
+   * Bootstrap: re-bind administrator authority to the CALLER.
+   *
+   * Without this the operation could not be started by the person it exists
+   * for. Every other stage requires the caller to already pass the
+   * super-admin resolver — which is exactly what the identity migration
+   * broke — so the recovery was reachable only by an account that did not
+   * need it. The stage itself grants nothing: it delegates to
+   * `recoverOwnerAuthority`, which refuses while ANY live administrator
+   * exists, requires either an orphaned admin row carrying the caller's own
+   * address or the deployment naming that address as the owner, and writes
+   * once.
+   */
+  "recover",
   /** `npm run migrate:owner -- --dry-run` — what WOULD move; writes nothing. */
   "plan",
   /** `npm run migrate:owner` — the guarded move + stability re-check. */
   "migrate",
+  /**
+   * Move the owner's objects onto the canonical prefix, in bounded resumable
+   * batches (copy → verify → re-point the row → delete the source).
+   */
+  "storage-rekey",
+  /** The sanitized final assertion: canonical owner vs legacy identity. */
+  "report",
   /** `npm run verify:owner` + `npm run verify:owner-live` (read-only). */
   "identity",
   /** `npm run verify:provider` — Keygen, read-only at the provider. */
@@ -62,7 +83,21 @@ export const OWNER_OPS_STAGES = [
 export type OwnerOpsStage = (typeof OWNER_OPS_STAGES)[number];
 
 /** Stages that write anything at all (synthetic rows included). */
-export const OWNER_OPS_MUTATING_STAGES: readonly OwnerOpsStage[] = ["migrate", "admin-probe"];
+export const OWNER_OPS_MUTATING_STAGES: readonly OwnerOpsStage[] = [
+  "migrate",
+  "admin-probe",
+  "storage-rekey",
+];
+
+/**
+ * Stages that do NOT require the caller to already hold owner authority.
+ *
+ * Exactly one: the bootstrap. It is still production-only, still
+ * same-origin, still authenticated, still rate-limited and still audited —
+ * and the module it calls applies the full recovery guard. Everything else
+ * continues to demand the canonical bound owner.
+ */
+export const OWNER_OPS_BOOTSTRAP_STAGES: readonly OwnerOpsStage[] = ["recover"];
 
 /**
  * The stages that must never run twice.
@@ -87,7 +122,12 @@ export const OWNER_OPS_ONE_SHOT_STAGES: readonly OwnerOpsStage[] = ["migrate"];
 export const OWNER_OPS_CONFIRMATIONS: Partial<Record<OwnerOpsStage, string>> = {
   migrate: "MIGRATE-OWNER",
   "admin-probe": "ADMIN-PROBE",
+  "storage-rekey": "REKEY-STORAGE",
 };
+
+export function isOwnerOpsBootstrapStage(stage: OwnerOpsStage): boolean {
+  return OWNER_OPS_BOOTSTRAP_STAGES.includes(stage);
+}
 
 /** `site_settings` key: the one-shot marker, written only on full success. */
 export const OWNER_OPS_COMPLETED_KEY = "nasaq.owner_ops.completed.v1";
@@ -311,6 +351,10 @@ export async function runOwnerOpsStage(
   stage: OwnerOpsStage,
   options: {
     userId: string;
+    /** The caller's verified address, when the session carried one. */
+    identityEmail?: string | null;
+    /** Whether the identity store marks that address verified. */
+    identityEmailVerified?: boolean;
     /**
      * The audit sink handed to the reconciliation (`owner.reconciled`), the
      * same one `npm run migrate:owner` passes. The route records the run
@@ -434,6 +478,206 @@ export async function runOwnerOpsStage(
     };
   };
 
+  /**
+   * `recover` — the bootstrap. Re-bind authority to the CALLER.
+   *
+   * Delegates entirely to `recoverOwnerAuthority`: no live administrator may
+   * exist, the caller must either hold an orphaned admin row carrying their
+   * own address or be named as the owner by the deployment, and the write
+   * happens once. The reconciliation that follows a successful bind is the
+   * module's own (`reconcileQuietly`), so authority and records move together.
+   */
+  const recover = async () => {
+    const [binding, verify] = await Promise.all([
+      import("../auth/owner-binding.server.ts"),
+      import("../auth/owner-migration-verify.server.ts"),
+    ]);
+    const directory = await binding.authIdentityDirectory();
+    if (!directory.ready) {
+      return {
+        ok: false,
+        reason: "store_unavailable",
+        error: "The identity store did not answer — refusing to bind (fail closed).",
+      };
+    }
+    const identity = {
+      id: options.userId,
+      email: options.identityEmail ?? null,
+      emailVerified: options.identityEmailVerified === true,
+    };
+    const outcome = await binding.recoverOwnerAuthority(sql, identity, directory, {
+      audit: async ({ action, detail }) => {
+        await options.audit?.({
+          action: action as "owner.reconciled",
+          detail: detail as Record<string, string | number | boolean | null>,
+        });
+      },
+    });
+    const stored = await binding.readOwnerBinding(sql);
+    return {
+      ok: outcome.ok,
+      reason: outcome.reason,
+      error: outcome.ok ? undefined : outcome.error,
+      role: outcome.ok ? outcome.role : null,
+      bound: Boolean(stored && stored.userId === options.userId),
+      owner: verify.fingerprint(options.userId),
+    };
+  };
+
+  /**
+   * `storage-rekey` — move the owner's objects onto the canonical prefix.
+   *
+   * Bounded and resumable: it reports `remaining`, and the caller runs it
+   * again until `complete`. Never deletes a source object before its copy has
+   * been read back at the destination.
+   */
+  const storageRekey = async () => {
+    const [bindingModule, reconciliation, ownerStorage, verify] = await Promise.all([
+      import("../auth/owner-binding.server.ts"),
+      import("../auth/owner-reconciliation.server.ts"),
+      import("../storage/owner-storage.server.ts"),
+      import("../auth/owner-migration-verify.server.ts"),
+    ]);
+    const directory = await bindingModule.authIdentityDirectory();
+    if (!directory.ready) {
+      return { ok: false, reason: "store_unavailable", error: "The identity store did not answer." };
+    }
+    const binding = await bindingModule.readOwnerBinding(sql);
+    if (!binding || binding.userId !== options.userId) {
+      return { ok: false, reason: "not_bound_owner", error: "Only the canonical owner may re-key owner storage." };
+    }
+    const orphans = await reconciliation.provenOwnerOrphanIds(sql, binding, directory);
+    const outcome = await ownerStorage.rekeyOwnerStorageObjects(sql, {
+      userId: binding.userId,
+      orphanIds: orphans,
+    });
+    const usage = await ownerStorage.ownerStorageUsage(sql, binding.userId);
+    return {
+      ok: outcome.complete && outcome.failed === 0,
+      owner: verify.fingerprint(binding.userId),
+      rekey: outcome,
+      usage,
+    };
+  };
+
+  /**
+   * `report` — the final, sanitized production assertion.
+   *
+   * Read-only. Fingerprints, booleans and counts: never an id, address, key,
+   * hash or secret.
+   */
+  const report = async () => {
+    const [bindingModule, reconciliation, verify, ownerStorage, adminRebind, superAdmin] =
+      await Promise.all([
+        import("../auth/owner-binding.server.ts"),
+        import("../auth/owner-reconciliation.server.ts"),
+        import("../auth/owner-migration-verify.server.ts"),
+        import("../storage/owner-storage.server.ts"),
+        import("../auth/owner-admin-rebind.server.ts"),
+        import("../auth/super-admin.server.ts"),
+      ]);
+    const directory = await bindingModule.authIdentityDirectory();
+    const binding = await bindingModule.readOwnerBinding(sql);
+    const canonicalId = binding?.userId ?? options.userId;
+    const identity = {
+      id: canonicalId,
+      email: options.identityEmail ?? null,
+      emailVerified: options.identityEmailVerified === true,
+    };
+    const orphans = binding
+      ? await reconciliation.provenOwnerOrphanIds(sql, binding, directory)
+      : [];
+
+    const migration = await verify.collectOwnerMigrationReport(sql, { directory });
+    const split = await ownerStorage.ownerStorageSplit(sql, canonicalId, orphans);
+    const stranded = await ownerStorage.strandedBucketObjects(sql, orphans);
+    const legacyAdminRows = await adminRebind.adminRowsFor(sql, orphans);
+    const retired = await adminRebind.readRetiredAdminRows(sql);
+    const isSuper = await superAdmin.isSuperAdminIdentity(sql, identity);
+    const { isAdminCaller } = await import("../auth/admin-identity.server.ts");
+    const isAdmin = await isAdminCaller(sql, identity);
+
+    const counts = async (table: string, ids: readonly string[]): Promise<number> => {
+      if (!ids.length) return 0;
+      try {
+        const rows = await sql.query<{ n: number }>(
+          `select count(*)::int as n from "${table}"
+            where user_id = any(string_to_array($1, E'\\n'))`,
+          [ids.join("\n")],
+        );
+        return Number(rows[0]?.n ?? 0);
+      } catch {
+        return -1;
+      }
+    };
+    const liveSubscriptions = async (ids: readonly string[]): Promise<number> => {
+      if (!ids.length) return 0;
+      try {
+        const rows = await sql.query<{ n: number }>(
+          `select count(*)::int as n from subscriptions
+            where user_id = any(string_to_array($1, E'\\n'))
+              and status in ('ACTIVE', 'SUSPENDED')`,
+          [ids.join("\n")],
+        );
+        return Number(rows[0]?.n ?? 0);
+      } catch {
+        return -1;
+      }
+    };
+
+    const canonical = {
+      ownerFingerprint: verify.fingerprint(canonicalId),
+      bound: Boolean(binding),
+      bindingRole: binding?.role ?? null,
+      admin: isAdmin,
+      superAdmin: isSuper,
+      licenses: await counts("licenses", [canonicalId]),
+      subscriptions: await counts("subscriptions", [canonicalId]),
+      liveSubscriptions: await liveSubscriptions([canonicalId]),
+      projects: await counts("cloud_projects", [canonicalId]),
+      templates: await counts("user_templates", [canonicalId]),
+      storageAssets: split.canonical.assets,
+      storageBytes: split.canonical.bytes,
+      storageProjects: split.canonical.projects,
+      inheritedPrefixAssets: split.canonical.foreignPrefixAssets,
+    };
+    const legacy = {
+      fingerprints: orphans.map(verify.fingerprint),
+      authority: legacyAdminRows > 0,
+      adminRows: legacyAdminRows,
+      retiredAdminRows: retired.length,
+      licenses: await counts("licenses", orphans),
+      subscriptions: await counts("subscriptions", orphans),
+      liveSubscriptions: await liveSubscriptions(orphans),
+      projects: await counts("cloud_projects", orphans),
+      templates: await counts("user_templates", orphans),
+      storageAssets: split.legacy.assets,
+      storageBytes: split.legacy.bytes,
+      storageProjects: split.legacy.projects,
+      strandedBucketObjects: stranded.supported ? stranded.stranded : null,
+    };
+
+    const clean =
+      migration.ok &&
+      canonical.bound &&
+      canonical.admin &&
+      !legacy.authority &&
+      legacy.licenses <= 0 &&
+      legacy.liveSubscriptions <= 0 &&
+      legacy.storageAssets <= 0 &&
+      legacy.projects <= 0 &&
+      legacy.templates <= 0 &&
+      canonical.inheritedPrefixAssets === 0;
+
+    return {
+      ok: clean,
+      canonical,
+      legacy,
+      checks: migration.checks,
+      warnings: migration.warnings,
+    };
+  };
+
   const adminProbe = async () => {
     const { runOwnerMutationProbe } = await import("../admin/owner-mutation-probe.server.ts");
     const outcome = await runOwnerMutationProbe(sql);
@@ -446,7 +690,19 @@ export async function runOwnerOpsStage(
   let result: unknown;
   let ok = false;
 
-  if (stage === "plan") {
+  if (stage === "recover") {
+    const outcome = await recover();
+    result = outcome;
+    ok = outcome.ok;
+  } else if (stage === "storage-rekey") {
+    const outcome = await storageRekey();
+    result = outcome;
+    ok = outcome.ok;
+  } else if (stage === "report") {
+    const outcome = await report();
+    result = outcome;
+    ok = outcome.ok;
+  } else if (stage === "plan") {
     const outcome = await plan();
     result = outcome;
     ok = outcome.ok;
@@ -478,13 +734,32 @@ export async function runOwnerOpsStage(
           userId: binding.userId,
           email: binding.email,
         });
+        /*
+         * Storage last, and inside the same stage: the rows now name the
+         * canonical account, so the objects can be moved onto its prefix
+         * without a window in which the two disagree. Bounded — a library
+         * larger than one invocation's budget reports `remaining`, and the
+         * `storage-rekey` stage continues it.
+         */
+        const { rekeyOwnerStorageObjects, ownerStorageUsage } = await import(
+          "../storage/owner-storage.server.ts"
+        );
+        const orphanIds = await reconciliation.provenOwnerOrphanIds(sql, binding, directory);
+        const rekey = await rekeyOwnerStorageObjects(sql, {
+          userId: binding.userId,
+          orphanIds,
+        });
+        const usage = await ownerStorageUsage(sql, binding.userId);
+
         const after = await verify.collectOwnerMigrationReport(sql, { directory });
         ok = after.ok && secondPass === null;
         result = {
           planned,
           moved: moved?.moved ?? {},
           movedTotal: moved?.movedTotal ?? 0,
+          adminAuthority: moved?.adminAuthority ?? null,
           idempotent: secondPass === null,
+          storage: { rekey, usage },
           after: {
             ok: after.ok,
             warnings: after.warnings,

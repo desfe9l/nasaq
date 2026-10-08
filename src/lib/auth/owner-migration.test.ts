@@ -544,7 +544,7 @@ describe("structural integrity alarms (STEP 11)", () => {
     }
   });
 
-  it("reports — but never fails on — legitimate unowned inventory and retired legacy authority", async () => {
+  it("reports — but never fails on — legitimate unowned inventory, and leaves NO legacy authority", async () => {
     await cleanMigration();
     await sql`
       insert into licenses (id, key_hash, key_prefix, type, status)
@@ -553,7 +553,17 @@ describe("structural integrity alarms (STEP 11)", () => {
     const report = await collectOwnerMigrationReport(sql, { directory: directory() });
     assert.equal(report.ok, true);
     assert.equal(findCheck(report, "unowned_active_license").count, 1, "inventory is reported");
-    assert.equal(findCheck(report, "orphan_admin_rows").count, 1, "the retired pre-migration admin row is visible");
+    /*
+     * The migration RETIRES the pre-migration admin row rather than leaving it
+     * in place. Two administrator identities for one person is the split state
+     * the whole operation exists to end, so "the orphan row is still visible"
+     * is no longer an acceptable post-migration shape: the role was carried to
+     * the canonical account and the orphan row is gone from the table the
+     * resolvers read (its actions stay in admin_audit_log).
+     */
+    assert.equal(findCheck(report, "orphan_admin_rows").count, 0, "the pre-migration admin row was retired");
+    assert.equal(findCheck(report, "legacy_owner_authority").ok, true);
+    assert.equal(findCheck(report, "legacy_owner_authority").count, 0);
     assert.equal(report.warnings >= 1, true);
   });
 

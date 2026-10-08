@@ -44,6 +44,7 @@ import {
   OWNER_OPS_RUNS_PER_MINUTE,
   claimOwnerOpsRun,
   countOwnerOpsRuns,
+  isOwnerOpsBootstrapStage,
   isOwnerOpsMutatingStage,
   isOwnerOpsStage,
   releaseOwnerOpsRun,
@@ -98,7 +99,10 @@ type Guarded =
  * evaluated first, so a non-production deployment cannot even measure whether
  * a session exists.
  */
-async function guard(request: Request, options: { requireBoundOwner: boolean }): Promise<Guarded> {
+async function guard(
+  request: Request,
+  options: { requireBoundOwner: boolean; requireOwnerAuthority?: boolean },
+): Promise<Guarded> {
   const runtime = ownerOpsRuntimeVerdict();
   if (!runtime.allowed) {
     return { ok: false, response: json({ ok: false, reason: runtime.reason, error: runtime.error }, runtime.status) };
@@ -171,7 +175,23 @@ async function guard(request: Request, options: { requireBoundOwner: boolean }):
     });
   };
 
-  if (!(await isSuperAdminIdentity(sql, identity))) {
+  /*
+   * The bootstrap exception, and the reason it is safe.
+   *
+   * Every stage but one requires the caller to ALREADY pass the super-admin
+   * resolver. That is correct for anything that moves records — and it is a
+   * deadlock for the one case this operation exists for: the owner whose
+   * account id changed, who therefore passes NO authority probe and cannot
+   * reach the repair that would restore one. The `recover` stage is exempt
+   * from this check and from it only. It still requires the production
+   * runtime, a same-origin request, a real session, the rate budget and the
+   * audit row — and the module it calls (`recoverOwnerAuthority`) refuses
+   * while any live administrator exists, demands an orphaned admin row
+   * carrying the caller's own address or the deployment naming that address
+   * as the owner, requires that address to be uniquely theirs, and writes
+   * once. An ordinary user gains nothing by reaching it.
+   */
+  if (options.requireOwnerAuthority !== false && !(await isSuperAdminIdentity(sql, identity))) {
     await record("refused", { reason: "not_owner" });
     return { ok: false, response: json({ ok: false, reason: "not_owner", error: "Owner authority required." }, 403) };
   }
@@ -255,8 +275,10 @@ export const Route = createFileRoute("/api/ops/owner-recovery")({
         if (!isOwnerOpsStage(stage)) {
           return json({ ok: false, reason: "unknown_stage", error: "Unknown stage." }, 400);
         }
+        const bootstrap = isOwnerOpsBootstrapStage(stage);
         const guarded = await guard(request, {
-          requireBoundOwner: isOwnerOpsMutatingStage(stage),
+          requireBoundOwner: isOwnerOpsMutatingStage(stage) && !bootstrap,
+          requireOwnerAuthority: !bootstrap,
         });
         if (!guarded.ok) return guarded.response;
 
@@ -328,6 +350,8 @@ export const Route = createFileRoute("/api/ops/owner-recovery")({
         try {
           outcome = await runOwnerOpsStage(sql, stage as OwnerOpsStage, {
             userId: guarded.userId,
+            identityEmail: guarded.identity.email,
+            identityEmailVerified: guarded.identity.emailVerified,
             audit: async ({ action, detail }) => {
               await audit(sql, {
                 adminUserId: guarded.userId,

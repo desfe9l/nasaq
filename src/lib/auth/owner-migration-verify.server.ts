@@ -66,10 +66,11 @@ import {
   type OwnerBinding,
 } from "./owner-binding.server.ts";
 import {
-  OWNED_TABLES,
   provenOwnerOrphanIds,
-  type ReconcileTable,
+  resolveOwnershipTargets,
 } from "./owner-reconciliation.server.ts";
+import { isSafeIdentifier } from "./owner-schema-sweep.server.ts";
+import { adminRowsFor } from "./owner-admin-rebind.server.ts";
 
 export type CheckSeverity = "fail" | "warn" | "info";
 
@@ -105,9 +106,9 @@ export type OwnerMigrationReport = {
   /** Fingerprints of the proven orphaned pre-migration ids. */
   orphans: string[];
   /** Rows the canonical owner currently holds, per owned table. */
-  canonicalRows: Partial<Record<ReconcileTable, number>>;
+  canonicalRows: Record<string, number>;
   /** Rows still held by proven orphan ids, per owned table (target: all 0). */
-  orphanRows: Partial<Record<ReconcileTable, number>>;
+  orphanRows: Record<string, number>;
   checks: IntegrityCheck[];
   /** True when no "fail"-severity check failed. */
   ok: boolean;
@@ -132,21 +133,30 @@ function check(
 export async function ownershipRowsByTable(
   sql: Sql,
   ids: readonly string[],
-): Promise<Partial<Record<ReconcileTable, number>>> {
+): Promise<Record<string, number>> {
   const uniqueIds = [...new Set(ids.map((id) => String(id ?? "").trim()).filter(Boolean))];
-  const counts: Partial<Record<ReconcileTable, number>> = {};
+  const counts: Record<string, number> = {};
   if (!uniqueIds.length) return counts;
   const joined = uniqueIds.join("\n");
-  for (const { table } of OWNED_TABLES) {
+  /*
+   * The SAME target set the reconciliation moves — resolved from the live
+   * schema, not from a list kept in parallel with it. A verification that
+   * reads a narrower list than the migration writes is how a split graph
+   * passes its own audit.
+   */
+  const targets = await resolveOwnershipTargets(sql);
+  for (const { table, column } of targets) {
+    if (!isSafeIdentifier(table) || !isSafeIdentifier(column)) continue;
+    const label = column === "user_id" ? table : `${table}.${column}`;
     try {
       const rows = await sql.query<{ n: number }>(
-        `select count(*)::int as n from ${table}
-          where user_id = any(string_to_array($1, E'\\n'))`,
+        `select count(*)::int as n from "${table}"
+          where "${column}" = any(string_to_array($1, E'\\n'))`,
         [joined],
       );
-      counts[table] = Number(rows[0]?.n ?? 0);
+      counts[label] = Number(rows[0]?.n ?? 0);
     } catch {
-      counts[table] = -1; // table unreadable — reported, never hidden
+      counts[label] = -1; // table unreadable — reported, never hidden
     }
   }
   return counts;
@@ -159,7 +169,7 @@ async function collectFailures(
   binding: OwnerBinding | null,
   orphans: readonly string[],
   directory: IdentityDirectory | null,
-  orphanCounts: Partial<Record<ReconcileTable, number>>,
+  orphanCounts: Record<string, number>,
 ): Promise<IntegrityCheck[]> {
   const checks: IntegrityCheck[] = [];
 
@@ -384,6 +394,31 @@ async function collectFailures(
         : `${orphanAdmins} admin_users row(s) name id(s) that no longer resolve — retired legacy authority. Kept for audit; never granted while the id cannot sign in.`,
     ),
   );
+
+  /*
+   * ── the legacy identity holds NO authority ───────────────────────────────
+   *
+   * The check above is a census of every unresolvable admin row, including
+   * strangers' (historical, expected). THIS one is the migration's own
+   * assertion and therefore fails the report: after the move, not one
+   * `admin_users` row may name an id the binding proved is this owner's past
+   * self. Two administrator identities for one human is the split-brain the
+   * migration exists to end.
+   */
+  if (binding) {
+    const legacyAdmin = await adminRowsFor(sql, orphans);
+    checks.push(
+      check(
+        "legacy_owner_authority",
+        "fail",
+        legacyAdmin === 0,
+        legacyAdmin,
+        legacyAdmin === 0
+          ? "The owner's pre-migration id(s) hold no admin_users row — authority is single and canonical."
+          : `${legacyAdmin} admin_users row(s) still name the owner's pre-migration id(s). Authority is split; run the migration.`,
+      ),
+    );
+  }
 
   return checks;
 }

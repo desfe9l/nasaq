@@ -24,6 +24,7 @@ import { Route as LibraryRouteImport } from './routes/library'
 import { Route as LicenseRouteImport } from './routes/license'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as OpenRouteImport } from './routes/open'
+import { Route as OwnerRecoveryRouteImport } from './routes/owner-recovery'
 import { Route as OwnerVaultRouteImport } from './routes/owner-vault'
 import { Route as PricingRouteImport } from './routes/pricing'
 import { Route as PrivacyRouteImport } from './routes/privacy'
@@ -151,6 +152,11 @@ const LoginRoute = LoginRouteImport.update({
 const OpenRoute = OpenRouteImport.update({
   id: '/open',
   path: '/open',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OwnerRecoveryRoute = OwnerRecoveryRouteImport.update({
+  id: '/owner-recovery',
+  path: '/owner-recovery',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OwnerVaultRoute = OwnerVaultRouteImport.update({
@@ -439,6 +445,7 @@ export interface FileRoutesByFullPath {
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/open': typeof OpenRoute
+  '/owner-recovery': typeof OwnerRecoveryRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -508,6 +515,7 @@ export interface FileRoutesByTo {
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/open': typeof OpenRoute
+  '/owner-recovery': typeof OwnerRecoveryRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -578,6 +586,7 @@ export interface FileRoutesById {
   '/license': typeof LicenseRoute
   '/login': typeof LoginRoute
   '/open': typeof OpenRoute
+  '/owner-recovery': typeof OwnerRecoveryRoute
   '/owner-vault': typeof OwnerVaultRoute
   '/pricing': typeof PricingRoute
   '/privacy': typeof PrivacyRoute
@@ -650,6 +659,7 @@ export interface FileRouteTypes {
     | '/license'
     | '/login'
     | '/open'
+    | '/owner-recovery'
     | '/owner-vault'
     | '/pricing'
     | '/privacy'
@@ -719,6 +729,7 @@ export interface FileRouteTypes {
     | '/license'
     | '/login'
     | '/open'
+    | '/owner-recovery'
     | '/owner-vault'
     | '/pricing'
     | '/privacy'
@@ -788,6 +799,7 @@ export interface FileRouteTypes {
     | '/license'
     | '/login'
     | '/open'
+    | '/owner-recovery'
     | '/owner-vault'
     | '/pricing'
     | '/privacy'
@@ -859,6 +871,7 @@ export interface RootRouteChildren {
   LicenseRoute: typeof LicenseRoute
   LoginRoute: typeof LoginRoute
   OpenRoute: typeof OpenRoute
+  OwnerRecoveryRoute: typeof OwnerRecoveryRoute
   OwnerVaultRoute: typeof OwnerVaultRoute
   PricingRoute: typeof PricingRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -993,6 +1006,13 @@ declare module '@tanstack/react-router' {
       path: '/open'
       fullPath: '/open'
       preLoaderRoute: typeof OpenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/owner-recovery': {
+      id: '/owner-recovery'
+      path: '/owner-recovery'
+      fullPath: '/owner-recovery'
+      preLoaderRoute: typeof OwnerRecoveryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/owner-vault': {
@@ -1474,6 +1494,7 @@ const rootRouteChildren: RootRouteChildren = {
   LicenseRoute: LicenseRoute,
   LoginRoute: LoginRoute,
   OpenRoute: OpenRoute,
+  OwnerRecoveryRoute: OwnerRecoveryRoute,
   OwnerVaultRoute: OwnerVaultRoute,
   PricingRoute: PricingRoute,
   PrivacyRoute: PrivacyRoute,
