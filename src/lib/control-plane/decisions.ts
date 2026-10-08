@@ -19,6 +19,8 @@ export type ControlActor = {
   userId: string;
 };
 
+export type DatabaseFailureKind = "quota" | "down" | "timeout";
+
 export type GateCode = "disabled" | "maintenance" | "unavailable" | "owner_only";
 
 export type ServiceGate =
@@ -31,6 +33,53 @@ export interface ServiceHealth {
   status: ServiceStatus;
   /** Why the status is not a plain "enabled", when there is a reason. */
   reason: string | null;
+}
+
+/**
+ * Postgres/Neon errors that mean the provider refused the call.
+ * A quota is not an application outage and must not be stored as one.
+ * The original message is discarded: driver errors can contain a host or a DSN.
+ */
+export function classifyDatabaseFailure(error: unknown): DatabaseFailureKind {
+  const parts: string[] = [];
+  let code = "";
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current; depth += 1) {
+    if (typeof current !== "object") {
+      parts.push(String(current));
+      break;
+    }
+    const record = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (!code && record.code != null) code = String(record.code);
+    if (typeof record.message === "string") parts.push(record.message);
+    current = record.cause;
+  }
+  const raw = parts.join(" ").toLowerCase();
+  if (
+    code === "53000" ||
+    code === "53300" ||
+    code === "53100" ||
+    code === "53200" ||
+    raw.includes("exceeded the quota") ||
+    raw.includes("compute time quota") ||
+    raw.includes("active time quota") ||
+    raw.includes("too many clients") ||
+    raw.includes("too many connections") ||
+    raw.includes("disk full") ||
+    raw.includes("out of memory")
+  ) {
+    return "quota";
+  }
+  if (
+    code === "57P03" ||
+    raw.includes("timeout") ||
+    raw.includes("etimedout") ||
+    raw.includes("starting up") ||
+    raw.includes("cannot connect now")
+  ) {
+    return "timeout";
+  }
+  return "down";
 }
 
 /**
@@ -131,7 +180,11 @@ export function pageCountAllows(args: {
  */
 export function deriveServiceHealth(
   plane: ControlPlaneDocument,
-  probes: { database?: ProviderProbe; storage?: ProviderProbe; ai?: ProviderProbe } = {},
+  probes: {
+    database?: "down" | "quota" | "timeout";
+    storage?: "down" | "quota";
+    ai?: "down" | "quota" | "billing" | "timeout";
+  } = {},
 ): Record<ServiceId, ServiceHealth> {
   const out = {} as Record<ServiceId, ServiceHealth>;
   for (const id of SERVICE_IDS) {
@@ -151,14 +204,24 @@ export function deriveServiceHealth(
     out[id] = { status: "enabled", reason: null };
   }
 
-  if (probes.database === "down") {
-    out.database = { status: "unavailable", reason: "database" };
+  const degradeDataPlane = (reason: string) => {
     for (const id of ["documents", "templates", "users_teams"] as const) {
-      if (out[id].status === "enabled") out[id] = { status: "degraded", reason: "database" };
+      if (out[id].status === "enabled") out[id] = { status: "degraded", reason };
     }
     if (out.authentication.status === "enabled") {
-      out.authentication = { status: "degraded", reason: "database" };
+      out.authentication = { status: "degraded", reason };
     }
+  };
+
+  if (probes.database === "quota") {
+    out.database = { status: "provider_limited", reason: "postgres" };
+    degradeDataPlane("postgres");
+  } else if (probes.database === "timeout") {
+    out.database = { status: "degraded", reason: "postgres" };
+    degradeDataPlane("postgres");
+  } else if (probes.database === "down") {
+    out.database = { status: "unavailable", reason: "database" };
+    degradeDataPlane("database");
   }
 
   if (probes.storage === "down" || probes.storage === "quota") {

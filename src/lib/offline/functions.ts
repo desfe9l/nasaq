@@ -118,9 +118,15 @@ export const saveCloudProject = createServerFn({ method: "POST" })
       where cloud_projects.user_id = ${context.userId}
     `;
     return { ok: true };
-    } catch {
-      noteProviderSignal("database", "down");
-      return { ok: false, reason: "database_unavailable", service: "database" };
+    } catch (error) {
+      const { classifyDatabaseFailure } = await import("@/lib/control-plane/decisions");
+      const kind = classifyDatabaseFailure(error);
+      noteProviderSignal("database", kind);
+      return {
+        ok: false,
+        reason: kind === "quota" ? "provider_limited" : "database_unavailable",
+        service: "database",
+      };
     }
   });
 
