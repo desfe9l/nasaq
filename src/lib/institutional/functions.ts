@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { cached, invalidateCache } from "@/lib/cache/public-cache";
+import { publicCacheTtlMs } from "@/lib/policy/limits";
 import {
   emptyInstitutionalCatalog,
   normalizeInstitutionalCatalog,
@@ -21,12 +23,19 @@ async function canManage(context: { userId: string | null; userEmail?: string | 
 }
 
 async function readCatalog(): Promise<InstitutionalCatalog> {
-  const db = await sql();
-  const rows = await db.query<{ value: unknown }>(
-    `SELECT value FROM site_settings WHERE key = $1 LIMIT 1`,
-    [KEY],
-  );
-  return rows.length ? normalizeInstitutionalCatalog(rows[0].value) : emptyInstitutionalCatalog();
+  // The RAW catalog is one small row that changes only through the admin panel,
+  // and the editor polls it — cache it at the application level so a poll (or
+  // several mounted panels polling) costs one read per TTL window, not one per
+  // call. The per-user visibility filter still runs on every request, so a
+  // cached raw catalog can never leak an unpublished item to a non-admin.
+  return cached(`institutional:${KEY}`, publicCacheTtlMs(), async () => {
+    const db = await sql();
+    const rows = await db.query<{ value: unknown }>(
+      `SELECT value FROM site_settings WHERE key = $1 LIMIT 1`,
+      [KEY],
+    );
+    return rows.length ? normalizeInstitutionalCatalog(rows[0].value) : emptyInstitutionalCatalog();
+  });
 }
 
 async function writeCatalog(catalog: InstitutionalCatalog): Promise<void> {
@@ -37,6 +46,8 @@ async function writeCatalog(catalog: InstitutionalCatalog): Promise<void> {
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
     [KEY, JSON.stringify(catalog)],
   );
+  // The stored catalog changed: the next read must not serve the previous one.
+  invalidateCache(`institutional:${KEY}`);
 }
 
 export const listInstitutionalBackgroundsFn = createServerFn({ method: "GET" })

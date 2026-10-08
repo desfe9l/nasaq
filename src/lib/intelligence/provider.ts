@@ -13,7 +13,7 @@ export interface LanguageNoteRequest {
 
 export interface LanguageNoteResult {
   ok: boolean;
-  code: "ok" | "not_configured" | "unauthorized" | "provider_error";
+  code: "ok" | "not_configured" | "unauthorized" | "provider_error" | "rate_limited";
   note: string;
 }
 

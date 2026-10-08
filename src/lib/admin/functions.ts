@@ -13,6 +13,8 @@
 import { normalizeShortCode } from "@/lib/templates/short-code";
 import { backfillShortCodes, ensureShortCode } from "@/lib/templates/short-code.server";
 import { createServerFn } from "@tanstack/react-start";
+import { cached, invalidateCache, invalidateCachePrefix } from "@/lib/cache/public-cache";
+import { publicCacheTtlMs } from "@/lib/policy/limits";
 import { svgDangerFindings } from "@/lib/editor/svg-scrub";
 import { publicTemplateContent } from "@/lib/templates/document-template";
 import { applyTemplateNameToContent, resolveTemplateName } from "@/lib/templates/naming";
@@ -200,6 +202,23 @@ async function ensureProductTemplates(db: Awaited<ReturnType<typeof sql>>) {
    * catalogue is read. Idempotent: afterwards nothing matches the `IS NULL`.
    */
   await backfillShortCodes(db, "admin_templates");
+}
+
+/**
+ * The seed checks above are idempotent but NOT free: four-plus queries per
+ * call. They used to run inside every PUBLIC catalog read, so each page view
+ * paid them. Now they run at most once per cache-TTL window per process — the
+ * catalog itself is cached for the same window, so the worst case is a new
+ * bundled row appearing one TTL late, and the first read after boot still
+ * seeds before serving.
+ */
+let lastSeedCheckAt = 0;
+
+async function ensureProductTemplatesThrottled(db: Awaited<ReturnType<typeof sql>>) {
+  const now = Date.now();
+  if (now - lastSeedCheckAt < publicCacheTtlMs()) return;
+  lastSeedCheckAt = now;
+  await ensureProductTemplates(db);
 }
 
 /**
@@ -679,6 +698,8 @@ export const adminSaveSettingsFn = createServerFn({ method: "POST" })
        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
       [data.section, JSON.stringify(value)],
     );
+    // The public settings cache must not serve the previous value.
+    invalidateCache("site:settings");
     return { ok: true as const, value };
   });
 
@@ -687,13 +708,18 @@ export const adminSaveSettingsFn = createServerFn({ method: "POST" })
 /** Public list: published templates only, without payloads. */
 export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handler(async (): Promise<AdminTemplateSummary[]> => {
   try {
-    const db = await sql();
-    await ensureProductTemplates(db);
-    const rows = await db.query(
-      `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, previews, sort_order, created_at, updated_at, short_code
-       FROM admin_templates WHERE status = 'published' ORDER BY sort_order ASC, updated_at DESC LIMIT 500`,
-    );
-    return rows.map(rowToSummary);
+    // Public catalog: cached so a page view (or N mounted components) costs one
+    // query per TTL window, not one per call. Invalidated by every template
+    // mutation under the `templates:` prefix.
+    return await cached("templates:published-list", publicCacheTtlMs(), async () => {
+      const db = await sql();
+      await ensureProductTemplatesThrottled(db);
+      const rows = await db.query(
+        `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, previews, sort_order, created_at, updated_at, short_code
+         FROM admin_templates WHERE status = 'published' ORDER BY sort_order ASC, updated_at DESC LIMIT 500`,
+      );
+      return rows.map(rowToSummary);
+    });
   } catch {
     return [];
   }
@@ -703,16 +729,18 @@ export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handle
 export const listBuiltinTemplateStatesFn = createServerFn({ method: "GET" })
   .handler(async (): Promise<{ id: string; status: TemplateStatus }[]> => {
     try {
-      const db = await sql();
-      await ensureProductTemplates(db);
-      const rows = await db.query<{ id: string; status: string }>(
-        `SELECT id, status FROM admin_templates
-         WHERE id LIKE 'builtin_pack_%' OR id LIKE 'builtin_page_%'`,
-      );
-      return rows.map((row) => ({
-        id: String(row.id),
-        status: row.status as TemplateStatus,
-      }));
+      return await cached("templates:builtin-states", publicCacheTtlMs(), async () => {
+        const db = await sql();
+        await ensureProductTemplatesThrottled(db);
+        const rows = await db.query<{ id: string; status: string }>(
+          `SELECT id, status FROM admin_templates
+           WHERE id LIKE 'builtin_pack_%' OR id LIKE 'builtin_page_%'`,
+        );
+        return rows.map((row) => ({
+          id: String(row.id),
+          status: row.status as TemplateStatus,
+        }));
+      });
     } catch {
       return [];
     }
@@ -723,17 +751,21 @@ export const getPublishedTemplateMetaFn = createServerFn({ method: "GET" })
   .validator((data: { idOrSlug: string }) => data)
   .handler(async ({ data }): Promise<{ ok: boolean; template?: AdminTemplateSummary; error?: string }> => {
     try {
-      const db = await sql();
-      await ensureProductTemplates(db);
       const key = String(data.idOrSlug || "").trim().slice(0, 200);
       if (!key) return { ok: false, error: "معرّف غير صالح" };
-      const rows = await db.query(
-        `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, previews, sort_order, created_at, updated_at, short_code
-         FROM admin_templates WHERE (slug = $1 OR id = $1 OR short_code = $1) AND status = 'published' LIMIT 1`,
-        [key],
-      );
-      if (!rows.length) return { ok: false, error: "القالب غير موجود" };
-      return { ok: true, template: rowToSummary(rows[0]) };
+      // Public metadata of a PUBLISHED row only — safe to cache per key. The
+      // cache is bounded, so a caller varying ids cannot grow it without limit.
+      return await cached(`templates:meta:${key}`, publicCacheTtlMs(), async () => {
+        const db = await sql();
+        await ensureProductTemplatesThrottled(db);
+        const rows = await db.query(
+          `SELECT id, slug, title, description, category, tier, status, kind, thumbnail, previews, sort_order, created_at, updated_at, short_code
+           FROM admin_templates WHERE (slug = $1 OR id = $1 OR short_code = $1) AND status = 'published' LIMIT 1`,
+          [key],
+        );
+        if (!rows.length) return { ok: false as const, error: "القالب غير موجود" };
+        return { ok: true as const, template: rowToSummary(rows[0]) };
+      });
     } catch {
       return { ok: false, error: "تعذر تحميل القالب" };
     }
@@ -749,7 +781,11 @@ export const getPublishedTemplateFn = createServerFn({ method: "POST" })
   .validator((data: { id: string }) => data)
   .handler(async ({ data, context }) => {
     const db = await sql();
-    await ensureProductTemplates(db);
+    // NOT cached: the payload response embeds a per-caller authorization
+    // decision (licensed templates), and caching it would leak one caller's
+    // access into another's response. The seed check is still throttled so a
+    // bot hammering this endpoint does not re-run it every request.
+    await ensureProductTemplatesThrottled(db);
     const key = String(data.id || "").trim().slice(0, 200);
     if (!key) return { ok: false as const, error: "معرّف غير صالح" };
     const rows = await db.query(`SELECT * FROM admin_templates WHERE (slug = $1 OR id = $1 OR short_code = $1) AND status = 'published' LIMIT 1`, [key]);
@@ -823,7 +859,11 @@ export const adminUpsertTemplateFn = createServerFn({ method: "POST" })
      * its "saving" state — the recurring "تعثر الحفظ" with nothing to act on.
      */
     try {
-      return await upsertTemplate(data, context);
+      const result = await upsertTemplate(data, context);
+      // A template mutation changes the public catalog: drop every cached
+      // public template read (list, builtin states, per-template metadata).
+      if (result.ok) invalidateCachePrefix("templates:");
+      return result;
     } catch (err) {
       return storageFailure("حفظ القالب", err);
     }
