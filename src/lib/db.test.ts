@@ -21,30 +21,26 @@ test("Vercel bootstrap stays renderable without a database but DB access fails c
   );
 });
 
-test("normalizeDatabaseUrl replaces ambiguous sslmodes with verify-full and routes Neon through pooler", () => {
+test("normalizeDatabaseUrl replaces ambiguous sslmodes with verify-full (generic PostgreSQL)", () => {
   assert.equal(
-    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=require"),
-    "postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=verify-full",
+    normalizeDatabaseUrl("postgres://user:pass@db.example.com/neondb?sslmode=require"),
+    "postgres://user:pass@db.example.com/neondb?sslmode=verify-full",
   );
   assert.equal(
-    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=prefer"),
-    "postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=verify-full",
+    normalizeDatabaseUrl("postgres://user:pass@db.example.com/neondb?sslmode=prefer"),
+    "postgres://user:pass@db.example.com/neondb?sslmode=verify-full",
   );
   assert.equal(
-    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-ca"),
-    "postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=verify-full",
+    normalizeDatabaseUrl("postgres://user:pass@db.example.com/neondb?sslmode=verify-ca"),
+    "postgres://user:pass@db.example.com/neondb?sslmode=verify-full",
   );
   assert.equal(
-    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb?sslmode=verify-full"),
-    "postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=verify-full",
+    normalizeDatabaseUrl("postgres://user:pass@db.example.com/neondb?sslmode=verify-full"),
+    "postgres://user:pass@db.example.com/neondb?sslmode=verify-full",
   );
   assert.equal(
-    normalizeDatabaseUrl("postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=require"),
-    "postgres://user:pass@ep-test-pooler.neon.tech/neondb?sslmode=verify-full",
-  );
-  assert.equal(
-    normalizeDatabaseUrl("postgres://user:pass@ep-test.neon.tech/neondb", { pooled: false }),
-    "postgres://user:pass@ep-test.neon.tech/neondb",
+    normalizeDatabaseUrl("postgres://user:pass@db.example.com/neondb"),
+    "postgres://user:pass@db.example.com/neondb",
   );
   assert.equal(
     normalizeDatabaseUrl("postgres://user:pass@my-custom-db.internal/db?sslmode=require"),

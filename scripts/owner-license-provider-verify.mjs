@@ -27,7 +27,7 @@ const fail = (code, message) => {
   process.exit(code);
 };
 
-if (dbSource !== "neon") {
+if (dbSource !== "postgres") {
   fail(2, "DATABASE_URL is not set — this verifies the DEPLOYMENT's database, never a local fallback.");
 }
 

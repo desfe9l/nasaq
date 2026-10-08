@@ -21,7 +21,7 @@ const fail = (code, message) => {
   process.exit(code);
 };
 
-if (dbSource !== "neon") {
+if (dbSource !== "postgres") {
   fail(2, "DATABASE_URL is not set — live verification runs against the DEPLOYMENT's database only.");
 }
 

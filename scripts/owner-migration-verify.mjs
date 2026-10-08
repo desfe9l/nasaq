@@ -33,7 +33,7 @@ const [{ getSql, dbSource }, { collectOwnerMigrationReport }] = await Promise.al
   import("../src/lib/auth/owner-migration-verify.server.ts"),
 ]);
 
-if (dbSource !== "neon") {
+if (dbSource !== "postgres") {
   console.error(
     "✗ DATABASE_URL is not set. This verifies the DEPLOYMENT's database: run it with the same DATABASE_URL the production deployment holds. The local fallback is never certified as production state.",
   );

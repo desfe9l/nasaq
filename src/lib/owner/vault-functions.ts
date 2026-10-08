@@ -185,7 +185,7 @@ const ENV_SPECS: EnvSpec[] = [
   {
     key: "DATABASE_URL",
     section: "database",
-    service: "Neon / PostgreSQL",
+    service: "PostgreSQL",
     account: "NASAQ production database",
     label: "رابط اتصال قاعدة البيانات",
     sensitivity: "secret",
@@ -193,8 +193,8 @@ const ENV_SPECS: EnvSpec[] = [
     loginUrl: "https://console.neon.tech",
     dashboardUrl: "https://console.neon.tech",
     apiUrl: null,
-    configurationLocation: "Vercel → Settings → Environment Variables؛ Neon connection details",
-    guide: guide("أنشئ connection string جديدًا من Neon، حدّث Vercel، ثم أعد النشر وشغّل migrations.", "https://console.neon.tech", "DATABASE_URL", "Production / Preview بحسب قاعدة البيانات", "نعم، إعادة نشر ومراجعة migrations مطلوبة.", "لا يوجد Webhook.", "ألغِ endpoint أو كلمة المرور القديمة من Neon بعد التحقق."),
+    configurationLocation: "Vercel → Settings → Environment Variables؛ PostgreSQL connection details",
+    guide: guide("أنشئ connection string جديدًا من مزود PostgreSQL (Neon/Supabase/Railway/RDS/Vercel Postgres)، حدّث Vercel، ثم أعد النشر وشغّل migrations.", "https://console.neon.tech", "DATABASE_URL", "Production / Preview بحسب قاعدة البيانات", "نعم، إعادة نشر ومراجعة migrations مطلوبة.", "لا يوجد Webhook.", "ألغِ endpoint أو كلمة المرور القديمة من المزود بعد التحقق."),
   },
   {
     key: "GEMINI_API_KEY",

@@ -72,7 +72,7 @@ jobs:
       group: owner-production-probe-${{ matrix.bound }}-${{ matrix.env }}
       cancel-in-progress: false
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.NEON_DATABASE_URL || secrets.POSTGRES_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.POSTGRES_URL }}
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || secrets.STORAGE_ACCOUNT_ID || secrets.AWS_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID || secrets.STORAGE_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY || secrets.STORAGE_SECRET_ACCESS_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
@@ -99,7 +99,7 @@ jobs:
     timeout-minutes: 25
     environment: ${{ inputs.environment || 'Production' }}
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.NEON_DATABASE_URL || secrets.POSTGRES_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.POSTGRES_URL }}
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || secrets.STORAGE_ACCOUNT_ID || secrets.AWS_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID || secrets.STORAGE_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY || secrets.STORAGE_SECRET_ACCESS_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
@@ -153,7 +153,7 @@ jobs:
           fail=0
           present_var() { local n="$1"; [ -n "$n" ] && [ -n "${!n:-}" ]; }
           first_present() { for n in "$@"; do if present_var "$n"; then echo "$n"; return 0; fi; done; return 1; }
-          db="$(first_present DATABASE_URL NEON_DATABASE_URL POSTGRES_URL || true)"
+          db="$(first_present DATABASE_URL POSTGRES_URL || true)"
           if [ -n "$db" ]; then echo "present : database url (via $db)"; else echo "ABSENT  : database url (DATABASE_URL family)"; fail=1; fi
           found=""
           for p in R2 STORAGE AWS; do
