@@ -146,7 +146,14 @@ export type AdminAction =
    */
   | "owner.reconciled"
   /** A client request's status, priority, assignee or written answer changed. */
-  | "client_request.updated";
+  | "client_request.updated"
+  /**
+   * One stage of the temporary production owner-recovery operation ran inside
+   * the deployment runtime (`/api/ops/owner-recovery`). Written for EVERY
+   * execution — including refusals — so the operation's use is fully auditable
+   * while it exists.
+   */
+  | "owner.ops_run";
 
 /** Payload for submitting a payment reference. */
 export type SubmitPaymentInput = {
