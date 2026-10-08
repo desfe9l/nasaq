@@ -6,7 +6,7 @@
  *   • Owner access is resolved server-side from NASAQ_OWNER_ID or
  *     NASAQ_OWNER_EMAIL; neither value is sent to the browser.
  *
- * Persistence uses the project's shared SQL client (`getSql`: Neon in
+ * Persistence uses the project's shared SQL client (`getSql`: PostgreSQL in
  * production, PGLite in preview) and the tables in migrations/0002.
  */
 

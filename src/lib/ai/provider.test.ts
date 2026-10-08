@@ -38,6 +38,13 @@ function geminiResponse(text: string, extra: Record<string, unknown> = {}): Resp
   });
 }
 
+function geminiErrorResponse(status: number, errorBody: Record<string, unknown>): Response {
+  return new Response(JSON.stringify({ error: errorBody }), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
 test("Gemini provider reports missing configuration without mocking a response", async () => {
   const restore = withEnv("GEMINI_API_KEY", undefined);
   try {
@@ -94,9 +101,142 @@ test("HTTP auth and invalid-model failures are differentiated", async () => {
   const restore = withEnv("GEMINI_API_KEY", "test-server-key");
   const previousFetch = globalThis.fetch;
   try {
-    for (const [status, expected] of [[401, "provider_auth"], [403, "provider_auth"], [404, "invalid_model"]] as const) {
+    for (const [status, expected] of [[401, "provider_auth"], [404, "invalid_model"]] as const) {
       globalThis.fetch = async () => new Response("{}", { status });
       await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), new RegExp(expected));
+    }
+    // 403 with generic body falls back to provider_auth
+    globalThis.fetch = async () => new Response("{}", { status: 403 });
+    await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /provider_auth/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test("403 with quota-exhausted body is classified as provider_quota not provider_auth", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => geminiErrorResponse(403, {
+      code: 403,
+      message: "Quota exhausted for this model",
+      status: "PERMISSION_DENIED",
+    });
+    await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /provider_quota/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test("403 with billing/prepay exhaustion is classified as provider_billing", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => geminiErrorResponse(403, {
+      code: 403,
+      message: "Billing account has insufficient funds",
+      status: "PERMISSION_DENIED",
+    });
+    await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /provider_billing/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test("429 with RESOURCE_EXHAUSTED status is classified as provider_rate", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => geminiErrorResponse(429, {
+      code: 429,
+      message: "Rate limit exceeded",
+      status: "RESOURCE_EXHAUSTED",
+    });
+    await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /provider_rate/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test("401 with UNAUTHENTICATED status is classified as provider_auth", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => geminiErrorResponse(401, {
+      code: 401,
+      message: "API key not valid",
+      status: "UNAUTHENTICATED",
+    });
+    await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /provider_auth/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test("402 with PAYMENT_REQUIRED is classified as provider_billing", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => geminiErrorResponse(402, {
+      code: 402,
+      message: "Payment required",
+      status: "PAYMENT_REQUIRED",
+    });
+    await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /provider_billing/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test("400 with INVALID_ARGUMENT is classified as provider_error", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => geminiErrorResponse(400, {
+      code: 400,
+      message: "Invalid request",
+      status: "INVALID_ARGUMENT",
+    });
+    await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /provider_error/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test("404 with NOT_FOUND is classified as invalid_model", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async () => geminiErrorResponse(404, {
+      code: 404,
+      message: "Model not found",
+      status: "NOT_FOUND",
+    });
+    await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /invalid_model/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test("500/503 with INTERNAL/UNAVAILABLE is classified as provider_unavailable", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  try {
+    for (const [status, errStatus] of [[500, "INTERNAL"], [503, "UNAVAILABLE"]] as const) {
+      globalThis.fetch = async () => geminiErrorResponse(status, {
+        code: status,
+        message: "Internal error",
+        status: errStatus,
+      });
+      await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /provider_unavailable/);
     }
   } finally {
     globalThis.fetch = previousFetch;
@@ -115,6 +255,44 @@ test("429 and 5xx retry once, then return a safe provider code", async () => {
   try {
     await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /provider_unavailable/);
     assert.equal(calls, 2);
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test("provider_quota and provider_billing are permanent (no retry)", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return geminiErrorResponse(403, {
+      code: 403,
+      message: "Quota exhausted",
+      status: "PERMISSION_DENIED",
+    });
+  };
+  try {
+    await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /provider_quota/);
+    assert.equal(calls, 1, "provider_quota should not retry");
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});
+
+test("provider_auth is permanent (no retry)", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    return new Response("{}", { status: 401 });
+  };
+  try {
+    await assert.rejects(requestGemini({ system: "x", userParts: [{ text: "x" }], maxOutputTokens: 10 }), /provider_auth/);
+    assert.equal(calls, 1, "provider_auth should not retry");
   } finally {
     globalThis.fetch = previousFetch;
     restore();

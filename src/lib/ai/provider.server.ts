@@ -31,6 +31,8 @@ export type GeminiProviderErrorCode =
   | "invalid_model"
   | "provider_auth"
   | "provider_rate"
+  | "provider_quota"
+  | "provider_billing"
   | "provider_unavailable"
   | "provider_timeout"
   | "provider_aborted"
@@ -95,6 +97,104 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
+ * Classify a non-2xx Gemini response by parsing its body.
+ * Returns the appropriate error code or null if classification is unclear.
+ */
+async function classifyGeminiError(response: Response): Promise<GeminiProviderErrorCode | null> {
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    return null;
+  }
+
+  if (!payload || typeof payload !== "object") return null;
+
+  const error = (payload as { error?: unknown }).error;
+  if (!error || typeof error !== "object") return null;
+
+  const err = error as {
+    code?: number;
+    message?: string;
+    status?: string;
+    details?: Array<{ "@type"?: string; [key: string]: unknown }>;
+  };
+
+  const errStatus = String(err.status ?? "").toUpperCase();
+  const errMessage = String(err.message ?? "").toLowerCase();
+  const errCode = err.code;
+
+  if (errStatus === "RESOURCE_EXHAUSTED" || errCode === 429) {
+    return "provider_rate";
+  }
+
+  if (
+    errMessage.includes("quota") ||
+    errMessage.includes("rate limit") ||
+    errMessage.includes("rate limited") ||
+    errMessage.includes("exhausted") ||
+    errMessage.includes("daily limit") ||
+    errMessage.includes("monthly limit") ||
+    errMessage.includes("request limit")
+  ) {
+    if (
+      errMessage.includes("billing") ||
+      errMessage.includes("credit") ||
+      errMessage.includes("prepay") ||
+      errMessage.includes("insufficient funds") ||
+      errMessage.includes("payment") ||
+      errMessage.includes("budget")
+    ) {
+      return "provider_billing";
+    }
+    return "provider_quota";
+  }
+
+  if (errStatus === "PERMISSION_DENIED" || errCode === 403) {
+    if (
+      errMessage.includes("quota") ||
+      errMessage.includes("rate limit") ||
+      errMessage.includes("exhausted") ||
+      errMessage.includes("billing") ||
+      errMessage.includes("credit") ||
+      errMessage.includes("prepay") ||
+      errMessage.includes("insufficient funds")
+    ) {
+      return errMessage.includes("billing") || errMessage.includes("credit") || errMessage.includes("prepay") || errMessage.includes("insufficient funds")
+        ? "provider_billing"
+        : "provider_quota";
+    }
+    return "provider_auth";
+  }
+
+  if (errStatus === "UNAUTHENTICATED" || errCode === 401) {
+    return "provider_auth";
+  }
+
+  if (errStatus === "PAYMENT_REQUIRED" || errCode === 402) {
+    return "provider_billing";
+  }
+
+  if (errStatus === "INVALID_ARGUMENT" || errCode === 400) {
+    return "provider_error";
+  }
+
+  if (errStatus === "NOT_FOUND" || errCode === 404) {
+    return "invalid_model";
+  }
+
+  if (errStatus === "DEADLINE_EXCEEDED" || errCode === 408 || errCode === 504) {
+    return "provider_timeout";
+  }
+
+  if (errStatus === "INTERNAL" || errStatus === "UNAVAILABLE" || (errCode && errCode >= 500)) {
+    return "provider_unavailable";
+  }
+
+  return null;
+}
+
+/**
  * The only Gemini HTTP boundary in the application. The key is read here, on
  * the server, and provider details never cross this function as raw responses.
  */
@@ -151,6 +251,16 @@ export async function requestGemini(request: GeminiRequest): Promise<string> {
       }
 
       if (!response.ok) {
+        const classified = await classifyGeminiError(response);
+        if (classified) {
+          const isPermanent = ["provider_auth", "provider_billing", "provider_error", "invalid_model", "provider_quota"].includes(classified);
+          if (isPermanent || attempt + 1 >= maxAttempts) {
+            throw new GeminiProviderError(classified);
+          }
+          await delay(150 * 2 ** attempt, request.signal);
+          continue;
+        }
+
         if (RETRYABLE_STATUS.has(response.status) && attempt + 1 < maxAttempts) {
           await delay(150 * 2 ** attempt, request.signal);
           continue;
