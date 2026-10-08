@@ -790,7 +790,40 @@ export function validateProject(project: Project): string[] {
       if (!el.id) problems.push("id");
       if (![el.x, el.y, el.w, el.h].every((value) => Number.isFinite(value))) problems.push("geometry");
       if ((el.type === "text" || el.type === "box") && typeof el.content !== "string") problems.push("content");
+      const layoutProblem = validateElementLayout(el);
+      if (layoutProblem) problems.push(`layout:${el.id}`);
     }
   }
   return problems;
+}
+
+const LAYOUT_ROLES = new Set([
+  "heading",
+  "body",
+  "accent-card",
+  "stat-card",
+  "summary-callout",
+  "table",
+  "image",
+  "ornament",
+  "furniture",
+]);
+const LAYOUT_ANCHORS = new Set(["right", "left", "center", "full"]);
+
+/**
+ * Per-element layout metadata (stamped by the AI layout engine) must be
+ * well-formed when present: a known role, a hierarchy of 1–3, and a valid
+ * grid anchor. The editor ignores the marker; this keeps generated JSON
+ * honest for every consumer of the canvas output.
+ */
+function validateElementLayout(el: CanvasEl): boolean {
+  const meta = el.layout;
+  if (!meta) return false;
+  if (!LAYOUT_ROLES.has(meta.role)) return true;
+  if (meta.hierarchy !== undefined && ![1, 2, 3].includes(meta.hierarchy)) return true;
+  if (meta.positioning) {
+    if (!LAYOUT_ANCHORS.has(meta.positioning.anchor)) return true;
+    if (meta.positioning.columnSpan !== undefined && ![1, 2, 3].includes(meta.positioning.columnSpan)) return true;
+  }
+  return false;
 }

@@ -151,6 +151,8 @@ export function buildDesignDna(analyses: DesignAnalysis[]): DesignDna {
       "A data page may use stat cards and one table. A prose page does not become a card grid.",
       "Photography is a replaceable image element.",
       "Tall stories stack from the top and close at the foot. Wide slides put the field on the right.",
+      "ANTI-MONOTONY: no two consecutive pages share one composition. Interior pages rotate between summary, stat cards, tables, multi-column cards, asymmetric editorial grids, and airy summary callouts.",
+      "Every page keeps the 60-30-10 color discipline: 60% paper (dominant), 30% field (secondary), 10% accent (thread, diamond, or number circle — never body text).",
     ],
     constraints: [
       "Do not copy a reference title, photograph, phone number, or deed into an original brief.",

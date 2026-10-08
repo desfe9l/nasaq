@@ -368,3 +368,36 @@ test("design and selection responses remain contract-normalized and editable", a
     restore();
   }
 });
+test("design brief system prompt enforces anti-monotony rules and the per-page layout contract", async () => {
+  const restore = withEnv("GEMINI_API_KEY", "test-server-key");
+  const previousFetch = globalThis.fetch;
+  let requestBody = "";
+  globalThis.fetch = async (_input, init) => {
+    requestBody = String(init?.body || "");
+    return geminiResponse(JSON.stringify({ title: "عنوان", pages: 3 }));
+  };
+  try {
+    const brief = await generateDesignBrief({ prompt: "تقرير رسمي", mode: "professional" });
+    // Anti-Monotony & Dynamic Layout Rules are part of the system prompt.
+    assert.ok(requestBody.includes("ANTI-MONOTONY"), "system prompt must carry the anti-monotony rules");
+    assert.ok(requestBody.includes("pageLayouts"), "system prompt must require per-page layout directives");
+    assert.ok(requestBody.includes("hero-cover"), "page 1 must be a hero cover");
+    assert.ok(requestBody.includes("asymmetric"), "asymmetric grids must be offered");
+    assert.ok(requestBody.includes("multi-column"), "multi-column cards must be offered");
+    assert.ok(requestBody.includes("60-30-10"), "the 60-30-10 palette rule must be stated");
+    assert.ok(requestBody.includes("Never return the same layout pattern for two consecutive pages"));
+    // The normalized brief carries one directive per page, hero cover first,
+    // and no two consecutive pages share a pattern.
+    assert.equal(brief.pageLayouts.length, 3);
+    assert.equal(brief.pageLayouts[0].pattern, "hero-cover");
+    assert.notEqual(brief.pageLayouts[1].pattern, brief.pageLayouts[2].pattern);
+    for (const directive of brief.pageLayouts) {
+      assert.ok([1, 2, 3].includes(directive.columns));
+      assert.ok(directive.visualHierarchy.length > 0);
+      assert.ok(directive.accentCards >= 0 && directive.accentCards <= 3);
+    }
+  } finally {
+    globalThis.fetch = previousFetch;
+    restore();
+  }
+});

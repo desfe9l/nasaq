@@ -231,6 +231,7 @@ export function AITemplateStudio({ initialPrompt }: { initialPrompt?: string }) 
         contentDensity: brief.contentDensity,
         bilingual: brief.bilingual,
         visualDirection: brief.visualDirection,
+        pageLayouts: brief.pageLayouts,
       };
 
       /*

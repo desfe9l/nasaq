@@ -1,3 +1,13 @@
+import {
+  normalizePageLayoutDirectives,
+  planPageLayouts,
+  type PageLayoutDirective,
+} from "@/lib/intelligence/layout-variety";
+import { presetForDesignStyle } from "@/lib/intelligence/style-presets";
+import type { DesignStyle } from "@/lib/intelligence/schema";
+
+export type { LayoutPatternId, PageLayoutDirective } from "@/lib/intelligence/layout-variety";
+
 export type DesignGenerationMode = "generate" | "balance" | "professional";
 export type CoverStyle =
   | "minimal"
@@ -36,6 +46,14 @@ export interface DesignBrief {
   bilingual: boolean;
   contentDensity: "light" | "balanced" | "dense";
   visualDirection: string;
+  /**
+   * Per-page layout directives (Anti-Monotony & Dynamic Layout Rules):
+   * one entry per page with its pattern, grid, positioning, visual hierarchy,
+   * accent cards and summary callouts. Page 1 is always a hero cover and no
+   * two consecutive pages share a pattern — the planner enforces that even
+   * when the provider returns a monotonous array.
+   */
+  pageLayouts: PageLayoutDirective[];
 }
 
 export type DesignBriefResult =
@@ -127,5 +145,15 @@ export function normalizeDesignBrief(value: unknown, input: DesignBriefInput): D
         ? raw.contentDensity
         : input.contentDensity ?? "balanced",
     visualDirection: text(raw.visualDirection, "تكوين عربي RTL بهرمية واضحة ومساحات بيضاء مقصودة"),
+    pageLayouts: planPageLayouts({
+      pages,
+      format,
+      mode: input.mode,
+      density: input.contentDensity,
+      styleBias: STYLES.has(requestedStyle)
+        ? presetForDesignStyle(requestedStyle as DesignStyle).layoutBias
+        : undefined,
+      directives: normalizePageLayoutDirectives(raw.pageLayouts, pages),
+    }),
   };
 }

@@ -1,6 +1,7 @@
 import type { ReportDraft } from "./contract";
 import type { CanvasEl, ElType, Page, Project, ProjectSnapshot, ThemeId } from "@/lib/editor/model";
 import { validateProject } from "@/lib/intelligence/layout";
+import { checkLayoutVariety, enforceLayoutVariety } from "@/lib/intelligence/layout-variety";
 
 export type AIEditorErrorCode =
   | "invalid_operation"
@@ -166,11 +167,22 @@ export async function applyAIEditorOperations(api: AIEditorCommandApi, operation
     }
     const operation = checked[0] as OperationOf<"generate_document">;
     try {
-      const problems = validateProject(operation.project);
+      let project = operation.project;
+      let problems = validateProject(project);
+      // Anti-monotony gate (Layout Variety Check): when two consecutive pages
+      // of a generated document share a structure, a secondary layout pattern
+      // is applied AUTOMATICALLY — the elements are re-flowed into a
+      // two-column grid (or an existing column split is mirrored). Content is
+      // never rewritten; every element stays fully editable.
+      if (!problems.length && !checkLayoutVariety(project).ok) {
+        const enforced = enforceLayoutVariety(project);
+        if (enforced.applied.length) project = enforced.project;
+        problems = validateProject(project);
+      }
       if (problems.length) {
         return [resultFailure(operation, 0, "invalid_document", "The generated document failed NASAQ validation and was not opened.", problems)];
       }
-      const created = await api.createDocument(operation.project, { autoName: false });
+      const created = await api.createDocument(project, { autoName: false });
       if (!created) return [resultFailure(operation, 0, "command_failed", "The editor rejected the generated document; no document was changed.")];
       return [{ ok: true, operationId: operationId(operation, 0) }];
     } catch (error) {
