@@ -16,7 +16,7 @@ import type { ThemeId } from "@/lib/editor/model";
 import { projectAccessBlock } from "@/lib/editor/access-limits";
 import type { FeatureId } from "@/lib/license/types";
 import { useEditor } from "@/lib/editor/store";
-import { DEMO_LICENSE, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
+import { applicationPageLimit, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
 import {
   entryProjectSeed,
   type CatalogEntry,
@@ -152,7 +152,7 @@ function capacityBlock(
       message: "اكتملت مساحة تجربة المحرر — يتضمن العرض مشروعًا واحدًا.",
     };
   }
-  const maxPages = DEMO_LICENSE.entitlements.maxPagesPerProject ?? Infinity;
+  const maxPages = applicationPageLimit();
   if (!entitlements.unlimited_pages && pages > maxPages) {
     return {
       status: "blocked",

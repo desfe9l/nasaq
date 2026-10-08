@@ -34,6 +34,13 @@ export const intelligenceNoteFn = createServerFn({ method: "POST" })
     if (!allowed) {
       return { ok: false, code: "unauthorized", note: "" };
     }
+    const { refreshControlPlane } = await import("@/lib/control-plane/store.server");
+    const { gateService } = await import("@/lib/control-plane/decisions");
+    const { enforcementPlane, noteProviderSignal } = await import("@/lib/control-plane/snapshot");
+    await refreshControlPlane();
+    if (!gateService(enforcementPlane(), "ai", { privileged: true }).allowed) {
+      return { ok: false, code: "not_configured", note: "الذكاء الاصطناعي متوقف بقرار المالك. بقية لوحة الإدارة تعمل." };
+    }
     // Admin-only, but it spends real provider money: the application safety
     // ceiling applies to admins too, so a compromised admin session cannot
     // drain the provider budget (`@/lib/policy/limits`).
@@ -61,6 +68,10 @@ export const intelligenceNoteFn = createServerFn({ method: "POST" })
       }
       if (code === "provider_blocked") {
         return { ok: false, code: "provider_error", note: "حجب مزود النموذج الطلب. التقييم القياسي لم يتغير." };
+      }
+      if (code === "provider_quota" || code === "provider_billing") {
+        noteProviderSignal("ai", code === "provider_quota" ? "quota" : "billing");
+        return { ok: false, code: "provider_error", note: "حصة مزود النموذج لا تسمح بالملاحظة. بقية الإدارة والمحرر لم تتأثر." };
       }
       if (code === "provider_unavailable") {
         return { ok: false, code: "provider_error", note: "مزود النموذج غير متاح مؤقتًا. التقييم القياسي لم يتغير." };

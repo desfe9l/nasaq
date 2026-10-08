@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { listInstitutionalBackgroundsFn } from "@/lib/institutional/functions";
+import { enforcementPlane } from "@/lib/control-plane/snapshot";
 import {
   INSTITUTIONAL_CHANGED,
   type InstitutionalBackground,
@@ -40,7 +41,22 @@ let inflight: Promise<void> | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 let mountedCount = 0;
 
-const POLL_MS = 15_000;
+const POLL_MS_FALLBACK = 15_000;
+let pollMs = POLL_MS_FALLBACK;
+
+function currentPollMs(): number {
+  const fromPlane = enforcementPlane().pollingIntervalMs;
+  return Number.isFinite(fromPlane) && fromPlane >= 5_000 ? fromPlane : POLL_MS_FALLBACK;
+}
+
+function reschedule(ms: number): void {
+  if (!Number.isFinite(ms) || ms < 5_000 || ms === pollMs) return;
+  pollMs = ms;
+  if (timer !== null) {
+    clearInterval(timer);
+    timer = setInterval(() => void refreshAll(), pollMs);
+  }
+}
 
 function publish(next: Snapshot): void {
   // Replace, never mutate: useSyncExternalStore compares by reference.
@@ -64,6 +80,8 @@ async function refreshAll(): Promise<void> {
         updatedAt: result.updatedAt,
         error: null,
       });
+      const hinted = (result as { pollAfterMs?: number }).pollAfterMs;
+      reschedule(typeof hinted === "number" ? hinted : currentPollMs());
     } catch {
       publish({ items: [], canManage: false, updatedAt: 0, error: "تعذر قراءة خلفيات مؤسسية" });
     } finally {
@@ -75,7 +93,7 @@ async function refreshAll(): Promise<void> {
 
 function startPolling(): void {
   if (timer !== null) return;
-  timer = setInterval(() => void refreshAll(), POLL_MS);
+  timer = setInterval(() => void refreshAll(), currentPollMs());
 }
 
 function stopPolling(): void {

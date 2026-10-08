@@ -708,6 +708,11 @@ export const adminSaveSettingsFn = createServerFn({ method: "POST" })
 /** Public list: published templates only, without payloads. */
 export const listPublishedTemplatesFn = createServerFn({ method: "GET" }).handler(async (): Promise<AdminTemplateSummary[]> => {
   try {
+    const { refreshControlPlane } = await import("@/lib/control-plane/store.server");
+    const { gateService } = await import("@/lib/control-plane/decisions");
+    const { enforcementPlane } = await import("@/lib/control-plane/snapshot");
+    await refreshControlPlane();
+    if (!gateService(enforcementPlane(), "templates").allowed) return [];
     // Public catalog: cached so a page view (or N mounted components) costs one
     // query per TTL window, not one per call. Invalidated by every template
     // mutation under the `templates:` prefix.

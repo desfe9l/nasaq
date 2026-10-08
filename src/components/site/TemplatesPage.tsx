@@ -38,7 +38,7 @@ import {
   templatesFilterPathFor,
 } from "@/lib/site-routes";
 import { cn } from "@/lib/utils";
-import { DEMO_LICENSE, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
+import { applicationPageLimit, canCreateDemoProject, canUseDemoPack } from "@/lib/product/product";
 import { projectAccessBlock } from "@/lib/editor/access-limits";
 import { getPublishedTemplateFn } from "@/lib/admin/functions";
 import { useLicense } from "@/lib/license/client";
@@ -182,7 +182,7 @@ export function TemplatesPage({
       });
       return true;
     }
-    const maxPages = DEMO_LICENSE.entitlements.maxPagesPerProject ?? Infinity;
+    const maxPages = applicationPageLimit();
     if (!entitlements.unlimited_pages && pageCount > maxPages) {
       toast.error("وصلت إلى حد صفحات تجربة المحرر", {
         description: "يتاح حتى 3 صفحات في العرض. افتح النسخة الكاملة لمشاريع أطول.",

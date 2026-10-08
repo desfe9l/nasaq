@@ -77,6 +77,19 @@ export const saveCloudProject = createServerFn({ method: "POST" })
     return { id, payload: rec.payload as JsonObject, updatedAt: typeof rec.updatedAt === "number" ? rec.updatedAt : Date.now(), version: typeof rec.version === "number" ? rec.version : undefined };
   })
   .handler(async ({ context, data }): Promise<any> => {
+    const { refreshControlPlane } = await import("@/lib/control-plane/store.server");
+    const { gateService } = await import("@/lib/control-plane/decisions");
+    const { enforcementPlane, noteProviderSignal } = await import("@/lib/control-plane/snapshot");
+    const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
+    await refreshControlPlane();
+    const access = await getAuthorizationContext({
+      id: context.userId,
+      email: context.userEmail,
+      emailVerified: context.userEmailVerified,
+    });
+    const gate = gateService(enforcementPlane(), "documents", { privileged: access.isOwner || access.isAdmin });
+    if (!gate.allowed) return { ok: false, reason: gate.code, service: "documents" };
+    try {
     const sql = await getSql();
     // Conflict check: fetch existing version
     const existing = await sql<{ version: number; updated_at: string }>`select version, updated_at from cloud_projects where id = ${data.id} and user_id = ${context.userId} limit 1`;
@@ -105,6 +118,10 @@ export const saveCloudProject = createServerFn({ method: "POST" })
       where cloud_projects.user_id = ${context.userId}
     `;
     return { ok: true };
+    } catch {
+      noteProviderSignal("database", "down");
+      return { ok: false, reason: "database_unavailable", service: "database" };
+    }
   });
 
 export const deleteCloudProject = createServerFn({ method: "POST" })

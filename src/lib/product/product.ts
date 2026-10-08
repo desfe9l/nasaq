@@ -1,3 +1,5 @@
+import { enforcementPlane } from "@/lib/control-plane/snapshot";
+
 export type ProductEdition = "demo" | "commercial" | "enterprise";
 export type LicenseStatus = "DEMO" | "TRIAL" | "ACTIVE" | "EXPIRED" | "SUSPENDED";
 export type LicenseScope = "individual" | "team" | "organization" | "enterprise";
@@ -114,12 +116,20 @@ export function canUseDemoPack(pack: string): boolean {
   return (DEMO_ALLOWED_PACKS as readonly string[]).includes(pack);
 }
 
+export function applicationProjectLimit(): number {
+  return enforcementPlane().projectLimit;
+}
+
+export function applicationPageLimit(): number {
+  return enforcementPlane().pageLimit;
+}
+
 export function canAddDemoPage(pageCount: number): boolean {
-  return pageCount < (DEMO_LICENSE.entitlements.maxPagesPerProject ?? Infinity);
+  return pageCount < applicationPageLimit();
 }
 
 export function canCreateDemoProject(projectCount: number): boolean {
-  return projectCount < (DEMO_LICENSE.entitlements.maxProjects ?? Infinity);
+  return projectCount < applicationProjectLimit();
 }
 
 export function canUseDemoExport(
@@ -184,8 +194,8 @@ export function licenseRecordFromEntitlements(
     scope: e.team_features ? "team" : "individual",
     status: type === "FREE" ? "DEMO" : type === "TRIAL" ? "TRIAL" : "ACTIVE",
     entitlements: {
-      maxProjects: e.unlimited_projects ? null : 1,
-      maxPagesPerProject: e.unlimited_pages ? null : 3,
+      maxProjects: e.unlimited_projects ? null : applicationProjectLimit(),
+      maxPagesPerProject: e.unlimited_pages ? null : applicationPageLimit(),
       premiumTemplates: e.premium_templates,
       advancedExports: e.advanced_export,
       brandKit: e.brand_kit,

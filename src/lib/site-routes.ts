@@ -124,6 +124,8 @@ export const ADMIN_ROUTES = {
   ai: "/admin/ai",
   /** Owner vault: provider API keys, kept out of every other surface. */
   vault: "/admin/vault",
+  /** Owner control of application services, limits, and maintenance. */
+  services: "/admin/services",
   /** Audit log of privileged actions. */
   audit: "/admin/audit",
   /** Template import service (PSD / package intake). */
@@ -254,6 +256,13 @@ export const ADMIN_SECTIONS: readonly AdminSection[] = [
     to: ADMIN_ROUTES.settings,
     label: "إعدادات النظام",
     description: "الأسعار، الدفع، وحدود المنصة.",
+    group: "identity",
+  },
+  {
+    id: "services",
+    to: ADMIN_ROUTES.services,
+    label: "التحكم التشغيلي",
+    description: "حالة كل خدمة وحدودها وحصصها، ويغيّرها المالك من هنا.",
     group: "identity",
   },
   {

@@ -1,5 +1,6 @@
 import {
   DEMO_LICENSE,
+  applicationPageLimit,
   canCreateDemoProject,
   canUseDemoPack,
 } from "@/lib/product/product";
@@ -18,7 +19,7 @@ export function exceedsProjectPageLimit(
   pageCount: number,
   entitlements: EditorAccessEntitlements,
 ): boolean {
-  return !entitlements.unlimited_pages && pageCount > DEMO_MAX_PAGES;
+  return !entitlements.unlimited_pages && pageCount > applicationPageLimit();
 }
 
 export function exceedsSavedProjectLimit(
