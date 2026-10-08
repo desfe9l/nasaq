@@ -198,6 +198,63 @@ export const uploadEditorAsset = createServerFn({ method: "POST" })
     return { ok: true, asset: toStoredAsset(row) };
   });
 
+/**
+ * The caller's ACCOUNT storage figure — the server-side source of truth.
+ *
+ * The two storage meters in the product used to read
+ * `navigator.storage.estimate()`, which measures the BROWSER's quota for this
+ * origin on this one device (IndexedDB + caches). It is not the account's
+ * storage: it does not follow the user to another device, it does not change
+ * when the account's rows move, and it reads "full" when the local database
+ * is full no matter how little the account holds. That is why reconciling
+ * ownership never changed the number the owner was looking at.
+ *
+ * This returns the figure derived from the rows that actually own the
+ * objects, so the meter moves when ownership moves.
+ */
+export const getStorageUsage = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(
+    async ({
+      context,
+    }): Promise<{
+      configured: boolean;
+      assets: number;
+      bytes: number;
+      projects: number;
+      cloudProjects: number;
+      /** Rows still pointing at a pre-migration prefix (target: 0). */
+      inheritedAssets: number;
+    }> => {
+      const empty = {
+        configured: false,
+        assets: 0,
+        bytes: 0,
+        projects: 0,
+        cloudProjects: 0,
+        inheritedAssets: 0,
+      };
+      if (!(await hasCloudStorageAccess(context))) return empty;
+      const { objectStorageConfigured } = await import("./r2.server");
+      const configured = objectStorageConfigured();
+      try {
+        const sql = await getSql();
+        const { ownerStorageUsage } = await import("./owner-storage.server");
+        const usage = await ownerStorageUsage(sql, context.userId);
+        return {
+          configured,
+          assets: usage.assets,
+          bytes: usage.bytes,
+          projects: usage.projects,
+          cloudProjects: usage.cloudProjects,
+          inheritedAssets: usage.foreignPrefixAssets,
+        };
+      } catch {
+        return { ...empty, configured };
+      }
+    },
+  );
+
 /** List the caller's own stored assets. Metadata only — no URLs, no bytes. */
 export const listStoredAssets = createServerFn({ method: "GET" })
   .middleware([authMiddleware])

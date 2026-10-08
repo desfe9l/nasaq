@@ -42,6 +42,12 @@ import {
   type OwnerBinding,
 } from "./owner-binding.server.ts";
 import { nextReboundFrom } from "../license/scope.ts";
+import { migrateAdminAuthority } from "./owner-admin-rebind.server.ts";
+import {
+  discoverMovableOwnership,
+  isSafeIdentifier,
+  type MovableOwnershipColumn,
+} from "./owner-schema-sweep.server.ts";
 
 /** `site_settings` key recording the last reconciliation — server-only state. */
 export const OWNER_RECONCILIATION_KEY = "nasaq.owner_reconciliation.v1";
@@ -65,9 +71,22 @@ export type ReconciliationResult = {
   userId: string;
   /** Orphaned ids that were proven to belong to the owner. */
   orphans: string[];
-  /** Rows moved per table (absent = nothing to move for that table). */
-  moved: Partial<Record<ReconcileTable, number>>;
+  /**
+   * Rows moved per table (absent = nothing to move for that table).
+   *
+   * Keys are table names: the statically known `ReconcileTable` set plus any
+   * table the schema sweep discovered, so a table added by a later migration
+   * is reported here the first time it holds one of the owner's rows.
+   */
+  moved: Record<string, number>;
   movedTotal: number;
+  /** Administrator authority carried over and retired, if any. */
+  adminAuthority?: {
+    role: string;
+    promoted: boolean;
+    /** Count of orphaned `admin_users` rows retired. Never the ids. */
+    retired: number;
+  };
   at: string;
 };
 
@@ -95,6 +114,32 @@ export const OWNED_TABLES: ReadonlyArray<{ table: ReconcileTable; keyed: boolean
   { table: "storage_projects", keyed: false },
   { table: "client_requests", keyed: false },
 ];
+
+/**
+ * The ownership targets this reconciliation will rewrite: the statically known
+ * tables above, PLUS every ownership column the live schema reports that is
+ * not explicitly preserved (audit, identity store, authority).
+ *
+ * The static list stays as the floor — a catalogue that cannot be read must
+ * not silently reduce the migration to nothing — and the sweep is the ceiling,
+ * so a table added by a future migration is included by default instead of
+ * being forgotten by default.
+ */
+export async function resolveOwnershipTargets(sql: Sql): Promise<MovableOwnershipColumn[]> {
+  const targets = new Map<string, MovableOwnershipColumn>();
+  for (const { table, keyed } of OWNED_TABLES) {
+    targets.set(`${table}.user_id`, { table, column: "user_id", keyed });
+  }
+  for (const found of await discoverMovableOwnership(sql)) {
+    const key = `${found.table}.${found.column}`;
+    // The static entry wins on `keyed` only when the catalogue disagrees in
+    // the unsafe direction: treating a keyed column as unkeyed would collapse
+    // two accounts into one row.
+    const existing = targets.get(key);
+    targets.set(key, { ...found, keyed: found.keyed || existing?.keyed === true });
+  }
+  return [...targets.values()];
+}
 
 /** Ids are joined into ONE parameter so no dynamic placeholder count is needed. */
 const ID_SEPARATOR = "\n";
@@ -145,17 +190,25 @@ export async function provenOwnerOrphanIds(
   return orphans;
 }
 
-/** True when at least one row still names one of these ids. */
+/**
+ * True when at least one row still names one of these ids.
+ *
+ * `table`/`column` come from the module's own list or the schema catalogue and
+ * are re-validated here before they reach SQL text; the ids are always bound
+ * parameters.
+ */
 async function anyRowsFor(
   sql: Sql,
-  table: ReconcileTable,
+  table: string,
   orphanIds: readonly string[],
+  column = "user_id",
 ): Promise<boolean> {
   if (!orphanIds.length) return false;
+  if (!isSafeIdentifier(table) || !isSafeIdentifier(column)) return false;
   try {
     const rows = await sql.query<{ one: number }>(
-      `select 1 as one from ${table}
-        where user_id = any(string_to_array($1, E'\\n')) limit 1`,
+      `select 1 as one from "${table}"
+        where "${column}" = any(string_to_array($1, E'\\n')) limit 1`,
       [idParam(orphanIds)],
     );
     return rows.length > 0;
@@ -179,7 +232,13 @@ async function anyRowsFor(
  */
 export async function rebindOwnerOwnership(
   sql: Sql,
-  input: { userId: string; orphanIds: readonly string[]; at?: Date },
+  input: {
+    userId: string;
+    orphanIds: readonly string[];
+    at?: Date;
+    /** Pre-resolved ownership targets (the sweep runs once per migration). */
+    targets?: readonly MovableOwnershipColumn[];
+  },
 ): Promise<ReconciliationResult> {
   const userId = input.userId.trim();
   const orphans = unique(input.orphanIds).filter((id) => id !== userId);
@@ -193,34 +252,36 @@ export async function rebindOwnerOwnership(
   };
   if (!orphans.length) return result;
 
-  const bump = (table: ReconcileTable, count: number) => {
+  const bump = (table: string, count: number) => {
     if (!count) return;
     result.moved[table] = (result.moved[table] ?? 0) + count;
     result.movedTotal += count;
   };
 
-  for (const { table, keyed } of OWNED_TABLES) {
-    if (!(await anyRowsFor(sql, table, orphans))) continue;
+  const targets = input.targets ?? (await resolveOwnershipTargets(sql));
+  for (const { table, column, keyed } of targets) {
+    if (!isSafeIdentifier(table) || !isSafeIdentifier(column)) continue;
+    if (!(await anyRowsFor(sql, table, orphans, column))) continue;
     try {
-      if (table === "subscriptions") {
+      if (table === "subscriptions" && column === "user_id") {
         bump(table, await moveSubscriptions(sql, userId, orphans));
         continue;
       }
       const rows = keyed
         ? await sql.query<{ n: number }>(
-            `update ${table} as target
-                set user_id = $2
-              where target.user_id = any(string_to_array($1, E'\\n'))
+            `update "${table}" as target
+                set "${column}" = $2
+              where target."${column}" = any(string_to_array($1, E'\\n'))
                 and not exists (
-                  select 1 from ${table} as taken where taken.user_id = $2
+                  select 1 from "${table}" as taken where taken."${column}" = $2
                 )
               returning 1`,
             [idParam(orphans), userId],
           )
         : await sql.query<{ n: number }>(
-            `update ${table}
-                set user_id = $2
-              where user_id = any(string_to_array($1, E'\\n'))
+            `update "${table}"
+                set "${column}" = $2
+              where "${column}" = any(string_to_array($1, E'\\n'))
               returning 1`,
             [idParam(orphans), userId],
           );
@@ -380,17 +441,56 @@ export async function reconcileBoundOwner(
   const orphans = await provenOwnerOrphanIds(sql, binding, directory);
   if (!orphans.length) return null;
 
+  const targets = await resolveOwnershipTargets(sql);
   let relevant = false;
-  for (const { table } of OWNED_TABLES) {
-    if (await anyRowsFor(sql, table, orphans)) {
+  for (const { table, column } of targets) {
+    if (await anyRowsFor(sql, table, orphans, column)) {
       relevant = true;
       break;
     }
   }
-  if (!relevant) return null;
+  /*
+   * Authority counts as something to reconcile in its own right. Without this
+   * an owner whose records already moved — but whose orphaned `admin_users`
+   * row is still sitting there with SUPER_ADMIN — would see the reconciliation
+   * report "nothing to do" while production still holds TWO administrator
+   * identities for one person. That split state is the thing being ended.
+   */
+  const orphanAdminRows = await anyRowsFor(sql, "admin_users", orphans);
+  if (!relevant && !orphanAdminRows) return null;
 
-  const result = await rebindOwnerOwnership(sql, { userId: caller, orphanIds: orphans });
-  if (!result.movedTotal) return null;
+  const result = await rebindOwnerOwnership(sql, {
+    userId: caller,
+    orphanIds: orphans,
+    targets,
+  });
+
+  /*
+   * Authority LAST, and only for the bound OWNER: the records are already on
+   * the canonical account by now, so if this step fails the owner keeps the
+   * console they had and the orphan row is retried on the next pass — never
+   * the reverse, which would strand the authority with nothing to administer.
+   */
+  if (orphanAdminRows) {
+    try {
+      const authority = await migrateAdminAuthority(sql, {
+        userId: caller,
+        orphanIds: orphans,
+      });
+      result.adminAuthority = {
+        role: authority.role,
+        promoted: authority.promoted,
+        retired: authority.retired.length,
+      };
+    } catch (error) {
+      console.warn(
+        "[owner] admin authority rebind failed:",
+        error instanceof Error ? error.message.slice(0, 200) : "unknown error",
+      );
+    }
+  }
+
+  if (!result.movedTotal && !result.adminAuthority?.retired) return null;
 
   try {
     await sql`
@@ -407,6 +507,8 @@ export async function reconcileBoundOwner(
       orphans: result.orphans.join(","),
       moved: result.movedTotal,
       tables: Object.keys(result.moved).join(","),
+      adminRetired: result.adminAuthority?.retired ?? 0,
+      adminRole: result.adminAuthority?.role ?? null,
     },
   });
   return result;

@@ -37,12 +37,13 @@ export function LibraryPage() {
   const [query, setQuery] = useState("");
   const [folderId, setFolderId] = useState<string | "all">("all");
   const [usedBytes, setUsedBytes] = useState<number | null>(null);
+  const [accountBytes, setAccountBytes] = useState<number | null>(null);
 
   useEffect(() => {
     void hydrate();
   }, [hydrate]);
 
-  /* Real usage reported by the browser — never an estimate of our own. */
+  /* This device's local usage, as reported by the browser. */
   useEffect(() => {
     navigator.storage
       ?.estimate?.()
@@ -51,6 +52,31 @@ export function LibraryPage() {
       })
       .catch(() => undefined);
   }, [assets.length]);
+
+  /*
+   * The ACCOUNT's usage, from the server. The browser estimate above belongs
+   * to this device; only this figure follows the account (and therefore moves
+   * when ownership does).
+   */
+  useEffect(() => {
+    if (!user?.id) {
+      setAccountBytes(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { getStorageUsage } = await import("@/lib/storage/functions");
+        const usage = await getStorageUsage();
+        if (!cancelled && usage.configured) setAccountBytes(usage.bytes);
+      } catch {
+        /* storage is optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, assets.length]);
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -121,8 +147,14 @@ export function LibraryPage() {
           <Stat label="مجلدات" value={String(folders.length)} />
           <Stat label="أيقونات وفواصل" value={String(customIcons.length)} />
           <Stat
-            label="المساحة المستخدمة"
-            value={usedBytes === null ? "—" : formatBytes(usedBytes)}
+            label={accountBytes === null ? "مساحة هذا الجهاز" : "مساحة حسابك"}
+            value={
+              accountBytes !== null
+                ? formatBytes(accountBytes)
+                : usedBytes === null
+                  ? "—"
+                  : formatBytes(usedBytes)
+            }
           />
         </section>
 

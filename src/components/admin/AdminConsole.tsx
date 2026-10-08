@@ -270,6 +270,20 @@ export function AdminConsole({ children }: { children?: ReactNode }) {
             >
               الموقع
             </a>
+            {/*
+              The owner's way out of the deadlock. "تفعيل كأول مسؤول" only
+              works on a database with NO administrator at all; the account
+              this screen actually turns away is usually the owner whose id
+              changed in the identity migration, whose admin row still exists
+              under an id nobody can sign in as. That case is repaired by the
+              recovery console, so the screen that refuses them names it.
+            */}
+            <a
+              href="/owner-recovery"
+              className="inline-flex h-9 items-center rounded-lg border border-line px-3 text-[12px] font-bold"
+            >
+              استعادة ملكية الحساب
+            </a>
             <button
               type="button"
               onClick={async () => {

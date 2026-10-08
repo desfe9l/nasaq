@@ -63,6 +63,7 @@ export function ProjectsPage() {
   const [view, setView] = useState<ViewId>("grid");
   const [usedBytes, setUsedBytes] = useState<number | null>(null);
   const [quotaBytes, setQuotaBytes] = useState<number | null>(null);
+  const [accountStorage, setAccountStorage] = useState<{ bytes: number; assets: number } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -96,7 +97,7 @@ export function ProjectsPage() {
     })();
   }, [projects.length, projectsLoading, isOffline]);
 
-  // IndexedDB storage meter — real usage reported by the browser, not a guess.
+  // Device meter — what THIS browser holds locally (IndexedDB + caches).
   useEffect(() => {
     let cancelled = false;
     navigator.storage
@@ -111,6 +112,34 @@ export function ProjectsPage() {
       cancelled = true;
     };
   }, [projects.length]);
+
+  /*
+   * Account meter — the server's figure, derived from the rows that own the
+   * objects. The device estimate above is per-browser: it reads "full" when
+   * the local database is full, which is not a statement about the account at
+   * all. The account figure is the one that follows ownership.
+   */
+  useEffect(() => {
+    if (!user?.id) {
+      setAccountStorage(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const { getStorageUsage } = await import("@/lib/storage/functions");
+        const usage = await getStorageUsage();
+        if (!cancelled && usage.configured) {
+          setAccountStorage({ bytes: usage.bytes, assets: usage.assets });
+        }
+      } catch {
+        /* storage is optional: no figure is better than a wrong one */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, assets.length]);
 
   const displayProjects = offlineProjects && !projects.length ? offlineProjects : projects;
   const filtered = displayProjects
@@ -210,14 +239,25 @@ export function ProjectsPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {/* Storage meter — honest local usage, no server involved. */}
-            {usedBytes !== null && (
+            {/* Account storage — the server's figure for THIS account. */}
+            {accountStorage !== null && (
               <span
-                title="حجم البيانات المحفوظة محليًا في متصفحك"
+                title="حجم ملفات حسابك في التخزين السحابي"
                 className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-line bg-surface px-3 text-[12px] font-bold tabular-nums text-muted"
               >
                 <Database className="size-3.5" aria-hidden />
-                {formatMB(usedBytes)}
+                حسابك: {formatMB(accountStorage.bytes)}
+                <span className="text-muted/70">({accountStorage.assets} ملف)</span>
+              </span>
+            )}
+            {/* Device meter — this browser's local cache, not the account. */}
+            {usedBytes !== null && (
+              <span
+                title="حجم البيانات المحفوظة محليًا في هذا المتصفح — لا يمثل مساحة حسابك"
+                className="inline-flex h-11 items-center gap-1.5 rounded-[10px] border border-line bg-surface px-3 text-[12px] font-bold tabular-nums text-muted"
+              >
+                <Database className="size-3.5" aria-hidden />
+                هذا الجهاز: {formatMB(usedBytes)}
                 {quotaBytes !== null && (
                   <>
                     <span className="text-muted/70">من {formatMB(quotaBytes)}</span>

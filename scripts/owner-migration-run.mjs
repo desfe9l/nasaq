@@ -113,12 +113,40 @@ const secondPass = await reconciliation.reconcileBoundOwner(sql, binding, direct
   email: binding.email,
 });
 
+/*
+ * Storage ownership: the ROWS now name the canonical account, so the objects
+ * are moved onto its prefix too. Bounded per call and resumable, so this
+ * loops until there is nothing left or a pass stops making progress — the
+ * same contract the in-runtime `storage-rekey` stage follows.
+ */
+const ownerStorage = await import("../src/lib/storage/owner-storage.server.ts");
+const rekeyPasses = [];
+for (let pass = 0; pass < 50; pass += 1) {
+  const outcome = await ownerStorage.rekeyOwnerStorageObjects(sql, {
+    userId: binding.userId,
+    orphanIds: orphans,
+  });
+  rekeyPasses.push(outcome);
+  if (outcome.complete || outcome.moved === 0) break;
+}
+const rekey = rekeyPasses[rekeyPasses.length - 1] ?? null;
+const storageUsage = await ownerStorage.ownerStorageUsage(sql, binding.userId);
+
 const after = await verify.collectOwnerMigrationReport(sql, reportOpts);
 
 if (asJson) {
   console.log(
     JSON.stringify(
-      { backend: dbSource, moved: result?.moved ?? {}, movedTotal: result?.movedTotal ?? 0, idempotent: secondPass === null, before, after },
+      {
+        backend: dbSource,
+        moved: result?.moved ?? {},
+        movedTotal: result?.movedTotal ?? 0,
+        adminAuthority: result?.adminAuthority ?? null,
+        idempotent: secondPass === null,
+        storage: { rekey, passes: rekeyPasses.length, usage: storageUsage },
+        before,
+        after,
+      },
       null,
       2,
     ),
@@ -135,7 +163,24 @@ if (!result) {
   }
   console.log(`  total: ${result.movedTotal} row(s) reconciled onto the canonical owner.`);
 }
+if (result?.adminAuthority) {
+  console.log(
+    `  authority:   role ${result.adminAuthority.role} on the canonical account; ${result.adminAuthority.retired} orphaned admin row(s) retired`,
+  );
+}
 console.log(`  idempotency: ${secondPass === null ? "confirmed (a fresh session is a stable no-op)" : "FAILED — a second pass moved more rows"}`);
+if (rekey) {
+  console.log(
+    rekey.reason === "no_orphans"
+      ? "  storage:     no pre-migration prefix to re-key"
+      : rekey.reason === "storage_unconfigured"
+        ? "  storage:     object storage is not configured in this runtime — rows moved, objects untouched"
+        : `  storage:     ${rekey.moved} object(s) re-keyed, ${rekey.remaining} remaining, ${rekey.failed} failed, ${rekey.skipped} skipped`,
+  );
+  console.log(
+    `  usage:       ${storageUsage.assets} asset(s), ${storageUsage.bytes} byte(s) on the canonical account; ${storageUsage.foreignPrefixAssets} still on a pre-migration prefix`,
+  );
+}
 
 const rows = (label, counts) => {
   const entries = Object.entries(counts).filter(([, n]) => n !== 0);
