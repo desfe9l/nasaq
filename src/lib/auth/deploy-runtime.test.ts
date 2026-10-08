@@ -7,7 +7,7 @@
  * while the server graph was being evaluated — before a single request could be
  * served. Every page died, not just sign-in.
  *
- * The contract pinned here, under `VERCEL=1` with no R2 and no `DATABASE_URL`:
+ * The contract pinned here, under `VERCEL=1` with no R2 and no `NASAQ_PRIMARY_DATABASE_URL`:
  *
  *   1. importing the auth modules does not throw;
  *   2. liveness answers — the deployment is UP;
@@ -27,7 +27,7 @@ import assert from "node:assert/strict";
 const MANAGED = [
   "VERCEL",
   "NASAQ_STRICT_ENV",
-  "DATABASE_URL",
+  "NASAQ_PRIMARY_DATABASE_URL",
   "R2_ACCOUNT_ID",
   "R2_ENDPOINT",
   "R2_ACCESS_KEY_ID",
@@ -41,7 +41,7 @@ function deployRuntime(): void {
   for (const name of MANAGED) if (!saved.has(name)) saved.set(name, process.env[name]);
   process.env.VERCEL = "1";
   delete process.env.NASAQ_STRICT_ENV;
-  for (const name of ["DATABASE_URL", "R2_ACCOUNT_ID", "R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]) {
+  for (const name of ["NASAQ_PRIMARY_DATABASE_URL", "R2_ACCOUNT_ID", "R2_ENDPOINT", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY"]) {
     delete process.env[name];
   }
 }

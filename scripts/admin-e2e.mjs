@@ -276,11 +276,11 @@ async function ownerMutations(owner, customer) {
 
   await step("owner: vault shows secret values to the owner", async () => {
     const vault = await call("getOwnerVaultFn", { method: "GET", cookie: owner.cookie });
-    const db = vault.value?.entries?.find?.((e) => e.variable === "DATABASE_URL");
-    assert.ok(db, "DATABASE_URL row present");
+    const db = vault.value?.entries?.find?.((e) => e.variable === "NASAQ_PRIMARY_DATABASE_URL");
+    assert.ok(db, "NASAQ_PRIMARY_DATABASE_URL row present");
     assert.equal(db.ownerReadable, true);
     // Only a variable this environment actually holds has a value to read; a
-    // deployment without DATABASE_URL is not a redaction failure.
+    // deployment without NASAQ_PRIMARY_DATABASE_URL is not a redaction failure.
     if (db.configured) assert.ok(db.value, "owner can read the configured value (not printed)");
   });
 }

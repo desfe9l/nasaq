@@ -79,7 +79,7 @@ All four are fixed in this branch, with 16 new unit tests. **No fix depends on a
 - **No user-facing copy tells anyone to upgrade Vercel, buy credits, or purchase infrastructure.** The only "Vercel" mentions are internal ops diagnostics. Verified by grep across `src/`.
 
 ### 2.8 Database
-- Shared global pool (`src/lib/db.ts`), Postgres in production via `DATABASE_URL`, PGLite locally; fails closed on Vercel without `DATABASE_URL` (documented, never silently in-memory in production).
+- Shared global pool (`src/lib/db.ts`), Postgres in production via `NASAQ_PRIMARY_DATABASE_URL`, PGLite locally; fails closed on Vercel without `NASAQ_PRIMARY_DATABASE_URL` (documented, never silently in-memory in production).
 - All queries parameterized; template/license/storage reads scoped by verified `user_id`.
 
 ---

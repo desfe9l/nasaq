@@ -131,7 +131,7 @@ describe("configuration notices", () => {
     const english =
       "Durable auth storage is not configured (missing: R2_ACCOUNT_ID (or R2_ENDPOINT), " +
       "R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY). Set R2_ACCOUNT_ID (or R2_ENDPOINT), " +
-      "R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, or provide DATABASE_URL; auth never " +
+      "R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, or provide NASAQ_PRIMARY_DATABASE_URL; auth never " +
       "falls back to process memory.";
     const [line] = authConfigurationDetail({ errors: [english] });
     assert.match(line, /تخزين الهوية/);

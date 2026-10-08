@@ -12,7 +12,7 @@ import {
 test("envNamesInSource finds every read form", () => {
   const source = `
     const a = process.env.BETTER_AUTH_SECRET;
-    const b = process.env["DATABASE_URL"];
+    const b = process.env["NASAQ_PRIMARY_DATABASE_URL"];
     const c = import.meta.env.VITE_AUTH_ENABLED;
     const d = import.meta.env?.VITE_STUN_URLS;
     const e = env("GEMINI_API_KEY");
@@ -22,7 +22,7 @@ test("envNamesInSource finds every read form", () => {
   const { names } = envNamesInSource(source);
   for (const expected of [
     "BETTER_AUTH_SECRET",
-    "DATABASE_URL",
+    "NASAQ_PRIMARY_DATABASE_URL",
     "VITE_AUTH_ENABLED",
     "VITE_STUN_URLS",
     "GEMINI_API_KEY",

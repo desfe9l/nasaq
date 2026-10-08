@@ -73,7 +73,7 @@ Fetched `origin/main` before implementation and again before finalization. It re
 - Browser viewports: **1440×1000, 1024×768, 768×1024, 1180×820**, plus a **1024×768 coarse-pointer/touch context** using native Chromium touch events. Screenshot inspection was performed; generated screenshots remain under ignored `.cache/editor-acceptance/`.
 - Real iPad/Safari hardware was not available. Production payment completion and a real licensed-user session were not exercised; existing licensing tests passed and provider/auth logic was preserved.
 - `npm run test:scripts`: **194 passed / 16 failed**. All 16 failures also reproduce against an archived, unchanged `origin/main`: brand-check (3), auth invariant (1), platform PWA metadata (8), app-env (3), atomic-write documentation (1). No fixes to those unrelated platform contracts were attempted.
-- Existing build warnings remain: six malformed CSS selector warnings, route-export splitting notices and browser externalization notices for `node:crypto`. Production database migration was skipped because `DATABASE_URL` is not configured; local PGLite migration remains automatic.
+- Existing build warnings remain: six malformed CSS selector warnings, route-export splitting notices and browser externalization notices for `node:crypto`. Production database migration was skipped because `NASAQ_PRIMARY_DATABASE_URL` is not configured; local PGLite migration remains automatic.
 - `git diff --check`: **PASS**.
 
 ### Reproduce browser verification

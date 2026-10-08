@@ -21,7 +21,7 @@ import { createMiddleware } from "@tanstack/react-start";
  * Signed out with auth on (live preview included) -> throws `UnauthorizedError`
  * (see `verify.server.ts`). With auth explicitly disabled (`VITE_AUTH_ENABLED=false`)
  * it resolves the shared dev user locally — but throws instead when a
- * `DATABASE_URL` is also set, so an app without sign-in must not use this at
+ * `NASAQ_PRIMARY_DATABASE_URL` is also set, so an app without sign-in must not use this at
  * all. On the auth-on path, use it on every server function that touches
  * per-user data and scope every query by `context.userId`.
  */

@@ -60,7 +60,7 @@ const R2_ENV = {
 describe("identity store selection", () => {
   it("prefers object storage, falls back to Postgres, then to local dev", () => {
     assert.equal(authStoreStatus(R2_ENV).kind, "cloudflare-r2");
-    assert.equal(authStoreStatus({ DATABASE_URL: "postgres://x" }).kind, "postgres");
+    assert.equal(authStoreStatus({ NASAQ_PRIMARY_DATABASE_URL: "postgres://x" }).kind, "postgres");
     assert.equal(authStoreStatus({}).kind, "filesystem");
   });
 

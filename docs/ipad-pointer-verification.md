@@ -52,7 +52,7 @@ Typecheck, the production build, and focused ESLint checks for the canvas/sessio
 
 The built editor was rendered in Chromium at iPad and desktop sizes; the iPad production smoke also exercised pinch and properties opening without changing stage dimensions. Screenshots are in `screenshots/ipad-input-verified.png`, `screenshots/production-ipad-input.png` and `screenshots/production-desktop-input.png`.
 
-Local production preview without `DATABASE_URL` exposed an existing packaging problem: the generated PGLite bundle lacked its `pglite.data`, `pglite.wasm` and `initdb.wasm` assets. For smoke verification only, those three installed-package assets were copied into the ignored generated build's `_libs` directory. No database/build configuration or generated binaries were added to Git. An unmodified local preview may still need that existing packaging issue addressed separately.
+Local production preview without `NASAQ_PRIMARY_DATABASE_URL` exposed an existing packaging problem: the generated PGLite bundle lacked its `pglite.data`, `pglite.wasm` and `initdb.wasm` assets. For smoke verification only, those three installed-package assets were copied into the ignored generated build's `_libs` directory. No database/build configuration or generated binaries were added to Git. An unmodified local preview may still need that existing packaging issue addressed separately.
 
 Production console network failures were limited to blocked external Google Fonts and the platform extension script. No editor JavaScript/pointer errors occurred; this is not a claim that every network resource loaded successfully.
 

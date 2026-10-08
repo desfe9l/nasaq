@@ -77,7 +77,7 @@ function mbLabel(bytes: number): string {
  *
  * A template save that throws used to reach the browser as a rejected promise:
  * the panel kept spinning, the author saw nothing (or a generic "تعثر الحفظ"),
- * and the real reason — a missing `DATABASE_URL`, a refused connection, a
+ * and the real reason — a missing `NASAQ_PRIMARY_DATABASE_URL`, a refused connection, a
  * constraint — stayed in a server log nobody was reading. Every privileged
  * write now returns its own failure with the reason, so the UI can show it and
  * the owner can act on it. Nothing here invents success.

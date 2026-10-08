@@ -42,7 +42,7 @@ const [{ getSql, dbSource }, bindingModule, reconciliation, verify] = await Prom
 
 if (dbSource !== "postgres") {
   console.error(
-    "✗ DATABASE_URL is not set — the migration runs against the DEPLOYMENT's database, never the local fallback. Set the same DATABASE_URL the production deployment holds. Nothing was touched.",
+    "✗ NASAQ_PRIMARY_DATABASE_URL is not set — the migration runs against the DEPLOYMENT's database, never the local fallback. Set the same NASAQ_PRIMARY_DATABASE_URL the production deployment holds. Nothing was touched.",
   );
   process.exit(2);
 }

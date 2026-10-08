@@ -22,7 +22,7 @@ const fail = (code, message) => {
 };
 
 if (dbSource !== "postgres") {
-  fail(2, "DATABASE_URL is not set — live verification runs against the DEPLOYMENT's database only.");
+  fail(2, "NASAQ_PRIMARY_DATABASE_URL is not set — live verification runs against the DEPLOYMENT's database only.");
 }
 
 const sql = await getSql();

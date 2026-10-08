@@ -381,7 +381,7 @@ export function authEnvironmentReport(
         errors.push(
           `Durable auth storage is not configured (missing: ${storage.missing.join(", ")}). ` +
             "Set R2_ACCOUNT_ID (or R2_ENDPOINT), R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, " +
-            "or provide DATABASE_URL; auth never falls back to process memory.",
+            "or provide NASAQ_PRIMARY_DATABASE_URL; auth never falls back to process memory.",
         );
       } else {
         warnings.push(

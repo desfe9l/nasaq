@@ -53,8 +53,8 @@ address). If the identity store cannot answer, every path fails closed.
 
 | # | State | Authoritative source | Notes |
 |---|-------|----------------------|-------|
-| 1 | Authentication | **AuthStore** — Cloudflare R2 when `R2_*` is configured, else Postgres via `DATABASE_URL` | decided by `auth/store/status.ts`; the legacy Better Auth `"user"` table is a **projection**, never the authority |
-| 2 | Commercial (customers, plans, subscriptions, payments, trials, requests) | **PostgreSQL** (`DATABASE_URL`) | migrated on every deploy by `scripts/migrate.mjs` |
+| 1 | Authentication | **AuthStore** — Cloudflare R2 when `R2_*` is configured, else Postgres via `NASAQ_PRIMARY_DATABASE_URL` | decided by `auth/store/status.ts`; the legacy Better Auth `"user"` table is a **projection**, never the authority |
+| 2 | Commercial (customers, plans, subscriptions, payments, trials, requests) | **PostgreSQL** (`NASAQ_PRIMARY_DATABASE_URL`) | migrated on every deploy by `scripts/migrate.mjs` |
 | 3 | Licences (local mirror, claims, admin inventory) | **PostgreSQL** | `licenses` / `license_claims`; both the admin console and the editor read THE SAME tables |
 | 4 | Object storage (asset bytes, legacy auth state) | **Cloudflare R2** | row `object_key` is never rewritten by the migration; access is re-authorized via the prefix rebound |
 | 5 | Licence provider | **Keygen** | keys are never regenerated/duplicated/invalidated by the migration; local mirror rows move, provider scope is honoured via `userScopeVerified`/`nasaqUserId` + the server-written `ownerReboundFrom` |
@@ -79,7 +79,7 @@ The app self-heals: the owner's next privileged call reconciles their records
 with a printed, fingerprinted before/after proof:
 
 ```bash
-# with the deployment's own environment (DATABASE_URL + AuthStore env):
+# with the deployment's own environment (NASAQ_PRIMARY_DATABASE_URL + AuthStore env):
 npm run migrate:owner -- --dry-run   # what would move; touches nothing
 npm run migrate:owner                # move + before/after counts + idempotency pass
 npm run verify:owner                 # read-only certification; exit 1 on failure
@@ -95,7 +95,7 @@ history preserved (primary keys, timestamps, status, metadata).
 
 ### Running it where the production configuration lives (no secret ever leaves)
 
-The commands above need the deployment's `DATABASE_URL`, R2 trio and Keygen
+The commands above need the deployment's `NASAQ_PRIMARY_DATABASE_URL`, R2 trio and Keygen
 token handed to the process. When those values must not leave the deployment
 (the normal case — they live in Vercel and are unreadable through the API),
 run the same operations **inside the deployment runtime**:
@@ -269,7 +269,7 @@ by default.
 
 `.github/workflows/owner-production.yml` was built to run this against
 production from a runner. It cannot: the environment probe (issue #162) shows
-`DATABASE_URL`, the object-storage trio and the Keygen token ABSENT in the
+`NASAQ_PRIMARY_DATABASE_URL`, the object-storage trio and the Keygen token ABSENT in the
 repository and in every GitHub Environment — the deployment's configuration
 lives only in Vercel. The workflow is kept for a deployment that does mirror
 its configuration into Actions; for this one, the in-runtime console is the

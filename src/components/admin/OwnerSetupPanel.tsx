@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils";
  *   · A row turns green only after a real probe answered — env presence alone
  *     shows amber with "اضغط اختبار الاتصال".
  *   · No secret is ever rendered, generated or requested: identity storage is
- *     reported by variable NAME (R2_* or DATABASE_URL) and validated with a
+ *     reported by variable NAME (R2_* or NASAQ_PRIMARY_DATABASE_URL) and validated with a
  *     real session probe.
  */
 
@@ -149,7 +149,7 @@ export function OwnerSetupPanel() {
         </SetupRow>
 
         {/* Database */}
-        <SetupRow id="database" title="قاعدة البيانات" variable="DATABASE_URL" check={check("database")} result={results.database} busy={busy === "database"}>
+        <SetupRow id="database" title="قاعدة البيانات" variable="NASAQ_PRIMARY_DATABASE_URL" check={check("database")} result={results.database} busy={busy === "database"}>
           <ActionButton
             busy={busy === "database"}
             onClick={() => void run("database", async () => testDatabaseFn())}

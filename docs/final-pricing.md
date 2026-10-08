@@ -53,6 +53,6 @@ Verification:
 
 QA environment note: production browser checks used the Vercel build with the
 PGLite `.data`/`.wasm` runtime assets copied into the **ignored local build output**.
-The existing bundler omits these assets for the no-`DATABASE_URL` fallback;
+The existing bundler omits these assets for the no-`NASAQ_PRIMARY_DATABASE_URL` fallback;
 this is unrelated to pricing. No generated database or binary is committed.
-Deployments with `DATABASE_URL` use PostgreSQL and the normal migration script.
+Deployments with `NASAQ_PRIMARY_DATABASE_URL` use PostgreSQL and the normal migration script.

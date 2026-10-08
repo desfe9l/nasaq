@@ -13,7 +13,7 @@
  *      and it keeps working while the application database is over quota,
  *      suspended or mid-migration. That is the whole point of this work: sign-in
  *      must not inherit the database's availability.
- *   2. **Postgres** (`DATABASE_URL`) — used only when R2 is not configured. The
+ *   2. **Postgres** (`NASAQ_PRIMARY_DATABASE_URL`) — used only when R2 is not configured. The
  *      same `AuthStore` contract, so nothing above the storage layer changes.
  *   3. **Local filesystem** — development and tests only, refused outright on a
  *      deployed runtime (`VERCEL=1` / `NASAQ_STRICT_ENV=1`), where the disk is
@@ -72,7 +72,7 @@ export function r2Configured(env: EnvLike = process.env): boolean {
 
 /** True when a Postgres URL is available as the fallback backend. */
 export function postgresConfigured(env: EnvLike = process.env): boolean {
-  return Boolean(readEnv(env, "DATABASE_URL"));
+  return Boolean(readEnv(env, "NASAQ_PRIMARY_DATABASE_URL"));
 }
 
 /** The status a deployment reports on the sign-in surface and in its logs. */
@@ -112,7 +112,7 @@ export function authStoreStatus(env: EnvLike = process.env): AuthStoreStatus {
     missing: r2MissingVariables(env),
     detail:
       "Durable auth storage is not configured — set R2_ACCOUNT_ID (or R2_ENDPOINT), " +
-      "R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, or provide DATABASE_URL. " +
+      "R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, or provide NASAQ_PRIMARY_DATABASE_URL. " +
       "Authentication never falls back to process memory.",
   };
 }

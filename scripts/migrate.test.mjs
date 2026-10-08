@@ -50,7 +50,7 @@ function runMigrateWithFailure({ code, message }) {
       encoding: "utf8",
       env: {
         ...process.env,
-        DATABASE_URL: "postgres://user:password@db.example.test/nasaq",
+        NASAQ_PRIMARY_DATABASE_URL: "postgres://user:password@db.example.test/nasaq",
         VERCEL: "1",
         VERCEL_ENV: "production",
       },
@@ -60,24 +60,23 @@ function runMigrateWithFailure({ code, message }) {
   }
 }
 
-test("an unreachable or over-quota database does not fail the deploy", () => {
-  // A Neon quota failure is a condition the deploy cannot fix. Every migration
-  // file is applied in its own transaction, so nothing is half-applied — but a
-  // build that dies here means NO deployment ships at all, even though the app
-  // runs fine without the unapplied schema. The deploy continues, loudly.
+test("an unreachable or over-quota primary database blocks the deploy", () => {
+  // Every migration file is applied in its own transaction, so nothing is
+  // half-applied. A production bundle must not ship against an unverified
+  // schema, even when the provider failure is external.
   const result = runMigrateWithFailure({ code: "53000", message: "exceeded the quota" });
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 1, result.stderr);
   assert.match(result.stderr, /53000/);
-  assert.match(result.stderr, /WITHOUT applying migrations/);
+  assert.match(result.stderr, /deployment is blocked/);
   assert.match(result.stderr, /db:migrate/);
 });
 
-test("a too-many-connections failure also continues the deploy", () => {
+test("a too-many-connections failure also blocks the deploy", () => {
   const result = runMigrateWithFailure({
     code: "53300",
     message: "sorry, too many clients already",
   });
-  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.status, 1, result.stderr);
   assert.match(result.stderr, /53300/);
 });
 

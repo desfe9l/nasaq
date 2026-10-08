@@ -28,7 +28,7 @@ const fail = (code, message) => {
 };
 
 if (dbSource !== "postgres") {
-  fail(2, "DATABASE_URL is not set — this verifies the DEPLOYMENT's database, never a local fallback.");
+  fail(2, "NASAQ_PRIMARY_DATABASE_URL is not set — this verifies the DEPLOYMENT's database, never a local fallback.");
 }
 
 const sql = await getSql();

@@ -2,7 +2,7 @@ name: Owner production migration + live verification
 
 # Runs the owner's identity migration and every post-migration verification
 # against the REAL production state, from a runner that holds the deployment's
-# own configuration (the GitHub Environment's secrets — the same DATABASE_URL
+# own configuration (the GitHub Environment's secrets — the same NASAQ_PRIMARY_DATABASE_URL
 # and R2 credentials the Vercel deployment uses).
 #
 # Modes:
@@ -72,7 +72,7 @@ jobs:
       group: owner-production-probe-${{ matrix.bound }}-${{ matrix.env }}
       cancel-in-progress: false
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.POSTGRES_URL }}
+      NASAQ_PRIMARY_DATABASE_URL: ${{ secrets.NASAQ_PRIMARY_DATABASE_URL || secrets.POSTGRES_URL }}
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || secrets.STORAGE_ACCOUNT_ID || secrets.AWS_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID || secrets.STORAGE_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY || secrets.STORAGE_SECRET_ACCESS_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
@@ -87,7 +87,7 @@ jobs:
           echo "### probe — environment: ${{ matrix.bound == 'true' && matrix.env || '(none — repository secrets only)' }} — $(date -u +%FT%TZ)"
           have() { [ -n "${!1:-}" ]; }
           line() { if have "$1"; then echo "present : $2"; else echo "ABSENT  : $2"; fi; }
-          line DATABASE_URL "database url"
+          line NASAQ_PRIMARY_DATABASE_URL "database url"
           s=0; for v in R2_ACCOUNT_ID R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY; do have "$v" && s=$((s+1)); done
           if [ "$s" -eq 3 ]; then echo "present : object storage trio"; else echo "ABSENT  : object storage trio ($s/3)"; fi
           line KEYGEN_API_TOKEN "keygen token"
@@ -99,7 +99,7 @@ jobs:
     timeout-minutes: 25
     environment: ${{ inputs.environment || 'Production' }}
     env:
-      DATABASE_URL: ${{ secrets.DATABASE_URL || secrets.POSTGRES_URL }}
+      NASAQ_PRIMARY_DATABASE_URL: ${{ secrets.NASAQ_PRIMARY_DATABASE_URL || secrets.POSTGRES_URL }}
       R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID || secrets.STORAGE_ACCOUNT_ID || secrets.AWS_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID || secrets.STORAGE_ACCESS_KEY_ID || secrets.AWS_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY || secrets.STORAGE_SECRET_ACCESS_KEY || secrets.AWS_SECRET_ACCESS_KEY }}
@@ -153,8 +153,8 @@ jobs:
           fail=0
           present_var() { local n="$1"; [ -n "$n" ] && [ -n "${!n:-}" ]; }
           first_present() { for n in "$@"; do if present_var "$n"; then echo "$n"; return 0; fi; done; return 1; }
-          db="$(first_present DATABASE_URL POSTGRES_URL || true)"
-          if [ -n "$db" ]; then echo "present : database url (via $db)"; else echo "ABSENT  : database url (DATABASE_URL family)"; fail=1; fi
+          db="$(first_present NASAQ_PRIMARY_DATABASE_URL POSTGRES_URL || true)"
+          if [ -n "$db" ]; then echo "present : database url (via $db)"; else echo "ABSENT  : database url (NASAQ_PRIMARY_DATABASE_URL family)"; fail=1; fi
           found=""
           for p in R2 STORAGE AWS; do
             if present_var "${p}_ACCOUNT_ID" && present_var "${p}_ACCESS_KEY_ID" && present_var "${p}_SECRET_ACCESS_KEY"; then found="$p"; break; fi

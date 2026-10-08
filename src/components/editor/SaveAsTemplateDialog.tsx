@@ -127,7 +127,7 @@ export function SaveAsTemplateDialog({
     } catch (error) {
       /*
        * The real reason, never a shrug: a refused connection, a missing
-       * DATABASE_URL, an oversized payload or a rejected entitlement each say
+       * NASAQ_PRIMARY_DATABASE_URL, an oversized payload or a rejected entitlement each say
        * something different, and the author can only act on the truth.
        */
       const message =

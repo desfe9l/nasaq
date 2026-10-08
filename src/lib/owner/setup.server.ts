@@ -9,7 +9,7 @@
  * Secret discipline:
  *   · No secret value is ever returned, echoed, logged, or included in an
  *     error message. Results carry booleans, lengths and safe summaries only.
- *   · `DATABASE_URL` is summarised as host + database name; user, password and
+ *   · `NASAQ_PRIMARY_DATABASE_URL` is summarised as host + database name; user, password and
  *     query string never leave this module.
  *   · Backend variable NAMES are reported when identity storage is missing;
  *     values are never read back into a check result.
@@ -111,10 +111,10 @@ export function checkAuthStorage(): SetupCheck {
   const status = authStoreStatus();
   const variable =
     status.kind === "postgres"
-      ? "DATABASE_URL"
+      ? "NASAQ_PRIMARY_DATABASE_URL"
       : status.configured
         ? "R2_ACCESS_KEY_ID"
-        : (status.missing[0] ?? "DATABASE_URL");
+        : (status.missing[0] ?? "NASAQ_PRIMARY_DATABASE_URL");
   if (status.configured && status.kind === "filesystem") {
     return {
       id: "auth-store",
@@ -122,7 +122,7 @@ export function checkAuthStorage(): SetupCheck {
       label: "تخزين الهوية",
       state: "warning",
       summary:
-        "مخزن تطوير محلي (.nasaq-auth). على بيئة نشر يجب ضبط R2 أو DATABASE_URL وإلا يُرفض تسجيل الدخول.",
+        "مخزن تطوير محلي (.nasaq-auth). على بيئة نشر يجب ضبط R2 أو NASAQ_PRIMARY_DATABASE_URL وإلا يُرفض تسجيل الدخول.",
       probed: true,
     };
   }
@@ -132,7 +132,7 @@ export function checkAuthStorage(): SetupCheck {
       variable,
       label: "تخزين الهوية",
       state: "missing",
-      summary: `بيانات ناقصة — ${status.missing.join("، ") || "DATABASE_URL"} غير مضبوط، وتسجيل الدخول سيفشل بـ503.`,
+      summary: `بيانات ناقصة — ${status.missing.join("، ") || "NASAQ_PRIMARY_DATABASE_URL"} غير مضبوط، وتسجيل الدخول سيفشل بـ503.`,
       probed: true,
     };
   }
@@ -144,7 +144,7 @@ export function checkAuthStorage(): SetupCheck {
     summary:
       status.kind === "cloudflare-r2"
         ? "جاهز — الحسابات والجلسات في تخزين الكائنات (R2)، مستقل عن قاعدة البيانات."
-        : "جاهز — الحسابات والجلسات في قاعدة البيانات (DATABASE_URL).",
+        : "جاهز — الحسابات والجلسات في قاعدة البيانات (NASAQ_PRIMARY_DATABASE_URL).",
     probed: true,
   };
 }
@@ -179,7 +179,7 @@ export async function probeAuthService(headers: Headers): Promise<{ ok: boolean;
 
 /** Host + database name only. User, password and query string never leave. */
 export function databaseSummary(): string | null {
-  const raw = env("DATABASE_URL");
+  const raw = env("NASAQ_PRIMARY_DATABASE_URL");
   if (!raw) return null;
   try {
     const url = new URL(raw);
@@ -194,12 +194,12 @@ export function checkDatabase(): SetupCheck {
   const summary = databaseSummary();
   return {
     id: "database",
-    variable: "DATABASE_URL",
+    variable: "NASAQ_PRIMARY_DATABASE_URL",
     label: "قاعدة البيانات",
     state: summary ? "warning" : "missing",
     summary: summary
       ? `مضبوط (${summary}) — اضغط اختبار الاتصال للتأكد الفعلي.`
-      : "بيانات ناقصة — DATABASE_URL غير مضبوط في هذه البيئة.",
+      : "بيانات ناقصة — NASAQ_PRIMARY_DATABASE_URL غير مضبوط في هذه البيئة.",
     probed: false,
   };
 }
@@ -212,8 +212,8 @@ export function checkDatabase(): SetupCheck {
  * discarded — never logged, never returned.
  */
 export async function testDatabaseConnection(): Promise<{ ok: boolean; detail: string }> {
-  if (!env("DATABASE_URL")) {
-    return { ok: false, detail: "DATABASE_URL غير مضبوط في هذه البيئة." };
+  if (!env("NASAQ_PRIMARY_DATABASE_URL")) {
+    return { ok: false, detail: "NASAQ_PRIMARY_DATABASE_URL غير مضبوط في هذه البيئة." };
   }
   try {
     const { getSql } = await import("@/lib/db");

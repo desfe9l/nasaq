@@ -47,7 +47,7 @@ npm run storage:verify            # محليًا أو في أي بيئة تحت�
 أي مفتاح أو endpoint أو معرّف حساب — حالات وأسماء المتغيرات الناقصة فقط.
 
 من CI: شغّل ورك‑فلو **Storage verification (Cloudflare R2)** بعد ضبط أسرار
-المستودع/البيئة (`R2_*` و`DATABASE_URL`) — يعمل على runner يستطيع الوصول إلى
+المستودع/البيئة (`R2_*` و`NASAQ_PRIMARY_DATABASE_URL`) — يعمل على runner يستطيع الوصول إلى
 Cloudflare وقاعدة البيانات.
 
 ## 3) ما الذي يبقى محليًا (لا يتغير)

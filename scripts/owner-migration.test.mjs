@@ -4,7 +4,7 @@
  *   1. the production alias hook resolves `@/…` to the real modules and —
  *      unlike the test hook — NEVER substitutes the database with a stub
  *      (a verifier that reads a stand-in database would certify nothing);
- *   2. both CLIs fail closed without `DATABASE_URL` and name the missing
+ *   2. both CLIs fail closed without `NASAQ_PRIMARY_DATABASE_URL` and name the missing
  *      configuration, instead of "verifying" the local fallback.
  */
 import { test } from "node:test";
@@ -48,9 +48,9 @@ for (const script of [
   "owner-live-verify.mjs",
   "owner-admin-mutation-probe.mjs",
 ]) {
-  test(`scripts/${script} refuses to run without DATABASE_URL`, () => {
+  test(`scripts/${script} refuses to run without NASAQ_PRIMARY_DATABASE_URL`, () => {
     const env = { ...process.env };
-    delete env.DATABASE_URL;
+    delete env.NASAQ_PRIMARY_DATABASE_URL;
     const run = spawnSync(
       process.execPath,
       [
@@ -63,6 +63,6 @@ for (const script of [
       { env, encoding: "utf8", timeout: 60_000 },
     );
     assert.equal(run.status, 2, `expected fail-closed exit 2 — got ${run.status}: ${run.stderr}`);
-    assert.match(run.stderr, /DATABASE_URL/);
+    assert.match(run.stderr, /NASAQ_PRIMARY_DATABASE_URL/);
   });
 }

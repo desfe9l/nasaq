@@ -5,7 +5,7 @@ import { pendingMigrations } from "../../scripts/migration-plan.mjs";
 export type DbSource = "postgres" | "pglite";
 
 /**
- * Normalize DATABASE_URL SSL parameters to prevent pg-connection-string v3/pg v9 deprecation
+ * Normalize NASAQ_PRIMARY_DATABASE_URL SSL parameters to prevent pg-connection-string v3/pg v9 deprecation
  * warnings while preserving full TLS certificate and hostname verification (sslmode=verify-full).
  *
  * This is generic PostgreSQL — no provider-specific hostname rewriting.
@@ -29,18 +29,18 @@ export function normalizeDatabaseUrl(
   return trimmed;
 }
 
-// An empty/whitespace DATABASE_URL (an easy misconfig in deploy UIs) must mean
+// An empty/whitespace NASAQ_PRIMARY_DATABASE_URL (an easy misconfig in deploy UIs) must mean
 // "unset" — otherwise production would silently run on the PGLite fallback.
 const rawDatabaseUrl =
-  typeof process !== "undefined" ? process.env.DATABASE_URL : undefined;
+  typeof process !== "undefined" ? process.env.NASAQ_PRIMARY_DATABASE_URL : undefined;
 const databaseUrl = normalizeDatabaseUrl(rawDatabaseUrl);
 
 /**
- * Active backend: real **PostgreSQL** when `DATABASE_URL` is set, otherwise local
+ * Active backend: real **PostgreSQL** when `NASAQ_PRIMARY_DATABASE_URL` is set, otherwise local
  * embedded **PGLite** (Postgres compiled to WASM) for non-Vercel development.
  * Vercel fails closed without managed Postgres; an Arena/dev preview using
  * PGLite is not evidence of production persistence. Configure PostgreSQL by setting
- * `DATABASE_URL`; no backend code changes are needed.
+ * `NASAQ_PRIMARY_DATABASE_URL`; no backend code changes are needed.
  */
 export const dbSource: DbSource = databaseUrl ? "postgres" : "pglite";
 
@@ -50,7 +50,7 @@ export const dbSource: DbSource = databaseUrl ? "postgres" : "pglite";
  * fallback there dies with a cryptic `ENOENT ... /var/task/_libs/pglite.data`.
  * Even if the file shipped, PGLite is in-memory per process, so licenses
  * written in one invocation would vanish in the next. Deployed apps MUST use
- * a managed Postgres via DATABASE_URL (any standard provider works — `pg` is already a
+ * a managed Postgres via NASAQ_PRIMARY_DATABASE_URL (any standard provider works — `pg` is already a
  * dependency and `scripts/migrate.mjs` applies migrations on every build).
  * `VERCEL=1` is injected by Vercel in all its build/function runtimes.
  */
@@ -197,7 +197,7 @@ function createPostgresSql(): Promise<Sql> {
  * and survives restarts. Set `NASAQ_PGDATA=memory` to opt back into a throwaway
  * database (useful in tests); `VERCEL=1` never gets a directory, because a
  * serverless filesystem is read-only and per-invocation — that deployment must
- * set `DATABASE_URL` (the guard in `createSql` says so loudly).
+ * set `NASAQ_PRIMARY_DATABASE_URL` (the guard in `createSql` says so loudly).
  */
 function pgliteDataDir(): string | undefined {
   if (typeof process === "undefined") return undefined;
@@ -239,7 +239,7 @@ async function createPgliteSql(): Promise<Sql> {
         console.warn(
           `[db] PGLite could not use ${dataDir} — falling back to an in-memory ` +
             "database (writes are lost on restart). Set NASAQ_PGDATA to a " +
-            "writable path, or DATABASE_URL for a managed Postgres.",
+            "writable path, or NASAQ_PRIMARY_DATABASE_URL for a managed Postgres.",
           err,
         );
         pg = new PGlite({ parsers });
@@ -308,10 +308,10 @@ async function createSql(): Promise<Sql> {
   }
   if (deployedWithoutDatabaseUrl) {
     throw new Error(
-      "[db] DATABASE_URL is not set on this deployment. Vercel serverless " +
+      "[db] NASAQ_PRIMARY_DATABASE_URL is not set on this deployment. Vercel serverless " +
         "cannot use the embedded PGLite fallback (no writable filesystem — it " +
         "fails with ENOENT _libs/pglite.data, and its data would not persist " +
-        "across invocations). Set DATABASE_URL to a managed Postgres (any " +
+        "across invocations). Set NASAQ_PRIMARY_DATABASE_URL to a managed Postgres (any " +
         "standard provider works) in Vercel → Settings → Environment Variables and redeploy. " +
         "Migrations apply automatically during the build.",
     );
@@ -320,7 +320,7 @@ async function createSql(): Promise<Sql> {
 }
 
 /**
- * Get the shared, **server-only** SQL client. PostgreSQL when `DATABASE_URL` is set,
+ * Get the shared, **server-only** SQL client. PostgreSQL when `NASAQ_PRIMARY_DATABASE_URL` is set,
  * otherwise the local PGLite fallback. Memoized — safe to call per request.
  *
  * Schema comes from `migrations/*.sql`, auto-applied before the first query on
@@ -337,11 +337,11 @@ export function getSql(): Promise<Sql> {
 /**
  * The shared PGLite instance (preview only), with `migrations/*.sql` applied.
  * Lets the licence tables persist to the SAME embedded DB as app data in preview (via a
- * Kysely dialect). Throws when `DATABASE_URL` is set (that path uses PostgreSQL).
+ * Kysely dialect). Throws when `NASAQ_PRIMARY_DATABASE_URL` is set (that path uses PostgreSQL).
  */
 export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite> {
   if (dbSource !== "pglite") {
-    throw new Error("getPglite() is only available on the PGLite fallback (no DATABASE_URL)");
+    throw new Error("getPglite() is only available on the PGLite fallback (no NASAQ_PRIMARY_DATABASE_URL)");
   }
   await getSql();
   const pg = await globalRef.__pgliteInstance__;
@@ -352,7 +352,7 @@ export async function getPglite(): Promise<import("@electric-sql/pglite").PGlite
 /**
  * Finish DB bootstrap before the server handles traffic.
  *
- * - **PGLite** (preview / no `DATABASE_URL`): open the in-memory DB and apply
+ * - **PGLite** (preview / no `NASAQ_PRIMARY_DATABASE_URL`): open the in-memory DB and apply
  *   `migrations/*.sql`. Idempotent — concurrent callers share one promise.
  * - **PostgreSQL**: no-op (pool is created lazily on first query).
  *
@@ -374,8 +374,8 @@ if (typeof window === "undefined") {
     // Surface the actionable error in the function logs at cold start instead
     // of a confusing PGLite stack trace on the first query.
     console.error(
-      "[db] Deployed without DATABASE_URL — the license/database-backed " +
-        "features are unavailable. Set DATABASE_URL (any standard Postgres provider) in " +
+      "[db] Deployed without NASAQ_PRIMARY_DATABASE_URL — the license/database-backed " +
+        "features are unavailable. Set NASAQ_PRIMARY_DATABASE_URL (any standard Postgres provider) in " +
         "Vercel → Settings → Environment Variables, then redeploy.",
     );
   } else if (dbSource === "pglite") {

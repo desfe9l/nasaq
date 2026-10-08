@@ -122,7 +122,7 @@ function warnOnce(scope: string, error: unknown): void {
 export function postgresLegacySource(): LegacyAccountSource {
   return {
     async findByEmail(email) {
-      if (!process.env.DATABASE_URL?.trim()) return null;
+      if (!process.env.NASAQ_PRIMARY_DATABASE_URL?.trim()) return null;
       try {
         const { getSql } = await import("@/lib/db");
         const sql = await getSql();

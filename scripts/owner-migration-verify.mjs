@@ -35,7 +35,7 @@ const [{ getSql, dbSource }, { collectOwnerMigrationReport }] = await Promise.al
 
 if (dbSource !== "postgres") {
   console.error(
-    "✗ DATABASE_URL is not set. This verifies the DEPLOYMENT's database: run it with the same DATABASE_URL the production deployment holds. The local fallback is never certified as production state.",
+    "✗ NASAQ_PRIMARY_DATABASE_URL is not set. This verifies the DEPLOYMENT's database: run it with the same NASAQ_PRIMARY_DATABASE_URL the production deployment holds. The local fallback is never certified as production state.",
   );
   process.exit(2);
 }

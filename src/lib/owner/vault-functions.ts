@@ -183,18 +183,18 @@ const ENV_SPECS: EnvSpec[] = [
     guide: guide("حدّث العنوان عند تغيير النطاق، ثم حدّث Google OAuth callback وأعد النشر.", "https://vercel.com/dashboard", "BETTER_AUTH_URL", "Production / Preview حسب النطاق", "نعم، إعادة نشر مطلوبة.", "نعم، راجع callback URL في Google Cloud."),
   },
   {
-    key: "DATABASE_URL",
+    key: "NASAQ_PRIMARY_DATABASE_URL",
     section: "database",
     service: "PostgreSQL",
     account: "NASAQ production database",
     label: "رابط اتصال قاعدة البيانات",
     sensitivity: "secret",
     purpose: "قاعدة البيانات الدائمة للتراخيص والمصادقة ومحتوى الإدارة.",
-    loginUrl: "https://console.neon.tech",
-    dashboardUrl: "https://console.neon.tech",
+    loginUrl: "https://supabase.com/dashboard",
+    dashboardUrl: "https://supabase.com/dashboard",
     apiUrl: null,
     configurationLocation: "Vercel → Settings → Environment Variables؛ PostgreSQL connection details",
-    guide: guide("أنشئ connection string جديدًا من مزود PostgreSQL (Neon/Supabase/Railway/RDS/Vercel Postgres)، حدّث Vercel، ثم أعد النشر وشغّل migrations.", "https://console.neon.tech", "DATABASE_URL", "Production / Preview بحسب قاعدة البيانات", "نعم، إعادة نشر ومراجعة migrations مطلوبة.", "لا يوجد Webhook.", "ألغِ endpoint أو كلمة المرور القديمة من المزود بعد التحقق."),
+    guide: guide("أنشئ مشروعًا مستقلًا في Supabase، استخدم رابط Transaction Pooler أو رابط PostgreSQL الموثق، حدّث Vercel، ثم أعد النشر وشغّل migrations.", "https://supabase.com/dashboard", "NASAQ_PRIMARY_DATABASE_URL", "Production / Preview بحسب قاعدة البيانات", "نعم، إعادة نشر ومراجعة migrations مطلوبة.", "لا يوجد Webhook.", "ألغِ endpoint أو كلمة المرور القديمة من المزود السابق بعد التحقق."),
   },
   {
     key: "GEMINI_API_KEY",
@@ -823,11 +823,11 @@ async function findings(
       action: "عيّن أحدهما في Vercel ثم أعد النشر قبل استخدام لوحة المالك.",
     });
   }
-  if (!runtime("DATABASE_URL")) {
+  if (!runtime("NASAQ_PRIMARY_DATABASE_URL")) {
     result.push({
       severity: "high",
       title: "قاعدة الإنتاج غير مثبتة في runtime الحالي",
-      detail: "DATABASE_URL غير مهيأ؛ النشر قد يستخدم fallback غير دائم أو يفشل مع العمليات الموثقة.",
+      detail: "NASAQ_PRIMARY_DATABASE_URL غير مهيأ؛ النشر قد يستخدم fallback غير دائم أو يفشل مع العمليات الموثقة.",
       action: "اربط قاعدة PostgreSQL production واختبر migrations قبل فتح الاستخدام العام.",
     });
   }
@@ -884,17 +884,17 @@ async function findings(
     result.push({
       severity: "high",
       title: "مخزن الهوية غير مهيأ — تسجيل الدخول سيفشل بـ503",
-      detail: `المتغيرات الناقصة: ${[...identityStorage.missing, "DATABASE_URL (بديل)"].join("، ")}. الحسابات لا تُحفظ في ذاكرة العملية إطلاقًا، لذلك تُرفض كل محاولة تسجيل دخول برسالة واضحة.`,
+      detail: `المتغيرات الناقصة: ${[...identityStorage.missing, "NASAQ_PRIMARY_DATABASE_URL (بديل)"].join("، ")}. الحسابات لا تُحفظ في ذاكرة العملية إطلاقًا، لذلك تُرفض كل محاولة تسجيل دخول برسالة واضحة.`,
       action:
-        "أضف مفاتيح R2 الثلاثة في Vercel (وهي نفسها المستخدمة لتخزين الأصول) أو اضبط DATABASE_URL، ثم أعد النشر.",
+        "أضف مفاتيح R2 الثلاثة في Vercel (وهي نفسها المستخدمة لتخزين الأصول) أو اضبط NASAQ_PRIMARY_DATABASE_URL، ثم أعد النشر.",
     });
   } else if (identityStorage.kind === "filesystem") {
     result.push({
       severity: "medium",
       title: "مخزن الهوية محلي (تطوير فقط)",
       detail:
-        "الحسابات والجلسات محفوظة في مجلد .nasaq-auth على هذا الجهاز؛ بيئة النشر لا تملك قرصًا دائمًا وتحتاج R2 أو DATABASE_URL.",
-      action: "على بيئة النشر: اضبط R2 أو DATABASE_URL ثم أعد النشر.",
+        "الحسابات والجلسات محفوظة في مجلد .nasaq-auth على هذا الجهاز؛ بيئة النشر لا تملك قرصًا دائمًا وتحتاج R2 أو NASAQ_PRIMARY_DATABASE_URL.",
+      action: "على بيئة النشر: اضبط R2 أو NASAQ_PRIMARY_DATABASE_URL ثم أعد النشر.",
     });
   }
   if (!runtime("KEYGEN_API_TOKEN")) {

@@ -106,7 +106,7 @@ function pgliteBootstrapPlugin(): Plugin {
  * bundle, exactly where PGLite resolves them in `vite preview`.
  *
  * This is intentionally build-only. `db.ts` still fails closed for an actual
- * Vercel function without DATABASE_URL; only local Vercel-output preview uses
+ * Vercel function without NASAQ_PRIMARY_DATABASE_URL; only local Vercel-output preview uses
  * PGLite and its writable filesystem.
  */
 function pgliteVercelRuntimeAssetsPlugin(): Plugin {

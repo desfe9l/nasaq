@@ -16,7 +16,7 @@
  * metadata row, and removes both in the same run. Nothing else is touched.
  *
  * Usage:
- *   R2_* + DATABASE_URL in the environment (or in the deployment that runs it)
+ *   R2_* + NASAQ_PRIMARY_DATABASE_URL in the environment (or in the deployment that runs it)
  *   npm run storage:verify
  *
  * Requires Node 22 (`--experimental-strip-types`, already the deployment
@@ -55,8 +55,8 @@ for (const step of report.steps) console.log(line(step));
 let metadataOk = true;
 if (!report.configured) {
   metadataOk = false;
-} else if (!process.env.DATABASE_URL?.trim()) {
-  console.log("  ! metadata check skipped — DATABASE_URL is not set in this process.");
+} else if (!process.env.NASAQ_PRIMARY_DATABASE_URL?.trim()) {
+  console.log("  ! metadata check skipped — NASAQ_PRIMARY_DATABASE_URL is not set in this process.");
 } else {
   const { default: pg } = await import("pg");
   function normalizeDatabaseUrl(connectionString) {
@@ -76,7 +76,7 @@ if (!report.configured) {
     return trimmed;
   }
   const client = new pg.Client({
-    connectionString: normalizeDatabaseUrl(process.env.DATABASE_URL),
+    connectionString: normalizeDatabaseUrl(process.env.NASAQ_PRIMARY_DATABASE_URL),
   });
   try {
     await client.connect();

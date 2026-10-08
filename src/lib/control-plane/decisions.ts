@@ -36,7 +36,7 @@ export interface ServiceHealth {
 }
 
 /**
- * Postgres/Neon errors that mean the provider refused the call.
+ * PostgreSQL provider errors that mean the provider refused the call.
  * A quota is not an application outage and must not be stored as one.
  * The original message is discarded: driver errors can contain a host or a DSN.
  */

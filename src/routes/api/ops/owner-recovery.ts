@@ -5,7 +5,7 @@
  *
  * The production recovery must run where the production configuration lives —
  * the deployment's own `process.env`. The operator CLIs need that same
- * `DATABASE_URL`, R2 trio and Keygen token handed to them from outside, which a
+ * `NASAQ_PRIMARY_DATABASE_URL`, R2 trio and Keygen token handed to them from outside, which a
  * runner that does not hold the deployment's configuration cannot do. This
  * route lets the deployment run the identical guarded operations in-process.
  *

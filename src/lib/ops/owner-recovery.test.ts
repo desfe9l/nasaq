@@ -47,9 +47,9 @@ describe("owner ops — production-only runtime guard", () => {
     for (const env of [
       {},
       { VERCEL_ENV: "" },
-      { VERCEL_ENV: "preview", DATABASE_URL: "postgres://example" },
-      { VERCEL_ENV: "development", DATABASE_URL: "postgres://example" },
-      { VERCEL_ENV: "Production", DATABASE_URL: "postgres://example" },
+      { VERCEL_ENV: "preview", NASAQ_PRIMARY_DATABASE_URL: "postgres://example" },
+      { VERCEL_ENV: "development", NASAQ_PRIMARY_DATABASE_URL: "postgres://example" },
+      { VERCEL_ENV: "Production", NASAQ_PRIMARY_DATABASE_URL: "postgres://example" },
     ]) {
       const verdict = ownerOpsRuntimeVerdict(env);
       assert.equal(verdict.allowed, false, JSON.stringify(env));
@@ -69,7 +69,7 @@ describe("owner ops — production-only runtime guard", () => {
   it("allows the real production runtime with its configuration present", () => {
     const verdict = ownerOpsRuntimeVerdict({
       VERCEL_ENV: "production",
-      DATABASE_URL: "postgres://example",
+      NASAQ_PRIMARY_DATABASE_URL: "postgres://example",
     });
     assert.equal(verdict.allowed, true);
   });

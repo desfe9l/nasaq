@@ -10,7 +10,7 @@
  *   · `./r2.ts`        — Cloudflare R2 (S3-compatible) object storage. The
  *                        deployment's durable, private backend; independent of
  *                        the application database.
- *   · `./postgres.ts`  — Postgres (Vercel Postgres/self-hosted/PGLite). An
+ *   · `./postgres.ts`  — Postgres (Vercel-managed PostgreSQL/self-hosted/PGLite). An
  *                        OPTIONAL backend for environments that already have a
  *                        database; never required for authentication to work.
  *   · `./file.ts`      — a local directory. Development and tests only; it is

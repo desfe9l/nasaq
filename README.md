@@ -15,7 +15,7 @@ npm run dev
 
 | الأمر | الغرض |
 |---|---|
-| `npm run build` | بناء الإنتاج ثم ترحيل قاعدة البيانات إن وُجد `DATABASE_URL` |
+| `npm run build` | بناء الإنتاج ثم ترحيل قاعدة البيانات إن وُجد `NASAQ_PRIMARY_DATABASE_URL` |
 | `npm run typecheck` | فحص الأنواع |
 | `npm test` | اختبارات المحرر والحساب |
 | `npm run check:deploy` | يتأكد أن بناء Vercel يثبت أدوات Vite ولا يُعامَل المستودع كـ workspace ناقص |

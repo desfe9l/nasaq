@@ -5,7 +5,7 @@
  *
  * The production recovery has to run where the production configuration lives:
  * the deployment's own `process.env`. The operator CLI (`npm run migrate:owner`
- * and the verification scripts) needs the same `DATABASE_URL`, R2 trio and
+ * and the verification scripts) needs the same `NASAQ_PRIMARY_DATABASE_URL`, R2 trio and
  * Keygen token handed to it from outside — which is exactly what a runner
  * without the deployment's configuration cannot do. This module lets the
  * DEPLOYMENT run the identical guarded operations in-process and answer with
@@ -25,7 +25,7 @@
  *
  *   1. `VERCEL_ENV` must be exactly `production` — a Preview deployment, a
  *      local dev server or a bare runner refuses before doing anything;
- *   2. `DATABASE_URL` must be present — the operation refuses to run against
+ *   2. `NASAQ_PRIMARY_DATABASE_URL` must be present — the operation refuses to run against
  *      anything but the deployment's managed Postgres;
  *   3. the identity store must answer — orphans and live accounts cannot be
  *      told apart otherwise, and the reconciliation refuses to guess.
@@ -156,7 +156,7 @@ export function ownerOpsRuntimeVerdict(
       error: "This operation runs on the Vercel Production deployment only. Nothing was read or written.",
     };
   }
-  if (!(env.DATABASE_URL ?? "").trim()) {
+  if (!(env.NASAQ_PRIMARY_DATABASE_URL ?? "").trim()) {
     return {
       allowed: false,
       status: 503,

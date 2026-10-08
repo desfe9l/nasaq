@@ -15,7 +15,7 @@
  *     operation. Authentication does not depend on the database;
  *   · it only ever writes the columns the legacy table owns, keyed by the same
  *     account id, so it can neither create nor resolve a session;
- *   · it is skipped entirely when `DATABASE_URL` is absent, which is the default
+ *   · it is skipped entirely when `NASAQ_PRIMARY_DATABASE_URL` is absent, which is the default
  *     deployment shape here.
  *
  * When the database is unavailable the projection lags; accounts still exist and
@@ -37,7 +37,7 @@ function warnOnce(error: unknown): void {
 
 /** Project (insert or update) one account into `"user"`. Never throws. */
 export async function mirrorUserToDatabase(user: StoredUser): Promise<void> {
-  if (!process.env.DATABASE_URL?.trim()) return;
+  if (!process.env.NASAQ_PRIMARY_DATABASE_URL?.trim()) return;
   try {
     const { getSql } = await import("@/lib/db");
     const sql = await getSql();

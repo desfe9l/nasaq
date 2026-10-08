@@ -37,8 +37,8 @@ they are injected, not configured.
 | Variable | Read by | If it is missing |
 | --- | --- | --- |
 | `VITE_AUTH_ENABLED` | `src/lib/auth/config.ts`, `src/lib/auth/client.ts` | Defaults to `true`. Setting it to `false` disables sign-in entirely; with durable identity storage also set, every authenticated server function rejects (fail closed) instead of sharing one dev user across real data. |
-| **Identity storage — `R2_ACCOUNT_ID` (or `R2_ENDPOINT`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`** | `src/lib/auth/store/` | **Blocking for sign-in only.** Accounts and sessions live in this app's own object storage under the private `_nasaq-auth/` prefix. With **no R2 and no `DATABASE_URL`**, every page still renders but sign-in answers `503 AUTH_STORE_UNAVAILABLE` with the missing variable NAMES in the log (`auth never falls back to process memory`). `R2_BUCKET_NAME` defaults to the configured bucket; the same credentials already serve the editor's cloud library, so no new service is needed. |
-| `DATABASE_URL` | `src/lib/db.ts`, `src/lib/auth/store/status.ts`, `scripts/migrate.mjs` | **No longer required for sign-in.** It serves the app's own data (licences, projects, requests, admin) and stands in as the identity store when R2 is not configured. Without it, database-backed features fail closed with a clear message instead of pretending to persist, and sign-in falls back to R2. Migrations in `migrations/` apply automatically during `npm run build`; a database that is unreachable or over quota **no longer fails the deploy** — the log says so and the rest of the app ships. |
+| **Identity storage — `R2_ACCOUNT_ID` (or `R2_ENDPOINT`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`** | `src/lib/auth/store/` | **Blocking for sign-in only.** Accounts and sessions live in this app's own object storage under the private `_nasaq-auth/` prefix. With **no R2 and no `NASAQ_PRIMARY_DATABASE_URL`**, every page still renders but sign-in answers `503 AUTH_STORE_UNAVAILABLE` with the missing variable NAMES in the log (`auth never falls back to process memory`). `R2_BUCKET_NAME` defaults to the configured bucket; the same credentials already serve the editor's cloud library, so no new service is needed. |
+| `NASAQ_PRIMARY_DATABASE_URL` | `src/lib/db.ts`, `src/lib/auth/store/status.ts`, `scripts/migrate.mjs` | **No longer required for sign-in.** It serves the app's own data (licences, projects, requests, admin) and stands in as the identity store when R2 is not configured. Without it, database-backed features fail closed with a clear message instead of pretending to persist, and sign-in falls back to R2. Migrations in `migrations/` apply automatically during `npm run build`; a database that is unreachable or over quota **no longer fails the deploy** — the log says so and the rest of the app ships. |
 | `BETTER_AUTH_URL` | `src/lib/auth/config.ts` | Not fatal — the auth service derives the origin per request from the (proxied) host, validated against the same allowlist as trusted origins. Set it to the canonical `https://` origin so the Google OAuth redirect URI and absolute links are stable. A non-https value on a deployment is a blocking error: `__Host-` session cookies are rejected over plain http. |
 | `BETTER_AUTH_SECRET` | `src/lib/auth/config.ts`, `src/lib/owner/setup.server.ts` | **Ignored, and no longer needed.** Sessions are opaque 256-bit tokens whose SHA-256 is stored in the identity store — there is no cookie signature to forge and no per-instance state to keep in sync. A deployment that still sets it gets an explicit warning that it does nothing instead of assuming it protects something. Do NOT treat its absence as a misconfiguration. |
 
@@ -59,7 +59,7 @@ None. `npm run dev` works with no `.env` at all:
   HTTP end-to-end check (`npm run test:auth:e2e`) exercises.
 
 `npm run preview` serves the built output with `VERCEL=1` set, i.e. as a
-deployed runtime: with no R2 and no `DATABASE_URL` it deliberately refuses
+deployed runtime: with no R2 and no `NASAQ_PRIMARY_DATABASE_URL` it deliberately refuses
 sign-in (503) instead of pretending a read-only, per-invocation filesystem is
 storage. Use the dev server (or configure a store) to exercise sign-in.
 
@@ -67,7 +67,7 @@ Useful for local work, none required:
 
 | Variable | Effect |
 | --- | --- |
-| `DATABASE_URL` | Runs local dev against real Postgres instead of PGLite. |
+| `NASAQ_PRIMARY_DATABASE_URL` | Runs local dev against real Postgres instead of PGLite. |
 | `R2_*` | Runs local dev against real object storage for both assets and identity. |
 | `GEMINI_API_KEY` | Turns the real AI surfaces on locally (see §3). Without it every AI call answers `not_configured` — clearly, never with fake content. |
 
@@ -100,7 +100,7 @@ explains what is needed) instead of failing obscurely.
 
 Never exposed to the browser, never logged, never committed:
 
-`DATABASE_URL`, `GOOGLE_CLIENT_SECRET`, `GEMINI_API_KEY`,
+`NASAQ_PRIMARY_DATABASE_URL`, `SOURCE_DATABASE_URL` (cutover only), `GOOGLE_CLIENT_SECRET`, `GEMINI_API_KEY`,
 `GUMROAD_ACCESS_TOKEN`, `KEYGEN_API_TOKEN`, `KEYGEN_PUBLIC_KEY`,
 `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `GROK_CONNECTOR_ACCESS_TOKEN`,
 `NASAQ_COMPAT_KEY` (sample key for `scripts/license-compat-check.mjs`).

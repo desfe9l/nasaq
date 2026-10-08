@@ -3,10 +3,10 @@
  * Deploy-time database migrator (node-postgres, `pg`).
  *
  * Runs during `npm run build` — on every Vercel deploy — applying pending files
- * in ../migrations to DATABASE_URL. Each file is applied in one transaction and
+ * in ../migrations to NASAQ_PRIMARY_DATABASE_URL. Each file is applied in one transaction and
  * recorded in a `_migrations` table, so it runs once and is safe to re-run.
  *
- * No DATABASE_URL (local / preview builds) -> skip; the PGLite fallback applies
+ * No NASAQ_PRIMARY_DATABASE_URL (local / preview builds) -> skip; the PGLite fallback applies
  * the same files at startup instead (see src/lib/db.ts).
  */
 import { readdir, readFile } from "node:fs/promises";
@@ -32,10 +32,16 @@ function normalizeDatabaseUrl(connectionString) {
   return trimmed;
 }
 
-const databaseUrl = normalizeDatabaseUrl(process.env.DATABASE_URL);
+const databaseUrl = normalizeDatabaseUrl(process.env.NASAQ_PRIMARY_DATABASE_URL);
 if (!databaseUrl) {
+  if (process.env.VERCEL === "1" || process.env.NASAQ_STRICT_ENV === "1") {
+    console.error(
+      "[migrate] NASAQ_PRIMARY_DATABASE_URL is required on a deployed runtime; refusing to ship without the primary database.",
+    );
+    process.exit(1);
+  }
   console.log(
-    "[migrate] DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",
+    "[migrate] NASAQ_PRIMARY_DATABASE_URL not set — skipping (the PGLite fallback migrates itself).",
   );
   process.exit(0);
 }
@@ -101,8 +107,7 @@ async function main() {
 }
 
 /**
- * SQLSTATEs and network codes that mean "the database could not be reached or
- * has no room", as opposed to "this migration is wrong".
+ * SQLSTATEs and network codes that identify an unavailable primary database.
  *
  * Connection exceptions (class 08), resource exhaustion (53xxx), lock/connect
  * timeouts, and the usual socket errors all fall here.
@@ -133,16 +138,13 @@ main().catch((err) => {
     .join("");
 
   if (isInfrastructureFailure(err)) {
-    // The database is unreachable or over quota — a condition the deploy cannot
-    // fix, and one that must not take the whole site down with it. Every file is
-    // applied in its own transaction, so the schema is exactly as consistent as
-    // it was before this run; nothing is recorded as applied. The build
-    // continues, LOUDLY, and the pending file is picked up by the next deploy
-    // (or by `npm run db:migrate`) once the database is back.
-    console.error("[migrate] WARNING: the database is unreachable or out of quota — continuing the deploy WITHOUT applying migrations.");
+    // A deployed bundle must never reach traffic with an unverified schema.
+    // Each file is transactional, so a failed run leaves the target consistent;
+    // the operator can retry after fixing the independent provider resource.
+    console.error("[migrate] ERROR: the primary database is unavailable; deployment is blocked and no writes were accepted.");
     console.error(detail + context);
-    console.error("[migrate] Run `DATABASE_URL=… npm run db:migrate` once the database is reachable.");
-    process.exit(0);
+    console.error("[migrate] Run `NASAQ_PRIMARY_DATABASE_URL=… npm run db:migrate` after restoring the primary resource.");
+    process.exit(1);
   }
 
   console.error("[migrate] failed:" + context.replace(/^\n/, " "));

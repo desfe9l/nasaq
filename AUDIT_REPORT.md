@@ -4,7 +4,7 @@
 - TanStack Start framework with React 19, Tailwind v4, TypeScript
 - Existing editor architecture (canvas, selection, multi-select, layers, shapes, text, images, tables, templates, export)
 - IndexedDB storage (DB_VERSION=3) with localStorage fallback for projects/assets/settings
-- PGLite (local) / PostgreSQL (production via DATABASE_URL) database architecture
+- PGLite (local) / PostgreSQL (production via NASAQ_PRIMARY_DATABASE_URL) database architecture
 - better-auth authentication pre-wired (client, server, middleware, gates)
 - Office export writers: PPTX (pptxgenjs) and DOCX (docx) with editable content preservation
 - PNG/JPG/PDF/SVG export via html2canvas + jspdf
@@ -26,7 +26,7 @@
 - Startup script (`startup.sh`) preserved and verified
 
 ## C. Security audit findings (verified)
-- `.env.example` exists but does NOT contain secrets (only commented DATABASE_URL, LICENSE_ISSUER_URL, etc.)
+- `.env.example` exists but does NOT contain secrets (only commented NASAQ_PRIMARY_DATABASE_URL, LICENSE_ISSUER_URL, etc.)
 - `.gitignore` protects `.env` files
 - No hardcoded passwords or API keys found in source
 - Auth uses `better-auth` (not a mock frontend-only system)
@@ -86,7 +86,7 @@ New: `WorkspaceOverlays.tsx`, `BrandKitPage.tsx`, `docs/` directory
 - Backward compatibility maintained (`migrateLegacyProject` exists in storage)
 
 ## J. Environment variables required
-- `DATABASE_URL` (optional — falls back to PGLite if empty)
+- `NASAQ_PRIMARY_DATABASE_URL` (optional — falls back to PGLite if empty)
 - `AUTH_SECRET` (for better-auth)
 - `GROK_PROJECT_ID` (for workspace preview vs deployed split)
 - No `NEXT_PUBLIC_*` or `VITE_*` secrets exposed
@@ -118,14 +118,14 @@ New: `WorkspaceOverlays.tsx`, `BrandKitPage.tsx`, `docs/` directory
 ## N. Exact deployment steps
 1. `git clone` (private repo)
 2. `npm install`
-3. Configure `.env` (optional `DATABASE_URL`, `AUTH_SECRET`)
+3. Configure `.env` (optional `NASAQ_PRIMARY_DATABASE_URL`, `AUTH_SECRET`)
 4. `npm run build` (builds + runs migrations)
 5. `npm run preview:restart` (local production preview on 127.0.0.1:8081)
 6. Deploy to Vercel (existing `vite.config.ts` + `tanstackStart` plugin)
 7. Set production environment variables in Vercel dashboard (not in source)
 
 ## O. Action still required from owner
-- Confirm `DATABASE_URL` for production PostgreSQL database (optional — PGLite works locally)
+- Confirm `NASAQ_PRIMARY_DATABASE_URL` for production PostgreSQL database (optional — PGLite works locally)
 - Confirm `AUTH_SECRET` for production authentication
 - Confirm `GROK_PROJECT_ID` for deployed environment detection
 - Confirm admin account setup (existing auth architecture supports this)
