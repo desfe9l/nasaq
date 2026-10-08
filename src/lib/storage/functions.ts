@@ -17,6 +17,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
 import { getSql } from "@/lib/db";
 import { uid } from "@/lib/utils";
+import { getClientIp } from "@/lib/auth/request-ip.server";
+import { checkOperationLimit, withinStorageQuota } from "@/lib/policy/limits";
 import {
   buildStorageObjectKey,
   isAllowedStorageContentType,
@@ -34,6 +36,8 @@ export type StorageFailureReason =
   | "not_configured"
   | "rejected"
   | "too_large"
+  | "quota_exceeded"
+  | "rate_limited"
   | "not_found"
   | "forbidden"
   | "upload_failed";
@@ -50,6 +54,19 @@ async function hasCloudStorageAccess(context: {
   const { getAuthorizationContext } = await import("@/lib/auth/authorization.server");
   const access = await getAuthorizationContext({ id: context.userId, email: context.userEmail ?? null, emailVerified: context.userEmailVerified === true });
   return access.isOwner || access.isAdmin || Boolean(access.license);
+}
+
+/**
+ * Application-owned storage budget (`@/lib/policy/limits`). Every handler below
+ * consults it before doing work: reads bound the signed-URL/byte traffic, and
+ * writes bound the object-storage + database traffic. A refusal is reported
+ * with the `rate_limited` reason, never as a storage error.
+ */
+function storageBudgetOk(
+  op: "storage:upload" | "storage:mutation" | "storage:read",
+  userId: string,
+): boolean {
+  return checkOperationLimit(op, userId, getClientIp()).allowed;
 }
 
 type AssetRow = {
@@ -147,6 +164,12 @@ export const uploadEditorAsset = createServerFn({ method: "POST" })
   )
   .handler(async ({ context, data }): Promise<UploadAssetResult> => {
     if (!(await hasCloudStorageAccess(context))) return { ok: false, reason: "forbidden" };
+    // Application-owned budget (`@/lib/policy/limits`): an upload writes bytes
+    // to object storage AND a database row, so frequency is bounded per user
+    // and per address before any work is done.
+    if (!checkOperationLimit("storage:upload", context.userId, getClientIp()).allowed) {
+      return { ok: false, reason: "rate_limited" };
+    }
     const { getObjectStorage } = await import("./r2.server");
     const storage = getObjectStorage();
     if (!storage) return { ok: false, reason: "not_configured" };
@@ -160,6 +183,16 @@ export const uploadEditorAsset = createServerFn({ method: "POST" })
     }
 
     const sql = await getSql();
+    // Per-ACCOUNT storage quota — an application limit on total bytes, checked
+    // BEFORE a single byte is written. Distinct from the per-object ceiling
+    // above (one file) and from the per-minute rate (frequency): this bounds
+    // how much one account can accumulate in the bucket.
+    const { ownerStorageUsage } = await import("./owner-storage.server");
+    const usage = await ownerStorageUsage(sql, context.userId);
+    if (!withinStorageQuota(usage.bytes, bytes.byteLength)) {
+      return { ok: false, reason: "quota_exceeded" };
+    }
+
     // The caller may only write under a project it owns. First use claims the
     // id; a project already owned by another account is refused outright.
     const { resolveOwnedProjectSlot } = await import("./ownership.server");
@@ -237,6 +270,9 @@ export const getStorageUsage = createServerFn({ method: "GET" })
       if (!(await hasCloudStorageAccess(context))) return empty;
       const { objectStorageConfigured } = await import("./r2.server");
       const configured = objectStorageConfigured();
+      // A polling meter must not become a request loop: same read budget. The
+      // configuration fact is still reported — only the usage read is refused.
+      if (!storageBudgetOk("storage:read", context.userId)) return { ...empty, configured };
       try {
         const sql = await getSql();
         const { ownerStorageUsage } = await import("./owner-storage.server");
@@ -260,6 +296,7 @@ export const listStoredAssets = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<StoredAsset[]> => {
     if (!(await hasCloudStorageAccess(context))) return [];
+    if (!storageBudgetOk("storage:read", context.userId)) return [];
     const { objectStorageConfigured } = await import("./r2.server");
     if (!objectStorageConfigured()) return [];
     const sql = await getSql();
@@ -292,6 +329,7 @@ export const getStoredAssetUrl = createServerFn({ method: "POST" })
     { ok: true; url: string; expiresInSeconds: number } | { ok: false; reason: StorageFailureReason }
   > => {
     if (!(await hasCloudStorageAccess(context))) return { ok: false, reason: "not_found" };
+    if (!storageBudgetOk("storage:read", context.userId)) return { ok: false, reason: "rate_limited" };
     const { getObjectStorage } = await import("./r2.server");
     const storage = getObjectStorage();
     if (!storage) return { ok: false, reason: "not_configured" };
@@ -339,6 +377,7 @@ export const downloadStoredAsset = createServerFn({ method: "POST" })
       | { ok: false; reason: StorageFailureReason }
     > => {
       if (!(await hasCloudStorageAccess(context))) return { ok: false, reason: "not_found" };
+      if (!storageBudgetOk("storage:read", context.userId)) return { ok: false, reason: "rate_limited" };
       const { getObjectStorage } = await import("./r2.server");
       const storage = getObjectStorage();
       if (!storage) return { ok: false, reason: "not_configured" };
@@ -384,6 +423,7 @@ export const deleteStoredAsset = createServerFn({ method: "POST" })
   })
   .handler(async ({ context, data }): Promise<{ ok: boolean }> => {
     if (!(await hasCloudStorageAccess(context))) return { ok: false };
+    if (!storageBudgetOk("storage:mutation", context.userId)) return { ok: false };
     const { getObjectStorage } = await import("./r2.server");
     const storage = getObjectStorage();
     if (!storage) return { ok: false };
@@ -408,6 +448,7 @@ export const deleteStoredAsset = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
   .handler(async ({ context }): Promise<{ payload: LibraryCatalog | null; updatedAt: string | null }> => {
     if (!(await hasCloudStorageAccess(context))) return { payload: null, updatedAt: null };
+    if (!storageBudgetOk("storage:read", context.userId)) return { payload: null, updatedAt: null };
     const sql = await getSql();
     const rows = await sql<{ payload: unknown; updated_at: string | Date }>`
       select payload, updated_at from library_catalog
@@ -430,8 +471,9 @@ export const saveLibraryCatalog = createServerFn({ method: "POST" })
     if (!payload || typeof payload !== "object") throw new Error("بيانات المكتبة غير صالحة");
     return { payload: normalizeCatalog(payload) };
   })
-  .handler(async ({ context, data }): Promise<{ ok: true } | { ok: false; reason: "rejected" }> => {
+  .handler(async ({ context, data }): Promise<{ ok: true } | { ok: false; reason: "rejected" | "rate_limited" }> => {
     if (!(await hasCloudStorageAccess(context))) return { ok: false, reason: "rejected" };
+    if (!storageBudgetOk("storage:mutation", context.userId)) return { ok: false, reason: "rate_limited" };
     const sql = await getSql();
     const body = JSON.stringify(data.payload);
     await sql`
@@ -465,6 +507,9 @@ export const copyStoredAssets = createServerFn({ method: "POST" })
     copies: Array<{ sourceId: string; asset: StoredAsset }>;
   }> => {
     if (!(await hasCloudStorageAccess(context))) return { copies: [] };
+    // A copy WRITES bytes to the bucket: it spends the upload budget, not the
+    // read budget.
+    if (!storageBudgetOk("storage:upload", context.userId)) return { copies: [] };
     const { getObjectStorage } = await import("./r2.server");
     const storage = getObjectStorage();
     if (!storage) return { copies: [] };
@@ -528,6 +573,7 @@ export const downloadStoredAssets = createServerFn({ method: "POST" })
     files: Array<{ id: string; dataUrl: string; asset: StoredAsset }>;
   }> => {
     if (!(await hasCloudStorageAccess(context))) return { files: [] };
+    if (!storageBudgetOk("storage:read", context.userId)) return { files: [] };
     const { getObjectStorage } = await import("./r2.server");
     const storage = getObjectStorage();
     if (!storage) return { files: [] };

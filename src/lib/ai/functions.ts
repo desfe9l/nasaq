@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { checkRateLimit } from "@/lib/license/rate-limit";
+import { checkAppSafetyLimit, checkOperationLimit } from "@/lib/policy/limits";
 import {
   normalizeDraftInput,
   validDraftInput,
@@ -81,11 +81,12 @@ export const generateReportDraftFn = createServerFn({ method: "POST" })
       };
     }
 
-    if (
-      !access.isAdmin &&
-      (!checkRateLimit("ai:report:user", context.userId, 8, 60_000) ||
-        !checkRateLimit("ai:report:ip", await clientIdentifier(), 16, 60_000))
-    ) {
+    // Application-owned budget (`@/lib/policy/limits`). Admins are exempt from
+    // the per-user budget, but the IP safety ceiling still bounds them.
+    const verdict = access.isAdmin
+      ? checkAppSafetyLimit("ai:report", await clientIdentifier())
+      : checkOperationLimit("ai:report", context.userId, await clientIdentifier());
+    if (!verdict.allowed) {
       return {
         ok: false,
         code: "rate_limited",
@@ -151,11 +152,10 @@ export const generateDesignBriefFn = createServerFn({ method: "POST" })
     } catch {
       return { ok: false, code: "license_required", message: "تحتاج هذه الميزة إلى ترخيص نشط." };
     }
-    if (
-      !access.isAdmin &&
-      (!checkRateLimit("ai:design:user", context.userId, 6, 60_000) ||
-        !checkRateLimit("ai:design:ip", await clientIdentifier(), 12, 60_000))
-    ) {
+    const designVerdict = access.isAdmin
+      ? checkAppSafetyLimit("ai:design", await clientIdentifier())
+      : checkOperationLimit("ai:design", context.userId, await clientIdentifier());
+    if (!designVerdict.allowed) {
       return { ok: false, code: "rate_limited", message: "تم الوصول إلى حد المحاولات المؤقت. حاول بعد دقيقة." };
     }
     try {
@@ -215,11 +215,10 @@ export const transformSelectionFn = createServerFn({ method: "POST" })
       };
     }
 
-    if (
-      !access.isAdmin &&
-      (!checkRateLimit("ai:selection:user", context.userId, 20, 60_000) ||
-        !checkRateLimit("ai:selection:ip", await clientIdentifier(), 40, 60_000))
-    ) {
+    const selectionVerdict = access.isAdmin
+      ? checkAppSafetyLimit("ai:selection", await clientIdentifier())
+      : checkOperationLimit("ai:selection", context.userId, await clientIdentifier());
+    if (!selectionVerdict.allowed) {
       return {
         ok: false,
         code: "rate_limited",

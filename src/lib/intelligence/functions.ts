@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { getClientIp } from "@/lib/auth/request-ip.server";
+import { checkAppSafetyLimit } from "@/lib/policy/limits";
 import type { LanguageNoteRequest, LanguageNoteResult } from "./provider";
 
 interface NoteInput extends LanguageNoteRequest {
@@ -31,6 +33,12 @@ export const intelligenceNoteFn = createServerFn({ method: "POST" })
     });
     if (!allowed) {
       return { ok: false, code: "unauthorized", note: "" };
+    }
+    // Admin-only, but it spends real provider money: the application safety
+    // ceiling applies to admins too, so a compromised admin session cannot
+    // drain the provider budget (`@/lib/policy/limits`).
+    if (!checkAppSafetyLimit("ai:admin-note", getClientIp()).allowed) {
+      return { ok: false, code: "rate_limited", note: "تم الوصول إلى حد الحماية المؤقت. حاول بعد دقيقة." };
     }
     try {
       const { requestLanguageNote, requestVisualNote } = await import("./provider.server");

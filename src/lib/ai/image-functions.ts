@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { checkRateLimit } from "@/lib/license/rate-limit";
+import { checkAppSafetyLimit, checkOperationLimit } from "@/lib/policy/limits";
 import {
   normalizeImageAnalysisInput,
   type ImageAnalysisInput,
@@ -68,11 +68,10 @@ export const analyzeImageFn = createServerFn({ method: "POST" })
         message: "تحتاج هذه الميزة إلى ترخيص نشط.",
       };
     }
-    if (
-      !access.isAdmin &&
-      (!checkRateLimit("ai:image:user", context.userId, 4, 60_000) ||
-        !checkRateLimit("ai:image:ip", await clientIdentifier(), 8, 60_000))
-    ) {
+    const verdict = access.isAdmin
+      ? checkAppSafetyLimit("ai:image", await clientIdentifier())
+      : checkOperationLimit("ai:image", context.userId, await clientIdentifier());
+    if (!verdict.allowed) {
       return {
         ok: false,
         code: "rate_limited",

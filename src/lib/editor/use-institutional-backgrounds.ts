@@ -1,46 +1,131 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { listInstitutionalBackgroundsFn } from "@/lib/institutional/functions";
 import {
   INSTITUTIONAL_CHANGED,
   type InstitutionalBackground,
 } from "./institutional-backgrounds";
 
-export function useInstitutionalBackgrounds() {
-  const [items, setItems] = useState<InstitutionalBackground[]>([]);
-  const [canManage, setCanManage] = useState(false);
-  const [updatedAt, setUpdatedAt] = useState(0);
-  const [error, setError] = useState<string | null>(null);
+/**
+ * Shared catalog for every panel that shows institutional backgrounds.
+ *
+ * WHY THIS IS A SINGLETON
+ *
+ * The hook is mounted by SEVERAL components at once (the editor's asset library
+ * AND its page-background panel, plus the admin panel). The naive version gave
+ * each mount its own 15-second interval and its own in-flight request, so one
+ * editor session produced two or three identical server calls — each hitting
+ * the database — every fifteen seconds, forever. That is exactly the
+ * duplicate-request storm the application must not create: repeated mounts,
+ * hydration and navigation must not multiply traffic.
+ *
+ * Now: ONE interval, ONE in-flight request, N subscribers. The first mount
+ * starts polling and kicks an initial load; the last unmount stops it. A refresh
+ * already in flight is shared by every caller that arrives while it runs.
+ * (The server side caches the catalog too — `@/lib/institutional/functions` —
+ * so a poll is cheap even if two tabs each keep their own singleton.)
+ */
 
-  const refresh = useCallback(async () => {
+type Snapshot = {
+  items: InstitutionalBackground[];
+  canManage: boolean;
+  updatedAt: number;
+  error: string | null;
+};
+
+const INITIAL: Snapshot = { items: [], canManage: false, updatedAt: 0, error: null };
+
+let snapshot: Snapshot = INITIAL;
+const listeners = new Set<() => void>();
+let inflight: Promise<void> | null = null;
+let timer: ReturnType<typeof setInterval> | null = null;
+let mountedCount = 0;
+
+const POLL_MS = 15_000;
+
+function publish(next: Snapshot): void {
+  // Replace, never mutate: useSyncExternalStore compares by reference.
+  snapshot = next;
+  for (const listener of listeners) listener();
+}
+
+async function refreshAll(): Promise<void> {
+  // Deduplicate: a refresh already running is shared, not restarted.
+  if (inflight) return inflight;
+  inflight = (async () => {
     try {
       const result = await listInstitutionalBackgroundsFn();
       if (!result.ok) {
-        setError(result.error);
-        setItems([]);
-        setCanManage(false);
+        publish({ items: [], canManage: false, updatedAt: 0, error: result.error });
         return;
       }
-      setError(null);
-      setCanManage(result.canManage);
-      setUpdatedAt(result.updatedAt);
-      setItems(result.items);
+      publish({
+        items: result.items,
+        canManage: result.canManage,
+        updatedAt: result.updatedAt,
+        error: null,
+      });
     } catch {
-      setError("تعذر قراءة خلفيات مؤسسية");
+      publish({ items: [], canManage: false, updatedAt: 0, error: "تعذر قراءة خلفيات مؤسسية" });
+    } finally {
+      inflight = null;
     }
-  }, []);
+  })();
+  return inflight;
+}
+
+function startPolling(): void {
+  if (timer !== null) return;
+  timer = setInterval(() => void refreshAll(), POLL_MS);
+}
+
+function stopPolling(): void {
+  if (timer === null) return;
+  clearInterval(timer);
+  timer = null;
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function getSnapshot(): Snapshot {
+  return snapshot;
+}
+
+function getServerSnapshot(): Snapshot {
+  return INITIAL;
+}
+
+export function useInstitutionalBackgrounds() {
+  const state = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   useEffect(() => {
-    void refresh();
-    const onChange = () => void refresh();
+    mountedCount += 1;
+    startPolling();
+    // First mount (or a remount) refreshes immediately; concurrent mounts share
+    // the single in-flight request above.
+    void refreshAll();
+    const onChange = () => void refreshAll();
     window.addEventListener(INSTITUTIONAL_CHANGED, onChange);
-    const timer = window.setInterval(() => void refresh(), 15000);
     return () => {
       window.removeEventListener(INSTITUTIONAL_CHANGED, onChange);
-      window.clearInterval(timer);
+      mountedCount = Math.max(0, mountedCount - 1);
+      if (mountedCount === 0) stopPolling();
     };
-  }, [refresh]);
+  }, []);
 
-  return { items, canManage, updatedAt, error, refresh };
+  const refresh = useCallback(() => refreshAll(), []);
+
+  return {
+    items: state.items,
+    canManage: state.canManage,
+    updatedAt: state.updatedAt,
+    error: state.error,
+    refresh,
+  };
 }
 
 export function notifyInstitutionalBackgrounds() {
@@ -78,9 +163,8 @@ export async function readBackgroundFile(file: File): Promise<{ src: string; w: 
       ctx.drawImage(image, 0, 0, w, h);
       resolve({ src: canvas.toDataURL("image/jpeg", 0.86), w, h });
     };
-    image.onerror = () => reject(new Error("تعذر تجهيز الصورة"));
+    image.onerror = () => reject(new Error("تعذر فتح الصورة"));
     image.src = src;
   });
-  if (sized.src.length > 2_400_000) throw new Error("الصورة أكبر من الحد بعد الضغط.");
   return sized;
 }
