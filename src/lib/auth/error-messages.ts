@@ -80,18 +80,18 @@ export function authErrorMessage(
     case "INVALID_TOKEN":
       return "انتهت الجلسة. سجّل الدخول من جديد.";
     case "DATABASE_QUOTA_EXCEEDED":
-      return "خدمة قاعدة البيانات وصلت للحد الأقصى للحصة (Neon Quota Exceeded). تواصل مع إدارة المنصة لترقية الخطة.";
+      return "قاعدة البيانات وصلت للحد الأقصى للحصة (Postgres 53000 Quota Exceeded). تواصل مع إدارة المنصة لترقية خطة قاعدة البيانات أو انتظار دورة الفوترة.";
     case "DATABASE_TOO_MANY_CONNECTIONS":
-      return "قاعدة البيانات تشهد ضغط اتصالات مؤقت. انتظر قليلًا ثم أعد المحاولة.";
+      return "قاعدة البيانات تشهد ضغط اتصالات مؤقت (Postgres 53300). انتظر قليلًا ثم أعد المحاولة.";
     case "FAILED_TO_CREATE_USER":
     case "FAILED_TO_CREATE_SESSION":
     case "FAILED_TO_GET_SESSION":
     case "FAILED_TO_UPDATE_USER":
       if (/quota|53000/i.test(message)) {
-        return "خدمة قاعدة البيانات وصلت للحد الأقصى للحصة (Neon Quota Exceeded). تواصل مع إدارة المنصة لترقية الخطة.";
+        return "قاعدة البيانات وصلت للحد الأقصى للحصة (Postgres 53000 Quota Exceeded). تواصل مع إدارة المنصة لترقية خطة قاعدة البيانات أو انتظار دورة الفوترة.";
       }
       if (/too many|53300/i.test(message)) {
-        return "قاعدة البيانات تشهد ضغط اتصالات مؤقت. انتظر قليلًا ثم أعد المحاولة.";
+        return "قاعدة البيانات تشهد ضغط اتصالات مؤقت (Postgres 53300). انتظر قليلًا ثم أعد المحاولة.";
       }
       return "تعذّر إكمال العملية في الخادم. أعد المحاولة بعد قليل؛ وإذا تكرر الخطأ تواصل مع الدعم.";
     case "PROVIDER_NOT_FOUND":
@@ -106,10 +106,10 @@ export function authErrorMessage(
 
   // Fallbacks for responses without a code. Compared loosely and never echoed.
   if (/quota|53000/i.test(message)) {
-    return "خدمة قاعدة البيانات وصلت للحد الأقصى للحصة (Neon Quota Exceeded). تواصل مع إدارة المنصة لترقية الخطة.";
+    return "قاعدة البيانات وصلت للحد الأقصى للحصة (Postgres 53000 Quota Exceeded). تواصل مع إدارة المنصة لترقية خطة قاعدة البيانات أو انتظار دورة الفوترة.";
   }
   if (/too many connections|too many clients|connection slots|53300/i.test(message)) {
-    return "قاعدة البيانات تشهد ضغط اتصالات مؤقت. انتظر قليلًا ثم أعد المحاولة.";
+    return "قاعدة البيانات تشهد ضغط اتصالات مؤقت (Postgres 53300). انتظر قليلًا ثم أعد المحاولة.";
   }
   if (/user already exists/i.test(message)) {
     return "هذا البريد الإلكتروني مسجّل بالفعل. سجّل الدخول بدلًا من إنشاء حساب جديد.";

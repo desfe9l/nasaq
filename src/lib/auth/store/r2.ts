@@ -4,7 +4,7 @@
  *
  * WHY OBJECT STORAGE AND NOT THE DATABASE: a session must survive a request on
  * any serverless instance, and login must keep working when the application
- * database (Neon/Postgres) is over quota, suspended or being migrated. The
+ * database (Postgres) is over quota, suspended or being migrated. The
  * bucket is already the app's private durable store for editor assets; identity
  * simply gets its own namespace inside it.
  *

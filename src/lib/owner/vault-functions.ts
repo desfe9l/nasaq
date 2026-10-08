@@ -828,7 +828,7 @@ async function findings(
       severity: "high",
       title: "قاعدة الإنتاج غير مثبتة في runtime الحالي",
       detail: "DATABASE_URL غير مهيأ؛ النشر قد يستخدم fallback غير دائم أو يفشل مع العمليات الموثقة.",
-      action: "اربط قاعدة Neon production واختبر migrations قبل فتح الاستخدام العام.",
+      action: "اربط قاعدة PostgreSQL production واختبر migrations قبل فتح الاستخدام العام.",
     });
   }
   /*

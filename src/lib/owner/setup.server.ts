@@ -232,7 +232,7 @@ export function safeDatabaseReason(error: unknown): string {
   const raw = error instanceof Error ? error.message.toLowerCase() : "";
 
   if (errCode === "53000" || raw.includes("quota") || raw.includes("exceeded the quota")) {
-    return "تم تجاوز حد الحصة في Neon (Postgres 53000 Quota Exceeded) — تواصل مع إدارة المشروع لترقية خطة Neon أو انتظار دورة الفوترة.";
+    return "تم تجاوز حد الحصة في قاعدة البيانات (Postgres 53000 Quota Exceeded) — تواصل مع إدارة المشروع لترقية خطة قاعدة البيانات أو انتظار دورة الفوترة.";
   }
   if (errCode === "53300" || raw.includes("too many clients") || raw.includes("too many connections")) {
     return "تم استنزاف عدد الاتصالات المسموح بها في قاعدة البيانات (Postgres 53300) — تحقق من استخدام endpoint المجمّع (-pooler).";

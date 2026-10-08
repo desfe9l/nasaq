@@ -4,7 +4,7 @@
  * Authentication does not need a database to work: the deployment's durable
  * backend is the object store (`./r2.ts`). This adapter exists so the SAME
  * identity contract can be served by a Postgres the project may already have
- * (Neon, Vercel Postgres, a self-hosted instance, or PGLite in development),
+ * (Vercel Postgres, a self-hosted instance, or PGLite in development),
  * and so the storage backend can be switched later without rewriting a line of
  * authentication — which is exactly what the `AuthStore` interface is for.
  *
