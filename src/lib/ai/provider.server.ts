@@ -23,6 +23,7 @@ import {
   type DesignBrief,
   type DesignBriefInput,
 } from "./design-contract.ts";
+import { constitutionSystemAddendum } from "./design-constitution.ts";
 
 type GeminiPart = { text: string } | { inlineData: { mimeType: string; data: string } };
 
@@ -50,6 +51,8 @@ export type GeminiRequest = {
   jsonResponse?: boolean;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** Filled with the model that actually answered. Never contains the API key. */
+  modelSink?: { model: string };
 };
 
 export class GeminiProviderError extends Error {
@@ -63,6 +66,13 @@ export class GeminiProviderError extends Error {
 }
 
 const DEFAULT_MODEL = "gemini-2.5-flash";
+/**
+ * gemini-2.5-flash stays the configured default. Google has been returning
+ * 404 for 2.5 on projects that have not used it before and points new work at
+ * current Flash models. A 404 tries these ids once each; auth, quota and
+ * billing errors do not.
+ */
+export const GEMINI_FALLBACK_MODELS = ["gemini-3.5-flash", "gemini-3.1-flash-lite"] as const;
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 const BLOCKED_FINISH_REASONS = new Set(["BLOCKED", "SAFETY", "RECITATION"]);
 
@@ -77,6 +87,29 @@ function modelName(): string {
 
 export function configuredGeminiModel(): string {
   return modelName();
+}
+
+function candidateModels(explicit?: string): string[] {
+  const primary = explicit ? explicit.replace(/^models\//, "") : modelName();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(primary)) {
+    throw new GeminiProviderError("invalid_model");
+  }
+  const models = [primary];
+  for (const id of GEMINI_FALLBACK_MODELS) {
+    if (!models.includes(id)) models.push(id);
+  }
+  return models;
+}
+
+function generationConfig(request: GeminiRequest, model: string, boost: boolean): Record<string, unknown> {
+  const config: Record<string, unknown> = {
+    temperature: request.temperature ?? 0.2,
+    maxOutputTokens: Math.min(8_192, request.maxOutputTokens * (boost ? 2 : 1)),
+    ...(request.jsonResponse ? { responseMimeType: "application/json" } : {}),
+  };
+  // 2.5 thinking can consume the whole output budget and return an empty body.
+  if (/^gemini-2\.5/.test(model)) config.thinkingConfig = { thinkingBudget: 0 };
+  return config;
 }
 
 function abortError(signal?: AbortSignal): GeminiProviderError {
@@ -196,19 +229,37 @@ async function classifyGeminiError(response: Response): Promise<GeminiProviderEr
 
 /**
  * The only Gemini HTTP boundary in the application. The key is read here, on
- * the server, and provider details never cross this function as raw responses.
+ * the server, sent as a header (never a query parameter), and provider
+ * details never cross this function as raw responses.
  */
 export async function requestGemini(request: GeminiRequest): Promise<string> {
   const apiKey = process.env.GEMINI_API_KEY?.trim();
   if (!apiKey) throw new GeminiProviderError("not_configured");
 
-  const model = request.model ? request.model.replace(/^models\//, "") : modelName();
-  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/.test(model)) {
-    throw new GeminiProviderError("invalid_model");
+  const models = candidateModels(request.model);
+  let lastInvalid: GeminiProviderError | null = null;
+  for (const model of models) {
+    try {
+      const text = await requestGeminiModel(apiKey, model, request);
+      if (request.modelSink) request.modelSink.model = model;
+      return text;
+    } catch (error) {
+      if (error instanceof GeminiProviderError && error.code === "invalid_model") {
+        lastInvalid = error;
+        continue;
+      }
+      throw error;
+    }
   }
+  throw lastInvalid ?? new GeminiProviderError("invalid_model");
+}
+
+async function requestGeminiModel(apiKey: string, model: string, request: GeminiRequest): Promise<string> {
   const timeoutMs = request.timeoutMs ?? 45_000;
   const retry = (await import("@/lib/control-plane/snapshot")).enforcementPlane().services.ai.retry;
   const maxAttempts = retry.maxAttempts;
+  let boost = false;
+  let starvedRetries = 0;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (request.signal?.aborted) throw new GeminiProviderError("provider_aborted");
@@ -225,19 +276,18 @@ export async function requestGemini(request: GeminiRequest): Promise<string> {
       let response: Response;
       try {
         response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
           {
             method: "POST",
             signal: controller.signal,
-            headers: { "content-type": "application/json" },
+            headers: {
+              "content-type": "application/json",
+              "x-goog-api-key": apiKey,
+            },
             body: JSON.stringify({
               systemInstruction: { parts: [{ text: request.system }] },
               contents: [{ role: "user", parts: request.userParts }],
-              generationConfig: {
-                temperature: request.temperature ?? 0.2,
-                maxOutputTokens: request.maxOutputTokens,
-                ...(request.jsonResponse ? { responseMimeType: "application/json" } : {}),
-              },
+              generationConfig: generationConfig(request, model, boost),
             }),
           },
         );
@@ -285,6 +335,12 @@ export async function requestGemini(request: GeminiRequest): Promise<string> {
       } catch {
         throw new GeminiProviderError("provider_error");
       }
+      if (starvedRetries < 1 && outputStarved(payload)) {
+        starvedRetries += 1;
+        boost = true;
+        attempt -= 1;
+        continue;
+      }
       return extractGeminiText(payload);
     } catch (error) {
       if (error instanceof GeminiProviderError) throw error;
@@ -299,6 +355,25 @@ export async function requestGemini(request: GeminiRequest): Promise<string> {
   throw new GeminiProviderError("provider_unavailable");
 }
 
+function outputStarved(payload: unknown): boolean {
+  if (!payload || typeof payload !== "object") return false;
+  const candidate = (payload as {
+    candidates?: Array<{
+      finishReason?: unknown;
+      content?: { parts?: Array<{ text?: unknown; thought?: unknown }> };
+    }>;
+  }).candidates?.[0];
+  if (!candidate) return false;
+  const parts = candidate.content?.parts ?? [];
+  const visible = parts
+    .filter((part) => part.thought !== true)
+    .map((part) => (typeof part.text === "string" ? part.text : ""))
+    .join("")
+    .trim();
+  if (visible) return false;
+  return parts.some((part) => part.thought === true) || candidate.finishReason === "MAX_TOKENS";
+}
+
 /** Extract text while preserving safe, actionable distinctions for callers. */
 export function extractGeminiText(payload: unknown): string {
   if (!payload || typeof payload !== "object") throw new GeminiProviderError("provider_error");
@@ -306,7 +381,7 @@ export function extractGeminiText(payload: unknown): string {
     promptFeedback?: { blockReason?: unknown };
     candidates?: Array<{
       finishReason?: unknown;
-      content?: { parts?: Array<{ text?: unknown }> };
+      content?: { parts?: Array<{ text?: unknown; thought?: unknown }> };
     }>;
   };
   if (root.promptFeedback?.blockReason) throw new GeminiProviderError("provider_blocked");
@@ -316,7 +391,8 @@ export function extractGeminiText(payload: unknown): string {
     throw new GeminiProviderError("provider_blocked");
   }
   const text = candidate.content?.parts
-    ?.map((part) => (typeof part.text === "string" ? part.text : ""))
+    ?.filter((part) => part.thought !== true)
+    .map((part) => (typeof part.text === "string" ? part.text : ""))
     .join("")
     .trim();
   if (!text) throw new GeminiProviderError("provider_empty");
@@ -378,7 +454,10 @@ export async function generateReportDraft(rawInput: ReportDraftInput): Promise<R
   return normalizeDraft(parseProviderJson(text), input.maxSections);
 }
 
-export async function generateDesignBrief(rawInput: DesignBriefInput): Promise<DesignBrief> {
+export async function generateDesignBrief(
+  rawInput: DesignBriefInput,
+  options?: { memoryNotes?: string; modelSink?: { model: string } },
+): Promise<DesignBrief> {
   const input = normalizeDesignBriefInput(rawInput);
   if (!input.prompt) throw new GeminiProviderError("provider_error");
   const text = await requestGemini({
@@ -403,8 +482,10 @@ export async function generateDesignBrief(rawInput: DesignBriefInput): Promise<D
       "Use only the supported NASAQ style, format, and coverStyle values from the user input contract.",
       "The result will be converted into real editable NASAQ text, shape, image, table, line, and group elements; never return SVG or a flattened image.",
       `Generation mode: ${input.mode}. Content density: ${input.contentDensity}. Bilingual requested: ${input.bilingual ? "yes" : "no"}.`,
+      constitutionSystemAddendum(options?.memoryNotes),
     ].join(" "),
     userParts: [{ text: JSON.stringify(input) }],
+    modelSink: options?.modelSink,
   });
   return normalizeDesignBrief(parseProviderJson(text), input);
 }

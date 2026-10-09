@@ -25,7 +25,7 @@
 
 import type { CanvasEl, Page } from "@/lib/editor/model";
 
-export type NasaqAiTab = "selection" | "report" | "image" | "generate";
+export type NasaqAiTab = "selection" | "report" | "image" | "generate" | "twin";
 
 export interface NasaqAiCapability {
   id: NasaqAiTab;
@@ -54,8 +54,13 @@ export const NASAQ_AI_CAPABILITIES: readonly NasaqAiCapability[] = [
   },
   {
     id: "generate",
-    label: "توليد المحتوى",
+    label: "توليد",
     hint: "من محتوى خام إلى مستند نَسَق كامل، عبر خط المنصة نفسه (قياس → تركيب → مراجعة).",
+  },
+  {
+    id: "twin",
+    label: "التوأم",
+    hint: "يفهم الموجز، يطبّق دستور التصميم، وينشئ عناصر قابلة للتعديل مع مراجعة محدودة.",
   },
 ];
 

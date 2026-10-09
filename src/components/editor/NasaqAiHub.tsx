@@ -4,11 +4,13 @@ import {
   FileText,
   Image as ImageIcon,
   Link2,
+  Sparkles,
   TextSelect,
   Wand2,
   X,
 } from "lucide-react";
 import { AiReportPanel } from "./AiReportPanel";
+import { DesignTwinPanel } from "./DesignTwinPanel";
 import { ImageAiTools } from "./ImageAiTools";
 import { SelectionAiActions } from "./SelectionAiActions";
 import {
@@ -28,6 +30,7 @@ const TAB_ICONS: Record<NasaqAiTab, typeof FileText> = {
   report: FileText,
   image: ImageIcon,
   generate: Wand2,
+  twin: Sparkles,
 };
 
 function pickAiTarget(
@@ -153,7 +156,7 @@ export function NasaqAiHub() {
       </p>
 
       <div
-        className="flex shrink-0 items-center gap-1 px-2 py-1.5"
+        className="flex shrink-0 items-center gap-1 overflow-x-auto px-2 py-1.5"
         role="tablist"
         aria-label="قدرات نَسَق AI"
       >
@@ -169,7 +172,7 @@ export function NasaqAiHub() {
               title={`${capability.label} — ${capability.hint}`}
               onClick={() => setTab(capability.id)}
               className={cn(
-                "grid h-8 min-w-8 flex-1 place-items-center rounded-[8px] border text-[10.5px] font-extrabold transition",
+                "grid h-8 min-w-8 shrink-0 place-items-center rounded-[8px] border px-2 text-[10px] font-extrabold transition",
                 active
                   ? "border-navy-2 bg-navy text-on-brand"
                   : "border-transparent text-muted hover:border-line hover:bg-surface-2",
@@ -223,6 +226,7 @@ export function NasaqAiHub() {
             </p>
           </div>
         )}
+        {tab === "twin" && <DesignTwinPanel />}
       </div>
     </div>,
     document.body,
